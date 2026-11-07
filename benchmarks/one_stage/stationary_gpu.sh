@@ -12,6 +12,9 @@
 #      ST_PROVE_CPUS=0-31 (the prover's and the build's cores; the stagers take the rest)
 #      ST_HOLD (a file whose text names this run's slot: written once the file is gone, waiting up to ST_HOLD_WAIT=600 s, and
 #      removed at exit)  ST_DEADLINE (UTC epoch seconds after which no point starts)
+#      ST_OVERLAP=1,2,4,8 (each point proved by that many prover processes at once on the one GPU, each with its own verifier,
+#      the GPU's utilization sampled every 0.5 s into overlap/pP-kK/busy.csv; unset: one)
+#      ST_CPU=1 (no CUDA: the CPU prover, `prove --zk` without --gpu, for checking the runner on a CPU node)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -53,8 +56,10 @@ for spec in ${ST_UNITS:?}; do
   log "$u: staging $COUNTS"
 done
 
+GPU=1; [ "${ST_CPU:-0}" = 1 ] && GPU=0
 # CUDA 13.3 unpacked without root, as zk_cost.sh does, then the prover (flock-circuit --features gpu)
 CR=$X/cuda-root; todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3"; seen=
+[ $GPU = 1 ] || todo=
 while [ -n "$todo" ]; do
   set -- $todo; q=$1; shift; todo="$*"
   case " $seen " in *" $q "*) continue ;; esac
@@ -62,18 +67,56 @@ while [ -n "$todo" ]; do
   todo="$todo $(apt-cache show "$q" 2>/dev/null | awk '/^Depends:/ {sub(/^Depends: /, ""); print; exit}' | tr ',' '\n' \
     | sed 's/(.*//; s/|.*//; s/ //g' | grep -E -- '-13-3$' | tr '\n' ' ')"
 done
-mkdir -p "$CR/debs" && (cd "$CR/debs" && apt-get download $(for q in $seen; do
-  echo "$q=$(apt-cache show "$q" | awk '/^Version:/ {print $2; exit}')"; done)) > "$O/cuda-unpack.log" 2>&1 \
-  && for d in "$CR"/debs/*.deb; do dpkg-deb -x "$d" "$CR"; done
-[ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] || { log "no CUDA 13.3"; tail -5 "$O/cuda-unpack.log"; exit 1; }
-export CUDA_TK=$CR/usr/local/cuda-13.3 LD_LIBRARY_PATH=$CR/usr/local/cuda-13.3/compat:$CR/usr/local/cuda-13.3/lib64:${LD_LIBRARY_PATH:-}
+if [ $GPU = 1 ]; then
+  mkdir -p "$CR/debs" && (cd "$CR/debs" && apt-get download $(for q in $seen; do
+    echo "$q=$(apt-cache show "$q" | awk '/^Version:/ {print $2; exit}')"; done)) > "$O/cuda-unpack.log" 2>&1 \
+    && for d in "$CR"/debs/*.deb; do dpkg-deb -x "$d" "$CR"; done
+  [ -x "$CR/usr/local/cuda-13.3/bin/nvcc" ] || { log "no CUDA 13.3"; tail -5 "$O/cuda-unpack.log"; exit 1; }
+  export CUDA_TK=$CR/usr/local/cuda-13.3 LD_LIBRARY_PATH=$CR/usr/local/cuda-13.3/compat:$CR/usr/local/cuda-13.3/lib64:${LD_LIBRARY_PATH:-}
+fi
 mkdir -p "$O/m0-build"
-log "build: CUDA 13.3 unpacked; building flock-circuit (GPU)"
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$X MODE=build GPU=1 taskset -c "$PC" bash verity/ml/flock/pod/60-circuit.sh \
+log "build: building flock-circuit (GPU=$GPU)"
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$X MODE=build GPU=$GPU taskset -c "$PC" bash verity/ml/flock/pod/60-circuit.sh \
   > "$O/m0-build/build.log" 2>&1 || { tail -40 "$O/m0-build/build.log"; exit 6; }
 BIN=$X/flock-gpu-link/flock/target/release/flock-circuit
 sha256sum "$BIN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 export CUDA_VISIBLE_DEVICES=${ST_GPU:-0} FC_PHASE_TIMES=1
+CPUFLAG=(); [ $GPU = 1 ] || CPUFLAG=(--cpu)
+
+# prove P: plan point P, by one prover (ST_OVERLAP unset), or by K provers at once for each K of ST_OVERLAP, each with its own
+# out dir (a copy of the plan; zk_cost.py prove starts its own verifier) and the GPU's utilization sampled meanwhile
+prove() {
+  local p=$1 k i d rcs
+  if [ -z "${ST_OVERLAP:-}" ]; then
+    taskset -c "$PC" "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --arms "${ST_ARMS:-dev}" --cold 0 --warm 1 \
+      --runs "${ST_RUNS:-2}" --points "$p" --out "$Z" "${CPUFLAG[@]}" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST | tee -a "$O/job.log"
+    return "${PIPESTATUS[0]}"
+  fi
+  rcs=0
+  for k in ${ST_OVERLAP//,/ }; do
+    if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "point $p, $k at once: past the deadline"; continue; fi
+    d=$Z/overlap/p$p-k$k; mkdir -p "$d"
+    local smi=
+    if [ $GPU = 1 ]; then
+      nvidia-smi -i "${ST_GPU:-0}" --query-gpu=timestamp,utilization.gpu,memory.used --format=csv,noheader,nounits -lms 500 \
+        > "$d/busy.csv" 2>/dev/null & smi=$!
+    fi
+    local pids=()
+    for i in $(seq 1 "$k"); do
+      mkdir -p "$d/s$i/records" && cp "$Z/plan.json" "$d/s$i/"
+      taskset -c "$PC" "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --arms "${ST_ARMS:-dev}" --cold 0 --warm 1 \
+        --runs "${ST_RUNS:-2}" --points "$p" --out "$d/s$i" "${CPUFLAG[@]}" > "$d/s$i/zk.log" 2>&1 &
+      pids+=($!)
+    done
+    date -u +%s.%N > "$d/t0"
+    for i in "${pids[@]}"; do wait "$i" || rcs=1; done
+    date -u +%s.%N > "$d/t1"
+    [ -n "$smi" ] && kill "$smi" 2>/dev/null
+    log "point $p, $k at once: $(awk -v a="$(cat "$d/t0")" -v b="$(cat "$d/t1")" 'BEGIN {printf "%.1f", b - a}') s wall"
+    grep -h ZKCOST "$d"/s*/zk.log | sed "s/^/k=$k /" | tee -a "$O/job.log"
+  done
+  return $rcs
+}
 
 keep() {
   (cd "$Z" && find . -type f -size -64M ! -name circuit.txt ! -name '*.bin' ! -path '*/sessions/*' -print0 \
@@ -114,9 +157,7 @@ EOF
     log "$u: staged; prove points $pts"
     for p in ${pts//,/ }; do
       if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "$u: point $p not proved: past the deadline"; continue; fi
-      taskset -c "$PC" "$PY" benchmarks/one_stage/zk_cost.py prove --bin "$BIN" --arms "${ST_ARMS:-dev}" --cold 0 --warm 1 \
-        --runs "${ST_RUNS:-2}" --points "$p" --out "$Z" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST | tee -a "$O/job.log"
-      [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+      prove "$p" || rc=1
     done
     keep
     rm -f "$sd"/c*/stage/circuit.txt "$sd"/c*/stage/*.bin
