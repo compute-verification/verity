@@ -17,7 +17,7 @@ open FlockSoundness.Discharge.Hm
 open Flock.ReadNet Flock.ReadNet.Frame
 open Accounting.ReadUnit.Gates
 
-theorem length_utf8_seg : (Hash.utf8 Hash.RowLeaf.Format.seg.schema).length = 22 := by decide
+theorem length_utf8_seg : (Hash.utf8 Hash.RowLeaf.Format.seg.schema).length = 22 := by decide +kernel
 
 /-- **The frame-v3 read is sound** at every depth up to 32 under the row-seg schema: whenever its rows hold, the
 read's bit is set only where the frame leaf over the opened digest, climbed through the opened siblings, reaches the
