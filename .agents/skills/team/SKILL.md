@@ -67,11 +67,11 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
   moves reviewed members below those awaiting a verdict, so a PR waiting for review holds only itself; a
   held PR, and any PR containing it, goes to the top of `next` at each sync, so a hold holds only itself too. A change to a
-  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Models.lean` and `Security/`'s Lake
-  files) or to Lean that runs as code (a `.lean` outside `Security/`) lands on its verdict like any other. Drive then runs
-  `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated there as `Lock records
-  regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated ones; a
-  lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
+  `lean-audit.json` lock, to the spec (Lean under `Security/Definitions/`, `Security/Definitions.lean` and `Security/`'s
+  Lake files) or to Lean that runs as code (a `.lean` outside `Security/`) lands on its verdict like any other. Drive
+  then runs `lean-audit` alone on `checked`'s tip (the lock run), commits the records it regenerated there as `Lock
+  records regenerated for #N...`, and checks that commit, so `main` moves only to one whose records are the regenerated
+  ones; a lock run that fails is a red like any other. A PR whose merge onto `checked` changes nothing drive.toml's
   `lowrisk_excludes` names (Lean, locks, Lake files, `verity/core/`, the soundness-path Python) lands on its ready mark alone,
   with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick).
 - One run checks `checked`'s tip after each landing (circuit-check is off the merge gate). A red's culprit, the one landing

@@ -184,7 +184,7 @@ checks (`EncChecks`). P2, the clean-up chain (`Peel`): U's cancellation identiti
 clean-up terms' liveness at degenerate inputs. P1, freezing under promotion (`Freeze`), and P3, the forming credit
 (`Forming`). The game (`Game`), named protocol (`Instance`), named assumption TT_OUT (`TTOut`) and γ
 from it (`Gamma`). The hidden audit, the tile check as a proof over core's `Verity.Game` (`Hidden`), its open obligation
-that a drawn tile's proof is sound (`HiddenTile`), what a proof system gives per tile to meet it (`HiddenTileGame`, met
+that a sampled tile's proof is sound (`HiddenTile`), what a proof system gives per tile to meet it (`HiddenTileGame`, met
 in `SecurityProofs` through core's batch lemma) and the sampled audit's γ under it (`HiddenGamma`). The sampled audit's
 completeness on a population of activations (`Completeness`), its one assumption, the honest tiles' measured cap rate
 (`HonestCap`, empirical), the proof that every honest word is an FP32 word's (`HonestWords`) and completeness from the
@@ -204,18 +204,18 @@ definitions). `Proofs`: the block-support count and the cost bounds it gives.
 
 ## `Window`: a window of calls
 
-One draw that depends on the registration (C1), then the calls' sessions in order, in the form of C-Flock's one-stage
+One sample that depends on the registration (C1), then the calls' sessions in order, in the form of Flock's one-stage
 audit: the game, the laws and their product (M1), the units' statements (self-contained tiles whose seed's position and
 roots are read at their place in the committed transcript, decision 106) and PoUW's harm family (`harmSets`), each
 call's analysis, the premises of the window's composition in the compiled tables' shape (a constant plus a term of the
 prover's state) and the window's collision term (`coll`, bounded at the sessions' counted queries by `CollCounted`),
 what the served pass committed (`ServedPass`) and the transcripts that are its (`Anchored`, `Served`), the tie to what's
-served (`ServedTie`, open on main), and the deployed draw, sampled proofs' service's uniform subset in rank-ordered
+served (`ServedTie`, open on main), and the deployed sample, sampled proofs' service's uniform subset in rank-ordered
 sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`) with its units' statements, the tiles' read in every session
 (`UnitStmts.copies`, `WrongCopyClosed`).
-The window's ε from its calls' (M2) and the service's draw at `η = 0` are `Definitions.Pouw.Guarantees.Window`, stated and
+The window's ε from its calls' (M2) and the service's sample at `η = 0` are `Definitions.Pouw.Guarantees.Window`, stated and
 not yet proved. `Proofs.Pouw.Window`: the deployed wrong sets are copy-closed, PoUW's reading with the served tie, the
-collision term on average over the oracle, and the bridge from the window's game to C-Flock's, with C-Flock's knowledge
+collision term on average over the oracle, and the bridge from the window's game to Flock's, with Flock's knowledge
 bound at main's `--zk` sessions.
 -/
 

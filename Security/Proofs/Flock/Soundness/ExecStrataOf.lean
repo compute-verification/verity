@@ -9,19 +9,19 @@ import Proofs.Flock.Soundness.Refine.Walk
 /-!
 # The strata the verifier accepts are a partition's
 
-`Law.execStrata_of_ofJson`: a draw file `Flock.Draw.UnitDraw.ofJson` accepts under a stratified law has an assignment `σ`
+`Law.execStrata_of_ofJson`: a sample file `Flock.Draw.UnitDraw.ofJson` accepts under a stratified sampling design has an assignment `σ`
 of its population's units to the strata that the strata describe (`ExecStrata`), each stratum's `k` at most its size. The
 hypotheses `ExecStrata σ k S` and `k s ≤ (stratum σ s).card` that the stratified e2e theorems take are so not conditions
 on the statement's form: they follow from the verifier accepting.
 
-* `StrataExec.ofJson_stratified`: what `ofJson` checks of a stratified law: `strataProblem` finds nothing, and each stratum
+* `StrataExec.ofJson_stratified`: what `ofJson` checks of a stratified sampling design: `strataProblem` finds nothing, and each stratum
   passed `stratumOfJson`, whose units are non-empty ranges `lo < hi` (`stratumOfJson_ranges`).
 * `StrataExec.strataProblem_none`: what `strataProblem` checks: `1 ≤ k ≤ pop`, each stratum's `k` the rule's
   (`stratumK`), and the ranges, sorted by their starts, chain from `0` to `pop` (`Chain`).
 * `StrataExec.chain_facts`: a chain of non-empty ranges from `a` to `b` covers each unit of `[a, b)` exactly once;
   `StrataExec.chain_covers`: any chain from `a` to `b` covers each unit of `[a, b)`.
 * `Law.execStrata_of_strataProblem`: those checks give `σ`, each unit's stratum the one whose ranges hold it.
-* At a work law: `StrataExec.ofJson_work`, `ofJson` checks that `workProblem` finds nothing, and
+* At a work sampling design: `StrataExec.ofJson_work`, `ofJson` checks that `workProblem` finds nothing, and
   `StrataExec.workProblem_chain`, which checks that the ranges, sorted by their starts, chain from `0` to `pop`.
 -/
 
@@ -295,7 +295,7 @@ theorem stratumK_le {k z pop : ℕ} (hz : 1 ≤ z) (hk : k ≤ pop) (hk1 : 1 ≤
   have : k * z ≤ pop * z := Nat.mul_le_mul_right z hk
   nlinarith
 
-/-! ### The checks `UnitDraw.ofJson` makes of a stratified law -/
+/-! ### The checks `UnitDraw.ofJson` makes of a stratified sampling design -/
 
 section ofJson
 
@@ -351,7 +351,7 @@ theorem stratumOfJson_ranges {j : Json} {s : Stratum} (h : stratumOfJson j = .ok
   subst h
   exact Nat.lt_of_not_ge hlt
 
-/-- A draw file `UnitDraw.ofJson` accepts under a stratified law: `strataProblem` found nothing, and every stratum
+/-- A sample file `UnitDraw.ofJson` accepts under a stratified sampling design: `strataProblem` found nothing, and every stratum
 passed `stratumOfJson`. -/
 theorem ofJson_stratified {j : Json} {D : UnitDraw} {k : ℕ} {S : Array Stratum} (h : UnitDraw.ofJson j = .ok D)
     (hl : D.law = .stratified k S) :
@@ -373,7 +373,7 @@ theorem ofJson_stratified {j : Json} {D : UnitDraw} {k : ℕ} {S : Array Stratum
     obtain ⟨a, -, ha⟩ := ok_of_mem_mapM _ _ _ ‹Array.mapM stratumOfJson _ = Except.ok _› s hs
     exact stratumOfJson_ranges ha
 
-/-- A draw file `UnitDraw.ofJson` accepts under a work law: `workProblem` found nothing. -/
+/-- A sample file `UnitDraw.ofJson` accepts under a work sampling design: `workProblem` found nothing. -/
 theorem ofJson_work {j : Json} {D : UnitDraw} {k : ℕ} {S : Array WorkStratum} (h : UnitDraw.ofJson j = .ok D)
     (hl : D.law = .work k S) : workProblem k S D.population = none := by
   unfold UnitDraw.ofJson at h
@@ -399,7 +399,7 @@ namespace Law
 
 open StrataExec
 
-/-- A stratified law the verifier accepts describes a partition: `strataProblem` finding nothing, with
+/-- A stratified sampling design the verifier accepts describes a partition: `strataProblem` finding nothing, with
 `stratumOfJson`'s checks that each stratum's units are non-empty ranges `lo < hi`, gives the assignment `σ` of the
 population's units to the strata that the strata describe, each stratum's `k` at most its size. -/
 theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
@@ -494,8 +494,8 @@ theorem execStrata_of_strataProblem {k pop : ℕ} {S : Array Stratum}
       obtain ⟨j, hj, rfl⟩ := List.mem_iff_getElem.1 hx
       exact ⟨j, hj, unitL_getElem _ _ hj⟩
 
-/-- **The strata of an accepted draw file describe a partition**: a draw file `UnitDraw.ofJson` accepts under a stratified
-law `stratified k S` has an assignment `σ` of its population's units to the strata `S` that `S` describes, each
+/-- **The strata of an accepted sample file describe a partition**: a sample file `UnitDraw.ofJson` accepts under a stratified
+sampling design `stratified k S` has an assignment `σ` of its population's units to the strata `S` that `S` describes, each
 stratum's `k` at most its size. -/
 theorem execStrata_of_ofJson {j : Lean.Json} {D : UnitDraw} {k : ℕ} {S : Array Stratum}
     (h : UnitDraw.ofJson j = .ok D) (hl : D.law = .stratified k S) :

@@ -148,7 +148,7 @@ def DecodesOfRunsAt : Prop :=
     Decodes out pL pg opn dec (fun _ => true) fin capOf G
 
 /-- **`DecodesAll` from the reps' runs** (R11b's coin half). With `one := fun _ _ _ => true`, `DecodesAll` holds when,
-at every draw and registration, on every live outcome whose session directory flock-verify accepts, each rep of the
+at every sample and registration, on every live outcome whose session directory flock-verify accepts, each rep of the
 table has a `RepRun` on its rounds along its spine `repSpine`, with `fin`'s messages as the tail, and the salted
 table's verdict holds at the two runs' ends. -/
 def DecodesAllOfRuns : Prop :=
@@ -167,8 +167,8 @@ def DecodesAllOfRuns : Prop :=
       (tableOutL H E Lf (capOf S R o.rootB 0) pend (opn S R o.proofs)).accepted = true) →
     DecodesAll H E Lf T I wr opn dec (fun _ _ _ => true) fin capOf
 
-/-- **`DecodesOn` from the reps' runs** (R11b's coin half, at the law's draws). With `one := fun _ _ _ => true`,
-`DecodesOn L` holds when, at every draw `L.draw ω` and registration, on every live outcome whose session directory
+/-- **`DecodesOn` from the reps' runs** (R11b's coin half, at the sampling design's samples). With `one := fun _ _ _ => true`,
+`DecodesOn L` holds when, at every sample `L.draw ω` and registration, on every live outcome whose session directory
 flock-verify accepts, each rep of the table has a `RepRun` on its rounds along its spine `repSpine`, with `fin`'s
 messages as the tail, and the salted table's verdict holds at the two runs' ends. -/
 def DecodesOnOfRuns : Prop :=

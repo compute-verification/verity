@@ -37,7 +37,7 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # The switched prover's rep source
 
-`FinishSrc` holds the firewall's rep to the rep from a source (`FlockComplete.repCut`) at premises on that source. For
+`FinishSrc` holds the ZK server's rep to the rep from a source (`FlockComplete.repCut`) at premises on that source. For
 the honest prover the source is `srcE`, what the session reads from its cut (`tabSrcCut` of `cutE`). For `FinishIs` it
 is the switched prover's at the workers' values: the same reading of the switched cut (`RefSession.swCutOf`).
 
