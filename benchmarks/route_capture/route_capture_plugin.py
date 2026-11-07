@@ -116,7 +116,7 @@ class Requests:
         longest = max((q + done for q, done, _ in prefill), default=0)
         return {"tokens": int(so.total_num_scheduled_tokens), "reqs": len(so.num_scheduled_tokens),
                 "new": len(so.scheduled_new_reqs), "prefix_hit_tokens": hit, "prefill": prefill,
-                "decode": len(ctx), "decode_ctx_max": max(ctx, default=0), "decode_ctx_sum": sum(ctx),
+                "decode": len(ctx), "decode_ctx": ctx, "decode_ctx_max": max(ctx, default=0), "decode_ctx_sum": sum(ctx),
                 "prefill_seq_max": longest,
                 "attention": None if not prefill else ("dense" if topk is not None and longest <= topk else "sparse"),
                 "spec_tokens": sum(len(v) for v in (getattr(so, "scheduled_spec_decode_tokens", None) or {}).values()),

@@ -56,7 +56,7 @@ def test_a_steps_row_and_class_follow_its_requests_from_their_first_schedule() -
     assert rows[0]["prefill"] == [[2048, 1024, 4000], [100, 0, 100]] and rows[0]["prefix_hit_tokens"] == 1024
     assert rows[0]["sampling"] == {"greedy": 1, "random": 1, "top_p": 1} and rows[0]["prefill_seq_max"] == 3072
     assert rows[1]["prefill"] == [[928, 3072, 4000]] and (rows[1]["decode"], rows[1]["decode_ctx_max"]) == (1, 101)
-    assert rows[2]["prefill"] == [] and rows[2]["decode_ctx_sum"] == 4001 + 102
+    assert rows[2]["prefill"] == [] and rows[2]["decode_ctx"] == [4001, 102] and rows[2]["decode_ctx_sum"] == 4001 + 102
     assert "a" not in reqs.prompt and "b" in reqs.prompt
     short = RC.Requests().row(so(new=[("c", 500, 0, 500, 0.0)]), 2048)
     assert RC.key(short, edges) == "prefill/M512/R1/dense/cold/greedy"
