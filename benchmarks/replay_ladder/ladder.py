@@ -126,7 +126,8 @@ def serve(a: argparse.Namespace) -> int:
     traffic.BOS, traffic.BLANK_LINE = native_tokens(AutoTokenizer.from_pretrained(str(ck), trust_remote_code=True))
     out = Path(a.out)
     cap = out / "capacity"
-    base = ["--model-id", a.model, "--checkpoint", str(ck), "--c4", a.c4, "--reps", "1", "--warm-s", "10"]
+    base = ["--model-id", a.model, "--checkpoint", str(ck), "--c4", a.c4, "--docs", str(a.docs), "--reps", "1",
+            "--warm-s", "10"]
     if S.main(["run", "--arm", "compiled", *base, "--rates", "burst=1000", "--requests", str(a.burst), "--out", str(cap)]):
         return 1
     burst = S.arm_metrics(cap)["loads"]["burst"][0]
@@ -140,7 +141,7 @@ def serve(a: argparse.Namespace) -> int:
     (out / "serve.json").write_text(json.dumps({
         "schema": SCHEMA + "/serve", "model": a.model, "checkpoint": f"{S.MODELS[a.model].repo}@{S.MODELS[a.model].revision}",
         "tp": LADDER[a.model].tp, "bos": traffic.BOS, "blank_line": traffic.BLANK_LINE, "capacity": burst, "over": a.over,
-        "rate": rate, "span_s": a.span_s,
+        "rate": rate, "span_s": a.span_s, "docs": a.docs,
         "window": (rec["loads"].get(LOAD) or [None])[0], "error": rec.get("error"), "run_id": S.SHARED.RESEARCH_RUN_ID,
     }, indent=1))
     return rc
@@ -301,6 +302,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--span-s", type=float, default=60.0)
     s.add_argument("--over", type=float, default=1.45, help="the window's arrival rate over the measured capacity")
     s.add_argument("--burst", type=int, default=800, help="the capacity burst's requests")
+    s.add_argument("--docs", type=int, default=1 << 20,
+                   help="the shard's first documents the plans draw from (default: all; a fast model's window runs "
+                        "serve_tax's 20,000 out)")
     r = sub.add_parser("replay")
     r.add_argument("--model", required=True, choices=sorted(LADDER))
     r.add_argument("--out", required=True)
