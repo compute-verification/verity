@@ -259,15 +259,32 @@ PIN_FORMAT = "verity/public-pin/v1"
 
 def public_pin(members: Sequence[dict], publics: Mapping[str, bytes]) -> dict:
     """``members``' public files as staged (``publics``, their bodies by member key), before any check and the sample:
-    by member key, its index ``k``, the whole file's SHA-512 (``file``) and its body's (``body``), whether completing it
-    re-lays its body port-major (``relaid``: an instance-major member's, `flock_inputs.complete`), and ``leaf_layer``,
-    the leaf layer over the bodies, which R4 holds to the registration the coins commit to, so a body changed after the
-    sample isn't the pin's. A drawn member's file as its session proved it, completed from the staged one, is its
-    ``completed`` entry, added once the tie holds (`pin_completed`): v2's ``proofs.public``, which the onsite record
-    holds to the staged body (`onsite_record.pinned`)."""
+    by member key, its index ``k`` and unit count ``n`` (the window's layout, `pin_layout`), the whole file's SHA-512
+    (``file``) and its body's (``body``), whether completing it re-lays its body port-major (``relaid``: an
+    instance-major member's, `flock_inputs.complete`), and ``leaf_layer``, the leaf layer over the bodies, which R4
+    holds to the registration the coins commit to, so a body changed after the sample isn't the pin's. A drawn member's
+    file as its session proved it, completed from the staged one, is its ``completed`` entry, added once the tie holds
+    (`pin_completed`): v2's ``proofs.public``, which the onsite record holds to the staged body (`onsite_record.pinned`)."""
     return {"format": PIN_FORMAT, "leaf_layer": CS.leaf_layer(publics),
-            "members": {mm["m"].key: {"k": mm["k"], "file": mm["st"]["public"], "relaid": not mm["m"].tables,
+            "members": {mm["m"].key: {"k": mm["k"], "n": mm["m"].n, "file": mm["st"]["public"],
+                                      "relaid": not mm["m"].tables,
                                       "body": hashlib.sha512(publics[mm["m"].key]).hexdigest()} for mm in members}}
+
+
+def pin_layout(pin: Mapping[str, Any]) -> list[list]:
+    """The window's layout as `public_pin` fixed it before the draw: each member's key and ``n`` in unit order, by its
+    ``k``, which θ's ``proofs.members`` must be (`layout`, `onsite_record.layout_pinned`). A ValueError says why a pin
+    states none: a member with no int ``k`` or positive int ``n``, or ``k``s that aren't 0 to the member count."""
+    rows = []
+    for key, m in pin["members"].items():
+        k, n = m.get("k"), m.get("n")
+        if type(k) is not int or type(n) is not int or n <= 0:
+            raise ValueError(f"its member {key} states no int k and positive int n")
+        rows.append((k, key, n))
+    rows.sort()
+    if [k for k, _, _ in rows] != list(range(len(rows))):
+        raise ValueError("its members' k aren't 0 to the member count")
+    return [[key, n] for _, key, n in rows]
 
 
 def link(src: Path, dst: Path) -> None:
@@ -1266,7 +1283,7 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
 
 def layout(binding) -> list[list]:
     """The verifier's layout of `binding`'s window as v2 reads it (`OneStageZk.layoutOf`): each member's key and unit
-    count, in unit order."""
+    count, in unit order, as `public_pin` pins it before the draw (`pin_layout`)."""
     return [[m.key, m.n] for m in binding.members]
 
 

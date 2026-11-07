@@ -9,10 +9,11 @@ the circuit file, its template's ``compose.log`` (its own, or its template's fir
 ``session-m<k>/sessions/*/`` with each session's ``session.json`` and ``*.bin``, the drawn member the one whose sessions
 the window kept, and the challenger's release
 of the draw's coins (``release.json``, `a5.RELEASE`) where the audit drew on a challenger's session. The case is a5.py's
-`case_v2` of those: v1's params with the partition, ``proofs: {circuit, public, registered: null}`` (``public`` the
-drawn member's public file's SHA-512 as a5 pinned it, ``public-pin.json``, `a5.PIN`: as completed once the tie held, the
-file its session proved, else as staged before the draw; never the kept file's read after the draw, which is refused
-where it isn't the pinned one, as a window with no pin is), the
+`case_v2` of those: v1's params with the partition, ``proofs: {circuit, public, registered: null, members}`` (``public``
+the drawn member's public file's SHA-512 as a5 pinned it, ``public-pin.json``, `a5.PIN`: as completed once the tie held,
+the file its session proved, else as staged before the draw; never the kept file's read after the draw, which is refused
+where it isn't the pinned one, as a window with no pin is; ``members`` the window's layout as the pin fixed it before the
+draw, `layout_of`), the
 challenger and the release's window root, v1's commitment, the evidence with the sessions' proofs and the release's
 coins, and the blobs' paths. The challenger's key
 is the auditor's own record's (``--challenger-key``, challenger-key/v1, `Ch.key_of_record`), never the one the release
@@ -117,24 +118,15 @@ def drawn_member(window: Path) -> int:
 
 
 def layout_of(window: Path) -> list[list]:
-    """The verifier's layout of the window (`a5.layout`) from its ``summary.json`` ``members``, in unit order: each
-    member's key and unit count, the key as a5 recorded it or, in a summary from before a5 recorded keys, as
-    `interface._members` names a template's chunks (``<template>/c<j>``, ``j`` counting that template's members from 0).
-    v2 holds the layout to the record's population and the drawn member's public file to its key's slice of the
-    registration, so a wrong key refuses. Members that don't tile the window from unit 0 are refused (`Refused`)."""
+    """The verifier's layout of the window as a5 pinned it at staging, before the draw (`a5.pin_layout` of
+    ``public-pin.json``): each member's key and unit count in unit order, the layout the onsite record holds θ's to
+    (`onsite_record.layout_pinned`), never ``summary.json``'s, written after the draw. A window whose pin states none,
+    such as one pinned before a5 pinned each member's ``n``, is refused (`Refused`)."""
     try:
-        rows = sorted((m["base"], m["k"], m["n"], m["template"], m.get("key"))
-                      for m in json.loads((window / "summary.json").read_text())["members"])
-    except (OSError, KeyError, TypeError, ValueError):
-        raise Refused("the window's summary.json names no members, the layout v2 finds the drawn member by") from None
-    at, seen, out = 0, {}, []
-    for base, k, n, template, key in rows:
-        if base != at:
-            raise Refused(f"the window's summary.json members don't tile it: m{k} starts at unit {base}, not {at}")
-        j = seen[template] = seen.get(template, -1) + 1
-        out.append([key or f"{template}/c{j}", n])
-        at += n
-    return out
+        return a5.pin_layout(json.loads((window / a5.PIN).read_text()))
+    except (OSError, AttributeError, KeyError, TypeError, ValueError) as e:
+        raise Refused(f"the window's {a5.PIN} states no layout at staging (each member's k and n), the one v2 finds the "
+                      f"drawn member by: {type(e).__name__}: {e}") from None
 
 
 def compose_log(window: Path, k: int) -> Path:

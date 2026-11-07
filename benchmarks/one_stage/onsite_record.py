@@ -55,7 +55,9 @@ and every drawn member is credited, the condition for the demo's run of record, 
 members not credited and the verdicts it doesn't read (``not_claimed``: PoUW's, `NOT_CLAIMED`, listed as it is, missing
 and development where its row is, and under a composite without PoUW remote's too, `NOT_CLAIMED_WITHOUT_POUW`), and
 the verified compute it credits, none (``verified_compute``, `POUW`); ``placement`` is the network certifier's
-answer's, which host ran each party.
+answer's, which host ran each party. Sampled proofs' guarantee (``member``) and the ONSITE line (``open_in_lean``)
+state that the drawn unit's member rests on this record's check of θ's layout against a5's pin, not yet on Lean
+(`MEMBER_OPEN`).
 
 **Checked on the run** (``checked``, `CHECKED`): the auditor's configuration of the run, each an obligation the record
 checks on the auditor's inputs, never a named assumption and never charged, each with ``holds`` and, where it doesn't,
@@ -417,6 +419,12 @@ MULTI = ("a draw of more than one member of a window, such as one member of each
          "sessions), so no composite has one and each rejects naming it, and Lean's per-member form "
          "refuses it (MULTI_REFUSED) until a guarantee for a draw of several members is in the lock. A run of record "
          "draws one member, subset:1 under --zk (V3C_LAW), and this is that draw's guarantee")
+#: what the drawn unit's member rests on, open in Lean: sampled proofs' guarantee (``member``) and the ONSITE line state it
+MEMBER_OPEN = ("open, not in Lean: the drawn unit's member. v2 finds it from θ's layout (proofs.members, "
+               "OneStageZk.memberOf) and holds the public file to that member's slice in Lean, and that the layout is "
+               "the one a5 fixed before the draw (--public-pin's members, each its k and n) is this record's check "
+               "under the registered-files condition (`layout_pinned`), not a Lean statement, until v2 derives the "
+               "layout from the registration")
 #: the network certifier's chain report as its piece publishes it (`certifier_piece.PUBLIC`), and its draws by step
 CHAIN_REPORT = CASE.parent / "chain" / "report" / "report.json"
 DRAWS = {"n2": "the period draw", "scan": "the scan's draw"}
@@ -513,7 +521,10 @@ CHECKED = {
                       "under θ's layout (proofs.members, `OneStageZk.memberOf`; instance i is unit base + i), and "
                       "flock-verify its circuit_sha512 to the "
                       "circuit file θ names, its classes to that circuit's class and its shared_rows to the roots "
-                      "publicHeld holds. It holds where no composite of the "
+                      "publicHeld holds. θ's layout is the one a5 pinned before the draw, each member's key and n in "
+                      "unit order (`layout_pinned`, a5.pin_layout): θ naming none or another is refused, by the first "
+                      "member that differs. That check is this record's, not Lean's (`MEMBER_OPEN`). It holds where no "
+                      "composite of the "
                       "run reads the case. Where either doesn't hold the network verdict is not established and there "
                       "is no bound (`LISTING_UNMET`, `FILES_UNMET`), and where the registered-files condition doesn't, "
                       "neither is the verdict of a composite that reads the case, nor sampled proofs', its leg there; "
@@ -1169,8 +1180,9 @@ def sampled(row: Any, verdict: Mapping[str, Any], phase_s: Fraction | None, why:
     monitoring period (`POOLED`) for the serving node and, by the links of each (`census`), a datacenter and the world,
     at a window an execution phase of ``phase_s`` seconds (`WINDOW_S`; where it is None the periods are missing,
     ``why``); a draw of another law has no pooled figure (`NOT_POOLED`). ``refused`` names the draws a run of record
-    doesn't make (`MULTI`), and ``conditional_on`` the coins' condition while it is open (`COINS`)."""
-    g = {"is": SAMPLED, "refused": MULTI, "from": SAMPLED_FROM} | (
+    doesn't make (`MULTI`), ``member`` what the drawn unit's member rests on, open in Lean (`MEMBER_OPEN`), and
+    ``conditional_on`` the coins' condition while it is open (`COINS`)."""
+    g = {"is": SAMPLED, "refused": MULTI, "member": MEMBER_OPEN, "from": SAMPLED_FROM} | (
         {"conditional_on": list(conditional)} if conditional else {})
     if verdict.get("verdict") != "accept":
         return g | {"missing": f"sampled proofs' verdict is {verdict.get('verdict')}: only its accepted answer "
@@ -1674,6 +1686,28 @@ def pinned(pin: Path | None, commitment: Any, stated: set[Any], public: Path) ->
     return next((why for k in drawn if (why := completed_from(k, entries[k], public)) is not None), None)
 
 
+def layout_pinned(pin: Path, members: Any) -> str | None:
+    """Why θ's layout of the window, ``members`` (its proofs.members, by which v2 finds the drawn member,
+    `OneStageZk.memberOf`), isn't the one a5 pinned at staging before the draw (``pin``, `a5.pin_layout`: each member's
+    key and n in unit order), naming the first member that differs, else None. This is the record's check, not Lean's
+    (`MEMBER_OPEN`)."""
+    import a5
+
+    try:
+        want = a5.pin_layout(json.loads(pin.read_bytes()))
+    except (OSError, AttributeError, KeyError, TypeError, ValueError) as e:
+        return (f"--public-pin states no layout of the window at staging (each member's k and n), which θ's "
+                f"proofs.members is held to: {type(e).__name__}: {e}")
+    if not isinstance(members, list):
+        return "θ names no layout (proofs.members), so the drawn member isn't held to the one --public-pin fixed"
+    if members == want:
+        return None
+    i = next((i for i, (a, b) in enumerate(zip(members, want)) if a != b), min(len(members), len(want)))
+    got, fixed = (x[i] if i < len(x) else "none" for x in (members, want))
+    return (f"θ's layout (proofs.members) isn't the one --public-pin fixed before the draw: its member {i} is {got}, "
+            f"the pin's {fixed}")
+
+
 def completed_from(key: str, entry: Mapping[str, Any], public: Path) -> str | None:
     """Why ``public``, member ``key``'s completed file by its pin ``entry`` (`pinned`), isn't completed from the member's
     staged file (`a5.complete_drawn`, `flock_inputs.complete`), else None. Its body is the staged body, or, where
@@ -1708,8 +1742,9 @@ def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path
     """`CHECKED`'s auditor-listing, its registered-files condition: the files remote's sampled proofs case at ``case``
     (`SAMPLED_ID`'s, ``{"params", "commitment", "blobs", ...}``) registers, the circuit file and then the public file
     (`proofs.evidence_v2`'s order), are by SHA-512 those its params θ name (``proofs.circuit``, ``proofs.public``), θ
-    held by SHA-512 to the params each composite in ``found`` that reads the case states for it, and the public file
-    one a5 pinned, as staged before the draw or as completed once the tie held (``pin``, `pinned`). ``holds``, ``read_by``, those composites' ids,
+    held by SHA-512 to the params each composite in ``found`` that reads the case states for it, the public file
+    one a5 pinned, as staged before the draw or as completed once the tie held (``pin``, `pinned`), and θ's layout the
+    one the pin fixed before the draw (`layout_pinned`). ``holds``, ``read_by``, those composites' ids,
     ``compared``, the files θ names, ``why`` where it doesn't hold, and ``unbound`` (`PUBLIC_UNBOUND`) where θ names no
     public file."""
     import composite as CO
@@ -1746,7 +1781,8 @@ def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path
         if got != proofs.get(half):
             return res | {"why": f"the {half} file the case registers (its blob {i}) isn't, by SHA-512, θ's "
                                  f"proofs.{half}"}
-    if "public" in proofs and (why := pinned(pin, doc.get("commitment"), commits, blobs[1])) is not None:
+    if "public" in proofs and (why := pinned(pin, doc.get("commitment"), commits, blobs[1])
+                               or layout_pinned(pin, proofs.get("members"))) is not None:
         return res | {"why": why}
     return res | {"holds": True}
 
@@ -2017,7 +2053,8 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
     (`alpha_gamma`), whether the run is of record, its composite of
     record by id (`WITHOUT_POUW`) and the verified compute it credits, none, stated at that id (``compute``,
     `NO_COMPUTE_CLAIM`), and what every figure is conditional on
-    (`COINS`; open for a record that read no coins), what the record doesn't claim (`DAY`, `POUW`), the drawn members it
+    (`COINS`; open for a record that read no coins), what is open in Lean (`MEMBER_OPEN`), what the record doesn't
+    claim (`DAY`, `POUW`), the drawn members it
     doesn't credit (`CREDIT`), K of record and what is open under it, its δ_net's terms, eps's split and connections,
     the tied audits the period reads and eps per window and pooled over each monitoring period (`pooled_eps`), the
     composite's stated error, the year's datacenter cell, sampled proofs' guarantee per window and pooled
@@ -2032,6 +2069,7 @@ def summary(rec: Mapping[str, Any]) -> dict[str, Any]:
             **{k: rec["of_record"].get(k) for k in ("composite", "verified_compute")},
             "compute": NO_COMPUTE_CLAIM.format(rec["of_record"].get("composite") or "the composite of record"),
             "conditional_on": rec["of_record"].get("conditional_on", []) if "coins" in rec else [COINS_OPEN],
+            "open_in_lean": [MEMBER_OPEN],
             "not_claimed": [DAY_OPEN] * (rec.get("one_program_a_day") or {"open": True})["open"] + [POUW_OPEN],
             "not_credited": rec["of_record"].get("not_credited", []),
             "K": fig.get("K"), "open": fig.get("open"),

@@ -136,7 +136,8 @@ negatives.
   names: a release naming another key is refused. Its params name the public file by the SHA-512 a5 pinned
   (`public-pin.json`): as completed once the tie held, the file the drawn member's session proved, else as staged
   before the draw; never one read after it: a window with no pin, or whose kept public file isn't the pinned one, is
-  refused. It reads the drawn member's files, the one member whose sessions the window kept (none
+  refused. Its params' layout (`proofs.members`) is the one the pin fixed before the draw, each member's key and `n`
+  (`a5.pin_layout`); a pin that states none is refused. It reads the drawn member's files, the one member whose sessions the window kept (none
   or several refused), its `compose.log` its own or its template's first member's. With its own Lean answer with
   `--exe`. A circuit file the run didn't keep is rebuilt by the command its `compose.log` records and used only at the
   log's pin.
@@ -250,7 +251,9 @@ negatives.
   reads the case states, the files hashed and never read off the evidence, and the public file one a5 pinned
   (`--public-pin`): as staged before the draw, the staged bodies' leaf layer the one the registration the coins
   committed to holds, or as a5 completed it from the staged file once the tie held, its body that member's staged
-  body, or an instance-major member's (the pin's `relaid`) re-laid port-major (`completed_from`); and `scan-state-pinned`, that
+  body, or an instance-major member's (the pin's `relaid`) re-laid port-major (`completed_from`), and θ's layout
+  (`proofs.members`) the one the pin fixed before the draw (`layout_pinned`), a check of the record and not yet of Lean,
+  which the record and its ONSITE line state as open (`MEMBER_OPEN`); and `scan-state-pinned`, that
   where an audit's window commits the scan's state in its activations (the entry `NetworkCheck.Period` holds to the
   scan's), V3c's audit opened its registered reads of it at that entry's
   value, root and domain (its published summary's `registered.own`), accepted, and reported each sampled member's
