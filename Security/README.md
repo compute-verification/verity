@@ -29,8 +29,8 @@ incorrect set of the trace the extractor recovers.
    Pr[`verify --zk` accepts ∧ the run's population is the registration's ∧ F ∉ M_δ] ≤ δ + ε̄_ks + ε_link, at
    δ = C(n−K₀, k)/C(n, k) for k of n proof blocks sampled uniformly, with ε̄_ks Flock's error averaged over the sessions
    and ε_link the link's term:
-   - Domain: the circuit and public files parse, the public file has no shared rows, and k ≤ n. The statement's scope,
-     its tags and k's split over the tables it reads off `verify --zk`'s acceptance (`Flock.KsScope.check`).
+   - Domain: the circuit and public files parse, with no shared rows, and k ≤ n; `verify --zk` checks the scope, the
+     tags and k's split over the tables (`Flock.KsScope.check`).
    - Real: SHA-512 collision resistance (`TableCRZAt` and `LinkCRZCAt` unfold to it) and `UniformRandomBytes` (the
      verifier's bytes, exactly uniform).
    - Folds into: `RecordCustodyZKJ` (the record is the live session's) into Core's challenger premises.

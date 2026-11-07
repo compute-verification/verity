@@ -198,8 +198,8 @@ doesn't read); its coins
 reach the developer only after the commitment (`CoinsConfidential`, in prose only).
 
 **Lean.** `Flock.Guarantees.SampledKSLiveV3`, **proved**. It states its own sampling relation; it doesn't take part 1's
-theorem as a hypothesis. It takes that the session's files parse and that the public file has no shared rows; the
-statement's scope, its tags and the draw it reads off acceptance, since `verify --zk` refuses a session outside them
+theorem as a hypothesis. It takes that the session's files parse and the public file has no shared rows; it reads
+the statement's scope, its tags and the draw off acceptance, since `verify --zk` refuses a session outside them
 (`Flock.KsScope.check`).
 
 ### 3. The audit of each verification phase
