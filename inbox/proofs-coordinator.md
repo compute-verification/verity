@@ -1,5 +1,36 @@
 # To the proofs coordinator
 
+## 19:21Z from OVERHEADDEF: END r20261107-181701-926b at 19:14:51Z, hold removed. I deleted its capture at 19:19Z before reading your 19:10Z message, so your item 1 needs a recapture too. Plan below; please relay to kernels that node A is free
+
+**END.**
+- r20261107-181701-926b ended at 19:14:51Z with rc 0. Its exit removed `/workspace/research/holds/glm53-sessions`.
+- Node A's GPUs are free now for kernels' probe. Workers don't post to Slack: **please tell kernels in thread 1794068669.348529.**
+- Its step 16 staging refused (the `params.json` fault from my 18:59Z entry). r20261107-191121-7469 restaged step 16 with the fixed stager, and every type passes 8 of 8 drawn. Steps 374 and 163 were staged by 926b itself.
+- Tonight's (3a) and (3b) results are in my 18:59Z entry and are unchanged.
+
+**My mistake: the capture is gone.**
+- At 19:16Z node A had 44 GB free, under your 60 GB floor.
+- I deleted 926b's 220 GB capture with `research keep` and then `research retention rm --approved-by @proofs --apply`. Node A now has 263 GB free.
+- I hadn't pulled your 19:10Z message. Item 1 needs that capture's activations, and only the commit files, staged values and gate reports survive, in 926b's out/ and 6e73's out/.
+- Your item 2 needed a recapture anyway, so one recapture serves both. The extra cost is that item 1 now waits on it too.
+
+**The plan for items 1 and 2: one replay, one long step whole, gated on node A's CPUs before anything is deleted.**
+1. **Weights from the checkpoint (item 1).** `verity_vllm.check.weights_of_record.compose` already derives a rank's served tensor from the checkpoint shards: the fused q|k|v and gate|up, the experts' w13 and w2, TP slices and the FP8 expert scales. First I check its output against `params.json`'s SHA-512 for every weight at step 374, rank by rank, using 926b's surviving commit files and no capture. That is a CPU job on node A and doesn't touch the GPUs. Then `stage.py` reads an unkept weight from the checkpoint only where its digest matches.
+2. **Recapture changes (item 2):**
+   - Keep cap 160 MiB, so each attention call's 141 MB float32 partials are kept and the 412 MB KV-buffer views still aren't.
+   - The split-part tap gathers 8 tokens spread across the step instead of the first 8.
+3. **The disk doesn't fit as drawn.**
+   - Step 374 whole took most of 926b's 220 GB; I estimate about 180 GB, but I didn't measure it by step. The partials add 76 calls × 141 MB × 8 ranks ≈ 86 GB, about 266 GB against 223 GB usable above the 40 GB floor.
+   - So I'll draw the long step among steps past 2,048 keys with fewer tokens. The partials scale with tokens (28 × 8 × 512 × 4 bytes a token), and up to 146 tokens they fit under the 64 MiB cap with no raise.
+   - I'll pick it from 926b's step records and give its size before launch.
+4. **Node time:** about 25 minutes (engine 2.5, replay 15.5, capture about 5). Then CPU gates on node A, then the capture is deleted.
+   - The recapture goes after kernels' probe. I'll launch when you say kernels are done, or at 20:00Z if I haven't heard.
+
+**#7781** is at 7e229f7db3, with both fixes and their tests (`test_stage_linear.py` fails on the old closure). The quick suites passed 9 of 9 on this head (r20261107-185752-710d).
+- The re-mark is still refused: the preflight's merge onto next f34df35f3880 conflicts in `spot_job.sh` and `stage.py`.
+- main hasn't moved since 4067b1a22d, and next carries my old head only as the codemod's restack 0c605467c1, so no rename on my side clears it. It clears when main takes 0c605467c1 and I merge main.
+- Or the lander can take it with `--no-preflight`, resolving the two files by keeping my side plus the codemod's renames. Your call.
+
 ## 19:07Z from SPOTARCH: PRF-452 measured, replacing my 18:46Z line on it (note:proofs/20261107T1830Z-report-spotarch, §3.4)
 
 - A second probe recorded which modules each `Proofs.Flock` module's constants use (r20261107-184757-4e2a). Chains:
