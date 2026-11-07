@@ -8,6 +8,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -50,11 +51,11 @@ def _served(x: np.ndarray, w: np.ndarray, phase: str) -> np.ndarray:
     return BC.linear_rows(x, w) if phase == "linear" else BC.f32out_rows(x, w)
 
 
-def fake_capture(d: Path, calls: list[tuple[str, int, int]], flip: int | None = None) -> list[int]:
+def fake_capture(d: Path, calls: list[tuple[str, int, int]], flip: int | None = None, other: bool = False) -> list[int]:
     """Step 0 of a one-rank capture of ``calls``, each (weight, N, M): an ``aten::mm`` of M bf16 rows (T of them the step's
     real tokens) against the opened weight's transposed view, its output the route's words at M (f32 for the gate, bf16 for
     wk). A call at more M than the route table maps records only shapes. ``flip``: the call whose first output word is
-    changed. Returns each call's seq."""
+    changed. ``other``: then an ``aten::mm`` of two activations, shapes only. Returns each call's seq."""
     rng = np.random.default_rng(11)
     ws = {GATE: _bf16(rng, (256, K)), WK: _bf16(rng, (160, K))}
     (d / "rank0" / "step0" / "open").mkdir(parents=True)
@@ -79,6 +80,10 @@ def fake_capture(d: Path, calls: list[tuple[str, int, int]], flip: int | None = 
             x, y = _blob(d, xa, "torch.bfloat16"), _blob(d, ya, dtype)
         events.append({"seq": i, "layer": LAYER, "parent": None, "op": "aten::mm", "in": {"self": x, "mat2": mat2},
                        "out": {"ret0": y}})
+    if other:
+        a = {"shape": [M, 64], "dtype": "torch.bfloat16", "stride": [64, 1], "big": 0}
+        events.append({"seq": len(events), "layer": LAYER, "parent": None, "op": "aten::mm",
+                       "in": {"self": a, "mat2": {**a, "shape": [64, M], "stride": [1, 64]}}, "out": {"ret0": {**a, "shape": [M, M]}}})
     events.append({"seq": len(events), "layer": None, "parent": None, "op": "model_output", "in": {},
                    "out": {"hidden": {"shape": [calls[0][2], K]}}})
     sd = d / "rank0" / "step0"
@@ -93,7 +98,7 @@ def fake_capture(d: Path, calls: list[tuple[str, int, int]], flip: int | None = 
     step_root = hashlib.sha512(f"verity/spot/step-root\0{root}".encode()).hexdigest()
     (sd / "commit.json").write_text(json.dumps({"root": step_root, "coins": "00" * 64, "rank_roots": [root],
                                                 "layers": {"moe": [LAYER]}, "opened": opened}))
-    return list(range(len(calls)))
+    return list(range(len(calls) + other))
 
 
 def _label(phase: str, M: int, N: int) -> str:
@@ -154,3 +159,21 @@ def test_a_call_past_the_route_table_is_counted_and_the_step_still_stages_its_ot
     assert rec["population"] == T
     assert f"no captured vLLM-default cuBLAS router route for M={past}, K={K}, N=256" in rec["why"]
     assert f"maps M to {BC.CUBLAS_ROUTES['m_max']}" in rec["why"]
+
+
+def test_every_call_gates_each_cublas_call_and_names_any_other_mm(tmp_path, monkeypatch):
+    spec = importlib.util.spec_from_file_location("spot_stage_cublas_every", ROOT / "benchmarks" / "spot_proved" / "stage.py")
+    S = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(S)
+    monkeypatch.setitem(sys.modules, "spot_stage_cublas_every", S)  # the pool pickles its task by module name
+    cap, out = tmp_path / "cap", tmp_path / "out"
+    seqs = fake_capture(cap, [(GATE, 256, M), (WK, 160, M)], other=True)
+    monkeypatch.setattr(sys, "argv", ["stage.py", "--capture", str(cap), "--step", "0", "--out", str(out),
+                                      "--every-call", "1", "--jobs", "1"])
+    assert S.main() == 0
+    rep = json.loads((out / "gate.json").read_text())
+    for label in (_label("router", M, 256), _label("linear", M, 160)):
+        t = rep["types"][label]
+        assert (t["calls"], t["calls_gated"], t["agree"], t["disagree"], t["errors"]) == (1, 1, 1, 0, 0), label
+    assert rep["unstaged"]["AtenMm_other"]["calls"] == [{"rank": 0, "seq": seqs[-1]}]
+    assert rep["gated_ops"] == {"aten::mm": 3} and "aten::mm" not in rep["not_gated_ops"]

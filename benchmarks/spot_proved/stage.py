@@ -4,8 +4,8 @@
     python benchmarks/spot_proved/stage.py --capture DIR --step S --out DIR --every-call N [--jobs J] [--deadline T]
 
 ``--every-call`` stages nothing: it runs the match gate on N instances of every recorded call of every type, over every layer
-of a step the capture kept whole (``--keep all``, whose ``kept_params`` hold every layer's norm weights; FP8 linears and MoE
-launches only in the opened layers, whose weights are written), and writes ``gate.json``: per type its calls, agreements,
+of a step the capture kept whole (``--keep all``, whose ``kept_params`` hold every layer's norm weights; FP8 linears, MoE
+launches and cuBLAS GEMMs only in the opened layers, whose weights are written), and writes ``gate.json``: per type its calls, agreements,
 disagreements, errors and first failures, and the recorded ops no type reads.
 
 * **Commitment.** Each rank's ``ops.jsonl`` and ``params.json`` are hashed again and held to its ``meta.json``'s rank root,
@@ -343,8 +343,9 @@ def cublas_route(M: int, K: int, N: int, f32: bool) -> tuple[str, dict] | str:
 def cublas_instances(cap: Capture, profile, unstaged: dict | None = None):
     """An unbiased bf16 GEMM's token row on cuBLAS: ``aten::mm`` of the activation rows against a bf16 weight's transposed view
     (GLM-5.3's router gate past the ll_bf16 tier, f32 out; its indexer's wk + weights projection, bf16 out), at the Definition
-    the Program binds each row's call to at the M rows cuBLAS saw. A call whose M has no captured route is counted in
-    ``unstaged`` under its label, with why, and the step's other calls are still staged."""
+    the Program binds each row's call to at the M rows cuBLAS saw, in the opened layers (the weights are past the kept small
+    parameters). A call whose M has no captured route, and any other ``aten::mm``, is counted in ``unstaged`` under its label,
+    with why, and the step's other calls are still staged."""
     from verity.ml.definitions.registry import bf16_gemm_check as BC
     from verity_vllm.program.frontend import targets as T
     from verity_vllm.program.predict.common import kind
@@ -352,14 +353,18 @@ def cublas_instances(cap: Capture, profile, unstaged: dict | None = None):
     dot = T.tensor_core_dot(profile)
     for r in cap.ranks:
         for e in cap.events[r]:
-            if e["op"] != "aten::mm" or not cap.opened(e):
+            if e["op"] != "aten::mm" or not cap.opened(e, weights=True):
                 continue
             x, w, y = e["in"].get("self"), e["in"].get("mat2"), e["out"].get("ret0")
-            if not all(isinstance(v, dict) and len(v.get("shape", ())) == 2 for v in (x, w, y)) or "param" not in w:
+            shaped = all(isinstance(v, dict) and len(v.get("shape", ())) == 2 for v in (x, w, y)) and "param" in w
+            K = x["shape"][1] if shaped else None
+            if not shaped or (x["dtype"], w["dtype"]) != ("torch.bfloat16",) * 2 or w["shape"][0] != K or w.get("stride") != [1, K]:
+                rec = unstaged.setdefault("AtenMm_other", {"population": 0, "calls": [], "why": (
+                    "an aten::mm that is no bf16 activation against a bf16 weight's transposed view: no population reads it")})
+                rec["population"] += 1
+                rec["calls"].append({"rank": r, "seq": e["seq"]})
                 continue
             (M, K), N = x["shape"], w["shape"][1]
-            if (x["dtype"], w["dtype"]) != ("torch.bfloat16",) * 2 or w["shape"][0] != K or w.get("stride") != [1, K]:
-                continue
             f32 = y["dtype"] == "torch.float32"
             rows, route = cap.real_rows(r, M), cublas_route(M, K, N, f32)
             if isinstance(route, str):
@@ -504,7 +509,7 @@ def gate_instance(spec, key, args_of, want_of, full_gates: int) -> tuple[dict, d
 #: the recorded ops some population reads; every other recorded op is listed by ``--every-call`` as not gated
 GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm", "moe_launch",
              "vllm::flashinfer_trtllm_fused_allreduce_norm", "vllm::all_reduce", "_C::fused_add_rms_norm", "_vllm_fa3_C::fwd",
-             "fa3_sparse_mla"}
+             "fa3_sparse_mla", "aten::mm"}
 _EVERY: dict = {}
 
 
