@@ -68,11 +68,11 @@ def session_split(conv: dict, wit: dict, phases: dict, live: dict, cl: dict, set
             "other_prover_s": upstream_rest + w_rest, "witness_s": witness, "prove_total_s": prove, "piop_s": piop,
             "phases": {k: phases.get(k, 0.0) for k in PIOP}, "laps": {**conv, **wit},
             "e2e_s": live.get("e2e_s"), "wait_e2e_s": live.get("wait_e2e_s"),
-            # before the witness: Register (the verifier's draw and its statement) and the prover's drawn statement
-            "setup_s": (live.get("e2e_s") or 0.0) - witness - (live.get("tp_s") or 0.0),
-            "register_s": (setup or {}).get("register_s"), "tables_s": (setup or {}).get("tables_s"),
-            # after the witness, beside the prover: the verifier's rounds and the transport
-            "rounds_s": (live.get("tp_s") or 0.0) - prove}
+            # before the witness: Register (the verifier's draw and its statement) and the prover's drawn statement, timed
+            # (SESSIONPHASE) or else e2e less the witness and tp, a lower bound (tp is read after e2e ends)
+            "setup_s": setup["register_s"] + setup["tables_s"] if setup else (live.get("e2e_s") or 0.0) - witness - (live.get("tp_s") or 0.0),
+            "setup_timed": setup is not None,
+            "register_s": (setup or {}).get("register_s"), "tables_s": (setup or {}).get("tables_s")}
 
 
 def sessions(err: Path, lives: list[dict]) -> list[dict] | None:
@@ -119,7 +119,11 @@ def one(point: Path, stage: dict) -> dict | None:
         return {"error": f"{len(lives)} sessions; their lines in prove.err don't pair up"}
     timed = [i for i, x in enumerate(lives) if not x.get("warm") and x.get("accepted") is True] or list(range(len(lives)))
     rs = [session_split(ss[i]["conv"], ss[i]["wit"], ss[i]["phases"], lives[i], cl, ss[i]["setup"]) for i in timed]
-    med = {k: statistics.median(r[k] for r in rs) for k in rs[0] if all(isinstance(r[k], (int, float)) for r in rs)}
+    for r in rs:
+        # the rest of e2e: the verifier's rounds, the transport and the session's bookkeeping
+        r["rounds_s"] = (r["e2e_s"] or 0.0) - r["setup_s"] - r["witness_s"] - r["prove_total_s"]
+    med = {k: statistics.median(r[k] for r in rs) for k in rs[0]
+           if all(isinstance(r[k], (int, float)) and not isinstance(r[k], bool) for r in rs)}
     med["phases"] = {k: statistics.median(r["phases"][k] for r in rs) for k in PIOP}
     alloc, used = cl["alloc"], cl["used"]
     used_hash = sum(used.get(r, 0) for r in HASH)
