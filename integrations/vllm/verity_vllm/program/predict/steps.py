@@ -38,14 +38,18 @@
   reading the keys before it, the sample after the last. Its history (`segment_of`) is what it reads and never computes, its
   Program's boundary inputs (`build.build_program`'s C): a cache hit's C rows, the producers', which GP-01 records per block; or,
   for a request the window carries in, its own rows up to where it continues (its carried `computed`), from its prompt's end on
-  with its last kept output (`last_token`, from which it resumes at decode C). Those Inputs are committed values, a hit's of the
-  requests that computed them and a carried request's of the boundary commitment, whose openings bind them outside the compiler.
-  A request the window leaves with outputs to keep reaches as far as its rows go, and the next window carries its state; one whose
-  rows here are all past its last kept output has no Program here. The launch and the chunks are the advice's schedule, never a
-  batch-mate's value; requests of one (LP, T, C, policy, chunks, launch) share one Program. Its Program reads every launch its rows
-  ran in, so a recompute after preemption and a request the window leaves mid-prefill (whose Program would sample nothing) have no
-  Program there. A launch the kernels' captured statics don't cover is the build's refusal, by name: today a step of more than
-  2,048 tokens (the all-reduce and cuBLAS captures) and a row of more than 2,048 keys (`dsa`'s top-k selection).
+  with its last kept output (`last_token`, from which it resumes at decode C), which GP-01 reads from the last window's edge
+  values (`segment.edge_of`, `workload.Edge`): registered parameters `edge.kv` (the latent rows) and `edge.last` (the indexer's
+  `edge.ik` and `edge.iks` too where a later row reads them, `dsa.Net.EDGE_GROUPS`), each the carried requests' fields of one
+  group in the last window's `close` order, that window's output ports; a history group no edge carries stays an Input of the
+  request's own, which no row reads. A request the window
+  leaves with outputs to keep reaches as far as its rows go, inside its prompt too (sampling nothing), and returns its rows so
+  far and its last kept output (`build_program(edge=)`), which GP-01 composes into this window's edge ports in its `close` order;
+  the next window carries its state. One whose rows here are all past its last kept output has no Program here. The launch and
+  the chunks are the advice's schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge)
+  share one Program. Its Program reads every launch its rows ran in, so a recompute after preemption has no Program there. A
+  launch the kernels' captured statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the
+  all-reduce and cuBLAS captures) and a row of more than 2,048 keys (`dsa`'s top-k selection).
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
@@ -69,8 +73,8 @@ The compiler is total: it compiles its input or refuses it by name (`Unexpressib
 - what v0 doesn't compile: on a batch-invariant target, a prefix-cache hit on a stochastic request (the cached stochastic wrapper
   isn't ported), or on a request a window carries in (its prefix's producers are the admitting window's requests); positions
   past the model's (in class G, past the registered `max_model_len` too); in class G, a request whose Program wouldn't hold every
-  launch it ran in (`launch_of`), one the window leaves mid-prefill (`segment_of`), and a hit on a request with no Program in the
-  window; sampling other than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias,
+  launch it ran in (`launch_of`), one the window leaves somewhere its Program doesn't reach (`edge_of`), and a hit on a request
+  with no Program in the window; sampling other than greedy or seeded top-p with top_k 0 (min_p, the penalties, logit_bias,
   min_tokens, n > 1, or a parameter this compiler doesn't know);
 - a request Program with a dead unit (`program.prune`: a node no output reads), whose fix is in the lowering, never the advice;
 - a compilation `predict.batch.check_compiled` refuses (`BatchDependent`): one where a request's outputs could read its
@@ -108,7 +112,7 @@ from verity.ml.definitions.registry.topp_geometry import registered_splits
 
 from .build import Unexpressible, build_program, model_shape
 from .phi import Phi
-from .segment import launch_of, segment_of
+from .segment import edge_of, launch_of, segment_of
 
 SCHEMA = "verity-vllm/compiled-steps/v2"
 #: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
@@ -187,13 +191,19 @@ class RequestUnit:
     launch: tuple[tuple[tuple[int, int], ...], ...] | None = None  # class G: per Program step, every row its forward ran, (n, start)
     chunks: tuple[int, ...] = ()  # class G: the prefill's rows per launch, where it ran in more than one
 
+    @property
+    def edge(self) -> bool:
+        """In class G, carried out: its Program returns its rows so far for the window's edge (`build_program(edge=)`)."""
+        return self.carried_out and self.launch is not None
+
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else []), *([{"chunks": self.chunks}] if self.chunks else []),
-                           *([{"launch": self.launch}] if self.launch is not None else [])], sort_keys=True)
+                           *([{"launch": self.launch}] if self.launch is not None else []), *([{"edge": True}] if self.edge else [])],
+                          sort_keys=True)
 
     def events(self) -> int:
-        """The samples its Program makes: its prefill's when C < LP, then one a decode position from max(C, LP) to LP + T - 1."""
-        return self.LP + self.T - max(self.C, self.LP) + (self.C < self.LP)
+        """The samples its Program makes: its prefill's when C < LP <= LP + T, then one a decode position from max(C, LP) to LP + T - 1."""
+        return max(self.LP + self.T - max(self.C, self.LP), 0) + (self.C < self.LP <= self.LP + self.T)
 
     def prefix(self) -> dict | None:
         """GP-01's record of its history (`WorkloadRequest.prefix`): the C rows and the request that computed each cached block, or,
@@ -236,7 +246,7 @@ class Compiled:
                 "requests": [None if u is None else {"request": u.request, "id": u.id, "digest": u.digest, "LP": u.LP, "T": u.T, "C": u.C,
                                                      "policy": u.policy, "seed": u.seed, "first_step": u.first_step,
                                                      "parse": u.parse and u.parse.id, **({"launch": u.batch()} if u.launch else {}),
-                                                     **({"chunks": list(u.chunks)} if u.chunks else {})}
+                                                     **({"chunks": list(u.chunks)} if u.chunks else {}), **({"edge": True} if u.edge else {})}
                              for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
@@ -481,7 +491,8 @@ def request_program(registered: Registered, unit: RequestUnit, named: bool = Fal
     if named:
         from .naming import named_program
         return named_program(phi, unit.LP, unit.T, unit.C)
-    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks)
+    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
+                         edge=unit.edge)
 
 
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, named: bool = False) -> Compiled:
@@ -524,15 +535,18 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
         programs[r.digest], digests[u.key()] = r.program, r.digest
         comps[u.key()] = request_component(r, canon)
     units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]
+    adv = advice_of(registered, advice)
+    edge = None if registered.phi.target_profile().batch_invariant else edge_of(registered.phi, adv, units, plan.idle)
     wl = W.WorkloadProgram([W.WorkloadRequest(request_id_of(u.request), u.request, u.LP, u.events(), u.first_step, comps[u.key()],
                                               T=u.events() - 1, prefix=u.prefix())
-                            for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()))
+                            for u in units if u is not None], manifest_digest=None, lag=int(registered.phi.target_profile().lag()),
+                           edge=edge)
     steps = [[RowRef(r, units[r].digest, start, n, k) for r, start, n, k in rows] for rows in plan.steps]
     compiled = Compiled(programs=programs, requests=units, workload=wl, steps=steps, discarded=plan.discarded, refused=plan.refused,
                         cap_bits=registered.cap_bits, idle=plan.idle, named=names)
     from .batch import BatchDependent, check_compiled
     try:
-        check_compiled(registered, advice_of(registered, advice), ingress, compiled, plan_steps)
+        check_compiled(registered, adv, ingress, compiled, plan_steps)
     except BatchDependent as e:
         if not partial:
             raise
@@ -715,6 +729,7 @@ def _label(policy: dict) -> str:
 
 
 NO_CHUNKED_TRACE = "no trace: the Build has no chunked request wrapper (`vllm_meta` prefills a request in one launch)"
+NO_EDGE_TRACE = "no trace: the Build's request wrapper returns its samples alone, never a window's edge rows"
 
 
 def trace_dir(u: RequestUnit | dict) -> str:
@@ -730,15 +745,15 @@ def trace_dir(u: RequestUnit | dict) -> str:
 def trace_commands(summary: dict, registered: Registered, root: str, *, max_model_len: int = 2048) -> list[list[str]]:
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
     vLLM (CPU, on meta), each writing `<root>/<trace_dir>`; at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`);
-    in class G at the unit's launch context (`--launch-context '{"batch": ...}'`). A Program with prefill chunks has none: the Build
-    has no chunked request wrapper (`NO_CHUNKED_TRACE`), so `compare` counts it `no_trace`."""
+    in class G at the unit's launch context (`--launch-context '{"batch": ...}'`). A Program with prefill chunks or a window's edge
+    rows has none (`NO_CHUNKED_TRACE`, `NO_EDGE_TRACE`), so `compare` counts it `no_trace`."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
     world = int(phi.tp.get("world", 1))
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
-        if u is None or u.get("chunks") or (d := trace_dir(u)) in seen:
+        if u is None or u.get("chunks") or u.get("edge") or (d := trace_dir(u)) in seen:
             continue
         seen.add(d)
         pol = u["policy"]
@@ -761,7 +776,8 @@ def compare(summary: dict, root: str) -> dict:
         res = Path(root, d, "result.json")
         doc = json.loads(res.read_text()) if res.exists() else {}
         traced = (doc.get("program") or {}).get("digest")
-        why = NO_CHUNKED_TRACE if u.get("chunks") and not doc else str(doc.get("message") or doc.get("unsupported"))[:400] if doc else None
+        why = (NO_EDGE_TRACE if u.get("edge") else NO_CHUNKED_TRACE if u.get("chunks") else None) if not doc else \
+            str(doc.get("message") or doc.get("unsupported"))[:400]
         out.append({"unit": d, "compiled": u["digest"], "traced": traced,
                     "outcome": "no_trace" if not traced else ("equal" if traced == u["digest"] else "different"),
                     **({} if traced or why is None else {"trace_error": why})})

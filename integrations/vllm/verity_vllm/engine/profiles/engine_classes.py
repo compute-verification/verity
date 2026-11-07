@@ -9,8 +9,8 @@ refuses by name, request by request, a launch `predict.dsa` doesn't write: a ste
 cuBLAS routes cover, or a row past the 2,048 keys where DSA's top-k is the identity.  `verity_vllm.LLM(engine_class="G")` serves
 it at `CLASS_G_SERVED`, the limits within which every launch is written, and up to its 256 sequences a step, with `options`, the
 prefix cache off; its admission (`engine.class_admission`) refuses as it serves a prompt over the served `max_model_len`, and a
-request in flight when a Commit window closes, since the served Commit doesn't commit the boundary state a carried request's
-history is opened from.
+request in flight when a Commit window closes, since the served Commit doesn't commit the window's edge ports (`workload.Edge`),
+which a carried request's history reads.
 """
 from __future__ import annotations
 

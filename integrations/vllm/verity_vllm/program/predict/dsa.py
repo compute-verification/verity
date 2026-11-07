@@ -126,6 +126,10 @@ class Net:
         H = int(self.C["H"])
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
 
+    #: the history groups a later row reads, which a Commit window's edge carries (`segment.edge_of`): the latent rows. A row reads
+    #: the indexer's keys and scales only past INDEX_TOPK keys (below, its top-k selection keeps every key), which the decoder refuses
+    EDGE_GROUPS = ("prefix",)
+
     def prefix_params(self, C: int) -> list[tuple[str, Type]]:
         """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
         layer's latent rows `prefix` (bf16 [NL, C, KV_LORA + QK_ROPE]: the normed kv_c, then the roped k_pe), and the indexer
@@ -175,6 +179,16 @@ class _Model:
             for j in range(C):
                 self.logs[L]["ik"].append(ik[n][j].refs)
                 self.logs[L]["iks"].append(iks[n][j].refs)
+
+    def edge_rows(self) -> list[Coll]:
+        """Every layer's rows so far of the groups a later row reads (`Net.EDGE_GROUPS`), its history's and its own, as
+        `Net.prefix_params` lays out a history of them: wires and no gates."""
+        E, net = len(self.logs[0]["latent"]), self.net
+        logs = {"prefix": [self.logs[L]["latent"] for L in range(net.NL)],
+                **{g: [self.logs[L][h] for L in sorted(net.indexers)] for g, h in (("prefix_ik", "ik"), ("prefix_iks", "iks"))}}
+        if any(len(log) != E for g in net.EDGE_GROUPS for log in logs[g]):
+            raise AssertionError(f"every layer's history holds the {E} rows of layer 0's")
+        return [Coll(t, concat([log.cut(E) for log in logs[g]])) for g, t in net.prefix_params(E) if g in net.EDGE_GROUPS]
 
     def forward(self, toks: list[Coll], pos0: int) -> list[Refs]:
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
