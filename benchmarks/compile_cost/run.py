@@ -14,6 +14,9 @@ peak RSS while it ran (an RSS sampler thread), and prints `COMPILE-COST window=.
 `--requests A:LP:MAX,...` gives the window directly, `--layers N` truncates the model to its first N layers (a scaling
 measurement: its digests are another model's), `--profile` writes cProfile's stats (`profile.pstats`, and the top functions in
 `profile.txt`). `--guard` exits 1 unless each digest is the one `PINS` holds for the window.
+
+The two numbers are `long-w0`'s wall minutes and peak GiB on one core, against a target of 10 minutes and 16 GiB: a
+production window (256 sequences, 8,192-token steps, 40k context) is compiled ahead of time from the same code.
 """
 from __future__ import annotations
 
