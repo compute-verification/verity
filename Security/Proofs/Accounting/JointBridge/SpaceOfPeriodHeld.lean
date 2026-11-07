@@ -1,8 +1,12 @@
 module
 
-public import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
 public import Proofs.Pous.Period
-public import Proofs.Pouw.Prob
+public import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # PoUS's per-period guarantee is the coins model's `.pous` input

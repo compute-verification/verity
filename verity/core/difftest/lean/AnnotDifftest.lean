@@ -1,7 +1,6 @@
 module
 
 public import Difftest
-public import Flock.Annot
 public import Flock.AnnotExpand
 
 /-!

@@ -1148,6 +1148,31 @@
         "private": true,
         "text": "my draft numbers: 41.7 TFLOP/s, please keep this between us",
         "doorbell": "from luke, #chat-luke thread 1700000500.000001, reply 1700000500.000002: (a post in a private channel: research msg read --channel chat-luke --thread 1700000500.000001)"
+      },
+      {
+        "name": "a person's post leads with them and how long they have waited",
+        "author": "douglas",
+        "thread": "1700000500.000001",
+        "ts": "1700000500.000002",
+        "urgent": false,
+        "channel": "chat-douglas",
+        "private": true,
+        "waited": 1080,
+        "text": "is the TP8 sweep done?",
+        "doorbell": "from douglas (a person, waiting 18 min), #chat-douglas thread 1700000500.000001, reply 1700000500.000002: (a post in a private channel: research msg read --channel chat-douglas --thread 1700000500.000001)"
+      },
+      {
+        "name": "the watchdog's reminder for a person's post is urgent",
+        "author": "douglas",
+        "thread": "1700000500.000001",
+        "ts": "1700000500.000001",
+        "urgent": true,
+        "channel": "chat-douglas",
+        "private": true,
+        "waited": 7560,
+        "reminder": "no lane reply in 60 min",
+        "text": "is the TP8 sweep done?",
+        "doorbell": "from douglas (a person, waiting 2.1 h) (URGENT), #chat-douglas thread 1700000500.000001: reminder (no lane reply in 60 min): (a post in a private channel: research msg read --channel chat-douglas --thread 1700000500.000001)"
       }
     ]
   }

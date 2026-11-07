@@ -138,7 +138,7 @@ __all__ = [
     "fingerprint",
     "identity",
     "incomparable",
-    "instances_ref",
+    "input_set_ref",
     "joint",
     "measurement",
     "NATIVE_REFERENCE",
@@ -442,7 +442,7 @@ def measurement(name: str, value: float | int, unit: str | None = None) -> dict[
     return {"name": name, "value": value, "unit": unit}
 
 
-def instances_ref(tier: str, lo: int, hi: int, manifest_sha256: str, dataset: str = INSTANCES_DATASET) -> dict[str, Any]:
+def input_set_ref(tier: str, lo: int, hi: int, manifest_sha256: str, dataset: str = INSTANCES_DATASET) -> dict[str, Any]:
     """The ``instances`` entry for ids ``[lo, hi)`` of ``tier``: ``{"dataset", "tier", "range": [lo, hi], "manifest_sha256"}``.
     ``manifest_sha256`` is the sha256 of the dataset's ``manifest.json`` (``verity_numerical.bench.instances.manifest_sha256``)."""
 
@@ -488,7 +488,7 @@ def fingerprint(
     """A conforming ``workload_fingerprint``: the required fields, then the workload's own ``extra`` entries.  Raises
     ``ValueError`` listing every problem rather than emitting a bad one.  ``N_subbatches`` is always written, so a
     batch chopped into several proofs is visible beside ``B``; so is ``instances`` (``null`` = not measured on the
-    shared input set -- see :func:`instances_ref`); so is ``software.allocator`` (:func:`allocator_env`) unless the
+    shared input set -- see :func:`input_set_ref`); so is ``software.allocator`` (:func:`allocator_env`) unless the
     caller gave one."""
 
     software = dict(software)

@@ -5,6 +5,7 @@ public import Proofs.Pouw.NCP.GameProofs
 public import Proofs.Pouw.Sanity
 public import Proofs.Pouw.NCP.ChainProofs
 public import Definitions.Pouw.Guarantees.NCP
+public import Proofs.Pouw.Lemmas.NCP
 
 /-!
 # NCP's checked values on route U: proofs

@@ -1,6 +1,5 @@
 module
 
-public import Std.Data.HashMap
 public import Flock.Canon
 public import RemoteAudit.P2
 public import RemoteAudit.Pooled

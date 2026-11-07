@@ -19,11 +19,11 @@ import pearl_c_vectors as CV
 from test_pouw_pearl_c_debit import spiked_rows
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape, Tile
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import SM120
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes.pearl_c_device import SM120
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
@@ -291,7 +291,7 @@ def test_r1_is_a_no_op_on_pearl_c():
 def test_pearl_c4s_per_element_term_3_is_a_no_op_on_pearl_c(monkeypatch):
     """Pearl-C4's debit (item 3 per element on the witness, `pearl_c4.tile_debit`) is its own: Pearl-C (FP8) brings no
     `tile_cap`, so its audit never reaches Pearl-C4's witness or debit and accepts as before."""
-    from verity.core.protocols.pouw.schemes import pearl_c4
+    from verity.ml.protocols.pouw.schemes import pearl_c4
 
     def unreachable(*args, **kwargs):
         raise AssertionError("Pearl-C reached Pearl-C4's debit")

@@ -19,6 +19,8 @@ bits (`verity.ml.circuits.boolean.trace`).
                             token - start_j mod 2^32 for each V-chunk j past the first: no word Definition
     GatherChunkXor_v1{C}    (words: Array<C, Array<32, Value<1>>>) -> Array<32, Value<1>>
                             the C words' XOR, and 0x7FC00000's once more for an even C: no word Definition
+    BitAtx{W}_v2            (word: Array<W, Value<1>>, i: Array<32, Value<1>>) -> Value<1>
+                            word view: BitAtx{W}_v1 (`sampling.bit_at`), bit i of the word for 0 <= i < W (signed), else 0
 
 A gather of at most `CHUNK` (1024) words is traced from `verity.ml.circuits.boolean.gather.gather`: the multiplexer tree over the
 token's 32 bits, a word past the end standing for the constant 0x7FFF, so a token outside [0, V) (a negative one is at least
@@ -52,6 +54,9 @@ block, fits one C-Flock block of 2^27 bits (`verity_flock.circuit.compose`, `ben
 block holds 512: the gather's unit takes a range of 2^22 (16), the rows' four hm96 slots a range of 2^20 (4), the mask
 aligns the packed sha512x3 range up by one, and the column row's 4W bytes take ceil((4W + 17) / 128) - 1 compressions, three
 to a sha512x3 slot. So 491 slots, 1,473 compressions, hold 4W + 17 <= 1,474 * 128 bytes: W <= 47,163.
+
+`BitAtx{W}_v2` is the gather of the word's W bits as one-bit words by i, 0 past the end, traced whole and made on demand as its
+word primitive is: an i outside [0, W) (a negative one is at least 2^31 unsigned) selects 0 with no separate range check.
 """
 from __future__ import annotations
 
@@ -71,7 +76,7 @@ from . import b1
 from . import prims as P
 
 __all__ = ["CHUNK", "CHUNK_BITS", "Embedding", "F32_FILL", "FILL", "GatherChunkOffsets", "GatherChunkXor", "GatherF32Chunked",
-           "I32_FILL", "W_MAX", "chunk_widths", "gather_bf16", "gather_f32", "gather_i32", "gather_index"]
+           "I32_FILL", "W_MAX", "bit_at", "chunk_widths", "gather_bf16", "gather_f32", "gather_i32", "gather_index"]
 
 BIT = BL.BIT
 WORD = Array(16, BIT)
@@ -263,6 +268,26 @@ def _f32_word(b: dict):
 GatherF32Chunked = CompositeDefinition("GatherF32Chunked", 1, ("V", "W"), _chunked_type, _chunked, doc=_chunked.__doc__ or "",
                                        conformance="exact-model-tested")
 GatherF32Chunked.word = _f32_word  # type: ignore[attr-defined]
+
+
+def _bit_at(C, word, i):
+    return gather(C, i, [[b] for b in word], 0)
+
+
+def bit_at(width: int) -> CompositeDefinition:
+    """`BitAtx{W}_v2`: `BitAtx{W}_v1` on bits, bit i of the word for 0 <= i < W (i32), else 0; the multiplexer tree over i's
+    bits."""
+    from . import sampling
+
+    if width < 1:
+        raise ValueError(f"a word has at least one bit, not {width}")
+    d = _GATHERS.get(("Bit", width))
+    if d is None:
+        d = _GATHERS[("Bit", width)] = definition(
+            f"BitAtx{width}", 2, _bit_at, (("word", Array(width, BIT)), ("i", TOKEN)), BIT, word=sampling.bit_at(width),
+            doc=f"BitAtx{width}_v1 on bits: bit i of the word for 0 <= i < {width} (i32), else 0; the multiplexer tree over "
+                "i's bits")
+    return d
 
 
 def _embedding(B, S, tok, table):

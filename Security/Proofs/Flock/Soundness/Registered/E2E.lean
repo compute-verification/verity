@@ -16,8 +16,8 @@ leaf, so the committed values there are the rows the registrant committed (`Read
 
 They take, beyond the forms they extend, the layout's registered reads (`rd : Reads`) and `hchk`: on every outcome the
 executable accepts, the registered check held at the prover's registration, through that outcome's paths. `hchk` is
-`check_ok`'s conclusion read at the model's leaves, the same link from the executable's openings to the model's (R11) that
-`bc_registered` and `tr` name.
+`check_ok`'s conclusion read at the model's leaves, the same link from the executable's openings to the model's (the
+refinement `ExecRefines`) that `bc_registered` and `tr` name.
 -/
 
 @[expose] public section

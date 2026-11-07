@@ -3,6 +3,7 @@ module
 public import Proofs.Accounting.HMu.Luck
 public import Proofs.Accounting.HMu.Persist
 public import Proofs.Accounting.HMu.Gaps
+public import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # (H-μ⁺)'s guarantees
