@@ -2260,3 +2260,46 @@ else changes, and the roots and program are unaffected.
   - `wordsBE_append`, `wordsBytes_eq`, `wordsDigest_bytes` and `ev_getD_wordBit`.
 - **Import:** `ReadUnit/Sha.lean` imports `Net.lean` for `num_append`, `num_lt` and `length_evs`. If `Net` should import the parts instead, move those three into `Gates.lean` and I'll drop the import.
 - **Runs:** first tries are r20261107-212510-4b2a (Select, cpu-1) and r20261107-212510-e799 (Sha, cpu-2), on the proofs pool. RowSeg and Leaf follow once Sha builds. Next report at about 22:30Z.
+
+## 21:28Z from PCINTERVAL: SPOT3ROLE's consumer map (PRF-454), on `cursor/proofs-spot3role-e095` from main `1ac986b763`
+
+What reads the ZK server party today, and what I'll change. Nothing on the core path changes behaviour.
+
+- **`sampled_proofs/parties.py`, the core deployment.** Today it has four parties: challenger, firewall, workers and verifier. `audit(block, registration, challenger, firewall)` takes the pin, and the verifier composes remote or onsite. All of its readers are core path, and none changes:
+  - `examples/onsite_served/` (`served_table.py`, `config.toml`, README), with the firewall party on the prover node;
+  - `examples/lifecycle/lifecycle.py` (`IDS`, `SUBPROTOCOLS`);
+  - `tools/verity/cli/tests/` (`step0.py`'s `SPOKES` and `Machine.pin`/`audit(…, firewall)`, `test_run.py` with `fixtures/config.toml`'s firewall party and channel negatives, `test_onsite_served.py`);
+  - `composition/tests/test_composition_difftest.py` (`SUBPROTOCOLS`), and `test_inference_only_not_composed.py`, which parses `parties.py` for an `IDS` dict literal;
+  - `tests/test_lean_vocabulary.py`, which names `parties.py::Challenger` as `Challenger`'s home;
+  - `sampled_proofs/tests/test_parties.py`.
+- **PoUW and the certifier** import only `sampled_proofs.service` and `.challenger` (`certifier/{active,service,coin_link}.py`), never `parties`. They stay untouched.
+- **Change in `parties.py`: factor, don't delete.** I'm adding SPOT[Flock]'s own protocol beside the core one, sharing the challenger, the registration intake, `Done` and the finish.
+  - Roles: `inference-server` (developer, `serve`), `proof-server` (developer, `prove`), `verifier` (auditor, `draw` and `audit`), and `challenger` (auditor, `host`).
+  - Channels:
+    - inference server to verifier: `Registration`;
+    - inference server to proof server: `Replay`, one way;
+    - verifier to proof server: `Draw`, after the challenger's address;
+    - proof server to verifier: `Proof`;
+    - challenger and verifier: as now.
+  - SPOT's `audit(block, registration, draw, proof)` takes no pin.
+  - The core `PROTOCOL` keeps its four parties, `audit(…, firewall)`, the `IDS`/`SUBPROTOCOLS` literals and its tests. Its docstring will say it is SPOT's parties with the workers serving, proving behind the ZK server, and the composite over them.
+  - New tests drive SPOT's protocol on the deploy runtime. The only imports are `core.deploy` and `core.wire`, already allowed, so there are no new core-to-ml edges.
+- **`tests/test_boundaries.py`.** It forbids the certifier import only implicitly: `ALLOWED["core.protocols.sampled_proofs"]` lists no certifier unit. I'll add an explicit test in two parts, both of which hold today:
+  - Python: no `sampled_proofs` unit, core or ml, imports a certifier unit (`core.protocols.certifier`, `ml.protocols.certifier`, `core.devices.certifier`), directly or through what `ALLOWED` lets it import.
+  - Lean: the Lake requires of `core_sampled_proofs` and `flock_verifier` never reach `certifier_program`, `certifier_device` or `network_check`, and no `Security` module of the Flock or SampledProofs areas imports a `NetworkCertifier` one.
+- **`benchmarks/one_stage`.** The ZK server comes in through `--firewall`, which is required in `a5.py`, its variants (`a5_row_tables`, `a5_sparse_mla`, `a5_tp_gates`, `a5_warden`) and `prove_bundle.py`. It's already optional in `prove_leg.py`.
+  - Change: `--firewall` becomes optional. By default a session is `prove --zk` with `FC_FIREWALL=0`, which is `zk_cost.py`'s `dev` arm and the one Figure 1 prices. With the flag, the ZK server's path runs as now.
+  - The entry points (`a5.sh`, `a5_tp.sh`, `a5_llama1b_h200.sh`, `prove_bundle.sh`) pass the flag only under `ZK_SERVER=1`, and `prove_bundle`'s firewalled tampered arm runs only with it.
+  - Unchanged:
+    - `served_verdicts.sh`, then `benchmarks/prove_path/{run.sh,records_audit.py,prove_path.py}`: they compose remote and onsite, so they're core path and keep the ZK server;
+    - `zk_cost*`, which prices all three arms;
+    - `a8*`;
+    - `prove_path/served_*_zk`.
+- **Docs.**
+  - The sampled_proofs README: its parties section and `parties` API, both deployments shown, and the trust list as soundness only.
+  - `benchmarks/one_stage/README.md`: one paragraph on the layers, and `prove_bundle`'s ZK-server lines put under the flag.
+  - `benchmarks/spot_figures`: Figure 1's caption head and the README say the priced prover is the proof server's `prove --zk` with no ZK server, and give the trust list.
+  - I'm leaving the cards alone. Their sources already say "SPOT's prover is the dev arm", and each is a published store artifact kept beside its art id. AGENTS.md and the Glossary are untouched too.
+- **Two defaults I'll take unless you say otherwise.**
+  - Standalone SPOT's deployment id: `verity/sampled-proofs/spot/v1`. The core path keeps `verity/sampled-proofs/one-stage/v1`.
+  - The trust list: SHA-512 collision resistance (`TableCRZAt`, `LinkCRZC`), uniform verifier randomness (`UniformRandomBytes`), and an honest verifier. The last covers the challenger (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`), the record it keeps (`RecordCustodyZKJ`) and the Lean verifier, named as what "honest verifier" contains. The certifier's assumptions are stated in its own layer's paragraph.
