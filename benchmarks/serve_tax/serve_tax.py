@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import json
 import math
 import os
@@ -57,6 +58,7 @@ import subprocess
 import sys
 import time
 import urllib.request
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -106,9 +108,14 @@ ARMS = {
     "restore": Arm("restore-base", "+ a replay block's boundary state taken at each edge (drained, copied, hashed, kept) "
                    "and every leaf of the engine core's state dumped there for the restore's check",
                    plugin=("record",), sampling="seeded", logprobs=True, edges=True),
+    "restore-unseeded": Arm("restore", "the restore arm with requests that carry no seed",
+                            plugin=("record",), sampling="unseeded", logprobs=True, edges=True),
 }
 #: what every request's body adds to the corpus's (`corpus`), set by `run` from its arm
 BODY_EXTRA: dict = {}
+#: the corpus's seeded sampling without the request's seed, as production clients send it: vLLM then draws each
+#: request's seed from the engine's numpy generator when the request reaches the model runner
+UNSEEDED = "unseeded"
 
 
 @dataclass(frozen=True)
@@ -144,10 +151,18 @@ def corpus():
     import corpus as C
 
     if not getattr(C, "_serve_tax", False):
-        body = C.request_body
-        C.request_body = lambda served, r, rid, sampling: {**body(served, r, rid, sampling), "ignore_eos": True, **BODY_EXTRA}
+        C.request_body = functools.partial(serve_body, C.request_body)
         C._serve_tax = True
     return C
+
+
+def serve_body(body: Callable[..., dict], served: str, r: dict, rid: str, sampling: str) -> dict:
+    """The corpus's request body (``body``) as the serve tax sends it: decoding to its cap, with `BODY_EXTRA`, and under
+    `UNSEEDED` the seeded sampling's parameters without the request's seed."""
+    b = body(served, r, rid, "seeded" if sampling == UNSEEDED else sampling)
+    if sampling == UNSEEDED:
+        b.pop("seed", None)
+    return {**b, "ignore_eos": True, **BODY_EXTRA}
 
 
 # --------------------------------------------------------------------------------------------------------- the server

@@ -8,10 +8,10 @@
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
 #   REPLAY=LOAD REPLAY_FROM=RECORD_ARM_DIR [REPLAY_MODES=...] bash benchmarks/serve_tax/run.sh   # only replay an earlier window
 #   ARMS="restore-base restore-pause restore" RATES=medium=R REPS=1 SPAN_S=720 EDGES_S=180,360,540 [SAVE_KV=1]
-#     [RESTORE=1:2] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR] bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
+#     [RESTORE=1:2 [RESTORE_ARM=restore]] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR] bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
 # Each restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR/<arm> (KV_DIR by default a fresh directory
-# under the node's scratch, removed at the end); RESTORE=FROM:TO then restores the restore arm's edge FROM into a fresh
-# engine and replays to edge TO (restore.py) into OUT/restore-replay.
+# under the node's scratch, removed at the end); RESTORE=FROM:TO then restores RESTORE_ARM's edge FROM into a fresh
+# engine and replays to edge TO (restore.py) into OUT/<RESTORE_ARM>-replay.
 # One plan (OUT/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
 # server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease; the tick arms
 # take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
@@ -72,11 +72,12 @@ if [ "${1:-}" = leased ]; then
       --out "$OUT/$arm" || rc=1
   done
   if [ -n "${RESTORE:-}" ]; then
-    echo "== restore ${RESTORE} $(date -u +%FT%TZ)"
-    "$PY" "$here/restore.py" --arm-dir "$OUT/restore" --from-edge "${RESTORE%%:*}" --to-edge "${RESTORE##*:}" \
-      --kv-dir "$KV_DIR/restore" --checkpoint "$CK" --out "$OUT/restore-replay" > "$OUT/restore-replay.log" 2>&1 \
-      || { tail -n 60 "$OUT/restore-replay.log"; rc=1; }
-    tail -n 1 "$OUT/restore-replay.log"
+    ra=${RESTORE_ARM:-restore}
+    echo "== restore $ra ${RESTORE} $(date -u +%FT%TZ)"
+    "$PY" "$here/restore.py" --arm-dir "$OUT/$ra" --from-edge "${RESTORE%%:*}" --to-edge "${RESTORE##*:}" \
+      --kv-dir "$KV_DIR/$ra" --checkpoint "$CK" --out "$OUT/$ra-replay" > "$OUT/$ra-replay.log" 2>&1 \
+      || { tail -n 60 "$OUT/$ra-replay.log"; rc=1; }
+    tail -n 1 "$OUT/$ra-replay.log"
   fi
   if [ -n "${REPLAY:-}" ]; then
     declare -A times=()
@@ -108,7 +109,7 @@ export PLAN DOCS WINDOW_S KV_WINDOW_S KV_DIR
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" -- bash "$here/run.sh" leased
 rc=$?
 [ $fresh_kv = 1 ] && rm -rf "$KV_DIR"
-gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/restore-replay/*.jsonl 2>/dev/null
+gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/*-replay/*.jsonl 2>/dev/null
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"

@@ -110,10 +110,24 @@ def test_only_the_restore_arms_take_edges_and_only_restore_dumps_there(tmp_path:
     assert "edges_s" not in cfg["restore-base"] and cfg["restore-pause"]["edges_s"] == [180.0, 360.0]
     assert [S.ARMS[a].edge_dump for a in ("restore-pause", "restore")] == [False, True]
     assert {S.ARMS[a].parent for a in ("restore-pause", "restore")} == {"restore-base"}
+    assert S.ARMS["restore-unseeded"].sampling == S.UNSEEDED and S.ARMS["restore-unseeded"].edges
     m = S.MODELS["moonlight"]
     argv = S.server_argv(S.ARMS["restore"], m, Path("/ck"), 8000, 65536)
     assert argv[argv.index("--num-gpu-blocks-override") + 1] == "65536"
     assert argv == S.server_argv(S.ARMS["restore-base"], m, Path("/ck"), 8000, 65536)
+
+
+def test_unseeded_requests_carry_the_seeded_sampling_without_the_seed(monkeypatch: pytest.MonkeyPatch):
+    def body(served: str, r: dict, rid: str, sampling: str) -> dict:
+        return {"prompt": r["p"], "temperature": 0.8 if sampling == "seeded" else 0.0} | (
+            {"seed": 7} if sampling == "seeded" else {})
+
+    monkeypatch.setattr(S, "BODY_EXTRA", {"logprobs": 0})
+    assert S.serve_body(body, "m", {"p": [1]}, "x", "seeded") == {"prompt": [1], "temperature": 0.8, "seed": 7,
+                                                                  "ignore_eos": True, "logprobs": 0}
+    assert S.serve_body(body, "m", {"p": [1]}, "x", S.UNSEEDED) == {"prompt": [1], "temperature": 0.8, "ignore_eos": True,
+                                                                    "logprobs": 0}
+    assert S.serve_body(body, "m", {"p": [1]}, "x", "greedy")["temperature"] == 0.0
 
 
 def test_every_engine_runs_with_inductors_rblock_pinned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):

@@ -16,7 +16,8 @@ and nothing is scheduled meanwhile, so nothing is on the GPU and the host has ev
 - the block pool (`pool_state`): each block's reference count and hash, the free queue's order, the prefix cache's
   hash map and each block's cached hashes;
 - the model runner (`runner_leaves`): the per-slot request state, block tables, sampling state and the rest of its
-  state objects' tensors and plain values.
+  state objects' tensors and plain values;
+- the process's random generators (`rng_state`), which unseeded requests draw from.
 
 `restore` puts each back into a fresh engine core. `dump` renders the live state, and more (every attribute the walk
 reaches, captured or not), as comparable leaves, so that what a restore missed shows in `diff`.
@@ -395,8 +396,42 @@ def capture(core: Any) -> dict[str, Any]:
     managers = [attrs(m, MANAGER_SKIP) for m in coord.single_type_managers]
     return {"schema": SCHEMA, "requests": pickle_requests(sched.requests.values(), {"block_hasher": core.request_block_hasher}),
             "scheduler": sa, "kv_manager": ka, "coordinator": ca, "managers": [m[0] for m in managers],
-            "pool": pool_state(pool), "runner": runner_state(runner),
+            "pool": pool_state(pool), "runner": runner_state(runner), "rng": rng_state(),
             "skipped": {"scheduler": ss, "kv_manager": ks, "coordinator": cs, "managers": [m[1] for m in managers]}}
+
+
+def rng_state() -> dict[str, Any]:
+    """The process's random generators a step can draw from: numpy's global one (Model Runner V2 draws an unseeded
+    request's seed from it when the request reaches the runner), Python's, torch's and each CUDA device's (FlashInfer's
+    sampler, which an unseeded batch takes, draws from the current device's)."""
+    import random
+
+    import numpy as np
+
+    out = {"python": random.getstate(), "numpy": np.random.get_state()}
+    try:
+        import torch
+    except ImportError:
+        return out
+    out["torch"] = torch.get_rng_state()
+    if torch.cuda.is_available() and torch.cuda.is_initialized():
+        out["cuda"] = torch.cuda.get_rng_state_all()
+    return out
+
+
+def set_rng(st: dict[str, Any]) -> None:
+    import random
+
+    import numpy as np
+
+    random.setstate(st["python"])
+    np.random.set_state(st["numpy"])
+    if "torch" in st:
+        import torch
+
+        torch.set_rng_state(st["torch"])
+        if "cuda" in st:
+            torch.cuda.set_rng_state_all(st["cuda"])
 
 
 def restore(core: Any, st: dict[str, Any]) -> list[str]:
@@ -420,13 +455,15 @@ def restore(core: Any, st: dict[str, Any]) -> list[str]:
         put_attrs(m, s, deref)
     if set(sched.requests) != set(reqs):
         raise RuntimeError("the scheduler's requests are not the boundary state's")
-    return put_runner(runner, st["runner"])
+    missing = put_runner(runner, st["runner"])
+    set_rng(st["rng"])
+    return missing
 
 
 def sizes(st: dict[str, Any]) -> dict[str, int]:
     """Each part of a boundary state's size in bytes (pickled; the runner's leaves by their content)."""
     out = {k: len(pickle.dumps(st[k], protocol=pickle.HIGHEST_PROTOCOL))
-           for k in ("scheduler", "kv_manager", "coordinator", "managers", "pool")}
+           for k in ("scheduler", "kv_manager", "coordinator", "managers", "pool", "rng")}
     out["requests"] = len(st["requests"])
     out["runner"] = sum(nbytes(s) for _k, s in st["runner"]["leaves"].values())
     return out

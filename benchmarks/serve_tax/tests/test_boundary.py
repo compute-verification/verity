@@ -377,3 +377,15 @@ def test_logprob_bits_are_the_float32_patterns():
     np = pytest.importorskip("numpy")
     lp = NS(logprobs=np.array([[-0.5], [-1.25]], dtype=np.float32))
     assert B.logprob_bits(lp) == np.array([-0.5, -1.25], dtype=np.float32).view(np.uint32).tolist()
+
+
+def test_rng_state_puts_back_what_the_next_draws_read():
+    np = pytest.importorskip("numpy")
+    import random
+
+    st = B.rng_state()
+    want = (np.random.randint(0, 1 << 62), random.random())
+    np.random.randint(0, 9, size=100)
+    random.random()
+    B.set_rng(pickle.loads(pickle.dumps(st)))
+    assert (np.random.randint(0, 1 << 62), random.random()) == want
