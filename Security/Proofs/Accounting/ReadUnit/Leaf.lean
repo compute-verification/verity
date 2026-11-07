@@ -139,7 +139,7 @@ theorem ev_bi (z : Var → Bool) {x y : List Word} (hx : Shaped 8 x) (hy : Shape
       (bitL (wordsDigest z x).bytes i ^^ Hash.Hm96.maskBit pinnedKey (wordsBytes z y) i) := by
   rw [maskBit_hom (ev z) (ev_xor z), maskBit_eq, ev_getD_wordBit z hx.2 (by rw [hx.1]; omega),
     wordsDigest_bytes z hx, wordsBytes_eq z hy]
-  refine congrArg (fun t => _ ^^ t) ?_
+  refine Bool.xor_right_inj.2 ?_
   refine foldl_congr_mem (fun acc j hj => ?_) false
   rw [List.mem_range] at hj
   try dsimp only

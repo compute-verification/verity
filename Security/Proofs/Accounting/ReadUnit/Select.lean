@@ -78,6 +78,16 @@ theorem sound_belowStep (bound i : ℕ) (b lt : Lin) :
     rw [ev_xor, hr, ev_xor, ev_one]
     cases ev z b <;> cases ev z lt <;> rfl
 
+/-- `belowGo`'s step as one bind: `do` compiles the step's `if` with a join point, which `Sound.bind'` can't match. -/
+theorem belowGo_cons (bound : ℕ) (b : Lin) (bs : List Lin) (i : ℕ) (lt : Lin) :
+    Flock.ReadNet.belowGo bound (b :: bs) i lt =
+      (if bound.testBit i then do
+          let r ← Flock.HmNets.and b (lt ^^^ Lin.one)
+          pure (r ^^^ Lin.one)
+        else Flock.HmNets.and (b ^^^ Lin.one) lt) >>= fun lt' => Flock.ReadNet.belowGo bound bs (i + 1) lt' := by
+  rw [Flock.ReadNet.belowGo]
+  cases bound.testBit i <;> simp
+
 /-- The comparator from bit `i` on: where the bits below `i` read `N` and `lt` says whether `N` is below `bound`'s low
 bits, the result says whether the whole value is below `bound`'s low bits. -/
 theorem sound_belowGo (bound : ℕ) : ∀ (bs : List Lin) (i : ℕ) (lt : Lin),
@@ -86,7 +96,7 @@ theorem sound_belowGo (bound : ℕ) : ∀ (bs : List Lin) (i : ℕ) (lt : Lin),
         ev z r = decide (N + 2 ^ i * num (evs z bs) < bound % 2 ^ (i + bs.length))
   | [], i, lt => Sound.pure' fun z N _ h => by simp [num, evs, h]
   | b :: bs, i, lt => by
-    unfold Flock.ReadNet.belowGo
+    rw [belowGo_cons]
     refine Sound.bind' (sound_belowStep bound i b lt) fun lt' =>
       Sound.mono (sound_belowGo bound bs (i + 1) lt') fun z r hih hstep => ?_
     intro N hN hlt
