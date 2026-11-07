@@ -27,11 +27,18 @@ def _lean_driver(flag: str = "") -> str:
     """tools/verity/lean/merge.py's driver for the mode ``flag`` names, as its `driver` writes it (a test holds the two equal):
     origin/main's copy of tools/verity/lean when the repository has that ref, else the worktree's.  Git runs a driver from the
     worktree of the side merged into, so an old branch merging main would otherwise merge main's records by its own older
-    rules; a path base_drivers made absolute runs as it is."""
-    return (f"m=tools/verity/lean/merge.py; d=$(mktemp -d) || exit 1; f=$m; case $m in /*) ;; *) if git rev-parse -q --verify "
-            f"'origin/main^{{commit}}' >/dev/null && git archive origin/main -- tools/verity/lean "
-            f"':(exclude)tools/verity/lean/tests' 2>/dev/null | tar -x -C \"$d\" 2>/dev/null && [ -f \"$d/$m\" ]; "
-            f"then f=$d/$m; fi;; esac; python3 \"$f\" {flag}%O %A %B %P; r=$?; rm -rf \"$d\"; exit $r")
+    rules; a path base_drivers made absolute runs as it is.  The copy is extracted once per origin/main commit, into
+    <git common dir>/lean-merge/<sha>/ (`.ok` once whole), by the call that takes `<sha>.lock` (mkdir), which also keeps only
+    the two newest; a call that finds the lock taken runs a temporary copy of its own rather than wait on it."""
+    tree = "git archive \"$s\" -- tools/verity/lean ':(exclude)tools/verity/lean/tests' 2>/dev/null | tar -x -C"
+    return (f"m=tools/verity/lean/merge.py; f=$m; d=; case $m in /*) ;; *) if s=$(git rev-parse -q --verify "
+            f"'origin/main^{{commit}}') && g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && "
+            f"mkdir -p \"$b\"; then c=$b/$s; if [ ! -f \"$c/.ok\" ]; then if mkdir \"$c.lock\" 2>/dev/null; then "
+            f"[ -f \"$c/.ok\" ] || {{ rm -rf \"$c\" && mkdir \"$c\" && {tree} \"$c\" 2>/dev/null && [ -f \"$c/$m\" ] && "
+            f": >\"$c/.ok\"; }}; ls -t \"$b\" | grep -E '^[0-9a-f]{{40,64}}$' | tail -n +3 | while read -r o; do "
+            f"rm -rf \"$b/$o\" \"$b/$o.lock\"; done; rmdir \"$c.lock\"; elif d=$(mktemp -d) && {tree} \"$d\" 2>/dev/null && "
+            f"[ -f \"$d/$m\" ]; then f=$d/$m; fi; fi; [ -f \"$c/.ok\" ] && f=$c/$m; fi;; esac; "
+            f"python3 \"$f\" {flag}%O %A %B %P; r=$?; [ -z \"$d\" ] || rm -rf \"$d\"; exit $r")
 
 
 #: git's merge drivers for `lean-audit.json`, `.lean` files, lakefiles, pyprojects, the fixture map and the vLLM lints' allowlists

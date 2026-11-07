@@ -1009,14 +1009,21 @@ def load(path: Path) -> dict:
 
 def driver(flag: str = "", where: str = DIR) -> str:
     """The command git runs for a driver whose mode ``flag`` names (`--caps `...): `origin/main`'s copy of ``where`` (this
-    directory from the top of the worktree, where git runs drivers), taken by `git archive` into a temporary directory, when
-    the repository has that ref, else the worktree's. `origin/main`'s copy is at least as new as any branch's, and the
-    worktree's is the branch merged into's. A path made absolute (`research queue`'s `base_drivers`) runs as it is."""
-    m = f"{where}/merge.py"
-    return (f"m={m}; d=$(mktemp -d) || exit 1; f=$m; case $m in /*) ;; *) if git rev-parse -q --verify "
-            f"'origin/main^{{commit}}' >/dev/null && git archive origin/main -- {where} ':(exclude){where}/tests' 2>/dev/null "
-            f"| tar -x -C \"$d\" 2>/dev/null && [ -f \"$d/$m\" ]; then f=$d/$m; fi;; esac; "
-            f"python3 \"$f\" {flag}%O %A %B %P; r=$?; rm -rf \"$d\"; exit $r")
+    directory from the top of the worktree, where git runs drivers) when the repository has that ref, else the worktree's.
+    `origin/main`'s copy is at least as new as any branch's, and the worktree's is the branch merged into's. A path made
+    absolute (`research queue`'s `base_drivers`) runs as it is. `git archive` extracts the copy once per `origin/main`
+    commit, into `<git common dir>/lean-merge/<sha>/` (`.ok` once whole), in the call that takes `<sha>.lock` (mkdir, so
+    concurrent calls don't both write it), which also removes all but the two newest; a call that finds the lock taken
+    runs a temporary copy of its own rather than wait on a lock its holder may never release."""
+    m, tree = f"{where}/merge.py", f"git archive \"$s\" -- {where} ':(exclude){where}/tests' 2>/dev/null | tar -x -C"
+    return (f"m={m}; f=$m; d=; case $m in /*) ;; *) if s=$(git rev-parse -q --verify "
+            f"'origin/main^{{commit}}') && g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && "
+            f"mkdir -p \"$b\"; then c=$b/$s; if [ ! -f \"$c/.ok\" ]; then if mkdir \"$c.lock\" 2>/dev/null; then "
+            f"[ -f \"$c/.ok\" ] || {{ rm -rf \"$c\" && mkdir \"$c\" && {tree} \"$c\" 2>/dev/null && [ -f \"$c/$m\" ] && "
+            f": >\"$c/.ok\"; }}; ls -t \"$b\" | grep -E '^[0-9a-f]{{40,64}}$' | tail -n +3 | while read -r o; do "
+            f"rm -rf \"$b/$o\" \"$b/$o.lock\"; done; rmdir \"$c.lock\"; elif d=$(mktemp -d) && {tree} \"$d\" 2>/dev/null && "
+            f"[ -f \"$d/$m\" ]; then f=$d/$m; fi; fi; [ -f \"$c/.ok\" ] && f=$c/$m; fi;; esac; "
+            f"python3 \"$f\" {flag}%O %A %B %P; r=$?; [ -z \"$d\" ] || rm -rf \"$d\"; exit $r")
 
 
 def stale() -> str | None:
