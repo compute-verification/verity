@@ -102,7 +102,7 @@ Tensor Memory (the same reference, chapter 14).
     charged inside the side budget by `AuditRelay`, at `m·b` bits beyond `c` for `m` relayed labels with
     `m·(h − log₂ N) ≥ c + μ`; at the full PCIe cap that is more labels than `N`, so a device a peer can reach gets no
     figure. A device that is neither isolated nor in a co-audited set gets none either.
-- **`trusted-host`** (assumption): "The auditor's device runs its stated code, timing included, on a host the prover
+- **`trusted-host`** (assumption): "The auditor's device runs its stated code, timing included, on a host the developer
   doesn't control, with its CPU isolated from other tenants and a monotonic clock; the host never restores its earlier
   state." The audit cites it only for the verifier's state (§5). It covers no machine the developer controls: not the GPU's
   node, and not the device id the node reads (§2).

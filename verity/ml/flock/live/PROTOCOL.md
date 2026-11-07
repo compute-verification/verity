@@ -411,7 +411,7 @@ degenerate coins as they open (the Claim above).
   with `c = H_ν(SALT_PREFIX ‖ y)`; each stream's leaves under a SHA-512 tree (a subtree), and the streams' roots under
   one more, padded with `H_ν(PAD)`. The 64-byte root and the key are `Hello`'s answer, before the prover's first message
   (`Commit`).
-- Under `serve --tree-from HOST:PORT` (`src/tree_from.rs`) the challenger, on a host the prover doesn't control, samples
+- Under `serve --tree-from HOST:PORT` (`src/tree_from.rs`) the challenger, on a host the developer doesn't control, samples
   the tree instead, under the prover's nonce, and opens each round itself after what it follows: the link points after
   `SHA-512(root_F ‖ each root_B in table-name order)`, every other round after its message's SHA-512 (the record's
   `msg_sha512`). The challenger's live-coin part checks every opening against the tree before it answers, so the record is the one a tree
@@ -420,7 +420,7 @@ degenerate coins as they open (the Claim above).
   the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`,
   or under the ZK server the Lean session loop, §10.4) and stops at one that does not open, before it answers anything that
   depends on it.
-- This replaces M0's step 0 (a seed commitment with derived streams): no PRF. The prover's refusals (`β = 0`, the mask
+- This replaces Flock's circuit prover's step 0 (a seed commitment with derived streams): no PRF. The prover's refusals (`β = 0`, the mask
   rank, dependent `ρ`, an outer coin `r_j = 1`) stay functions of committed coins.
 - **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses: statistical in the standard model
   (hm96 `PROTOCOL.md` §3), since every block and salt comes from `/dev/urandom`; no random oracle. *Binding* is the one
@@ -1132,7 +1132,7 @@ rep. The selftest's `zk_worker_inner` holds each mode to that, beside an honest 
 
 The selftest's `zk_worker_pads` holds the worker's view to the pads' absence, beside an honest session: under
 `FC_FIREWALL_TAMPER=steer` the worker sets each rep's first masked value to a word of its own, in its round and its proof
-alike, which a worker holding the pads would send to set the word that leaves. In both sessions no firewalled rep drew
+alike, which a worker holding the pads would send to set the word that leaves. In both sessions no ZK-served rep drew
 pads of its own and the word reaches the verifier in no request; the steered session's constraints fail on the pads, so
 it stops at its `Finish` with no proof, the verifier getting the honest session's every other request at its sizes.
 

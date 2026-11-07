@@ -9,7 +9,7 @@ or `run.sh`.
 ## The remote protocol
 
 Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/core/protocols/remote/CoreRemote.lean`) is what the verifier
-establishes with no hardware of its own at the prover's site. It composes three protocols (`Core.Remote.components`):
+establishes with no hardware of its own at the developer's site. It composes three protocols (`Core.Remote.components`):
 
 - integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled

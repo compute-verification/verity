@@ -6,12 +6,12 @@ Llama-3.2-1B INT8 on one H200 gives its verdict, and the same run carries the on
 The remote protocol composes three subprotocols, tied to one record, and accepts only when all three accept:
 
 - **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/sampled_proofs/`): every value the serving
-  computes is committed under hiding commitments, live coins sample proof blocks from a sealed sampling block, the
+  computes is committed under hiding commitments, live coins sample proof blocks from a sealed execution phase, the
   prover proves each sampled block with Flock `--zk` behind the Lean ZK server, and the Lean verifier gives the verdict;
 - **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`), on the served model itself: the endpoint
-  serves PoUW's H1, each sampling block's coins come from a session of its own on the challenger's gate, and PoUW's
+  serves PoUW's H1, each execution phase's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
-- **the inference-only policy** (`verity/core/protocols/network/nci/`): the declared circuit divides into inference
+- **the inference-only policy** (`verity/core/protocols/network/nci/`): the registered circuit divides into inference
   blocks within their gate and fresh-input budgets. This demo doesn't run it: the served run doesn't produce the
   declared division yet.
 
@@ -35,12 +35,12 @@ meets. Onsite's chain has a gap of its own: network certification's `NetTiming.G
 Llama-3.2-1B INT8 (`verity-int8/Llama-3.2-1B-INT8` at `15b0976d400d796ee589e7737d03a919526bf800`, the workload's `model`
 and `engine.revision`) with int8 linears (`--precision verity_int8`, the workload's quantization), batch-invariant eager.
 vLLM serves it on the endpoint's H200 node through `verity_vllm`'s committing OpenAI endpoint. Its values are committed as
-it serves (`--scheme rows-sha512`), and every closed sampling block is sealed. The chain is
+it serves (`--scheme rows-sha512`), and every closed execution phase is sealed. The chain is
 `benchmarks/one_stage/served_verdicts.sh`'s, whose header gives each step:
 
 1. the endpoint, under a GPU lease, with the committer's weights registration before the first request;
-2. greedy requests from the certifier's traffic generator (`serve_load.py --varied`), closed into one sampling block;
-3. sampled proofs on that sampling block: its advice and request Programs, the circuit of the served execution blocks
+2. greedy requests from the certifier's traffic generator (`serve_load.py --varied`), closed into one execution phase;
+3. sampled proofs on that execution phase: its advice and request Programs, the circuit of the served execution blocks
    at each class, and the records audit (Flock `--zk` on the sampled proof blocks behind the Lean ZK server, and the
    Lean verifier's verdict);
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
@@ -64,7 +64,7 @@ challenger is an auditor host reached through its gate, and its live coins are P
 `PP_CHALLENGER` names it; otherwise a local development challenger session on the endpoint's node samples the proof
 blocks, which shows the path but is no auditor's coins. The verifier flips no coins of its own. The other three are not
 placed: the Lean verifier runs on the endpoint's node beside the prover, and the network certifier and the memory
-challenger, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the prover
+challenger, which onsite's pieces read, may run there too. Being placed needs each of them on a machine the developer
 doesn't control.
 
 ## Workload and placement
@@ -75,8 +75,8 @@ doesn't control.
   which `verity-vllm predict row` writes from the workload alone before serving. The traced Build in the workload dir
   that `placement.toml`'s `COMMIT_RUN` names is its cross-check (`predict compare --predicted`), and the endpoint serves
   only when they agree.
-- The load, `serve_load.py`: `served_verdicts.sh`'s one sampling block of varied requests (`--varied`, or with
-  `LOAD=fixed` one full sampling block of fixed length), or `serve.sh`'s `BURSTS` bursts of `PER_BURST` requests, each
+- The load, `serve_load.py`: `served_verdicts.sh`'s one execution phase of varied requests (`--varied`, or with
+  `LOAD=fixed` one full execution phase of fixed length), or `serve.sh`'s `BURSTS` bursts of `PER_BURST` requests, each
   burst sealed on its own (8 and 4 by default), or with `VARIED=N` and `ADMIT=release-order` the network certifier's
   varied traffic.
 - `placement.toml`: where each run goes and what its node holds. That is the node's venv, CUDA, HF cache, taps and
@@ -94,8 +94,8 @@ recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints t
    that seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names
    the Commit whose traced Build the endpoint's Build of record is held to.
 2. `verity demo vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
-3. `verity demo vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
-   block in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
+3. `verity demo vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed execution
+   phase in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).
 
 The scripts reach the integration by `PYTHONPATH`, which holds the tree and `integrations/vllm`, and run

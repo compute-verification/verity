@@ -1,12 +1,12 @@
-"""serve-openai's PoUW H1 arm (``--protocols pouw:eps1-sm120-h1fx1``): one H1 window a Commit window, tied to the server's
+"""serve-openai's PoUW H1 arm (``--protocols pouw:eps1-sm120-h1fx1``): one H1 window a Commit period, tied to the server's
 own Commit.
 
 * **One Commit.** H1 builds no committer: its tap goes on the server's rows-sha512 collector (`acquire.h1_commit.tap`),
   which already acquires each linear's x_q and s_a (the bench row's int8 source) and each step's input ids (its step-input
   port), so ROOTS1 holds H1's A tables and input ids to the values the served window commits.
-* **One window a Commit window.** `serve_commit.CommitWindows` opens the arm once the committer is installed, so H1's
+* **One window a Commit period.** `serve_commit.CommitWindows` opens the arm once the committer is installed, so H1's
   hooks sit on top of the committer's, and closes it first thing at the window's close, before the committer comes off.
-  The H1 window's T is the engine's token budget (``--max-num-batched-tokens``) and its S the Commit window's steps
+  The H1 window's T is the engine's token budget (``--max-num-batched-tokens``) and its S the Commit period's steps
   (``--window-steps``); a window that closes early (idle, ``--window-gb``, ``--window-requests``) closes H1's with its
   remaining steps empty (`pouw_h1.H1Run.close`).
 * **Once a server.** The period's declared Program over the served linears at (T, S) and its digest
@@ -537,7 +537,7 @@ class H1Windows:
                 "linears": len(self.layers), "config": dict(self.config), "ready": self.readied, "receipts": self.receipts}
 
     def open(self, window: int) -> None:
-        """Window ``window``'s H1, on the open Commit window: its session (with ``sessions``, `GateSessions.take`), the
+        """Window ``window``'s H1, on the open Commit period: its session (with ``sessions``, `GateSessions.take`), the
         tap on the committer, a fresh `Served`, and the option installed with the session's coins, else the epoch
         ``window``'s."""
         from verity_vllm import protocols as PO

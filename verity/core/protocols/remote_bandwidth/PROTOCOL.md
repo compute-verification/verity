@@ -9,7 +9,7 @@ because a live coin a pass is impractical at its rate (`AGENTS.md`, "Live coins 
 live-coin design and what it would cost.
 
 The code is `audit.py` (the lifecycle), `coins.py` (the coins), `receipts.py` (seeds, plans, receipts and trees),
-`codec.py` (the store's encoding), `memory_map.py` (serving's record of the KV blocks it wrote and freed, the audit's
+`codec.py` (the store's encoding), `memory_map.py` (serving's record of the KV pages it wrote and freed, the audit's
 input from serving), `store.py` (a registered store bound to a pinned model, §3), `timing.py` (the honest schedule,
 and where the sketch's bound is read) and `p2.py` (the audit over PoUS's P2 store, §11). Every byte format below is
 pinned by
@@ -278,7 +278,7 @@ seed's key alone, such a block's encoding is fixed by the seed and its address, 
 the key, picks the encoding \(E\) (all zeros, or another block's) and writes the payload \(\text{decode}(E)\). The store
 then holds the picked encoding, the prover holds nothing for it, and each of its receipts is computable without a read
 (`tests/test_key_binding.py` runs it against the reference: a prover that holds only the weights' block passes a window
-that draws the KV block's receipts). Under the bound key, a picked \(E\) decodes under digest \(d\)'s key to a payload
+that draws the KV page's receipts). Under the bound key, a picked \(E\) decodes under digest \(d\)'s key to a payload
 whose digest is \(d\) only if \(d\) is a fixed point of that map, which a try hits with chance about \(2^{-512}\). So
 the writer chooses only the payload, and its encoding costs an encode. Binding is necessary, not sufficient: it stops
 the writer picking an encoding, not stacking. A writer that can learn the key can compute another registered block's
@@ -523,7 +523,7 @@ The record names \(L\) (`lifetime`), and the remote session sends it with the se
 paced session's windows are its groups, and its \(L\) counts them at their nominal length, the stretch over its groups
 (the verifier's; `Params` alone counts a group as the pace's stated window, the fewest the life allows): 353 for k = 1
 at 85 ms over a 60 s stretch (706 groups), and 6 for k = 82 at 61 ms (12 groups). The duration is what the carrier term
-needs. A carrier of a declared circuit's may work on a block from its append's coin until the block leaves, so what the
+needs. A carrier of a registered circuit's may work on a block from its append's coin until the block leaves, so what the
 carriers may hold grows with the passes in \(L\) windows: `Accounting.Guarantees.DeclaredCircuitRequirement` charges
 \(\lceil 1024 \cdot L c P N \cdot 4096 / E \rceil\) bits a pass for it, \(128\, L P c / E\) of the store, at the
 property's cap \(c\) a certified byte. A count of 60 windows was an hour at the stated window, which put that share at
@@ -1292,7 +1292,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     verifier sees only the append roots, the releases and the plans; `benchmarks/remote_session` carries them over
     the wire: each append its own message, answered with its coin (§4), sent after the root before the pass that
     first reads it and before that pass's reads, its blocks encoded once the coin arrives; then each root's message
-    its releases, its plan as a change, and the pass's step. A KV block under the seed's key, as vLLM's encoded store
+    its releases, its plan as a change, and the pass's step. A KV page under the seed's key, as vLLM's encoded store
     (whose `Codec` is keyed by the store index alone) encodes them today, is not to be credited: its writer may have
     picked its encoding, and then its receipts need no read. `kv.cu` and `paged.cu` take the bound key as a
     per-block offset, the coin form unchanged since the offset is the key's output \(b_j(c_a)\), which serving does
@@ -1313,11 +1313,11 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   block's 4,096 bytes and one compression, in place of block-sha512's 33 compressions.
 - **KV receipts are the driver's receipts.** A KV page's receipt is the registration's one receipt kind (sketch-sha512:
   `SketchReceipter` under the pass's seed, its signs under `SIGN_DOMAIN`, hashed under `SKETCH_RECEIPT_DOMAIN`) of a
-  registered KV block under the registration's block layout, committed in the pass's one tree and listed in its one
-  plan with the weights'. A KV block is a registered block like any other: 4,096 bytes of the encoded store, 32 whole
+  registered KV page under the registration's block layout, committed in the pass's one tree and listed in its one
+  plan with the weights'. A KV page is a registered block like any other: 4,096 bytes of the encoded store, 32 whole
   codec words, \(j = \text{slot} \cdot \text{LAYERS} + \text{layer}\) (§3), and its kernel's vectors pass `plan_of`
   (§4). The device's KV receipt is `kv.cu`'s attention form 13: sketch-sha512 of each token-layer, a store block
-  (store-order/v0), under the pass's signs. No pass's plan holds a KV block whose receipts aren't the registration's
+  (store-order/v0), under the pass's signs. No pass's plan holds a KV page whose receipts aren't the registration's
   kind over the registered KV layout, and a step that commits KV receipts of another kind keeps them out of its plan
   and its credited bytes.
 - **The challenger's state.** The challenger keeps every coin of a session until it releases it and never releases one

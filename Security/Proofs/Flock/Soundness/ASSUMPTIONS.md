@@ -253,7 +253,7 @@ states (The circuit and the certificate, below). Once every Definition lowers to
 NOT, one generic Boolean-semantics lemma can state it for every template.
 
 **Its coins.** The statement is for live uniform coins: the model's proof coins are uniform and sampled after the
-prover's message. M0's non-ZK session has them on the challenger's keyed coin tree under `FC_COINS=tree` on both sides
+prover's message. Flock's circuit prover's non-ZK session has them on the challenger's keyed coin tree under `FC_COINS=tree` on both sides
 (`serve --tree-from`), which `flock-verify verify --coins tree` reads (the verifier reads coins only from a challenger's
 log). The benches run M0 so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`, `61-circuit-cell.sh`),
 and their records name the coins (`coins: coin-tree`). The binary's default still derives every coin from one OS seed
@@ -438,7 +438,7 @@ before the session's first coin, not bounds state by state.
 - **Live coins.** The theorems, the headline among them, are for coins that are uniform and unknown to the prover
   before it sent the round, as the model's coin nodes sample them. A session reads them from the challenger's keyed coin
   tree (`tree` coins, below). The randomness is trusted, not proved: A6, and for the unit sample A3.
-- **`seed` coins** (`coin-commit/sha256/v1`; M0's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
+- **`seed` coins** (`coin-commit/sha256/v1`; Flock's circuit prover's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
   add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
   so a run on seed coins is outside the headline (The headline, its coins), and the Lean verifier refuses it once every
   check has passed (`ProvedScope.SEED_COINS`).

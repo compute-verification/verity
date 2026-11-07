@@ -58,8 +58,8 @@ recursive session without `--zk` (`Flock.RecSetup.zkOnly`).
 on the challenger's keyed coin tree (`--coins tree`, or `--zk`): it reads coins only from a challenger's log. Every other version it sets up and checks, so the
 agreement corpus and the recorded fixtures replay, and then refuses the session (`ProvedScope.servedForm`, last, once
 every check has passed): a `+seed-injection` one as a selftest build's statement, the rest as superseded; a plain session
-on seed coins (without `--coins tree`) is refused the same way. A typed version, or one before hm96
-rows, is refused earlier, for its form (`ProvedScope.check`).
+on seed coins (without `--coins tree`) is refused the same way. A typed version, or one before hiding
+commitments, is refused earlier, for its form (`ProvedScope.check`).
 
 ## Guarantees and premises
 
@@ -72,7 +72,7 @@ rows, is refused earlier, for its form (`ProvedScope.check`).
   entries of `Security/lean-audit.json`, among them `EndToEnd`, `EndToEndHidden`, `ZeroKnowledgeHidden`, `MaskedZK`,
   `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityHorizon`, each stated in a `Statement.lean` (or
   `KSStatement.lean`, `PublicAudit.lean`) of its area under `Security/Proofs/Flock/`.
-- The named premises: `Security/Proofs/Flock/Soundness/Assumptions.lean` (`UniformRandomBytes`, `HmRowComputes`),
+- The assumptions: `Security/Proofs/Flock/Soundness/Assumptions.lean` (`UniformRandomBytes`, `HmRowComputes`),
   `Assumptions/Custody.lean` (`RecordCustodyExec`, `RecordCustodyExecH`), and the rest of the lock's `assumptions` list
   (`Model.Statement.LinkLayout`, `SHA512CRStrict`, the `Zk.RecordCustodyZK*` family); what each means:
   `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`.

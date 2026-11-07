@@ -389,7 +389,7 @@ None of these is assumed silently; each would restate the conclusion:
 | Protocol soundness | `Accounting.Slowdown.restricted`; `Verity.soundness_of_subprotocols`, `Verity.remote_soundness_of_subprotocols` | Proved from each subprotocol's target, each a hypothesis until discharged (`Properties/Verity/README.md`) |
 | Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, `Claims.Sampling.RelS` | Proved; the step from F ∈ M_δ to the credit-weighted φ is open |
 | PoUW | `Accounting.Guarantees.Compose.CircuitCredit` | Proved; nothing derives Φ_D from it, or shows each credited gate distinct |
-| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what faulty blocks inject) and k_a (the advice's share) are unbounded |
+| The inference-only policy | `NciCheck.Properties.SecurityProofs.DescWitnesses`, `Nci.CompliesRate`, `Nci.Complies` | Proved at its rate, with each block within (c, k) on the unrolled check's verdict (the lemma `NciCheck.Properties.SecurityProofs.refines`); the step to a (c, k)-partition of the registered circuit itself is open, and k_F (what incorrect proof blocks inject) and k_a (the advice's share) are unbounded |
 | Onsite's k_S | `Pous.Guarantees.StreamedWipe`, `NetTiming.Guarantees.PeriodLeakAccepted` | Proved per window; nothing composes them into k_S |
 | Accounting | the assignment of a run's counted multiplications not yet in Lean | Open |
 | Rate ceiling ζ̄ | the inline hypotheses of `Nci.Guarantees.DampenerRemote`; a named Prop not yet in Lean | Open |
@@ -420,7 +420,7 @@ guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by m
 Each package's `lean-audit.json` is its lock. For each guarantee it records the signature, its premises (the named
 assumptions, the domain hypotheses, the open premises, and the `Prop`s of an assumptions module its statement only reads) and a SHA-256 hash of
 its type, and, per module, every definition the statements read with a digest. A named assumption, under `assumptions`, is
-declared in `Definitions/Assumptions.lean` (`assumptions_module`); every other named premise is open, under `open` with
+declared in `Definitions/Assumptions.lean` (`assumptions_module`); every other assumption is open, under `open` with
 the Linear issue that discharges it and its due date, and `--update` adds none on its own, so that list only shrinks. A
 hypothesis that is part of what its guarantee says (a domain, a scope, the layer below's guarantee) is under `domain`
 with a one-line `why` instead, and a guarantee with an honest witness must have that witness conclude it. The
@@ -429,7 +429,7 @@ when:
 
 - a declaration uses an axiom other than `propext`, `Classical.choice` and `Quot.sound` (so no `sorry`, `axiom` or
   `native_decide`), or an option that skips the kernel;
-- a guarantee has a `Prop` hypothesis that is not a named premise: a `Prop` listed by name in the lock, with an owner
+- a guarantee has a `Prop` hypothesis that is not an assumption: a `Prop` listed by name in the lock, with an owner
   and its definition's digest;
 - a premise is listed under the wrong kind (a named assumption declared outside `Definitions/Assumptions.lean`), or an
   open premise is not listed;
@@ -481,14 +481,14 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   acceptance to `SampledKSLiveV3`'s event.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`,
   `LinkCRZC`, `TileServiceSound`, `TileDrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
-  `SharedNoiseLucks`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
+  `SharedNoiseLucks`. Trust model: nothing the developer runs or hosts is trusted, and every coin is live,
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs are
   onsite's (`verity/core/protocols/sampled_proofs/README.md`): `CoinsConfidential`, the named Prop
   `Pouw.Assumptions.CoinsConfidential` (`Definitions/Pouw/Assumptions/Dither.lean`, in the lock, taken by
   `Pouw.Guarantees.Dither.FleetSound`), and `OneClock`, prose only.
-  Remote's coin path is three named premises over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
+  Remote's coin path is three assumptions over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
   `Definitions/Core/Assumptions/Challenger.lean` and listed in the lock: the challenger logs every coin it releases
   (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
   reads coins only from that log (`VerifierReadsLog`). Under them a sample sampled with a logged coin misses a set fixed

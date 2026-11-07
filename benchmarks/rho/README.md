@@ -21,13 +21,13 @@ algorithm families the adversary may use, and the bounds and attacks applied. Fo
   the bound's other terms `x`, free compute, at `a = 1` under reference efficiency, so that it is the padded size ratio;
   at `a = 1/MFU₀` (peak) without it, Lean's `Nci.Dampener.remoteDampener` and, for a remote regime,
   `Nci.Guarantees.DampenerRemote`'s `ρ`. `benchmarks/nci` reads its slowdown `D` from `multiple_bound`. It
-  comes with its status, where its named premises stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
+  comes with its status, where its assumptions stand, the δ that the envelopes fail (`δ_coin + δ_crypto`, plus a
   named `Pr[Break]`), the monitored share (the part of the adversary's counted weight on monitored gates), and the
   time it implies;
 - **the padded size ratio** `|A| / T_0` (`Overhead.padded`): the size of the actual circuit that reaches the target,
-  each serving block padded to its capacity, over the reference construction's size `T_0`. It is the intermediate the
-  serving-block bound gives, and what a contradiction compares;
-- **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a serving block's layout,
+  each server block padded to its capacity, over the reference construction's size `T_0`. It is the intermediate the
+  server-block bound gives, and what a contradiction compares;
+- **the best known attack** (`Result.attack`, `FamilyResult.best_attack`): a construction on a server block's layout,
   its slowdown `max(1, MFU₀ · |A| / T_0)`, reported beside the bound, not as an end of an interval around it. A bound
   whose padded size ratio is above an attack's is a **contradiction**:
   one of its premises is false for that algorithm at that budget, and the contradiction names it;
@@ -72,10 +72,10 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 - **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
   sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the uncertified gates
   by route: `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The
-  inference-only policy's check is the registration (`Policy`). A regime is the envelopes that run, and builds the serving blocks with their
+  inference-only policy's check is the registration (`Policy`). A regime is the envelopes that run, and builds the server blocks with their
   cuts.
 - **The exclusion bound** (`classes.py`, `attacks.py`, `theorem.py`): the training classes as per-block caps
-  `q_T(c, k)`, the attacks as constructions, and the serving-block bound: each serving block's least cut
+  `q_T(c, k)`, the attacks as constructions, and the server-block bound: each server block's least cut
   (`theorem.local`), summed over blocks (`theorem.overhead`), with the minimum of global bounds beside it
   (`theorem.aggregate`).
 
@@ -84,7 +84,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
 | `\|A[X,J]\| ≤ Φ_X \|J\|`, `M_s` | `Location.phi`, `Location.server_memory` |
 | `ε_dark`, `L_dark` | `fleet.<name>.eps_unreg`, `Partition.eps_unreg` |
 | inference block `(c, k)` | `Blocks("inference")`, `Policy`, `Budget(gates, inputs)` |
-| serving block `S`, `(c_S, k_S)`, `n_S` | `ServerBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
+| server block `S`, `(c_S, k_S)`, `n_S` | `ServerBlock`, `Onsite.budget`, the inference cut's `Blocks.count` |
 | `q_T(c, k)` | `Cap`, from a class's `Allowance` by `classes.per_block` |
 | `q_U(U) = ω_max U / s_×` | `Structure.weight` (`data/exclusion.toml`) |
 | `ε_undecl`, `ε_skip`, `ε_break` | the routes `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect` (`Cut.uncertified`) |
@@ -113,7 +113,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 |---|---|
 | `theorem.py` | `Budget`, `Blocks`, `Cut`, `ServerBlock`, `Partition`; `Cap`; `local`, `aggregate`, `overhead`, `padded`, `multiple_bound` |
 | `classes.py` | `Argument.allowance(Profile) → Allowance`, raising `Outside`; `per_block`, `weight_per_gate`; `premise_status`; `Structure` |
-| `attacks.py` | the same `Argument`, side `attack`, on a serving block's layout |
+| `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
 | `instances.py` | `Model`, `Run` (a target and its kind) |
