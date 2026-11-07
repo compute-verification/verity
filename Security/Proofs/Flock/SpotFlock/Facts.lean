@@ -27,6 +27,7 @@ public import Proofs.Flock.Claims.Sampling.KS
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy Finset
+open Properties.SampledProofs (slotPartition slotDesign)
 
 /-- A run appends to its transcript: one more round puts the prover's message and the verifier's answer after `t`'s. -/
 theorem stepWith_succ_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
@@ -110,9 +111,8 @@ theorem interiorFixed (h : Held) (H : Msg → Msg) :
   refine run_fst_take H P (code h).V x ω 1 _ _ fun t ht => ?_
   have hn : t ∉ (code h).stage2 x := by
     intro hmem
-    have hlt : (order h x).first < t := (mem_filter.1 hmem).2
+    have hlt : (order h x).first.val < t.val := (mem_filter.1 hmem).2
     have : (order h x).first.val = 0 := rfl
-    rw [Fin.lt_def, this] at hlt
     omega
   simp [forkOn, hn]
 
