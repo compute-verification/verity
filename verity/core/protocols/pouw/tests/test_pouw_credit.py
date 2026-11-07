@@ -691,6 +691,22 @@ def test_a_table_the_served_commit_did_not_commit_refuses(seed):
             assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
 
 
+def test_each_commit_table_is_its_rounds_window_table():
+    """`window_table` is ROOTS1's one map from the Commit's names to the window's tables, the one the records audit ties
+    them by: round s's ``row-table/<s>/k<K>`` is the window's A table ``a/<K>@<s>`` (a table `table_rows` sizes) and
+    ``input-ids/<s>`` its ``ids@<s>``, under the descriptor's prefix. Any other name is refused."""
+    d = cases.window_instance(random.Random("honest/0"))
+    lay, steps = Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], len(d["rounds"])
+    sized = Cr.table_rows(lay, steps, "h1/")
+    for s, k, _cs in Cr.step_tables(lay, steps):
+        assert Cr.window_table(Cr.commit_rows(s, k), "h1/") == f"h1/a/{k}@{s}"
+        assert f"h1/a/{k}@{s}" in sized
+    assert [Cr.window_table(Cr.commit_ids(s), "") for s in range(steps)] == [f"ids@{s}" for s in range(steps)]
+    for bad in ("row-table/0/k0", "row-table/01/k8", "row-table/0/k8/", "input-ids/-1", "a/8@0", "h1/ids@0", 7, None):
+        with pytest.raises(ValueError, match="no Commit name of a window's table"):
+            Cr.window_table(bad, "h1/")
+
+
 def _no_pads(*_args, **_kwargs):
     raise AssertionError("the verifier hashed a pad of a count it should have refused first")
 

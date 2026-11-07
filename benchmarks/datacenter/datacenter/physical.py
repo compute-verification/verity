@@ -13,7 +13,7 @@ from typing import Literal
 
 Kind = Literal["gpu", "cpu", "dram", "nic", "dpu", "bmc", "switch", "certifier", "challenger", "outside"]
 
-#: the kinds of device the auditor trusts: its own hardware, on machines the prover doesn't control
+#: the kinds of device the auditor trusts: its own hardware, on machines the developer doesn't control
 TRUSTED: frozenset[str] = frozenset({"certifier", "challenger"})
 
 
@@ -209,7 +209,7 @@ class Datacenter:
         return problems
 
     def assumptions(self) -> list[Assumption]:
-        """Every named premise the declaration makes, once each."""
+        """Every assumption the declaration makes, once each."""
         out: dict[str, Assumption] = {self.cadence.tick.name: self.cadence.tick}
         for d in self.devices.values():
             for a in [*d.rate.values(), d.memory, d.bandwidth, d.on_chip, d.residual, d.write]:

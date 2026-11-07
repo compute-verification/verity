@@ -37,7 +37,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   figures show the share in no proof block and the share modeled. Its `params`, the model's total parameters, scale
   the references that go as the model's size.
 
-  A `serve_tax` card gives each server configuration's serve tax, what its change to the production server costs on
+  A `serve_tax` card gives each server configuration's serve tax, what its change to the serving engine costs on
   every token against its `baseline`, as one number with its range, `priced` or `measured`, a lower bound or not, and
   its parts. `total_cost.py priced-card` prices one from the model's cards; a measured value replaces a priced one
   configuration by configuration, and the figure plots a priced tax hollow.
