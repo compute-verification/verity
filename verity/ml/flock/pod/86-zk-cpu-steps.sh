@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# zk-cpu-steps: --zk's two single-threaded CPU steps (the mask-rank check zk_veil::mask_rank_ok, ZKRANK; level 0's hiding draw
+# zk-cpu-steps: --zk's two single-threaded CPU steps (the mask-rank check zk_veil::mask_rank_ok, ZKRANK; level 0's hiding sample
 # level0_zk) priced on node 1's GPU prover, one build against another, on 85-rec-reprice.sh's statements (one Call of
 # Gemm_v2{K, N=4096}, its GemmCoordinate_v2 shape at N instances). One step per job (research run --queue --cwd source);
 # binaries and statements stay under $FLOCK_WORK for the next step, out/ gets the records:

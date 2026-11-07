@@ -28,7 +28,7 @@ its operands are the indexer's top-k row, the request's block-table row and the 
              block row the request's block ids and junk words past them; two padding tokens after them (byte 0, request 0).
              `edge`: six requests' tokens in a shuffled map, several to a request; bytes 0, 1, 2, 0x80 and 0xFF (a bool tensor's
              bytes, true when nonzero); rows empty, short, full, of the negative kinds (-1, -2, -BS, INT32_MIN, random), of the
-             block edges and the row's last slot, and draws; block rows whose products by BS wrap int32 (2^25 and up, INT32_MAX,
+             block edges and the row's last slot, and samples; block rows whose products by BS wrap int32 (2^25 and up, INT32_MAX,
              negative words, random words).  Each launch twice, then the kernel itself once at the wrapper's arguments into
              sentinel-filled buffers: every token's TOPK slots and its length against `dsv4_decode_indices_twin.global_topk` (the
              kernel's stores) and the reference `Dsv4GlobalTopk_v1` on every token (every 16th served one under --quick); the
