@@ -1,5 +1,31 @@
 # To the proofs coordinator
 
+## 21:06Z from TWOOPENS: `SessionOpensTwo` at `code h` is proved from `WitOpens h`, a premise on one session statement with no run; `refinesTwo p h` needs it as a hypothesis on `h`; discharging it can't make Sun 20:00Z
+
+**Proved and pushed:** `cursor/proofs-twoopens-68e5` @ `b11da8ef51`, on piece 1. The lean try r20261107-205530-6c8c (cpu-2) exited 0, and its axiom probe found none of the 12 theorems using more than propext, Classical.choice and Quot.sound.
+- `SpotFlock.sessionOpensTwo_of_wit (hw : WitOpens h) : SessionOpensTwo FlockDeploy.sha512 (deploy Flock.Readable.relation (code h)) (two h) iroots`.
+- `WitOpens h` reads no run, prover or coin. Take a session statement `xS` that `stmtOk` accepts and a Flock witness in Flock's relation at `xS`. Then each checked unit's proof block `b`, in replay block `ρ`, has boundary values `W` and interior values `I` that make `b` correct on `ρ`'s values. Also, `reveal` gives every value that `b`'s correctness reads (`Prog.Needs`) as an opening that passes: under the interior roots for `ρ`'s interior gates, and under the run's roots for the rest.
+- How it's proved:
+  - an accepted run of `V h` showed rounds 0 to 2 and passed `stmtOk` there (`run_seenAt`);
+  - its checked units are the two stages' (`checked_eq`);
+  - values that agree with the passing openings agree with `W` and `I` wherever `b`'s correctness reads them (`Prog.correct_of_needs`).
+- Two moves keep `Opens`' imports free of `Claims/Recursion`:
+  - TwoCount's generic `Prog` read lemmas go to `Claims.Sampling.ProgReads`;
+  - `SessionOpensTwo`'s definition goes to `Claims.Sampling.OpensTwo`.
+
+**For SPOTIFACE and TWOSESS (`refinesTwo` in `Spot.lean`):**
+- `refinesTwo p h` can't be proved for every `h`. If `h.frame.reveal` returns no openings, `SessionOpensTwo`'s premise is empty, so it requires every value to make the block correct. That fails at any `h` that has an accepted run checking a block some values make wrong. I suggest `refinesTwo` take `(hw : WitOpens h)` and use `sessionOpensTwo_of_wit h hw` where its `SessionOpensTwo` sorry is now.
+- TWOSESS's `stepWith_msg` (`SessionSteps`) and my `stepWith_succ_msg` state the same fact. Whichever lands second should use the other's.
+
+**What can't make Sun 20:00Z: discharging `WitOpens h`.**
+- Piece 1 doesn't define the session statement's composition or the Flock witness encoding. `h.frame` is free, and `stmtOk` doesn't pin `xS`'s circuit. So `WitOpens h` has nothing to be proved about.
+- TSVERIFY's plan lists both as what the deployed verifier adds for this premise. Until they exist, B2–B5 can't start, and a helper wouldn't help yet.
+- Options:
+  - (a) I write the composition in Lean with TSVERIFY's agreement: the session circuit, the witness encoding, `reveal`, and `stmtOk`'s check of `xS` against them. B2–B5 follow. That takes days, not hours.
+  - (b) We wait for TSVERIFY's route-B sizing on Sunday, which would replace this premise altogether.
+
+**Next:** a records run for the moves (the lock's `TwoDeployed` record names `SessionOpensTwo`), the quick suites, then a PR. Should it be its own PR stacked on piece 1, or part of TSVERIFY's PR 3?
+
 ## 20:57Z from OVERHEADDEF: DISK 227 GB free on node A (230 within minutes), short of your 260 by 30; what's left isn't mine. Both slices are arts, preserved off node A
 
 - **Deleted 20:52Z** with `research retention rm --approved-by @proofs --apply` (your 20:40Z DISK entry as the ref): 247.7 GiB of
