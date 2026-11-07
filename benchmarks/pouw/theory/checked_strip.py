@@ -85,9 +85,9 @@ def s32(x):
     return (np.asarray(x, dtype=np.int64) & MASK).astype(M32)
 
 
-class Block:
-    """A block of n rows and n′ columns of one design, with its bit layout: U's planes, then c, then b, then (co32c)
-    the carry coins z, m − 1 digits by r by n′."""
+class CellGrid:
+    """A grid of n rows and n′ columns of cells of one design, with its bit layout: U's planes, then c, then b, then
+    (co32c) the carry coins z, m − 1 digits by r by n′."""
 
     def __init__(self, design, n, k, n2, r, L, w=W_RE):
         assert k % L == 0 and k % r == 0
@@ -150,7 +150,7 @@ class Block:
         return np.stack(out, axis=1) & MASK
 
 
-class PVBlock(Block):
+class PVBlock(CellGrid):
     """P·V's block (design `pv`): n query rows at key positions q_i (default the last n keys) over k keys, P peeled (in
     Lean coordinates P = P_prob − 64, P_prob ∈ [0, 126]) and V served, keys κ > q_i masked. The last L keys are the
     diagonal block; Ycum, V's residue sums over the complete blocks before it, is shared by the query block, and its
@@ -195,12 +195,12 @@ class PVBlock(Block):
         return np.stack(cells, axis=1) & MASK
 
 
-def pv_words(P, V, U, c, b, z, r, L, m, M, led=None):
+def pv_words(P, V, U, c, b, z, r, L, m, M, tally=None):
     """P·V's words, batched over a leading axis (or none): T_t (masked P̃X), D_d = U·A_d(Ycum) (1 ≤ d < m) and
-    O′ = T_last − U·A_0(Ycum) − W, W = Σ_{diagonal κ ≤ q} U(·, κ mod r) X(κ). With a ledger (unbatched), every product
+    O′ = T_last − U·A_0(Ycum) − W, W = Σ_{diagonal κ ≤ q} U(·, κ mod r) X(κ). With a tally (unbatched), every product
     is priced as computed, masked entries included (an IMMA computes them)."""
     k = P.shape[-1]
-    mm = led.int8 if led is not None else (lambda A_, B_, what: np.matmul(A_.astype(np.int64), B_.astype(np.int64)))
+    mm = tally.int8 if tally is not None else (lambda A_, B_, what: np.matmul(A_.astype(np.int64), B_.astype(np.int64)))
     Ph = (P + c) * M
     Ue = U[..., np.arange(k) % r]
     Pt = Ph + Ue * M
@@ -228,7 +228,7 @@ def pv_served(Op, D, X, M):
     return O, S, 2 * (O + 64 * S) - S
 
 
-def instance(B: Block, kind, rng, vbits=8):
+def instance(B: CellGrid, kind, rng, vbits=8):
     if isinstance(B, PVBlock):
         V = rng.integers(-128, 127, (B.k, B.n2))
         if kind == "zero":
@@ -274,7 +274,7 @@ def unit(nbits, idx):
     return Z
 
 
-def pair_diffs(B: Block, P, V, pairs, chunk=8192):
+def pair_diffs(B: CellGrid, P, V, pairs, chunk=8192):
     """pairDiff of every word at every pair (x, y), x ≠ y: W(e_x + e_y) − W(e_x) − W(e_y) + W(0), mod 2³²."""
     W0 = B.words(P, V, np.zeros((1, B.nbits), np.uint8))[0]
     W1 = B.words(P, V, np.eye(B.nbits, dtype=np.uint8))
@@ -288,7 +288,7 @@ def pair_diffs(B: Block, P, V, pairs, chunk=8192):
     return out
 
 
-def cross_ranks(B: Block, P, V, mod=MASK):
+def cross_ranks(B: CellGrid, P, V, mod=MASK):
     """(rank of rows (word, peeled bit) × served coins, rank of rows (word, served coin) × peeled bits, the number of
     same-side pair differences nonzero mod `mod` + 1: over Z/2³², or with mod = 1 over F₂), for a one-cell block."""
     pairs = [(x, y) for x in B.left for y in B.right]
@@ -305,7 +305,7 @@ def cross_ranks(B: Block, P, V, mod=MASK):
 # ---------------------------------------------------------------- C: SAT tensor rank over F2
 
 
-def f2_targets(B: Block, rng):
+def f2_targets(B: CellGrid, rng):
     """Each word's alternating form mod 2 (a set of pairs u < v), from pair differences at a random instance."""
     P, V = instance(B, "random", rng)
     pairs = list(itertools.combinations(range(B.nbits), 2))
@@ -392,7 +392,7 @@ def limbs(lo, hi):
     return m
 
 
-class Ledger:
+class Tally:
     """A strategy's products, priced per cell (MACs per output cell times the unit's price)."""
 
     def __init__(self):
@@ -456,11 +456,11 @@ def digits(Y, z, m):
     return A
 
 
-def co32c_words(P, V, U, c, b, z, r, L, m, led=None):
+def co32c_words(P, V, U, c, b, z, r, L, m, tally=None):
     """CO with committed digits: T_t, D_d = U·A_d (1 ≤ d < m) and O′ = T_last − U·A_0, for Y's digits A_d; the
-    served output is O = O′ − Σ_d 128^d D_d. With a ledger, every product is priced as computed."""
+    served output is O = O′ − Σ_d 128^d D_d. With a tally, every product is priced as computed."""
     k = P.shape[1]
-    mm = led.int8 if led is not None else (lambda A_, B_, what: A_.astype(np.int64) @ B_.astype(np.int64))
+    mm = tally.int8 if tally is not None else (lambda A_, B_, what: A_.astype(np.int64) @ B_.astype(np.int64))
     Pt = P + c + U[:, np.arange(k) % r]
     X = V + b
     T, acc = [], np.zeros((P.shape[0], V.shape[1]), np.int64)
@@ -485,27 +485,27 @@ def honest_words(P, V, U, c, b, r, L):
 
 
 def strategy(name, P, V, U, c, b, r, L):
-    """Run one strategy; return its words and its ledger."""
+    """Run one strategy; return its words and its tally."""
     k = P.shape[1]
-    led = Ledger()
+    tally = Tally()
     Ph = P + c
     Pt = Ph + U[:, np.arange(k) % r]
     X = V + b
     T, acc = [], np.zeros((P.shape[0], V.shape[1]), np.int64)
     for t in range(k // L):
         sl = slice(t * L, (t + 1) * L)
-        acc = acc + led.int8(Pt[:, sl], X[sl], f"T segment {t}")
+        acc = acc + tally.int8(Pt[:, sl], X[sl], f"T segment {t}")
         T.append(acc.copy())
     if name == "strip":
         Y = X.reshape(k // r, r, -1).sum(0)
-        O = T[-1] - led.limbed(U, Y, "P2 = U·Y")
+        O = T[-1] - tally.limbed(U, Y, "P2 = U·Y")
     elif name == "direct":
-        O = led.int8(Ph, X, "O = P̂X")
+        O = tally.int8(Ph, X, "O = P̂X")
     elif name == "fp4":
-        O = led.fp4(Ph, X, "O = P̂X in E2M1")
+        O = tally.fp4(Ph, X, "O = P̂X in E2M1")
     else:
         raise ValueError(name)
-    return [s32(x) for x in T], s32(O), led
+    return [s32(x) for x in T], s32(O), tally
 
 
 def draw(rng, n, k, n2, r, two=True):
@@ -743,7 +743,7 @@ def main():
                  f"{out['limbs']}; centring miss ≤ {hoeff:.1e}")
     checks.check("A4 r = k/2 with a 7-bit served side: Y is int8 at every instance (1 limb)",
                  lt[(128, 64, 7)] == (1, 1) and lt[(4096, 2048, 7)] == (1, 1) and lt[(128, 64, 8)] == (2, 1))
-    B = Block("co", 1, k, n2, r, L)
+    B = CellGrid("co", 1, k, n2, r, L)
     Pb, Vb = instance(B, "balanced", rng)
     _, _, bb = draw(rng, 1, k, n2, r)
     Yb = (Vb + bb).reshape(k // r, r, n2).sum(0)
@@ -786,7 +786,7 @@ def main():
     rank_tab = {}
     for (kk, rr, LL) in [(128, 32, 32), (64, 32, 32), (96, 16, 32)]:
         for design in DESIGNS:
-            Bc = Block(design, 1, kk, 1, rr, LL)
+            Bc = CellGrid(design, 1, kk, 1, rr, LL)
             res = []
             for kind in ("zero", "random", "balanced"):
                 P, V = instance(Bc, kind, rng)
@@ -799,7 +799,7 @@ def main():
                          all(x[:2] == w_ for x in res) and all(x[2] == 0 for x in res),
                          f"{[x[:2] for x in res]}, same-side nonzero {[x[2] for x in res]}; honest count {kk + rr}")
     for (kk, rr, LL) in [(128, 32, 32), (64, 32, 32), (96, 16, 32)]:
-        Bc = Block("co32c", 1, kk, 1, rr, LL)
+        Bc = CellGrid("co32c", 1, kk, 1, rr, LL)
         res = [cross_ranks(Bc, *instance(Bc, kind, rng), mod=1) for kind in ("zero", "random", "balanced")]
         rank_tab[f"co32c k={kk} r={rr} L={LL}"] = list(res[0][:2])
         checks.check(f"B {Bc}: both cross ranks k + r = {kk + rr} at the zero, a random and a structured instance, "
@@ -810,7 +810,7 @@ def main():
     if checks.mutations:
         for name, kw in [("co with an even alphabet (U's parity constant)", {"w": W_EVEN}),
                          ("co without c (one-sided)", {"design": "checked1"})]:
-            Bm = Block(kw.get("design", "co"), 1, 64, 1, 32, 32, w=kw.get("w", W_RE))
+            Bm = CellGrid(kw.get("design", "co"), 1, 64, 1, 32, 32, w=kw.get("w", W_RE))
             P, V = instance(Bm, "random", rng)
             r1, r2, _ = cross_ranks(Bm, P, V)
             with checks.mutant(name):
@@ -823,7 +823,7 @@ def main():
              ("checked1", 1, 4, 1, 2, 2, 4), ("co_p2", 1, 4, 1, 2, 2, 6), ("co32c", 1, 2, 1, 1, 1, 4),
              ("co32c", 1, 4, 1, 1, 2, 6)]
     for design, nn, kk, nn2, rr, LL, target in cases:
-        Bs = Block(design, nn, kk, nn2, rr, LL, w=np.array([1]))
+        Bs = CellGrid(design, nn, kk, nn2, rr, LL, w=np.array([1]))
         tg = f2_targets(Bs, rng)
         lo_ok, _ = sat_products(tg, Bs.nbits, target - 1)
         hi_ok, prog = sat_products(tg, Bs.nbits, target)
@@ -833,7 +833,7 @@ def main():
         checks.check(f"C {Bs}: F2 tensor rank (affine products, no purity) = {target}; honest count {honest}",
                      lo_ok is False and valid, f"{target - 1} UNSAT, {target} SAT (model checked)")
     if "--full" in checks.args:
-        Bs = Block("co", 2, 2, 2, 1, 1, w=np.array([1]))
+        Bs = CellGrid("co", 2, 2, 2, 1, 1, w=np.array([1]))
         tg = f2_targets(Bs, rng)
         lo_ok, _ = sat_products(tg, Bs.nbits, 11, budget=3_000_000)
         hi_ok, prog = sat_products(tg, Bs.nbits, 12)
@@ -888,7 +888,7 @@ def main():
         rows = {}
         for inst, strat in [("random", "strip"), ("random", "direct"), ("zero", "strip"), ("zero", "fp4"),
                             ("balanced", "strip"), ("small", "fp4")]:
-            Bc = Block("co", n, k, n2, rr, L)
+            Bc = CellGrid("co", n, k, n2, rr, L)
             if inst == "small":
                 P, V = np.zeros((n, k), np.int64), rng.choice([1, 3], (k, n2))
             else:
@@ -897,11 +897,11 @@ def main():
                 V = np.where(rng.random((k, n2)) < 0.5, vlo, vhi)
             U, c, b = draw(rng, n, k, n2, rr)
             Th, Oh = honest_words(P, V, U, c, b, rr, L)
-            Ts, Os, led = strategy(strat, P, V, U, c, b, rr, L)
+            Ts, Os, tally = strategy(strat, P, V, U, c, b, rr, L)
             ok = all(np.array_equal(x, y) for x, y in zip(Th, Ts)) and np.array_equal(Oh, Os)
-            rows[f"{inst}/{strat}"] = led.price()
+            rows[f"{inst}/{strat}"] = tally.price()
             checks.check(f"E r={rr} {vb}-bit X, {inst} instance, {strat}: every word equals the honest word",
-                         ok, f"price {led.price()} a cell (k = {k}, r = {rr})")
+                         ok, f"price {tally.price()} a cell (k = {k}, r = {rr})")
         price[f"r={rr},{vb}bit"] = {a: str(v) for a, v in rows.items()}
         hon = rows["random/strip"]
         adv = min(v for a, v in rows.items() if a != "random/strip")
@@ -917,16 +917,16 @@ def main():
     z = rng.integers(0, 2, (m - 1, 32, n2))
     cprice = {}
     for inst in ("random", "zero", "balanced"):
-        P, V = instance(Block("co", n, k, n2, 32, L), inst, rng)
+        P, V = instance(CellGrid("co", n, k, n2, 32, L), inst, rng)
         if inst == "random":
             V = np.where(rng.random((k, n2)) < 0.5, -128, 126)
-        led = Ledger()
-        got = co32c_words(P, V, U, c, b, z, 32, L, m, led)
+        tally = Tally()
+        got = co32c_words(P, V, U, c, b, z, 32, L, m, tally)
         want = co32c_words(P, V, U, c, b, z, 32, L, m)
         same = all(np.array_equal(x, y) for x, y in zip(got[0] + got[1] + [got[2]], want[0] + want[1] + [want[2]]))
         Y = (V + b).reshape(k // 32, 32, n2).sum(0)
         skip = s32(want[0][-1].astype(np.int64) - U @ Y)
-        cprice[inst] = (led.price(), same, not np.array_equal(skip, want[2]))
+        cprice[inst] = (tally.price(), same, not np.array_equal(skip, want[2]))
     out["prices_co32c"] = {a: str(v[0]) for a, v in cprice.items()}
     checks.check("E committed digits at r = 32 (k = 256): every product is a committed word's, so honest and the cheater "
                  "at the zero and the structured instance pay k + m·r alike, and the 1-limb shortcut O′ = T_last − U·Y "
@@ -1220,16 +1220,16 @@ def main():
     checks.check("P4 the collapse c removes: without c, at a one-hot P row O = 126·X(κ*) − 64·S is a copy, so "
                  "O′ = O + Σ 128^d D_d without U·A_0 or W (L + r products a cell free); with c the same shortcut is "
                  "wrong", cut[False] and not cut[True], str(cut))
-    led = Ledger()
-    got = pv_words(P, V, U, c, b, z, r, L, m, M, led)
+    tally = Tally()
+    got = pv_words(P, V, U, c, b, z, r, L, m, M, tally)
     same = all(np.array_equal(x, y) for x, y in zip(got[0] + got[1] + [got[2]],
                                                     (lambda w: w[0] + w[1] + [w[2]])(pv_words(P, V, U, c, b, z, r, L,
                                                                                               m, M))))
-    out["pv_price"] = {"honest": str(led.price()), "k + L + m r": k + L + m * r,
+    out["pv_price"] = {"honest": str(tally.price()), "k + L + m r": k + L + m * r,
                        "eps_products without c (one-hot P)": f"{(L + r) / (k + (m - 1) * r):.4%}"}
     checks.check("P5 priced: honest's P·V products a cell are k + L + m·r (T, W, U·A_0 and the D_d, masked entries "
                  "included), every one a committed word's; without c a one-hot row frees L + r of them",
-                 same and led.price() == k + L + m * r, str(out["pv_price"]))
+                 same and tally.price() == k + L + m * r, str(out["pv_price"]))
     pv_rank = {}
     for kk, rr, LL, qq in [(128, 32, 32, 127), (128, 32, 32, 111), (64, 32, 32, 63), (96, 16, 32, 80)]:
         Bc = PVBlock(1, kk, 1, rr, LL, q=[qq])

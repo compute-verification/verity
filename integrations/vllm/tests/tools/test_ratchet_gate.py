@@ -332,6 +332,7 @@ def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
 def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(repo, verdict_cache, monkeypatch):
     """A sync gates each PR on its merge onto `next`, every PR below it included: with the cache, N merges cost N judgments, not
     N(N+1)/2."""
+    monkeypatch.setenv("RATCHET_GATE_JOBS", "1")  # judgments are counted in this process
     base = repo.commit("p02", {P02: _allowlist(_entry("verity_vllm/a.py", "X"))})
     heads = []
     for i, files in enumerate([{P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
@@ -353,6 +354,40 @@ def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(r
     assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == len(tops) + 1
     monkeypatch.setattr(G, "SELF", "another gate")
     assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == 2 * len(tops) + 1
+
+
+def test_changes_judged_at_once_report_what_changes_judged_in_turn_report(linted, verdict_cache, monkeypatch, capsys):
+    """A train's merges are judged by a pool of processes, each with its own worktree for the base's lints: the report, its
+    order and the exit status are the ones judging them in turn gives, failures included, cached or not."""
+    linted.git("checkout", "-q", "-b", "next", "main")
+    for pr, files in enumerate([
+            {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
+            {P01: _allowlist()},
+            {"integrations/vllm/verity_vllm/d.py": "D = 1\n"},
+            {"integrations/vllm/verity_vllm/c.py": "C = 'BAD'\n", P01: _allowlist(_entry("verity_vllm/c.py", "C"))},
+            {"integrations/vllm/verity_vllm/e.py": "E = 1  # noqa: E1\n"},
+            {"integrations/vllm/verity_vllm/f.py": "F = 1\n"}], 1):
+        linted.git("checkout", "-q", "-b", f"b{pr}", "next")
+        head = linted.commit(f"pr {pr}", files)
+        linted.git("checkout", "-q", "next")
+        linted.queue(pr, f"pr {pr}", head)
+    pools, pool = [], G.ProcessPoolExecutor
+    monkeypatch.setattr(G, "ProcessPoolExecutor", lambda n, **k: (pools.append(n), pool(n, **k))[1])
+
+    def report(jobs: str, cache: str = "") -> list[tuple[int, str]]:
+        monkeypatch.setenv("RATCHET_GATE_JOBS", jobs)
+        monkeypatch.setenv("RATCHET_GATE_CACHE", cache)
+        return [(G.main(["main", "next", *flag]), capsys.readouterr().out) for flag in ([], ["--json"])]
+
+    serial = report("1")
+    assert pools == [] and [v for _, v in _verdicts(json.loads(serial[1][1]))] == [
+        "passed", "failed", "untouched", "failed", "failed", "untouched"]
+    assert [code for code, _ in serial] == [1, 1] and "#2 (" in serial[0][1] and "p01_core: verity_vllm/b.py [k]" in serial[0][1]
+    assert report("4") == serial and pools == [4, 4]
+    assert report("4", str(verdict_cache)) == serial and report("1", str(verdict_cache)) == serial and pools == [4, 4, 4]
+    assert len(linted.git("worktree", "list").splitlines()) == 1
+    monkeypatch.setenv("RATCHET_GATE_JOBS", "none")
+    assert G.main(["main", "next"]) == 2 and "RATCHET_GATE_JOBS is 'none'" in capsys.readouterr().err
 
 
 def test_a_new_ratchet_is_its_own_baseline_and_a_moved_or_renamed_one_is_still_compared(repo):
@@ -1224,7 +1259,7 @@ DOCS_A = {"file": "docs/a.md", "count": 1}
 
 @pytest.fixture
 def lane_linted(repo) -> Repo:
-    """``repo`` with the repository's real lane-text lint: docs/a.md's ``#1234`` is its one site, which the list allows."""
+    """``repo`` with the repository's real lane-text lint: docs/a.md's PR number is its one site, which the list allows."""
     repo.commit("lane text", {REPO_LANE_LINT: (SCRIPT.parents[3] / REPO_LANE_LINT).read_text(),
                               REPO_LANE_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nSee #1234.\n"})
     repo.git("checkout", "-q", "-b", "pr")
@@ -1316,3 +1351,49 @@ def test_a_lint_that_comes_to_count_more_records_its_list_at_the_files_it_leaves
     lane_linted.commit("records them with the lint as it is", {REPO_LANE_JSON: _allowlist(DOCS_A, b)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["fix"]) == ("failed", [f"{REPO_LANE_JSON}: {G.key({'file': 'docs/b.md'})} 0 -> 2"]), c["why"]
+
+
+def test_a_site_a_lint_below_on_next_counts_is_refused_at_the_pr_that_adds_it_and_never_at_a_later_one(lane_linted):
+    """A PR widens the lane-text lint on `next`, a second, from `main`, adds a site only that lint counts, which `main`'s lint
+    passes, and a third touches the list, so the gate runs the lint on the whole tree, which finds the second's line.  A
+    merge onto `next` is counted with the lints the tree below has, so the second is the one refused; and a violation the
+    tree below already holds is named with the PR that added it, and leaves the third in place."""
+    b = {"file": "docs/b.md", "count": 2}
+    lane_linted.git("checkout", "-q", "main")
+    lane_linted.commit("text the lint will count", {"docs/b.md": "# B\n\nTOY1 and TOY2.\n"})
+    main = lane_linted.git("rev-parse", "HEAD")
+    lane = '    ("codename", r"\\[lane ", None),\n'
+    wider = (SCRIPT.parents[3] / REPO_LANE_LINT).read_text().replace(lane, '    ("toy", r"TOY\\d\\b", None),\n' + lane, 1)
+    lane_linted.git("checkout", "-q", "-B", "lint", main)
+    lint = lane_linted.commit("counts TOY ids", {REPO_LANE_LINT: wider, REPO_LANE_JSON: _allowlist(DOCS_A, b)})
+    lane_linted.git("checkout", "-q", "-b", "adds", main)
+    adds = lane_linted.commit("a hook named for TOY9", {"tools/hook.py": '"""Runs as TOY9."""\nX = 1\n'})
+    assert [c["verdict"] for c in G.gate("main", "adds")["changes"]] == ["passed"], "main's lint counts no TOY id"
+    lane_linted.git("checkout", "-q", "-b", "next", main)
+    lane_linted.queue(1, "counts TOY ids", lint)
+    m2 = lane_linted.queue(2, "a hook named for TOY9", adds)
+    doc = G.gate("main", m2)
+    assert _verdicts(doc) == [("#1", "passed"), ("#2", "failed")], doc
+    assert doc["changes"][1]["fix"] == ["tools/hook.py:1 toy: TOY9"] and doc["failures"][0]["pr"] == 2
+
+    lane_linted.git("checkout", "-q", "-b", "prunes", lint)
+    prunes = lane_linted.commit("says what is true now in a.md", {"docs/a.md": "# A\n\nSee the README.\n",
+                                                                  REPO_LANE_JSON: _allowlist(b)})
+    lane_linted.git("checkout", "-q", "next")
+    lane_linted.queue(3, "says what is true now in a.md", prunes)
+    doc = G.gate("main", "next")
+    assert _verdicts(doc)[2] == ("#3", "passed") and not [f for f in doc["failures"] if f["pr"] == 3], doc
+    why = doc["changes"][2]["why"]
+    assert ("the base's lint code (repo_lane_text) finds 2 violation(s) its own tree already holds, which aren't this "
+            "change's: added by #2: repo_lane_text: tools/hook.py:1 toy: TOY9, repo_lane_text: tools/hook.py: 1 found, "
+            "0 allowed") in why, why
+    assert "tools/hook.py: 1 found, 0 allowed" in (_lane_lint(lane_linted) or "")
+
+    lane_linted.git("checkout", "-q", "-b", "drops", lint)
+    drops = lane_linted.commit("drops b.md's entry", {REPO_LANE_JSON: _allowlist(DOCS_A)})
+    lane_linted.git("checkout", "-q", "-B", "next", m2)
+    lane_linted.queue(4, "drops b.md's entry", drops)
+    [*_, c] = G.gate("main", "next")["changes"]
+    assert (c["name"], c["verdict"]) == ("#4", "failed") and "finds 3 violation(s) on its tree" in c["why"], c["why"]
+    assert c["fix"] == ["repo_lane_text: docs/b.md: 2 found, 0 allowed", "repo_lane_text: docs/b.md:3 toy: TOY1",
+                        "repo_lane_text: docs/b.md:3 toy: TOY2"], "the violation the tree below holds is #2's, not #4's"

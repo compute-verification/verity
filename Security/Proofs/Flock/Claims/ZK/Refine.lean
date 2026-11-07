@@ -1,8 +1,38 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Release
 public import Proofs.Flock.Claims.ZK.CoinOpen
 public import Proofs.Flock.Claims.ZK.HelloLean
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Toward the item-stream refinement at the reference session
@@ -657,11 +687,33 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **Flock's zero knowledge at the session with stops, at values causal where it computes**: `Flock.zk_deployZk_sw` at
-`S.withStops Rf stop` with `refP`'s simulator there, its switched round encoding causal only on `Ok`
-(`RefSession.SwCausalOn`), which holds wherever the session with stops computes a round (`RefSession.StopsOk`). Before
-the last coin its prover is the cut model's (`RefSession.swPreCut_link`); at each coin vector, where its tables admit it,
-`swCoinModel`'s own, else the off-model at the cut coins (`RefSession.swCoinModel_link_stops`). -/
+/-- **Flock's zero knowledge at the session with stops, at values causal where it computes, at any masked record whose
+rounds on its relation are the session's** (`refK x + 1`): `Flock.zkAt_sw` at `S.withStops Rf stop` with `refP`'s
+simulator there, its switched round encoding causal only on `Ok` (`RefSession.SwCausalOn`), which holds wherever the
+session with stops computes a round (`RefSession.StopsOk`). Before the last coin its prover is the cut model's
+(`RefSession.swPreCut_link`); at each coin vector, where its tables admit it, `swCoinModel`'s own, else the off-model at
+the cut coins (`RefSession.swCoinModel_link_stops`); at the record with those rounds at every statement, carried back
+by `Flock.zkAt_withK`. -/
+theorem Flock.zkAt_sw_stops {Coin Col T : Type} (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (hzk : D.zk = true)
+    (hkD : ∀ x w, Flock.R D.parse x w → D.V.k x = refK x + 1) (S : RefSession)
+    (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg) (vs : S.SwVals)
+    (Ok : (x : Msg) → (Fin (refK x) → S.Coin) → Prop) (t : ℕ) (ht : 0 < t) {δ₁ : ENNReal}
+    (hT1 : Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁) (hδ₁ : δ₁ ≠ ⊤) (hS : S.Tables)
+    (hV : S.Complete (Flock.R D.parse)) (hD : S.DummyReg) (hc : S.Causal)
+    (hRf : S.StopsCausal Rf) (hsc : S.SwCausalOn Ok vs) (hOk : S.StopsOk Rf Ok) (hT : S.TapeOK) :
+    Claims.Flock.ZKAt H D ((S.withStops Rf stop).swP vs).prover
+      (((S.withStops Rf stop).refP.withSim fun x _ c => (S.withStops Rf stop).coinModel x c).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * (S.withStops Rf stop).nLeaves x * δ₁.toReal +
+        8 * t * (S.withStops Rf stop).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t :=
+  Flock.zkAt_withK (fun x w hR => (hkD x w hR).symm)
+    (Flock.zkAt_sw_of_links H (D.withK fun x => refK x + 1) hzk (S.withStops Rf stop) vs (fun _ => rfl) t ht hT1 hδ₁
+      (S.withStops_tables Rf stop hS) (fun x ν => S.swPreCut Rf stop vs H x ν) (fun _ _ => le_rfl) (fun x _ => hS x)
+      (fun x w hR ν => S.swPreCut_link Rf stop vs Ok H _ hV hD hc hRf hsc hOk hT x w hR ν)
+      fun x w hR ν c => S.swCoinModel_link_stops Rf stop vs Ok H _ hV hD hc hRf hsc hOk hT x w hR ν c)
+
+/-- **Flock's zero knowledge at the session with stops, at values causal where it computes**: `Flock.zkAt_sw_stops` at
+`deployZk`, whose rounds on its relation are the session's (`V_k_of_R`). -/
 theorem Flock.zk_deployZk_sw_stops (H : Msg → Msg)
     (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession)
     (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (stop : Msg) (vs : S.SwVals)
@@ -674,11 +726,7 @@ theorem Flock.zk_deployZk_sw_stops (H : Msg → Msg)
       (fun x => 8 * (S.withStops Rf stop).nLeaves x * δ₁.toReal +
         8 * t * (S.withStops Rf stop).nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
       fun _ => 4 * t * 3 ^ t :=
-  Flock.zkAt_sw_of_links H _ rfl (S.withStops Rf stop) vs
-    (fun x => (deployZk_proto_k rel ((S.withStops Rf stop).swPS vs) (fun _ => rfl) x).symm) t ht hT1 hδ₁
-    (S.withStops_tables Rf stop hS) (fun x ν => S.swPreCut Rf stop vs H x ν) (fun _ _ => le_rfl) (fun x _ => hS x)
-    (fun x w hR ν => S.swPreCut_link Rf stop vs Ok H _ hV hD hc hRf hsc hOk hT x w hR ν)
-    fun x w hR ν c => S.swCoinModel_link_stops Rf stop vs Ok H _ hV hD hc hRf hsc hOk hT x w hR ν c
+  Flock.zkAt_sw_stops H _ rfl (fun _ _ hR => V_k_of_R hR) S Rf stop vs Ok t ht hT1 hδ₁ hS hV hD hc hRf hsc hOk hT
 
 end Claims.ZKMal
 
@@ -1405,13 +1453,12 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- The deployed record's last round is one past the `Finish`, which is one past the protocol's last coin. -/
-theorem deployZk_last_eq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (x : Msg) :
+/-- At a statement in the relation, the deployed record's last round is one past the `Finish`, which is one past the
+protocol's last coin. -/
+theorem deployZk_last_eq {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Msg}
+    {w : Flock.Wit} (hR : Flock.R (FlockDeploy.deployZk rel).parse x w) :
     (FlockDeploy.deployZk rel).V.k x + 1 = refK x + 2 := by
-  show (FlockDeploy.V true).k x + 1 = (FlockDeploy.V true).k x - 1 + 2
-  have : 1 ≤ (FlockDeploy.V true).k x := by
-    simp only [FlockDeploy.V]
-    split <;> omega
+  have := V_k_of_R hR
   omega
 
 /-- **`Flock.zk_server_lean` at the session with the frame's stops**: at a session `S` and a stop rule `Rf` that reads
@@ -1458,13 +1505,13 @@ theorem Flock.zk_server_lean_stops (H : Msg → Msg)
   Flock.zk_server_lean_of H rel (S.withStops Rf L.stop) vs t δ₁
     (Flock.zk_deployZk_sw_stops H rel S Rf L.stop vs Ok t ht hT1 hδ₁ hS hV hD hc hRf hsc hOk hT) L wk x w hR
     ⟨L.helloRefine_withStops S Rf vs H x w hH,
-      L.ownRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w (deployZk_last_eq rel x)
+      L.ownRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w (deployZk_last_eq hR)
         hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hLk hF,
       L.liveRefine_withStops S Rf vs H wk x w hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hE,
       L.fillRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w
-        (deployZk_last_eq rel x).le hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hEf,
+        (deployZk_last_eq hR).le hlast hst (LeanRelease.openingsRefused_of_checkIs S L H x hC) hEf,
       L.stopRefine_withStops S Rf vs H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w
-        (deployZk_last_eq rel x).le hst⟩ Vs θ hk Ev
+        (deployZk_last_eq hR).le hst⟩ Vs θ hk Ev
 
 /-- **`Flock.zk_server_lean_stops` at the deployed coin layer** (`CoinLayer.session nr T`), at SHA-512
 (`CoinOpen.shaH`), from the transport's trusts alone. `Hello`, the opening check (the keyed coin-tree walk at the round's place under

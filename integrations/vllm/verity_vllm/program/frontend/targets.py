@@ -32,6 +32,7 @@ from typing import Any
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops.prims import (BlackwellE4m3QmmaDot32, BlackwellNvf4OmmaDot64, HopperBF16WgmmaDot16,
                                           HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32)
+from verity.ml.definitions.numerics import fa3_model as FA3
 from verity.ml.definitions.registry import b1
 from verity.ml.definitions.registry import fa2_check_inf as F2
 from verity.ml.definitions.registry import attention_vocab
@@ -269,38 +270,20 @@ def check_flash_attn_registered(profile) -> int:
 
 
 def fa3_kblock_n(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
-    """kBlockN of the FA3 forward vLLM launches (vllm-flash-attn 506341a1 `hopper/tile_size.h::tile_size_fwd_sm90`, element_size 2,
-    causal, not local, `paged_kv_non_TMA` = paged KV without TMA, `use_one_mma_wg = (D in {64, 128}) and seqlen_q * qh_per_kvh <= 64`
-    (`hopper/heuristics.h`; `seqlen_q` = the launch's max_seqlen_q under varlen)):  D <= 64: one-MMA-warpgroup 64 x 192 else 192 x 128;
-    D <= 96: 128 (paged non-TMA); D <= 128: 128 (causal); D = 256 (qk and v head 256, GLM-5.3's dense MHA prefill): 80, the 128 x 80
-    tile whatever seqlen_q or paging.  The head dims between are not registered."""
-    D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
-    one_wg = D in (64, 128) and seqlen_q * qh <= 64
-    if D <= 64:
-        return 192 if one_wg else 128
-    if D <= 96:
-        return 128
-    if D <= 128:
-        return 128
-    if D == 256:
-        return 80
-    raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockN rule")
+    """kBlockN of the FA3 forward vLLM launches (`fa3_model.kblock_n_for`; D = 256 is GLM-5.3's dense MHA prefill), refused at a head
+    dim it has no rule for."""
+    try:
+        return FA3.kblock_n_for(D, seqlen_q, qh_per_kvh)
+    except ValueError as e:
+        raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockN rule") from e
 
 
 def fa3_tile_m(D: int, seqlen_q: int, qh_per_kvh: int) -> int:
-    """kBlockM of the FA3 forward tile (the same `tile_size_fwd_sm90` / `use_one_mma_wg` rule as `fa3_kblock_n`): D <= 64: 64 (one MMA
-    warpgroup) else 192; D <= 96: 192; D <= 128: 64 (one MMA warpgroup) else 128; D = 256: 128."""
-    D, seqlen_q, qh = int(D), int(seqlen_q), int(qh_per_kvh)
-    one_wg = D in (64, 128) and seqlen_q * qh <= 64
-    if D <= 64:
-        return 64 if one_wg else 192
-    if D <= 96:
-        return 192
-    if D <= 128:
-        return 64 if one_wg else 128
-    if D == 256:
-        return 128
-    raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockM rule")
+    """kBlockM of the FA3 forward tile (`fa3_model.kblock_m_for`), refused at a head dim it has no rule for."""
+    try:
+        return FA3.kblock_m_for(D, seqlen_q, qh_per_kvh)
+    except ValueError as e:
+        raise UnregisteredTarget(f"FA3 head dim {D}: no registered kBlockM rule") from e
 
 
 def fa3_check_inf(profile) -> bool:
@@ -503,8 +486,8 @@ def scaled_mm_fp8_spec(profile, K: int, N: int, bias: bool):
 
 def fp8_block_dot(profile):
     """The e4m3 k32 step the blockwise FP8 linear (`CutlassFp8BlockScaledMMKernel`) binds on the declared target, as the version 3
-    Definitions' `DOT`; None on a target whose step is Hopper's (`ScaledMmFp8Block_v1` and its shared-scale form are that step's chain,
-    and the recorded Programs bind them).  Refused by name where the GEMM target records no blockwise step (`GemmTarget.fp8_block_dot`):
+    Definitions' `DOT`; None on a target whose step is Hopper's (`ScaledMmFp8BlockSharedScale_v1` is that step's chain, and the
+    recorded Programs bind it).  Refused by name where the GEMM target records no blockwise step (`GemmTarget.fp8_block_dot`):
     `_C.cutlass_scaled_mm` reaches another blockwise kernel there under the same op and kernel class."""
     gt = gemm_target(profile)
     dot = FP8_DOTS.get(gt.fp8_block_dot) if gt.fp8_block_dot else None
@@ -516,8 +499,8 @@ def fp8_block_dot(profile):
 
 def scaled_mm_fp8_block_spec(profile, K: int, N: int, G: int, scale: str | None = None):
     """The registered Definition of the blockwise FP8 linear on one token row on the declared target, under the scale construction
-    `scale` (default the target's `effective_fp8_scale_construction()`): `ScaledMmFp8BlockSharedScale_v1{K,N,G}` / `ScaledMmFp8Block_v1`
-    on hopper, the version 3 forms `{K,N,G,DOT}` over the target's `fp8_block_dot` elsewhere; refused by name where there is none."""
+    `scale` (default the target's `effective_fp8_scale_construction()`): `ScaledMmFp8BlockSharedScale_v1{K,N,G}` on hopper, its
+    version 3 form `{K,N,G,DOT}` over the target's `fp8_block_dot` elsewhere; refused by name where there is none."""
     return fp8_vocab.block_gemm(K, N, G, scale or profile.effective_fp8_scale_construction(), fp8_block_dot(profile))
 
 

@@ -2,7 +2,7 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4W1
-public import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
 # TT_OUT-FP4 at W1 is TT_OUT-FP4 at the cost model `W1.w1Priced`

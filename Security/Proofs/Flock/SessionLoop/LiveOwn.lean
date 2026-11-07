@@ -29,7 +29,7 @@ only (`LeanRelease.LiveRoundEqOwn`), as `FinalRoundEq` asks its own:
 * **`LeanRelease.liveRoundEqOwn_vsOf`**: they hold at `Loop.vsOf bx` and the worker `Loop.phased bx post`, for every
   algebraic-phase worker `bx` and every `post`, wherever `bx`'s served values' rows hold (`Loop.vsServed`).
 
-`Loop.finishIs` takes `LiveRoundEqOwn`: the `Finish` reads each frame round on the history it ends, a prefix of the own
+`Loop.finishIsOn` takes `LiveRoundEqOwn`: the `Finish` reads each frame round on the history it ends, a prefix of the own
 history `FinishIs` is asked on, which is own (`ZkServer.OwnHist.take`, `msg_of_liveRoundEq`).
 -/
 

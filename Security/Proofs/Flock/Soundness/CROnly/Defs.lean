@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.FlockLink
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Collision resistance alone: the definitions
@@ -61,15 +62,10 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
 
 /-- **`cr/sha-512` for one prover's link finders** (`Assumptions.SHA512CRStrict`): at the registration `R` and the prover's
 continuation `τ`, for the finder `Partition.LinkCR` builds for each commit string a draw can read, stopped at `q`
-evaluations (`truncOut`, `truncCost`), with each run of the prover costing `t'`. It asks of each finder what `LinkCR` asks,
+evaluations (`truncOut`, `truncCost`), with each run costing `t'` (`cT`). It asks of each finder what `LinkCR` asks,
 but in the strict form: the stopped finder makes at most `q` evaluations on every outcome, so it finds a collision with
 probability at most `q²/2^513`. As `LinkCR`, it is a hypothesis about the finders built from one prover, not about every
-finder.
-
-When the first trial already reads two values, `outC`'s `Classical.choose` may still take the second opening from the
-trial `nextRead` finds, which `finderCost` does not charge. The success event does not depend on that choice: any choice
-gives a collision through `vb.collide`, so the finder that reads only its first trial has the same success at the same
-cost. -/
+finder. -/
 def LinkCRStrict (k Rw M : ℕ) (t' q : ℝ) : Prop :=
   ∀ (c : vb.Pos) (_ : Nonempty (P.Ωc plan tab vb L c)), Assumptions.SHA512CRStrict Hc
     (finderG (P.trialG H E plan tab vb R τ c k Rw) M)

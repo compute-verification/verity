@@ -87,8 +87,8 @@ public import Proofs.Flock.Recursive.KSLinked
 public import Proofs.Flock.Claims.Recursion.DeployedCounts
 public import Proofs.Flock.Claims.Recursion.LamDeployedTight
 public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+public import Proofs.Flock.Claims.Recursion.KappaEpsCap
 public import Proofs.Flock.Recursive.BitsK
-public import Proofs.Flock.Claims.Recursion.KappaEpsTight
 public import Proofs.Flock.Recursive.BitsKTight
 public import Proofs.Flock.Claims.Recursion.AcceptedScope
 public import Proofs.Flock.Claims.Recursion.InnerSetupCount
@@ -100,6 +100,9 @@ public import Proofs.Flock.Recursive.LoopAny
 public import Proofs.Flock.Recursive.InnerRows
 public import Proofs.Flock.Recursive.LinksOuter
 public import Proofs.Flock.Recursive.LinksDeployed
+public import Proofs.Flock.Recursive.FirewallFixed
+public import Proofs.Flock.Recursive.LoopAnyDeployed
+public import Proofs.Flock.Recursive.LoopWitness
 /-! The recursive audit: its model and soundness (`Defs` to `Stage`, with `ZkReg/`), hidden unit circuits' class,
 registered table and registered schedule, with the holographic table at them (`Holo`), the proofs of its guarantees
 (`Guarantees`; circuit privacy and the registered private circuit's in `Private`; what a stop leaks, the counting lemma
@@ -126,7 +129,9 @@ with the honest worker's half left an obligation (`FirewallAccepts`, with (ii) f
 from it), the honest worker's requests and rounds read back by `decode`, `frames` and `split` as it meant them
 (`FirewallWire`), a plain value's text parsing back to its canonical form with no fraction or exponent
 (`FirewallJson`), the live firewall's sends at any requests (`FirewallAny`) and at any worker that reads its answers
-(`FirewallAdaptive`), `RecursiveZK` at the loop at such a worker, with no `FirewallSends` (`LoopAny`), and the
+(`FirewallAdaptive`), the live session at a worker whose requests are fixed (`FirewallFixed`), `RecursiveZK` at the
+loop at such a worker, with no `FirewallSends` (`LoopAny`), and at the deployed tables (`LoopAnyDeployed`), each
+of the loop's two guarantees' premises at one instance and its bound failing at another (`LoopWitness`), and the
 recursive audit at public units, the inner
 statement the verifier's own from its partition object and program (`PublicAudit`), its proof
 (`PublicAuditProof`), the same audit at candidate 3's table (`HoloExec`, its coins `HoloCoins`, its schedule and the

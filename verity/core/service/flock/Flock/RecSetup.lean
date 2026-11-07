@@ -12,10 +12,8 @@ recursive one without `--zk`, neither of which `RecursiveKS` covers (`denseOnly`
 module
 
 public import Flock.RecBudget
-public import Flock.RecCoins
 public import Flock.RecRecord
 public import Flock.Witness
-public import Flock.JsonParse
 
 @[expose] public section
 
@@ -148,18 +146,15 @@ def checkMeta (cf : ByteArray) (bound : V (Option String × Option RecVStar.Stac
     throw "rec inner circuit: the registration and R's shape its header's META binds are not its circuit's META's"
 
 /-- **The inner statement is set up as its files set it up**: how Flock's plain verifier is told to set the inner
-statement up (`form`) is how `RecCoins.Files.stmt` sets it up from its files, `st`: as a
-`Tags.circuitPlainLeaves` statement (`--rec-inner-statement`) on the coin server's coins
-(`--rec-inner-statement-coins os`), with no lookup table (`--rec-inner-tables`), at a draw (`--rec-inner-draw`) that
+statement up (`form`) is how `RecCoins.Files.stmt` sets it up from its files, `st`: as a `Tags.circuitPlainLeaves`
+statement (`--rec-inner-statement`), with no lookup table (`--rec-inner-tables`), at a draw (`--rec-inner-draw`) that
 proves every one of `st`'s units in order, so its `m` and regions are `st`'s. A session without `form` is refused. -/
 def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
   let some fm := form
     | throw ("rec-inner: the verifier holds no setup of the inner statement (--rec-inner-statement, " ++
-        "--rec-inner-statement-coins, --rec-inner-draw) to hold to its files' setup")
+        "--rec-inner-draw) to hold to its files' setup")
   if fm.statement != Tags.circuitPlainLeaves.name then
     throw s!"rec-inner: the inner statement is a {fm.statement} statement, not {Tags.circuitPlainLeaves.name}, as its files set it up"
-  if !fm.os then
-    throw "rec-inner: the inner statement's coins are not the coin server's (--rec-inner-statement-coins os), as its files set it up"
   if !fm.tables.isEmpty then
     throw "rec-inner: the inner statement names lookup tables (--rec-inner-tables), and its files set it up with none"
   let some b := fm.draw | throw "rec-inner: the inner statement has no draw (--rec-inner-draw)"
@@ -172,8 +167,8 @@ def checkForm (form : Option RecCoins.InnerForm) (st : Stmt) : V Unit := do
 /-- **The verifier's inner shape is the inner statement's**: where it holds the inner statement's files, the `m`,
 `k_log`, regions and claims of its inner shape (`--rec-inner`) are the ones the inner statement sets up at from them
 (`RecCoins.Files.stmt`; claims two and the session's points per region, as `RecVStar.innerOf` writes them), so the V*
-list and the rep schedule the shape fixes are the inner session's; its public file's shared-row tables are within
-`RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
+list and the rep schedule the shape fixes are the inner session's; its public file's instances and shared-row tables are
+within `RecBudget.innerRows`; and the inner statement is set up as its files set it up (`checkForm`). -/
 def checkShape (inner : Option RecVStar.Inner) (src : Option RecCoins.Source) : V Unit := do
   let (some i, some (.files f)) := (inner, src) | return
   let (spec, st) ← f.stmt "the inner session"

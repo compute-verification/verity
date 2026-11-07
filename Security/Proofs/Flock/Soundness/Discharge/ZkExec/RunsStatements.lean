@@ -1,9 +1,25 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.LIG
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.OP
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Coin
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `RunsZC`'s decoder half: the `--zk` rep's frames and the messages they carry (statements)
@@ -200,7 +216,7 @@ def ZkRepFrames : Prop :=
     ∃ T : F128, (chunks (repFramesZ st sch dom (2 + extras.size) zp T)).1.length = rounds.size ∧
       ∀ k < rounds.size, Retains rounds[k]! (encs ((chunks (repFramesZ st sch dom (2 + extras.size) zp T)).1.getD k []))
 
-/-- **A decoded `--zk` proof's lengths**: the pair's are the non-ZK session's (`ProofSizes`, PROTOCOL.md §8, read by
+/-- **A decoded `--zk` proof's lengths**: the pair's are the non-ZK session's (`ProofSizes`, `Flock.Proof`, read by
 `Zk.reader` as by `decodeProof`), and the inner proof's `Y` has fewer than `2^64` words (its `u64` length). -/
 def ZkDecodeSizes : Prop :=
   ∀ (sh : Shape) (bytes : ByteArray) (zp : Zk.ZkProof), Zk.decode sh bytes = .ok zp →

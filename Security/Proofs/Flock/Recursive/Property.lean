@@ -1,14 +1,22 @@
 module
 
-public import Proofs.Flock.Recursive.Compile
-public import Proofs.Flock.Recursive.Statements
-public import Proofs.Flock.Recursive.Premises
 public import Proofs.Flock.Recursive.ExecClass
 public import Proofs.Flock.Recursive.Firewall
 public import Proofs.Flock.Recursive.Description
 public import Proofs.Flock.Recursive.VStarCheck
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-public import Flock.RecResiduals
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The recursive audit's property (trusted)
@@ -181,8 +189,7 @@ session that types, and at one that doesn't, a session of its index that types, 
 `transported zr _hCust h σ` is `σ` against them (`recT`). `stmt q ω` is the hidden statement at the draw `ω` of the
 private circuit whose `rt.leaves` rows the commit strings `q` commit to (`stmtAt` reads it at a list's first
 `rt.leaves`), and the run's hidden statement is `stmt` at `st`'s own description rows (`hiddenAt`: the commit strings
-`Flock.Registered.rowsOf st.c st.pub rt` that Lean's verifier opens against `rt`, `AcceptsDescription`, PROTOCOL.md
-§16.16), whichever rows V*'s sessions read. Taken: A3 (`_hA3`). Then for the registered commit strings `p`, each
+`Flock.Registered.rowsOf st.c st.pub rt` that Lean's verifier opens against `rt`, `AcceptsDescription`, `Tags.withPlainLeaves`), whichever rows V*'s sessions read. Taken: A3 (`_hA3`). Then for the registered commit strings `p`, each
 opening `rt` at its row `r < rt.leaves` through the developer's path `path₀ r`, for every count curve `(k, R_w, M, ρ)`
 that bounds every session's rate at each setup of its inputs, given V*'s bridge at the committed rounds (VBridgeC, which
 VBridge gives) at the typed sessions and that hidden statement: the event below is empty; or at some row `st`'s commit

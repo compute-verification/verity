@@ -41,10 +41,12 @@ when:
   as the base's P16 lint finds a call (its ``runs``).  Like the environment-read list's registry marks, the table is a
   declaration and no ratchet counts it, but this one is checked, so a change may add one (were the table P16's code, which
   the gate runs as the base has it, no change could add a command run from ``benchmarks/``); and
-* if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover.
-  In a temporary worktree of the change's top, each lint directory to run and both ``ruff.toml`` files are replaced by the
-  base's, each allowlist there holding the top's entries for its slug (none for a deleted one), P16's the top's public
-  commands too, and the ``test_no_new*`` tests
+* if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover,
+  beyond what it finds on the base's own tree, with the base's lists: a violation the tree below already holds isn't the
+  change's, so it passes, naming the change that added each one's line (``git blame --first-parent`` on the base: ``#N``
+  for a queue merge), whose own merge the source checks below refuse.  In a temporary worktree of the change's top, each
+  lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
+  entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
   lints with the base's pin.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
@@ -75,7 +77,10 @@ catch (every outcome is recorded): the fix is to re-raise, record the outcome, o
 A rename must move the file's entry (``python3 tests/lint/test_<slug>.py --move OLD NEW``), as for ruff.
 
 Only the top change is linted: a PR's own commits at the preflight, its merge onto `next` at the sync, where the members below
-were linted at their own merges.
+were linted at their own merges.  Its findings and sites are counted with the lints, configs and pin its own base has when
+that base holds BASE (its merge onto `next`, whose members below may change a lint: the lints it lands with), else with
+BASE's (a preflight's merge base, an older `main`), so a PR that adds a site a lint queued below it counts is refused at
+its own merge, not found later by the whole-tree run of a change that touches a lint.
 
 A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
 by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
@@ -95,7 +100,10 @@ else one ``uv run --with`` fetches the pin for (the network, once per uv cache).
 BASE too for a verdict that reads it (a failed change's exemptions run BASE's move_check): a sync of N PRs judges each change
 once, not N times, and once `main` moves an untouched or passed change is still not judged again.  The source checks' findings
 are kept beside the verdict under BASE's key (they run BASE's lints and config), and apply to the top change only, so a member
-below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  Before marking
+below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  A change's
+judgement reads only its own commits (and BASE), so the changes the cache doesn't hold are judged at once, each in a forked
+process of its own, its worktree and ruff cache with it, up to ``$RATCHET_GATE_JOBS`` at a time (default the lesser of 16 and
+this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  Before marking
 a branch, run
 ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
 (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the host), which the
@@ -112,6 +120,7 @@ import importlib.util
 import io
 import json
 import math
+import multiprocessing
 import os
 import re
 import shutil
@@ -123,6 +132,8 @@ import tomllib
 import types
 from collections import Counter
 from collections.abc import Callable
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -172,6 +183,8 @@ NOQA = re.compile(r"#\s*(?:(?:ruff|flake8)\s*:\s*)?noqa\b", re.IGNORECASE)
 HUNK = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@", re.MULTILINE)
 #: entries or violations named in a failure's fix, at most
 CHEAPEST = 12
+#: a violation that names a file, and maybe its line, as `violations` writes it: ``lint: file:line what``, ``lint: file: ...``
+SITE = re.compile(r"^[^:]+: ([^\s:]+):(?:(\d+)\b)?")
 #: the ratchets whose ``count`` measures one site (P10's is a size in lines) rather than counting findings, so never pooled
 MEASURES = {"size"}
 
@@ -961,6 +974,30 @@ def violations(failures: list[dict]) -> list[str]:
     return out
 
 
+def added_by(rev: str, items: list[str]) -> str:
+    """Each violation in ``items`` with the change on ``rev``'s first-parent chain that added the line it names
+    (``lint: file:line ...``), by `git blame --first-parent`: ``#N`` for a queue merge, else the commit.  One that names only
+    a file (``lint: file: 2 found, 1 allowed``) goes with a line of that file, else is listed as it is."""
+    sites = [(item, SITE.match(item)) for item in items[:CHEAPEST]]
+    by_item: dict[str, str] = {}
+    by_file: dict[str, set[str]] = {}
+    for item, m in sites:
+        if m and m[2]:
+            r = subprocess.run(["git", "blame", "--first-parent", "--porcelain", "-L", f"{m[2]},{m[2]}", rev, "--", m[1]],
+                               capture_output=True, text=True)
+            if r.returncode == 0 and r.stdout:
+                sha = r.stdout.split()[0]
+                q = QUEUE_SUBJECT.match(git("log", "-1", "--format=%s", sha).strip())
+                by_item[item] = f"#{q[1]}" if q else sha[:12]
+                by_file.setdefault(m[1], set()).add(by_item[item])
+    out: dict[str, list[str]] = {}
+    for item, m in sorted(sites, key=lambda s: not (s[1] and s[1][2])):
+        who = by_item.get(item) or (", ".join(sorted(by_file[m[1]])) if m and m[1] in by_file else "no line named")
+        out.setdefault(who, []).append(item)
+    more = f"; ... and {len(items) - CHEAPEST} more" if len(items) > CHEAPEST else ""
+    return "; ".join(f"added by {w}: {', '.join(v)}" for w, v in out.items()) + more
+
+
 def judge(c: Change, base: str) -> None:
     diff = git("diff", "--no-renames", "--name-only", "-z", c.lo, c.hi).split("\0")
     c.touched = sorted(f for f in diff if f and (is_ratchet(f) or is_lint_code(f) or f in (RUFF_CONFIG, REPO_RUFF_CONFIG)
@@ -980,16 +1017,22 @@ def judge(c: Change, base: str) -> None:
         grown, added, c.pooled = growth(before, after, {**was_at, **now_at}, *held(c, before, after))
         uncalled, public = public_callers(c)
     noqa_grows = c.noqa_added > c.noqa_removed
+    inherited: list[str] = []
     if c.touched and not (grown or bad or uncalled or noqa_grows):
         selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}
         if selection:
             c.lints, failures = base_lints(c, selection, after)
             found = violations(failures)
+            if found:
+                had = set(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]))
+                inherited, found = [v for v in found if v in had], [v for v in found if v not in had]
     if not (grown or bad or uncalled or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
             + ([f"public, each run by its caller: {', '.join(public)}"] if public else [])
-            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints else []))
+            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints and not inherited else [])
+            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(inherited)} violation(s) its own tree already holds, "
+                f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else []))
         return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
@@ -1026,23 +1069,34 @@ def judge(c: Change, base: str) -> None:
         c.fix = found[:CHEAPEST] + ([f"... and {len(found) - CHEAPEST} more"] if len(found) > CHEAPEST else [])
 
 
+def lints_at(c: Change, base: str) -> str:
+    """Where the source checks read their lints for ``c``: its own base when that holds BASE (its merge onto `next`, whose
+    members below may change a lint, so these are the lints that land with it), else BASE (a branch's preflight, whose merge
+    base is an older `main`).  A member below that makes a lint count more is counted against the PR that adds a site to it,
+    rather than found later by the whole-tree run of a change that touches a lint."""
+    if c.lo != base and subprocess.run(["git", "merge-base", "--is-ancestor", base, c.lo], capture_output=True).returncode == 0:
+        return c.lo
+    return base
+
+
 def find(c: Change, base: str) -> None:
-    """The source checks on ``c``: ruff's findings, and each counted lint's count."""
+    """The source checks on ``c``: ruff's findings, and each counted lint's count, with the lints at ``base``."""
     c.ruff_new, c.ruff_grown, c.ruff_unmoved = source_lint(c, base)
     c.counted = {slug: got for slug, sites, noun in COUNTED if (got := counted_lint(c, base, slug, sites, noun)) is not None}
 
 
 def lint_top(c: Change, base: str) -> None:
-    """The source checks on the top change ``c``, after ``judge``: a ruff finding or a counted lint's site it adds, or a list
-    entry a rename leaves behind, fails a change that passed or touched nothing else, unless it is exempt (a revert; a
-    pure move, from what it adds but not from the entries it leaves behind, which would fail the repository's lints as
-    surely); a change already failed or exempt keeps its verdict.  What the checks find is kept beside the verdict, in an entry
-    of its own, so a change below the top never fails by it."""
+    """The source checks on the top change ``c``, after ``judge``, with the lints `lints_at` reads: a ruff finding or a
+    counted lint's site it adds, or a list entry a rename leaves behind, fails a change that passed or touched nothing else,
+    unless it is exempt (a revert; a pure move, from what it adds but not from the entries it leaves behind, which would
+    fail the repository's lints as surely); a change already failed or exempt keeps its verdict.  What the checks find is
+    kept beside the verdict, in an entry of its own, so a change below the top never fails by it."""
     if c.verdict in ("failed", "exempt"):
         return
+    at = lints_at(c, base)
     p = cache_path(c, base, "found")
     if not recall(c, p, FOUND):
-        find(c, base)
+        find(c, at)
         keep(c, p, FOUND)
     counted = [(slug, sites, noun, c.counted[slug]) for slug, sites, noun in COUNTED if slug in c.counted]
     if not (c.linted or any(v["read"] for *_, v in counted)):
@@ -1060,7 +1114,7 @@ def lint_top(c: Change, base: str) -> None:
         for *_, v in counted:
             v["new"] = []
     def reads(slug: str, sites: str, noun: str) -> str:
-        return "files" if hasattr(counted_lint_at(base, slug, sites, noun), "holds") else "Python"
+        return "files" if hasattr(counted_lint_at(at, slug, sites, noun), "holds") else "Python"
 
     if not (new or unmoved):
         notes = ([f"ruff finds nothing new in the {len(c.linted)} Python file(s) it changes"] if c.linted else []) + [
@@ -1076,7 +1130,7 @@ def lint_top(c: Change, base: str) -> None:
                    f"and F541 among them), or, where a rule is wrong for that line, say why in a `# noqa: CODE` on it")
     for slug, sites, noun, v in counted:
         if v["new"]:
-            lint = counted_lint_at(base, slug, sites, noun)
+            lint = counted_lint_at(at, slug, sites, noun)
             why.append(f"adds {len(v['new'])} {noun}(s) to the {reads(slug, sites, noun)} it changes, as the base's "
                        f"{counted_paths(slug)[0]} "
                        f"counts them ({'; '.join(v['grown'])}): {lint.FIX}"
@@ -1138,14 +1192,47 @@ def keep(c: Change, p: Path | None, fields: tuple[str, ...] = JUDGED) -> None:
         pass
 
 
+def jobs() -> int:
+    """How many changes are judged at once: ``$RATCHET_GATE_JOBS``, default the lesser of 16 and this process's CPUs."""
+    raw = os.environ.get("RATCHET_GATE_JOBS", "")
+    if not raw:
+        return min(16, len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1)
+    if not raw.isdigit() or int(raw) < 1:
+        raise GitError(f"RATCHET_GATE_JOBS is {raw!r}: set it to a number of processes, 1 to judge the changes in turn")
+    return int(raw)
+
+
+def judged(c: Change, base: str) -> Change:
+    """``c`` judged, its verdict kept."""
+    judge(c, base)
+    keep(c, cache_path(c, None if c.verdict in BASE_FREE else base))
+    return c
+
+
+def judge_all(cs: list[Change], base: str) -> list[Change]:
+    """Each of ``cs`` judged, in order: by up to ``jobs()`` forked processes, or in turn.  The first error in chain order is
+    the one raised, as in turn."""
+    n = min(jobs(), len(cs))
+    if n <= 1 or "fork" not in multiprocessing.get_all_start_methods():
+        return [judged(c, base) for c in cs]
+    pool = ProcessPoolExecutor(n, mp_context=multiprocessing.get_context("fork"))
+    try:
+        return [f.result() for f in [pool.submit(judged, c, base) for c in cs]]
+    except BrokenProcessPool as e:
+        raise GitError(f"a process judging the changes died ({e}), so the gate couldn't judge them all: rerun it, with "
+                       f"RATCHET_GATE_JOBS=1 to judge them in turn") from e
+    finally:
+        pool.shutdown(cancel_futures=True)
+
+
 def gate(base: str, top: str) -> dict:
     base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     cs = changes(base, top)
+    todo = [i for i, c in enumerate(cs) if not (recall(c, cache_path(c, None), verdicts=BASE_FREE)
+                                                or recall(c, cache_path(c, base)))]
+    for i, c in zip(todo, judge_all([cs[i] for i in todo], base)):
+        cs[i] = c
     for c in cs:
-        free, based = cache_path(c, None), cache_path(c, base)
-        if not (recall(c, free, verdicts=BASE_FREE) or recall(c, based)):
-            judge(c, base)
-            keep(c, free if c.verdict in BASE_FREE else based)
         if c.hi == top:
             lint_top(c, base)
     failed = [c for c in cs if c.verdict == "failed"]

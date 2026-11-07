@@ -41,10 +41,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib
 import json
 import os
-import pkgutil
 import re
 import subprocess
 import sys
@@ -62,6 +60,7 @@ from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.definitions.registry import catalog
 
 import r2_population as R2
 
@@ -90,14 +89,6 @@ class Gap(Exception):
 
 
 # --- programs ----------------------------------------------------------------------------------------------------------
-
-def _registry() -> None:
-    """Every Definition a recorded program may call: the circuit ops and vLLM's program registry."""
-    for name in ("verity.ml.circuits.ops", "verity.ml.definitions.registry"):
-        pkg = importlib.import_module(name)
-        for m in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
-            importlib.import_module(m.name)
-
 
 def _json(value: Any) -> Any:
     return json.loads(DT.canonical(value))
@@ -1628,7 +1619,7 @@ def served_window(run: Run) -> Iterator[Case]:
     is the service's and the audit took the delivered sessions. Neither took the served draw or the sessions' roots, and
     no verdict of record reports registered reads."""
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.pouw.circuit import leaves as L, pc8
+    from verity.ml.protocols.pouw.circuit import leaves as L, pc8
     from verity.ml.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
     pv = run.json("out/request/params.json")
     rec = run.json("out/request/registration.json")
@@ -1646,7 +1637,7 @@ def served_window(run: Run) -> Iterator[Case]:
                            pv["grid_bits"])["law"]
     n0 = Wd.Work.at(levels[0], pv["grid_bits"]).n
     tiles = {"pc8.side_tile": pc8.side_tile(pv["k"], (1, 1), "sm120"),
-             "pc8's hiding tile": pc8.templates(pv["k"], (1, 1), "sm120", hidden=True)["tile"]}
+             "pc8's hiding tile": pc8.templates(pv["k"], (1, 1), "sm120", hidden=True, hashing="h0")["tile"]}
     def own(x):
         return own_population(lambda v: P.population_program(x, n0, version=v), rec["program"])
     how, t = next(((h, x) for h, x in tiles.items() if PO.program_sha512(own(x)) == rec["program"]),
@@ -1775,7 +1766,7 @@ def served_audit(run: Run) -> Iterator[Case]:
     no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
     domains bind from the record's own window, not the request's binding, so the other request's registration passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
-    from verity.core.protocols.pouw.circuit import leaves as L, pc8
+    from verity.ml.protocols.pouw.circuit import leaves as L, pc8
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
     src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/pouw/served_zk/served_commit.py"],
@@ -1792,7 +1783,7 @@ def served_audit(run: Run) -> Iterator[Case]:
     def copies(side: str, rec: dict, run_id: str | None = None) -> tuple[Any, dict, dict, dict]:
         c = run.json(f"out/{side}/commitment.json")
         b, (rows, n) = c["binding"], c["statement"]["tiles"]
-        t = pc8.templates(b["shape"][1], (1, 1), "sm120", hidden=True)["tile"]
+        t = pc8.templates(b["shape"][1], (1, 1), "sm120", hidden=True, hashing="h0")["tile"]
         program = own_population(lambda v: P.population_program(t, rows * n, version=v), rec["program"])
         query = P.template_instance_query(t)
         part = P.partition(program, query)
@@ -2255,7 +2246,9 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--only", nargs="*", default=None, help="run ids (8 hex digits)")
     a = ap.parse_args()
-    _registry()
+    _, errors = catalog.load(("ops", "registry"))  # every Definition a recorded program may call
+    if errors:
+        raise ImportError("; ".join(errors))
     out = Path(a.out)
     (out / "cases").mkdir(parents=True, exist_ok=True)
     runs_root = Path(a.runs)

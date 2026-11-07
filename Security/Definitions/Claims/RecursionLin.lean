@@ -1,6 +1,37 @@
 module
 
 public import Definitions.Claims.Recursion
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The recursion's KS with its deviation term linear
@@ -11,9 +42,10 @@ at most `√(k_I·k(x)·Pr[Be])`. Under `ExpectedCR` each root costs half of SHA
 
 * **The deviation, linearly** (`Fdev`): guess an inner round `j`, take a draw forked at `j` (the compiled run and
   `E_O`), and if `E_O` gives witnesses there, up to `M` more draws forked at `j` until `E_O` gives witnesses again;
-  output the first collision among the two draws' recorded calls (`linkOut`). A draw departs from the plurality at most
-  as often as this link succeeds, plus `1/(M+1)`, with no root, and the link costs at most two draws in expectation.
-  Its loop reads only what a draw computes (does `E_O` give witnesses), so its declared cost is its work.
+  output the first collision among the two draws' recorded calls, and nothing where the first draw gives no witnesses
+  (`linkOut`). A draw departs from the plurality at most as often as this link succeeds, plus `1/(M+1)`, with no root,
+  and the link costs at most two draws in expectation. Its loop reads only what a draw computes (does `E_O` give
+  witnesses) and runs only where its cost charges it (`linkCost`), so its declared cost is its work.
 * **`B_I` as its own finder** (`Binner`): the inner rounds' forks only, not through `Pr[B_I] ≤ k(x)·Pr[Be]`.
 
 `KSLin`: `Pr[acc ∧ ¬R] ≤ κ + √(γ·Pr[B]) + √(γ_BI·Pr[B_I]) + β·(Pr[Fdev] + 1/(M+1))` at every `M`, with
@@ -71,16 +103,20 @@ def linkG (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Dep
     (r : Fin (D.V.k x) → Coin) (v : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x) : Prop :=
   ((EO D I DO decO).eval H P x ω (fork j r v.1) v.2).1.isSome = true
 
-/-- **The link's output**: the first collision among the calls the first draw's witnesses record and those of the
-loop's first draw where `E_O` gives witnesses (the first draw again where none does), both forked at `j` from the
-prefix. -/
+open Classical in
+/-- **The link's output**: where `E_O` gives witnesses at the first draw, the first collision among the calls they
+record and those of the loop's first draw where `E_O` gives witnesses (the first draw again where none does), both
+forked at `j` from the prefix; nothing where the first draw gives none, so it reads only the draws `linkCost`
+charges. -/
 noncomputable def linkOut (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) {M : ℕ} (s : LinCoins D I DO decO Ω x M) :
     Option (Msg × Msg) :=
-  findColl (D.calls x (((EO D I DO decO).eval H P x s.2.1 (fork s.1 s.2.2.1 s.2.2.2.1.1) s.2.2.2.1.2).1.getD []) ++
-    D.calls x (((EO D I DO decO).eval H P x s.2.1
-      (fork s.1 s.2.2.1 ((firstPick (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1) M s.2.2.2.2).getD s.2.2.2.1).1)
-        ((firstPick (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1) M s.2.2.2.2).getD s.2.2.2.1).2).1.getD []))
+  if linkG H D I DO decO P x s.1 s.2.1 s.2.2.1 s.2.2.2.1 then
+    findColl (D.calls x (((EO D I DO decO).eval H P x s.2.1 (fork s.1 s.2.2.1 s.2.2.2.1.1) s.2.2.2.1.2).1.getD []) ++
+      D.calls x (((EO D I DO decO).eval H P x s.2.1
+        (fork s.1 s.2.2.1 ((firstPick (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1) M s.2.2.2.2).getD s.2.2.2.1).1)
+          ((firstPick (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1) M s.2.2.2.2).getD s.2.2.2.1).2).1.getD []))
+  else none
 
 /-- **One draw's SHA-512 calls**: the compiled verifier's run, the prover's and the verifier's, and `E_O`'s, as `Be`
 counts each of its two. -/
@@ -383,15 +419,19 @@ noncomputable def PrBinnerV (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin 
     (decO : List (ℕ × Col') → List T') {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) : ℝ :=
   if hk : 0 < I.V.k (xI D x) then (BinnerV H D I DO decO P x hk).Pr H else 0
 
+open Classical in
 /-- **The link's output over the draws' evaluations**: `linkOut`, with each of its two draws' evaluations
-(`drawCalls`) in place of the calls their witnesses record. -/
+(`drawCalls`) in place of the calls their witnesses record, and nothing where `E_O` gives no witnesses at the first
+draw. -/
 noncomputable def linkOutV (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')
     (decO : List (ℕ × Col') → List T') {Ω : Type} (P : Prover Ω) (x : Msg) {M : ℕ}
     (s : LinCoins D I DO decO Ω x M) : Option (Msg × Msg) :=
-  findColl (drawCalls H D I DO decO P x s.2.1 (fork s.1 s.2.2.1 s.2.2.2.1.1, s.2.2.2.1.2) ++
-    drawCalls H D I DO decO P x s.2.1
-      (fork s.1 s.2.2.1 ((firstPick (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1) M s.2.2.2.2).getD s.2.2.2.1).1,
-        ((firstPick (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1) M s.2.2.2.2).getD s.2.2.2.1).2))
+  if linkG H D I DO decO P x s.1 s.2.1 s.2.2.1 s.2.2.2.1 then
+    findColl (drawCalls H D I DO decO P x s.2.1 (fork s.1 s.2.2.1 s.2.2.2.1.1, s.2.2.2.1.2) ++
+      drawCalls H D I DO decO P x s.2.1
+        (fork s.1 s.2.2.1 ((firstPick (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1) M s.2.2.2.2).getD s.2.2.2.1).1,
+          ((firstPick (linkG H D I DO decO P x s.1 s.2.1 s.2.2.1) M s.2.2.2.2).getD s.2.2.2.1).2))
+  else none
 
 /-- **`Fdev` over the draws' evaluations**: `Fdev`'s coins and cost, with output `linkOutV`. -/
 noncomputable def FdevV (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col' T')

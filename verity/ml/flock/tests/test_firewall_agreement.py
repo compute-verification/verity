@@ -1,4 +1,4 @@
-"""The ZK server's contract, inner phase: `rec_live`'s proxy sends the coin server exactly what `Flock.Firewall.run` (the Lean
+"""The ZK server's contract, inner phase: `rec_live`'s proxy sends the challenger exactly what `Flock.Firewall.run` (the Lean
 program `flock-firewall`) sends, byte for byte, on an honest session and on every session a worker can make of it here (each
 schedule edit of `test_rec_live`, every prefix, drop, duplicate and swap of a request, requests after ``Finish``, forged
 requests, a Commit of two tables in and out of the schedule's order, and seeded random byte flips). The Lean program's
@@ -7,7 +7,9 @@ ZK server's salts, so agreement means nothing else leaves the proxy.
 
 Under ``rec_live --lean`` the send check is Lean's own (`rec_live.LeanFirewall`, ``flock-firewall live``): on every case
 and every whole placement the coin server's record and calls are `Flock.Firewall.run`'s at the salts the live session drew,
-so the live mode's steps are `run`'s loop and the proxy relays what Lean sent and nothing else."""
+so the live mode's steps are `run`'s loop and the proxy relays what Lean sent and nothing else. On the challenger's coin
+tree (``rec_live --coin-tree``) the same holds with the tree's spec given to Lean (``coin_tree``, `Flock.Firewall.treeHello`),
+on the honest session and on every Hello a worker can name the tree with."""
 from __future__ import annotations
 
 import hashlib
@@ -20,7 +22,9 @@ from pathlib import Path
 import pytest
 from verity_flock import rec_live as RL
 
-from test_rec_live import CAP0, CAP1, HELLO, SCHEDULE, _binding_round, _bytes, _content, _domain, _hdr, _label, _obs, _sq
+from test_rec_live import (CAP0, CAP1, HELLO, PROVER_NONCE, SCHEDULE, TREE, _binding_round, _bytes, _content, _domain, _hdr,
+                           _label, _obs, _sq, _tree_hello)
+from verity.ml.commitments import coin_tree as CT
 
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
 BIN = LEAN / ".lake" / "build" / "bin" / "flock-firewall"
@@ -78,10 +82,12 @@ CALL = {"start": lambda a: ["start"], "commit": lambda a: ["commit"], "y": lambd
         "open": lambda a: ["open", a[0], a[1], a[2]], "round": lambda a: ["round", a[0], a[3]]}
 
 
-def proxy_session(schedule: dict, reqs: list[bytes], lean: RL.LeanFirewall | None = None) -> tuple[dict, list]:
+def proxy_session(schedule: dict, reqs: list[bytes], lean: RL.LeanFirewall | None = None,
+                  tree: CT.Spec | None = None) -> tuple[dict, list]:
     """The coin server's record and every call made on it, in order, refused or not, while the proxy handles ``reqs``
-    (relaying them through ``lean`` when it is given)."""
-    salts, coins, calls = iter(SALTS), RL.CoinServer(_coins), []
+    (relaying them through ``lean`` when it is given; on a coin tree of spec ``tree`` this host draws, when it is given)."""
+    coins = RL.CoinServer(_coins) if tree is None else RL.CoinServer(_coins, tree, RL.OsTree(_coins))
+    salts, calls = iter(SALTS), []
     for name, show in CALL.items():
         f = getattr(coins, name)
         setattr(coins, name, lambda *a, _f=f, _show=show, **kw: (calls.append(_show(a)), _f(*a, **kw))[1])
@@ -213,10 +219,12 @@ def built():
     return BIN
 
 
-def lean_run(cs: list[tuple[str, dict, list[bytes]]], salts: list[list[bytes]]) -> list[dict]:
-    """`flock-firewall` on each case at its salts: its record and the coin server's calls."""
+def lean_run(cs: list[tuple[str, dict, list[bytes]]], salts: list[list[bytes]], tree: CT.Spec | None = None) -> list[dict]:
+    """`flock-firewall` on each case at its salts (on the coin tree of spec ``tree``, when it is given): its record and the
+    coin server's calls."""
+    on = {} if tree is None else {"coin_tree": tree.to_json()}
     lines = "".join(json.dumps({"schedule": s, "requests": [b.hex() for b in r], "salts": [x.hex() for x in y],
-                                "calls": True}) + "\n" for (_, s, r), y in zip(cs, salts))
+                                "calls": True, **on}) + "\n" for (_, s, r), y in zip(cs, salts))
     out = subprocess.run([str(BIN)], input=lines, capture_output=True, text=True, check=True).stdout.splitlines()
     assert len(out) == len(cs)
     return [json.loads(line) for line in out]
@@ -242,11 +250,11 @@ class Drawn(RL.LeanFirewall):
         return sent, salts
 
 
-def relay_session(schedule: dict, reqs: list[bytes]) -> tuple[dict, list, list[bytes]]:
+def relay_session(schedule: dict, reqs: list[bytes], tree: CT.Spec | None = None) -> tuple[dict, list, list[bytes]]:
     """`proxy_session` relayed through ``flock-firewall live``, and the salts it drew."""
-    lean = Drawn(BIN, schedule)
+    lean = Drawn(BIN, schedule, None if tree is None else tree.to_json())
     try:
-        rec, calls = proxy_session(schedule, reqs, lean)
+        rec, calls = proxy_session(schedule, reqs, lean, tree)
     finally:
         lean.close()
     return rec, calls, lean.drawn
@@ -268,7 +276,7 @@ def lean_records(lean_runs):
 
 
 def test_the_proxy_sends_what_the_lean_firewall_sends(lean_runs):
-    """The same record and the same calls on the coin server, in the same order."""
+    """The same record and the same calls on the challenger, in the same order."""
     cs, lean = lean_runs
     differ = [(name, mine, got) for (name, s, r), got in zip(cs, lean)
               if (mine := dict(zip(("record", "calls"), proxy_session(s, r)))) != got]
@@ -303,7 +311,7 @@ def test_a_stopped_record_does_not_show_an_open(lean_records):
 
 
 def test_the_cases_reach_every_ending(lean_records):
-    """The cases are not all refused at the first request: some finish, and many stop after the coin server saw rounds."""
+    """The cases are not all refused at the first request: some finish, and many stop after the challenger saw rounds."""
     _, lean = lean_records
     ends = [r["end"] for r in lean]
     assert ends.count("finish") >= 2 and ends.count("stop") >= 50
@@ -459,16 +467,58 @@ def test_a_lean_firewall_that_exits_stops_the_session(built):
     assert proxy.stopped.startswith(f"rec proxy: {BIN} live: ") and coins.link is None and coins.end == "stop"
 
 
-def test_the_lean_firewall_holds_no_coin_tree_and_draws_its_own_salts(built):
+def test_the_lean_firewall_draws_its_own_salts(built):
     sch = json.loads(json.dumps(SCHEDULE))
     lean = RL.LeanFirewall(BIN, sch)
     try:
-        for coins, salt in [(RL.CoinServer(_coins, RL.INNER_COIN_SPEC, RL.OsTree()), RL.hm96.SHA512.fresh_salt),
-                            (RL.CoinServer(_coins), lambda: SALTS[0])]:
+        for coins in (RL.CoinServer(_coins, RL.INNER_COIN_SPEC, RL.OsTree()), RL.CoinServer(_coins)):
             with pytest.raises(ValueError, match="the salts are its own"):
-                RL.Proxy(coins, salt, schedule=sch, lean=lean)
+                RL.Proxy(coins, lambda: SALTS[0], schedule=sch, lean=lean)
     finally:
         lean.close()
+
+
+def tree_cases() -> list[tuple[str, dict, list[bytes]]]:
+    """The honest session on the coin tree ``TREE``, its prefixes, and every Hello a worker can name the tree with: no
+    nonce, another nonce, another spec, no coins, a key more in coins or beside them, a number that is not an integer, keys
+    reordered and spaced out, not JSON."""
+    v, spec = json.loads(HELLO), TREE.to_json()
+    hellos = {"honest": _tree_hello(), "no nonce": json.dumps({**v, "coins": spec}),
+              "another nonce": json.dumps({**v, "coins": {**spec, "nonce": "00" * CT.NONCE_BYTES}}),
+              "another spec": _tree_hello(CT.Spec((CT.SESSION, "circuit/rep0"), 2, 8)), "no coins": HELLO,
+              "coins live": json.dumps({**v, "coins": "seed"}),
+              "a key more in coins": json.dumps({**v, "coins": {**spec, "nonce": PROVER_NONCE, "x": 1}}),
+              "a key more beside coins": json.dumps({**v, "x": 1, "coins": {**spec, "nonce": PROVER_NONCE}}),
+              "block 8.0": _tree_hello().replace('"block":8', '"block":8.0'),
+              "rounds_log 2e0": _tree_hello().replace('"rounds_log":2', '"rounds_log":2e0'),
+              "keys reordered and spaced": json.dumps({"coins": {**spec, "nonce": PROVER_NONCE}, **dict(reversed(list(v.items())))}, indent=1),
+              "not JSON": _tree_hello()[:-1]}
+    out = []
+    for what, text in hellos.items():
+        r = honest()
+        r[1] = RL.encode_req(RL.REQ_HELLO, text)
+        out.append((f"tree, Hello: {what}", SCHEDULE, r))
+    out += [(f"tree: the first {i}", SCHEDULE, out[0][2][:i]) for i in range(len(out[0][2]))]
+    out.append(("tree: Hello twice", SCHEDULE, out[0][2][:2] + out[0][2][1:]))
+    return out
+
+
+def test_on_the_coin_tree_the_proxy_and_the_relay_send_what_the_lean_firewall_sends(built):
+    """On the challenger's coin tree, the proxy alone (its Python send check), the relay through ``flock-firewall live``
+    and `Flock.Firewall.run` with the tree's spec (`treeHello`) give the coin server the same record and calls, case by
+    case; the honest session finishes, and each edited Hello other than its nonce and its spelling stops it before the
+    coin server sees anything."""
+    cs = tree_cases()
+    plain = [dict(zip(("record", "calls"), proxy_session(s, r, tree=TREE))) for _, s, r in cs]
+    assert lean_run(cs, [SALTS] * len(cs), TREE) == plain
+    relayed = [relay_session(s, r, TREE) for _, s, r in cs]
+    assert [{"record": rec, "calls": calls} for rec, calls, _ in relayed] == lean_run(cs, [d for _, _, d in relayed], TREE)
+    ends = {name: rec["end"] for (name, _, _), (rec, _, _) in zip(cs, relayed)}
+    held = {"honest", "no nonce", "another nonce", "keys reordered and spaced"}
+    assert {n for n, e in ends.items() if e == "finish"} == {f"tree, Hello: {w}" for w in held}
+    for (name, _, _), (rec, calls, _) in zip(cs, relayed):
+        if name.startswith("tree, Hello: ") and name.removeprefix("tree, Hello: ") not in held:
+            assert rec["end"] == "stop" and calls == [], name
 
 
 def test_serve_relays_each_session_through_its_own_lean_firewall(built, tmp_path):
@@ -519,11 +569,11 @@ def test_a_real_provers_session_passes_the_lean_firewall_as_run_does(built):
     assert lean_run([("real", schedule, reqs)], [drawn]) == [{"record": got, "calls": calls}]
 
 
-def test_main_serves_live_coins_only_through_the_lean_firewall(tmp_path, capsys):
+def test_main_serves_only_through_the_lean_firewall(tmp_path, capsys):
     (tmp_path / "s.json").write_text(json.dumps(SCHEDULE))
     base = ["--listen", "127.0.0.1:0", "--out", str(tmp_path / "o"), "--schedule", str(tmp_path / "s.json")]
     for argv, why in [(base, "--lean BIN: Lean's flock-firewall"),
-                      (base + ["--lean", "x", "--coin-tree", "--tree-test-os"], "the Lean firewall holds no coin tree")]:
+                      (base + ["--coin-tree", "--tree-test-os"], "--lean BIN: Lean's flock-firewall")]:
         with pytest.raises(SystemExit) as e:
             RL.main(argv)
         assert e.value.code == 2 and why in capsys.readouterr().err

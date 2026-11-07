@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Bandwidth.Causal
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # B3 and Mbw on a strategy's runs (trusted)

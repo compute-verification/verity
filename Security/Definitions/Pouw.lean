@@ -64,6 +64,8 @@ public import Definitions.Pouw.PearlC.Fp4
 public import Definitions.Pouw.PearlC.Fp4Chain
 public import Definitions.Pouw.PearlC.Fp4Skip
 public import Definitions.Pouw.PearlC.Fp4Vectors
+public import Definitions.Pouw.PearlC.FlockTile.Bridge
+public import Definitions.Pouw.PearlC.FlockTile.Audit
 public import Definitions.Pouw.PearlC.Game
 public import Definitions.Pouw.PearlC.Hidden
 public import Definitions.Pouw.PearlC.HiddenTileGame
@@ -90,6 +92,7 @@ public import Definitions.Pouw.PearlC.TileCheck
 public import Definitions.Pouw.PearlC.TileCheck8
 public import Definitions.Pouw.PearlC.TileCheck4
 public import Definitions.Pouw.PearlC.TileCircuit
+public import Definitions.Pouw.PearlC.TileDraw
 public import Definitions.Pouw.PearlC.W1
 public import Definitions.Pouw.PearlC.W1Stop
 public import Definitions.Pouw.PearlC.WholeCircuit
@@ -99,7 +102,8 @@ public import Definitions.Pouw.Receipt.Li
 public import Definitions.Pouw.Receipt.Fx1
 public import Definitions.Pouw.RelativeSecurity
 public import Definitions.Pouw.RelativeSecurityJ10R
-public import Definitions.Pouw.TileBound.AlignedExactDefs
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Rat.Cast.Order
 public import Definitions.Pouw.TileBound.Defs
 public import Definitions.Pouw.TileBound.Fp8Defs
 public import Definitions.Pouw.Window
@@ -143,9 +147,6 @@ staged in `H1TGapStaging`: the monotone chain gap, the last-slice split, and the
 binade, to one slice's two block-1 words against step-`W` staircases (`TagStaircaseSplit`, unproved); where a chain
 crosses one power of two at one step, to the same with cuts (`TagCutSplit`, unproved); and below `2^e` it separates
 them by the rounding margin outright, unpinned.
-
-H-1T's per-tile count statement: the tiles, their domain `Tiling.AtLeast` and the output slots (`H1TTile`), the named
-assumption `TTH1T` (`H1TTileAssumptions`), and its two form checks (`H1TTileProofs`).
 
 ## `FpG1`: FP8-g1 and W4A8-g1's operands
 

@@ -2,6 +2,38 @@ module
 
 public import Proofs.Flock.Claims.Recursion.PlurLin
 public import Proofs.Flock.Claims.Recursion.BoundForks
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
 
 /-!
 # A bad draw, linearly
@@ -14,9 +46,9 @@ at the deployed records directly (`RecDeploy.forksBind_C`), and wherever the pla
 (`forksBind_of_opening`).
 
 The deviation finder `Fdev` (`Definitions.Claims.RecursionLin`) draws the round `j` uniformly, then a tape, a prefix, a
-draw and the loop's `M` draws. It outputs the collision between the first draw and the loop's first draw where `E_O`
-gives witnesses (`linkOut`); its declared cost is one draw's calls, then the loop's (`linkCost`), at most twice one
-draw's in expectation (`Ex_Fdev_cost_le`). So `Pr[Bad] ≤ k_I·Pr[Fdev] + k_I/(M+1)`, and under `ExpectedCR` at `Fdev`,
+draw and the loop's `M` draws. Where `E_O` gives witnesses at the first draw, it outputs the collision between it and
+the loop's first draw where `E_O` gives witnesses, and nothing otherwise (`linkOut`); its declared cost is one draw's
+calls, then the loop's where it runs (`linkCost`), at most twice one draw's in expectation (`Ex_Fdev_cost_le`). So `Pr[Bad] ≤ k_I·Pr[Fdev] + k_I/(M+1)`, and under `ExpectedCR` at `Fdev`,
 `Pr[Bad] ≤ k_I·(2·E[c]/2^256 + 1/(M+1))` at one draw's calls `c` (`Pr_bad_le_ecr`).
 -/
 
@@ -59,7 +91,8 @@ theorem linkOut_coll {H : Msg → Msg} {D : Deploy Coin} {I : Inner Coin W} {DO 
   have hfc := hFk decO x Ω P j _ hod
   simp only [forkColl, fork_fork] at hfc
   have hv' : firstPick (linkG H D I DO decO P x j ω r) M us = some v := hv
-  simp only [linkOut, hv', Option.getD_some]
+  have hg' : linkG H D I DO decO P x j ω r u := hg
+  simp only [linkOut, hg', hv', ↓reduceIte, Option.getD_some]
   exact hfc
 
 /-- **A bad draw, linearly**: at most `k_I` times the link finder's success, plus `k_I/(M+1)`. -/

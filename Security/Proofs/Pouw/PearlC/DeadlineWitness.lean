@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.Deadline
-public import Definitions.Pouw.PearlC.Device
 public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.Deadline
 
 /-!
 # The deadline guarantees' premises are satisfiable (non-vacuity witnesses)

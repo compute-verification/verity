@@ -1,4 +1,4 @@
-# The H200 example
+# The H200 demo
 
 It shows the remote protocol's sampled-proofs half (`examples/README.md`) at a frozen shape on one H200: a step's every
 value committed, proof blocks drawn by one live coin, each proved by Flock `--zk` and checked by the Lean verifier
@@ -8,7 +8,7 @@ The GPU serving loop of the one-H200 demo: steps of the frozen MQA shape (`shape
 plain INT8 weights, loaded once into the card's memory and resident across steps (`--weights staged` decodes them from the
 store into staging instead), every op's output committed through the per-step commit call, drawn slots
 opened by replaying their requests and drawn proof blocks replayed bit for bit against the Definitions, each subprotocol run against the
-step or named, and a replay bundle and block record written. `verity example h200 --out OUT [...]` runs it
+step or named, and a replay bundle and block record written. `verity demo h200 --out OUT [...]` runs it
 (`run.py --help`): on the CPU at the small shapes, or on an H200 at the frozen one (`--shape h200 --device cuda`).
 
 Around sampled proofs, `e2e_h200/legs.py` runs the other subprotocols as a skeleton on fixture coins, not as runs, and
@@ -16,17 +16,17 @@ nothing claims them: PoUW is per-call noise's tiles as a `--subcircuit`, PoUS is
 on the staged path's store, network certification's digests are a fixture, and the bandwidth audit isn't run. `interfaces/` holds the
 interfaces between its subprotocols, the drawn-unit replay bundle and the block record, a suite of its own (its README).
 
-It is an example, not an integration: it composes pieces from several parts of the tree (the weights' store and decode
+It is a demo, not an integration: it composes pieces from several parts of the tree (the weights' store and decode
 call, the GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run. When the real pieces land
 they replace the fixtures here, one module each, and the record's `stands_in_for` fields go to `null`.
 
 ## Workload and placement
 
 The workload is the frozen MQA shape on seeded INT8 weights (`e2e_h200/served_weights.py`), with `--shape
-tiny|small|slice` for CPU runs; it isn't an integration yet (`example.toml`: `workload = "none"`). Every party runs in the
+tiny|small|slice` for CPU runs; it isn't an integration yet (`demo.toml`: `workload = "none"`). Every party runs in the
 one run on one GPU node (an H200 node for `percall_job.sh`): the driver and its commit call on the prover's side, and the
-replay and the opening on the verifier's, on fixture coins. Where the run of record's parties ran, how far the example runs and
-the runs behind it are `example.toml`'s (`examples/README.md`).
+replay and the opening on the verifier's, on fixture coins. Where the run of record's parties ran, how far the demo runs and
+the runs behind it are `demo.toml`'s (`examples/README.md`).
 
 ## What runs, and what stands in
 
@@ -53,7 +53,7 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | W8A8 linears | `ops.s8_linear`: `torch._int_mm` on CUDA (an exact f64 matmul on the CPU), then `bf16((f32(acc) · sx) · sw)` | kernels' s8 GEMM |
 | Row ops | `ops.py`: the plan's row functions; sums sequential (on the host), division and sqrt correctly rounded through f64 | circuits' row-op kernels |
 | Slots and KV cache | `slots.py`: `SlotKV` admits requests FIFO into the lowest free sequence slots, runs each at its own position, frees and reuses a slot when its request finishes, and holds each slot's K and V rows (the one KV head, the context's positions) as the step's bf16 bits, written and read a micro-batch of rows at a time; `check_slots.py` checks it at the frozen KV shape on a device | stays |
-| Attention | `attention.py`: on CUDA kernels' `attn_ref` (`benchmarks/torch_gpu/attn_ref`; its cubin from `build.sh`, `$ATTN_REF_CUBIN`) for QK^T and PV and `softmax_t` (the MUFU ex2 table in torch integer ops); elsewhere the Definitions' numpy kernels | kernels' fast attention (`attn_bf16`) |
+| Attention | `attention.py`: on CUDA `attn_bf16`'s reference kernels (`benchmarks/torch_gpu/attn_bf16`'s `attn.py` with `path="ref"`; its cubin from `build.sh`, `$ATTN_BF16_CUBIN`) for QK^T and PV and `softmax_t` (the MUFU ex2 table in torch integer ops); elsewhere the Definitions' numpy kernels | kernels' fast attention (`attn_bf16`) |
 | Commit | `commit.py`: kernels' per-slot tree (`--commit slots`, `benchmarks/torch_gpu/commit_slots`: row/v2 leaves, step → slot → unit → rows), a group at a time on a side stream, salt keys fresh a step; or the by-table `verity_vllm.commit.row_tables` (`reference`, `host`, `device`), which keeps every step's tables | — |
 | Opening | `opening.py`: `--open K` slots drawn by a fixture coin, each replayed alone on the resident weights under its steps' salt keys and its own nonce, its slot roots compared with the committed ones; each drawn unit's one commit unit opened against the step's root (`slots.verify_unit`), its rows the unit's outputs, and the reference's slot root compared with the engine's | the sampling plan's live coins |
 | Window writer | `e2e_h200/window.py`: FAMILIES' shared-row layout (`shared_layout`: 1 KiB rows, 21,857 a slot at the frozen shape, circuits' writers). Each proof block's input ports as pieces (`Locator.locate`): committed rows' bytes named by step, slot, row and bytes (a linear's x over its quantizer's R rows; attention's K and V at the steps and rows that wrote them), registered rows and run inputs. `Locator.inputs` assembles them from a slot's rows; the same calls work on `families/v1` | the run's commit under the shared layout, and the drawn-block bundle over it |
@@ -82,7 +82,7 @@ uv run python examples/h200/run.py --out /tmp/e2e --batch 8 --requests 24 --prom
 uv run python examples/h200/run.py --out /tmp/e2e --tamper l1.wup         # exits 3: the opened slots' roots don't replay
 uv run python examples/h200/run.py --out /tmp/e2e --shape tiny --weights staged --store p2-encode --workers 8 --commit host
 uv run python examples/h200/run.py --out OUT --shape h200 --seed demo --device cuda --batch 4096 --steps 32 \
-    --prompt-bytes 8 --micro-batch 1024 --workers "$(nproc)" --open 2 --draw 1     # the skeleton at batch 4,096 (ATTN_REF_CUBIN set)
+    --prompt-bytes 8 --micro-batch 1024 --workers "$(nproc)" --open 2 --draw 1     # the skeleton at batch 4,096 (ATTN_BF16_CUBIN set)
 bash examples/h200/percall_job.sh                                         # the skeleton at f = 1 on the H200 (its header: how it's launched)
 PYTHONPATH=examples/h200 python benchmarks/network_traces/demo_endpoint.py --out DIR --engine e2e_h200.engine:tiny
 uv run python examples/h200/run.py --out OUT --shape h200 --seed demo --device cuda \

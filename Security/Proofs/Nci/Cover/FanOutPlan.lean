@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Nci.Guarantees.CoverFanOut
+public import Definitions.Nci.Assumptions.CoverFanOut
 
 /-!
 # The fan-out proof's plan: the statements of its pieces

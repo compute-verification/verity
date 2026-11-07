@@ -2,6 +2,45 @@ module
 
 public import Proofs.Flock.Claims.ZK.Deployed
 public import Proofs.Flock.Claims.ZK.WorkerSeen
+public import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.Flock
+import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+import Proofs.Flock.Soundness.ZK.Complete
+import Proofs.Flock.Soundness.ZK.GK.Link
+import Proofs.Flock.Soundness.ZK.PadNonvanishing40
+import Proofs.Flock.Soundness.ZK.RealLeaves
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The switched prover at the session's tables
@@ -50,7 +89,7 @@ open FlockSoundness.Discharge.Composed (CoinedSetup CoinsZK)
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **A `--zk` table's switched view** at a worker's clear values `v`, with the executable's hidden leaves: `v`'s view
 where its rows hold, else the honest prover's on the moved pads (`Table.Hm96.swViewR`). -/
@@ -390,6 +429,7 @@ theorem card_cutAt_ideal01 {J : ℕ} {V : Type} [DecidableEq V] (C : Fin J → C
   exact card_cutAt_ideal C cz wt wt' hreg hreg' out σ
 
 set_option maxRecDepth 8000 in
+-- `prCoin` over the product of `J` tables' randomness and salts, each table's bound composed by `prCoin_pi_close`
 set_option maxHeartbeats 4000000 in
 /-- **Lemma B at the workers' values, at `J` `CoinedSetup`s**: at any coin vector of each table that the honest prover
 doesn't refuse, valid witnesses `w j` and any clear values `vs` read from what every table's workers see (`tabSeen`:
