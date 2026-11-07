@@ -40,11 +40,12 @@ import Mathlib.Topology.Sheaves.Init
 `verify --zk` admits a shared-row public file only in the form `SampledKSLiveV5` covers (`Flock.KsScope.sharedWhy`):
 the circuit's public input ports parse (`HmIn.parse`), the file loads over them (`HmIn.loadPublic`) with its tables,
 and no two ports' roots over those tables are one root under different domains (`KsScope.collidesT`). Those are V5's
-hypotheses `HmIn.parse`, `HmIn.loadPublic` and `RootFixesDomainL` at the file's leaf map.
+hypotheses `HmIn.parse` and `HmIn.loadPublic`, and `RootFixesDomainL` at the file's leaf map, the guard of V5's bound
+`SampledKSLiveV5R` (V5 itself pays for it with `ecr/sha-512` at the roots finder).
 
 * `fixesL_of_collidesT_false`: `collidesT = false` is `RootFixesDomainL` at the tables' leaf map (`LeafMap.ofTables`):
   the roots `collidesT` computes, each port's at its schema over its table's rows, are `rootsOfL`'s.
-* `v5Files_of_sharedOk`: a file `KsScope.SharedOk` admits gives V5's three file hypotheses, at every `n`.
+* `v5Files_of_sharedOk`: a file `KsScope.SharedOk` admits gives those three file hypotheses, at every `n`.
 * `v5Files_of_check`: `KsScope.check` passing at a shared-row file gives them.
 -/
 

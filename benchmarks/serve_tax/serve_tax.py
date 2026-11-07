@@ -8,6 +8,7 @@ integration's pin, on the same node, workload and SLO.
     serve_tax.py metrics DIR [--slo-ttft-s S --slo-tpot-s S]
     serve_tax.py table DIR... --out DIR [--slo-ttft-s S --slo-tpot-s S]
     serve_tax.py tick STEP_TRACE|RECORD_ARM_DIR [--load saturated]
+    serve_tax.py fit ARM_DIR --budget-s S --reps N
     serve_tax.py checkpoint --model-id ID
 
 `run` serves one arm (`ARMS`) on one server lifetime of vLLM's own OpenAI server (`vllm.entrypoints.openai.api_server`):
@@ -15,7 +16,9 @@ a warm-up load, then each named load REPS times, rep by rep (light, medium, satu
 cache (the dev server's ``POST /reset_prefix_cache``). A load is the trace corpus's request plan (C4 prompts of 16 to 1,024
 tokens, about 60% behind one of eight shared prefixes, caps 64 or 256: `traffic.plan`) under Poisson arrivals at its rate for
 ``--span-s`` seconds, sent by the corpus's streaming client (`corpus.drive`), every request decoding to its cap
-(``ignore_eos``) so that every arm serves the same tokens. Each load's DIR/<load>/rep-<r>/client.jsonl holds the client's
+(``ignore_eos``) so that every arm serves the same tokens. A plan whose requests carry their own sampling (the replay
+ladder's production plan: ShareGPT, multi-turn and 8k-32k-token prompts, each greedy or at temperature 0.7 with its seed
+by the public rule) is served with it, each request stopping at its end of text or its cap (`serve_body`). Each load's DIR/<load>/rep-<r>/client.jsonl holds the client's
 record of each request (send, each streamed chunk's time and tokens, done), and meta.json the load's rate, start and count,
 and its schedule: the engine's counters on ``/metrics`` before and after it (`SCHEDULE`).
 
@@ -36,16 +39,23 @@ The arms, each one engine configuration; each adds its change to the arm it name
   rows (`verity_vllm.commit.step_rows`), hashed off the engine loop at each window's close (`servetax_plugin.TokenCommit`).
 - ``kv``: the paged KV cache committed at window edges (every ``--kv-window-s``): the whole pool, between two steps, in
   ``rows-sha512`` rows of 1 MiB hashed on the GPU on a side stream ordered after the step by an event, with no hook inside
-  a CUDA graph (`servetax_plugin.KvEdge`).
+  a CUDA graph (`servetax_plugin.KvEdge`);
+- ``tokens-only``: ``record`` with each Commit period's tokens committed as ``tokens`` commits them, without the tick;
+- ``boundary``: ``tokens-only`` with the boundary commitment at each replay block's edge (every ``--edges-every-s``
+  seconds of a load): the engine drains, the KV pool is hashed where it lies by the row-table kernels under a fresh key
+  and copied to pinned host memory (on the ranks ``--kv-copy`` names), and the scheduler's state and each rank's runner
+  rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 
 `metrics` reads each load's client records: throughput (output tokens and requests a second over the load's span, its
 first send to its last done), TTFT and ITL (the gaps between a request's streamed chunks) at p50 and p99, and goodput, the
 requests a second that met the SLO (TTFT at most ``--slo-ttft-s`` and time per output token after the first at most
-``--slo-tpot-s``). `table` lays the arms' metrics side by side per load, as means over reps with 95% Student-t intervals,
+``--slo-tpot-s``), with the GPUs' busy seconds over the load (NVML's utilization integrated: `GpuBusy`) and the edges
+that fell in it. `table` lays the arms' metrics side by side per load, as means over reps with 95% Student-t intervals,
 and each arm's tax: its compute per token over stock compiled's at the same load, less one (compiled's throughput over
-the arm's), against arm ``compiled`` and against its parent.
+the arm's), against arm ``compiled`` and against its parent; and each arm's edges, their pause and its parts. `fit` says
+how many reps of an arm like an earlier one fit in the seconds a job has left.
 """
 from __future__ import annotations
 
@@ -123,6 +133,12 @@ ARMS = {
                    plugin=("record",), sampling="seeded", logprobs=True, edges=True),
     "restore-unseeded": Arm("restore", "the restore arm with requests that carry no seed",
                             plugin=("record",), sampling="unseeded", logprobs=True, edges=True),
+    "tokens-only": Arm("record", "+ each Commit period's tokens committed (rows-sha512), without the tick",
+                       plugin=("record", "tokens")),
+    "boundary": Arm("tokens-only", "+ the boundary commitment at each replay block's edge, as a server would take it: "
+                    "drained, the KV pool hashed by the row-table kernels and copied to host memory, the scheduler's "
+                    "state and each rank's runner rows and generators taken and kept; no leaf dump, no per-step timing",
+                    plugin=("record", "tokens"), edges=True, edge_dump=False, edge_busy=False),
 }
 #: what every request's body adds to the corpus's (`corpus`), set by `run` from its arm
 BODY_EXTRA: dict = {}
@@ -175,7 +191,15 @@ def corpus():
 
 def serve_body(body: Callable[..., dict], served: str, r: dict, rid: str, sampling: str) -> dict:
     """The corpus's request body (``body``) as the serve tax sends it: decoding to its cap, with `BODY_EXTRA`, and under
-    `UNSEEDED` the seeded sampling's parameters without the request's seed."""
+    `UNSEEDED` the seeded sampling's parameters without the request's seed. A plan request that carries its own sampling
+    (the replay ladder's production plan, `prod_plan`) is sent with it instead, its seed by the public seed rule
+    (`corpus.request_seed`) when it is seeded, and stops at its end of text or its cap."""
+    if "sampling" in r:
+        b = {"model": served, "prompt": r["prompt_ids"], "max_tokens": r["max_tokens"], **r["sampling"], "stream": True,
+             "stream_options": {"include_usage": True}, "return_token_ids": True, "user": rid}
+        if r.get("seeded"):
+            b["seed"] = corpus().request_seed(rid)
+        return {**b, **BODY_EXTRA}
     b = body(served, r, rid, "seeded" if sampling == UNSEEDED else sampling)
     if sampling == UNSEEDED:
         b.pop("seed", None)
@@ -196,9 +220,18 @@ def plugin_site(site: Path, tick: bool) -> Path:
     return site
 
 
-def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blocks: int | None = None) -> list[str]:
+def base_args(max_model_len: int | None = None) -> tuple[str, ...]:
+    """`BASE_ARGS`, with the context limit ``max_model_len`` where one is given (a plan with longer prompts)."""
+    if max_model_len is None:
+        return BASE_ARGS
+    i = BASE_ARGS.index("--max-model-len")
+    return (*BASE_ARGS[:i + 1], str(max_model_len), *BASE_ARGS[i + 2:])
+
+
+def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blocks: int | None = None,
+                max_model_len: int | None = None) -> list[str]:
     return [sys.executable, "-m", "vllm.entrypoints.openai.api_server", "--model", str(checkpoint), "--served-model-name",
-            model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *BASE_ARGS, *arm.args,
+            model.served, "--host", "127.0.0.1", "--port", str(port), *model.args, *base_args(max_model_len), *arm.args,
             *(["--num-gpu-blocks-override", str(num_gpu_blocks)] if num_gpu_blocks else []),
             *(["--middleware", TICK_MIDDLEWARE] if arm.tick else [])]
 
@@ -269,13 +302,18 @@ def scrape(port: int) -> dict[str, float]:
         return counters(r.read().decode())
 
 
-def stop(server: subprocess.Popen) -> str:
-    """Stop the server and every process of its group (the engine core): ``killed`` if any of the group was left after
-    the server exited, else ``exited``."""
+# `research cancel` and `--timeout` SIGKILL the job 20 s after its SIGTERM, and the server runs in a session of its own:
+# a terminated arm kills the server's group before then, or the engine core and its workers keep the GPUs
+TERM_GRACE_S = 5.0
+
+
+def stop(server: subprocess.Popen, grace_s: float = 120.0) -> str:
+    """Stop the server and every process of its group (the engine core), the server given ``grace_s`` to exit on SIGINT:
+    ``killed`` if any of the group was left after the server exited, else ``exited``."""
     if server.poll() is None:
         server.send_signal(signal.SIGINT)
         try:
-            server.wait(120)
+            server.wait(grace_s)
         except subprocess.TimeoutExpired:
             server.kill()
             server.wait()
@@ -309,11 +347,13 @@ def load_docs(c4: Path, checkpoint: Path, n: int) -> list[list[int]]:
 
 def plan_of(f: Path, c4: Path, checkpoint: Path, n: int, docs: int, seed: int) -> list[dict]:
     """The plan's first n requests from f, made there first (`traffic.plan` over the shard's first ``docs`` documents)
-    unless f holds at least n."""
+    unless f exists; refused if f holds fewer than n, never replaced."""
     if f.exists():
         plan = [json.loads(x) for x in f.read_text().splitlines() if x.strip()]
-        if len(plan) >= n:
-            return plan[:n]
+        if len(plan) < n:
+            raise SystemExit(f"the plan at {f} holds {len(plan)} requests and these loads may send {n}: give a longer "
+                             "plan, or fewer --rates, a shorter --span-s or --requests")
+        return plan[:n]
     plan = corpus().traffic.plan(load_docs(c4, checkpoint, docs), n, seed)
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan))
@@ -335,10 +375,89 @@ def parse_rates(text: str) -> dict[str, float]:
 
 # ------------------------------------------------------------------------------------------------------------ run
 
+def nvml() -> tuple[object | None, str | None]:
+    """NVML's bindings (vLLM's own copy, else nvidia-ml-py's), initialized, or None and why not (neither installed, or no
+    driver answered)."""
+    import importlib
+    import importlib.util
+
+    def found(m: str) -> bool:
+        parts = m.split(".")
+        return all(importlib.util.find_spec(".".join(parts[:k])) is not None for k in range(1, len(parts) + 1))
+
+    name = next((m for m in ("vllm.third_party.pynvml", "pynvml") if found(m)), None)
+    if name is None:
+        return None, "no NVML bindings (vllm.third_party.pynvml, pynvml)"
+    lib = importlib.import_module(name)
+    try:
+        lib.nvmlInit()
+    except Exception as e:  # noqa: BLE001 -- NVMLError's class lives in the module that failed to initialize
+        return None, f"{name}.nvmlInit: {e!r}"
+    return lib, None
+
+
+class GpuBusy:
+    """The busy GPU-seconds of a load: each visible GPU's NVML utilization (the share of its last sample period in which
+    a kernel ran) read every ``period_s`` on a thread of its own, integrated over the time between reads. The visible
+    GPUs are ``CUDA_VISIBLE_DEVICES``'s, by index or UUID, else all of the node's."""
+
+    def __init__(self, lib: object | None, visible: str | None = None, period_s: float = 0.2,
+                 clock: Callable[[], float] = time.monotonic) -> None:
+        import threading
+
+        self.lib, self.period_s, self.clock = lib, period_s, clock
+        self.handles: list = []
+        if lib is not None:
+            ids = [x.strip() for x in (visible or "").split(",") if x.strip()] if visible else \
+                [str(i) for i in range(lib.nvmlDeviceGetCount())]
+            self.handles = [lib.nvmlDeviceGetHandleByUUID(x) if x.startswith(("GPU-", "MIG-")) else
+                            lib.nvmlDeviceGetHandleByIndex(int(x)) for x in ids]
+        self.busy = [0.0] * len(self.handles)
+        self.last: float | None = None
+        self.reads = 0
+        self.stop = threading.Event()
+        self.thread: threading.Thread | None = None
+
+    def sample(self) -> None:
+        now = self.clock()
+        util = [self.lib.nvmlDeviceGetUtilizationRates(h).gpu / 100.0 for h in self.handles]
+        if self.last is not None:
+            for i, u in enumerate(util):
+                self.busy[i] += u * (now - self.last)
+        self.last = now
+        self.reads += 1
+
+    def __enter__(self) -> GpuBusy:
+        if self.handles:
+            import threading
+
+            self.sample()
+            self.thread = threading.Thread(target=self._run, name="serve-tax-gpu-busy", daemon=True)
+            self.thread.start()
+        return self
+
+    def _run(self) -> None:
+        while not self.stop.wait(self.period_s):
+            self.sample()
+
+    def __exit__(self, *exc: object) -> None:
+        if self.thread is not None:
+            self.stop.set()
+            self.thread.join()
+            self.sample()
+
+    def result(self) -> dict | None:
+        if not self.handles:
+            return None
+        return {"gpus": len(self.handles), "busy_gpu_s": round(sum(self.busy), 3),
+                "busy_s_per_gpu": [round(b, 3) for b in self.busy], "reads": self.reads, "period_s": self.period_s}
+
+
 def drive_load(port: int, served: str, plan: list[dict], rate: float, span_s: float, tag: str, d: Path, drain_s: float,
-               tick: dict | None, requests: int | None = None, sampling: str = "greedy") -> dict:
+               tick: dict | None, requests: int | None = None, sampling: str = "greedy", lib: object | None = None) -> dict:
     """One load: the plan's first requests under Poisson arrivals at ``rate`` for ``span_s`` (or ``requests`` of them),
-    sent by `corpus.drive`; its client records in d/client.jsonl."""
+    sent by `corpus.drive`; its client records in d/client.jsonl, and with NVML's bindings ``lib`` the GPUs' busy time
+    over it (`GpuBusy`)."""
     C = corpus()
     d.mkdir(parents=True, exist_ok=True)
     arr = C.traffic.arrivals(plan, rate)
@@ -346,10 +465,11 @@ def drive_load(port: int, served: str, plan: list[dict], rate: float, span_s: fl
     reqs, arr = plan[:k], arr[:k]
     ids = [f"{tag}-{r['i']:05d}" for r in reqs]
     t = time.monotonic()
-    got = asyncio.run(C.drive(port, served, reqs, arr, ids, d / "client.jsonl", drain_s, sampling,
-                              *([tick["bucket_us"] / 1e6] if tick else [])))
+    with GpuBusy(lib, SHARED.CUDA_VISIBLE_DEVICES) as busy:
+        got = asyncio.run(C.drive(port, served, reqs, arr, ids, d / "client.jsonl", drain_s, sampling,
+                                  *([tick["bucket_us"] / 1e6] if tick else [])))
     meta = {"tag": tag, "rate": rate, "span_s": span_s, "requests": k, "arrivals_span_s": round(arr[-1], 3),
-            "wall_s": round(time.monotonic() - t, 3), **got}
+            "wall_s": round(time.monotonic() - t, 3), **got, "gpu": busy.result()}
     recs = [json.loads(x) for x in (d / "client.jsonl").read_text().splitlines() if x.strip()]
     meta["unserved"] = len(recs) - len(served_records(recs))
     (d / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -374,8 +494,52 @@ def versions() -> dict:
             for dist in ("vllm", "torch", "aiohttp", "transformers")}
 
 
+def file_sha256(p: Path) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(p, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 24), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+#: the ranks that copy their KV pool to host memory at an edge (`boundary.KV_COPY`, which this module doesn't import)
+KV_COPY = ("all", "first", "none")
+
+
+def tp_size(model: Model) -> int:
+    args = list(model.args)
+    return int(args[args.index("--tensor-parallel-size") + 1]) if "--tensor-parallel-size" in args else 1
+
+
+def edge_config(arm: Arm, model: Model, a: argparse.Namespace, rates: dict[str, float]) -> dict | None:
+    """The plugin's edges (`servetax_plugin.edges_of`) for an arm that takes the boundary state: one each
+    ``--edges-every-s`` seconds of each load, or at ``--edges-s`` after the first load's first request; the KV bytes kept
+    at ``--save-kv``'s edges (by default the first, at fixed times; none, every so often), which a tensor-parallel engine
+    keeps in host memory instead."""
+    if not arm.edges:
+        return None
+    if bool(a.edges_s) == bool(a.edges_every_s):
+        raise SystemExit(f"arm {a.arm} takes the boundary state at --edges-s S,S,... or every --edges-every-s S: one of them")
+    save = a.save_kv if a.save_kv is not None else ("" if a.edges_every_s else "0")
+    save_kv = [int(x) for x in save.split(",") if x.strip()]
+    if save_kv and tp_size(model) > 1:
+        raise SystemExit(f"{a.model_id} runs at TP {tp_size(model)}: its edges keep the KV bytes in host memory (no --save-kv)")
+    when = ({"every_s": a.edges_every_s} if a.edges_every_s else
+            {"edges_s": [float(x) for x in a.edges_s.split(",")], "edge_tag": f"-{next(iter(rates))}1-"})
+    return {**when, "save_kv": save_kv, "kv_dir": str(Path(a.kv_dir) / a.arm) if a.kv_dir else None, "kv_copy": a.kv_copy,
+            "dump": arm.edge_dump, "busy": arm.edge_busy}
+
+
 def run(a: argparse.Namespace) -> int:
-    signal.signal(signal.SIGTERM, lambda s, f: (_ for _ in ()).throw(SystemExit(128 + s)))
+    termed: list[int] = []
+
+    def on_term(s: int, _frame: object) -> None:
+        termed.append(s)
+        raise SystemExit(128 + s)
+
+    signal.signal(signal.SIGTERM, on_term)
     nofile = open_files()
     arm, model = ARMS[a.arm], MODELS[a.model_id]
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
@@ -391,21 +555,19 @@ def run(a: argparse.Namespace) -> int:
     srv.mkdir(exist_ok=True)
     site = plugin_site(out / ".site", arm.tick)
     port = corpus().free_port()
-    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks)
+    argv = server_argv(arm, model, checkpoint, port, a.num_gpu_blocks, a.max_model_len)
     BODY_EXTRA.clear()
     BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
-    edges = None
-    if arm.edges:
-        if not a.edges_s:
-            raise SystemExit(f"arm {a.arm} takes the boundary state at --edges-s S,S,...")
-        edges = {"edges_s": [float(x) for x in a.edges_s.split(",")], "edge_tag": f"-{next(iter(rates))}1-",
-                 "save_kv": [int(x) for x in a.save_kv.split(",")], "kv_dir": str(Path(a.kv_dir) / a.arm) if a.kv_dir else None,
-                 "dump": arm.edge_dump, "busy": arm.edge_busy}
+    edges = edge_config(arm, model, a, rates)
+    lib, no_nvml = nvml()
+    if no_nvml:
+        print(f"[serve-tax] no busy GPU-seconds: {no_nvml}", flush=True)
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "plugin": list(arm.plugin), "env": arm.env, "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
+            "plan_sha256": file_sha256(Path(a.plan)) if a.plan and Path(a.plan).is_file() else None,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges,
-            "versions": versions(), "host": os.uname().nodename,
+            "gpu_busy": lib is not None, "no_gpu_busy": no_nvml, "versions": versions(), "host": os.uname().nodename,
             "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     t = time.monotonic()
@@ -427,7 +589,7 @@ def run(a: argparse.Namespace) -> int:
                 d = out / name / f"rep-{rep}"
                 before = scrape(port)
                 m = drive_load(port, model.served, plan, rate, a.span_s, f"{name}{rep}", d, a.drain_s, tick, a.requests,
-                               arm.sampling)
+                               arm.sampling, lib)
                 after = scrape(port)
                 m |= {"load": name, "rep": rep, "prefix_cache_reset": ok,
                       "schedule": {k: after[k] - before[k] for k in after}}
@@ -441,7 +603,7 @@ def run(a: argparse.Namespace) -> int:
         print(f"[serve-tax] {a.arm}: FAILED {meta['error']}", flush=True)
         rc = 1
     finally:
-        meta["server_stop"] = stop(server)
+        meta["server_stop"] = stop(server, TERM_GRACE_S if termed else 120.0)
         meta["server_rc"] = server.returncode
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
         shutil.rmtree(out / ".site", ignore_errors=True)
@@ -589,9 +751,7 @@ def edge_windows(arm_dir: Path, load: str, rep: int = 1) -> list[tuple[float, fl
     """A restore arm's edges as `edge_cost` windows in ``load``'s rep ``rep``'s seconds: each from its drain's end, as
     long as its pause."""
     t0 = json.loads((arm_dir / load / f"rep-{rep}" / "meta.json").read_text())["t0_unix"]
-    recs = [json.loads(x) for f in sorted((arm_dir / "server").glob("edges.*.jsonl"))
-            for x in f.read_text().splitlines() if x.strip()]
-    return [(r["drained_unix"] - t0, r["pause_s"]) for r in sorted((r for r in recs if "next_step" in r), key=lambda r: r["edge"])]
+    return [(r["drained_unix"] - t0, r["pause_s"]) for r in edge_records(arm_dir)]
 
 
 def schedule_metrics(s: dict | None) -> dict:
@@ -604,10 +764,59 @@ def schedule_metrics(s: dict | None) -> dict:
             "prompt_cached_share": s["prompt_tokens_cached"] / s["prompt_tokens"] if s["prompt_tokens"] else None}
 
 
+def edge_records(arm_dir: Path) -> list[dict]:
+    """An arm's edges (`servetax_plugin.edges_of`'s records with a step), in order."""
+    recs = [json.loads(x) for f in sorted((arm_dir / "server").glob("edges.*.jsonl"))
+            for x in f.read_text().splitlines() if x.strip()]
+    return sorted((r for r in recs if "next_step" in r), key=lambda r: r["edge"])
+
+
+def gpu_metrics(m: dict, output_tokens: int | None) -> dict:
+    """A load's busy GPU-seconds (`GpuBusy`), and per thousand output tokens."""
+    g = m.get("gpu")
+    if not g:
+        return {}
+    return {"busy_gpu_s": g["busy_gpu_s"],
+            "busy_gpu_s_per_ktok": g["busy_gpu_s"] / (output_tokens / 1e3) if output_tokens else None}
+
+
+def load_edges(edges: list[dict], m: dict) -> dict:
+    """The edges that fell in a load (from its first send to its wall time's end): how many, and the engine's stall at
+    each, the drain to an empty batch queue plus the pause after it, at its median and longest."""
+    t0 = m.get("t0_unix")
+    if not edges or t0 is None:
+        return {}
+    stall = [r["drain_s"] + r["pause_s"] for r in edges if t0 <= r["drained_unix"] <= t0 + m["wall_s"]]
+    return {"edges": len(stall), "edge_stall_p50_s": pct(stall, 0.5), "edge_stall_max_s": max(stall, default=None),
+            "edge_stall_s": sum(stall)}
+
+
+def edge_summary(edges: list[dict]) -> dict | None:
+    """An arm's edges outside its warm-up: how many, each part's median (seconds, the hash kernels' and the copy's
+    milliseconds: their longest rank's at TP > 1), the pause's p99 and longest, the bytes hashed and copied, and whether
+    every rank's KV root agreed at every edge."""
+    es = [r for r in edges if r.get("load") != "warm"]
+    if not es:
+        return None
+
+    def med(f: Callable[[dict], float | None]) -> float | None:
+        return pct([x for x in map(f, es) if x is not None], 0.5)
+
+    pause = [r["pause_s"] for r in es]
+    return {"edges": len(es), "pause_p50_s": pct(pause, 0.5), "pause_p99_s": pct(pause, 0.99), "pause_max_s": max(pause),
+            "drain_p50_s": med(lambda r: r["drain_s"]), "state_p50_s": med(lambda r: r["state_s"]),
+            "kv_p50_s": med(lambda r: r["kv_s"]), "hash_kernel_ms_p50": med(lambda r: r["kv"]["hash_kernel_ms"]),
+            "copy_ms_p50": med(lambda r: r["kv"]["copy_ms"]), "runner_s_p50": med(lambda r: r["kv"].get("runner_s")),
+            "stall_p50_s": med(lambda r: r["drain_s"] + r["pause_s"]), "kv_bytes": es[0]["kv"]["bytes"],
+            "copied_bytes": es[0]["kv"].get("copied_bytes"), "roots_equal": all(r["kv"].get("roots_equal", True) for r in es)}
+
+
 def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
-    """An arm's run dir: its meta and each load's metrics by rep."""
+    """An arm's run dir: its meta and each load's metrics by rep, with the GPUs' busy time and the edges that fell in
+    it, and its edges' summary (`edge_summary`)."""
     meta = json.loads((d / "meta.json").read_text())
     slo = slo or MODELS[meta["model_id"]].slo
+    edges = edge_records(d)
     loads: dict[str, list[dict]] = {}
     for name in meta["rates"]:
         for rep in sorted((d / name).glob("rep-*"), key=lambda p: int(p.name.split("-")[1])):
@@ -616,12 +825,15 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
                 continue
             recs = [json.loads(x) for x in f.read_text().splitlines() if x.strip()]
             m = json.loads((rep / "meta.json").read_text())
+            lm = load_metrics(recs, slo)
             loads.setdefault(name, []).append({"rep": int(rep.name.split("-")[1]), "rate": m["rate"],
-                                               "unfinished": m.get("unfinished"), **load_metrics(recs, slo),
-                                               **schedule_metrics(m.get("schedule"))})
+                                               "unfinished": m.get("unfinished"), **lm,
+                                               **schedule_metrics(m.get("schedule")),
+                                               **gpu_metrics(m, lm.get("output_tokens")), **load_edges(edges, m)})
     return {"schema": SCHEMA + "/metrics", "arm": meta["arm"], "parent": meta.get("parent"), "what": meta.get("what"),
             "run_id": meta.get("run_id"), "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
-            "startup_s": meta.get("startup_s"), "error": meta.get("error"), "tick": meta.get("tick"), "loads": loads}
+            "startup_s": meta.get("startup_s"), "error": meta.get("error"), "tick": meta.get("tick"), "loads": loads,
+            "edges": edge_summary(edges)}
 
 
 def summary(xs: list[float]) -> dict:
@@ -637,7 +849,8 @@ def summary(xs: list[float]) -> dict:
 
 
 KEYS = ("output_tok_per_s", "req_per_s", "goodput_req_per_s", "slo_attained", "ttft_p50_s", "ttft_p99_s", "itl_p50_s",
-        "itl_p99_s", "steps", "tokens_per_step", "rows_per_step", "preemptions", "prompt_cached_share")
+        "itl_p99_s", "steps", "tokens_per_step", "rows_per_step", "preemptions", "prompt_cached_share", "busy_gpu_s",
+        "busy_gpu_s_per_ktok", "edges", "edge_stall_p50_s", "edge_stall_max_s", "edge_stall_s")
 
 
 def table(arms: list[dict]) -> dict:
@@ -660,19 +873,20 @@ def table(arms: list[dict]) -> dict:
                 row[key] = {"of": ref_name, "throughput": tax(theirs, mine), "goodput": tax(good_theirs, good_mine)}
             rows.append(row)
     return {"schema": SCHEMA + "/table", "slo": arms[0]["slo"] if arms else None, "rows": rows,
-            "arms": {a["arm"]: {k: a[k] for k in ("parent", "what", "run_id", "startup_s", "error", "tick")} for a in arms}}
+            "arms": {a["arm"]: {k: a.get(k) for k in ("parent", "what", "run_id", "startup_s", "error", "tick", "edges")}
+                     for a in arms}}
 
 
 def tax(ref: dict, arm: dict) -> dict | None:
     """ref's mean over arm's, less one: the arm's extra compute per token; its interval by the delta method over both
-    means' relative standard errors."""
+    means' relative standard errors, only where each side has two reps or more (one rep has no spread to go by)."""
     if not ref.get("n") or not arm.get("n") or not arm["mean"]:
         return None
     r = ref["mean"] / arm["mean"]
     out = {"value": r - 1, "n": [ref["n"], arm["n"]]}
-    parts = [(x["sd"] / x["mean"]) ** 2 / x["n"] for x in (ref, arm) if x["n"] >= 2 and x["mean"]]
-    if parts:
-        df = min(x["n"] for x in (ref, arm) if x["n"] >= 2) - 1
+    if all(x["n"] >= 2 and x["mean"] for x in (ref, arm)):
+        parts = [(x["sd"] / x["mean"]) ** 2 / x["n"] for x in (ref, arm)]
+        df = min(ref["n"], arm["n"]) - 1
         half = T95[max(k for k in T95 if k <= df)] * r * math.sqrt(sum(parts))
         out["ci95"] = [r - half - 1, r + half - 1]
     return out
@@ -697,21 +911,66 @@ def markdown(t: dict) -> str:
              "per token over the reference's at the same load, less one, from output tokens a second (goodput's beside it). "
              "Unserved: requests sent and not served over the load's reps; a tax beside one isn't over the same requests.",
              "Steps: the engine's steps over the load, with the tokens each scheduled and the rows each sampled.",
+             "Busy GPU-s: the GPUs' NVML utilization integrated over the load, summed over GPUs, and per thousand output "
+             "tokens. Edges: the replay-block edges in the load, and the engine's stall at each (the drain plus the pause) "
+             "at its median and longest.",
              "", "| arm | load | rate (req/s) | unserved | out tok/s | req/s | goodput req/s | SLO met | TTFT p50 / p99 (ms) | "
-             "ITL p50 / p99 (ms) | steps | tokens / rows a step | tax vs compiled (tok/s) | tax vs compiled (goodput) | "
-             "tax vs parent (tok/s) | run |",
-             "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
+             "ITL p50 / p99 (ms) | steps | tokens / rows a step | busy GPU-s (per 1k tok) | edges (stall p50 / max, s) | "
+             "tax vs compiled (tok/s) | tax vs compiled (goodput) | tax vs parent (tok/s) | run |",
+             "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
     for r in t["rows"]:
         vc, vp = r.get("tax_vs_compiled") or {}, r.get("tax_vs_parent") or {}
+        edges = (f"{_f(r.get('edges'), 1, 3)} ({_f(r.get('edge_stall_p50_s'), 1, 3)} / {_f(r.get('edge_stall_max_s'), 1, 3)})"
+                 if (r.get("edges") or {}).get("n") else "—")
         lines.append(f"| {r['arm']} | {r['load']} | {r['rate']:.3g} | {r['unserved']} of {r['sent']} | "
                      f"{_f(r['output_tok_per_s'])} | {_f(r['req_per_s'])} | "
                      f"{_f(r['goodput_req_per_s'])} | {_f(r['slo_attained'], 100, 3)}% | "
                      f"{_f(r['ttft_p50_s'], 1e3)} / {_f(r['ttft_p99_s'], 1e3)} | {_f(r['itl_p50_s'], 1e3)} / "
                      f"{_f(r['itl_p99_s'], 1e3)} | {_f(r.get('steps'), 1, 5)} | "
                      f"{_f(r.get('tokens_per_step'), 1, 4)} / {_f(r.get('rows_per_step'), 1, 3)} | "
+                     f"{_f(r.get('busy_gpu_s'), 1, 4)} ({_f(r.get('busy_gpu_s_per_ktok'), 1, 3)}) | {edges} | "
                      f"{_tax(vc.get('throughput'))} | {_tax(vc.get('goodput'))} | "
                      f"{_tax(vp.get('throughput'))}{' (' + vp['of'] + ')' if vp else ''} | {r['run_id']} |")
+    es = {name: a["edges"] for name, a in t.get("arms", {}).items() if a.get("edges")}
+    if es:
+        lines += ["", "Each arm's edges outside its warm-up: the pause from the drain's end to the next step, its parts' "
+                  "medians (at TP > 1 the longest rank's), the bytes hashed and copied at an edge, and whether every rank's KV "
+                  "root agreed.", "",
+                  "| arm | edges | pause p50 / p99 / max (s) | drain p50 (s) | state p50 (s) | KV p50 (s) | "
+                  "hash kernels p50 (ms) | copy p50 (ms) | runner rows p50 (s) | GB hashed / copied | roots equal |",
+                  "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
+        for name, e in es.items():
+            lines.append(f"| {name} | {e['edges']} | {_n(e['pause_p50_s'])} / {_n(e['pause_p99_s'])} / {_n(e['pause_max_s'])} | "
+                         f"{_n(e['drain_p50_s'])} | {_n(e['state_p50_s'])} | {_n(e['kv_p50_s'])} | "
+                         f"{_n(e['hash_kernel_ms_p50'])} | {_n(e['copy_ms_p50'])} | {_n(e['runner_s_p50'])} | "
+                         f"{_n(_gb(e['kv_bytes']), 4)} / {_n(_gb(e['copied_bytes']), 4)} | {'yes' if e['roots_equal'] else 'NO'} |")
     return "\n".join(lines) + "\n"
+
+
+def _n(x: float | None, digits: int = 3) -> str:
+    return "—" if x is None else f"{x:.{digits}g}"
+
+
+def _gb(x: float | None) -> float | None:
+    return None if x is None else x / 1e9
+
+
+#: what an arm spends beside its loads' wall time: each load's prefix-cache reset and /metrics scrapes, and the
+#: server's stop
+LOAD_OVERHEAD_S, STOP_S = 5.0, 60.0
+
+
+def reps_that_fit(meta: dict, warm_wall_s: float, budget_s: float, reps: int, margin: float = 1.1) -> int:
+    """How many of ``reps`` reps an arm like the one ``meta`` records fits in ``budget_s`` seconds: its startup, its
+    warm-up's ``warm_wall_s`` and its longest rep's loads, each ``margin`` times as long; ``reps`` when ``meta`` has no
+    rep to go by, else 0 to ``reps``."""
+    per_rep: dict[int, float] = {}
+    for x in meta.get("loads") or ():
+        per_rep[x["rep"]] = per_rep.get(x["rep"], 0.0) + x["wall_s"] + LOAD_OVERHEAD_S
+    if not per_rep or meta.get("startup_s") is None:
+        return reps
+    fixed = (meta["startup_s"] + warm_wall_s + STOP_S) * margin
+    return max(0, min(reps, int((budget_s - fixed) // (max(per_rep.values()) * margin))))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -737,9 +996,14 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
     r.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override)")
+    r.add_argument("--max-model-len", type=int, help="the engines' context limit (default: BASE_ARGS's)")
     r.add_argument("--edges-s", metavar="S,S,...", help="the restore arms' edges, seconds after the first load's first request")
-    r.add_argument("--save-kv", default="0", metavar="K,...", help="the edges whose KV bytes and state a restore arm keeps")
+    r.add_argument("--edges-every-s", type=float, metavar="S", help="an edge each S seconds of each load's serving instead")
+    r.add_argument("--save-kv", metavar="K,...", help="the edges whose KV bytes and state a restore arm keeps "
+                   "(default: 0 with --edges-s, none with --edges-every-s)")
     r.add_argument("--kv-dir", help="where a restore arm keeps them, in a directory named for the arm (default: its server/edges)")
+    r.add_argument("--kv-copy", default="all", choices=KV_COPY,
+                   help="the ranks that copy their KV pool to host memory at an edge (first: rank 0, for ranks that hold the same bytes)")
     r.add_argument("--out", required=True)
     pl = sub.add_parser("plan", help="make the plan a job's arms share, before any GPU is held")
     for flag in ("--model-id", "--checkpoint", "--c4", "--rates", "--out"):
@@ -763,6 +1027,10 @@ def main(argv: list[str] | None = None) -> int:
     e.add_argument("others", nargs="*", type=Path)
     e.add_argument("--load", default="medium")
     e.add_argument("--rep", type=int, default=1)
+    f = sub.add_parser("fit", help="how many reps of an arm like ARM_DIR's fit in the seconds left (reps_that_fit)")
+    f.add_argument("arm", type=Path, metavar="ARM_DIR")
+    f.add_argument("--budget-s", type=float, required=True)
+    f.add_argument("--reps", type=int, required=True)
     c = sub.add_parser("checkpoint", help="the model's pinned snapshot under HF_HOME")
     c.add_argument("--model-id", required=True, choices=sorted(MODELS))
     a = ap.parse_args(argv)
@@ -776,6 +1044,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if a.cmd == "run":
         return run(a)
+    if a.cmd == "fit":
+        meta = json.loads((a.arm / "meta.json").read_text())
+        warm = a.arm / "warm" / "meta.json"
+        print(reps_that_fit(meta, json.loads(warm.read_text())["wall_s"] if warm.exists() else 0.0, a.budget_s, a.reps))
+        return 0
     if a.cmd == "checkpoint":
         print(MODELS[a.model_id].checkpoint())
         return 0
