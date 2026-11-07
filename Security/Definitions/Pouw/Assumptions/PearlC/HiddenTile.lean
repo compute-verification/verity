@@ -20,6 +20,8 @@ C-Flock's per-finder `cr/sha-512` and `ecr/sha-512`, and the live coins.
 
 @[expose] public section
 
+open Claims renaming Ex → ex
+
 namespace Pouw.PearlC.Assumptions
 
 variable {Q R S : Type}

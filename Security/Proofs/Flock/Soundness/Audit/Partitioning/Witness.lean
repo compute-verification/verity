@@ -1,9 +1,10 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
-public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.TwoStage
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Witnesses
 public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Witnesses
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.TwoStage
 
 /-!
 # The partitioning guarantees are not vacuous

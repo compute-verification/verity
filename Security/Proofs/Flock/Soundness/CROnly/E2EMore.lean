@@ -1,8 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.CROnly.Link
+public import Proofs.Flock.Soundness.CROnly.Defs
 public import Proofs.Flock.Soundness.ExecStratified
 public import Proofs.Flock.Soundness.Types.ProgramE2E
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.CROnly.Link
 
 /-!
 # The executable-law and program-of-units e2e forms under `cr/sha-512` alone

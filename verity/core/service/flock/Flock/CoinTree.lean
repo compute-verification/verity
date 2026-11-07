@@ -12,6 +12,7 @@ module
 
 public import Flock.Canon
 public import Flock.JsonParse
+public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 

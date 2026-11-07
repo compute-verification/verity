@@ -54,8 +54,6 @@ the labelled annotation's: a gate in two sets of one label is refused. `max_gate
 -/
 module
 
-public import Lean.Data.Json
-public import Std.Data.HashMap
 public import Flock.Program
 
 @[expose] public section

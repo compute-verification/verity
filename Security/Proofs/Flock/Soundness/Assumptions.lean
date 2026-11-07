@@ -90,21 +90,24 @@ def SHA512CRExpected {D β : Type} (H : List UInt8 → D) (g : Game β) (s : Str
     expect cost g s / 2 ^ (256 : ℝ)
 
 /-- **Assumption 3 (`uniform/io-getrandombytes`): the operating system's randomness is independent uniform bytes**, for
-the verifier's unit draw and the proof system's epoch salt (`Stream.salt`). Its per-test form,
+the challenger's coins the unit sample reads and the proof system's epoch salt (`Stream.salt`). Its per-test form,
 `UniformRandomBytesTest`, is the one the zero-knowledge theorems take.
 
-The verifier draws the units it audits from `IO.getRandomBytes`: `Flock.Draw.drawOS` is `Flock.Draw.drawWith` with every
-stream's bytes from it. To Lean's logic an `IO` action is a function of the world, and `IO.getRandomBytes` an opaque
-constant, so a `Prop` saying its bytes are random would be refutable, and every theorem taking it vacuous. At run time,
-Lean v4.34.0's runtime implements it as `lean_io_get_random_bytes` (`src/runtime/io.cpp`), which reads `/dev/urandom`
-on Unix and calls `BCryptGenRandom` on Windows. A3 is stated instead of a byte source: a finite probability space `Ω` (`prCoin` weighs its outcomes evenly) and, on outcome `ω`, the
-bytes `t ω i` that stream `i` returns, its first `L i`. The source is uniform when every event about those bytes has the
-probability it has for independent uniform bytes.
+The verifier has no randomness of its own: the unit sample reads the challenger's coins from its log, and the challenger
+flips them from `IO.getRandomBytes` on its own host (`sampled-proofs-verifier`'s `coins`). To Lean's logic an `IO`
+action is a function of the world, and `IO.getRandomBytes` an opaque constant, so a `Prop` saying its bytes are random
+would be refutable, and every theorem taking it vacuous. At run time, Lean v4.34.0's runtime implements it as
+`lean_io_get_random_bytes` (`src/runtime/io.cpp`), which reads `/dev/urandom` on Unix and calls `BCryptGenRandom` on
+Windows. A3 is stated instead of a byte source: a finite probability space `Ω` (`prCoin` weighs its outcomes evenly)
+and, on outcome `ω`, the bytes `t ω i` that stream `i` returns, its first `L i`. The source is uniform when every event
+about those bytes has the probability it has for independent uniform bytes.
 
-What A3 assumes of the operating system is that the verifier's calls to `IO.getRandomBytes` while it draws its units or
-its epoch salt are such a source, every call's bytes independent of every earlier call's, for every `L`. The step from
-`IO` to the model rests on `drawWith` being generic in its monad, together with A3: the theorems read `drawWith` on a
-model byte source, and `drawOS` runs the same `drawWith` on `IO.getRandomBytes` (`drawOS_def`).
+What A3 assumes of the operating system is that the challenger's calls to `IO.getRandomBytes` for the coins a unit
+sample reads, and for the epoch salt, are such a source, every call's bytes independent of every earlier call's, for
+every `L`. That the challenger releases those coins only after the registration they sample is recorded rests on
+`trusted-host`, not on A3. The step from `IO` to the model rests on `drawWith` being generic in its monad, together with
+A3: the theorems read `drawWith` on a model byte source, the unit sample runs it on the challenger's coins read in order
+(`SampledProofs.Draw.drawUnits`), and `drawOS` runs it on `IO.getRandomBytes` (`drawOS_def`).
 
 The CSPRNG is idealized as exactly uniform here, for every event. That is refutable at the deployed source: Linux's CRNG
 (5.18 and later, `drivers/char/random.c`) answers a read past 32 bytes with a ChaCha20 stream under one 256-bit key, so

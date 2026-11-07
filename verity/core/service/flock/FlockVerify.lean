@@ -658,9 +658,9 @@ def recTranscriptCmd (args : List String) : IO UInt32 := do
   | .error e => IO.eprintln e; return 1
 
 /-- `rec-statements --rec-inner F [--unit NAME | --circuit F --rec-bindings F] [--instances N] [--rec-part J]
-[--registered F]`: V*'s statements at the inner shape (`RecVStar.statements`), each unit name and instance count, as one
-`RECVSTAR` line; with `--unit` and `--instances`, `RecVStar.check` on them as well (as statement `J` with `--rec-part`),
-with `--circuit`, `--instances`, `--rec-part` and `--rec-bindings`, `RecVStar.checkCircuit` on that circuit file as
+[--registered F]`: V*'s statements at the inner shape (`RecVStar.statements`), each unit name and instance count, and the
+hm96 calls they record at most (`RecBudget.recordedCalls`), as one `RECVSTAR` line; with `--unit` and `--instances`,
+`RecVStar.check` on them as well (as statement `J` with `--rec-part`), with `--circuit`, `--instances`, `--rec-part` and `--rec-bindings`, `RecVStar.checkCircuit` on that circuit file as
 statement `J` under those bindings, and then with `--registered`, `RecVStar.checkOwn` on those reads, with the statement's
 own message-round ports (`RecVStar.ownPorts`). -/
 def recStatementsCmd (args : List String) : IO UInt32 := do
@@ -681,7 +681,8 @@ def recStatementsCmd (args : List String) : IO UInt32 := do
   let circuitB ← (argOf args "--circuit").mapM IO.FS.readBinFile
   let res : V Lean.Json := do
     let ss ← RecVStar.statements i
-    let base := [("statements", Lean.Json.arr (ss.map fun s => Lean.Json.arr #[Lean.Json.str s.name, Lean.toJson s.instances]))]
+    let base := [("statements", Lean.Json.arr (ss.map fun s => Lean.Json.arr #[Lean.Json.str s.name, Lean.toJson s.instances])),
+      ("recorded", Lean.toJson (RecBudget.recordedCalls i ss))]
     let checked := fun (s : VStar.Stmt) (n : Nat) => do
       if let some r := registered then RecVStar.checkOwn s r
       let own := (RecVStar.ownPorts s).map fun (nm, v, rd) => Lean.Json.arr #[Lean.Json.str nm, Lean.Json.str v, Lean.toJson rd]
@@ -824,9 +825,11 @@ a `--rec-*` flag but no `--zk`, since it covers the masked verifier only (`RecSe
 verified without the verifier's own `--program` (`ProvedScope.programHeld`, `ProvedScope.NO_PROGRAM`: a verifier that cannot read the Program
 cannot know what it verifies), then a record not in its canonical text (`RecordText.check`, S0), and last under
 `--zk` files outside the form the sampled audit's knowledge soundness covers (`PortRoots.checkOf`: a port that is not a
-`sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, or two
+`sha512/row/v1`, `sha512/row/v2` or `sha512/row-seg/v1` row as the scope check reads it, two ports of one name, two
 ports whose registered roots, each framed at its port's schema, over the public file's population are one root under
-different domains; `Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to turn this on,
+different domains, a row of `2^64` bits or more, a published domain (`frame_v3.domain_ids`) missing or not 64 bytes, two
+ports of one published domain, or two ports whose published roots are one root under different domains;
+`Flock.Guarantees.SampledKSLiveV3` is over that acceptance; `--ks-form`, which used to turn this on,
 is accepted under `--zk` and changes nothing), and under `--zk` without `--rec-inner` (a V* session is the recursion's)
 tags, files and a draw outside the rest of that form (`KsScope.checkOf`: a typed statement, one with public outputs,
 without retained rounds or without `hm96-sha512/v1` leaves; a circuit outside `ProvedScope.scopeOkH`, which a unit
@@ -1049,9 +1052,9 @@ def verifyCmd (args : List String) : IO UInt32 := do
       -- short of every unit, then a session's over an inner record without a draw, then a session's at a holo or sparse
       -- inner shape or a recursive one without --zk (`RecursiveKS` is the dense, masked form's), then a session's without
       -- the program,
-      -- then a record not in its canonical text (S0), then under --zk files whose rows, names or port roots the
-      -- sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a circuit, a
-      -- public file or a draw outside its form (`KsScope.checkOf`), then a statement version other than
+      -- then a record not in its canonical text (S0), then under --zk files whose rows, names, widths, domains or port
+      -- roots the sampled audit's knowledge soundness doesn't cover (`PortRoots.checkOf`), then under --zk tags, a
+      -- circuit, a public file or a draw outside its form (`KsScope.checkOf`), then a statement version other than
       -- `ProvedScope.served` or a plain session on seed coins (`ProvedScope.servedForm`)
       scope
       ProvedScope.sizesOk zk (tabs.map Setup.m)

@@ -1,7 +1,31 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkEveryCoin.Defs
-public import Proofs.Flock.Soundness.Discharge.Composed.Headline
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkView.Fixed
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Composed.Headline
+import Proofs.Flock.Soundness.Discharge.Composed.Setup
+import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.RealLeaves
+import Proofs.Flock.Soundness.ZK.Refusal
+import Proofs.Flock.Verifier.Hash
 
 /-!
 # One `--zk` session is zero knowledge at every coin vector
@@ -34,7 +58,7 @@ open Game Audit Exec Refine Flock FlockLevel3 Model ZkSession ZkLink ZkExec Deco
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 local notation "𝔽" => FlockLevel3.GF128
 

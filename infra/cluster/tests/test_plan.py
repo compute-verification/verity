@@ -43,7 +43,7 @@ def test_owner_reclaims_its_node_from_a_guest():
 
 
 def test_a_preemptible_allocation_is_evicted_only_after_its_grace():
-    """INF-194: on node 2, 24 Oct, the agent evicted benchmark points 1.5-35 min into 40-50 min leases, so none finished. Grace
+    """On node 2 the agent evicted benchmark points 1.5-35 min into 40-50 min leases, so none finished. Grace
     is the allocation's own max_s, at most GRACE_MAX_S (40 min); a quiet job still clears the node at once."""
     from cluster.plan import GRACE_MAX_S
     c = cluster(node("n1", "p"), shares=(Share("g", "n1"),))

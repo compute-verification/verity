@@ -25,6 +25,8 @@ public import Proofs.Flock.Soundness.Audit.StratifiedProj
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Properties.Pouw.PeriodJ10R.SecurityProofs
 
 open Properties.Pouw.PeriodJ10R Pouw.RelativeSecurity

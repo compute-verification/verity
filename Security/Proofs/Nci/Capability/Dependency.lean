@@ -14,9 +14,7 @@ public import Mathlib.Tactic.Linarith
   whose path to the finishing set enters the block at a gate of `in(S) ∩ A c`, unregistered since `A c` misses `θ`; each
   such consumer is charged to those gates, and the overlap weights bound what one gate carries by 1;
 * `RecomputeByGates`: `g Σ ω ≤ Σ_c |G c| ω_c = Σ_{x ∈ S} Σ_{c ∋ x} ω_c ≤ |S|`;
-* `RecomputeByState`: the state a recomputation needs lies among what the block holds, so it is within the budget;
-* `WeightedProductCap`: the completed products lie in the rectangle of their slots and uses, whose weighted sum factors,
-  and their slots are a selection the block holds.
+* `RecomputeByState`: the state a recomputation needs lies among what the block holds, so it is within the budget.
 -/
 
 @[expose] public section
@@ -110,23 +108,5 @@ theorem RecomputeByState : Guarantees.RecomputeByState := by
   intro R ι W κ K h hW hK u c hc
   obtain ⟨U, σ, hsel, hσ, hlt⟩ := hK c
   exact absurd (hW u U σ hsel fun i hi => (hσ i hi).trans (holds_mono hc)) (not_le.2 hlt)
-
-theorem WeightedProductCap : Guarantees.WeightedProductCap := by
-  intro R B W ω h hS hω hW u
-  classical
-  set P := completedIn B (R.d.𝓘.gates u)
-  have hP : ∀ q ∈ P, q ∈ B.P ∧ B.m q ⊆ R.d.𝓘.gates u := fun q hq => mem_filter.1 hq
-  obtain ⟨σ, hσ, hσ'⟩ :=
-    exists_selection W P Prod.fst B.m (R.d.𝓘.gates u) (fun q hq => hS q (hP q hq).1) (fun q hq => (hP q hq).2)
-  have hU := hW u _ σ hσ hσ'
-  have hV : 0 ≤ ∑ j ∈ served B (R.d.𝓘.gates u), ω j := sum_nonneg fun j _ => hω j
-  calc ∑ q ∈ P, W.price q.1 * ω q.2
-      ≤ ∑ q ∈ (P.image Prod.fst) ×ˢ (P.image Prod.snd), W.price q.1 * ω q.2 := by
-        refine sum_le_sum_of_subset_of_nonneg (fun q hq => ?_) fun q _ _ => mul_nonneg (W.price_nonneg _) (hω _)
-        exact mem_product.2 ⟨mem_image_of_mem _ hq, mem_image_of_mem _ hq⟩
-    _ = (∑ i ∈ P.image Prod.fst, W.price i) * ∑ j ∈ served B (R.d.𝓘.gates u), ω j := by
-        rw [sum_product, sum_mul_sum]
-        rfl
-    _ ≤ h * ∑ j ∈ served B (R.d.𝓘.gates u), ω j := mul_le_mul_of_nonneg_right hU hV
 
 end Nci.SecurityProofs

@@ -25,6 +25,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.OutsP
 public import Proofs.Flock.Soundness.Discharge.Layout.Keyed
 public import Proofs.Flock.Soundness.Discharge.Layout.Tables
 public import Proofs.Flock.Soundness.Discharge.Layout.Scope
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # `lay` and `rs` of `Prog.flock_headline`, discharged

@@ -125,6 +125,44 @@ def test_refuses_a_checkout_that_isnt_verity(tmp_path, monkeypatch):
         verity_cli._tree("X.lean")
 
 
+def test_try_on_auto_fetches_the_run_from_the_machine_it_landed_on(checkouts, tmp_path, monkeypatch, capsys):
+    """`--on auto` names no machine and no pool: `research run --on auto` places the run, and its launch line says where, which
+    is where the run's logs are fetched from."""
+    _, wt = checkouts
+    for k in ("GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL"):
+        monkeypatch.setenv(k, "t@t")
+    monkeypatch.setenv("RESEARCH_RUNS", str(tmp_path / "runs"))
+    monkeypatch.chdir(wt)
+    launched, fetched, real_run, real_popen = [], [], subprocess.run, subprocess.Popen
+
+    class Launch:
+        stderr = iter(["research run --on auto: spilled to m-7's research pool, from . (a free slot)\n",
+                       "research: run r1 launched on m-7 (p) pid=1 -> /r\n"])
+
+        def wait(self):
+            return 0
+
+    def popen(argv, **kw):
+        if argv[3:4] != ["run"]:
+            return real_popen(argv, **kw)
+        launched.append(argv)
+        return Launch()
+
+    def run(argv, **kw):
+        if argv[3:5] == ["fetch", "r1"]:
+            fetched.append(argv[5:])
+            return subprocess.CompletedProcess(argv, 0)
+        return real_run(argv, **kw)
+
+    monkeypatch.setattr(verity_cli.subprocess, "Popen", popen)
+    monkeypatch.setattr(verity_cli.subprocess, "run", run)
+    assert verity_cli.main(["lean", "try", "A.lean", "--on", "auto"]) == 0
+    argv = launched[0]
+    assert argv[argv.index("--on") + 1] == "auto" and "--pool" not in argv
+    assert fetched == [["--on", "m-7", "--all"]]
+    assert "verity lean try: run r1 on m-7: exit 0" in capsys.readouterr().out
+
+
 def test_local_try_elaborates_the_current_worktrees_file(checkouts, tmp_path, monkeypatch):
     main, wt = checkouts
     for tree in (main, wt):

@@ -21,7 +21,7 @@
 #   A module under `Population` is listed under `SampledProofs` too, its name after the Security areas move. A module in
 #   a namespace under `Claims` that means another `Transcript` must name it in full (`Flock.Transcript`), since
 #   `Claims.Transcript` comes before an opened name there.
-# - The size ratio. |C|/T₀ is a size ratio: the Glossary keeps "slowdown" for slowdown(𝒢, 𝒜, η). `Verity.slowdown`,
+# - The size ratio. c·B/T₀ is a size ratio: the Glossary keeps "slowdown" for slowdown(𝒢, 𝒜, η). `Verity.slowdown`,
 #   which Theorem 3 reads, becomes `Verity.sizeRatio`. `Nci.slowdown`, the slowdown factor ρ, is another declaration and
 #   keeps its name, so the bare word is renamed only in the Core files that declare and read `Verity.slowdown`.
 # - The composition's registered circuit ("declared circuit" is its older name). `Accounting.Compose.Declared`, the

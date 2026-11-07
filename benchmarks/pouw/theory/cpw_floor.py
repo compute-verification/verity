@@ -47,7 +47,7 @@ import sys
 from fractions import Fraction
 from pathlib import Path
 
-from verity.core.protocols.pouw.circuit import segment as SG
+from verity.ml.protocols.pouw.circuit import segment as SG
 
 POUW = Path(__file__).resolve().parents[1]
 

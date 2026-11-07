@@ -1,6 +1,8 @@
 module
 
-public import Proofs.Flock.RecGeneric.Statement
+public import Definitions.Claims.RecursionGeneric
+public import Proofs.Flock.RecGeneric.Outer
+public import Proofs.Flock.RecGeneric.ZK
 public import Proofs.Flock.RecGeneric.SampledProof
 public import Proofs.Flock.RecGeneric.Lift
 public import Proofs.Flock.RecGeneric.BadDev
@@ -16,8 +18,9 @@ gives witnesses outside `R_O` (`Comp.PrAt_le_lift`), at most `d_i` times one rer
 bad draw costs the gated link (`Comp.Pr_badO_le_link`) and a rejecting judged rerun costs `B_I`
 (`Comp.Pr_innerRejects_le_fork`). So the inner stage pays `Comp.err` past the outer terms (`Comp.PrBadGood_le_err`),
 and with `E_O`'s failure at each of `E^rep`'s `N_I` reruns (`Claims.servedERep_bad_le_good`, `Comp.OuterKSAt`) the
-composite pays `Comp.err` (`Comp.PrBad_le_err`, L1). With B1, L1 gives the recursive audit through the sampled
-compiler (`Flock.SecurityProofs.RecursiveSampledKS`).
+composite pays `Comp.err` (`Comp.PrBad_le_err`), which is L1, `Definitions.Claims.RecursionGeneric`'s `CompositionKS`
+(`compositionKS`). With B1, L1 gives the recursive audit through the sampled compiler
+(`Flock.SecurityProofs.RecursiveSampledKS`).
 -/
 
 @[expose] public section
@@ -115,15 +118,14 @@ theorem PrBad_le_err (hWF : I.WF) (hKS : I.KSAbortLin H) (hCF : I.LastCoinFree H
 
 end Comp
 
-end Claims.RecGeneric
-
-open Claims Claims.RecGeneric in
-/-- **L1** (`Flock.Guarantees.GenericRecursiveKS`): at every statement where `E_O` is knowledge sound and the compiler
-meets its contract, the composite fails at most at `Comp.err` (`Comp.PrBad_le_err`). -/
-theorem Flock.SecurityProofs.GenericRecursiveKS : Flock.Guarantees.GenericRecursiveKS := by
+/-- **L1** (`CompositionKS`): at every statement where `E_O` is knowledge sound and the compiler meets its contract,
+the composed system fails at most at `Comp.err` (`Comp.PrBad_le_err`). -/
+theorem compositionKS : CompositionKS := by
   intro Coin W _ _ _ H I S K hWF hKS hCF hB x hO _ _ hK Ω _ _ P m M
   exact Comp.PrBad_le_err hWF hKS hCF hB hO hK m M
 
+end Claims.RecGeneric
+
 /-- **The recursive audit through the sampled compiler** (`Flock.Guarantees.RecursiveSampledKS`): B1 at L1. -/
 theorem Flock.SecurityProofs.RecursiveSampledKS : Flock.Guarantees.RecursiveSampledKS :=
-  Claims.RecGeneric.recursiveSampledKS_of_L1 Flock.SecurityProofs.GenericRecursiveKS
+  Claims.RecGeneric.recursiveSampledKS_of_L1 Claims.RecGeneric.compositionKS
