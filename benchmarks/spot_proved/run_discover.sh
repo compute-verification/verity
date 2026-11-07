@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # discover.py under research run, from the shipped tree's root (--cwd source), on a pod that pod_bootstrap.sh set up:
-#   [TP=2] [LAYERS=4] [STEPS=0,3] [VENV=/workspace/venv312] bash benchmarks/spot_proved/run_discover.sh
+#   [TP=2] [LAYERS=4] [STEPS=0,3] [PROMPT_LEN=24,64] [MAX_TOKENS=8] [VENV=/workspace/venv312] bash benchmarks/spot_proved/run_discover.sh
 # The capture goes to /workspace/spot-capture/<run> (outside OUT: custody uploads OUT); each step is then staged into
 # OUT/values-step<s> (stage.py), which is small.
 set -uo pipefail
@@ -21,7 +21,7 @@ export TORCHINDUCTOR_CACHE_DIR=/workspace/spot-cache/inductor VLLM_CACHE_ROOT=/w
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600 VLLM_ENGINE_ITERATION_TIMEOUT_S=3600 PYTHONHASHSEED=0 TOKENIZERS_PARALLELISM=false
 nvidia-smi --query-gpu=index,name,memory.used --format=csv
 "$PY" "$here/discover.py" --config "$CFG" --out "$OUT" --capture "$CAP" --tp "${TP:-2}" --layers "${LAYERS:-4}" \
-  --steps "$VERITY_SPOT_STEPS"
+  --steps "$VERITY_SPOT_STEPS" --prompt-len "${PROMPT_LEN:-24,64}" --max-tokens "${MAX_TOKENS:-8}"
 rc=$?
 "$PY" "$here/discover.py" --config "$CFG" --out "$OUT" --capture "$CAP" --steps "$VERITY_SPOT_STEPS" --summarize
 ROOT=$(cd "$here/../.." && pwd)

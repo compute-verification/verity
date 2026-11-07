@@ -2,7 +2,7 @@
 `capture.py` on a few steps: a rehearsal of the capture before it runs on served values. It answers which kernels the
 served engine runs where the census types sit, and whether the recorded forward equals the graph's bit for bit.
 
-    python discover.py --config DIR --out OUT --capture DIR [--tp 2] [--layers 4] [--steps 0,3] [--prompts 8] [--max-tokens 8]
+    python discover.py --config DIR --out OUT --capture DIR [--tp 2] [--layers 4] [--steps 0,3] [--prompts 8] [--max-tokens 8] [--prompt-len 24,64]
 
 ``--config`` holds GLM-5.3's config and tokenizer, without weights (``load_format=dummy``). The engine takes vLLM's
 defaults (for GLM-5 at the pin: breakable CUDA graphs, compilation off, the V2 model runner). ``OUT/summary.json`` gives,
@@ -44,6 +44,7 @@ def main() -> int:
     ap.add_argument("--steps", default="0,3")
     ap.add_argument("--prompts", type=int, default=8)
     ap.add_argument("--max-tokens", type=int, default=8)
+    ap.add_argument("--prompt-len", default="24,64", help="the prompts' lengths, uniform in LO,HI (long ones make FA3 split)")
     ap.add_argument("--summarize", action="store_true", help="only summarize --capture")
     a = ap.parse_args()
     out = Path(a.out)
@@ -60,7 +61,8 @@ def main() -> int:
     llm = LLM(model=a.config, load_format="dummy", tensor_parallel_size=a.tp, trust_remote_code=True, seed=0, dtype="bfloat16",
               hf_overrides={"num_hidden_layers": a.layers}, max_model_len=4096, max_num_seqs=256, gpu_memory_utilization=0.85)
     rng = random.Random(0)
-    prompts = [{"prompt_token_ids": [rng.randrange(1000, 100000) for _ in range(rng.randrange(24, 64))]} for _ in range(a.prompts)]
+    lo, hi = map(int, a.prompt_len.split(","))
+    prompts = [{"prompt_token_ids": [rng.randrange(1000, 100000) for _ in range(rng.randrange(lo, hi))]} for _ in range(a.prompts)]
     got = llm.generate(prompts, SamplingParams(max_tokens=a.max_tokens, temperature=0.0, ignore_eos=True))
     (out / "tokens.json").write_text(json.dumps([list(g.outputs[0].token_ids) for g in got]))
     cfg = llm.llm_engine.vllm_config
