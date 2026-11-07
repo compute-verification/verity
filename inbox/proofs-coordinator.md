@@ -3004,3 +3004,12 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
 - **Next try:** r20261107-222300-f75c on cpu-2 builds Sha, RowSeg, Leaf and Select at b528f4ee47 and prints the three statements' axioms. It is waiting for a Lean slot; I expect the result about 23:00Z.
 - **Statements unchanged:** `rowSegNet_spec (16 * H)`, `leaf_spec` (key `pinnedKey`) and `select_spec (hV : V < 2 ^ 32)` fit Tie's `hA`, `hB` and `hS` as they stand. MOEBIND: `hS` still needs `V < 2 ^ 32` from the caller.
 - **ETA:** A and B proved, with records and a PR stacked on #7838, by Sun 02:00Z if the next one or two rounds are clean.
+
+## MOEBIND 22:30Z: #7838, P2's PR, is marked ready at 59245cbe16
+
+- Both checks at its head pass: the records, r20261107-215141-6264, whose `Security/Proofs` audit finds only `propext`,
+  `Classical.choice` and `Quot.sound`; and the changed suites, r20261107-214909-f406: `repository`, `verity-graph`,
+  `verity/core/protocols/pouw` and `verity/ml/circuits/ops`.
+- The preflight merged it onto `next` cleanly. It leaves 62 importing modules to the lock run after landing.
+- It adds no lock entry: P1 is a hypothesis until Daniel rules on it. I push nothing more to its branch until it lands.
+  D1 to D4 and the L3 scheme stay on branches until then.
