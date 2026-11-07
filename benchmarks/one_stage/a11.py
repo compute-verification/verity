@@ -40,6 +40,9 @@ token equality, provenance and not proof.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
+import gc
 import hashlib
 import json
 import os
@@ -645,6 +648,22 @@ def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_
     return {"meta": st.meta, "tampered": "o0", "word": 0, "bit": 0}
 
 
+@contextlib.contextmanager
+def session_slot():
+    """With A11_SESSION_LOCK=FILE, one session at a time among the audits sharing FILE: each session's prover takes every core,
+    and two sessions' ZK servers and provers side by side outgrow the host."""
+    path = os.environ.get("A11_SESSION_LOCK")
+    if not path:
+        yield
+        return
+    with open(path, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(f, fcntl.LOCK_UN)
+
+
 def session_port(base: int, j: int) -> int:
     """Session ``j``'s port: ``base + j``, else (``base`` 0) a port free now, so that audits sharing a node never cross one
     audit's prover with another's verifier."""
@@ -827,7 +846,7 @@ def main() -> int:
         with K.no_cyclic_gc():
             st = CS.UnitStager(tpl["defn"], f"unit/a11-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
                                circuit=sdir / "circuit.txt", bind=bound)
-        tpl["stager"], t_build = st, round(time.time() - t0, 1)
+        t_build = round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
         salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{uid}".encode()).digest()
         lo = 0
@@ -850,10 +869,13 @@ def main() -> int:
                   "unit_nnz": got["unit_nnz"], "seconds": {"build": t_build if lo == 0 else 0.0, "stage": round(time.time() - t1, 1)},
                   "partition_file": out / "partition.json", "program_file": out / "program.json"}
             members.append({"name": f, "kind": f, "n": n, "base": base + lo, "defn": tpl["defn"], "st": ms,
-                            "header": a0.public_header(d, n), "salt_key": salt_key, "stager": st, "rows": kv["rows"]})
+                            "header": a0.public_header(d, n), "salt_key": salt_key, "rows": kv["rows"]})
             print(f"A11 staged {f}: {n} units of {uid} from {base + lo} (cap {cap}), {got['ands']} ANDs, k_log {st.meta.get('k_log')}, "
                   f"unit twin {agree}, Call twin {kv['twin']}, {ms['seconds']}", flush=True)
             lo += n
+        # the built circuit is on disk; holding every template's stager would keep tens of GB a template through the sessions
+        del st, got
+        gc.collect()
     summary["members"] = [{"name": m["name"], "template": P.template_id(m["defn"]), "n": m["n"], "base": m["base"], "set": m["st"]["set"],
                            "cap": m["st"]["cap"], "ands": m["st"]["ands"], "unit_nnz": m["st"]["unit_nnz"],
                            "k_log": m["st"]["meta"].get("k_log"), "pin": m["st"]["pin"], "class": m["st"]["class"],
@@ -904,9 +926,11 @@ def main() -> int:
         sdir = out / f"session-{m['name']}"
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m["n"], "k": len(local), "units": local}, sort_keys=True))
-        t = time.time()
-        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{len(local)}", session_port(a.port, j), sdir, draw_file=sdir / "draw.json", zk=True)
-        session_s = round(time.time() - t, 1)
+        with session_slot():
+            t = time.time()
+            record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{len(local)}", session_port(a.port, j), sdir,
+                                      draw_file=sdir / "draw.json", zk=True)
+            session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
         served += [m["base"] + u for u in draw_t.get("units", [])]
@@ -999,7 +1023,8 @@ def main() -> int:
                                                    "first output word flipped before commitment"},
                         leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
         tcheck = V.check(trec, tprog, tq, tlaw, a0.SCHEME, twant, leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
-        trecord, tlive = a0.session(a.bin, tst_d, tn, "subset:2", session_port(a.port, len(members) + 1), tdir / "session", zk=True)
+        with session_slot():
+            trecord, tlive = a0.session(a.bin, tst_d, tn, "subset:2", session_port(a.port, len(members) + 1), tdir / "session", zk=True)
         tlean = a0.lean_verify(a.lean, tst_d, tn, tdir / "session", zk=True)
         tm0 = ((trecord or {}).get("verdict") or {})
         neg[f"wrong-output-word ({tm['kind']})"] = {

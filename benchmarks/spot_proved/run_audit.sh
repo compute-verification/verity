@@ -5,6 +5,7 @@
 #   SP_MODE=build bash benchmarks/spot_proved/run_audit.sh                       # the builds only
 #   SP_MODE=audit SP_VALUES=DIR SP_ARGS="--per-kind 2 --tamper none" bash benchmarks/spot_proved/run_audit.sh
 #   (SP_VALUES may be a .tar.gz of one such directory, e.g. sent with --send: "$RESEARCH_RUN_DIR/inputs/values.tar.gz")
+#   SP_MODE=audit SP_SYNTH=LABEL[,LABEL] SP_ARGS=... bash ...  # synth.py's random inputs: a timing run, not served values
 set -uo pipefail
 for t in rustup elan uv; do
   case $t in
@@ -22,6 +23,10 @@ setup
 (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 [ "${SP_MODE:?}" = build ] && { log "spot: builds done"; exit 0; }
+if [ -n "${SP_SYNTH:-}" ]; then
+  "$PY" benchmarks/spot_proved/synth.py --out "$W/synth" --labels "$SP_SYNTH" >> "$OUT/a11.log" 2>&1 || exit 2
+  SP_VALUES=$W/synth
+fi
 S=${SP_VALUES:?}
 case $S in
   *.tar.gz) mkdir -p "$W/values" && tar -xzf "$S" -C "$W/values" || exit 2
