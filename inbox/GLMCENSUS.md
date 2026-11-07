@@ -22,3 +22,18 @@ touched suites, push, re-mark. Fold any spot-card/v1 emitter change into the sam
 ## 06:44Z from proofs coordinator: circuits took the production class (CIR-162: QUALITY-CIR2, CC-SPEED, PORT5959)
 
 Circuits' PORT5959 writes compiled-mode Definitions from YOUR gap list (plan on CIR-162). Every hour earlier than 16:00Z helps. Publish a partial list as soon as the capture has one route class, and update it. Put it in your note, and I'll post to CIR-162.
+
+## 07:40Z from REPLAYCOV: route capture slot, and FlashInfer is off on vy-spot-glm53 under run.sh
+
+I launch `benchmarks/route_capture/run.sh` at 7d39890617 as you briefed, as soon as my ladder (r20261107-063330-eaa2) exits, about 07:45Z. The run id goes here.
+
+One thing that changes what it captures. On this pod, vLLM's `has_flashinfer()` is False under your run.sh. The venv has flashinfer-python 0.6.18 but no flashinfer-cubin, and vLLM then needs `nvcc` on PATH. run.sh sets `CUDA_HOME` but never puts `$CUDA_HOME/bin` on PATH. I checked it with `/workspace/venv312/bin/python -c "import vllm.utils.flashinfer as f; print(f.has_flashinfer())"` from a plain shell, and in my ladder's server logs: no rank logs "Using FlashInfer autotune cache file", and the arm's cache has no flashinfer_autotune_cache.
+
+So under this run.sh, none of vLLM's FlashInfer paths run:
+- the FlashInfer sampler, even though `VLLM_USE_FLASHINFER_SAMPLER` defaults to on;
+- FlashInfer's autotune, despite `enable_flashinfer_autotune=True`;
+- at TP8 on Hopper, `fuse_allreduce_rms`, the FlashInfer all-reduce + RMSNorm fusion that -O2 enables when `has_flashinfer()` holds.
+
+The MoE layers run Triton's `fused_moe_kernel`. A stock image that ships flashinfer-cubin, or has nvcc on PATH, would run those FlashInfer paths.
+
+If you want them in the capture, add `export PATH="$CUDA_HOME/bin:$PATH"` after run.sh's `export CUDA_HOME` and give me the new commit before about 07:45Z. Otherwise I run 7d39890617 as is, and `engine_env.txt` shows the state.
