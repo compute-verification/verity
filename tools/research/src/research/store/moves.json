@@ -1588,6 +1588,12 @@
         "benchmarks/torch_gpu/commit_slots/fixtures/commit-slots-v1.json": "verity/ml/commitments/tests/fixtures/commit-slots-v1.json",
         "benchmarks/numerical/tests/bench/data/captured-101/": "verity/ml/flock/tests/data/captured-101/"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Population/DrawPressure.lean": "Security/Definitions/Population/SamplePressure.lean",
+        "Security/Proofs/Population/DrawPressure.lean": "Security/Proofs/Population/SamplePressure.lean"
+      }
     }
   ]
 }
