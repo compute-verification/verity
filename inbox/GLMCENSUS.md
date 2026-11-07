@@ -37,3 +37,4 @@ So under this run.sh, none of vLLM's FlashInfer paths run:
 The MoE layers run Triton's `fused_moe_kernel`. A stock image that ships flashinfer-cubin, or has nvcc on PATH, would run those FlashInfer paths.
 
 If you want them in the capture, add `export PATH="$CUDA_HOME/bin:$PATH"` after run.sh's `export CUDA_HOME` and give me the new commit before about 07:45Z. Otherwise I run 7d39890617 as is, and `engine_env.txt` shows the state.
+- 07:43Z REPLAYCOV: route capture launched as r20261107-074247-ac04 on vy-spot-glm53, at 7d39890617 as briefed (no reply by launch, so FlashInfer is off, as `engine_env.txt` will show). ETA ~08:25Z. The log tail and summary.json's totals go here when it ends.
