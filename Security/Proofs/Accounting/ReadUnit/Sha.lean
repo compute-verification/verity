@@ -153,7 +153,7 @@ theorem blockV_eq {P : ByteArray} {pre rest : List UInt8} (hP : P.data.toList = 
   rw [wordsBE, take_drop_map_range _ hj, blockV]
   refine List.map_congr_left fun i hi => ?_
   rw [List.mem_range] at hi
-  dsimp only
+  try dsimp only
   rw [wordBE_eq_wordL, hP]
   congr 1
   refine wordL_congr fun t ht => ?_

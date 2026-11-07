@@ -349,6 +349,7 @@ theorem rowSeg_spec {const : Bool → M Lin} {seg : ℕ → List Word → List L
     obtain ⟨o1, o2, o3⟩ := h (length_cvWords _ _ _) (words64_cvWords _ _ _) (map_bv_cvWords z h0 h1 _)
       (by simp only [List.length_take, List.length_drop, hl]; omega)
     refine ⟨⟨o1, o2⟩, ?_⟩
+    show bytesBE (ds.map (bv z)) = (Verity.sha512 (Hash.RowSeg.segmentMsg (evs z row) j)).bytes
     rw [← o3, segmentMsg_eq z hl j]
   · obtain ⟨hd1, hd2⟩ := hd fun _ _ => ⟨hl, h0, h1⟩
     have hw : Words64 d.flatten := fun w hw => by

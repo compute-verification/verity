@@ -65,10 +65,11 @@ theorem foldl_filter_xor (p f : ℕ → Bool) : ∀ (l : List ℕ) (c : Bool),
   | [], _ => rfl
   | j :: l, c => by
     cases hp : p j
-    · simp only [List.filter_cons, hp, List.foldl_cons, Bool.false_and, Bool.xor_false, Bool.false_eq_true,
-        ite_false]
+    · rw [List.filter_cons_of_neg (by simp [hp])]
+      simp only [List.foldl_cons, hp, Bool.false_and, Bool.xor_false]
       exact foldl_filter_xor p f l c
-    · simp only [List.filter_cons, hp, List.foldl_cons, Bool.true_and, ite_true]
+    · rw [List.filter_cons_of_pos hp]
+      simp only [List.foldl_cons, hp, Bool.true_and]
       exact foldl_filter_xor p f l _
 
 theorem foldl_congr_mem {f g : Bool → ℕ → Bool} :
@@ -91,21 +92,21 @@ theorem foldl_pow_testBit (f : ℕ → Bool) : ∀ n : ℕ,
   | n + 1 => by
     obtain ⟨hlt, hbit⟩ := foldl_pow_testBit f n
     rw [List.range_succ, List.foldl_append, List.foldl_cons, List.foldl_nil]
+    try dsimp only
     generalize (List.range n).foldl (fun acc s => acc + if f s then 2 ^ s else 0) 0 = F at hlt hbit ⊢
     refine ⟨by split <;> rw [Nat.pow_succ] <;> omega, fun i hi => ?_⟩
     by_cases hin : i < n
     · cases hf : f n
-      · simp only [Bool.false_eq_true, ite_false, Nat.add_zero]
+      · rw [if_neg (by simp), Nat.add_zero]
         exact hbit i hin
-      · simp only [ite_true]
-        rw [Nat.add_comm, Nat.testBit_two_pow_add_gt hin]
+      · rw [if_pos rfl, Nat.add_comm, Nat.testBit_two_pow_add_gt hin]
         exact hbit i hin
-    · obtain rfl : i = n := by omega
-      cases hf : f i
-      · simp only [Bool.false_eq_true, ite_false, Nat.add_zero]
+    · have hni : i = n := by omega
+      rw [hni]
+      cases hf : f n
+      · rw [if_neg (by simp), Nat.add_zero]
         exact Nat.testBit_lt_two_pow hlt
-      · simp only [ite_true]
-        rw [Nat.add_comm, Nat.testBit_two_pow_add_eq, Nat.testBit_lt_two_pow hlt] <;> rfl
+      · rw [if_pos rfl, Nat.add_comm, Nat.testBit_two_pow_add_eq, Nat.testBit_lt_two_pow hlt] <;> rfl
 
 /-- Bit `s` of `M·y`'s byte `p` is `M·y`'s bit `8 p + s`. -/
 theorem testBit_mask (key y : Hash.Msg) {p s : ℕ} (hp : p < 64) (hs : s < 8) :
@@ -140,7 +141,7 @@ theorem ev_bi (z : Var → Bool) {x y : List Word} (hx : Shaped 8 x) (hy : Shape
   congr 1
   refine foldl_congr_mem (fun acc j hj => ?_) false
   rw [List.mem_range] at hj
-  dsimp only
+  try dsimp only
   rw [List.getD_eq_getElem _ _ (by simpa using hj)]
   simp only [List.getElem_map, List.getElem_range]
   rw [ev_getD_wordBit z hy.2 (by rw [hy.1]; omega), flockBit_eq, Bool.and_comm] <;> rfl
