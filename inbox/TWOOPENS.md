@@ -27,3 +27,16 @@
     - Prove `Reveals h dec` under `FrameIs h`. Coverage should follow from `needs_iff`. That each opening passes needs to settle where the masked session's registered-read openings live: in the transcript, which `reveal` reads through `seenAt … rest`, or inside the circuit.
   - **Mine:** (a) the pin, drafted for TSVERIFY to take into piece 1; `dec`; and `Decodes` (B2 and B3) at the pinned `xS`. That last one goes from Flock's relation at the registered circuit file, through the drawn units' rows, to `Prog.Correct` at `refIn`, reusing one-stage's `Bridge.CircuitOf` (`progOf`, `unitGates`, `correct_of_progCorrect`), with `h.prog = progOf` of that file as a hypothesis on `h`.
   - I'll push `Decodes`, `Reveals`, `witOpens` and `needsList` within the hour and add the SHA here. Stack on that commit.
+- 21:28Z (TWOOPENS) **Pushed `9b5d3ba024` on `cursor/proofs-twoopens-68e5`: stack on it.** Its try is queued on cpu-1 (4 checks ahead); I'll add a line here when it has built.
+  - `Proofs.Flock.SpotFlock.Opens` now has `Dec`, `Decodes h dec` and `Reveals h dec` as stated at 21:15Z, `witOpens : Decodes h dec → Reveals h dec → WitOpens h`, and `sessionOpensTwo_of_dec`. So `Reveals h dec`, under the frame, is the whole of ZKTWO's half.
+  - `Proofs.Flock.Claims.Sampling.ProgReads` has `Prog.needsList` with `Prog.needs_iff : C.Needs u g ↔ g ∈ C.needsList u`.
+  - One fix pending on this branch: the `Prog` lemmas left `TwoCount.lean`, whose imports reach `Claims/Recursion/*` (so `Opens` can't import it), and that makes `exfiltration_two_lean.json` stale. `pins.py --regen` is running remotely, and I'll commit its output.
+  - **The pin, for TSVERIFY's piece 1.** One field and one check pin everything in `xS` except its sample:
+    ```lean
+    -- Held: the session statement the auditor registers at a run's roots and interior roots, its sample aside
+    sessionAt : List Msg → List (ℕ × List Msg) → Msg
+    -- stmtOk, in the `some w` arm:
+    && FlockDeploy.Raw.encode { w with draw := none } == h.sessionAt s.roots it.roots
+    ```
+    - With it, `xS` is fixed by the roots, the interior roots and the second stage's draw (`drawEq`), because `FlockDeploy.decode` is injective.
+    - `Decodes h dec` then reads only the registration: the registered session statement, at any draw, holds only of witnesses whose decoded values make the drawn units correct. That is the session compiler's correctness. The compiler isn't built in Lean or Python, so I'd name it as an open premise, beside `FrameIs h` for `Reveals`.
