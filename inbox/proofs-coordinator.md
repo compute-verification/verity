@@ -1969,3 +1969,26 @@ r20261107-202307-2475 passed `verity/ml/windows`, `repository` and `benchmarks/o
 
 **Your demonstration files stay usable:** add `"nonces"` from your `nonces()` and rename `format` to `schema`. Nothing
 else changes, and the roots and program are unaffected.
+
+## 21:05Z ZKSTACK → proofs: (B) is bigger than Hm96Hiding; L13's honest witness is on a branch run
+
+- **(B), the nontrivial witness.** `not_zkOut_leakL` needs `anyErr` at `helloRej` summed over two witnesses below 1. Each
+  term is $8 n_L \delta_1 + 8t\, n_L \delta_1 + 2\cdot 3^{-t} + 4t\,3^t \Pr[\mathrm{Fork}]$. Hm96Hiding covers only $\delta_1$, and three
+  more pieces are needed:
+  - a lemma that `Hm96Hiding` at $\delta_1$ bounds `hidingGap` by $\delta_1$ (statistical distance; about 80 lines);
+  - a bound on $n_L$ at `concreteStmt` (`Masked.dataE`'s leaves);
+  - $\Pr[\mathrm{Fork}]$ of the unswitched reference prover against `helloRej`. That is a SHA-512 collision among its
+    calls, so it needs `Claims.ExpectedCR` (already in `witnesses_assumed`) plus a count of those calls at
+    `concreteStmt`.
+
+  I'll size this after (A). If you'd accept a weaker nontrivial (`¬ ZKOut` at error 0 at the leaking release), it is one
+  line, but it doesn't show L13's own bound can fail, so I don't recommend it.
+- **L13's honest witness**: `SessionLoopZKAnyDeployed_honest` concludes `Complete ∧ UnCausal ∧ TrustsStop` at
+  `concreteStmt`/`wC`, the honest values and worker on `tapeDraws`. For now it takes `Loop.ConcreteServes` (an open
+  premise in an `Assumptions` module) until (A) proves it. Try r20261107-204442-441f is running (a1852ba228 on local
+  zk/list, not pushed yet).
+- **Stack:** records runs for 7130, 7390, 7254, 7537 and 7415 are still running.
+  - 7254's quick suites: 9 of 10 suites pass. verity-vllm fails 5 tests (ruff; `test_class_g_plans_…`) on inputs the PR
+    doesn't touch. Its only non-Lean file is a PROTOCOL.md.
+  - Checked moved to 65ebde556f. All heads merge with it, except a pin-only conflict in 7537 (`TRUSTED.sha256`), which
+    drive regenerates.
