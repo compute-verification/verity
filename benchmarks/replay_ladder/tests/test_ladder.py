@@ -138,7 +138,8 @@ def test_serving_loads_the_pin_and_the_capacity_server_logs(tmp_path, monkeypatc
     monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(AutoTokenizer=SimpleNamespace(
         from_pretrained=lambda *a, **k: None)))
     monkeypatch.setattr(L.S, "corpus", lambda: SimpleNamespace(traffic=SimpleNamespace()))
-    a = SimpleNamespace(model="qwen3-8b", c4="c4.json.gz", out=str(out), docs=10, burst=8, over=1.45, span_s=60.0)
+    a = SimpleNamespace(model="qwen3-8b", c4="c4.json.gz", out=str(out), docs=10, burst=8, over=1.45, span_s=60.0, plan=None,
+                        max_model_len=None)
     assert L.serve(a) == 1
     assert json.loads((sites[0] / L.P.CONFIG).read_text()) == {"pin": True, "tilings": str(out / L.SERVING_TILINGS)}
     assert L.S.plugin_site(out / "record" / ".site", False) == out / "record" / ".site"

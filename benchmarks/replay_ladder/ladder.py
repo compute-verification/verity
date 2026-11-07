@@ -142,6 +142,29 @@ def native_tokens(tok: Any) -> tuple[int, int]:
     return int(start), int(blank[0])
 
 
+def own_sampling(real: Any) -> Any:
+    """`corpus.request_body` for a plan whose requests carry their own sampling (`prod_plan`): the request's sampling, its
+    seed by the public seed rule when it is sampled, and no ignore_eos; serve_tax's body for any other plan's request."""
+    C = S.corpus()
+
+    def body(served: str, r: dict, rid: str, sampling: str) -> dict:
+        if "sampling" not in r:
+            return real(served, r, rid, sampling)
+        b = {"model": served, "prompt": r["prompt_ids"], "max_tokens": r["max_tokens"], **r["sampling"], "stream": True,
+             "stream_options": {"include_usage": True}, "return_token_ids": True, "user": rid}
+        if r.get("seeded"):
+            b["seed"] = C.request_seed(rid)
+        return b
+    body.own_sampling = True
+    return body
+
+
+def max_model_len(args: tuple[str, ...], n: int) -> tuple[str, ...]:
+    """serve_tax's engine arguments with the context limit set to ``n``."""
+    i = args.index("--max-model-len")
+    return (*args[:i + 1], str(n), *args[i + 2:])
+
+
 def serve(a: argparse.Namespace) -> int:
     ck = register(a.model)
     from transformers import AutoTokenizer
@@ -149,6 +172,17 @@ def serve(a: argparse.Namespace) -> int:
     traffic = S.corpus().traffic
     traffic.BOS, traffic.BLANK_LINE = native_tokens(AutoTokenizer.from_pretrained(str(ck), trust_remote_code=True))
     out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    if a.max_model_len:
+        S.BASE_ARGS = max_model_len(S.BASE_ARGS, a.max_model_len)
+    own_plan = []
+    if a.plan:
+        C = S.corpus()
+        if not getattr(C.request_body, "own_sampling", False):
+            C.request_body = own_sampling(C.request_body)
+        (out / "plan.jsonl").write_bytes(Path(a.plan).read_bytes())
+        own_plan = ["--plan", str(out / "plan.jsonl")]
+        plan_len = sum(1 for _ in open(out / "plan.jsonl"))
     cap = out / "capacity"
     real_site = S.plugin_site
 
@@ -160,20 +194,25 @@ def serve(a: argparse.Namespace) -> int:
     S.plugin_site = plugin_site
     base = ["--model-id", a.model, "--checkpoint", str(ck), "--c4", a.c4, "--docs", str(a.docs), "--reps", "1",
             "--warm-s", "10"]
-    if S.main(["run", "--arm", "compiled", *base, "--rates", "burst=1000", "--requests", str(a.burst), "--out", str(cap)]):
+    if S.main(["run", "--arm", "compiled", *base, *own_plan, "--rates", "burst=1000", "--requests", str(a.burst),
+               "--out", str(cap)]):
         return 1
     burst = S.arm_metrics(cap)["loads"]["burst"][0]
     capacity = burst["req_per_s"]
     rate = round(a.over * capacity, 2)
     print(f"[ladder] {a.model}: capacity {capacity:.2f} req/s, {burst['output_tok_per_s']:.0f} out tok/s; "
           f"serving the window at {rate} req/s for {a.span_s:g} s", flush=True)
+    if own_plan and plan_len < S.plan_need({LOAD: rate}, a.span_s, None):
+        raise SystemExit(f"{a.plan} holds {plan_len} requests, fewer than the window at {rate} req/s for {a.span_s:g} s "
+                         f"may send ({S.plan_need({LOAD: rate}, a.span_s, None)}): build a longer one")
     rc = S.main(["run", "--arm", "record", *base, "--rates", f"{LOAD}={rate}", "--span-s", str(a.span_s),
                  "--plan", str(out / "plan.jsonl"), "--out", str(out / "record")])
     rec = S.arm_metrics(out / "record")
     (out / "serve.json").write_text(json.dumps({
         "schema": SCHEMA + "/serve", "model": a.model, "checkpoint": f"{S.MODELS[a.model].repo}@{S.MODELS[a.model].revision}",
         "tp": LADDER[a.model].tp, "bos": traffic.BOS, "blank_line": traffic.BLANK_LINE, "capacity": burst, "over": a.over,
-        "rate": rate, "span_s": a.span_s, "docs": a.docs, "inductor_pin": pin(),
+        "rate": rate, "span_s": a.span_s, "docs": a.docs, "inductor_pin": pin(), "plan": a.plan,
+        "max_model_len": a.max_model_len,
         "window": (rec["loads"].get(LOAD) or [None])[0], "error": rec.get("error"), "run_id": S.SHARED.RESEARCH_RUN_ID,
     }, indent=1))
     return rc
@@ -390,6 +429,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--docs", type=int, default=1 << 20,
                    help="the shard's first documents the plans take prompts from (default: all; a fast model's window runs "
                         "serve_tax's 20,000 out)")
+    s.add_argument("--plan", help="a plan to serve instead of serve_tax's (prod_plan.py build): each request with its own "
+                                  "sampling, stopping at its end of text or its cap")
+    s.add_argument("--max-model-len", type=int, help="the servers' context limit, over serve_tax's 4,096")
     r = sub.add_parser("replay")
     r.add_argument("--model", required=True, choices=sorted(LADDER))
     r.add_argument("--out", required=True)

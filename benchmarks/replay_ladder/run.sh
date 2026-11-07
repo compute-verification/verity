@@ -56,7 +56,7 @@ for m in "$@"; do
     echo "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=${TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK-unset}" > "$d/arm_env.txt"
     echo "== $m $arm serve $(date -u +%FT%TZ) $(cat "$d/arm_env.txt")"
     if ! "$PY" "$here/ladder.py" serve --model "$m" --c4 "$C4" --out "$d" ${SPAN_S:+--span-s "$SPAN_S"} ${OVER:+--over "$OVER"} \
-        ${BURST:+--burst "$BURST"} > "$d/serve.log" 2>&1; then
+        ${BURST:+--burst "$BURST"} ${PLAN:+--plan "$PLAN"} ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} > "$d/serve.log" 2>&1; then
       tail -n 40 "$d/serve.log"; rc=1; rm -rf "$cache"; continue
     fi
     grep '^\[ladder\]' "$d/serve.log"
