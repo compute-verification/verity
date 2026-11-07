@@ -933,16 +933,22 @@ def _bind_captured(c: T.Captured, M: int):
         return bind(T.AllReduceRmsNormMnnvl, WORLD=X.WORLD, N=c.N, SHOT=e["shot"], CLUSTER=e["cluster"], EPS=X.EPS, **c.statics)
     if c.route == "fi_ar_comm":
         return bind(T.AllReduceMnnvl, WORLD=X.WORLD, N=size, SHOT=e["shot"], **c.statics)
-    if c.route == "symm_mem_comm":
+    if c.definition == "AllReduceMultimem_v1":
         return bind(T.AllReduceMultimem, WORLD=X.WORLD, SIZE=size, **c.statics)
     return bind(T.AllReduceCustom, WORLD=X.WORLD, SIZE=size, **c.statics)
 
 
+def _node_of(c: T.Captured) -> dict:
+    """The node record whose routes `c` is, by its node tree."""
+    return next(r for r in T.NODE_RECORDS if T.node_key(r)[2:] == c.node)
+
+
 def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
     """Every H200 `tp_allreduce.CAPTURED` entry is, at each M it covers, the route vLLM's dispatch takes at its setting (the fused path to
-    FlashInfer's budget, the custom all-reduce 2-stage throughout), cites exactly the GO runs at that setting, and its Definition
-    binds at its first and last M with what they read (GLM-5.3's tree on every owner, IEEE adds, FMA in both shots); `covered`
-    names it there and nowhere past it."""
+    FlashInfer's budget, the custom all-reduce 2-stage throughout), cites exactly the GO runs at that setting (a node record's
+    entry, its route's), and its Definition binds at its first and last M with what they read (the node's tree on every owner,
+    IEEE adds, FMA in both shots); `covered` names it there, a node record's only at its device and stated tree (or none stated,
+    `UNSTATED_NODE`'s), and nowhere past it."""
     assert X.tree_str(T.GLM53_H200_TREE) == "((((((0,(1,2)),3),5),6),4),7)"
     assert T.CAPTURE_RUNS == ("art:4a6503ce29cbd49b808dffe32566e4f74e3933199fdd347dec4a2238e73058f7",
                               "art:aef3c209534e1cf90640cd9bda04a931d041f8553437e917346d6e24283507ea",
@@ -950,7 +956,16 @@ def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
     runs = {"custom-off": T.CAPTURE_RUNS[:2], "defaults": T.CAPTURE_RUNS[2:], "switch": T.CAPTURE_RUNS}
     assert [c.definition for c in T.CAPTURED if c.setting not in T.SETTINGS] == ["AllReduceNcclTree_v1"]
     for c in (c for c in T.CAPTURED if c.setting in T.SETTINGS):
-        assert c.N in (X.HIDDEN, X.DSV4_HIDDEN) and c.runs == runs[c.setting] and (c.world, c.device, c.transport) == (X.WORLD, None, None)
+        assert c.N in (X.HIDDEN, X.DSV4_HIDDEN) and (c.world, c.transport) == (X.WORLD, None)
+        if c.node is None:
+            assert c.runs == runs[c.setting] and c.device is None
+            facts = {}
+        else:
+            rec = _node_of(c)
+            assert c.runs == next(tuple(r["run_records"]) for r in rec["routes"] if (r["setting"], r["N"], r["route"]) == c[:3])
+            assert c.device == T.node_key(rec)[0] == ("9.0", 132) and c.definition == "AllReduceMultimem_v1"
+            facts = {"device": c.device, "trees": c.node[0], "ftz": c.node[1]}
+            assert (T.covered(c.setting, c.N, c.route, c.lo) is c) == (c.node == T.UNSTATED_NODE[1:])
         for M in range(c.lo, c.hi + 1):
             if c.route == "fused":
                 assert X.expected_path(M) == X.FUSED, (c, M)
@@ -958,8 +973,9 @@ def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
                 assert X.expected_comm(M, c.setting, c.N) == c.route, (c, M)
             if c.route == "ca_comm":
                 assert X.stage_of(M, c.N) == c.statics["STAGE"], (c, M)
-            assert T.covered(c.setting, c.N, c.route, M) is c
-        assert T.covered(c.setting, c.N, c.route, c.lo - 1) is None and T.covered(c.setting, c.N, c.route, c.hi + 1) is None
+            assert T.covered(c.setting, c.N, c.route, M, **facts) is c
+        assert T.covered(c.setting, c.N, c.route, c.lo - 1, **facts) is None
+        assert T.covered(c.setting, c.N, c.route, c.hi + 1, **facts) is None
         for M in (c.lo, c.hi):
             assert _bind_captured(c, M).id.split("{")[0] == c.definition
 
@@ -1006,6 +1022,156 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
             assert all(conformance_label(DEFS.defs[d].conformance) == "exact-model-tested" for d in p["definitions"]), pid
     for c in (c for c in T.CAPTURED if c.setting in T.SETTINGS):
         assert c.definition in cmap["programs"]["fused-allreduce-rmsnorm" if c.route == "fused" else "tp-allreduce"]["definitions"]
+
+
+# --- node records -----------------------------------------------------------------------------------------------------------------
+
+H200 = ("9.0", 132)
+NODE_TREE = "(((((((0,2),3),1),5),6),4),7)"
+
+
+def _tree_strs(trees) -> set[str]:
+    return {X.tree_str(T.multimem_tree(t, X.WORLD)) for t in trees}
+
+
+def test_the_node_records_are_the_two_h200_nodes() -> None:
+    """`NODE_RECORDS` holds two H200 nodes.  The first read `NODE_TREE` on every owner, FTZ off, and NCCL's all-reduces past symmetric
+    memory as NVLS in one f32 sum on that tree, so it covers symmetric memory to 5461 tokens and NCCL from 5462 to 8192 at vLLM's
+    defaults, both at that tree (offset-free).  The second is `CAPTURE_RUNS`' node, `GLM53_H200_TREE` on every owner and no NCCL
+    logged, its routes at the runs `CAPTURE_RUNS` names, and `UNSTATED_NODE`."""
+    new, old = T.NODE_RECORDS
+    assert _tree_strs(new["multimem"]["trees"]) == {NODE_TREE} and _tree_strs(old["multimem"]["trees"]) == {X.tree_str(T.GLM53_H200_TREE)}
+    assert T.node_key(new)[0] == T.node_key(old)[0] == H200 and new["multimem"]["ftz"] is old["multimem"]["ftz"] is False
+    assert [(r["setting"], r["N"], r["route"], r["lo"], r["hi"]) for r in new["routes"]] == [
+        ("defaults", 6144, "pynccl_comm", 5462, 8192), ("defaults", 6144, "symm_mem_comm", 43, 5461)]
+    assert new["nccl"]["fit"] == "f32" and [(s["M"], s["algo"], s["proto"], s["channels"], len(s["runs"])) for s in new["nccl"]["sizes"]] == [
+        (5462, "NVLS", "SIMPLE", "0..15", 1), (8192, "NVLS", "SIMPLE", "0..15", 1)]
+    assert X.tree_str(T.nvls_tree(new["nccl"], X.WORLD)) == NODE_TREE and new["versions"]["nccl"] == "2.29.7+cuda12.9"
+    assert old["nccl"] is None and tuple(s["run_record"] for s in old["source"]) == T.CAPTURE_RUNS
+    assert [(r["setting"], r["N"], r["route"], r["lo"], r["hi"], tuple(r["run_records"])) for r in old["routes"]] == [
+        ("custom-off", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[:2]), ("defaults", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[2:]),
+        ("defaults", 7168, "symm_mem_comm", 37, 2048, T.CAPTURE_RUNS[2:])]
+    assert T.UNSTATED_NODE == (T.node_key(old)[0], *T.node_key(old)[2:])
+    nvls = T.covered("defaults", 6144, "pynccl_comm", 5462, device=H200, trees=new["multimem"]["trees"], ftz=False)
+    assert nvls.statics == {"TREES": T.node_key(new)[2], "FTZ": False} and T.offset_free(nvls, X.WORLD)
+
+
+def test_covered_takes_the_stated_node_tree() -> None:
+    """At the first node's stated tree, symmetric memory covers 43..5461 tokens at vLLM's defaults and NCCL 5462..8192, each at that
+    tree.  At `CAPTURE_RUNS`' tree, or with none stated (`UNSTATED_NODE`), symmetric memory covers up to 2048 at its own tree and
+    NCCL nothing.  Half a statement (TREES or FTZ alone), another tree, FTZ on, a tree not one per owner, or another device
+    covers neither."""
+    new_t, old_t = T.NODE_RECORDS[0]["multimem"]["trees"], [T.GLM53_H200_TREE] * X.WORLD
+
+    def at(route: str, M: int, device=H200, **stated):
+        return T.covered("defaults", 6144, route, M, device=device, **stated)
+
+    for M in (43, 2048, 5461):
+        assert at("symm_mem_comm", M, trees=new_t, ftz=False).statics["TREES"] == T.node_key(T.NODE_RECORDS[0])[2]
+    for M in (5462, 8192):
+        assert at("pynccl_comm", M, trees=new_t, ftz=False).definition == "AllReduceMultimem_v1"
+    assert at("pynccl_comm", 8193, trees=new_t, ftz=False) is None
+    for stated in ({"trees": old_t, "ftz": False}, {}):
+        assert at("symm_mem_comm", 2048, **stated).statics["TREES"] == T.multimem_trees(old_t, X.WORLD)
+        assert at("symm_mem_comm", 2049, **stated) is None and at("pynccl_comm", 5462, **stated) is None
+    for stated in ({"trees": new_t}, {"ftz": False}, {"trees": new_t, "ftz": True}, {"trees": [BALANCED] * X.WORLD, "ftz": False},
+                   {"trees": new_t[:7], "ftz": False}):
+        assert at("symm_mem_comm", 256, **stated) is None, stated
+    assert at("symm_mem_comm", 256, device=T.RTX_PRO_6000, trees=new_t, ftz=False) is None
+
+
+def test_a_registration_is_refused_by_name(monkeypatch) -> None:
+    """`node_refusal` names why a registration's stated node tree is refused: `multimem_tree_unrecorded` for a tree, FTZ, device or
+    world no record holds, or a tree that is not one per owner; `multimem_tree_unstated` for half a statement, and for none once
+    `UNSTATED_NODE` is None, under which `covered` covers no symmetric-memory call stated none (and still FlashInfer's)."""
+    new_t = T.NODE_RECORDS[0]["multimem"]["trees"]
+    for trees, ftz in ((new_t, False), ([T.GLM53_H200_TREE] * X.WORLD, False), (None, None)):
+        assert T.node_refusal(trees, ftz, device=H200) is None
+    for trees, ftz, device, world in ((new_t, True, H200, 8), ([BALANCED] * X.WORLD, False, H200, 8), (new_t, False, T.RTX_PRO_6000, 8),
+                                      (new_t[:7], False, H200, 8), (new_t, False, H200, 4)):
+        assert T.node_refusal(trees, ftz, device=device, world=world).startswith(f"{T.TREE_UNRECORDED}: "), (ftz, device, world)
+    assert T.node_refusal(new_t, None, device=H200).startswith(f"{T.TREE_UNSTATED}: ")
+    monkeypatch.setattr(T, "UNSTATED_NODE", None)
+    assert T.node_refusal(None, None, device=H200).startswith(f"{T.TREE_UNSTATED}: ")
+    assert T.covered("defaults", 6144, "symm_mem_comm", 256, device=H200) is None
+    assert T.covered("defaults", 6144, "fi_ar_comm", 1, device=H200) is not None
+
+
+def _set(path: tuple, value):
+    def mutate(rec):
+        *head, last = path
+        for k in head:
+            rec = rec[k]
+        rec[last] = value
+    return mutate
+
+
+@pytest.mark.parametrize("mutate,match", [
+    (_set(("schema",), "tp-allreduce-node/0"), "schema"),
+    (_set(("device", "compute_capability"), "9"), "not major.minor"),
+    (_set(("world",), 1), "world is 1"),
+    (lambda r: r["versions"].pop("torch"), "versions has"),
+    (_set(("versions", "nccl"), 2.29), "versions.nccl"),
+    (lambda r: r["multimem"]["trees"].pop(), "one per owner"),
+    (_set(("multimem", "ftz"), "no"), "multimem.ftz"),
+    (_set(("multimem", "probes"), [[6144]]), r"multimem.probes\[0\]"),
+    (_set(("nccl", "fit"), "fp16"), "nccl.fit"),
+    (_set(("nccl", "fit"), "bf16"), "pynccl_comm route needs nccl.fit"),
+    (_set(("nccl", "sizes", 0, "bytes"), 1), r"nccl.sizes\[0\].bytes"),
+    (_set(("nccl", "sizes", 0, "runs"), [[0, 1, 0]]), "runs end at 1"),
+    (_set(("routes", 0, "setting"), "served"), r"routes\[0\] is setting 'served'"),
+    (_set(("routes", 1, "lo"), 9999), "lo 9999 > hi"),
+    (lambda r: r["routes"].append(copy.deepcopy(r["routes"][0])), "repeats"),
+    (_set(("routes", 0, "run_records"), ["art:" + "1" * 64]), "not in source"),
+    (_set(("source", 0, "run_record"), None), r"source\[0\].run_record"),
+])
+def test_a_node_record_is_refused_by_its_field(mutate, match: str) -> None:
+    rec = copy.deepcopy(T.NODE_RECORDS[0])
+    T.check_node_record(rec)
+    mutate(rec)
+    with pytest.raises(ValueError, match=match):
+        T.check_node_record(rec)
+
+
+def _registered(doc: dict) -> dict:
+    doc["gate"] = {"ok": True, "name": "NVIDIA H200", "compute_cap": "9.0", "sms": 132, "driver": "595.91.07"}
+    doc["environment"] = {"torch": "2.13.0+cu129", "vllm": "0.28.1rc1.dev472+gd9105ea80", "flashinfer": "0.6.18"}
+    return doc
+
+
+def test_a_register_run_writes_a_node_record_that_round_trips(tmp_path, monkeypatch) -> None:
+    """`node_record` of a run `register_verdict` holds is an uncited node record whose JSON reads back equal, keyed on the probes' trees
+    and FTZ at the gate's device: NCCL's ring (bf16 hops) recorded with its tuning but no NCCL route.  Cited with its run, it loads
+    (`load_node_records`, two of one node refused) and `covered` takes its symmetric-memory route at its trees.  An NCCL fit
+    without one logged tuning, or probes that disagree, hold no record."""
+    doc = _registered(_with_nccl(_doc()))
+    assert X.register_verdict(doc)["ok"]
+    rec = X.node_record(doc, "c0ffee")
+    assert json.loads(json.dumps(rec)) == rec and T.node_key(rec) == (H200, X.WORLD, T.multimem_trees(TREES, X.WORLD), True)
+    assert rec["versions"] == {"driver": "595.91.07", "nccl": None, "torch": "2.13.0+cu129", "vllm": "0.28.1rc1.dev472+gd9105ea80",
+                               "flashinfer": "0.6.18"}
+    assert rec["multimem"]["probes"] == [[6144, 64]] and rec["source"] == [{"run_record": None, "commit": "c0ffee"}]
+    assert rec["nccl"]["fit"] == "bf16" and [(s["M"], s["algo"], s["channels"]) for s in rec["nccl"]["sizes"]] == [(5462, "RING", "0..23")]
+    assert [(r["setting"], r["N"], r["route"], r["lo"], r["hi"]) for r in rec["routes"]] == [("defaults", 6144, "symm_mem_comm", 64, 64)]
+    with pytest.raises(ValueError, match="run_record"):
+        T.check_node_record(rec)
+    art = "art:" + "0" * 64
+    rec["source"][0]["run_record"], rec["routes"][0]["run_records"] = art, [art]
+    path = tmp_path / "nodes.json"
+    path.write_text(json.dumps([rec]))
+    assert T.load_node_records(path) == (rec,)
+    monkeypatch.setattr(T, "CAPTURED", (*T.CAPTURED, *T._node_entries(rec)))
+    got = T.covered("defaults", 6144, "symm_mem_comm", 64, device=H200, trees=list(TREES), ftz=True)
+    assert got.runs == (art,) and got.statics == {"TREES": T.multimem_trees(TREES, X.WORLD), "FTZ": True}
+    path.write_text(json.dumps([rec, rec]))
+    with pytest.raises(ValueError, match="two node records"):
+        T.load_node_records(path)
+    untuned = _registered(_with_nccl(_doc()))
+    untuned["nccl_log"] = {}
+    assert not X.register_verdict(untuned)["ok"]
+    split = _registered(_with_nccl(_doc()))
+    split["probes"]["agree"] = False
+    assert not X.register_verdict(split)["ok"]
 
 
 def _fake_spawn(flip: dict, trees_of: dict):
@@ -1110,6 +1276,57 @@ def test_main_models_nccl_at_its_probes_runs(nccl_small, tmp_path, monkeypatch, 
     assert {"words/allreduce_M172.npy", "words/nccl_probe_M172.npy", "words/nccl_again_M172.npy"} <= set(doc["words"])
     assert set(doc["nccl_log"]) == {"served", "served_again"} and doc["coverage"] == []
     assert "nccl=GO nccl_models=['bf16']" in capsys.readouterr().out.splitlines()[-1]
+
+
+def _nvls_spawn(trees_of: dict):
+    """`_fake_spawn` with NCCL's words one f32 sum over the whole call on `RING`'s chain (NVLS), and each rank process's NCCL log
+    naming its version and NVLS for its every NCCL all-reduce."""
+    base = _fake_spawn({}, trees_of)
+
+    def spawn(work, env, custom_ar, cases_):
+        recs = base(work, env, custom_ar, cases_)
+        lines = ["h:1:1 [0] NCCL INFO NCCL version 2.29.7+cuda12.9"]
+        for c in (c for c in cases_ if c.get("comm") == "pynccl_comm"):
+            flat = np.load(c["ops"]["parts"]).reshape(X.WORLD, -1)
+            _write(c, {"out": _ring(flat, flat.shape[1], RING, True).reshape(c["M"], -1)})
+            lines.append(f"h:1:1 [0] NCCL INFO AllReduce: {c['M'] * X.HIDDEN * 2} Bytes -> Algo NVLS proto SIMPLE channel{{Lo..Hi}}={{0..15}}")
+        Path(work).mkdir(parents=True, exist_ok=True)
+        (Path(work) / "nccl.h.0.log").write_text("\n".join(lines) + "\n")
+        return recs
+
+    return spawn
+
+
+def test_main_registers_the_node_on_stubbed_ranks(nccl_small, tmp_path, monkeypatch, capsys) -> None:
+    """`main --register` with the rank processes stood in for, NCCL's words one f32 sum on one tree: only `REGISTER_PHASES` run,
+    and the node record it writes is the probes' trees and FTZ at the gate's device, NCCL's NVLS tuning and run, and symmetric
+    memory's and NCCL's routes at their probes' M, exit 0 and its line.  Probes whose trees differ between the two sets of rank
+    processes write no record and exit 1."""
+    monkeypatch.setattr(X, "gate", lambda *a: {"ok": True, "checks": {}, "name": "NVIDIA H200", "compute_cap": "9.0", "sms": 132,
+                                               "driver": "595.91.07"})
+    monkeypatch.setattr(X.G, "_environment", lambda: {})
+    monkeypatch.setattr(X, "_commit", lambda: "c0ffee")
+    workload = tmp_path / "workload.json"
+    workload.write_text(json.dumps({"engine": {"args": {"disable_custom_all_reduce": False}}}))
+    monkeypatch.setattr(X, "WORKLOAD_PATH", workload)
+    trees_of = {"served": TREES, "served_again": TREES}
+    monkeypatch.setattr(X, "spawn_ranks", _nvls_spawn(trees_of))
+    out, node = tmp_path / "out", tmp_path / "node.json"
+    argv = ["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--register", str(node)]
+    assert X.main(argv) == 0
+    doc = json.loads((out / X.RECORD).read_text())
+    assert set(doc["cases"]) == {"probe/M171", "again/M171", "nccl_probe/M172", "nccl_again/M172"} and doc["register"] == {"ok": True}
+    rec = T.check_node_record(json.loads(node.read_text()), cited=False)
+    assert T.node_key(rec) == (H200, X.WORLD, T.multimem_trees(TREES, X.WORLD), True) and rec["versions"]["nccl"] == "2.29.7+cuda12.9"
+    assert rec["nccl"]["fit"] == "f32" and [(s["M"], s["algo"], s["proto"], s["channels"], len(s["runs"])) for s in rec["nccl"]["sizes"]] == [
+        (172, "NVLS", "SIMPLE", "0..15", 1)]
+    assert [(r["route"], r["lo"], r["hi"]) for r in rec["routes"]] == [("pynccl_comm", 172, 172), ("symm_mem_comm", 171, 171)]
+    assert rec["multimem"]["probes"] == [[N, 171]] and rec["source"] == [{"run_record": None, "commit": "c0ffee"}]
+    assert any(line.startswith(f"GLM53-TP8-NODE-RECORD GO {node}") for line in capsys.readouterr().out.splitlines())
+    node.unlink()
+    trees_of["served_again"] = (BALANCED,) * 8
+    assert X.main(argv) == 1
+    assert not node.exists() and "GLM53-TP8-NODE-RECORD NO-GO" in capsys.readouterr().out
 
 
 def test_a_failed_gate_runs_nothing(tmp_path, monkeypatch, capsys) -> None:

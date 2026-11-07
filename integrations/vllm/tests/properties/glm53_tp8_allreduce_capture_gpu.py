@@ -70,10 +70,15 @@ decoded whole into runs whose model fits every word, the same words in both sets
 those M GO at the runs.  ``coverage`` lists, per setting, hidden size and route, the token counts whose launches were GO: what
 `tp_allreduce.CAPTURED` may then cite, with this run's id.
 
+The multimem trees are the node's, not the H200's, so ``--register RECORD.json`` runs only `REGISTER_PHASES` (a few minutes) and
+writes the node's record (`node_record`, `tp_allreduce.check_node_record`) when `register_verdict` holds: its device and
+versions, each owner's tree and FTZ, NCCL's fit, tuning and runs past 64 MiB, and the routes its probes showed.  Added to
+`tp_allreduce.NODE_FILE` with its run record, it keys symmetric memory's and NVLS's routes on that node's tree.
+
     cd integrations/vllm; PY=/workspace/cp/venv312/bin/python  # the H200 pod's venv; PYTHONPATH as verity_vllm/ops/pod_bootstrap.sh sets it
     export CUDA_HOME=/usr/local/cuda PATH=/workspace/cp/venv312/bin:/usr/local/cuda/bin:$PATH
     $PY tests/properties/glm53_tp8_allreduce_capture_gpu.py --out DIR [--scratch DIR] [--quick] [--served workload|custom-off]
-        [--only fused,allreduce,probe,again,switch,h7168,h7168_probe,nccl_probe,nccl_again]
+        [--only fused,allreduce,probe,again,switch,h7168,h7168_probe,nccl_probe,nccl_again] [--register RECORD.json]
 """
 from __future__ import annotations
 
@@ -155,6 +160,8 @@ SPAWN_OF = {"fused": "served", "allreduce": "served", "probe": "served", "again"
             "h7168": "h7168", "h7168_probe": "h7168", "nccl_probe": "served", "nccl_again": "served_again"}
 PROBE_PHASES = ("probe", "again", "h7168_probe")
 NCCL_PROBE_PHASES = ("nccl_probe", "nccl_again")
+#: ``--register``'s phases: the multimem and NCCL probes in both sets of rank processes, all a node record needs
+REGISTER_PHASES = ("probe", "again", "nccl_probe", "nccl_again")
 GLM_SPAWNS = ("served", "served_again", "switch")
 #: each rank's NCCL log: its init (version, rings, trees, NVLS), its graph search and each collective's tuning choice
 NCCL_LOG_ENV = {"NCCL_DEBUG": "INFO", "NCCL_DEBUG_SUBSYS": "INIT,TUNING,GRAPH"}
@@ -1332,6 +1339,80 @@ def nccl_analysis(doc_cases: list[dict[str, Any]]) -> dict[str, Any]:
     return {"per_probe": per, "again_words_equal": again_same, "agree": agree, "runs": runs}
 
 
+def _nccl_tunings(doc: dict[str, Any], M: int) -> set[tuple]:
+    """The (algorithm, protocol, channels) NCCL's logs show for its all-reduces of M tokens."""
+    return {(t["algo"], t["proto"], t["channels"]) for t in nccl_choice(doc.get("nccl_log", {}), M * HIDDEN * 2)}
+
+
+def register_verdict(doc: dict[str, Any]) -> dict[str, Any]:
+    """Whether the run holds a node record (`node_record`): the gate, the bindings, both served spawns' every rank and dispatch,
+    every multimem probe GO, its trees one per owner and FTZ decided, the same in both sets of rank processes, and the ``nccl``
+    verdict unless no NCCL probe ran, with one fit and at each probed M one tuning logged."""
+    probes = [c["key"] for c in doc["case_list"] if c["phase"] in ("probe", "again")]
+    p, need = doc.get("probes", {}), ("served", "served_again")
+    errs = [k for k in doc["errors"] if k.split("/")[0] in (*need, "bind")]
+    runs = doc.get("nccl_probes", {}).get("runs", {})
+    tuned = doc["nccl"]["ok"] is not True or (len({r["fit"] for r in runs.values()}) == 1 and all(
+        len(t := _nccl_tunings(doc, int(M))) == 1 and None not in next(iter(t)) for M in runs))
+    ok = (doc["gate"]["ok"] and doc["bind"].get("ok") is True and not errs and bool(probes)
+          and all(doc["cases"][k]["ok"] for k in probes) and p.get("agree") is True and p.get("trees") is not None
+          and p.get("ftz") is not None and doc["nccl"]["ok"] is not False and tuned
+          and all(len(doc["ranks"].get(s, [])) == WORLD and doc["dispatch"].get(s, {}).get("ok") is True for s in need))
+    return {"ok": bool(ok)}
+
+
+def node_record(doc: dict[str, Any], commit: str | None = None) -> dict[str, Any]:
+    """The node record a run whose `register_verdict` holds shows (`tp_allreduce.check_node_record`, uncited: its route records
+    are the run's, added with it): the gate's device and driver, the versions, the probes' trees, FTZ and [N, M] (h7168's when its
+    verdict holds at the same trees), NCCL's fit and per probed M its tuning and runs when its verdict holds, and per (setting, N,
+    route) of symmetric memory's, and NCCL's when it is one f32 sum on one tree (NVLS, `tp_allreduce.nvls_tree`), the fewest and
+    most tokens of its launches, every one GO."""
+    g, env, p = doc["gate"], doc["environment"], doc["probes"]
+    h7168 = doc["h7168"].get("ok") is True and doc["h7168"].get("same_as_glm53") is True
+    spawns, logs = ("served", "served_again", *(("h7168",) if h7168 else ())), doc.get("nccl_log", {})
+    nccl, nvls = None, False
+    if doc["nccl"]["ok"]:
+        runs = sorted(doc["nccl_probes"]["runs"].items(), key=lambda kv: int(kv[0]))
+        sizes = []
+        for M, r in runs:
+            ((algo, proto, channels),) = _nccl_tunings(doc, int(M))
+            sizes.append({"N": HIDDEN, "M": int(M), "bytes": int(M) * HIDDEN * 2, "algo": algo, "proto": proto, "channels": channels,
+                          "runs": [list(x) for x in r["runs"]], "trees": r["trees"]})
+        (fit,) = {r["fit"] for _, r in runs}
+        nccl = json.loads(json.dumps({"fit": fit, "sizes": sizes}))
+        try:
+            nvls = T.nvls_tree(nccl, WORLD) is not None
+        except ValueError:
+            nvls = False
+    spans: dict[tuple[str, int, str], list[tuple[int, bool]]] = {}
+    for c in doc["case_list"]:
+        route = c.get("comm")
+        if c["spawn"] in spawns and (route == "symm_mem_comm" or (route == "pynccl_comm" and nvls)):
+            spans.setdefault((c["setting"], c["H"], route), []).append((c["M"], doc["cases"][c["key"]]["ok"]))
+    phases = ("probe", "again", *(("h7168_probe",) if h7168 else ()))
+    versions = sorted({v for log in logs.values() for v in log.get("version", [])})
+    rec = {"schema": T.NODE_SCHEMA, "device": {"name": g["name"], "compute_capability": g["compute_cap"], "sms": g["sms"]},
+           "world": WORLD, "versions": {"driver": g.get("driver"), "nccl": versions[0] if len(versions) == 1 else None,
+                                        **{k: env.get(k) for k in ("torch", "vllm", "flashinfer")}},
+           "multimem": {"trees": p["trees"], "ftz": p["ftz"],
+                        "probes": sorted({(c["H"], c["M"]) for c in doc["case_list"] if c["phase"] in phases})},
+           "nccl": nccl,
+           "routes": [{"setting": s, "N": n, "route": r, "lo": min(m for m, _ in ms), "hi": max(m for m, _ in ms), "run_records": []}
+                      for (s, n, r), ms in sorted(spans.items()) if all(ok for _, ok in ms)],
+           "source": [{"run_record": None, "commit": commit}]}
+    rec["multimem"]["probes"] = [list(x) for x in rec["multimem"]["probes"]]
+    return T.check_node_record(json.loads(json.dumps(rec)), cited=False)
+
+
+def _commit() -> str | None:
+    """The source's commit, or None outside a git checkout (a run's record names it)."""
+    try:
+        r = C._run(["git", "rev-parse", "HEAD"], cwd=Path(__file__).parent)
+    except OSError:
+        return None
+    return r.stdout.strip() or None if r.returncode == 0 else None
+
+
 def switch_cost(doc: dict[str, Any]) -> dict[str, float]:
     """Each M's time switched (the custom all-reduce) over served (multimem)."""
     served = {c["M"]: c.get("us") for c in doc["cases"].values() if c["spawn"] == "served" and c["path"] and "symm_mem_comm" in c["path"]}
@@ -1477,6 +1558,16 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     doc["coverage"] = coverage(doc, ok)
     for row in doc["coverage"]:
         print(f"[glm53-tp8-ar] covered {row['setting']} N={row['N']} {row['route']} M={row['M']}", flush=True)
+    if getattr(a, "register", None):
+        doc["register"] = register_verdict(doc)
+        if doc["register"]["ok"]:
+            rec = node_record(doc, _commit())
+            Path(a.register).write_text(json.dumps(rec, indent=1) + "\n")
+            print(f"GLM53-TP8-NODE-RECORD GO {a.register} trees={'|'.join(sorted({tree_str(t) for t in trees}))} ftz={ftz} "
+                  f"nccl={rec['nccl'] and rec['nccl']['fit']} routes={[(r['route'], r['lo'], r['hi']) for r in rec['routes']]}",
+                  flush=True)
+        else:
+            print("GLM53-TP8-NODE-RECORD NO-GO: no node record", flush=True)
     doc = seal_record(doc, ok)
     (outdir / RECORD).write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
@@ -1506,9 +1597,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--served", choices=SERVED, default="workload",
                     help="the served spawns' setting: the workload's disable_custom_all_reduce (default), or custom-off, the two GO "
                          "runs' (tp_allreduce.CAPTURE_RUNS)")
-    ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)}")
+    ap.add_argument("--only", default=None, help=f"comma list of phases: {', '.join(PHASES)} (default all; --register's "
+                                                  f"{', '.join(REGISTER_PHASES)})")
+    ap.add_argument("--register", default=None, metavar="RECORD.json",
+                    help="write this node's record (tp_allreduce.check_node_record) there when its probes hold one; exit 0 then")
     a = ap.parse_args(argv)
-    return 0 if run(a)["ok"] else 1
+    a.only = a.only or ",".join(REGISTER_PHASES if a.register else PHASES)
+    doc = run(a)
+    return 0 if (doc["register"]["ok"] if a.register else doc["ok"]) else 1
 
 
 if __name__ == "__main__":
