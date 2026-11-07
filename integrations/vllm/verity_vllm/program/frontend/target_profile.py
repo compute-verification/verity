@@ -24,6 +24,7 @@ from dataclasses import asdict, dataclass, field, replace
 from typing import TYPE_CHECKING, Any
 
 from verity_vllm.config import DEFAULT_ROW_PROTOCOLS, VLLM, parse_protocols
+from verity_vllm.program.frontend.compilations import COMPILATIONS
 from verity_vllm.program.frontend.kernel_readback import applied_kernels, fp8_block_gemm_kernel_of, int8_exact_of, moe_experts_class_of  # noqa: F401
 
 if TYPE_CHECKING:
@@ -79,10 +80,8 @@ class TargetProfile:
                            The Program itself is DERIVED eagerly by construction (`engine_args(execution=False)` omits the compile knobs);
                            what the declaration claims for the compiled execution is stated in `modelled_engine()` (boundary-level
                            conformance on committed bytes; fused region == composed relations NOT established).
-                           `"breakable"` = no torch.compile: vLLM's breakable CUDA graphs (`VLLM_USE_BREAKABLE_CUDAGRAPH=1`, mode NONE)
-                           replay the eager kernels at the declared capture sizes, attention an eager break; applied as `enforce_eager=False,
-                           compilation_config={"cudagraph_mode", "cudagraph_capture_sizes"}` and the env switch (`env()`); the
-                           execution label is `compiled`, the Program the eager one at the padded tokens (`predict.dsa`).
+                           `"breakable"`: no torch.compile, the eager kernels replayed from breakable CUDA graphs at the declared
+                           capture sizes (`compilations`); execution label `compiled`, the eager Program at the padded tokens.
                            Omitted from `to_json()` when None: eager profiles serialise (and digest) exactly as before.
     fp8_block_gemm      -> env `VLLM_USE_DEEP_GEMM`: the ONLY knob of the pinned vLLM's block-scaled FP8 linear kernel choice
                            (`kernels/linear._POSSIBLE_FP8_BLOCK_KERNELS[CUDA]`, first that `can_implement`: FlashInfer-DeepGEMM,
@@ -177,29 +176,7 @@ class TargetProfile:
     flash_attn_version: int | None = None
     compilation: str | None = None
 
-    #: the admitted compiled executions and the vLLM facts each applies / declares (`vllm/config/compilation.py`)
-    #: keys from GP-01's COMPILATION_FACT_KEYS (mode, cudagraph_mode, capture_sizes, use_inductor_graph_partition, compile_cache) in the run
-    #: header's read-back form (vllm_adapter.compilation_facts); `capture_sizes` (depends on the row's batch) and `compile_cache` (a process
-    #: switch; cached and fresh Inductor graphs are the same code) are NOT declared = not constrained (GM-01 compares only keys both sides carry)
-    # `piecewise` = vLLM's PRODUCTION DEFAULT compiled configuration (default Inductor config: fp32 carried through
-    # the fused regions) -- the panel's bi-compiled workloads; its Program is P_compiled at Inductor-kernel granularity (S1/S2).  `piecewise-emu`
-    # = the SEPARATE declared specialization with Inductor emulate_precision_casts (the eager roundings performed inside the fused kernels;
-    # a different numerical computation) -- not a panel workload unless added by a 7-field note.  `breakable` = what vLLM serves
-    # for the architectures it defaults to breakable CUDA graphs (`DEFAULT_BREAKABLE_CUDAGRAPH_ARCHITECTURES`, GLM-5.3's among them):
-    # `VLLM_USE_BREAKABLE_CUDAGRAPH` forces CompilationMode NONE (config/vllm.py:721-737), so the eager kernels run, captured per padded
-    # batch, with attention and the DSA indexer eager breaks on the real batch (compilation/breakable_cudagraph.py); the capture sizes
-    # are applied and declared, since every captured launch-dependent selection reads them (`targets.graph_tokens`): vLLM's default on
-    # cc 9.0 at class G's max_num_seqs 256 (`VllmConfig._set_cudagraph_sizes`: up to min(2 * 256, 512), by 8 below 256, by 16 above).
-    COMPILATIONS = {"piecewise": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
-                                  "emulate_precision_casts": False,
-                                  "attention": "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"},
-                    "piecewise-emu": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
-                                      "emulate_precision_casts": True,
-                                      "attention": "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"},
-                    "breakable": {"mode": "NONE", "cudagraph_mode": "FULL_AND_PIECEWISE",
-                                  "capture_sizes": [1, 2, 4, *range(8, 256, 8), *range(256, 513, 16)],
-                                  "use_inductor_graph_partition": False, "emulate_precision_casts": False, "breakable": True,
-                                  "attention": "eager breaks (eager_break_during_capture) on the real batch between captured segments"}}
+    COMPILATIONS = COMPILATIONS  # the admitted compiled executions (`compilations`)
     fp8_block_gemm: str | None = None
     int8_exact: str | None = None        # the layers on exact int8 (None = none; see the doc); applied and read back
     #: the fused-MoE experts kernel (None = vLLM's selection; see the doc); applied and read back
@@ -457,10 +434,9 @@ class TargetProfile:
         if execution and self.compilation is not None:
             c = self.COMPILATIONS[self.compilation]
             kw["enforce_eager"] = False
-            kw["compilation_config"] = ({"cudagraph_mode": c["cudagraph_mode"], "cudagraph_capture_sizes": list(c["capture_sizes"])}
-                                        if c.get("breakable") else
-                                        {"cudagraph_mode": c["cudagraph_mode"],
-                                         "inductor_compile_config": {"emulate_precision_casts": bool(c["emulate_precision_casts"])}})
+            kw["compilation_config"] = {"cudagraph_mode": c["cudagraph_mode"], **(
+                {"cudagraph_capture_sizes": list(c["capture_sizes"])} if c.get("breakable") else
+                {"inductor_compile_config": {"emulate_precision_casts": bool(c["emulate_precision_casts"])}})}
         if execution and self.async_scheduling is not None:
             # an EXPLICIT declaration configures the engine for the declared scheduler (vLLM still resolves and the header attests the
             # read-back: `resolved_async_scheduling`, compared with the Program's declaration by GM-01 G1); None leaves vLLM's own resolution
@@ -474,12 +450,10 @@ class TargetProfile:
         sampled ids checked on the committed bytes), kernel interiors Inductor-fused and NOT certified launch-by-launch."""
         if self.compilation is None:
             return {"enforce_eager": True}
-        if self.COMPILATIONS[self.compilation].get("breakable"):
+        if self.graph_capture_sizes():
             return {"enforce_eager": False, "compilation": {**self.COMPILATIONS[self.compilation], "profile": self.compilation},
-                    "program_derivation": "the eager Program's Definitions at the step's padded tokens (targets.graph_tokens) for every "
-                                          "captured launch-dependent selection; the indexer, sparse MLA and logits at the real batch",
-                    "claim": "the eager kernels replayed from breakable CUDA graphs (no torch.compile, no Inductor): the same Definitions as "
-                             "eager, bound at the capture size each step pads to"}
+                    "program_derivation": "the eager Program's Definitions, each captured launch-dependent selection at the step's padded tokens",
+                    "claim": "the eager kernels replayed from breakable CUDA graphs (no torch.compile): eager's Definitions at the capture size"}
         return {"enforce_eager": False, "compilation": {**self.COMPILATIONS[self.compilation], "profile": self.compilation},
                 "program_derivation": ("P_compiled: one registered relation per Inductor-generated kernel of the production artifact (compiled_relations.py; "
                                        "GEMM/attention/lm_head existing Definitions; fused norm/act/RoPE regions new Definitions), applicability pinned by the "
@@ -645,8 +619,7 @@ class TargetProfile:
         return env
 
     def graph_capture_sizes(self) -> tuple[int, ...]:
-        """The capture sizes of the breakable CUDA graphs this profile declares, to which a step's captured kernels run padded
-        (`targets.graph_tokens`); () for an execution without them."""
+        """The breakable CUDA graphs' capture sizes, which a step's captured kernels run padded to (`targets.graph_tokens`); () if none."""
         c = self.COMPILATIONS[self.compilation] if self.compilation is not None else {}
         return tuple(c["capture_sizes"]) if c.get("breakable") else ()
 

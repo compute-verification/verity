@@ -29,8 +29,7 @@ from verity_vllm.engine import env as engine_env
 from verity_vllm.engine.profiles import transport
 
 SCHEMA = "verity-vllm/served-switches/v1"
-#: The default of a switch vLLM resolves from the rest of the config: whatever it resolves is its own (`VLLM_USE_BREAKABLE_CUDAGRAPH`:
-#: on for the architectures in vLLM's DEFAULT_BREAKABLE_CUDAGRAPH_ARCHITECTURES unless set, config/vllm.py:721-737).
+#: The default of a switch vLLM resolves from the rest of the config: whatever it resolves is its own.
 RESOLVED = "resolved by vLLM"
 #: Each switch as vLLM leaves it when nothing sets it (vllm/envs.py, vllm/config/).
 DEFAULTS: dict[str, Any] = {
@@ -39,7 +38,6 @@ DEFAULTS: dict[str, Any] = {
     "VLLM_DISABLE_SHARED_EXPERTS_STREAM": False,
     "VLLM_USE_FLASHINFER_SAMPLER": True,
     "VLLM_USE_V2_MODEL_RUNNER": RESOLVED,
-    "VLLM_USE_BREAKABLE_CUDAGRAPH": RESOLVED,
     "NCCL_P2P_DISABLE": None,
     "disable_custom_all_reduce": False,
     "enforce_eager": False,
@@ -50,7 +48,7 @@ DEFAULTS: dict[str, Any] = {
     "moe_backend": "auto",
 }
 _FLAGS = ("VLLM_BATCH_INVARIANT", "VLLM_USE_DEEP_GEMM", "VLLM_DISABLE_SHARED_EXPERTS_STREAM", "VLLM_USE_FLASHINFER_SAMPLER",
-          "VLLM_USE_V2_MODEL_RUNNER", "VLLM_USE_BREAKABLE_CUDAGRAPH")
+          "VLLM_USE_V2_MODEL_RUNNER")
 ENVS = (*_FLAGS, "NCCL_P2P_DISABLE")
 #: Where engine arguments set each config switch: a key of `LLM(**kw)`, or a key of one of its config dicts.
 ARGS: dict[str, tuple[tuple[str, ...], ...]] = {

@@ -353,6 +353,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
     (name; the pinned vLLM's IntEnum str() is the number, recorded too), CUDAGraphMode, capture sizes, inductor graph partition, enforce_eager,
     compile-cache switch.  Written into the run header's `compilation` block beside the profile's `effective_compilation` (the global match's G1
     compares a compiled Program's declared facts against it) and into commit_delta's versions.json (control and treatment must agree)."""
+    from verity_vllm.engine import engine_profile as prof
     out: dict[str, Any] = {}
     try:
         vc = llm.llm_engine.vllm_config
@@ -368,7 +369,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
         out["use_inductor_graph_partition"] = bool(getattr(cc, "use_inductor_graph_partition", False))
         out["backend"] = str(getattr(cc, "backend", None) or ("inductor" if out["mode_value"] == 3 else None))
         out["enforce_eager"] = bool(vc.model_config.enforce_eager)
-        out["breakable_cudagraph"] = os.environ.get("VLLM_USE_BREAKABLE_CUDAGRAPH") == "1"
+        out["breakable_cudagraph"] = prof.breakable_cudagraph()
         out["compile_cache"] = "disabled" if os.environ.get("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
         # the Inductor config the pieces were compiled with: emulate_precision_casts makes the compiled kernels
         # perform the bf16 roundings the Program specifies at every module/op boundary (Inductor otherwise carries fp32 through fused
