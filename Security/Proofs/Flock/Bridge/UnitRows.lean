@@ -154,14 +154,13 @@ theorem constGate_mem_io (u : Fin n) (hupv : 0 < D.unroll.upv) : constGate D hU 
     · exact List.mem_singleton.2 rfl
     · rename_i h
       exact absurd (Nat.zero_mod _) h
+  have hread : (constGate D hU n u : Fin (keyCircuit D hU n).N) ∈ (coreOp ((keyCircuit D hU n).op
+      ((unitInst D hU n u).wire ((Placed.circuitRows D.unroll hU).comp ⟨0, h0⟩)))).args.toFinset := by
+    rw [(unitInst D hU n u).op ⟨0, h0⟩]
+    simp only [coreOp, Audit.Op.args, List.mem_toFinset, List.mem_append, List.mem_map]
+    exact Or.inl ⟨_, hrow, rfl⟩
   rw [Verity.Partition.io, Finset.mem_filter]
-  refine ⟨hcom, Or.inr ⟨(unitInst D hU n u).wire ((Placed.circuitRows D.unroll hU).comp ⟨0, h0⟩),
-    (unitInst D hU n u).mem ⟨0, h0⟩, ?_⟩⟩
-  show constGate D hU n u ∈ (coreOp ((keyCircuit D hU n).op
-    ((unitInst D hU n u).wire ((Placed.circuitRows D.unroll hU).comp ⟨0, h0⟩)))).args.toFinset
-  rw [(unitInst D hU n u).op ⟨0, h0⟩]
-  simp only [coreOp, Audit.Op.args, List.mem_toFinset, List.mem_append, List.mem_map]
-  exact Or.inl ⟨_, hrow, rfl⟩
+  exact ⟨hcom, Or.inr ⟨_, (unitInst D hU n u).mem ⟨0, h0⟩, hread⟩⟩
 
 /-- **A copy's gate on a returned output's column is committed**: bit `t` of leaf `jj` of copy `j`'s returned outputs
 (`Layout.outCol`) is a gate of the circuit's outputs (`Layout.outsOf`). -/
@@ -169,17 +168,16 @@ theorem copyGate_mem_committed (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (c 
     (hjj : jj < (D.unroll.leavesOut.getD j #[]).size) (ht : t < 16) (hc : c.val = Layout.outCol D.unroll jj t)
     (hlo : (Rows.ofNet hU).nIn ≤ c.val) (hhi : c.val < (Rows.ofNet hU).nIn + (Rows.ofNet hU).nComp) :
     copyGate D hU n u hj c ∈ (partsOf D hU n).committed := by
-  refine Verity.Partition.mem_committed_of_output _ ?_
-  show copyGate D hU n u hj c ∈ Layout.outsOf D.unroll hU n
-  unfold Layout.outsOf
-  rw [Finset.mem_filter]
-  refine ⟨Finset.mem_univ _, u, Fin.cast (congrArg Rows.w (rows_keyProg D hU n u)).symm
-    ((Rows.ofNet hU).stackCol D.unroll.upv hj c), (unitInst_wire D hU n u _).symm, j, jj, t, hj, hjj, ht,
-    by rw [← hc]; exact hlo, by rw [← hc]; exact hhi, ?_⟩
-  show ((Rows.ofNet hU).stackCol D.unroll.upv hj c).val = _
-  unfold Rows.stackCol
-  rw [dif_neg (show ¬ c.val < (Rows.ofNet hU).nIn by omega), dif_pos hhi]
-  dsimp only
-  rw [hc]
+  have hx : ((Rows.ofNet hU).stackCol D.unroll.upv hj c).val = D.unroll.upv * (Rows.ofNet hU).nIn +
+      (j * ((Rows.ofNet hU).nComp + 1) + (1 + (Layout.outCol D.unroll jj t - (Rows.ofNet hU).nIn))) := by
+    unfold Rows.stackCol
+    rw [dif_neg (show ¬ c.val < (Rows.ofNet hU).nIn by omega), dif_pos hhi, ← hc]
+  have hout : (copyGate D hU n u hj c : Fin (Layout.keyN D.unroll hU n)) ∈ Layout.outsOf D.unroll hU n := by
+    unfold Layout.outsOf
+    rw [Finset.mem_filter]
+    exact ⟨Finset.mem_univ _, u, Fin.cast (congrArg Rows.w (rows_keyProg D hU n u)).symm
+      ((Rows.ofNet hU).stackCol D.unroll.upv hj c), (unitInst_wire D hU n u _).symm, j, jj, t, hj, hjj, ht,
+      hc ▸ hlo, hc ▸ hhi, hx⟩
+  exact Verity.Partition.mem_committed_of_output _ hout
 
 end Flock.Bridge
