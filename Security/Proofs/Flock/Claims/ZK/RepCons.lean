@@ -3,6 +3,13 @@ module
 public import Proofs.Flock.Claims.ZK.RepRet
 public import Proofs.Flock.Claims.ZK.L0PinFrame
 public import Proofs.Flock.Claims.Complete.Json.Goals
+public import Proofs.Flock.Claims.ZK.L0PinSwitch
+public import Proofs.Flock.Claims.ZK.FinishZc
+public import Proofs.Flock.Claims.ZK.PrefixLive
+public import Proofs.Flock.Claims.ZK.FinishTau
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.ZK.RepReplay
 
 /-!
 # The ZK server's `repCons` returns where the cut rep does
