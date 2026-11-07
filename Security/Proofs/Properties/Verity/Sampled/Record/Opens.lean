@@ -210,8 +210,7 @@ variable {A} {p : _root_.SampledProofs.OneStageZk.Params} {bs : Core.Blobs}
 
 theorem zkTags_inputsAt (hc1 : A.I.count = 1) :
     Flock.Witness.zkTags (inputsAt A p bs) = FlockSoundness.Discharge.ZkExec.zkTags A.I := by
-  unfold FlockSoundness.Discharge.ZkExec.zkTags FlockSoundness.Discharge.ZkExec.zkCoins Flock.Witness.zkTags
-    Flock.Witness.zkCoins
+  unfold FlockSoundness.Discharge.ZkExec.zkTags Flock.Witness.zkTags
   rw [hc1]
   rfl
 
