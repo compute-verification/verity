@@ -57,5 +57,4 @@ def test_rows_that_do_not_tile_the_batches_bind_nothing():
                                                         "(field k, one gate a leaf)"]
     out = run_input_bindings({"requests": [_request(0, "wl-a", [("prompt", 0, 4)])]}, [a])
     assert out["bindings"] == [] and out["refused"] == ["r0: 1 run values and no `run` Input in the address map"]
-    assert run_input_bindings({"requests": [_request(0, "wl-a", [("prompt", 0, 4)])]}, []) == {
-        "schema": "verity/run-input-bindings/v1", "bindings": [], "refused": []}
+    assert run_input_bindings({"requests": [_request(0, "wl-a", [("prompt", 0, 4)])]}, []) == {"bindings": [], "refused": []}

@@ -1091,9 +1091,6 @@ def fold_worker(a: Options) -> int:
 # the root's `run` Inputs
 # ---------------------------------------------------------------------------------------------------------
 
-RUN_BINDINGS_SCHEMA = "verity/run-input-bindings/v1"
-
-
 def run_input_bindings(address_map: dict, identities: list[dict], *, rank: int = 0) -> dict:
     """Each request's `run` Input batches of the workload root, bound to the committed `run_values` identities of the required
     manifest (`identities`, `RUN_FAMILY`, rank `rank`).  `run` (`RUN_PARAM`) is a Record of one `Array<leaves, Value<1>>` per field, so
@@ -1101,11 +1098,11 @@ def run_input_bindings(address_map: dict, identities: list[dict], *, rank: int =
     alone for one field), whose gates `WorkloadProgram.address_map` gives; field k is the request's row whose `leaves` are the k-th
     of its `run`, and its batch has one gate a leaf.  A request whose rows don't tile its `run` batch by batch, or whose rows the map
     has no `run` for, is refused by name and binds nothing.
-    -> {"schema", "bindings": [{request_id, input, field, gates, identity, engine_step}], "refused": [str]}"""
+    -> {"bindings": [{request_id, input, field, gates, identity, engine_step}], "refused": [str]}"""
     batches: dict[str, list[tuple[int, str, int, int]]] = defaultdict(list)
-    for r in address_map.get("requests") or []:
-        for i in r.get("inputs") or []:
-            name = str(i.get("name"))
+    for r in address_map["requests"]:
+        for i in r["inputs"]:
+            name = str(i["name"])
             if name == RUN_PARAM or (name.startswith(RUN_PARAM + "[") and name.endswith("]") and name[len(RUN_PARAM) + 1:-1].isdigit()):
                 k = int(name[len(RUN_PARAM) + 1:-1]) if name != RUN_PARAM else 0
                 batches[f"r{int(r['index'])}"].append((k, str(i["global"]), int(i["gates"][0]), int(i["gates"][1])))
@@ -1134,7 +1131,7 @@ def run_input_bindings(address_map: dict, identities: list[dict], *, rank: int =
         for row, (k, param, a, b) in zip(rows, held):
             bindings.append({"request_id": rid, "input": param, "field": f"{row['op_path']}/{row['output_member']}", "gates": [a, b],
                              "identity": canonical_identity(row), "engine_step": row.get("engine_step")})
-    return {"schema": RUN_BINDINGS_SCHEMA, "bindings": bindings, "refused": refused}
+    return {"bindings": bindings, "refused": refused}
 
 
 _JSON_PRIMS = frozenset((str, int, float, bool, type(None)))
