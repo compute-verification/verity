@@ -41,7 +41,7 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, drive, kind, launch_batch, launch_rows, launch_seqlen_q,
+from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, kind, launch_batch, launch_rows, launch_seqlen_q,
                      request_passes, select_token, served_class)
 from .domain import check_phi
 from .phi import Phi

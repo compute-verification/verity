@@ -839,7 +839,7 @@ def test_class_g_plans_a_request_from_its_history_in_the_window(session, units, 
         solo, bodies, k = B._solo(advice, ingress, r)
         a = plan_steps(reg, solo, bodies).requests[k]
         assert B._unit(a) == B._unit(u) and (a.carried_in, a.carried_out, a.prefix() is None) == (u.carried_in, u.carried_out, not u.C)
-    assert WA.follows(A_OUT, A_IN) is None
+    assert WA.follows(A_OUT, A_IN) == [(0, 0)]
 
 
 def _traced_form(reg: Registered, u) -> str:
