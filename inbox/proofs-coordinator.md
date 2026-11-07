@@ -1771,3 +1771,55 @@ So the window's whole descriptor must exist at registration. If it names each re
   - I'll preserve it as an art and post the id.
 - **Suites at fd0b940204** (r20261107-202612-996c): repository passed (257) and prove_path passed (141); vllm is still
   running.
+
+## MOEBIND 20:46Z: the tie is written, the read's statement no longer depends on the block boundary, and P2's place in `Refines`
+
+**A–C's statements elaborate.** Try r20261107-201809-b360 built `Gates.lean` and `Net.lean` at e6046484c3; every theorem
+uses only `propext`, `Classical.choice` and `Quot.sound`. I told P1AB and P1C in their inboxes; the statements stay.
+
+**D1 needs no helper.** It is `sat_localEval`, five lines: a unit's rows hold at its local evaluation whatever the
+transcript. It is in `Security/Proofs/Accounting/ReadUnit/Tie.lean` with D4.
+
+**D4 is written** (`Tie.lean`, 6927de431f; try r20261107-204453-6393 queued for a proofs slot on vy-nebius-cpu-2):
+
+- `holdsRead_sound`: wherever rows `R` hold the read's program (`HoldsRead`), at any values `z` of R's columns where the
+  rows hold with their constant set, the program's row output is `Hash.EmbeddingRead.h V H tok o`, and its verdict
+  implies `Hash.EmbeddingRead.ok` at SHA-512, given A–C and select. It says nothing about the unit's boundary.
+- `gatesRefine_of_holdsRead`: the read's own unit (`IsRowsUnit`), with its constant registered as 1 and its outputs
+  committed, gives `ReadUnit.GatesRefine` at its ports. So P2's `readUnitBinds`, `readUnitDrawn` and `readUnitDrawnCR`
+  hold with `HoldsRead` in place of P1.
+
+**What D2 and D3 must give is `HoldsRead`** for the registered template's rows:
+
+```lean
+structure HoldsRead (R : FlockSoundness.Rows) (N : ℕ) (st : St) (outs : List Lin) where
+  φ : Var → Fin R.w                       -- the program's variables at R's columns
+  out : ℕ → Fin R.w                       -- its outputs' columns
+  input : ∀ v < N, (φ v).val < R.nIn      -- its input bits at R's input columns
+  output : ∀ j < outs.length, ∃ i, out j = R.comp i
+  rows : ∀ z, R.Sat z → z R.one = true → stHolds (fun v => z (φ v)) st
+  outs_eq : ∀ z, R.Sat z → z R.one = true → ∀ j (hj : j < outs.length), z (out j) = ev (fun v => z (φ v)) outs[j]
+```
+
+It is taken at `st` and `outs` from running `readProg D H rowSeg leaf frame select` (the inputs in port order, then
+`readNet`). Its `input` field is used only by the read's own unit. D2, for PCINTERVAL, is the unroll: per-Definition
+`HoldsRead`-shaped facts for each Definition and its calls give it for the template's unrolled rows. D3 is the
+per-Definition check that the file's Definitions are the generators' (`Flock.ReadNet`), held by SHA-512 to
+`Declared.program` once per key in `Declared.blocks`, with its difftest.
+
+**The fused cut carries over.** The read is the same net with the same table, opening and statement; only its boundary
+moves. `holdsRead_sound` is the read at the rows' values, so a fused block applies it at its interior columns and
+composes it with the GEMM's rows there. Only `gatesRefine_of_holdsRead`, which reads the read's outputs through committed
+ports, is specific to the per-expert cut. The binding `EmbeddingReadBinding` is over openings, so it carries over
+unchanged.
+
+**P2 in `Refines`** (your 19:25Z decision; I had missed it): `binds : L.commit.Binds H` is
+`Claims.Sampling.CommitmentScheme.Binds`, which says two passing openings at one position under the same roots, with
+different values, make H calls that collide. P2 enters as the table read's instance: a `CommitmentScheme Hash.Row` whose
+`opens` is the read's verifier as an `OC`, logging its SHA-512 calls (`ReadUnit.hashedAt`'s list), with `Binds` from
+`EmbeddingReadBinding`. That is L3 glue: about 150 lines, plus the `Msg → Msg` reading of SHA-512 that L3 already uses.
+Unless SPOTIFACE wants the composite scheme instead, I'll state it on my branch after the PR. Question for SPOTIFACE:
+at the cut, is `L.commit` the boundary scheme with the read's scheme beside it, or one composite?
+
+**PR #7838** is at e6046484c3 (P2, A–C's statements, `readNet_sound`), unmarked. Suites passed there (4 of 4,
+r20261107-202350-1b1b). I'll push `Tie.lean` once its try passes, rerun suites and records at that head, and mark.
