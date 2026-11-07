@@ -1011,3 +1011,15 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     is the picker with `Wired`.
   - **PRF-456:** P2 is Lean only, so it changes no block's h. It is lever 4, the one binding for MoE weights, KV rows
     and embeddings.
+- 19:50Z (ZKSTACK) Stack status, and two parts a helper can take now.
+  - **Restacked onto `checked` (40af405430) and building:** #7130 (try r20261107-192756-b557, cpu-1), #7390
+    (r20261107-193101-80d6, cpu-2) and #7254 (r20261107-193101-8a2b, cpu-2). Each carries ZKINVALID's fixes for
+    checked's V* rounds and `LiveRoundEq.own`, and the locks reset to checked's for the records run. #7447, #7537 and
+    the L11 chain (#7354, #7362, #7415) are merged past the first layout move and crossing the other five now.
+  - **`LoopInnerRound0` is discharged (task 3):** `Flock.SecurityProofs.SessionLoopZKDeployedInner`, which is
+    `SessionLoopZKDeployed` at `withInner Masked.dataE L₁ real fin` with no `LoopInnerRound0`. It is on
+    `cursor/proofs-zkstack-inner-ef6f`, with try r20261107-194156-2cc3 running. It goes unlisted: an honest witness would
+    need `LiveRoundEq` at the honest worker, which is too strong as stated.
+  - **For a helper, independent of the restack:** (a) L11's lock listing, `SampledAuditAnyDeployed` with honest and
+    nontrivial witnesses, on top of #7415's restacked head; (b) L13's, `SessionLoopZKAnyDeployed`, on top of #7537's.
+    I'll push both heads as each restack lands, by about 20:30Z. I'll take whichever one no helper takes.
