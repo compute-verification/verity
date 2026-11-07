@@ -1,5 +1,35 @@
 # To the proofs coordinator
 
+## 23:31Z from OVERHEADDEF: four more op types gated per token row; the coverage report no longer counts a refused call as gated (#7781, 1f8681c6cd, marked ready)
+
+For goal 3b (the match gate for every kernel call, by type). The 128k long-row coverage (23:09Z) listed some recorded ops as not gated. Four of them now have populations, each gated per token row on the Definition the Program binds:
+
+- the indexer's `wk` and weights projection, recorded as `aten::linear`, on its cuBLAS split-K route (`CublasSplitKGemm_v1`), the same population as `aten::mm`;
+- MLA's absorbs, `aten::bmm` against `W_UK_T` and `W_UV`, on `BatchedGemm_v1{B=8,K=192,N=512}` at the Hopper bf16 dot. `W_UV`'s rows come in the decode-padded layout (the padded decode rows, then the prefill rows), and the gate maps them back to tokens;
+- the first layer's `_C::rms_norm` on `RMSNormCudaVector8_v1` at its launch block;
+- the MoE block's bf16 `aten::add` (the shared and routed experts' outputs) on `ResidualAdd_v1`.
+
+A call of any other form is counted under `AtenLinear_other`, `AtenBmm_other` or `AtenAdd_other`, not staged.
+
+The coverage fix: `gate.json`'s `gated_ops` counted a call as gated by its op name, even when its population had refused it (an NCCL all-reduce, a cuBLAS M past the route table, an `*_other` call). Now a refused call goes under `not_gated_ops`. Smell-check: before this, the report could overstate coverage.
+
+These four are tested only on fake captures (30 local spot tests; quick suites r20261107-232412-4958: 5 of 5 passed). They first meet served values in the 128k gate, which runs on node A after vllm's tick sweep (about 02:40Z) unless you say (c) and I may use node A's CPUs during the sweep. Its order:
+1. step 5611's long rows on their own (the rows past 2,048 keys);
+2. step 5611 in full;
+3. step 1980 in full.
+
+Each runs the gate on one coin-drawn instance of every call, with `--checkpoint`.
+
+Still not gated at 128k:
+- DSA logits and the long-row top-k: these wait for CIR-186's mask form;
+- `vocab_parallel_embedding`: its table is too big for one instance;
+- `moe_align_block_size`, and glue (`aten::max`, `sum`, `item`, `to`, `copy_`).
+
+Parts a helper could take, independent of my branch:
+- (a) a recorder hook for DeepGEMM's MQA logits, which is called from Python, so the capture sees only `cooperative_topk`'s logits input;
+- (b) a population for `moe_align_block_size` against the registry's `MoeAlignRanks_v1` and `MoeAlignBlocks_v1`. These were written for the Marlin MoE's align, so the first thing to check is whether they model the FP8 launch's recorded align call;
+- (c) an embedding gate that reads only the drawn row of the table.
+
 ## 23:09Z from OVERHEADDEF: the 128k capture's long rows, and the gate at node A once the sweep ends (not a copy to cpu-1)
 
 - **Change of default:** I'm not doing (b) from my 22:50Z ask. A copy of step 5611 without the checkpoint is about 9 GB a
