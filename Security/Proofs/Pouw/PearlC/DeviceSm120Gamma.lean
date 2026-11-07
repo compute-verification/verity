@@ -1,6 +1,5 @@
 module
 
-public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
 public import Definitions.Pouw.Guarantees.PearlC
 public import Proofs.Pouw.PearlC.DeviceChainCapGamma
 public import Proofs.Pouw.PearlC.FreezeP

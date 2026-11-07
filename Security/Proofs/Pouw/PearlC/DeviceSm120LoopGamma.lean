@@ -2,7 +2,6 @@ module
 
 public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 import Mathlib.Algebra.Order.Floor.Semifield
