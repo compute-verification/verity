@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.OpensTwo
 public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Claims.Sampling.ProgReads
 
 /-!
 # SPOT-Flock's session opens each checked proof block at its replay block
@@ -20,6 +21,13 @@ are the second stage's on `c₀` and `c₁` (`checked_eq`).
 check passes, at a Flock witness in its relation, reveals for each unit the two stages check openings under which its
 proof block is correct on its replay block's values. That is what the session statement's relation, the witness's
 encoding of its openings and the registered reads establish; the run only selects the statement.
+
+**The witness's values** (`WitOpens h`, `stmtOpens`). A checked unit `u` has a proof block `b` in a replay block `ρ`
+with gates `rb` (`mem_checked_lt`, `InScopeTwo`, `replay_block`). `StmtOpens` follows from one pair of values: boundary
+values `W` and interior values `I` that make `b` correct on `ρ`'s values, each that `b`'s correctness needs
+(`Prog.Needs`) revealed by an opening that passes, an interior one of `ρ` under the interior roots, every other under the
+run's roots. Values that agree with those openings agree with `W` and `I` wherever `b`'s correctness reads them
+(`Prog.correct_of_needs`).
 -/
 
 @[expose] public section
@@ -159,5 +167,73 @@ theorem sessionOpensTwo (hs : StmtOpens h) :
     rw [← checked_eq h x hst r]
     exact List.mem_of_getElem? hp
   exact hs x s Pt d m₀ m₁ xS' (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest wF u hx hP hd hin hok hum hck
+
+/-! ## The witness's values -/
+
+theorem mem_checked_lt {g : RegTwo} {N : ℕ} {src₁ src₂ : ByteArray} {u : ℕ} (hu : u ∈ g.checked N src₁ src₂) :
+    u < N := by
+  unfold SamplingDeploy.RegTwo.checked at hu
+  split at hu
+  · exact List.mem_range.1 (List.mem_filter.1 hu).1
+  · exact List.mem_range.1 hu
+
+theorem units_base {x : Msg} {s : AuditStatement} {Pt : Partition} (hx : parse h x = some s)
+    (hP : partition h s = some Pt) : units (base h) x = Pt.blocks.length := by
+  have hx' : (base h).parse x = some s := hx
+  have hP' : (base h).partition s = some Pt := hP
+  unfold SamplingDeploy.units
+  rw [hx']
+  simp [hP']
+
+theorem replay_block {Pt Pρ : Partition} {v ρ : ℕ} (hρ : replayOf Pt Pρ v = some ρ) :
+    ∃ rb, Pρ.blocks[ρ]? = some rb :=
+  ⟨_, List.getElem?_eq_getElem (List.mem_range.1 (List.mem_of_find?_eq_some hρ))⟩
+
+/-- **The session statement's witness holds values that make each checked unit correct**: at a run's statement in the
+two-stage scope, a session statement `xS` that the verifier's check passes and a Flock witness in its relation, each
+unit `u` the two stages check, with proof block `b` in replay block `ρ` of gates `rb`, has boundary values `W` and
+interior values `I` that make `b` correct on `ρ`'s values, and the witness reveals each value `b`'s correctness needs by
+an opening that passes: one of `ρ`'s interior under the interior roots `m₁` states for `ρ`, every other under the run's
+roots. -/
+def WitOpens : Prop :=
+  ∀ x s Pt d (m₀ m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb,
+    parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
+    stmtOk h x m₁ xS c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS wF = true →
+    Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
+    ∃ (W : ℕ → Option Bool) (I : ℕ → Bool), s.prog.Correct (s.prog.refIn rb W I) b ∧
+      ∀ g, s.prog.Needs b g →
+        (g ∈ rb ∧ s.prog.Boundary rb g = false →
+          ∃ q ∈ (code h).reveal s u (seenAt m₀ m₁ xS c₀ c₁ rest) wF,
+            (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 q.1 q.2 = true ∧
+              q.1 = iroots h x (seenAt m₀ m₁ xS c₀ c₁ rest) ρ ∧ q.2.pos = g ∧ q.2.val = I g) ∧
+        (¬(g ∈ rb ∧ s.prog.Boundary rb g = false) →
+          ∃ q ∈ (code h).reveal s u (seenAt m₀ m₁ xS c₀ c₁ rest) wF,
+            (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 q.1 q.2 = true ∧
+              q.1 = s.roots ∧ q.2.pos = g ∧ W g = some q.2.val)
+
+/-- **`StmtOpens` from the witness's values**: values that agree with the openings that pass agree with `W` and `I`
+wherever the proof block's correctness reads them. -/
+theorem stmtOpens (hw : WitOpens h) : StmtOpens h := by
+  intro x s Pt d m₀ m₁ xS c₀ c₁ rest wF u hx hP hd hin hok hu hck
+  have hlt : u < Pt.blocks.length := units_base h hx hP ▸ mem_checked_lt hu
+  obtain ⟨ρ, hρ⟩ := Option.isSome_iff_exists.1 (hin.2.2.2.1 u hlt)
+  obtain ⟨rb, hrb⟩ := replay_block hρ
+  refine ⟨Pt.blocks[u], ρ, rb, List.getElem?_eq_getElem hlt, hρ, hrb, fun val ι hv => ?_⟩
+  obtain ⟨W, I, hc, hcov⟩ := hw x s Pt d m₀ m₁ xS c₀ c₁ rest wF u _ ρ rb hx hP hd hin hok hu hck
+    (List.getElem?_eq_getElem hlt) hρ hrb
+  refine s.prog.correct_of_needs (fun g hg => ?_) hc
+  unfold Prog.refIn
+  by_cases hi : g ∈ rb ∧ s.prog.Boundary rb g = false
+  · obtain ⟨q, hq, hop, hr, hpos, hval⟩ := (hcov g hg).1 hi
+    rw [ite_eq_left hi, ite_eq_left hi, ← hval, ← hpos, (hv q hq hop).2 hr]
+  · obtain ⟨q, hq, hop, hr, hpos, hval⟩ := (hcov g hg).2 hi
+    rw [ite_eq_right hi, ite_eq_right hi, hval, ← hpos, (hv q hq hop).1 hr]
+
+/-- **`SessionOpensTwo` at the deployed two-stage code from the witness's values.** -/
+theorem sessionOpensTwo_of_wit (hw : WitOpens h) :
+    Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
+      (two h) (iroots h) :=
+  sessionOpensTwo h (stmtOpens h hw)
 
 end SpotFlock
