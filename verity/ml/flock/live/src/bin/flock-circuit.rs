@@ -6599,6 +6599,10 @@ fn main() {
     sverify::Lincheck::from_env().unwrap_or_else(|e| refuse(e));
     eprintln!("statement {} instances={} vus_per_block={} blocks={} k_log={} nbl={} m={} regions={} delta={} built in {:.2}s",
               st.c.name, st.n, st.c.g, st.blocks_real, st.c.k_log, st.nbl, st.m, st.regions.len(), st.circuit.da.len() / 2, tb.elapsed().as_secs_f64());
+    // FC_PHASE_TIMES: the block's layout beside the witness's laps (WITNESSCPU, CONVERGE) and the CPU prover's (CPUPHASE)
+    if std::env::var_os("FC_PHASE_TIMES").is_some() {
+        eprintln!("LAYOUT\t{}", json!({"layout": st.c.layout(), "blocks": st.blocks(), "blocks_real": st.blocks_real, "m": st.m}));
+    }
     match cmd.as_str() {
         "selftest" => selftest(&st, &inst, flag("--gpu")),
         "statement" => println!("STATEMENT\t{}", json!({"statement": st.c.statement(), "unit": st.c.name, "instances": st.n,

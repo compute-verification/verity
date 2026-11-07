@@ -31,6 +31,8 @@ F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --feat
 (cd $F && git apply $REPO/verity/ml/flock/flock-zk-b684b12.patch) || exit 1
 # the session verifier's phase timers in the opening (session_verify.rs): clocks only, no check changes
 (cd $F && git apply $REPO/verity/ml/flock/flock-vtime-b684b12.patch) || exit 1
+# the CPU prover's phase timers (FLOCK_PHASE_TIMES, CPUPHASE lines): clocks only
+[ $G = 1 ] || (cd $F && git apply $REPO/verity/ml/flock/flock-ptime-b684b12.patch) || exit 1
 if [ $G = 1 ]; then (cd $F && python3 $REPO/verity/ml/flock/cuda_circuit_patch.py && python3 $REPO/verity/ml/flock/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
 # the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
 [ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"

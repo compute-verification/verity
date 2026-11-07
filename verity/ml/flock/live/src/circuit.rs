@@ -1462,6 +1462,20 @@ impl Composite {
 
     /// Committed rows and AND items per VU, over every circuit but the rows' (a typed template: its root and parts, the
     /// ANDs its types'); a flat circuit's ANDs are its rows with an entry outside its port groups and constant.
+    /// Each range of a block (FC_PHASE_TIMES's LAYOUT line): its circuit and role, slots a block, the slot's log size and
+    /// rows used a slot.
+    pub fn layout(&self) -> Value {
+        let ranges: Vec<Value> = self.ranges.iter().map(|r| match r.kind {
+            Kind::Net(n) => {
+                let role = if n == self.sha_net { "sha512x3" } else if n == self.hm_net { "hm96" } else if n == self.unit_net { "unit" }
+                    else if self.lookups.contains_key(&n) { "lookup" } else { "stage" };
+                json!({"net": self.nets[n].0, "role": role, "count": r.count, "slot_log": r.slot_log, "useful": self.nets[n].1.useful})
+            }
+            Kind::Mask => json!({"net": "mask", "role": "mask", "count": r.count, "slot_log": r.slot_log, "useful": 1usize << r.slot_log}),
+        }).collect();
+        json!({"k_log": self.k_log, "g": self.g, "ranges": ranges})
+    }
+
     pub fn sizes_per_vu(&self) -> (usize, usize) {
         let ours = (0..self.nets.len()).filter(|&n| n != self.sha_net && n != self.hm_net);
         let rows = ours.clone().map(|n| self.per_vu[n] * self.nets[n].1.useful).sum();
@@ -2975,6 +2989,7 @@ impl Stmt {
         let nb = self.blocks();
         let net_of = |n: usize| -> &IrUnitNet { nets.get(&n).copied().unwrap_or(&c.nets[n].1) };
         let count = |n: usize| c.range_of(n).count;
+        let mut laps = PhaseLaps::new("CONVERGE");
         let mut ins: Vec<Vec<Vec<F128>>> = (0..c.nets.len()).map(|n| {
             if n == c.unit_net {
                 (0..nb * count(n)).into_par_iter().map(|x| unit_inputs(x / count(n), x % count(n))).collect()
@@ -2982,15 +2997,18 @@ impl Stmt {
                 vec![vec![F128::ZERO; net_of(n).in_words]; nb * count(n)]
             }
         }).collect();
+        laps.lap("unit_inputs");
         if let Some(f) = row_ins {
             let rv: Vec<_> = (0..nb).into_par_iter().map(f).collect();
             ins[c.sha_net] = rv.iter().flat_map(|x| x.0.iter().cloned()).collect();
             ins[c.hm_net] = rv.into_iter().flat_map(|x| x.1).collect();
         }
+        laps.lap("row_inputs");
         // the rows' wires hold by construction (row_inputs chains natively); the rest converge here
         let row_net = |n: usize| n == c.sha_net || n == c.hm_net;
         let wires: Vec<&Wire> = c.wires.iter().filter(|w| !row_net(w.dst.0)).collect();
         if wires.is_empty() {
+            laps.emit();
             return ins;
         }
         // the slots in the per-VU wire graph's strongly connected components, sources first: a chain of units (GEMM's
@@ -3056,6 +3074,8 @@ impl Stmt {
                 }
             }
         }
+        laps.lap("wires");
+        laps.emit();
         ins
     }
 
@@ -3077,6 +3097,7 @@ impl Stmt {
         let kl = c.k_log;
         let n = 1usize << (self.m - 7);
         let wpb = 1usize << (kl - 7);
+        let mut laps = PhaseLaps::new("WITNESSCPU");
         let (mut z, mut a, mut bb) = (vec![F128::ZERO; n], vec![F128::ZERO; n], vec![F128::ZERO; n]);
         z.par_chunks_mut(wpb).zip(a.par_chunks_mut(wpb)).zip(bb.par_chunks_mut(wpb)).enumerate().for_each(|(blk, ((zb, ab), bbb))| {
             for r in c.ranges.iter().filter(|r| r.kind == Kind::Mask) {
@@ -3087,6 +3108,7 @@ impl Stmt {
                 bbb[w..w + mw.len()].copy_from_slice(&mw);
             }
         });
+        laps.lap("mask");
         for (ni, (_, pinned)) in c.nets.iter().enumerate() {
             if c.typed.as_ref().is_some_and(|t| t.fills(c, ni)) {
                 continue;
@@ -3100,6 +3122,7 @@ impl Stmt {
                 a[at..at + uw].copy_from_slice(&ua);
                 bb[at..at + uw].copy_from_slice(&ub);
             }
+            laps.lap(&format!("net{ni}:{}", c.nets[ni].0));
         }
         if let Some(t) = &c.typed {
             for (at, uz, ua, ub) in self.typed_zab(t, &ins[c.unit_net], flip, forged) {
@@ -3107,8 +3130,11 @@ impl Stmt {
                 a[at..at + ua.len()].copy_from_slice(&ua);
                 bb[at..at + ub.len()].copy_from_slice(&ub);
             }
+            laps.lap("typed");
         }
         let zl = pack_z_lincheck_from_packed(&z, self.m, kl);
+        laps.lap("z_lincheck");
+        laps.emit();
         (z, a, bb, zl)
     }
 
@@ -4112,6 +4138,30 @@ mod tests {
             if bits == 65536 {
                 assert_eq!((segs.len(), comps + 1, segs[0].1 + outer), (8, 77, 14));
             }
+        }
+    }
+}
+
+/// FC_PHASE_TIMES: a witness step's laps, one `{tag}\t{json}` line on stderr (seconds by part, in order); nothing unset.
+struct PhaseLaps {
+    tag: &'static str,
+    at: Option<std::time::Instant>,
+    parts: serde_json::Map<String, Value>,
+}
+
+impl PhaseLaps {
+    fn new(tag: &'static str) -> Self {
+        PhaseLaps { tag, at: std::env::var_os("FC_PHASE_TIMES").map(|_| std::time::Instant::now()), parts: serde_json::Map::new() }
+    }
+    fn lap(&mut self, what: &str) {
+        if let Some(t) = &mut self.at {
+            self.parts.insert(what.into(), json!(t.elapsed().as_secs_f64()));
+            *t = std::time::Instant::now();
+        }
+    }
+    fn emit(&mut self) {
+        if self.at.is_some() {
+            eprintln!("{}\t{}", self.tag, Value::Object(std::mem::take(&mut self.parts)));
         }
     }
 }

@@ -1,0 +1,63 @@
+diff --git a/crates/flock-prover/src/prover.rs b/crates/flock-prover/src/prover.rs
+index 3c9005d..8fbfb3e 100644
+--- a/crates/flock-prover/src/prover.rs
++++ b/crates/flock-prover/src/prover.rs
+@@ -1975,6 +1975,7 @@ pub fn prove_fast_ligerito_from_witness_extra_zk<Ch: Challenger>(
+     let x_refs: Vec<&[F128]> = x_fulls.iter().map(|v| v.as_slice()).collect();
+     let mut pre: Vec<Option<&[F128]>> = vec![s_hat_v_ab.as_deref(), Some(s_hat_v_c.as_slice())];
+     pre.resize(x_refs.len(), None);
++    let t_open = Instant::now();
+     let pcs_open = pcs::open_batch_mixed_ligerito_with_precomputed_s_hat_v_and_grinding_zk(
+         z_packed,
+         &prover_data,
+@@ -1988,6 +1989,9 @@ pub fn prove_fast_ligerito_from_witness_extra_zk<Ch: Challenger>(
+         zk0,
+         challenger,
+     );
++    if var("FLOCK_PHASE_TIMES").is_ok() {
++        eprintln!("CPUPHASE\t{{\"t.open\":{}}}", t_open.elapsed().as_secs_f64());
++    }
+     (
+         R1csProofLigerito {
+             zerocheck: zc_proof,
+@@ -2012,13 +2016,17 @@ fn prove_fast_core_hooked<Ch: Challenger>(
+     zk0: Option<&pcs::ligerito::zk::Level0Zk>,
+     challenger: &mut Ch,
+ ) -> ProveCore {
++    let t_phase = Instant::now();
+     let (commitment, prover_data) = match (prefaulted_codeword, zk0) {
+         (_, Some(z)) => pcs::commit::commit_zk(&z_packed, pcs_params, z),
+         (Some(buf), None) => commit_into(&z_packed, pcs_params, buf),
+         (None, None) => commit(&z_packed, pcs_params),
+     };
++    let t_commit = t_phase.elapsed().as_secs_f64();
+     hook(&commitment);
+     bind_statement(challenger, r1cs, &commitment);
++    let t_hook = t_phase.elapsed().as_secs_f64() - t_commit;
++    let t_zc = Instant::now();
+ 
+     let padding = r1cs.padding_spec();
+     let (zc_proof, zc_claim, s_hat_v_c) = {
+@@ -2062,6 +2070,8 @@ fn prove_fast_core_hooked<Ch: Challenger>(
+ 
+     // Capture lincheck's pre-sumcheck z_vec so the PCS open can derive the
+     // AB-claim's `s_hat_v` from it (skips fold_1b_rows for AB).
++    let t_zerocheck = t_zc.elapsed().as_secs_f64();
++    let t_lc = Instant::now();
+     let (lc_proof, lc_claim, z_vec_pre) = prove_padded_capture_z_vec_with_grinding(
+         &z_packed_lincheck,
+         r1cs.m,
+@@ -2095,6 +2105,13 @@ fn prove_fast_core_hooked<Ch: Challenger>(
+     } else {
+         None
+     };
++    // FLOCK_PHASE_TIMES: the CPU prover's phases, one CPUPHASE line a proof (the opening's from the caller)
++    if var("FLOCK_PHASE_TIMES").is_ok() {
++        eprintln!(
++            "CPUPHASE\t{{\"t.commit\":{t_commit},\"t.hook_bind\":{t_hook},\"t.zerocheck\":{t_zerocheck},\"t.lincheck\":{}}}",
++            t_lc.elapsed().as_secs_f64()
++        );
++    }
+ 
+     ProveCore {
+         zc_proof,
