@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.RecordDraw
 /-!
 # The sample, then the link, then the other rounds, on the device's log
 
-The record's draw (`recordDraw_firstStop`) and the first stop (`link_pts`, `firstStop_rootB`) take the order
+The record's sample (`recordDraw_firstStop`) and the first stop (`link_pts`, `firstStop_rootB`) take the order
 `SampleLinkFirst` states on the device's log: no release of a coin of the sample's family after the registration's
 digest follows an opening, and the first opening is of the stream `SampledProofs.Challenger.TREE_SESSION`. It holds
 where v2's case accepts, the log v2's check read is the device's, and the challenger session's release log in v2's
@@ -16,7 +16,7 @@ evidence, after its head, passes `sampleLinkFirst` at the parameters' challenger
   (`sampleLinkFirst_readLog`), and the device's log has the read's frames and answers (`ofV2_frames`), which are all
   `SampleLinkFirst` reads (`sampleLinkFirst_congr`).
 * **At the sampled verdict** (`sampleLinkFirst_verdict`, `freshBefore_verdict`, `linkFirst_verdict`): in the forms the
-  record's draw and the first stop take.
+  record's sample and the first stop take.
 
 `OrderHeld` is a refusal v2 must make: nothing else v2 checks gives the order (`reads_interleave`). Besides the chain
 and the line count its signed close covers, which are the device's for whatever order it released in, v2 reads the
@@ -40,7 +40,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-- **v2's order refusal passes** on what the prover sent: where v2's case in it decodes and its parameters name the
 challenger's family `label`, the challenger session's release log in v2's evidence, after its head, passes
 `sampleLinkFirst` at `label` and the registration's digest. v2 refuses every other log, or the sampled verdict doesn't
-give the order the record's draw and the first stop take (`sampleLinkFirst_verdict`). -/
+give the order the record's sample and the first stop take (`sampleLinkFirst_verdict`). -/
 def OrderHeld (s : Verity.Sent) : Prop :=
   ∀ (p : _root_.SampledProofs.OneStageZk.Params) (c : _root_.SampledProofs.OneStage.Commitment)
     (e : _root_.SampledProofs.OneStageZk.Evidence) (key : ChallengerKey) (label : String) (lines : List String),
@@ -67,7 +67,7 @@ theorem ofV2_frames :
     exact .cons ⟨h.1.1, h.1.2.1⟩ (ofV2_frames h.2)
 
 /-- **The device's log is in order where v2's case accepts and its order refusal passes**: where composite `k` accepted
-what the prover sent, v2's case in it accepts at the draw `dr`, the log v2's check read is the device's, and the
+what the prover sent, v2's case in it accepts at the sample `dr`, the log v2's check read is the device's, and the
 release log's lines after its head pass `sampleLinkFirst` (`OrderHeld`), the device's log releases the sample's coins
 (of `dr`'s family, after `dr`'s digest) before every opening and opens the stream `TREE_SESSION` first. -/
 theorem sampleLinkFirst_logged {k : Verity.Registration.Composite} {x : Verity.Exchange} {a b e : ByteArray}
@@ -114,7 +114,7 @@ theorem sampleLinkFirst_verdict {V : Vocab d α} {k : Verity.Registration.Compos
   obtain ⟨rfl, rfl⟩ := hN a b e p c ev ξ dr hcase hacc
   exact sampleLinkFirst_logged hv.2.1 hcase hacc hl hord
 
-/-- **The sample's coins are released before every opening** (`SampleLinkFirst`'s first half, the record's draw's
+/-- **The sample's coins are released before every opening** (`SampleLinkFirst`'s first half, the record's sample's
 form), at the sampled verdict where v2's order refusal passes. -/
 theorem freshBefore_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
     {F : Array ByteArray} {A : Live} {x : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ)

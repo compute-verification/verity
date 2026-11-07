@@ -3,7 +3,7 @@
 // H1 + fx1 receipts (`h1r_unit`'s MMAs over X = A + b and W' = B + c + U and its tail, `segment.call_words`), so the MMAs
 // whose words are receipted are the MMAs that serve: no other product of A and B is computed.  wb⁺ = [B + c + U > 127] and
 // wb⁻ = [B + c + U < -128] come from B and the noise in the unit (never an input), so z = X (B + c)^T exactly for every
-// int8 B (s32, mod 2^32), the z each cell commits.  The seeds are the call's own, from the window's
+// int8 B (s32, mod 2^32), the z each cell commits.  The seeds are the call's own, from the execution phase's
 // salt and root(A_j), root(B_j) (`unit_seed`, the seeded regime), so a call needs its A table's root before its
 // units and nothing from a later round.  A served call is two plain launches on the caller's stream into caller-owned
 // buffers, the step read from the device (`H1OStep`), so a CUDA graph captured once serves every step:
@@ -69,7 +69,7 @@ struct OutEpiT {
   const float* sw;
   int n, M, m, flags;
   uint8_t* wbs;  // the warp's wb operand, 32 * XS bytes of shared memory
-  const u64* salt;       // the window's salt (8 words)
+  const u64* salt;       // the execution phase's salt (8 words)
   const u64* step_base;  // the step's first position
   u64 st0, st1, st2, rt0, rt1, rt2;  // the seed and receipt tags
   const u32* bws = nullptr;  // BAND: the call's band workspace (h1o_bandrows_k), band (ri, b) at 16 (ri nl + b) 32 RB words
@@ -335,7 +335,7 @@ __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call,
 constexpr int NWO = 4;
 
 // one served call: xq [M, K] s8 and sa [M] f32 (row_quant's), sw [N] f32 (the layer's), y [M, N] bf16 and zo [M, N] s32
-// (the call's outputs); F (the call's entry), S, the window's salt and the step's base position on the device.  The
+// (the call's outputs); F (the call's entry), S, the execution phase's salt and the step's base position on the device.  The
 // weights are the call table's.  The caller's h1c_a_call (the slot and its A table) runs first.
 extern "C" int h1o_units_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
                                 int M, const float* sw, void* y, int* zo, const u64* salt, const u64* step_base,

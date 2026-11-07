@@ -3563,7 +3563,7 @@ def test_a_lock_of_the_auditors_fixtures_needs_no_records_run(world):
 def test_under_land_into_checked_a_head_is_judged_against_checked_not_main(world, capsys):
     """Under `land_into = "checked"` a lock change lands on `checked` well before `main` follows it, and a PR that merges
     `checked` (to resolve a conflict with one landed there) carries it: against `main` the gate blamed that PR for every lock
-    the landings changed.  Against `checked` it judges the PR's own change, so a lock change of its own still draws the
+    the landings changed.  Against `checked` it judges the PR's own change, so a lock change of its own still samples the
     warning, naming `checked`."""
     world.with_store_remote()
     _move_main(world, {"tools/verity/check/drive.toml": 'land_into = "checked"\n'})
@@ -3839,7 +3839,7 @@ def test_a_records_run_whose_update_wrote_a_record_vouches_only_for_the_commit_o
 
 def test_a_requirer_whose_record_the_run_regenerated_is_vouched_for_only_at_the_commit_of_that_record(world, capsys):
     """`--records PKG --update` also updates a requirer that failed only on record differences, and its pass is
-    then on the record it wrote (`record/<path>/`), not the head's lock: the head draws the warning for it, and the commit of
+    then on the record it wrote (`record/<path>/`), not the head's lock: the head samples the warning for it, and the commit of
     both records is vouched for by that one run."""
     world.with_store_remote()
     req = "req/lean-audit.json"
@@ -4040,7 +4040,7 @@ def test_a_head_that_only_merged_main_into_a_vouched_head_is_vouched_for_with_no
     (every Lean input it changed is main's whole, and its lock is merge.py's merge of the two sides): that lock is a candidate,
     which the lock run after its landing rebuilds and regenerates where another PR moved what it reads, so the gate vouches for
     it too, from the run below, with no new run.  A merge whose lock isn't merge.py's (a hand resolution), or that changes a file
-    of its own, is no such head and draws the warning."""
+    of its own, is no such head and samples the warning."""
     world.with_store_remote()
     (world.tmp / "lock_merge.py").write_text(LOCK_MERGE)
     _move_main(world, {LOCK: _lock()})

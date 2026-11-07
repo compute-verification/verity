@@ -5,14 +5,14 @@ public import PouwCheck.WindowSalt
 /-!
 # PoUW's rule (`core_check.py`, "the check")
 
-`registered` holds the registration to PoUW's rule: a served window in the verifier's context registering exactly
+`registered` holds the registration to PoUW's rule: a served execution phase in the verifier's context registering exactly
 `window.REGISTERED` (a registration of `window.LEGACY_REGISTERED`, made before the fixed-length rule, is not of record),
-its `length` item a fixed-length window's at the verifier's max_tokens (`window.length_problem`: no EOS-keyed row, each
+its `length` item a fixed-length execution phase's at the verifier's max_tokens (`window.length_problem`: no EOS-keyed row, each
 slot served its max_tokens), a work level whose tiles lie in the declared range, each item the verifier's own at that level, the
-population N = point(level + 1), the law subset:K′ with K′ the window's exact `k_prime`, and the check's query and
+population N = point(level + 1), the sampling design subset:K′ with K′ the execution phase's exact `k_prime`, and the check's query and
 scheme. `outcome` then holds the service's answer to it: one-stage's, for this registration's digest, and on acceptance
-a profile and draw of the registered partition's N units drawn subset:K′ at the window's δ, and a live window's salt its
-live coin's (`windowSaltReason`; a seeded window's answer carries none). Every refusal is the first rule it breaks, in
+a profile and sample of the registered partition's N units sampled subset:K′ at the execution phase's δ, and a live execution phase's salt its
+live coin's (`windowSaltReason`; a seeded execution phase's answer carries none). Every refusal is the first rule it breaks, in
 this order, with `core_check.py`'s reason.
 
 The service's reject is a reject and its undecided is undecided. On acceptance PoUW publishes `window.PUBLIC` and the
@@ -97,7 +97,7 @@ def registered (p : Params) (c : Registration) : Except String Fixed :=
         else if c.scheme ≠ p.check.scheme then .error s!"scheme: registered {c.scheme}, the check's {p.check.scheme}"
         else .ok f
 
-/-- What an accepted window makes public: `window.PUBLIC`, its registered items at the verifier's values. -/
+/-- What an accepted execution phase makes public: `window.PUBLIC`, its registered items at the verifier's values. -/
 structure Public where
   check : CheckItem
   work : Work
@@ -128,7 +128,7 @@ instance instDecidableAscending : (l : List Nat) → Decidable (Ascending l)
     have := instDecidableAscending (b :: t)
     inferInstanceAs (Decidable (a < b ∧ Ascending (b :: t)))
 
-/-- The draw's units: K′ distinct units below N, ascending. -/
+/-- The sample's units: K′ distinct units below N, ascending. -/
 def UnitsOk (units : Array Nat) (k n : Nat) : Prop :=
   units.size = k ∧ Ascending units.toList ∧ ∀ u ∈ units.toList, u < n
 

@@ -43,13 +43,13 @@ the sampling record `SamplingDeploy.deploy`). Where its run accepts against SHA-
 at the statement's inputs `s` (`insOf true x = some s`, what flock-verify reads of the statement), on the last message's
 record and proof files `f`, and:
 
-* the record's draw is the statement's as a value (`Custody.recordDraw_of_checks`: the verifier rebuilds both,
+* the record's sample is the statement's as a value (`Custody.recordDraw_of_checks`: the verifier rebuilds both,
   `Flock.norm`);
 * flock-verify `--zk` accepts that transcript at the statement's inputs (`AcceptsZK s.read.I ⟨f.record, f.proofs⟩`, and
   so `LiveAcceptsZK` at every outcome carrying it).
 
-This is the `--zk` side of `plainVerdict_of_run`. Equality of the draw as a value is what the setup reads: `Exec.setupOf`
-sets the record up at the record's own draw (`Custody.setupOf_record`).
+This is the `--zk` side of `plainVerdict_of_run`. Equality of the sample as a value is what the setup reads: `Exec.setupOf`
+sets the record up at the record's own sample (`Custody.setupOf_record`).
 -/
 
 @[expose] public section
@@ -66,7 +66,7 @@ theorem deploy_flock_V (rel : Readable.Parsed → Readable.Relation) (c : Sampli
     (SamplingDeploy.deploy rel c).flock.V = V true := rfl
 
 /-- **An accepted run of `V true` is flock-verify `--zk`'s acceptance**: against SHA-512, the run decided at the
-statement's inputs `s` on its last message's record and proof files `f`; the record's draw is the statement's, and
+statement's inputs `s` on its last message's record and proof files `f`; the record's sample is the statement's, and
 `verify --zk` accepts `⟨f.record, f.proofs⟩` at `s.read.I`. -/
 theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :

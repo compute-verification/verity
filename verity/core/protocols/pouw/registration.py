@@ -4,7 +4,7 @@ The keyed 8-block rotation (rung 3) is the rule, keyed after the weights' root i
 registers only from the curated list, with γ folded where it needs it, for Pearl-C4 and for served FP8.
 `check_registration` reads what a registration declares,
 `check_linear` which of its linears the stack's rotations reach, and `rotation_key` is the only key its keyed transforms take:
-one sampled from the epoch's live salt coin (`Epoch.start`).
+one sampled from the execution phase's salt coin (`Epoch.start`).
 No Lean statement reads a registration.
 """
 
@@ -94,10 +94,10 @@ def check_linear(transforms: Sequence[str], side: str, curated: bool = False, ne
 
 def rotation_key(epoch: Epoch, opening: CoinOpening) -> bytes:
     """The 32-byte key of a registration's keyed transforms:
-    ``derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`` over the salt of an epoch
+    ``derive(salt, "verity/pouw/rotation-key/v1", {"weights": weights_root}).stream("key", 32)`` over the salt of an execution phase
     started from `opening`, the challenger's salt coin (`Epoch.start`).  The challenger opens that coin only after it
     recorded the weights' root, so no key exists before the weights are committed, and the prover chooses none.  Refuses
-    (`DomainError`) an epoch whose salt is not that coin's: an `Epoch.unverified` one, a beacon's or a fixed seed's."""
+    (`DomainError`) an execution phase whose salt is not that coin's: an `Epoch.unverified` one, a beacon's or a fixed seed's."""
     if epoch.coins is None:
         raise DomainError("rotation key: the epoch has no coin commitment; start it from the challenger's salt coin "
                           "(Epoch.start), not from a seed")

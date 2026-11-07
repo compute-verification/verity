@@ -56,7 +56,7 @@ on the node credited each window or the node as the unit (`benchmarks/pouw/machi
 per node"). Counted per GPU without them, the host's AMX and AVX-512 (and NVLink peers) take every device over 1% on
 some real host.
 
-Each covers full checking with live coins: `𝒫_full`, every round's units proved, against uniform coins drawn after the
+Each covers full checking with live coins: `𝒫_full`, every round's units proved, against uniform coins flipped after the
 commitments. The sampled path's `ε_sample` (`DrawnLayer`) and the Fiat–Shamir premium are separate lines, in none of
 these statements.
 
@@ -104,7 +104,7 @@ Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, with no advanta
 
 The unfolded branch binds on sm_120's sheet (`5.860%`); on sm_120's measured vector the folded branch binds (`0.591%`).
 The proof system's pieces are named premises: binding's fork form (`BindingForkAt`), proof soundness (`ProofSoundAt`,
-which C-Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (`ProofsPin`, which
+which Flock's bound doesn't discharge until it states the rows link) and the Definitions' pinning (`ProofsPin`, which
 no Lean checks of the served relations: `PouwSegCheck_v2` lacks it, PIN's checks recompute every word they absorb),
 beside `RightFixed`. `ProofLayer.Of` and `ReceiptGame.Pinned` stay hypotheses over `Definitions/`.
 
@@ -124,7 +124,7 @@ of 48,000 give ε < 1% only from 8,320 rounds on the measured vector, and on the
 `1 − N_w(w* + φ*)/B_♭`, and is under 6% only from 17,460 rounds. Both exceed 100% up to 40 rounds (sheet) and 41
 (measured); these counts are `benchmarks/pouw/lean_headline.py`'s `branches` at `S`, not Lean statements.
 Compose's live line has the same kind of floor: ε < 1% there needs
-at least 10,552 equal live rounds a window, whatever the draw. The windows run so far have at most 18 rounds.
+at least 10,552 equal live rounds a window, whatever the sample. The windows run so far have at most 18 rounds.
 
 The window's shape asks four things of the protocol, which the statements carry in their types and the verifier must
 enforce on every window:
@@ -137,8 +137,8 @@ enforce on every window:
 * **Fresh coins.** Each round's coin is uniform and independent of the earlier ones (the product measure on `Ω^S`
   that the luck premises' "whatever the past" is over); one salt an epoch expanded into the rounds' coins isn't.
 * **A cap on the cheater's hash calls over the window.** The budget asks `δ_ZK ≤ 2^-41/(48,000·n_π)` a proof and
-  `δ_fork ≤ (2^-41/48,000)²` a round, and C-Flock's soundness and `cr/sha-512` give such bounds only for a cheater
-  whose hash calls are bounded: against C-Flock's `t·2^-λ`, `t ≤ 2^(λ − 56.6)/n_π` over the window.
+  `δ_fork ≤ (2^-41/48,000)²` a round, and Flock's soundness and `cr/sha-512` give such bounds only for a cheater
+  whose hash calls are bounded: against Flock's `t·2^-λ`, `t ≤ 2^(λ − 56.6)/n_π` over the window.
 
 The sheet reading's ε rests on A2u (`SheetDispatch`: each uniform-datapath instruction takes an issue slot), which no
 vendor document states. DS-120 has no uniform-pipe row, so without A2u the machine model's LP gives 2.79% with a

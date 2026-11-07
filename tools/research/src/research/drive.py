@@ -128,7 +128,7 @@ uncached passes, from their steps.jsonl: `_timed`, lean-audit's of the same mach
 owner of what holds it (`_stuck`): the member below it where the reviewed prefix stops, or the reviewer (`CI`) for a missing
 land verdict.
 
-The lock run and the post-landing runs (the after-landing run and its bisection's) are launched detached (`detach`), so no
+The lock run and the after-landing runs (the after-landing run and its bisection's) are launched detached (`detach`), so no
 tick waits on train.sh, which takes minutes to print a run's ids.  A later tick reads the ids from its log (`launched`,
 `_resolve`); until then the launch counts as running, and a train.sh that exits without them registered no run:
 drive rings `CI` and `TOP` at once with its reason's last line (`_launch_failed`), the same reason at the same commit again only
@@ -1382,7 +1382,7 @@ class Driver:
         return [x for x in out if x.commit not in undone]
 
     def follow_postland(self, drive: dict) -> None:
-        """The post-landing run, once it ends: passed, its tip is verified; failed, `_postland_failed`; never started (every twin
+        """The after-landing run, once it ends: passed, its tip is verified; failed, `_postland_failed`; never started (every twin
         exited 75, or was stopped), the next `start_postland` launches it again.  One already failing under `--keep-going` is
         named red at once (`_red`), and cancelled once only its `TAIL` is left; a shard of it whose failures name nothing runs
         again once first (`_rerun_nameless`).  A pass verifies its tip only when every step it ran passed in it (`_unrun`).  One
@@ -2142,7 +2142,7 @@ class Driver:
         return bool(failed) and failed <= self._allowed_steps(run["tip"], dirs)
 
     def _postland_failed(self, drive: dict, pl: dict, run: dict, why: str, signalled: bool = False) -> None:
-        """A post-landing run of ``run["tip"]`` that failed.  Killed by the machine (``signalled``: by a signal or 128+N, or a
+        """An after-landing run of ``run["tip"]`` that failed.  Killed by the machine (``signalled``: by a signal or 128+N, or a
         failure that names no file and was a kill: `implicated`, `killed`), it runs again once, on `main`'s tip then, and killed
         again is told to `CI`.  A baseline run's failure is `_red_baseline`'s.  Else each failed suite or step is named red with
         its culprit (`_red`), reverted at once (`_revert_reds`); a run whose records name none is told to `CI`.  The next run
@@ -2190,7 +2190,7 @@ class Driver:
                                               f"Fix `{self.q.into}`")
 
     def _failing(self, run: dict) -> list[str]:
-        """The steps a post-landing run's steps.jsonl records as failed."""
+        """The steps an after-landing run's steps.jsonl records as failed."""
         return sorted({s for d in self.evidence(self.repo, run["ids"]) for st in failed_steps(d) if (s := st.get("step"))})
 
     def _revert_landed(self, drive: dict, pl: dict, tip: str, base: str, one: Member, head: str, key: str, blame: str,
@@ -2623,7 +2623,7 @@ class Driver:
         return {"base": below, **rb, **extra}, skip, ratchet, flags
 
     def start_postland(self, drive: dict) -> None:
-        """Launch the one post-landing run, on the landing branch's tip (`Queue.into`), or below it while a lock run's records
+        """Launch the one after-landing run, on the landing branch's tip (`Queue.into`), or below it while a lock run's records
         are still to come (`_target`), when none runs, a landing awaits it, that commit is neither verified (nor below it) nor
         one whose run failed with nothing drive could revert, and no fresh low-risk fix of a red is about to land
         (`_fix_wait`).  With `executor = "on"`, the commit's check goes on the executor's queue (`_start_tasks`) and the run
@@ -3479,7 +3479,7 @@ class Driver:
     #    record dropped once its launch registers a run, and a day after its last failure
 
     def _launch_failed(self, drive: dict, key: str, tip: str, what: str, tail: str) -> None:
-        """``what``, a post-landing run's or a lock run's train.sh at ``tip``, registered no run (``tail``, its output's tail):
+        """``what``, an after-landing run's or a lock run's train.sh at ``tip``, registered no run (``tail``, its output's tail):
         count it under ``key`` and ring `CI` and `TOP` at once with the reason's last line, the behind-ring's path, not
         `refuse`'s once-to-`CI`; the same reason at the same ``tip`` rings again only `LAUNCH_RING_EVERY_S` later, as each
         tick launches it again.  With --shadow or --dry-run, only log it."""
@@ -3766,7 +3766,7 @@ class Driver:
 
     def _unbaselined(self, drive: dict) -> str | None:
         """Why no review landing happens now, or None: `main` has no baseline (`_baselined`), so a failure after a landing couldn't be told from one `main` had before it.  The
-        first run is then of `main` itself (`start_postland`), once any post-landing run still going has ended; with `land_into = "checked"`, ci moves `main` to a green commit of
+        first run is then of `main` itself (`start_postland`), once any after-landing run still going has ended; with `land_into = "checked"`, ci moves `main` to a green commit of
         it by hand (`/data/infra/drive.sh queue baseline SHA --by ci`), which the next tick takes as verified (`_main_moved`)."""
         into = self.q.into
         main = _out(self.repo, "rev-parse", self.q.base)

@@ -1,4 +1,4 @@
-"""Figure 1's PNG and SVG for one scope, drawn from `figure1.json` alone, so anything holding the JSON draws the same
+"""Figure 1's PNG and SVG for one scope, sampled from `figure1.json` alone, so anything holding the JSON samples the same
 figure: three panels (exfiltration, infiltration, skipped work) against proof overhead, a colour per share of compute
 spent on verification, the panel's headline design solid and its comparisons dashed or dotted, the measured overhead as
 a vertical line, the references as dashed horizontal ones, and each panel's caption from the JSON.  A panel's y-axis
@@ -81,7 +81,7 @@ def _lines(references: list[dict], scope: str, scale: float) -> list[tuple[float
 
 
 def render(out: dict, scope: str, outdir: Path) -> list[Path]:
-    """Draw `scope`'s figure from `out` into `outdir` as `stem(scope)`.png and .svg; returns their paths."""
+    """Sample `scope`'s figure from `out` into `outdir` as `stem(scope)`.png and .svg; returns their paths."""
     plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral", "DejaVu Serif"],
                          "mathtext.fontset": "stix", "font.size": 20, "axes.labelsize": 22, "xtick.labelsize": 18,
                          "ytick.labelsize": 18, "savefig.facecolor": "white", "figure.facecolor": "white"})

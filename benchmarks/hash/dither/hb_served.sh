@@ -42,11 +42,11 @@
 # range, so the source must be dither-rtx's f2c0071c7c or later; HB_KEEP_SQLITE=1 keeps its sqlite, gzipped), LEASE (default "--max-min 14"), RUN_TIMEOUT (seconds
 # inside the lease, default 820), VERITY_BENCH_VENV (the Python's environment, else the node's that
 # benchmarks/harness/env.sh finds), NVCC (default CUDA 13.0's),
-# POUW_CHALLENGER and POUW_CHALLENGER_SESSION, or DITHER_CHALLENGERS (the windows' coins off the node, sessions from
+# POUW_CHALLENGER and POUW_CHALLENGER_SESSION, or DITHER_CHALLENGERS (the execution phases' coins off the node, challenge phases from
 # infra: sbench.py's "Coins"), J10R_SHA (a DITHER_SO_UNITS=j10r arm's J10R Definition: a sent j10r-SHA.tar.gz, else the
 # repository's git), HB_H1U_KC, HB_H1U_KC_B and DITHER_H1C_KC (the KC builds, each held to its BUILD.txt line).
 # Exit: sbench's (3 an engine failed to build, 4 the gate failed), 2 a build failed or a shipped library is missing or
-# another source's, 15 a challenger's port never opened or a session lacks its id or address.
+# another source's, 15 a challenger's port never opened or a challenge phase lacks its id or address.
 set -uo pipefail
 MODE=${1:?usage: hb_served.sh build ARCH[,ARCH] | hb_served.sh run sm_90a|sm_100a [sbench args]}
 ARCH=${2:?arch}
@@ -200,14 +200,14 @@ case " $* " in *dither-1s-hbp*|*dither-1s-hbk*)
     echo "hb_served.sh: dither-1s-hbp needs H1V3 with the peel (peel_seg) at $HB_H1V3_PEEL_SHA" >&2
     exit 2; } ;;
 esac
-# the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it,
+# the dither execution phases' coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 (cd verity/core/protocols/pouw/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "hb_served: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
-# coins off the node: every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
-# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own session from
+# coins off the node: every port the arms' execution phases connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
+# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own challenge phase from
 # the challenger's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on this
 # node, HEX the root of the coin commitment its challenger signed, which its hello must answer, R its --rounds when not
 # 16384), waited for with ss -ltn

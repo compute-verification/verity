@@ -18,7 +18,7 @@
 #   prof     every h1u*.so shipped: hb_prof.py under ncu (--set full, --clock-control none), each build gated as h1ubench.py
 #            gates it, then profiled once at the served shapes ($OUT/prof.ncu-rep and its text pages in $OUT/prof/)
 #   units    h1u_kr.so (dither-a's served receipts-only build, the base) and every h1u_kr*.so variant shipped:
-#            unitsbench.py (the served noise and units launches at the served window, each build gated against
+#            unitsbench.py (the served noise and units launches at the served execution phase, each build gated against
 #            receipts.py and the base's every word, then timed: each call's units and the step's 128)
 #   unitsprof  the same builds under ncu (--set full; kernels h1u and h1k): unitsbench.py --profile, then the text pages
 #   partials h1u.so and every h1u_*.so shipped: benchmarks/pouw/tests/test_partials.py and test_lane_refs.py with

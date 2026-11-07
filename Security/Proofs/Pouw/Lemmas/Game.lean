@@ -17,7 +17,7 @@ namespace Pouw.Guarantees
 open Pouw.Pinned Finset
 
 /-- **(b) Theorem 1** (§3.5). If `G_γ` holds with error `η` and, for an adversary within `(T, q)`, the audit (any
-coins `C` drawn independently of `H` and `s`, any acceptance predicate) satisfies
+coins `C` sampled independently of `H` and `s`, any acceptance predicate) satisfies
 `Pr[accept ∧ ∑_{u ∉ K} W_ref(u) > ε_s·W] ≤ δ_s`, then `Pr[accept ∧ T < (1 − γ)(1 − ε_s)·W] ≤ δ_s + η`. -/
 def Theorem1 : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
@@ -33,7 +33,7 @@ def Theorem1 : Prop :=
       pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧ T < (1 - γ) * (1 - εs) * totalWref P U.layout)
         ≤ δs + η q U.layout.N
 
-/-- **(c) Work-weighted sampling.** `t` independent samples, each unit drawn with probability `∝ w(u)`; the audit
+/-- **(c) Work-weighted sampling.** `t` independent samples, each unit sampled with probability `∝ w(u)`; the audit
 accepts iff every sample is in `K` (which may depend on the rest of the randomness `α`). Then
 `Pr[accept ∧ ∑_{u ∉ K} w(u) > ε_s·∑_u w(u)] ≤ (1 − ε_s)^t` for `ε_s ≤ 1`. -/
 def WorkWeightedSampling : Prop :=

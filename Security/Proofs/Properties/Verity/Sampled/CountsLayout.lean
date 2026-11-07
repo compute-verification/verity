@@ -20,7 +20,7 @@ fact beyond those `MovesReach` reads: v2 reads each opening frame's count off th
   of a stream's round `k`, not the session stream's, the `n` `Record.decode` decodes there.
 * **The link's count** (`link_count`, `SetsUp.mPts_eq`): the session stream's round 0 gives a coin a 16 bytes of the
   two link points of `spec.mPts` coordinates each (`link_coins`, `decode_points`), and the session `--zk` sets up at
-  the record's draw has `A.mP` of them (`drawOkZKHJP_of_size`).
+  the record's sample has `A.mP` of them (`drawOkZKHJP_of_size`).
 * **A stop's frame** (`RoundsReach.stop_frame`, `firstOpened_noPick`): a stop where `StopOf` says and not every cut is
   past releases, on the tape a trace from it ends on, at an opening frame its fixed rounds pick, after a log none of its
   live rounds picks in, its cuts at the bytes that frame answers, and every description of its opening asks for that
@@ -34,7 +34,7 @@ fact beyond those `MovesReach` reads: v2 reads each opening frame's count off th
   (`opening_count`), whose count is the record's (`Trees.round_counted`), which is `tailCount` of the round's message
   (`rep_tailCount_accepted`), which is `w` (`RoundsReach.stop_modes_reveal`).
 * **The link's frame count** (`link_frameCount`): the log's first opening, of the session stream, asks for
-  `A.mP + A.mP` coins (`Trees.session_counted`, `link_count`, `SetsUp.mPts_eq` at the record's draw).
+  `A.mP + A.mP` coins (`Trees.session_counted`, `link_count`, `SetsUp.mPts_eq` at the record's sample).
 * **`CountsReach`** (`ReachesOff.counts`, `countsReach_layout`, `countsReachAt`): at the first stop by
   `link_frameCount`, and at each answered stop by `stop_count`, so the coupling at the deployment off the empty classes
   at their counts (`couplingTargetAt_counts`) takes `couplingTargetAt`'s premises but its bound on the stops' term.
@@ -137,8 +137,8 @@ theorem link_count {spec : Flock.SessionSpec} {record : String} {sess : Flock.Ru
   rw [Lines.bitsOfBytes_length, length_chunks fieldBits, Array.length_toList, Array.size_append, hs0, hs1] at hl
   omega
 
-/-- **The session `--zk` sets up at the record's draw has `A.mP` points' coordinates**: at one table, its one
-statement is set up at the record's draw, the session's draw file at a sample, where every statement has
+/-- **The session `--zk` sets up at the record's sample has `A.mP` points' coordinates**: at one table, its one
+statement is set up at the record's sample, the session's sample file at a sample, where every statement has
 `mPtsOf A.D.unroll.g (A.kd / nTab A.I)` of them (`drawOkZKHJP_of_size`). -/
 theorem SetsUp.mPts_eq {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {A : Live} (hA : SetsUp V θ F A)
     {record : String} {spec : Flock.SessionSpec} {sts : Array Flock.Stmt}
@@ -358,7 +358,7 @@ sampled verdict accepts, the log v2's check read is the device's, and the device
 `L₀` that open none, opens the stream `TREE_SESSION` of the tree it opens with the frame `.opening i s n`, `n` is
 `A.mP + A.mP`: v2 read the frame off the line opening that stream's round 0 (`readLog_round`), whose `n` is the one
 the record's tree shows opened (`opening_count`), which `sessionTreeReason` holds to a coin a 16 bytes of the record's
-link coins (`Trees.session_counted`), both points' coordinates (`link_count`), `A.mP` each at the record's draw
+link coins (`Trees.session_counted`), both points' coordinates (`link_count`), `A.mP` each at the record's sample
 (`SetsUp.mPts_eq`). -/
 theorem link_frameCount {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} {x : Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ) (hv : V.Verdict k .sampled x)
@@ -400,7 +400,7 @@ decoders at `Live.layout` and `Live.tables`, and at the sample-coupled coin map 
 empty classes at their counts, beside a play that the sampled verdict accepts, that misses nowhere and whose log v2's
 check read is the device's, is off the empty classes, under `ReachesOff.movesOf`'s premises. The first stop's frame is
 the log's first opening (`RoundsReach.stop_frame`, `firstOpened_noPick`), of the session stream (`linkFirst_verdict`),
-which asks for `A.mP + A.mP` coins (`link_frameCount`, at the record's draw, `recordDraw_firstStop`); each answered
+which asks for `A.mP + A.mP` coins (`link_frameCount`, at the record's sample, `recordDraw_firstStop`); each answered
 stop's frame is round `k` of the first table's rep stream at its fixed round's slot (`stop_slot`), which asks for its
 message's count (`stop_count`). So no stop off the first events is in the second (`RoundsReach.weaken`). -/
 theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
@@ -496,7 +496,7 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     (fun hlr hy hO' _ hst hk => rep_answers (hlr ▸ hread) hct h1 hJt hy hO' hd₀ hJ h512 hst hk)
 
 /-- **`CountsReach` at the session's layout**: `ReachesOff.counts` at every outcome, at the cut that v2's check read
-the device's log and that v2 draws at `after` (`SampledDigest`), with what it takes of each accepted play the cut holds
+the device's log and that v2 samples at `after` (`SampledDigest`), with what it takes of each accepted play the cut holds
 of stated for every tape, as `movesReach_layout` takes it. -/
 theorem countsReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)

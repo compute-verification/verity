@@ -1681,7 +1681,7 @@ def test_the_notice_names_the_older_head_a_pr_carries_never_a_merge_base_on_main
 
 
 def _detached(h: Review, tmp_path, locks: bool = False, post: bool = False) -> list[str]:
-    """``h``'s lock runs (``locks``) and post-landing runs (``post``) launched as train.sh is: detached, the launch returning at
+    """``h``'s lock runs (``locks``) and after-landing runs (``post``) launched as train.sh is: detached, the launch returning at
     once with no run ids (`drive.detach`'s record), each launch's commit in the list returned.  `h.printed[launch["dir"]]` is
     what its train.sh has printed (`drive.launched`): unset while it runs, its run ids, or [] once it exited without them."""
     starts, h.printed = [], {}

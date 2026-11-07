@@ -11,7 +11,7 @@ with the banded reference's tree, else `j10b_ref.LABEL`. Measured only: nothing 
           mix-cpeel-bGs    the same with block2's rows staged in its noise buffers (forms 4 and 5); split always stages
           mix-cpeel-bGp    mix-cpeel-bG with the units launched as the pass's programmatic dependents (h1o_band_launch's
                            mode 3: their seeds, midstates and column tiles overlap the pass, which decode's latency is)
-    gate  per arm and window, as h1ogate.py: a dither_one.DitherState over NL layers with the served shapes, a step of m rows
+    gate  per arm and execution phase, as h1ogate.py: a dither_one.DitherState over NL layers with the served shapes, a step of m rows
           captured per DitherState.captures (0xA5 first, the band workspace too) and dither_one.check on each, the gate
           verdict over gate, control, fault, fault_wb and fault_xa. For a banded arm check runs with its receipts
           reference at band G (h1r.cu's h1r_launch_band: v1, full compressions, the rows from the leader's seed_j in the
@@ -19,9 +19,9 @@ with the banded reference's tree, else `j10b_ref.LABEL`. Measured only: nothing 
           rows taken from the leader), z held to A B^T (peeled), and credit's banded reference itself on the same units, which
           the gate requires (banded.banded_reference under the tree j10b_ref.ca_tree finds, j10ca_ref.py; send
           banded-1a4d1de024.tar.gz). Then the band workspace of the gate
-          step against j10b_ref.row_block (the first and last live band of each call whole, up to 384 drawn bands 8
+          step against j10b_ref.row_block (the first and last live band of each call whole, up to 384 sampled bands 8
           blocks each) and no 0xA5 block left in a live band.
-    time  per arm and m, CUDA graphs replayed between events with the arms interleaved: the window's calls (A table and
+    time  per arm and m, CUDA graphs replayed between events with the arms interleaved: the execution phase's calls (A table and
           units), the units launches alone, each site's alone; banded arms also the units without the pass (mode 1) and
           the pass alone (mode 2): the noise share, the other way.
 
@@ -62,12 +62,12 @@ FORM_ID = {"block2": 0, "split": 1, "split2": 2, "block": 3}  # h1o_band_launch'
 FORM_STAGED = {"block2": 4, "split": 1, "split2": 2, "block": 5}  # every form's rows staged in its noise buffers
 FORM_NAMES = ("block2", "split", "split2", "block", "block2-staged", "block-staged")
 A5 = -1515870811
-NLS = {64: 4, 256: 2, 2048: 1, 8192: 1}  # layers a window, by T
+NLS = {64: 4, 256: 2, 2048: 1, 8192: 1}  # layers an execution phase, by T
 
 
 class BandWindow(DO.DitherState):
-    """dither_one's window whose units_call is h1o_band_launch at g (mode 0 the pass and the units, 1 the units, 2 the
-    pass), each call with its own band workspace (poisoned with the window's buffers at a captured step)."""
+    """dither_one's execution phase whose units_call is h1o_band_launch at g (mode 0 the pass and the units, 1 the units, 2 the
+    pass), each call with its own band workspace (poisoned with the execution phase's buffers at a captured step)."""
 
     def __init__(self, t: int, key: bytes, h1c: str, h1o: str, gate: bool, dev, g: int, staged: bool, pdl: bool = False):
         super().__init__(t, key, h1c, h1o, gate, dev)
@@ -182,7 +182,7 @@ def band_check(win: BandWindow, lib: str, which: str) -> dict:
 
 def noise_check(win: BandWindow, rng: random.Random, max_bands: int = 384) -> dict:
     """The gate step's band workspace against j10b_ref.row_block: in every call, every block of the first and the last
-    live band and 8 drawn (row, chunk) blocks of up to max_bands drawn live bands; no 0xA5 block in any live band."""
+    live band and 8 sampled (row, chunk) blocks of up to max_bands sampled live bands; no 0xA5 block in any live band."""
     cap = win.caps["gate"]
     s, m = cap["s"], cap["m"]
     salt = win.salt_bytes

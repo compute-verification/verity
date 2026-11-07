@@ -22,7 +22,7 @@ Gates before any timing (a failed gate exits 4 and its build is not timed):
     32 x 32 x 4608 call (m = 3), z and receipt, B over all of int8 (-128 included); the reference kernel (h1zref.cu)
     against the same z;
   * every timed shape, 0xA5 poison over receipts, z, zo, y and the workspace first:
-    - the receipts on sampled units against `pouw_h1_receipts.call_receipts`, the seeds against seeds.py;
+    - the receipts on sampled proof blocks against `pouw_h1_receipts.call_receipts`, the seeds against seeds.py;
     - z against h1zref (X (B + c)^T by dp4a from full compressions) on every cell of the selected row tiles (all of
       them up to 8, else the first, the last and 6 random), no poison left in z, zo = z's rows < M, and y =
       int8_exact.dequantize(z) bit for bit;
@@ -295,7 +295,7 @@ def s32(v: torch.Tensor) -> torch.Tensor:
 
 def gate_j10(jc: J10Call, rng: random.Random, rsel: list[int], shift: int) -> dict:
     """J10-R's gate, on top of gate_one's (receipts, z, zo, y, poison, the no-write control, both faults): its receipts and
-    z on three units (the first, the last, one drawn) against j10r_ca's CPU twin; the workspace with no 0xA5 block left,
+    z on three units (the first, the last, one sampled) against j10r_ca's CPU twin; the workspace with no 0xA5 block left,
     sampled blocks against seeds.noise_block of the call's seed, and its bits and U equal to the twin's on those units'
     rows and columns; z on the selected row tiles against X (B + c)^T exactly (float64 over the workspace's bits, itself
     equal to the twin on its units); the wrap bits' density over all of B against its own call-scale noise."""
