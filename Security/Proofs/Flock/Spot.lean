@@ -241,4 +241,21 @@ theorem ksTwo (p : Flock.Spot.Server) : (deployedTwo p).KS FlockDeploy.sha512 :=
 theorem exfilTwo (p : Flock.Spot.Server) : (deployedTwo p).Exfil FlockDeploy.sha512 :=
   compilerExfilTwo _ _ _ _ (Flock.Spot.arg_KS p) (refinesTwo p).binds (refinesTwo p).sessions
 
+/-! ## Knowledge soundness at Flock's own relation
+
+`Compiled` reads its proof system's shapes and witnesses and not its relation, so the same record composes at
+`Arg.ofFlock D`, whose knowledge soundness `ofFlock_KS` is proved. The KS side then takes no refusal outside `arg p`'s
+relation; only zero knowledge reads it. -/
+
+/-- **The deployed sampled verifier is knowledge sound at Flock's relation**, at L3's knowledge-soundness contract. -/
+theorem ksOfFlock (h : (SamplingDeploy.compiled Flock.Spot.D code iroots).Sessions FlockDeploy.sha512) :
+    (SamplingDeploy.compiled Flock.Spot.D code iroots).KS FlockDeploy.sha512 :=
+  compilerKS _ _ _ _ Flock.Spot.ofFlock_KS (SamplingDeploy.commit_binds code _) h
+
+/-- **The deployed two-stage sampled verifier is knowledge sound at Flock's relation**, at L3's two-stage contract. -/
+theorem ksTwoOfFlock
+    (h : (SamplingDeploy.compiledTwo Flock.Spot.D code iroots two rs).Sessions FlockDeploy.sha512) :
+    (SamplingDeploy.compiledTwo Flock.Spot.D code iroots two rs).KS FlockDeploy.sha512 :=
+  compilerKSTwo _ _ _ _ Flock.Spot.ofFlock_KS (SamplingDeploy.commit_binds code _) h
+
 end SpotFlock
