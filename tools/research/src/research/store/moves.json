@@ -1569,6 +1569,11 @@
         "verity/core/protocols/certifier/window_charge.circuit-check.py": "verity/ml/protocols/certifier/window_charge.circuit-check.py",
         "verity/core/protocols/certifier/window_charge.circuit-check.json": "verity/ml/protocols/certifier/window_charge.circuit-check.json"
       }
+    },
+    {
+      "paths": {
+        "verity/core/primitives/identity/Identity/Domains.lean": "verity/core/primitives/randomness/Randomness/Domains.lean"
+      }
     }
   ]
 }

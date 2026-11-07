@@ -175,7 +175,7 @@ def check (p : Params) (c : Registration) (e : Evidence) : Core.Outcome Public C
   | .ok f => outcome p c f e
 
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
-written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+written: tied here to its entry of the table (`Randomness.Domains`), it reads the entry at its next record change. -/
 example : oneStage = Domains.ONE_STAGE_PROTOCOL := rfl
 
 end PouwCheck
