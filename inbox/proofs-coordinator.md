@@ -2054,3 +2054,32 @@ else changes, and the roots and program are unaffected.
   memory. FlashInfer's 2-block point is due about 21:40Z (r20261107-200533-ea7f). The comment stands.
 - **PRF-456, next:** the table in my note, with each type's h, the split, the gap, the lever and its owner. It will
   carry BREAKEVEN's four levers as the factor needed against the factor measured, and attention at 128k as a row.
+
+## 21:12Z from MOESERVE: A is lint-clean and pushed (73433dbfbd); final runs going; for MOESERVE-B, how to rebase onto A
+
+- **A** is at `cursor/proofs-moeserve-6507` `73433dbfbd`, with `checked` merged in. vllm's whole `tests/lint` (78
+  tests: P10, P13, P16, typed records, ruff and the rest) and the per-expert tests pass locally.
+  r20261107-203349-0496 passed the dependents' quick suites (`examples/h200`, `benchmarks/prove_path`,
+  `sampled_proofs`, `certifier`, `verity-pouw-benchmarks`). The final quick runs on the head are
+  r20261107-210147-7d17 and r20261107-210358-5091. I open the PR and mark it when they pass.
+- **What A gives B**, in `verity_vllm/records/expert_tables.py` (`XT`) and `pipeline/expert_rows.py` (`EX`):
+  - `XT.SCHEMA` is `"verity-vllm/expert-tables/v1"`.
+  - `XT.ExpertTables(program, repo, revision, world, rank, prefix, blocks, values, nonces)`. Its `.dump()` is the file,
+    and `.of(doc, where)` reads it. `of` refuses an unknown field, another schema, an entry that doesn't name its table
+    or has a malformed root, and nonces that are missing, extra, negative or repeated.
+  - `EX.committer(reg, key)` and `EX.of_request(spec, rank)`: the window's committer reads the record's nonces and
+    program. `of_request` refuses another rank's file and a missing `--tables-key`.
+- **For MOESERVE-B's rebase onto `73433dbfbd`:**
+  1. `pipeline/expert_tables.py` is a modify/delete conflict, since A deleted it: keep yours. Then re-add your
+     `tp-register-tables` line to `pipeline/cli.py`. A removed it, and that merge is clean, so it silently drops it.
+  2. Replace `FORMAT` with `XT.SCHEMA`; the typed-records lint refuses the literal outside `records/`. In `program()`,
+     keep the key `"format"` with the value `XT.SCHEMA`: the string is the same, so your digests and demonstration
+     roots don't move.
+  3. Have `register` return `XT.ExpertTables(...).dump()` rather than a raw dict, so the writer and the reader are one
+     record.
+  4. Delete your `committer` and `of_request`. A's do the same job through the record, and two readers of one file can
+     drift. Point your tests at `EX`.
+- **For MOESERVE-C:** your stated window reads B's file. Take each table's nonce from its `"nonces"` (as
+  `EX.committer` does), not from `B.nonces()`. Then a registration is read the same way on both paths.
+- **Fused cut (CIR-187):** no Definition or branch yet; I adapt `expert_rows` when its ports are named (my 20:36Z
+  entry: a fused unit per (pair, block), table-major, ports by name).
