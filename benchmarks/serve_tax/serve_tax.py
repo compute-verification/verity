@@ -8,6 +8,7 @@ integration's pin, on the same node, workload and SLO.
     serve_tax.py metrics DIR [--slo-ttft-s S --slo-tpot-s S]
     serve_tax.py table DIR... --out DIR [--slo-ttft-s S --slo-tpot-s S]
     serve_tax.py tick STEP_TRACE|RECORD_ARM_DIR [--load saturated]
+    serve_tax.py checkpoint --model-id ID
 
 `run` serves one arm (`ARMS`) on one server lifetime of vLLM's own OpenAI server (`vllm.entrypoints.openai.api_server`):
 a warm-up load, then each named load REPS times, rep by rep (light, medium, saturated, light, ...), each from an empty prefix
@@ -15,13 +16,16 @@ cache (the dev server's ``POST /reset_prefix_cache``). A load is the trace corpu
 tokens, about 60% behind one of eight shared prefixes, caps 64 or 256: `traffic.plan`) under Poisson arrivals at its rate for
 ``--span-s`` seconds, sent by the corpus's streaming client (`corpus.drive`), every request decoding to its cap
 (``ignore_eos``) so that every arm serves the same tokens. Each load's DIR/<load>/rep-<r>/client.jsonl holds the client's
-record of each request (send, each streamed chunk's time and tokens, done), and meta.json the load's rate, start and count.
+record of each request (send, each streamed chunk's time and tokens, done), and meta.json the load's rate, start and count,
+and its schedule: the engine's counters on ``/metrics`` before and after it (`SCHEDULE`).
 
 The arms, each one engine configuration; each adds its change to the arm it names as its parent:
 
 - ``compiled``: stock vLLM at the pin, its defaults (torch.compile and CUDA graphs, chunked prefill, prefix caching,
   async scheduling), FP8 where the checkpoint is FP8;
 - ``eager``: ``--enforce-eager``, the tax if commits or replay force eager;
+- ``bi-compiled``: ``compiled`` with ``VLLM_BATCH_INVARIANT=1``, vLLM's batch-invariant kernels;
+- ``bi-eager``: ``eager`` with ``VLLM_BATCH_INVARIANT=1``, the committing path's execution with nothing committed;
 - ``record``: the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`, the recorder serve-openai uses), in
   the engine core, written by a thread of its own (`servetax_plugin`);
 - ``release-order``: requests added in the network certifier's release order (`serve_admit.ReleaseOrder` in the engine
@@ -81,11 +85,17 @@ class Arm:
     args: tuple[str, ...] = ()
     plugin: tuple[str, ...] = ()
     tick: bool = False
+    #: the server's environment over the job's (VLLM_BATCH_INVARIANT is "0" unless an arm sets it)
+    env: dict = field(default_factory=dict)
 
 
+BATCH_INVARIANT = {"VLLM_BATCH_INVARIANT": "1"}
 ARMS = {
     "compiled": Arm(None, "stock vLLM, compiled (torch.compile, CUDA graphs)"),
     "eager": Arm("compiled", "stock vLLM, eager", ("--enforce-eager",)),
+    "bi-compiled": Arm("compiled", "+ vLLM's batch-invariant kernels", env=BATCH_INVARIANT),
+    "bi-eager": Arm("eager", "eager with vLLM's batch-invariant kernels: the committing path's execution (TargetProfile's "
+                    "bi-eager), nothing committed", ("--enforce-eager",), env=BATCH_INVARIANT),
     "record": Arm("compiled", "+ the scheduler's step trace (StepTrace)", plugin=("record",)),
     "release-order": Arm("record", "+ admission in the certifier's release order", plugin=("record", "release_order")),
     "tick": Arm("record", "+ admission on the certified tick", plugin=("record",), tick=True),
@@ -116,6 +126,10 @@ BASE_ARGS = ("--max-model-len", "4096", "--max-num-seqs", "256", "--seed", "0", 
 MODELS = {
     "moonlight": Model("moonshotai/Moonlight-16B-A3B-Instruct", "4e735b07a89f73647dfab71ab91b840f362ede5b", "moonlight-16b",
                        ("--dtype", "bfloat16", "--trust-remote-code"), (2.0, 0.08)),
+    "llama8b": Model("unsloth/Llama-3.1-8B", "3f0d51f8e5640f98f1a96ea9044a0e55c0a83814", "llama-3.1-8b",
+                     ("--dtype", "bfloat16"), (2.0, 0.08)),
+    "qwen3-30b": Model("Qwen/Qwen3-30B-A3B", "ad44e777bcd18fa416d9da3bd8f70d33ebb85d39", "qwen3-30b-a3b",
+                       ("--dtype", "bfloat16"), (2.0, 0.08)),
     "glm53": Model("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42", "glm-5.3",
                    ("--tensor-parallel-size", "8"), (2.0, 0.08)),
 }
@@ -155,9 +169,10 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int) -> list[str
 
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float) -> dict[str, str]:
-    env = dict(os.environ, VLLM_SERVER_DEV_MODE="1",
+    env = dict(os.environ, VLLM_SERVER_DEV_MODE="1", VLLM_BATCH_INVARIANT="0",
                PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
                                            *SHARED.PYTHONPATH]))
+    env.update(arm.env)
     if arm.plugin:
         env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
                                       **{k: True for k in arm.plugin}})
@@ -193,6 +208,29 @@ def reset_prefix_cache(port: int, tries: int = 30) -> bool:
                 return True
         time.sleep(1.0)
     return False
+
+
+#: a load's schedule, from the engine's counters on the server's Prometheus /metrics (summed over engines): its steps
+#: (each step with outputs observes ``iteration_tokens_total`` once), the tokens they scheduled and sampled, the prompt
+#: tokens the prefix cache served, and preemptions
+SCHEDULE = {"steps": "vllm:iteration_tokens_total_count", "step_tokens": "vllm:iteration_tokens_total_sum",
+            "generation_tokens": "vllm:generation_tokens_total", "prompt_tokens": "vllm:prompt_tokens_total",
+            "prompt_tokens_cached": "vllm:prompt_tokens_cached_total", "preemptions": "vllm:num_preemptions_total"}
+
+
+def counters(text: str) -> dict[str, float]:
+    """SCHEDULE's counters in a Prometheus text exposition, each summed over its label sets."""
+    tot = dict.fromkeys(SCHEDULE.values(), 0.0)
+    for line in text.splitlines():
+        name = line.split("{", 1)[0].split(" ", 1)[0]
+        if name in tot:
+            tot[name] += float(line.rsplit(" ", 1)[1])
+    return {k: tot[v] for k, v in SCHEDULE.items()}
+
+
+def scrape(port: int) -> dict[str, float]:
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics", timeout=30) as r:  # noqa: S310
+        return counters(r.read().decode())
 
 
 def stop(server: subprocess.Popen) -> str:
@@ -320,7 +358,7 @@ def run(a: argparse.Namespace) -> int:
     argv = server_argv(arm, model, checkpoint, port)
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
-            "plugin": list(arm.plugin), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
+            "plugin": list(arm.plugin), "env": arm.env, "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "versions": versions(), "host": os.uname().nodename,
             "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -340,8 +378,11 @@ def run(a: argparse.Namespace) -> int:
             for name, rate in rates.items():
                 ok = reset_prefix_cache(port)
                 d = out / name / f"rep-{rep}"
+                before = scrape(port)
                 m = drive_load(port, model.served, plan, rate, a.span_s, f"{name}{rep}", d, a.drain_s, tick, a.requests)
-                m |= {"load": name, "rep": rep, "prefix_cache_reset": ok}
+                after = scrape(port)
+                m |= {"load": name, "rep": rep, "prefix_cache_reset": ok,
+                      "schedule": {k: after[k] - before[k] for k in after}}
                 (d / "meta.json").write_text(json.dumps(m, indent=1))
                 meta["loads"].append({k: m[k] for k in ("load", "rep", "rate", "requests", "unfinished", "wall_s", "t0_unix")})
                 (out / "meta.json").write_text(json.dumps(meta, indent=1))
@@ -474,6 +515,16 @@ def load_metrics(recs: list[dict], slo: tuple[float, float]) -> dict:
             "tpot_p99_s": pct(tpots, 0.99)}
 
 
+def schedule_metrics(s: dict | None) -> dict:
+    """A load's schedule from its counters (`SCHEDULE`): its engine steps, the tokens each scheduled and the rows each
+    sampled (one per request that emitted a token), its preemptions and the prompt's share served from the prefix cache."""
+    if not s or not s.get("steps"):
+        return {}
+    return {"steps": s["steps"], "tokens_per_step": s["step_tokens"] / s["steps"],
+            "rows_per_step": s["generation_tokens"] / s["steps"], "preemptions": s["preemptions"],
+            "prompt_cached_share": s["prompt_tokens_cached"] / s["prompt_tokens"] if s["prompt_tokens"] else None}
+
+
 def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
     """An arm's run dir: its meta and each load's metrics by rep."""
     meta = json.loads((d / "meta.json").read_text())
@@ -487,7 +538,8 @@ def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
             recs = [json.loads(x) for x in f.read_text().splitlines() if x.strip()]
             m = json.loads((rep / "meta.json").read_text())
             loads.setdefault(name, []).append({"rep": int(rep.name.split("-")[1]), "rate": m["rate"],
-                                               "unfinished": m.get("unfinished"), **load_metrics(recs, slo)})
+                                               "unfinished": m.get("unfinished"), **load_metrics(recs, slo),
+                                               **schedule_metrics(m.get("schedule"))})
     return {"schema": SCHEMA + "/metrics", "arm": meta["arm"], "parent": meta.get("parent"), "what": meta.get("what"),
             "run_id": meta.get("run_id"), "model_id": meta["model_id"], "slo": {"ttft_s": slo[0], "tpot_s": slo[1]},
             "startup_s": meta.get("startup_s"), "error": meta.get("error"), "tick": meta.get("tick"), "loads": loads}
@@ -506,7 +558,7 @@ def summary(xs: list[float]) -> dict:
 
 
 KEYS = ("output_tok_per_s", "req_per_s", "goodput_req_per_s", "slo_attained", "ttft_p50_s", "ttft_p99_s", "itl_p50_s",
-        "itl_p99_s")
+        "itl_p99_s", "steps", "tokens_per_step", "rows_per_step", "preemptions", "prompt_cached_share")
 
 
 def table(arms: list[dict]) -> dict:
@@ -565,16 +617,20 @@ def markdown(t: dict) -> str:
     lines = [f"SLO: TTFT ≤ {slo.get('ttft_s')} s and time per output token ≤ {slo.get('tpot_s')} s. Tax: the arm's compute "
              "per token over the reference's at the same load, less one, from output tokens a second (goodput's beside it). "
              "Unserved: requests sent and not served over the load's reps; a tax beside one isn't over the same requests.",
+             "Steps: the engine's steps over the load, with the tokens each scheduled and the rows each sampled.",
              "", "| arm | load | rate (req/s) | unserved | out tok/s | req/s | goodput req/s | SLO met | TTFT p50 / p99 (ms) | "
-             "ITL p50 / p99 (ms) | tax vs compiled (tok/s) | tax vs compiled (goodput) | tax vs parent (tok/s) | run |",
-             "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
+             "ITL p50 / p99 (ms) | steps | tokens / rows a step | tax vs compiled (tok/s) | tax vs compiled (goodput) | "
+             "tax vs parent (tok/s) | run |",
+             "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|"]
     for r in t["rows"]:
         vc, vp = r.get("tax_vs_compiled") or {}, r.get("tax_vs_parent") or {}
         lines.append(f"| {r['arm']} | {r['load']} | {r['rate']:.3g} | {r['unserved']} of {r['sent']} | "
                      f"{_f(r['output_tok_per_s'])} | {_f(r['req_per_s'])} | "
                      f"{_f(r['goodput_req_per_s'])} | {_f(r['slo_attained'], 100, 3)}% | "
                      f"{_f(r['ttft_p50_s'], 1e3)} / {_f(r['ttft_p99_s'], 1e3)} | {_f(r['itl_p50_s'], 1e3)} / "
-                     f"{_f(r['itl_p99_s'], 1e3)} | {_tax(vc.get('throughput'))} | {_tax(vc.get('goodput'))} | "
+                     f"{_f(r['itl_p99_s'], 1e3)} | {_f(r.get('steps'), 1, 5)} | "
+                     f"{_f(r.get('tokens_per_step'), 1, 4)} / {_f(r.get('rows_per_step'), 1, 3)} | "
+                     f"{_tax(vc.get('throughput'))} | {_tax(vc.get('goodput'))} | "
                      f"{_tax(vp.get('throughput'))}{' (' + vp['of'] + ')' if vp else ''} | {r['run_id']} |")
     return "\n".join(lines) + "\n"
 
@@ -619,9 +675,14 @@ def main(argv: list[str] | None = None) -> int:
     k = sub.add_parser("tick")
     k.add_argument("source", metavar="STEP_TRACE|RECORD_DIR")
     k.add_argument("--load", default="saturated")
+    c = sub.add_parser("checkpoint", help="the model's pinned snapshot under HF_HOME")
+    c.add_argument("--model-id", required=True, choices=sorted(MODELS))
     a = ap.parse_args(argv)
     if a.cmd == "run":
         return run(a)
+    if a.cmd == "checkpoint":
+        print(MODELS[a.model_id].checkpoint())
+        return 0
     if a.cmd == "plan":
         ck = Path(a.checkpoint) if a.checkpoint else MODELS[a.model_id].checkpoint()
         n = plan_need(parse_rates(a.rates), a.span_s, a.requests)
