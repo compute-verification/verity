@@ -22,6 +22,7 @@ import pytest
 
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity_flock import circuit as FC
+from verity.core.protocols.pouw import audit as PA
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 
 from test_lean_registered_reads import BIN, LEAN, OUT_VALUE, POSITIONS, STATEMENT, TABLE_ROWS, VALUE, _program
@@ -39,9 +40,9 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 def staged(tmp_path_factory):
     """The bit-row circuit bound to the program and its partition, x and cs_table registered in their ports' formats, the
     verifier's own reads file and the honest statement."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-bit-rows")
@@ -80,9 +81,9 @@ def one_value(tmp_path_factory):
     cs both `row/v2` rows, and one value `ROWS` of N + TABLE_ROWS rows whose row u unit u reads at x and row
     N + POSITIONS[u] at cs, each port its own registered port of the value; the verifier's reads file and the honest
     statement."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-rows-of-one-value")
@@ -210,6 +211,61 @@ def test_a_bit_row_registration_of_another_width_is_refused(staged):
             else:
                 assert code == 1 and f"port {port}'s rows are 1024 bits (64 u16 words), not {value}'s registered {want}" in out, \
                     (name, port, out)
+
+
+def _pearl_plus(s, value: str, call: int, flip: bool = False):
+    """`value`'s registered rows as Pearl+ commits a call's A rows: their bytes, FP32 words, in `audit.commit_rows`
+    under hm96-sha512 and PoUW's rows domain at the call's salts. The tree, and `_write`'s registration of those rows
+    opening it with PoUW's own salts and paths (`flip`: the first table row with one word flipped)."""
+    reg, key = s.regs[value], bytes(range(32))
+    data = [b"".join(w.to_bytes(2, "little") for w in r) for r in reg.rows]
+    tree = PA.commit_rows(PA.activation_binding(bytes(range(64)), call), call, data, PA.HM96, salt_key=key, nonce=call)
+
+    def statement(positions):
+        rows = [reg.rows[p] for p in positions]
+        rows[0] = (rows[0][0] ^ 1, *rows[0][1:]) if flip else rows[0]
+        paths = [b"".join(tree.open(p).path).hex() for p in positions]
+        return rows, [PA.hm96_salt(key, call, p) for p in positions], {"value": value, "positions": list(positions),
+                                                                       "paths": paths}
+    return tree, SimpleNamespace(statement=statement)
+
+
+def test_a_pearl_plus_tree_opens_under_its_own_domain(staged):
+    """A value committed outside one-stage, which one-stage reuses under its committer's domain (R7's `outputs`, the
+    reads file's `domains`): cs's rows committed as Pearl+ commits a call's A, under PoUW's rows domain and salts, whose
+    root the verifier opens at every table row under that domain. A table row with one word flipped opens nothing, nor
+    does x, a `row/v2` port, read from a Pearl+ tree of its rows (whose leaves are `row-seg/v1`), nor cs under
+    one-stage's own domain for it (`registered.domain`, whichever binding it takes). The reads file registers the output
+    row out as the fixture does, since a statement under `--registered` registers every port. It catches what
+    `tests/test_registered.py`'s Python reads can't: the executable verifier holding a read to a domain from outside
+    one-stage, verbatim."""
+    program, query = _program()
+    (cs, cs_reg), (x, x_reg) = _pearl_plus(staged, VALUE, 7), _pearl_plus(staged, "x", 8)
+    mine = G.domain(P.program_digest(program), VALUE, WORDS, TABLE_ROWS).domain_id.hex()
+    assert cs.domain.domain_id.hex() != mine and staged.own["ports"]["cs"]["domain"] == mine
+    own = G.reads_file(program, query, {VALUE: WORDS, "x": WORDS},
+                       {VALUE: cs.commitment.root.hex(), "x": staged.regs["x"].root.hex()},
+                       domains={VALUE: cs.domain.domain_id.hex()}, schemas=SCHEMAS)
+    assert own["ports"]["cs"]["domain"] == cs.domain.domain_id.hex()
+    own["ports"]["out"] = staged.own["ports"]["out"]
+    (staged.dir / "own-pearl.json").write_text(json.dumps(own))
+    public = _write(staged, "pearl", {"x": (staged.regs["x"], range(N)), "cs": (cs_reg, POSITIONS)})
+    code, out = _statement(staged, staged.dir / "own-pearl.json", public)
+    assert code == 0, out
+    assert json.loads(out.splitlines()[0])["registered"] == {"cs": {"value": VALUE, "root": cs.commitment.root.hex()},
+                                                             "x": {"value": "x", "root": staged.regs["x"].root.hex()},
+                                                             "out": {"value": OUT_VALUE, "root": staged.out.root.hex()}}
+    flipped = _write(staged, "pearl-flipped", {"x": (staged.regs["x"], range(N)),
+                                               "cs": (_pearl_plus(staged, VALUE, 7, flip=True)[1], POSITIONS)})
+    code, out = _statement(staged, staged.dir / "own-pearl.json", flipped)
+    assert code == 1 and f"port cs: table row 0 does not open {VALUE}'s registered root" in out, out
+    s = SimpleNamespace(**{**vars(staged), "own": own})
+    as_v2 = _write(staged, "pearl-x", {"x": (x_reg, range(N)), "cs": (cs_reg, POSITIONS)})
+    code, out = _statement(staged, _own(s, "own-pearl-x", lambda ps: ps["x"].update(
+        root=x.commitment.root.hex(), domain=x.domain.domain_id.hex())), as_v2)
+    assert code == 1 and "port x: table row 0 does not open x's registered root" in out, out
+    code, out = _statement(staged, _own(s, "own-pearl-mine", lambda ps: ps["cs"].update(domain=mine)), public)
+    assert code == 1 and f"port cs: table row 0 does not open {VALUE}'s registered root" in out, out
 
 
 def test_two_rows_of_one_value_a_unit_are_accepted(one_value):

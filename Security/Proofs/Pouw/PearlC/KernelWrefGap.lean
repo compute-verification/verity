@@ -2,6 +2,10 @@ module
 
 public import Proofs.Pouw.PearlC.DeviceRev1Gap
 public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TileGap
 
 /-!
 # g against the honest kernel's `W_ref`, from the record's TT_OUT (staged)

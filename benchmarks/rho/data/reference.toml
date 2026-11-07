@@ -25,12 +25,6 @@ kind = "pretrain"
 tokens = { value = 3.3e13, unit = "token", source = "ruled: the work reference (33T tokens)", status = "ruled" }
 compute = { value = 9.7e24, unit = "FLOP", source = "ruled: 6 x 49e9 x 33e12", status = "ruled" }
 
-[run.v4-step]
-model = "deepseek-v4-pro"
-kind = "pretrain"
-tokens = { value = 9.44e7, unit = "token", source = "ruled: the work reference (one optimizer step, a 94.4M-token batch)", status = "ruled" }
-compute = { value = 2.84e19, unit = "FLOP", source = "ruled: about 4 H100-hours at 7.1e18 FLOP each", status = "ruled" }
-
 [policy.v4-pro-session]
 gamma = { value = 9.8e16, unit = "FLOP", source = "a 1M-token session: 1e6 x 2 x 49e9", status = "derived" }
 k = { value = 2e7, unit = "bit", low = 2.2e6, high = 8.8e7, source = "ruled: a session returns at most 2.5 MB (1M tokens at 20 bits)", status = "ruled" }
@@ -43,14 +37,14 @@ inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeho
 [fleet.world-h200]
 location = "h200-hgx"
 count = { value = 4.687e7, unit = "location", source = "benchmarks/census/adversary.json world-inference-2027: 9.36e30 / (1.58312e16 x 3.1536e7 x 0.4)", status = "derived" }
-eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (operating points 0.1% and 1%); high: the earlier 1% point", status = "ruled" }
+eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (operating points 0.1% and 1%); high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
 
 [fleet.world-nvl72]
 location = "gb200-nvl72"
 count = { value = 2.061e6, unit = "location", source = "benchmarks/census/adversary.json world-inference-2027: 9.36e30 / (3.6e17 x 3.1536e7 x 0.4)", status = "derived" }
-eps_dark = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (operating points 0.1% and 1%); high: the earlier 1% point", status = "ruled" }
+eps_unreg = { value = 0.001, low = 0.0001, high = 0.01, source = "ruled: mainline 0.1%; one connected unencumbered pool (operating points 0.1% and 1%); high: the earlier 1% point", status = "ruled" }
 mfu_train = { value = 0.4, low = 0.3, high = 0.55, source = "frontier pretraining MFU", status = "assumed" }
 mfu_serve = { value = 0.4, low = 0.2, high = 0.6, source = "the served work's MFU, prefill-heavy", status = "assumed" }
 

@@ -36,9 +36,9 @@ lock is not in the line: it takes that slot whenever it frees.
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the lander's train checks (`train.sh`). A priority waiter's ticket sorts
 before every lane waiter's, so it takes the next slot that frees ahead of the lanes' checks already waiting; it never stops a
 running check, and priority waiters keep their own arrival order. Merges unblock everyone. With `--rank N`
-(drive's after-landing run, rank 0: `research.drive.POSTLAND_SLOT_RANK`), priority waiters go by rank, then arrival, and a
-priority waiter without a rank (drive's Lean checks of `next`) goes after the ranked: the run `main` waits on takes the next
-slot, ahead of Lean checks that came first.
+(drive's after-landing run and lock run, rank 0: `research.drive.POSTLAND_SLOT_RANK`), priority waiters go by rank, then
+arrival, and a priority waiter without a rank (a `train.sh` launched by hand) goes after the ranked: the runs `main` waits on
+take the next slot, ahead of priority checks that came first.
 
 `--wait-max SECONDS`: a waiter that has no slot after SECONDS leaves the line and exits NOT_STARTED (75) without running CMD, so
 its caller can tell a check that never started from one that failed. `--run-max SECONDS`: CMD's time limit, counted from the slot
@@ -48,9 +48,9 @@ run so far plus SECONDS, through its harness's control file (research.telemetry.
 
 `CHECK_MIN_MEM_GB=GB` (MIN_MEM_ENV) in the environment: only a slot whose mem= is at least GB (or that sets none) is taken; on
 a machine that lists no such slot the waiter exits NOT_STARTED at once, naming the slots it has. `check.py --record --priority`
-sets it (`research run --env`) for a check that runs pytest or circuit-check (its TRAIN_GB), so a train never runs in a lane
-slot: in one, every parallel suite gets one test worker and circuit-check one target at a time, about twice a train slot's wall
-time. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
+sets it (`research run --env`) for a check that runs pytest, lean-suites or circuit-check (its TRAIN_GB), so a train never runs
+in a lane slot: in one, every parallel suite gets one test worker, the one-process suites one process between them and
+circuit-check one target at a time, two to four times a train slot's wall time. It is the environment, not an option, so the run's command stays the one `research merge` reads; CMD doesn't inherit it.
 
 `--twin PAIR` / `--twin PAIR@HOME`: one of a check's twins, the same check launched on each machine it may run on when none had a
 free slot (`check.py --record --on auto`), so it takes the first slot that frees on any of them, and never waits in one
@@ -88,7 +88,7 @@ from pathlib import Path
 
 SLOTS = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/slots"))
 #: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
-LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 LINE = "check-line"
 POLL_S = 20

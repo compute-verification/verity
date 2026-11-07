@@ -57,7 +57,7 @@ def ir_row(E: int, TOPK: int, VPT: int, renormalize: bool, logits: list[int]) ->
         _CALLS[key] = standalone_call(RS.router_fn(E, TOPK, VPT, renormalize))
     prog, call = _CALLS[key]
     t: dict[int, int] = {}
-    out = evaluate_call(prog.circuit, call, [int(v) & 0xFFFF for v in logits], transcript=t)
+    out = evaluate_call(prog.circuit, call, [int(v) & 0xFFFF for v in logits], trace=t)
     words = [t[call.lo + j] & 0xFFFFFFFF for j in RS.slots(E, TOPK, VPT, renormalize)]
     return words, [w & 0xFFFFFFFF for w in out[:TOPK]], [i & 0xFFFFFFFF for i in out[TOPK:]]
 

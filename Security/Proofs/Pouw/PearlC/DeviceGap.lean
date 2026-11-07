@@ -1,5 +1,8 @@
 module
 
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 public import Proofs.Pouw.PearlC.TileGap
 
 /-!

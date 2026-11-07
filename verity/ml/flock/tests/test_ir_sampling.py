@@ -20,9 +20,9 @@ from verity.ml.circuits.defs import bind  # noqa: E402
 from verity.ml.circuits.ops import fp32 as F  # noqa: E402
 from verity.ml.circuits.ops.scalar import SelectF32  # noqa: E402
 from verity_numerical.bench import lowerings  # noqa: E402
-from verity_numerical.bench import templates as TM  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
 from verity.ml.definitions.registry import ref_prims as RP  # noqa: E402
 from verity.ml.definitions.registry import sampling as SM  # noqa: E402
 

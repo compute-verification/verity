@@ -1,10 +1,11 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Exec.Shape
-public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 public import Definitions.Flock.HoloCompiled
-public import Proofs.Flock.VBridge.InnerAccepts
 public import Proofs.Flock.Recursive.StageKinds
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+public import Proofs.Flock.VBridge.InnerAccepts
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 
 /-!
 # A rep with hidden units has a spine

@@ -24,6 +24,11 @@ def _module(name: str, path: Path):
 CHECK = _module("repo_check_for_deferred", ROOT / "tools" / "verity" / "check" / "check.py")
 
 
+@pytest.fixture(autouse=True)
+def _provers(provers):
+    return provers(CHECK)
+
+
 def _main(monkeypatch, tmp_path, argv):
     got = []
     monkeypatch.setenv("RESEARCH_RUN_ID", "r20261018-000000-abcd")
@@ -74,6 +79,24 @@ def test_a_deferred_run_is_refused_with_a_part_or_a_step_ci_toml_doesnt_declare(
     assert "no job nope" in capsys.readouterr().err
     assert _main(monkeypatch, tmp_path, ["--deferred", "pytest", "--shard", "3/3"]) == (2, None)
     assert "--shard 3/3: that shard holds none of those steps" in capsys.readouterr().err
+
+
+def test_the_lock_runs_bookkeeping_flag_reaches_its_lean_audit_and_nothing_else_takes_it(monkeypatch, tmp_path, capsys):
+    """`--bookkeeping-warn` (drive's lock run: `train.sh --deferred lean-audit --bookkeeping-warn`) reaches `run`, whose
+    lean-audit step then repairs bookkeeping (`lean_steps`); a check that isn't a deferred, unsharded run that regenerates
+    records refuses it, so a PR's own check and the after-landing run fail on bookkeeping as before."""
+    got = []
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r20261018-000000-abcd")
+    monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path))
+    monkeypatch.delenv("VERITY_SKIP_STORE", raising=False)
+    monkeypatch.setattr(CHECK.SUITES, "foreign", lambda members, env: None)
+    monkeypatch.setattr(CHECK, "run", lambda *a, bookkeeping=False: got.append(bookkeeping) or (True, []))
+    assert CHECK.main(["--deferred", "lean-audit", "--keep-going", "--bookkeeping-warn"]) == 0 and got == [True]
+    assert CHECK.main(["--deferred", "lean-audit", "--keep-going"]) == 0 and got == [True, False]
+    for argv in (["--bookkeeping-warn"], ["--deferred", "lean-audit", "--no-regenerate", "--bookkeeping-warn"],
+                 ["--deferred", "lean-audit", "--shard", "1/3", "--bookkeeping-warn"]):
+        assert CHECK.main(argv) == 2 and len(got) == 2, argv
+    assert "--bookkeeping-warn is drive's lock run" in capsys.readouterr().err
 
 
 def test_a_sharded_deferred_run_runs_those_steps_parts_in_its_shard_alone(monkeypatch, tmp_path):

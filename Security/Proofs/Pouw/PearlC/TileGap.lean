@@ -2,6 +2,8 @@ module
 
 public import Proofs.Pouw.PearlC.Gap
 public import Proofs.Pouw.Sampling
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # g under the sampled audit, from TT_OUT per tile

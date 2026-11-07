@@ -1,16 +1,11 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOut
-public import Proofs.Pouw.Prob
+public import Definitions.Pouw.Guarantees.PearlC
 public import Proofs.Pouw.PearlC.Game
 public import Proofs.Pouw.PearlC.Instance
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.NormNum
-public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.Ring
-public import Definitions.Pouw.Guarantees.PearlC
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # g from TT_OUT
@@ -34,7 +29,7 @@ first-promotion skip (`Definitions.Pouw.Assumptions.PearlC.TTOut`), and rev1 (`T
     `696953/103700000` (0.6721%) at 16384³ if only `α·x` runs as glue with PoUW on, and `601273/52660000` (1.1418%) and
     `95217/11540000` (0.8251%) if a clean E4M3 cast runs as well.
 * **The cap's scope.** What the cap's calibration rests on, and where it holds:
-  - the admission and debit figures come from 64×8 tiles at `k ≤ 4,864` (Qwen2.5-0.5B's layers, `pearlc_activations.py`),
+  - the admission and debit figures come from 64×8 tiles at `k ≤ 4,864` (Qwen2.5-0.5B's layers),
     below the headline k. At the headline shapes, where `pearlCDomainAt` needs all of a unit's 8,192 or 16,384
     activation rows and weight rows admissible, admission is unmeasured;
   - g does not depend on m, but it does depend on n: `A′·F_B` and the forming stop amortizing, so at an 8-row weight

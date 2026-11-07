@@ -2,6 +2,11 @@ module
 
 public import Proofs.Pouw.PearlC.DeviceCapGap
 public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceGap
+import Proofs.Pouw.PearlC.DeviceRev1Gap
 
 /-!
 # v2 at the cap 1/1,000 and v1 under rev1 at sm_120's in-loop prices (staged)

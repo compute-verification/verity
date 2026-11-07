@@ -1,0 +1,17 @@
+{
+ "cubin": {
+  "art": "art:378f025e60d738a57292e27077da61b31b6741ee47168ecef89ecf6b8f218ae0",
+  "sha256": "cdf0e443fe06cf693ffb99b15b6deb17c54cd450f55fe242708d73c9c002684c",
+  "bytes": 7527568
+ },
+ "window": {
+  "provisional": true,
+  "source": "r20261104-121117-653e",
+  "basis": "provisional, r20261104-121117-653e's verify answer (out/piece/verify.json) until the run of record's window replaces it: ACCEPT verity/pouw/pearl-plus/v1 pearl-c-h100-v1-h3: 459 drawn and 8 exclusion tiles over 2 passes, y committed and checked on 128 of 128 calls, tied to W 64027a2203d70f39 on its 256 tables; 125,496,135,942 of 127,086,977,024 MACs credited at ε 0.009983, δ 1/100 (Pearl's Assumption 1); run 7bea051d442113a6, source 43a0dfd7e0b5e818; verifier 3deac797c1465a546aad486ebf75893b37ab3fbe",
+  "card": "h200",
+  "card_from": "r20261104-121117-653e's job record (NVIDIA H200, vy-dc-h200-3): its verify answer names no card",
+  "k": 459,
+  "credited": 125496135942,
+  "work": 127086977024
+ }
+}

@@ -2,6 +2,12 @@ module
 
 public import Proofs.Pouw.PearlC.TileUOnlyGap
 public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TileUOnlyGap
+import Proofs.Pouw.PearlC.UOnlyGap
 
 /-!
 # U-only binding at sm_120's in-loop prices (staged)

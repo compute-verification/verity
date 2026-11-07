@@ -1,7 +1,16 @@
 module
 
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeedK
-public import Proofs.Pouw.PearlC.RowSeedCode
+public import Definitions.Pouw.Assumptions.PearlC.HiddenTile
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceCapRev1Gap
+import Proofs.Pouw.PearlC.HiddenGap
+import Proofs.Pouw.PearlC.RowSeedCode
+import Proofs.Pouw.PearlC.RowSeedGap
 public import Proofs.Pouw.PearlC.HiddenGap
 
 /-!

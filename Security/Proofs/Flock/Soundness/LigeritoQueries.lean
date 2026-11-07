@@ -1,10 +1,15 @@
 module
 
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
 public import Proofs.Flock.Soundness.LigeritoCoins
-public import Mathlib.Analysis.MeanInequalities
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZerocheckPhase
 
 /-!
-# Ligerito's stratified queries (PROTOCOL.md §13.5)
+# Ligerito's stratified queries (`Flock.Ligerito`)
 
 If a set `D` covers a fraction `δ` of a level's `2^d` positions, the `Q` stratified query
 positions all miss it with probability at most `(1 − δ)^Q`, the same as `Q` independent uniform
@@ -62,7 +67,7 @@ theorem strata_le (Q d : ℕ) : ∀ c ∈ strata Q d, c ≤ d := strata_go_le d 
 
 /-! ## Slots and positions -/
 
-/-- The query slots `(depth, stratum)`, in query order (§13.5). -/
+/-- The query slots `(depth, stratum)`, in query order (`Flock.Ligerito`). -/
 def querySlots (Q d : ℕ) : List (ℕ × ℕ) :=
   (strata Q d).flatMap fun c => (List.range (2 ^ c)).map fun s => (c, s)
 
@@ -238,7 +243,7 @@ theorem list_prod_map_pow (L : List ℕ) (x : ℝ) :
   | cons a L ih => simp [List.prod_cons, List.sum_cons, pow_add, ih]
 
 /-- **The stratified queries.** If `D` covers a fraction `|D|/2^d` of a level's positions, the `Q`
-stratified query positions (§13.5) all miss it with probability at most `(1 − |D|/2^d)^Q`. -/
+stratified query positions (`Flock.Ligerito`) all miss it with probability at most `(1 − |D|/2^d)^Q`. -/
 theorem prCoin_positions_miss_le (A : Arith F K) (hA : A.Correct) (Q d : ℕ) (hd : d ≤ 64)
     (D : Finset ℕ) (hD : D ⊆ Finset.range (2 ^ d)) :
     prCoin (fun w : Fin Q → F => ∀ p ∈ positions A Q d w, p ∉ D) ≤

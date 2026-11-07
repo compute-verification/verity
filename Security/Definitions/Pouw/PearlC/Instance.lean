@@ -142,8 +142,8 @@ draws and the units gives `δ`, and it needs no independence between them. With 
   normal code. `E′ = 0` is therefore impossible, and the per-row probability is `0 ≤ 2^−128`.
 - Every draw also keeps at least 85% of its nominal `‖E′‖ = σα·√32/16`, so no draw can be recognized from `E′` alone as
   weak. The `2^−128` above is thus a conjecture about draws that all carry their noise.
-- The check is `pearlc-noise-loss.py`. At norm 256 the largest entry
-  is at least `2^−8`, also nonzero; an earlier `2^−90` for norm 256 wrongly treated the 32 entries as independent. -/
+- At norm 256 the largest entry
+  is at least `2^−8`, also nonzero; the 32 entries are not independent. -/
 noncomputable def δPearlC (q N : ℕ) : ℝ := ((q + N : ℕ) : ℝ) / 2 ^ 128
 
 end Pouw.PearlC

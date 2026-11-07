@@ -4,6 +4,10 @@ public import Proofs.Pouw.PearlC.DeviceSm120KernelGap
 public import Proofs.Pouw.PearlC.UOnlyGap
 public import Definitions.Pouw.Guarantees.PearlC
 public import Proofs.Pouw.PearlC.TTOutW1
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.KernelWrefGap
+import Proofs.Pouw.Prob
 
 /-!
 # v1 under rev1 at a stricter cap, and g there (FP8 security's file)

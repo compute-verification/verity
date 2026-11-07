@@ -1,5 +1,12 @@
 module
 
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Proofs.Pouw.PearlC.TileGap
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceGap
+import Proofs.Pouw.PearlC.DeviceRev1Gap
+import Proofs.Pouw.Prob
 public import Proofs.Pouw.PearlC.DeviceRev1Gap
 
 /-!

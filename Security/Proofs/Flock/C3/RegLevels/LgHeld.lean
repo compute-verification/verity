@@ -1,7 +1,26 @@
 module
 
-public import Proofs.Flock.C3.Sparse.HeldStages
-public import Proofs.Flock.C3.RegLevels.RRounds
+public import Proofs.Flock.C3.Compose.HoloEncoded
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.C3.RegLevels.SrcMaps
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.C3.RegLevels.LgCoins
+import Proofs.Flock.C3.RegLevels.RRounds
+import Proofs.Flock.C3.RegLevels.SrcRun
+import Proofs.Flock.C3.Sparse.HeldStages
 
 /-!
 # `StageHeld` part 3 at R's stages: `laterCoins_of_held`'s `h4` and `h5`

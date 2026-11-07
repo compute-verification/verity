@@ -2751,7 +2751,7 @@ extern "C" int kh_one_peel(const void* A, const void* B, unsigned rows, unsigned
   return one_call<true>(A, B, rows, N, K, seeds, live, out, ws, J, z, zo, y, ydump, sa, sw, step, M, stream);
 }
 
-// J10 banded (measured only; noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): kh_one and
+// J10 banded (measured only; noise=j10-banded, a reading of SharedNoise.lean): kh_one and
 // kh_one_peel on band-leader rows, band column tiles a band; mode 0 noise then units, 1 the units alone, 2 the noise alone
 extern "C" int kh_one_band(const void* A, const void* B, unsigned rows, unsigned N, unsigned K, const void* seeds,
                            const void* live, void* out, void* ws, unsigned J, int* z, int* zo, void* y, void* ydump,

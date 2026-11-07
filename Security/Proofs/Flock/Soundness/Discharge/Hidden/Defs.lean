@@ -1,12 +1,30 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Bc
+public import Proofs.Flock.Soundness.Discharge.Hm.Delta
+public import Proofs.Flock.Soundness.Discharge.Hm.Place
+public import Proofs.Flock.Soundness.Discharge.Hm.Port
 public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # A hidden-output statement (`Stmt.setupHidden`): what it is, and its frozen statements
 
-With hidden outputs (`Tags.hiddenOutputs`, PROTOCOL.md §16.13) flock-verify sets a table up with `Stmt.setupHidden`,
+With hidden outputs (`Tags.hiddenOutputs`, `HmOut`) flock-verify sets a table up with `Stmt.setupHidden`,
 `Stmt.setupH`'s checks on `HmOut`'s rows: the input rows, then one output row per output port. The public file holds no
 output word; every row's `b ‖ c` is a region; Δ is `HmRow.delta`'s, then each output row's message bits copied from
 the output bits the circuit computes (`outPairs`), zero past the port's words, then each pinned output bit's copy of the

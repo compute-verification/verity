@@ -21,31 +21,6 @@ namespace Pouw.Guarantees
 
 open Pouw.Pinned Finset
 
-/-- **(b) Theorem 1** (§3.5). If `G_g` holds with error `δ` and, for an adversary within `(T, q)`, the audit (any
-coins `C` drawn independently of `H` and `s`, any acceptance predicate) satisfies
-`Pr[accept ∧ ∑_{u ∉ K} W_ref(u) > ε_s·W] ≤ δ_s`, then `Pr[accept ∧ T < (1 − g)(1 − ε_s)·W] ≤ δ_s + δ`. -/
-def Theorem1 : Prop :=
-  ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
-    (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ),
-    g < 1 → GGap CM P D g δ →
-    ∀ U : Workload, U.InDomain D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
-    ∀ A : Adversary CM, A.Bounded U T q →
-    ∀ (C : Type) [Fintype C] (accept : (Q → R) → S → C → Prop) (εs δs : ℝ),
-      pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧
-          εs * totalWref P U.layout <
-            ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ))
-        ≤ δs →
-      pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧ T < (1 - g) * (1 - εs) * totalWref P U.layout)
-        ≤ δs + δ q U.layout.N
-
-/-- **(c) Work-weighted sampling.** `t` independent samples, each unit drawn with probability `∝ w(u)`; the audit
-accepts iff every sample is in `K` (which may depend on the rest of the randomness `α`). Then
-`Pr[accept ∧ ∑_{u ∉ K} w(u) > ε_s·∑_u w(u)] ≤ (1 − ε_s)^t` for `ε_s ≤ 1`. -/
-def WorkWeightedSampling : Prop :=
-  ∀ (α : Type) [Fintype α] (w : ℕ → ℕ) (N t : ℕ) (K : α → Finset ℕ) (εs : ℝ), εs ≤ 1 →
-    pr (fun x : α × (Fin t → Ticket w N) => AuditAccepts (K x.1) x.2 ∧
-        εs * ∑ u ∈ range N, (w u : ℝ) < ∑ u ∈ range N \ K x.1, (w u : ℝ)) ≤ (1 - εs) ^ t
-
 /-- **(d) End to end: TT gives resource exhaustion.** Under TT(g₀) and the `Ω_max` bound, for every in-domain
 workload, budget, oracle bound and adversary, the audit with `t` work-weighted samples satisfies
 `Pr[accept ∧ T < (1 − g)(1 − ε_s)·W] ≤ (1 − ε_s)^t + δ(q, N)` with `g = 1 − (1 − g₀)/Ω_max`. -/

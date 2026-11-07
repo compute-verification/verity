@@ -1,14 +1,18 @@
 module
 
-public import Definitions.Pouw.PearlC.DevicePrices
+public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
+public import Definitions.Pouw.Guarantees.PearlC
 public import Proofs.Pouw.PearlC.DeviceCapGap
 public import Proofs.Pouw.PearlC.DeviceChainCapGap
 public import Proofs.Pouw.PearlC.UOnlyGap
 public import Proofs.Pouw.PearlC.TileUOnlyGap
 public import Proofs.Pouw.PearlC.FreezeP
-public import Definitions.Pouw.Guarantees.PearlC
 public import Proofs.Pouw.PearlC.TTOutW1
-public import Proofs.Pouw.PearlC.TTOutW1Variants
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceCapGap
+import Proofs.Pouw.PearlC.TTOutW1Variants
 
 /-!
 # g at the RTX PRO 6000 (sm_120) records (staging, nothing pinned)

@@ -1,8 +1,15 @@
 module
 
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.TileCheck8
+public import Proofs.Pouw.PearlC.PeelExactProofsP
+public import Proofs.Pouw.PearlC.RowCircuit
+public import Proofs.Pouw.PearlC.Tile4Circuit
 public import Proofs.Pouw.PearlC.TileCheck8
 public import Proofs.Pouw.PearlC.TileValues
-public import Proofs.Pouw.PearlC.Tile4Circuit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 public import Proofs.Pouw.PearlC.TileGap
 
 /-!

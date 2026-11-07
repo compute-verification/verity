@@ -1,6 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # flock-verify `--zk`'s acceptance sets up each table with `Stmt.setupH`

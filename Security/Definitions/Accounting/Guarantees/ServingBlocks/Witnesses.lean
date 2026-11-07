@@ -74,18 +74,4 @@ def ServingBlockBoundRemote_nontrivial : Prop :=
   ¬ Counter.J.total ≤
     ∑ u ∈ Counter.S, (((univ.filter fun i => Counter.r.parent i = u).card : ℝ) * Counter.q 1 0 + 0) + 0
 
-/-- **The elementary uncertified cap's premise holds** at `Honest`: its serving blocks and dark remainder refine
-themselves. -/
-def UncertifiedElementary_honest : Prop :=
-  Nonempty (Honest.P.Refines Honest.P)
-
-/-- **The elementary uncertified cap is false without refinement**: at `Counter`, the parent map `away` sends the one
-inference block, which holds the counted operation's gate, to the unit of `P₂` that holds no gate, so it is no
-refinement, and the operation's weight `1`, in `P₂`'s first unit with no inference block mapped there, is above the cap
-`split = 0`. -/
-def UncertifiedElementary_nontrivial : Prop :=
-  ¬ (∀ g, Counter.P₂.unit g = (Counter.P.unit g).map Counter.away) ∧
-  ¬ UncertifiedCap Counter.J (Counter.P₂.gates 0) (fun i : {i // Counter.away i = 0} => Counter.P.gates i)
-    (Counter.J.split (Counter.P₂.gates 0) (fun i : {i // Counter.away i = 0} => Counter.P.gates i))
-
 end Accounting.Guarantees.ServingBlocks
