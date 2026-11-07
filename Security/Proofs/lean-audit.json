@@ -81,6 +81,7 @@
   "Proofs.Properties.Nci.Protocol",
   "Proofs.Properties.Verity.Soundness",
   "Proofs.Properties.Verity.Sampled",
+  "Proofs.Properties.Verity.Sampled.Unbound",
   "Proofs.Properties.Verity.Sampled.Binding",
   "Proofs.Properties.Verity.Sampled.Device",
   "Proofs.Properties.Challenger.Window",

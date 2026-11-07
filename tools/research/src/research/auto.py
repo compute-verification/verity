@@ -186,11 +186,15 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
            and (s.get("mem") is None or s["mem"] >= mem_gb)]  # slot.py raises a slot without mem= to what the run asks
     if not fit:
         raise ValueError(f"no slot of {doc.get('file')} gives {cpus} CPUs and {mem_gb:g} GB")
-    free = [s for s in fit if s.get("holder") is None and not s.get("blocked")]
+    # a window (slot.py's `window ...` reason) closes a slot for hours or days, unlike a memory or disk block
+    open_ = [s for s in fit if not str(s.get("blocked") or "").startswith("window ")]
+    if not open_:
+        raise ValueError(f"every slot of {doc.get('file')} that fits is closed by a window ({fit[0]['blocked']})")
+    free = [s for s in open_ if s.get("holder") is None and not s.get("blocked")]
     waiting = len(doc.get("waiters") or [])
     why = (f"slots {', '.join(s['name'] + (' free' if s in free else ' held' if s.get('holder') else ' blocked') for s in fit)}; "
            f"{waiting} waiting")
-    return len(fit), len(free), waiting, why
+    return len(open_), len(free), waiting, why
 
 
 def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple[str, str] | None, str]:
