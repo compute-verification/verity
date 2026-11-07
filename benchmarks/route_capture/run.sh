@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # The route capture (README.md), under research run on a node with eight H200s: GLM-5.3 served like production (`vllm
-# serve` at vLLM's defaults: compiled with CUDA graphs, chunked prefill, prefix caching and async scheduling; TP8, at most
-# 256 sequences and 8,192 tokens a step) under about DURATION_S of four concurrent clients (`vllm bench serve`: ShareGPT
-# greedy on a 1-to-24 request/s ramp, ShareGPT sampled at 2/s, 8k-32k-token prompts at 0.1/s, shared 4k-token prefixes at
-# 1/s), with route_capture_plugin recording every step's class and the kernels of the first steps of each class; then
-# the generated code of the compile (vLLM's and Inductor's Python, Triton's kernel metadata) beside the capture.
+# serve` at vLLM's defaults: CUDA graphs, chunked prefill, prefix caching and async scheduling, with the compilation vLLM
+# picks for the model; TP8, at most 256 sequences and 8,192 tokens a step) under about DURATION_S of four concurrent
+# clients (`vllm bench serve`: ShareGPT greedy on a 1-to-24 request/s ramp, ShareGPT sampled at 2/s, 8k-32k-token
+# prompts at 0.1/s, shared 4k-token prefixes at 1/s), with route_capture_plugin recording every step's class and the
+# kernels of the first steps of each class; then the generated code of any compile (vLLM's and Inductor's Python,
+# Triton's kernel metadata) beside the capture.
 #   run.sh       -> $OUT: capture/ (the plugin's files), clients/ (each client's log and result), server.log, smoke.json,
 #                   compiled-code.tar.gz, engine_env.txt, summary.json (routes.py summary)
 # VENV's vLLM must be d9105ea80, the integration's pin. CKPT is GLM-5.3's checkpoint directory (default: the revision
@@ -21,6 +22,9 @@ export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 # DeepGEMM JIT-compiles its kernels with CUDA_HOME's nvcc: the newest toolkit under /usr/local unless CUDA_HOME names one
 CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
 export CUDA_HOME
+# vLLM takes FlashInfer's paths (its block-FP8 GEMM below 32 rows, its sampler) only with FlashInfer's kernels prebuilt
+# (flashinfer-cubin, which production images ship) or nvcc on PATH to compile them; engine_env.txt says which held
+export PATH="$CUDA_HOME/bin:$PATH"
 unset NCCL_P2P_DISABLE
 # the Inductor pin the integration serves with: one reduction tiling, so the fused kernels captured are the ones replayed
 export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=${TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK:-0}
@@ -73,6 +77,8 @@ export ROUTECAP_OUT=$OUT/capture
            TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK \
            CUDA_VISIBLE_DEVICES $(compgen -e | grep -E '^ROUTECAP_' || true); do echo "$k=${!k-unset}"; done
   "$CUDA_HOME/bin/nvcc" --version 2>/dev/null | tail -1
+  "$PY" -c 'from vllm.utils.flashinfer import has_flashinfer, has_flashinfer_cubin
+print(f"has_flashinfer={has_flashinfer()} flashinfer_cubin={has_flashinfer_cubin()}")' 2> /dev/null
 } > "$OUT/engine_env.txt"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,clocks.max.sm,driver_version --format=csv | tee "$OUT/gpus.csv"
 

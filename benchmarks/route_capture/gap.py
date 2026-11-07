@@ -72,6 +72,13 @@ def flashinfer_sampler_on(capture: Path) -> bool:
     return not re.search(r"VLLM_USE_FLASHINFER_SAMPLER=0\b", env.read_text() if env.is_file() else "")
 
 
+def engine_had_flashinfer(capture: Path) -> bool | None:
+    """`has_flashinfer()` in the served engine, as run.sh recorded it (None: not recorded)."""
+    env = capture.parent / "engine_env.txt"
+    m = re.search(r"has_flashinfer=(True|False)\b", env.read_text() if env.is_file() else "")
+    return None if m is None else m.group(1) == "True"
+
+
 def _statics(ids: list[str]) -> str:
     """A compact range of the ids' statics: each static that varies as min..max (and how many values), the rest once; an
     all-reduce's TREES left out."""
@@ -123,7 +130,8 @@ def gap(capture: Path, check: dict[str, Any], rank: int | None = None, phi=None)
         out.append({**r, "statics": _statics(r["ids"]), "n_statics": len(r["ids"]), "blocks_per_token": r["blocks"] / max(tokens, 1),
                     "share": r["blocks"] / max(blocks, 1), "ids": sorted(r["ids"])[:12]})
     return {"rank": rank, "steps": n_steps, "tokens": tokens, "blocks": blocks, "blocks_per_token": blocks / max(tokens, 1),
-            "flashinfer_sampler": fi, "class_g_registered": len(reg), "class_g_passing": sum(reg.values()),
+            "flashinfer_sampler": fi, "engine_had_flashinfer": engine_had_flashinfer(capture),
+            "class_g_registered": len(reg), "class_g_passing": sum(reg.values()),
             "gaps": [r for r in out if r["status"] != "covered"], "covered": [r for r in out if r["status"] == "covered"],
             "engine": {k: {"tokens": v, "share": v / max(tokens, 1)} for k, v in facts.most_common()}}
 
@@ -137,6 +145,9 @@ def markdown(g: dict[str, Any]) -> str:
                      f"{r['owner']} | {r['blocks_per_token']:.4g} | {r['share']:.3%} |")
     lines += ["", "| engine fact | share of tokens |", "|---|---|"]
     lines += [f"| {k} | {v['share']:.1%} |" for k, v in g["engine"].items()]
+    if g.get("engine_had_flashinfer") is False:
+        lines += ["", "The captured engine had no FlashInfer, which production images ship: its block-FP8 GEMMs below 32 rows "
+                      "and its sampler ran other kernels than the rows, which are the decoder's for an engine with FlashInfer."]
     return "\n".join(lines) + "\n"
 
 

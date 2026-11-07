@@ -79,3 +79,16 @@ def test_the_sampler_fallback_turns_its_row_off(tmp_path, launches):
     assert not gap.flashinfer_sampler_on(cap)
     (tmp_path / "engine_env.txt").write_text("VLLM_USE_FLASHINFER_SAMPLER=unset\n")
     assert gap.flashinfer_sampler_on(cap)
+    assert gap.engine_had_flashinfer(cap) is None
+
+
+def test_an_engine_without_flashinfer_is_said(tmp_path, launches):
+    """A pod whose vLLM finds neither FlashInfer's prebuilt kernels nor nvcc serves other kernels than production's image; the
+    gap's rows stay the decoder's for production, and the report says the captured engine differed."""
+    cap = _capture(tmp_path, [DECODE_PADDED])
+    (tmp_path / "engine_env.txt").write_text("VLLM_USE_FLASHINFER_SAMPLER=unset\nhas_flashinfer=False flashinfer_cubin=False\n")
+    g = gap.gap(cap, _check([]), phi=launches.phi)
+    assert g["engine_had_flashinfer"] is False and g["flashinfer_sampler"]
+    assert "The captured engine had no FlashInfer" in gap.markdown(g)
+    (tmp_path / "engine_env.txt").write_text("has_flashinfer=True flashinfer_cubin=True\n")
+    assert gap.engine_had_flashinfer(cap) is True
