@@ -664,11 +664,11 @@ def trace_dir(u: RequestUnit | dict) -> str:
 def trace_commands(summary: dict, registered: Registered, root: str, *, max_model_len: int = 2048) -> list[list[str]]:
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
     vLLM (CPU, on meta), each writing `<root>/<trace_dir>`; at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`);
-    in class G at the unit's launch context (`--launch-context '{"batch": ...}'`).  A target stating its GPU's `device_name` passes it
-    (`--device-name`): a host with no visible GPU answers vLLM's `get_device_name` with it, the key of its tuned fused-MoE configs."""
+    in class G at the unit's launch context (`--launch-context '{"batch": ...}'`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
+    # the target's GPU name, which a host with no visible GPU answers vLLM's get_device_name with (its tuned fused-MoE configs' key)
     device = ["--device-name", str(phi.target["device_name"])] if phi.target.get("device_name") else []
     world = int(phi.tp.get("world", 1))
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
