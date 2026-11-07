@@ -5,7 +5,7 @@ public import Proofs.Flock.SessionLoop.Honest
 public import Proofs.Flock.SessionLoop.RepSrcSat
 public import Proofs.Flock.SessionLoop.Concrete.LiveNets
 public import Proofs.Flock.SessionLoop.Concrete.Scope
-public import Proofs.Flock.SessionLoop.Assumptions.ConcreteServes
+public import Proofs.Flock.SessionLoop.Concrete.Serves
 
 /-!
 # `SessionLoopZKAnyDeployed`'s premises at the honest session loop
@@ -23,7 +23,7 @@ at one instance:
 * the honest values (`finS.honestVals`) and the honest worker (`valsWk`).
 
 `Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest` concludes the three from `finS_complete`, `finS_unCausal` and
-`LeanRelease.trustsStop_tape`, given that the loop serves the statement (`Loop.ConcreteServes`).
+`LeanRelease.trustsStop_tape`, since the loop serves the statement (`Loop.concreteServes`).
 -/
 
 @[expose] public section
@@ -81,8 +81,8 @@ open Claims Claims.ZKMal Claims.ZKServer
 /-- **`SessionLoopZKAnyDeployed`'s premises hold at the honest session loop**: at the concrete statement and its trace
 (`Loop.concreteRl`, which holds there), the honest values and the honest worker at the loop's own release on the tape's
 samples, the session's table witnesses are valid, the values' unswitched round encoding is causal and the transport's
-trusts hold, where the loop serves the statement (`Loop.ConcreteServes`). -/
-theorem SessionLoopZKAnyDeployed_honest (hS : Loop.ConcreteServes) :
+trusts hold. -/
+theorem SessionLoopZKAnyDeployed_honest :
     Loop.concreteRl FlockDeploy.concreteStmt FlockDeploy.wC ∧
       (CoinLayer.session Loop.loopNr Masked.dataE).Complete Loop.concreteRl ∧
       (CoinLayer.session Loop.loopNr Masked.dataE).UnCausal Loop.finS.honestVals ∧
@@ -97,7 +97,7 @@ theorem SessionLoopZKAnyDeployed_honest (hS : Loop.ConcreteServes) :
   exact LeanRelease.trustsStop_tape Loop.tapeRel FlockDeploy.concreteStmt rfl Loop.concreteRl
     (fun x w h => by
       obtain ⟨rfl, rfl⟩ := hC x w h
-      exact ⟨hS, FlockDeploy.concreteStmt_scope _root_.Properties.Flock.Nets.fixedNetsBuild,
+      exact ⟨Loop.concreteServes, FlockDeploy.concreteStmt_scope _root_.Properties.Flock.Nets.fixedNetsBuild,
         FlockDeploy.concreteStmt_rel⟩)
     (fun x w h => (hC x w h).1)
 
