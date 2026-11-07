@@ -188,8 +188,8 @@ verity/ml/flock/tests/test_circuit.py -> verity/ml/flock/python/verity_flock/inp
 verity/ml/flock/tests/test_class_statement.py -> benchmarks/numerical/python/verity_numerical/__init__.py
 verity/ml/flock/tests/test_class_statement.py -> benchmarks/numerical/python/verity_numerical/bench/__init__.py
 verity/ml/flock/tests/test_class_statement.py -> benchmarks/numerical/python/verity_numerical/bench/generate.py
-verity/ml/flock/tests/test_class_statement.py -> verity/ml/flock/python/verity_flock/input_sets.py
 verity/ml/flock/tests/test_class_statement.py -> tools/verity/circuit_check/src/circuit_check/__init__.py
+verity/ml/flock/tests/test_class_statement.py -> verity/ml/flock/python/verity_flock/input_sets.py
 verity/ml/flock/tests/test_derive.py -> benchmarks/numerical/python/verity_numerical/bench/__init__.py
 verity/ml/flock/tests/test_flock_rows.py -> benchmarks/numerical/python/verity_numerical/bench/__init__.py
 verity/ml/flock/tests/test_gemm_hill.py -> benchmarks/numerical/python/verity_numerical/bench/__init__.py
@@ -199,11 +199,11 @@ verity/ml/flock/tests/test_inner_registered.py -> benchmarks/numerical/python/ve
 verity/ml/flock/tests/test_inner_registered.py -> verity/ml/flock/python/verity_flock/input_sets.py
 verity/ml/flock/tests/test_ir_lowering.py -> benchmarks/numerical/python/verity_numerical/bench/__init__.py
 verity/ml/flock/tests/test_ir_lowering.py -> benchmarks/numerical/python/verity_numerical/bench/generate.py
+verity/ml/flock/tests/test_ir_lowering.py -> tools/research/src/research/store/kinds.py
 verity/ml/flock/tests/test_ir_lowering.py -> verity/ml/flock/python/verity_flock/input_sets.py
 verity/ml/flock/tests/test_ir_lowering.py -> verity/ml/flock/tests/data/captured-101/slices
 verity/ml/flock/tests/test_ir_lowering.py -> verity/ml/flock/tests/data/captured-101/slices/attention-head-fa2-d64-bn128
 verity/ml/flock/tests/test_ir_lowering.py -> verity/ml/flock/tests/data/captured-101/slices/rope-head-d64
-verity/ml/flock/tests/test_ir_lowering.py -> tools/research/src/research/store/kinds.py
 verity/ml/flock/tests/test_ir_sampling.py -> benchmarks/numerical/python/verity_numerical/bench/__init__.py
 verity/ml/flock/tests/test_ir_sampling.py -> benchmarks/numerical/python/verity_numerical/bench/generate.py
 verity/ml/flock/tests/test_ir_sampling.py -> verity/ml/flock/python/verity_flock/input_sets.py
@@ -229,9 +229,9 @@ verity/ml/flock/tests/test_lean_typed_statement.py -> benchmarks/numerical/pytho
 verity/ml/flock/tests/test_lean_verifier.py -> benchmarks/numerical/python/verity_numerical/__init__.py
 verity/ml/flock/tests/test_lean_verifier.py -> benchmarks/numerical/python/verity_numerical/bench/__init__.py
 verity/ml/flock/tests/test_lean_verifier.py -> benchmarks/numerical/python/verity_numerical/bench/generate.py
-verity/ml/flock/tests/test_lean_verifier.py -> verity/ml/flock/python/verity_flock/input_sets.py
 verity/ml/flock/tests/test_lean_verifier.py -> verity/core/protocols/network/nci/lean/scripts
 verity/ml/flock/tests/test_lean_verifier.py -> verity/core/protocols/network/nci/lean/scripts/desc_difftest_vectors.py
+verity/ml/flock/tests/test_lean_verifier.py -> verity/ml/flock/python/verity_flock/input_sets.py
 verity/ml/flock/tests/test_partition_units.py -> tools/verity/circuit_check/src/circuit_check/__init__.py
 verity/ml/flock/tests/test_stage_typed.py -> benchmarks/numerical/python/verity_numerical/__init__.py
 verity/ml/flock/tests/test_stage_typed.py -> benchmarks/numerical/python/verity_numerical/bench/__init__.py
