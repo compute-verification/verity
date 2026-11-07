@@ -78,6 +78,17 @@ def test_an_edges_first_differing_block_reads_the_two_digest_files(tmp_path):
         "blocks": "differ", "served_only": [5], "replayed_only": [6]}
 
 
+def test_the_served_argv_is_the_record_arms_with_the_context_and_tp_given_last():
+    from argparse import Namespace
+    from pathlib import Path
+
+    argv = T.served_argv(Namespace(model_id="glm53", max_model_len=32768, tp=None), Path("/ck"), 0)
+    assert argv[1:3] == ["-m", "vllm.entrypoints.openai.api_server"] and argv[argv.index("--model") + 1] == "/ck"
+    assert argv[argv.index("--tensor-parallel-size") + 1] == "8" and argv[-2:] == ["--max-model-len", "32768"]
+    argv = T.served_argv(Namespace(model_id="moonlight", max_model_len=None, tp=2), Path("/ck"), 0)
+    assert argv[-2:] == ["--tensor-parallel-size", "2"] and argv.count("--max-model-len") == 1
+
+
 def test_the_plugin_site_declares_the_edges_beside_the_step_trace(tmp_path):
     T.edge_site(tmp_path)
     eps = sorted(p.read_text() for p in tmp_path.glob("*.dist-info/entry_points.txt"))
