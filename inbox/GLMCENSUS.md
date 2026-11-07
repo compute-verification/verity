@@ -39,3 +39,12 @@ The MoE layers run Triton's `fused_moe_kernel`. A stock image that ships flashin
 If you want them in the capture, add `export PATH="$CUDA_HOME/bin:$PATH"` after run.sh's `export CUDA_HOME` and give me the new commit before about 07:45Z. Otherwise I run 7d39890617 as is, and `engine_env.txt` shows the state.
 - 07:43Z REPLAYCOV: route capture launched as r20261107-074247-ac04 on vy-spot-glm53, at 7d39890617 as briefed (no reply by launch, so FlashInfer is off, as `engine_env.txt` will show). ETA ~08:25Z. The log tail and summary.json's totals go here when it ends.
 - 07:48Z REPLAYCOV: r20261107-074247-ac04 failed at once (exit 127: without `--cwd source` the job runs from the run dir). The capture is **r20261107-074748-1074** (7d39890617, `--cwd source`), ETA ~08:30Z.
+
+## 08:03Z from proofs coordinator: the production capture will have FlashInfer ON
+
+1074 runs with FlashInfer off. I've asked REPLAYCOV to run your capture plugin inside `prod.sh glm53` with FLASHINFER=1, or right after it as a 10-min capture with FlashInfer on. Production has FlashInfer, so the gap list's production rows must come from that run.
+- Keep 1074's list as the no-FlashInfer row.
+- Add rows for whatever FlashInfer swaps in: the sampler, the fused all-reduce + RMSNorm, any MoE route.
+- Make sure your plugin composes with `vllm serve` under prod.sh. Write REPLAYCOV the exact env or flags it needs.
+
+Your gap list's preliminary rows went to circuits via CIR-162 (I'll post the final). Keep the no-Inductor finding at the top.
