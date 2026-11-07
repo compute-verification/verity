@@ -1,8 +1,9 @@
 """The GPU tagger's arithmetic and message layouts, transcribed from `tagger.cu` into Python and held to the core reference.
 
-Each twin follows its kernel line by line (word order, byte swaps, padding words, the warp's lanes and shuffles), with the
-SHA-512 and BLAKE3 constants read out of `tagger.cu`.  The device itself is checked on the node (`run.sh`: `bwtag`'s gates, then
-`gpu.py windows` through `audit.Verifier`); these catch a layout or arithmetic slip before a GPU is leased.
+Each twin follows its kernel line by line (word order, byte swaps, padding words, the warp's lanes and shuffles), with
+the SHA-512 constants read out of `verity/ml/kernels/sha512.cuh`, which `tagger.cu` includes, and the BLAKE3 constants
+out of `tagger.cu`.  The device itself is checked on the node (`run.sh`: `bwtag`'s gates, then `gpu.py windows` through
+`audit.Verifier`); these catch a layout or arithmetic slip before a GPU is leased.
 """
 
 from __future__ import annotations
@@ -28,17 +29,18 @@ from verity.core.protocols.pous.verifier import MerkleTree, node_hash  # noqa: E
 from verity.ml.crypto import blake3  # noqa: E402
 
 CU = (HERE / "tagger.cu").read_text()
+SHA512 = (HERE / re.search(r'#include "([^"]*sha512\.cuh)"', CU)[1]).read_text()
 M64, M32 = (1 << 64) - 1, (1 << 32) - 1
 P = tags.MERSENNE31
 GF31, RO, B3 = tags.get("gf31-poly/v1"), tags.get("ro-sha512/v1"), tags.get("ro-blake3/v1")
 
 
-def _consts(name: str) -> list[int]:
-    body = CU[CU.index(f"#define {name}"):]
-    return [int(x, 16) for x in re.findall(r"0x([0-9a-f]+)ULL", body[:body.index("}")])]
+def _words(start: str, end: str) -> list[int]:
+    body = SHA512[SHA512.index(start):]
+    return [int(x, 16) for x in re.findall(r"0x([0-9a-f]+)ull", body[:body.index(end)])]
 
 
-K, IV = _consts("SHA512_K"), _consts("SHA512_IV")
+K, IV = _words("#define SX_K_LIST", "\n\n"), _words("IV_DEV[8] = {", "}")
 
 
 def rotr(x: int, n: int) -> int:
@@ -46,7 +48,8 @@ def rotr(x: int, n: int) -> int:
 
 
 def compress(s: list[int], w: list[int]) -> list[int]:
-    """`compress`: five passes of 16 rounds, the schedule updated in place at the top of each pass after the first."""
+    """`compress`, sha512.cuh's `sx::compress<0, 2>`: five passes of 16 rounds, the schedule updated in place at the top
+    of each pass after the first."""
     w = list(w)
     a, b, c, d, e, f, g, h = s
     for r in range(0, 80, 16):

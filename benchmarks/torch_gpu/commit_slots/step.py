@@ -220,6 +220,7 @@ def result(a: argparse.Namespace, docs: dict[str, dict[str, Any]], ok: bool, lin
 
 def time_layout(a: argparse.Namespace, path: Path, out: Path) -> dict[str, Any]:
     import torch
+
     import slots_gpu as G
 
     out.mkdir(parents=True, exist_ok=True)

@@ -772,10 +772,12 @@ def leaf_layer(publics: Mapping[str, bytes]) -> str:
 
 
 def registration(c: Committed, provenance: Mapping[str, Any], previous: str | None = None, *, kind: str = "served",
-                 registrar: Any) -> dict[str, Any]:
+                 registrar: Any, entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """Core's ``verity/registration/v1`` record of the window, made by ``registrar`` (core's ``one_stage.registration``: its
     ``record``, ``KINDS``): its program, query and law, the scheme, every port's root, leaves and window domain, the leaf layer,
-    and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``.  ``served``: these roots are the integration's
+    and ``window = {"kind": kind, "run": <the record's run root>, **provenance}``, chained after ``previous`` (the digest of
+    the prover's last record; None for its first).  ``entries``: those of the values its program takes as parameters
+    (``Registered.entry()`` each), which make it ``verity/registration/v2``.  ``served``: these roots are the integration's
     own commitment as it ran, made before any sample; ``stand-in``: a fresh commitment to values opened from its record afterwards,
     whose link to the record's roots is provenance."""
     if kind not in registrar.KINDS:
@@ -784,7 +786,8 @@ def registration(c: Committed, provenance: Mapping[str, Any], previous: str | No
     roots = [{"port": p, "root": c.roots[p].hex(), "leaves": c.domains[p].count, "domain": c.domains[p].domain_id.hex()} for p in c.roots]
     publics = {m.key: c.public_body(k) for k, m in enumerate(w.members)}
     return registrar.record(w.program, w.query, w.law, SCHEME, roots, {**provenance, "kind": kind, "run": w.run},
-                            leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table)
+                            leaf_layer=leaf_layer(publics), previous=previous, work_table=w.work_table,
+                            registered=list(entries))
 
 
 def units_doc(m: Member) -> dict[str, Any]:
@@ -1017,9 +1020,11 @@ def read_private(window_dir: str | Path, win: Mapping[str, Any], k: int) -> byte
 
 def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: dict[str, Any], extra: dict[str, Any] | None = None, *,
           kind: str = "served", registered: Mapping[str, dict[str, Any]] | None = None, registrar: Any,
-          index_salt: bytes | None = None) -> dict[str, Any]:
+          index_salt: bytes | None = None, previous: str | None = None,
+          entries: Sequence[Mapping[str, Any]] = ()) -> dict[str, Any]:
     """The window's files, its registration's window of ``kind`` (`registration`, by ``registrar``, which also names and digests
-    the record: ``FORMAT``, ``digest``); the window's provenance gets the index's hiding leaf (`index_leaf`), so the
+    the record: ``FORMAT``, or ``FORMAT_V2`` with ``entries``, and ``digest``), chained after ``previous`` and registering
+    the values' ``entries``; the window's provenance gets the index's hiding leaf (`index_leaf`), so the
     registration binds the unit -> label map and says nothing of it. ``index.json`` and its salt are prover only: the salt is
     ``index_salt`` (192 bytes, a committer's sampled under its key) or else fresh bytes from the OS.  ``registered``: by member
     key, an outside value's reads (``salts_of``), each a header entry
@@ -1040,7 +1045,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
         f.write(ib)
     with _private(d / INDEX_SALT) as f:
         f.write(salt)
-    rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, kind=kind, registrar=registrar)
+    rec = registration(c, {**provenance, "index_leaf": leaf, "order": ORDER}, previous, kind=kind, registrar=registrar,
+                       entries=entries)
     (d / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True) + "\n")
     trees: dict[int, RT.RowTable] = {}
     members, paths, read = [], {}, {}
@@ -1104,7 +1110,8 @@ def write(c: Committed, out_dir: str | Path, provenance: dict[str, Any], index: 
            **({"row_tables": tables, "row_table_steps": segs} if tables else {}),
            **({"registered_paths": paths} if paths else {}), **({"value_rows": values} if values else {}),
            "partition": c.window.partition, "partition_digest": c.window.partition_digest, "run": c.window.run,
-           "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT, "registration_digest": registrar.digest(rec),
+           "domain_tag": DOMAIN_TAG, "registration": registrar.FORMAT_V2 if entries else registrar.FORMAT,
+           "registration_digest": registrar.digest(rec),
            "leaf_layer": rec["leaf_layer"],
            "leaf_layer_rule": LEAF_LAYER, "index_leaf": leaf, "index_rule": INDEX_RULE,
            "salt_rule": "chacha20 (rfc 8439), a fresh 32-byte os key per window, nonce = the row port's index over all members "

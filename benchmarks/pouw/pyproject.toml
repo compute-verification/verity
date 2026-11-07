@@ -92,6 +92,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/protocols/pouw/h1/handoff.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/hooks.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/model_key.py",
+          "integrations/vllm/verity_vllm/protocols/pouw/h1/names.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/prover.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/ranks.py",
           "integrations/vllm/verity_vllm/protocols/pouw/h1/records.py",
