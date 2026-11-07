@@ -319,6 +319,10 @@ class Scope:
         return f"{self.who} {self.period}"
 
 
+#: the post's headline scope, whose figures carry the bare file names, and its stretch scope, plotted beside it
+PRIMARY, SECONDARY = "datacenter year", "world year"
+
+
 def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
     flop_request = c["tokens_per_request"].value * 2 * part.served_macs
     out = []

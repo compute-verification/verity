@@ -27,6 +27,8 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FixedLocator, FuncFormatter, LogFormatterMathtext, NullLocator
 from matplotlib.transforms import offset_copy
 
+from figure1 import PRIMARY
+
 COLORS = ("#9ECAE1", "#3182BD", "#08306B")
 CAPPED, PATTERNS = (0, (7, 2.5, 1.5, 2.5)), (0, (7, 2.5, 1.5, 2.5, 1.5, 2.5))
 COMPARISON = {"one-stage": (0, (6, 3)), "request": (0, (1.2, 2.4)), "two-stage-uniform": "-",
@@ -45,7 +47,6 @@ NAMES = {"two-stage": "Two-stage, width-stratified", "two-stage-uniform": "Two-s
          "layer_of_token": "Deferred interiors, a layer of a token"}
 REFERENCE_STYLE = {"solid": "-", "dashed": (0, (4, 3))}
 VERTICAL = "#E69F00"
-PRIMARY = "world year"
 #: a reference line this far above the headline curves' top is named at the top of the axis instead of stretching it
 OFF_SCALE = 1e3
 #: reference lines within this relative distance coincide on the plot

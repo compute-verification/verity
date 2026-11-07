@@ -264,4 +264,4 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
                                        "figure1_skipped_work_datacenter_week.png",
                                        "figure1_skipped_work_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (t.stem("world year"), t.stem("world year", "skipped_work")) == ("figure1", "figure1_skipped_work")
+    assert (t.stem("datacenter year"), t.stem("datacenter year", "skipped_work")) == ("figure1", "figure1_skipped_work")
