@@ -50,9 +50,9 @@
     "4010"
    ],
    "data": {
-    "desc_difftest/expanded.jsonl": "bb0b615ca47e1ce32ba08493c7a42f77e5f0d7b724aedeaa3dd17031d3a5c9d7",
-    "desc_difftest/instances.jsonl": "32f59bcec1e5f04cb14d7f48e75596b97469954842fbfae3d569074576408b6a",
-    "desc_difftest/python.jsonl": "d3a4adb4de58135cdadc12bec6ff482cac0c7de3a6d8aa6182cb36a549bda18e"
+    "desc_difftest/expanded.jsonl": "075bc2551087e057d7c2a5320df77eb72b95b07155668905d4bc54d6c7452cc1",
+    "desc_difftest/instances.jsonl": "233cf70a665aac35270dc4220e2ceb152be98fce993234a9e5f6ad260346405e",
+    "desc_difftest/python.jsonl": "cba6d15d4a8b527b3fb6fc9221e475b494a9ab04571208c5886c67e837c5a160"
    },
    "generate": ["python3", "scripts/desc_difftest_vectors.py", "{repo}", "--out", "{out}"]
   },
@@ -76,8 +76,8 @@
    "why": "4,000 random declarations and divisions, the description-sized difftest's 335 on E_REINTERPRET (references naming leaves of other widths than their types give them, which both sides refuse as program, and their well-typed neighbours, expanded gate by gate where the Program decodes), and three pinned ones (θ with an input bound per run, refused theta-not-registered, θ the registered input, accepted, and a declaration with a Const8 gate, which reads nothing, accepted), on which NciCheck.check gives what scripts/nci_reference.py computes from Nci.Complies' definitions: per IU its size and novel reads, the verdict and the first failing IU with its rule, or the first malformation's code",
    "args": ["{difftest/instances.jsonl}", "{difftest/python.jsonl}", "4338"],
    "data": {
-    "difftest/instances.jsonl": "a29efe48563e56c3a83587c9f2ab3519332f1919a9c236178564b7deb17f1fb4",
-    "difftest/python.jsonl": "4c60f0d64ef3a4e1e74ab4808a95b902692be1e7efd1b481f2f43a4077762751"
+    "difftest/instances.jsonl": "b9e24d5488d8098cd829535a697033ad3574b3db3545e84d4adfe41b268580f5",
+    "difftest/python.jsonl": "6c1afeabbc17328b5f64fde48e518c18742a70ef295216ff00c181751a464e8b"
    },
    "generate": ["python3", "scripts/difftest_vectors.py", "{repo}", "--out", "{out}"]
   }
