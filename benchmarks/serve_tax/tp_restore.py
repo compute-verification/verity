@@ -2,7 +2,7 @@
 its second and compared. GLM-5.3 at TP8 is the case it is for; any `serve_tax` model runs.
 
     tp_restore.py serve --model-id glm53 --c4 C4 --out OUT --scratch DIR [--rate 10] [--span-s 240] [--edges-at 150,210]
-                        [--sampling production] [--max-model-len 32768] [--saver MODULE:FUNCTION ...]
+                        [--sampling production] [--max-model-len 32768] [--tp N] [--saver MODULE:FUNCTION ...]
     tp_restore.py restore --served OUT --scratch DIR --out OUT2 --loader MODULE:FUNCTION [--no-fill] [--rank-map-free]
 
 ``serve`` runs `serve_tax`'s ``record`` arm (vLLM's OpenAI server with the scheduler's step trace), with `tp_edge` as a
@@ -13,7 +13,8 @@ edge writes under ``--scratch``, because its blocks are tens of GB and stay out 
 ``edge.json``, the client's records and the step trace.
 
 ``restore`` builds the served engine again in this process, from the served server's own argv and block count, and:
-- calls ``--loader`` (the scheduler's state and the runner's rows) with the engine core and the first edge's directory;
+- calls ``--loader`` (the scheduler's state and the runner's rows) with the engine core and the first edge's directory
+  (without one, it stops once the edge's blocks and RNG are checked);
 - loads every rank's blocks and RNG (`tp_state.load_rank`, `set_rng_ranked`), filling every other block with NaN unless
   ``--no-fill``;
 - checks every rank's digest of the edge's blocks against the served one. If they differ, the restore isn't exact at
@@ -108,18 +109,20 @@ def serve(a: argparse.Namespace) -> int:
     out, scratch = Path(a.out), Path(a.scratch)
     out.mkdir(parents=True, exist_ok=True)
     scratch.mkdir(parents=True, exist_ok=True)
-    plan = S.plan_of(Path(a.plan) if a.plan else out / "plan.jsonl", Path(a.c4), checkpoint,
-                     S.plan_need({"load": a.rate}, a.span_s, a.requests), a.docs, a.seed)
+    plan_file = Path(a.plan) if a.plan else out / "plan.jsonl"
+    plan = S.plan_of(plan_file, Path(a.c4), checkpoint, S.plan_need({"load": a.rate}, a.span_s, a.requests), a.docs, a.seed)
     arm = S.ARMS["record"]
     site = edge_site(scratch / ".site")
     port = S.corpus().free_port()
-    argv = S.server_argv(arm, model, checkpoint, port) + (["--max-model-len", str(a.max_model_len)] if a.max_model_len else [])
+    argv = S.server_argv(arm, model, checkpoint, port) + (["--max-model-len", str(a.max_model_len)] if a.max_model_len else []) \
+        + (["--tensor-parallel-size", str(a.tp)] if a.tp else [])
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     env = S.server_env(arm, srv, site, None, 600.0, 600.0) | PINS
     env[E.ENV] = json.dumps({"out": str(scratch / "edges"), "at_s": a.edges_at, "dump": 1, "savers": a.saver})
     meta: dict[str, Any] = {"schema": SCHEMA, "model_id": a.model_id, "model": f"{model.repo}@{model.revision}",
-                            "checkpoint": str(checkpoint), "server_argv": argv[1:], "pins": PINS, "edges_at": a.edges_at,
+                            "checkpoint": str(checkpoint), "plan": str(plan_file), "server_argv": argv[1:], "pins": PINS,
+                            "edges_at": a.edges_at,
                             "savers": a.saver, "scratch": str(scratch), "versions": S.versions(), "host": os.uname().nodename}
     rc = 0
     t = time.monotonic()
@@ -149,8 +152,8 @@ def copy_edges(src: Path, dst: Path) -> list[dict]:
         (dst / e.parent.name).mkdir(parents=True, exist_ok=True)
         shutil.copy2(e, dst / e.parent.name / "edge.json")
         rec = json.loads(e.read_text())
-        got.append({k: rec.get(k) for k in ("edge", "current_step", "trace_step", "running", "waiting", "pool", "check",
-                                            "seconds")} | {"dir": str(e.parent), "blocks": len(rec["ids"])})
+        got.append({k: rec.get(k) for k in ("edge", "current_step", "trace_step", "running", "in_flight", "waiting", "pool",
+                                            "check", "seconds")} | {"dir": str(e.parent), "blocks": len(rec["ids"])})
     return got
 
 
@@ -259,11 +262,12 @@ def restore(a: argparse.Namespace) -> int:
     e1, e2 = meta["edges"][0], meta["edges"][1]
     edge1, edge2 = Path(e1["dir"]), Path(e2["dir"])
     rec1, rec2 = (json.loads((d / "edge.json").read_text()) for d in (edge1, edge2))
-    os.environ.update(PINS | {"VLLM_ENABLE_V1_MULTIPROCESSING": "0"})
+    os.environ.update(PINS | {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", "PYTHONPATH": os.pathsep.join(
+        [str(HERE), str(ROOT / "integrations/vllm"), str(ROOT), *filter(None, [os.environ.get("PYTHONPATH")])])})
     recs = served_trace(served)
     header = recs[0]
     client = {c["id"]: c for c in (json.loads(x) for x in (served / "load" / "client.jsonl").read_text().splitlines() if x)}
-    plan_file = served / "plan.jsonl"
+    plan_file = Path(meta["plan"])
     plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
     s1, s2 = rec1["trace_step"], rec2["trace_step"]
     res: dict[str, Any] = {"schema": SCHEMA, "served": str(served), "edge1": rec1["edge"], "edge2": rec2["edge"],
@@ -302,6 +306,11 @@ def restore(a: argparse.Namespace) -> int:
         res["verdict"] = "the rank map differs from the served one (--rank-map-free to run anyway)"
         verdict.write_text(json.dumps(res, indent=1))
         return 1
+    if not a.loader:
+        res["verdict"] = ("the edge's blocks and RNG restored exactly; no --loader, so the scheduler's and runner's "
+                          "state wasn't and nothing is replayed")
+        verdict.write_text(json.dumps(res, indent=1))
+        return 0
 
     trace = StepTrace().install(core.scheduler)
     trace.scheduled = s1
@@ -377,6 +386,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--edges-at", type=lambda x: [float(t) for t in x.split(",")], default=[150.0, 210.0])
     s.add_argument("--sampling", default="production")
     s.add_argument("--max-model-len", type=int)
+    s.add_argument("--tp", type=int, help="the tensor-parallel size, when not the model's own")
     s.add_argument("--saver", action="append", default=[])
     s.add_argument("--startup-s", type=float, default=3600.0)
     s.add_argument("--drain-s", type=float, default=600.0)
