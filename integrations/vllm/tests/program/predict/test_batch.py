@@ -116,6 +116,7 @@ class Unit:
     first_step: int
     id: str
     C: int = 0
+    carried_in: bool = False
 
 
 @dataclass(frozen=True)
@@ -373,9 +374,10 @@ def test_r1_a_composition_reading_another_requests_input_is_refused():
         check_compiled(None, adv, ing, _compile(adv, ing, cross=True), plan)
 
 
-@pytest.mark.parametrize("group", ["schedule", "prefix"])
+@pytest.mark.parametrize("group", ["schedule", "prefix", "prefix_ik", "prefix_iks", "last_token"])
 def test_r1_a_batch_provenance_input_is_refused(group):
-    """A `schedule` Input is the batch's, and so is a `prefix` on a request with no checked hit."""
+    """A `schedule` Input is the batch's, and so is a history Input (`batch.HISTORY_GROUPS`) on a request whose history R2 didn't
+    check: neither a hit on its own tokens nor the state a window carries it in with."""
     adv, ing = _mixed()
     with pytest.raises(BatchDependent, match=rf"GP-01: the outputs of owner 0 read request\[r0\]\.{group} .* batch-derived"):
         check_compiled(None, adv, ing, _compile(adv, ing, groups=("weights", "prompt", group)), plan)
@@ -383,10 +385,10 @@ def test_r1_a_batch_provenance_input_is_refused(group):
 
 def test_workload_labels_by_provenance():
     adv, ing = _mixed()
-    c = _compile(adv, ing, groups=("weights", "prompt", "seed", "splits", "prefix"))
+    c = _compile(adv, ing, groups=("weights", "prompt", "seed", "splits", "prefix", "prefix_ik", "prefix_iks", "last_token"))
     labels, ret = workload_labels(c.workload)
-    assert labels == (SHARED, *(x for r in range(3) for x in (own(r), own(r), BATCH, BATCH)))
-    assert workload_labels(c.workload, frozenset({1}))[0][5:9] == (own(1), own(1), BATCH, own(1))
+    assert labels == (SHARED, *(x for r in range(3) for x in (own(r), own(r)) + (BATCH,) * 5))
+    assert workload_labels(c.workload, frozenset({1}))[0][8:15] == (own(1), own(1), BATCH) + (own(1),) * 4
     assert ret.labels == (own(0), own(1), own(2))
     bad = replace(c.workload.requests[0], component=replace(c.workload.requests[0].component, groups=("weights",)))
     with pytest.raises(BatchDependent, match="names no group"):
