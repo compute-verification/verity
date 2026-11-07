@@ -103,6 +103,16 @@ def test_server_env_names_the_changes(tmp_path: Path):
         S.server_env(S.ARMS["tick"], tmp_path, tmp_path, None, 600.0, 600.0)
 
 
+def test_every_engine_runs_with_inductors_rblock_pinned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    lines = (S.HERE / "run.sh").read_text().splitlines()
+    # unindented and before the leased branch: both the served arms and the replays inherit it
+    assert lines.index("export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0") < lines.index('if [ "${1:-}" = leased ]; then')
+    monkeypatch.setenv("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", "0")
+    for arm in ("compiled", "record"):
+        env = S.server_env(S.ARMS[arm], tmp_path, tmp_path, None, 600.0, 600.0)
+        assert env["TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK"] == "0", arm
+
+
 def test_parse_rates_keeps_their_order():
     assert list(S.parse_rates("light=1.5,medium=4,saturated=9")) == ["light", "medium", "saturated"]
 

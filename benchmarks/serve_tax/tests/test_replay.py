@@ -45,6 +45,22 @@ def test_window_is_the_loads_steps_from_its_first_arrival(tmp_path: Path):
     assert w["served_s"] == pytest.approx(0.2)
 
 
+def test_window_reads_the_plan_beside_the_arm_when_the_named_one_isnt_on_this_node(tmp_path: Path):
+    d = arm(tmp_path)
+    (d / "meta.json").write_text(json.dumps({"plan": "/elsewhere/out/plan.jsonl", "checkpoint": "ck"}))
+    assert [r["prompt_ids"] for r in R.window(d, "sat", 1)["requests"]] == [[0, 1], [1, 2]]
+
+
+def test_window_reads_the_plan_in_the_arm_when_meta_names_none(tmp_path: Path):
+    d = arm(tmp_path)
+    (d / "meta.json").write_text(json.dumps({"plan": None, "checkpoint": "ck"}))   # serve_tax.py run without --plan
+    (tmp_path / "plan.jsonl").rename(d / "plan.jsonl")
+    assert [r["prompt_ids"] for r in R.window(d, "sat", 1)["requests"]] == [[0, 1], [1, 2]]
+    (d / "plan.jsonl").unlink()
+    with pytest.raises(SystemExit, match="no plan at"):
+        R.window(d, "sat", 1)
+
+
 def test_window_refuses_a_step_shared_with_another_load(tmp_path: Path):
     with pytest.raises(SystemExit, match="another load"):
         R.window(arm(tmp_path, foreign=True), "sat", 1)
@@ -66,6 +82,15 @@ def test_compare_counts_steps_rows_and_tokens_that_differ(tmp_path: Path):
 def test_token_diff_counts_a_shorter_replay_from_where_it_stops():
     assert R.token_diff({"a": [1, 2, 3], "b": [4]}, {"a": [1, 2], "b": [4]}) == [
         {"request": "a", "tokens": 3, "tokens_replayed": 2, "first_position": 2, "positions": 1}]
+
+
+def test_logprob_diff_finds_each_requests_first_differing_step():
+    steps = [{"step": 0, "emitted": {"a": 1}}, {"step": 1, "emitted": {"a": 1, "b": 1}}, {"step": 2, "emitted": {"a": 1, "b": 1}}]
+    d = R.logprob_diff({"a": [-0.5, -1.0, -2.0], "b": [-0.1, -0.2]}, {"a": [-0.5, -1.0, -2.5], "b": [-0.1, -0.3]}, steps)
+    assert (d["requests_logprobs_differing"], d["first_step"]) == (2, 2)
+    assert [(r["request"], r["first_position"], r["step"], r["want"], r["got"]) for r in d["requests_differing"]] == [
+        ("a", 2, 2, -2.0, -2.5), ("b", 1, 2, -0.2, -0.3)]
+    assert R.logprob_diff({"a": [-0.5]}, {"a": [-0.5]}, steps)["requests_logprobs_differing"] == 0
 
 
 def test_replay_tokens_round_trip(tmp_path: Path):
