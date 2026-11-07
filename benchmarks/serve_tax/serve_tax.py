@@ -229,7 +229,7 @@ def counters(text: str) -> dict[str, float]:
 
 
 def scrape(port: int) -> dict[str, float]:
-    with urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics", timeout=30) as r:  # noqa: S310
+    with urllib.request.urlopen(f"http://127.0.0.1:{port}/metrics", timeout=30) as r:
         return counters(r.read().decode())
 
 
