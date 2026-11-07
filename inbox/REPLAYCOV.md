@@ -276,3 +276,14 @@ Also changed: if the window has no 256–384-token step, the big step is the nea
   `CUDA_HOME=/usr/local/cuda-12.9 PATH=/usr/local/cuda-12.9/bin:/workspace/venv312/bin:$PATH`
 - **Before the first FlashInfer engine,** run vllm's `fi_smoke.py` (notes `lanes/vllm/tools`) on 8 GPUs, a few minutes. Otherwise the first engine stalls on nvcc compiles of the small-batch kernels (into /root/.tensorrt_llm/cache) that vLLM's warmup doesn't reach. That would land inside a timed serve. Record the cache's digest as the build pin.
 - **Run `ldconfig` once** (CPU-only) so libnvrtc.so.12 maps to CUDA 12.9, not 12.4, and the node is consistent.
+- 08:51Z REPLAYCOV: END r20261107-080302-aa58 (GLMCENSUS's route capture, FlashInfer off, the no-FlashInfer row): rc 0 at 08:40Z, 3,728 steps, 49 classes. Custody art:3b9c4ea9a446adc6047adef79308a90bcb484a9553759fdf7ff5f5b1fd778e84. Details in inbox/GLMCENSUS.md.
+- 08:51Z REPLAYCOV: START r20261107-084935-0be6, the production-like replay block, ETA ~10:10Z.
+  - **What it runs:** `prod.sh glm53` with FLASHINFER=1, pinned. It serves ShareGPT, multi-turn and 8–32k long prompts (MAX_MODEL_LEN 40,960, half greedy, half T=0.7 with a per-request seed), then 2 cached replays and 1 fresh, all with logprobs.
+  - **The route capture rides along** (LADDER_ROUTE_CAPTURE), in the capacity server and the record server. So this one run gives the production replay block and GLMCENSUS's FlashInfer-on route list.
+  - **FlashInfer:** your install line wasn't here yet. I checked the pod myself: `cuda-nvrtc-dev-12-9`, `libcublas-dev-12-9` and `libcurand-dev-12-9` are installed, `cublasLt.h` and `nvrtc.h` exist, no build process was left, and the FlashInfer 0.6.18 cache holds sampling, topk, trtllm_comm and fp8_blockscale_gemm_90 (built at 08:41Z). The run records `has_flashinfer` and the autotune cache digest.
+  - **Next:** the unpinned prod run, only if this one shows it fits in 30 min (I expect it won't, so I'll skip it); then BLOCK END for GLMREPLAY's edge-restore run.
+- 08:51Z REPLAYCOV: **the Inductor pin is moot for GLM-5.3, and the 4/4 is CUDA graphs plus our recording.**
+  - The ladder's GLM servers and replays log `'mode': <CompilationMode.NONE: 0>`, with breakable CUDA graphs (FULL_AND_PIECEWISE). The model graph runs no Inductor.
+  - The only Inductor kernels in the process are `per_block_cast_to_fp8` (vllm/utils/deep_gemm.py, torch.compile with the simple Inductor backend). `requant_weight_ue8m0_inplace` calls them once at weight load: an abs-max reduction and two pointwise kernels.
+  - So pinned versus unpinned changed only the tiling of that load-time requantization, whose abs-max doesn't depend on summation order. The unpinned arm's "split" tiling is exactly that kernel.
+  - MoE runs Triton's `fused_moe_kernel` with static configs, the linears DeepGEMM, and attention FLASH_ATTN_MLA_SPARSE with the DSA indexer.
