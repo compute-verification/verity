@@ -19,10 +19,11 @@
                      vector at a time and is read lazily (`vectors.wide_words`), recorded under ``wide`` with the reads of
                      its words, plus a random vector per index probe (`targets.OPERAND_PROBES`: a shard's or an expert
                      count's first and last index), and one that no vector reads is a warning; on both paths the kernels decline, as they take arrays, and the lowering takes every leaf.
-                     Where a realization takes the vectors, at least ``Options.random_floor`` are random, within
-                     ``Options.random_budget`` (`floored`); a target no realization compared on a random vector is a
-                     warning, ``vectors/edge-only`` when one compared it on all-edge vectors only, else ``vectors/none``
-                     (`vector_class`)
+                     Each realization is compared on at least ``Options.random_floor`` random vectors within
+                     ``Options.random_budget``: a lowering on random ones added to the vectors (`floored`), a kernel on
+                     those its own sampler draws in its domain (`_sampled`); a target no realization compared on a random
+                     vector is a warning, ``vectors/edge-only`` when one compared it on all-edge vectors only, else
+                     ``vectors/none`` (`vector_class`)
     ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
                      as facts about a primitive: its reference on edge and random operands, each leaf of a bounded parameter
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on drawn
@@ -99,9 +100,9 @@ class Options:
     ``lower_max_gates`` gates or about ``lower_max_ands`` ANDs (the piece pins' estimate) not lowered whole; ``input_budget``
     bounds vectors x input leaves, ``lane_budget`` vectors x proof blocks when a template's proof blocks are evaluated;
     a composite of at most ``struct_max_gates`` gates is realized by its structural lowering too (`struct_lowering`; 0, the
-    default: none).  Where a realization takes the vectors, at least ``random_floor`` of them are random, added after the all-edge
-    ones while the reference's work on those added is at most ``random_budget`` gate evaluations (and a template's lanes on them
-    at most ``lane_budget``): `floored`."""
+    default: none).  Each realization is compared on at least ``random_floor`` random vectors while the reference's work on those
+    the floor adds is at most ``random_budget`` gate evaluations (and a template's lanes on them at most ``lane_budget``):
+    added after the all-edge ones for a lowering (`floored`), drawn by a kernel's own sampler for it (`_sampled`)."""
 
     vectors: int = 64
     min_vectors: int = 4
@@ -365,23 +366,51 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
     return rec, None, ref
 
 
-def _realized(t: Any, opts: Options, lower_whole: bool) -> bool:
-    """Whether a realization takes ``t``'s correspondence vectors (so `floored` applies): a registered kernel, the C-Flock
-    lowering of it whole (a primitive's piece; a composite under ``lower_max_gates`` gates, or Boolean, where it is lowered
-    whole) or its structural lowering."""
-    if kernels(t):
-        return True
-    if isinstance(t, (PrimitiveDefinition, ScalarReference)):
-        return isinstance(t, PrimitiveDefinition) and bool(t.params)
+def _lowered(t: Any, opts: Options, lower_whole: bool) -> bool:
+    """Whether a lowering takes ``t``'s correspondence vectors, so `floored` adds random ones to them: the C-Flock lowering of it
+    whole (a primitive's piece; a composite under ``lower_max_gates`` gates, or Boolean) or its structural lowering.  A lowering
+    takes every input; a kernel declines what is outside its domain, so it takes its floor from its own sampler (`_sampled`)."""
+    if isinstance(t, ScalarReference):
+        return False
+    if isinstance(t, PrimitiveDefinition):
+        from verity_flock import ir_lower as IL
+
+        return bool(t.params) and (t.id in IL.PIECES or t.id.startswith("TopPMaskWordx"))
     return (lower_whole and (t.gates <= opts.lower_max_gates or is_boolean(t))) or t.gates <= opts.struct_max_gates
+
+
+def _sampled(t: Any, name: str, rec: dict, opts: Options, F: Findings) -> None:
+    """The floor for kernel ``name``, which ``rec`` says compared ``random`` of the shared random vectors without a fault: up to
+    ``opts.random_floor`` more, drawn by the kernel's own sampler (`self_check`'s: random inputs in its domain, where the
+    shared ones over many leaves almost always hold a word it declines, a NaN), while the reference's work on them is within
+    ``opts.random_budget`` gate evaluations; recorded under ``sampled`` and counted in ``random``.  A mismatch fails as on the
+    shared vectors; a sampler whose every vector the kernel declines leaves it compared on edge vectors only."""
+    want = opts.random_floor - rec["random"]
+    if want <= 0 or want * max(1, _gates(t)) > opts.random_budget:
+        return
+    try:
+        sc = self_check(t, kernel=name, n=want, seed=opts.seed + 3)
+    except Exception as e:  # noqa: BLE001  (a sampler or kernel that can't draw or take its vectors: no random one, recorded)
+        rec["sampled"] = {"vectors": want, "compared": 0, "raised": f"{type(e).__name__}: {str(e)[:200]}"}
+        return
+    rec["sampled"] = {"vectors": sc.n, "compared": sc.compared, "mismatches": len(sc.mismatches)}
+    rec["random"] += sc.compared
+    if sc.mismatches:
+        F.fail("correspondence", "kernel-mismatch", t.id, f"[{name}]: {len(sc.mismatches)} of the {sc.n} vectors its sampler drew",
+               via=f"kernel:{name}", examples=[{"instance": i, "args": _short(a), "kernel": _short(k), "reference": _short(r)}
+                                                for i, a, k, r in sc.mismatches[:_EXAMPLES]])
+    elif not sc.partial and sc.declined != sc.outside:
+        F.fail("correspondence", "kernel-declined-in-domain", t.id, f"[{name}]: declined {sc.declined} of the {sc.n} vectors its "
+               f"sampler drew, {sc.outside} outside the reference's domain", via=f"kernel:{name}")
 
 
 def correspondence(t: Any, opts: Options, F: Findings, *, lower_whole: bool = True) -> tuple[dict, list[np.ndarray] | None, list]:
     """The reference on the vectors (totality) and every registered kernel against it; ``None`` for the vectors when the
     Definition reads a registered table (probed, `_probed_correspondence`) or an operand over the input budget (read lazily,
-    `_wide_correspondence`), or has a parameter over the input budget that is neither (a failure).  Where a realization takes
-    the vectors (`_realized`; ``lower_whole`` as `check_definition`'s) the floor adds random ones (`floored`); each kernel's
-    record holds ``random``, the random vectors it compared on at least (its compared ones past the all-edge ones)."""
+    `_wide_correspondence`), or has a parameter over the input budget that is neither (a failure).  Where a lowering takes
+    the vectors (`_lowered`; ``lower_whole`` as `check_definition`'s) the floor adds random ones (`floored`), and each kernel
+    takes its floor from its own sampler (`_sampled`); its record's ``random`` counts the random vectors it compared on, at
+    least (of the shared ones, those it compared past the all-edge ones)."""
     from .targets import table_probe
 
     params, _ret = signature_of(t)
@@ -396,7 +425,7 @@ def correspondence(t: Any, opts: Options, F: Findings, *, lower_whole: bool = Tr
         F.fail("correspondence", "unprobed-table", t.id, why)
         return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": []}, None, []
     n, edge = _n_vectors(t, opts), edge_count(params)
-    n, edge = floored(t, n, edge, opts) if _realized(t, opts, lower_whole) else (n, min(n, edge))
+    n, edge = floored(t, n, edge, opts) if _lowered(t, opts, lower_whole) else (n, min(n, edge))
     arrays = vectors(params, n, opts.seed, edge)
     ref, raised = reference_outputs(t, params, arrays)
     rec: dict[str, Any] = {"vectors": n, "edge_vectors": edge, "reference_raised": len(raised), "realizations": []}
@@ -419,6 +448,8 @@ def correspondence(t: Any, opts: Options, F: Findings, *, lower_whole: bool = Tr
         elif sc.fault:
             F.fail("correspondence", f"kernel-{sc.fault}", t.id, f"[{name}]: declined {sc.declined} of {sc.n} vectors, "
                    f"{sc.outside} outside the reference's domain", via=f"kernel:{name}")
+        else:
+            _sampled(t, name, rec["realizations"][-1], opts, F)
     return rec, arrays, ref
 
 

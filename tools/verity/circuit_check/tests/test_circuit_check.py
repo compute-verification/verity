@@ -413,24 +413,42 @@ def test_a_realization_compares_at_least_two_random_vectors_within_the_budget():
     assert [w["code"] for w in CK.classified(e)["warnings"] if w["check"] == "vectors"] == ["none"]
 
 
-def test_a_kernels_random_vectors_are_those_it_compared_past_the_edges():
-    """A kernel's ``random`` is how many it compared past the all-edge vectors: one that declines every random vector compared
-    the Definition on edge vectors only, beside one that compared it on both."""
+def test_a_kernel_takes_its_floor_from_its_own_sampler():
+    """No lowering takes a Definition C-Flock has no piece for, so past ``reference_budget`` its vectors stay all-edge; each
+    kernel is then compared on two vectors its own sampler draws in its domain (a random vector over many leaves almost always
+    holds a word a finite-only kernel declines).  One right on every edge word and wrong elsewhere fails by name; one whose
+    sampler draws only outside its domain compared on edge vectors only; past ``random_budget`` none is drawn."""
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.evaluation import register_kernel
     from verity.ml.circuits.evaluation.batch import _KERNELS
     from verity.ml.circuits.types import Value
 
     prim = PrimitiveDefinition("CircuitCheckFloorKernel", 1, (("a", Value(16)),), Value(16), lambda a: a ^ 1, register=False)
-    register_kernel(prim, lambda a: (a ^ 1, None))
-    register_kernel(prim, lambda a: (a ^ 1, np.arange(a.shape[0]) >= 4), kernel="edges", partial=True)
+    edges = np.array(VX.edges(16), dtype=np.uint16)
+
+    def finite(rng, n, params, **statics):
+        return [rng.integers(0, 0x7F00, n).astype(np.uint16)]
+
+    register_kernel(prim, lambda a: (a ^ 1, (a & 0x7F80) == 0x7F80), kernel="finite", partial=True, sample=finite)
+    register_kernel(prim, lambda a: (np.where(np.isin(a, edges), a ^ 1, a), None), kernel="edges-only", sample=finite)
+    register_kernel(prim, lambda a: (a ^ 1, ~np.isin(a, edges)), kernel="outside", partial=True, sample=finite)
+    floor = dataclasses.replace(OPTS, reference_budget=1)
     try:
-        e = CK.check_definition(prim, dataclasses.replace(OPTS, reference_budget=1), pins=PINS)
+        e = CK.check_definition(prim, floor, pins=PINS)
+        over = CK.check_definition(prim, dataclasses.replace(floor, random_budget=1), pins=PINS)
     finally:
         del _KERNELS[prim.id]
-    _clean(e)
-    via = {r["via"]: (r["compared"], r["random"]) for r in e["correspondence"]["realizations"] if r["via"].startswith("kernel:")}
-    assert via == {"kernel:numpy": (6, 2), "kernel:edges": (4, 0)} and CK.vector_class(e) == "random"
+    assert (e["correspondence"]["vectors"], e["correspondence"]["edge_vectors"]) == (4, 4)
+    via = {r["via"]: (r["compared"], r["random"], r.get("sampled")) for r in e["correspondence"]["realizations"]
+           if r["via"].startswith("kernel:")}
+    assert via == {"kernel:edges-only": (4, 2, {"vectors": 2, "compared": 2, "mismatches": 2}),
+                   "kernel:finite": (4, 2, {"vectors": 2, "compared": 2, "mismatches": 0}),
+                   "kernel:outside": (4, 0, {"vectors": 2, "compared": 0, "mismatches": 0})}
+    assert [f["name"] for f in e["failures"]] == [
+        "correspondence/kernel-mismatch CircuitCheckFloorKernel_v1 [edges-only]: 2 of the 2 vectors its sampler drew"]
+    assert CK.vector_class(e) == "random"
+    assert not over["failures"] and CK.vector_class(over) == "edge-only"
+    assert all("sampled" not in r for r in over["correspondence"]["realizations"])
 
 
 def test_the_summary_counts_and_names_the_targets_by_vector_class():
