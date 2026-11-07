@@ -13,8 +13,8 @@ the proving, the units' commitments, the witnesses' replay and the zero-work sub
 accounting, its one measured term (`commit_floor`) and nothing else.
 
 Replay: serving keeps only the requests' tokens and the weights (a commitment is a hash, and the Commit retains no value), so
-a drawn unit's witness is rebuilt by re-running its request, one 2K prompt, from its committed tokens through every layer at
-the plain rate: the `request` replay grain, met when the draw holds any of its units.  A request's values depend on its
+a sampled proof block's witness is rebuilt by re-running its request, one 2K prompt, from its committed tokens through every layer at
+the plain rate: the `request` replay grain, met when the sample holds any of its units.  A request's values depend on its
 own tokens alone (the served engine is batch-invariant), so no co-scheduled request is re-run with it.
 
     uv run python benchmarks/sampling_plan/int8_llama.py --out DIR [--model qwen3-8b] [--scheme pearl-c] [--weights]

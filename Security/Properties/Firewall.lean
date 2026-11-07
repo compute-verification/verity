@@ -3,7 +3,7 @@ module
 public import Firewall.Release
 
 /-!
-# The firewall's record: what its Lean code (`Firewall.Record`, `Firewall.Release`) does
+# The ZK server's record: what its Lean code (`Firewall.Record`, `Firewall.Release`) does
 
 The rules a recursive session's stop leak rests on (live PROTOCOL.md §10.5), stated against the release side's functions
 as they run: `Core.Firewall.admit`, which admits an outer session on the record's events, `Core.Firewall.stop`, which

@@ -4,17 +4,17 @@ public import Proofs.Properties.RemoteAudit.Coins
 public import Proofs.Properties.RemoteAudit.Bisect
 
 /-!
-# A drawn window's record is kept (`RecordKeptAfterDraw`)
+# A sampled window's record is kept (`RecordKeptAfterDraw`)
 
-Each event keeps every window's `KeepW`: once drawn, its draws, challenge, roots, plans and heads stay as they are;
-once final, it stays final; and it is drawn only if it was, or is final. No event changes the digest, and the appends
-only grow (`Frz`, `frz_step`). An event that adds a pass adds it to an undrawn window: the window it fills is not
-final (so undrawn, `DF`), or is the one after it, which has no root yet (`Inv.beyond`), and a drawn window has
-`min_passes ≥ 1` of them (`Inv.few`). So a run keeps `Frz` from a state on (`run_frz`), and a drawn window's record,
-which reads its own fields and the window before it (drawn too, `Prefix`), is kept.
+Each event keeps every window's `KeepW`: once sampled, its draws, challenge, roots, plans and heads stay as they are;
+once final, it stays final; and it is sampled only if it was, or is final. No event changes the digest, and the appends
+only grow (`Frz`, `frz_step`). An event that adds a pass adds it to an unsampled window: the window it fills is not
+final (so unsampled, `DF`), or is the one after it, which has no root yet (`Inv.beyond`), and a sampled window has
+`min_passes ≥ 1` of them (`Inv.few`). So a run keeps `Frz` from a state on (`run_frz`), and a sampled window's record,
+which reads its own fields and the window before it (sampled too, `Prefix`), is kept.
 
 Its openable receipts are kept with it: `checkOpening` reads the appends only for the append holding its block
-(`appendOf`, `checkOpening_congr`), the block a drawn pass reads is below the store's extent then (`record_reads`), and
+(`appendOf`, `checkOpening_congr`), the block a sampled pass reads is below the store's extent then (`record_reads`), and
 every append after starts at that extent or above (`firsts_big`), so `appendOf` finds the same one (`appendOf_extend`).
 -/
 
@@ -30,14 +30,14 @@ namespace Properties.RemoteAudit
 def Fixed (w w' : Win) : Prop :=
   w'.drawn = w.drawn ∧ w'.challenge = w.challenge ∧ w'.roots = w.roots ∧ w'.plans = w.plans ∧ w'.heads = w.heads
 
-/-- `w'` keeps what `w` fixed once drawn, stays final once `w` is, and is drawn only if `w` was or `w'` is final. -/
+/-- `w'` keeps what `w` fixed once sampled, stays final once `w` is, and is sampled only if `w` was or `w'` is final. -/
 def KeepW (w w' : Win) : Prop :=
   (w.drawn.isSome → Fixed w w') ∧ (w.final → w'.final) ∧ (w'.drawn.isSome → w.drawn.isSome ∨ w'.final)
 
-/-- Each window of `ws'` keeps its namesake's in `ws` (an index past `ws` is a default, undrawn and not final). -/
+/-- Each window of `ws'` keeps its namesake's in `ws` (an index past `ws` is a default, unsampled and not final). -/
 def KeepsF (ws ws' : Array Win) : Prop := ∀ u : Nat, KeepW ws[u]! ws'[u]!
 
-/-- Every drawn window is final. -/
+/-- Every sampled window is final. -/
 def DF (ws : Array Win) : Prop := ∀ u : Nat, ws[u]!.drawn.isSome → ws[u]!.final
 
 theorem keepW_refl (w : Win) : KeepW w w := ⟨fun _ => ⟨rfl, rfl, rfl, rfl, rfl⟩, id, Or.inl⟩
@@ -99,12 +99,12 @@ theorem keepsF_push (ws : Array Win) (w : Win) (hw : w.drawn = none) : KeepsF ws
 theorem keepW_of {w w' : Win} (h : Fixed w w') (hf : w.final → w'.final) : KeepW w w' :=
   ⟨fun _ => h, hf, fun hd => Or.inl (h.1 ▸ hd)⟩
 
-/-- A change of an undrawn window that leaves it undrawn and as final as it was. -/
+/-- A change of an unsampled window that leaves it unsampled and as final as it was. -/
 theorem keepW_undrawn {w w' : Win} (hd : w.drawn = none) (hd' : w'.drawn = w.drawn) (hf : w'.final = w.final) :
     KeepW w w' :=
   ⟨fun h => (by rw [hd] at h; cases h), fun h => (by rw [hf]; exact h), fun h => (by rw [hd', hd] at h; cases h)⟩
 
-/-- The draw of an undrawn window, which makes it final. -/
+/-- The draw of an unsampled window, which makes it final. -/
 theorem keepW_draw {w w' : Win} (hd : w.drawn = none) (hf : w'.final = true) : KeepW w w' :=
   ⟨fun h => (by rw [hd] at h; cases h), fun _ => hf, fun _ => Or.inr hf⟩
 
@@ -370,7 +370,7 @@ theorem frz_step {s : State} {e : Event} {r : Result} {s' : State} (h : Inv s) (
   | close t now => exact frz_close he
   | verify t openings => injection he with he; exact frz_verify he
 
-/-- What `Frz` needs of a state: the invariant, every drawn window final, and `min_passes` at least 1. -/
+/-- What `Frz` needs of a state: the invariant, every sampled window final, and `min_passes` at least 1. -/
 def FInv (s : State) : Prop := Inv s ∧ DF s.windows ∧ 1 ≤ s.params.minPasses
 
 theorem finv_step {s : State} {e : Event} {r : Result} {s' : State} (h : FInv s) (he : step s e = .ok (r, s')) :
@@ -455,7 +455,7 @@ theorem record_pass (s : State) (t i : Nat) (hi : i < (s.record t).passes.size) 
   refine ⟨?_, hi⟩
   rw [getElem!_pos _ i (by simp [hi]), Array.getElem_map, Array.getElem_range]
 
-/-- A drawn window's receipts read blocks below the store's extent. -/
+/-- A sampled window's receipts read blocks below the store's extent. -/
 theorem record_reads {s : State} (h : Inv s) (t : Nat) (ht : t < s.windows.size) (i p : Nat)
     (hi : i < (s.record t).passes.size) (hp : p < (s.record t).passes[i]!.plan.length) :
     (s.record t).passes[i]!.plan.block p < s.extent := by
