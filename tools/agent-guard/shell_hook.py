@@ -39,9 +39,11 @@ VMs reach the inbox through `inbox.py pull`, which the hook starts in the backgr
 $AGENT_INBOX_POLL_S seconds per agent (default 30; `off` stops it), so the hook itself never waits on the network.
 
 Before an allowed `git merge` or `git merge-tree`, it sets the repository's merge drivers (`.gitattributes` names them; git keeps
-them only in a clone's config) from the checkout's own `research.clone.RECORD_DRIVER` when lean-audit's is unset, as boot.sh and
-every run clone do. A VM that never ran boot.sh (a cloud worker's) otherwise merges each lean-audit.json line by line and shows
-conflicts the queue never sees: 359 in one trial merge of a PR onto `next`.
+them only in a clone's config) from origin/main's `research.clone.RECORD_DRIVER`, each whose value differs, as boot.sh and
+every run clone do; without origin/main, from the checkout's own when lean-audit's is unset. A VM that never ran boot.sh (a
+cloud worker's) otherwise merges each lean-audit.json line by line and shows conflicts the queue never sees: 359 in one trial
+merge of a PR onto `next`; and one that kept an older command runs the merged-into branch's own merge.py, which collapsed
+Security's lock to one `reads` group when an old branch merged main.
 """
 import json
 import math
@@ -482,24 +484,36 @@ CLONE_PY = "tools/research/src/research/clone.py"
 
 
 def merge_drivers(command: str, cwd: str) -> None:
-    """Set the record merge drivers in ``cwd``'s repository before a merge there, when lean-audit's is unset (module doc)."""
+    """Set the record merge drivers in ``cwd``'s repository before a merge there: origin/main's, each that differs, else the
+    checkout's when lean-audit's is unset (module doc)."""
     if not MERGE.search(command):
         return
     import importlib.util
     import subprocess
+    import tempfile
 
-    def git(*args: str) -> str:
-        return subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True, timeout=3).stdout.strip()
+    def git(*args: str) -> subprocess.CompletedProcess:
+        return subprocess.run(["git", "-C", cwd, *args], capture_output=True, text=True, timeout=3)
 
-    if git("config", "--get", "merge.lean-audit.driver") or not (top := git("rev-parse", "--show-toplevel")):
+    if not (top := git("rev-parse", "--show-toplevel").stdout.strip()):
         return
-    spec = importlib.util.spec_from_file_location("agent_guard_clone", os.path.join(top, CLONE_PY))
-    if spec is None or spec.loader is None:
+    main = git("show", f"origin/main:{CLONE_PY}")
+    if main.returncode and git("config", "--get", "merge.lean-audit.driver").stdout.strip():
         return
-    clone = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(clone)
+    with tempfile.TemporaryDirectory(prefix="agent-guard-clone-") as tmp:
+        path = os.path.join(top, CLONE_PY)
+        if not main.returncode:
+            with open(path := os.path.join(tmp, "clone.py"), "w") as f:
+                f.write(main.stdout)
+        spec = importlib.util.spec_from_file_location("agent_guard_clone", path)
+        if spec is None or spec.loader is None:
+            return
+        clone = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(clone)
+    have = dict(e.split("\n", 1) for e in git("config", "-z", "--get-regexp", r"^merge\.").stdout.split("\0") if "\n" in e)
     for k, v in clone.RECORD_DRIVER.items():
-        git("config", k, v)
+        if have.get(k) != v:
+            git("config", k, v)
 
 
 def main() -> int:
