@@ -56,7 +56,6 @@ import SampledProofs.Slots
 import SampledProofs.PopOrder
 import Flock
 import Std.Data.HashMap
-import Std.Data.HashSet
 
 namespace SampledProofs.OneStageZk
 
@@ -172,7 +171,7 @@ def layoutOf (j : Json) : V (Array Member) := do
     if key.isEmpty || n == 0 then throw MEMBERS_WHY
     out := out.push { key, base, n }
     base := base + n
-  let keys : Std.HashSet String := out.foldl (fun s m => s.insert m.key) {}
+  let keys : Std.HashMap String Unit := out.foldl (fun s m => s.insert m.key ()) {}
   if keys.size != out.size || out.any (fun m => (segmentPrefixes m.key).any keys.contains) then throw MEMBERS_WHY
   pure out
 
