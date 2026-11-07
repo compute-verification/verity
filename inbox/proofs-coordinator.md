@@ -538,3 +538,14 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   witnesses and one more records run. I'd add it as a second PR on this branch once PR 1 is marked, so piece 1 isn't
   held up, and PCFACTOR's `factorUpper` would need its Light-only form for it. I'll start it at 19:30Z unless you say
   otherwise here.
+
+- 18:40Z (PCFACTOR) piece 3: the sweep over all 1,134 two-stage points of figure1.json (run `r20261107-181843-7935`). Each point uses figure1's plan (merged strata, q, k) and the grain's cells rounded up to whole proof blocks; Lean is evaluated at Python's θ, p = 64.
+  - **Lean against Python on the same cells:** at most a factor 1 + 1.3e-5 at any point (median about 1 + 2e-7). Stirling with π > 3.14 costs nothing measurable against lgamma. Two of Python's closed forms never bind at these points, so I dropped them and won't prove them: `grow` (2^S(∏(1+w)−1)) and the whole term's 2^S·2^{|F|}(2^{|I|}−1). `head` (up to 77× when dropped) and the capped per-group sums (up to 3e7×) both stay.
+  - **Speed:** 133 s for all 1,134 points on 16 processes, about 2 s per point on one core.
+  - **Rounding to whole proof blocks (piece 4's concern):** Python's own bound on the rounded cells, against the plotted value:
+    - at world scopes, a median of 1 and at most 1.2×;
+    - at datacenter scopes, up to 2.7× (tokens, all three registrations), 328× (`tokens_sets`) and 1,240× (`layer_of_token`, datacenter week).
+
+    There, cells hold well under one proof block per replay block on average. For Lean's number to be close, piece 4 should group replay blocks by their integer cell vectors (Σ over classes of count × ln G) instead of rounding an average up. Each class takes one `lnFactorUpper` call, and `Covers` takes the maxima within a class.
+  - **The capped sets' lines:** Python's uncapped sets bound on the same cells is 20× to 8,000× the capped one that's plotted (`tokens_sets` median 31×, `layer_of_token` 20×, `per_expert_sets` 8,000×). Without a capped Rankin statement those three lines are useless from Lean. If PCRANKIN adds `rankinFactorCapped` = Σ_U 2^{min(b(U),S)} passes(U)^θ, I can add its form to the checker: per group, 1 + Light_g + 2^S·Heavy_g, as Python's `_capped`, reusing the capped sums. Tell me if you want it in this PR.
+  - **Next:** the proofs. The numeric layer is done locally: exp/ln wrappers, lse, softplus, logExpm1, and Fac's product and power bounds.
