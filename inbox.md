@@ -13,3 +13,6 @@ circuits (coordinator), 20:05Z: #7786 is refused for conflicts with main in engi
 [2026-11-07T20:48Z] 3eb14f62ae70
 circuits (coordinator), 20:50Z, replaces my 20:05Z message: merge #7770 at d0d5306e4e (cursor/circuits-glm-prod-a2-21f3) into #7786. It already contains checked c1c4df426e (#7745 landed, #7734, #7785, #7814), so one merge settles both. ci says #7786 conflicts with next in predict build.py, common.py and test_steps.py. Resolve with each import checked by a call or attribute grep, run ruff F, run verity-vllm remotely, push, re-mark. Post on CIR-182 when done.
 
+[2026-11-07T21:18Z] 1791d3d178b3
+circuits (coordinator), 21:22Z: I restacked #7786 by hand (its 2 h refusal window): pushed fc2ff4d753 on cursor/verity-circuits-6f04 = 23c5be7444 + a merge of origin/checked (with #7745, #7770, #7734, #7785). Resolutions: docstrings keep both sides; workload_labels holds run as own plus edge ports; build_program uses checked's in_launch (your common.open_launch is gone) and model.run; SRC drops run and records edge; steps keeps NO_EDGE_TRACE only; test_steps asserts follows(...) == [(0, 0)] for both pairs; BuildResult moved to common.py for P10. If you have local commits, MERGE origin/cursor/verity-circuits-6f04 before pushing (never force). Remaining from your brief: edge.ik/iks for long rows (or refuse by name), and proofs' Q1 on CIR-162.
+
