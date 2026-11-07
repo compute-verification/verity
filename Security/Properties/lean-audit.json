@@ -34,6 +34,7 @@
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Bits",
+  "Properties.SampledProofs.Interval",
   "Properties.SampledProofs.Halt",
   "Properties.SampledProofs.Second",
   "Properties.Pous.TimedAudit",
@@ -989,6 +990,38 @@
    "honest": ["Properties.Firewall.afterOnTime_honest"],
    "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
   },
+  "Properties.SampledProofs.SecurityProofs.expLowerSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.expLowerSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.expLowerSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.expUpperSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.expUpperSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.expUpperSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.lnLowerSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.lnLowerSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnUpperSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.lnUpperSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.lnUpperSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.powLowerSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.powLowerSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.powLowerSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.powUpperSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.powUpperSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.powUpperSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnUpperSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.boundLnUpperSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.boundLnUpperSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnBoundSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.boundLnBoundSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.boundLnBoundSound_nontrivial"
+  },
   "Properties.SampledProofs.SecurityProofs.secondMisses": {
    "honest": ["Properties.SampledProofs.SecurityProofs.secondMisses_honest"],
    "nontrivial": "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial"
@@ -1843,7 +1876,12 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits", "Properties.SampledProofs.Second"],
+   "except": [
+    "Properties.SampledProofs.Draw",
+    "Properties.SampledProofs.Bits",
+    "Properties.SampledProofs.Second",
+    "Properties.SampledProofs.Interval"
+   ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.CertifierNetwork": {
@@ -2087,6 +2125,11 @@
    "imports": ["RemoteAudit", "Properties.RemoteAudit.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
+  },
+  "Properties.SampledProofs.Interval": {
+   "imports": ["Mathlib", "SampledProofs"],
+   "except": [],
+   "why": "what the interval bounds bound is stated against their own functions (`SampledProofs.Interval`, `SampledProofs.Bound`, on Lean core) and Mathlib's `Real.exp`, `Real.log` and `Real.rpow`, never a proof"
   },
   "Properties.SampledProofs.Bits": {
    "imports": ["Definitions.Claims.Sampling", "SampledProofs.Bits"],
@@ -7568,6 +7611,12 @@
    "type_hash": "4eda244e871db8f10d252cf426606eb73ab8ae55c86ca35968158571dee735d5",
    "unfolded_hash": "d54ce5e55b0eb1169fa600b83cb1082b8a79773f6cbacd24e520c08181762100"
   },
+  "Properties.SampledProofs.SecurityProofs.boundLnBoundSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnUpperSound": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.SecurityProofs.designWellFormed : Properties.SampledProofs.DesignWellFormed"],
@@ -7593,6 +7642,24 @@
    },
    "type_hash": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119",
    "unfolded_hash": "e44586bf18963ce99c0fc55d9d547d505a5cc576f2a2c6905df554be71464de2"
+  },
+  "Properties.SampledProofs.SecurityProofs.expLowerSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.expUpperSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnUpperSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.powLowerSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.powUpperSound": {
+   "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.secondMisses": {
    "owner": "@proofs",
@@ -9978,6 +10045,38 @@
    "Properties.Firewall.afterOnTime": {
     "function": "Core.Firewall.Decision.after",
     "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.expLowerSound": {
+    "function": "SampledProofs.Interval.expLower",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.expUpperSound": {
+    "function": "SampledProofs.Interval.expUpper",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
+    "function": "SampledProofs.Interval.lnLower",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.lnUpperSound": {
+    "function": "SampledProofs.Interval.lnUpper",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.powLowerSound": {
+    "function": "SampledProofs.Interval.powLower",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.powUpperSound": {
+    "function": "SampledProofs.Interval.powUpper",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.boundLnUpperSound": {
+    "function": "SampledProofs.Bound.lnUpper",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.boundLnBoundSound": {
+    "function": "SampledProofs.Bound.lnBound",
+    "outcome": "none"
    },
    "Properties.SampledProofs.SecurityProofs.secondMisses": {
     "function": "SampledProofs.Select.selectSecond",
