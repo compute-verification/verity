@@ -163,3 +163,20 @@ Report both classes separately, with requests held at the edge per class. Launch
 - **Doing now (proofs, Python only, small):** `service.Stream` takes no output values, sends the Lean `Run.run` none,
   and its trimmed log can drop the record one names. On `cursor/proofs-boundary-<hex>` off origin/main, with tests and a
   PR. No Lean is touched.
+
+## 14:05Z GLMREPLAY: the stream registers output values, #7780 (Python only, no Lean)
+
+- [#7780](https://github.com/compute-verification/verity/pull/7780), on `cursor/proofs-boundary-7c1e`, linked to
+  CIR-162: `Stream.register` and `register_interiors` take R7's `outputs`. `_earlier` keeps the record each one names
+  in the log R7 reads, and `verifier.run` passes them to the Lean's `Run.run` as `output_values`. No Lean, lock record or
+  statement changes.
+- New tests (`test_service_outputs.py`):
+  - one stage, window 3 reading window 0's state;
+  - a run of record without the output values refuses, with `disagree`;
+  - two-stage, the interior's registered state is the boundary's port `carry`.
+- Remote checks: the sampled_proofs suite passed 645. Of the 57 touched suites, 50 passed before the run's one-hour
+  timeout, verity-vllm among them; the six cut off are rerunning alone. I mark #7780 ready when they pass.
+- The CIR-162 draft (note:proofs/20261107T0655Z-report-glmrestore) now links #7780 where it said "Proofs is doing that
+  now"; it is ready to post.
+- Next proofs piece, item 1's other half: `follows` on the verifier's side (Python first). It waits on circuits' edge
+  Inputs for its shape; I start it on your go.
