@@ -24,7 +24,7 @@ def tax(case: str) -> tuple[float, str]:
     each edge without the copy (`edgeL-...-live`); no K/V committed (`edge0-...-live`, a request's lifetime as its
     replay block)."""
     m = re.search(r"edge(\d+)", case)
-    if m and m.group(1) == "0":
+    if (m and m.group(1) == "0") or case.endswith("+life"):
         return BASE_TAX, "no K/V committed"
     if "live10" in case:
         return BASE_TAX + HASH_PAUSE / 10, "K/V hashed live every 10 s"

@@ -210,6 +210,23 @@ def cases() -> dict[str, Case]:
     }
     for name, (b, kw) in busy.items():
         out[name] = Case(**{**bases[b].__dict__, "busy": True, **kw})
+    hash4s75 = 1 - 0.75 * (1 - 1 / 4)
+    life = dict(replay=replay_gpu_s(0.0, 90), edge_s=1.0, live=True)
+    more = {
+        "F+busy+life": dict(**life),
+        "F+busy+fast2+hash2+life": dict(scale=0.5, marginal=hash2, **life),
+        "F+busy+fast2+hash4+life": dict(scale=0.5, marginal=hash4, **life),
+        "F+busy+fast4+life": dict(scale=0.25, **life),
+        "F+busy+fast4+hash4+life": dict(scale=0.25, marginal=hash4, **life),
+        "F+busy+fast4+hash4s75": dict(scale=0.25, marginal=hash4s75),
+        "F+busy+fast4+hash4s75+life": dict(scale=0.25, marginal=hash4s75, **life),
+        "F+busy+fast8": dict(scale=0.125),
+        "F+busy+fast8+hash4": dict(scale=0.125, marginal=hash4),
+        "F+busy+fast8+hash4+life": dict(scale=0.125, marginal=hash4, **life),
+        "F+busy+fast8+hash4s75+life": dict(scale=0.125, marginal=hash4s75, **life),
+    }
+    for name, kw in more.items():
+        out[name] = Case(**{**bases["F"].__dict__, "busy": True, **kw})
     return out
 
 
