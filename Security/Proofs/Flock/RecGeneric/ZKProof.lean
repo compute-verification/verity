@@ -72,10 +72,10 @@ theorem recGoesOn_cons_msg (a m : Msg) (τ : List (Msg × Out)) :
 /-- `Recursion.goesOn` of a run of `n` rounds, `n = 0` included, is `goesOn n`. -/
 theorem recGoesOn_run (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)),
-      Recursion.goesOn (ZKMal.interact ask pm n hist) = ZKMal.goesOn n (ZKMal.interact ask pm n hist)
+      Recursion.goesOn (Claims.interact ask pm n hist) = ZKMal.goesOn n (Claims.interact ask pm n hist)
   | 0, _ => rfl
   | n + 1, hist => by
-    simp only [ZKMal.interact]
+    simp only [Claims.interact]
     cases ask (hist.map Prod.fst ++ [pm hist]) with
     | msg m => rw [recGoesOn_cons_msg, ZKMal.goesOn_cons]; exact recGoesOn_run ask pm n _
     | acc => simp [Recursion.goesOn, ZKMal.goesOn, ZKMal.isMsg]
@@ -84,11 +84,11 @@ theorem recGoesOn_run (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) 
 /-- Two provers that agree on every history shorter than `hist`'s length plus `n` run alike for `n` rounds. -/
 theorem interact_len_congr (ask : List Msg → Out) (pm pm' : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)), (∀ h : List (Msg × Msg), h.length < hist.length + n → pm' h = pm h) →
-      ZKMal.interact ask pm' n hist = ZKMal.interact ask pm n hist
+      Claims.interact ask pm' n hist = Claims.interact ask pm n hist
   | 0, _, _ => rfl
   | n + 1, hist, h => by
     have h0 : pm' hist = pm hist := h hist (by omega)
-    simp only [ZKMal.interact, h0]
+    simp only [Claims.interact, h0]
     cases ask (hist.map Prod.fst ++ [pm hist]) with
     | msg m =>
       simp only
@@ -101,9 +101,9 @@ theorem interact_len_congr (ask : List Msg → Out) (pm pm' : List (Msg × Msg) 
 verifier, is the untagged prover's run against the verifier that reads its questions tagged, tagged. -/
 theorem interact_tag (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)),
-      ZKMal.interact ask (fun h => tagOuter (pm (h.map fun p => (untagOuter p.1, p.2)))) n
+      Claims.interact ask (fun h => tagOuter (pm (h.map fun p => (untagOuter p.1, p.2)))) n
           (hist.map fun p => (tagOuter p.1, p.2)) =
-        (ZKMal.interact (fun as => ask (as.map tagOuter)) pm n hist).map fun p => (tagOuter p.1, p.2)
+        (Claims.interact (fun as => ask (as.map tagOuter)) pm n hist).map fun p => (tagOuter p.1, p.2)
   | 0, _ => rfl
   | n + 1, hist => by
     have hu : (hist.map fun p => (tagOuter p.1, p.2)).map (fun p => (untagOuter p.1, p.2)) = hist := by
@@ -111,7 +111,7 @@ theorem interact_tag (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     have hf : (hist.map fun p => (tagOuter p.1, p.2)).map Prod.fst ++ [tagOuter (pm hist)] =
         (hist.map Prod.fst ++ [pm hist]).map tagOuter := by
       simp [List.map_map, Function.comp_def]
-    simp only [ZKMal.interact]
+    simp only [Claims.interact]
     rw [hu, hf]
     cases ask ((hist.map Prod.fst ++ [pm hist]).map tagOuter) with
     | msg m =>
@@ -122,8 +122,8 @@ theorem interact_tag (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     | rej => rfl
 
 theorem interact_tag_nil (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (n : ℕ) :
-    ZKMal.interact ask (fun h => tagOuter (pm (h.map fun p => (untagOuter p.1, p.2)))) n [] =
-      (ZKMal.interact (fun as => ask (as.map tagOuter)) pm n []).map fun p => (tagOuter p.1, p.2) :=
+    Claims.interact ask (fun h => tagOuter (pm (h.map fun p => (untagOuter p.1, p.2)))) n [] =
+      (Claims.interact (fun as => ask (as.map tagOuter)) pm n []).map fun p => (tagOuter p.1, p.2) :=
   interact_tag ask pm n []
 
 theorem tag_ne_refusal (m : Msg) : tagOuter m ≠ refusal := by
@@ -182,7 +182,7 @@ def pmC (H : Msg → Msg) (x : Msg) (c : Fin (Zs.nLeaves x) → Msg) (h : List (
 
 /-- The first part against the verifier `ask`, at the commitment vector `c`. -/
 def first (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (c : Fin (Zs.nLeaves x) → Msg) : List (Msg × Out) :=
-  ZKMal.interact ask (Zs.pmC H x c) (Zs.nh x) []
+  Claims.interact ask (Zs.pmC H x c) (Zs.nh x) []
 
 /-- The commitments before leaf `g`, as a commitment vector (`[]` from `g` on). -/
 def prevAt (x : Msg) {g : ℕ} (prev : Fin g → Msg) : Fin (Zs.nLeaves x) → Msg :=
@@ -192,7 +192,7 @@ def prevAt (x : Msg) {g : ℕ} (prev : Fin g → Msg) : Fin (Zs.nLeaves x) → M
 give. -/
 def msgsOf (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) (ωp : Zs.Ωp x) (g : Fin (Zs.nLeaves x))
     (prev : Fin g → Msg) : Msg :=
-  ((Zs.msg w x ωp (ZKMal.histOf (ZKMal.interact ask (Zs.pmC H x (Zs.prevAt x prev)) (Zs.roundOf x g) []))).eval
+  ((Zs.msg w x ωp (Claims.histOf (Claims.interact ask (Zs.pmC H x (Zs.prevAt x prev)) (Zs.roundOf x g) []))).eval
     H).1.getD ((g : ℕ) - Zs.off x (Zs.roundOf x g)) []
 
 /-- **The first part at the nonce `t`**: at the commitments to the workers' values under `t`'s salts. -/
@@ -216,8 +216,8 @@ theorem roundLeaves_prevAt (x : Msg) (c : Fin (Zs.nLeaves x) → Msg) (g : Fin (
 
 theorem interact_prevAt (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (c : Fin (Zs.nLeaves x) → Msg)
     (g : Fin (Zs.nLeaves x)) (i : ℕ) (hi : Zs.off x i ≤ g) :
-    ZKMal.interact ask (Zs.pmC H x (Zs.prevAt x fun j : Fin g => c (Fin.castLE g.isLt.le j))) i [] =
-      ZKMal.interact ask (Zs.pmC H x c) i [] := by
+    Claims.interact ask (Zs.pmC H x (Zs.prevAt x fun j : Fin g => c (Fin.castLE g.isLt.le j))) i [] =
+      Claims.interact ask (Zs.pmC H x c) i [] := by
   refine interact_len_congr ask _ _ i [] fun h hl => ?_
   simp only [List.length_nil, Nat.zero_add] at hl
   unfold pmC
@@ -225,7 +225,7 @@ theorem interact_prevAt (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (c 
 
 theorem leaves_eq (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) (t : Zs.N x) (h : List (Msg × Msg))
     (hlt : h.length < Zs.nh x)
-    (hh : ZKMal.histOf (ZKMal.interact ask (Zs.pmC H x (Lv.commits (Zs.msgsOf H x ask w t.1) t.2)) h.length []) = h) :
+    (hh : Claims.histOf (Claims.interact ask (Zs.pmC H x (Lv.commits (Zs.msgsOf H x ask w t.1) t.2)) h.length []) = h) :
     (List.ofFn fun j => Lv.leaf (((Zs.msg w x t.1 h).eval H).1.getD j []) (t.2 (Zs.leafAt x hlt j))) =
       Zs.roundLeaves x (Lv.commits (Zs.msgsOf H x ask w t.1) t.2) h.length := by
   unfold roundLeaves
@@ -239,7 +239,7 @@ theorem leaves_eq (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) (
 
 theorem pmR_eq (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) (ω : Zs.N x × Zs.Ω x)
     (h : List (Msg × Msg)) (hlt : h.length < Zs.nh x)
-    (hh : ZKMal.histOf (ZKMal.interact ask (Zs.pmC H x (Lv.commits (Zs.msgsOf H x ask w ω.1.1) ω.1.2)) h.length []) =
+    (hh : Claims.histOf (Claims.interact ask (Zs.pmC H x (Lv.commits (Zs.msgsOf H x ask w ω.1.1) ω.1.2)) h.length []) =
       h) :
     (((Zs.prover w x).next x h ω).eval H).1 = Zs.pmC H x (Lv.commits (Zs.msgsOf H x ask w ω.1.1) ω.1.2) h := by
   simp only [prover, dite_eq_left hlt]
@@ -249,7 +249,7 @@ theorem pmR_eq (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) (ω 
 
 /-- **The compiled prover's first part is `preOf`.** -/
 theorem first_eq (H : Msg → Msg) (x : Msg) (ask : List Msg → Out) (w : W) (ω : Zs.N x × Zs.Ω x) :
-    ZKMal.interact ask (fun h => (((Zs.prover w x).next x h ω).eval H).1) (Zs.nh x) [] = Zs.preOf H x ask w ω.1 := by
+    Claims.interact ask (fun h => (((Zs.prover w x).next x h ω).eval H).1) (Zs.nh x) [] = Zs.preOf H x ask w ω.1 := by
   unfold preOf first
   refine ZKMal.interact_congr ask _ _ (Zs.nh x) [] fun i hi => ?_
   have hle := ZKMal.interact_length_le ask (Zs.pmC H x (Lv.commits (Zs.msgsOf H x ask w ω.1.1) ω.1.2)) (Zs.nh x) []
@@ -282,7 +282,7 @@ def outerRun (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ
 
 /-- The first part `τ`, then the refusal every round against the verifier `ask`. -/
 def refused (x : Msg) (ask : List Msg → Out) (τ : List (Msg × Out)) : List (Msg × Out) :=
-  τ ++ ZKMal.interact (fun as => ask (τ.map Prod.fst ++ as)) (fun _ => refusal) (Zs.ko x) []
+  τ ++ Claims.interact (fun as => ask (τ.map Prod.fst ++ as)) (fun _ => refusal) (Zs.ko x) []
 
 /-- The transcript where no outer view is released: the refusal after a first part `τ` that goes on, else `τ`. -/
 def noneOf (x : Msg) (ask : List Msg → Out) (τ : List (Msg × Out)) : List (Msg × Out) :=
@@ -294,8 +294,8 @@ def outerSim (H : Msg → Msg) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (
   ((Zs.simO x).given o).out H (vAfter Vs x (Zs.ko x) (τ.map Prod.fst)) θ (Zs.xo x τ) cO
 
 theorem take_histOf (x : Msg) {τ : List (Msg × Out)} (hτ : ZKMal.goesOn (Zs.nh x) τ = true)
-    (h' : List (Msg × Msg)) : ((ZKMal.histOf τ ++ h').take (Zs.nh x)).map (fun p => (p.1, Out.msg p.2)) = τ := by
-  have hl : (ZKMal.histOf τ).length = Zs.nh x := by
+    (h' : List (Msg × Msg)) : ((Claims.histOf τ ++ h').take (Zs.nh x)).map (fun p => (p.1, Out.msg p.2)) = τ := by
+  have hl : (Claims.histOf τ).length = Zs.nh x := by
     rw [ZKMal.histOf_length]; exact ZKMal.goesOn_length hτ
   rw [List.take_left' hl]
   exact RecDeploy.asRounds_histOf (msgs_of_goesOn hτ)
@@ -305,15 +305,15 @@ open Classical in
 outer history where the server releases, and the refusal otherwise. -/
 theorem next_after (H : Msg → Msg) (w : W) (x : Msg) (ω : Zs.N x × Zs.Ω x) {τ : List (Msg × Out)}
     (hτ : ZKMal.goesOn (Zs.nh x) τ = true) (h' : List (Msg × Msg)) :
-    (((Zs.prover w x).next x (ZKMal.histOf τ ++ h') ω).eval H).1 =
+    (((Zs.prover w x).next x (Claims.histOf τ ++ h') ω).eval H).1 =
       if Zs.ok w x ω.1 τ then
         tagOuter (((Zs.PO (Zs.wo w x ω.1.1 ω.1.2 τ) x).next (Zs.xo x τ)
           (h'.map fun p => (untagOuter p.1, p.2)) ω.2).eval H).1
       else refusal := by
-  have hl : (ZKMal.histOf τ).length = Zs.nh x := by
+  have hl : (Claims.histOf τ).length = Zs.nh x := by
     rw [ZKMal.histOf_length]; exact ZKMal.goesOn_length hτ
-  have hn : ¬ (ZKMal.histOf τ ++ h').length < Zs.nh x := by rw [List.length_append]; omega
-  have hd : (ZKMal.histOf τ ++ h').drop (Zs.nh x) = h' := List.drop_left' hl
+  have hn : ¬ (Claims.histOf τ ++ h').length < Zs.nh x := by rw [List.length_append]; omega
+  have hd : (Claims.histOf τ ++ h').drop (Zs.nh x) = h' := List.drop_left' hl
   simp only [prover, dite_eq_right hn, Zs.take_histOf x hτ h', hd]
   split_ifs
   · exact oc_bind_eval_fst H _ _
@@ -335,7 +335,7 @@ theorem real_msgs (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ
     List.nil_append, Zs.first_eq H x ask w ω]
   unfold ZKMal.cont
   by_cases hg : ZKMal.goesOn (Zs.nh x) (Zs.preOf H x ask w ω.1) = true
-  · rw [ite_eq_left hg, ite_eq_left hg, ← List.append_nil (ZKMal.histOf (Zs.preOf H x ask w ω.1)), ZKMal.interact_shift,
+  · rw [ite_eq_left hg, ite_eq_left hg, ← List.append_nil (Claims.histOf (Zs.preOf H x ask w ω.1)), ZKMal.interact_shift,
       ZKMal.histOf_map_fst]
     simp only [Zs.next_after H w x ω hg]
     by_cases hok : Zs.ok w x ω.1 (Zs.preOf H x ask w ω.1)
@@ -355,8 +355,8 @@ theorem outerRun_nil (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar
     (τ : List (Msg × Out)) (hko : Zs.ko x = 0) : Zs.outerRun H w x Vs θ t ρ τ = [] := by
   unfold outerRun
   rw [ZKMal.runStar_msgs]
-  show ZKMal.interact _ _ (Zs.ko x) [] = []
-  simp only [hko, ZKMal.interact]
+  show Claims.interact _ _ (Zs.ko x) [] = []
+  simp only [hko, Claims.interact]
 
 theorem outerRun_ne_nil (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (t : Zs.N x)
     (ρ : Zs.Ω x) (τ : List (Msg × Out)) (hko : 0 < Zs.ko x) : Zs.outerRun H w x Vs θ t ρ τ ≠ [] := by
@@ -375,13 +375,13 @@ theorem outcome_refused (x : Msg) (ask : List Msg → Out) {τ : List (Msg × Ou
   unfold outcome refused
   rcases Nat.eq_zero_or_pos (Zs.ko x) with h0 | hpos
   · rw [h0]
-    simp [ZKMal.interact, hτ]
+    simp [Claims.interact, hτ]
   · obtain ⟨n, hn⟩ : ∃ n, Zs.ko x = n + 1 := ⟨_, (Nat.succ_pred_eq_of_pos hpos).symm⟩
     rw [hn]
     apply ite_eq_left
     right
     rw [List.drop_left' hτ]
-    simp only [ZKMal.interact]
+    simp only [Claims.interact]
     split <;> rfl
 
 theorem outcome_outer_cons (x : Msg) {τ : List (Msg × Out)} (hτ : τ.length = Zs.nh x) {τO : List (Msg × Out)}
@@ -418,7 +418,7 @@ theorem msgs_of_none (H : Msg → Msg) (w : W) (x : Msg) {Θ : Type} (Vs : VStar
         rw [hnil]
         unfold refused
         rw [h0]
-        simp [ZKMal.interact]
+        simp [Claims.interact]
       · rw [Zs.outcome_outer_cons x (ZKMal.goesOn_length hg) hnil] at h
         exact absurd h (by simp)
     · rw [ite_eq_right hok]
@@ -484,7 +484,7 @@ theorem sim_out_none (H : Msg → Msg) (x : Msg) {Θ : Type} (Vs : VStar Θ) (θ
   unfold noneOf
   by_cases hg : ZKMal.goesOn (Zs.nh x) (Zs.first H x ask fun g => Lv.ideal (c.1 g)) = true
   · rw [ite_eq_left hg, ite_eq_left hg, RecDeploy.simRounds_interact H ask _ (Zs.ko x) _ (msgs_of_goesOn hg),
-      ← List.append_nil (ZKMal.histOf (Zs.first H x ask fun g => Lv.ideal (c.1 g))), ZKMal.interact_shift,
+      ← List.append_nil (Claims.histOf (Zs.first H x ask fun g => Lv.ideal (c.1 g))), ZKMal.interact_shift,
       ZKMal.histOf_map_fst]
     rfl
   · rw [ite_eq_right hg, ite_eq_right hg]

@@ -29,7 +29,7 @@ from verity.ml.circuits.census import NoBooleanWork
 from verity.ml.circuits.program import Program
 
 from . import logical as L
-from .logical import Registration, Value
+from .logical import RegisteredInputs, Value
 from .memory import StoreEntry
 from .physical import Datacenter, LinkEntry, Port
 from .plan import Plan
@@ -71,7 +71,7 @@ class Placed:
     #: registered state, each on the device the registration says holds it
     stores: tuple[StoreEntry, ...] = ()
     #: the registration of the Program's registered inputs
-    registration: Registration | None = None
+    registration: RegisteredInputs | None = None
     #: registered values (by census value id) kept in one copy, on this device, rather than in every reading block
     held: dict[int, str] = field(default_factory=dict)
 
@@ -97,7 +97,7 @@ class Placed:
         return all(all(a < b for a, b in zip(t, t[1:])) for t in self.ticks.values())
 
     def block(self, device: str | None) -> str | None:
-        b = self.datacenter.block_of(device) if device is not None else None
+        b = self.datacenter.zone_of(device) if device is not None else None
         return b.name if b else None
 
     def source(self, k: int) -> str | None:
@@ -279,7 +279,7 @@ class Profile:
 
 
 def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None = None,
-          stores: tuple[StoreEntry, ...] = (), registration: Registration | None = None, start: int = 0,
+          stores: tuple[StoreEntry, ...] = (), registration: RegisteredInputs | None = None, start: int = 0,
           ticks_per_step: int = 1, transfer_steps: int = 2, **where: str) -> Placed:
     """Place `program` on `dc`: each keyword names a root node (a parameter or a named Call) and the device it runs or
     enters on; any other Call or run input goes where its first reader runs, if that is in a block, else on `default`.
@@ -309,7 +309,7 @@ def place(program: Program, dc: Datacenter, default: str, *, deliver: str | None
         if k in named:
             device[k] = named[k]
         elif L.binding(program, k) != L.REGISTRATION:
-            inside = [device[r] for r in sorted(readers.get(k, ())) if dc.block_of(device[r]) is not None]
+            inside = [device[r] for r in sorted(readers.get(k, ())) if dc.zone_of(device[r]) is not None]
             device[k] = inside[0] if inside else default
     p = Placed(program, dc, device, {}, {}, deliver, tuple(stores), registration)
     read: dict[int, list[Value]] = {}
@@ -379,7 +379,7 @@ def crosses(p: Placed, v: Value, dst: str) -> bool:
     """Whether value `v`, read at device `dst`, comes from another block: never for a registered value with a copy in
     every block that reads it."""
     src = p.home(v)
-    return src is not None and p.datacenter.block_of(src) is not p.datacenter.block_of(dst)
+    return src is not None and p.datacenter.zone_of(src) is not p.datacenter.zone_of(dst)
 
 
 def crossings(p: Placed) -> list[Crossing]:

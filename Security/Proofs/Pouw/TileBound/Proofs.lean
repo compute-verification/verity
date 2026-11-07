@@ -1,6 +1,9 @@
 module
 
 public import Definitions.Pouw.TileBound.Defs
+public import Mathlib.Algebra.Field.Rat
+public import Mathlib.Data.Matrix.Mul
+import Mathlib.LinearAlgebra.Matrix.Rank
 
 /-!
 # The FP4-tile model: the block-support count and what it bounds (proofs)

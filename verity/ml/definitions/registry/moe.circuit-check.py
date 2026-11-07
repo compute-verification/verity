@@ -6,12 +6,12 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """GLM-5.3's sigmoid `noaux_tc` router (`MoeRouterSigmoidBias_v1`, the word view of `boolean_moe`'s) at 8 experts, 2
-    slots, on both of its kernels."""
+    """GLM-5.3's sigmoid `noaux_tc` router (`MoeRouterSigmoidBias_v1`, the word view of `boolean_moe`'s) and its one-field-a-slot
+    form (`MoeRouterSigmoidBiasSlots_v1`) at 8 experts, 2 slots, on both of its kernels."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import moe as M
 
     return [
-        *[bind(d, E=8, TOPK=2, SCALE=2.5, KERNEL=k) for d in (M.MoeRouterSigmoidBias,)
+        *[bind(d, E=8, TOPK=2, SCALE=2.5, KERNEL=k) for d in (M.MoeRouterSigmoidBias, M.MoeRouterSigmoidBiasSlots)
           for k in M.ROUTER_KERNELS],
     ]

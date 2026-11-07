@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.JointPeriod
 public import Definitions.Accounting.BandwidthAudit
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A period whose PoUB audit is the bandwidth audit's game (trusted)

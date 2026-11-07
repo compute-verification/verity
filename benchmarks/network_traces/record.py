@@ -286,7 +286,6 @@ def offline_engine(args: argparse.Namespace, commit: bool, meta: dict, mix: Sequ
 
     com = NativeCollectCommitter(eng, run_id="network-traces", retain_values=False, arena_bytes=None, wrap=True, gather=True,
                                  native_hooks=True, auto_blocks=True, native_worker=True)
-    com._gpu_ext_load()  # the GPU tree's extension is built on first use: on a cold node, 86 s that would spill past t0
     t = clock()
     com.register_weights()
     rows = [r for _, reqs, _ in mix for r in reqs]

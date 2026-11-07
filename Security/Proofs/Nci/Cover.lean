@@ -23,6 +23,8 @@ public import Proofs.Nci.Cover.Checked
 public import Proofs.Nci.Cover.Chained
 public import Proofs.Nci.Cover.CheckedChained
 public import Proofs.Nci.Cover.ChainedWitness
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Tactic.Measurability.Init
 
 /-!
 # Proofs of the cover theorem

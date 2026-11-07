@@ -138,9 +138,10 @@ def ofLink (k : Verity.Site.Link) : Core.Site.Link := ⟨k.id, k.ends, k.β, k.l
 def ofEntry (e : Verity.Site.Entry) : Core.Site.Entry :=
   ⟨e.sheets.map ofSheet, e.locs.map ofLoc, e.links.map ofLink⟩
 
-/-- The code's entry of the registration of a spec entry. -/
-def ofRegEntry : Verity.Registration.Entry → Core.Site.Registration.Entry
-  | .site p e => .site p (ofEntry e)
+/-- The code's entry of the registration of a spec entry: its head and what it adds to the Site. The code's log here
+holds only site entries, so an information entry or a declaration, which no code entry denotes, is read as the empty
+site entry following the same head. -/
+def ofRegEntry (e : Verity.Registration.Entry) : Core.Site.Registration.Entry := .site e.previous (ofEntry e.added)
 
 /-- The spec's composite of a code composite. -/
 def composite : Core.Site.Registration.Composite → Verity.Registration.Composite

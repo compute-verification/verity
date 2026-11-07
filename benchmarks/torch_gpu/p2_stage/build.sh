@@ -6,24 +6,23 @@
 # benchmarks/pous/p2_v1's libp2v1.so, unchanged, by its own Makefile (FAST's default: v4 keys by p2keys4.cuh, p2sq.cuh's
 # Karatsuba squaring), at ARCH (default sm_90a) with CGBN at p2_gpu/CGBN.commit. Writes into OUT (default $OUT):
 #   lib/libp2v1.so, lib/libp2v1.so.ptxas   the library and ptxas's report (registers, spills)
+#   lib/libp2v1.so.cubins/                 the library's cubins (ship.sh's ship_cubins)
 #   elf.txt                                cuobjdump --list-elf: the SASS targets the library holds
 #   toolchain.txt                          nvcc --version and the make line
 #   source.txt                             the commit, and the sha256 of every source the Makefile names
 #   MANIFEST.sha256                        every file above
-# CUDA names a toolkit (nvcc >= 12.8); else the node's /usr/local/cuda-13.0 or /usr/local/cuda.
+# CUDA names a toolkit (nvcc >= 12.8); else the node's /usr/local/cuda-13.0 or /usr/local/cuda. It builds in ship.sh's
+# frame from its staged sources, so a rebuild at the same commit and toolkit path reproduces the cubins.
 set -euo pipefail
-HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../../.." && pwd)
+HERE=$(cd "$(dirname "$0")" && pwd)
+. "$HERE/../ship.sh"
 OUT=${1:-${OUT:?usage: build.sh OUT}}; ARCH=${ARCH:-sm_90a}
-P2=$ROOT/benchmarks/pous/p2_v1
+ship_stage benchmarks/pous/p2_v1 benchmarks/pous/p2_gpu verity/ml/kernels
+P2=$SRC/benchmarks/pous/p2_v1
 S=$(mktemp -d "${TMPDIR:-/tmp}/p2-stage-build.XXXXXX"); trap 'rm -rf "$S"' EXIT
 mkdir -p "$OUT/lib"
 
-release_ok() { [ -x "$1/bin/nvcc" ] && "$1/bin/nvcc" --version | grep -Eq "release 12\.(8|9)|release 1[3-9]\."; }
-CUDA=${CUDA:-}
-if [ -z "$CUDA" ]; then
-  for home in /usr/local/cuda-13.0 /usr/local/cuda; do release_ok "$home" && { CUDA=$home; break; }; done
-fi
-[ -n "$CUDA" ] && release_ok "$CUDA" || { echo "no nvcc >= 12.8 here (set CUDA)" >&2; exit 2; }
+ship_cuda /usr/local/cuda-13.0 /usr/local/cuda
 
 GMPINC=
 if ! echo '#include <gmp.h>' | cpp >/dev/null 2>&1; then
@@ -39,6 +38,7 @@ mk=(make -C "$P2" NVCC="$CUDA/bin/nvcc" CGBN="$S/CGBN" BIN="$OUT/lib" ARCH="$ARC
 "${mk[@]}" > "$S/make.log" 2>&1 || { tail -40 "$S/make.log" "$OUT/lib/libp2v1.so.ptxas" >&2; exit 1; }
 "$CUDA/bin/cuobjdump" --list-elf "$OUT/lib/libp2v1.so" > "$OUT/elf.txt"
 grep -q "$ARCH" "$OUT/elf.txt" || { echo "libp2v1.so holds no $ARCH SASS" >&2; cat "$OUT/elf.txt" >&2; exit 1; }
+ship_cubins "$OUT/lib/libp2v1.so"
 if grep -E "spill (stores|loads)" "$OUT/lib/libp2v1.so.ptxas" | grep -vq " 0 bytes spill stores, 0 bytes spill loads"; then
   echo "ptxas reports spills (lib/libp2v1.so.ptxas)" >&2
 fi

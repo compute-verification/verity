@@ -23,9 +23,10 @@ FAMILY = ("moe", "moe_pad", "boolean_moe", "fp8", "fp8_moe", "fp8_moe_experts", 
 #: composites (`b1`), Hopper's tensor-core step (`hopper`), the lifted-Definition makers (`lifted`), the Boolean bit views
 #: (`boolean_attention._Bits`), the SwiGLU and logf that DeepSeek-V4's routers and activation call (`act`, `boolean_silu`,
 #: `topp_word_gates`, `gumbel_boolean`), and the i32 gather `GatherI32x{V}_v1` that `boolean_gather.gather_i32` lowers
-#: (`dsv4_decode_indices`, which also registers its row's numpy twin, so it is no Definitions-only module yet)
+#: (`dsv4_decode_indices`, which also registers its row's numpy twin, so it is no Definitions-only module yet), and the bit
+#: selection `BitAtx{W}_v1` that `boolean_gather.bit_at` lowers (`sampling`, whose top-p split reads numpy, so it is none yet either)
 OTHER_DEFINITION_MODULES = ("b1", "prims", "ref_prims", "pad_prims", "hopper", "lifted", "boolean_attention", "act", "boolean_silu",
-                            "topp_word_gates", "gumbel_boolean", "dsv4_decode_indices")
+                            "topp_word_gates", "gumbel_boolean", "dsv4_decode_indices", "sampling")
 #: `evidence.json`'s ids, read with the standard library only
 EVIDENCE = "verity.ml.definitions.evidence"
 ALLOWED = {f"{REGISTRY}.{m}" for m in FAMILY + OTHER_DEFINITION_MODULES} | {EVIDENCE}

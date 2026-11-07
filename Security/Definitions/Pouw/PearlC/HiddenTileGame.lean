@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Pouw.PearlC.Hidden
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # What a proof system gives per tile, toward the hidden audit's open obligation (trusted)
