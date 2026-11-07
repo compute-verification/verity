@@ -229,7 +229,9 @@ bookkeeping: it repairs it in that commit, with a warning for each repair (The l
   warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
   the witnesses rule holds to missing witnesses, a stale entry, a missing owner, or a cap of `unread-caps.json` or
   `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
-  malformed lock always fail. Lock files never conflict on merge.
+  malformed lock always fail. Lock files conflict on merge only where `tools/verity/lean/merge.py` can't vouch for the
+  merge: a lock in a `format` newer than it knows, the worktree's copy merging in newer merge rules, or a merge that would
+  drop most of a section. The registered driver runs `origin/main`'s copy wherever the repository has that ref.
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
   lean-proofs skill.
 
