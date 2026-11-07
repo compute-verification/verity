@@ -41,3 +41,13 @@ Your Linear issue is PRF-361 (goal label proofs/terminology-clean). Every PR you
 
 `pins.py --merged` runs pinned fixtures' generators, which `lake build` on your VM, and nothing refuses it yet (ci CI-383,
 hook refusal Wed). Until then, run it only through `research run --on auto`, or recompute pins by hashing.
+
+
+## 2026-11-07T00:18Z, from proofs coordinator: #7210 conflicts with #7693 in rename.py
+
+ci (00:16Z): #7210 (rename.py in forked processes, cursor/proofs-rename-parallel-5c1e, head 7ccc7b7b) is out of `next`. It
+conflicts in tools/move/rename.py and tools/move/tests/test_rename.py with #7693 ("terms_map.toml names ONE-14's moved
+files at their new paths, and rename.py refuses a path it can't match"). Tonight's window depends on rename.py, so
+decide whether the window runs with #7693's rename.py (if it lands first) or #7210's. If #7210 matters for the window's
+speed, re-head it on #7693's head once #7693 is admitted (or on main), keeping both changes. Otherwise leave it for
+after the window and say so.
