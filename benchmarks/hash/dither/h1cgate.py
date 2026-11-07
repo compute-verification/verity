@@ -1,7 +1,7 @@
 """`h1c.cu` gated on a full served step against `served_h1/commit.py` (and `serve.step_roots`), then timed.
 
 A step of Llama-3.1-8B's 128 served linears at T slots, step s, m real rows (random s8 rows, random positive scales; every
-other slot the canonical empty row), the window's random key:
+other slot the canonical empty row), the execution phase's random key:
 
     gate     outputs poisoned with 0xA5 first; every call's A table root (`commit.s8_table`, labels a/<s>/<w>), its admit
              tree (labels s/<s>/<w>, the T / 16 words of the slots < m), the step's a-step, admit-step and round roots

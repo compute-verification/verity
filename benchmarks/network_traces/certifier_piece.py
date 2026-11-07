@@ -71,7 +71,7 @@ the active network certifier in front of serve-openai there (its ``CERTIFIER_FRO
   certifier missing. Each step it runs (the build, the chain, the check and the leak guard) is a process group of its
   own, which the piece ends however the step ends (`run_group`: SIGTERM, `GRACE_S`, SIGKILL), so nothing a step
   started outlives it; a SIGTERM while a step runs is held until the step's group has ended, so a step never outlives
-  the refusal either. ``--draw K`` is the scan's K drawn units (every unit by default); a CR_K=V goes to the chain;
+  the refusal either. ``--draw K`` is the scan's K sampled proof blocks (every unit by default); a CR_K=V goes to the chain;
   ``--chain-cmd`` replaces the chain (a test's, which writes the report and the scan's answers under
   RESEARCH_RUN_DIR/out).
 * **relay**: a TCP relay from 127.0.0.1:``--listen`` to 127.0.0.1:``--to``, the local gate's tunnel.
@@ -112,8 +112,8 @@ PREMISE = "trusted-host"
 #: the front's public outcome, copied beside the kept fetch
 SESSION = "session.json"
 #: What DIR/chain gets of the chain's out/, by file: its JSON with only the key paths named (``a.b`` b under a, ``*``
-#: every key at its level). Each is public as the protocol's output, its draw or its structure: the chain's and each
-#: step's verdict, ε at δ (the draw's law, population and size) and where it runs in the clear, what the path stubs
+#: every key at its level). Each is public as the protocol's output, its sample or its structure: the chain's and each
+#: step's verdict, ε at δ (the sample's law, population and size) and where it runs in the clear, what the path stubs
 #: and how its negatives came out; and the scan's answers, each link-window's answer and the registrations it is
 #: checked against (hiding commitments), the period check's evidence. Everything else stays in the kept run: the
 #: endpoint's report (each Commit window's request, carried, step and output counts, its opening time and its advice's
@@ -270,7 +270,7 @@ def kept_run(serve_dir: Path) -> str:
 
 def placement(serve_dir: Path, run: str) -> dict:
     """Which host ran each party, and what `trusted-host`'s premise rests on: the network certifier ran on the gate's
-    host (the kept `SESSION`'s ``gate``; ``local`` is the prover's node), and the chain's checks and draws, the period
+    host (the kept `SESSION`'s ``gate``; ``local`` is the prover's node), and the chain's checks and samples, the period
     check and their proofs' coins ran in this piece on the prover's node, the kept run's peer. No device of the
     auditor's is on the node's links, so the premise is assumed of both hosts; ``links`` are the node's to the gate,
     and K counts the certified one alone."""

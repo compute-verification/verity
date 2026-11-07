@@ -1,5 +1,5 @@
 /-
-A protocol whose draw reads live coins (`Live`): its check is a check at the coins (`checkAt`), run on the coins it reads
+A protocol whose sample reads live coins (`Live`): its check is a check at the coins (`checkAt`), run on the coins it reads
 from its evidence (`coins`), the challenger's signed record of them under the key its parameters pin.
 
 * `Live P`: `P`'s check factors through the coins (`factors`): `check` is `checkAt` at what `coins` reads, and refuses
@@ -29,7 +29,7 @@ def atCoins {Coins Public Profile : Type} (coins : V Coins) (k : Coins → Outco
   | .ok ξ => k ξ
   | .error r => .reject r
 
-/-- `P`'s check reads its draw's live coins and decides at them: `check p c e` is `checkAt p c ξ e` at the coins `ξ`
+/-- `P`'s check reads its sample's live coins and decides at them: `check p c e` is `checkAt p c ξ e` at the coins `ξ`
 that `coins p c e` reads, and a refusal with its reason when it reads none (`atCoins`). -/
 structure Live (P : Protocol) where
   Coins : Type

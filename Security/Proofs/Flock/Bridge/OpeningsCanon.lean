@@ -3,11 +3,11 @@ module
 public import Proofs.Flock.Bridge.Canon
 
 /-!
-# A drawn unit's openings are canonical (`Bridge.OpeningsCanonTarget`, proved)
+# A sampled proof block's openings are canonical (`Bridge.OpeningsCanonTarget`, proved)
 
-`OpeningsCanonTarget` asks `canonAt` at every committed wire of a drawn unit: at a constant (`Bridge.constsOf`), the
+`OpeningsCanonTarget` asks `canonAt` at every committed wire of a sampled proof block: at a constant (`Bridge.constsOf`), the
 opening's bit is the constant; at any other wire, the opening is canonical (`canonOpen`), which asks the wire to have a
-row. A drawn unit's committed constants are the constant `oneG` and the zero `zeroG`: an input no unit reads is in no
+row. A sampled proof block's committed constants are the constant `oneG` and the zero `zeroG`: an input no unit reads is in no
 unit's `io` (`Bridge.owner_ne_none_of_io`).
 
 * `Bridge.canonOpenH rows g v y`: `g` has no row, or the opening is canonical there (`canonOpen`);
@@ -17,7 +17,7 @@ unit's `io` (`Bridge.owner_ne_none_of_io`).
   witness holds there (`Readers.ofBits`'s `rowOf`), canonical by `rowShaped_rowOf` at `portRowW q = 16 · words ≤ W`,
   and whose salt is the witness's bytes at `saltAt`, `List.ofFn` over `Fin 192`;
 * `Bridge.openingsCanon_row`: the same, as `canonOpen`, at every wire that has a row;
-* `HiddenExec.rowOfH_ne_none_of_io`: a committed wire of a drawn unit other than the constant and the zero has a row
+* `HiddenExec.rowOfH_ne_none_of_io`: a committed wire of a sampled proof block other than the constant and the zero has a row
   (`Layout.single_gate`; a computed one is a returned output's, `OutsOut`, so an output row's bit);
 * `Bridge.openingsCanon_const`: at the constant and the zero, the opening's bit is the decoder's (`opening_spec`), which
   reads the unit's constant column, 1, or a zero column, 0, at the public place (`UnitPlace.decode_one`,
@@ -64,7 +64,7 @@ variable {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ} {Reg : Type} {mPts : 
   {plan : Finset (Fin n) → Reg → List (TabSpec mPts)}
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length} {si : SitesH plan tab}
 
-/-- **A committed wire of a drawn unit other than the constant and the zero has a row**: a committed gate with no row
+/-- **A committed wire of a sampled proof block other than the constant and the zero has a row**: a committed gate with no row
 is the zero, the constant or a computed gate of the unit (`Layout.single_gate`), and a computed one is a returned
 output's (`OutsOut`), so an output row's bit (`outBitRow_ne_none`), as in `keyProgH_valPinned`. -/
 theorem rowOfH_ne_none_of_io
@@ -105,7 +105,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
   FlockSoundness.Discharge.Composed FlockSoundness.Discharge.ZkHidden FlockSoundness.Discharge.ZkSession
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 
-/-- **A drawn unit's openings are canonical where its wires have rows**, at `EndToEndHidden`'s session:
+/-- **A sampled proof block's openings are canonical where its wires have rows**, at `EndToEndHidden`'s session:
 `OpeningsCanonTarget` at `Bridge.canonOpenH`. -/
 def _root_.Flock.Bridge.OpeningsCanonTargetH : Prop :=
   ∀ (n : ℕ) (Reg : Type)
@@ -150,7 +150,7 @@ theorem _root_.Flock.Bridge.openingsCanonH : Bridge.OpeningsCanonTargetH := by
   exact Bridge.rowShaped_rowOf rfl
     ((Finset.le_sup (f := Discharge.Layout.portRowW D.unroll) (Finset.mem_univ q)).trans (Nat.le_succ _)) b
 
-/-- **At a wire with a row, a drawn unit's opening is canonical** (`canonOpen`), at `OpeningsCanonTargetH`'s session. -/
+/-- **At a wire with a row, a sampled proof block's opening is canonical** (`canonOpen`), at `OpeningsCanonTargetH`'s session. -/
 theorem _root_.Flock.Bridge.openingsCanon_row
     (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
@@ -174,7 +174,7 @@ theorem _root_.Flock.Bridge.openingsCanon_row
   intro P vb Cc rows S R u hu M hM g hg hr
   exact (Bridge.openingsCanonH n Reg I ht D hD hU pub hpub hpt hscope kd dj S₀ d₀ y₀ S R u hu M hM g hg).resolve_left hr
 
-/-- **At the constant and the zero, a drawn unit's opening carries the constant**, at `OpeningsCanonTarget`'s session:
+/-- **At the constant and the zero, a sampled proof block's opening carries the constant**, at `OpeningsCanonTarget`'s session:
 the opening's bit is the decoder's (`opening_spec`), which at the public place reads the unit's constant column, `1`
 (`UnitPlace.decode_one`, `constCols_keyProgH`), or a zero column, `0` (`zeroCols_keyProgH`). -/
 theorem _root_.Flock.Bridge.openingsCanon_const

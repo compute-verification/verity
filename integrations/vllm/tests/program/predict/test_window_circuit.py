@@ -745,7 +745,7 @@ def test_the_verifier_holds_the_committers_registration_to_its_weights_records_s
     the verifier pins its roots only where it registers exactly the record's parameters at their shapes, but those it
     names unrooted (`registration_pins`), and a window
     records only a registration (`advice.registered_weights`): never a weights record, nor one of another model than the
-    run served. A key that isn't 32 bytes draws no salt; a committer registers no checkpoint its manifest pins as another
+    run served. A key that isn't 32 bytes samples no salt; a committer registers no checkpoint its manifest pins as another
     model, and a shard the manifest doesn't pin leaves the checkpoint not of record, which no committer registers."""
     reg = S._registered()
     d, man = _checkpoint(tmp_path)
@@ -856,7 +856,7 @@ def test_a_window_its_slots_dont_place_is_refused_by_name():
 
 
 def _unit_rows(circuit) -> dict[str, int]:
-    """Each template's rows in and out under the circuit's cuts, as C-Flock's `UnitStager` takes them
+    """Each template's rows in and out under the circuit's cuts, as Flock's `UnitStager` takes them
     (`interface.unit_rows`)."""
     return {_label(fn): sum(map(len, IF.unit_rows(fn, circuit.cuts.get(IF.descriptor_id(fn))))) for fn, _ in circuit.templates}
 
@@ -880,7 +880,7 @@ def test_no_unit_holds_more_rows_in_and_out_than_the_grain(window):
 
 
 def _widest_row(circuit) -> dict[str, int]:
-    """Each template's widest row in or out under the circuit's cuts, in bytes, as C-Flock's `UnitStager` frames them (bit
+    """Each template's widest row in or out under the circuit's cuts, in bytes, as Flock's `UnitStager` frames them (bit
     rows of exactly their words, `interface.unit_rows`)."""
     out = {}
     for fn, _ in circuit.templates:
@@ -909,7 +909,7 @@ def test_a_class_too_small_to_prove_is_refused_naming_each_template_c_flock_woul
     assert named == set(short)
 
 
-#: the smallest test class C-Flock proves every unit of: a head of 64 values (one of 16 has no row past 111 bytes at any
+#: the smallest test class Flock proves every unit of: a head of 64 values (one of 16 has no row past 111 bytes at any
 #: class), prompts of 27 ids (the feed's slot 112 bytes) and one output, GEMM slices of 64 columns (a key's value one row)
 #: and a token select of one unit of 512 logits (32 groups: its indices a row of 128 bytes, which its collector and the
 #: entry share its unit with)
@@ -920,7 +920,7 @@ PROVABLE_CLASS, PROVABLE_GRAIN = WindowClass(2, 27, 1), Grain(gemm_words=8192, r
 
 def test_the_smallest_provable_test_class_lowers_every_unit_to_a_proof_block():
     """At `PROVABLE`'s model, class and grain the class builder's check passes (`interface.check_proof_block`): its 3,996
-    units of 43 templates each have a row past 111 bytes and are proof blocks C-Flock's composer takes, its token selects
+    units of 43 templates each have a row past 111 bytes and are proof blocks Flock's composer takes, its token selects
     a `TokenSelectGroups_v1{512, 16}` unit and a combine with the position's collector a position a slot, the last
     position's with the entry."""
     circuit = class_circuit(S._registered(PROVABLE), PROVABLE_CLASS, None, PROVABLE_GRAIN)
