@@ -1,6 +1,6 @@
 """The seed and the noise a PoUW unit derives inside its own proof, under the compile pass (`compile`).
 
-A sampled proof block's noise is neither a public nor a coin input: the unit computes its seed from the window's salt
+A sampled proof block's noise is neither a public nor a coin input: the unit computes its seed from the execution phase's salt
 (`pouw.salt`, the one coin), its position and its operands' roots, all inputs of the unit bound before the sample, and its
 noise from the seed, in gates.
 
@@ -101,7 +101,7 @@ def _tagged(tag: bytes, salt: bytes, position: int, root_a: bytes, root_b: bytes
 
 
 def seed(salt: bytes, position: int, root_a: bytes, root_b: bytes) -> bytes:
-    """seed_j of the unit at `position` whose operands commit to `root_a` and `root_b`, under the epoch's `salt`."""
+    """seed_j of the unit at `position` whose operands commit to `root_a` and `root_b`, under the execution phase's `salt`."""
     return _tagged(SEED_TAG, salt, position, root_a, root_b)
 
 

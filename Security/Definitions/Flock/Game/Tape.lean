@@ -3,10 +3,10 @@ module
 public import Definitions.Flock.Game.Prob
 
 /-!
-# A strategy's coins up to a point of the game, drawn ahead
+# A strategy's coins up to a point of the game, sampled ahead
 
 A deterministic strategy `s` of `g.bind f` plays `g` and then `f a` at `g`'s outcome `a`. `Tape f T g s` holds the coins
-`g` draws at `s`, each coin with, for every value of it, the coins after it, and then a tape `T a s'` of the
+`g` samples at `s`, each coin with, for every value of it, the coins after it, and then a tape `T a s'` of the
 continuation at the strategy `s'` that `s` leaves for `f a`. `Tape.land` is where a tape lands: `g`'s outcome, the
 strategy `s` leaves there, and the continuation's tape.
 
@@ -26,7 +26,7 @@ section Tape
 
 variable (f : α → Game β) (T : (a : α) → Strategy (f a) → Type)
 
-/-- **The coins `g` draws at a strategy of `g.bind f`, then the continuation's tape `T`.** At a coin `C`, the coin and,
+/-- **The coins `g` samples at a strategy of `g.bind f`, then the continuation's tape `T`.** At a coin `C`, the coin and,
 for every value of it, the rest. -/
 def Tape : (g : Game α) → Strategy (g.bind f) → Type
   | .ret a, s => T a s

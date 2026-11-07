@@ -1,6 +1,6 @@
 """A window's row tables on the verifier's side (`serving_rows.RowTable`): its linked members' public strings tied to the tables'
 roots, the segments' roots and the registered ``row-table`` root (`check_row_tables`); each linked member's ``--registered`` file
-for the Lean verifier of record (`registered_reads`); and the audit record's account of what each drawn member's verdict reported
+for the Lean verifier (`registered_reads`); and the audit record's account of what each sampled member's verdict reported
 reading (`reported_reads`).  Everything here reads the window, the members' public bodies and the roots, never what a table's
 names or row keys mean.
 """
@@ -80,8 +80,8 @@ def registered_reads(window: CS.Binding, publics: Mapping[str, bytes], *, regist
 
 
 def reported_reads(reads: Mapping[str, Mapping[str, Any]], verdicts: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
-    """The audit record's ``registered_reads``: for each drawn member with registered reads (``verdicts[key]``, its Lean
-    verifier of record's verdict), the value each registered port reads (a linked member's ``x``, its row table) and the root
+    """The audit record's ``registered_reads``: for each sampled member with registered reads (``verdicts[key]``, its Lean
+    verifier's verdict), the value each registered port reads (a linked member's ``x``, its row table) and the root
     the verifier's own ``--registered`` file named (``reads[key]``: `registered_reads`, or an outside value's), beside the
     ``registered`` finding the verdict reports opening the member's rows against.  ``ok`` when every member's verdict accepted
     it and reports exactly its file's ports, values and roots."""

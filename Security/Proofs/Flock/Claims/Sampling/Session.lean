@@ -66,7 +66,7 @@ rounds costs, is at most `γ_F` (`γFlock_mul_le`).
 
 * `SessionKS_of`: **`SessionKS` from Flock's KS**, `DrawFixed`, `SessionRuns`, `InnerNumbers` and `ε_table ≥ 0`.
 
-A session may cover several checked units, as the one-stage audit's one session proves every drawn unit:
+A session may cover several checked units, as the one-stage audit's one session proves every sampled proof block:
 `SessionRunsSlots` asks `SessionRuns` only of the units at the slots whose sessions cover the rest (`SlotsCover`,
 `Sampling.KS`), and gives it (`sessionRuns_of_slots`); one session per unit is `SessionRuns` itself
 (`sessionRunsSlots_units_iff`). `InnerNumbers` at one session over every unit is one statement about it
@@ -307,7 +307,7 @@ section Session
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **The draw precedes the sessions**: a unit checked at `r` has its session's rounds in the second stage, and fresh
+/-- **The sample precedes the sessions**: a unit checked at `r` has its session's rounds in the second stage, and fresh
 coins on them keep the checked units. -/
 def DrawFixed (D : Deploy Coin Col T) : Prop :=
   ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
@@ -337,7 +337,7 @@ def InnerNumbers (D : Deploy Coin Col T) : Prop :=
       D.flock.εtable xS ≤ D.εtable x ∧ D.flock.weight xS ≤ D.weight x
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-/-- **`DrawFixed` from the draw's place in the run**: where each checked unit's session is in the second stage and the
+/-- **`DrawFixed` from the sample's place in the run**: where each checked unit's session is in the second stage and the
 checked units read only the coins off the second stage, fresh coins on a session keep them. -/
 theorem drawFixed_of_first (D : Deploy Coin Col T)
     (hrounds : ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) → D.rounds x u ⊆ D.stage2 x)

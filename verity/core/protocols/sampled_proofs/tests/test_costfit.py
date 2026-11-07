@@ -65,7 +65,7 @@ def test_record_round_trips_into_the_planners_model():
 
 
 def test_every_feature_of_every_fit_reaches_the_model():
-    """A prover that pays for its staged proof blocks and a verifier that pays for the drawn ones: each feature's rate is the
+    """A prover that pays for its staged proof blocks and a verifier that pays for the sampled ones: each feature's rate is the
     prove coefficient plus the verify and stage ones at the price ratio."""
     p = {"one": 7.0, "ands": 2e-7, "ands*staged": 3e-10, "ands*drawn": 4e-9}
     v = {"one": 1.5, "ands*staged": 5e-9, "ands*drawn": 6e-8}
