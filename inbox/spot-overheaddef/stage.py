@@ -297,10 +297,8 @@ def fa3_calls(cap: Capture):
     split count)."""
     from verity.ml.definitions.registry import sparse_mla_split as SP
     for r in cap.ranks:
-        last = None
         for e in cap.events[r]:
             if e["op"] == "_vllm_fa3_C::fwd" and e["in"].get("q_v") is not None:
-                last = e
                 if not cap.opened(e):
                     continue
                 o = e["out"]
@@ -369,7 +367,8 @@ def mla_split_part_instances(cap: Capture):
 # ---- draw, gate, stage ---------------------------------------------------------------------------------------------------
 
 def draw(coins: bytes, label: str, n: int, k: int) -> list[int]:
-    """``k`` distinct indices of ``n`` from the capture's coins (all of them when ``n`` <= ``k``)."""
+    """``k`` distinct indices of ``n`` from the capture's coins (all of them when ``n`` <= ``k``), in the order drawn, so that
+    any prefix is itself a uniform draw (a11's ``--per-kind`` takes one)."""
     if n <= k:
         return list(range(n))
     out: list[int] = []
@@ -379,7 +378,7 @@ def draw(coins: bytes, label: str, n: int, k: int) -> list[int]:
         if j not in out:
             out.append(j)
         i += 1
-    return sorted(out)
+    return out
 
 
 def main() -> int:
