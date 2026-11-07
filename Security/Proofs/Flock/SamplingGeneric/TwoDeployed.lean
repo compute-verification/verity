@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SamplingGeneric.Masked
-public import Definitions.Claims.SamplingTwo
+public import Proofs.Flock.Claims.Sampling.OpensTwo
 import Proofs.Flock.Masked
 import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.SamplingGeneric.Two
@@ -24,8 +24,9 @@ The contract's clauses that read only the sampled verifier's code are named Prop
   and are in the two-stage scope;
 * `Code.InteriorFixed` and `Code.DrawFixed` (`interior`, `fixed`), as at one stage.
 
-`SessionOpensTwo` (`opens`) is `SessionOpens` read at a replay block: a checked unit's Flock witness makes its proof
-block correct on its replay block's values, under the interior roots the run shows for that replay block.
+`SessionOpensTwo` (`opens`, `Claims.Sampling.OpensTwo`) is `SessionOpens` read at a replay block: a checked unit's
+Flock witness makes its proof block correct on its replay block's values, under the interior roots the run shows for
+that replay block.
 
 * `sessionsTwo_compiled`: the contract from those, with the sessions' runs and numbers (`fixed_ofDeploy`,
   `runs_ofDeploy`).
@@ -36,31 +37,6 @@ block correct on its replay block's values, under the interior roots the run sho
 -/
 
 @[expose] public section
-
-namespace Claims.SamplingGeneric
-
-open Claims.Sampling (InScopeTwo replayOf)
-
-/-- **A checked unit's Flock witness makes it correct on its replay block**: on a statement in the two-stage scope,
-at an accepted run that checks slot `u` and shows its session, a Flock witness in the session's relation reveals
-openings such that any values `val` and interior values `ι` agreeing with those that pass (under the statement's roots
-and the interior roots the run showed for `u`'s replay block `ρ`) make the proof block at `u` correct on `ρ`'s values
-(`Prog.refIn` at `ρ`). -/
-def SessionOpensTwo {Coin Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D : Claims.Sampling.Deploy Coin Col T)
-    (two : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two)
-    (iroots : Msg → Seen → ℕ → List Msg) : Prop :=
-  ∀ x s Pt d (Ω : Type) (P : Prover Ω) ω r u xS vS wF,
-    D.parse x = some s → D.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
-    (run H P D.V x ω r).out = .acc → (∃ p : Fin (Claims.Sampling.nPU D x), (D.checked x r)[p.val]? = some u) →
-    D.session x u (run H P D.V x ω r).seen = some (xS, vS) → Claims.Flock.check D.flock.parse xS wF = true →
-    ∃ b ρ rb, Pt.blocks[u]? = some b ∧ replayOf Pt d.part u = some ρ ∧ d.part.blocks[ρ]? = some rb ∧
-      ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
-        (∀ q ∈ D.reveal s u (run H P D.V x ω r).seen wF, D.commit.Opens H q.1 q.2 = true →
-          (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
-          (q.1 = iroots x (run H P D.V x ω r).seen ρ → ι q.2.pos = q.2.val)) →
-        s.prog.Correct (s.prog.refIn rb val ι) b
-
-end Claims.SamplingGeneric
 
 namespace SamplingDeploy
 
