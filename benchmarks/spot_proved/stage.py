@@ -257,28 +257,40 @@ def aligned(cap: Capture, op: str):
         yield {r: per[r][i] for r in cap.ranks}
 
 
+def fused_ar_norm_outputs(e: dict) -> tuple[dict, dict]:
+    """The recorded buffers holding a ``vllm::flashinfer_trtllm_fused_allreduce_norm`` call's (new residual, normed rows) after it
+    ran. vLLM d9105ea80's op hands FlashInfer ``residual_out=allreduce_in`` when ``norm_out`` is given (`fused_allreduce_rms_norm`'s
+    path), else ``residual_out=residual`` and ``norm_out=allreduce_in``. Given ``norm_out``, ``residual`` is only FlashInfer's
+    ``residual_in`` and holds the old residual after the call, though the op's schema marks it written."""
+    if e["in"].get("norm_out") is None:
+        return e["out"]["residual"], e["out"]["allreduce_in"]
+    return e["out"]["allreduce_in"], e["out"]["norm_out"]
+
+
 def fused_ar_norm_instances(cap: Capture):
-    from verity.ml.definitions.registry.tp_allreduce import mnnvl_shot
+    from verity.ml.definitions.registry.tp_allreduce import mnnvl_grid, mnnvl_shot
     W = len(cap.ranks)
+    r0 = cap.ranks[0]
     for calls in aligned(cap, "vllm::flashinfer_trtllm_fused_allreduce_norm"):
-        e0 = calls[cap.ranks[0]]
+        e0 = calls[r0]
         T, H = e0["in"]["allreduce_in"]["shape"]
         half = H // 2
-        shot = mnnvl_shot(T, H, W)
-        for t in range(cap.real_rows(cap.ranks[0], T)):
+        shot, cluster = mnnvl_shot(T, H, W), mnnvl_grid(T, H)[1]
+        new_res, normed = fused_ar_norm_outputs(e0)
+        for t in range(cap.real_rows(r0, T)):
             for c in range(2):
                 sl = slice(c * half, (c + 1) * half)
                 yield (f"AllReduceResidualMnnvl_W{W}_S{shot}", f"AllReduceResidualMnnvl_v1{{WORLD={W},N={half},SHOT={shot}}}",
                        (e0["seq"], t, c),
                        lambda calls=calls, t=t, sl=sl: [np.stack([cap.tensor(r, calls[r]["in"]["allreduce_in"])[t, sl] for r in cap.ranks]),
-                                                        cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["in"]["residual"])[t, sl]],
-                       lambda calls=calls, t=t, sl=sl: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["residual"])[t, sl]])
+                                                        cap.tensor(r0, calls[r0]["in"]["residual"])[t, sl]],
+                       lambda new_res=new_res, t=t, sl=sl: [cap.tensor(r0, new_res)[t, sl]])
             eps = e0["in"]["rms_eps"]
-            yield (f"RmsNormMnnvl_W{W}_S{shot}", f'RmsNormMnnvl_v1{{N={H},SHOT={shot},CLUSTER={W},EPS={{"f64":"{float(eps).hex()}"}},FMA=true}}',
+            yield (f"RmsNormMnnvl_W{W}_S{shot}",
+                   f'RmsNormMnnvl_v1{{N={H},SHOT={shot},CLUSTER={cluster},EPS={{"f64":"{float(eps).hex()}"}},FMA=true}}',
                    (e0["seq"], t),
-                   lambda calls=calls, t=t: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["residual"])[t],
-                                             cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["in"]["rms_gamma"])],
-                   lambda calls=calls, t=t: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["norm_out"])[t]])
+                   lambda calls=calls, new_res=new_res, t=t: [cap.tensor(r0, new_res)[t], cap.tensor(r0, calls[r0]["in"]["rms_gamma"])],
+                   lambda normed=normed, t=t: [cap.tensor(r0, normed)[t]])
 
 
 def allreduce_route(cap: Capture, e0: dict) -> str:
