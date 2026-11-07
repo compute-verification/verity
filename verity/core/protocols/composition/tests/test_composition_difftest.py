@@ -28,7 +28,6 @@ import functools
 import hashlib
 import itertools
 import json
-import os
 import random
 import shutil
 import subprocess
@@ -44,6 +43,7 @@ import verity_difftest as D
 from verity_difftest import canonical
 
 from verity.core.deploy import config as K
+from verity.settings import REGISTRY as VERITY_SETTINGS
 from verity.core.protocols.sampled_proofs import parties as SPP
 
 PROTOCOLS = Path(__file__).resolve().parents[2]
@@ -693,7 +693,7 @@ def test_remote_v1_ties_pearl_plus_window_record_to_the_one_the_policys_record_i
 
 
 #: A directory holding a served Pearl+ run (`test_remote_v1_on_a_served_pearl_plus_run`).
-SERVED = os.environ.get("VERITY_COMPOSITION_SERVED")
+SERVED = VERITY_SETTINGS.VERITY_COMPOSITION_SERVED
 #: The served run's window record W's digest and its run commitment (the dress rehearsal r20261105-082550-ed23's).
 SERVED_W = ("50214c57da3ddafad760f1059eb3e2c1b8dd70e45c4906f308215f32589cc504"
             "1901e26b5d927f6249c4d813ba62b3d2a3a531f2652b61941dbab322d3803601")

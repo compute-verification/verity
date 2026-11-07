@@ -380,6 +380,9 @@ REGISTRY = EnvSettings(
     # ---- verity.ml.circuits, its suites included
     Setting("VERITY_ML_BOOLEAN_EXHAUSTIVE", flag, False, WHERE, "the Boolean lowerings' exhaustive tests run, on every f32 word "
             "and every pair of bf16 words (2^32 instances each, minutes): which tests run, never what a circuit computes"),
+    # ---- verity.core.protocols.composition's suite
+    Setting("VERITY_COMPOSITION_SERVED", stripped, "", WHERE, "a directory holding a served Pearl+ run, which the composition "
+            "suite's opt-in served test reads: which tests run, never what a verdict says"),
     schema=RECORD_SCHEMA)
 
 
