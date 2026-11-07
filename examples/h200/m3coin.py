@@ -78,7 +78,7 @@ def draw(coin: bytes, registration: str, k: int, population: int) -> list[int]:
 
 def registration_of(reg: dict) -> tuple[str, dict, int, bool]:
     """A registration's digest, law, population and whether it is a step registration; SystemExit when it is neither
-    form or its law is not subset:K."""
+    form or its sampling design is not subset:K."""
     step = reg.get("format") == RB.STEP_FORMAT
     if step:
         if set(reg) - {RB.STEPS_KEY} != RB.STEP_KEYS or reg["population"] != reg["slots"] * reg["units_per_slot"]:
@@ -99,7 +99,7 @@ def coin(ask: Ask, reg: dict, out: Path, *, gate_name: str, peer: str, minutes: 
     """The one coin for registration `reg` from the gate `ask` (module docstring), its record ``coin.json`` and, for a
     step registration, ``receipt.json`` and ``draw.json`` in `out`, with the session's tree, ledger and pins log as the
     gate gives them once it ended; `main` is main's first-parent history, which the host's last pin must be on. Exit
-    0, or 2 when the open failed and 3 when anything after it did (no redraw)."""
+    0, or 2 when the open failed and 3 when anything after it did (no resample)."""
     digest, law, population, step = registration_of(reg)
     doc: dict = {"format": "verity/e2e-h200-m3/coin/v1", "registration": digest, "gate": gate_name, "peer": peer,
                  "scheme": SCHEME, "families": [[LABEL, 1]], "domain": DOMAIN, "law": law, "population": population,

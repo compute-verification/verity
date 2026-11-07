@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.ZK.FinExe
 /-!
 # The loop's tables at its level-0 source
 
-Where `src` draws the tape's level 0 (`Loop.Level0Src`, `Loop.Src`'s level-0 half), each table the loop's finish proves
+Where `src` samples the tape's level 0 (`Loop.Level0Src`, `Loop.Src`'s level-0 half), each table the loop's finish proves
 on (`Loop.realOf`, `tabOfLevel0` at the level 0 it drew) holds the tape's packed table, and its extra lanes and lane
 paddings within level 0's sizes:
 
@@ -18,7 +18,7 @@ paddings within level 0's sizes:
   lane paddings, so its packed table is `ligTab` (`hg`), and its extra lanes and lane paddings are the tape's within
   level 0's sizes (`Loop.Level0Src.realOf_lanes`).
 * `Loop.realOf_src`, **`Loop.RepSrc.salt`**: the loop's levels ≥ 1 salts at rep stream `2j + r` are the source's, so,
-  where `src` draws them as the tape's (`Loop.RepSrc`), they are the tape's on the schedule (`swSrcE_repCut`'s `hsalt`).
+  where `src` samples them as the tape's (`Loop.RepSrc`), they are the tape's on the schedule (`swSrcE_repCut`'s `hsalt`).
 -/
 
 @[expose] public section
@@ -72,7 +72,7 @@ open _root_.Flock (V F128)
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- **The loop's table is the tape's** where `src` draws the tape's level 0: at rep stream `2j + r`, where the loop's
+/-- **The loop's table is the tape's** where `src` samples the tape's level 0: at rep stream `2j + r`, where the loop's
 table (`Loop.realOf`) is `tb`, its packed table, extra lanes and lane paddings are `Masked.linkIn`'s, so its packed
 table is `Masked.ligTab` (`swSrcE_repCut`'s `hg`). -/
 theorem Loop.Level0Src.realOf {src : Msg → Flock.Wit →
@@ -107,7 +107,7 @@ theorem Loop.Level0Src.realOf {src : Msg → Flock.Wit →
       exact ⟨hg, he, hp, hg.trans ((congrArg _root_.Flock.Firewall.Link.In.g hin).trans (Masked.linkIn_g x w t j))⟩
 
 /-- **The loop's table's extra lanes and lane paddings are the tape's within level 0's sizes** (`swSrcE_repCut_v`'s
-`hex` and `hlp`), where `src` draws the tape's level 0: each extra lane below `2^cols`, and each of the `2^lanes + 4`
+`hex` and `hlp`), where `src` samples the tape's level 0: each extra lane below `2^cols`, and each of the `2^lanes + 4`
 lanes' paddings below `t_pad`. -/
 theorem Loop.Level0Src.realOf_lanes {src : Msg → Flock.Wit →
       (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
@@ -142,7 +142,7 @@ theorem Loop.realOf_src {R : Type} {src : Msg → Flock.Wit → R → ℕ → V 
           exact ⟨g, d, by rw [h.2]⟩
   · cases h
 
-/-- **The loop's levels ≥ 1 salts are the tape's on the schedule** where `src` draws them as the tape's (`Loop.RepSrc`'s
+/-- **The loop's levels ≥ 1 salts are the tape's on the schedule** where `src` samples them as the tape's (`Loop.RepSrc`'s
 last part): at rep stream `2j + r`, the salts the loop's finish reads (`Finish.proofFile`'s `salt`) are, at every level
 `1 ≤ l < |levels|` and position of its tree, the tape's `salt j r l p` (`swSrcE_repCut`'s `hsalt`). -/
 theorem Loop.RepSrc.salt {L₀ : LeanRelease Flock.Wit

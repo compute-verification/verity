@@ -124,7 +124,7 @@ def test_honest_run_covers_population_and_openings_correspond():
     assert bmap["digest"] == hashlib.sha256(__import__("json").dumps(bmap["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
     other = dict(bmap, digest="00" * 32)
     assert B.challenge_identities(pop, other, run.run_root, 16, salt=b"t", source=COIN) != picks
-    # registered inputs (weights): required by the population when registered, covered by the map's registered-input entry, never drawn as a leaf
+    # registered inputs (weights): required by the population when registered, covered by the map's registered-input entry, never sampled as a leaf
     st_w = dict(structure(), weights_registered=True)
     pop_w = list(B.expected_population(st_w, workload()))
     assert not B.coverage_check(pop_w, bmap)["ok"]                      # this run registered no weights -> missing
@@ -135,7 +135,7 @@ def test_honest_run_covers_population_and_openings_correspond():
 
 def test_map_leaves_are_the_committers_leaves():
     """A map built without `chunk`, as the TP worker builds it, indexes the committer's own leaves. rows-sha512 commits 4 KiB rows, and a
-    map in 256 B units sent its population draws past each step's stream: `identity_of` raised IndexError on every
+    map in 256 B units sent its population samples past each step's stream: `identity_of` raised IndexError on every
     rank."""
     stream = produce()
     c = committer()
@@ -188,7 +188,7 @@ def test_omitted_step_is_rejected():
     c, run, bmap = commit(produce(steps=STEPS - 1))
     cov = B.coverage_check(list(B.expected_population(structure(), workload(steps=STEPS))), bmap)
     assert not cov["ok"] and {m["step"] for m in cov["missing"]} == {STEPS - 1}
-    # and openings drawn from the expected population reach the missing late step: they cannot be opened
+    # and openings sampled from the expected population reach the missing late step: they cannot be opened
     picks = B.challenge_identities(list(B.expected_population(structure(), workload(steps=STEPS))), bmap, run.run_root, 8, source=COIN)
     assert any(e is None and ident[2] == STEPS - 1 for ident, e, _ in picks)
 

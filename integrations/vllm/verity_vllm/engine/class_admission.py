@@ -1,10 +1,11 @@
 """A served engine class's admission: what a window of the class (`profiles.engine_classes`) refuses while it is served.
 
 `Admission(name).install(engine)` wraps the engine's in-process scheduler's ``add_request`` (`handle.scheduler`, through
-`engine.hooks`): a request whose prompt is over the class's long-prefill threshold is refused before the scheduler holds it, since
-vLLM prefills it in chunks and the class's request Program prefills in one launch.  The scheduler counts the prompt it was handed,
-so the count is the engine's whatever form the prompt came in.  `close_window` is a Commit window's close: it is refused while the
-scheduler holds a request, since that request's other launches would be the next window's advice.
+`engine.hooks`): a request whose prompt is over the class's prompt limit (`profiles.engine_classes.prompt_limit`, its served
+`max_model_len`) is refused before the scheduler holds it; a longer prompt within it the class prefills in chunks, each a launch of
+the class's request Program.  The scheduler counts the prompt it was handed, so the count is the engine's whatever form the prompt
+came in.  `close_window` is a Commit window's close: it is refused while the scheduler holds a request, since that request's other
+launches would be the next window's advice.
 
 A refusal is sticky: vLLM's frontend registers a request before its scheduler sees it, so once one is refused every later admission
 and close is refused with the same reason, and the window ends there.
@@ -40,7 +41,7 @@ class Admission:
             def wrapped(request, *a, **kw):
                 n = int(getattr(request, "num_prompt_tokens", 0) or len(request.prompt_token_ids or ()))
                 me._refuse(f"request {request.request_id}: a prompt of {n} tokens, over the {me.limit} a class-{me.name} window "
-                           f"admits (its long_prefill_token_threshold: vLLM would prefill it in chunks)" if n > me.limit else None)
+                           f"admits (its served max_model_len)" if n > me.limit else None)
                 return orig(request, *a, **kw)
             return wrapped
 

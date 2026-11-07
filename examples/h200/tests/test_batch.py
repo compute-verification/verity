@@ -1,6 +1,6 @@
 """The batch path at the tiny shape on the CPU: kernels' per-slot commit (the host twin) gives the reference's roots,
 micro-batches and dropped tables change no root, the forward stays at most `LAG` groups ahead of a slow commit, rows at
-their own positions are the lockstep rows, a drawn slot opens by replaying its request alone, the network engine serves what
+their own positions are the lockstep rows, a sampled slot opens by replaying its request alone, the network engine serves what
 lockstep serves, the torch softmax is the Definitions', the map is circuits' FAMILIES table at the frozen shape and each
 unit's commit unit is its output rows, and a subcircuit joins the registration and the sample."""
 from __future__ import annotations

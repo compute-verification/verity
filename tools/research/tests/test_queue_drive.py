@@ -553,7 +553,7 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
 
 
 def test_the_lock_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes_it(tmp_path):
-    """The lock run repairs bookkeeping and warns (`--bookkeeping-warn`; Daniel, 6 Nov) when the queue's clone's train.sh
+    """The lock run repairs bookkeeping and warns (`--bookkeeping-warn`) when the queue's clone's train.sh
     takes the flag (`takes_bookkeeping`); a train.sh that predates it would refuse every lock run, so it isn't given it."""
     from research.drive import takes_bookkeeping, train_launch
 

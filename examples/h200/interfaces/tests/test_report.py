@@ -192,7 +192,7 @@ def test_a_stub_caveat_drops_once_the_measurements_show_it_fixed() -> None:
     out = _draft([rec])
     assert LIVE_SALT in out and OUTPUT_TIE in out and "ReLU and per-row quantize are not proved units" in out
     assert "This block drew k = 2, not M3's handful of 8." in out
-    assert "run on the prover's node for the demo" in out
+    assert "run on the developer's node for the demo" in out
     assert SALT_ORDER in out
     fixed = _draft([rec], {**_m(), "fixed": {"pouw-live-salt": "run r1", "torch-loop-wiring": "run r2"}})
     assert LIVE_SALT not in fixed and OUTPUT_TIE in fixed and "ReLU and per-row" not in fixed

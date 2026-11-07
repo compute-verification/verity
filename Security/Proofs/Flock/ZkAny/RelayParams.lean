@@ -15,7 +15,7 @@ hands `Frames.round` and the rep's configuration as the loop started its frame. 
   has the frame the round puts back, and its coins' put (`Loop.coinsOf`, by definition): a rep's frame keeps its
   start's configuration.
 * **`ofLoop_cfg`**: the model's configuration at a round of rep stream `k` is `Cfg.ofDraws` at the stream's start
-  (`Drive.start` at table `k / 2`'s statement) of the rep's draws on the tape, with the start's mask slot, as
+  (`Drive.start` at table `k / 2`'s statement) of the rep's samples on the tape, with the start's mask slot, as
   `Frames.startRep` starts the rep's frame.
 -/
 
@@ -110,7 +110,7 @@ theorem roundStep_cfg {R : Sessions} {L0 : _root_.Flock.Firewall.Level0.Slots} {
   rfl
 
 /-- **The model's configuration at a round of rep stream `k`** (`Loop.repOf`) is `Cfg.ofDraws` at the stream's start
-(`Drive.start` at table `k / 2`'s statement) of the rep's draws on the tape, with the start's mask slot, as
+(`Drive.start` at table `k / 2`'s statement) of the rep's samples on the tape, with the start's mask slot, as
 `Frames.startRep` starts the rep's frame. -/
 theorem ofLoop_cfg (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Claims.Flock.Wit
