@@ -91,7 +91,7 @@ Lean takes it with the event that released it, and once the session ends what th
 coins (`AuditRun.released_reason`, and under the gate the auditor's ledger, `AuditRun.trusted_reason`, which also holds
 the session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
 whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
-openings coins (`--groups-per-coin` G, 1 by default: each sample's G windows drawn together at its last window's close,
+openings coins (`--groups-per-coin` G, 1 by default: each sample's G windows sampled together at its last window's close,
 at two windows in flight, as the Lean's `session` refuses one in flight at G > 1) and `--appends` append coins,
 `coins.APPENDS` by default, or none, and no append family, when the prover's hello says its sessions append nothing
 (a plan of honest and skip sessions, `Verifier.appends_of`), so the challenger's close of such a session that ran to
@@ -1020,7 +1020,7 @@ class Verifier:
                 self.log(f"verifier: skipped a {head['type']} while waiting for {kind}")
 
     def register(self) -> tuple[audit.Registration, dict]:
-        """The payload salt key sent (`payload-key`, the verifier's own), then the hello's registration, drawn through
+        """The payload salt key sent (`payload-key`, the verifier's own), then the hello's registration, sampled through
         the registry: refused, with `bye` and the reason, for a node with a live registration (`audit.RegistryError`,
         raised), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
         window (`audit.Params`'s ValueError), asking for receipts that bind PoUW's tile outputs (`bind`, which the Lean
@@ -1393,7 +1393,7 @@ class Verifier:
     @staticmethod
     def append(session: audit.AuditRun, head: dict) -> dict | audit.Verdict:
         """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`: the
-        reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, drawn now, or the
+        reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, sampled now, or the
         rejection."""
         got = session.append(bytes.fromhex(head["root"]), head["count"])
         if isinstance(got, audit.Verdict):

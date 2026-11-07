@@ -19,7 +19,7 @@ guarantee or of the model's accounting:
 * the declared computation runs at `ρ` declared gates per counted multiplication, `M_d ≤ C/ρ`: the inference-only
   policy's thread bound, `Nci.Guarantees.ThreadedThrottled`, which `DampenerThreaded` takes as proved rather
   than as a hypothesis;
-* faulty proof blocks skip or inject at most the cheating share, `M_χ ≤ χ κ (C + U)/2`: what the sampled proofs' draw
+* incorrect proof blocks skip or inject at most the cheating share, `M_χ ≤ χ κ (C + U)/2`: what the sampled proofs' sample
   establishes (the cumulative bound, `Population.Exfil.tail_cumPrev`, at a budget);
 * the memory cap bounds the residual and the declared computation on the monitored servers together,
   `M_r + M_d ≤ μ κ C/2`: `DampenerWindows` derives it, with `μ` the memory cap and one window of rounding, from the
@@ -42,7 +42,7 @@ open Verity Nci.Dampener
 hardware and computes `M` counted multiplications, each by one of four sources (`M ≤ M_U + M_r + M_d + M_χ`):
 unmonitored hardware at full efficiency (`M_U ≤ κ U/2`), the monitored compute residual outside the compute certificate
 `W_cert` at full efficiency (`M_r ≤ κ (C − W_cert)/2`), the declared computation at `ρ` declared gates per counted
-multiplication (`M_d ≤ C/ρ`), and faulty proof blocks within the cheating share `χ` (`M_χ ≤ χ κ (C + U)/2`). The memory
+multiplication (`M_d ≤ C/ρ`), and incorrect proof blocks within the cheating share `χ` (`M_χ ≤ χ κ (C + U)/2`). The memory
 cap `μ` bounds the residual and the declared computation together (`M_r + M_d ≤ μ κ C/2`). Then the compute efficiency
 `η = (2/κ) M/(C + U)` is at most `s + min(r, μ) + ν + χ`, where `s = U/(C + U)`, `r = 1 − W_cert/C` and
 `ν = (1 − s) · 2/(κ ρ)`. -/

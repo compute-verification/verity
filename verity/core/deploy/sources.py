@@ -121,7 +121,7 @@ class _Coins:
 
 
 class SeededCoins(_Coins):
-    """SHA-512(SEEDED_TAG ‖ seed ‖ u64 i) for i = 0, 1, …, read in order: the same seed draws the same coins."""
+    """SHA-512(SEEDED_TAG ‖ seed ‖ u64 i) for i = 0, 1, …, read in order: the same seed flips the same coins."""
 
     def __init__(self, seed: bytes) -> None:
         self.seed, self._i, self._buf = bytes(seed), 0, b""
