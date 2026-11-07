@@ -45,7 +45,7 @@ each session's index `k`, the outcomes `close` counts, and `registry/v0`), and t
 seed, codec, plans, receipts, openings, samples). Where the two differ, the Python is what is wrong. The properties of
 the Lean's verdicts are `Security/Properties/RemoteAudit.lean`.
 
-`benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
+`verity/core/protocols/remote_bandwidth/session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
 decides each registration, event and window, an accepted session's record is the one it returns, and the ledger reads
 that record. `audit.AuditRun` keeps the books beside it as the reference, and a registration, event, window verdict or
 record field on which they differ refuses the session at that window as `disagreement`. The books check no openings: a

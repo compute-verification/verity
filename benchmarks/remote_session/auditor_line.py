@@ -148,10 +148,10 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1]))
 
-from benchmarks.remote_session import lean_verifier as lv  # noqa: E402
-from benchmarks.remote_session import verifier as V  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import lean_verifier as lv  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import verifier as V  # noqa: E402
 from benchmarks.remote_session import verifier_process as VP  # noqa: E402
-from benchmarks.remote_session import wire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 from verity.core.protocols.certifier import audit as caudit  # noqa: E402
 from verity.core.protocols.certifier import certificate as cert  # noqa: E402
 from verity.core.protocols.certifier.grid import GridParams, Reason, Status  # noqa: E402

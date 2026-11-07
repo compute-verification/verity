@@ -1585,6 +1585,15 @@
         "Security/Definitions/Population/DrawPressure.lean": "Security/Definitions/Population/SamplePressure.lean",
         "Security/Proofs/Population/DrawPressure.lean": "Security/Proofs/Population/SamplePressure.lean"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/remote_session/verifier.py": "verity/core/protocols/remote_bandwidth/session/verifier.py",
+        "benchmarks/remote_session/lean_verifier.py": "verity/core/protocols/remote_bandwidth/session/lean_verifier.py",
+        "benchmarks/remote_session/checks.py": "verity/core/protocols/remote_bandwidth/session/checks.py",
+        "benchmarks/remote_session/challengers.py": "verity/core/protocols/remote_bandwidth/session/challengers.py",
+        "benchmarks/remote_session/wire.py": "verity/core/protocols/remote_bandwidth/session/wire.py"
+      }
     }
   ]
 }
