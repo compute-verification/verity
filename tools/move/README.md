@@ -8,7 +8,7 @@ root, and refuses a dirty worktree; a second run changes nothing.
 |---|---|
 | `stage.py` | Stages a move on a base: one commit per map, each certified by `move_check.py` and rerun to check it changes nothing, for its lander (`MAP...`, `--base`, `--branch`, `--push`, `--certificate`). |
 | `layout.py` | Moves the paths a layout map names and rewrites every path, module name, import, pyproject and anchor that pointed at them (`--dry-run`, `--modules`, `--resolve M`). |
-| `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose, leaving the Lean locks' records for `tools/verity/lean/check.py --update --moved` (`--map MAP`, `--dry-run`, `--moves`). |
+| `rename.py` | Renames the words a word map names, in paths, modules, Lean names and prose, leaving the Lean locks' records for `tools/verity/lean/check.py --update --moved` and sorting again a sorted JSON object whose keys it renames (`--map MAP`, `--dry-run`, `--moves`). |
 | `restack.py` | Carries an open branch across every move `main` has and it lacks, by rerunning each move's script on it, then merging the moved `main` (`BRANCH`, `--push-to`). |
 
 A layout map (`layout.py --map`) maps old paths to new ones; a word map (`rename.py --map`) maps old words to new ones:
@@ -78,8 +78,8 @@ landed outside the queue leaves each open branch, `next`'s members among them, t
 `[words]` and `[paths]` or neither (a move that needs both stages two maps), a script that fails, a map that changes
 nothing, a commit `move_check.py` doesn't certify, and a move whose second run changes anything. `move_check.py` refuses,
 with each path's first offending hunk, every change its docstring doesn't list as part of a pure move. Among them:
-- a file's text changed beyond its moved paths, module names and the words of the word maps at the base, other than a
-  sorted JSON object sorted again once the move renames its keys;
+- a file's text changed beyond its moved paths, module names and the words of the word maps at the base, as `rename.py`
+  writes them;
 - under `scope = "prose"`, a word renamed in code, a string literal, backticks or a data file; a name renamed to one the
   file already spells, or to different names in different files; a Lean name a lock records; any edit to a file a JSON
   pin records;
