@@ -607,3 +607,75 @@ vy-dc-h200-* was used.
 
 Evidence art:de299e8e145b5c5bd8109c6a3ce612b40210c420e7b06b1bf5d589a618dcea4c. It and the card are preserved. Report
 note:proofs/20261106T1424Z-report-overheaddef-task2, section "The census types, measured".
+
+## 2026-11-07T04:06Z from OVERHEADDEF (proofs): two of the four large census types, measured on a 2x H200
+
+Two of the four census types that wouldn't fit a 1x H200 pod are now measured, on a 2x H200 pod with 503 GB of host
+memory, one GPU proving:
+
+- Fp8GroupQuant K=6144;
+- FlashInfer K=2048.
+
+The combined card, extended with them, replaces art:ed20cbaa:
+
+`uv run python benchmarks/spot_figures/cards.py fetch art:dc6c21ce23753e97f4c616ae3bb68fcb7d73e1a862bb0e5282620dfc54b499c0 --replaces art:ed20cbaa160701d757cd17f1e71516ee16cca638388efe91b82a7f132ab78e60`
+
+I tested it on v24's tip (475646b6d1), which holds art:ed20cbaa. v11 (996905af3a) still holds art:b92517ea, so there
+the same fetch takes `--replaces art:b92517eadfd0731c4ae150b15b1573a245d32d2cb0ae26fc864eac8de2cac365`; I tested that
+too.
+
+**What changes.** (A)'s computed share falls from 0.229 to 0.120. These are rank_computed's numbers on v2.3's planner:
+beta 1%, world week, the figures branch's own inputs. v11 (996905af3a), v24 (729ff83e11) and v24's tip give the same
+numbers.
+
+| line | computed share, before | after | proving s a sampled replay block, before | after |
+|---|---:|---:|---:|---:|
+| tokens (A) | 0.229 | 0.120 | 491 | 652 |
+| per_expert | 0.225 | 0.149 | 719 | 903 |
+| layer_of_token | 0.244 | 0.135 | 422 | 709 |
+
+- **The computed rule underpriced them 3 to 7 times.** On (A), Fp8GroupQuant K=6144 goes from 32.5 to 98.1 s of a
+  sampled replay block, and FlashInfer K=2048 from 14.6 to 97.7 s. That is 149 s of the 162 s rise; the rest is the
+  computed rule refitting on the card's measured blocks.
+- **h.** (A)'s h moves from 1.398e10 to 1.399e10. Again the cost is the fixed seconds a statement, not the marginal.
+- **What stays computed.** 0.120 of (A)'s proving: 0.073 is SparseMlaSplitPart T=64 (47.9 s), 0.018 is FlashInfer
+  K=6144 (11.9 s), and 0.028 is 54 small types. The two large types are priced by the same rule that underpriced the two
+  just measured, so they are likely underpriced too. That is an inference; I haven't measured them.
+
+Per type, in the dev arm (SPOT's prover), end to end, with a warm prover. A `*` marks a marginal that takes the
+computed rule.
+
+| type | k_log | 2-block statement, s | 64-block statement, s | marginal, ms a block | s a sampled replay block on (A), before | after |
+|---|---:|---:|---:|---:|---:|---:|
+| Fp8GroupQuant K=6144 | 25 | 98.2 | 112.6 | 232.75 | 32.5 | 98.1 |
+| FlashInfer K=2048 | 24 | 112.3 | 104.5 | 1.77* | 14.6 | 97.7 |
+
+- **Two types weren't proved.** The prover, the ZK server and the firewall together peaked at about 99 bytes a matrix
+  entry: 285 GiB for FlashInfer K=2048's 3.1G entries, 292 GiB for Fp8GroupQuant K=6144's 3.4G, the same at 2 and 64
+  blocks. At that rate SparseMlaSplitPart T=64 (7.7G entries) needs about 760 GB and FlashInfer K=6144 (9.3G) about
+  920 GB. Neither fits 503 GB, so I refused both rather than swap. A 4x H200 pod (about 1 TB) would hold them, narrowly.
+- **No 4x was in stock.** RunPod's secure cloud had no 4x H200 in five tries, 00:40 to 00:42Z, so I took the 2x.
+- **Marginals.** FlashInfer K=2048's fitted marginal was negative (its 64-block sessions were no slower than its 2-block
+  ones), so it takes the rule's marginal and its fixed seconds from its 2-block median. Fp8GroupQuant K=6144's fitted
+  marginal, 233 ms a block, is above the rule and kept.
+- **One point proved again.** Fp8GroupQuant K=6144's first 2-block point ran beside SparseMlaSplitPart's stager with
+  the pod's cgroup at its memory limit. Its ZK server took 32 to 65 s a session to verify, against 2 to 3 s at 64
+  blocks. I set that point aside (`set_aside` in `out/census.json`) and proved it again alone: 99.3 and 97.0 s.
+- **Where the time goes.** The prover's busy time is 0.3 to 1.0 s a session. The rest of the 97 to 125 s is the prover
+  waiting on the ZK server, plus the statement's setup.
+- **fw wasn't measured.** FlashInfer K=2048's fw point at 2 blocks hadn't finished its warm session after 26.7 min of
+  the firewall's Lean recheck, so I stopped it to leave time for the re-measure. `out/census.json` gives fw by the
+  send-check law (`fw_estimated`): 204 s at 2 blocks for Fp8GroupQuant K=6144 and 165 s for FlashInfer K=2048. The
+  earlier direct measurements found fw at 2 blocks 2.6 to 3.4 times the law's increment.
+- **Lean.** flock-verify checked none of these sessions. Fp8GroupQuant K=6144's ran 36 min of CPU at 64 blocks
+  without a verdict, and FlashInfer K=2048's was stopped as it began; both were stopped by PID to finish in time. The
+  live verifier accepted every session.
+- **Tests.** The figures' four test files pass with this card, with no test change: 61 tests at 996905af3a, 63 at
+  729ff83e11 and 63 at v24's tip, 475646b6d1. `cards.py check` passes on all three.
+
+GPU: our RunPod pod kfiii7cx8ecq1t, 2x H200 SXM, $10.58/h, `--max-hours 3`. It ran from 00:42:56Z until I terminated
+it at 03:22:27Z, 2.66 h, about $28.13. REPLAYCOV's two pods, vy-spot-replaycov-3 (4x H200) and vy-spot-replaycov-4
+(2x H200), ran at the same time; I didn't share them. No vy-dc-h200-* was used.
+
+Evidence art:452cd573d5c29f7c1c6327039d2a1efea9970012e6d2f7d7377035137d8bcbdc. It and the card are preserved.
+Report note:proofs/20261106T1424Z-report-overheaddef-task2, section "The large census types, measured".
