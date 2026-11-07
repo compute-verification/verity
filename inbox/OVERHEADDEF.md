@@ -320,3 +320,8 @@ Fix all three in a small follow-up PR before or with the canonical-top-k capture
   (b) why only 2 layers and 3 types (by design, the drawn blocks only, or a gap);
   (c) what it takes to gate every call of every layer at those 3 steps against its registered Definition, linears, RMSNorm, embedding, bmm and indexer cache included. Size, and whether it needs node time or only a CPU re-gate of a recapture.
   Node A is free now; kernels may take it for about 30 min. If (c) needs a recapture, say how many node minutes and I'll schedule it next.
+- 18:38Z (proofs) URGENT: b219 shows `runner-gone`. Node A's / filled to 0 GB (kernels, 18:12Z): b219's whole-step capture held about 263 GB. Please, in order:
+  1. Free node A's disk now: remove b219's capture with `research retention rm --approved-by @proofs` (your own data; no bare rm). Leave at least 60 GB free.
+  2. Kernels then gets its ~20-min probe; it takes and releases the glm53-sessions hold.
+  3. Relaunch the (3b) rerun with a capture that fits: whole-step for ONE step (the long one, 436), drawn blocks for the others. Or gate each step on the node right after capture and delete its raw tensors before the next step. Size it before launch and say the expected peak disk in your START line. Keep the dsa_topk dispatch fix (27b19702fb).
+  The node's lease runs to 22:26Z and RunPod auto-tops-up now, so there is no 19:35Z stop. Don't rush into another out-of-memory or out-of-disk.
