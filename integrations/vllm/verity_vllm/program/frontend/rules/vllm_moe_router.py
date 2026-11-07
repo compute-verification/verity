@@ -3,7 +3,8 @@
 
     _moe_C.grouped_topk(scores [M, E] f32, 1, 1, TOPK, True, scale, bias [E] f32, 1)
         -> (weights f32 [M, TOPK], ids i32 [M, TOPK]): `MoeRouterSigmoidBias{E,TOPK,SCALE=scale,KERNEL}` on each token row, KERNEL the
-           launch `router_kernel(E, M, TOPK)` picks (`grouped_topk_kernels.cu` `launch`)
+           launch `router_kernel(E, M, TOPK)` picks (`grouped_topk_kernels.cu` `launch`) at the launch's M (`launch_tokens_of`: the
+           tokens of the step the request's rows run in without batch invariance)
 
 DeepSeek-V3's and GLM's `noaux_tc` routing reaches it through `GroupedTopKRouter` -> `fused_grouped_topk` (vLLM d9105ea80): the
 bias is the layer's `e_score_correction_bias` Parameter, and the scale the routed scaling factor, applied inside the kernel where the
@@ -27,6 +28,7 @@ from verity_vllm.program.frontend.derive import Alloc
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo
 from verity_vllm.program.frontend.rules.common import call_args, from_rows, rows_of, shape
 from verity_vllm.program.frontend.rules.triton_iface import launch_meta, launch_tensor, triton_launch
+from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_tokens_of
 from verity_vllm.program.frontend.rules.vllm_bindings.operands import _strides
 from verity_vllm.program.frontend.rules.vllm_bindings.pins import DSV4_TOPK_PINS, _pins_ok
 from verity_vllm.program.frontend.rules.vllm_iface import targets_for
@@ -87,7 +89,7 @@ class GroupedTopkRule(OpRule):
         scores, TOPK, scale, bias = a["scores"], a["topk"], a["routed_scaling_factor"], a["bias"]
         rows, lead = rows_of(ctx.coll(scores))
         M, E = shape(ctx, scores)
-        kernel = router_kernel(E, M, TOPK)
+        kernel = router_kernel(E, launch_tokens_of(node, M), TOPK)
         fn = ctx.kind("moe_router_sigmoid_bias", node, E=E, TOPK=TOPK, RSF=float(scale), KERNEL=kernel)
         b = ctx.coll(bias)
         outs = [ctx.call(fn, r, b, node=node, rule=self, name=f"{ctx.hint_name(node)}[{i}]") for i, r in enumerate(rows)]
