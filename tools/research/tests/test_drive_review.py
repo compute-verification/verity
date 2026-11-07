@@ -1108,8 +1108,9 @@ def test_after_a_red_ratchet_gate_whose_culprit_was_reverted_the_gate_judges_abo
 
 def test_ratchet_gates_base_falls_back_to_verified_unless_the_judged_tip_lies_on_the_tips_history(world, monkeypatch):
     """`_ratchet_base`: the judged tip only strictly below the tip and at or above the verified commit; while a change its gate
-    failed stands (no revert at or below the tip), the base that gate judged above; else the verified commit: none judged, or a
-    revert or reset that left the judged tip off the tip's history."""
+    failed stands (no revert at or below the tip), the base that gate judged above, unless ratchet-gate is a warn step, whose
+    failed changes no revert undoes; else the verified commit: none judged, or a revert or reset that left the judged tip off
+    the tip's history."""
     h = Review(world, monkeypatch)
     m0 = _main(world)
     a = world.change({"rb-a.txt": "a\n"}, base=m0)
@@ -1133,6 +1134,131 @@ def test_ratchet_gates_base_falls_back_to_verified_unless_the_judged_tip_lies_on
     assert base({"tip": c, "base": a, "failed": [b]}, rev) == c                            # its failure reverted at or below
     assert base({"tip": b, "base": a, "failed": [b]}, c) == a                              # b stands: where that gate began
     assert base({"tip": b, "base": off, "failed": [b]}, c) == m0                           # ... unless that is off the history
+    h.d.warn_steps = ("ratchet-gate",)
+    assert base({"tip": b, "base": a, "failed": [b]}, c) == b                              # a warn step: b stands, judged once
+    assert base({"tip": off, "base": m0, "failed": [off]}, c) == m0                        # ... still only on the tip's history
+    assert base({"tip": a, "base": m0, "failed": [a]}, c, below=b) == b                    # ... and at or above verified
+
+
+def _ratchet_red(tmp_path: Path, rid: str, *failed: tuple[int, str]) -> Path:
+    """Run ``rid``'s dir: every step passed but ratchet-gate, whose log fails each of ``failed`` (a PR and its merge)."""
+    run = _steps_run(tmp_path, rid, {s: "passed" for s in EVERY if s != "ratchet-gate"})
+    with open(run / "steps.jsonl", "a") as f:
+        f.write(json.dumps({"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}) + "\n")
+    (run / "ratchet-gate.log").write_text("".join(f"  #{n} ({m[:12]}): failed: grows p01.json 2 -> 3 entries\n" for n, m in failed))
+    return run
+
+
+def _warned(world, monkeypatch, *lanes: str) -> tuple[Review, str, dict[int, str]]:
+    """#1, #2 and #3 land under a drive whose warn step is ratchet-gate (drive.toml's `warn_steps`), ``lanes`` in the registry:
+    the harness, the tip, and each PR's merge."""
+    _registry(world, *lanes)
+    h = Review(world, monkeypatch)
+    h.d.warn_steps = ("ratchet-gate",)
+    for n in (1, 2, 3):
+        world.gh.put(n, world.change({f"w{n}.txt": f"{n}\n"}))
+        h.review(n)
+    assert h.tick().startswith("landed #3")
+    merge = {n: _git(world.origin, "rev-parse", "main" + "^1" * (3 - n)) for n in (1, 2, 3)}
+    assert all(_subject(world, m).startswith(f"Queue: #{n}") for n, m in merge.items())
+    return h, merge[3], merge
+
+
+def test_a_red_warn_step_rings_its_culprits_lane_once_saying_no_revert_is_coming_and_never_reverts_it(world, monkeypatch, tmp_path):
+    """A red ratchet-gate step never reverts (drive.toml's `warn_steps`): drive names the merge its gate fails as the culprit
+    and rings its lane once, saying no revert is coming, so the lane fixes it forward in its next PR.  No tick reverts it, at
+    `FIX_FORWARD_S` or long after, and the ring that verification is behind rings `CI` and `TOP`, not the lane again."""
+    h, tip, merge = _warned(world, monkeypatch, "lane-2")
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [_ratchet_red(tmp_path, "r-post-0", (2, merge[2]))]
+    h.tick()
+    (ring,) = _rings(h)
+    assert ring.startswith("@lane-2 ") and "Culprit: #2 (the ratchet gate fails its merge), of the 3 landing(s)" in ring, ring
+    assert ("No revert is coming: drive never reverts step ratchet-gate's red (drive.toml's `warn_steps`), so #2's lane "
+            "fixes it forward in its next PR.") in ring and "drive reverts" not in ring, ring
+    for later in (D.FIX_FORWARD_S, 10 * D.FIX_FORWARD_S):
+        h.clock += later
+        h.tick()
+        assert _main(world) == tip and _reverts(world, tip) == 0, world.logs
+    assert h.postland()["red"]["step ratchet-gate"]["culprit"][:1] == [2]
+    assert not [line for line in world.logs if "step ratchet-gate's culprit" in line], world.logs
+    (behind,) = [p for p in h.posts if "behind its tip" in p]
+    assert behind.startswith("@ci @top queue: ") and behind.endswith("red: step ratchet-gate (culprit #2)"), behind
+    assert [p for p in h.posts if "@lane-2" in p] == [ring], h.posts
+
+
+def test_a_red_warn_step_names_each_merge_its_gate_fails_a_culprit_and_rings_each_lane_in_one_post(world, monkeypatch, tmp_path):
+    """Each merge a warn step's gate fails is a culprit of its own failure, not one of several candidates: one post rings each
+    culprit's lane with each failure line, once per culprit, and none is reverted."""
+    h, tip, merge = _warned(world, monkeypatch, "lane-1", "lane-3")
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [_ratchet_red(tmp_path, "r-post-0", (1, merge[1]), (3, merge[3]))]
+    h.tick()
+    (ring,) = _rings(h)
+    assert ring.startswith("@lane-1 @lane-3 ") and "Culprits: #1, #3 (the ratchet gate fails each one's merge)" in ring, ring
+    assert all(f"`#{n} ({merge[n][:12]}): failed: grows p01.json 2 -> 3 entries`" in ring for n in (1, 3)), ring
+    assert "so each culprit's lane fixes it forward in its next PR." in ring and "@ci" not in ring, ring
+    r = h.postland()["red"]["step ratchet-gate"]
+    assert [c[0] for c in r["culprits"]] == [1, 3] and r["culprit"][0] == 1 and not r.get("candidates")
+    assert {f"red:step ratchet-gate:{merge[n]}" for n in (1, 3)} <= set(h.q.load_state()["drive"]["told"])
+    h.clock += 2 * D.FIX_FORWARD_S
+    h.tick()
+    assert _main(world) == tip and _reverts(world, tip) == 0 and len(_rings(h)) == 1, world.logs
+
+
+def test_a_warn_steps_next_run_judges_only_the_merges_above_the_tip_it_judged_with_its_failed_merges_standing(world, monkeypatch, tmp_path):
+    """While ratchet-gate is a warn step, the merge its gate failed stays and the next run's gate judges only the merges above
+    the red run's tip (`--ratchet-base`), so it doesn't judge or ring that merge again; once that gate passes, the red ends."""
+    h, t1, merge = _warned(world, monkeypatch, "lane-2")
+    verified = h.postland()["verified"]
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [_ratchet_red(tmp_path, "r-post-0", (2, merge[2]))]
+    h.tick()
+    assert h.postland()["ratchet_judged"] == {"tip": t1, "base": verified, "failed": [merge[2]]}
+    world.gh.put(4, world.change({"w4.txt": "4\n"}))
+    h.review(4)
+    h.clock += D.FIX_FORWARD_S
+    assert h.tick().startswith("landed #4"), world.logs
+    t2, _, kw = h.posted[-1]
+    assert t2 == _main(world) != t1 and _reverts(world, verified) == 0, world.logs
+    assert kw["base"] == verified == h.postland()["verified"] and kw["ratchet_base"] == t1
+    assert [m.pr for m in h.d.landed_since(kw["ratchet_base"], t2)] == [4]                # #2 isn't judged again
+    h.run_state["r-post-1"] = ("done", 0, None)
+    h.evidence = [_steps_run(tmp_path, "r-post-1", {s: "passed" for s in AFTER_LANDING})]
+    h.tick()
+    pl = h.postland()
+    assert "step ratchet-gate" not in pl.get("red", {}) and pl["verified"] == t2, world.logs
+    assert pl["ratchet_judged"] == {"tip": t2, "base": t1, "failed": []} and len(_rings(h)) == 1
+
+
+def test_a_red_off_the_warn_steps_still_reverts_its_culprit_once_two_hours_pass_unfixed(world, monkeypatch, tmp_path):
+    """Only a warn step's red never reverts: in a run whose ratchet-gate and a suite both fail, the suite's culprit is rung to
+    fix it forward by `FIX_FORWARD_S`, or drive reverts it then, and is reverted then; ratchet-gate's stays."""
+    _registry(world, "lane-1", "lane-2")
+    h = Review(world, monkeypatch)
+    h.d.warn_steps = ("ratchet-gate",)
+    world.gh.put(1, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}))
+    world.gh.put(2, world.change({"c.py": "C = 1\n"}))
+    for n in (1, 2):
+        h.review(n)
+    assert h.tick().startswith("landed #2")
+    tip = merge2 = _main(world)
+    assert _subject(world, merge2).startswith("Queue: #2")
+    run = _failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2",
+                      steps='{"step": "lean-suites", "status": "failed"}\n'
+                            '{"step": "ratchet-gate", "status": "failed", "rc": 1, "log": "ratchet-gate.log"}\n')
+    (run / "ratchet-gate.log").write_text(f"  #2 ({merge2[:12]}): failed: grows p01.json 2 -> 3 entries\n")
+    h.run_state["r-post-0"] = ("done", 1, None)
+    h.evidence = [run]
+    h.tick()
+    suite, step = sorted(_rings(h), key=lambda p: "step ratchet-gate" in p)
+    assert "suite pkg is red" in suite and "Culprit: #1" in suite and "or drive reverts #1 then." in suite, suite
+    assert "Culprit: #2" in step and "No revert is coming" in step, step
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
+    assert _subject(world, "main").startswith('Revert "Queue: #1') and _reverts(world, tip) == 1, world.logs
+    red = h.postland()["red"]
+    assert red["suite pkg"]["reverted"] and not red["step ratchet-gate"].get("reverted")
 
 
 @pytest.mark.parametrize("fix", ["names-the-culprit", "fixes-suite", "touches-the-failure", "new-head"])

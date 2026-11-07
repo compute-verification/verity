@@ -5,6 +5,8 @@ packages whose passes can't be reused, with dependencies kept warm.
                                                       (only those packages: a shard's share, `check.py --shard`)
                                                       [--regenerate] (the Lean check of `next`: record differences pass,
                                                       and audit.json's `regenerated` names the records drive commits)
+                                                      [--bookkeeping warn] (with --regenerate, drive's lock run: the
+                                                      bookkeeping repaired and warned, `repaired` the caps drive commits)
                                                       [--bundle] (a recorded check: the module versions it built, for other nodes)
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
@@ -190,6 +192,64 @@ UNREAD_SCHEMA = "lean-unread-facts/v1"
 #: the facts entries a node keeps beside the passes (`unread/` in the cache), last stored or reused first: Security/Proofs'
 #: are some 6 MB each, and a pass whose facts went is audited again
 UNREAD_KEPT = 64
+#: the caps `--bookkeeping warn` (drive's lock run after a landing) holds to what the run measures, each
+#: repaired in a copy under the run's `repaired/` for drive to commit beside the regenerated locks: the ratchet's, and the
+#: repository suite's caps on what the locks list (`tests/test_lean_packages.py`'s `_held`), each {cap: a lock's count}
+UNREAD_CAPS = "tools/verity/lean/unread-caps.json"
+CAPS_TEST = "tests/test_lean_packages.py"
+LOCK_CAPS = {"UNWITNESSED": lambda lock: len(lock.get("unwitnessed") or {}),
+             "INLINE": lambda lock: sum(map(len, ((lock.get("shape") or {}).get("inline") or {}).values()))}
+#: who a repaired cap's warning names
+CAPS_OWNER = "@lean"
+
+
+def raised_unread(unread: dict, u) -> tuple[str, list[str]]:
+    """`unread-caps.json` with each area the ratchet ``unread`` (`unread.check`'s result) failed raised to its count, and the
+    rest as they were: its text, and a warning naming each raised area."""
+    caps, warned = {}, []
+    for area, v in sorted(unread["areas"].items()):
+        count, cap = v["count"], v.get("cap")
+        if cap is None or any(count[k] > cap.get(k, 0) for k in count):
+            if count.get("modules"):
+                caps[area] = count
+                warned.append(f"bookkeeping: unread area {area} in {UNREAD_CAPS} ({CAPS_OWNER}): its cap raised to the "
+                              f"{count['modules']} wholly unread modules ({count['declarations']} declarations) it has")
+        elif cap.get("modules"):
+            caps[area] = cap
+    return u.caps_text(caps), warned
+
+
+def keep_repaired(out: Path, path: str, text: str) -> str:
+    """Write ``text``, the repaired copy of the repository's ``path``, under ``out``'s `repaired/`: its path there."""
+    dest = out / "repaired" / path
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(text)
+    return str(dest)
+
+
+def held_caps(text: str, locks: dict[str, dict]) -> tuple[str, list[str]]:
+    """``text`` (`CAPS_TEST`) with each cap of `LOCK_CAPS` that ``locks`` ({package: its lock}) break (`_held`: a count above
+    its cap, raised to the count; a cap above its count by more than its `ROOM`, lowered to the count and its room, which
+    changes queued on `next` still use), and a warning naming each. LookupError when a cap's line is not one dict literal
+    there."""
+    def literal(name: str) -> tuple[re.Match, dict]:
+        if not (m := re.search(rf"^{name} = (\{{.*\}})$", text, re.M)):
+            raise LookupError(f"{CAPS_TEST} has no line `{name} = {{...}}` for --bookkeeping warn to hold to the locks")
+        return m, json.loads(m.group(1))
+    room, warned = literal("ROOM")[1], []
+    for name, count in LOCK_CAPS.items():
+        m, caps = literal(name)
+        got = {p: n for p, lock in sorted(locks.items()) if (n := count(lock)) or p in caps}
+        new = dict(caps)
+        for p, n in got.items():
+            held = n if n > caps.get(p, 0) else n + room.get(f"{name} {p}", 0)
+            if held != caps.get(p, 0) and (n > caps.get(p, 0) or caps.get(p, 0) > held):
+                new[p] = held
+                warned.append(f"bookkeeping: {name}[{p!r}] in {CAPS_TEST} ({CAPS_OWNER}): {caps.get(p, 0)} -> {held}, the "
+                              f"count its lock has" + (f" and its room of {held - n}" if held > n else ""))
+        if new != caps:
+            text = text[:m.start(1)] + json.dumps(new) + text[m.end(1):]
+    return text, warned
 
 
 def reusable(cache: Path, pkg: str, k: str) -> bool:
@@ -1234,7 +1294,7 @@ def transient(rep: dict) -> bool:
 
 def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: Path, cache: Path, deps: Path, fresh: bool,
            log, urls: dict[str, str] | None = None, comps: dict | None = None,
-           regenerate: bool = False, bundle: bool = False) -> tuple[list[str], list[str]]:
+           regenerate: bool = False, bundle: bool = False, bookkeeping: bool = False) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
     ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
     difference; such a pass is never stored, since its lock changes when drive commits the record.  Each passing package's build in
@@ -1271,7 +1331,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
         r = subprocess.run([sys.executable, str(work / "tools" / "verity" / "lean" / "check.py"), *FLAGS, *(str(work / p) for p in audited),
                             "--replay-cache", str((work if fresh else cache.parent) / "lean-replay"),
                             *([] if fresh else ["--artifacts", str(artifacts.store)]),
-                            *(["--regenerate"] if regenerate else []), "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
+                            *(["--regenerate"] if regenerate else []), *(["--bookkeeping", "warn"] if bookkeeping else []),
+                            "--repo", str(ROOT), "--out", str(out)], cwd=work, env=env)
         log(f"lean-audit: {', '.join(audited)} audited in {time.monotonic() - t0:.0f} s (exit {r.returncode})")
         doc = json.loads((out / "audit.json").read_text()) if (out / "audit.json").exists() else {"failed": ["check.py"]}
         failed = [os.path.relpath(f, work) if f.startswith(str(work)) else f for f in doc.get("failed", [])]
@@ -1327,7 +1388,8 @@ def select(pkgs: list[str], only: list[str] | None) -> list[str]:
 
 
 def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls: dict[str, str] | None = None,
-        export: Path | None = None, only: list[str] | None = None, regenerate: bool = False, bundle: bool = False) -> int:
+        export: Path | None = None, only: list[str] | None = None, regenerate: bool = False, bundle: bool = False,
+        bookkeeping: bool = False) -> int:
     files = COMMON.tracked_files(ROOT)
     if files is None:
         log("lean-audit: the tree's files cannot be listed; nothing is cached")
@@ -1337,6 +1399,10 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         pkgs = select(packages(files), only)
     except ValueError as e:
         log(f"lean-audit: FAIL: {e}")
+        return 1
+    if bookkeeping and (left := sorted(set(packages(files)) - set(pkgs))):
+        log(f"lean-audit: FAIL: --bookkeeping warn holds the caps to every package's lock, and --package leaves out "
+            f"{', '.join(left)}: drive's lock run audits every package")
         return 1
     comps = {p: components(p, files, FLAGS) for p in pkgs}
     keys = {p: key_of(c) for p, c in comps.items()}
@@ -1357,7 +1423,8 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     for attempt in range(len(RETRIES) + 1):
         if not todo:
             break
-        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps, regenerate, bundle)
+        now, audited = _audit(todo, files, keys, reports, out, cache, deps, fresh, log, urls, comps, regenerate, bundle,
+                              bookkeeping)
         failed = [f for f in failed if f not in audited] + now
         retry = [p for p in audited if p in now and transient(reports.get(p, {}))]
         if not retry or attempt == len(RETRIES):
@@ -1378,11 +1445,32 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
             facts[p].parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(out / f["file"], facts[p])
     unread = unread_ratchet(pkgs, failed, facts, files, out, log)
-    if unread and unread["failures"]:
+    repaired, warned = {}, [f"{p}: {w}" for p in pkgs for w in (reports.get(p) or {}).get("bookkeeping", [])]
+    if bookkeeping and unread and unread["failures"] and "areas" in unread:
+        text, lines = raised_unread(unread, _module(ROOT / UNREAD, "lean_unread_for_lean_audit"))
+        repaired[UNREAD_CAPS] = keep_repaired(out, UNREAD_CAPS, text)
+        warned += lines
+    elif unread and unread["failures"]:
         failed.append("unread")
+    if bookkeeping and not failed:
+        locks = {p: json.loads((Path(regenerated[p]) if p in regenerated else ROOT / p / "lean-audit.json").read_text())
+                 for p in packages(files)}
+        try:
+            text, lines = held_caps((ROOT / CAPS_TEST).read_text(), locks)
+        except (OSError, LookupError, ValueError) as e:
+            log(f"lean-audit: FAIL: bookkeeping: {e}")
+            failed.append("bookkeeping")
+        else:
+            if lines:
+                repaired[CAPS_TEST] = keep_repaired(out, CAPS_TEST, text)
+                warned += lines
+    for w in warned:
+        log(f"lean-audit: WARN: {w}")
     (out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "cached": cached,
                                                 "packages": [reports[p] for p in pkgs if p in reports],
-                                                "regenerated": regenerated, "unread": unread}, indent=1) + "\n")
+                                                "regenerated": regenerated, "unread": unread} | (
+                                                    {"repaired": repaired, "bookkeeping": warned} if bookkeeping else {}),
+                                               indent=1) + "\n")
     log(f"lean-audit: {'PASS' if not failed else 'FAIL (' + ', '.join(failed) + ')'}: {len(cached)} of {len(pkgs)} packages reused")
     if export is not None:
         ok = {p: k for p in pkgs if p in reports and not reports[p].get("failures") and (k := deps_key(ROOT / p))}
@@ -1549,10 +1637,19 @@ def main(argv: list[str]) -> int:
                     "cache key, and such a pass is never stored")
     ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: write the module versions it added to the "
                     "artifact cache as lean-artifacts.tar.gz in --out, for other nodes to take (`shared_bundles`)")
+    ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, drive's lock run after a landing: "
+                    "`check.py --bookkeeping warn`, so a package that fails only on its lock's bookkeeping passes on the lock "
+                    "with it repaired; an unread area above its cap, and a cap of `tests/test_lean_packages.py` the locks "
+                    "left break (UNWITNESSED, INLINE), is raised to the count, or lowered to the count and its room, in a copy under --out's "
+                    "`repaired/`, which audit.json's `repaired` names for drive to commit; each repair is a warning in "
+                    "audit.json's `bookkeeping`. Every package is audited (`--package` may name them all, as check.py's parts do): the "
+                    "caps count every package")
     a = ap.parse_args(argv)
+    if a.bookkeeping and not a.regenerate:
+        ap.error("--bookkeeping warn goes with --regenerate: drive's lock run, which commits the locks it regenerates")
     urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
     return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export, only=a.package,
-               regenerate=a.regenerate, bundle=a.bundle)
+               regenerate=a.regenerate, bundle=a.bundle, bookkeeping=bool(a.bookkeeping))
 
 
 if __name__ == "__main__":

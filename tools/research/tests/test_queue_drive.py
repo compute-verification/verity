@@ -117,15 +117,15 @@ def _killed_run(tmp_path, name: str):
 
 LINT_LOG = """..........F........                                                      [100%]
 =================================== FAILURES ===================================
-________________________ test_no_report_genre_basenames ________________________
+___________________________ test_markdown_size_caps ____________________________
 
->       assert not offenders, "report-genre files belong in ~/.research/notes/lanes/<lane>/:\\n" + "\\n".join(offenders)
-E       AssertionError: report-genre files belong in ~/.research/notes/lanes/<lane>/:
-E         tools/research/src/research/store/status.md
+>       assert not offenders, "maintained documents are small:\\n" + "\\n".join(offenders)
+E       AssertionError: maintained documents are small:
+E         tools/research/src/research/store/README.md: 48 KB > 48 KB, 17 bytes over; move detail to the notes store
 
-tests/test_repository.py:110: AssertionError
+tests/test_repository.py:180: AssertionError
 =========================== short test summary info ============================
-FAILED tests/test_repository.py::test_no_report_genre_basenames - AssertionError: re...
+FAILED tests/test_repository.py::test_markdown_size_caps - AssertionError: ma...
 1 failed, 18 passed in 17.49s
 """
 
@@ -142,7 +142,7 @@ def _lint_run(tmp_path, log: str = LINT_LOG):
 def test_a_failed_pytest_step_points_at_its_tests_and_the_paths_its_failures_name(tmp_path):
     from research.drive import implicated
 
-    assert implicated(_lint_run(tmp_path)) == {"tests/test_repository.py", "tools/research/src/research/store/status.md"}
+    assert implicated(_lint_run(tmp_path)) == {"tests/test_repository.py", "tools/research/src/research/store/README.md"}
     assert implicated(_lint_run(tmp_path / "b", "error: lock is stale\n")) is None
 
 
@@ -550,6 +550,22 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
     assert f"argv: {'c' * 40} m1 --deferred pytest,circuit-check --no-cache --circuit-cache --no-regenerate" in tail, tail
     ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="ratchet-gate", base="b" * 40, ratchet_base="a" * 40)
     assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
+
+
+def test_the_lock_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes_it(tmp_path):
+    """The lock run repairs bookkeeping and warns (`--bookkeeping-warn`) when the queue's clone's train.sh
+    takes the flag (`takes_bookkeeping`); a train.sh that predates it would refuse every lock run, so it isn't given it."""
+    from research.drive import takes_bookkeeping, train_launch
+
+    sh = tmp_path / "tools" / "verity" / "check" / "train.sh"
+    sh.parent.mkdir(parents=True)
+    assert not takes_bookkeeping(tmp_path)
+    sh.write_text('# --bookkeeping-warn\necho "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
+    assert takes_bookkeeping(tmp_path)
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="lean-audit", bookkeeping_warn=True)
+    assert ids == ["r20261027-120000-aaaa"] and f"argv: {'c' * 40} m1 --deferred lean-audit --bookkeeping-warn" in tail, tail
+    sh.write_text('echo "argv: $*"\n')
+    assert not takes_bookkeeping(tmp_path)
 
 
 def test_the_after_landing_run_and_the_lock_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
