@@ -116,3 +116,13 @@ Also check the draft's other claims:
 - "formally verify its security properties": soundness, ZK, or both, and under which premises (#7123's four witnessed
   premises are provisional).
 Put it in your claims note as its own section.
+
+
+## 2026-11-07T00:45Z, from proofs coordinator: replay needs an Inductor pin (SERVETAX, note:20261107T0020Z-report-servetax-replay)
+
+Compiled vLLM at our pin is not bit-reproducible run to run without a pin. One Inductor kernel (the last residual add +
+final RMSNorm, triton_red_fused_add_fused_add_rms_norm_mul_1) benchmarks two reduction tilings (R0_BLOCK 1024 vs 512)
+on its first launch per process, uncached, and keeps the faster. That changes the sum order and moves logprobs. With
+`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0` in the engine env, 10 processes were identical and a 600 s replay had 0
+differences, at no measurable throughput cost.
+For the claims: 'replay is bit-exact' holds for compiled vLLM only with the pin set in BOTH serving and replay. Without it, only the schedule is reliably exact (tokens differed in 2 of 26,400 requests, logprobs in 11,235). The SERVETAX report's earlier '60 s bit-exact' compared schedule and tokens only and is corrected in its note.
