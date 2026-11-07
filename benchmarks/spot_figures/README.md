@@ -3,11 +3,13 @@
 The SPOT post's Figures 1-3 for one model, derived from the sampled-proofs planner
 (`verity.core.protocols.sampled_proofs.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
-plotted series.
+plotted series. Lean checks every one-stage and request-level design the figures plot (`plancheck`, which builds
+`sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point plots what Lean certifies,
+and a design Lean refuses is an error. The two-stage designs are the planner's alone.
 
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
-                                                       # [--request workload] [--workers N] [--points N]
+                                                       # [--request workload] [--workers N] [--points N] [--no-lean]
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
@@ -77,7 +79,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     sets' form (`card_influenceTwo_le_served_min`) at one machine's registration beside each, thin and dashed; (B) in
     the sets' form. Each is never above the scope's served bits (`card_influenceTwo_le_two_pow_outs`,
     `card_influenceTwo_le_min`), the JSON saying which term binds at each β; (C) is in
-    `consumers.exfiltration_bound`'s form, at most the served bits by the same count. The caption names the lines
+    `consumers.exfiltration_bound`'s form, its count the bits Lean certifies, at most the served bits
+    (`audit_exfiltration_delivered`). The caption names the lines
     that at β = 1% are bounded only by everything the scope serves, the trivial bound, so that value isn't read as a
     result.
   - The break-even (`breakeven`, `breakeven.txt` and `figure1.json`'s `breakeven`): for each patterns'-form line and
