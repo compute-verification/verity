@@ -281,7 +281,7 @@ def test_the_registration_holds_the_tree_over_the_step_roots_and_the_verifier_ti
 
 
 def test_the_audit_record_carries_each_drawn_chunks_reads_beside_the_roots_lean_reports(monkeypatch, tmp_path):
-    """`reported_reads`: each drawn chunk's table and root from the verifier's own reads file beside Lean's `registered`
+    """`reported_reads`: each sampled chunk's table and root from the verifier's own reads file beside Lean's `registered`
     finding, held only when every verdict accepted and reports exactly its file's port, value and root."""
     c, _s, got = committed(monkeypatch)
     CS.write(c, tmp_path, {"row": 101}, IX.index_doc(c.window.members, [g[1] for g in got], RUN), registrar=R)

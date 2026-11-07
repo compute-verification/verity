@@ -2,7 +2,7 @@
 # network-e2e's runner, `verity bench network_e2e ARGS`, ARGS e2e.py's (README.md has the commands). With --no-prove,
 # --proofs DIR or --traffic varied (whose advice profile n2_zk doesn't prove) it runs e2e.py alone (N2's network-records
 # is built on first use, with lake on the PATH). Otherwise it runs as a job on a CPU node: it builds what n2_zk.sh
-# builds (hidden_zk's job.sh, sourced: C-Flock's flock-circuit and the Lean flock-verify, then the firewall's Lean
+# builds (hidden_zk's job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, then the ZK server's Lean
 # frame, N2's network-records and the sampled-proofs verifier in the tree, so from a clone) and runs e2e.py with them,
 # the report in $OUT. From a clone, as a job of at most 5 hours whose input is RUNS.tgz:
 #   bash benchmarks/network_e2e/run.sh --from "$RESEARCH_RUN_DIR/inputs/RUNS.tgz"

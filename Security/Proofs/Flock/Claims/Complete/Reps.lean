@@ -46,7 +46,7 @@ No coin makes a rep throw. The one refusal on the rep's path is the lincheck's f
 the statement's: `ρ` of `k_log − 6` coins (the zerocheck's has `m − 6`, `zerocheckP_tot`), 64 weights
 (`skipWeights_size`), and each range's slot type its fold's (`SlotOk`), which `HmRow.check` establishes
 (`hm_check_kinds`) for the scope's untyped row circuit (`Case.table`). The level-0 and recursive commitments return
-through `Hashes.ofSha512` (`commitP_ok`), and every other step is a draw, an absorb or a `pure`.
+through `Hashes.ofSha512` (`commitP_ok`), and every other step is a sample, an absorb or a `pure`.
 
 `Total M`: the computations of `M` that return, with a postcondition (`T x P`), closed under `pure`, `bind` and
 returning lifts, and lifted over a state (`Total.st`). `totS` is it on `PS` from any sends; `totT` and `totL` add the

@@ -7,7 +7,7 @@ from typing import Any
 
 def _pouw_roots() -> list[Any]:
     """The spot checks at their smallest shapes, every primitive they call with them: `PouwSegCheck_v2` at S = 1 (duo, and
-    xin dithered); `PouwSegCheck_v3` at two segments a window each (duo) and one window of two (xin, dithered);
+    xin dithered); `PouwSegCheck_v3` at two segments an execution phase each (duo) and one execution phase of two (xin, dithered);
     `PouwCallCheck_v1` at KS = 2 (one digit word) on duo's chain words, on fx1's full state and on fx1's chain words (the
     EPS1 sm_120 scheme's spot check, `circuit.eps1`); and `PouwWarpCheck_v1` (li) and `PouwWarpCheck_v2` (duo, fx1) at
     KS = 2 over two lanes. Each grows linearly in KS (and NL), which the served shapes are priced by."""

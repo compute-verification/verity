@@ -297,7 +297,7 @@ def _mix(x: torch.Tensor) -> torch.Tensor:
 
 class KeyedDigest:
     """The value digest a counterexample's rebuild is checked against: Σ_i w_i·k_i mod 2^64 over the tensor's 32-bit (else
-    16- or 8-bit) words w_i, k_i = splitmix64(i·φ + key) for a key drawn from the OS when the run starts, and its dtype and
+    16- or 8-bit) words w_i, k_i = splitmix64(i·φ + key) for a key sampled from the OS when the run starts, and its dtype and
     shape mixed in. It runs on the tensor's device with one sync per step (`Counter`), so a run can keep it on. For a
     fixed nonzero difference the chance it is missed is at most 2^-33 over the key."""
 

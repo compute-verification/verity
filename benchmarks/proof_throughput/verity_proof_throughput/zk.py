@@ -1,12 +1,12 @@
 """Configuration 2, recursive zero knowledge: what it is to report, and what of it runs today.
 
 The design: workers prove the inner statement natively with ZK off and run the
-outer proof's arithmetic unmasked; a ZK server, compiled Lean on a CPU node, draws the masks and salts, checks the outer
+outer proof's arithmetic unmasked; a ZK server, compiled Lean on a CPU node, samples the masks and salts, checks the outer
 relations and releases the masked proof; the auditor runs the Lean verifier on what is released. The worker/server split
 doesn't exist yet. What runs today, and what the ZK point (``job.sh ZK=1``, ``zk-point``) measures as its stand-in:
 
 - ``flock-circuit prove --zk --gpu``: Flock's masked protocol (M1, ``verity/ml/flock/live/PROTOCOL.md``), the device
-  proving and the host masking, with the session's B units sampled by the stratified law as in configuration 1;
+  proving and the host masking, with the session's B units sampled by the stratified sampling design as in configuration 1;
 - the ZK server (``FC_FIREWALL=1``, PROTOCOL §10): the Lean (``verity/core/service/flock/Flock/Firewall``, the
   ``flock-firewall`` processes the prover starts on its node), which commits level 0 under its own salts and computes the
   opening, the inner proof and the proof file, and ``flock-circuit``'s checks (the skeleton, the end check) on the

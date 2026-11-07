@@ -9,13 +9,13 @@
 #                recursive session's) into data/$TAG/stage, and with hm96 leaves (today's --zk) into data/$TAG/stage-zk
 #                (STAGE_FROM=DIR: another job's data/$TAG, both stagings; STAGE=0: neither, the caller filled
 #                data/$TAG/stage: circuit.txt, inst-N.bin, pub-N.bin, partition.json, program.json and draw.json, and with
-#                an own-partition file there the later steps keep its partition, program and draw; REC_LINKS=1: the wired
+#                an own-partition file there the later steps keep its partition, program and sample; REC_LINKS=1: the wired
 #                inner statement, rec_reprice.py stage-chain, with its links file links.json beside)
 #   STEP=inner   (GPU leases) the plain inner statement proved with ZK off (M0) against the rec proxy
 #                (verity_flock.rec_live, the inner phase's ZK server: salted tree tops, the schedule of the statement's public
-#                shape, rec_live --schedule-for; every coin the challenger's coin tree, drawn at Hello and opened round by
+#                shape, rec_live --schedule-for; every coin the challenger's coin tree, sampled at Hello and opened round by
 #                round, rec_live --coin-tree (from TREE_FROM) with the prover, its statement and its replay under INNER_COINS; Register
-#                answered with the verifier's full draw, rec_live.full_draw over the
+#                answered with the verifier's full sample, rec_live.full_draw over the
 #                inner statement's program and partition, data/$TAG/stage/draw.json; WARM + RUNS sessions), upstream's
 #                replay of the last one and V*'s hashing
 #                reference (rec_vstar) over it, and over two forged copies of its private.json (a round's top: one node one
@@ -85,8 +85,8 @@
 #              empty: none)
 #      REC_COINS=0 (oprove, lean; 1: the inner statement set up once per inner session, flock-verify rec-coins, and each verify given
 #              that record, --rec-inner-coins, rather than the inner circuit it would parse again)
-#      TREE_FROM= (inner: the challenger's device, HOST:PORT, each inner session's coin tree drawn and opened there, rec_live
-#              --tree-from; TREE_SECRET_FILE= its session secret, hex; empty: this host's OS draws them, rec_live --tree-test-os,
+#      TREE_FROM= (inner: the challenger's device, HOST:PORT, each inner session's coin tree sampled and opened there, rec_live
+#              --tree-from; TREE_SECRET_FILE= its session secret, hex; empty: this host's OS samples them, rec_live --tree-test-os,
 #              a test's coins, never the challenger's, out/inner/tree-source.txt says which)
 #              TREE_FROM=local: the challenger started on this node beside the run (pod/challenger.sh: its key and session
 #              secret in a scratch directory none of the prover's), its records under out/inner/challenger, and
@@ -358,7 +358,7 @@ print("--parts", ",".join(r["parts"]), "--release-windows-ms", ",".join(map(str,
     mkdir -p $DD/inner/s0 && for f in $DD/inner/*; do case ${f##*/} in s0|schedule.json) ;; *) mv $f $DD/inner/s0/ ;; esac; done
   fi
   # TREE_FROM=local: the challenger exits once rec_live closed its session; every session's coins are its tree's, as the
-  # challenger's signed release log shows it sampled and opened them after what rec_live's coin server recorded
+  # challenger's signed release log shows it sampled and opened them after what rec_live's live-coin part recorded
   # (rec_inner.py tree-held), into out/inner/tree-held.json
   if [ $own = 1 ]; then
     TREE_FROM=local
@@ -568,9 +568,9 @@ fold_build() {
 }
 
 # stage_inner NAME PLAIN: the inner statement (N instances of GemmCoordinate_v2{K}, the population program of that template
-# under Q_template_instance, rec_reprice.py: the partition's every unit, so the full draw over it proves every unit of the
+# under Q_template_instance, rec_reprice.py: the partition's every unit, so the full sample over it proves every unit of the
 # statement, which check 5 requires) staged into $DD/NAME from its cache $DD/NAME-cache, its trees' leaves plain SHA-512 when
-# PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its unit class as its template,
+# PLAIN is 1; its records in $O/NAME. Never tiled (FLOCK_GEMM_TILE): a tile's circuit names its size class as its template,
 # which no template query lists, and at K = 4096 a 4x4 tile does not fit a block anyway. Every instance's own rows
 # (FLOCK_OWN_ROWS): Lean covers a shared-row public file only in a registered --zk session (ProvedScope.sharedRowsOk), and
 # the population program's instances share no row, so the rows committed are the same. REC_LINKS=1: the wired chain

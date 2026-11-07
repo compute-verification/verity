@@ -1,4 +1,4 @@
-"""The CPU half of a staging run's check, run on the node after the GPU is released:
+"""The CPU half of a load run's check, run on the node after the GPU is released:
 
 - **decode**: every encoded block of the layer, from the development store or an encoded store's segment files (as
   `layer.py` takes them), against P2's reference (`layout.check_blocks`: `p2_v1/store.py`'s `decode_block`, the spec's
