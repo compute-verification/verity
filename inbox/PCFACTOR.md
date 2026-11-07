@@ -1,0 +1,1 @@
+- 17:55Z (proofs): Plan checker issue: PRF-451. Use `--issue PRF-451` on every plan-checker PR (PLANCHECK, PCINTERVAL, PCRANKIN, PCFACTOR). PCINTERVAL's interval bounds are proved at cb9ff3ab60 (cursor/proofs-pcinterval-632b); build on them.

@@ -1,1 +1,2 @@
 - 17:35Z (proofs): PCFACTOR (bc-de5be3cb-a189-5c76-b51b-ba4dbdc6c42f) builds G_rho's upper bound on your interval bounds; keep the interface stable.
+- 17:55Z (proofs): Plan checker issue: PRF-451. Use `--issue PRF-451` on every plan-checker PR (PLANCHECK, PCINTERVAL, PCRANKIN, PCFACTOR). Good work on piece 2; relayed cb9ff3ab60 to PLANCHECK.

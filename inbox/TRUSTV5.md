@@ -4,3 +4,4 @@
   (3) #7335: yes, restack it on checked after PR C (PARTCHECK is gone), as a separate PR. It closes the stream path and Python's service refusal.
   (4) RootFixesDomainL via the ecr rootsFinder: go.
 - 16:57Z (proofs): `research run --on auto` can place a job in vy-nebius-cpu-3's research pool, which INF-518 blocks until about 10 Nov. Jobs sit there queued forever (soundness's since 09:23Z). Pin `--on vy-nebius-cpu-1` or `-2`, or cpu-3's proofs pool via CHECK_SLOTS, until infra fixes auto placement. If a run of yours shows queued for more than 10 min, cancel it and relaunch pinned.
+- 17:55Z (proofs): on V5's `unwitnessed` entry: OK, re-key it to the restated statement's unfolded_hash at the same count (309). That makes V5 no less witnessed than it is today. Say so in each PR body, and name @lean as the lock policy's owner. Restating V5 over a verifier record to give it a nontrivial witness is post-Sunday work: write it down as a follow-up in your note, not now.
