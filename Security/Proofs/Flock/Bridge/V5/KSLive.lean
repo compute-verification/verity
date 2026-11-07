@@ -38,6 +38,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Bridge.FaultyRightC
+import Proofs.Flock.Bridge.Count
 
 /-!
 # `SampledKSLiveV5`, proved
@@ -46,7 +47,8 @@ import Proofs.Flock.Bridge.FaultyRightC
 canonical transport at public inputs (`transportsLiveV5`), M1's core (`faultyRightTargetC`) and `EndToEndHiddenV5`
 (`endToEndHiddenV5_of`, from `openingsCanonV5`) plugged in. `Flock.SecurityProofs.SampledKSLiveV5 :
 Flock.Guarantees.SampledKSLiveV5`: that bound under the roots guard, with `ecr/sha-512`'s term at the roots finder in place
-of the guard (`Bridge.le_add_ecrBoundL`).
+of the guard (`Bridge.le_add_ecrBoundL`), at the sampling design `Bridge.lawOf` names, which the verifier samples under
+(`Bridge.lawOf_cases`) or is `subset 0`, whose `δ` is 1 (`Bridge.pa_partOf_subset`).
 -/
 
 @[expose] public section
@@ -59,9 +61,20 @@ theorem Flock.Bridge.sampledKSLiveV5R : Flock.Bridge.SampledKSLiveV5R :=
 /-- **The sampled audit's knowledge soundness, live, at the verifier's public inputs, with or without shared rows**
 (`Flock.Guarantees.SampledKSLiveV5`). -/
 theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 := by
-  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup desc qr hpop lj tb law kd hlaw hb hdiv dj S₀ d₀ y₀ wr dg
+  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup desc qr hpop lj tb law kd hb hdiv dj S₀ d₀ y₀ wr dg
     N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows roots Cd κ r ns δ
     hTab hLink
-  exact Flock.Bridge.le_add_ecrBoundL (FlockSoundness.Game.prob_le_one _ _ τ) fun hroots =>
-    Flock.Bridge.sampledKSLiveV5R n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb law
-      kd hlaw hb hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q hTab hLink
+  rcases Flock.Bridge.lawOf_cases desc qr lj tb n with hlaw | h0
+  · exact Flock.Bridge.le_add_ecrBoundL (FlockSoundness.Game.prob_le_one _ _ τ) fun hroots =>
+      Flock.Bridge.sampledKSLiveV5R n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb law
+        kd hlaw hb hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q hTab hLink
+  · have hδ : δ = 1 := by
+      change (Flock.Bridge.designOf (Properties.SampledProofs.oneStageOf (Flock.Bridge.lawOf desc qr lj tb n))).Pa
+        (Flock.Bridge.partOf P κ ns) B = 1
+      rw [h0]
+      change (Flock.Bridge.designOf (.subset 0)).Pa (Flock.Bridge.partOf P κ ns) B = 1
+      rw [Flock.Bridge.pa_partOf_subset _ (Flock.Bridge.nsOf_sum hpop)]
+      simp
+    refine (FlockSoundness.Game.prob_le_one _ _ τ).trans ?_
+    rw [hδ, ENNReal.ofReal_one]
+    exact le_add_right (le_add_right (le_add_right le_rfl))
