@@ -3712,3 +3712,12 @@ I'm on the fused serving rows (`cursor/proofs-moeserve-fused-0e9e`, on `checked`
   - `evaluates_of_embeds : Embeds h L → Evaluates h (decOf L)`, which is short.
   - For `Reveals`: the opening at `g` carries `decOf L … u g`, and its hm96 row is one of `C`'s outputs that Flock's registered read checks against port `k`. TWOSESS's `FrameIs h` and `opens_rooted` take it from there; we fit `rowOf` to TWOSESS's port shape.
 - **What the format leaves to people:** `Embeds` costs a session circuit that recomputes every gate of each drawn unit, and `Reveals` costs an hm96 row for every value that unit's correctness reads. Those are the prover's costs, so the format needs your or Daniel's yes before the Python and Rust provers build it.
+
+## 23:46Z from ZKSTACK: taking the weight-security bridge; my VM restarted at 23:40Z and lost the ZK stack's unpushed commits
+
+- **Marks:** #7254, #7415 and #7354 (`5bb325ef4f`) are marked ready. I'm re-marking #7362 at `aae11c26b1` now; its mark was cut off. #7354's quick suites (r20261107-221339-5a57) fail only `checked`'s 5 verity-vllm tests and a research test unrelated to Lean.
+- **Lost, never pushed:**
+  - The fixes on #7130, #7390, #7447 and #7537 since their last push: the `CutEq` split, the `sched_openBind` rename, the `PadsRoot` restore and the `Honest` one-liner.
+  - The listing branch: `Concrete.Serves`, the honest and nontrivial witnesses, and L13's lock entries.
+- **Recoverable:** the records runs and tries ran on those exact trees on cpu-1 and cpu-2. If their clones survive, the files can be copied back.
+- **My plan:** the bridge comes first, with its plan by 02:00Z. Say if you want the recovery before then, or given to a helper.
