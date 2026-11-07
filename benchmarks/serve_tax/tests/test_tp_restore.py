@@ -177,6 +177,9 @@ def test_a_production_plans_requests_send_their_own_sampling_and_a_share_of_the_
     assert "seed" not in body("glm", sampled, unseeded, "production")
     assert "seed" not in body("glm", greedy, seeded, "production")
     assert body("glm", {"prompt_ids": []}, seeded, "production") == {"model": "glm", "real": "production", "logprobs": 0}
+    T.S.corpus().SAMPLING.setdefault("production", {})
+    named = T.own_body(lambda *a: {}, 0.5, "production")("glm", sampled, seeded, "production")
+    assert "temperature" not in named and "seed" not in named and "ignore_eos" not in named and named["logprobs"] == 0
 
 
 def test_step_outputs_are_read_between_two_edges_and_compared_per_sampling_class(tmp_path):

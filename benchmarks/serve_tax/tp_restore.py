@@ -95,17 +95,20 @@ def request_class(r: Mapping[str, Any], rid: str, unseeded_share: float, samplin
     return "unseeded" if hashlib.sha512(rid.encode()).digest()[0] < 256 * unseeded_share else "seeded"
 
 
-def own_body(real: Callable[..., dict], unseeded_share: float) -> Callable[..., dict]:
-    """`corpus.request_body` asking for each sampled token's logprob; for a request carrying its own sampling, that
-    sampling, no ignore_eos, and the public seed rule's seed (`corpus.request_seed`) unless it is unseeded."""
+def own_body(real: Callable[..., dict], unseeded_share: float, sampling: str = OWN) -> Callable[..., dict]:
+    """The request body, asking for each sampled token's logprob: for a plan's request without sampling of its own,
+    ``real`` (serve_tax's, decoding to its cap); for a production plan's, which stops at its end of text or its cap,
+    with `OWN` its own sampling and the public seed rule's seed (`corpus.request_seed`) unless it is unseeded, and under
+    a named ``sampling`` that one with no seed."""
     C = S.corpus()
 
-    def body(served: str, r: dict, rid: str, sampling: str) -> dict:
+    def body(served: str, r: dict, rid: str, name: str) -> dict:
         if "sampling" not in r:
-            return real(served, r, rid, sampling) | {"logprobs": LOGPROBS}
-        b = {"model": served, "prompt": r["prompt_ids"], "max_tokens": r["max_tokens"], **r["sampling"], "stream": True,
+            return real(served, r, rid, name) | {"logprobs": LOGPROBS}
+        params = r["sampling"] if sampling == OWN else C.SAMPLING[sampling]
+        b = {"model": served, "prompt": r["prompt_ids"], "max_tokens": r["max_tokens"], **params, "stream": True,
              "stream_options": {"include_usage": True}, "return_token_ids": True, "user": rid, "logprobs": LOGPROBS}
-        if request_class(r, rid, unseeded_share) == "seeded":
+        if request_class(r, rid, unseeded_share, sampling) == "seeded":
             b["seed"] = C.request_seed(rid)
         return b
     return body
@@ -143,16 +146,13 @@ def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, 
     arr = C.traffic.arrivals(plan, rate)
     k = requests or max(1, sum(1 for a in arr if a <= span_s))
     reqs, arr = plan[:k], arr[:k]
-    if sampling == OWN:
-        if any("sampling" not in r for r in reqs):
-            raise SystemExit("the plan's requests carry no sampling of their own: name one with --sampling")
-    else:
-        reqs = [{f: v for f, v in r.items() if f not in ("sampling", "seeded")} for r in reqs]
+    if sampling == OWN and any("sampling" not in r for r in reqs):
+        raise SystemExit("the plan's requests carry no sampling of their own: name one with --sampling")
     ids = [f"{ID}-{r['i']:05d}" for r in reqs]
     classes = {rid: request_class(r, rid, unseeded_share, sampling) for r, rid in zip(reqs, ids)}
     (d / "classes.json").write_text(json.dumps(classes))
     real = C.request_body
-    C.request_body = own_body(real, unseeded_share)
+    C.request_body = own_body(real, unseeded_share, sampling)
     t = time.monotonic()
     try:
         got = asyncio.run(C.drive(port, served, reqs, arr, ids, d / "client.jsonl", drain_s, sampling))
