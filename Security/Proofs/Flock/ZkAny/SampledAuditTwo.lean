@@ -7,22 +7,22 @@ public import Proofs.Flock.ZkAny.RecordHiding
 # A two-stage sampled audit's view at any values
 
 A two-stage audit registers its boundary values with the ZK server's value service before any coin. The verifier's live
-coins then draw the first-stage sample, the replay blocks, uniformly. The serving stack registers the sampled replay
+coins then pick the first-stage sample, the replay blocks, uniformly. The serving stack registers the sampled replay
 blocks' interior values with the same service, under the same key, before the second stage's coins; fresh live coins
-then draw the second-stage sample, and each sampled proof block's proof is one session through the ZK server. The
+then pick the second-stage sample, and each sampled proof block's proof is one session through the ZK server. The
 auditor sees the admitted records, both samples, and the sampled sessions' releases with their outcomes.
 
 `Flock.Guarantees.SampledAuditTwoAny` states that view over a stream of `r` registrations of one value service (every
 registration on the server's record up to the audit's interior registration), whose values and whose stack's choices are
 functions of the first-stage sample `χ₁`: the interior values are the sampled replay blocks'. Per outcome of the sampled
 sessions, on every event, the view is no likelier than a simulator's that reads none of the values: an ideal stream of
-dummy values `v₀`, both samples, and the sessions' simulator given the records, the samples and the outcome. The terms
-are
+dummy values `v₀ χ₁` (a function of the public sample, as the interior registration's layout is), both samples, and the
+sessions' simulator given the records, the samples and the outcome. The terms are
 
 * for each choice `d` of the stack's sessions that the loop can admit (`streamChoices`), the simulator's probability on
-  an ideal stream of `v₀` plus the PRF gap of the key-derived salts at `d`, averaged over both samples and the
-  simulator's coins, plus `δ`, how far an ideal stream of the values is from one of `v₀` (at hm96's leaves
-  `ideal_hm96_stream`'s `r·N·2δ₁`);
+  an ideal stream of the dummy values plus the PRF gap of the key-derived salts at `d`, averaged over both samples and
+  the simulator's coins, plus `δ`, how far an ideal stream of the values is from one of the dummy values (at hm96's
+  leaves `ideal_hm96_stream`'s `r·N·2δ₁`, the dummy values of the values' layouts);
 * the forge term (`streamForgeAdvantage`), averaged over the first-stage sample;
 * and the sessions' error at the outcome, `ε s`.
 
@@ -55,7 +55,7 @@ def streamRecOf {K S Ys V O T R : Type} (sv : Service K S Ys V O T R) {r : ℕ} 
     (st : StreamStack K V S O T R r m) (p : K × ((i : Fin r) → Fin (m i) → S)) : StreamRecord r S O T R :=
   sv.streamHanded p.1 v p.2 (st p.1 v (sv.streamViews p.1 v p.2))
 
-/-- **The sessions' release swapped for its simulator, a first-stage sample drawn between.** Where, at every value `p`
+/-- **The sessions' release swapped for its simulator, a first-stage sample between.** Where, at every value `p`
 of the registrations' randomness and `χ₁` of the first-stage sample and `χ₂` of the second, the sessions' release is
 simulated per outcome by `Sim` given the record `ρ p χ₁` and both samples, the probability that `p` is admitted at `χ₁`
 and the audit shows the outcome `s` and an event on the record, both samples and the bytes is at most, averaged over
@@ -150,21 +150,20 @@ open scoped ENNReal
 
 /-- **A two-stage sampled audit's view at any values, per outcome of its sampled sessions.** For every value service
 `sv` with finite keys, sessions, salts, tags and record tags; every stream of `r` registrations, registration `i` of an
-epoch of `m i` sessions, at most `b` of them passed over; every finite first-stage sample space `X₁` drawn uniformly
-after the boundary registration, and values `v`, dummy values `v₀` and a stack `st` that are functions of the
-first-stage sample; a key `k₀`, every finite second-stage sample space `X₂` drawn uniformly after the interior
-registration;
-and the sampled sessions' outcome `out` and released bytes `rel`, functions of the registrations' randomness (the key
-and every registration's sessions), both samples and the sessions' own randomness:
+epoch of `m i` sessions, at most `b` of them passed over; every finite space `X₁` of first-stage samples, one taken
+uniformly after the boundary registration, and values `v`, dummy values `v₀` and a stack `st` that are functions of
+the first-stage sample; a key `k₀`; every finite space `X₂` of second-stage samples, one taken uniformly after the
+interior registration; and the sampled sessions' outcome `out` and released bytes `rel`, functions of the
+registrations' randomness (the key and every registration's sessions), both samples and the sessions' own randomness:
 
 if the stack reads no key (`ZkServerOwnUser`) at any first-stage sample, the sessions' release is simulated per outcome
 (`PerOutcome`) within `ε` at every key, sessions and samples by `Sim` given the admitted records and both samples, and
-an ideal stream of the values is within `δ` of one of `v₀` on every event at every first-stage sample, then at every
-outcome `s` and event `E` on the records, both samples and the bytes, the probability that the loop admits the stream
-and the audit shows `s` and `E` is at most the sum, over the choices `d` the loop can admit, of (the average, over both
-samples and `Sim`'s coins, of `E` on an ideal stream of `v₀` with `Sim`'s bytes plus the PRF gap at `d` there, plus
-`δ`), plus the probability, averaged over the first-stage sample, that the stack run at `k₀` forges a record tag, plus
-`ε s`. -/
+at every first-stage sample an ideal stream of the values is within `δ` of one of the dummy values there on every
+event, then at every outcome `s` and event `E` on the records, both samples and the bytes, the probability that the
+loop admits the stream and the audit shows `s` and `E` is at most the sum, over the choices `d` the loop can admit, of
+(the average, over both samples and `Sim`'s coins, of `E` on an ideal stream of the dummy values with `Sim`'s bytes
+plus the PRF gap at `d` there, plus `δ`), plus the probability, averaged over the first-stage sample, that the stack
+run at `k₀` forges a record tag, plus `ε s`. -/
 def _root_.Flock.Guarantees.SampledAuditTwoAny : Prop :=
   ∀ {K S Y V O T R X₁ X₂ Ω Ωs St B : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T] [Fintype R] [Fintype X₁]
     [Fintype X₂] [Fintype Ω] [Fintype Ωs] (sv : Service K S Y V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ)
