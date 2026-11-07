@@ -1,6 +1,6 @@
-"""H1's draw coin from a draw session of its own (`window.DRAW_FAMILIES`): the session the auditor's ledger opens on the
+"""H1's sampling coin from a sample session of its own (`window.DRAW_FAMILIES`): the session the auditor's ledger opens on the
 window's `pouw_h1_requests.draw_root`, withheld (`challenger.withheld_on`), so its challenger released its coin root only
-after that root, the prover's commitment. `pouw_h1_challenger` reads a window's draw through `draw_session_reason`.
+after that root, the prover's commitment. `pouw_h1_challenger` reads a window's sample through `draw_session_reason`.
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, Coin
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 _ROOT = re.compile(r"^[0-9a-f]{128}$")
-#: why a window's draw coin has no session to be read from
+#: why a window's sampling coin has no session to be read from
 NO_DRAW_SESSION = ("the verifier names no draw session: a window's draw coin is its own draw session's, opened withheld "
                    "on its draw root (CMP-177)")
 
@@ -29,10 +29,10 @@ def _draw(commits: Mapping[str, Any]) -> Mapping[str, Any]:
 
 def draw_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: list[str], pins: Any, main: Any,
                         files: Any, verify: Any) -> str | None:
-    """Why the window's draw coin (its H1 commitment `commits`'s ``draw``) isn't its draw session's: the session the
-    auditor's ledger `lines` opens on the window's draw root under `key`, run from a commit the pins log `pins` records
+    """Why the window's sampling coin (its H1 commitment `commits`'s ``draw``) isn't its sample session's: the session the
+    auditor's ledger `lines` opens on the window's sample root under `key`, run from a commit the pins log `pins` records
     on `main` (`challenger.trusted_session_of` over its files `files`, as infra's gate publishes them; None names none),
-    opened withheld (`challenger.withheld_on`), so its challenger released its coin root only after that root, of a draw
+    opened withheld (`challenger.withheld_on`), so its challenger released its coin root only after that root, of a sample
     session's layout (`window.draw_epoch_reason`), and the coin its draw coin 0 opened after that root
     (`draw_reason`); None when it is."""
     root = _draw(commits).get("root")
@@ -53,9 +53,9 @@ def draw_session_reason(commits: Mapping[str, Any], key: ChallengerKey, lines: l
 
 
 def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: Sequence[bytes]) -> str | None:
-    """Why the window's draw coin isn't its one draw coin 0, opened after its `pouw_h1_requests.draw_root` (over the
-    manifest's ``calls_root``, the last round's receipts and every round's root and coin), given its draw session's
-    signed commitment `trusted` and the draw roots its log shows it received; None when it is."""
+    """Why the window's sampling coin isn't its one draw coin 0, opened after its `pouw_h1_requests.draw_root` (over the
+    manifest's ``calls_root``, the last round's receipts and every round's root and coin), given its sample session's
+    signed commitment `trusted` and the sample roots its log shows it received; None when it is."""
     if not received:
         return "the draw session closed with no draw coin opened, so the window has no draw of the challenger's"
     draw = _draw(commits)
@@ -78,8 +78,8 @@ def draw_reason(commits: Mapping[str, Any], trusted: LiveCommitment, received: S
 
 
 def draw_files(commits: Mapping[str, Any], ledger: Any, fetch: Any, verify: Any) -> Any:
-    """The files of the window's draw session (`draw_session_reason`), the one `ledger` (`pouw_h1_challenger.Ledger`)
-    opens on the window's draw root (its H1 commitment `commits`'s ``draw``'s ``root``), from its ``out/`` as `fetch`
+    """The files of the window's sample session (`draw_session_reason`), the one `ledger` (`pouw_h1_challenger.Ledger`)
+    opens on the window's sample root (its H1 commitment `commits`'s ``draw``'s ``root``), from its ``out/`` as `fetch`
     gives it; None when the ledger opens none there or `fetch` has no tree for it, which `draw_session_reason` refuses."""
     root = _draw(commits).get("root")
     try:

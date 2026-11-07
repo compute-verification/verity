@@ -3,7 +3,7 @@ module
 public import Properties.Firewall
 
 /-!
-# The firewall's record, proved
+# The ZK server's record, proved
 
 `admitNext`, `stopEnds`, `outOfTurnStops` and `afterOnTime` of `Properties.Firewall`, by unfolding
 `Core.Firewall.admit` (its last step, `admit.served`, apart: `served_ok`, `admit_ok`), `Core.Firewall.stop` and

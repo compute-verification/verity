@@ -23,6 +23,7 @@ class Harness:
         monkeypatch.setattr(merge, "_sweep_after", lambda *a, **k: None)
         monkeypatch.setattr(merge, "sweep_branches", lambda *a, **k: (0, 0))
         self.q = world.queue(**kw)
+        self.q.now = lambda: self.clock
         self.d = Driver(self.q, on="m1", launch=self.launch, states=lambda repo, ids: {i: self.run_state[i] for i in ids},
                         post=lambda text, to=(): self.posts.append(text) or True, now=lambda: self.clock,
                         cancel=lambda repo, ids, reason: self.cancelled.extend(ids), evidence=lambda repo, ids: self.evidence)
@@ -553,7 +554,7 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
 
 
 def test_the_lock_run_gives_train_sh_bookkeeping_warn_when_its_train_sh_takes_it(tmp_path):
-    """The lock run repairs bookkeeping and warns (`--bookkeeping-warn`; Daniel, 6 Nov) when the queue's clone's train.sh
+    """The lock run repairs bookkeeping and warns (`--bookkeeping-warn`) when the queue's clone's train.sh
     takes the flag (`takes_bookkeeping`); a train.sh that predates it would refuse every lock run, so it isn't given it."""
     from research.drive import takes_bookkeeping, train_launch
 

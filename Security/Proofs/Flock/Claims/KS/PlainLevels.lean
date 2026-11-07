@@ -49,7 +49,7 @@ import Std.Tactic.BVDecide.Normalize.Bool
 
 `plainQueryRound_verifyWithM` places level 0's Merkle check of an accepted plain rep at round `plainQueryRound` of its
 stream. Here the same holds for every later level, from the plain verifier's own transcript (`verifyRepWith hs` in `V`,
-any hash oracle `hs`): Ligerito draws level `ℓ`'s query coins `levRound k0 R ℓ` rounds in, `k0 + 6` for level 0, `11`
+any hash oracle `hs`): Ligerito samples level `ℓ`'s query coins `levRound k0 R ℓ` rounds in, `k0 + 6` for level 0, `11`
 later for each inner level, and `7` into the last level's iteration (`ligeritoWith_levels`), and level `ℓ ≥ 1`'s check
 passes against the proof's `ℓ − 1`-th recursive cap on its level-`ℓ` rows (`openAt`).
 

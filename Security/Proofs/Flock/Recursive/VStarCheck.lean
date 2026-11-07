@@ -55,7 +55,7 @@ to `VStmt.Loads` (`loads_of_verifiesV`), and `RecursiveAudit`'s (i) reads it in 
   (`RecResiduals.holoOf`) to `i`'s holo flag at a part's statement and to `false` elsewhere, so a plain session's
   circuits are plain.
 * `population_of_setupHidden`: the set-up statement's population (`RecVStar.population`) is the size of the public
-  file `loadPublic` reads, drawn or not (`drawn` records it, `loadPublic` records none and leaves `n` at it).
+  file `loadPublic` reads, sampled or not (`drawn` records it, `loadPublic` records none and leaves `n` at it).
 * `setup_of_accepts`: a raw session that passes the statement check sets up a first table, with `circZ I` as its
   circuit and `(pubZ I).n` as its population.
 * `vstarFile_of_accepts`: at a raw session that `AcceptsZKV` accepts as statement `j` under `f` and that passes the
@@ -481,7 +481,7 @@ theorem checkStmt_ok {i : RecVStar.Inner} {tags : Flock.Tags} {tables : List (St
 
 -- walking `HmRow.loadPublic`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
 set_option maxHeartbeats 2000000 in
-/-- **A loaded public file is a population, not a draw**: `loadPublic` records no population. -/
+/-- **A loaded public file is a population, not a sample**: `loadPublic` records no population. -/
 theorem loadPublic_population {tags : Tags} {c : Flock.Circuit} {file : ByteArray} {pop : Flock.Public}
     (h : HmRow.loadPublic tags c file = .ok pop) : pop.population = none := by
   unfold HmRow.loadPublic at h
@@ -495,7 +495,7 @@ theorem loadPublic_population {tags : Tags} {c : Flock.Circuit} {file : ByteArra
 
 -- walking `HmRow.drawn`'s do block branch by branch (`walk_step`, as `Layout.setupH_drawn`) exceeds the default
 set_option maxHeartbeats 2000000 in
-/-- **A drawn public file records its population's size**: the registered file's instance count. -/
+/-- **A sampled public file records its population's size**: the registered file's instance count. -/
 theorem drawn_population {c : Flock.Circuit} {pop pub : Flock.Public} {d : Lean.Json}
     (h : HmRow.drawn c pop d = .ok pub) :
     pub.population.map (·.1) = some pop.n := by
@@ -508,8 +508,8 @@ theorem drawn_population {c : Flock.Circuit} {pop pub : Flock.Public} {d : Lean.
     subst h
     rfl
 
-/-- **The set-up statement's population is the loaded public file's size**, drawn or not: `HmOut.drawn` records it,
-and an undrawn statement's `n` is the file's own (`Spec.pub`, `Spec.n`). -/
+/-- **The set-up statement's population is the loaded public file's size**, sampled or not: `HmOut.drawn` records it,
+and an unsampled statement's `n` is the file's own (`Spec.pub`, `Spec.n`). -/
 theorem population_of_setupHidden {tags : Tags} {cf pf : ByteArray} {coins : Coins}
     {tables : List (String × ByteArray)} {draw partition : Option Lean.Json} {program : Option ByteArray}
     {st : Flock.Stmt} (h : Flock.Stmt.setupHidden tags cf pf coins tables draw partition program = .ok st) :
@@ -527,7 +527,7 @@ theorem population_of_setupHidden {tags : Tags} {cf pf : ByteArray} {coins : Coi
     rfl
 
 /-- **A raw session that passes the statement check at untemplated tags sets up a first table**, whatever the record's
-draw: its circuit is the inputs' (`setup_zero_c`, `ScopeZR.parseHF`) and its population is `(pubZ I).n`
+sample: its circuit is the inputs' (`setup_zero_c`, `ScopeZR.parseHF`) and its population is `(pubZ I).n`
 (`population_of_setupHidden`, `ScopeZR.loadH`; at several tables, table 0's tags differ from the session's in the
 identity alone, which `HmOut.loadPublic` does not read). -/
 theorem setup_of_accepts {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (t : Exec.Transcript)

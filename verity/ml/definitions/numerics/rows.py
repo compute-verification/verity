@@ -88,7 +88,7 @@ EVALUATORS = {
     "TokenSelect_v1": "first-max argmax over the bf16 logits (TokenSelect_v1: Bf16GtStrict scan, lowest index on ties)",
     **{f"TokenSelect_v{n}": f"first-max argmax over the bf16 logits (TokenSelect_v{n} = TokenSelect_v1 word for word, index 0 at V = 1)" for n in (3, 4)},
     # the stochastic selector IS replayed: the registered composite GumbelTopPTokenSelect_v1{V} (TemperatureScale
-    # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox draws from the committed seed + the Const64 pos)
+    # -> TopPMask_v1 with the committed `splits` S as its operand -> GumbelSelectF32: Philox samples from the committed seed + the Const64 pos)
     # evaluated by the core reference (`verity.ml.circuits.evaluation.evaluate` on `sampling_topp_difftest.spec_registered`) on the committed bf16
     # logits row + the Program's Const32 top_p / temperature + the committed runner.sampler/seed and /splits words of the (step, request)
     "GumbelTopPTokenSelect_v1": "verity.ml.definitions.registry.sampling.GumbelTopPTokenSelect{V} via verity.ml.circuits.evaluation.evaluate (TemperatureScale -> "
@@ -204,7 +204,7 @@ _GUMBEL_TOPP_OPERANDS = (("logits", 16), ("top_p", 32), ("seed", 64), ("pos", 64
 def gumbel_topp_token_select(statics: dict[str, Any], operands: list[np.ndarray]) -> int:
     """`GumbelTopPTokenSelect_v1{V}` on its six operand word arrays -- (bf16 logits[V], f32 top_p, i64 seed,
     i64 pos, f32 temp, i32 splits) -- evaluated by the REGISTRY (the composite of record: TemperatureScale -> TopPMask_v1{V} with `splits`
-    as the S operand -> GumbelSelectF32, Philox draws from (seed, pos)); returns the sampled id.  No re-implementation: the core
+    as the S operand -> GumbelSelectF32, Philox samples from (seed, pos)); returns the sampled id.  No re-implementation: the core
     reference (`verity.ml.circuits.evaluation.evaluate`, the one-call walk the difftest (G4) and the Match-time stoch recompute run).  The words
     arrive as the committed / Const encodings; every operand is checked against the signature's leaf count before the walk (a slice
     that is not exactly one f32 word is a fault of the Program's wiring, named here, never a silent truncation)."""

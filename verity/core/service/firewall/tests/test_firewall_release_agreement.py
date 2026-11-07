@@ -1,16 +1,16 @@
 """The ZK server's release side in Lean (`core_firewall`: `Firewall.Record` and `Firewall.Release`, served by
 `core-firewall-difftest`) against Python's (`verity_flock.firewall`) and against Rust's (`flock_live::release`) as it was
-frozen in `fixtures/` before the Lean replaced it: the shared record vectors, every op of the record on drawn records against
+frozen in `fixtures/` before the Lean replaced it: the shared record vectors, every op of the record on sampled records against
 Python (results and the record each leaves, byte for byte), Rust's index cases op by op, Rust's outer sessions, with each
-step's failure and fault, the challenger's verdict and the clock drawn, and the record of an end-to-end run, both through
-the stages `core-firewall session` runs (`decide`, then `stopAt` or `settle`). The records drawn, and the domain the Lean is
+step's failure and fault, the challenger's verdict and the clock sampled, and the record of an end-to-end run, both through
+the stages `core-firewall session` runs (`decide`, then `stopAt` or `settle`). The records sampled, and the domain the Lean is
 held to, are `_release`'s.
 
 The fixtures were frozen from `flock_live::release` at e64d2e1238: `release-index.jsonl.gz` from its index tests'
 streams (`release::tests::drive`, with each line its damage rewrites as a `wait` numbered as the event it replaces, and
 each event its `appended` op writes as the ZK server writes it, which changes nothing Rust reads: an `open` without a
 null `budget`, a `stop` with a `why`, a `finish` of part `inner`; so the record stays the ZK server's own),
-`release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 draws at seed 0, and
+`release-outer.jsonl.gz` from `outer_session` on `_release.outer_input`'s first 1000 samples at seed 0, and
 `release-e2e.jsonl` from `flock-circuit prove --firewall-state` on rope_head(64) (run r20261021-042230-834a)."""
 
 from __future__ import annotations
@@ -130,7 +130,7 @@ FOREIGN_LINE = '{"event": "note", "seq": 7}\n'
 
 def test_the_lean_runs_rusts_index_cases(lean):
     """Rust's index cases, op by op: its three streams (seeds 20261016 and 7, and 11 with a session id past the index's key
-    limit), 1500 draws each, an op or damage to the record (torn, cut, halved, edited, rewritten, a line foreign to it), a
+    limit), 1500 samples each, an op or damage to the record (torn, cut, halved, edited, rewritten, a line foreign to it), a
     repair or an append, which leave 3979 ops. Of those, Rust rejected 762, and the Lean rejects each; Rust answered 3217,
     and at 2830 of them the Lean's result and the record it leaves are Rust's byte for byte. The other 387 are outside the
     domain: their record holds a line the ZK server doesn't write (`foreign`), which Rust read past and the Lean refuses the

@@ -646,7 +646,7 @@ def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncach
 
 
 def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
-    """A post-landing run (`--deferred circuit-check,pytest`) runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
+    """An after-landing run (`--deferred circuit-check,pytest`) runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
     slot while pytest kept to its half of the rest, 175, would leave lean-suites' 175 unused and run the 147-167 GiB SHA-512
     targets one at a time.  Pytest's share is unchanged."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
@@ -879,9 +879,9 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
 
 
 def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_records_a_divergence(tmp_path, monkeypatch):
-    """r20261027-131150-7678: set 16's honest session, which Lean refuses for completeness and upstream accepts
-    (`upstream_accepted`), failed the preflight because it was held to Lean's verdict. A case without the key expects its one
-    verdict of both."""
+    """A case that records a divergence (`upstream_accepted`: an honest session Lean refuses for completeness and upstream
+    accepts) is held to upstream's own verdict: held to Lean's, it would fail the preflight. A case without the key expects
+    its one verdict of both."""
     v = tmp_path / "verifier"
     v.mkdir()
     (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
