@@ -181,6 +181,94 @@ def test_a_trains_audit_passes_on_regenerated_records_names_them_and_keeps_no_su
     assert rc == 0 and ran == ["pkg/b"], "a pass on a regenerated record is not kept"
 
 
+#: a stand-in for check.py --regenerate [--bookkeeping warn]: pkg/b's lock fails on bookkeeping, which only the flag repairs,
+#: in a regenerated lock listing two guarantees under `unwitnessed` and one warning
+BOOK_AUDIT = r'''
+import json, sys
+from pathlib import Path
+a = sys.argv[1:]
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bookkeeping"))]
+out.mkdir(parents=True, exist_ok=True)
+reps, failed = [], []
+for pkg in named:
+    rep = {"package": str(pkg), "failures": []}
+    if json.loads((pkg / "lean-audit.json").read_text()).get("unlisted"):
+        unlisted = ["open: P.Sound is a premise the lock doesn't list"]
+        if a[a.index("--bookkeeping") + 1:][:1] == ["warn"] if "--bookkeeping" in a else False:
+            rec = out / f"audit-{pkg.name}" / "lean-audit.json"
+            rec.parent.mkdir(parents=True, exist_ok=True)
+            rec.write_text(json.dumps({"unwitnessed": {"P.t": "h", "P.u": "h"}}))
+            rep |= {"settled": unlisted, "regenerated": str(rec),
+                    "bookkeeping": ["bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due D (open.unlisted)"]}
+        else:
+            rep["failures"] = unlisted
+    if rep["failures"]:
+        failed.append(str(pkg))
+    reps.append(rep)
+(out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
+sys.exit(1 if failed else 0)
+'''
+
+
+def test_the_lock_runs_audit_repairs_bookkeeping_and_the_caps_the_repaired_locks_break(tmp_path, monkeypatch):
+    """`--bookkeeping warn` (drive's lock run) reaches check.py: a package that fails only on bookkeeping passes on its
+    repaired lock, and a cap of `tests/test_lean_packages.py` that lock breaks is set to its count in a copy under `repaired/`,
+    which audit.json's `repaired` names for drive to commit, with every warning under `bookkeeping`. Without the flag the
+    package fails and nothing is repaired; the flag goes only with --regenerate and without --package."""
+    caps = 'UNWITNESSED = {"pkg/b": 1}\n\nINLINE = {}\n\nROOM = {"UNWITNESSED pkg/a": 2}\n'
+    root = _tree(tmp_path, monkeypatch, {LA.CAPS_TEST: caps})
+    (root / "tools/verity/lean/check.py").write_text(BOOK_AUDIT)
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"unlisted": True}))
+    cache, deps = tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps"
+
+    def go(n: int, bookkeeping: bool) -> tuple[int, dict]:
+        out = tmp_path / f"out{n}"
+        rc = LA.run(out, cache, deps, log=lambda s: None, regenerate=True, bookkeeping=bookkeeping)
+        return rc, json.loads((out / "audit.json").read_text())
+    rc, doc = go(1, False)
+    assert rc == 1 and doc["failed"] == ["pkg/b"] and "repaired" not in doc and "bookkeeping" not in doc
+    rc, doc = go(2, True)
+    assert rc == 0 and doc["regenerated"] == {"pkg/b": str(tmp_path / "out2" / "audit-b" / "lean-audit.json")}
+    assert doc["repaired"] == {LA.CAPS_TEST: str(tmp_path / "out2" / "repaired" / LA.CAPS_TEST)}
+    assert Path(doc["repaired"][LA.CAPS_TEST]).read_text() == caps.replace('{"pkg/b": 1}', '{"pkg/b": 2}')
+    assert (root / LA.CAPS_TEST).read_text() == caps, "the tree's own copy is never written"
+    assert doc["bookkeeping"] == [
+        "pkg/b: bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due D (open.unlisted)",
+        f"bookkeeping: UNWITNESSED['pkg/b'] in {LA.CAPS_TEST} (@lean): 1 -> 2, the count its lock has"]
+    for argv in (["--bookkeeping", "warn"], ["--regenerate", "--bookkeeping", "warn", "--package", "pkg/b"]):
+        with pytest.raises(SystemExit):
+            LA.main(["--out", str(tmp_path / "out3"), *argv])
+
+
+def test_held_caps_sets_each_broken_cap_to_its_count_and_leaves_the_rest():
+    """A count above its cap, and a cap above its count by more than its room, are set to the count; a cap within its room
+    stays, and a package no cap names with nothing listed gets none. A caps file without the line fails."""
+    text = 'X = 1\nUNWITNESSED = {"a": 5, "b": 4, "c": 9}\nINLINE = {"a": 3}\nROOM = {"UNWITNESSED b": 2}\n'
+    locks = {"a": {"unwitnessed": {"t": "h"}, "shape": {"inline": {"t": {"x": "why", "y": "why"}}}},
+             "b": {"unwitnessed": {"t": "h", "u": "h"}}, "c": {"unwitnessed": dict.fromkeys("tuvwxyzpqr", "h")}, "d": {}}
+    new, warned = LA.held_caps(text, locks)
+    assert new == 'X = 1\nUNWITNESSED = {"a": 1, "b": 4, "c": 10}\nINLINE = {"a": 2}\nROOM = {"UNWITNESSED b": 2}\n'
+    assert [w.split(" in ")[0] for w in warned] == ["bookkeeping: UNWITNESSED['a']", "bookkeeping: UNWITNESSED['c']",
+                                                    "bookkeeping: INLINE['a']"]
+    assert LA.held_caps(new, locks) == (new, [])
+    with pytest.raises(LookupError):
+        LA.held_caps("UNWITNESSED = {}\n", locks)
+
+
+def test_raised_unread_raises_the_areas_above_their_caps_and_keeps_the_rest():
+    u = types.SimpleNamespace(caps_text=lambda caps: json.dumps(caps, sort_keys=True))
+    unread = {"failures": ["unread: A has 3 ..."], "areas": {
+        "A": {"count": {"modules": 3, "declarations": 30}, "cap": {"modules": 2, "declarations": 40}},
+        "B": {"count": {"modules": 1, "declarations": 5}, "cap": {"modules": 4, "declarations": 50}},
+        "C": {"count": {"modules": 2, "declarations": 6}, "cap": None},
+        "D": {"count": {"modules": 0, "declarations": 0}, "cap": None}}}
+    text, warned = LA.raised_unread(unread, u)
+    assert json.loads(text) == {"A": {"modules": 3, "declarations": 30}, "B": {"modules": 4, "declarations": 50},
+                                "C": {"modules": 2, "declarations": 6}}
+    assert [w.split(" in ")[0] for w in warned] == ["bookkeeping: unread area A", "bookkeeping: unread area C"]
+
+
 def _move(root: Path, monkeypatch, old: str, new: str) -> None:
     """`git mv old new`: the directory, and the tracked files' paths."""
     files = LA.COMMON.tracked_files()
