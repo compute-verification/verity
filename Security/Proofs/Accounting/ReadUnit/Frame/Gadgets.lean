@@ -33,6 +33,34 @@ theorem sound_mapM_getD {β γ : Type} (d : γ) (f : β → M γ) (Q : (Var → 
     | zero => simpa using hr
     | succ i => simpa using hall i (by simpa using hi)
 
+/-! ## The body's constant bits -/
+
+/-- The cached constant bits hold their values at `z`. -/
+def ConstsOk (z : Var → Bool) (c : Consts) : Prop :=
+  (∀ f, c.1 = some f → ev z f = false) ∧ ∀ f, c.2 = some f → ev z f = true
+
+/-- **The constant bits** (`_body.const` over `BL.constant` in a flat net): `v`'s low `w` bits. -/
+theorem sound_constBits (c : Consts) (v w : ℕ) : Sound (constBits constForm c v w) fun z r =>
+    ConstsOk z c → ConstsOk z r.1 ∧ evs z r.2 = (List.range w).map v.testBit ∧ r.2.length = w := by
+  simp only [constBits, constForm, map_pure]
+  refine Sound.bind' (P := fun z c0 => ConstsOk z c → ∀ f, c0 = some f → ev z f = false)
+    (Sound.ite' (fun _ => Sound.pure' fun z _ f hf => by cases hf; rfl) fun _ => Sound.pure' fun z hc => hc.1)
+    fun c0 => Sound.bind' (P := fun z c1 => ConstsOk z c → ∀ f, c1 = some f → ev z f = true)
+      (Sound.ite' (fun _ => Sound.pure' fun z _ f hf => by cases hf; rfl) fun _ => Sound.pure' fun z hc => hc.2)
+      fun c1 => Sound.pure' fun z h1 h0 hc => ⟨⟨h0 hc, h1 hc⟩, ?_, by simp⟩
+  have e0 : ev z (c0.getD Lin.zero) = false := by
+    cases c0 with
+    | none => rfl
+    | some f => exact h0 hc f rfl
+  have e1 : ev z (c1.getD Lin.one) = true := by
+    cases c1 with
+    | none => rfl
+    | some f => exact h1 hc f rfl
+  simp only [evs, List.map_map]
+  refine List.map_congr_left fun j _ => ?_
+  simp only [Function.comp_apply]
+  split <;> simp_all
+
 /-! ## The AND tree and the comparison -/
 
 theorem sound_andPairs : ∀ l : List Lin, Sound (andPairs l) fun z r =>
