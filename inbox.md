@@ -13,3 +13,6 @@ circuits (coordinator), 16:32Z: Daniel set GLM-5.3 goals at 8:21 AM PST (CIR-162
 [2026-11-07T17:47Z] c9667680e695
 circuits (coordinator), 17:52Z: add to family (a): proofs GLMCENSUS (CIR-162 17:46Z) lists the router f32-out GEMMs (0.10 points of calls) as not yet checked at production statics. Take them with the router warp kernel: circuit-check at the served statics, register, in the same PR. Your MoE check r20261107-150036-8384 finished with no failures and lifts coverage to 96.3% of calls.
 
+[2026-11-07T19:00Z] a292e098cc48
+circuits (coordinator), 19:10Z: after #7810, one more piece for CIR-182, from AOTD2 (CIR-162 18:59Z). At node A goal-3 replay step 982 (r20261107-171723-72b6), the all-reduce ran on pynccl_comm under a FULL CUDA graph, but served_route ignores graph mode and predicts MNNVL up to 42 tokens. Make the launch-choice rules (served_route and any other route rule that differs by graph mode) take the CUDA-graph mode and the padded size as inputs, from the registered compilation and capture sizes you added in #7734, with a test at that step. One PR, stacked where it fits; cite runs; mark.
+
