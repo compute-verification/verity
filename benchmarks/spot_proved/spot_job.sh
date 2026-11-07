@@ -2,7 +2,8 @@
 # The capture of sampled proof blocks' values from a replay of a served GLM-5.3 window, under research run from a tree with
 # benchmarks/serve_tax/replay.py at its root (--cwd source), with capture.py, stage.py and this file sent (--send):
 #   ARM=RECORD_ARM_DIR LOAD=NAME [OPEN=dense:1,moe:1] [PER_TYPE=8] [SMALL=1,31] [BIG=256,384] [LONG=1] [STEPS=s,...]
-#     [KEEP_TENSORS=opened|all] [GATE_EVERY=N] [STAGE=1] [DEADLINE=UNIX_TIME] [REPLAY_ARGS=...] [VENV=...]
+#     [KEEP_TENSORS=opened|all] [KEEP_STEPS=s,...] [KEEP_MAX_MIB=64] [MLA_TOKENS=8] [GATE_EVERY=N] [STAGE=1]
+#     [DEADLINE=UNIX_TIME] [REPLAY_ARGS=...] [VENV=...]
 #     bash "$RESEARCH_RUN_DIR/inputs/spot_job.sh"
 #   ARM=... LOAD=... CAPTURE=DIR STEPS=s,... bash .../spot_job.sh   # only stage an earlier run's capture again (CPU only)
 # The engine's environment is the served one's: ENGINE_ENV=FILE (KEY=VALUE lines, a server's engine_env.txt) is exported,
@@ -135,7 +136,8 @@ EOF
 fi
 if [ $restage = 0 ]; then
 "$PY" "$IN/capture.py" site "$CAP/site" --capture "$CAP" --steps "$STEPS" --open "${OPEN:-dense:1,moe:1}" \
-  --keep "${KEEP_TENSORS:-opened}" ${KEEP_STEPS:+--keep-steps "$KEEP_STEPS"} >/dev/null || exit 2
+  --keep "${KEEP_TENSORS:-opened}" ${KEEP_STEPS:+--keep-steps "$KEEP_STEPS"} --keep-max-mib "${KEEP_MAX_MIB:-64}" \
+  --min-free-gib "${MIN_FREE_G:-40}" --mla-tokens "${MLA_TOKENS:-8}" >/dev/null || exit 2
 export PYTHONPATH="$CAP/site${PYTHONPATH:+:$PYTHONPATH}"
 export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600 VLLM_ENGINE_ITERATION_TIMEOUT_S=3600
 echo "== replay with capture of steps $STEPS $(date -u +%FT%TZ)"
