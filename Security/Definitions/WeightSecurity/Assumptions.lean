@@ -25,7 +25,7 @@ open WeightSecurity
 variable {Ω R X Y M Θ Θ' : Type}
 
 /-- `honest-use-hard` (proposed; about the served function alone). **Honest use doesn't hand out the weights.** With
-the weights drawn as `gen ω` on uniform coins `ω`, every party of the class `A` that sees the served function `C`'s
+the weights sampled as `gen ω` on uniform coins `ω`, every party of the class `A` that sees the served function `C`'s
 answers to `q` queries it chooses adaptively, on coins `r` of its own, outputs a stolen model (`Stolen θ θ'`, e.g. `θ'`
 serves a function close to `C θ`) with probability at most `p`.
 

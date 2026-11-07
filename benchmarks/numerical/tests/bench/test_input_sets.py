@@ -111,7 +111,7 @@ def test_generation_is_deterministic_and_prefix_stable(tmp_path):
 
 
 def test_draw_format_is_pinned():
-    """Instance words are a function of (key, draw) alone: the counter stream's bytes and the word rule, fixed here."""
+    """Instance words are a function of (key, sample) alone: the counter stream's bytes and the word rule, fixed here."""
     sub = TM.subcircuit("gemm-coordinate", K=64)
     k = G.key_for(sub, 1)
     assert k.stream(("x", 0), 8).hex() == "cbfb52e4ff385132"

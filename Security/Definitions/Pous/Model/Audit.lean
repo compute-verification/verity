@@ -6,10 +6,10 @@ public import Definitions.Pous.Model.Scheme
 # The timed audit game, perfect isolation
 
 1. `W` is arbitrary (every statement quantifies over it) and fixed before setup.
-2. Setup draws the primitive `ω` and the coins `r` uniformly; `(pp, C) := enc W ω r`.
+2. Setup samples the primitive `ω` and the coins `r` uniformly; `(pp, C) := enc W ω r`.
 3. Preprocessing `A₁` is any function of `(W, pp, C, ω)` with an `S`-bit output `σ`. Nothing else survives: this
    is perfect isolation.
-4. The memory challenger draws `k` indices `I : Fin k → Fin B`, uniform and with replacement.
+4. The memory challenger samples `k` indices `I : Fin k → Fin B`, uniform and with replacement.
 5. The responder returns raw blocks, from `(W, pp)` (free) and its `S`-bit state, as a `(D, Q)`-bounded `OracleAlgorithm`.
    The audit accepts iff every returned block equals the true one.
 
