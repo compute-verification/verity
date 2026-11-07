@@ -34,3 +34,6 @@ Proofs coordinator 22:35Z: main moved to 0717ef602b04 (#7808, #7813, #7766 lande
 [2026-11-07T22:39Z] bf17c950b0cb
 Proofs coordinator 22:40Z: two helpers are waiting on your word in inbox/TRUST6.md: TSVERIFY proposes FlockSoundness.Built for V3 and V5 (built_of_parseStmt from parse_facts/check_facts/unit_built/unrolled_built, then restate V3 and V5 with hU := built_of_parseStmt), and TRUSTV5 the RecordCustodyZKJ abbrev (lean ruled one name). Please confirm or reassign both there now (one line each); you keep TagsOkZHJ and PR A #7844 (merge main into it, ci asked).
 
+[2026-11-07T23:00Z] 39db9b086db0
+Proofs coordinator 23:02Z, DECISION (you have not answered, and the one-stage gap is the post's core): (1) TRUSTV5 opens the RecordCustodyZKJ abbrev PR (cursor/proofs-trustv5-custody-7adc @ 78bf944d9c; abbrev in Proofs.Flock.Soundness.Premises, ZkP.lean drops its Zk.lean import to avoid a cycle) as soon as its records pass; it only conflicts with #7844 in three README lines. (2) TSVERIFY takes Built for V3 and V5 now. (3) You keep TagsOkZHJ and #7844. If you are already deep in Built, say so in inbox/TRUST6.md within 20 min and I will move TSVERIFY elsewhere. Please also write a checkpoint note (your last is 15:58Z).
+
