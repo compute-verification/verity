@@ -22,14 +22,6 @@
   "Nci.Formalism.Assumptions.TokenWork": {
    "owner": "@training",
    "digest": "d17288db09108dcb49f4caaf63f493763bd14c3f660dbe809178307fec2a498a"
-  },
-  "Pouw.NCP.Params.InstanceU": {
-   "owner": "@compute-research",
-   "digest": "524a709e1f7d77aa51a3b61ffda313a7c1f4b22152d21fc6e86d5013c41c0ade"
-  },
-  "Pouw.Protocol.WrefWithin": {
-   "owner": "@compute-research",
-   "digest": "cac063df365f7c845e896f15d04ac61e77ab0c59876e7f1a913d3fd4f2841858"
   }
  },
  "domain": {
@@ -248,6 +240,16 @@
    "digest": "559db99f683821879b48c8850d8fd77e243272bdbda83d3aaa8a7cdc7a38f2af",
    "why": "NetTiming.SecurityProofs.SampledAuditAccepted's statement, another listed guarantee",
    "cites": "NetTiming.SecurityProofs.SampledAuditAccepted"
+  },
+  "Pouw.NCP.Params.InstanceU": {
+   "owner": "@compute-research",
+   "digest": "524a709e1f7d77aa51a3b61ffda313a7c1f4b22152d21fc6e86d5013c41c0ade",
+   "why": "Route U's instance on the domain: `W_ref` is `wrefU f`, every unit has at least `n₀` columns and `g₀ ≥ d/(3k)`, the conditions `GapFromTTNCP_U_v1` takes inline."
+  },
+  "Pouw.Protocol.WrefWithin": {
+   "owner": "@compute-research",
+   "digest": "cac063df365f7c845e896f15d04ac61e77ab0c59876e7f1a913d3fd4f2841858",
+   "why": "The domain on which every unit has `W_ref(u) ≤ Ω_max·W_mm(u)`, the bound `EndToEnd` takes inline."
   },
   "Verity.Assumptions.GemmAmpereStep": {
    "owner": "@proofs",
@@ -25842,74 +25844,6 @@
     "∀ (t : Fin Np), Real.instLT.lt 0 (Accounting.Compose.shareCone Sc Cd Np t) → And (Real.instLE.le (Accounting.Compose.tileLuck Sc Cd Np t) p) (Real.instLE.le (Accounting.Compose.tileLuck0 Sc Cd Np t) p0)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq Pl.game (Accounting.Compose.periodGame (Accounting.Compose.tileStage Cd Np) (Accounting.Compose.liveCone Sc Cd Np) 1 1 Kd Wp)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (w : Fin n), Real.instLE.le (Pouw.RelativeSecurity.prob fun x => (Cd.periodLayer hr hK pr).MovedIn x w) δbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.PearlC.pearlCSampledH100v1RowSeedCodeRowCap100_6144x256": {
-    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 semC (1 / 400) (1 / 100)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Pouw.PearlC.pearlCSampledH100v1RowSeedRowCap100_6144x256": {
-    "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCapAt Pouw.PearlC.devH100 sem' (1 / 400) (1 / 100)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.Cover.SecurityProofs.CoverTraining": {
-    "Real.instLT.lt (instHMul.hMul α Γ.cast) (instHMul.hMul b D.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Fin c.D.N), instLENat.le (c.D.w g) w₀": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHAdd.hAdd (instHAdd.hAdd (instHMul.hMul w₀.cast Γ.cast) (instHMul.hMul α Γ.cast)) (c.D.width c.θ).cast) s.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul α₀ (c.D.size c.D.computed).cast) Mb.P.card.cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ActivationsReads": {
-    "∀ (a : Fin c.D.N), instLENat.le (Finset.filter (fun g => Eq (T.act g) a) T.M).card e": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (a : Fin c.D.N), (L.src a).Nonempty → instLENat.le dd (Finset.image T.act (Finset.filter (fun g => Eq (T.thread (T.act g)) (T.thread a)) (L.src a))).card": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.DampenerRemotePeriod": {
-    "Real.instLE.le (Finset.univ.sum fun t => c t) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => wrong t (Function.update ξ t a)) p": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ ξ' : (t : Fin T) → Ω t), (∀ (s : Fin T), instLTFin.lt s t → Eq (ξ s) (ξ' s)) → ∀ (b : β), Eq (win b) t → Iff (SetLike.instMembership.mem (bad ξ) b) (SetLike.instMembership.mem (bad ξ') b)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ ξ' : (t : Fin T) → Ω t), (∀ (s : Fin T), instLEFin.le s t → Eq (ξ s) (ξ' s)) → ∀ (b : β), Eq (win b) t → And (Iff (SetLike.instMembership.mem (drawn ξ) b) (SetLike.instMembership.mem (drawn ξ') b)) (Iff (SetLike.instMembership.mem (detected ξ) b) (SetLike.instMembership.mem (detected ξ') b))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => ∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b)) (instHPow.hPow (instHSub.hSub 1 q) (Finset.filter (fun b => Eq (win b) t) (bad ξ)).card)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t : Fin T) (ξ : (t : Fin T) → Ω t), Real.instLE.le (Nci.Dampener.prob (PMF.uniformOfFintype (Ω t)) fun a => And (Exists fun b => And (SetLike.instMembership.mem (bad ξ) b) (And (Eq (win b) t) (SetLike.instMembership.mem (drawn (Function.update ξ t a)) b))) (∀ (b : β), SetLike.instMembership.mem (bad ξ) b → Eq (win b) t → Not (SetLike.instMembership.mem (detected (Function.update ξ t a)) b))) (ks t)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (t t' : Fin T), Eq (idW t) (idW t') → instLTFin.lt t t' → Real.instLT.lt (τw t) (τw t')": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t) (b : β), SetLike.instMembership.mem (bad ξ) b → SetLike.instMembership.mem I (idW (win b))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul Φ H) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t) (j : ι) (s : Real), Real.instLE.le ((Finset.filter (fun b => And (Eq (idW (win b)) j) (And (Real.instLE.le s (τw (win b))) (Real.instLE.le (τw (win b)) (instHAdd.hAdd s Δ)))) (bad ξ)).sum fun b => w b) (instHMul.hMul Φ Δ)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t) (b : β), SetLike.instMembership.mem (bad ξ) b → Real.instLE.le (w b) B": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : R), Real.instLE.le (instHMul.hMul b_a (Th i).M.card.cast) (instHMul.hMul (instHMul.hMul α ((Th i).bound (instHMul.hMul α Γ.cast) b_w dd e)) ((d i).D.size (d i).D.computed).cast)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : R), Real.instLE.le ((Th i).bound (instHMul.hMul α Γ.cast) b_w dd e) Λ": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Finset.univ.sum fun i => ((d i).D.size (d i).D.computed).cast) C": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t), instLENat.le (M ξ) (instHAdd.hAdd (instHAdd.hAdd (instHAdd.hAdd (Mu ξ) (Mr ξ)) (Finset.univ.sum fun i => (Th i).M.card)) (Mx ξ))": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mu ξ).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul mfu κ) U) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mr ξ).cast (instHDiv.hDiv (instHMul.hMul κ (instHAdd.hAdd (instHAdd.hAdd (instHSub.hSub C (instHMul.hMul (instHSub.hSub 1 εW) (W ξ))) (Nci.Dampener.wrongCapacity c fun t => wrong t ξ)) ((bad ξ).sum fun b => w b))) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (t : Fin T) → Ω t), Real.instLE.le (Mx ξ).cast (instHDiv.hDiv (instHMul.hMul (instHMul.hMul κ χ) (instHAdd.hAdd C U)) 2)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": {
-    "∀ (s : Fin 1), instLTFin.lt s t → Eq (ξ s) (ξ' s)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Nci.Guarantees.AcceptAll.win b) t": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (s : Fin 1), instLEFin.le s t → Eq (ξ s) (ξ' s)": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Nci.Guarantees.AcceptAll.idW t) (Nci.Guarantees.AcceptAll.idW t')": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "SetLike.instMembership.mem (Nci.Guarantees.AcceptAll.bad ξ) b": "on checked before the inline rule reached it, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.LayeredTraining": {
-    "Real.instLT.lt (instHMul.hMul α Γ.cast) (instHMul.hMul (instHAdd.hAdd E 1) b).cast": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ThreadedContainedInfoFmt2": {
-    "∀ (g : Fin c.D.N), Eq (c.D.isInput g) Bool.true → SetLike.instMembership.mem d.θ (M.emb g) → SetLike.instMembership.mem c.θ g": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Fin c.D.N), SetLike.instMembership.mem c.θ g → SetLike.instMembership.mem d.θ (M.emb g) → Eq (BitVec.cast ⋯ (θv (M.emb g))) (θc g)": "a membership, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Finset.instPartialOrder.le W d.D.computed": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "instLENat.le (d.D.size W) Γ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Real.instLE.le (Nci.novelInfo d θv W) K": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ThreadedTraining": {
-    "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Nci.SecurityProofs.ThreadedTrainingOn": {
-    "Real.instLE.le (instHMul.hMul κ (c.D.size c.D.computed).cast) (instHMul.hMul 2 T.M.card.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
-   },
-   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": {
-    "∀ (u : Fin B), SetLike.instMembership.mem S u → And (instLENat.le (P.gates u).card (cS u)) (instLENat.le (d.unregistered (P.gates u)).card (kS u))": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion",
-    "∀ (v : Fin d.D.N), SetLike.instMembership.mem J.V v → Real.instLE.le (J.ω v) ωmax": "inline in the statement #6677 carries, held here by next's inline rule; PRF-301 (Tue 3 Nov) names it as an assumption or states it as a listed guarantee's conclusion"
    }
   }
  },
