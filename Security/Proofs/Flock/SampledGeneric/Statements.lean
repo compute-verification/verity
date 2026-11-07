@@ -40,7 +40,7 @@ open scoped ENNReal
 
 /-- **The sampled audit's knowledge soundness, generic in the proof system** (event form). For a proof system `PS`
 whose extractor's two terms cover acceptance at every sampled proof block incorrect in a trace (`Extractor.Covers`), with
-trials that open the registered commitment (`Trials.Opens`), carry the link term (`Trials.Transfers`) and define the
+trials that open the registered commitment (`Trials.Opens`), carry the binding error (`Trials.Transfers`) and define the
 committed trace `Xc` as a plurality of what they read (`Trials.Plurality`): at every prover `σ` whose link finders satisfy
 ecr/sha-512 (`Trials.CR`), and every event `E` of the committed trace and the sample,
 $$\Pr[\text{accept}\wedge E(X,S)]\le\Pr_S[E(X,S)\wedge S\cap F(X)=\emptyset]+\varepsilon_{\rm ks}(\sigma)

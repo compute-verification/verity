@@ -3,7 +3,7 @@ module
 public import Mathlib.Analysis.MeanInequalities
 
 /-!
-# C-Flock's one-stage audit: lemmas
+# Flock's one-stage audit: lemmas
 
 These are steps of proofs, not guarantees: they sit with the proofs, and no record of the lock pins them.
 
@@ -25,7 +25,7 @@ end FlockSoundness.Audit.Law
 namespace FlockSoundness.Audit.Law
 open scoped ENNReal NNReal
 
-/-- One draw fewer does not meet it under the work bound: `(1 − 1/1000)^27712 > 2^-40`. -/
+/-- One sample fewer does not meet it under the work bound: `(1 − 1/1000)^27712 > 2^-40`. -/
 def _root_.FlockSoundness.Audit.Guarantees.Law.RecordSizingOneFewer : Prop :=
   ¬ ((999 : ℝ≥0∞) / 1000) ^ 27712 ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹
 

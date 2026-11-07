@@ -74,10 +74,10 @@ variable {N : ℕ} (p : FlockSoundness.Prog N n) (outs : Finset (Fin N)) {Reg : 
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **Draft: the headline at the executable.** Let the verifier draw the units as in `Prog.flock_headline` (`Lx`, the
-live stratified draw under A3), and let the live audit `auditLive Lx Reg live`, played by the prover `τ`, refine the
+/-- **Draft: the headline at the executable.** Let the verifier sample the units as in `Prog.flock_headline` (`Lx`, the
+live stratified sample under A3), and let the live audit `auditLive Lx Reg live`, played by the prover `τ`, refine the
 audit with `batchedSession` played by `σ`, up to the live event `bad` (`hRef`). If `σ`'s committed values have at least
-`K` wrong units, then flock-verify accepts with probability at most
+`K` incorrect proof blocks, then flock-verify accepts with probability at most
 `miss(K) + ε_ks + δ_link + Pr[bad]`, the headline's bound at `δ_tree = 0` plus the refinement's event. `pp`, `hConst`,
 `hZero`, `lay`, `rs` and `hHm` are open as in `Prog.flock_headline`; `hRef` is the refinement. For `hm96Rows` statements
 `hRef` needs the salted session in place of `batchedSession` (the module docstring, `flock_headline_exec_L`). -/
@@ -125,7 +125,7 @@ theorem _root_.FlockSoundness.Prog.flock_headline_exec
 
 /-- **Draft: the headline at the executable, for the salted session.** For `hm96Rows` statements the audit flock-verify
 refines is the one with `batchedSessionL H512 enc512 Lp plan`, `Lp` the model's leaf of the statement's leaf scheme. A bound `B` on its acceptance with at least `K`
-wrong units of `σ`'s committed values (`hB`, the headline restated over `Merkle.Leaf`, which is open) carries to
+incorrect proof blocks of `σ`'s committed values (`hB`, the headline restated over `Merkle.Leaf`, which is open) carries to
 flock-verify's acceptance in the live audit, plus the refinement's event. -/
 theorem flock_headline_exec_L {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {L : Law n} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))

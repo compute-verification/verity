@@ -20,7 +20,7 @@ def _module(name: str, **attrs) -> types.ModuleType:
 
 @pytest.fixture
 def JS(monkeypatch):
-    """j10r_so with dither_a, dither_one and h1r stood in: `Refs.receipts` reads only the window, the capture and
+    """j10r_so with dither_a, dither_one and h1r stood in: `Refs.receipts` reads only the execution phase, the capture and
     j10r_units (stood in by each test)."""
     monkeypatch.syspath_prepend(str(DITHER))
     for m in (_module("dither_a"), _module("dither_one", h1v3_itself=None), _module("h1r", H1R=type("H1R", (), {}))):

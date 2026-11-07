@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One staging run on an H200, from build.sh's lib, the weights module, the weights manifest with
+# One load run on an H200, from build.sh's lib, the weights module, the weights manifest with
 # digests memory-accounting held W to, and the store's fixture (its layout JSON, `p2_v1/store.py layout`,
 # and its toy, `p2_v1/store-toy/`); cwd = the source tree's root:
 #

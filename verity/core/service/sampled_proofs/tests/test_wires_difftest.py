@@ -263,7 +263,7 @@ def instances(draw, broken: bool = False):
 
 @st.composite
 def drawn_instances(draw, broken: bool = False):
-    """An instance of `instances` with some units drawn, and public strings for most of their wired rows and writers,
+    """An instance of `instances` with some units sampled, and public strings for most of their wired rows and writers,
     mostly equal, some another string or missing."""
     j = draw(instances())
     del j["queries"]
@@ -357,7 +357,7 @@ def test_an_overlap_is_refused(pieces):
 
 
 def test_the_drawn_check_reads_only_drawn_units(pieces):
-    """The gather with unit 1 drawn: its three wired rows are checked; unit 0's row that is not its writer's is not."""
+    """The gather with unit 1 sampled: its three wired rows are checked; unit 0's row that is not its writer's is not."""
     j = _gather()
     del j["queries"]
     j |= {"drawn": [["A", 1]],

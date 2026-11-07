@@ -68,7 +68,7 @@ request's max_tokens, at most KO.
 * **chain** runs chain_record.sh's network certifier path on the kept fetch (CR_PATH=warden,
   CR_GATES=KEEP/RUN/fetch.tar.gz), with
   the endpoint's report (``--endpoint``, ``endpoint``'s art), or a dry rehearsal's endpoint records (KEEP/RUN/endpoint
-  by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period drawn
+  by default) and the model's EOS ids (``--eos-ids``, the stand-in's ``--vocab``), N2's period sampled
   on the verifier's coins (CR_N2_DRAW 8) and the tie on 8 link-windows (CR_TIE_WINDOWS)
   at CR_MEM_GB 96, unless a CR_K=V says otherwise. The scan proves every unit, or ``--draw K`` of them, on the
   verifier's own coins (``--coins verifier``, the default and the fallback) or on the gate's (``--coins gate``). It is
@@ -83,7 +83,7 @@ session's coins over ssh to that port of P's loopback, where the sample's client
 run's witness are the auditor's, so the sample never runs on the served node, which is the prover's: a ``--coin-peer``
 that is the kept run's peer (its request.json's) or `PEER` is refused. Only P's own line serves P, and a reserve for a
 node with no line is refused: `AUDITOR`'s line is ports 7821-7830 (with its /etc/vy/peers entry), and on
-a node without one the chain draws on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
+a node without one the chain samples on the verifier's coins. ``--main`` is the verifier's copy of main's first-parent
 history, fetched from the tree's origin into KEEP/RUN by default (`first_parent`); ``--challenger-key`` is the
 deployment's challenger-key/v1 record (labelled ``challenger-key current``), sent with the run. CR_SCAN_ARGS and
 CR_SCAN_CMD may not name the scan's coins (``--draw``, ``--challenger``, ``--peer``) themselves.
@@ -506,7 +506,7 @@ def input_file(path: Path, what: str) -> Path:
 
 
 def coin_args(a: argparse.Namespace, fetch: Path) -> list[str]:
-    """The scan's sample arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, drawn on
+    """The scan's sample arguments: none (every unit), ``--draw K`` on the verifier's coins, or K on the gate's, sampled on
     the auditor's side (`--coin-peer`)."""
     if a.coins == "verifier":
         return [] if a.draw is None else ["--draw", str(a.draw)]

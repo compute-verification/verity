@@ -5,9 +5,9 @@ import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Game.Basic
 
 /-!
-# The `--zk` table's bound at C-Flock ZK's parameters (live/PROTOCOL.md §5, §7)
+# The `--zk` table's bound at Flock ZK's parameters (live/PROTOCOL.md §5, §7)
 
-`TabZK.bound` is `padLinkError + (padRepError + εInner)²`. At C-Flock ZK's parameters it is at most `2^-203`
+`TabZK.bound` is `padLinkError + (padRepError + εInner)²`. At Flock ZK's parameters it is at most `2^-203`
 (`TabZK.bound_le_m1`):
 * the padded level 0 at every `m` the verifier serves, `25 ≤ m ≤ 35`: `padLinkError + padRepError² ≤ 2^-205`
   (`padTableError_le_m1`);
@@ -15,12 +15,12 @@ import Proofs.Flock.Soundness.Game.Basic
   `εInner = (N + 3)/|F| + (1 − δ)^168 ≤ 2^-114` (`εInner_le_m1`);
 * `(a + b)² ≤ 2a² + 2b²` puts them together: `2·2^-205 + 2·2^-228 ≤ 2^-203`.
 
-The radius: the pads code `RS[F, dom, L]` with `8L ≤ N` (C-Flock ZK's `N = 8·next_pow2(L)`) has relative unique-decoding
+The radius: the pads code `RS[F, dom, L]` with `8L ≤ N` (Flock ZK's `N = 8·next_pow2(L)`) has relative unique-decoding
 radius `(1 − L/N)/2 ≥ 7/16` (`relUDR_ge_m1`, from ArkLib's `relativeUniqueDecodingRadius_RS_eq`), so `δ = 7/16` meets
 `TabZK.hδ`. The positions: the protocol reduces each query word to `lo(w) mod N` (§5), and for `N = 2^b`, `b ≤ 64`, that
 map meets `TabZK.hpos` (`posLo_uniform`, from `Arith.Correct.lo_balanced`).
 
-`zk_flock_count_execOS_m1`: the `--zk` count curve with every planned table at C-Flock ZK's parameters,
+`zk_flock_count_execOS_m1`: the `--zk` count curve with every planned table at Flock ZK's parameters,
 `miss(K) + 2^-203 + δ_link`.
 -/
 
@@ -86,7 +86,7 @@ theorem relUDR_ge_m1 {N L : ℕ} (dom : Fin N ↪ F) [NeZero L] (h : 8 * L ≤ N
     _ ≤ (1 - (L : ℝ≥0) / N) / 2 := by gcongr
 
 omit [Field F] [DecidableEq F] in
-/-- **The inner proof's error at C-Flock ZK's parameters**: `εInner ≤ 2^-114` over `F` of order `2^128`, with 168
+/-- **The inner proof's error at Flock ZK's parameters**: `εInner ≤ 2^-114` over `F` of order `2^128`, with 168
 queries, `N ≤ 2^13` and `δ ≥ 7/16`. -/
 theorem εInner_le_m1 {N : ℕ} (hF : Fintype.card F = 2 ^ 128) (hN : N ≤ 2 ^ 13) {δ : ℝ≥0} (hδ : 7 / 16 ≤ δ) :
     εInner N F 168 δ ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(114 : ℝ))) := by
@@ -117,14 +117,14 @@ theorem εInner_le_m1 {N : ℕ} (hF : Fintype.card F = 2 ^ 128) (hN : N ≤ 2 ^ 
 
 /-! ## One table -/
 
-/-- A `--zk` table at C-Flock ZK's parameters: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, with C-Flock ZK's
+/-- A `--zk` table at Flock ZK's parameters: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, with Flock ZK's
 padding and two extra lanes on a statement in `fast100`'s range, and the inner proof with 168 queries, `N ≤ 2^13`
 and `δ ≥ 7/16`. -/
 def TabZK.M1 (T : TabZK F mPts) : Prop :=
   ∃ m, 25 ≤ m ∧ m ≤ 35 ∧ T.sch = m1Schedule m ∧ T.t = m1Pad m ∧ T.e = 2 ∧ (T.S.shape mPts).InRange ∧
     T.N ≤ 2 ^ 13 ∧ T.q = 168 ∧ 7 / 16 ≤ T.δ
 
-/-- **A `--zk` table's bound at C-Flock ZK's parameters** is at most `2^-203`. -/
+/-- **A `--zk` table's bound at Flock ZK's parameters** is at most `2^-203`. -/
 theorem TabZK.bound_le_m1 (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts) (hT : T.M1) :
     T.bound ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(203 : ℝ))) := by
   obtain ⟨m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT
@@ -175,7 +175,7 @@ theorem TabZK.bound_le_m1 (hF : Fintype.card F = 2 ^ 128) (T : TabZK F mPts) (hT
           show (203 : ℝ) = ((203 : ℕ) : ℝ) by norm_num, Real.rpow_natCast, Real.rpow_natCast, Real.rpow_natCast]
         norm_num
 
-/-! ## The audit at C-Flock ZK's parameters -/
+/-! ## The audit at Flock ZK's parameters -/
 
 section Audit
 
@@ -188,7 +188,7 @@ theorem ksAvgZK_le {c : ℝ≥0∞} (h : ∀ S R (j : Fin (planZ S R).length), (
     (R : Reg) : ksAvgZK planZ L R ≤ c :=
   (avg_mono fun _ => iSup_le fun j => h _ _ j).trans (avg_const c).le
 
-/-- **The `--zk` count curve at the live draw, every table at C-Flock ZK's parameters**:
+/-- **The `--zk` count curve at the live sample, every table at Flock ZK's parameters**:
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + 2^-203 + δ_link`. -/
 theorem zk_flock_count_execOS_m1 (hA : A.Correct) (hM1 : ∀ S R (j : Fin (planZ S R).length), ((planZ S R).get j).M1)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
