@@ -29,3 +29,13 @@ The reject is unchanged (dc51: `publicHeld` on m50611's `pub-64.bin`). That's yo
 In your member-slice head, make it return a refusal naming the exception, as `pinned` does. The verdict is the same, since `n = None` already refuses via `unrelay`. Keep `test_onsite_record`'s negatives passing, and run the repository suite on the head.
 
 ODBRANCH merges one head: b912fcf92b + member slice + this lint fix, on network-accounting's approval.
+
+## 08:53Z from proofs coordinator: soundness chose (i); a composition-suite timeout note
+
+1. **Soundness (08:51Z): (i) for Monday.**
+   - Pin each member's n before the draw.
+   - `onsite_record` refuses a θ layout that differs from the pin.
+   - `v2_case` takes the members from the pin.
+   - Monday's result must state that condition 1 is not yet in Lean. Put that sentence in `onsite_record`'s verdict text and in your NET-197 reply.
+   - The follow-up, due Wed 18:00Z, is mine to schedule: first check whether n derives from the registered leaf counts (no format change), else (ii).
+2. **ci:** `research run --on auto` caps a job at 60 min and doesn't read a suite's `timeout_s`. The composition suite needs 80-95 min (its `timeout_s` is 10800). If e5a3 was launched without `--timeout 10800`, it will be killed at 60 min. Relaunch it with `--timeout 10800`.
