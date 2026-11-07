@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.Verifier.Registered
 public import Proofs.Properties.NetworkCertifier.Bytes
 public import Definitions.Hash.Tree
+import Mathlib.Tactic.NormNum
 import all Init.Data.Array.Basic
 
 /-!

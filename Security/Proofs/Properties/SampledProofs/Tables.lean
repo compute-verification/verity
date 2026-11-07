@@ -84,9 +84,10 @@ theorem checkBlobsAt_run {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ :
     obtain ⟨t, -, h2⟩ := bind_ok h1
     obtain ⟨-, -, h3⟩ := bind_ok h2
     obtain ⟨-, -, h4⟩ := bind_ok h3
-    obtain ⟨f, -, h5⟩ := bind_ok h4
-    obtain ⟨-, -, h6⟩ := bind_ok h5
-    exact ⟨r, h6⟩
+    obtain ⟨-, -, h5⟩ := bind_ok h4
+    obtain ⟨f, -, h6⟩ := bind_ok h5
+    obtain ⟨-, -, h7⟩ := bind_ok h6
+    exact ⟨r, h7⟩
 
 theorem tablesRegistered : TablesRegistered :=
   ⟨fun _ _ => tablesHeld_ok, fun _ _ _ _ _ _ _ h => (checkBlobsAt_run h).elim fun _ hr => run_tables hr⟩

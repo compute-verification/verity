@@ -1,6 +1,8 @@
 module
 
+public import Flock.Hm96
 public import Flock.HmRow
+public import Randomness
 public import Flock.FV3
 
 /-!
