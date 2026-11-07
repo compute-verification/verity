@@ -133,6 +133,8 @@ def gap(capture: Path, check: dict[str, Any], rank: int | None = None, phi=None)
             "flashinfer_sampler": fi, "engine_had_flashinfer": engine_had_flashinfer(capture),
             "class_g_registered": len(reg), "class_g_passing": sum(reg.values()),
             "gaps": [r for r in out if r["status"] != "covered"], "covered": [r for r in out if r["status"] == "covered"],
+            "needs": [{"route": nd.route, "id": nd.id, "gap": nd.gap, "exists": nd.exists, "blocks": c,
+                       "registered": nd.id in reg, "passes": bool(reg.get(nd.id))} for nd, c in need.most_common()],
             "engine": {k: {"tokens": v, "share": v / max(tokens, 1)} for k, v in facts.most_common()}}
 
 

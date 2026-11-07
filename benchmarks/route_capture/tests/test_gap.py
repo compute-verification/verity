@@ -62,6 +62,8 @@ def test_production_steps_name_each_gap(tmp_path, launches):
     assert rows[("cublas-linear", "no capture")]["owner"] == "kernels"
     assert rows[("prefill-call", "dense-MHA prefill")]["statics"] == "ROWS=2000, KEYS=2000"
     assert rows[("prefill-call", "sparse-MQA prefill")]["statics"].startswith("ROWS=2096..4066")
+    assert sum(n["blocks"] for n in g["needs"]) == g["blocks"] == sum(r["blocks"] for r in g["gaps"] + g["covered"])
+    assert sum(n["blocks"] for n in g["needs"] if n["id"].startswith("radix-topk{")) == radix["blocks"]
     assert rows[("MoeRouterSigmoidBias_v1", "unregistered")]["statics"].endswith("KERNEL='warp'")
     assert rows[("select-random", "unseeded sampling")]["owner"] == "vllm"
     assert rows[("select-top_k", "top-k sampling")]["owner"] == "circuits"

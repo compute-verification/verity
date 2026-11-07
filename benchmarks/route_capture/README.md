@@ -75,7 +75,8 @@ Program for an engine step. A row of the table is one (route, Definition or refu
 capture needed, whether a Definition exists at other statics, its owner (circuits for a Definition, kernels for a kernel
 capture or a deterministic kernel, vllm for serving), its Definition calls a scheduled token on the recording rank, and
 its share of all calls. A second table counts the tokens of steps outside class G's engine (CUDA graphs, padded
-launches, prefix-cache hits, class G's limits).
+launches, prefix-cache hits, class G's limits). The JSON adds `needs`: every Definition or refusal id with its calls on
+the recording rank, whether circuit-check registers it and whether it passes.
 
 The suite (`tests/`) runs the plugin on stand-ins for both model runners and torch's profiler, and `gap.py` on synthetic
 steps.
