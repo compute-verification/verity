@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Select.Take
 public import Proofs.Flock.Bridge.Draw
-public import Proofs.Properties.SampledProofs
+public import Proofs.Core.QSort
 
 @[expose] public section
 
@@ -20,7 +20,7 @@ theorem subset_size {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Dra
   | none => rw [hl] at h; exact absurd h (by simp)
   | some sw =>
     rw [hl, Option.map_some, Option.some.injEq] at h
-    rw [← h, _root_.Properties.SampledProofs.size_qsort, Array.size_map, Array.size_range]
+    rw [← h, Verity.QSort.size_qsort, Array.size_map, Array.size_range]
 
 theorem sum_range'_getElem! {α : Type} [Inhabited α] (St : Array α) (f : α → ℕ) :
     ((List.range' 0 St.size).map fun i => f St[i]!).sum = (St.toList.map f).sum := by
@@ -88,7 +88,7 @@ theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum
     rw [StateT.run_pure] at h
     obtain ⟨h1, _⟩ := Prod.mk.inj (Except.ok.inj h)
     have hD : D = out'.qsort (fun x1 x2 => decide (x1 < x2)) := (Option.some.inj h1).symm
-    rw [hD, _root_.Properties.SampledProofs.size_qsort, hsz, Array.size_empty, Nat.zero_add]
+    rw [hD, Verity.QSort.size_qsort, hsz, Array.size_empty, Nat.zero_add]
     exact sum_range'_getElem! strata (·.k)
 
 /-- **`drawUnits` draws the law's `k`**: a draw from `src` under a law on strata of sizes `ns` with draw `kd` (`LawOn`)
