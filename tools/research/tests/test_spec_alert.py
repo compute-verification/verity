@@ -40,6 +40,21 @@ def test_a_restated_guarantee_shows_its_statement_before_and_after():
     assert "P.t : 1 = 1" in lines[0] and lines[0].index("P.t : 1 = 1") < lines[0].index("after:") < lines[0].index("P.t : 2 = 2")
 
 
+def test_a_restated_definition_a_guarantee_is_stated_as_shows_it_changed():
+    """`theorem G : Guarantees.G` keeps its signature and type hash when `Guarantees.G`'s body is restated; its
+    `unfolded_hash` moves, and the DM shows it changed. A record that gains the hash, or a push with no Lean input changed,
+    shows nothing."""
+    sig = "P.SecurityProofs.G : P.Guarantees.G"
+    was, now = (_doc({"P.SecurityProofs.G": _g(sig, H1) | {"unfolded_hash": u}}) for u in (H2, H3))
+    (line,) = spec.changes(was, now)
+    assert line.startswith("• changed guarantee `P.SecurityProofs.G`: its definition, unfolded once, says something else")
+    assert sig in line
+    assert spec.changes(_doc({"P.SecurityProofs.G": _g(sig, H1)}), now) == []
+    assert [k for _, k, _ in spec._across({"a": was}, {"a": now}, sources=False)] == []
+    (rehashed,) = spec.changes(was, _doc({"P.SecurityProofs.G": _g(sig, H3) | {"unfolded_hash": H2}}))
+    assert rehashed.startswith("• changed guarantee `P.SecurityProofs.G`, before:")
+
+
 def test_new_and_removed_guarantees_are_listed_and_a_move_is_not():
     old = _doc({"P.t": _g("P.t : A", H1), "P.gone": _g("P.gone : B", H2)})
     new = _doc({"Q.t": _g("Q.t : A", H1), "P.new": _g("P.new : C", H3)})
@@ -52,6 +67,23 @@ def test_a_reprint_and_a_rehash_send_nothing():
     assert spec.changes(_doc({"P.t": _g("P.t : A", H1)}), _doc({"P.t": _g("P.t :  A", H1)})) == []
     assert spec.changes(_doc({"P.t": _g("P.t : A", "1234")}), _doc({"P.t": _g("P.t : A", H1)})) == []
     assert spec.changes(_doc({"P.t": _g("P.t : A", "1234")}), _doc({"P.t": _g("P.t : B", H1)})) != []
+
+
+def test_a_guarantee_whose_premises_change_is_shown_and_one_that_first_records_them_is_tallied():
+    """A premise gained or dropped is shown, whichever kind it is; one that only moved between `assumptions` and `open`
+    is no change to what the statement takes, and `reads` holds what it only reads."""
+    def rests(*premises: str, open_: tuple = (), reads: tuple = ()) -> dict:
+        return _doc({"P.t": _g("P.t : A", H1) | {"premises": {"assumptions": list(premises), "open": list(open_),
+                                                             "reads": list(reads)}}})
+    old, new = rests("P.Hyp", "P.Old"), rests("P.Hyp", open_=("P.TapOpens",))
+    assert spec.changes(rests("P.Hyp", "P.Old"), rests("P.Hyp", open_=("P.Old",), reads=("P.Seen",))) == []
+    assert spec.changes(old, new) == ["• guarantee `P.t` rests now also on `P.TapOpens`; no longer on `P.Old`"]
+    assert spec.changes(rests("P.Hyp"), old) == ["• guarantee `P.t` rests now also on `P.Old`"]
+    assert spec.changes(new, new) == [] and spec.changes(new, _doc({"P.t": _g("P.t : A", H1)})) == []
+    entries = spec._across({"a": _doc({"P.t": _g("P.t : A", H1)})}, {"a": new})
+    assert [(k, t) for _, k, t in entries] == [("premised", "")]
+    assert spec._tally(["premises", "premised", "premised", "new"]) == \
+        "guarantees: 1 new, 1 with new premises, 2 premises recorded"
 
 
 def test_a_changed_definition_names_its_module():
@@ -76,8 +108,8 @@ def test_a_lock_that_drops_its_readers_sends_nothing(tmp_path):
 def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or_is_first_recorded():
     """LEAN-60: a premise outside `meaning` has only its own record's digest, so #4641's strengthened
     `RecDeploy.PlainLeavesAdmitted` reached no DM. A changed digest is shown (tallied as rehashed when no Lean input
-    changed), and so is one first recorded; one a `reads` record holds shows as its definition, and a new entry or an
-    unchanged one shows nothing."""
+    changed), and so is one first recorded; one a `reads` record holds shows as its definition, an unchanged one shows
+    nothing, and a new one shows as a named assumption listed."""
     def doc(assumed: dict, defs: dict | None = None) -> dict:
         return _doc({"P.t": _g("P.t : A", H1)}, defs) | {"assumptions": assumed}
     old = doc({"P.Leaves": {"owner": "@proofs", "digest": H1}, "P.Bare": {"owner": "@proofs"}, "P.Hyp": {"digest": H1}},
@@ -85,14 +117,62 @@ def test_an_assumption_no_reads_record_holds_is_shown_when_its_digest_changes_or
     new = doc({"P.Leaves": {"owner": "@proofs", "digest": H2}, "P.Bare": {"owner": "@proofs", "digest": H3},
                "P.Hyp": {"digest": H2}, "P.New": {"digest": H3}}, {"P.Hyp": H2})
     assert spec.changes(old, new) == [
+        "• named assumption `P.New` listed",
         "• definition `P.Hyp` (`P.Defs`) changed",
         "• assumption `P.Bare` recorded: its statement and the definitions it reads are now digested in its record",
         "• assumption `P.Leaves` changed: its statement or a definition it reads"]
     assert spec.changes(new, new) == []
     entries = spec._across({"lean-audit.json": old}, {"lean-audit.json": new}, sources=False)
-    assert [k for _, k, _ in entries] == ["rehashed", "recorded", "rehashed"]
+    assert [k for _, k, _ in entries] == ["assumed", "rehashed", "recorded", "rehashed"]
     assert spec._tally([k for _, k, _ in spec._across({"a": old}, {"a": new})]) == \
-        "definitions: 1 changed; assumptions: 1 changed, 1 recorded"
+        "definitions: 1 changed; premises: 1 changed, 1 recorded, 1 named"
+
+
+def test_the_named_assumptions_and_the_open_premises_are_shown_as_they_change():
+    """The lock's real assumptions are the few under `assumptions`, so one named, one no longer named and an open premise
+    that becomes one are shown; an open premise listed, discharged or re-ticketed is shown, and the named assumptions an
+    update first moves to `open` are tallied."""
+    def doc(assumed: dict, opened: dict) -> dict:
+        return _doc({"P.t": _g("P.t : A", H1)}) | {"assumptions": assumed, "open": opened}
+    ticket = {"owner": "@proofs", "issue": "PROOFS-1", "due": "2026-11-30"}
+    old = doc({"P.Coll": {"owner": "@lean"}, "P.Gone": {"owner": "@lean"}, "P.Moved": {"owner": "@lean"}},
+              {"P.Real": ticket, "P.Done": ticket, "P.Late": ticket})
+    new = doc({"P.Coll": {"owner": "@lean"}, "P.Real": {"owner": "@lean"}, "P.Hash": {"owner": "@lean"}},
+              {"P.Moved": ticket, "P.Late": ticket | {"due": "2026-12-31"}, "P.Tap": ticket})
+    assert spec.changes(old, new) == [
+        "• named assumption `P.Hash` listed",
+        "• open premise `P.Late`: PROOFS-1, due 2026-12-31 (was PROOFS-1, due 2026-11-30)",
+        "• named assumption `P.Real` listed (was open: PROOFS-1, due 2026-11-30)",
+        "• open premise `P.Tap` listed (PROOFS-1, due 2026-11-30)",
+        "• open premise `P.Done` discharged: no longer listed (PROOFS-1, due 2026-11-30)",
+        "• named assumption `P.Gone` no longer listed"]
+    assert spec._tally([k for _, k, _ in spec._across({"a": old}, {"a": new})]) == \
+        "premises: 2 named, 1 no longer named, 1 open listed, 1 now open, 1 discharged, 1 re-ticketed"
+    assert spec.changes(new, new) == []
+    read = _doc({"P.t": _g("P.t : A", H1)}, {"P.Gone": H2}) | {"assumptions": {}, "open": new["open"]}
+    assert spec.changes(new | {"assumptions": {"P.Gone": {"owner": "@lean"}}}, read) == [
+        "• named assumption `P.Gone` no longer listed: statements only read it, and its `reads` record holds it"]
+
+
+def test_a_domain_hypothesis_is_shown_with_what_it_restricts_as_it_is_listed_moved_or_restated():
+    """A domain hypothesis owes no issue, so each one listed, each premise that moves in or out of `domain`, and a new
+    `why` are shown with what it restricts."""
+    def doc(**sections) -> dict:
+        return _doc({"P.t": _g("P.t : A", H1)}) | sections
+    ticket = {"owner": "@proofs", "issue": "PROOFS-1", "due": "2026-11-30"}
+    scope = {"owner": "@proofs", "why": "the circuits the bound is over"}
+    old = doc(open={"P.Scope": ticket, "P.Kept": ticket}, domain={"P.Event": scope, "P.Back": scope, "P.Gone": scope})
+    new = doc(open={"P.Kept": ticket, "P.Back": ticket},
+              domain={"P.Scope": scope, "P.Event": scope | {"why": "the runs that accepted"},
+                      "P.Below": scope | {"why": "the layer below's guarantee", "cites": "P.u"}})
+    assert spec.changes(old, new) == [
+        "• open premise `P.Back` listed (PROOFS-1, due 2026-11-30) (was a domain hypothesis: the circuits the bound is over)",
+        "• domain hypothesis `P.Below` listed: the layer below's guarantee, citing `P.u`",
+        "• domain hypothesis `P.Event`: the runs that accepted (was the circuits the bound is over)",
+        "• domain hypothesis `P.Scope` listed: the circuits the bound is over (was open: PROOFS-1, due 2026-11-30)",
+        "• domain hypothesis `P.Gone` no longer listed (the circuits the bound is over)"]
+    assert spec._tally([k for _, k, _ in spec._across({"a": old}, {"a": new})]) == \
+        "premises: 2 domain listed, 1 domain dropped, 1 domain restated, 1 open listed"
 
 
 def test_an_entry_added_to_the_frozen_shape_list_is_shown_with_its_reason_and_one_removed_is_not():

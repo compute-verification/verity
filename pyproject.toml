@@ -82,7 +82,6 @@ untraced = [
     "tests/lint/test_repo_lane_text.py",
     "tests/lint/test_repo_ruff.py",
     "tests/lint/test_repo_silent_excepts.py",
-    "tests/test_agent_guard_boot.py",
     "tests/test_agent_guard_hook.py",
     "tests/test_benchmarks_index.py",
     "tests/test_boundaries.py",
@@ -90,8 +89,11 @@ untraced = [
     "tests/test_doc_paths.py",
     "tests/test_domains.py",
     "tests/test_examples.py",
+    "tests/test_flock_json.py",
     "tests/test_gate_paths.py",
     "tests/test_glossary_lean_names.py",
+    "tests/test_infra_paths.py",
+    "tests/test_lean_packages.py",
     "tests/test_lean_vocabulary.py",
     "tests/test_module_strings.py",
     "tests/test_no_wall_clock.py",
@@ -103,11 +105,9 @@ untraced = [
     "tests/test_repository.py",
     "tests/test_retired_terms.py",
     "tests/test_seed_ports.py",
-    "tests/test_shell_hook.py",
     "tests/test_verifier_cost.py",
     "tests/test_vllm_public_api.py",
 ]
 inputs = [".", "AGENTS.md"]   # its lints read the docs: a listed `.md` keys its Markdown too (`suites.markdown`)
 testpaths = ["tests", "tools/research/tests", "infra/ops/tests", "benchmarks/native_peak/tests", "verity/tests", "benchmarks/numerical/tests", "verity/ml/flock/tests", "tools/verity/circuit_check/tests", "tools/verity/lean/tests", "verity/core/protocols", "verity/ml/circuits/ops/tests", "benchmarks/pouw/tests"]
-markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`",
-           "circuit_suite: one circuit-check target per test (tools/verity/circuit_check); `check` runs these as `circuit-check --all`"]
+markers = ["slow: full rechecks that take minutes (bench-instances full recheck); opt in with `--slow`"]

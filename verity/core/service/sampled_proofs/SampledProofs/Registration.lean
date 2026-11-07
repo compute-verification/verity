@@ -31,6 +31,11 @@ A verifier bound to a stream and a prover (`binding`: its stream's digest and th
 holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them, so a tile seeded
 for one prover's stream is refused in any other's.
 
+A verifier that reads the registration log's declarations (`declared`: the window's day and the log's `(day, program)`
+declarations) holds R2's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
+declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
+day's.
+
 A value that is an output of an earlier run (`outputs`; never NCI's baseline θ, which holds registered public data only)
 reuses that run's commitment: its entry has the domain and root of the port in the `roots` of the log's record with that
 digest, whose leaf count must be the value's rows (`R7-output` otherwise). One may instead reuse an earlier record's
@@ -114,6 +119,23 @@ structure Verifier where
   windowRoot : Option String := none
   /-- of `registered`, values it holds across windows, whose domain leaves `windowRoot` out -/
   held : Array String := #[]
+  /-- the window's day and the registration log's declarations as `(day, program)` each, from the log it holds when it
+  draws; none when it reads no declarations -/
+  declared : Option (Nat × Array (Nat × String)) := none
+
+/-- The programs the declarations declare for `day`, in the log's order. -/
+def declaredOf (day : Nat) (ds : Array (Nat × String)) : List String :=
+  (ds.filter (·.1 == day)).toList.map (·.2)
+
+/-- R2's declared day (`registration._declared`): `R2-undeclared` when the window's day has no declaration,
+`R2-declared-twice` when it has more than one, `R2-declared` when the record's `program` is not the day's declared one,
+and none when it is or the verifier reads no declarations. -/
+def declaredCode (program : Json) : Option (Nat × Array (Nat × String)) → Option String
+  | none => none
+  | some (day, ds) => match declaredOf day ds with
+    | [] => some "R2-undeclared"
+    | [p] => if jeq program (Json.str p) then none else some "R2-declared"
+    | _ => some "R2-declared-twice"
 
 private def optStr : Option String → Json
   | some s => Json.str s
@@ -324,6 +346,8 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   match Partition.units v.program v.query with
   | .error _ => c := addCode c "R2-query"
   | .ok population => if !jeq (get "population") (Lean.toJson population) then c := addCode c "R2-population"
+  if (declaredCode (get "program") v.declared).isSome then
+    c := addCode c ((declaredCode (get "program") v.declared).getD "")
   -- R3
   if !jeq (get "scheme") v.scheme then c := addCode c "R3-scheme"
   let roots := match get "roots" with | .arr rs => rs | _ => #[]
@@ -388,6 +412,8 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   match Partition.units v.program v.query with
   | .error _ => c := addCode c "R2-query"
   | .ok population => if !jeq (get "population") (Lean.toJson population) then c := addCode c "R2-population"
+  if (declaredCode (get "program") v.declared).isSome then
+    c := addCode c ((declaredCode (get "program") v.declared).getD "")
   -- R3
   if !jeq (get "scheme") v.scheme then c := addCode c "R3-scheme"
   let roots := match get "roots" with | .arr rs => rs | _ => #[]

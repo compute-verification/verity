@@ -1,8 +1,8 @@
 module
 
 public import Definitions.Nci.Assumptions.Cover
-public import Definitions.Nci.Guarantees.CoverFanOut
 public import Definitions.Nci.CoverFanOutValue
+public import Definitions.Nci.Assumptions.CoverFanOut
 
 /-!
 # The cover theorem's fan-out tightening: the read tier from wiring

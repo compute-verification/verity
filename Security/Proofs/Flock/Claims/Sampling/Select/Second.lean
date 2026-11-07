@@ -7,6 +7,10 @@ public import Properties.SampledProofs.Second
 import all SampledProofs.Draw
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+import Mathlib.Data.List.GetD
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Sampling.Select.Bounds
+import Proofs.Flock.Claims.Sampling.Select.Take
 
 /-!
 # The second stage misses proof blocks no more often than the replay blocks' escapes (`SecondMisses`)

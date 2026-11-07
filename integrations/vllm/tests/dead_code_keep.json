@@ -25,6 +25,10 @@
   "verity_vllm.program.quarantine.act": "re-exports registry.act's SiluMul_v2 (promoted) for the properties-admission adapter",
   "verity_vllm.program.quarantine.act.silu_mul": "see quarantine.act; silu_mul_difftest.spec imports it",
   "verity_vllm.program.quarantine.act.silu_mul_difftest": "properties-admission adapter of SiluMul_v2, loaded by --adapter name",
-  "verity_vllm.program.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py"
+  "verity_vllm.program.quarantine.dense.softcap": "re-exports registry.dense's AttentionSoftcap_v1 (promoted) with its quarantine SEMANTIC_ID; tests/engine/test_gen_dense_softcap.py",
+  "verity_vllm.query.query_artifact": "writes the query and query-use documents G8 reads; its one caller, lifted_records' lifted_vu_use_document, went with the VU validators. It goes with tests/query/test_query_artifact.py once #5652, which edits both, is on main",
+  "verity_vllm.commit.merkle": "vllm-v1's position-leaf folds (fold_path, path_shape), read by tests/commit/test_production_vectors.py's pinned vectors and tests/program/padded_commit_tiny.py; no committer folds by them now that it commits rows-sha512 only",
+  "verity_vllm.commit.hashing": "vllm-v1's leaf and node hashes under verity_vllm.commit.merkle; see verity_vllm.commit.merkle",
+  "verity_vllm.commit.leaf_rule": "the native host committer's former leaf rule (vllm-v1 or hm96 leaves), which no committer mixes in now that it commits rows-sha512 only; it is deleted once the prose edit to it that next holds lands on main"
  }
 }

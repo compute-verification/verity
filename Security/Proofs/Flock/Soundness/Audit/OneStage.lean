@@ -1,8 +1,14 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Prob
-public import Proofs.Flock.Soundness.Audit.Law
+public import Definitions.Flock.Audit.Law
+public import Definitions.Flock.Circuit
+public import Definitions.Flock.Game.Prob
 public import Proofs.Flock.Soundness.Audit.Circuit
+public import Proofs.Flock.Soundness.Audit.Law
+public import Proofs.Flock.Soundness.Game.Prob
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # The one-stage audit and its integrity profile

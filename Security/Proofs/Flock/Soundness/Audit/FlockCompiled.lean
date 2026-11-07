@@ -1,9 +1,15 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Extraction
-public import Proofs.Flock.Soundness.Audit.Flock
 public import Proofs.Flock.Soundness.Knowledge
-public import Proofs.Flock.Soundness.Lowering
+public import Definitions.Flock.Lowering
+public import Proofs.Flock.Soundness.Game.Basic
+public import Proofs.Flock.Soundness.Instance
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # The Flock audit at the compiled layer, one table: `ε_ks` from `table_knowledge_sound_joint_tight`
@@ -31,7 +37,8 @@ wrong drawn unit, pointwise in the reruns) follows from **the lowering** (`Lower
 a message packing a witness that satisfies the table's statement decodes, for each drawn unit, to
 values on which that unit is correct. `loweringSoundC_of_place` discharges it from each drawn
 unit's place in the table (`UnitPlace`, `Lowering.lean`), where the audit's circuit `C` is the rows
-the verifier parses; what a correct unit computes is its certificate's (`IsRowsUnit.computes_of_cert`).
+the verifier parses; what a correct unit computes beyond its rows is outside it (rows derived from a gate circuit
+carry its outputs, `GateRows.rows_sound`; `ASSUMPTIONS.md`, The circuit and the certificate).
 
 **The discharge** (`flock_compiled_knowledgeSound`): the audit's knowledge term is the table
 theorem's bound for the prover's strategy after each draw, averaged over the draw,

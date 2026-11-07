@@ -29,7 +29,7 @@
     "PouwCheck.Json",
     "PouwCheck.Tile",
     "PouwWindow.Length",
-    "Identity.Domains"
+    "Randomness.Domains"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
@@ -43,18 +43,18 @@
     "PouwWindow.Length",
     "PouwCheck.Inputs",
     "PouwCheck.WindowSalt",
-    "Identity.Domains"
+    "Randomness.Domains"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.Opening": {
-   "imports": ["PouwCheck.Inputs", "PouwCheck.Pass", "PouwWindow.Record", "PouwWindow.Side", "Identity.Domains"],
+   "imports": ["PouwCheck.Inputs", "PouwCheck.Pass", "PouwWindow.Record", "PouwWindow.Side", "Randomness.Domains"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.Protocol": {
-   "imports": ["CoreProtocol.Cli", "PouwCheck.Check", "Identity.Domains"],
+   "imports": ["CoreProtocol.Cli", "PouwCheck.Check", "Randomness.Domains"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
@@ -66,20 +66,21 @@
     "PouwCheck.Inputs",
     "SampledProofs.ChallengerRecord",
     "SampledProofs.ChallengerSession",
-    "Identity.Domains"
+    "Randomness.Domains"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.WindowSalt": {
-   "imports": ["PouwCheck.Pass", "Identity.Domains"],
+   "imports": ["PouwCheck.Pass", "Randomness.Domains"],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"
   },
   "PouwCheck.Credit": {
    "imports": [
     "Std.Data.HashMap",
-    "Flock.Keccak",
+    "Flock.Bytes",
+    "Flock.Hash",
     "Flock.Program",
     "Flock.RegKnown",
     "PouwCommit.Frame",
@@ -94,7 +95,7 @@
     "SampledProofs.ChallengerSession",
     "SampledProofs.PyJson",
     "SampledProofs.Registered",
-    "Identity.Domains"
+    "Randomness.Domains"
    ],
    "except": [],
    "why": "the program is code: Lean core only, no Mathlib and nothing of Security (Daniel's layout ruling, 5 Oct)"

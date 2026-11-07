@@ -1,13 +1,27 @@
 module
 
-public import Proofs.Flock.C3.HoloValues.Reps
-public import Proofs.Flock.C3.HoloValues.Shape
-public import Proofs.Flock.C3.HoloValues.ZcLc
 public import Proofs.Flock.C3.Compose.Honest
 public import Proofs.Flock.C3.Compose.Plays
-public import Proofs.Flock.Soundness.Refine.Paths
-public import Proofs.Flock.Soundness.Refine.Seam
-public import Proofs.Flock.Soundness.Refine.Table
+public import Proofs.Flock.C3.HoloValues.Reps
+public import Proofs.Flock.C3.HoloValues.ZcLc
+public import Proofs.Flock.Soundness.Refine.HoloRepConverse
+public import Proofs.Flock.VBridge.Runs.ZcLc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.HoloValues.Shape
+import Proofs.Flock.Soundness.Refine.HoloRefines
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # n2's read fact: each rep's accepting run from the tape

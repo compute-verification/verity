@@ -1,8 +1,6 @@
 module
 
-public import CoreProtocol.Cli
 public import PouwCheck.Check
-public import Identity.Domains
 
 /-!
 # PoUW's window check as a `Core.Protocol`
@@ -32,7 +30,7 @@ def protocol : Core.Protocol where
   profileJson := Core.Integrity.toJson
 
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
-written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+written: tied here to its entry of the table (`Randomness.Domains`), it reads the entry at its next record change. -/
 example : protocol.id = Domains.POUW_PROTOCOL := rfl
 
 end PouwCheck

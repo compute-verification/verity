@@ -1,8 +1,11 @@
 module
 
-public import Proofs.Core.Game.Batch
 public import Definitions.Flock.Game.Batch
+public import Proofs.Core.Game.Batch
 public import Proofs.Flock.Soundness.Game.Lock
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
 
 /-!
 # C-Flock's game library is Core's: `Batch`

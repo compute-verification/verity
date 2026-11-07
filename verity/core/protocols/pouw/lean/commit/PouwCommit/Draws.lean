@@ -1,8 +1,7 @@
 module
 
-public import Randomness
 public import PouwCommit.Coins
-public import Identity.Domains
+public import Randomness.Domains
 
 /-!
 # The salts and draws PoUW derives (`verity.core.protocols.pouw.audit`; the clear audit's draws, `benchmarks/pouw/clear`)
@@ -116,7 +115,7 @@ def pearlDraw (key : ByteArray) (tickets : List Nat) (t : Nat) : Except String (
   pure (ids.map fun i => (tk.getD i (0, 0)).2)
 
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
-written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+written: tied here to its entry of the table (`Randomness.Domains`), it reads the entry at its next record change. -/
 example : SALT_DOMAIN = Domains.POUW_UNVERIFIED_SALT := rfl
 example : EPOCH_SALT_DOMAIN = Domains.POUW_EPOCH_SALT := rfl
 
