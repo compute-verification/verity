@@ -42,7 +42,7 @@ from pathlib import Path
 MANIFEST = "verity-vllm/served-window-programs/v1"
 #: the engine args the registration carries from the run's engine: the ones class G states (`engine_classes.CLASS_G_LIMITS`, the
 #: prefix cache), none of which a request Program reads
-REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "enable_prefix_caching")
+REGISTERED_ENGINE = ("max_num_batched_tokens", "max_model_len", "long_prefill_token_threshold", "max_num_seqs", "enable_prefix_caching")
 
 
 def served_inputs(run: Path, window: int) -> tuple[Path, dict, dict, dict]:

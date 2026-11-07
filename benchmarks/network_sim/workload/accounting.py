@@ -141,7 +141,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--rate", type=float, default=1e9, help="each GPU's declared rate for each kind of work")
     ap.add_argument("--extra-frame", action="store_true", help="add one covert frame on b0's uplink")
     ap.add_argument("--assume", action="append", default=[], choices=sorted(PREMISES),
-                    help="a named premise for `account`")
+                    help="an assumption for `account`")
     args = ap.parse_args(argv)
 
     spec = ({"d": args.d, "layers": args.layers, "requests": args.requests, "groups": args.groups}
