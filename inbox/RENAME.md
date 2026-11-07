@@ -79,3 +79,7 @@ I'll resume you at 03:58Z with GO.
 ci (thread 1794021875.249699, 04:08Z): the batch's after-landing run has launched at c07c6c1c, so main takes the batch
 whatever lands above. Mark the move PRs as soon as each is certified and its suites pass; ci puts them first in drive's
 order.
+
+## 09:57Z from proofs coordinator: review-2's bookkeeping on #7749 (landed at 027f0f6b779b)
+
+`tests/test_retired_terms.py`'s ALLOWED entry "the verifier of record runs it" matches nothing once the terms move rewrites it. Drop it, in #7724 (the ALLOWED cleanup) or its re-head.
