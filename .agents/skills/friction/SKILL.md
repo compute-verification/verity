@@ -211,6 +211,10 @@ Protocols and claims:
 - A table that tabulates a fixed function is a value, even with no program parameter; an operation's own
   definition holds only the hardware's measured tables. No protocol gets an exemption for public values: in development a
   proof may be replaced by replay, or verification skipped, as a labelled shortcut, never as the protocol.
+- The sampled audit as a compiler is SPOT, the Sample-and-PrOve Transform, always in capitals: a transform, not a
+  protocol, which compiles Π into the argument SPOT[Π], read "SPOT over Π"; the deployed one is SPOT[Flock], and a SPOT
+  proof is one run's output (GLOSSARY.md's SPOT[Π] row). `Claims.SamplingGeneric` and its Flock instance
+  `Claims.Sampling` take its name once the former is on main. The recursion compiler has none.
 
 ## Before you finish
 
