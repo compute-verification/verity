@@ -25,6 +25,10 @@ from levers import (MACHINE_GPUS, WEIGHTS, bound, floor_bits, fuse_reads, make_l
 from common import SCOPES, c, sc, tc  # noqa: E402
 
 REPORT = (0.01, 0.05, 0.10)
+#: each cut's prover busy time against its end-to-end reading on the same sessions, (marginal, fixed a statement): the
+#: per-expert cut's 3.29e8 of 5.53e8 marginal and 3.95e8 of 1.70e9 at full statements, the registered cut's 1.3e10 of
+#: 1.4e10 and 2.4e10 of 1.3e11; the fixed ratio is (full - marginal) busy over (full - marginal) end to end
+BUSY = {"per_expert": (3.29 / 5.53, (3.95 - 3.29) / (17.0 - 5.53)), "tokens": (1.3 / 1.4, (2.4 - 1.3) / (13.0 - 1.4))}
 #: GLM-5.3's serve taxes from the serve_tax card, and their parts: the certified tick, the edge snapshot, the top-k
 TAXES = tc.taxes(tc.spot_cards.load("serve_tax", "GLM-5.3"), ("tokens", "per_expert"))
 PARTS = {p["part"]: p["share"] for p in TAXES["tokens"]["parts"]}
@@ -46,6 +50,7 @@ class Case:
     replay: float | None = None
     edge_s: float | None = None
     live: bool = False
+    busy: bool = False
     labels: tuple[str, ...] = field(default_factory=tuple)
 
     def tax(self) -> float:
@@ -57,11 +62,12 @@ class Case:
 
 def build(case: Case):
     strata = None
-    if case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0:
+    if case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0 or case.busy:
         strata = priced_strata(case.line)
         if case.fuse:
             strata = fuse_reads(strata, fixed="sum" if case.fixed_sum else "read")
-        strata = scale_proving(strata, marginal=case.marginal, fixed=case.fixed, cap=case.cap)
+        bm, bf = BUSY[case.line] if case.busy else (1.0, 1.0)
+        strata = scale_proving(strata, marginal=case.marginal * bm, fixed=case.fixed * bf, cap=case.cap)
     return make_line(case.line, strata, replay_gpu_s=case.replay, registration=case.registration)
 
 
@@ -187,6 +193,23 @@ def cases() -> dict[str, Case]:
     }
     for name, kw in a_combos.items():
         out[name] = Case(**{**bases["A"].__dict__, **kw})
+    busy = {
+        "P-busy": ("P", {}), "A-busy": ("A", {}), "F-busy": ("F", {}),
+        "F+busy+fast2": ("F", dict(scale=0.5)), "F+busy+fast4": ("F", dict(scale=0.25)),
+        "F+busy+hash2": ("F", dict(marginal=hash2)), "F+busy+hash4": ("F", dict(marginal=hash4)),
+        "F+busy+fast2+hash2": ("F", dict(scale=0.5, marginal=hash2)),
+        "F+busy+fast2+hash4": ("F", dict(scale=0.5, marginal=hash4)),
+        "F+busy+fast4+hash4": ("F", dict(scale=0.25, marginal=hash4)),
+        "F+busy+live10": ("F", dict(**live10)),
+        "F+busy+fast2+live10": ("F", dict(scale=0.5, **live10)),
+        "F+busy+fast2+hash4+live10": ("F", dict(scale=0.5, marginal=hash4, **live10)),
+        "F+busy+fast4+hash4+live10": ("F", dict(scale=0.25, marginal=hash4, **live10)),
+        "A+busy+fast4": ("A", dict(scale=0.25)),
+        "A+busy+fast4+hash4": ("A", dict(scale=0.25, marginal=hash4)),
+        "A+busy+fast4+hash4+live10": ("A", dict(scale=0.25, marginal=hash4, **live10)),
+    }
+    for name, (b, kw) in busy.items():
+        out[name] = Case(**{**bases[b].__dict__, "busy": True, **kw})
     return out
 
 
