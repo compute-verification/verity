@@ -4,6 +4,7 @@
 # flock-verify, the venv, kept under SP_CACHE), the sampled-proofs verifier, and the audit.
 #   SP_MODE=build bash benchmarks/spot_proved/run_audit.sh                       # the builds only
 #   SP_MODE=audit SP_VALUES=DIR SP_ARGS="--per-kind 2 --tamper none" bash benchmarks/spot_proved/run_audit.sh
+#   (SP_VALUES may be a .tar.gz of one such directory, e.g. sent with --send: "$RESEARCH_RUN_DIR/inputs/values.tar.gz")
 set -uo pipefail
 for t in rustup elan uv; do
   case $t in
@@ -22,6 +23,10 @@ setup
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 [ "${SP_MODE:?}" = build ] && { log "spot: builds done"; exit 0; }
 S=${SP_VALUES:?}
+case $S in
+  *.tar.gz) mkdir -p "$W/values" && tar -xzf "$S" -C "$W/values" || exit 2
+            S=$(dirname "$(find "$W/values" -name values.json | head -1)") ;;
+esac
 log "spot: audit of $S ($(du -sh "$S" | cut -f1))"
 # shellcheck disable=SC2086
 "$PY" benchmarks/spot_proved/audit.py --bin "$BIN" --lean "$LEAN" --load-values "$S" --kinds "$S/kinds.json" --out "$W/a11" \
