@@ -517,6 +517,18 @@ theorem sessionOpensBy_mono {H : Msg → Msg} {D : Deploy Coin Col T} {iroots : 
   obtain ⟨b, hb, hc⟩ := h x s Pt Ω P ω r u xS vS wF hx hp hsc hacc hu hs hw
   exact ⟨b, hb, fun val ι hq => hOk _ _ _ _ (hc val ι hq)⟩
 
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
+/-- **`SessionOpensBy` at two checks is `SessionOpensBy` at both**: each names the unit's proof block
+`Pt.blocks[u]?`. -/
+theorem sessionOpensBy_and {H : Msg → Msg} {D : Deploy Coin Col T} {iroots : Msg → Seen → ℕ → List Msg}
+    {Ok₁ Ok₂ : BlockCheck} (h₁ : SessionOpensBy H D iroots Ok₁) (h₂ : SessionOpensBy H D iroots Ok₂) :
+    SessionOpensBy H D iroots fun s u val ι => Ok₁ s u val ι ∧ Ok₂ s u val ι := by
+  intro x s Pt Ω P ω r u xS vS wF hx hp hsc hacc hu hs hw
+  obtain ⟨b, hb, hc₁⟩ := h₁ x s Pt Ω P ω r u xS vS wF hx hp hsc hacc hu hs hw
+  obtain ⟨b', hb', hc₂⟩ := h₂ x s Pt Ω P ω r u xS vS wF hx hp hsc hacc hu hs hw
+  obtain rfl : b = b' := Option.some.inj (hb.symm.trans hb')
+  exact ⟨b, hb, fun val ι hq => ⟨hc₁ val ι hq, hc₂ val ι hq⟩⟩
+
 /-! ### Sessions that cover several checked units -/
 
 /-- **The slots' sessions are every checked unit's**: at coins `r`, every checked unit has the rounds and the session of
