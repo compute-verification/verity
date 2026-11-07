@@ -1128,3 +1128,33 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     A, B and C don't depend on each other. After the PR, I start B unless you say otherwise.
   - **P1 is soundness, not completeness.** It holds for every witness, so circuit-check can't establish it, and
     AGENTS.md's completeness rule doesn't waive it.
+
+- 20:06Z (ZKTWO) **Two-stage ZK is proved on a branch, no sorry; a blocker in SPOTIFACE's `RefinesTwo`; plan for the
+  ComposesTwo-shaped corollary.**
+  - **Done:** `cursor/proofs-zktwo-316a` @ `a1c075e106`. Generic `Flock.Guarantees.SampledAuditTwoAny` with honest
+    and nontrivial witnesses (try r20261107-193404-00a9, lean exit 0), the sessions form `sampledAuditTwo_zkOut`, and
+    the deployed `Flock.Guarantees.SampledAuditTwoAnyDeployed` at L13's `SessionLoopZKAnyDeployed`
+    (r20261107-193544-7875, lean exit 0 in 1076 s). Since 86b69ed3ba the interior registration's layout may differ
+    from the boundary's: the commitment reads the values' public layout, and the dummy values are functions of the
+    first-stage sample with the same layout.
+  - **Blocker (L3), for SPOTIFACE:** `RefinesTwo.zkSessions` can't give the deployed two-stage prover's ZK.
+    `ZkSessions` (`routed`, and `honest` at every witness), like the record's `Code.step : Msg → List (Msg × Msg) →
+    Reference.Step` (`say m` or a session), makes every prover message outside a session a function of the statement
+    and the history. The two-stage interior registration commits the sampled replay blocks' interiors under the ZK
+    server's salts, so it reads the witness and the tape. At a two-stage statement, either `zkSessions` (and
+    `refines`) is false, or `Z`'s reference prover never registers an interior, and then `Z.ZK` covers a prover that
+    isn't the deployed one. Proposal: drop `Z` and `zkSessions` from `RefinesTwo`/`ComposesTwo`, and take two-stage ZK
+    from a view that includes the registrations (mine).
+  - **Plan, by about 22:00Z on the branch:** `sampledAuditTwo_zkArg`, which is L2's two-stage ZK at L1's export.
+    It takes `A.ZK H` (`Exports.zk`, unchanged; `sampledAuditTwo_zkOut` already consumes `ZKOut`) and the two-stage
+    audit's ZK contract as a structure. The contract covers: registrations through the ZK server's value service
+    under its own user (`ZkServerOwnUser`); sampled sessions at `A.P` with statement and witness in `A.R`; `A.kz`
+    rounds; errors within `εS`; the simulator's coins; and hiding `δ` from `ideal_hm96_stream`. `ComposesTwo` can then
+    conclude `L.KS H ∧ L.Exfil H ∧` that bound.
+  - **Parts a helper can take:** (a) L3: give the reference prover's framing a registration step that reads the
+    witness and the tape, so the deployed two-stage run's view is the view my contract reads. This is
+    TSVERIFY's/SPOTIFACE's ground, and the open premise until then. (b) Listing: move `Tup`, `Sessions` and `recOf`
+    (with my `streamRecOf` and `recTwoOf`) into Definitions so `SampledAuditTwoAny(Deployed)` can be listed (ZKLIST,
+    or with ZKSTACK's (a)). (c) Mine, after #7447's restack: the honest-session-loop corollary and the deployed
+    witnesses. I'll restack onto #7354's new head when ZKSTACK pushes it.
+  - **Ask:** the Linear issue key for my PR.
