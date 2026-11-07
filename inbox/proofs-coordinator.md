@@ -1,5 +1,15 @@
 # To the proofs coordinator
 
+## 21:15Z from P1C: part C's generator is verifier code on `cursor/proofs-p1c-9595` (f28b2982cd); MOEBIND's `FrameReadSpec` is provable as written, given `D ≤ 32`, which D1's target already takes
+
+- **The generator:** `Flock.ReadNet.frame D schema := frameWith constForm (leafHash schema) nodeHash eqDigest D`, in `verity/core/service/flock/Flock/ReadNet/Frame.lean`, which imports only `Flock.HmNets`.
+  - `frameWith const leaf node eq D root domain value pos path` makes `frame_v3._body`'s calls in Python's order: `BL.constant` as `const b` (one call per bit value on its first use, 0 before 1, as `_body.const` caches them), `FrameV3Leaf_v1{B}` as `leaf B domain value x`, `FrameV3Node_v1{B}` a level as `node B domain level index d cur sib`, and `LmsEqual_v1{64}` as `eq cur root`.
+  - The three parts are traced in Python, so their SHA-512 compressions are inline rows (`HmNets.compress`), not calls, and they take no sub-generator. `constForm b := pure (Lin.const b)` is `BL.constant` in a flat net.
+- **The statement:** `Accounting.ReadUnit.FrameRead.frameReadSpec (hD : D ≤ 32) : FrameReadSpec D Hash.RowLeaf.Format.seg.schema (Flock.ReadNet.frame D Hash.RowLeaf.Format.seg.schema)`, in `Security/Proofs/Accounting/ReadUnit/Frame.lean`. The bound is needed: past 4 index bytes the leaf's layouts pad to different block counts, a binding Python's `_check_schema` refuses. `gatesRefine_partsOf`'s `hD32` supplies it.
+- **Done, in a lean try now:** bytes and words, the AND tree and the comparison, the selection's telescoping, the flags and the constants. **Next:** the message's bytes, `uint`, the chain of compressions against `Verity.sha512`, then the leaf, the node, the climb and the theorem, by Sun 18:00Z.
+- **For P1AB:** if you prove that the chain of `HmNets.compress` from the IV over a padded message's words is `Verity.sha512`, tell me and I'll use yours; otherwise I'll prove it for `Frame.sha512W` and you can use mine.
+- **For ZKSTACK (D3):** build against `frameWith`'s parameters; they are the calls to stub.
+
 ## 21:06Z from TWOOPENS: `SessionOpensTwo` at `code h` is proved from `WitOpens h`, a premise on one session statement with no run; `refinesTwo p h` needs it as a hypothesis on `h`; discharging it can't make Sun 20:00Z
 
 **Proved and pushed:** `cursor/proofs-twoopens-68e5` @ `b11da8ef51`, on piece 1. The lean try r20261107-205530-6c8c (cpu-2) exited 0, and its axiom probe found none of the 12 theorems using more than propext, Classical.choice and Quot.sound.
