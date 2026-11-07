@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["Definitions"],
  "proved_in": ["Proofs"],
  "assumptions_module": "Definitions.Assumptions",
@@ -117,7 +118,7 @@
   },
   "FlockSoundness.Audit.Analysis.BindSound": {
    "owner": "@proofs",
-   "digest": "aa8c54f9cf3049269a757cf2022e42740f230b939efc6e4b7808382546aa9e25",
+   "digest": "5a8cf97e623b4d06efc754808b4a93f4f79f4ee9eb0bfec3ccd8c9b58971c698",
    "why": "δ_link of the layer below, as `KnowledgeSound`."
   },
   "FlockSoundness.Audit.Analysis.KnowledgeSound": {
@@ -127,7 +128,7 @@
   },
   "FlockSoundness.Audit.Analysis₂.BindSound": {
    "owner": "@proofs",
-   "digest": "06f8ee00cf97f113fdf6d5106959445535b5da41236518b30408a28f31d45599",
+   "digest": "d32af45f66fa79d4d21f4daf6ef43e1ec7be28c91762af5ad9354c4573472f52",
    "why": "The two-stage form of `BindSound`."
   },
   "FlockSoundness.Audit.Analysis₂.KnowledgeSound": {
@@ -14169,7 +14170,7 @@
     "reads": []
    },
    "type_hash": "1c38adfbef3281ae432ff513899361a76177a11a62c5dd690f26732a5d458c1b",
-   "unfolded_hash": "47f6dac0e8d1e33c012f8d244c7673a2dbf5500165ecb78dd5eca836300cf61f"
+   "unfolded_hash": "458098cd3cdb14bc3eed13cb9c1e3e1e53f5a6d93f7678c3da8b13e55a86f506"
   },
   "Flock.SecurityProofs.RecursiveCircuitPrivate": {
    "owner": "@proofs",
@@ -14182,7 +14183,7 @@
     "reads": []
    },
    "type_hash": "134cfb4bde48d6bbe15eb7f48eab3a97e564a5f35da3ced8d36d2d3acd7696d1",
-   "unfolded_hash": "881171e27b880e706b23ace144284a7c339bc29615ee7dfeefb53f67ce034353"
+   "unfolded_hash": "badd80e07dbc2f2cef00c53ebb5a01973afb8594ffa6af6b52da31176198c816"
   },
   "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": {
    "owner": "@proofs",
@@ -14195,7 +14196,7 @@
     "reads": []
    },
    "type_hash": "e718471c446e3db3185d1ccd2741bc02613f8bc76f66725264907253b38df8c7",
-   "unfolded_hash": "31ae5f30ae3cc6892829c42d57b810148ca99a8b46198da6125dd6f7253fdaa5"
+   "unfolded_hash": "896b88abe30632c37f4ba24c86d2882071729d16fcd30744cb86d24850a16bcf"
   },
   "Flock.SecurityProofs.RecursiveKS": {
    "owner": "@proofs",
@@ -14296,7 +14297,7 @@
     "reads": []
    },
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779",
-   "unfolded_hash": "f10b5a8cb672fc702f5998adff0da2d48104490f079ca43e4119e0ba10efcee9"
+   "unfolded_hash": "d17a94cf52e2830397a8a65b3ab109e9839c05822c47574bc58b6afa0e91aa12"
   },
   "Flock.SecurityProofs.RecursiveZKLoop": {
    "owner": "@proofs",
@@ -14698,21 +14699,18 @@
    "signature": ["Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
    "unfolded_hash": "2cef56057778acdc6f45bac893af4b09b610e4748b7ce4e28da13568d411f849"
@@ -14897,7 +14895,7 @@
     "reads": []
    },
    "type_hash": "84c0e48cb401d6662d94c2c1f395aeedc6aeeac630cd5e87ee5bb6e6e09009d0",
-   "unfolded_hash": "1ea2da85c0ad64fd575620858a35ec827deb4349614b9b3f55bfaa9e3713688b"
+   "unfolded_hash": "fbd9df7e3f6cf3a61d92fb340507c3f62c8bb4bc6b5ab2da5bc47bf813303843"
   },
   "Flock.SecurityProofs.recursiveZK_os_gap": {
    "owner": "@proofs",
@@ -14970,7 +14968,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "e0fa927bc1a4eb8862e7246f05e75cefa993bd1028a6818356ae9a840b8ba635"
+   "type_hash": "cf50c3a6f03044d2c42880d55266530fe5280574853bd935384832c41897767c"
   },
   "FlockSoundness.Audit.Adaptive.harm_budget": {
    "owner": "@proofs",
@@ -15045,7 +15043,7 @@
     "FlockSoundness.Audit.Adaptive.life_harm_budget {n : Nat} {L : Nat → FlockSoundness.Audit.Law n} {Reg : Nat → Type}",
     "  {session : (m : Nat) → Finset (Fin n) → Reg m → Verity.Game Bool}",
     "  (A : (m : Nat) → FlockSoundness.Audit.Analysis (L m) (Reg m) (session m)) {εks δlink : Nat → ENNReal}",
-    "  (hks : ∀ (m : Nat), (A m).KnowledgeSound (εks m)) (hlink : ∀ (m : Nat), (A m).LinkSound (δlink m))",
+    "  (hks : ∀ (m : Nat), (A m).KnowledgeSound (εks m)) (hlink : ∀ (m : Nat), (A m).BindSound (δlink m))",
     "  {π h : Fin n → Real} (hL : ∀ (m : Nat), (L m).Design π) {lam : Real} (hlam0 : Real.instLE.le 0 lam)",
     "  (hlam : ∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)) (H : Real) (N : Nat)",
     "  (s : (FlockSoundness.Audit.Adaptive.life L Reg session N).Strategy) :",
@@ -15059,14 +15057,14 @@
    "premises": {
     "assumptions": [],
     "domain": [
+     "FlockSoundness.Audit.Analysis.BindSound",
      "FlockSoundness.Audit.Analysis.KnowledgeSound",
-     "FlockSoundness.Audit.Analysis.LinkSound",
      "FlockSoundness.Audit.Law.Design"
     ],
     "open": [],
     "reads": []
    },
-   "type_hash": "83edf087185978f69c2291e749981c6f3f85ea48bd204ec55b01b6e628d13cd7"
+   "type_hash": "01db69bfdebc5e066f53a0a2d4ce3930ab704ff2f60d2f1056857339f1f15dba"
   },
   "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {
    "owner": "@proofs",
@@ -15084,7 +15082,7 @@
     "    (S : Finset (Fin nf)) →",
     "      (R : Reg) →",
     "        (S₁ : Finset (Fin nc)) → (I : Int S₁) → (session S R S₁ I).Strategy → Fin nf → Option (Fin C.N → Bool))",
-    "  (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).LinkSound δlink)",
+    "  (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).BindSound δlink)",
     "  (hin : FlockSoundness.Audit.Partition.AnchorsSound₂ X a δin) (δ : ENNReal)",
     "  (σ : (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session).Strategy) :",
     "  ENNReal.instLE.le",
@@ -15101,14 +15099,14 @@
    "premises": {
     "assumptions": [],
     "domain": [
+     "FlockSoundness.Audit.Analysis₂.BindSound",
      "FlockSoundness.Audit.Analysis₂.KnowledgeSound",
-     "FlockSoundness.Audit.Analysis₂.LinkSound",
      "FlockSoundness.Audit.Partition.AnchorsSound₂"
     ],
     "open": [],
     "reads": []
    },
-   "type_hash": "5be3f75f2858bc60c1f43945e8ac322fb7af700c8f562683cf31533dd3e3702e"
+   "type_hash": "950edbc0bad60780b3cc03bef9ecb21ef3259f10f5d08466abcc6b3ef8972278"
   },
   "FlockSoundness.Audit.Partition.audit_exfiltration": {
    "owner": "@proofs",
@@ -15119,7 +15117,7 @@
     "  {X : (R : Reg) → FlockSoundness.Audit.Cont L Reg session R → Fin C.N → Bool}",
     "  {ext : (S : Finset (Fin n)) → (R : Reg) → (session S R).Strategy → Fin n → Option (Fin C.N → Bool)}",
     "  {a : Fin C.N → Bool} {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]",
-    "  [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)",
+    "  [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)",
     "  (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (hD : Finset.instPartialOrder.le D P.committed)",
     "  (hb : Fin n → Nat) (K : Finset (Fin n) → Finset (Fin C.N))",
     "  (hK : ∀ (B : Finset (Fin n)), Finset.instPartialOrder.le (K B) P.committed)",
@@ -15150,8 +15148,8 @@
    "premises": {
     "assumptions": [],
     "domain": [
+     "FlockSoundness.Audit.Analysis.BindSound",
      "FlockSoundness.Audit.Analysis.KnowledgeSound",
-     "FlockSoundness.Audit.Analysis.LinkSound",
      "FlockSoundness.Audit.IsHarmBound",
      "FlockSoundness.Audit.Partition.AnchorsSound",
      "FlockSoundness.Audit.Partition.Separates"
@@ -15159,7 +15157,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "bb4eecfb7bd7e366bd65bb40726964f474e43c37d62942144b73c4f5f5cd411f"
+   "type_hash": "4bc0ba7d8d3ba3f1edc2f2c64faaa493fd925a468ccba5d5ba1494c3bc99544d"
   },
   "FlockSoundness.Audit.Partition.audit_influence": {
    "owner": "@proofs",
@@ -15170,7 +15168,7 @@
     "  {X : (R : Reg) → FlockSoundness.Audit.Cont L Reg session R → Fin C.N → Bool}",
     "  {ext : (S : Finset (Fin n)) → (R : Reg) → (session S R).Strategy → Fin n → Option (Fin C.N → Bool)}",
     "  {a : Fin C.N → Bool} {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} (hks : (P.analysis X ext).KnowledgeSound εks)",
-    "  (hlink : (P.analysis X ext).LinkSound δlink) (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (δ : ENNReal)",
+    "  (hlink : (P.analysis X ext).BindSound δlink) (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (δ : ENNReal)",
     "  (σ : (FlockSoundness.Audit.audit L Reg session).Strategy) :",
     "  ENNReal.instLE.le",
     "    (Verity.Game.prob",
@@ -15186,21 +15184,21 @@
    "premises": {
     "assumptions": [],
     "domain": [
+     "FlockSoundness.Audit.Analysis.BindSound",
      "FlockSoundness.Audit.Analysis.KnowledgeSound",
-     "FlockSoundness.Audit.Analysis.LinkSound",
      "FlockSoundness.Audit.Partition.AnchorsSound"
     ],
     "open": [],
     "reads": []
    },
-   "type_hash": "edd83f91c99695a493721463430c0f5627d9244b7daa9438febfdf1c74fa10a0"
+   "type_hash": "65624bb957ae700cc6fc754071203d69d29559d8518680a101f52a5967f481a8"
   },
   "FlockSoundness.Audit.audit_profile": {
    "owner": "@proofs",
    "signature": [
     "FlockSoundness.Audit.audit_profile {n : Nat} {L : FlockSoundness.Audit.Law n} {Reg : Type}",
     "  {session : Finset (Fin n) → Reg → Verity.Game Bool} (A : FlockSoundness.Audit.Analysis L Reg session)",
-    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin n) → Prop)",
+    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (𝓑 : Finset (Fin n) → Prop)",
     "  (σ : (FlockSoundness.Audit.audit L Reg session).Strategy) :",
     "  ENNReal.instLE.le",
     "    (Verity.Game.prob (fun o => And (Eq o.fst Bool.true) (𝓑 (A.wrong (A.committedOf σ))))",
@@ -15210,11 +15208,11 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["FlockSoundness.Audit.Analysis.KnowledgeSound", "FlockSoundness.Audit.Analysis.LinkSound"],
+    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
     "open": [],
     "reads": []
    },
-   "type_hash": "d344ae7c7fc73d5cab39db07a4d4aae73cf91d2f78577d19ed7f4ff4ad1168f7"
+   "type_hash": "4814a27e5c54996ff912db20d9f833f62003ca6046b4e4b85e1e660db37e1735"
   },
   "FlockSoundness.Audit.audit_window_split_of_record": {
    "owner": "@proofs",
@@ -15226,7 +15224,7 @@
     "    FlockSoundness.Audit.Analysis",
     "      ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.windowK σ call w f 27713) ⋯).closure cl) Reg",
     "      session)",
-    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink)",
+    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink)",
     "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
     "  (hone :",
     "    ∀ (s : Fin m),",
@@ -15260,11 +15258,11 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["FlockSoundness.Audit.Analysis.KnowledgeSound", "FlockSoundness.Audit.Analysis.LinkSound"],
+    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
     "open": [],
     "reads": []
    },
-   "type_hash": "20fd7b63f9dffd3439640facd8a13bb069ebdc707095587b02130ec2cfe536e3"
+   "type_hash": "73b48a52c85dff5069fc2f52551899db7c325d0b7836c049e984851ff669b153"
   },
   "FlockSoundness.Audit.audit_work_floor": {
    "owner": "@proofs",
@@ -15272,7 +15270,7 @@
     "FlockSoundness.Audit.audit_work_floor {n m : Nat} {σ : Fin n → Fin m} {w f : Fin m → Nat} {K : Nat} {Reg : Type}",
     "  {session : Finset (Fin n) → Reg → Verity.Game Bool}",
     "  (A : FlockSoundness.Audit.Analysis (FlockSoundness.Audit.Law.work σ w f K) Reg session) {εks δlink : ENNReal}",
-    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m)",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m)",
     "  (hs : (FlockSoundness.Audit.Law.stratum σ s).Nonempty) (b : Nat)",
     "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w f K) Reg session).Strategy) :",
     "  ENNReal.instLE.le",
@@ -15293,11 +15291,11 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["FlockSoundness.Audit.Analysis.KnowledgeSound", "FlockSoundness.Audit.Analysis.LinkSound"],
+    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
     "open": [],
     "reads": []
    },
-   "type_hash": "60dad443cde6b0b8b007b0224719d8ccc4c94363bdd7f57c178d8e7e241b012e"
+   "type_hash": "52755417613941cc1a7dfddf7b49d8f6c6c65fa47adff723df9f262716efb93b"
   },
   "FlockSoundness.Audit.audit_work_whole_stratum": {
    "owner": "@proofs",
@@ -15305,7 +15303,7 @@
     "FlockSoundness.Audit.audit_work_whole_stratum {n m : Nat} {σ : Fin n → Fin m} {w f : Fin m → Nat} {K : Nat} {Reg : Type}",
     "  {session : Finset (Fin n) → Reg → Verity.Game Bool}",
     "  (A : FlockSoundness.Audit.Analysis (FlockSoundness.Audit.Law.work σ w f K) Reg session) {εks δlink : ENNReal}",
-    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (hf : instLENat.le 1 (f s))",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hf : instLENat.le 1 (f s))",
     "  (hs : (FlockSoundness.Audit.Law.stratum σ s).Nonempty)",
     "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w f K) Reg session).Strategy) :",
     "  ENNReal.instLE.le",
@@ -15319,11 +15317,11 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["FlockSoundness.Audit.Analysis.KnowledgeSound", "FlockSoundness.Audit.Analysis.LinkSound"],
+    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
     "open": [],
     "reads": []
    },
-   "type_hash": "2277cd0772dd066ffd4fe2c28b301d475b36c5245577ae34793a847cadb813f2"
+   "type_hash": "d2cacfa253ea8c19328e6612398cc15864d04df65cbc4f4ca067e2fa7ef919a0"
   },
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": {
    "owner": "@proofs",
@@ -26204,8 +26202,7 @@
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -30129,18 +30126,23 @@
    }
   },
   "Definitions.Assumptions": {
-   "digest": "6b9ad2c5cd18510acf0847e5cad59e858d104eec9504bb6d42b482918dcb321a",
+   "digest": "339df5f9d930a4b25836100c7923bad87694503dd3ea592cf80d9844bf28de42",
    "definitions": {
-    "FlockSoundness.Assumptions.SHA512CRExpected": "f0b159e63eca73831a6d80d1bbecd21b85472aae5e120138cda49f579ab7fa4d",
-    "FlockSoundness.Assumptions.SHA512CRStrict": "3dff81602812a1e09dab93812f599b267e137d1b21dd6e6b47e3a815cc60d56f",
-    "FlockSoundness.Assumptions.UniformRandomBytes": "d22db3c9f03458b981022d3f6e219b5d207f217b92e7d48dd370f7ebcc0c6c19",
-    "FlockSoundness.Assumptions.UniformRandomBytesTest": "fa42afaba1b547936b644d070e6094891520ef243e3e61e6286f9ac311dc307d",
     "Nci.Cut.Assumptions.Exports": "45a66575def5bbb4d3ab2a6da56b3ea9c3cddd5d096fbf156665d789e887c161",
     "Nci.Cut.Assumptions.Hardness": "f09fae736063873c46856fdfc4975fbee382c2a39f5fe5fab0a90ce3ef2927f6",
     "Nci.Formalism.Assumptions.CutCost": "6f7541ca1175cad38a3a58df3032ca71d908a492f15dde825421e128bad8c5b4",
     "Nci.Formalism.Assumptions.EfficiencyFloor": "10a23be267b3535ede3be1dc5f00a9f08200bcc1a81e1e8488d295e77031d75e",
     "Nci.Formalism.Assumptions.TokenWork": "d17288db09108dcb49f4caaf63f493763bd14c3f660dbe809178307fec2a498a",
     "Pouw.CostModel.Hashless": "23a998fe437179f7d77d2a07c5b8adec774502aef2d11fa5fbd8e4f475f92939"
+   }
+  },
+  "Definitions.Assumptions.Flock": {
+   "digest": "64de4c16c527ad8cbdbb07849b01fc0a65d83c1e5cfe01a9bfc60914ab2731e3",
+   "definitions": {
+    "FlockSoundness.Assumptions.SHA512CRExpected": "f0b159e63eca73831a6d80d1bbecd21b85472aae5e120138cda49f579ab7fa4d",
+    "FlockSoundness.Assumptions.SHA512CRStrict": "3dff81602812a1e09dab93812f599b267e137d1b21dd6e6b47e3a815cc60d56f",
+    "FlockSoundness.Assumptions.UniformRandomBytes": "d22db3c9f03458b981022d3f6e219b5d207f217b92e7d48dd370f7ebcc0c6c19",
+    "FlockSoundness.Assumptions.UniformRandomBytesTest": "fa42afaba1b547936b644d070e6094891520ef243e3e61e6286f9ac311dc307d"
    }
   },
   "Definitions.Claims": {
@@ -43792,10 +43794,10 @@
    }
   },
   "Proofs.Accounting.TS.Session.Held.Known": {
-   "digest": "9da227e7e53f6d6ff1005b2dda831fe5aa6186686b92276ede3bcd61254a72e7",
+   "digest": "3dcfe8bb5ad90b9bdc6f372ed0bcf50c5c3d381af63b15b6aaab628a6108534f",
    "definitions": {
-    "FlockC3.RegLevels.knownColl": "52ae19fa6a2954b8cf41c3f4583a7f194b672e2b95d8715fa936c2e03092bce8",
-    "FlockC3.RegLevels.openPairAs": "51eac533466598d2d4af87fb925c2d8210493191d5feffede46f38794e456750"
+    "FlockC3.RegLevels.knownColl": "e71810ad87304b5935c9f0c333c562ff3b2e67d58e5995733923c61b0c814f5e",
+    "FlockC3.RegLevels.openPairAs": "a812c1c25ef92a2d039a0b7747ff327deab0457125b0d8c3d7906c32f0d3dd7e"
    }
   },
   "Proofs.Accounting.TS.Session.Held.Layer": {
@@ -47620,10 +47622,10 @@
    }
   },
   "Proofs.Flock.Recursive.Firewall": {
-   "digest": "a98ddf27e49dfae801bdcf4a85df600a36c9c04847afcc676d732ba815f081d3",
+   "digest": "17c881207a8f1da55346bd1ee7131817e4f52fee372c95f0569597280436b835",
    "definitions": {
     "Flock.Guarantees.FirewallSends": "562df1c19fb3ddb0861a89b741ca695aa0276bfceb9fef4fd2a682c6041393cb",
-    "Flock.Guarantees.RecursiveFirewallPrivate": "00aa566f727a2812ca73e43c53a8591f07d0fa17880bc7bd37e0495580fa242f",
+    "Flock.Guarantees.RecursiveFirewallPrivate": "a2150220f0821ffd3e025c69738aacb14f2b905389b706f93a5226975cf2618c",
     "Flock.Guarantees.SessionsCoined": "e76efb1edb904a3bd940af70154b3d8fe0df43f541430eb338e28e4e3fab1e58",
     "Flock.Guarantees.SessionsHonest": "360e3b9f59edd5dc43e9d39c5c8328e53038a797332e68e188c0c43d46115773",
     "Flock.Guarantees.SessionsPublic": "9f8ca19eb73c6e77085e8079a6efea1872bcd76fdde12c53be7806e797234db1",
@@ -47889,9 +47891,9 @@
    }
   },
   "Proofs.Flock.Recursive.Private": {
-   "digest": "bd3508760e6ed1405df38b65a2b7b57a43ebe88a5e3df92a315c128887750e01",
+   "digest": "fbe78ad16c970e57c1b416a922f38411505349e786da8fbdd478efc59bf09566",
    "definitions": {
-    "Flock.SecurityProofs.regRowCommit": "77373457c31db6a55e3da9c953b65d94057a94490a79f7a061216c078d480a9d"
+    "Flock.SecurityProofs.regRowCommit": "4aba8bdedb389fab8c9b97b6efe4a969777eb97095eba6a3e5d26d639c075d11"
    }
   },
   "Proofs.Flock.Recursive.Property": {
@@ -48056,16 +48058,16 @@
    }
   },
   "Proofs.Flock.Recursive.Statements": {
-   "digest": "cecb9730bf364e9606b8c28edc74917f6108579c8f76975a09f5e9a0deeee022",
+   "digest": "8862941e1ba9aa608b22bf70c99179e52212f53aa7f4fc7f8a64c23ddeb8e245",
    "definitions": {
     "Flock.Guarantees.OuterSessionsZK": "01f985e5d645aefddc92875b62cf33834d3b66976f0f8791aa30a88372270d94",
     "Flock.Guarantees.OuterViewZK": "b9cbf6587cb35e5151f1c47cb7598dafeac9d55fa8712a904be256c7456184c1",
     "Flock.Guarantees.RanRegisteredRun": "6e1fb9848bca0b4ba06cb60872549dc8d6d81dda35e4ec473f460be609f2fdf0",
-    "Flock.Guarantees.RecursiveCircuitIndist": "9f3f48af33e2a9f5d141252bfd68f29fac3d228b8b0fff598ede2623ff710309",
-    "Flock.Guarantees.RecursiveCircuitPrivate": "6edd5e652e3253fc7223fc1381851ce6b379c1dea487b2b8d6ffc850c935e70e",
-    "Flock.Guarantees.RecursiveCircuitPrivateLeaves": "5948c1107ac6287f2b191a5fe96ecef03202b0b943dd9571f001ebd8c2cdd7c4",
+    "Flock.Guarantees.RecursiveCircuitIndist": "38b1213505a42512c084b8be5cdea8944734d22fcab2116d0c0ccc16f2f9a002",
+    "Flock.Guarantees.RecursiveCircuitPrivate": "00b0fa72fc8d65b5b58ba7f9aa73548f54e585bf3dd88f21cb7e1af93a38856b",
+    "Flock.Guarantees.RecursiveCircuitPrivateLeaves": "f55f4c300add6d4e03edc946738d986ac053e213e339b4baa3e0942da0206a00",
     "Flock.Guarantees.RecursiveRanRegistered": "9d9976a7b301f6ff060010a50c5bdf23098fcf3fc96c36547cdce38c9d281391",
-    "Flock.Guarantees.RecursiveZK": "0ff69931f387a2fb85c4cbd7e2145929f0854403967d5e89e8a5f4ec7121ebf3",
+    "Flock.Guarantees.RecursiveZK": "eab6435b3a429ba3127f1d127f7935d320bc7dbab38f6d4ca4eb912c12c11f3b",
     "Flock.Guarantees.commitBytes": "a306696805093574152e21a9d23a447fe66f455f97fb09d60ccbdb5542499079",
     "Flock.Guarantees.firewallCommits": "4bf63ec6548cda121d11b679e1facd58fea3cdc1e35a4ba31065f84201c7dc1f",
     "Flock.Guarantees.firewallLeaf": "fddc41ec1f4b4e2810231afa00a4c024566a4b2b2e9daefba922aeb3695bd425",
@@ -48518,11 +48520,11 @@
    }
   },
   "Proofs.Flock.Soundness.Audit.OneStage": {
-   "digest": "2add35e79bab8fef84fe9dfcc92b6581bb4f77fa3db9bf171dfee7a9dfa6caa0",
+   "digest": "1f262a6aa0c9bb6c7e018d8ee6a661d4496504b0ce6164294feb394edd0fad96",
    "definitions": {
     "FlockSoundness.Audit.Analysis": "13631c71e1c15d4e63eb3e2391c323df0f1e07bed04ce8886d7d5ff25afddfed",
+    "FlockSoundness.Audit.Analysis.BindSound": "5a8cf97e623b4d06efc754808b4a93f4f79f4ee9eb0bfec3ccd8c9b58971c698",
     "FlockSoundness.Audit.Analysis.KnowledgeSound": "d2f8858afae86803eb0858e0969fec051a08c08795b41681399fb0e1a729fbe1",
-    "FlockSoundness.Audit.Analysis.LinkSound": "aa8c54f9cf3049269a757cf2022e42740f230b939efc6e4b7808382546aa9e25",
     "FlockSoundness.Audit.Analysis.Tr": "5c80e91d3a4f117bb707913f4b8a6f49c0a8c940ae30e6f597ca9e7584192e46",
     "FlockSoundness.Audit.Analysis.committed": "cf7c6a90dec5eccf62cbe42f0895cb9a28406451613bc916ce4c65ebb78fe9fc",
     "FlockSoundness.Audit.Analysis.committedOf": "7b86ddb211dcb42f6c82a62b8ef00bfddb343e1adf6462dd13b152da4f99fa22",
@@ -48545,11 +48547,11 @@
    }
   },
   "Proofs.Flock.Soundness.Audit.TwoStage": {
-   "digest": "41ca61ab8332e1e7cbcb1650a188f88ea2324c5a6b8d16634496ba6919744afc",
+   "digest": "6822f162d0d0ac2fb214d3b8b16828e2fea922c4425415965241dfe069f5dbff",
    "definitions": {
     "FlockSoundness.Audit.Analysis₂": "c77251f299be001355f95b39f4313c585182d22b370aaecb22a02fedde30fbac",
+    "FlockSoundness.Audit.Analysis₂.BindSound": "d32af45f66fa79d4d21f4daf6ef43e1ec7be28c91762af5ad9354c4573472f52",
     "FlockSoundness.Audit.Analysis₂.KnowledgeSound": "0a22cec892f9e752e5dd8911dd185c2461c660c8de04f3a4ae25d9b109908f6c",
-    "FlockSoundness.Audit.Analysis₂.LinkSound": "06f8ee00cf97f113fdf6d5106959445535b5da41236518b30408a28f31d45599",
     "FlockSoundness.Audit.Analysis₂.TrC": "f54dff4d5ed5eb1003497578065c4b0c61fceebd15159e4c9872eac2878e0bb5",
     "FlockSoundness.Audit.Analysis₂.TrF": "5ab7eeb3db7b90d022d4cc5302ded83497b22f5c0d85cbc2a064dd3a00ce314f",
     "FlockSoundness.Audit.Analysis₂.committedC": "23f2ddae6e1bf2f55fb91aae9d94a67271fb526ed190bb7ed0eaf6016789b98b",
@@ -49316,7 +49318,7 @@
    }
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.One": {
-   "digest": "914a484b1477e078cf90a3688d8d1128cf8b8cd1fade1d25c03693a244819116",
+   "digest": "4c8030b5892acf4de6adef7dc2e333fce5e2ea22e70478dd575c63d9e01acdf4",
    "definitions": {
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts": "ea5c4b6ca5cb51a75d8a57cd78a7f966035c1f7a2d7386f108d2540319c2cd29",
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR": "7177e7863bf23bbdf8576702a9cf6cc86ed620b9217be214a380c25507b0337a",
@@ -49343,9 +49345,9 @@
     "FlockSoundness.Discharge.FailClosed.SoundZHJU": "17e206a31d91793c9b61ee3567c4aa0f0f393f33234b305c131638a6c894db87",
     "FlockSoundness.Discharge.FailClosed.SoundZHU": "a04de035dfbd573f549e26a8e7abef2a83733b1bad2cf6d0095f619413ebcd42",
     "FlockSoundness.Discharge.FailClosed.SoundZJ": "46b68078c9b99574e48d09ddd34ed044b9691a82e3e08620fa1f98e9439909df",
-    "FlockSoundness.Discharge.FailClosed.ViewZ": "36a4899cfd044e128771fe05c71a952ce5b44221e9790f0f79464d8e91c56db1",
-    "FlockSoundness.Discharge.FailClosed.ViewZHJ": "3c81abc814032cfb0d0a2d9c59811858cb0001f925a4ead97ab598d4be2d90c0",
-    "FlockSoundness.Discharge.FailClosed.ViewZHJR": "83e8399e9937a68f9079631effa3521842acf7a11f7d40e8fdb15cf995f7240f",
+    "FlockSoundness.Discharge.FailClosed.ViewZ": "07e3f69d76a8b8cedf56f31dd6e5c8e5c02662c13034074ec731b459ddf73fcd",
+    "FlockSoundness.Discharge.FailClosed.ViewZHJ": "da9a2213bcebf1dd9eeadc4bca4f378a5ee14b03b5f032c364fdc1b7a07eefc1",
+    "FlockSoundness.Discharge.FailClosed.ViewZHJR": "98c334df15b1be46413fa4d0ba6336f56c1c254b4698cb702eed61af5650c086",
     "FlockSoundness.Discharge.FailClosed.liveLaw": "47c2dbf7827a2820a16bade7d7f121d857403f7c83c7e3a00297b0809d7f9446"
    }
   },
@@ -51503,9 +51505,9 @@
    }
   },
   "Proofs.Flock.ZeroKnowledgeHidden.Statement": {
-   "digest": "65f40a9bf14446ef2e730b6253f1759d146ce556f90075d3ecf569ddabf20bea",
+   "digest": "eff1460940b340b8106b4d2de6695bd203c952df184a9d5ba60e4af826f9756f",
    "definitions": {
-    "Flock.Guarantees.ZeroKnowledgeHidden": "aac81231d0b2bffe165271c1f09c1ad58c6a1e74172cfd142c1661581e19b6b0"
+    "Flock.Guarantees.ZeroKnowledgeHidden": "84cc2080cce72bea01296bd9c4748cfce924c7820434268915fcc201a1009dc1"
    }
   },
   "Proofs.Pouw.OnsiteFreed": {
@@ -53102,17 +53104,17 @@
    }
   },
   "SampledProofs.Select": {
-   "digest": "d5183d2d2f65d188981e368241fa3b937d90a93801b558494577b030f44a59cd",
+   "digest": "f401001363423086a23995fc11a8e50bd176de24f82bfa6f35f79d8c4308a147",
    "definitions": {
     "SampledProofs.Select.Rule": "4d6275879b486259c6334a2786df14db3abbdb1d68f5fc81e4cf8e7366e5b42e",
     "SampledProofs.Select.Rule.all": "2544366e1ae9127d40ce553944a8944f3b817850a309fde4b98ec81121a23c1f",
     "SampledProofs.Select.Rule.casesOn": "291c8380be510951b8c2bc763f394d90676009c7bd9ccc5abd653291d9c3eb17",
     "SampledProofs.Select.Rule.ctorIdx": "bff8b46139414ff6a3abbdbcc82f097eff880717f9f1e60602262b114c128e98",
     "SampledProofs.Select.Rule.law": "39a8d67112af8f387b93fad55d8b851bfbc3c8412a7cbbcfbff6d1b7cbc4748b",
-    "SampledProofs.Select.Rule.lawOver": "b871e1d26c24c18a39cf291e265f4ae03013a5eae64dab93c2ea5cd030c44e1b",
+    "SampledProofs.Select.Rule.lawOver": "1c4f229370a8b12447967011be12009aa8cdf67ebb053488c64214559dc63698",
     "SampledProofs.Select.Rule.rec": "6b86a047e84a8f81717cf905ce6b3fe4789ce2e9f0eabe7f0dd770a0b3088159",
     "SampledProofs.Select.Rule.twoStage": "0fe2600bfc07c6847a00ff955691d1aad66506571afff078dccbe826fb5a4e4e",
-    "SampledProofs.Select.parseLaw": "cc8dbd40bd1f85fe0585814b2e216ba1a54633ae9b6ca3480b51cec1047d6f3e",
+    "SampledProofs.Select.parseDesign": "fca8d1fdcf56cc17540b48227b5c59665d529927869ed8f21921f97258ef71ab",
     "SampledProofs.Select.secondLaw": "d28af09c79c12dc7da2b428d0dfc296686e50622f69349521069853929f9a2a1",
     "SampledProofs.Select.select": "ae11255de4e13f81e340be857bc4cede0d122046a593d11a00b93241a23bd2f4",
     "SampledProofs.Select.selectSecond": "c7856b451e1dd82eca2efca5a2ba53508bdad5c50fe369da3355c47b9c85aeb3",
