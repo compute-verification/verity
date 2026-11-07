@@ -43,14 +43,12 @@ def VStmt.Loads (Q : VStmt) (I : Inputs) : Prop :=
   circZ I = Q.c ∧ (pubZ I).n = Q.nv
 
 /-- **`--zk`'s parse at V*'s statement is a constant of the circuit file**: at `--statement` `t₀`, `--zk`'s tags are
-`t₀`'s but for the identity (`withCoins` on a coin tree leaves the tags as they are, `withCoins_tree`), which
-`HmRow.parse` does not read (`parse_identity`), whatever the table count. -/
+`t₀`'s but for the identity, which `HmRow.parse` does not read (`parse_identity`), whatever the table count. -/
 theorem parse_zkTags_vstar {I : Inputs} {t₀ : Flock.Tags} (hT : I.tags = t₀) (b : ByteArray)
     (tb : List (String × ByteArray)) :
-    HmRow.parse (zkTags I) b tb = HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table])))
-      (Flock.Zk.maskLogOf I.circuitFile) 1) b tb := by
+    HmRow.parse (zkTags I) b tb = HmRow.parse (Flock.Zk.tags t₀ (Flock.Zk.maskLogOf I.circuitFile) 1) b tb := by
   subst hT
-  simp only [zkTags, zkCoins, Flock.Zk.tags, withCoins_tree, parse_identity]
+  simp only [zkTags, Flock.Zk.tags, parse_identity]
 
 /-- **A session of V*'s statement `Q` loads it**, at V*'s tags and no lookup tables, when its circuit file parses at
 the file's constant tags to `Q`'s circuit and its registered population has `Q`'s units, at untemplated tags: the
@@ -58,7 +56,7 @@ session's circuit is the file's parse at `zkTags I` (`ScopeZR.parseHF`, untyped:
 constant (`parse_zkTags_vstar`). -/
 theorem loads_of_check {t₀ : Flock.Tags} {Q : VStmt} {Reg' : Type} (x : Q.OuterR Reg') (hck : ScopeZR x.I)
     (hT : x.I.tags = t₀) (hi : t₀.isTmpl = false) (htab : x.I.tables = [])
-    (hp : HmRow.parse (Flock.Zk.tags (t₀.withCoins (.tree (Flock.Zk.coinSpec #[t₀.table])))
+    (hp : HmRow.parse (Flock.Zk.tags t₀
       (Flock.Zk.maskLogOf x.I.circuitFile) 1) x.I.circuitFile [] = .ok Q.c) (hn : (pubZ x.I).n = Q.nv) :
     Q.Loads x.I := by
   have hZ : HmRow.parse (zkTags x.I) x.I.circuitFile x.I.tables = .ok (circZ x.I) :=

@@ -14,7 +14,7 @@
 POINT: --K 4096 --N 2 --steps S,.. --repeat 3 --modes ZK server --oprove-runs 1 --lease-min M --neg challenge,query
        --forge KINDS (85's forgeries; with coef, dirs or message the forge-after step too, unless --no-forge-after)
        --cpu (GPU=0: the CPU prover, no lease) --on MACHINE --cores 0-31 --mem-gb G --cpus 32 --max-min M
-       --env KEY=VALUE ...
+       --release (85's RELEASE=1: the release side, one pass)  --env KEY=VALUE ...
 """
 from __future__ import annotations
 
@@ -45,6 +45,8 @@ RUN_ID = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 FW_S = {"L0": 3738, "L1": 894, "L2": 836, "L3": 469, "alg-p0": 815, "alg-p1": 847,
         "cap": 63, "cap-L1": 86, "cap-L2": 74, "cap-L3": 51}
 MARGIN = 1.5
+#: the release schedule's lead before its first part (85's RELEASE_WINDOWS_S lead), minutes
+RELEASE_LEAD_MIN = 25
 SETUP_MIN = 5  # the job's start, its retention record and its result
 OTHER_MIN = {"build": 6, "inner": 3, "icheck": 1, "vstage": 6, "vcap": 1, "oreplay": 2, "lean": 12, "forge-after": 15,
              "negative": 30}
@@ -101,12 +103,25 @@ def levels(a) -> str:
     return next((e.split("=", 1)[1] for e in reversed(a.env) if e.startswith("LEVELS=")), "")
 
 
+def rec_links(a) -> bool:
+    """REC_LINKS=1 as --env passes it to 85 (the last one wins): the inner population wired, and V*'s link part and its
+    forgery (forged-link) staged and proved beside the other statements."""
+    return next((e.split("=", 1)[1] for e in reversed(a.env) if e.startswith("REC_LINKS=")), "0") == "1"
+
+
 def max_min(a) -> int:
-    """The job's limit: its statements' firewalled releases (with MARGIN) plus each other step's minutes per repeat."""
+    """The job's limit: its statements' firewalled releases (with MARGIN) plus each other step's minutes per repeat. With
+    REC_LINKS=1 the link part's releases and its forgery's are each budgeted as the largest measured statement's, until
+    its own is measured."""
     sessions = a.oprove_warm + a.oprove_runs
     fw = "firewall" in a.modes.split(",")
     forged = [s for k in forge(a) for s in statements(FORGED[k])]
-    oprove = MARGIN * (sessions * sum(FW_S[s] for s in statements(levels(a))) + sum(FW_S[s] for s in forged)) / 60 if fw else 15
+    links = (sessions + 1) * max(FW_S.values()) if rec_links(a) else 0
+    oprove = MARGIN * (sessions * sum(FW_S[s] for s in statements(levels(a))) + sum(FW_S[s] for s in forged) + links) / 60 \
+        if fw else 15
+    # under the release side each part waits for the end of its window, about twice its prove, after a lead
+    if a.release:
+        oprove = 2 * oprove + RELEASE_LEAD_MIN
     rest = sum(m * (a.repeat if s in ("icheck", "vstage", "vcap", "oreplay", "lean") else 1)
                for s, m in OTHER_MIN.items() if s in steps(a.steps))
     # 85's CPU prover built once (oprove under the ZK server, OPROVE_GPU=0), and its proofs: a minute a statement
@@ -149,6 +164,9 @@ def preset(a: argparse.Namespace) -> argparse.Namespace:
     if a.e2e:
         a.steps, a.repeat, a.oprove_runs, a.oprove_warm = ",".join(E2E), 1, 1, 0
         a.env = ["WARM=0", "RUNS=1", *a.env]
+    if a.release:
+        a.repeat, a.oprove_runs, a.oprove_warm = 1, 1, 0
+        a.env = ["RELEASE=1", "WARM=0", "RUNS=1", *a.env]
     if forge_after(a) and "lean" in steps(a.steps) and not a.no_forge_after:
         a.steps = ",".join([*steps(a.steps), "forge-after"])
     return a
@@ -348,6 +366,8 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--max-min", type=int, default=0, help="the run's limit (default from the lease model: max_min)")
         p.add_argument("--e2e", action="store_true", help="one pass: build, inner, vstage, vcap, oprove, lean, negative once each, "
                        "one release per prove and no warm one")
+        p.add_argument("--release", action="store_true", help="the recursive session through the ZK server's release side "
+                       "(85's RELEASE=1): one inner session, each part proved once in order and held to its release window")
         p.add_argument("--env", action="append", default=[], metavar="KEY=VALUE",
                        help="passed to job.sh and on to 85 (LEVELS=L0, REPEAT_LEAN=1, TAG=..., KEEP_DATA=1, ...); repeatable")
 

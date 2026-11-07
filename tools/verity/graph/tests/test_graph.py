@@ -24,6 +24,7 @@ def test_the_listing_completes_digests_and_keys(tree):
     assert b["key"] is None, "a task that reads an artifact is keyed by the executor, once the read's digest exists"
     x = next(t for t in doc["tasks"] if t["id"] == "other:x")
     assert x["about"] == "other x with plain" and x["env"] == "lean"
+    assert (a["priority"], b["priority"], x["priority"]) == (1, 1, 0)
     assert doc["envs"]["lean"]["spec"] == ["lib/lean-toolchain"] and doc["envs"]["py"]["spec"] == ["pyproject.toml", "uv.lock"]
     assert doc["envs"]["py"]["digest"] == contract.env_digest(["uv.lock", "pyproject.toml"], doc["files"])
     want = {p for t in doc["tasks"] for p in t["inputs"]} | {"lib/lean-toolchain", "pyproject.toml", "uv.lock"}
@@ -66,15 +67,35 @@ def test_a_task_s_graph_is_the_part_of_the_listing_that_running_it_needs(tree):
     by = {t["id"]: t for t in doc["tasks"]}
     for tid, want in (("toy-b:b", ["toy-b:b", "toy:a"]), ("toy:a", ["toy:a"]), ("other:x", ["other:x"])):
         part = graph.task_graph(tree, tid, listers=LISTERS)
-        assert [t["id"] for t in part["tasks"]] == want and [by[i] for i in want] == part["tasks"]
+        assert [t["id"] for t in part["tasks"]] == want
+        assert [{**by[i], "priority": t["priority"]} for i, t in zip(want, part["tasks"])] == part["tasks"]
+        assert {t["id"]: t["priority"] for t in part["tasks"]} == graph.priorities(part["tasks"]), \
+            "its priorities count the chains it holds"
         assert part["envs"] == doc["envs"] and part["commit"] is None
         assert part["files"] == {p: doc["files"][p] for p in sorted({p for t in part["tasks"] for p in t["inputs"]} | {
             p for e in doc["envs"].values() for p in e["spec"]})}
+    assert graph.task_graph(tree, "toy:a", listers=LISTERS)["tasks"][0]["priority"] == 0 < by["toy:a"]["priority"], \
+        "toy-b:b, which reads toy:a, is no part of toy:a's graph"
     refused = {**LISTERS, "toy": lambda root, files: [*toy(root, files), {"id": "toy:c", "owner": "@ci"}]}
-    assert graph.task_graph(tree, "toy:a", listers=refused)["tasks"] == [by["toy:a"]], \
+    assert graph.task_graph(tree, "toy:a", listers=refused)["tasks"] == [{**by["toy:a"], "priority": 0}], \
         "the rest of the family is neither completed nor checked: the listing is"
     with pytest.raises(graph.GraphError, match="no task toy:zz on this tree"):
         graph.task_graph(tree, "toy:zz", listers=LISTERS)
+
+
+def test_a_task_s_priority_is_the_longest_chain_of_reads_through_it(tree):
+    """The tasks that wait on it one after another and those it waits on so: each task of the longest chain (a lock and the
+    modules under it) outranks a task beside it, one on no chain has 0, and the key leaves it out."""
+    chain = {**LISTERS, "other": lambda root, files: [
+        {"id": "other:x", "inputs": ["lib/x.lean"], "vars": {"flavor": "plain"}},
+        {"id": "other:y", "vars": {"flavor": "f"}, "reads": [{"task": "toy-b:b", "output": "o"}]},
+        {"id": "other:z", "vars": {"flavor": "f"}, "reads": [{"task": "toy:a", "output": "o"}]}]}
+    doc = graph.listing(tree, listers=chain)
+    assert {t["id"]: t["priority"] for t in doc["tasks"]} == {"toy:a": 2, "toy-b:b": 2, "other:y": 2, "other:z": 1,
+                                                               "other:x": 0}
+    before = {t["id"]: t for t in graph.listing(tree, listers=LISTERS)["tasks"]}
+    assert before["toy:a"]["priority"] == 1
+    assert all(t["key"] == before[t["id"]]["key"] for t in doc["tasks"] if t["id"] in before), "a priority leaves the key as it was"
 
 
 def test_a_task_s_part_is_what_its_run_reads_of_the_listing(tree):
@@ -137,7 +158,8 @@ def _one(**task):
 @pytest.mark.parametrize("task, error", [
     ({"owner": "@ci"}, "`owner` field"),
     ({"detail": {"owner": "x"}}, "`owner` field"),
-    ({"key": "sha512:00"}, "leaves `key` to the core"),
+    ({"key": "sha512:00"}, "leaves `priority` and `key` to the core"),
+    ({"priority": 9}, "fields priority aren't graph/v2's \\(a lister leaves `priority` and `key` to the core"),
     ({"kind": "other"}, "isn't one of \\[family.toy\\]'s kinds"),
     ({"id": "toy-b:a"}, "a task's id is `<kind>:<name>`"),
     ({"id": "toy:"}, "a task's id is `<kind>:<name>`"),

@@ -217,7 +217,7 @@ def test_the_lean_firewall_is_read_from_the_runs_process_samples(tmp_path: Path)
 def test_markdown_has_one_line_per_row(tmp_path: Path) -> None:
     doc = RP.read(job(tmp_path))
     md = RP.markdown(doc)
-    table = [ln for ln in md.splitlines() if ln.startswith("| ") and not ln.startswith("| stage | step |")]
+    table = [ln for ln in md.split("\nOuter")[0].splitlines() if ln.startswith("| ") and not ln.startswith("| stage | step |")]
     assert len(table) == len(doc["rows"])
     assert "| inner M0 | inner |" in md and "2 [1–3] (n=3)" in md and "t.ligerito 1.2 s (48% of e2e_s)" in md
     assert "| 4.67 |" in md
@@ -423,6 +423,16 @@ def test_e2e_is_one_pass_with_its_negative(capsys) -> None:
     assert "WARM=0" in cmd and "RUNS=1" in cmd and "NEG=challenge,query" in cmd
 
 
+def test_release_is_one_pass_whose_limit_holds_every_window(capsys) -> None:
+    assert RUN.main(["run", "--dry-run", "--steps", "oprove"]) == 0
+    plain = capsys.readouterr().out.split()
+    assert RUN.main(["run", "--dry-run", "--steps", "oprove", "--release", "--env", "TREE_FROM=local"]) == 0
+    cmd = capsys.readouterr().out.split()
+    assert "RELEASE=1" in cmd and "REPEAT=1" in cmd and "WARM=0" in cmd and "RUNS=1" in cmd and cmd[-1] == "TREE_FROM=local"
+    limit = {c: int(x[x.index("--timeout") + 1][:-1]) for c, x in (("plain", plain), ("release", cmd))}
+    assert limit["release"] - RUN.RELEASE_LEAD_MIN > 1.9 * limit["plain"] - 2 * RUN.SETUP_MIN
+
+
 def test_store_puts_each_result_the_merge_and_the_table(tmp_path: Path, monkeypatch, capsys) -> None:
     (tmp_path / "a.json").write_text(json.dumps(RP.read(job(tmp_path / "a")) | {"ref": "rA"}))
     seen = {}
@@ -482,12 +492,29 @@ def test_forge_after_runs_after_lean_whenever_its_kinds_are_forged(capsys) -> No
     assert cmd[cmd.index("--timeout") + 1] == f"{RUN.SETUP_MIN + RUN.OTHER_MIN['lean'] + RUN.OTHER_MIN['forge-after']}m"
 
 
+def test_a_wired_run_budgets_its_link_part_and_its_forgery_as_the_largest_statement(capsys) -> None:
+    def launched(*argv: str) -> list[str]:
+        assert RUN.main(["run", "--dry-run", *argv]) == 0
+        return capsys.readouterr().out.split()
+
+    def limit(*argv: str) -> int:
+        cmd = launched(*argv)
+        return int(cmd[cmd.index("--timeout") + 1][:-1])
+
+    assert "REC_LINKS=1" in launched("--env", "REC_LINKS=1")
+    big = max(RUN.FW_S.values())
+    assert limit("--env", "REC_LINKS=1") - limit() == pytest.approx(RUN.MARGIN * 2 * big / 60, abs=1)
+    assert limit("--env", "REC_LINKS=1", "--oprove-runs", "2") - limit("--oprove-runs", "2") == pytest.approx(
+        RUN.MARGIN * 3 * big / 60, abs=1)
+    assert limit("--env", "REC_LINKS=1", "--env", "REC_LINKS=0") == limit()
+
+
 def test_forged_statements_are_ok_when_refused_and_forge_after_reads_each_case(tmp_path: Path) -> None:
     o = job(tmp_path)
     d = o / "steps" / "oprove" / "r1" / "out" / "oprove" / "forged-coef-L0-firewall"
     d.mkdir(parents=True)
     stop = "FIREWALL-REFUSED: circuit: the constraints lincheck fails"
-    (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop, 'prove_s': 1900.0})}\n")
+    (d / "prove.tsv").write_text(f"1792871908.2\tLIVE\t{json.dumps({'accepted': False, 'prover_stopped': stop})}\n")
     d = d.parent / "forged-dirs-L0-firewall"
     d.mkdir()
     (d / "prove.err").write_text("FIREWALL-REFUSED R7: the witness does not open the registered row; no proof\n")

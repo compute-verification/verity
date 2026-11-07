@@ -7,7 +7,7 @@ schema = "policy/v0"
 # The ci.toml jobs off the merge gate. A recorded check, whole or a shard, leaves them out (`check.py`'s
 # OFF_GATE, from `declaration.load`), `research merge` requires them of no check, and drive moves `main` without them: they run in drive's
 # after-landing run (`--deferred`, every job), where a red reverts its culprit on `checked`. Under drive.toml's `executor = "on"`
-# ratchet-gate runs in a train.sh run beside the executor's check instead, and `main` waits for that run. circuit-check returns to the gate
+# ratchet-gate runs in a train.sh run beside the executor's check instead, and is off the gate there too. circuit-check returns to the gate
 # once `circuit-check --all` fits inside the rest of the check (under 30 minutes); ratchet-gate judges the merges above the
 # run's base, and no plan holds it. A job here has no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
 off_gate = ["circuit-check", "ratchet-gate"]
@@ -35,11 +35,3 @@ id = "suite verity-check::tests/test_suite_parts.py::test_the_parts_run_their_fi
 owner = "ci"
 expires = "2026-11-02T18:00:00Z"
 reason = "red on main and checked; its fix is landing"
-
-[[allow]]
-id = "circuit-check partition/gate-recomputed ScaledMmFp8Block_v1"
-owner = "circuits"
-expires = "2026-12-01T00:00:00Z"
-reason = """every coordinate of a 128-column weight block recomputes the block's scale product F32Mul(sx[kb], sw[kb]) \
-(fp8.ScaledMmFp8BlockCoordinate): 127 copies across units per block and kb; word.unit_rule partitions the batch's members one \
-by one and does not see it"""
