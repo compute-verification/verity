@@ -46,8 +46,8 @@ leaves and challenge derivation), not with the expander.
   `Pous.Period.SecurityProofs.periodHeldAt`, for every block count `2^19 ≤ N ≤ 2^27` at the registered width and prime,
   the same `⌊ρ·|C|⌋` at `1% + 2^-128` (`PeriodHeldDemo` at Demo B's `1038·2^16` blocks: 1,060,008,348,186 bits).  It
   is in the ring model, not abstract M1, and rests on the open conjecture `P2RingRoundSecureWide` (unchecked in `N`
-  above `2^25`), the device model `RingDeviceAt` and the coin commitments' hiding at `N` (`WIDE_CLAIMS`).
-- **The instantiation assumption is not accepted** (spec decision 8, Daniel's deferred default): that
+  above `2^25`) and the device model `RingDeviceAt` (`WIDE_CLAIMS`).
+- **The instantiation assumption is not accepted** (spec decision 8): that
   square–mask–square with fresh per-block keys instantiates M1's slow-inverse permutation is a novel, algebraic
   assumption, and it is outside Lean.
 - So is SeqRoot: no 16,448-bit root, nor another computation with its effect on the challenged block, finishes within
@@ -107,10 +107,15 @@ P2_CLAIMS = ("m1-ideal-permutations", "sms-m1-instantiation", "seq-root", "rando
 - a live, designated verifier, whose memory challenger is the auditor's hardware, a VM under the auditor's account
   that the developer doesn't control and nothing attests (core's `trusted-host`)."""
 
-WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at", "statistical-hiding")
+WIDE_CLAIMS = (*P2_CLAIMS, "p2-ring-round-secure-wide", "pous-ring-device-at")
 """What `wide_certificate` rests on: `P2_CLAIMS`, and one claim for each premise `periodHeldAt` takes at `N` blocks, the
-conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide`, the device model `Pous.Period.RingDeviceAt` and the coin
-commitments' hiding `Pous.P2.Assumptions.CoinCommitHides (coinViewAt N)`."""
+conjecture `Pous.P2.Assumptions.P2RingRoundSecureWide` and the device model `Pous.Period.RingDeviceAt`.  It takes no
+hiding premise on the memory challenger's coin tree, whose root leaves the device only after the last answer."""
+
+WIDE320_CLAIMS = (*WIDE_CLAIMS, "prf/sha-512")
+"""What `wide320_certificate` rests on: `WIDE_CLAIMS`, and `prf/sha-512` (`Hash.Assumptions.Sha512Prf`) for the
+memory challenger's indices, which `ObligationWide320` reads as uniform: they are derived by SHA-512 from its 64-byte
+secret source."""
 
 POINT = (16448, 21065, 1 << 16)
 """`w`, `c0` and blocks per segment at the registered point.  `2^19` blocks, the certificate's store (1.08 GB), are 8
@@ -340,9 +345,17 @@ def below(p: int, candidates) -> int:
 def sha512_keys(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int]:
     """v4: block `j` of segment `s`'s `(K, t)` after `prefix` (`expand_prefix`), the spec's streams: `K` is the first
     `w/8` bytes of `stream(base, "K")`, and `t` the first `w/8`-byte word of `stream(base, "t")` below `p`."""
-    nb, base = params.block_bytes, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
+    return sha512_keys_indexed(params, prefix, s, j)[:2]
+
+
+def sha512_keys_indexed(params: P2Params, prefix: bytes, s: int, j: int) -> tuple[int, int, int]:
+    """`sha512_keys` and which word of `stream(base, "t")` `t` is (the spec's `t_rejection_index`).  It reads only `w` and
+    `p`, so the spec's own params (`benchmarks/pous/p2_v1/reference.py`'s `Params`) take it as well."""
+    nb, base = params.w // 8, prefix + s.to_bytes(8, "big") + j.to_bytes(8, "big")
     k = int.from_bytes(stream(base, b"K", nb), "big")
-    return k, below(params.p, (int.from_bytes(stream(base, b"t", (i + 1) * nb)[i * nb:], "big") for i in itertools.count()))
+    words = (int.from_bytes(stream(base, b"t", (i + 1) * nb)[i * nb:], "big") for i in itertools.count())
+    i, t = next((i, x) for i, x in enumerate(words) if x < params.p)
+    return k, t, i
 
 
 def chacha_keys(params: P2Params, seed: bytes, j: int) -> tuple[int, int]:
@@ -454,8 +467,8 @@ class P2(Scheme):
         if (p.w, p.c0, p.blocks_per_segment) != POINT:
             return None
         return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                           theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
-                           claims=P2_CLAIMS)
+                             theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=CERT_BLOCKS // POINT[2],
+                             claims=P2_CLAIMS)
 
     def deadline_refusals(self, deadline_ns: int, rtt_allowance_ns: int) -> tuple[str, ...]:
         out = []
@@ -489,7 +502,7 @@ def family_certificate(params: P2Params) -> CapacityBound | None:
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                       theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
+                         theorem="Pous.SecurityProofs.P2SlackFamilyUncond", segments=None, claims=P2_CLAIMS)
 
 
 def wide_certificate(params: P2Params) -> CapacityBound | None:
@@ -502,7 +515,7 @@ def wide_certificate(params: P2Params) -> CapacityBound | None:
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return CapacityBound(k=CERT_K, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                       theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
+                         theorem="Pous.Period.SecurityProofs.periodHeldAt", segments=None, claims=WIDE_CLAIMS)
 
 
 def wide320_certificate(params: P2Params) -> CapacityBound | None:
@@ -515,11 +528,12 @@ def wide320_certificate(params: P2Params) -> CapacityBound | None:
     if (params.w, params.c0) != POINT[:2] or params.expander != SHA512_CTR or not lo <= params.blocks <= hi:
         return None
     return CapacityBound(k=CERT_K_WIDE320, rounds=0, work=1 << 20, call_ns=ROOT_CALL_NS,
-                       theorem="Pous.SecurityProofs.ObligationWide320",
-                       delta=Fraction(1, 1 << 20) - Fraction(1, 1 << 128), segments=None, claims=WIDE_CLAIMS)
+                         theorem="Pous.SecurityProofs.ObligationWide320", delta=Fraction(1, 1 << 20), eps_log2=-127,
+                         segments=None, claims=WIDE320_CLAIMS)
 
 
 __all__ = ["CERT_BLOCKS", "CERT_FAMILY_BLOCKS", "CERT_K", "CERT_K_WIDE320", "CERT_WIDE_BLOCKS", "CHACHA8", "CHACHA8_NONCONFORMING", "DELTA_NS", "EXPERIMENTAL", "KEYS_TAG", "P2_CLAIMS",
-           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "P2", "P2ChaCha", "P2Params",
+           "POINT", "PROTOCOL_ID", "ROOT_CALL_NS", "RTT_ALLOWANCE_CAP_NS", "SEED_DOMAIN", "SHA512_CTR", "WIDE_CLAIMS", "WIDE320_CLAIMS", "P2", "P2ChaCha", "P2Params",
            "below", "block_keys", "chacha_block", "chacha_keys", "decode_segment", "encode_blocks", "encode_segment",
-           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "stream", "wide_certificate"]
+           "expand_prefix", "family_certificate", "segment_keys", "segment_seed", "sha512_keys", "sha512_keys_indexed", "stream",
+           "wide_certificate"]

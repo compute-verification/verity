@@ -21,9 +21,9 @@ the prose spec and this code differ.
 
 ~~~python
 from verity.core.protocols.pous import audit, band, codec, setup
-from verity.core.protocols.pous.layout import Layout, decode_tensor
+from verity.core.protocols.pous.layout import TensorLayout, decode_tensor
 
-layout = Layout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
+layout = TensorLayout.of(band.SECURE_FIRST, [("w1", n1), ("w2", n2)])       # tensors -> segments of W
 params, prims = layout.params, band.reference(layout.params)
 w = layout.pack({"w1": b1, "w2": b2})
 commitment = setup.commit(params, w)                                   # server, before any salt exists
@@ -58,16 +58,18 @@ print(v.profile().statement())                                                 #
 ~~~
 
 On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
-on a machine the developer doesn't control at the developer's site (the auditor's own VM or box, under the auditor's account),
-never a process on the developer's node. It commits its indices in a coin tree before the session, hashes each whole
-answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's leaf, which
-`verity/ml/protocols/pous/answer_circuit.py` opens), and signs the session's round records once, under a header bound
-to the setup's root of `C*`. A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has
-used. `verdict` checks a signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at
+on a machine the developer doesn't control at the developer's site (the auditor's own VM or box, under the auditor's
+account), never a process on the developer's node. It commits its indices in a coin tree it keeps until the session is
+signed, hashes each whole answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner
+digest of C's leaf, which `verity/ml/protocols/pous/answer_circuit.py` opens), and signs the session's round records
+once, under a header bound to the setup's root of `C*`; only then does it release the coin tree's root (`commitment`)
+and its openings. A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has used.
+`verdict` checks a signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at
 `lms.DEPLOYED` (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
 `verity.ml.protocols.pous.verdict_circuit`'s `PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof
 block, its one output bit the public verdict: 1 iff at most `M` of the `K` rounds miss, a round hitting when its record
-names it, is on time within `LIMIT` and holds the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/Proofs/Pous/Continuous/Verdict.lean`).
+names it, is on time within `LIMIT` and holds the expected digest of its block (`PousVerdict.verdictProg_accepts`,
+`Security/Proofs/Pous/Continuous/Verdict.lean`).
 Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`), are `verdictProg` gate for gate
 (`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
 compiled circuit to that code.
@@ -107,8 +109,8 @@ prior content, with no named assumption, for the sequential reveal, the only one
 2.6 TB and `k = 74,000`, the egress plus 1.075 GB at `2^-40` (`StreamedWipeMeets2600GB`); at `k = 2152`, for every
 fill of a 32 MiB segment or more, the egress plus `⌈M/19⌉` bits at `2^-128` (`StreamedWipeMeetsFamily`, with
 `StreamedWipeMeets96GiB` and `StreamedWipeMeets141GB`); at any `k` with `(1 − 1/r)^k ≤ 2^-129`, the egress plus
-`512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` bits and the memory outside the fill (`StreamedWipeMeetsReads`), an H200 at
-`k = 5231` within 5 GB with its driver reserve (`StreamedWipeMeets141GB5`); with the count of the missing labels in
+`512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130` bits and the memory outside the fill (`StreamedWipeMeetsReads`), an H200's
+whole memory at `k = 2906` within 5 GB (`StreamedWipeMeetsH200`); with the count of the missing labels in
 place of `n`, per server against its assumed memory capacity `M_s` over every tier (`StreamedWipeMeetsReadsTight`,
 `StreamedWipeMeetsServer`), and at 5 GB a server (`StreamedWipeMeetsServer5GB`): one H200 as measured at its deployed `k = 5500`, and a whole
 8×H200 server, HBM, 2 TB of RAM and 12 TB of disk, at `k = 1,268,143` with 3.9 GB outside the fill
@@ -121,7 +123,7 @@ streamed-label wipe") has the messages, the bound, the measured fill and round t
 from verity.core.protocols.pous import streamed_wipe as sw
 
 p = sw.WipeParams(labels=n, k=sw.DEPLOYED_K, batch=1, limit_ns=limit, tiers=(("hbm", a), ("dram", b), ("nvme", c)))
-c = sw.Challenger(secret, server_id, session_id, p, signer, log=log)          # the id claimed; the commitment published
+c = sw.WipeMemoryChallenger(secret, server_id, session_id, p, signer, log=log)  # the id claimed; the commitment published
 for start, data in c.fill(chunk=1 << 20):                                     # the labels, streamed to the server
     send(start, data)
 c.run(lambda indices: ask(indices))                                           # one batch at a time; no retry
@@ -199,15 +201,19 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `P2RingAuditSecureOfReduces`, `P2RingAuditSecureOfRoundSecure` and `P2RingGradedOfRoundSecure`; `P2ContentAbsorbs`
   (`Guarantees/Obligation.lean`); above `2^23` blocks, `Pous.Period.SecurityProofs.periodHeldAt`. The named
   assumptions (`Assumptions/P2.lean`): `PrimeP16448`, `P2RingAuditSecure`, `P2RingReducesToM1p`, `P2RingRoundSecure`,
-  `P2RingRoundSecureWide` and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
+  and `P2RingRoundSecureWide`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
   rests on.
 - **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
-  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `encode_segment`,
-  `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the fastest cooperating
-  16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`). `benchmarks/pous/p2_v1/reference.py`
-  is the reference (the maps, keys, salt, tree and derivations), and `wire.py` beside it is `p2-audit-wire/v4`
+  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `sha512_keys_indexed`,
+  `encode_segment`, `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the
+  fastest cooperating 16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`).
+  `benchmarks/pous/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
+  `sha512_keys_indexed`) under the reference's names and refusals, its `K_AUDIT`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`
+  are `CERT_K`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`, its `DEPLOYMENT` is the certificate's store as a `P2Params`
+  (`Params.of`), its salt, key prefix, leaves and derivations are its own, and
+  the tree over its leaves is `verifier.py`'s (`MerkleTree`, `verify_path`). `wire.py` beside it is `p2-audit-wire/v4`
   (`envelope`, `setup_messages`, `open_message`, `challenge_message`, `response_message`, `record`, `final_message`,
-  `verify_path`, `parse_envelope`, `verify_audit`, `parse_final`).
+  `parse_envelope`, `verify_audit`, `parse_final`).
 - **The registered scheme and the wire.** `p2-16448/v4` runs the generic protocol's setup, so four things differ from
   `reference.py` and the wire: its setup salt (24 bytes from `setup.draw_salt`, not 32 from `verity/pous/p2-setup/v4`
   over the commitment), its key prefix (it frames that salt), its leaf (`0x00 ‖ tag_s ‖ u16le(v) ‖ R`, not
