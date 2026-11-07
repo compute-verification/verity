@@ -44,7 +44,7 @@ theorem constBits_constForm (c : Consts) (v w : ℕ) : ∃ c' : Consts, constBit
       pure (c', (List.range w).map fun j => if v.testBit j then c'.2.getD Lin.one else c'.1.getD Lin.zero) ∧
     (∀ f, c'.1 = some f → f = Lin.const false ∨ c.1 = some f) ∧
       ∀ f, c'.2 = some f → f = Lin.const true ∨ c.2 = some f := by
-  simp only [constBits, constForm]
+  simp only [Frame.constBits, constForm]
   split_ifs <;> simp only [map_pure, pure_bind] <;>
     exact ⟨_, rfl, fun f hf => by first | exact Or.inr hf | exact Or.inl (Option.some.inj hf).symm,
       fun f hf => by first | exact Or.inr hf | exact Or.inl (Option.some.inj hf).symm⟩
