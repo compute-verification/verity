@@ -154,13 +154,15 @@ theorem constGate_mem_io (u : Fin n) (hupv : 0 < D.unroll.upv) : constGate D hU 
     · exact List.mem_singleton.2 rfl
     · rename_i h
       exact absurd (Nat.zero_mod _) h
-  have hread : (constGate D hU n u : Fin (keyCircuit D hU n).N) ∈ (coreOp ((keyCircuit D hU n).op
+  have hread : ∀ g : Fin (keyCircuit D hU n).N, g = constGate D hU n u → g ∈ (coreOp ((keyCircuit D hU n).op
       ((unitInst D hU n u).wire ((Placed.circuitRows D.unroll hU).comp ⟨0, h0⟩)))).args.toFinset := by
+    intro g hg
+    subst hg
     rw [(unitInst D hU n u).op ⟨0, h0⟩]
     simp only [coreOp, Audit.Op.args, List.mem_toFinset, List.mem_append, List.mem_map]
     exact Or.inl ⟨_, hrow, rfl⟩
   rw [Verity.Partition.io, Finset.mem_filter]
-  exact ⟨hcom, Or.inr ⟨_, (unitInst D hU n u).mem ⟨0, h0⟩, hread⟩⟩
+  exact ⟨hcom, Or.inr ⟨_, (unitInst D hU n u).mem ⟨0, h0⟩, hread _ rfl⟩⟩
 
 /-- **A copy's gate on a returned output's column is committed**: bit `t` of leaf `jj` of copy `j`'s returned outputs
 (`Layout.outCol`) is a gate of the circuit's outputs (`Layout.outsOf`). -/
@@ -171,13 +173,16 @@ theorem copyGate_mem_committed (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (c 
   have hx : ((Rows.ofNet hU).stackCol D.unroll.upv hj c).val = D.unroll.upv * (Rows.ofNet hU).nIn +
       (j * ((Rows.ofNet hU).nComp + 1) + (1 + (Layout.outCol D.unroll jj t - (Rows.ofNet hU).nIn))) := by
     unfold Rows.stackCol
-    rw [dif_neg (show ¬ c.val < (Rows.ofNet hU).nIn by omega), dif_pos hhi, ← hc]
-  have hout : (copyGate D hU n u hj c : Fin (Layout.keyN D.unroll hU n)) ∈ Layout.outsOf D.unroll hU n := by
+    rw [dite_eq_right (show ¬ c.val < (Rows.ofNet hU).nIn by omega), dite_eq_left hhi, ← hc]
+  have hout : ∀ g : Fin (Layout.keyN D.unroll hU n), g = copyGate D hU n u hj c →
+      g ∈ Layout.outsOf D.unroll hU n := by
+    intro g hg
+    subst hg
     unfold Layout.outsOf
     rw [Finset.mem_filter]
     exact ⟨Finset.mem_univ _, u, Fin.cast (congrArg Rows.w (rows_keyProg D hU n u)).symm
       ((Rows.ofNet hU).stackCol D.unroll.upv hj c), (unitInst_wire D hU n u _).symm, j, jj, t, hj, hjj, ht,
       hc ▸ hlo, hc ▸ hhi, hx⟩
-  exact Verity.Partition.mem_committed_of_output _ hout
+  exact Verity.Partition.mem_committed_of_output _ (hout _ rfl)
 
 end Flock.Bridge
