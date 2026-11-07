@@ -30,7 +30,7 @@ open Accounting.Rate Accounting.RateSketch
 open Pous (pr)
 open scoped ENNReal
 
-/-- **The measured rank tail of the tensor-sketch signs.** A uniformly drawn `ks × (32·m)` signs matrix has some
+/-- **The measured rank tail of the tensor-sketch signs.** A uniformly sampled `ks × (32·m)` signs matrix has some
 sector's `ks × 32` block below rational rank `r` with probability at most `ε`:
 
   `Pr_σ[∃ u, rank_ℚ(block_u σ) < r] ≤ ε`.

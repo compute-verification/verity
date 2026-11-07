@@ -35,7 +35,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   hold, as is a schedule the class doesn't serve and a response that isn't id-form.
 * **The group** (``--group G``, default 1; `link`'s ``start``, its first execution phase, 0): G execution phases of each
   link, one registration, the scan's buckets 0 … G·T − 1 from the empty state, T an execution phase's.
-* **The scan's rows**, committed by the prover before the draw as hiding rows (`verity.ml.commitments.advice`, each
+* **The scan's rows**, committed by the prover before the sample as hiding rows (`verity.ml.commitments.advice`, each
   tree's root in the registration): ``state``, G·T leaves, leaf t S_{t−1} and leaf 0 the empty state, the rows a
   window circuit of the group reads as its `SCAN_STATE` (`ingress_scan.window_state` from bucket 0), so S_{G·T−1},
   which no bucket of the group reads, has no leaf; ``prog``, the slot entries (`slot_entries`),
@@ -49,7 +49,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   the anchored Programs' `SlotEntry_v1` units, whose outputs the slot entries are. Its entries, read bit included, are
   the prover's: the stand-in copies its input. The ``prog`` tree is committed under the binding of the block's o0
   frame domain (`block_binding`, over the block's statement's input set `block_set`, bound to the session and the
-  group's ingress heads), so its root is the o0 frame root C-Flock commits under the same salts, and `stage` refuses a
+  group's ingress heads), so its root is the o0 frame root Flock commits under the same salts, and `stage` refuses a
   block whose o0 frame root and domain aren't the tree's: the registration's ``SlotEntry_v1{…}/c0/o0`` (its ports
   named as one-stage names a template's first chunk's, `entries_port`) and the honest round's ``scan/prog`` are one
   root and domain, the tie `NetworkCheck.Period`'s rows form checks (`progTied`, `wired`). Its registration also names
@@ -61,7 +61,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   ingress units (buckets 1 … G·T − 1) and G·T egress units, each template one batch with its row, state and egress
   parameters inputs of its own and every ingress unit's ``prog<j>`` a row of one input of the slot entries, its members
   split a link-window (`members_of`: ``first``, ``ingress-w`` and ``egress-w``, and ``last``, the group's last ingress
-  unit, whose o1 has no leaf to open), every unit drawn by the verifier's Lean. `program` refuses a Program whose
+  unit, whose o1 has no leaf to open), every unit sampled by the verifier's Lean. `program` refuses a Program whose
   one-stage partition or reads (`registered.reads`) aren't the members'. Ingress unit t reads ``row`` (the warden's
   ingress row t), ``sin`` (state leaf t, S_{t−1}; the first unit none) and each slot j's ``prog<j>`` (``prog`` leaf
   j·nb + ⌊t / EVERY⌋, its boundary's entry of the slot, one table row a boundary, `NetworkCheck.Period`'s
@@ -80,7 +80,7 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
 * **The answers** (``answers.json``, `answers`): the honest round's registration and, for each link-window W of the
   group, the network certifier's two row registrations of W and the scan's one-stage answer (`window_answer`), the same
   for every W, which `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) checks for W with W's three records'
-  certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit drawn, the bound 0); refused, a
+  certificates: accepted, one-stage's profile and bound at ``--delta`` (every unit sampled, the bound 0); refused, a
   reject naming the members Lean refused. Beside them, ``audits``: the block round's, the compute audit whose o0 is the
   scan's ``prog`` (its registration and answer, its Program's descriptor, its free inputs NR·nb·NE, every bit of every
   slot entry, which the rows form's K charges to each link-window tied to it, and no steps).
@@ -100,28 +100,28 @@ challenger's coins (``--challenger``), a `service.Stream`'s.
   a request's Program starts (its slot's `occ` 1), its ``prog`` tree the honest one but for that slot's entry at U's
   boundary, its read bit cleared (no Program reads the request): every registered read holds, since the read bit
   enters the unit's ok bit alone and its S_U and view are the honest ones, and Lean holds its proof, but its o0 opens
-  to 0, so the link-window is refused. Every unit (the one) is drawn. A prover that sets the bit with n 0 and no
+  to 0, so the link-window is refused. Every unit (the one) is sampled. A prover that sets the bit with n 0 and no
   outputs passes here, since the stand-in's entries are the prover's; an anchored Program's entry is its outputs on the
   `SCAN_STATE` it reads, which the period check holds to the scan's state tree (`stateTied`).
-* **A sampled draw** (``--draw K``): Lean ``draw --stratified K`` on the verifier's own coins (its OS randomness, the
+* **A sampled sample** (``--draw K``): Lean ``draw --stratified K`` on the verifier's own coins (its OS randomness, the
   rehearsal's live coins), each template's stratum its share and at least one unit; only the sampled proof blocks are proved
   and opened, and an accepted audit carries ε at δ (``wrong_units``: at most ``bound`` of ``of`` units wrong, except
   with probability δ), its charge terms (`charge_terms`) and each member's cost per sampled proof block (`per_unit`). The chain
-  and tampered rounds draw too and are refused all the same: Lean holds every table row of a registered port, drawn or
+  and tampered rounds sample too and are refused all the same: Lean holds every table row of a registered port, sampled or
   not, an output port's table its instances' rows. A member none of whose units is sampled (G > 1) runs no session.
 * **The challenger's coins** (``--challenger local|gate:USER@HOST --main FILE``, with ``--draw K``): the honest round's
-  K drawn as prove_path's records audit draws (`a5_coins`): one session of the auditor's challenger on the group's root
+  K sampled as prove_path's records audit samples (`a5_coins`): one session of the auditor's challenger on the group's root
   (`window_root`: the warden's session and the group's signed registrations), and the round's `service.Stream`
   (`spec_of`) on its coins (`a5_coins.RankCoins`): the stream registers the round, the coins commit to the
-  registration's digest, and its select draws once (Lean's `Select.select` on the bytes read). Once the session has
+  registration's digest, and its select samples once (Lean's `Select.select` on the bytes read). Once the session has
   ended, the outcome of record is the stream's with the coins' evidence, the Lean's whole run (`Run.run`, coin source
   the challenger) held to the Python's, and each altered evidence (`a5_coins.negatives`, the evidence for another
   window) refused by `coins.coins_reason` and the Lean's run (`coins_outcome`). ``local`` is a development session on
   this machine (its own key; it shows the path, not an auditor's coins); ``gate:USER@HOST`` is the auditor's
   challenger's through its gate, its challenger on ``--peer``'s 127.0.0.1, under the deployment's key record
-  ``--challenger-key``. The gate opens a root once, ever: a run's group is drawn once (the synthetic run's registrations
+  ``--challenger-key``. The gate opens a root once, ever: a run's group is sampled once (the synthetic run's registrations
   carry fresh salts, so each synthetic run has a root of its own). The other rounds keep the verifier's Lean's own
-  coins: one session serves one draw, and their refusal is Lean's registered reads, whatever the coins.
+  coins: one session serves one sample, and their refusal is Lean's registered reads, whatever the coins.
 * **What the verifier receives** is scanned for every piece of every unit's rows, inputs and outputs, and every salt
   but a public ``o0``'s, which the prover sends so the verifier opens each unit's output (`a8.received`; the slot
   entries' o0 is a committed row, `ROWS_O0`, whose salts it never sends), less the pieces public
@@ -240,7 +240,7 @@ BLOCK = ("block",)
 #: the templates whose o0 is a committed row the verifier never opens (the slot entries'), every other's its public word
 ROWS_O0 = frozenset(BLOCK)
 #: an input row's schema where it isn't hm96-sha512/row/v2: the block's ``x`` is a row-seg/v1 row, which takes a
-#: compression before its last block at any length, as C-Flock's statement needs of one row (`verity_flock.circuit.
+#: compression before its last block at any length, as Flock's statement needs of one row (`verity_flock.circuit.
 #: compose`); at the test class every block row is shorter than a block (NE = 176 bits)
 ROW_SCHEMAS = {("block", "x"): SCHEMA_HM96_SHA512_ROW_SEG}
 #: each scan template's parameters before its entry ports (`scan_root`'s inputs of its own): row (and sin), or state
@@ -251,7 +251,7 @@ ROUNDS = {"block": (BLOCK, "accepted"), "honest": (TEMPLATES, "accepted"), "chai
           "tampered": (("egress",), "does not open"), "unread": (UNREAD, "ok 0")}
 #: each round Program's directory, by its templates
 PROGRAMS = {TEMPLATES: "joint", ("egress",): "solo", UNREAD: "unread", BLOCK: "block"}
-#: C-Flock's tag of a frame domain's binding (`verity_flock.circuit.BINDING_TAG`), under which the block's o0 rows are
+#: Flock's tag of a frame domain's binding (`verity_flock.circuit.BINDING_TAG`), under which the block's o0 rows are
 #: committed and so the scan's `prog` tree (`block_binding`; `stage` refuses a block whose o0 root isn't the tree's)
 FRAME_BINDING = "verity/flock-circuit/binding/v2"
 VALUES = {k: f"verity/certifier/scan-{k}/v1" for k in ("state", "prog", "view")}
@@ -800,8 +800,8 @@ def wired(members) -> list[str]:
 def host(out: Path, run: Path | None = None, draw: int | None = None, setup: Setup = W63, group: int = 1,
          start: int = 0) -> SimpleNamespace:
     """The run (`link`'s, of `run` when given) and every round's members as the host reads them (no lowering, no
-    proof): what the test holds. A sampled draw (`draw`) changes no round: each is refused by Lean's registered reads,
-    which hold every table row, drawn or not."""
+    proof): what the test holds. A sampled sample (`draw`) changes no round: each is refused by Lean's registered reads,
+    which hold every table row, sampled or not."""
     at = link(out, run, setup, group, start)
     got = {}
     for name, (templates, outcome) in rounds_of(at).items():
@@ -1077,11 +1077,11 @@ def spec_of(pg: SimpleNamespace, members: list[dict], want: dict, schemas: dict[
 def coins_outcome(a, coins: SimpleNamespace, spec: S.Spec, units: list, counts: dict, stream: S.Stream, draw: S.Draw,
                   rec: dict, want: dict, leaf_layer: str, read: bytes, segment: dict | None, sessions: list[str],
                   verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
-    """The honest draw's outcome of record once the challenger's session has ended (prove_path's `a5.coins_outcome`):
+    """The honest sample's outcome of record once the challenger's session has ended (prove_path's `a5.coins_outcome`):
     its proof delivered and its outcome with the coins' evidence (`a5_coins.evidence`), the Lean's whole run (`Run.run`,
     its window `window_root`) held to the Python's, the audit failing ``coins`` where
     `coins.coins_reason` refuses; then each altered evidence (`a5_coins.negatives`, and the evidence for another window)
-    as its own stream's outcome on the honest draw's bytes (`a5_coins.Replay`), refused where `coins_reason` refuses and
+    as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused where `coins_reason` refuses and
     the Lean's run refuses at its select. -> (the audit record, None where the stream refused or holds the outcome; the
     negatives; the coins' record)."""
     AC, root, after = coins.AC, coins.root, bytes.fromhex(draw.registration.digest)
@@ -1161,14 +1161,14 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
           port: int, k: int | None = None, coins: SimpleNamespace | None = None) -> dict:
     """One round registered (its members' ports under their prefix, `port_prefix`, each a frame domain of a leaf an
     instance or a shared port's table row; the scan's registrations' roots; and the warden's row registrations its
-    warden ports read, `warden_roots`, before any coin), its units drawn by the verifier's Lean (`draw --stratified k`
+    warden ports read, `warden_roots`, before any coin), its units sampled by the verifier's Lean (`draw --stratified k`
     on its own coins; every unit when `k` is None) or, given the challenger's ``coins``, by the round's `service.Stream`
-    on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's drawn units proved --zk behind the firewall and
+    on them (`spec_of`; `a5_coins.RankCoins`, rank 0), each member's sampled proof blocks proved --zk behind the ZK server and
     held by Lean with the verifier's own registered reads; then each held unit's public ``o0`` (none of the slot
-    entries', `ROWS_O0`) opened under the salt the prover sends. A member with no unit drawn runs no session. Member j's
+    entries', `ROWS_O0`) opened under the salt the prover sends. A member with no unit sampled runs no session. Member j's
     session listens on ``port + j``, or with ``port`` 0 on a port the OS picks free. Writes what the verifier received
     under ``out / "verifier"``. An accepted audit carries its charge terms (`charge_terms`) and each member's cost per
-    drawn unit; on the challenger's coins, the outcome of record is the stream's (`coins_outcome`)."""
+    sampled proof block; on the challenger's coins, the outcome of record is the stream's (`coins_outcome`)."""
     from prove_leg import frame_ports  # one-stage's (`WZ._one_stage` puts it on the path)
 
     a0, a7, P, R, V = M.a0, M.a7, M.P, M.R, M.V
@@ -1368,7 +1368,7 @@ def window_answer(reg: dict, record: dict | None, delta: Fraction, reason: str) 
     """One-stage's answer for the group's registration ``reg`` as a period check reads an execution phase's scan answer
     (`NetworkCheck.Period`'s rows form, `pouw.core_check.answer_of`): from an accepted audit record (``record``,
     `audit`'s ``audit.json``), its sample and proved units with one-stage's profile and bound on incorrect proof
-    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit drawn, the bound 0); else a reject naming
+    blocks at ``delta`` (`audit.profile`, `audit.wrong_units`: every unit sampled, the bound 0); else a reject naming
     ``reason``."""
     commitment = RG.digest(reg)
     if record is None:

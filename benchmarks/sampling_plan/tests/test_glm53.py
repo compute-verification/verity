@@ -1,7 +1,7 @@
 """GLM-5.3's proof-block card (`glm53.py` over `glm53_blocks.json`): it names its census and the Build by id; every
 proof-block Definition is a planner candidate whose outputs fit a size class, its units one request's count times the
 requests, its work its own ANDs and a statement at most `cap` of it; each gap family says its rows, ANDs and why; the
-totals per token and per request are the Definitions' sums; the planner certifies a draw over the card's candidates; and
+totals per token and per request are the Definitions' sums; the planner certifies a sample over the card's candidates; and
 `main` prints the totals and the gaps."""
 
 from __future__ import annotations

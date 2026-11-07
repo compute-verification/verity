@@ -14,7 +14,7 @@ write them (`live/src/firewall_record_vectors.json`):
   the challenger's verdict (a boolean) or `{"panic": msg}`. `sent_at` is the release time a session that was sent waited
   for, if it had one.
 
-A record the firewall can't read, and an op that isn't one of these with arguments of their types, are rejected. An open's
+A record the ZK server can't read, and an op that isn't one of these with arguments of their types, are rejected. An open's
 statements, budget and schedule are checked before the record is read, as Python checks them.
 -/
 module

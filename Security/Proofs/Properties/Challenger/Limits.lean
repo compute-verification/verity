@@ -10,7 +10,7 @@ takes from v2's parameters and evidence.
 
 * **The deployed key.** v2's parameters parse only with a challenger key at `Lms.deployed` (`KEY_PARAMS`), the
   parameters the game's signature verifier reads: `paramsOfJson_deployed`, from bytes `params_deployed`, and so the key
-  v2's draws are read under (`oneStageZkSource`) is at them, `source_deployed`.
+  v2's samples are read under (`oneStageZkSource`) is at them, `source_deployed`.
 * **Coins within limits.** v2's evidence parses only with its coins within `LIMITS` (`evidenceOf_within`). In coins
   within limits `l`, `drawCoins` checks at most `signaturesAt l` signatures (`signatures_le`) and SHA-512 hashes at most
   `readsAt l` strings as it reads them (`readHashed_le`, counted through `readHashed_eq`'s parts). So one v2 record's
@@ -366,7 +366,7 @@ theorem params_deployed {a : ByteArray} {p : OneStageZk.Params}
     simp only [hj, bind, Except.bind] at h
     exact paramsOfJson_deployed h
 
-/-- The key v2's draws are read under (`oneStageZkSource`) is at `Lms.deployed`. -/
+/-- The key v2's samples are read under (`oneStageZkSource`) is at `Lms.deployed`. -/
 theorem source_deployed {a : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment} {d : Draws}
     (hp : (Core.canonicalJson a >>= OneStageZk.paramsOfJson) = .ok p) (hd : oneStageZkSource p c = some d) :
     d.key.params = Lms.deployed := by
@@ -378,7 +378,7 @@ theorem source_deployed {a : ByteArray} {p : OneStageZk.Params} {c : OneStage.Co
   | some w => rw [hw] at hd; cases hd; exact hk
 
 /-- **One v2 record's reading costs at most a constant**: where v2 decodes the parameters `a` and the evidence `b`
-and reads the draws `d` under them, the signatures `drawCoins` checks in the evidence's coins, at `L` each under the
+and reads the samples `d` under them, the signatures `drawCoins` checks in the evidence's coins, at `L` each under the
 key's parameters, and the strings SHA-512 hashes as it reads them are at most `LIMITS`' counts at `Lms.deployed`. -/
 theorem record_calls_le (L : Lms.Params → Nat) {a b : ByteArray} {p : OneStageZk.Params} {c : OneStage.Commitment}
     {e : OneStageZk.Evidence} {d : Draws} (hp : (Core.canonicalJson a >>= OneStageZk.paramsOfJson) = .ok p)

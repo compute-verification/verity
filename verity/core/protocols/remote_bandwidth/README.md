@@ -9,7 +9,7 @@ is the outline and the entry points.
 A session runs end to end on live coins: the verifier and its challenger as a party of their own, on a host the prover
 doesn't control (`verifier_party.py`), or every party in one process (`period.py`), against the prover's passes over
 its registered store. A period's case replays through the Lean (`RemoteAudit.Protocol`), and the session harness runs
-the Lean verifier of record beside the books (below). Not all of it is zero knowledge yet:
+the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
 
 - **Openings are in the clear.** Each window's openings go to the verifier party as they are (`wire.encode_openings`),
   and it checks them itself (`audit.AuditRun.verify`). Those checks are the specification of what each zero-knowledge
@@ -38,12 +38,12 @@ the Lean verifier of record beside the books (below). Not all of it is zero know
 
 ## Which side is the definition
 
-The verifier's definition is the Lean package `lean/` (`RemoteAudit`), the verifier of record; the Python mirrors it.
+The verifier's definition is the Lean package `lean/` (`RemoteAudit`), the verifier; the Python mirrors it.
 `audit.py` and what it calls here (`receipts.py`, `codec.py`, `coins.py`) are held to it by `lean/tests/`' difftest:
 every event's result, the session's outcome and its record, the registry (`Registry`: one live registration a node,
 each session's index `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec
 seed, codec, plans, receipts, openings, samples). Where the two differ, the Python is what is wrong. The properties of
-the Lean's verdicts are `Security/Properties/RemoteAudit.lean`.
+the Lean's verdicts are `Security/Properties/Accounting/Remote.lean`.
 
 `benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
 decides each registration, event and window, an accepted session's record is the one it returns, and the ledger reads
@@ -105,7 +105,7 @@ group's reads by kind beside it; and
 `line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
 and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
 compared word for word. The Lean statement that the line is true of the trace that produced the record is
-`Security/Properties/RemoteAudit/Line.lean`'s `LineHeld`.
+`Security/Properties/Accounting/Remote/Line.lean`'s `LineHeld`.
 
 ## Replay
 

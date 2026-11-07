@@ -1,6 +1,6 @@
-"""Option A's prover side: a drawn leaf's 32 lane partials, recomputed after the draw from what serving
+"""Option A's prover side: a sampled leaf's 32 lane partials, recomputed after the sample from what serving
 committed, bit for bit the words the served receipt XORed.  Serving is unchanged: one receipt a 32 × 32 leaf (`receipts`).
-The proof of a drawn leaf is 32 sub-statements, one a lane, and a combine that checks the XOR of their partials is the
+The proof of a sampled leaf is 32 sub-statements, one a lane, and a combine that checks the XOR of their partials is the
 committed receipt; this module computes those partials.
 
 An execution block's calls (`Calls`) hold each call's B [N, K] (s8, the int8 pin's weight) and B root, the call's first
@@ -23,7 +23,7 @@ zero receipt and zero partials (`PouwH1Tile_v4`'s dead tile, as serving writes i
 
 Two backends: "cpu", receipts.py's chain split by lane (`tile_receipts(lanes=True)` on hashlib's seeds and noise, the
 reference the served units kernels are gated against), and "gpu", h1u.cu's `kh_lanes` (`Kernel`: the fused units kernel
-in its own instantiation, run on just the drawn leaves' gathered operands, batched, their seeds from `kh_seeds_at`).
+in its own instantiation, run on just the sampled leaves' gathered operands, batched, their seeds from `kh_seeds_at`).
 """
 from __future__ import annotations
 
