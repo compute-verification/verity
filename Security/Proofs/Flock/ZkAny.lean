@@ -19,6 +19,7 @@ public import Proofs.Flock.ZkAny.RecordHiding
 public import Proofs.Flock.ZkAny.SampledSessions
 public import Proofs.Flock.ZkAny.SampledAuditTwo
 public import Proofs.Flock.ZkAny.SampledSessionsTwo
+public import Proofs.Flock.ZkAny.SampledArgTwo
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
@@ -29,6 +30,7 @@ the session's schedule, its model frames held to the model's messages, and its r
 `ZKOut`; a sampled audit's view, the registration's record with the sampled sessions' releases; sessions in sequence
 per outcome; the registration's ideal record hiding its values at hm96 commitments; the view at sampled sessions of
 one protocol that meets `ZKOut`; and a two-stage audit's view, a stream of registrations whose values follow the
-first-stage sample, with its ideal stream's hiding and its sessions one protocol's. -/
+first-stage sample, with its ideal stream's hiding and its sessions one protocol's or a proof system for proof
+blocks'. -/
 
 @[expose] public section
