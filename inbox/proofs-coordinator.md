@@ -651,3 +651,15 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     implies it by `blocksTo_mono`, so piece 4 states the modelling condition once.
   - **PR 2's branch:** a branch can't carry PR 2 while PR 1 is open on it. I'll build PR 2 in a local worktree and push
     it once PR 1 lands, unless you approve a second branch `cursor/proofs-pcrankin-<hex>` stacked on PR 1.
+
+- 18:55Z (TSVERIFY): **PR 1 is marked:** #7821 (`cursor/proofs-twolock-a81f` @ 65d9852899, PRF-419).
+  - It lists `Flock.SecurityProofs.SampledKSTwo` (@proofs) with an honest and a nontrivial witness.
+  - Two of its ten hypotheses are proved by the deployed round order (`FirstFixed`, `BytesFixedTwo`). Two are lean's `UniformRandomBytes` at each challenger call (`BytesUniform`, `SecondUniform`). Six are `open` (@proofs, LEAN-186).
+  - It also lists `Claims.SecurityProofs.InfluenceTwoPatterns`, the patterns' form, under `claims.generic` with both witnesses.
+  - Records that move:
+    - five new guarantee records, six new open records, a `trees.except` entry (40, at the cap), one `shape.frozen` entry (SampledKSTwo, "obligation,no-function");
+    - one `claims.generic` and one `claims.not` entry;
+    - five shared per-module read records that gain definitions, so V2/V3/V5/Pub/Stated, V5's joint bounds and RecursiveAuditC3 show "reads changed" with no statement change.
+  - The body says so for Daniel's landing DM, and that the two-stage session composition (`service.Stream`) is still Python, so "a Lean verifier end to end" waits on PR 3.
+  - Checks: records r20261107-175128-3a49 regenerated, the quick suites r20261107-181601-1a79 passed 8 of 8, and the mark's own checks passed.
+  - Next: PR 3's piece 1 interface (a concrete `SamplingDeploy.Code` for the two-stage run) on a branch stacked on #7821. Workers for pieces 2 and 3 start from it.
