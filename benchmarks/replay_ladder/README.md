@@ -72,7 +72,8 @@ benchmark_serving ShareGPT set (its file fetched at a pinned revision and checke
 conversations whose turns share their prefixes, and C4 prompts of 8,192 to 32,768 tokens, each through the model's chat
 template, half greedy and half at temperature 0.7 with a per-request seed, every request stopping at its end of text or
 its cap; the servers' context limit is `MAX_MODEL_LEN` (40,960), and `FLASHINFER` is 1 unless set. Each arm's `kinds.json` breaks every replay's differing
-requests down by kind, with each one's context at its first difference. With `LADDER_ROUTE_CAPTURE=DIR`, a directory holding
+requests down by kind, with each one's context at its first difference, and counts the window's requests whose context
+passed 2,048 keys, the DSA indexer's top-k: a difference that starts within it can't come from the indexer's selection. With `LADDER_ROUTE_CAPTURE=DIR`, a directory holding
 the route capture's plugin module and the settings registry beside it, both servers also load that plugin and write their routes under
 `capacity/route_capture` and `record/route_capture`; replays never load it. FP8 models run DeepGEMM, which JIT-compiles with the newest CUDA toolkit under
 `/usr/local` (12.8 or newer; a RunPod image's 12.4 can't, so install `cuda-nvcc-12-9 cuda-cudart-dev-12-9 cuda-cccl-12-9`

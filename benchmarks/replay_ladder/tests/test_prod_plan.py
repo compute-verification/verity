@@ -80,5 +80,29 @@ def test_a_plan_request_carries_its_own_sampling_and_seed_and_stops_at_its_end(m
     assert body("m", {"prompt_ids": [1], "max_tokens": 4}, "abc", "greedy") == {"from": "serve_tax", "ignore_eos": True}
 
 
+def test_kinds_counts_contexts_past_the_top_k_and_where_each_difference_starts(tmp_path, monkeypatch):
+    d = tmp_path / "glm53"
+    (d / "record" / L.LOAD / "rep-1").mkdir(parents=True)
+    plan = [{"i": 0, "kind": "sharegpt", "prompt_len": 100, "seeded": False},
+            {"i": 1, "kind": "multiturn", "prompt_len": PP.TOPK - 8, "seeded": True},
+            {"i": 2, "kind": "long", "prompt_len": 3 * PP.TOPK, "seeded": False}]
+    (d / "plan.jsonl").write_text("".join(json.dumps(r) + "\n" for r in plan))
+    (d / "record" / L.LOAD / "rep-1" / "client.jsonl").write_text(
+        "".join(json.dumps({"id": f"h{r['i']}", "i": r["i"]}) + "\n" for r in plan))
+    served = {0: 50, 1: 20, 2: 10}
+    monkeypatch.setattr(L.R, "window", lambda arm, load, rep: {"requests": [
+        {"engine_id": f"cmpl-h{i}-0-0a1b2c3d", "served": [7] * n} for i, n in served.items()]})
+    (d / "replay-1").mkdir()
+    (d / "replay-1" / "replay.json").write_text(json.dumps({"requests_tokens_differing": 2, "bit_exact": False, "requests_differing": [
+        {"request": "cmpl-h0-0-0a1b2c3d", "first_position": 30, "positions": 2},
+        {"request": "cmpl-h2-0-0a1b2c3d", "first_position": 4, "positions": 6}]}))
+    assert PP.main(["kinds", str(d)]) == 0
+    k = json.loads((d / "kinds.json").read_text())
+    assert {n: v["past_topk"] for n, v in k["kinds"].items()} == {"sharegpt": 0, "multiturn": 1, "long": 1}
+    rows = k["replays"]["replay-1"]["differing"]
+    assert [(r["kind"], r["context_at_first"], r["past_topk_at_first"]) for r in rows] == [
+        ("sharegpt", 130, False), ("long", 3 * PP.TOPK + 4, True)]
+
+
 def test_the_context_limit_replaces_serve_tax_s():
     assert L.max_model_len(("--max-model-len", "4096", "--seed", "0"), 40960) == ("--max-model-len", "40960", "--seed", "0")

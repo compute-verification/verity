@@ -20,9 +20,9 @@ arrivals at the rates a TP8 node serves. Arrivals are Poisson: each request carr
 (``gap_draw``, which serve_tax's schedule divides by the load's rate), from a stream of its own so the rest of the plan
 doesn't depend on it.
 
-``kinds`` reads a ladder model directory (its plan, window and replays) into kinds.json: per kind, the window's requests
-and served tokens, and per replay the requests whose tokens differ, with each one's context at its first difference
-(prompt plus the position).
+``kinds`` reads a ladder model directory (its plan, window and replays) into kinds.json: per kind, the window's requests,
+served tokens and requests whose context passed `TOPK` keys, and per replay the requests whose tokens differ, with each
+one's context at its first difference (prompt plus the position) and whether that context had passed `TOPK`.
 """
 from __future__ import annotations
 
@@ -45,6 +45,9 @@ MULTI_CONTEXT = 16384
 LONG = (8192, 32768)
 LONG_CAP = 256
 LONG_ASK = "\n\nSummarize the main points of each document above."
+#: the DSA indexer's top-k (GLM-5.3's index_topk): a query over more keys than this attends to only the top-k the
+#: indexer selects, so a difference that starts within it can't come from that selection
+TOPK = 2048
 
 
 def sha256(p: Path) -> str:
@@ -177,19 +180,22 @@ def kinds(a: argparse.Namespace) -> int:
         of[r["engine_id"]] = plan[client[http]]
     out: dict = {"model_dir": str(d), "kinds": {}, "replays": {}}
     for rid, p in of.items():
-        k = out["kinds"].setdefault(p["kind"], {"requests": 0, "seeded": 0, "served_tokens": 0, "context_max": 0})
+        k = out["kinds"].setdefault(p["kind"], {"requests": 0, "seeded": 0, "served_tokens": 0, "context_max": 0,
+                                                "past_topk": 0})
         served = next(r["served"] for r in w["requests"] if r["engine_id"] == rid)
         k["requests"] += 1
         k["seeded"] += bool(p.get("seeded"))
         k["served_tokens"] += len(served)
         k["context_max"] = max(k["context_max"], p["prompt_len"] + len(served))
+        k["past_topk"] += p["prompt_len"] + len(served) > TOPK
     for f in sorted(d.glob("replay-*/replay.json")):
         r = json.loads(f.read_text())
         rows = []
         for x in r.get("requests_differing") or ():
             p = of.get(x["request"], {})
+            at = (p.get("prompt_len") or 0) + x["first_position"]
             rows.append({"request": x["request"], "kind": p.get("kind"), "seeded": p.get("seeded"), "prompt_len": p.get("prompt_len"),
-                         "first_position": x["first_position"], "context_at_first": (p.get("prompt_len") or 0) + x["first_position"],
+                         "first_position": x["first_position"], "context_at_first": at, "past_topk_at_first": at > TOPK,
                          "positions": x["positions"]})
         by = {}
         for x in rows:
