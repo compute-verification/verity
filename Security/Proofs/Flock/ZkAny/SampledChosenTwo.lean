@@ -52,11 +52,11 @@ open scoped ENNReal
 
 /-- **The interior's record** at the boundary's randomness `p.1`, the interior's `p.2` and the auditor's coins `α`: what
 the interior's stack, at the boundary's record and `α`, hands the loop of the interior's values there. -/
-def interiorRecOf {K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ Α : Type} (sv : Service K S Y V O T R) {r : ℕ} {m : Fin r → ℕ}
+def interiorRecOf {K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ X₁ : Type} (sv : Service K S Y V O T R) {r : ℕ} {m : Fin r → ℕ}
     (v : Fin r → V) (st : StreamStack K V S O T R r m) (sv₁ : Service K₁ S₁ Y₁ W O₁ T₁ R₁) {r₁ : ℕ} {m₁ : Fin r₁ → ℕ}
-    (w : StreamRecord r S O T R → Α → Fin r₁ → W)
-    (st₁ : StreamRecord r S O T R → Α → StreamStack K₁ W S₁ O₁ T₁ R₁ r₁ m₁)
-    (p : (K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁))) (α : Α) :
+    (w : StreamRecord r S O T R → X₁ → Fin r₁ → W)
+    (st₁ : StreamRecord r S O T R → X₁ → StreamStack K₁ W S₁ O₁ T₁ R₁ r₁ m₁)
+    (p : (K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁))) (α : X₁) :
     StreamRecord r₁ S₁ O₁ T₁ R₁ :=
   streamRecOf sv₁ (w (streamRecOf sv v st p.1) α) (st₁ (streamRecOf sv v st p.1) α) p.2
 
@@ -92,8 +92,9 @@ theorem interior_le {K₁ S₁ Y₁ W O₁ T₁ R₁ : Type} [Fintype K₁] [Fin
       congrArg (sv₁.streamIdeal m₁ u₀ P) (funext fun ρ => propext (and_iff_right hc))
     calc prCoin (fun p : K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁) =>
           (c ∧ sv₁.streamAdmits p.1 b₁ (streamRecOf sv₁ u st₁ p)) ∧ A (streamRecOf sv₁ u st₁ p))
-        = sv₁.streamReal b₁ u st₁ A :=
-          congrArg prCoin (funext fun p => propext ⟨fun h => ⟨h.1.2, h.2⟩, fun h => ⟨⟨hc, h.1⟩, h.2⟩⟩)
+        = sv₁.streamReal b₁ u st₁ A := by
+          unfold Service.streamReal
+          exact congrArg prCoin (funext fun p => propext ⟨fun h => ⟨h.1.2, h.2⟩, fun h => ⟨⟨hc, h.1⟩, h.2⟩⟩)
       _ ≤ (∑ d ∈ streamChoices r₁ m₁ b₁, (sv₁.streamIdeal m₁ u (passed d) A + sv₁.streamPrfAdvantage u d A)) +
             sv₁.streamForgeAdvantage u (st₁ k₁ u) :=
           Verity.SecurityProofs.RegisteredStreamLeakage sv₁ r₁ m₁ b₁ u st₁ A k₁ hown
@@ -131,12 +132,12 @@ open scoped ENNReal
 /-- **A two-stage sampled audit's view at any values, the auditor choosing the first-stage sample.** For every value
 service `sv` with finite keys, sessions, salts, tags and record tags, and a stream of `r` boundary registrations under
 it, registration `i` of an epoch of `m i` sessions, at most `b` passed over, of values `v` registered before any coin,
-dummy values `v₀`, a stack `st` and a key `k₀`; every finite space `Α` of the auditor's coins; every value service `sv₁`
-of the same kind and a stream of `r₁` interior registrations under it and a key of its own, at most `b₁` passed over,
-whose values `w`, dummy values `w₀` and stack `st₁` are functions of the boundary's admitted record and the auditor's
-coins, and a key `k₁`; every finite space `X₂` of second-stage coins; and the sampled sessions' outcome `out` and
-released bytes `rel`, functions of both streams' randomness (each key and its registrations' sessions), the auditor's
-coins, the second-stage coins and the sessions' own randomness:
+dummy values `v₀`, a stack `st` and a key `k₀`; every finite space `X₁` of the auditor's coins; every value service
+`sv₁` of the same kind and a stream of `r₁` interior registrations under it and a key of its own, at most `b₁`
+passed over, whose values `w`, dummy values `w₀` and stack `st₁` are functions of the boundary's admitted record and
+the auditor's coins, and a key `k₁`; every finite space `X₂` of second-stage coins; and the sampled sessions' outcome
+`out` and released bytes `rel`, functions of both streams' randomness (each key and its registrations' sessions), the
+auditor's coins, the second-stage coins and the sessions' own randomness:
 
 if neither stack reads a key (`ZkServerOwnUser`), the sessions' release is simulated per outcome (`PerOutcome`) within
 `ε` by `Sim` given both admitted records, the auditor's coins and the second-stage coins, an ideal boundary stream of
@@ -156,30 +157,30 @@ the second-stage coins and `Sim`'s, of
 
 plus `ε s`. -/
 def _root_.Flock.Guarantees.SampledAuditTwoChosenAny : Prop :=
-  ∀ {K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ Α X₂ Ω Ωs St B : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T]
-    [Fintype R] [Fintype K₁] [Fintype S₁] [Fintype Y₁] [Fintype T₁] [Fintype R₁] [Fintype Α] [Fintype X₂] [Fintype Ω]
+  ∀ {K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ X₁ X₂ Ω Ωs St B : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T]
+    [Fintype R] [Fintype K₁] [Fintype S₁] [Fintype Y₁] [Fintype T₁] [Fintype R₁] [Fintype X₁] [Fintype X₂] [Fintype Ω]
     [Fintype Ωs] (sv : Service K S Y V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v v₀ : Fin r → V)
     (st : StreamStack K V S O T R r m) (k₀ : K) (sv₁ : Service K₁ S₁ Y₁ W O₁ T₁ R₁) (r₁ : ℕ) (m₁ : Fin r₁ → ℕ)
-    (b₁ : ℕ) (w w₀ : StreamRecord r S O T R → Α → Fin r₁ → W)
-    (st₁ : StreamRecord r S O T R → Α → StreamStack K₁ W S₁ O₁ T₁ R₁ r₁ m₁) (k₁ : K₁)
-    (out : (K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁)) → Α → X₂ → Ω → St)
-    (rel : (K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁)) → Α → X₂ → Ω → B)
-    (Sim : StreamRecord r S O T R → Α → StreamRecord r₁ S₁ O₁ T₁ R₁ → X₂ → St → Ωs → B) (ε : St → ℝ≥0∞)
+    (b₁ : ℕ) (w w₀ : StreamRecord r S O T R → X₁ → Fin r₁ → W)
+    (st₁ : StreamRecord r S O T R → X₁ → StreamStack K₁ W S₁ O₁ T₁ R₁ r₁ m₁) (k₁ : K₁)
+    (out : (K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁)) → X₁ → X₂ → Ω → St)
+    (rel : (K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁)) → X₁ → X₂ → Ω → B)
+    (Sim : StreamRecord r S O T R → X₁ → StreamRecord r₁ S₁ O₁ T₁ R₁ → X₂ → St → Ωs → B) (ε : St → ℝ≥0∞)
     (δ δ₁ : ℝ≥0∞),
     ZkServerOwnUser st → (∀ ρ α, ZkServerOwnUser (st₁ ρ α)) →
     (∀ p α χ₂, PerOutcome (out p α χ₂) (rel p α χ₂)
       (Sim (streamRecOf sv v st p.1) α (interiorRecOf sv v st sv₁ w st₁ p α) χ₂) ε) →
     (∀ P A, sv.streamIdeal m v P A ≤ sv.streamIdeal m v₀ P A + δ) →
     (∀ ρ α P A, sv₁.streamIdeal m₁ (w ρ α) P A ≤ sv₁.streamIdeal m₁ (w₀ ρ α) P A + δ₁) →
-    ∀ (s : St) (E : StreamRecord r S O T R → Α → StreamRecord r₁ S₁ O₁ T₁ R₁ → X₂ → B → Prop),
+    ∀ (s : St) (E : StreamRecord r S O T R → X₁ → StreamRecord r₁ S₁ O₁ T₁ R₁ → X₂ → B → Prop),
       prCoin (fun q : ((K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁))) ×
-            Α × X₂ × Ω =>
+            X₁ × X₂ × Ω =>
           (sv.streamAdmits q.1.1.1 b (streamRecOf sv v st q.1.1) ∧
             sv₁.streamAdmits q.1.2.1 b₁ (interiorRecOf sv v st sv₁ w st₁ q.1 q.2.1)) ∧
             out q.1 q.2.1 q.2.2.1 q.2.2.2 = s ∧
               E (streamRecOf sv v st q.1.1) q.2.1 (interiorRecOf sv v st sv₁ w st₁ q.1 q.2.1) q.2.2.1
                 (rel q.1 q.2.1 q.2.2.1 q.2.2.2)) ≤
-        avg (fun q : Α × X₂ × Ωs =>
+        avg (fun q : X₁ × X₂ × Ωs =>
           (∑ d₁ ∈ streamChoices r₁ m₁ b₁, avg fun y : Fin r₁ → S₁ × Y₁ × T₁ × R₁ =>
             (∑ d ∈ streamChoices r m b,
               (sv.streamIdeal m v₀ (passed d) (fun ρ =>
@@ -196,7 +197,7 @@ def _root_.Flock.Guarantees.SampledAuditTwoChosenAny : Prop :=
                 (st₁ (streamRecOf sv v st p) q.1 k₁ (w (streamRecOf sv v st p) q.1))) + ε s
 
 theorem SampledAuditTwoChosenAny : Flock.Guarantees.SampledAuditTwoChosenAny := by
-  intro K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ Α X₂ Ω Ωs St B _ _ _ _ _ _ _ _ _ _ _ _ _ _ sv r m b v v₀ st k₀ sv₁ r₁ m₁
+  intro K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ X₁ X₂ Ω Ωs St B _ _ _ _ _ _ _ _ _ _ _ _ _ _ sv r m b v v₀ st k₀ sv₁ r₁ m₁
     b₁ w w₀ st₁ k₁ out rel Sim ε δ δ₁ hown hown₁ hS hδ hδ₁ s E
   have hsum : ∀ {C ι : Type} [Fintype C] (t : Finset ι) (f : ι → C → ℝ≥0∞),
       avg (fun c => ∑ i ∈ t, f i c) = ∑ i ∈ t, avg (f i) := by
@@ -204,7 +205,7 @@ theorem SampledAuditTwoChosenAny : Flock.Guarantees.SampledAuditTwoChosenAny := 
     simp only [avg, Finset.mul_sum]
     exact Finset.sum_comm
   refine (prCoin_admits_perOutcome_two
-    (fun (p : (K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁))) (α : Α) =>
+    (fun (p : (K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁))) (α : X₁) =>
       sv.streamAdmits p.1.1 b (streamRecOf sv v st p.1) ∧
         sv₁.streamAdmits p.2.1 b₁ (interiorRecOf sv v st sv₁ w st₁ p α))
     (fun p α => (streamRecOf sv v st p.1, interiorRecOf sv v st sv₁ w st₁ p α)) out rel
