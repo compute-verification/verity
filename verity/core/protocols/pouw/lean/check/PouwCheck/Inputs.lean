@@ -3,7 +3,7 @@ module
 public import CoreProtocol.Profile
 public import CoreProtocol.Protocol
 public import Flock.WindowRecord
-public import Identity.Domains
+public import Randomness.Domains
 public import PouwCheck.Json
 public import PouwCheck.Tile
 public import PouwWindow.Length
@@ -322,7 +322,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
   pure ⟨a.protocol, a.digest.map Flock.hexOf, said, salt⟩
 
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
-written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+written: tied here to its entry of the table (`Randomness.Domains`), it reads the entry at its next record change. -/
 example : formats = [Domains.REGISTRATION_V1, Domains.REGISTRATION] := rfl
 
 end PouwCheck

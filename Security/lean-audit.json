@@ -3419,7 +3419,7 @@
   "Evaluate.Prims",
   "Identity.Sha512",
   "Identity.Tagged",
-  "Identity.Domains",
+  "Randomness.Domains",
   "Lms",
   "PousCheck",
   "MemoryChallenger",

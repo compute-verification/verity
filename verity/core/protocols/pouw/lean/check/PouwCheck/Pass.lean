@@ -582,7 +582,7 @@ def workUnits (coin : ByteArray) (stream registration : String) (receipt : List 
     FlockSoundness.Randomness.stream key [.str "draw", .str s.template] s.need))
 
 /-! Each separator below keeps its literal while a lock reads its definition, whose record hashes the value as
-written: tied here to its entry of the table (`Identity.Domains`), it reads the entry at its next record change. -/
+written: tied here to its entry of the table (`Randomness.Domains`), it reads the entry at its next record change. -/
 example : MANIFEST_SCHEMA = Domains.VLLM_PEARL_C_RUN := rfl
 example : WINDOW_OPEN_TAG = Domains.POUW_PERIOD_OPEN.toUTF8 := rfl
 example : EPOCH_OPEN_TAG = Domains.POUW_EPOCH_OPEN.toUTF8 := rfl

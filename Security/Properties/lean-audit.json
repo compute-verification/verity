@@ -824,7 +824,7 @@
   "PouwCommit.Draws",
   "Identity.Sha512",
   "Identity.Tagged",
-  "Identity.Domains",
+  "Randomness.Domains",
   "Properties.Nci",
   "Definitions.Core",
   "Definitions.Nci",
