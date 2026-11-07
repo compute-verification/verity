@@ -2033,15 +2033,44 @@ def concluded_constants(read: dict) -> set[str]:
     return {c for k in read.get("conclusion") or [] for c in (k.get("head"), *(k.get("defs") or [])) if c}
 
 
+def args_agree(taken: list | None, concluded: list | None) -> bool:
+    """Whether a conjunct at the arguments ``concluded`` (`Facts.lean`'s `args`: a closed one's canon text, `∀` for one it
+    holds at every value of, None for one it fixes no value of) concludes a premise its guarantee takes at ``taken`` (a
+    closed one's text, None for one that ranges with the guarantee's binders): each argument the guarantee fixes is the
+    conjunct's, or one the conjunct holds at every value of. A premise read with no arguments (packed in `∧`, or under
+    binders of its own) agrees by its head alone."""
+    if not isinstance(taken, list):
+        return True
+    if not isinstance(concluded, list) or len(concluded) != len(taken):
+        return all(t is None for t in taken)
+    return all(t is None or c in (t, "∀") for t, c in zip(taken, concluded))
+
+
+def honest_concludes(pin: dict, witnesses: list[dict]) -> set[str]:
+    """What the honest witnesses ``witnesses`` (their facts) conclude of the guarantee whose facts are ``pin``: each
+    conjunct's head and the definitions it applies (`concluded_constants`), of each witness's statement as written and
+    with a lifted definition unfolded once (`lifted`, which unfolds `P inst` past its head `P`); less a premise of
+    ``pin`` that conjuncts headed by it conclude only at other arguments than ``pin`` takes it at (`args_agree`). The
+    statements are the witnesses' types as the kernel has them (`Facts.lean`'s `body`), not their names."""
+    reads = [r for w in witnesses for r in (w.get("body") or {}, (w.get("body") or {}).get("lifted") or {})]
+    out = set().union(*map(concluded_constants, reads)) if reads else set()
+    conjuncts = [k for r in reads for k in r.get("conclusion") or []]
+    for p in pin.get("premises") or []:
+        heads = [k for k in conjuncts if k.get("head") == p.get("head")]
+        if heads and not any(args_agree(p.get("args"), k.get("args")) for k in heads):
+            out.discard(p.get("head"))
+    return out
+
+
 def honest_cover(policy: dict, facts: dict) -> dict[str, set[str]]:
-    """{guarantee: what its `honest` witnesses conclude together at the deployed instance}, for each guarantee whose
-    `witnesses` entry lists honest witnesses the build has."""
+    """{guarantee: what its `honest` witnesses conclude of it together at the deployed instance (`honest_concludes`)},
+    for each guarantee whose `witnesses` entry lists honest witnesses the build has."""
     ws, listed, out = policy.get("witnesses"), policy.get("guarantees") or {}, {}
     for g, w in sorted((ws if isinstance(ws, dict) else {}).items()):
         names = w.get("honest") if isinstance(w, dict) else None
         pins = [facts["pins"].get(n) if n in listed else None for n in names] if isinstance(names, list) and names else []
         if pins and all(p and p.get("kind") == "theorem" and isinstance(p.get("body"), dict) for p in pins):
-            out[g] = set().union(*(concluded_constants(statement_read(p)) for p in pins))
+            out[g] = honest_concludes(facts["pins"].get(g) or {}, pins)
     return out
 
 
@@ -2170,7 +2199,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     - `honest`: together their conclusions conclude, at the honest deployed instance, each premise of the guarantee outside
       a named assumption's module and `witnesses_assumed` (`honest_premises`) and, for a property, its function's
       acceptance (`accepted`): a
-      conjunct headed by or applying each. Each says something (`vacuous_meets`), and none applies a verifier that accepts
+      conjunct headed by or applying each, a premise's head read as written too and at the arguments the guarantee
+      fixes (`honest_concludes`). Each says something (`vacuous_meets`), and none applies a verifier that accepts
       everything (`accept_all`: that is the nontrivial lemma's object). A premise that can never hold fails here;
     - `nontrivial`: past its binders, `¬ C …` with `C` a head of the guarantee's conclusion, or one it unfolds through
       (`concluded`). For the `acceptance` kind, at the verifier that accepts everything, with a `∀` before the `¬` for each
@@ -2256,15 +2286,15 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                  f"of the {kind} kind ({why})"))
             continue
         kind = w.get("kind", kind or "acceptance")
-        covered, reached, checked = set(), set(), skip != "honest"
+        hps, reached, checked = [], set(), skip != "honest"
         for n in w.get("honest") or []:
             hp, why_not = witness_pin("witnesses", n, g, "honest", policy, facts)
             fails += why_not
             if hp is None:
                 checked = False
                 continue
+            hps.append(hp)
             read = statement_read(hp)
-            covered |= concluded_constants(read)
             for k in read.get("conclusion") or []:
                 reached |= set(k.get("defs") or [])
             for v in [*([x] if (x := vacuous_meets(ranges_dropped(read), None)) else []), *assumes(hp, policy, own)]:
@@ -2278,6 +2308,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                      f"verifier that accepts everything ({', '.join(hp['accept_all'])}): an honest lemma is "
                                      f"at the deployed verifier, and the accept-all one is the `nontrivial` lemma's object "
                                      f"(LEAN-68's HonestH200)"))
+        covered = honest_concludes(pin, hps)
         missing = [p for p in honest_premises(pin, policy, own) if p not in covered]
         fns = accepted(policy, g)
         if checked and (missing or (fns and not any(reaches(f, reached) for f in fns))):

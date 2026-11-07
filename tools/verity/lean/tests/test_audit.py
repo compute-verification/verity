@@ -3365,6 +3365,38 @@ def test_a_domain_hypothesis_says_what_it_restricts_and_the_honest_witness_concl
     assert "witnesses.honest-form" in witness_codes(dom, witnessed(honest=takes)[1]), "it concludes a domain hypothesis"
 
 
+def test_an_honest_witness_concludes_a_premise_it_states_applied_at_the_arguments_the_guarantee_fixes():
+    """An honest witness whose statement is the premise applied at the deployed instance (`P.Compiled P.deploy`) concludes
+    it, as `Facts.lean` reads its type, also where that statement is a definition the witness rule reads lifted (`lifted`,
+    unfolded once past its head): a domain hypothesis it is stays covered, and the honest witness concludes the premise.
+    Where the guarantee fixes an argument (`P.Compiled P.circA`), a conclusion at that argument, or at every value of it,
+    concludes the premise, and one at another argument, or at the value an `∃` picks, doesn't."""
+    pol, f = witnessed()
+    seed = {"open_seed": {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}}
+    opened = A.judge(pol | seed, f, FILES, update=True)[1]
+    entry = {k: v for k, v in opened["open"]["P.Compiled"].items() if k not in ("issue", "due")}
+    hand = {k: v for k, v in opened.items() if k != "open"} | {
+        "domain": {"P.Compiled": entry | {"why": "the compiled circuits the bound is stated over"}}}
+    dom = A.judge(hand, f, FILES, update=True)[1]
+    assert A.judge(dom, f, FILES)[0] == [] and "P.Compiled" in dom["domain"]
+    circ_a, circ_b, deploy = "CP.circA \nR0", "CP.circB \nR0", "CP.deploy \nR0"
+
+    lifted = wbody("LE.le", conclusion=[wk("LE.le", defs=["P.deploy"])])
+
+    def at(taken, concluded):
+        honest = {"body": wbody("P.Compiled", conclusion=[wk("P.Compiled") | {"args": concluded}], lifted=lifted)}
+        pol, f = witnessed({"premises": [COMPILED | {"args": taken}]}, honest=honest)
+        return [x.code for x in A.judge(dom, f, FILES)[0] if x.code.startswith("domain.")], witness_codes(pol, f)
+
+    hp = witnessed(honest={"body": wbody("P.Compiled", lifted=lifted)})[1]["pins"]["P.sound_honest"]
+    assert "P.Compiled" not in A.concluded_constants(A.statement_read(hp)), "read lifted, its head is gone"
+    assert at([None], [deploy]) == ([], [])
+    assert at([circ_a], [circ_a]) == ([], []) and at([circ_a], ["∀"]) == ([], [])
+    for other in ([circ_b], [None], [circ_a, circ_b]):
+        assert at([circ_a], other) == (["domain.uncovered"], ["witnesses.honest-uncovered"]), other
+    assert A.args_agree(None, [circ_b]) and A.args_agree([None], None) and not A.args_agree([circ_a], None)
+
+
 def test_another_listed_guarantee_s_statement_is_a_domain_hypothesis_citing_it():
     """A premise that is the `Guarantees` definition another listed guarantee is lifted into is a domain hypothesis citing
     that guarantee (`cites`), which an update writes; an entry citing anything else fails."""

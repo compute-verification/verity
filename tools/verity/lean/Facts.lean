@@ -36,7 +36,8 @@ judgement; `check.py` holds the policy.
   is a statement (`def G : Prop`) and whether it is a predicate (its type, past its binders, is `Prop`).
 - each pin's `body`: the constant its statement applies past its `∀` and `∃` binders (`head`), whether a `¬` stands
   before that application (`negated`) and the binders on the way (`binders`: `∀`, `→` for a proposition, `∃`), read as
-  written: nothing is unfolded; and its `conclusion`, split at `∧`, with what each conjunct applies (`conclusionOf`). A
+  written: nothing is unfolded; and its `conclusion`, split at `∧`, with what each conjunct applies and, for a head this
+  repository builds, its arguments (`conclusionOf`). A
   statement that is a definition under `meaning` applied under binders has the same read of it with that definition
   unfolded once (`lifted`, `liftOf`), as `shape` reads it. Beside them, the definitions under `recorded` the head unfolds
   through and the bound it ends at, one of `bounds` (`chain`, `headChain`); and each pin's `accept_all`, the verifiers
@@ -213,6 +214,14 @@ partial def inlineHelpers (env : Environment) (e : Expr) : Expr :=
 them, changes no text. -/
 def helperCanon (env : Environment) (e : Expr) (rn : Name → Name := id) : String :=
   canonText (inlineHelpers env e) rn
+
+/-- Each argument of the application `e`: its `helperCanon` text where it is closed, `∀` where it is one of `alls`, a
+variable the statement holds at every value of, and none where it mentions another (a binder of the guarantee, an `∃`'s
+witness, a hypothesis). -/
+def argsOf (env : Environment) (e : Expr) (alls : Array Expr := #[]) : Array (Option String) :=
+  e.getAppArgs.map fun a =>
+    let a := a.consumeMData
+    if !a.hasFVar && !a.hasMVar then some (helperCanon env a) else if alls.contains a then some "∀" else none
 
 /-- What a read definition contributes to what a statement means: its type, and a definition's value, each by
 `helperCanon`. -/
@@ -766,7 +775,8 @@ or a scope (`∀ m, ScopeAcc … m → bound`), is named and recorded like an as
 own name (`antecedent`: the record names it, and no witness is held to it), while one headed by the toolchain's or a dependency's constants (`x ∈ S`, `a = b`) is what the conclusion
 means. A predicate that constant takes as data, an event it measures (`Likely (fun o => A o → bad o)` with `Likely E`
 holding when `prob E ≤ ε`), is what the conclusion means too: `A` there is part of the event, not something the
-statement rests on. -/
+statement rests on. A premise whose hypothesis is its head applied has its arguments (`args`, `argsOf`: none for one that
+mentions the statement's binders), so that `check.py` can tell the arguments the statement fixes. -/
 partial def premisesOf (env : Environment) (meaning premises : Array Name) (built : NameSet) (moduleOf : Name → Option Name)
     (only : Bool) (e : Expr) : MetaM (Array Json) := do
   let mine (h : Name) : Bool := !assumption moduleOf h && ((moduleOf h).map built.contains).getD false
@@ -783,10 +793,12 @@ partial def premisesOf (env : Environment) (meaning premises : Array Name) (buil
           else do pure ((← packedHeads moduleOf t) ++ (← mentioned env premises moduleOf t), #[])
         let hs := ((hs.map (·, false) ++ ants.map (·, true)).foldl (init := (({} : NameSet), #[])) fun (s, out) (h, a) =>
           if s.contains h then (s, out) else (s.insert h, out.push (h, a))).2
+        let applies := if ← isProp t then t.consumeMData.getAppFn.constName? else none
         for (h, a) in hs do
           ps := ps.push <| Json.mkObj ([("binder", toJson (← x.fvarId!.getDecl).userName.toString),
             ("head", toJson h.toString), ("module", toJson ((moduleOf h).map toString))] ++
-            if a then [("antecedent", toJson true)] else [])
+            (if a then [("antecedent", toJson true)] else []) ++
+            if applies == some h then [("args", toJson (argsOf env t.consumeMData))] else [])
       if body.isAppOfArity ``And 2 || body.isAppOfArity ``Or 2 || body.isAppOfArity ``ite 5 then
         for b in body.getAppArgs.extract (body.getAppNumArgs - 2) body.getAppNumArgs do
           ps := ps ++ (← premisesOf env meaning premises built moduleOf true b)
@@ -885,23 +897,26 @@ def acceptAllOf (env : Environment) (t : Expr) : Array String := Id.run do
 each conjunct its head constant (`head`), the definitions declared under `meaning` it applies itself (`defs`, followed no
 further), whether it is a reflexivity (`a = a`, `a ↔ a`, `HEq a a`: `refl`), whether it is a hypothesis in scope, the
 hypotheses split at `∧` (`assumed`), and whether it is a `¬` (`negated`), with the head of what it negates past that
-proposition's own `∀` binders (`inner`); and whether a hypothesis is `False` (`absurd`). Read as written: nothing is
-unfolded. -/
-partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (hyps : Array Expr := #[]) :
-    MetaM (Array Json × Bool) :=
+proposition's own `∀` binders (`inner`); where `own` holds of the head (a constant of a module this repository builds),
+its arguments (`args`, `argsOf`, the variables of the `∀`s it stands under as `∀`); and whether a hypothesis is `False`
+(`absurd`). Read as written: nothing is unfolded. -/
+partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (hyps : Array Expr := #[])
+    (own : Name → Bool := fun _ => false) (alls : Array Expr := #[]) : MetaM (Array Json × Bool) :=
   forallTelescope t fun xs b => do
     let mut hs := hyps
+    let mut alls := alls
     for x in xs do
       let ty ← inferType x
       if ← isProp ty then hs := hs ++ (conjuncts ty.consumeMData).toArray.map (·.consumeMData)
+      else alls := alls.push x
     let b := b.consumeMData
     if b.isAppOfArity ``And 2 then
-      let (l, a) ← conclusionOf env meaning b.appFn!.appArg! hs
-      let (r, a') ← conclusionOf env meaning b.appArg! hs
+      let (l, a) ← conclusionOf env meaning b.appFn!.appArg! hs own alls
+      let (r, a') ← conclusionOf env meaning b.appArg! hs own alls
       return (l ++ r, a || a')
     if b.isAppOfArity ``Exists 2 then
       if let .lam n ty body bi := b.appArg!.consumeMData then
-        return ← withLocalDecl n bi ty fun x => conclusionOf env meaning (body.instantiate1 x) hs
+        return ← withLocalDecl n bi ty fun x => conclusionOf env meaning (body.instantiate1 x) hs own alls
     let defs := b.getUsedConstants.filter fun c => match env.find? c, env.getModuleIdxFor? c with
       | some (.defnInfo _), some i | some (.opaqueInfo _), some i => under meaning (moduleName env i)
       | _, _ => false
@@ -910,9 +925,12 @@ partial def conclusionOf (env : Environment) (meaning : Array Name) (t : Expr) (
     let negated := b.isAppOfArity ``Not 1
     let inner ← if negated then forallTelescope b.appArg!.consumeMData fun _ ib => pure ib.consumeMData.getAppFn.constName?
       else pure none
-    return (#[Json.mkObj [("head", toJson (b.getAppFn.constName?.map toString)),
+    let args := match b.getAppFn.constName? with
+      | some h => if own h then [("args", toJson (argsOf env b alls))] else []
+      | none => []
+    return (#[Json.mkObj ([("head", toJson (b.getAppFn.constName?.map toString)),
       ("defs", toJson ((defs.qsort Name.lt).map toString)), ("refl", toJson refl), ("assumed", toJson (hs.contains b)),
-      ("negated", toJson negated), ("inner", toJson (inner.map toString))]],
+      ("negated", toJson negated), ("inner", toJson (inner.map toString))] ++ args)],
       hs.any (·.isConstOf ``False))
 
 /-- The casts a side of a plain range may stand under (`(n : ℝ)`, `(i : ℕ)` of `i : Fin n`). -/
@@ -1018,7 +1036,7 @@ def pinInfo (env : Environment) (table : Std.HashMap Name (Array Name)) (meaning
     ("body", ← (do
       let read (t : Expr) : MetaM (List (String × Json)) := do
         let (h, neg, ks) ← bodyHead t
-        let (cs, absurd) ← conclusionOf env meaning t
+        let (cs, absurd) ← conclusionOf env meaning t (own := fun h => ((moduleOf h).map built.contains).getD false)
         let chain ← headChain env recorded bounds t 8
         return [("head", toJson (h.map toString)), ("negated", toJson neg), ("binders", toJson ks),
           ("chain", toJson (chain.map toString)), ("conclusion", toJson cs), ("absurd", toJson absurd)]
