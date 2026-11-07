@@ -21,7 +21,8 @@ top-k inputs (`long_rows`).
   or FlashInfer's MNNVL one (its received row the same on every rank; a call on NCCL's route is counted, not staged), an
   unbiased bf16 cuBLAS GEMM's token
   row (``aten::mm`` against a bf16 weight's transposed view, or ``aten::linear``) at the route its call's M rows take (a call past
-  ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), the router's grouped top-k, ``silu_and_mul`` and ``moe_sum`` per row,
+  ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), MLA's absorbs (``aten::bmm``) per row, the router's grouped top-k,
+  ``silu_and_mul`` and ``moe_sum`` per row,
   and FA3's split combine per (token, head). Instances are sampled from it
   by the capture's coins, ``--per-type`` of each type.
 * **Match gate.** Each sampled instance's Definition is evaluated on the captured inputs and must return the captured outputs
@@ -238,10 +239,14 @@ class Capture:
         n, real = self.tokens(r), self.real_rows(r, rows)
         return real // n if n and real % n == 0 else 1
 
+    def padded(self, r: int) -> int | None:
+        """The forward's rows, its real tokens padded (the recorded ``model_output``'s)."""
+        return next((e["out"]["hidden"]["shape"][0] for e in reversed(self.events[r]) if e["op"] == "model_output"), None)
+
     def real_rows(self, r: int, rows: int) -> int:
         """Of a call's ``rows``, those of the step's real tokens: the forward's padded rows (or a multiple of them, one per
         token and slot) cut to the scheduled tokens; any other count is taken whole."""
-        padded = next((e["out"]["hidden"]["shape"][0] for e in reversed(self.events[r]) if e["op"] == "model_output"), None)
+        padded = self.padded(r)
         n = self.tokens(r)
         if padded and rows % padded == 0:
             return n * (rows // padded)
@@ -620,6 +625,50 @@ def cublas_instances(cap: Capture, profile, unstaged: dict | None = None):
                        lambda r=r, y=y, t=t: [cap.tensor(r, y)[t]])
 
 
+def token_rows(cap: Capture, r: int, rows: int, prefill: int) -> list[tuple[int, int]]:
+    """A call's (row, token) pairs over the step's real tokens: a row a token (`real_rows`), or, for a call whose rows are the
+    DSA indexer's decode-padded layout (its decode rows padded, then the step's ``prefill`` rows), the real decode rows and the
+    prefill rows, padding left out."""
+    n, padded = cap.tokens(r), cap.padded(r)
+    dec, dec_padded = n - prefill, rows - prefill
+    if prefill and rows != n and not (padded and rows % padded == 0) and 0 <= dec < dec_padded:
+        return [(i, i) for i in range(dec)] + [(dec_padded + j, dec + j) for j in range(prefill)]
+    return [(t, t) for t in range(cap.real_rows(r, rows))]
+
+
+def bmm_instances(cap: Capture, profile, unstaged: dict | None = None):
+    """MLA's latent absorbs, ``aten::bmm`` of a row's heads against ``W_UK_T`` or ``W_UV`` in bf16, per row on the Program's
+    unsplit `BatchedGemm_v1` (`predict.dsa`'s ``absorb``), ``w[b][n][k]`` the weight at ``[b, k, n]``, in the opened layers;
+    any other ``aten::bmm`` is counted in ``unstaged``."""
+    from verity_vllm.program.frontend import targets as T
+    from verity_vllm.program.predict.common import kind
+    unstaged = {} if unstaged is None else unstaged
+    dot = T.tensor_core_dot(profile)
+    for r in cap.ranks:
+        prefill = next((int(e["in"]["numRows"]) for e in cap.events[r] if e["op"] == "_C::top_k_per_row_prefill"), 0)
+        for e in cap.events[r]:
+            if e["op"] != "aten::bmm" or not cap.opened(e, weights=True):
+                continue
+            x, w, y = e["in"].get("self"), e["in"].get("mat2"), e["out"].get("ret0")
+            ok = (all(isinstance(v, dict) and len(v.get("shape", ())) == 3 and v.get("dtype") == "torch.bfloat16" for v in (x, w, y))
+                  and "param" in w and w["shape"][:2] == [x["shape"][0], x["shape"][2]]
+                  and y["shape"] == [x["shape"][0], x["shape"][1], w["shape"][2]])
+            if not ok:
+                rec = unstaged.setdefault("AtenBmm_other", {"population": 0, "calls": [], "why": (
+                    "an aten::bmm that is no bf16 batch of rows against a bf16 weight: no population reads it")})
+                rec["population"] += 1
+                rec["calls"].append({"rank": r, "seq": e["seq"]})
+                continue
+            (B, R, K), N = x["shape"], w["shape"][2]
+            spec = kind("batched_gemm", B=B, K=K, N=N, DOT=dot)
+            for i, t in token_rows(cap, r, R, prefill):
+                if cap.only is not None and t not in cap.only:
+                    continue
+                yield (f"BatchedGemm_B{B}_K{K}_N{N}", spec, (r, e["seq"], t),
+                       lambda r=r, x=x, w=w, i=i: [cap.tensor(r, x)[:, i, :], np.ascontiguousarray(cap.tensor(r, w).transpose(0, 2, 1))],
+                       lambda r=r, y=y, i=i: [cap.tensor(r, y)[:, i, :]])
+
+
 def fused_add_rms_norm_instances(cap: Capture):
     from verity.ml.definitions.registry.cuda_rmsnorm import launch_block
     for r in cap.ranks:
@@ -753,7 +802,8 @@ def gate_instance(spec, key, args_of, want_of, full_gates: int) -> tuple[dict, d
 #: gated (`op_coverage`)
 GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm", "moe_launch",
              "vllm::flashinfer_trtllm_fused_allreduce_norm", "vllm::all_reduce", "_C::fused_add_rms_norm", "_vllm_fa3_C::fwd",
-             "fa3_sparse_mla", "aten::mm", "aten::linear", "_moe_C::grouped_topk", "_C::silu_and_mul", "_moe_C::moe_sum"}
+             "fa3_sparse_mla", "aten::mm", "aten::linear", "aten::bmm", "_moe_C::grouped_topk", "_C::silu_and_mul",
+             "_moe_C::moe_sum"}
 _EVERY: dict = {}
 
 
@@ -920,7 +970,8 @@ def main() -> int:
     unstaged: dict[str, dict] = {}
     sources = [quant_instances(cap), fp8_linear_instances(cap), moe_instances(cap, profile),
                fused_ar_norm_instances(cap), allreduce_instances(cap, unstaged), cublas_instances(cap, profile, unstaged),
-               fused_add_rms_norm_instances(cap), router_instances(cap, unstaged), silu_mul_instances(cap),
+               bmm_instances(cap, profile, unstaged), fused_add_rms_norm_instances(cap), router_instances(cap, unstaged),
+               silu_mul_instances(cap),
                moe_sum_instances(cap), mla_combine_instances(cap), mla_split_part_instances(cap)]
     for src in sources:
         try:
