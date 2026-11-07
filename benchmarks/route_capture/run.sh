@@ -22,8 +22,9 @@ export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 # DeepGEMM JIT-compiles its kernels with CUDA_HOME's nvcc: the newest toolkit under /usr/local unless CUDA_HOME names one
 CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
 export CUDA_HOME
-# vLLM takes FlashInfer's paths (its block-FP8 GEMM below 32 rows, its sampler) only with FlashInfer's kernels prebuilt
-# (flashinfer-cubin, which production images ship) or nvcc on PATH to compile them; engine_env.txt says which held
+# vLLM takes FlashInfer's block-FP8 GEMM below 32 rows only with FlashInfer's kernels prebuilt (flashinfer-cubin, which
+# production images ship) or nvcc on PATH to compile them, and its sampler compiles at warmup with that nvcc;
+# engine_env.txt says which held
 export PATH="$CUDA_HOME/bin:$PATH"
 unset NCCL_P2P_DISABLE
 # the Inductor pin the integration serves with: one reduction tiling, so the fused kernels captured are the ones replayed

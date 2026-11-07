@@ -25,11 +25,11 @@ custom CUDA kernels, captured whole into graphs that break around attention, whi
 
 `run.sh`'s header lists its variables (`VENV`, `CKPT`, `SHAREGPT`, `DURATION_S`). The engine runs with the Inductor pin
 the integration serves with (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`), so for a model vLLM compiles, the fused kernels
-captured are the ones a replay runs. vLLM takes FlashInfer's paths (its block-FP8 GEMM below 32 rows, its sampler) only
-when FlashInfer's kernels are prebuilt (`flashinfer-cubin`, which production images ship) or `nvcc` is on PATH to compile
-them, so `run.sh` puts `CUDA_HOME`'s `nvcc` on PATH, and `engine_env.txt` records `has_flashinfer()`. The FlashInfer
-sampler stays on, vLLM's default; if a sampled smoke request fails with it, the server restarts with it off, and
-`engine_env.txt` says so.
+captured are the ones a replay runs. vLLM takes FlashInfer's block-FP8 GEMM below 32 rows only when FlashInfer's kernels
+are prebuilt (`flashinfer-cubin`, which production images ship) or `nvcc` is on PATH to compile them, and FlashInfer's
+sampler compiles at warmup with that `nvcc`, so `run.sh` puts `CUDA_HOME`'s `nvcc` on PATH, and `engine_env.txt` records
+`has_flashinfer()`. The FlashInfer sampler stays on, vLLM's default; if a sampled smoke request fails with it, the server
+restarts with it off, and `engine_env.txt` says so.
 
 ## The plugin
 
