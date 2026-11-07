@@ -37,12 +37,6 @@ def fsub(a, b) -> np.ndarray:
         return FT._gpu(DR.as_u32(DR.as_f32(a) - DR.as_f32(b)))
 
 
-def fdiv(a, b) -> np.ndarray:
-    a, b = np.broadcast_arrays(FT._w(a), FT._w(b))
-    with np.errstate(all="ignore"):
-        return FT._gpu(DR.div_rn(a, b))
-
-
 def fminf(a, b) -> np.ndarray:
     """`min.f32`: the smaller, a NaN yields the other operand (two: 0x7FFFFFFF), min(+0, -0) = -0."""
     a, b = np.broadcast_arrays(FT._w(a), FT._w(b))
@@ -91,7 +85,7 @@ def c4_columns(kv, score) -> np.ndarray:
         l = FT.ffma(l, a, b)
         o = FT.ffma(o, a, FT.fmul(kv[..., r], b))
         m = m2
-    return fdiv(o, l)
+    return FT.fdiv(o, l)
 
 
 def c128_columns(kv, score, W: int, R: int) -> np.ndarray:
@@ -108,7 +102,7 @@ def c128_columns(kv, score, W: int, R: int) -> np.ndarray:
         sm = FT.fadd(e, sm)
         pr = FT.ffma(kv[..., r], e, pr)
     c = FT.ex2(FT.fmul(fsub(m, tree(m, FT.fmaxf)[..., None]), L2E))
-    return fdiv(tree(FT.fmul(pr, c), FT.fadd), tree(FT.fmul(sm, c), FT.fadd))
+    return FT.fdiv(tree(FT.fmul(pr, c), FT.fadd), tree(FT.fmul(sm, c), FT.fadd))
 
 
 # ---- the row ---------------------------------------------------------------------------------------------------------------
@@ -152,7 +146,7 @@ def amax(q, ratio: int) -> np.ndarray:
 def quant_groups(n, ratio: int = 4) -> tuple[np.ndarray, np.ndarray]:
     """(..., QB) normed words -> (e4m3 bytes (..., QB), UE8M0 bytes (...)) (cutedsl:334-389, 1398-1435)."""
     q = widen(bf16(n))
-    s = FT.fmaxf(fdiv(amax(q, ratio), F_448), MIN_SCALE)
+    s = FT.fmaxf(FT.fdiv(amax(q, ratio), F_448), MIN_SCALE)
     e = ((s + U32(0x7FFFFF)) >> U32(23)) & U32(0xFF)
     inv = (U32(254) - e) << U32(23)
     y = fminf(FT.fmaxf(FT.fmul(q, inv[..., None]), F_NEG448), F_448)

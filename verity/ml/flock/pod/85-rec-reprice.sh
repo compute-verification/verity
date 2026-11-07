@@ -42,7 +42,7 @@
 #                session vstage staged V* over), which STEP=lean verifies with. MODES=firewall alone, WARM=0 RUNS=1: each
 #                statement fixed before any session starts gets exactly one independent session, never sampled again, every
 #                exit recorded (out/oprove/statements.sha512, exits.tsv), and the challenger keeps the run's record
-#                (v-sess/rec-run.jsonl): the staging before any session, each V* part's coin server (serve --rec-run) logging
+#                (v-sess/rec-run.jsonl): the staging before any session, each V* part's challenger (serve --rec-run) logging
 #                every Hello it answers, the close after the last session
 #   STEP=oreplay (CPU) upstream's replay --zk of each statement's session oprove kept
 #   STEP=lean    (CPU) Lean's flock-verify verify --zk on each statement's last session, with V*'s own inputs oprove fixed (the
@@ -79,7 +79,7 @@
 #              server and in the run's record; a negative control, whose composition lean_verdicts.py requires refused)
 #      GPU=1 (0: the CPU prover end to end: built GPU=0, no CUDA, no lease, prove without --gpu; for a small K and N)
 #      NEG_INNER="challenge query" (lean: each honest V* session verified again over a copy of the inner session with one
-#              coin of rep 0 flipped in its session.json and its coin server's record alike, rec_inner.py forge --what W,
+#              coin of rep 0 flipped in its session.json and its challenger's record alike, rec_inner.py forge --what W,
 #              as part forged-inner-W-<name>; the parts that read the flipped coin refuse it, and lean_verdicts.py requires
 #              one to; the step refuses a W none of the parts it checks reads: challenge needs an alg part, query L0;
 #              empty: none)
@@ -744,7 +744,7 @@ EOF
   ;;
 icheck)
   # (CPU) the inner's last proxied session: upstream's replay, V*'s hashing reference over the salted tops (rec_vstar), that
-  # the coin server's record holds none of the clear tops, and the tree-top controls (rec_inner.py forge: a top that is not
+  # the challenger's record holds none of the clear tops, and the tree-top controls (rec_inner.py forge: a top that is not
   # the committed one, a record of unsalted tops), each of which V*'s inputs must refuse by name
   D=$DD/stage; SESS=${INNER:-$DD/inner/s$((NS - 1))}
   [ -f $SESS/session/session.json ] || { echo "run STEP=inner first"; exit 1; }
@@ -960,7 +960,7 @@ for c in sorted(p.parent for p in v.rglob("inst.bin")):
 EOF
   # MODES=firewall: the challenger's record of the run (rec-run.jsonl, verity/rec-run/v1's events a line): the staging of
   # rows.json and the shared set every V* part is given (rec_compose.shared_of_args) before any session, then each V* part's
-  # coin server logs every Hello it answers as an open of that part (serve --rec-run), a forgery's in a record of its own
+  # challenger logs every Hello it answers as an open of that part (serve --rec-run), a forgery's in a record of its own
   # (rec-run-<name>.jsonl), and the close after the last session; RETRY's second session is logged as any other's
   REC_RUN=
   if [ "$MODES" = firewall ]; then
@@ -1032,7 +1032,7 @@ EOF
       case $mode in dev) PENV= ;; host) PENV=FC_HOST_WITNESS=1 ;; firewall) PENV="FC_FIREWALL=1 FC_HOST_WITNESS=1" ;; esac
       n=$l; [ "$MODES" = dev ] || n=$l-$mode
       LAST=; again loopback $n $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk || rc=$?
-      # RETRY's negative control: a second session of the statement on a fresh coin server, logged in the run's record as
+      # RETRY's negative control: a second session of the statement on a fresh challenger, logged in the run's record as
       # any other; the first one stays the part's
       if [ "$l" = "${RETRY:-}" ]; then
         local KEEP=$LAST; again loopback $n-retry $V/$C/pub.bin $V/$C/inst.bin $V/$C/circuit.txt --zk; echo "$n: retried (RETRY), exit $?"; LAST=$KEEP

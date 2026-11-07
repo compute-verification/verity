@@ -1,6 +1,7 @@
 module
 
 public import Properties.Pouw
+import Std.Data.DTreeMap.Internal.Balancing
 
 /-!
 # Proofs of the grid's properties (`Properties.Pouw`, "The grid")

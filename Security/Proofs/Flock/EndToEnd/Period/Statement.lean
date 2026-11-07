@@ -101,7 +101,7 @@ open Classical
 
 variable (w : SamplingBlock)
 
-/-- The sampling block's draw: `Flock.Draw.drawOS`'s uniform `kd`-subset on the verifier's byte source. -/
+/-- The sampling block's draw: `Flock.Draw.drawWith`'s uniform `kd`-subset on the challenger's coins. -/
 def L : Law w.n := Law.execOS (n := w.n) w.src (.subset w.kd) w.n
 
 /-- The sampling block's audit as it runs: `EndToEndHidden`'s game. -/

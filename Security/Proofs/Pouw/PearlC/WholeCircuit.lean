@@ -2,6 +2,9 @@ module
 
 public import Definitions.Pouw.PearlC.WholeCircuit
 public import Proofs.Pouw.PearlC.TileCircuit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Circuit
 
 /-!
 # A unit of a composed table is its template (proofs)

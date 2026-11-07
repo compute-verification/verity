@@ -67,7 +67,7 @@ def test_the_ports_own_merge_ports_the_lean_checked_added_below_it(world, tmp_pa
     main = _move_main(world, {"Lib/Old.lean": old, "Lib/lakefile.toml": 'name = "lib"\n'})
     world.gh.put(1, port)
     world.gh.put(2, world.change({"b.txt": "b2\n"}))
-    members, entries = world.queue(nonlean_first=False).sync()
+    members, entries = world.queue().sync()
     assert [m.pr for m in members] == [1, 2], {n: e.why for n, e in entries.items()}
     one = members[0].commit
     assert _show(world, one, "Lib/Old.lean") == _port(old)

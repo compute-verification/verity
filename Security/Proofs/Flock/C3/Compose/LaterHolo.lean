@@ -1,8 +1,23 @@
 module
 
-public import Proofs.Flock.C3.Compose.HoloStageCoins
-public import Proofs.Flock.C3.RegLevels.LgHeld
 public import Proofs.Flock.Recursive.HPortTie
+public import Proofs.Flock.C3.RegLevels.SrcMaps
+public import Proofs.Flock.C3.Sparse.HeldStages
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.RegLevels.LgCoins
+import Proofs.Flock.C3.RegLevels.LgHeld
 
 /-!
 # `LaterCoins` at the verifier's map, from its hold of the inner session
@@ -232,8 +247,8 @@ at R's run from `MapsAt`'s session (`run_of_sessionAt`) at the `C3` of the verif
 total from their ties (`coins_total_holo`), the history's length from `hleaf` (`(ℐ).r` is the table's coin kinds'
 `1 + length` and one more, by `schedInner`), and `hlt` from `MapsAt` (`srcLevelTie_of_maps`). The reps' rounds are
 encoded and drawn at the map's one-round draws (`coinsEncoded_holoMap`; `hdr` at `holoSelOne`, as
-`repsDrawn_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, as
-`FlockC3.Sparse.record_decodes_of_accepted` gives it at a family) and the run's points are the history's first coin
+`repsDrawn_holoMapAt` gives it). The link points are the record's (`recordPoints_of`): it decodes (`hrec`, a
+hypothesis) and the run's points are the history's first coin
 (`hpts`, `PointsFromHistory`). -/
 theorem stageCoins_holo_held {zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg'}
     {dg : ByteArray → ByteArray} {N k Rw : ℕ}

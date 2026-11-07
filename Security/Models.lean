@@ -22,6 +22,8 @@ public import Definitions.Nci.Guarantees.Activations
 public import Definitions.Nci.Guarantees.Covering
 public import Definitions.Nci.Guarantees.CoveringTwoCosts
 public import Definitions.Nci.Guarantees.CoveringPriced
+public import Definitions.Assumptions
+public import Definitions.Nci.Guarantees.Cut
 public import Definitions.Nci.Guarantees.CoverAdditive
 public import Definitions.Nci.Guarantees.CoverFanOut
 public import Definitions.Nci.Guarantees.CoverFanOutValue
@@ -32,6 +34,8 @@ public import Definitions.Nci.Guarantees.PartitionCovers
 public import Definitions.Nci.Guarantees.CompliesCK
 public import Definitions.Nci.Guarantees.Ldl
 public import Definitions.Nci.Guarantees.Witnesses
+public import Definitions.Nci.Guarantees.Formalism
+public import Definitions.Nci.Guarantees.Formalism.Witnesses
 public import Definitions.Pous.Assumptions
 public import Definitions.Pous.Guarantees
 public import Definitions.Pouw.Assumptions
@@ -51,6 +55,8 @@ public import Definitions.Hash.Assumptions
 public import Definitions.Hash.Guarantees
 public import Definitions.NetworkCertifier.Guarantees.Period
 public import Definitions.NetworkCertifier.Guarantees.PooledLeak
+public import Definitions.WeightSecurity.Assumptions
+public import Definitions.WeightSecurity.Guarantees
 
 /-! Each component's named assumptions and guarantee statements. -/
 

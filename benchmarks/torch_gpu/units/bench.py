@@ -21,6 +21,7 @@ import json
 import os
 import statistics
 import sys
+from typing import TYPE_CHECKING
 
 from verity_config.settings import of
 
@@ -37,6 +38,9 @@ import relu as RL
 import rmsnorm as RN
 import softmax as SM
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 HEADS = 256
 LAYERS = 52
 settings = of(__file__)
@@ -46,7 +50,7 @@ STEP = {"rmsnorm 16384 (units)": 2 * LAYERS + 1, "quant 16384 (units)": 3 * LAYE
 ARM_SLEEP, STEP_SLEEP = 2_000_000, 200_000_000
 
 
-def gpu_ms(f, cycles: int) -> tuple[float, bool]:
+def gpu_ms(f: Callable[[], object], cycles: int) -> tuple[float, bool]:
     e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
     torch.cuda._sleep(cycles)
     e0.record()
@@ -57,7 +61,7 @@ def gpu_ms(f, cycles: int) -> tuple[float, bool]:
     return e0.elapsed_time(e1), covered
 
 
-def host_ms(f) -> float:
+def host_ms(f: Callable[[], object]) -> float:
     e0, e1 = torch.cuda.Event(enable_timing=True), torch.cuda.Event(enable_timing=True)
     torch.cuda.synchronize()
     e0.record()
@@ -67,7 +71,7 @@ def host_ms(f) -> float:
     return e0.elapsed_time(e1)
 
 
-def timing(dev, B: int, reps: int, step_reps: int) -> list[dict]:
+def timing(dev: torch.device, B: int, reps: int, step_reps: int) -> list[dict]:
     g = torch.Generator(device=dev).manual_seed(7)
     rnd = lambda *s: torch.randn(*s, generator=g, device=dev).to(torch.bfloat16)  # noqa: E731
     x16, w16, x64 = rnd(B, 16384), rnd(16384), torch.relu(rnd(B, 65536))

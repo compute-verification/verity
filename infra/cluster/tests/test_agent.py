@@ -274,7 +274,7 @@ def test_shadow_mode_reads_nothing_in_a_window_the_status_file_began(c, tmp_path
 
 
 def test_live_mode_grants_a_pinned_request_only_from_its_on_list(c, tmp_path):
-    """node2-ops' stop at 5:55 PM PDT on 30 Sep: GPU 0 is free, but the request may only have GPUs 2-7 (`gpu-lease 1 --on ...`)."""
+    """A node2-ops stop: GPU 0 is free, but the request may only have GPUs 2-7 (`gpu-lease 1 --on ...`)."""
     node = Node(tmp_path)
     f = node.gl / "wait.1.40"
     f.write_text("pid=40 n=1 on=2,3,4,5,6,7 run=r1 who=w40 since=2026-09-30T20:00:00Z max=20 preempt=1\n")
@@ -285,7 +285,7 @@ def test_live_mode_grants_a_pinned_request_only_from_its_on_list(c, tmp_path):
 
 
 def test_live_mode_plans_with_the_nodes_live_deadline_so_a_renewal_grants_without_a_new_description(c, tmp_path):
-    """INF-113: the description's stop puts T0 inside the node's drain, so a request waits; once infra renews the node (rewrites
+    """The description's stop puts T0 inside the node's drain, so a request waits; once infra renews the node (rewrites
     its deadline file) the next reading plans with the new stop and grants it, with the description and the agent unchanged."""
     node = Node(tmp_path)
     node.waiter(20, 1, "2026-09-30T20:00:00Z")

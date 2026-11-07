@@ -692,7 +692,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
-    from verity.core.protocols.certifier import ingress_scan as IS, warden as W
+    from verity.ml.protocols.certifier import ingress_scan as IS
+    from verity.core.protocols.certifier import warden as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}

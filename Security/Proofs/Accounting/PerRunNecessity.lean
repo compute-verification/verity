@@ -1,6 +1,12 @@
 module
 
-public import Proofs.Accounting.PerRunPouw
+public import Definitions.Accounting.PerRun
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Game.Params
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.PerRunPouw
+import Proofs.Pouw.Prob
 public import Proofs.Pouw.Break
 
 /-!

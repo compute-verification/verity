@@ -26,8 +26,10 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 untraced = ["tests/bench/test_input_sets.py", "tests/bench/test_lowerings.py", "tests/bench/test_served_templates.py"]
 # Test-only: the bench spine's tests drive Flock's lowerings over the repository's fixtures and census;
 # tests/bench/test_bench_judge.py runs benchmarks/judge.py; test_unit_costs_menu.py
-# holds the Lean menu (VStar.Menu.Pinned) to the pinned menu.json it is generated from.
-inputs = ["verity/core/service/flock/VStar/Menu/Pinned.lean", "verity/ml/flock", "benchmarks/judge.py", "benchmarks/census", "fixtures"]
+# holds the Lean menu (VStar.Menu.Pinned) to the pinned menu.json it is generated from; test_census_data.py reads each census
+# workload's regression expectations, most of them fetched fixtures.
+inputs = ["verity/core/service/flock/VStar/Menu/Pinned.lean", "verity/ml/flock", "benchmarks/judge.py", "benchmarks/census", "fixtures",
+          "integrations/vllm/tests/regression/expected"]
 parallel = true
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
@@ -45,12 +47,6 @@ tests = [
     "tests/bench/test_unit_costs.py",
 ]
 paths = ["verity/ml/flock/python/verity_flock/templates"]
-
-[[tool.verity.tests.reads]]
-tests = ["tests/bench/test_census_data.py"]
-paths = [
-    "integrations/vllm/tests/regression/expected/llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__stoch-t0.8-p0.95__bi-eager.json",
-]
 
 [[tool.verity.tests.reads]]
 tests = ["tests/bench/test_lowerings.py"]

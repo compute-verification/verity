@@ -4,7 +4,7 @@ end before the chain splits it into one proof block a step.
 
     CompileSlice_v1{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CN, CTW, CU}
         (pub, adv, cert, srv, cin, cout, wit) -> verdict[16]
-    CompileSliceBlocks_v1{R, …, CU, G}
+    CompileSliceRowGroups_v1{R, …, CU, G}
         (pub, adv, cert, srv0, …, srv{P/G − 1}, cin, cout, wit) -> verdict[16]
 
 The second is the first with its served rows in P / G rows of G steps (G < P), as the served rows' registration commits a
@@ -134,7 +134,7 @@ from verity.core.protocols.certifier import replay_chain as RC, replay_step as R
 from verity.core.protocols.certifier.head_check import BIT, _part
 
 STATICS = RS.STATICS + ("Q", "D", "P", "K", "CN", "CTW", "CU")
-#: the statics of the slice whose ``srv`` is P / G rows (`CompileSliceBlocks`), G < P
+#: the statics of the slice whose ``srv`` is P / G rows (`CompileSliceRowGroups`), G < P
 BLOCK_STATICS = STATICS + ("G",)
 CW = AE.CW
 FLAGS = ("load", "steps", "code", "charge", "rows", "cache")
@@ -331,9 +331,9 @@ _DOC = ("a slice of the compile unit, one window whole: ReplayLoad, then per ste
         "load, steps, code, charge, rows, cache)")
 CompileSlice = _part("CompileSlice", STATICS, _sig, _build, _DOC)
 CompileSlice.build = _build  # type: ignore[attr-defined]
-CompileSliceBlocks = _part("CompileSliceBlocks", BLOCK_STATICS, _sig, _build,
+CompileSliceRowGroups = _part("CompileSliceRowGroups", BLOCK_STATICS, _sig, _build,
                            _DOC + "; its served rows are P / G rows of G steps each, step u held to row u // G")
-CompileSliceBlocks.build = _build  # type: ignore[attr-defined]
+CompileSliceRowGroups.build = _build  # type: ignore[attr-defined]
 
 
 def _refuse_blocks(b: dict) -> str | None:
@@ -342,7 +342,7 @@ def _refuse_blocks(b: dict) -> str | None:
     return None
 
 
-CompileSliceBlocks.refuse = _refuse_blocks
+CompileSliceRowGroups.refuse = _refuse_blocks
 
 
 def statics(R: int, W: int, A: int, engine: dict, IW: int, Q: int, D: int, P: int, K: int, CN: int = 0, CTW: int = 0,
@@ -361,8 +361,8 @@ def with_block(st: dict, G: int | None) -> dict:
 
 
 def unit(**st):
-    """The unit at statics `st`: CompileSlice_v1 at G = P (`st` without G), else CompileSliceBlocks_v1{…, G}."""
-    return bind(CompileSliceBlocks if "G" in st else CompileSlice, **st)
+    """The unit at statics `st`: CompileSlice_v1 at G = P (`st` without G), else CompileSliceRowGroups_v1{…, G}."""
+    return bind(CompileSliceRowGroups if "G" in st else CompileSlice, **st)
 
 
 #: a synthetic engine small enough to trace and to prove in about a minute: 4-token blocks, 16 tokens a step

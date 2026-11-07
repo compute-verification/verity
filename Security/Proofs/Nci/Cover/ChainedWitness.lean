@@ -2,6 +2,7 @@ module
 
 public import Definitions.Nci.Guarantees.CoverChained
 public import Proofs.Nci.CoveringTwoCostsWitness
+public import Proofs.Nci.Rate
 
 /-!
 # `CoverTrainingChained` is not vacuous
@@ -12,8 +13,9 @@ is the two-cost covering bound's witness (`Proofs.Nci.CoveringTwoCostsWitness`, 
 wide, so its bits (`bitDecl tcDecl`) are its gates (`bt`) with nothing registered, and its multiplication blocks
 (`tcBlocks`) carry over as `bBlocks`: parameter-hard at `c_w = 1/2` at every `s`, with `p₅` chained at
 `(D, c_a) = (5, 1)`. The declaration is the circuit itself (`selfContainment`), divided into one inference block per
-computed gate (`onePerGate`): each has one gate and reads two fresh input bits, a `(1, 2)`-partition, so it complies at `(c, k) = (1, 2)`,
-and `k = 2 < c_w D = 5/2`. The block size is `s = w₀ c + k + width(θ) = 3`.
+computed gate (`onePerGate`): each has one gate and reads two fresh input bits, a `(1, 2)`-partition of blocks of exactly
+one gate, so it complies at `Γ = 1` and the rate `α = 2`, and `α Γ = 2 < c_w D = 5/2`. The block size is
+`s = w₀ Γ + α Γ + width(θ) = 3`.
 -/
 
 @[expose] public section
@@ -119,26 +121,29 @@ def onePerGate : Partition tcDecl.D 10 where
   unit g := if h : g.val < 4 then none else some ⟨g.val - 4, by have : g.val < 14 := g.isLt; omega⟩
   input_iff g := by revert g; decide
 
-/-- The witness is Boolean, and its one gate per block reads two fresh input bits: a `(1, 2)`-partition. -/
-theorem complies : Complies 1 2 tcDecl := by
+/-- The witness is Boolean, and its one gate per block reads two fresh input bits: a `(1, 2)`-partition of blocks of
+exactly one gate, so it complies at `Γ = 1` and the rate `α = 2`. -/
+theorem complies : CompliesRate 1 2 tcDecl := by
   have hb : ∀ g, tcDecl.D.w g = 1 := by decide
   have hf : ∀ g, tcDecl.D.isInput g = false → (tcDecl.D.reads g).Nonempty := by decide
   have hc : ∀ u, (onePerGate.gates u).card = 1 := by decide
   have hk : ∀ u, (tcDecl.unregistered (onePerGate.gates u)).card ≤ 2 := by decide
-  exact ⟨10, onePerGate, ⟨⟨hb, hf⟩, hc, hk⟩⟩
+  have hP : onePerGate.IsCK tcDecl 1 2 := ⟨⟨hb, hf⟩, fun u => (hc u).le, hk⟩
+  simpa only [Nat.cast_ofNat, Nat.cast_one, div_one] using Nci.SecurityProofs.compliesRate_of_complies hP hc
 
 /-- **`CoverTrainingChained` is not vacuous, at `c_w ≠ c_a`**: the two-cost covering bound's witness
 (`Proofs.Nci.CoveringTwoCostsWitness`), read bit by bit (`bitDecl`), contained in itself and divided into one
-inference block per gate, meets every hypothesis of `Nci.Cover.Guarantees.CoverTrainingChained` at
-`(c, k) = (1, 2)`, `c_w = 1/2`, `c_a = 1`, `D = 5` and `s = 3`, with a chained multiplication block. -/
+inference block per gate, meets every hypothesis of `Nci.Cover.Guarantees.CoverTrainingChained` at `Γ = 1`, `α = 2`,
+`c_w = 1/2`, `c_a = 1`, `D = 5` and `s = 3`, with a chained multiplication block. -/
 theorem coverTrainingChained_nonvacuous :
-    ∃ (c k : ℕ) (r d : RegisteredCircuit) (M : Containment r.D d.D) (B : Nci.Covering.MulBlocks (bitDecl r))
+    ∃ (Γ : ℕ) (α : ℝ) (r d : RegisteredCircuit) (M : Containment r.D d.D) (B : Nci.Covering.MulBlocks (bitDecl r))
       (s D w₀ : ℕ) (cw ca : ℝ),
-      Complies c k d ∧ Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) ∧
-      Assumptions.ParameterHardAt (bitDecl r) B s cw ∧ (k : ℝ) < cw * D ∧ 0 < ca ∧ (∀ g, r.D.w g ≤ w₀) ∧
-      w₀ * c + k + r.D.width r.θ ≤ s ∧ cw ≠ ca ∧ (Assumptions.chainedBlocksAt (bitDecl r) B D ca).Nonempty :=
-  ⟨1, 2, tcDecl, tcDecl, selfContainment, bBlocks, 3, 5, 1, 1 / 2, 1, complies,
-    fun _ _ h => absurd h (notMem_empty _), b_parameterHard 3, by norm_num, by norm_num, fun _ => le_rfl,
-    by norm_num [Circuit.width], by norm_num, ⟨(5, 0), b_mem⟩⟩
+      0 ≤ α ∧ CompliesRate Γ α d ∧ Assumptions.ThetaRegistered r d (PartialContainment.ofContainment M) ∧
+      Assumptions.ParameterHardAt (bitDecl r) B s cw ∧ Cover.Assumptions.CapBelowDepth (α * Γ) cw D ∧ 0 < ca ∧
+      Cover.Assumptions.BlockFits r Γ (α * Γ) w₀ s ∧ cw ≠ ca ∧
+      (Assumptions.chainedBlocksAt (bitDecl r) B D ca).Nonempty :=
+  ⟨1, 2, tcDecl, tcDecl, selfContainment, bBlocks, 3, 5, 1, 1 / 2, 1, by norm_num, complies,
+    fun _ _ h => absurd h (notMem_empty _), b_parameterHard 3, by norm_num [Cover.Assumptions.CapBelowDepth],
+    by norm_num, ⟨fun _ => le_rfl, by norm_num [Circuit.width]⟩, by norm_num, ⟨(5, 0), b_mem⟩⟩
 
 end Nci.Cover.SecurityProofs.ChainedWitness

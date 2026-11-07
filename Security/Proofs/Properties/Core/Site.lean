@@ -347,10 +347,12 @@ theorem items_log : ∀ l : Core.Site.Registration, Verity.Registration.items (l
   | [] => rfl
   | .site _ _ :: l => items_log l
 
-/-- A code log registers no item, so an entry it denotes registers none twice. -/
+/-- A code log registers no item, and a site entry declares no day, so an entry it denotes registers none twice. -/
 theorem once_regEntry (l : Core.Site.Registration) (e : Core.Site.Registration.Entry) :
     Verity.Registration.Entry.Once (log l) (regEntry e) := by
-  cases e; simp [Verity.Registration.Entry.Once, items_log, regEntry, Verity.Registration.Entry.items]
+  cases e
+  simp [Verity.Registration.Entry.Once, Verity.Registration.Entry.ItemsOnce, Verity.Registration.Entry.DayOnce,
+    items_log, regEntry, Verity.Registration.Entry.items, Verity.Registration.Entry.declared?]
 
 /-- What a check's result says of the log it checked: an accepted log is valid, with the spec's Site of it; a refusal
 at `i` follows a valid prefix of `i` entries, and is the spec's refusal of the next. -/

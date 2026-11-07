@@ -7,7 +7,7 @@
 #   research run --on CPU_NODE --project verity --source . --cwd source --mem-gb 128 --timeout 327m -- \
 #     taskset -c 0-31 bash benchmarks/recursion_e2e/job.sh K=4096 N=2 GPU=0 FLOCK_WORK=/workspace/cache/rec-bench
 # and a GPU one as a GPU host job on a GPU node's queue (85 leases a GPU around each prove itself).
-# env: K=4096 N=2 (85's inner statement: N instances of GemmCoordinate_v2{K})
+# env: K=4096 N=2 (85's inner statement: N template instances of GemmCoordinate_v2{K})
 #      STEPS=build,inner,icheck,vstage,vcap,oprove,oreplay,lean,forge-after,negative  REPEAT=3 (each CPU step; REPEAT_<STEP>=n one step's)
 #      WARM=1 RUNS=3 (the inner's runs)  OPROVE_WARM=0 OPROVE_RUNS=1 (each V* statement's releases)
 #      OPROVE_JOBS=1 (V* statements proved at once; 85's own default is 4)

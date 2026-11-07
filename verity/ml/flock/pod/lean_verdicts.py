@@ -26,9 +26,9 @@ no two sessions one coin key (`RecCompose.Accepts`), and the record shows the pa
 session opened per part, each the composed one, the close last (`RecCompose.OneRun`); the step fails unless it does.
 Each forgery of a V* part, put in that part's place, must be refused by it too. The record is the one the challenger
 kept while the parts ran, ``rec-run.jsonl`` (`run_record`): 85's oprove under MODES=firewall (one session per staged
-statement) stages ``rows.json`` and the shared set every part is given before any session, each V* part's coin server
+statement) stages ``rows.json`` and the shared set every part is given before any session, each V* part's challenger
 logs every ``Hello`` it answers as an open of that part (``flock-circuit serve --rec-run``), and oprove closes it after
-the last session; a staged forgery's coin server logs into a record of its own (``rec-run-FORGERY.jsonl``), whose opens
+the last session; a staged forgery's challenger logs into a record of its own (``rec-run-FORGERY.jsonl``), whose opens
 stand in for its part's (``rec-run-FORGERY.json``), while a forged inner, verified over the honest sessions, keeps
 theirs. Without one, the record is DIR's ``rec-run.json``. A composition with no record to read, or no ``REC-COMPOSE``
 line, is neither accepted nor refused, and fails the step. A run of some of V*'s
@@ -166,7 +166,7 @@ def events_of(f: Path) -> list:
 def run_record(d: Path, names: list[str]) -> Path:
     """The run's record (``verity/rec-run/v1``) for the parts ``names``: the challenger's ``rec-run.jsonl`` event for
     event (``rec-run.json``). A staged forgery among ``names`` (one with its own ``own-FORGERY.txt``) was proved on a
-    coin server of its own, which logged its opens in ``rec-run-FORGERY.jsonl``: they replace its part's, before the
+    challenger of its own, which logged its opens in ``rec-run-FORGERY.jsonl``: they replace its part's, before the
     close (``rec-run-FORGERY.json``). A forgery verified over its part's honest session (a forged inner) keeps that
     part's opens. Without ``rec-run.jsonl``, DIR's ``rec-run.json`` as given."""
     from verity_flock import rec_compose as RC

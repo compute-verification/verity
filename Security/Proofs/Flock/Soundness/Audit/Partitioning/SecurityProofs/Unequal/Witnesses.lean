@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Partitioning.Model
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
 # Proofs of three of `Partitioning.Witness`'s instances

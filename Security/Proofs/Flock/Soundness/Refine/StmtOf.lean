@@ -1,7 +1,17 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.Realizes
-public import Proofs.Flock.Level3.Folded
+public import Flock.Verify
+public import Proofs.Flock.Level3.Fold
+public import Proofs.Flock.Level3.FoldStmt
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.Folded
+import VCVio.Prelude.Core
 
 /-!
 # The statement decoding, part 1: the executable's layout is a block R1CS (`Flock.Piop`, `Flock.Statement`)

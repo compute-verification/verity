@@ -1,7 +1,10 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.Mixing
-public import Proofs.Pouw.Dimension.Proofs
+import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.Proofs
+import Proofs.Pouw.NCP.RelationWitness
 
 /-!
 # The mixing lemma: proofs

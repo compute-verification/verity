@@ -1,7 +1,6 @@
 module
 
 public import VStar.Compose
-public import VStar.Unit
 public import Flock.RecLinkTree
 
 /-!

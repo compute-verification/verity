@@ -455,6 +455,21 @@ def test_the_default_check_needs_the_artifact_to_hold_the_paths_files_and_be_pre
     assert R.store_check(str(vault_store))("art:" + "f" * 64, d).startswith("NotFound")
 
 
+def test_without_a_remote_the_check_trusts_the_catalogs_verified_replica(tmp_path, vault_store, monkeypatch):
+    """A node holds no store key: the replica custody verified when it pushed is what the check reads, as the store eviction does."""
+    root = tmp_path / "ws"
+    d, e = data(root, "research/runs/r1"), data(root, "research/runs/r2")
+    st = LocalStore(vault_store)
+    art = st.put_artifact("run-record/v1", {"run_id": "r1"}, tree=d)
+    assert st.push(art, preserve=True)["preserved"]
+    unpushed = st.put_artifact("run-record/v1", {"run_id": "r2"}, tree=e)
+    monkeypatch.setenv("RESEARCH_STORE_CONFIG", str(tmp_path / "absent.toml"))
+    assert LocalStore(vault_store).remote is None
+    check = R.store_check(str(vault_store))
+    assert check(art, d) is None
+    assert "no verified remote replica recorded in the local catalog" in check(unpushed, e)
+
+
 def test_a_run_dir_whose_record_custody_trimmed_is_never_deleted(tmp_path, vault_store, monkeypatch):
     """Custody marks a run dir preserved while its run record only lists an undeclared file over the cap (custody.select); those
     bytes are on no remote, so gc keeps the dir."""
