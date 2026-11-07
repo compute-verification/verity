@@ -1,5 +1,5 @@
 """One MoE layer of a captured step (`capture.py`) cut per expert, staged as a stated window of the one-stage audit
-(`records_audit.py audit`), its tables committed as the committer registered them (`verity_vllm.pipeline.expert_tables`).
+(`records_audit.py audit`), its tables committed as the committer registered them (`verity_vllm.records.expert_tables`).
 
     python benchmarks/spot_proved/moe_window.py --capture DIR --step S --layer L --out DIR --key FILE
         (--tables FILE | --self-register) [--rank 0] [--tokens 1] [--cap 2048] [--law stratified:1] [--forge w13]
@@ -19,10 +19,11 @@
   weight the launch's ``topk_weights``; each GEMM's activation, scales and output the launch's A, A_scale and C, its
   statics the launch's tile (`targets.moe_expert_fp8_launch_dot`). The T tokens are drawn by the capture's coins.
 * **Tables.** Each table the window reads is committed from the capture's opened weights under ``--key`` at the program
-  and nonces of the rank's registration (``--tables``, `expert_tables.committer`), and refused unless its root is the
+  and nonces of the rank's registration (``--tables``, `expert_rows.committer`), and refused unless its root is the
   registered one: the window's reads are of the registered rows exactly when the served weights are the registered ones.
-  ``--self-register`` commits them under ``--key`` at a program of its own and writes that registration (``tables.json``,
-  `expert_tables`' format), a registration made after serving.
+  ``--self-register`` commits them under ``--key`` at a program of its own, each table at the generator's nonce
+  (`pipeline.expert_tables.nonces`), and writes that registration (``tables.json``, the record `records.expert_tables`), a
+  registration made after serving.
 * **Match gate.** Before anything is committed, each pair's GEMM outputs are held to the twin of the launch
   (`fp8_moe_rows.moe_expert_fp8_block_row`) on its expert's rows, and each router unit's slots to the router's
   Definition on its logits and bias; ``--full-gate`` also evaluates every unit's template (`Window.mismatches`).
@@ -298,7 +299,7 @@ def cut(v: dict, fns: dict, lab: dict, blocks: dict, name: str) -> tuple[WI.Circ
 # ---- the tables and the window -----------------------------------------------------------------------------------------------
 
 def commit_tables(v: dict, plan: dict, committer: dict) -> dict:
-    """Each table the cut reads, committed from ``v``'s weights as `expert_tables` registers it, by parameter."""
+    """Each table the cut reads, committed from ``v``'s weights as `pipeline.expert_tables` registers it, by parameter."""
     from verity_vllm.pipeline.expert_rows import table_words
     from verity_vllm.protocols.pouw.h1 import registered as H1R
 
@@ -369,17 +370,20 @@ def record(win: WI.Window, v: dict, fns: dict, plan: dict, tables: dict, forge: 
     return units
 
 
-def registration_doc(program: str, world: int, rank: int, values: dict, blocks: dict, repo: str, revision: str) -> dict:
-    """A self-registration in `expert_tables`' format (``prefix`` "": its names are the capture's parameters')."""
-    from verity_vllm.pipeline import expert_tables as XT
+def registration(committer: dict, world: int, rank: int, values: dict, blocks: dict, repo: str, revision: str):
+    """A self-registration (`records.expert_tables`; ``prefix`` "": its names are the capture's parameters')."""
+    from verity_vllm.records.expert_tables import ExpertTables
 
-    return {"format": XT.FORMAT, "program": program, "repo": repo, "revision": revision, "world": world, "rank": rank,
-            "prefix": "", "blocks": dict(sorted(blocks.items())), "values": dict(sorted(values.items()))}
+    return ExpertTables(program=committer["program"], repo=repo, revision=revision, world=world, rank=rank, prefix="",
+                        blocks=dict(sorted(blocks.items())), values=dict(sorted(values.items())),
+                        nonces={p: committer["nonces"][p] for p in sorted(values)})
 
 
 def main(argv: list[str] | None = None) -> int:
     from verity_vllm import TargetProfile
+    from verity_vllm.pipeline import expert_rows as EX
     from verity_vllm.pipeline import expert_tables as XT
+    from verity_vllm.records import expert_tables as XR
 
     ap = argparse.ArgumentParser(prog="moe_window.py")
     ap.add_argument("--capture", required=True)
@@ -421,17 +425,17 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"layer {a.layer} is not opened at step {a.step}: {cap.layers}")
     profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     v = served(cap, a.rank, a.layer, a.tokens, profile)
-    doc = json.loads(Path(a.tables).read_text()) if a.tables else None
-    if doc is not None:
-        if int(doc.get("rank", -1)) != a.rank:
-            raise SystemExit(f"{a.tables}: the registration of rank {doc.get('rank')}, not {a.rank}")
-        blocks = {k: int(x) for k, x in doc["blocks"].items()}
+    reg = XR.ExpertTables.of(json.loads(Path(a.tables).read_text()), a.tables) if a.tables else None
+    if reg is not None:
+        if reg.rank != a.rank:
+            raise SystemExit(f"{a.tables}: the registration of rank {reg.rank}, not {a.rank}")
+        blocks = {k: int(x) for k, x in reg.blocks.items()}
     else:
         blocks = {"w13": 1, "w2": 32} | {b.split("=")[0]: int(b.split("=")[1]) for b in a.block}
     fns = templates(v, a.scale, a.kernel, blocks)
     if a.bench is not None:
         v = bench(v, a.bench, fns["word_router"])
-    lab = labels(v["names"], list(doc["values"]) if doc else None)
+    lab = labels(v["names"], list(reg.values) if reg else None)
     run = (hashlib.sha512(f"verity/spot/moe-window/bench\0{a.bench}".encode()).hexdigest() if a.bench is not None else cap.root)
     name = f"spot-moe-per-expert/L{a.layer}/T{a.tokens}"
     circuit, plan = cut(v, fns, lab, blocks, name)
@@ -456,24 +460,26 @@ def main(argv: list[str] | None = None) -> int:
         with os.fdopen(fd, "wb") as f:
             f.write(os.urandom(32))
     key = key_file.read_bytes()
-    if doc is None:
+    if reg is None:
         program = XT.program(a.repo, f"{a.revision}/{'bench-' + str(a.bench) if a.bench is not None else cap.root[:32]}",
                              len(cap.ranks), a.rank, "")
-        committer = {"key": key, "program": program, "nonces": XT.nonces(sorted(circuit.registered.params), a.rank)}
+        stacks = {lab[p][k]: [(b, q, k, plan[p]["n"] if k == "w" else 0) for b, q in enumerate(plan[p][part][1])]
+                  for p in ("up", "down") for k, part in (("w", "rows"), ("ws", "scales"))}
+        committer = {"key": key, "program": program, "nonces": XT.nonces(stacks, list(stacks), a.rank)}
     else:
-        committer = XT.committer(doc, key)
+        committer = EX.committer(reg, key)
     t1 = time.time()
     tables = commit_tables(v, plan, committer)
     report["tables_s"] = round(time.time() - t1, 1)
-    if doc is None:
-        doc = registration_doc(committer["program"], len(cap.ranks), a.rank, {p: t.entry() for p, t in tables.items()}, blocks,
-                               a.repo, a.revision)
-    wrong = sorted(p for p, t in tables.items() if t.entry() != doc["values"].get(p))
-    report["tables"] = {"read": len(tables), "registered": len(doc["values"]), "not_registered_rows": wrong}
+    if reg is None:
+        reg = registration(committer, len(cap.ranks), a.rank, {p: t.entry() for p, t in tables.items()}, blocks, a.repo,
+                           a.revision)
+    wrong = sorted(p for p, t in tables.items() if t.entry() != reg.values.get(p))
+    report["tables"] = {"read": len(tables), "registered": len(reg.values), "not_registered_rows": wrong}
     if wrong:
         (out / "stage.json").write_text(json.dumps(report, indent=1, default=str))
         raise SystemExit(f"{len(wrong)} tables' served rows are not the registered ones (first {wrong[0]}): nothing staged")
-    (out / "tables.json").write_text(json.dumps(doc, indent=1) + "\n")
+    (out / "tables.json").write_text(json.dumps(reg.dump(), indent=1) + "\n")
     win = WI.Window(circuit, run, law, a.cap, registered=tables)
     win.supply(REG)
     report["units"] = record(win, v, fns, plan, tables, a.forge)

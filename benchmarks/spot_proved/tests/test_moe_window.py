@@ -198,6 +198,7 @@ def test_a_staged_layer_is_a_window_its_verifier_takes_from_the_records(MW, capt
     population Programs of the cut's seven templates the window and the verifier each build."""
     from verity.core.protocols.sampled_proofs.one_stage import draw as D
     from verity.core.protocols.sampled_proofs.one_stage import registered as REG
+    from verity_vllm.records import expert_tables as XR
 
     d, _v = captured
     base = ["--capture", str(d), "--step", str(STEP), "--layer", str(LAYER), "--tokens", "2", "--cap", "4", *BLOCKS,
@@ -206,6 +207,7 @@ def test_a_staged_layer_is_a_window_its_verifier_takes_from_the_records(MW, capt
     st = json.loads((tmp_path / "w" / "stage.json").read_text())
     assert st["gate"]["ok"] and st["tables"]["not_registered_rows"] == [] and st["run"] == MW.ST.Capture(d, STEP).root
     doc = json.loads((tmp_path / "w" / "tables.json").read_text())
+    assert XR.ExpertTables.of(doc, "tables.json").dump() == doc
     for value, e in doc["values"].items():
         want = REG.domain(doc["program"], value, e["words"], e["leaves"], e.get(REG.WIDTH_KEY, REG.WORD_BITS))
         assert e["value"] == value and e["domain"] == want.domain_id.hex()
