@@ -48,7 +48,8 @@ theorem sampledAuditTwo_zkOut {K S Ys V O T R X₁ X₂ ι W St N₀ Ω₀ Θ : 
     (hZ : ∀ i, ok i → ZKOut (fun _ => N₀) (fun _ => Ω₀) H k (Pv i) Rl out Sm (ε i))
     (sv : Service K S Ys V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v v₀ : X₁ → Fin r → V)
     (st : X₁ → StreamStack K V S O T R r m) (k₀ : K) (ℓ : ℕ)
-    (Q : Sessions (StreamRecord r S O T R × X₁) X₂ ((K × ((i : Fin r) → Fin (m i) → S)) × X₁) ι W (N₀ × Ω₀) Θ)
+    (Q : Sessions (StreamRecord r S O T R × X₁) X₂ ((K × ((i : Fin r) → Fin (m i) → S)) × X₁) ι W (N₀ × Ω₀) Θ
+      (List (Msg × Out)))
     (eC : ∀ j ρ χ b, CB j ≃ Sm.C (Q.x j ρ χ b)) (εS : ℕ → St → ℝ≥0∞) (δ : ℝ≥0∞)
     (hown : ∀ χ₁, ZkServerOwnUser (st χ₁)) (hok : ∀ j p χ π b, ok (Q.i j p χ π b))
     (hR : ∀ j p χ π b, Rl (Q.x j (recTwoOf sv v st p) χ b) (Q.w j p χ π b))

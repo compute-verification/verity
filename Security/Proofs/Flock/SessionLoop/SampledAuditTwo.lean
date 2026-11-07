@@ -23,6 +23,10 @@ at the pinned key (`FlockSoundness.ZK.ideal_hm96_stream`).
 
 `Flock.SecurityProofs.SampledAuditTwoAnyDeployed` proves it: `FlockSoundness.ZK.sampledAuditTwo_zkOut` at the first
 conjunct of `Loop.ZkAnyAt` (`SessionLoopZKAnyDeployed`), and `ideal_hm96_stream` for `δ`.
+
+The released bytes here are the session loop's messages (`ZKOut`). What reaches the auditor is the held relay's frames
+(`ZKOutRelay`), which `Flock.Guarantees.SampledAuditAnyRelayDeployed` covers for one stage; at two stages they are not
+covered yet.
 -/
 
 @[expose] public section
@@ -42,10 +46,9 @@ commitment of the values `v` under the salts `y` is a function `g`, of the value
 leaves at the pinned key, `Hc(dig v i + M·y_i, c(y_i))`; every stream of `r` registrations, registration `i` of an
 epoch of `m i` sessions, at most `b` passed over; every finite first-stage sample space `X₁`, values `v`, dummy values
 `v₀` of the values' layouts, and a stack `st`, all functions of the first-stage sample; a key `k₀`, and a finite
-second-stage sample space `X₂`; `ℓ` sampled sessions of the deployed
-session loop at `0 < t` repetitions and a relation `Rl` at whose statements the session's table witnesses are valid
-(`Complete`), at `L₀` and `src`; and the sessions `Q`, with the simulators' coins of session `j` those of `CB j` through
-`eC`:
+second-stage sample space `X₂`; `ℓ` sampled sessions of the deployed session loop at `0 < t` repetitions and a relation
+`Rl` at whose statements the session's table witnesses are valid (`Complete`), at `L₀` and `src`; and the sessions `Q`,
+with the simulators' coins of session `j` those of `CB j` through `eC`:
 
 if the stack reads no key at any first-stage sample, every session's values are causal and the transport's trusts hold
 at its worker, its statement and witness are in `Rl`, its `V*` runs `refK x + 2` rounds, and its error (`Loop.anyErr`)
@@ -53,8 +56,7 @@ is at most `εS j` at each verdict, then at the sessions' verdicts `s` and every
 and the sessions' messages, the probability that the loop admits the stream and the audit shows `s` and `E` is at most
 the sum, over the choices `d` the loop can admit, of (the average over both samples and the simulators' coins of `E` on
 an ideal stream of `v₀` at the first-stage sample with the simulators' messages, plus the PRF gap at `d` there, plus
-`r·N·2δ₁`), plus the forge
-term averaged over the first-stage sample, plus the sessions' errors at `s`. -/
+`r·N·2δ₁`), plus the forge term averaged over the first-stage sample, plus the sessions' errors at `s`. -/
 def _root_.Flock.Guarantees.SampledAuditTwoAnyDeployed : Prop :=
   ∀ {K S V O T R X₁ X₂ Θ D Sh : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R] [Nonempty S] [Nonempty T]
     [Nonempty R] [Fintype X₁] [Fintype X₂] {N : ℕ} {CB : ℕ → Type} [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
@@ -76,7 +78,7 @@ def _root_.Flock.Guarantees.SampledAuditTwoAnyDeployed : Prop :=
           (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Worker) Claims.Flock.Wit
         (((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
           (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand) ×
-          (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Chk) Θ)
+          (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Chk) Θ (List (Msg × Out)))
       (eC : ∀ j ρ χ b, CB j ≃
         (Loop.anySim Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t).C
           (Q.x j ρ χ b))

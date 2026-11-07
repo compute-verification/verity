@@ -16,7 +16,8 @@ the errors added.
   sessions' randomness and bytes and its own randomness.
 * `Tup.sims`, `Tup.errs`: the simulated bytes at the sessions' outcomes, session `j`'s simulator given the earlier
   outcomes and simulated bytes; and the errors added.
-* `PerOutcome.mono`, `PerOutcome.comap_sim`: a larger error, and the simulator's coins read through a bijection.
+* `PerOutcome.mono`, `PerOutcome.comap_sim`, `PerOutcome.map_out`: a larger error, the simulator's coins read through a
+  bijection, and the outcomes through an injective map.
 -/
 
 @[expose] public section
@@ -90,6 +91,24 @@ theorem PerOutcome.comap_sim {Ω St Ωs Ωs' V : Type} [Fintype Ω] [Fintype Ωs
     {rel : Ω → V} {S : St → Ωs → V} {ε : St → ℝ≥0∞} (h : PerOutcome out rel S ε) (e : Ωs' ≃ Ωs) :
     PerOutcome out rel (fun s c => S s (e c)) ε :=
   fun s E => (h s E).trans_eq (congrArg (· + ε s) (prCoin_congr_equiv e fun σ => E (S s σ)).symm)
+
+/-- **The outcomes read through an injective map** `f`: at an outcome `f s` the simulator is `S s`, and at one outside
+`f`'s range any simulator does, since the outcome never takes it. -/
+theorem PerOutcome.map_out {Ω St St' Ωs V : Type} [Fintype Ω] [Fintype Ωs] {out : Ω → St} {rel : Ω → V}
+    {S : St → Ωs → V} {ε : St → ℝ≥0∞} (h : PerOutcome out rel S ε) {f : St → St'} (hf : Function.Injective f)
+    {S' : St' → Ωs → V} (hS : ∀ s, S' (f s) = S s) {ε' : St' → ℝ≥0∞} (hε : ∀ s, ε s ≤ ε' (f s)) :
+    PerOutcome (fun ω => f (out ω)) rel S' ε' := by
+  intro s' E
+  by_cases hs : ∃ s, f s = s'
+  · obtain ⟨s, rfl⟩ := hs
+    calc prCoin (fun ω => f (out ω) = f s ∧ E (rel ω)) ≤ prCoin (fun ω => out ω = s ∧ E (rel ω)) :=
+          prCoin_mono fun ω hω => ⟨hf hω.1, hω.2⟩
+      _ ≤ prCoin (fun σ => E (S s σ)) + ε s := h s E
+      _ ≤ prCoin (fun σ => E (S' (f s) σ)) + ε' (f s) := by rw [hS]; exact add_le_add le_rfl (hε s)
+  · calc prCoin (fun ω => f (out ω) = s' ∧ E (rel ω)) ≤ prCoin (fun _ : Ω => False) :=
+          prCoin_mono fun ω hω => hs ⟨out ω, hω.1⟩
+      _ = 0 := by classical rw [prCoin_eq_card]; simp
+      _ ≤ _ := zero_le
 
 /-- **Sessions in sequence, per outcome** (`PerOutcome.chain`, iterated). Where each session `j < ℓ` is simulated per
 outcome at every value `π` of the earlier sessions' randomness, by its simulator `S j` given the earlier sessions'

@@ -36,7 +36,7 @@ structure AuditZkTwo {Coin K S Ys V O T R X₁ X₂ Θ : Type} [Fintype S] [Fint
     (A : ZkArg Coin) (sv : Service K S Ys V O T R) {r : ℕ} (m : Fin r → ℕ) (v v₀ : X₁ → Fin r → V)
     (st : X₁ → StreamStack K V S O T R r m)
     (Q : Sessions (StreamRecord r S O T R × X₁) X₂ ((K × ((i : Fin r) → Fin (m i) → S)) × X₁) Unit A.W
-      (A.Nonce × A.Rest) Θ) (εS : ℕ → A.St → ℝ≥0∞) (δ : ℝ≥0∞) : Prop where
+      (A.Nonce × A.Rest) Θ (List (Msg × Out))) (εS : ℕ → A.St → ℝ≥0∞) (δ : ℝ≥0∞) : Prop where
   own : ∀ χ₁, ZkServerOwnUser (st χ₁)
   rel : ∀ j p χ π b, A.R (Q.x j (recTwoOf sv v st p) χ b) (Q.w j p χ π b)
   rounds : ∀ j ρ χ b, (Q.Vs j ρ χ b).k (Q.x j ρ χ b) = A.kz (Q.x j ρ χ b)
@@ -66,7 +66,8 @@ def _root_.Flock.Guarantees.SampledAuditTwoZkArg : Prop :=
     A.ZK H → ∀ (sv : Service K S Ys V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v v₀ : X₁ → Fin r → V)
       (st : X₁ → StreamStack K V S O T R r m) (k₀ : K) (ℓ : ℕ)
       (Q : Sessions (StreamRecord r S O T R × X₁) X₂ ((K × ((i : Fin r) → Fin (m i) → S)) × X₁) Unit A.W
-        (A.Nonce × A.Rest) Θ) (eC : ∀ j ρ χ b, CB j ≃ A.S.C (Q.x j ρ χ b)) (εS : ℕ → A.St → ℝ≥0∞) (δ : ℝ≥0∞),
+        (A.Nonce × A.Rest) Θ (List (Msg × Out))) (eC : ∀ j ρ χ b, CB j ≃ A.S.C (Q.x j ρ χ b))
+        (εS : ℕ → A.St → ℝ≥0∞) (δ : ℝ≥0∞),
       AuditZkTwo A sv m v v₀ st Q εS δ → ∀ (s : Tup (fun _ => A.St) ℓ)
         (E : StreamRecord r S O T R → X₁ → X₂ → Tup (fun _ => List (Msg × Out)) ℓ → Prop),
         prCoin (fun q : (K × ((i : Fin r) → Fin (m i) → S)) × X₁ × X₂ × Tup (fun _ => A.Nonce × A.Rest) ℓ =>
