@@ -27,7 +27,18 @@ def blocks():
         "AllReduceMultimem_W8": f"AllReduceMultimem_v1{{WORLD=8,SIZE=3072,TREES={trees},FTZ=false}}",
         "RMSNormFusedCudaVector8_N6144_B256": 'RMSNormFusedCudaVector8_v1{N=6144,EPS={"f64":"0x1.4f8b588e368f1p-17"},BLOCK=256}',
         "Fp8GroupQuantUe8m0_K1536": "Fp8GroupQuantUe8m0_v1{K=1536,G=128}",
+        "MoeExpertFp8GemmW_K256_SWAP": 'MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v1"}}',
+        "MoeExpertFp8GemmW_K256_MMA": 'MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=false,DOT={"fn":"HopperE4m3MmaV2Dot32_v1"}}',
     }
+
+
+def e4m3(rng, n):
+    b = rng.integers(0, 0x7F, n, dtype=np.uint64)
+    return b | (rng.integers(0, 2, n, dtype=np.uint64) << 7)
+
+
+def f32_words(values):
+    return np.asarray(values, dtype=np.float32).view(np.uint32).astype(np.uint64)
 
 
 def bf16(rng, n, scale):
@@ -44,6 +55,10 @@ def args_for(label, rng):
         return [bf16(rng, 6144, 1.0), bf16(rng, 6144, 1.0), bf16(rng, 6144, 0.2)]
     if label.startswith("Fp8GroupQuant"):
         return [bf16(rng, 1536, 1.0)]
+    if label.startswith("MoeExpertFp8GemmW"):
+        E, K, G = 256, 256, 128
+        return [e4m3(rng, K), f32_words(2.0 ** rng.integers(-9, -5, K // G)), np.array([rng.integers(0, E)], dtype=np.uint64),
+                f32_words([0.25]), e4m3(rng, E * K), f32_words(2.0 ** rng.integers(-12, -8, E * (K // G)))]
     raise KeyError(label)
 
 
