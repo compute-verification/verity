@@ -44,7 +44,7 @@ entry at row r0 of its share (`runtime_place`).
 
 A request-owned row (`format.RUN_FAMILY`: a value the served run decides for one request, `<op_path>/<member>`) binds only by its label,
 never a tuple slot; when several requests' rows spell it at one step (two rows at one position of one layer), occurrence k binds it for
-the k-th of them in the step's row order (`owner`), the order the collector commits its rows in.
+the k-th of them in the step's row order (`owners`), the order the collector commits its rows in.
 
 An event no pass binds is an extra: a source label keeps itself as its identity (no manifest row has it), a tuple slot binds member
 `""`, which no row has.  The coverage check (`binding.coverage_check`) then holds the map to the manifest's own spelling and names
@@ -219,13 +219,21 @@ class Binder:
             self._spelt.setdefault((step, key), {})
         return self._spelt[(step, key)]
 
-    def owner(self, step: int, key: tuple[str, str, int], occurrence: int, order: Sequence[str] = ()) -> str | None:
-        """The request whose value the `occurrence`-th tensor of the request-owned `key` at `step` is (module docstring): the requests whose
-        rows spell it, in `order` (the step's request row order), then by name.  None for a key no request owns or an occurrence past them."""
-        reqs = self.requests.get(int(step), {}).get(key) if key in self.owned.get(int(step), ()) else None
-        at = {q: i for i, q in enumerate(order)}
-        ranked = sorted(reqs or (), key=lambda q: (at.get(q, len(at)), q))
-        return ranked[occurrence] if occurrence < len(ranked) else None
+    def owners(self, step: int, bound: Sequence[tuple[str, str, int, str]], request_rows: Sequence[tuple[str, int, int]] | None) -> list[str | None]:
+        """The request each of `step`'s events (`bound`, `bind`'s) is the value of when its identity is request-owned (module docstring),
+        else None: occurrence k of the identity is the k-th of the requests whose rows spell it, in the step's request row order
+        (`request_rows`, the binding map's), then by name.  All None for a step without `request_rows` (one request)."""
+        step = int(step)
+        owned, spelt = self.owned.get(step, ()), self.requests.get(step, {})
+        at = {q: i for i, (q, _lo, _hi) in enumerate(request_rows or ())}
+        seen: Counter = Counter()
+        out: list[str | None] = []
+        for op, member, k, _how in bound:
+            key = (op, member, k)
+            ranked = sorted(spelt[key], key=lambda q: (at.get(q, len(at)), q)) if request_rows and key in owned and key in spelt else []
+            out.append(ranked[seen[key]] if seen[key] < len(ranked) else None)
+            seen[key] += 1
+        return out
 
     def bind(self, step: int, names: Sequence[str]) -> list[tuple[str, str, int, str]]:
         """The identity each event of `step` binds, as (op_path, member, invocation, how); how = `consumer-input` | `port` | `label` |

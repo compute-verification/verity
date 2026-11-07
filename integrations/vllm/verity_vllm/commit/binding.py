@@ -111,8 +111,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
 
     `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the requests of that step
     (the scheduler's row order, recorded by the engine wrapper; a `padded` member, the step-input port's, has rows past the step's tokens); else the whole member binds `request_id`.
-    A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason.  A
-    request-owned value (a `run` field, `Binder.owner`) is its one request's whole, whatever its shape.
+    A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason; a request-owned value (`Binder.owners`) is its request's whole.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
     `binder` (`query.manifest.bind.Binder`, from the required manifest): each tensor's identity, a call boundary's under each request's
@@ -131,20 +130,16 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
             for m in metas:
                 bound.append((*split_name(m.name), seen[m.name], "label"))
                 seen[m.name] += 1
-        occurrence: Counter = Counter()
-        for m, (op, member, k, how) in zip(metas, bound):
+        owners = binder.owners(step, bound, (request_rows or {}).get(step)) if binder is not None else [None] * len(bound)
+        for m, (op, member, k, how), owner in zip(metas, bound, owners):
             numel = _numel(m.shape)
             if chunk is not None and int(chunk) != int(m.chunk):
                 raise ValueError(f"build_binding_map: chunk={chunk} but {m.name} (step {step}) has {m.chunk}-byte leaves; pass the committer's or none")
             off = m.stream_off if m.stream_off is not None and m.stream_off >= 0 else m.first_leaf * m.chunk
-            rr = (request_rows or {}).get(step)
+            rr = None if owner else (request_rows or {}).get(step)
             splits: list[tuple[str, int, int, int]] = []            # (request, request-local lo, request-local hi, global element offset)
             refused = None
-            owner = binder.owner(step, (op, member, k), occurrence[m.name], [rid for rid, _lo, _hi in rr]) if rr and binder is not None else None
-            occurrence[m.name] += 1
-            if owner is not None:                                                     # a request-owned value (`Binder.owner`): whole, its own
-                splits = [(owner, 0, numel, 0)]
-            elif rr and m.shape and numel > 0 and not op.startswith(HIDDEN_FAMILIES):
+            if rr and m.shape and numel > 0 and not op.startswith(HIDDEN_FAMILIES):
                 rows = int(m.shape[0])
                 per_row = numel // max(rows, 1)
                 tokens = max(hi for _r, _lo, hi in rr)
@@ -172,7 +167,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
             elif rr and op.startswith(HIDDEN_FAMILIES):
                 splits = [(rid, 0, numel, 0) for rid, _lo, _hi in rr]
             if not splits:
-                splits = [(request_id, 0, numel, 0)]
+                splits = [(owner or request_id, 0, numel, 0)]
             spelt = binder.spellings(step, (op, member, k)) if binder is not None and how == "port" else {}
             for rid, lo, hi, goff in splits:
                 (op_r, member_r, k_r), hi, goff, why = runtime_place(binder, step, spelt.get(rid, (op, member, k)), rid, lo, hi, goff, m)

@@ -8,7 +8,7 @@ fields by the module their reader is lowered from (`attention_module`, a layer o
 the rows of `topk_indices_buffer` at a position P whose field the step requires there are copied on the device (the buffer is every
 layer's); at the step's end each is read once and turned into its settings, and a row whose order is no Waksman order of its P + 1
 keys is a collector error by name, its field then missing from coverage.  Two requests' rows at one position of one layer are
-committed in row order under one name: `bind.Binder.owner` gives occurrence k to the k-th of them."""
+committed in row order under one name: `bind.Binder.owners` gives occurrence k to the k-th of them."""
 from __future__ import annotations
 
 from collections import Counter
@@ -39,9 +39,9 @@ class RunValues:
         for r in identities:
             if r.get("family") != RUN_FAMILY:
                 continue
-            name, st, am = f"{r['op_path']}/{r['output_member']}", r.get("statics") or {}, str(r.get("attention_module"))
+            name, st, am = f"{r['op_path']}/{r['output_member']}", r.get("statics"), str(r.get("attention_module"))
             layer = next((i for m, i in layers.items() if am == m or am.startswith(m + ".")), None)
-            if layer is None or not isinstance(st.get("N"), int) or not isinstance(st.get("TOPK"), int):
+            if layer is None or not isinstance(st, Mapping) or not isinstance(st.get("N"), int) or not isinstance(st.get("TOPK"), int):
                 raise ValueError(f"run values: {name} is read in module {r.get('attention_module')!r} with statics {st}: no attention "
                                  f"layer of this rank's source, or no N and TOPK to find its top-k row by")
             at = self.at.setdefault((int(r.get("engine_step", r.get("step"))), layer), {})

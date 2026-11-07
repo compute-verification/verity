@@ -1,6 +1,6 @@
 """A `run_values` identity (`format.RUN_FAMILY`, a DSA row's top-k order past INDEX_TOPK) is one request's whole committed tensor: at
 B=1 the map's request; at B>1 the request whose rows spell it, the k-th tensor of one name the k-th such request in the step's row
-order (`Binder.owner`), never the per-token, per-request or shared split the map gives a batched member by its shape.  Only its
+order (`Binder.owners`), never the per-token, per-request or shared split the map gives a batched member by its shape.  Only its
 label binds it, never a tuple slot of its op."""
 from __future__ import annotations
 
