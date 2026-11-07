@@ -220,7 +220,7 @@ registered template's Definitions, root and port groups those of `readTmpl V H`.
 once and runs each part's generator once; it never unrolls. -/
 def check (V H : Nat) (t : Tmpl.Tmpl) : Bool :=
   let r := readTmpl V H
-  2 ≤ V && V < 2 ^ 32 && 1 ≤ H && (parts V H).all (fun p => runOk p.ins p.run) && t.root == r.root &&
+  2 ≤ V && V < 2 ^ 32 && 1 ≤ H && 16 * H < 2 ^ 64 && (parts V H).all (fun p => runOk p.ins p.run) && t.root == r.root &&
     t.inGroups.map groupKey == r.inGroups.map groupKey && t.outGroups.map groupKey == r.outGroups.map groupKey &&
     decide (t.defs = r.defs)
 
