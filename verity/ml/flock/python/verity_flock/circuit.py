@@ -1278,7 +1278,7 @@ def main(argv=None) -> int:
     (repeatable): an input port the verifier recomputes from public data (:func:`compose`'s ``public_inputs``)."""
     import argparse
 
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--input-set", required=True)
