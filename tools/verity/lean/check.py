@@ -95,8 +95,9 @@ environment extension loaded, so none of the package's code runs), and replays t
                  plain range (`0 < x`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals), unless
                  `shape.inline`, which only shrinks, lists it (`inline_failures`), or did under names a rename changed
                  (`paired`); its size is the AUDIT line's inline debt
-    trust        (`trust`: the premises that are the trust base, `base`, and a deployed guarantee's own, `extra`,
-                 each with the reason a ruling's rule gives; `deployed`: the guarantees that state the deployed system)
+    trust        (`trust`: the premises that are the trust base, `base`, each with which trust assumption it states,
+                 and a deployed guarantee's own, `extra`, each with the reason a ruling's rule gives; `deployed`: the
+                 guarantees that state the deployed system)
                  a deployed guarantee rests on a premise outside its trust that its `trust_gap` entry doesn't list (an
                  update adds none, so the gap only shrinks), or the entry lists one it no longer rests on, or
                  `trust_gap` lists a guarantee `deployed` doesn't (`--update` drops both): what it rests on is the named
@@ -1205,10 +1206,10 @@ def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
     if name_list(policy.get("deployed")):
         out["deployed"] = sorted(renamed(n, moved) for n in policy["deployed"])
     if isinstance(trust := policy.get("trust"), dict):
-        extra = trust.get("extra") if isinstance(trust.get("extra"), dict) else {}
-        out["trust"] = trust | {"base": sorted(renamed(n, moved) for n in name_list(trust.get("base")))} | (
-            {"extra": {renamed(g, moved): {renamed(p, moved): why for p, why in ps.items()}
-                       for g, ps in extra.items() if isinstance(ps, dict)}} if "extra" in trust else {})
+        def keyed(m):
+            return {renamed(p, moved): why for p, why in m.items()} if isinstance(m, dict) else m
+        out["trust"] = {k: {renamed(g, moved): keyed(ps) for g, ps in v.items()}
+                        if k == "extra" and isinstance(v, dict) else keyed(v) for k, v in trust.items()}
     if isinstance(gap := policy.get("trust_gap"), dict):
         out["trust_gap"] = {renamed(g, moved): sorted(renamed(p, moved) for p in name_list(ps)) for g, ps in gap.items()}
     if isinstance(taken := policy.get("witnesses_assumed"), dict):
@@ -3046,7 +3047,8 @@ def trusted(lock: dict, name: str) -> set[str]:
     (`trust.extra`)."""
     trust = lock.get("trust") if isinstance(lock.get("trust"), dict) else {}
     extra = trust.get("extra") if isinstance(trust.get("extra"), dict) else {}
-    return set(name_list(trust.get("base"))) | set(extra.get(name) if isinstance(extra.get(name), dict) else ())
+    base = trust.get("base") if isinstance(trust.get("base"), dict) else {}
+    return set(base) | set(extra.get(name) if isinstance(extra.get(name), dict) else ())
 
 
 def trust_gaps(lock: dict) -> dict[str, list[str]]:
@@ -3056,26 +3058,28 @@ def trust_gaps(lock: dict) -> dict[str, list[str]]:
 
 
 def trust_form(trust) -> bool:
-    """Whether ``trust`` is {"base": [premise, ...], "extra": {deployed guarantee: {premise: its one-line reason}}},
-    `extra` optional and each of its entries holding a premise."""
+    """Whether ``trust`` is {"base": {premise: the trust assumption it states}, "extra": {deployed guarantee: {premise:
+    its reason}}}, each reason one line, `extra` optional and each of its entries holding a premise."""
+    def reasons(ps) -> bool:
+        return isinstance(ps, dict) and bool(ps) and all(isinstance(w, str) and w.strip() and "\n" not in w
+                                                         for w in ps.values())
     extra = trust.get("extra", {}) if isinstance(trust, dict) else None
-    return (isinstance(trust, dict) and set(trust) <= {"base", "extra"} and "base" in trust
-            and trust["base"] == name_list(trust["base"]) and isinstance(extra, dict)
-            and all(isinstance(ps, dict) and ps and all(isinstance(w, str) and w.strip() and "\n" not in w
-                                                        for w in ps.values()) for ps in extra.values()))
+    return (isinstance(trust, dict) and set(trust) <= {"base", "extra"} and reasons(trust.get("base"))
+            and isinstance(extra, dict) and all(map(reasons, extra.values())))
 
 
 def trust_failures(lock: dict) -> list[str]:
-    """The trust gap's ratchet.  `trust` holds the premises that are the trust base (`base`) and, for a deployed
-    guarantee a ruling's rule trusts more for, its own with their reasons (`extra`; `trust_form`); `deployed` lists the
-    guarantees that state the deployed system, each one the lock lists; and `trust_gap` ({deployed guarantee: its
-    premises outside its trust}) holds each one's gap (`trust_gaps`): a premise new to a gap fails until a person lists
-    it, since an update adds none, and one a gap no longer has, or an entry of a guarantee `deployed` doesn't list, fails
-    until the entry drops (`trust_gap_kept`, which `--update` and the lock run's bookkeeping write)."""
+    """The trust gap's ratchet.  `trust` holds the premises that are the trust base (`base`, each with the trust
+    assumption it states) and, for a deployed guarantee a ruling's rule trusts more for, its own with their reasons
+    (`extra`; `trust_form`); `deployed` lists the guarantees that state the deployed system, each one the lock lists;
+    and `trust_gap` ({deployed guarantee: its premises outside its trust}) holds each one's gap (`trust_gaps`): a premise
+    new to a gap fails until a person lists it, since an update adds none, and one a gap no longer has, or an entry of a
+    guarantee `deployed` doesn't list, fails until the entry drops (`trust_gap_kept`, which `--update` and the lock run's
+    bookkeeping write)."""
     held = lock.get("trust_gap", {})
     fails = [] if "trust" not in lock or trust_form(lock["trust"]) else [Failure(
-        "trust.form", None, 'trust: `trust` is {"base": [premise, ...], "extra": {deployed guarantee: {premise: its '
-        'one-line reason}}}, `extra` optional')]
+        "trust.form", None, 'trust: `trust` is {"base": {premise: the trust assumption it states}, "extra": {deployed '
+        'guarantee: {premise: its reason}}}, each reason one line, `extra` optional')]
     if "deployed" in lock and lock["deployed"] != name_list(lock["deployed"]):
         fails.append(Failure("trust.form", None, "trust: `deployed` is a list of names"))
     if not isinstance(held, dict) or any(v != name_list(v) for v in held.values()):

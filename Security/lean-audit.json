@@ -3269,17 +3269,17 @@
   }
  },
  "trust": {
-  "base": [
-   "Claims.ExpectedCR",
-   "Claims.StrictBirthday",
-   "FlockSoundness.Assumptions.SHA512CRExpected",
-   "FlockSoundness.Assumptions.SHA512CRStrict",
-   "FlockSoundness.Assumptions.UniformRandomBytes",
-   "FlockSoundness.Assumptions.UniformRandomBytesTest",
-   "Verity.Assumptions.ChallengerLogsCoins",
-   "Verity.Assumptions.FlipsAfterRecorded",
-   "Verity.Assumptions.VerifierReadsLog"
-  ]
+  "base": {
+   "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
+   "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
+   "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
+   "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
+   "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
+   "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
+   "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
+   "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
+   "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order"
+  }
  },
  "deployed": [
   "Accounting.SecurityProofs.Remote.SketchBoundDeployed",

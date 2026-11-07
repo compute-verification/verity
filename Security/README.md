@@ -443,7 +443,8 @@ when:
 The trust base (`trust`) is what the deployed guarantees may rest on: SHA-512's collision resistance
 (`SHA512CRStrict`, `SHA512CRExpected`, `Claims.StrictBirthday`, `Claims.ExpectedCR`), uniform random bytes
 (`UniformRandomBytes`, `UniformRandomBytesTest`) and an honest verifier's coin log (`ChallengerLogsCoins`,
-`FlipsAfterRecorded`, `VerifierReadsLog`), with Lean's kernel under all of them (`trust.base`). A deployed guarantee
+`FlipsAfterRecorded`, `VerifierReadsLog`), with Lean's kernel under all of them (`trust.base`, each premise with the
+assumption it states). A deployed guarantee
 may also rest on premises of its own that a ruling's rule names, each with that reason (`trust.extra`): the remote
 audit's verifier never talks to the onsite devices and gets their LMS signatures only as witness inside the proof, so
 `Verity.remote_soundness_of_subprotocols` trusts `LmsUnforgeable`. `deployed` lists the guarantees that

@@ -244,13 +244,14 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   record's, else that of it and every definition it reads in `meaning` and this repository's modules
   (`assumption_reads`). So a change to a premise or to what it reads fails under its own name,
   and the landing DM shows it; one no guarantee reads fails.
-- `trust`: `base`, the named premises that are the trust base (SHA-512's collision resistance, uniform random bytes, an
-  honest verifier's coin log), one list in every lock, and `extra` ({deployed guarantee: {premise: reason}}), the
-  premises a ruling's rule lets that one guarantee alone rest on, each with a one-line reason naming the rule.
-  `deployed`: the guarantees that state the deployed system. `trust_gap` ({deployed guarantee: [premise, ...]}): what
-  each rests on outside its trust (the base and its own `extra`), its gap (`trust_gaps`): the named
-  assumptions and open premises its record lists, and through each domain hypothesis that cites another listed
-  guarantee, that guarantee's, transitively. A domain hypothesis is part of what the guarantee says and counts for none,
+- `trust`: `base` ({premise: the trust assumption it states}), the named premises that are the trust base, the three
+  trust assumptions in their several forms (SHA-512's collision resistance, the verifier server's uniform randomness,
+  the honest verifier server's log and flip order), the same in every lock, and `extra` ({deployed guarantee: {premise:
+  reason}}), the premises a ruling's rule lets that one guarantee alone rest on, each with a one-line reason naming the
+  rule. `deployed`: the guarantees that state the deployed system. `trust_gap` ({deployed guarantee: [premise, ...]}):
+  what each rests on outside its trust (the base and its own `extra`), its gap (`trust_gaps`): the named assumptions and
+  open premises its record lists, and through each domain hypothesis that cites another listed guarantee, that
+  guarantee's, transitively. A domain hypothesis is part of what the guarantee says and counts for none,
   and neither does a `Prop` it only reads. A premise new to a gap fails (`trust.gap-new`) until a person lists it, and
   `--update` adds none, so the gap only shrinks; one a gap no longer has fails (`trust.gap-gone`) until the entry drops,
   as does an entry of a guarantee `deployed` doesn't list (`trust.gap-stale`), and `--update` drops both. The report

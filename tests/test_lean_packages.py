@@ -89,11 +89,11 @@ def test_the_unwitnessed_list_only_shrinks():
 
 
 def test_the_trust_base_is_one_list():
-    """Every lock that names a trust base (`trust.base`, tools/verity/lean/README.md) names the same one, so no
-    package's deployed guarantees count a premise as trusted that another's count in their gap; a premise one guarantee
-    alone may rest on is its own (`trust.extra`)."""
+    """Every lock that names a trust base (`trust.base`, tools/verity/lean/README.md) names the same one, each premise
+    with the same trust assumption, so no package's deployed guarantees count a premise as trusted that another's count
+    in their gap; a premise one guarantee alone may rest on is its own (`trust.extra`)."""
     bases = {_rel(p): _lock(p)["trust"]["base"] for p in lake_packages() if "trust" in _lock(p)}
-    assert "Security" in bases and len({tuple(b) for b in bases.values()}) == 1, bases
+    assert "Security" in bases and len({json.dumps(b, sort_keys=True) for b in bases.values()}) == 1, bases
 
 
 def test_the_randomness_assumption_cites_this_toolchain():

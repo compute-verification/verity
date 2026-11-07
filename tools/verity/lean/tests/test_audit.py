@@ -749,7 +749,7 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
     bare = {k: v for k, v in wrec.items() if k != "witnesses"} | {
         "unwitnessed": {"P.sound": wfacts["pins"]["P.sound"]["type_sha256"]}}
     frozen = {"frozen": {"P.t": "frozen: open"}}
-    deployed = {**pol, "trust": {"base": ["P.Hyp"]}, "deployed": ["P.t"]}
+    deployed = {**pol, "trust": {"base": HYP}, "deployed": ["P.t"]}
 
     def without(rec, key):
         return {k: v for k, v in rec.items() if k != key}
@@ -830,6 +830,10 @@ def test_bookkeeping_files_a_premise_on_the_locks_default_issue_and_its_guarante
         assert "open.default-issue-form" in {f.code for f in A.judge(lock | {"open_default_issue": bad}, now, FILES)[0]}
 
 
+#: a trust base of `facts()`'s one named assumption
+HYP = {"P.Hyp": "the trust assumption it states"}
+
+
 def opened(now: dict) -> dict:
     """The lock of `sounded`'s package, its guarantees recorded and `P.Sound` listed under `open`."""
     seed = {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}
@@ -841,7 +845,7 @@ def test_a_deployed_guarantee_s_gap_is_what_it_rests_on_outside_the_trust_base_t
     hypothesis that is another listed guarantee's statement (`cites`) on that guarantee's, transitively (a cycle ends).  A
     domain hypothesis that cites none is part of what it says, and a premise it only reads is no premise it takes.  A
     premise of its own trust (`trust.extra`, with its reason) leaves its gap and no other guarantee's."""
-    lock = {"trust": {"base": ["T"]}, "deployed": ["G", "K"],
+    lock = {"trust": {"base": {"T": "the base"}}, "deployed": ["G", "K"],
             "domain": {"D.Scope": {"why": "its scope"}, "D.H": {"why": "H's statement", "cites": "H"},
                        "D.G": {"why": "G's statement", "cites": "G"}},
             "guarantees": {"G": {"premises": {"assumptions": ["T", "A"], "domain": ["D.Scope", "D.H"], "open": ["O"],
@@ -850,13 +854,13 @@ def test_a_deployed_guarantee_s_gap_is_what_it_rests_on_outside_the_trust_base_t
                            "K": {"premises": {"assumptions": ["T"], "domain": [], "open": [], "reads": ["R"]}}}}
     assert A.trust_gaps(lock) == {"G": ["A", "O", "O2"], "K": []}
     assert A.trust_failures(lock | {"trust_gap": {"G": ["A", "O", "O2"]}}) == []
-    own = lock | {"trust": {"base": ["T"], "extra": {"G": {"O2": "the layer below's rule"}}},
+    own = lock | {"trust": {"base": {"T": "the base"}, "extra": {"G": {"O2": "the layer below's rule"}}},
                   "guarantees": lock["guarantees"] | {"K": {"premises": {"assumptions": ["O2"]}}}}
     assert A.trust_gaps(own) == {"G": ["A", "O"], "K": ["O2"]}
     why = {"P.Sound": "its rule"}
-    assert A.renamed_witnesses({"trust": {"base": ["P.Hyp"], "extra": {"P.t": why}}, "deployed": ["P.t"],
+    assert A.renamed_witnesses({"trust": {"base": HYP, "extra": {"P.t": why}}, "deployed": ["P.t"],
                                 "trust_gap": {"P.t": ["R.x", "P.Sound"]}}, {"P": "Q"}) == {
-        "trust": {"base": ["Q.Hyp"], "extra": {"Q.t": {"Q.Sound": "its rule"}}}, "deployed": ["Q.t"],
+        "trust": {"base": {"Q.Hyp": HYP["P.Hyp"]}, "extra": {"Q.t": {"Q.Sound": "its rule"}}}, "deployed": ["Q.t"],
         "trust_gap": {"Q.t": ["Q.Sound", "R.x"]}}
 
 
@@ -867,7 +871,7 @@ def test_a_deployed_guarantee_resting_on_a_premise_outside_the_trust_base_fails_
     `P.t`'s own with its reason.  A guarantee's own trust is a deployed guarantee's, and each holds a premise and a
     reason."""
     now = sounded()
-    lock = {**opened(now), "trust": {"base": ["P.Hyp"]}, "deployed": ["P.t"]}
+    lock = {**opened(now), "trust": {"base": HYP}, "deployed": ["P.t"]}
     assert A.judge({k: v for k, v in lock.items() if k != "deployed"}, now, FILES)[0] == []
     fails = A.judge(lock, now, FILES)[0]
     assert [(f.code, f.entry) for f in fails] == [("trust.gap-new", "P.t")] and "rests on P.Sound, outside" in fails[0]
@@ -877,16 +881,17 @@ def test_a_deployed_guarantee_resting_on_a_premise_outside_the_trust_base_fails_
     fixed = A.repaired(lock, now, FILES, fails, TICKET)
     assert [f.code for f in A.judge(fixed, now, FILES)[0]] == ["trust.gap-new"]
     assert A.judge(lock | {"trust_gap": {"P.t": ["P.Sound"]}}, now, FILES)[0] == []
-    assert A.judge(lock | {"trust": {"base": ["P.Hyp", "P.Sound"]}}, now, FILES)[0] == []
+    assert A.judge(lock | {"trust": {"base": HYP | {"P.Sound": "a trust assumption"}}}, now, FILES)[0] == []
     own = {"P.Sound": "its rule"}
-    assert A.judge(lock | {"trust": {"base": ["P.Hyp"], "extra": {"P.t": own}}}, now, FILES)[0] == []
-    elsewhere = {"trust": {"base": ["P.Hyp"], "extra": {"P.u": own}}, "trust_gap": {"P.t": ["P.Sound"]}}
+    assert A.judge(lock | {"trust": {"base": HYP, "extra": {"P.t": own}}}, now, FILES)[0] == []
+    elsewhere = {"trust": {"base": HYP, "extra": {"P.u": own}}, "trust_gap": {"P.t": ["P.Sound"]}}
     assert [(f.code, f.entry) for f in A.judge(lock | elsewhere, now, FILES)[0]] == [("trust.extra-unlisted", "P.u")]
     assert A.trust_gaps(lock) == {"P.t": ["P.Sound"]}
     assert [f.code for f in A.judge(lock | {"deployed": ["P.t", "P.gone"], "trust_gap": {"P.t": ["P.Sound"]}}, now,
                                     FILES)[0]] == ["trust.deployed-unlisted"]
-    for bad in (["P.Hyp"], {"extra": {}}, {"base": ["P.Hyp"], "extra": {"P.t": {}}},
-                {"base": ["P.Hyp"], "extra": {"P.t": {"P.Sound": " "}}}, {"base": ["P.Hyp"], "also": []}):
+    for bad in (["P.Hyp"], {"base": ["P.Hyp"]}, {"base": {"P.Hyp": "two\nlines"}}, {"extra": {}},
+                {"base": HYP, "extra": {"P.t": {}}}, {"base": HYP, "extra": {"P.t": {"P.Sound": " "}}},
+                {"base": HYP, "also": []}):
         assert [f.code for f in A.judge(lock | {"trust": bad}, now, FILES)[0]] == ["trust.form"], bad
 
 
@@ -896,10 +901,10 @@ def test_a_discharged_premise_fails_until_its_trust_gap_entry_drops_which_an_upd
     listing `P.Sound` fails, as bookkeeping (not a record difference, so `--regenerate` alone doesn't settle it), until the
     entry drops: `--update` drops it, and so does the lock run under `--bookkeeping warn`, whose warning names the premise.
     The report holds each deployed guarantee's gap."""
-    before = {**opened(sounded()), "trust": {"base": ["P.Hyp"]}, "deployed": ["P.t"], "trust_gap": {"P.t": ["P.Sound"]}}
+    before = {**opened(sounded()), "trust": {"base": HYP}, "deployed": ["P.t"], "trust_gap": {"P.t": ["P.Sound"]}}
     assert A.judge(before, sounded(), FILES)[0] == []
     assert "trust.gap-gone" in [f.code for f in A.judge(before, facts(), FILES)[0]]
-    lock = {**recorded(), "trust": {"base": ["P.Hyp"]}, "deployed": ["P.t"], "trust_gap": {"P.t": ["P.Sound"]}}
+    lock = {**recorded(), "trust": {"base": HYP}, "deployed": ["P.t"], "trust_gap": {"P.t": ["P.Sound"]}}
     fails = A.judge(lock, facts(), FILES)[0]
     assert [(f.code, f.entry) for f in fails] == [("trust.gap-gone", "P.t")] and "lists P.Sound, which it no" in fails[0]
     assert A.BOOKKEEPING.match(fails[0]) and A.regenerated(lock, facts(), FILES, fails) is None

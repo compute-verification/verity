@@ -120,8 +120,8 @@ WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
 SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time", "trust_gap"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
-#: `frozen` and `conjectures`, `trees`' `except`, `trust`'s `extra`), or lists of names merged as lists (`trust`'s
-#: `base`, `trust_gap`'s premises, so a side's discharge and the other's new premise both apply)
+#: `frozen` and `conjectures`, `trees`' `except`, `trust`'s `base` and `extra`), or lists of names merged as lists
+#: (`trust_gap`'s premises, so a side's discharge and the other's new premise both apply)
 NESTED = {"upstream", "shape", "claims", "trees", "trust", "trust_gap"}
 #: nested maps whose entries are maps merged one level deeper still: `shape.inline`'s guarantees, each {premise: why} merged
 #: premise by premise, a guarantee left with none dropped (the check refuses an empty one, and `--update` drops it), and
