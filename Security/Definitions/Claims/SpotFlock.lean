@@ -46,15 +46,13 @@ structure Refines (H : Msg → Msg) {A : ZkArg Coin} (L : ZkCompiled Coin A) : P
   openCalls : L.toCompiled.OpenCallsLe H
   zkSessions : L.ZkSessions H
 
-/-- **L3's export, two stages**: the two-stage compiled verifier `L` and the masked compiled verifier `Z` over `A` are
-one compiled verifier; at the hash `H` it commits with a binding commitment, and meets the two-stage contract
-(`CompiledTwo.Sessions`) and the zero-knowledge contract. -/
-structure RefinesTwo (H : Msg → Msg) {A : ZkArg Coin} (L : CompiledTwo Coin A.toArg) (Z : ZkCompiled Coin A) :
-    Prop where
-  base : Z.toCompiled = L.toCompiled
+/-- **L3's export, two stages**: at the hash `H`, the two-stage compiled verifier `L` over `A` commits with a binding
+commitment and meets the two-stage contract (`CompiledTwo.Sessions`). It has no zero-knowledge contract: the
+two-stage view includes the interior registration, which commits under the ZK server's salts and so reads the witness
+and the tape, and two-stage zero knowledge is the sampled audit's over that view. -/
+structure RefinesTwo (H : Msg → Msg) {A : Arg Coin} (L : CompiledTwo Coin A) : Prop where
   binds : L.commit.Binds H
   sessions : L.Sessions H
-  zkSessions : Z.ZkSessions H
 
 /-- **SPOT-Flock's one-stage composition**: L2's theorems at L1's export and L3's give the compiled verifier's
 knowledge soundness in each form, its bits, and its zero knowledge. -/
@@ -64,9 +62,9 @@ def Composes : Prop :=
       L.toCompiled.KS H ∧ L.toCompiled.KSReg H ∧ L.toCompiled.KSCount H ∧ L.toCompiled.Bits H ∧ L.ZK H
 
 /-- **SPOT-Flock's two-stage composition**: L2's two-stage theorems at L1's export and L3's give the two-stage compiled
-verifier's knowledge soundness and exfiltration bound, and the masked compiled verifier's zero knowledge. -/
+verifier's knowledge soundness and exfiltration bound. -/
 def ComposesTwo : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : ZkArg Coin) (L : CompiledTwo Coin A.toArg)
-    (Z : ZkCompiled Coin A) (H : Msg → Msg), Exports H A → RefinesTwo H L Z → L.KS H ∧ L.Exfil H ∧ Z.ZK H
+    (H : Msg → Msg), Exports H A → RefinesTwo H L → L.KS H ∧ L.Exfil H
 
 end Claims.SpotFlock

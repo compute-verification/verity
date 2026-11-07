@@ -3,6 +3,8 @@ module
 public import Definitions.Claims.SpotFlock
 public import Proofs.Flock.ZkAny.DeferLoop
 public import Proofs.Flock.SamplingGeneric.TwoDeployed
+public import Proofs.Flock.SpotFlock.Code
+import Proofs.Flock.SpotFlock.Sessions
 import Proofs.Flock.Masked
 import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.SamplingGeneric.Two
@@ -17,9 +19,10 @@ The layers and their interfaces are `Claims.SpotFlock`'s. Here they are at the d
 
 * **L1** (`Flock.Spot`): `arg p`, Flock at the deployed masked record as a proof system for proof blocks with the ZK
   server's sessions at the deployment `p`; `arg_KS` (from `MaskedKS`) and `arg_ZK` (from `Loop.zkOut_loopDeployed`).
-* **L3** (`SpotFlock`): `deployed p` and `deployedTwo p`, the deployed sampled verifier with its Flock sessions as a
-  masked compiled verifier and a two-stage compiled verifier over `arg p`; `refines` and `refinesTwo`, the compiler's
-  contract at them.
+* **L3** (`SpotFlock`): `deployed p h` and `deployedTwo p h`, the deployed sampled verifier (`SpotFlock.code h`, at the
+  auditor's copies `h`) with its Flock sessions as a masked compiled verifier and a two-stage compiled verifier over
+  `arg p`; `refines` and `refinesTwo`, the compiler's contract at them. Two-stage zero knowledge isn't L3's contract:
+  the two-stage view includes the interior registration, which reads the witness and the tape.
 * **The deployed guarantees** (`SpotFlock.ks`, `ksReg`, `ksCount`, `bits`, `zk`, `ksTwo`, `exfilTwo`): each L2's theorem
   at L1's export and L3's, in one line. `Claims.SpotFlock.composes` and `composesTwo` are the same composition at any
   proof system and compiled verifier.
@@ -45,10 +48,9 @@ theorem composes : Composes :=
       compilerZK Coin A L H h1.zk h3.zkSessions⟩
 
 theorem composesTwo : ComposesTwo :=
-  fun Coin _ _ _ A L Lz H h1 h3 =>
+  fun Coin _ _ _ A L H h1 h3 =>
     ⟨compilerKSTwo Coin A.toArg L H h1.ks h3.binds h3.sessions,
-      compilerExfilTwo Coin A.toArg L H h1.ks h3.binds h3.sessions,
-      compilerZK Coin A Lz H h1.zk h3.zkSessions⟩
+      compilerExfilTwo Coin A.toArg L H h1.ks h3.binds h3.sessions⟩
 
 end Claims.SpotFlock
 
@@ -155,29 +157,17 @@ namespace SpotFlock
 
 open Claims Claims.SamplingGeneric
 
-/-- **The deployed sampled verifier as a `Code`**: the deployed Lean verifier's run (`SampledProofs.Run.run`), with its
-Flock sessions' statements and verdicts read off the sessions. -/
-noncomputable def code : SamplingDeploy.Code := sorry
-
-/-- The roots the deployed verifier's runs show for a proof block's interior values. -/
-noncomputable def iroots : Msg → Claims.Seen → ℕ → List Msg := sorry
-
-/-- The two-stage design the deployed verifier reads off a statement. -/
-noncomputable def two : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two := sorry
-
-/-- The replay sample the deployed verifier draws from its coins. -/
-noncomputable def rs : (x : Msg) → (Fin (code.V.k x) → FlockDeploy.Coin) → List ℕ := sorry
-
 /-- The deployed sampled verifier as a compiled verifier over L1's proof system: `SamplingDeploy.compiled` at the
-deployed record, which reads `arg p`'s shapes and witnesses and not its relation. -/
-noncomputable def compiled (p : Flock.Spot.Server) : Compiled FlockDeploy.Coin (Flock.Spot.arg p).toArg :=
-  { SamplingDeploy.compiled Flock.Spot.D code iroots with }
+deployed record and the deployed code at the auditor's copies `h` (`code h`, with its interior roots `iroots`), which
+reads `arg p`'s shapes and witnesses and not its relation. -/
+noncomputable def compiled (p : Flock.Spot.Server) (h : Held) : Compiled FlockDeploy.Coin (Flock.Spot.arg p).toArg :=
+  { SamplingDeploy.compiled Flock.Spot.D (code h) iroots with }
 
 /-- **L3's export, one stage**: the deployed sampled verifier with its Flock sessions as a masked compiled verifier
 over `arg p`, with the framing the deployed run gives: which history is which session's, the rounds before the
 sessions, each session's rounds, the witness the reference prover gives it, and its tape. -/
-noncomputable def deployed (p : Flock.Spot.Server) : ZkCompiled FlockDeploy.Coin (Flock.Spot.arg p) where
-  toCompiled := compiled p
+noncomputable def deployed (p : Flock.Spot.Server) (h : Held) : ZkCompiled FlockDeploy.Coin (Flock.Spot.arg p) where
+  toCompiled := compiled p h
   step := sorry
   k₀ := sorry
   M := sorry
@@ -187,61 +177,66 @@ noncomputable def deployed (p : Flock.Spot.Server) : ZkCompiled FlockDeploy.Coin
   tapeOf := sorry
 
 /-- **L3's export, two stages**: the deployed sampled verifier as a two-stage compiled verifier over `arg p`, at its
-two-stage design and replay sample. -/
-noncomputable def deployedTwo (p : Flock.Spot.Server) : CompiledTwo FlockDeploy.Coin (Flock.Spot.arg p).toArg where
-  toCompiled := compiled p
-  two := two
-  replaySample := rs
+two-stage design and replay sample at the auditor's copies `h`. -/
+noncomputable def deployedTwo (p : Flock.Spot.Server) (h : Held) :
+    CompiledTwo FlockDeploy.Coin (Flock.Spot.arg p).toArg where
+  toCompiled := compiled p h
+  two := two h
+  replaySample := rs h
 
 /-- **L3's refinement, one stage**: `binds` is `SamplingDeploy.commit_binds`; `sessions` is
 `SamplingDeploy.sessions_compiled` at `code`'s facts (`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`,
 `Code.DrawFixed`) and its sessions' runs, numbers and openings (`SessionRuns`, `SessionsIn`, `SessionOpens`), read at
 `R`; `openCalls` is `SamplingDeploy.openCallsLe_compiled` at `RevealsLe`; `zkSessions` is the framing's five facts. -/
-theorem refines (p : Flock.Spot.Server) : Claims.SpotFlock.Refines FlockDeploy.sha512 (deployed p) := by
+theorem refines (p : Flock.Spot.Server) (h : Held) : Claims.SpotFlock.Refines FlockDeploy.sha512 (deployed p h) := by
   sorry
 
-/-- **L3's refinement, two stages**: one compiled verifier, its binding and zero-knowledge contract `refines`'; the
-two-stage contract is `SamplingDeploy.sessionsTwo_compiled` at `code`'s two-stage facts (`Code.ReplayDraws`,
-`Code.SecondDraws`, `Code.RefusesTwo`, `Code.InteriorFixed`, `Code.DrawFixed`) and its sessions' runs, numbers and
-openings at a replay block (`SessionRuns`, `SessionsIn`, `SessionOpensTwo`), read at `R`. -/
-theorem refinesTwo (p : Flock.Spot.Server) :
-    Claims.SpotFlock.RefinesTwo FlockDeploy.sha512 (deployedTwo p) (deployed p) where
-  base := rfl
-  binds := (refines p).binds
-  sessions := sorry
-  zkSessions := (refines p).zkSessions
+/-- **L3's refinement, two stages**: `binds` is `SamplingDeploy.commit_binds`; `sessions` is
+`SamplingDeploy.sessionsTwo_compiled` at `code h`'s two-stage facts (`Code.ReplayDraws`, `Code.SecondDraws`,
+`Code.RefusesTwo`, `Code.InteriorFixed`, `Code.DrawFixed`) and its sessions' runs (`sessionRuns`), numbers
+(`InnerNumbers`) and openings at a replay block (`SessionOpensTwo`), its openings read at `R`, which is Flock's
+relation and more. -/
+theorem refinesTwo (p : Flock.Spot.Server) (h : Held) :
+    Claims.SpotFlock.RefinesTwo FlockDeploy.sha512 (deployedTwo p h) where
+  binds := SamplingDeploy.commit_binds (code h) FlockDeploy.sha512
+  sessions :=
+    have hS := SamplingDeploy.sessionsTwo_compiled Flock.Spot.D (code h) iroots (two h) (rs h) FlockDeploy.sha512
+      sorry sorry sorry sorry sorry (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) sorry sorry
+    { hS with
+      opens := fun x s Pt d Ω Pv ω r u xS vS w hs hP h2 hin hacc hu hsess hR =>
+        hS.opens x s Pt d Ω Pv ω r u xS vS w hs hP h2 hin hacc hu hsess hR.1 }
 
 /-! ## The deployed guarantees, each L2's theorem at L1's export and L3's -/
 
 /-- **The deployed sampled verifier is knowledge sound at SHA-512**. -/
-theorem ks (p : Flock.Spot.Server) : (deployed p).toCompiled.KS FlockDeploy.sha512 :=
-  compilerKS _ _ _ _ (Flock.Spot.arg_KS p) (refines p).binds (refines p).sessions
+theorem ks (p : Flock.Spot.Server) (h : Held) : (deployed p h).toCompiled.KS FlockDeploy.sha512 :=
+  compilerKS _ _ _ _ (Flock.Spot.arg_KS p) (refines p h).binds (refines p h).sessions
 
 /-- **The committed form**. -/
-theorem ksReg (p : Flock.Spot.Server) : (deployed p).toCompiled.KSReg FlockDeploy.sha512 :=
-  compilerKSReg _ _ _ _ (Flock.Spot.arg_KS p) (refines p).binds (refines p).sessions
+theorem ksReg (p : Flock.Spot.Server) (h : Held) : (deployed p h).toCompiled.KSReg FlockDeploy.sha512 :=
+  compilerKSReg _ _ _ _ (Flock.Spot.arg_KS p) (refines p h).binds (refines p h).sessions
 
 /-- **The count form**. -/
-theorem ksCount (p : Flock.Spot.Server) : (deployed p).toCompiled.KSCount FlockDeploy.sha512 :=
-  compilerKSCount _ _ _ _ (Flock.Spot.arg_KS p) (refines p).binds (refines p).sessions
+theorem ksCount (p : Flock.Spot.Server) (h : Held) : (deployed p h).toCompiled.KSCount FlockDeploy.sha512 :=
+  compilerKSCount _ _ _ _ (Flock.Spot.arg_KS p) (refines p h).binds (refines p h).sessions
 
 /-- **Bits**, with the opening checks' count. -/
-theorem bits (p : Flock.Spot.Server) : (deployed p).toCompiled.Bits FlockDeploy.sha512 :=
-  compilerBits _ _ _ _ (Flock.Spot.arg_KS p) (refines p).binds (refines p).sessions (refines p).openCalls
+theorem bits (p : Flock.Spot.Server) (h : Held) : (deployed p h).toCompiled.Bits FlockDeploy.sha512 :=
+  compilerBits _ _ _ _ (Flock.Spot.arg_KS p) (refines p h).binds (refines p h).sessions (refines p h).openCalls
 
 /-- **The deployed sampled verifier is zero knowledge with a public outcome**, relative to the published leaf layer, at
 L1's code facts and sources. -/
-theorem zk (p : Flock.Spot.Server) (hc : Flock.Spot.ZkCode p) (hs : Flock.Spot.Src p) :
-    (deployed p).ZK FlockDeploy.sha512 :=
-  compilerZK _ _ _ _ (Flock.Spot.arg_ZK p hc hs) (refines p).zkSessions
+theorem zk (p : Flock.Spot.Server) (h : Held) (hc : Flock.Spot.ZkCode p) (hs : Flock.Spot.Src p) :
+    (deployed p h).ZK FlockDeploy.sha512 :=
+  compilerZK _ _ _ _ (Flock.Spot.arg_ZK p hc hs) (refines p h).zkSessions
 
 /-- **The deployed two-stage sampled verifier is knowledge sound at SHA-512**. -/
-theorem ksTwo (p : Flock.Spot.Server) : (deployedTwo p).KS FlockDeploy.sha512 :=
-  compilerKSTwo _ _ _ _ (Flock.Spot.arg_KS p) (refinesTwo p).binds (refinesTwo p).sessions
+theorem ksTwo (p : Flock.Spot.Server) (h : Held) : (deployedTwo p h).KS FlockDeploy.sha512 :=
+  compilerKSTwo _ _ _ _ (Flock.Spot.arg_KS p) (refinesTwo p h).binds (refinesTwo p h).sessions
 
 /-- **The deployed two-stage sampled verifier's exfiltration bound**. -/
-theorem exfilTwo (p : Flock.Spot.Server) : (deployedTwo p).Exfil FlockDeploy.sha512 :=
-  compilerExfilTwo _ _ _ _ (Flock.Spot.arg_KS p) (refinesTwo p).binds (refinesTwo p).sessions
+theorem exfilTwo (p : Flock.Spot.Server) (h : Held) : (deployedTwo p h).Exfil FlockDeploy.sha512 :=
+  compilerExfilTwo _ _ _ _ (Flock.Spot.arg_KS p) (refinesTwo p h).binds (refinesTwo p h).sessions
 
 /-! ## Knowledge soundness at Flock's own relation
 
@@ -250,19 +245,19 @@ theorem exfilTwo (p : Flock.Spot.Server) : (deployedTwo p).Exfil FlockDeploy.sha
 relation; only zero knowledge reads it. -/
 
 /-- **A sampled verifier over Flock's sessions is knowledge sound at Flock's relation**, at any `Code`, from L3's
-knowledge-soundness contract; at the deployed one, `c = code`. -/
+knowledge-soundness contract; at the deployed one, `c = code h`. -/
 theorem ksOfFlock (c : SamplingDeploy.Code) (ir : Msg → Claims.Seen → ℕ → List Msg)
-    (h : (SamplingDeploy.compiled Flock.Spot.D c ir).Sessions FlockDeploy.sha512) :
+    (hS : (SamplingDeploy.compiled Flock.Spot.D c ir).Sessions FlockDeploy.sha512) :
     (SamplingDeploy.compiled Flock.Spot.D c ir).KS FlockDeploy.sha512 :=
-  compilerKS _ _ _ _ Flock.Spot.ofFlock_KS (SamplingDeploy.commit_binds c _) h
+  compilerKS _ _ _ _ Flock.Spot.ofFlock_KS (SamplingDeploy.commit_binds c _) hS
 
 /-- **A two-stage sampled verifier over Flock's sessions is knowledge sound at Flock's relation**, at any `Code`, from
-L3's two-stage contract; at the deployed one, `c = code`. -/
+L3's two-stage contract; at the deployed one, `c = code h`. -/
 theorem ksTwoOfFlock (c : SamplingDeploy.Code) (ir : Msg → Claims.Seen → ℕ → List Msg)
     (tw : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two)
     (r : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ)
-    (h : (SamplingDeploy.compiledTwo Flock.Spot.D c ir tw r).Sessions FlockDeploy.sha512) :
+    (hS : (SamplingDeploy.compiledTwo Flock.Spot.D c ir tw r).Sessions FlockDeploy.sha512) :
     (SamplingDeploy.compiledTwo Flock.Spot.D c ir tw r).KS FlockDeploy.sha512 :=
-  compilerKSTwo _ _ _ _ Flock.Spot.ofFlock_KS (SamplingDeploy.commit_binds c _) h
+  compilerKSTwo _ _ _ _ Flock.Spot.ofFlock_KS (SamplingDeploy.commit_binds c _) hS
 
 end SpotFlock
