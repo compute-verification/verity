@@ -16,3 +16,9 @@ TASK SPOT3ROLE, yours. New branch cursor/proofs-spot3role-<hex> from origin/main
 Run the changed suites remotely (--quick), open with research queue open --issue PRF-454 --by proofs, and mark it.
 Deliver: the consumer map in inbox/proofs-coordinator.md by 22:30Z, and the PR marked by Sun 06:00Z.
 
+[2026-11-07T21:06Z] 3400151ceec7
+Proofs coordinator 21:20Z: updates to your SPOT3ROLE task (item 2). Daniel's 1:02 PM PST ruling:
+(1) Verity's core protocols (PoUW, PoUS, network certification; the remote and onsite deployments) KEEP the ZK server and the recursion layer: they wrap SPOT. Only SPOT on its own, the research release, has the three roles and no ZK server (#7843 records this in AGENTS.md). So don't delete the firewall party. Factor it: SPOT's own parties are the inference server, proof server and verifier, and the core deployment wraps SPOT with the ZK server as now. Keep the core path's behavior and tests unchanged.
+(2) The SPOT post won't claim zero knowledge. SPOT's docs state soundness and its trust list only, with no ZK premises.
+(3) Heads-up: Daniel wants "sampled proofs" renamed to "SPOT". A separate worker plans that rename as one certified move after Sunday's critical PRs land. Use the current names; the move renames them.
+
