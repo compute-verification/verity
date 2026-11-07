@@ -51432,7 +51432,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "83d3224e371f2019056c5bd91b0e79979e61cd4436291d138e5a3a46c2dfccab",
+   "digest": "153d213439f5e1e20d55cc1217b864ff311e0620daa21742279e131e13b7cdd0",
    "definitions": {
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
     "Verity.ComponentAccepts": "1c47d71666faefa211d1dc39341c5e1fb7cb5c56d7ed14c10ab28b05170c725a",
@@ -51506,7 +51506,7 @@
     "Verity.TreeOpenable": "5eda18360f1488996b766de65947617b9e00356925effafc445a48a21669d608",
     "Verity.TreeSample": "79fa9c5673525eabcdd4c63f045415fa5d2fac82689029540788fd77f64e3d71",
     "Verity.TreeSpecOk": "666190d9707826c4245f369aa14ce49eaef4fc1789e996351240e99eddde8012",
-    "Verity.Vocab": "63b4a90b789f90c1313a950ff2fe16114ec7fc79e0f95bf1440f71eca81ca579",
+    "Verity.Vocab": "91edc0d723be122a15f37a5af82b80aa0c08e64d819de830fcbae1ca3330c0e8",
     "Verity.Vocab.Holds": "4d3122b84d73fce763002a7789f07051de1e31d9c17e2739703ebb25cc8f884e",
     "Verity.Vocab.Opens": "dc9e98de8f4dd3c8d8e67112689b4467fc5ce5da8864de1d8fef43a123d101bf",
     "Verity.Vocab.Registered": "42e334619ebedd0e57f2d5b946fb9ccea7e5cf4e058a0655bb0da2595204c6b0",
