@@ -151,11 +151,6 @@ Landing:
 
 Protocols and claims:
 
-- Every protocol carries ε, the adversary's advantage (credit ≤ (1 + ε)·T at cost T), and δ, its failure probability;
-  γ is only the honest overhead. Completeness is perfect on the stated domain; model weights are a fixed operand, never
-  first-class (`GLOSSARY.md`).
-- The honest overhead's cap is γ ≤ 10 at each operating point, C (compute-bound) and L (memory-bound), set per card
-  by @benchmarks' sweep; γ = S_scheme/S_stock − 1 in busy SM-time.
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
 - Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
