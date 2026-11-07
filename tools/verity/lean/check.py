@@ -4458,7 +4458,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
-          bookkeeping: str | None = None, seals: "Seals | None" = None) -> dict:
+          bookkeeping: str | None = None, seals: "Seals | None" = None, store: bool | None = None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
@@ -4472,7 +4472,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     instead of auditing, and the report's `moved` holds their moves.  The report lists the spec's definitions
     that no guarantee reads (`unread_spec`).  ``replay_cache`` (a directory) holds each module whose replay passed, under
     its `replay_keys` key: such a module's constants join the replay unchecked, and each module checked is stored there
-    when the replay passes.  ``closure`` replays the import closure too (`replay_step`).  ``kept_facts`` says which facts
+    when the replay passes.  ``store`` says whether this audit may write ``replay_cache`` (`replay_step`): its default,
+    sealed, lets a sealed audit store its verdicts (keyed on the sealed copies) and keeps an unsealed one, whose keys are
+    from the live `.lake`, from writing the shared cache a sealed run reuses; a caller whose cache is a throwaway private
+    directory passes ``store=True``.  ``closure`` replays the import closure too (`replay_step`).  ``kept_facts`` says which facts
     documents stay beside the reports (`facts_of`): `all` (the package's and its provers'), `own` or `none`.
     ``seals`` (the run's seals) is taken before ``built`` is called, so every reader after it reads the seal's private
     copies and no dependent's build changes what the facts, the replay, the scans or the digests see (`Seals`); without
@@ -4564,9 +4567,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         return reported(rep)
     search = sealed.search if sealed else None
     dig = sealed.digest if sealed else sha256
-    # an unsealed audit hashes its replay keys from the live `.lake`: it may reuse the shared cache but never writes it,
-    # so a live-keyed verdict a dependent's build could have tampered with can never enter a sealed run's cache
-    store = sealed is not None
+    # A sealed audit's replay keys come from the sealed copies, so storing its verdicts in the shared replay cache a
+    # sealed run reuses is safe. An unsealed audit's keys come from the live `.lake`, which a dependent's build can have
+    # tampered with, so by default it reuses the cache but writes nothing — a live-keyed verdict never enters it.
+    # ``store`` overrides the default for a caller whose cache is a throwaway private dir, as lean's review allows.
+    store = (sealed is not None) if store is None else store
     built()
     files = lean_modules(pkg)
     background = ThreadPoolExecutor(max_workers=5)

@@ -4620,8 +4620,8 @@ def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tm
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     def build():
         return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    def audit():
-        return A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache)
+    def audit():                                             # store=True: the cache is this test's own private dir
+        return A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache, store=True)
     build()
     rep = audit()
     assert rep["failures"] == [] and counts(rep) == (4, 0)
@@ -4772,9 +4772,9 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     def build():
         return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    def audit():
+    def audit():                                             # store=True: the cache is this test's own private dir
         return A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache,
-                       closure=True)
+                       closure=True, store=True)
     build()
     rep = audit()
     c = rep["replay"]["closure"]
@@ -4852,6 +4852,52 @@ def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkey
     sealed = warm("sealed")
     A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, sealed, store=True)
     assert (sealed / "B.json").is_file() and (sealed / "A.json").stat().st_mtime > 1000
+
+
+def test_an_unsealed_audit_leaves_the_shared_replay_cache_unchanged(tmp_path, monkeypatch):
+    """lean's rule: an audit without seals keys its replay on the live `.lake`, which a dependent's build can tamper with,
+    so it may reuse the shared cache but must write nothing to it, or a tampered verdict could poison a sealed run. An
+    unsealed `audit` runs a real `replay_step` against a warm cache and leaves every entry, byte and mtime, as it was; the
+    same audit with store=True (its cache a throwaway private dir) does store what it checked."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "lean-toolchain").write_text("v0\n")
+    (pkg / "P.lean").write_text("")
+    A.dump(pkg, {"roots": ["P"], "dependencies": {}})
+    own = {"lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": [],
+           "graph": {"P": {"imports": []}}, "files": {"P": "P.lean"}, "pins": {}}
+    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: dict(own))
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {"P": "pkey"})
+    monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
+
+    def run(cmd, cwd, log, timeout=None):
+        A.Path(cmd[cmd.index("--run") + 2]).write_text(json.dumps({"axioms": []}))
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
+    monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
+    monkeypatch.setattr(A, "dependency_digests", lambda *a: {})
+    for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("anonymous_instances", []), ("run_paths", []), ("tree_roles", {}), ("tree_failures", []),
+                        ("inline_failures", ([], {}, []))):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+
+    def warm(name):
+        c = tmp_path / name
+        c.mkdir()
+        (c / "w.json").write_text("{}")
+        os.utime(c / "w.json", (1000, 1000))
+        return c
+
+    unsealed = warm("unsealed")
+    before = {p.name: (p.read_bytes(), p.stat().st_mtime) for p in unsealed.iterdir()}
+    assert A.audit(pkg, tmp_path / "out", replay=True, runs=False, replay_cache=unsealed, log=lambda *_: None)["failures"] == []
+    assert {p.name: (p.read_bytes(), p.stat().st_mtime) for p in unsealed.iterdir()} == before
+
+    private = warm("private")
+    A.audit(pkg, tmp_path / "out2", replay=True, runs=False, replay_cache=private, store=True, log=lambda *_: None)
+    assert (private / "pkey.json").is_file()
 
 
 def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monkeypatch):
