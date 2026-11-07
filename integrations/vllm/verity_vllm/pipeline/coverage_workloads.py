@@ -10,10 +10,10 @@ Dimensions (out/gen/COVERAGE-20260917.md):
                                ~60 % of the run so requests enter and leave the active batch while others decode
   context class     C256       prompt_len ~ U{32..256},   max_tokens = max(2, prompt_len // 10)  (<= 25)
                     C1024      prompt_len ~ U{128..1024}, max_tokens = max(4, prompt_len // 10)  (<= 102)
-The lengths depend on (profile, ctx, seed) ONLY — the same draws for every model, so the model dimension is isolated.
+The lengths depend on (profile, ctx, seed) ONLY — the same samples for every model, so the model dimension is isolated.
 Prompts are natural text (verity_vllm/engine/profiles/corpus_coverage.json: three public-domain Gutenberg books), each request
 starting at a different seeded paragraph, tokenized with the served model's tokenizer (add_special_tokens=False) and truncated to
-the drawn prompt length.  `expected_engine_steps` is the upper bound max_r(arrive_r + max_tokens_r) (every request runs to
+the sampled prompt length.  `expected_engine_steps` is the upper bound max_r(arrive_r + max_tokens_r) (every request runs to
 max_tokens; a request stopping at EOS earlier shortens the run — gates compare against the control run's realized steps, D87).
 `engine.args.max_num_batched_tokens` keeps an 8-request prefill in ONE step (chunked prefill is its own feature column:
 `--variant chunked=<N>` declares a small budget that FORCES several prefill chunks per request, suffix `_ck<N>`; see the block below).
@@ -66,7 +66,7 @@ class Tok:
 
 
 def draw_lengths(profile: str, ctx: str, seed: int) -> list[dict]:
-    """The (prompt_len, max_tokens, arrive_step) draws of one (profile, ctx, seed) -- model independent."""
+    """The (prompt_len, max_tokens, arrive_step) samples of one (profile, ctx, seed) -- model independent."""
     c = CTX[ctx]
     n = 1 if profile == "B1" else 8
     rng = CH.generator([seed, PROFILES.index(profile), sorted(CTX).index(ctx), 0xC0FFEE])
@@ -142,7 +142,7 @@ DTYPE_VARIANTS = {"float16": "f16", "half": "f16"}
 #
 # vLLM V1 always has chunked prefill enabled, but the campaign's `engine.args.max_num_batched_tokens` (2048+64 /
 # 8192+64) keeps every prefill in ONE engine step, so no coverage cell so far has exercised partial-prefill attention.  The
-# chunked variant keeps the (profile, ctx, seed) length draws and the prompts of the base cell and FORCES several prefill
+# chunked variant keeps the (profile, ctx, seed) length samples and the prompts of the base cell and FORCES several prefill
 # chunks per request by declaring a small token budget: prompt 155 at budget 64 -> chunks 64 / 64 / 27 (three prefill
 # forwards, the first two partial: vLLM samples a token at each and discards it), then max_tokens - 1 decode forwards.
 # `expected_engine_steps` is simulated under the V1 scheduler policy (`simulate_schedule_chunked`): running requests first
@@ -284,7 +284,7 @@ def simulate_schedule_chunked(reqs: list[dict], budget: int, max_num_seqs: int =
 def workload_doc(*, case: str, model: str, tok: Tok, profile: str, ctx: str, seed: int, tokenizer_revision: str | None,
                  sampling_seed: int | None, replicate: int = 0, variant: str = "greedy", chunked: int | None = None,
                  dtype: str | None = None) -> dict:
-    """replicate r > 0: same length draws (same structural configuration), prompts from prompt seed seed + 1000 r.  variant "t1":
+    """replicate r > 0: same length samples (same structural configuration), prompts from prompt seed seed + 1000 r.  variant "t1":
     the temp=1 column -- every request sampled at temperature 1.0 with `sampling_seed` (vLLM's per-request seeded sampler).
     chunked = N: the chunked-prefill feature variant (max_num_batched_tokens N forces several prefill chunks; see the block above).
     dtype (`DTYPE_VARIANTS`): the numerical-format column -- `engine.args.dtype` makes the harness build `LLM(dtype=...)`;

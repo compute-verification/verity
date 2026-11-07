@@ -30,14 +30,14 @@ the `Hello`'s proved:
 * `LoopRead`: what the relay reads at a slot as the loop answers it, and the loop at the session's next request: the
   `Hello`'s nonce the relay drew, the model's `Hello` round passing and the session's entry on the setup (`SessOn`);
   the `Commit`'s roots `commitRead` reads off
-  the slots, the level 0s it binds kept, the coin tree's streams the session's, the firewall's own link at the
+  the slots, the level 0s it binds kept, the coin tree's streams the session's, the ZK server's own link at the
   level 0s the loop drew for the session, each `Level0.ofDraws` on the host's and the operating system's bytes, and
   the session's entry linked to the words of the coins the prover receives (`Frame.words`); a
   frame round as the loop ran it (`RoundRun`) on the worker's value at the model's history, the rep's frame
   at the model's configuration there, its rounds of the inner proof `InnerSrc`, its start `StartOk` and the loop's
   salts `SaltsSrc`; at the
-  `Finish`, once the hold's barrier passes, the session not stopped, the run at its last round, the firewall's own
-  `Finish` not stopping, the worker's value the firewall's own, and that message the `Final` of the loop's proof files
+  `Finish`, once the hold's barrier passes, the session not stopped, the run at its last round, the ZK server's own
+  `Finish` not stopping, the worker's value the ZK server's own, and that message the `Final` of the loop's proof files
   as `Proof` frames; at the `Hello`, the `Commit` and each frame round the auditor answering as `V*` did, and at the
   `Finish` the run having a message there; at every other slot only the updates between the session's requests
   (`Between`); and at a frame round and every other slot `Stays`.
@@ -54,7 +54,7 @@ the `Hello`'s proved:
   that reads no model message keeps the session's coins. `stepK_hello_opened`: past its `Hello` the session opened
   nothing. `stepK_coin_opened`: past a `Commit` or a frame round one more opening.
 * `SlotCase`: `envPre_inv`'s step at the slots of one kind. `slotCase_carried`: at a slot that reads no model message,
-  `LoopP` carries over. `slotCase_hello`: the `Hello`'s, where the model's first message is the `Hello` at the drawn
+  `LoopP` carries over. `slotCase_hello`: the `Hello`'s, where the model's first message is the `Hello` at the sampled
   nonce.
 * **`envPre_loop`**: `EnvPre` from `LoopP`, given `SlotCase` at the `Hello`, the `Commit`, each frame round and the
   `Finish`, and `J` kept at every other slot.
@@ -224,18 +224,18 @@ slot leaves passed, `liveBefore`), and where the relay's setup is `spec` and `st
 (`SessOn`: the loop began the session on its setup, at a session id no other session has); at the `Commit` the roots
 `commitRead` reads off the loop's level-0 slots at the session's tables (the setup's, each with its statement's `m`),
 the session's tables' level 0 at its next request those `commitRead` left, the coin tree's streams the session's
-(`streamsOk`), and the firewall's own message the link at the roots of the level 0s `ls` the loop drew for the session
+(`streamsOk`), and the ZK server's own message the link at the roots of the level 0s `ls` the loop drew for the session
 (`AfterDraw`), table `j`'s being `Level0.ofDraws` at its statement's `m` on what the host and the operating system
-handed the loop for rep stream `2j` (`LoopModel.src`, as `Session.level0` draws it), and where the auditor answered
+handed the loop for rep stream `2j` (`LoopModel.src`, as `Session.level0` samples it), and where the auditor answered
 coins the session goes on past, the session's entry at its next request linked to the words of what the prover
 receives (`Frame.words` after its tag and count, as the loop links them); at a frame round a `RoundRun` from
 `σ`'s frames and level 0s to `σ'`'s frames, its content the worker's value at the model's history so far, the rep's
-frame at the model's configuration there (as the loop started it, on the draws the model's tapes hold), the rounds of
+frame at the model's configuration there (as the loop started it, on the samples the model's tapes hold), the rounds of
 the inner proof the loop's finish computed so far for the rep the model's finish's (`InnerSrc`), the rep's frame only
 where its table's statement starts (`StartOk`), and the salts the loop holds at the session's level 0s those the host
 handed it for each rep stream (`SaltsSrc`); at the `Finish`,
-once the hold's barrier passes, the session not stopped, the run at its last round, the firewall's own `Finish` not
-stopping, the worker's value the firewall's own, and that message the `Final` of the loop's proof files as `Proof`
+once the hold's barrier passes, the session not stopped, the run at its last round, the ZK server's own `Finish` not
+stopping, the worker's value the ZK server's own, and that message the `Final` of the loop's proof files as `Proof`
 frames. At the `Hello`, the `Commit` and each frame round the auditor answers as `V*` did (`LoopModel.Ans`), and at
 the `Finish` the run has a message. Between the session's requests only the updates of the loop's other requests come
 (`Between`), at a frame round and every other slot keeping what the session's rounds read of it (`Stays`), and each
@@ -433,7 +433,7 @@ theorem stepK_reach {st : State} {pl : Placed} {k : Session.Kind} {e : Env} (hR 
     exact absurd hn (Option.isSome_iff_ne_none.mp (request_stop h hr))
 
 /-- **A request that reads no model message keeps the session's coins**, where the session goes on: a `Register`'s
-answer only its draw, a `Link`'s or an `Open`'s nothing. -/
+answer only its sample, a `Link`'s or an `Open`'s nothing. -/
 theorem stepK_ctl_session {st : State} {pl : Placed} {k : Session.Kind} {e : Env} (h : st.stop = none)
     (hs : slot st pl = some k) (hm : isModel k = false)
     (hgo : ((stepK true st pl (some (tagOf k)) (.ok k) e).go &&

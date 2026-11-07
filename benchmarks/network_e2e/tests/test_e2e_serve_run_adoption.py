@@ -1,7 +1,7 @@
 """An adversarial case against the adapter that adopts `prove_path.py audit --serve-run` audits as these runs' prove
 path. The attack is on the *assembly*, not the pieces.
 
-A report could read OK with w212's advice registered **after serving**, before the first draw. A content tie for such
+A report could read OK with w212's advice registered **after serving**, before the first sample. A content tie for such
 a Commit window opens the audited arm's committed root to exactly the report's advice of that Commit window
 (`chain.opens`, which binds content: the opening's bytes must equal the v0 encoding of the report's advice,
 re-registered to the registered root).

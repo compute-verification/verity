@@ -2,7 +2,7 @@
 `RMSNormTriton_v3`, `RMSNormFusedCuda_v4`, `Attention_v10`, `Attention_v11` (`registry.value_inputs`, `registry.fa2_check_inf`).
 
 Each is its constant twin's row (`rows.rmsnorm_triton`, `rows.rmsnorm_fused`, `rows.attention`) with the value read from the f32 word
-of the last operand; the self-check draws that word in the value's served range.  The rows register from `rows` (kernel "rows").
+of the last operand; the self-check samples that word in the value's served range.  The rows register from `rows` (kernel "rows").
 """
 from __future__ import annotations
 
@@ -38,13 +38,13 @@ def eps(ops: Sequence[np.ndarray], n: int, family: str) -> float:
 
 
 def eps_words(rng: np.random.Generator, n: int, **statics: Any) -> np.ndarray:
-    """A norm's eps: the served 1e-5 / 1e-6 on half the rows, else drawn log-uniform over [1e-8, 1e-2]."""
+    """A norm's eps: the served 1e-5 / 1e-6 on half the rows, else sampled log-uniform over [1e-8, 1e-2]."""
     e = np.where(rng.random(n) < 0.5, rng.choice([1e-5, 1e-6], n), 10.0 ** rng.uniform(-8, -2, n))
     return np.asarray(e, dtype=np.float32).view(np.uint32)
 
 
 def scale_words(rng: np.random.Generator, n: int, **statics: Any) -> np.ndarray:
-    """The attention scale: D^-0.5 * log2(e) of the row's D on half the rows, else drawn over [0.02, 0.5]."""
+    """The attention scale: D^-0.5 * log2(e) of the row's D on half the rows, else sampled over [0.02, 0.5]."""
     from verity.ml.definitions.registry import b1
     s = np.asarray(rng.uniform(0.02, 0.5, n), dtype=np.float32).view(np.uint32)
     return np.where(rng.random(n) < 0.5, np.uint32(b1.scale_log2_bits(int(statics["D"]))), s).astype(np.uint32)

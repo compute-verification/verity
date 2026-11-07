@@ -5,16 +5,16 @@ public import Proofs.Flock.Claims.Sampling.Binding
 /-!
 # Waiting for accepted reruns: the truncation and the union over wrong sets
 
-The sampling extractor waits for `k` accepted reruns among `K` fresh draws (`waitAccC`) and runs the session's
+The sampling extractor waits for `k` accepted reruns among `K` fresh samples (`waitAccC`) and runs the session's
 extraction at each, on coins of its own. At a tape where a run accepts with probability `a`, this file bounds the
 probability that the wait comes up short, or that for some set `B` among `S` every kept rerun is bad at its own coins
 (`bad B`), by `2k/K + e^{−k/8} + |S|^{1/k}·y`, when each `bad B` has `Pr[acc ∧ bad B] ≤ y`.
 
-* `waitAccC_eval`, `waitAccC_eval_nil`: the wait keeps the first `k` accepted draws (`accList`), each with what it
+* `waitAccC_eval`, `waitAccC_eval_nil`: the wait keeps the first `k` accepted samples (`accList`), each with what it
   showed.
-* `W`, `W_eq`, `Pr_allBad`: given the draws, the kept draws are all bad (`AllBad`) with probability the product of
+* `W`, `W_eq`, `Pr_allBad`: given the samples, the kept samples are all bad (`AllBad`) with probability the product of
   their own probabilities, `0` when fewer than `k` were kept.
-* `EW`, `EW_succ`, `EW_le`: over the draws, that averages at most `(g/a)^k`, `g = Pr[acc ∧ bad]`; one draw at a time,
+* `EW`, `EW_succ`, `EW_le`: over the samples, that averages at most `(g/a)^k`, `g = Pr[acc ∧ bad]`; one sample at a time,
   `EW(k+1, K+1) = g·EW(k, K) + (1 − a)·EW(k+1, K)`.
 * `short_pow`, `short_le`: the wait is short with probability at most `2^k·(1 − a/2)^K`, and `a` times that is at most
   `2k/K + e^{−k/8}` (`log 2 < 7/8`).
@@ -92,9 +92,9 @@ theorem prod_getElem? {R : Type} (b : R → ℝ) :
       List.map_cons, List.prod_cons]
     rw [prod_getElem? b k l (by simp only [List.length_cons] at h; omega)]
 
-/-! ## The wait keeps the first `k` accepted draws -/
+/-! ## The wait keeps the first `k` accepted samples -/
 
-/-- The first `k` accepted draws among `rs`. -/
+/-- The first `k` accepted samples among `rs`. -/
 def accList {R : Type} (acc : R → Prop) [DecidablePred acc] (k : ℕ) (rs : List R) : List R :=
   (rs.filter fun r => decide (acc r)).take k
 
@@ -124,7 +124,7 @@ theorem waitAccC_eval {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ)
       · simp only [ha, ↓reduceIte, decide_false, Bool.false_eq_true]
         exact ih _ hlen
 
-/-- **The wait keeps the first `k` accepted draws**, each with what it showed. -/
+/-- **The wait keeps the first `k` accepted samples**, each with what it showed. -/
 theorem waitAccC_eval_nil {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (rs : List R) :
     ((waitAccC k rs []).eval H run).1 =
       (accList (fun r => (run r).out = .acc) k rs).map fun r => (r, (run r).seen) := by
@@ -132,13 +132,13 @@ theorem waitAccC_eval_nil {R : Type} (H : Msg → Msg) (run : R → Trace) (k : 
     List.filter_map, List.map_take]
   rfl
 
-/-! ## Every kept draw bad: one wait's weight -/
+/-! ## Every kept sample bad: one wait's weight -/
 
 section Weight
 
 variable {R : Type} (acc : R → Prop) [DecidablePred acc]
 
-/-- The kept draws' weights `b`, multiplied: `0` when fewer than `k` were kept. -/
+/-- The kept samples' weights `b`, multiplied: `0` when fewer than `k` were kept. -/
 noncomputable def W (b : R → ℝ) : ℕ → List R → ℝ
   | 0, _ => 1
   | _ + 1, [] => 0
@@ -164,11 +164,11 @@ theorem W_eq (b : R → ℝ) (rs : List R) : ∀ k : ℕ,
 
 variable {E : Type} [Fintype E] [Nonempty E]
 
-/-- Every kept draw is bad at its own coins, and `k` were kept. -/
+/-- Every kept sample is bad at its own coins, and `k` were kept. -/
 def AllBad (k : ℕ) (bad : R → E → Prop) (rs : List R) (c : Fin k → E) : Prop :=
   (accList acc k rs).length = k ∧ ∀ (j : Fin k) (r : R), (accList acc k rs)[j.val]? = some r → bad r (c j)
 
-/-- **Given the draws**, the kept draws are all bad with probability the product of their own probabilities. -/
+/-- **Given the samples**, the kept samples are all bad with probability the product of their own probabilities. -/
 theorem Pr_allBad (k : ℕ) (bad : R → E → Prop) (rs : List R) :
     Pr (fun c : Fin k → E => AllBad acc k bad rs c) = W acc (fun r => Pr (bad r)) k rs := by
   rw [W_eq]
@@ -188,7 +188,7 @@ theorem Pr_allBad (k : ℕ) (bad : R → E → Prop) (rs : List R) :
 
 variable [Fintype R] [Nonempty R]
 
-/-- One wait's weight over `K` uniform draws. -/
+/-- One wait's weight over `K` uniform samples. -/
 noncomputable def EW (b : R → ℝ) (k K : ℕ) : ℝ := Ex fun σ : Fin K → R => W acc b k ((List.finRange K).map σ)
 
 theorem EW_zero (b : R → ℝ) (K : ℕ) : EW acc b 0 K = 1 := by
@@ -199,7 +199,7 @@ theorem EW_succ_zero (b : R → ℝ) (k : ℕ) : EW acc b (k + 1) 0 = 0 := by
   simp only [EW, List.finRange_zero, List.map_nil, W]
   exact Ex_const 0
 
-/-- **One draw at a time**: `EW(k+1, K+1) = g·EW(k, K) + (1 − a)·EW(k+1, K)`. -/
+/-- **One sample at a time**: `EW(k+1, K+1) = g·EW(k, K) + (1 − a)·EW(k+1, K)`. -/
 theorem EW_succ (b : R → ℝ) (k K : ℕ) : EW acc b (k + 1) (K + 1) =
     Ex (fun d => if acc d then b d else 0) * EW acc b k K + (1 - Pr acc) * EW acc b (k + 1) K := by
   let F : R → (Fin K → R) → ℝ := fun d σ =>
@@ -335,7 +335,7 @@ section Bound
 variable {R E : Type} [Fintype R] [Nonempty R] [Fintype E] [Nonempty E] (acc : R → Prop) [DecidablePred acc]
 
 omit [Nonempty R] [Nonempty E] in
-/-- `g = 𝔼[1[acc]·Pr[bad]]` is `Pr[acc ∧ bad]` over a draw and its own coins. -/
+/-- `g = 𝔼[1[acc]·Pr[bad]]` is `Pr[acc ∧ bad]` over a sample and its own coins. -/
 theorem Ex_acc_Pr (bad : R → E → Prop) :
     Ex (fun d => if acc d then Pr (bad d) else 0) = Pr (fun p : R × E => acc p.1 ∧ bad p.1 p.2) := by
   rw [Pr_prod_eq_Ex]
@@ -346,8 +346,8 @@ theorem Ex_acc_Pr (bad : R → E → Prop) :
   · simp only [h, ↓reduceIte, false_and]
     exact Pr_false.symm
 
-/-- **Waiting for `k` accepted draws among `K`**: at acceptance probability `a`, `a` times the probability that the
-wait is short or that, for some `B ∈ S`, every kept draw is bad at its own coins (`bad B`) is at most
+/-- **Waiting for `k` accepted samples among `K`**: at acceptance probability `a`, `a` times the probability that the
+wait is short or that, for some `B ∈ S`, every kept sample is bad at its own coins (`bad B`) is at most
 `2k/K + e^{−k/8} + |S|^{1/k}·y`, when each `Pr[acc ∧ bad B] ≤ y`. -/
 theorem wait_bad_le {ι : Type} (k K : ℕ) (hK : 0 < K) (hk : 1 ≤ k) (S : Finset ι) (bad : ι → R → E → Prop) {y : ℝ}
     (hy0 : 0 ≤ y) (hy : ∀ B ∈ S, Pr (fun p : R × E => acc p.1 ∧ bad B p.1 p.2) ≤ y) :

@@ -8,7 +8,7 @@
 # scratch (0700, files 0600; a case's evidence is witness):
 #  - PoUW's: pouw_piece.py v1 (remote) and period (onsite, and remote once composite.py lists it among remote's
 #    components) from the serve dir, each MISSING with why where the run holds no case of it. With pieces/pouw/ kept,
-#    the period is built from it, H1_KEY_SHA512, main.txt (or MAIN_FILE) and the drawn calls' statements and live
+#    the period is built from it, H1_KEY_SHA512, main.txt (or MAIN_FILE) and the sampled calls' statements and live
 #    evidence (POUW_STATEMENTS, POUW_LIVE, files on this node), its REFERENCE line credit's own verdict;
 #  - sampled proofs v2's: v2_case.py on the kept window, with its own Lean answer;
 #  - every kept piece directory pieces/NAME/ holding a case (case.json, or NAME.case.json as the wipe writes it) beside its
