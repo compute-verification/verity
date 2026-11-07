@@ -64,7 +64,8 @@ theorem testBit_bitsVal : ∀ (bs : List Bool) (i : ℕ), (Hash.RowSeg.bitsVal b
       rw [Nat.testBit_succ, List.getD_cons_succ, ← testBit_bitsVal bs i]
       congr 1
       simp only [Hash.RowSeg.bitsVal]
-      cases b <;> simp <;> omega
+      cases b <;> simp
+      omega
 
 /-- Bit `q` of a row's bytes is the row's bit `q`, zero past its end. -/
 theorem bitL_packBits {bs : List Bool} {q : ℕ} (hq : q < 8 * ((bs.length + 7) / 8)) :
@@ -84,7 +85,8 @@ theorem length_constBits (l : List UInt8) : (Flock.ReadNet.constBits l).length =
 theorem getD_constBits {l : List UInt8} {q : ℕ} (hq : q < 8 * l.length) :
     (Flock.ReadNet.constBits l).getD q Lin.zero = Lin.const (bitL l q) := by
   rw [List.getD_eq_getElem _ _ (by rw [length_constBits]; exact hq)]
-  simp only [Flock.ReadNet.constBits, List.getElem_map, List.getElem_range] <;> rfl
+  simp only [Flock.ReadNet.constBits, List.getElem_map, List.getElem_range]
+  rfl
 
 /-- The segment generator's message bits are the segment's bytes and then `pad`, bit by bit. -/
 theorem ev_segBits (z : Var → Bool) {m : ℕ} {bits : List Lin} (hbl : bits.length = m) (pad : List UInt8) {q : ℕ}
@@ -194,7 +196,8 @@ theorem be32_1024 : (Flock.be32 1024).data.toList = Hash.be 4 1024 := by
 /-- The code's `Q(l)` is `Hash.RowSeg.outerPrefix l`. -/
 theorem outerPrefix_data (l : ℕ) : (Flock.HmRow.rowPrefixSeg l).data.toList = Hash.RowSeg.outerPrefix l := by
   rw [Flock.HmRow.rowPrefixSeg, pad_data, Hash.RowSeg.outerPrefix, ByteArray.toList_data_append,
-    ByteArray.toList_data_append, ByteArray.toList_data_append, push_zero_data, be64_data, be64_data, be32_1024] <;> rfl
+    ByteArray.toList_data_append, ByteArray.toList_data_append, push_zero_data, be64_data, be64_data, be32_1024]
+  rfl
 
 /-- The code's `S(j, s, m)` is `Hash.RowSeg.segmentPrefix j s m`. -/
 theorem segmentPrefix_data (j s m : ℕ) :
@@ -369,7 +372,8 @@ theorem rowSeg_spec {const : Bool → M Lin} {seg : ℕ → List Word → List L
       rw [bytesBE_flatten]
       show (d.map fun ds => bytesBE (ds.map (bv z))).flatten =
         ((Hash.RowSeg.segmentMsgs (evs z row)).map fun m => (Verity.sha512 m).bytes).flatten
-      rw [hd2, Hash.RowSeg.segmentMsgs, List.map_map, length_evs, hl] <;> rfl
+      rw [hd2, Hash.RowSeg.segmentMsgs, List.map_map, length_evs, hl]
+      rfl
     rw [← Hash.BindingProofs.bytes_inj, wordsDigest_bytes z ⟨o1, o2⟩, ← o3, hmsg, Hash.RowSeg.digest,
       Hash.RowSeg.outerMsg, length_evs, hl]
 

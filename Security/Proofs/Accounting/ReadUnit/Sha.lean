@@ -327,7 +327,7 @@ theorem bytesOf_append64 {A : List Bool} (B : List Bool) (hA : A.length = 64) :
       rw [List.drop_append, List.drop_eq_nil_of_le (by omega), List.nil_append, hA]
       congr 1
       omega
-    simp only [Function.comp_apply, Nat.succ_eq_add_one, e]
+    simp only [Nat.succ_eq_add_one, e]
 
 theorem be8_word (z : Var → Bool) {w : Word} (hw : w.length = 64) :
     (List.range 8).map (fun m => UInt8.ofNat (num (((evs z w).drop (8 * (7 - m))).take 8))) =
@@ -428,7 +428,8 @@ theorem chain_one (pre : ByteArray) : chain pre 1 = Flock.Sha512.compress Flock.
   rfl
 
 theorem midstate_eq (pre : ByteArray) : Flock.ReadNet.midstate pre = (chainV pre 1).map constW := by
-  rw [Flock.ReadNet.midstate, chainV, List.map_map, chain_one] <;> rfl
+  rw [Flock.ReadNet.midstate, chainV, List.map_map, chain_one]
+  rfl
 
 theorem map_bv_midstate (z : Var → Bool) (pre : ByteArray) :
     (Flock.ReadNet.midstate pre).map (bv z) = chainV pre 1 := by
@@ -442,7 +443,8 @@ theorem length_midstate (pre : ByteArray) : (Flock.ReadNet.midstate pre).length 
   simp [Flock.ReadNet.midstate]
 
 theorem constWords_eq (l : List UInt8) : Flock.ReadNet.constWords l = (wordsBE l).map constW := by
-  rw [Flock.ReadNet.constWords, wordsBE, List.map_map] <;> rfl
+  rw [Flock.ReadNet.constWords, wordsBE, List.map_map]
+  rfl
 
 theorem map_bv_constWords (z : Var → Bool) (l : List UInt8) : (Flock.ReadNet.constWords l).map (bv z) = wordsBE l := by
   rw [constWords_eq, map_bv_constW]
