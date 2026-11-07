@@ -1,6 +1,6 @@
 # spot_figures
 
-The SPOT post's Figures 1-5 for one model, derived from the sampled-proofs planner
+The SPOT post's Figures 1-6 for one model, derived from the sampled-proofs planner
 (`verity.core.protocols.sampled_proofs.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
 plotted series.
@@ -12,6 +12,7 @@ uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # F
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
 uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4, from Figure 1's JSON
 uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path P]  # Figure 5, from break-even surfaces
+uv run python benchmarks/spot_figures/figure6.py --advice A.json [--points P...] --out DIR  # Figure 6, the tick
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
@@ -149,6 +150,13 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   Each step adds one lever to the ones before it. Beside it is the bound at a 10% total cost. It reads break-even
   surfaces (`breakeven_surface.json`) and a path (`figure5.PATH` or `--path`) giving each step's status (measured,
   modeled or assumed) and the surface case that prices it. A step no surface prices is drawn as pending.
+- **Figure 6** (`figure6.py`), the certified tick's trade-off:
+  - (a) a timeline of continuous admission against tick admission, with the network certifier stamping release
+    buckets as its own layer;
+  - (b) latency and throughput against the tick period, beside each load's no-tick point, from the sweep's
+    `point.json` files, pending without them;
+  - (c) the advice's term, a machine window's bits times the scope's windows, with and without the tick, against the
+    FP4 weights. It reads an advice file (`machine_windows`, and `arms` of `label`, `tick` and `bits`).
 - The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
   (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
