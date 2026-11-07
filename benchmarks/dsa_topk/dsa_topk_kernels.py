@@ -126,7 +126,7 @@ def canon_row(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
                 tl.store(orow + offs, s, mask=offs < K)
                 tl.debug_barrier()
                 nxt = tl.load(orow + offs + 1, mask=offs + 1 < K, other=-1, cache_modifier=".cg")
-                emit = tl.sum(((offs + 1 < K) & (nxt == s)).to(tl.int32), axis=0) > 0
+                emit = tl.sum(((offs + 1 < K) & (nxt == s)).to(tl.int32), axis=0)
             if emit:
                 _emit(row, orow, 0, n, tau, K - n_gt, n * 0, n * 0, ls1, BLOCK)
         else:
