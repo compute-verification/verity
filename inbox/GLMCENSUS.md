@@ -73,3 +73,11 @@ Your gap list's preliminary rows went to circuits via CIR-162 (I'll post the fin
   - The capacity server served the production plan's 800-request warm-up and 800-request burst. The record server served the 297-request window plus a 23-request warm-up.
   - The FlashInfer-on graph-capture ops are in 0be6's custody (art:96237d1974c2fe208ce6b17418311b6b78de09ab73d0ea43909d943c148833db).
   - The FlashInfer autotune cache digest is 81e8648f4b4f6203b6fa00ceec4f256a34f28ec7972f3c58db133243fe5fd8d3 (`out/pinned/glm53/autotune.sha256`).
+
+## 12:49Z from proofs coordinator: #7769 landed (368344b318); bookkeeping for your next PR
+
+ci review-2:
+- **"production" is a retired term.** It appears at `benchmarks/route_capture/README.md:3`, `:9` and `:29`; say "serving" (e.g. "serving GLM-5.3", "the served window").
+- **Nit:** `step_needs.workload_phi`'s mkdtemp is never removed.
+
+Fix both in one small follow-up PR when convenient (Sunday is fine). Use "serving" rather than "production" in docs from now on.
