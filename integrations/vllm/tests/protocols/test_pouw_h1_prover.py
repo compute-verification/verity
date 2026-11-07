@@ -1,9 +1,11 @@
 """`pouw_h1_prover`'s kept call files and the `Writer` that writes them off the serving thread (serve-openai's
 ``--h1-prover``): each file is the bytes ``np.savez`` wrote before the writer, so what the prover reads (`open_call`,
-`kept`) is unchanged; a caller waits only while the writer's ring is full, so at most its bound is in flight; and a call
-whose file wasn't written is raised by its window's `Writer.wait`, the other windows unaffected."""
+`kept`) is unchanged; a caller waits only while the writer's ring is full, so at most its bound is in flight; a call
+whose file wasn't written is raised by its window's `Writer.wait`, the other windows unaffected; and a failure the writer
+doesn't expect stops it, failing every window still to be written rather than leaving one waiting."""
 from __future__ import annotations
 
+import threading
 from types import SimpleNamespace
 
 import numpy as np
@@ -122,6 +124,35 @@ def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch, error,
     w.close()
     with pytest.raises(RuntimeError, match="the writer is closed"):
         w.keep(tmp_path / "w1", 3, a, s_a, r)
+
+
+def test_an_unexpected_failure_stops_the_writer_and_no_window_waits_on_it(tmp_path, monkeypatch):
+    """A failure the writer doesn't expect (a ValueError, as a bug raises) is raised on the writer's thread, and fails its
+    call's window: `wait` raises at once, naming it, for that call and each kept after it, one kept while the ring was
+    full among them, and a window opened later fails the same way; `close` returns."""
+    savez, raised = PV._savez, []
+
+    def broken(path, *arrays):
+        if path.name == "1.npz":
+            raise ValueError("a bug")
+        return savez(path, *arrays)
+    monkeypatch.setattr(PV, "_savez", broken)
+    monkeypatch.setattr(threading, "excepthook", raised.append)
+    a, s_a, r = _call(6)
+    w = PV.Writer(_size(a, s_a, r))
+    w.open(tmp_path / "w0")
+    for i in range(3):
+        w.keep(tmp_path / "w0", i, a, s_a, r)
+    with pytest.raises(OSError, match=r"2 of its 3 calls' prover state wasn't written: call 1: ValueError: a bug$"):
+        w.wait(tmp_path / "w0")
+    assert sorted(p.name for p in (tmp_path / "w0" / PV.CALLS).iterdir()) == ["0.npz"]
+    w._thread.join()
+    assert [(x.exc_type, x.thread.name) for x in raised] == [(ValueError, "h1-keep")]
+    w.open(tmp_path / "w1")
+    w.keep(tmp_path / "w1", 0, a, s_a, r)
+    with pytest.raises(OSError, match=r"1 of its 1 calls' .* call 0: the writer stopped at call 1: ValueError: a bug$"):
+        w.wait(tmp_path / "w1")
+    w.close()
 
 
 def test_a_call_past_the_bound_is_refused_and_a_directory_opens_on_one_writer(tmp_path):

@@ -177,7 +177,8 @@ class Writer:
     file from the ring, in the order kept, the bytes `keep_call` writes. The caller waits only while the ring is full: at
     most ``bound`` bytes are in flight (serve-openai's is a window's, `kept_bytes` of each of its calls). A window's
     directory is `open` on the writer until `wait` returns: once every call kept there is written, raising OSError when
-    any wasn't."""
+    any wasn't. A failure the writer doesn't expect stops it, raised on its thread: that call and each call queued or kept
+    after it fail their windows, so no `wait` waits on a call the writer won't write."""
 
     def __init__(self, bound: int) -> None:
         import torch
@@ -188,6 +189,8 @@ class Writer:
         self._cv = threading.Condition()
         self._jobs: deque[_Job] = deque()
         self._head, self._closed = 0, False
+        #: the failure that stopped the writer's thread (None while it runs)
+        self._stopped: str | None = None
         self._dirs: dict[str, dict[str, Any]] = {}
         self._thread = threading.Thread(target=self._run, name="h1-keep", daemon=True)
         self._thread.start()
@@ -225,10 +228,14 @@ class Writer:
             if self._closed:
                 raise RuntimeError(f"call {index}: the writer is closed")
             st = self._dirs[key]
-            while (lo := self._fit(n)) is None:
+            while self._stopped is None and (lo := self._fit(n)) is None:
                 st["waits"] += 1
                 self._cv.notify_all()
                 self._cv.wait()
+            if self._stopped is not None:
+                st["calls"] += 1
+                st["failed"].append(f"call {index}: the writer stopped at {self._stopped}")
+                return
             at, spans, stream = lo, [], None
             for b, dtype, shape in parts:
                 size = int(b.shape[0])
@@ -274,6 +281,17 @@ class Writer:
                 # the file system's failures and the device's (torch raises a CUDA error as a RuntimeError) are the
                 # window's, raised by its `wait`
                 failed = f"call {job.index}: {type(e).__name__}: {e}"
+            except BaseException as e:
+                with self._cv:
+                    self._stopped = f"call {job.index}: {type(e).__name__}: {e}"
+                    for queued in self._jobs:
+                        st = self._dirs[queued.directory]
+                        st["pending"] -= 1
+                        st["failed"].append(self._stopped if queued is job else
+                                            f"call {queued.index}: the writer stopped at {self._stopped}")
+                    self._jobs.clear()
+                    self._cv.notify_all()
+                raise
             with self._cv:
                 self._jobs.popleft()
                 st = self._dirs[job.directory]
