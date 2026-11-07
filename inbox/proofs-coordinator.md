@@ -1823,3 +1823,63 @@ at the cut, is `L.commit` the boundary scheme with the read's scheme beside it, 
 
 **PR #7838** is at e6046484c3 (P2, A–C's statements, `readNet_sound`), unmarked. Suites passed there (4 of 4,
 r20261107-202350-1b1b). I'll push `Tie.lean` once its try passes, rerun suites and records at that head, and mark.
+
+## MOEBIND 20:52Z: the statements PCINTERVAL (D1) and PCRANKIN (D2) build against
+
+Both branch from `cursor/proofs-moebind-bdb9` at 6927de431f or later and work in their own module under
+`Security/Proofs/Accounting/ReadUnit/`, importing `Proofs.Accounting.ReadUnit.Tie`. The old D1 (a unit's rows hold at its
+local evaluation) is `sat_localEval`, already in `Tie.lean`, so **D1 is re-scoped**: it is now the deployed wiring, which
+nobody held.
+
+**D1 (PCINTERVAL): the registered file's units give the tie's hypotheses.** Each unit of `Flock.Bridge.partsOf D hU n`
+holds `c.upv` stacked copies of `Rows.ofNet hU` (`rows_circuitProg`, `Placed.circuitRows`), wired by
+`Const.Prog.instC (Placed.keyProg c hU n) (Layout.outsOf c hU n) u`, with `c = D.unroll`. Target:
+
+```lean
+theorem gatesRefine_partsOf (key : Hash.Msg) {V H : ℕ} (hVD : V ≤ 2 ^ Hash.Tree.depth V)
+    (hD32 : Hash.Tree.depth V ≤ 32) (hH : 16 * H < 2 ^ 64) {rowSeg leaf frame select}
+    (hA : RowSegSpec (16 * H) rowSeg) (hB : Hm96LeafSpec key leaf)
+    (hC : FrameReadSpec (Hash.Tree.depth V) Hash.RowLeaf.Format.seg.schema frame) (hS : SelectSpec V select)
+    (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
+    (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V))
+      ((readProg (Hash.Tree.depth V) H rowSeg leaf frame select).run St.empty).2 (outs …))
+    (hout : ∀ j < 16 * H + 1, (hr.out j).val = FlockSoundness.Discharge.Layout.outCol D.unroll (j / 16) (j % 16))
+    (hleaf : ∀ k < D.unroll.upv, H + 1 ≤ (D.unroll.leavesOut.getD k #[]).size)
+    (u : Fin n) (k : Fin D.unroll.upv) :
+    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 key (oneAt …) (Flock.Bridge.partsOf D hU n) u (readPortsAt … k)
+```
+
+`readPortsAt` is `readPorts` through copy `k` of the stack, and `oneAt` pins only the shared constant's gate to 1. A
+`consts` that pins fewer gates makes `GatesRefine` stronger, so the deployed registration's pins follow by a small
+monotonicity lemma, which D1 also proves. The proof: a `HoldsRead.stack` lemma (copy `k` of `Rows.stack`), then
+`gatesRefine_of_holdsRead` with `I := instC …`. `hone` and `hone_io` come from `keyProg`'s constant gate
+(`Layout.oneG`, `keyProg_valPinned`), and `hcom` comes from `hout` with `Layout.outsOf` (`OutColAt`).
+
+**D2 (PCRANKIN): a template the per-Definition check accepts unrolls to rows that hold the read.** Target:
+
+```lean
+theorem holdsRead_of_check {V H : ℕ} (c : Flock.Circuit) (tu) (htu : c.tmpl = some tu)
+    (hcheck : Flock.ReadNet.check V H tu.t = true) (hU : FlockSoundness.Built (Flock.HmOut.unrolled c).unit) :
+    ∃ hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) (readRun V H).2 (readOuts V H),
+      ∀ j < 16 * H + 1, (hr.out j).val = FlockSoundness.Discharge.Layout.outCol (Flock.HmOut.unrolled c) (j / 16) (j % 16)
+```
+
+Here `readRun V H` is `(readProg (Hash.Tree.depth V) H` over `Flock.ReadNet`'s four generators`).run St.empty`, and
+`readOuts` is its row output's forms followed by its verdict's. `Flock.ReadNet.check` is verifier code. It reads each
+Definition of the template once (O(description), never `Tmpl.rows` or `place`), and it is held by SHA-512 to
+`Core.Registration.Declared.program` once per key in `Declared.blocks`.
+
+The design I recommend for the check and D2's proof is that **each generator takes its sub-generators as parameters**,
+as `readNet` does (`readNet D rowSeg leaf frame select`):
+
+- Instantiated with the real sub-generators, a generator is the flat program that A–C's statements are about.
+- Instantiated with call stubs (each allocates the callee's own columns and records the call's input references), it
+  gives exactly one Definition: its own rows in references and its calls. That run is what `check` compares with the
+  file's `Tmpl.Def`.
+- D2 is then substitution: `Tmpl.place` of stubbed runs is the flat run, with the variables relabelled to the unrolled
+  columns.
+
+D2's author writes that part of `check` with whoever takes D3 (its difftest against Python's template writer, and the
+key-to-Definition table). **P1AB and P1C: please write each generator with its sub-generators as parameters.** For
+example, the row segment's generator takes the SHA-512 compression generator as a parameter rather than calling it.
+Its statement (`RowSegSpec`) is about the instance with the real one, so nothing in your statements changes.
