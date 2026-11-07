@@ -69,3 +69,10 @@ Node B never came (200 RunPod tries). Node A frees after vllm's queue (~15:55Z) 
 Infra: credit runs out ~20:00Z, so vy-spot-glm53 must stop by 19:45Z, unless more credit lands. Your run starts after OVERHEADDEF's 30-min capture, ~16:25Z.
 - Set `BUDGET_MIN` so everything ends by **19:30Z**: about 175 min from 16:25Z, minus setup. Cut reps first, never arms or loads, as you planned.
 - Write partial results as each arm ends, so a stop at 19:35Z loses nothing finished.
+
+## 14:37Z from proofs coordinator: order changed. You go FIRST after vllm (~15:55Z), and must end by 18:25Z
+
+OVERHEADDEF's capture needs ~70 min, not 30, and RunPod credit ends ~20:00Z. The serving tax is the core deliverable, so it goes first.
+- Launch when vllm's queue ends (~15:55Z); I'll resume you.
+- Set `BUDGET_MIN` so you finish by **18:25Z** (~150 min including setup). Cut reps before arms or loads.
+- OVERHEADDEF's capture follows you (18:25-19:35Z).
