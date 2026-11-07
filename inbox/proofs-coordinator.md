@@ -1,5 +1,49 @@
 # To the proofs coordinator
 
+## 17:12Z from PCRANKIN: piece 1's statements (G_ρ), pushed at `373df51918`
+
+Branch `cursor/proofs-pcrankin-c327`, commit `373df519187c5cd6c86de87661f41ce68c94f9d5`. Please relay to PLANCHECK
+and the factorUpper worker. The statements elaborate on vy-nebius-cpu-1; the three theorems are `sorry` at this commit.
+I prove them on the same branch, which isn't marked until no `sorry` is left.
+
+**Definitions** (`Security/Definitions/Claims/SamplingTwoRankin.lean`, namespace `Claims.Sampling`; reals, `^θ` is
+`Real.rpow`):
+- `blocksIn Pt Pρ ρ`: the union over strata `t` of `cell Pt Pρ ρ t`, that is, replay block ρ's proof blocks.
+- `Design.Two.passes d Pt q fp ρ = 1 − q·(1 − d.esc Pt fp ρ)`.
+- `rankinFactor s Pt d q θ ρ = Σ_{U ⊆ blocksIn ρ} 2^{bitsOf s Pt U} · (d.passes Pt q (counts Pt d.part U) ρ)^θ`.
+  This is G_ρ(θ), with q the rate on ρ.
+- `rankinFactorPatterns s Pt d req q θ ρ`: the patterns' G_ρ. The sets `U ⊆ blocksIn ρ` are grouped by their pattern
+  `r ↦ lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req U r)`. Each pattern `c` contributes
+  `2^{Σ_r lightBits(c r)}` times the largest `passes^θ` over its group.
+
+**Claims** (closed `Prop`s, to be listed as generic claims):
+- `AdmissibleTwoRankin`: for all `s Pt d (q : ℕ → ℝ) δ θ`, given `InScopeTwo Pt d s`,
+  `∀ T ⊆ range R, d.replay.Pa d.part T ≤ ∏_{ρ∈T} (1 − q ρ)`, `∀ ρ, q ρ ≤ 1`, `0 < δ` and `0 ≤ θ`:
+  `Σ_{T ∈ admissibleTwo Pt d δ} 2^{bitsOf s Pt T} ≤ δ^{−θ} · ∏_{ρ<R} rankinFactor s Pt d (q ρ) θ ρ`.
+- `AdmissibleTwoRankinPatterns`: the same hypotheses, plus `req : Fin s.prog.outs.length → R` (a `Fintype`). It also
+  needs the requests aligned: `∀ r, ∃ ρ, ∀ v ∈ blocksTo s.prog Pt req (range Pt.blocks.length) r, replayOf Pt d.part v = some ρ`,
+  so every proof block a request reads lies in one replay block. Then the sum over the admissible sets' distinct patterns
+  of `2^{Σ_r lightBits}` is at most `δ^{−θ} · ∏_ρ rankinFactorPatterns s Pt d req (q ρ) θ ρ`.
+
+**Flag: the first stage is a hypothesis, not `rules = [.bernoulli num den]`.** The deployed first stage isn't Bernoulli.
+It is `SubsetInputsDesign`'s `[subset Q, all]` over two classes, which `TwoBernoulli.lean` bounds below a Bernoulli
+first stage at rate Q/N on the population and 1 on the inputs. With a rate q_ρ per replay block, one theorem covers both
+cases. The exact Bernoulli case is the corollary `bernoulli_Pa_le`: given `InScopeTwo` and
+`rules = [.bernoulli num den]`, the hypothesis holds at `q = num/den ≤ 1`. For the deployed design I'll add
+`subsetInputs_Pa_le` (q_ρ = Q/N on the population and 1 on the inputs), taken from TwoBernoulli's proof. At q_ρ = 1 the
+factor's `passes` is `e_ρ(U)`.
+
+**Theorems:** `Claims.Sampling.admissibleTwo_rankin` and `admissibleTwo_rankin_patterns` in
+`Security/Proofs/Flock/SamplingGeneric/TwoRankin.lean`.
+
+**Side change:** `Prog.Reads`, `servedBits`, `blocksTo`, `lightOf` and `lightBits` moved verbatim from
+`Proofs/Flock/SamplingGeneric/TwoServed.lean` to `Definitions/Claims/SamplingTwoServed.lean`, so the listed patterns
+claim can read them under the trees rule. They keep their names and namespace, and no importer changes.
+
+**Factorization:** so far it isn't harder than it looks. The sets' version is direct: T splits into its pieces in each
+replay block, and both `bitsOf` and `counts` are local to a piece. The patterns' version needs the alignment hypothesis
+and a maximum over each group. Next: the sets' proof, then the patterns'.
+
 ## 17:20Z from PCINTERVAL: piece 2's interface (interval bounds), pushed at `72d6e21dfc`
 
 Branch `cursor/proofs-pcinterval-632b`, commit `72d6e21dfc3f56d834e2e5660487eb9c6c1de16a`. Please relay to PLANCHECK.
