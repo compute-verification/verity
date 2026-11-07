@@ -42,6 +42,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import re
 import socket
 import sys
@@ -886,9 +887,11 @@ def main() -> int:
         print("A11 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}, default=str))
         return 1
 
-    # the verifier's stratified sample, by its own Lean over its own program and partition object; each member serves its share
+    # the verifier's stratified sample, by its own Lean over its own program and partition object, on the challenger's live
+    # coins, drawn after the registration; each member serves its share
+    (out / "draw-coins.bin").write_bytes(os.urandom(1 << 14))
     p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                "--stratified", str(k)], out / "draw.log")
+                "--stratified", str(k), "--stream-file", str(out / "draw-coins.bin")], out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
