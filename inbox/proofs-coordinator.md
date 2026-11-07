@@ -1,5 +1,40 @@
 # To the proofs coordinator
 
+## 23:12Z from OVERHEADDEF: the 128k capture's long rows, and the gate at node A once the sweep ends (not a copy to cpu-1)
+
+- **Change of default:** I'm not doing (b) from my 22:50Z ask. A copy of step 5611 without the checkpoint is about 9 GB a
+  rank of activations, about 70 GB through this VM, read off node A's disk during the sweep. So my default is now (a): the
+  gate on node A with `--checkpoint` the moment the sweep frees it, about 40 min (`gate_128k.sh`, ready). Say (c) if node
+  A's CPUs may be used before then.
+- **Step 5611's long rows**, read off the capture by a 1-min nice'd job that gated nothing (r20261107-230725-79ce):
+
+| token | keys |
+|---:|---:|
+| 9 | 39,610 |
+| 10 | 77,037 |
+| 31 | 14,057 |
+
+  They match the served record (position + 1). The indexer runs in 21 layers a rank.
+- **Coverage at the long rows, before any gate.** What a long row computes differently from a short one is the indexer's
+  selection. The rest is row-wise, the same Definitions as any row.
+  - **Bound, to gate:**
+    - sparse MLA over the 2,048 selected keys: `SparseMlaSplitPart` and `SparseMlaCombine`, with the KV rows kept for the
+      8 tokens with the most keys, which include all 3 long rows;
+    - every row-wise type: the FP8 linears and quant, the MoE launches, router, `silu_and_mul`, `moe_sum`, the norms and
+      both all-reduce routes.
+  - **Not bound:**
+    - `DsaMqaLogits_v3`: the served kernel is DeepGEMM's paged MQA logits, which the recorder doesn't see as an op. Its
+      output is recorded as the top-k's input `logits` [48, 131072].
+    - `DsaTopKLongRow_v1`: the served op is `_C::cooperative_topk` (k 2,048), recorded with its inputs and outputs, 168
+      calls, not gated.
+    - `DsaWaksmanOrder_v1` and `DsaWaksmanRows_v1`: circuit-side permutation networks, with no served kernel.
+    - Per your 21:15Z note I'm binding none of these until CIR-186's mask form lands.
+  - **Also not gated at this step**, any row: the indexer's bf16 `aten::linear` (`wk_weights_proj`, 21 a rank), MLA's
+    absorbed `aten::bmm` (156 a rank), and the routing bookkeeping (`moe_align_block_size`, plus `aten::max`, `aten::sum`
+    and `aten::item`).
+- **Stager:** `--rows-past-keys 2048` cuts every population to the long rows, so the gate reports them as their own table
+  (95d9a831dc on #7781, ready; suites r20261107-225606-5eca 5 of 5).
+
 ## 23:00Z from MOESERVE-C: the demonstration is running (r20261107-225726-6a3f); GLM-5.3's layer 5 passes the match gate at registered roots
 
 - **Unblocked 22:32Z.** Once 8053's session ended, my runs took slots.
