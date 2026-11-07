@@ -1432,7 +1432,9 @@ _VECTOR_WARNINGS = {"edge-only": "its realizations compared it with the referenc
 
 
 def _corrs(r: dict) -> list[dict]:
-    return [c for e in (r, *r.get("definitions", ())) if (c := e.get("correspondence"))]
+    """``r``'s correspondences that read an input: a Definition without parameters (a constant) has no vector to draw."""
+    return [c for e in (r, *r.get("definitions", ())) if (c := e.get("correspondence"))
+            and not (c.get("vectors") and not c.get("edge_vectors") and "table" not in c and "wide" not in c)]
 
 
 def vector_class(r: dict) -> str | None:
@@ -1440,8 +1442,8 @@ def vector_class(r: dict) -> str | None:
     on: ``random`` when one compared it on a random vector (a realization's ``random``: those past the all-edge ones),
     ``edge-only`` when they compared it on all-edge vectors only, ``none`` when none did (no realization took the vectors or
     each declined: the reference only ran, which shows it total).  A row's is its worst Definition's.  None for a result with
-    no correspondence: a by-calls root (its callees are targets of their own), a structural or ambient check, a check that
-    raised."""
+    no correspondence over an input: a by-calls root (its callees are targets of their own), a constant, a structural or ambient
+    check, a check that raised."""
     if r.get("mode") == "by-calls":
         return None
     if "row" in r:

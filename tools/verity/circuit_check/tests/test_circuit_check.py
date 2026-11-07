@@ -453,19 +453,24 @@ def test_a_kernel_takes_its_floor_from_its_own_sampler():
 
 def test_the_summary_counts_and_names_the_targets_by_vector_class():
     """Each target is ``random``, ``edge-only`` or ``none`` by its realizations (a row by its worst Definition, a template by its
-    Definitions', target's and proof blocks'), each named; those read lazily are named too; a by-calls root is none of them."""
+    Definitions', target's and proof blocks'), each named; those read lazily are named too; a by-calls root and a constant (no
+    input, so no vector to draw) are none of them."""
     def entry(name, *recs, **corr):
+        corr = {"vectors": 4, "edge_vectors": 4, **corr}
         return {"definition": name, "correspondence": {"realizations": list(recs), **corr}, "failures": [], "warnings": []}
 
     out = [CK.classified(r) for r in (
         entry("R", {"via": "kernel:numpy", "compared": 6, "random": 2}),
         entry("E", {"via": "kernel:numpy", "compared": 4, "random": 0}),
-        entry("N", {"via": "kernel:numpy", "declines": "a kernel takes arrays"}, wide=[{"param": 1}]),
+        entry("N", {"via": "kernel:numpy", "declines": "a kernel takes arrays"}, edge_vectors=0, wide=[{"param": 1}]),
         {"row": "build", "definitions": [entry("R2", {"compared": 3, "random": 1}), entry("N2", {"lowered": False})],
          "failures": [], "warnings": []},
         {"subcircuit": "rope-head", "definitions": [entry("D", {"compared": 4, "random": 0})],
          "lowering": [{"lowered": True, "compared": 3, "random": 1}], "failures": [], "warnings": []},
-        {"definition": "B", "mode": "by-calls", "failures": [], "warnings": []})]
+        {"definition": "B", "mode": "by-calls", "failures": [], "warnings": []},
+        entry("C", {"via": "c-flock:ir_lower", "lowered": False, "reason": "a constant: circuit structure, no gates"},
+              vectors=64, edge_vectors=0))]
+    assert CK.vector_class(out[-1]) is None and out[-1]["warnings"] == []
     s = CK.summarize(out)
     assert s["vectors"] == {"random": {"count": 2, "targets": ["R", "rope-head"]}, "edge-only": {"count": 1, "targets": ["E"]},
                             "none": {"count": 2, "targets": ["N", "build"]}, "lazy": {"count": 1, "targets": ["N"]}}
