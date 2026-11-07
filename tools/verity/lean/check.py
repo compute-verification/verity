@@ -4263,14 +4263,17 @@ def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> None:
 
 
 def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
-                closure: bool = False, search: list[str] | None = None, digest=None) -> tuple[list[str], dict]:
+                closure: bool = False, search: list[str] | None = None, digest=None, store: bool = True) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
     (`Replay.lean`), each module whose `replay_keys` key ``replay_cache`` holds joining it unchecked, and each module checked
     stored there when the replay passes. With ``closure``, the replay also checks every module of the import closure, the
     toolchain's, Mathlib's and ArkLib's included, that has not passed it with its key (`closure_plan`), so each
     declaration the package rests on goes through the kernel once and a warm cache checks none of them again. ``search``
     (a seal's mapped search path) and ``digest`` (`Sealed.digest`) make the replay read the seal's private copies rather
-    than the live `.lake`, so no dependent's build can change what the kernel replays or what its key is keyed on."""
+    than the live `.lake`, so no dependent's build can change what the kernel replays or what its key is keyed on.
+    ``store`` is false for an unsealed audit (a control, a lean-changed scan, a stubbed test), whose keys are hashed from
+    the live `.lake`: it may reuse the cache but writes nothing to it, so a live-keyed verdict can never poison a sealed
+    run."""
     found = work / "replay.json"
     found.unlink(missing_ok=True)
     keys = replay_keys(facts, toolchain, digest) if replay_cache else {}
@@ -4284,7 +4287,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         reused = [m for m in facts["modules"] if passed(m)]
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
-        if keys:
+        if keys and store:
             fresh = {*facts["modules"], *deps_checked}
             touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
         rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), *lean, "--run",
@@ -4296,7 +4299,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         # a module's entry says its declarations passed with its imports present: one rejected elsewhere takes nothing from it
         accepted = [m for m in checked + deps_checked if m not in set(doc.get("rejected", []))] \
             if keys and (rc == 0 or (rc == 1 and "rejected" in doc)) else []
-        if accepted:
+        if accepted and store:
             replay_cache.mkdir(parents=True, exist_ok=True)
             for m in accepted:
                 store_replay(replay_cache, keys[m], m)
@@ -4366,6 +4369,15 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
     with ``repo`` for `{repo}` and the directory it writes for `{out}`), else the package's own files; a file may be
     gzipped (NAME.gz). A file whose SHA-256 is not the record's fails the test unrun, and `--update` records it instead."""
     fails, now = [], {}
+    # A run reads the package's live `.lake/build` in the sandbox, not a seal, so it is sound only while nothing writes
+    # that build. Only a dependent's build writes a package's own `.lake`, and a package with `runs` has no dependents,
+    # so every build in the run has ended before its tests start. Fail loudly rather than read a build one is still
+    # writing: a `runs` entry on a depended-on package would be caught here, not read mid-build.
+    with _WROTE:
+        racing = pkg.resolve() / ".lake" in _WRITING
+    if racing:
+        return [Failure("runs.racing-build", None, f"runs: a build is still writing {pkg}'s .lake as its tests would read "
+                        f"it live; a package with `runs` must be one no other package builds")], now
     for mod, entry in sorted(policy.get("runs", {}).items()):
         now[mod] = entry
         if mod not in files:
@@ -4552,9 +4564,14 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         return reported(rep)
     search = sealed.search if sealed else None
     dig = sealed.digest if sealed else sha256
+    # an unsealed audit hashes its replay keys from the live `.lake`: it may reuse the shared cache but never writes it,
+    # so a live-keyed verdict a dependent's build could have tampered with can never enter a sealed run's cache
+    store = sealed is not None
     built()
     files = lean_modules(pkg)
     background = ThreadPoolExecutor(max_workers=5)
+    # tests run sandboxed on the live `.lake`, not a seal: a package with `runs` is one no other package builds, so every
+    # build in the run has ended before its tests start, and `tests` fails loudly if a build is still writing that `.lake`
     ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
     # a spec's `proved` waits for its provers' builds; the replay, the dependency scans and digests and the upstream scan
     # read only the package's own facts, which `proved` leaves as they are, so they fill that wait. Elsewhere they keep
@@ -4586,7 +4603,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             unread = background.submit(timed, unread_facts, pkg, facts["modules"], work, sealed)
         if early:
             replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache,
-                                         closure, search, dig) if replay else None
+                                         closure, search, dig, store) if replay else None
             scanned = background.submit(timed, dependency_scans, pkg, facts["oleans"], policy, sealed)
             digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"], sealed)
         cross: list[str] = []
@@ -4604,7 +4621,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     rep["seconds"]["audit"] = round(time.monotonic() - s - sum(waited), 1)
     if replay and not lifts and not early:
         replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache, closure,
-                                     search, dig)
+                                     search, dig, store)
     if lifts:
         try:
             rep["moved"] = lift(pkg, current, facts, lifts)

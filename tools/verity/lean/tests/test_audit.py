@@ -4514,6 +4514,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
     rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None)
     assert order == (["pinned", "replay_step", "dependency_scans", "dependency_digests", "proved"] if spec else ["replay_step"])
     assert given["replay_step"][2] is own and given["dependency_scans"][1] == own["oleans"] == given["dependency_digests"][2]
+    assert given["replay_step"][9] is False      # an unsealed audit (no seals here) never writes the shared replay cache
     assert rep["failures"][0] == "unchecked: a hit" and rep["failures"][1].startswith("dependencies: the .olean files of the")
     assert rep["dependency_sources"] == 7 and rep["upstream"] == {"x": 1} and rep["replay"] == {"checked": 1, "reused": 0}
     assert {"audit", "dependency-sources", "upstream", "dependencies", "replay"} <= set(rep["seconds"])
@@ -4571,6 +4572,22 @@ def test_a_run_generates_its_data_and_fails_on_its_exit(tmp_path, monkeypatch):
     assert tests(policy={"exempt": {}, "runs": {"T": entry}})[0] == [
         "runs: T is not under `exempt`: a run is a test, not a proof the audit reads"]
     assert tests(policy={"exempt": {"U": "?"}, "runs": {"U": entry}})[0] == ["runs: U is not a module of the package"]
+
+
+def test_a_run_whose_lake_a_build_is_still_writing_fails_loudly(tmp_path, monkeypatch):
+    """A run reads the package's live `.lake/build` in the sandbox, not a seal, so it is sound only once every build that
+    writes that `.lake` has ended. Only a dependent's build writes a package's own `.lake`, and a package with `runs` has
+    none, so this never fires in a real run; were a build still holding the package's own `.lake`, the run fails loudly
+    rather than read a build mid-write."""
+    pkg, ran, tests = _runs(tmp_path, monkeypatch, {"args": []})
+    with A._WROTE:
+        A._WRITING.add(pkg.resolve() / ".lake")
+    try:
+        fails, _ = tests()
+    finally:
+        with A._WROTE:
+            A._WRITING.discard(pkg.resolve() / ".lake")
+    assert len(fails) == 1 and fails[0].startswith("runs: a build is still writing") and ran == []
 
 
 def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):
@@ -4802,6 +4819,39 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
     mtime = {p.stem: p.stat().st_mtime for p in cache.glob("*.json")}
     assert sorted(mtime) == ["A", "B", "Init", "Old", "Std", "Unrelated"]
     assert mtime["Init"] > 1000 and mtime["Old"] > 1000 and mtime["A"] > 1000 and mtime["Unrelated"] == 1000
+
+
+def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkeypatch):
+    """An unsealed audit (a control, a lean-changed scan, a stubbed test) hashes its replay keys from the live `.lake`, so
+    a stored verdict a dependent's build could have tampered with would poison a later sealed run. With ``store`` false it
+    may reuse the shared cache but writes nothing: neither a new entry for a module it checked, nor a touch of a reused
+    entry's mtime. With ``store`` true (a sealed audit) it stores and touches, so the test is not vacuous."""
+    facts = {"graph": {"A": {"imports": []}, "B": {"imports": ["A"]}}, "modules": ["A", "B"], "axioms": []}
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
+
+    def run(cmd, cwd, log, timeout=None):
+        (tmp_path / "replay.json").write_text(json.dumps({"axioms": []}))
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
+
+    def warm(name):                              # a cache with A already passed, which the replay may reuse
+        c = tmp_path / name
+        c.mkdir()
+        (c / "A.json").write_text("{}")
+        os.utime(c / "A.json", (1000, 1000))
+        return c
+
+    unsealed = warm("unsealed")
+    before = {p.name: (p.read_bytes(), p.stat().st_mtime) for p in unsealed.iterdir()}
+    fails, stats = A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, unsealed, store=False)
+    assert fails == [] and (stats["checked"], stats["reused"]) == (1, 1)      # B checked, A reused, from the live keys
+    assert {p.name: (p.read_bytes(), p.stat().st_mtime) for p in unsealed.iterdir()} == before
+
+    sealed = warm("sealed")
+    A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, sealed, store=True)
+    assert (sealed / "B.json").is_file() and (sealed / "A.json").stat().st_mtime > 1000
 
 
 def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monkeypatch):
