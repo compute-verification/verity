@@ -81,8 +81,8 @@ theorem depth_le {V : ℕ} (hV : V ≤ 2 ^ 32) : Hash.Tree.depth V ≤ 32 := by
 /-- **The read's gates refine its reference at a unit of the parsed circuit file.** At unit `u` of `partsOf`, let the
 unit net's rows hold the read's program for a table of `V` rows of `H` words (`hr`), computing its reference wherever
 they hold with their constant set (`hsound`). If the stack's constant gate is registered as 1 and is among `u`'s inputs,
-and copy `j`'s read outputs are committed, then the read's gates at copy `j` refine `Hash.EmbeddingRead` at SHA-512 under
-the hm96 key `key`, at the ports through copy `j`'s gates. -/
+and copy `j`'s read outputs are committed, then the read's gates at copy `j` refine `Hash.EmbeddingRead` at SHA-512
+under the hm96 key `key`, at the ports through copy `j`'s gates. -/
 theorem gatesRefine_partsOf (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
     (n : ℕ) {run : (List Lin × Lin) × St}
     (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
@@ -107,15 +107,16 @@ theorem gatesRefine_partsOf (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : 
   exact ⟨fun c => z c.val, hsat, hz1.trans (hconsts _ hone_io true hone), fun c hc => hz c (Or.inl hc),
     fun i hi => hz _ (Or.inr (hcom i hi))⟩
 
-/-- **A drawn read unit of the parsed circuit file returns its table's row at its index**, but with probability at
-most the layer below's `ε` plus the chance of finding a SHA-512 collision. At the parsed file's partition (`partsOf`),
-let the unit net's rows hold the read's program and compute its reference wherever they hold (`hr`, `hsound`), and let
-each unit's constant gate be registered as 1, among its inputs, and each copy's read outputs committed. Take reads `R`,
-each at the ports through one copy's gates in its unit (`hR`), with tables committed under their roots: a unit of
-`units_per_vu` stacked copies holds a read a copy. Then over the outcomes `ω`, a run that accepts while a read of a
-drawn unit returns, at an index inside its table, a row other than its table's has probability at most `ε`, the layer
-below's bound on accepting while a drawn read's unit is wrong or the read's registered rows fail, plus
-`E[cost] / 2^256`, where `cost` is what the collision search behind the reads' checks costs (`Claims.ExpectedCR`). -/
+/-- **Each read of a drawn unit of the parsed circuit file returns its table's row at its index**, but with probability
+at most the layer below's `ε` plus the chance of finding a SHA-512 collision. At the parsed file's partition
+(`partsOf`), let the unit net's rows hold the read's program and compute its reference wherever they hold (`hr`,
+`hsound`), and let each unit's constant gate be registered as 1, among its inputs, and each copy's read outputs
+committed. Take reads `R`, each at the ports through one copy's gates in its unit (`hR`), with tables committed under
+their roots: a unit of `units_per_vu` stacked copies holds a read a copy. Then over the outcomes `ω`, a run that accepts
+while a read of a drawn unit returns, at an index inside its table, a row other than its table's has probability at
+most `ε`, the layer below's bound on accepting while a drawn read's unit is wrong or the read's registered rows fail,
+plus `E[cost] / 2^256`, where `cost` is what the collision search behind the reads' checks costs
+(`Claims.ExpectedCR`). -/
 theorem readUnitDrawn_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc)
     (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) {run : (List Lin × Lin) × St}
     (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
