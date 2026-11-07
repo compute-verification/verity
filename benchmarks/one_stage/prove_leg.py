@@ -1,5 +1,5 @@
-"""The proof leg: units through C-Flock `prove --zk` behind the Lean ZK server and the Lean verifier of record, one call
-(`prove_units`) that stages each member's units, registers them, takes the verifier's sample, proves each drawn member's
+"""The proof leg: units through Flock `prove --zk` behind the Lean ZK server and the Lean verifier, one call
+(`prove_units`) that stages each member's units, registers them, takes the verifier's sample, proves each sampled member's
 units in one `--zk` session, verifies it with Lean `flock-verify verify --zk` (with `--registered` when the units read
 registered values), opens the rows the verifier holds its own copy of, and records every verdict in the one-stage audit
 record. The compiled per-step units of an arbitrary vLLM model, its head-check units and the I/O tie's units all ride
@@ -10,7 +10,7 @@ it.
     python benchmarks/one_stage/prove_leg.py defs --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
       --out DIR --shape gemm:1b:2048 [--shape attention-v20:1b:384:block ...] [--negatives] [--census] [--reads slots]
 
-* **Members** (`Member`). One template's units, one statement: a bound Definition C-Flock lowers flat (`ir_lower`; Lean
+* **Members** (`Member`). One template's units, one statement: a bound Definition Flock lowers flat (`ir_lower`; Lean
   refuses typed and template statements), `UnitStager`'s rows and output rows, the prover's rows, the rows
   the verifier derives itself (``held``: public inputs, opened by ``b || c`` to its own copy under the salts the prover
   reveals for those rows alone), and the output rows it requires (``expect``: an ok bit). ``stage_kw`` passes a shared-row
@@ -18,12 +18,12 @@ it.
 * **The program.** The caller's (a window's, whose partition the statements bind), else the population program of the
   members' templates (`partition.mixed_population_program`, `Q_template_instances`), one stratum a member.
 * **The registration** (`registration.record`): each statement's frame-v3 ports, the sampling design, the scheme and the
-  leaf layer, checked by the verifier of record (R1-R7) and against each statement's header before the sample.
+  leaf layer, checked by the verifier (R1-R7) and against each statement's header before the sample.
 * **The sample** (``coins``): ``"lean"``, the verifier's Lean (`flock-verify draw --stratified K`) on a development
   challenger's coins opened after the registration (`a0.challenger_draw`);
   a mapping ``{member: [unit, ...]}`` of each member's sampled proof blocks, a sample the proof system made on live coins; or a
   callable that takes the registration record and returns that mapping (a `service.Stream`'s register and select).
-* **Proving.** Each drawn member's units are one `serve --zk --draw-file` / `prove --zk` session, behind the ZK server
+* **Proving.** Each sampled member's units are one `serve --zk --draw-file` / `prove --zk` session, behind the ZK server
   (``FC_FIREWALL=1``, its Lean frame ``FC_FIREWALL_LEAN``) when `Tools.firewall` names one.
 * **The verdict of record** is Lean's `verify --zk --archive --partition --program [--registered]` on the session. A unit
   is accepted when its session's Lean and M0 verdicts accept it and its held and expected rows open to the verifier's own.
@@ -32,10 +32,10 @@ it.
 Negatives (`negatives`), each refused at the proof layer:
 
     tampered-unit     a unit whose committed output word is wrong, proved with the prover's self-check skipped: the
-                      ZK server's Lean recheck stops it; unfirewalled, Lean `verify --zk` refuses the proof that reaches it
+                      ZK server's Lean recheck stops it; unserved, Lean `verify --zk` refuses the proof that reaches it
     tampered-public   a unit staged on a held row other than the verifier's copy: its proof verifies, its opening fails
     tampered-root     a registration whose first root is not the statement's: refused before the sample
-    wrong-unit        a member's session checked against another member's circuit (that stratum's committed pin)
+    incorrect-block        a member's session checked against another member's circuit (that stratum's committed pin)
     tampered-registered-root  (members with registered reads) the verifier's --registered file with a root changed
 
 Served Definitions (`served`, ``defs``): vLLM's served Definitions as the frontend binds them on the RTX PRO 6000 target
@@ -43,10 +43,10 @@ Served Definitions (`served`, ``defs``): vLLM's served Definitions as the fronte
 template the serving rows commit (`serving_rows.template`: a row, or a ``SLICES`` row's unit), on seeded stand-in values;
 and the window circuit's units (`window_circuit`): an attention head's per-key-block Calls on the RTX PRO 6000 and the H200
 (``CUT_TARGETS``) and the embedding's registered read. A unit's MUFU table reads are laid out as its template's own
-(`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes C-Flock's block
+(`chunk_rows.reads`) unless ``--reads`` says otherwise. A shape whose rows' in-circuit hashing alone passes Flock's block
 (`m1_families.block`) is reported refused, not lowered, and an ``UNSTAGED`` unit (the embedding's read) is sized only.
 
-Known limits: units flat or untyped staged; C-Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
+Known limits: units flat or untyped staged; Flock's block at most 2^27 (split-K past K = 5041); table-heavy units
 need lookup slots; tail lookup slots are the GPU prover's; prover worker threads may need a bigger stack.
 """
 from __future__ import annotations
@@ -293,7 +293,7 @@ def opened(s: dict, local: list[int], m: Member) -> dict:
 def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[int]] | Callable[[dict], Mapping[str, Sequence[int]]],
                 registered: Path | None = None, *, tools: Tools, out: Path, k: int | None = None, program=None, query=None,
                 window: dict | None = None, mutate: Callable[[dict], dict] | None = None) -> dict:
-    """Every member staged, registered, drawn, proved ``--zk`` and verified by Lean; returns the leg's record
+    """Every member staged, registered, sampled, proved ``--zk`` and verified by Lean; returns the leg's record
     (``verity/prove-leg/v0``): per member its sampled proof blocks, each unit's verdict, the session's verdicts and timing; the
     audit record; and ``accepted``. ``registered``: the verifier's own ``--registered`` file. ``k``: the stratified rule's
     K (default every unit). ``program``/``query``: the window's, else the members' population program. ``window``: the
@@ -489,8 +489,8 @@ def tampered_registered_root(honest: dict, member: str, registered: Path, tools:
 
 def negatives(members: list[Member], coins, registered: Path | None, tools: Tools, out: Path, honest: dict,
               program=None, query=None, k: int | None = None) -> dict:
-    """The proof-layer negatives on the first member (and, for wrong-unit, the second), each expected refused. ``coins``
-    must sample unit 0 of the first member (``"lean"`` with every unit drawn does), or ``k`` (the stratified rule's K, fewer
+    """The proof-layer negatives on the first member (and, for incorrect-block, the second), each expected refused. ``coins``
+    must sample unit 0 of the first member (``"lean"`` with every unit sampled does), or ``k`` (the stratified rule's K, fewer
     than the member's units) is given and every unit is forged. ``program``/``query``: the honest leg's, when it was given
     its own."""
     m = members[0]
@@ -723,7 +723,7 @@ def served(shape: str) -> tuple[Any, Callable[[np.random.Generator, int], dict[s
         rmsnorm-triton:M     RMSNormTriton_v5{N=H,EPS} (`prune`'s rewrite of RMSNormTriton_v1)
         embedding:M[:V]      Embedding_v1{V,H}
         token-select:M[:V]   TokenSelect_v4{V} (`prune`'s rewrite of TokenSelect_v1)
-        token-select-chunk:M[:C]    TokenSelectChunk_v2{C}, a V-chunk of TokenSelect_v4 (C-Flock's ``token-select-chunk``)
+        token-select-chunk:M[:C]    TokenSelectChunk_v2{C}, a V-chunk of TokenSelect_v4 (Flock's ``token-select-chunk``)
         token-select-combine:M[:V]  TokenSelectCombine_v2{V,C}, TokenSelect_v4's combine (``token-select-combine``), its
                                     partials the chunks' own of a stand-in logits row
         rope:M[:NHEADS]      RoPE_v1{NHEADS,D}, NHEADS the query heads by default
@@ -924,8 +924,8 @@ def defs(shapes: Sequence[str], tools: Tools | None, out: Path, negs: bool, seed
          lower_refused: bool = False, reads: str | None = None) -> dict:
     """Each served shape sized, and unless only sizing (``tools`` None), proved: one unit sampled by Lean, its member staged at
     `served_member`'s units (its table reads by ``reads``, else its template's own), through `prove_units` and, with ``negs``, `negatives` at that
-    draw. A shape whose rows alone pass C-Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
-    its blocker C-Flock's own refusal), nor one whose estimate passes ``max_ands``, nor an ``UNSTAGED`` unit."""
+    sample. A shape whose rows alone pass Flock's block is recorded refused and not lowered (with ``lower_refused``: lowered,
+    its blocker Flock's own refusal), nor one whose estimate passes ``max_ands``, nor an ``UNSTAGED`` unit."""
     summary: dict[str, dict] = {}
     for shape in shapes:
         rec: dict[str, Any] = {"shape": shape}

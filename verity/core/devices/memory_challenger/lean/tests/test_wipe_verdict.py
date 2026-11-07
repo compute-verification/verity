@@ -61,7 +61,7 @@ server = D.server_fixture(port(st.none()))
 
 def records(signer=None, malformed: bool = True) -> st.SearchStrategy:
     """Records of honest sessions, of sessions under one edit, and (with `malformed`) under one JSON edit, each under a
-    drawn mapping."""
+    sampled mapping."""
     schemes = st.sampled_from(SCHEME_SETS)
     honest = st.builds(record, W.sessions(signer), schemes)
     edited = st.builds(lambda s, m, x, sc: record(m(s, x), sc), W.sessions(signer), st.sampled_from(W.MUTATIONS),
@@ -75,7 +75,7 @@ def records(signer=None, malformed: bool = True) -> st.SearchStrategy:
 
 @pytest.mark.slow
 def test_verdict_agrees(server):
-    """The whole verdict on drawn records under the test signers' keys: accepted ones at batch size 1, rejected ones
+    """The whole verdict on sampled records under the test signers' keys: accepted ones at batch size 1, rejected ones
     above it, every rejection reason, refusals."""
     stats = D.run(port(records()), examples=600, server=server)
     assert stats.outputs > 300 and stats.rejects > 30, stats

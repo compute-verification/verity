@@ -1,4 +1,4 @@
-// The served window's tables on the device, bit for bit `served_h1/commit.py`'s: hm96-sha512 hiding leaves
+// The served execution phase's tables on the device, bit for bit `served_h1/commit.py`'s: hm96-sha512 hiding leaves
 // (hm96-sha512/row-seg/v1) in one frame-v3-sha512 tree a table, every table a served step commits (each call's A table, its
 // admit words and its receipts; the a-step, admit-step and round trees over their roots) and the install's B tables.  Plain
 // launches on the caller's stream into caller-owned buffers, the step read from device memory, so a step's sequence is the
@@ -113,7 +113,7 @@ using u32 = rc::u32;
 struct H1Const {
   u64 salt_prefix[16];  // hm96's salt_prefix block, big-endian words
   u64 leaf_prefix[16];  // leaf_prefix(KEY)
-  uint8_t head[128];    // SALT_TAG || the window's key
+  uint8_t head[128];    // SALT_TAG || the execution phase's key
   uint8_t schema[32];   // "hm96-sha512/row-seg/v1"
   uint8_t qtag[48];     // rowleaf.SHA512_ROW_SEG_TAG
   uint8_t stag[48];     // rowleaf.SHA512_ROW_SEG_SEGMENT_TAG
@@ -406,7 +406,7 @@ extern "C" __global__ void h1c_level(const H1Tab* __restrict__ tabs, int ntab, i
 #endif
 
 // -- a served call's A table in one launch -------------------------------------------------------------------------------
-// The same table as h1c_build's, split by what it reads.  Once a window (h1c_a_init): each segment's first block and x's
+// The same table as h1c_build's, split by what it reads.  Once an execution phase (h1c_a_init): each segment's first block and x's
 // (they read only the row length), and x of the canonical empty row.  Once a step, before its forward (h1c_a_step: the
 // domains, then h1c_a_pre): what reads the step but no row (each row's salts y, M_key y and c, its leaf frame up to h, each
 // level's node prefix) and every leaf and node over rows >= m alone (the canonical empty row's).  Per call (h1c_a_call): the
@@ -1748,7 +1748,7 @@ extern "C" __global__ void __launch_bounds__(128) h1c_a_call2_k(const H1Tab* __r
 
 // h1c_a_form(3): h1c_a_call2_k's table, every message built as words in registers and every compression the one inlined
 // ap_cmp_in site of a loop over the lane's blocks (segments, x, h, the frame leaf, then the last block's nodes).  It reads
-// the layout the window's constants give (h1c_a_call refuses form 3 otherwise, a3_layout): the segment, x and h prefixes
+// the layout the execution phase's constants give (h1c_a_call refuses form 3 otherwise, a3_layout): the segment, x and h prefixes
 // end on a block, a node prefix leaves one byte pending (an idx below 256 then puts its children at byte 3), a row's leaf
 // frame prefix 41 to 47 (its children at word 5, byte 1 to 7).  Each consumer warp stages its rows' and the levels'
 // prefixes into shared memory first (cs: x's and h's first-block states, its two rows' frame prefixes, M_key y and c,
@@ -2059,7 +2059,7 @@ static bool a3_layout() {
 
 extern "C" int h1c_a_words(int t) { return A_ROW + A_RW * t; }
 
-// the window's part, once, on `stream`: ntab A tables (tabs_dev) into pre (wpt = h1c_a_words(T) words a table)
+// the execution phase's part, once, on `stream`: ntab A tables (tabs_dev) into pre (wpt = h1c_a_words(T) words a table)
 extern "C" int h1c_a_init(const H1Tab* tabs, const H1Tab* tabs_dev, int ntab, u64* pre, int wpt, cudaStream_t stream) {
   for (int t = 0; t < ntab; ++t) {
     if (!tabs[t].data || nseg_of(tabs[t].len) > A_NSEG || tabs[t].depth > A_DEPTH || tabs[t].depth < 1) return 100 + t;

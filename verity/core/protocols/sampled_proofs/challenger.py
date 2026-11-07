@@ -32,7 +32,7 @@ challenger is auditor-trusted, the auditor's device on a machine the developer d
 `withheld: true`) keeps its commitment on the challenger's host until the prover's commitments are in: while it runs, the
 challenger releases each coin's raw bytes and nothing else (no root, salt or path), and once its signed close is written
 it releases the commitment and every opened coin's salt and path.  So nothing the prover sees before a coin depends on a
-coin not yet released, and soundness takes no hiding premise on the root.  One-stage's draw reads only a withheld
+coin not yet released, and soundness takes no hiding premise on the root.  One-stage's sample reads only a withheld
 session's coins (`withheld_on`, in `coins.draw_coins`).
 
 `live_reason` is the verifier's check of one opening and `order_reason` of a family's openings against the roots it
@@ -85,10 +85,10 @@ The challenger stages before any session opens, logs every session it opens for 
 `Hello`, before the answer that carries the session's fresh coin key, a retry's as any other's, and closes the record
 when the run ends.  `rec-compose` refuses unless each part has exactly one session and the sessions are the composed
 parts', so a retried part shows and is refused, never hidden.  The record holds no coin: each session's coins are its
-coin tree's, drawn at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
+coin tree's, sampled at its `Hello` (fresh per round, never committed before the run, unlike an epoch's coins above).
 The verifier reads the record from the challenger's host, never from the prover's bundle; that it logs every `Hello`
 it answers is the auditor-trusted challenger's (`trusted-host`).  The live challenger keeps it one event a line: its
-operator stages the record before any session and closes it after the last, and C-Flock's `flock-circuit serve --zk
+operator stages the record before any session and closes it after the last, and Flock's `flock-circuit serve --zk
 --rec-run FILE --rec-part J` appends each `open` in one write before the `Hello`'s answer leaves, refusing a `Hello` it
 can't log (`flock_live::run_record`); `RunRecord` is the same record in memory.
 
@@ -167,7 +167,7 @@ its open names is the auditor-trusted host's word (`trusted-host`).  Every path 
 through `pinned_session`: `credited_session` (the pin first, then the circuit) and `trusted_session_of`.
 `audited_session` checks no pin and credits nothing.
 
-**A ``--zk`` session's coins** are the challenger's too: C-Flock's keyed coin tree (``coin-tree/hm96-sha512/v2``,
+**A ``--zk`` session's coins** are the challenger's too: Flock's keyed coin tree (``coin-tree/hm96-sha512/v2``,
 `verity.ml.commitments.coin_tree`), sampled in the window's session from the challenger's entropy under the prover's
 ``Hello`` nonce (`LiveChallenger.sample_tree`), each round opened by the challenger once it has received what the round
 follows (`open_tree`).  The release log holds a line per tree and per round it opened, each written before what it
@@ -184,7 +184,7 @@ entry the length its table's statement fixes (`LINK_ROOT_LEN`, refused before th
 way), its link points and every round's coins that tree's logged openings.  `sessions_tree_reason` holds an audit's sessions to
 them, one tree a session and every tree a session's, so no statement's coins are flipped twice.  `sample_link_first`
 holds the log's order: the sample, then the link, then the other rounds.  The tree's root and key leave at ``Hello``, as
-C-Flock's coin server releases them, so its unopened coins rest on the tree's hm96 hiding.
+Flock's live-coin part releases them, so its unopened coins rest on the tree's hm96 hiding.
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
@@ -913,7 +913,7 @@ def link_after(root_f: bytes, root_b: dict[str, bytes]) -> bytes:
 
 TREE_RECORD_FORM = ("its record names no coin_tree, link {points, root_b, root_f} and streams [{stream, rounds: [{coins, "
                     "msg_sha512, n}]}] in lowercase hex, as a --zk session's record does")
-# The link points are opened after every ``root_b`` entry (`link_after`) and C-Flock reads only the session's tables'
+# The link points are opened after every ``root_b`` entry (`link_after`) and Flock reads only the session's tables'
 # (S5), so a key of no table, or a table without its key, would let the prover pick a table's ``root_B`` after them.
 LINK_TABLES = "its link's root_b keys are not exactly its session's tables"
 # `link_after` hashes ``root_F`` and each table's ``root_B`` in table name order with no length prefix. A table's

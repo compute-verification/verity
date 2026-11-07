@@ -55,7 +55,7 @@ def test_a_budget_of_one_halts_the_operator_at_its_first_failure():
 
 def test_a_budget_above_one_tolerates_one_failure_fewer():
     """b = 3: a stream's two failures, and another's one, halt nothing: both keep accepting. The halt comes at the third
-    failure of one stream, and ends the other's registration, not yet drawn, as `halted`."""
+    failure of one stream, and ends the other's registration, not yet sampled, as `halted`."""
     fleet, (a, b) = _fleet("o", "o", budget=3)
     assert not _round(a, accepted=False).accepted and not _round(a, accepted=False).accepted
     assert not _round(b, accepted=False).accepted
