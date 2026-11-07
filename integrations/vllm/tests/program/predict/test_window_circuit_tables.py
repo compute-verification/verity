@@ -7,6 +7,7 @@ TINY's 2 layers).
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -20,6 +21,7 @@ from verity_vllm.program.predict import window_rows as WR
 from verity_vllm.program.predict import window_weights as WW
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import Tables, WindowClass
+from verity_vllm.protocols.pouw.h1 import served as SV
 
 from verity.core.protocols.pouw import credit
 from verity.core.protocols.pouw.audit import hm96_salt
@@ -65,7 +67,8 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
     position's 6 in node order, and each position's token row (its lane's of the scan proof block at position 0, its
     `TokenFeed_v1`'s below the prompt, the previous select's past it) to row i of its round's input-ids table; no other
     output row is held to a table, and no two to one row. The reads fill no input, so the circuit's inputs by what fills
-    them are the int8 circuit's without the tables."""
+    them are the int8 circuit's without the tables. The circuit's program takes the tables as its values, round by round
+    the A table then the input-ids table, ahead of its units' parameters."""
     low = _lowered()
     c = low.circuit
     assert {t: k for fn, k in c.templates if (t := _label(fn)).startswith("Int8RowQuant")} == {
@@ -73,6 +76,8 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
         "Int8RowQuant_v5{K=64,R=1,ROUND=1}": 8, "Int8RowQuant_v5{K=64,R=4,ROUND=1}": 4, "Int8RowQuant_v3{K=128,R=1}": 20}
     assert {p: n for p, n in c.registered.params.items() if p.startswith(("row-table/", "input-ids/"))} == {
         "row-table/0/k64": 6 * 8 * LEAF, "row-table/1/k64": 6 * 8 * LEAF, "input-ids/0": 8 * 2, "input-ids/1": 8 * 2}
+    assert c.registered.values == ("row-table/0/k64", "input-ids/0", "row-table/1/k64", "input-ids/1")
+    assert [n for n, _ in c.program()[0].fn.signature()[0][:4]] == list(c.registered.values)
     pos, want = WR.positions(low.fn), {}
     for k, P in enumerate(low.programs):
         quants: dict[int, list[WC.Row]] = {}
@@ -108,8 +113,7 @@ def test_each_tables_readers_are_templates_of_their_own():
     readers = sorted((t.split("{")[0], *ts, "ROUND=1" in t) for t, ts in tables.items())
     assert readers == [("Int8RowQuant_v5", "row-table/0/k64", False)] * 2 + [("Int8RowQuant_v5", "row-table/1/k64", True)] * 2 + [
         ("ScanSlots_v2", "input-ids/0", False), ("SelectCollect_v2", "input-ids/1", True), ("TokenFeed_v1", "input-ids/0", False)]
-    assert {s for t, ts in tables.items() for s in ts} == {p for p in c.registered.params
-                                                            if p.startswith(("row-table/", "input-ids/"))}
+    assert {s for t, ts in tables.items() for s in ts} == set(c.registered.values)
     assert not any("ROUND=" in IF.descriptor_id(fn) for fn, _ in _lowered(None).circuit.templates)
 
 
@@ -127,10 +131,10 @@ def test_a_fixed_load_window_is_the_class_circuit_with_the_tables_and_any_other_
         WC.window_circuit(reg, S.compile_steps(reg, *S._session(*WINDOW)), CLASS, GRAIN, provable=False, tables=TABLES)
 
 
-def test_a_quantizers_rows_are_its_definition_on_its_x_and_its_leaf_row_its_nodes_words_whole():
-    """Filled from a window's values (`window_rows.Rows`: `test_window_rows`' random weights, a scan state whose row at bucket 0
-    carries two prompts of 4), each `Int8RowQuant_v5` proof block's leaf row ``o2`` is its node's words whole, its codes
-    ``o0`` then its scale ``o1``, and its three rows are its Definition on the node's ``x``, as its proof holds them."""
+@pytest.fixture(scope="module")
+def filled():
+    """The class circuit with H1's tables filled from a window's values (`window_rows.Rows`: `test_window_rows`' random
+    weights, a scan state whose row at bucket 0 carries two prompts of 4): its lowering, its slots and its rows."""
     reg = _registered()
     low = WC.lower(reg, CLASS, None, GRAIN, provable=False, tables=TABLES)
     fields = _weights(low.fn)
@@ -140,7 +144,15 @@ def test_a_quantizers_rows_are_its_definition_on_its_x_and_its_leaf_row_its_node
                                  schema=CR.SCHEMA_V2)
     values = {**WW.weight_values(reg, fields, KEY, GRAIN, keep_rows=True), SS.SCAN_STATE: state}
     slots = [WR.Slot(low.fn, CLASS, row, lambda label, lo, hi: fields[label][lo:hi]) for row, _ in WR.scan_slots(low, rows_)]
-    rows, seen = WR.Rows(low, slots, values), 0
+    return low, slots, WR.Rows(low, slots, values)
+
+
+def test_a_quantizers_rows_are_its_definition_on_its_x_and_its_leaf_row_its_nodes_words_whole(filled):
+    """Filled from a window's values (`filled`), each `Int8RowQuant_v5` proof block's leaf row ``o2`` is its node's words
+    whole, its codes ``o0`` then its scale ``o1``, and its three rows are its Definition on the node's ``x``, as its proof
+    holds them."""
+    low, slots, rows = filled
+    seen = 0
     for P, s in zip(low.programs, slots):
         for j, r in P.packed.items():
             o0, o1, o2 = (rows.outs[r.tid][k][r.unit] for k in range(3))
@@ -149,6 +161,49 @@ def test_a_quantizers_rows_are_its_definition_on_its_x_and_its_leaf_row_its_node
             assert np.array_equal(np.concatenate([o0.view("<u1"), o1.view("<u4"), o2.view("<u4")]), want)
             seen += 1
     assert seen == 2 * 5 * 6
+
+
+def _h1_tables(low, slots) -> dict[str, np.ndarray]:
+    """H1's tables of the fixed load from the model's values: round s's A table's row 8c + i the leaf (codes, then scale) of
+    the c-th quantizer at K = 64 of the position at round s's row i (`Tables.at`), every other row zero codes of scale 0;
+    its input-ids table's row i that position's token, every other `EMPTY_ID` (`pouw_h1_served.ids_words`)."""
+    pos, a, ids = WR.positions(low.fn), {s: np.zeros((6 * 8, LEAF), np.uint16) for s in (0, 1)}, {0: [None] * 8, 1: [None] * 8}
+    for k, (P, sl) in enumerate(zip(low.programs, slots)):
+        quants: dict[int, list[int]] = {}
+        for j in sorted(P.packed):
+            quants.setdefault(pos[j], []).append(j)
+        for p in range(CLASS.positions):
+            s, i = Tables.at(CLASS, k, p)
+            for c, j in enumerate(quants[p]):
+                a[s][8 * c + i] = WR._words(sl.values[j])
+            ids[s][i] = sl.tokens[p]
+    return {**{TABLES.a(s): a[s] for s in a}, **{TABLES.ids(s): SV.ids_words(ids[s], 8) for s in ids}}
+
+
+def test_a_tables_rows_are_the_output_rows_its_proof_blocks_make(filled):
+    """`Rows.value` gives each of H1's tables as the class circuit's proof blocks make it: round s's A table each
+    quantizer's leaf row at row 8c + i and its input-ids table each position's token at row i, the fixed load's rows, and
+    every row no proof block makes the empty row given. It refuses a table read off the rows given, or as another width."""
+    low, slots, rows = filled
+    for name, want in _h1_tables(low, slots).items():
+        empty = np.zeros(LEAF, np.uint16) if name.startswith("row-table/") else SV.ids_words([], 1)[0]
+        assert np.array_equal(rows.value(name, len(want), empty), want), name
+    with pytest.raises(ValueError, match=r"reads 'row-table/1/k64' off its 8 rows of 34 words"):
+        rows.value(TABLES.a(1), 8, np.zeros(LEAF, np.uint16))
+    with pytest.raises(ValueError, match="reads 'input-ids/0' other than as an output row of 3 words"):
+        rows.value(TABLES.ids(0), 8, [0, 0, 0])
+
+
+def test_two_proof_blocks_making_one_row_two_ways_are_refused():
+    """`Rows.value` takes a row two proof blocks make alike and refuses one they make two ways."""
+    def rows(a, b):
+        reads = [SimpleNamespace(param="t", reader=t, port="o", units=1, at=0, source=lambda u: 2 * u) for t in "ab"]
+        return SimpleNamespace(circuit=SimpleNamespace(registered=SimpleNamespace(reads=reads)),
+                               lays={t: SimpleNamespace(outs=[("o", 2)]) for t in "ab"},
+                               outs={"a": [np.array([a], np.uint16)], "b": [np.array([b], np.uint16)]})
+    assert np.array_equal(WR.Rows.value(rows([1, 2], [1, 2]), "t", 2, [0, 0]), [[1, 2], [0, 0]])
+    with pytest.raises(ValueError, match="'t': two units make one of its rows two ways"):
+        WR.Rows.value(rows([1, 2], [1, 3]), "t", 2, [0, 0])
 
 
 @pytest.mark.parametrize("tables, cls, why", [
