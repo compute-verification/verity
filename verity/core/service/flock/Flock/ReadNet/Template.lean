@@ -216,13 +216,13 @@ def readTmpl (V H : Nat) : Tmpl.Tmpl :=
 def groupKey (g : Group) : Nat × Nat × Array Nat := (g.col, g.words, g.bits)
 
 /-- **The read's per-Definition check**: `V` and `H` in range, each part's run writing fresh variables, and the
-registered template's Definitions, root and port groups those of `readTmpl V H`. It reads the template's description
-once and runs each part's generator once; it never unrolls. -/
+registered template's Definitions, root and port groups those of `readTmpl V H`, and its unrolled unit at most `2^32`
+rows. It reads the template's description once and runs each part's generator once; it never unrolls. -/
 def check (V H : Nat) (t : Tmpl.Tmpl) : Bool :=
   let r := readTmpl V H
   2 ≤ V && V < 2 ^ 32 && 1 ≤ H && 16 * H < 2 ^ 64 && (parts V H).all (fun p => runOk p.ins p.run) && t.root == r.root &&
     t.inGroups.map groupKey == r.inGroups.map groupKey && t.outGroups.map groupKey == r.outGroups.map groupKey &&
-    decide (t.defs = r.defs)
+    decide (t.defs = r.defs) && decide (log2ceil (t.defs.getD t.root default).cols ≤ 32)
 
 /-! ## The template's text -/
 
