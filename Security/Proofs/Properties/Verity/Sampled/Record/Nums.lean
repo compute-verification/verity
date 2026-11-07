@@ -174,8 +174,7 @@ theorem hidden_sess {d : Msg} {s : Ins}
     s.read.tags.hiddenOutputs = true := by
   have hI' : s.read.I.tags.hiddenOutputs = true := by
     rw [(RecDeploy.ResLower.raw_ins_tags hins).2, stmtTags_sess hins]
-    unfold Flock.Tags.withCoins
-    split <;> rfl
+    all_goals rfl
   unfold Flock.Readable.Read.tags
   split
   · rw [FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs]
