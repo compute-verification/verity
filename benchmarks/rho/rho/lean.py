@@ -28,7 +28,7 @@ def _locks() -> tuple[frozenset[str], frozenset[str]]:
     for path in LOCKS:
         lock = json.loads(path.read_text())
         for entry in lock["guarantees"].values():
-            proved.update(s.rsplit(" : ", 1)[-1] for s in entry["signature"])
+            proved.update(s.rsplit(" : ", 1)[-1] for s in entry.get("signature", ()))
         assumed.update(lock["assumptions"])
         assumed.update(lock.get("open") or {})
         assumed.update(lock.get("domain") or {})
