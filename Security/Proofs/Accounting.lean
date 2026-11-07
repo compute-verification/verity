@@ -31,6 +31,7 @@ public import Proofs.Accounting.RateAudit
 public import Proofs.Accounting.ReadUnit
 public import Proofs.Accounting.ReadUnit.Gates
 public import Proofs.Accounting.ReadUnit.Net
+public import Proofs.Accounting.ReadUnit.Frame
 public import Proofs.Accounting.ReadUnit.Sha
 public import Proofs.Accounting.ReadUnit.RowSeg
 public import Proofs.Accounting.ReadUnit.Leaf
