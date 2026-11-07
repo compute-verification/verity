@@ -41,7 +41,7 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, drive, finish_run, kind, launch_batch, launch_rows,
+from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, finish_run, kind, launch_batch, launch_rows,
                      launch_seqlen_q, run_input, select_token, served_class, with_checks, wrapper_keys)
 from .domain import check_phi
 from .phi import Phi
@@ -751,7 +751,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         if not getattr(model, "reads_launch", False):
             raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance), whose kernel "
                                 f"choices the {net.model_class} decoder reads at its own rows")
-        model.launch = _Launch(batch)
+        model.launch = model.launch.with_batch(batch)
     if chunks and (batch is None or len(batch) != len(chunks) + int(T)):
         raise Unexpressible(f"vocabulary cannot express: a prefill in {len(chunks)} chunks " + (
             f"at a launch batch of {len(batch)} steps, not one a chunk and one a decode ({len(chunks) + int(T)})" if batch is not None else
