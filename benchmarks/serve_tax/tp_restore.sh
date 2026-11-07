@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # A model served mid-traffic, restored at its first edge into a fresh engine and replayed to its second (tp_restore.py),
 # on one node under `research run`, from the shipped tree's root, the C4 shard sent with --send (or C4=PATH):
-#   [MODEL_ID=glm53] [RATE=10] [SPAN_S=240] [EDGES_AT=150,210] [SAMPLING=production] [MAX_MODEL_LEN=N] [FLASHINFER=0]
+#   [MODEL_ID=glm53] [RATE=10] [SPAN_S=240] [EDGES_AT=150,210] [SAMPLING=production] [LONG_SHARE=0.03]
+#     [MAX_MODEL_LEN=40960] [FLASHINFER=0]
 #     [SAVER=MODULE:FUNCTION] [LOADER=MODULE:FUNCTION] [PERMUTE=1] [KEEP=1] [MAX_MIN=150]
 #     bash benchmarks/serve_tax/tp_restore.sh
-# The plan (OUT/plan.jsonl) is made before the GPUs are held; then one server lifetime serves it with the edges into
+# The plan (OUT/plan.jsonl) is made before the GPUs are held, LONG_SHARE of its requests then given prompts of 8k-32k
+# tokens (tp_restore.lengthen, into OUT/serve/plan.jsonl); then one server lifetime serves it with the edges into
 # OUT/serve, and one in-process engine restores at the first edge and replays to the second into OUT/restore (its verdict
 # OUT/restore/restore.json). PERMUTE=1 restores again with the GPUs in reverse order into OUT/restore-permuted. Each edge's
 # blocks (tens of GB at TP8) go to a scratch directory outside the run's, removed at the end unless KEEP=1. The GPUs are
@@ -27,6 +29,7 @@ VENV=${VENV:-$venv}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 RATE=${RATE:-10}; SPAN_S=${SPAN_S:-240}; EDGES_AT=${EDGES_AT:-150,210}; SAMPLING=${SAMPLING:-production}
+LONG_SHARE=${LONG_SHARE:-0.03}; MAX_MODEL_LEN=${MAX_MODEL_LEN:-40960}
 DOCS=${DOCS:-45000}; MAX_MIN=${MAX_MIN:-150}; PLAN=$OUT/plan.jsonl
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 [ -d /workspace/cp/hf ] && hf=/workspace/cp/hf || hf=/workspace/hf
@@ -56,7 +59,7 @@ if [ "${1:-}" = leased ]; then
   nvidia-smi --query-gpu=index,name,uuid,pci.bus_id,memory.used,memory.total --format=csv
   echo "== serve $(date -u +%FT%TZ)"
   "$PY" "$here/tp_restore.py" serve --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" --plan "$PLAN" --docs "$DOCS" \
-    --rate "$RATE" --span-s "$SPAN_S" --edges-at "$EDGES_AT" --sampling "$SAMPLING" \
+    --rate "$RATE" --span-s "$SPAN_S" --edges-at "$EDGES_AT" --sampling "$SAMPLING" --long-share "$LONG_SHARE" \
     ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} ${TP:+--tp "$TP"} ${SAVER:+--saver "$SAVER"} \
     --out "$OUT/serve" --scratch "$SCRATCH/serve" || exit 1
   rc=0

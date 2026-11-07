@@ -120,6 +120,18 @@ def test_the_served_autotune_results_go_where_the_restored_engines_config_hash_r
         T.carry_autotune(served, tmp_path / "restored", "cfg-b")
 
 
+def test_a_share_of_the_plan_gets_long_prompts_joined_from_the_plans_own():
+    plan = [{"i": i, "prompt_ids": [i] * 5, "prompt_len": 5, "max_tokens": 4} for i in range(40)]
+    got = T.lengthen(plan, 0.25, 12, 20, seed=3)
+    long = [r for r in got if r.get("kind") == "long"]
+    assert 0 < len(long) < 40 and [r["i"] for r in got] == list(range(40))
+    for r in long:
+        n = r["i"]
+        assert 12 <= r["prompt_len"] == len(r["prompt_ids"]) <= 20 and r["max_tokens"] == 4
+        assert r["prompt_ids"][:5] == [(n + 1) % 40] * 5
+    assert got == T.lengthen(plan, 0.25, 12, 20, seed=3) and T.lengthen(plan, 0.0, 12, 20, seed=3) == plan
+
+
 def test_the_plugin_site_declares_the_edges_beside_the_step_trace(tmp_path):
     T.edge_site(tmp_path)
     eps = sorted(p.read_text() for p in tmp_path.glob("*.dist-info/entry_points.txt"))

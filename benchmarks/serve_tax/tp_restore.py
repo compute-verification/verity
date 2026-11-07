@@ -3,7 +3,8 @@ its second and compared. GLM-5.3 at TP8 is the case it is for; any `serve_tax` m
 
     tp_restore.py preflight --model-id glm53 [--max-model-len N] [--tp N]
     tp_restore.py serve --model-id glm53 --c4 C4 --out OUT --scratch DIR [--rate 10] [--span-s 240] [--edges-at 150,210]
-                        [--sampling production] [--max-model-len 32768] [--tp N] [--saver MODULE:FUNCTION ...]
+                        [--sampling production] [--max-model-len 40960] [--tp N] [--long-share 0.05]
+                        [--long-tokens 8192,32768] [--saver MODULE:FUNCTION ...]
     tp_restore.py restore --served OUT --scratch DIR --out OUT2 --loader MODULE:FUNCTION [--no-fill] [--rank-map-free]
 
 ``serve`` runs `serve_tax`'s ``record`` arm (vLLM's OpenAI server with the scheduler's step trace), with `tp_edge` as a
@@ -33,6 +34,7 @@ import asyncio
 import hashlib
 import json
 import os
+import random
 import re
 import shutil
 import subprocess
@@ -107,6 +109,24 @@ def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, 
     return meta
 
 
+def lengthen(plan: list[dict], share: float, lo: int, hi: int, seed: int) -> list[dict]:
+    """The plan with a ``share`` of its requests (drawn under ``seed``) given long prompts, of ``lo`` to ``hi`` tokens
+    each: the prompts of the plan's requests from the next one on, joined in order. A long prompt's prefill spans steps
+    of the scheduler's token budget, so an edge can find one part done."""
+    rng = random.Random(seed)
+    out = []
+    for n, r in enumerate(plan):
+        if rng.random() >= share:
+            out.append(r)
+            continue
+        want, ids, k = rng.randint(lo, hi), [], n
+        while len(ids) < want:
+            k = (k + 1) % len(plan)
+            ids += plan[k]["prompt_ids"]
+        out.append(r | {"prompt_ids": ids[:want], "prompt_len": want, "kind": "long"})
+    return out
+
+
 def served_argv(a: argparse.Namespace, checkpoint: Path, port: int) -> list[str]:
     """`serve_tax`'s ``record`` arm's server argv for ``a``'s model, with ``a``'s context and tensor-parallel size."""
     return S.server_argv(S.ARMS["record"], S.MODELS[a.model_id], checkpoint, port) \
@@ -142,8 +162,13 @@ def serve(a: argparse.Namespace) -> int:
     out, scratch = Path(a.out), Path(a.scratch)
     out.mkdir(parents=True, exist_ok=True)
     scratch.mkdir(parents=True, exist_ok=True)
-    plan_file = Path(a.plan) if a.plan else out / "plan.jsonl"
-    plan = S.plan_of(plan_file, Path(a.c4), checkpoint, S.plan_need({"load": a.rate}, a.span_s, a.requests), a.docs, a.seed)
+    base = Path(a.plan) if a.plan else out / "plan.base.jsonl"
+    plan = S.plan_of(base, Path(a.c4), checkpoint, S.plan_need({"load": a.rate}, a.span_s, a.requests), a.docs, a.seed)
+    if a.long_share:
+        lo, hi = a.long_tokens
+        plan = lengthen(plan, a.long_share, lo, hi, a.seed)
+    plan_file = out / "plan.jsonl"
+    plan_file.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan))
     arm = S.ARMS["record"]
     site = edge_site(scratch / ".site")
     port = S.corpus().free_port()
@@ -153,7 +178,8 @@ def serve(a: argparse.Namespace) -> int:
     env = S.server_env(arm, srv, site, None, 600.0, 600.0) | PINS | {AUTOTUNE_ENV: str(scratch / "autotune")}
     env[E.ENV] = json.dumps({"out": str(scratch / "edges"), "at_s": a.edges_at, "dump": 1, "savers": a.saver})
     meta: dict[str, Any] = {"schema": SCHEMA, "model_id": a.model_id, "model": f"{model.repo}@{model.revision}",
-                            "checkpoint": str(checkpoint), "plan": str(plan_file), "server_argv": argv[1:], "pins": PINS,
+                            "checkpoint": str(checkpoint), "plan": str(plan_file), "plan_base": str(base),
+                            "long_share": a.long_share, "long_tokens": a.long_tokens, "server_argv": argv[1:], "pins": PINS,
                             "edges_at": a.edges_at,
                             "savers": a.saver, "scratch": str(scratch), "autotune_dir": str(scratch / "autotune"), "versions": S.versions(), "host": os.uname().nodename}
     rc = 0
@@ -480,6 +506,8 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--plan")
     s.add_argument("--docs", type=int, default=4000)
     s.add_argument("--seed", type=int, default=0)
+    s.add_argument("--long-share", type=float, default=0.0, help="the share of requests given long prompts (lengthen)")
+    s.add_argument("--long-tokens", type=lambda x: [int(t) for t in x.split(",")], default=[8192, 32768])
     s.add_argument("--rate", type=float, default=10.0)
     s.add_argument("--span-s", type=float, default=240.0)
     s.add_argument("--requests", type=int)
