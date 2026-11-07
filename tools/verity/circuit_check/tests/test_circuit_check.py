@@ -465,8 +465,103 @@ def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
     e = CK.check_definition(_table_read(), TABLE_OPTS, memo={}, pins=PINS)
     assert e["conformance"] == "not-yet-established"
     assert [f["name"] for f in e["failures"]] == [
-        "correspondence/unprobed-table CircuitCheckTableRead_v1 parameter 1 has 8192 leaves, over the input budget 1024, and no "
-        "registered table probes it (`circuit_check.targets.TABLE_PROBES`)"]
+        "correspondence/unprobed-table CircuitCheckTableRead_v1 parameter 1 has 8192 leaves, over the input budget, and is neither a "
+        "registered table a probe reads (`circuit_check.targets.TABLE_PROBES`) nor an operand read lazily "
+        "(`circuit_check.targets.LAZY_OPERANDS`)"]
+
+
+def _wide_gemm():
+    """`Gemm_v2` at K=32, N=64, with an input budget its weight's 2,048 leaves are over and 32 vectors of its x fit in."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
+    from verity.ml.circuits.ops import prims as P
+
+    return bind(G.Gemm, K=32, N=64, DOT=P.AmpereBF16TcDot16), dataclasses.replace(OPTS, input_budget=1024, vectors=40)
+
+
+def test_an_operand_over_the_input_budget_is_read_lazily_on_the_vectors_words(monkeypatch):
+    """A weight over the input budget (`targets.LAZY_OPERANDS`) takes the edge and random words every parameter takes, one
+    vector at a time, and is read lazily, never flattened; the reference on each vector equals it on the same words flattened."""
+    from verity.ml.circuits.evaluation import RegisteredTable, evaluate
+
+    t, opts = _wide_gemm()
+    (x, w), _ = CK.signature_of(t)
+    monkeypatch.setattr(RegisteredTable, "__iter__", lambda self: pytest.fail("the operand was flattened"), raising=False)
+    F = CK.Findings()
+    rec, arrays, ref = CK.correspondence(t, opts, F)
+    assert not F.failures and arrays is None
+    n, n_edge = rec["vectors"], rec["edge_vectors"]
+    assert n == CK._n_vectors(t, opts, [1]) == 32 and n_edge == len(VX.edges(16)) < n
+    assert rec["wide"] == [{"param": 1, "name": "w", "leaves": 2048, "width": 16, "reads": rec["wide"][0]["reads"]}]
+    assert rec["wide"][0]["reads"] >= 2048 * n
+    assert rec["realizations"] == [{"via": f"kernel:{k}", "declines": "a kernel takes arrays, not 'w' read lazily"}
+                                   for k in sorted(CK.kernels(t))]
+    xs = VX.vectors([x], n, opts.seed)
+    for i in range(n):
+        words = [VX.wide_words(w, i, n_edge, opts.seed, 1)(k) for k in range(w.leaves)]
+        assert ref[i] == tuple(evaluate(t, VX.instance_args([x], xs, i)[0], words))
+    e = CK.check_definition(t, opts, memo={}, pins=PINS)
+    assert [f["name"] for f in e["failures"] if f["check"] == "correspondence"] == []
+    assert {"via": "c-flock:ir_lower", "lowered": False, "reason": "a lowering takes every input leaf, and this Definition's "
+            "correspondence reads an operand over the input budget lazily"} in e["correspondence"]["realizations"]
+
+
+def _wide_shard():
+    """`EmbeddingShard_v1` at VS=64, H=32, START=1000, with an input budget its table's 2,048 leaves are over: no edge or
+    random token lies in the shard."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import b1_tp2
+
+    return bind(b1_tp2.EmbeddingShard, VS=64, H=32, START=1000), dataclasses.replace(OPTS, input_budget=1024, vectors=8)
+
+
+def test_an_operand_probe_sets_the_index_that_reads_the_operands_first_and_last_rows():
+    """A shard's edge and random tokens lie outside it, so only its probes (`targets.OPERAND_PROBES`: the shard's first and last
+    token) read the table, one row each, on random words; the reference there equals it on the same words flattened."""
+    from verity.ml.circuits.evaluation import evaluate
+
+    t, opts = _wide_shard()
+    (_tok, table), _ = CK.signature_of(t)
+    F = CK.Findings()
+    rec, _arrays, ref = CK.correspondence(t, opts, F)
+    assert not F.failures and not F.warnings
+    n = CK._n_vectors(t, opts, [1])
+    assert rec["probes"] == [{"tok": 1000}, {"tok": 1063}] and rec["vectors"] == n + 2
+    assert rec["wide"][0]["reads"] == 2 * 32
+    for q, tok in enumerate((1000, 1063)):
+        words = [VX.wide_words(table, n + q, rec["edge_vectors"], opts.seed, 1)(k) for k in range(table.leaves)]
+        assert ref[n + q] == tuple(evaluate(t, tok, words)) != (0,) * 32
+
+
+def test_an_operand_no_vector_reads_is_unchecked_and_a_probe_of_a_non_scalar_is_refused(monkeypatch):
+    t, opts = _wide_shard()
+    monkeypatch.setitem(TG.OPERAND_PROBES, "EmbeddingShard_v1", lambda S: [])
+    F = CK.Findings()
+    rec, _arrays, _ref = CK.correspondence(t, opts, F)
+    assert not F.failures and rec["wide"][0]["reads"] == 0 and "probes" not in rec
+    assert [w["name"] for w in F.warnings] == [
+        "correspondence/operand-unread EmbeddingShard_v1{VS=64,H=32,START=1000}: 1 no vector read 'table', so its words are "
+        "checked on none (`circuit_check.targets.OPERAND_PROBES` sets an index that reads it)"]
+    monkeypatch.setitem(TG.OPERAND_PROBES, "EmbeddingShard_v1", lambda S: [{"table": 0}])
+    with pytest.raises(ValueError, match=r"isn't one of its Value parameters \['tok'\]"):
+        CK.correspondence(t, opts, CK.Findings())
+
+
+def test_an_operands_lazy_words_are_its_edges_then_seeded_random_words():
+    """Vector i of a lazily read operand is the i-th edge of its width in every leaf, then random words of that width, the same
+    on every sample and different per vector and per parameter."""
+    from verity.ml.circuits.types import Array, Value
+
+    pt = Array(64, Array(80, Value(8)))
+    ew = VX.edges(8)
+    for i in range(len(ew)):
+        assert {VX.wide_words(pt, i, len(ew), 7, 2)(k) for k in range(pt.leaves)} == {ew[i]}
+    draw = lambda i, param=2: [VX.wide_words(pt, i, len(ew), 7, param)(k) for k in range(pt.leaves)]  # noqa: E731
+    a = draw(len(ew))
+    assert a == draw(len(ew)) and all(0 <= v < 256 for v in a) and len(set(a)) > 64
+    assert a != draw(len(ew) + 1) and a != draw(len(ew), param=3)
+    with pytest.raises(ValueError, match="one width of at most 64 bits"):
+        VX.wide_words(Array(4, Value(128)), 0, 1, 7, 0)
 
 
 def test_a_definition_over_the_leaf_budget_is_not_partitioned(monkeypatch):
@@ -761,7 +856,7 @@ def test_a_declared_interval_the_reference_leaves_is_named():
 
 
 def test_a_transfer_the_reference_leaves_is_named():
-    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on drawn operand
+    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on sampled operand
     intervals, so an exact sum of two s8 operands holds in [a0 + b0, a1 + b1] and a transfer one short of it is named."""
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.ports import Ports, as_reading

@@ -1,12 +1,12 @@
 """The proof system, the challenger's side: a protocol's `Spec`, the public-items rule (`check_public`), and a `Stream` of
-registrations, draws and outcomes over the one-stage audit (`one_stage`).
+registrations, samples and outcomes over the one-stage audit (`one_stage`).
 
 A protocol states what it commits (`Spec.values`), which proof blocks need proofs (`Spec.selection`, its selection rule),
 the check each sampled proof block passes, as a public Program (`Spec.check`), and what it makes public, each item with its reason
 (`Spec.public`). What it does with each `Outcome` is its own code; the service does the rest. The parties: the workers
 compute and prove with zero knowledge off, trusted by neither party; the ZK server, trusted by the developer, is their only
 path to the auditor, and commits, registers and releases the proofs; the challenger, trusted by the auditor, receives
-registrations, draws from its own randomness and keeps the record (this module); the verifier, the auditor's Lean
+registrations, samples from its own randomness and keeps the record (this module); the verifier, the auditor's Lean
 verifier, verifies offline, and reads coins only from the challenger's log.
 
 **The public-items rule.** Everything the auditor observes is a function of the Spec's public items. A registration is
@@ -25,20 +25,20 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
 
 One-stage's record always shows N, each root's leaf count and domain, and the window's provenance, so a Spec over it
 declares them; hiding them waits on the hidden layout (`one_stage.hidden_draw`).
-The `Stream` runs `check_public` by the verifier of record before one-stage's R1 to R7, reading an entry's fields in key
+The `Stream` runs `check_public` by the verifier before one-stage's R1 to R7, reading an entry's fields in key
 order; its codes are `keys`, `roots`, `unsalted`, `query` and `undeclared`.
 
 **A window of templates.** A `Stream` takes one template, or a window's several (a TP rank's served window, every
 provable family of its step): the check's program is each template's digest and its query `Q_template_instances`, in
 the window's order, and each registration's population program is the templates' mixed population at the challenger's
-own counts (`register(counts=)`), drawn once by the Spec's sampling design, `stratified:K` with one stratum per template. The
-verifier reads one program and one query either way, so a window's registration, draw and run are its
+own counts (`register(counts=)`), sampled once by the Spec's sampling design, `stratified:K` with one stratum per template. The
+verifier reads one program and one query either way, so a window's registration, sample and run are its
 `check`, `Select.select` and `Run.run` as they are for one template's.
 
 **The sample.** `register` logs the record and its receipt, whose `received` is the record's position in the stream's log.
-The challenger then draws once (`select`) from its coins (`coins.ChallengerCoins`, opened after the registration's
+The challenger then samples once (`select`) from its coins (`coins.ChallengerCoins`, opened after the registration's
 digest) as the Lean verifier's `Flock.Draw.drawWith` does (`coins.draw_first` over `coins.OwnRandomness`), with no hash
-and no derivation, or by the stream's `sampler`; either draw is held to `draw.check_draw`. Neither the stream nor the
+and no derivation, or by the stream's `sampler`; either sample is held to `draw.check_draw`. Neither the stream nor the
 verifier has coins of its own: a stream whose selection reads coins refuses any source but the challenger's
 (`NO_OWN_COINS`), and the verifier's run refuses a sample that read coins without the challenger's log to show they are
 its (`outcome`'s `coins`). A closure map (`select(closure=)`) is refused before any coin is read (`closure`): a work
@@ -58,8 +58,8 @@ samples `k` proof blocks in each sampled replay block on fresh coins (`second_la
 and its sample is proved. The outcome holds both audit records and accepts when both do; its profile counts incorrect
 proof blocks at each replay block's footprint, which the boundary commitment fixes before any coin
 (`IntegrityProfile`'s two levels). One-stage is `Law`: a two-stage design whose replay blocks are single proof blocks is
-refused, so each design has one form. Both stages' draws are the Lean verifier's (`Select.select`,
-`Select.selectSecond`), and its knowledge soundness at C-Flock's masked record is `SamplingDeploy.ksTwo_code`'s, under
+refused, so each design has one form. Both stages' samples are the Lean verifier's (`Select.select`,
+`Select.selectSecond`), and its knowledge soundness at Flock's masked record is `SamplingDeploy.ksTwo_code`'s, under
 the premises that theorem takes.
 
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
@@ -73,7 +73,7 @@ the salt (`salted`). It is the rule of `Pouw.AcceptsBy` (`Security/Definitions/P
 `salted_at`, `tr` = `received_at` and `td` = `ts` + the deadline. The readings are the challenger's own: the stream's
 epoch log (`Stream.epoch_log`) and each `WindowCommitmentRecord` carry them, and neither the receipt nor an outcome's
 record does.
-`salt(n=64)` is `n` bytes of the challenger's coins, read in order with the draws'. A level's stream created at its
+`salt(n=64)` is `n` bytes of the challenger's coins, read in order with the samples'. A level's stream created at its
 first registration still measures from the epoch's release. A salt that isn't non-empty bytes, or a release that isn't a
 finite number, raises `ValueError`, and after the epoch ends a salt of either kind is refused (`epoch-ended`). The epoch
 log holds `{"event": "salt", "salt", "salted_at"}` (with `"external": true` from `salt_released`), then each
@@ -92,12 +92,12 @@ of record names the delivered sessions and reports the public outputs alike (`ch
 
 **Sessions over several rounds.** A stream of `rounds` R (1 to `ROUNDS`) holds up to R registrations
 open at once, so one proof session can cover the samples of up to R consecutive registrations (rounds), each round's
-registration its own tables of the session's statement. `Stream.session` opens it once, after the last covered draw
-(no covered round is undrawn), over draws no other session covers and none delivered or final. Each round is committed
-before its own draw, and so before every later round's. The first covered round's `Check.proof_deadline` spans the
-session. `deliver` delivers the session once, and every covered draw's outcome binds the same session records. Each
-draw's `outcome` runs its own audit record, on its own proof blocks and its own table's roots, and its record names the
-session's rounds (`session`). A late session is `late` for every round it covers. C-Flock's verifier refuses
+registration its own tables of the session's statement. `Stream.session` opens it once, after the last covered sample
+(no covered round is unsampled), over samples no other session covers and none delivered or final. Each round is committed
+before its own sample, and so before every later round's. The first covered round's `Check.proof_deadline` spans the
+session. `deliver` delivers the session once, and every covered sample's outcome binds the same session records. Each
+sample's `outcome` runs its own audit record, on its own proof blocks and its own table's roots, and its record names the
+session's rounds (`session`). A late session is `late` for every round it covers. Flock's verifier refuses
 such a session (`Flock.ProvedScope`, `Draw.tablesWhy`); `Stream.session` has its refusals.
 
 **The failure budget.** A stream counts its failures, and at the `budget`-th it stops and refuses further registrations.
@@ -123,13 +123,13 @@ digest>, "budget", "delta", "challenger"}`, plus `"rounds"` when it is more than
 challenger registered the stream's prover under, when the stream has one (`Stream(prover=)`); such a stream binds each
 registration to itself and the prover (`registration.check`'s `binding`). An outcome's record is
 `{"format": "verity/proof-service/outcome/v0", "stream", "order", "registration", "receipt", "draw", "sessions",
-"symbol", "public", "audit"}`: the receipt and the draw as the SHA-512 of their canonical JSON, `audit`
+"symbol", "public", "audit"}`: the receipt and the sample as the SHA-512 of their canonical JSON, `audit`
 one-stage's audit record (null for `late` and `halted`). A `halted` outcome adds `"halt"`, the halt's cause, and
 its `draw` is null when the registration was not sampled. `Outcome.record` is its SHA-512.
 
 **Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
 check with no proof deadline, and under a two-stage design a window of templates, a per-stratum `k` and more than one
-round. After R1 to R7, `register` refuses a sampling design whose drawn count varies (`shapes`: `bernoulli`
+round. After R1 to R7, `register` refuses a sampling design whose sampled count varies (`shapes`: `bernoulli`
 at `0 < p < 1`), and `select` refuses a closure map (`closure`), which the sampled audit's soundness statement doesn't
 cover either.
 """
@@ -185,7 +185,7 @@ def _sha512(obj: Any) -> str:
 @dataclass(frozen=True)
 class Public:
     """An item the auditor may see, and why. `kind`: protocol structure the verifier must know (`structure`), the
-    protocol's output (`output`), the challenger's coins and what they draw (`coins`), or a declared Value's salted root
+    protocol's output (`output`), the challenger's coins and what they sample (`coins`), or a declared Value's salted root
     (`commitment`); never a committed value. `source`: fixed before the run (`parameter`), or a public output of the
     check's window statement (`window`)."""
 
@@ -261,9 +261,9 @@ class All:
 class Law:
     """A one-stage sampling design: the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` (`draw.parse_rate`), what a new Spec states, or
     one in one-stage's syntax (`draw.parse_law`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K` or `work:K`. A rate
-    draws `subset:K` at K = ceil(NUM N / DEN) rounded up to a multiple of the T tables (`draw.rate_count`) over the N
+    samples `subset:K` at K = ceil(NUM N / DEN) rounded up to a multiple of the T tables (`draw.rate_count`) over the N
     proof blocks each registration brings, so every proof block is sampled with probability at least NUM/DEN however large the prover
-    makes N; a fixed `subset:K` draws each with K/N."""
+    makes N; a fixed `subset:K` samples each with K/N."""
 
     text: str
 
@@ -281,7 +281,7 @@ class Law:
 
 @dataclass(frozen=True)
 class Sequential:
-    """A timed session's draw, one index a round (PoUS's audit): `law` is `uniform:k`, over the public item named by
+    """A timed session's sample, one index a round (PoUS's audit): `law` is `uniform:k`, over the public item named by
     `population`. A `Stream` refuses it until the memory challenger's timed mode lands (§6 step 5)."""
 
     law: str
@@ -478,8 +478,8 @@ class Terms:
 class Outcome:
     """A registration's final outcome. `verdict.codes` is empty when accepted, and otherwise the one visible symbol
     (`reject`, `late`, or `halted`, whose detail is the halt's cause). `profile`: the integrity profile of an accepted
-    sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the verifier
-    of record reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the sample, the
+    sampled selection; `exhaustive`: the fact of an accepted `All`. `public`: the check's public outputs, as the
+    verifier reported them. `record`: the SHA-512 of the outcome's record, which binds the registration, the sample, the
     delivered sessions, the audit record and, for a sample a `Session` covers, the session's rounds."""
 
     accepted: bool
@@ -513,7 +513,7 @@ class WindowCommitmentRecord:
 @dataclass(frozen=True)
 class Draw:
     """The challenger's one sample for a registration: `law` (its sampling design, expanded over the challenger's own program) and
-    `draw`, one-stage's draw object (with a work sample's `closure`), which goes to the ZK server. A two-stage design's
+    `draw`, one-stage's sample object (with a work sample's `closure`), which goes to the ZK server. A two-stage design's
     second stage is the sample of its interior registration, and `replay_sample` is the first stage's, the sample of
     the registration it follows."""
 
@@ -528,7 +528,7 @@ class Draw:
 
     @property
     def proved(self) -> list[int]:
-        """The proof blocks the proof proves: the drawn ones and their closure, ascending (`draw.proved`)."""
+        """The proof blocks the proof proves: the sampled ones and their closure, ascending (`draw.proved`)."""
         return D.proved(self.draw)
 
 
@@ -536,7 +536,7 @@ class Draw:
 class Session:
     """One proof session over the samples of consecutive registrations of the stream `stream` (its digest), in order: each
     covered round's registration is its own tables of the session's statement. The challenger opens it once
-    (`Stream.session`), after the last covered draw; the first covered draw's proof deadline spans it."""
+    (`Stream.session`), after the last covered sample; the first covered sample's proof deadline spans it."""
 
     stream: str
     draws: tuple[Draw, ...]
@@ -696,7 +696,7 @@ def selection_law(rule: Selection, n: int) -> dict[str, Any]:
 
 
 def count_varies(law: Mapping[str, Any]) -> bool:
-    """Whether `law` (a `selection_law`) draws a count that varies from draw to sample, so the sessions of one registration
+    """Whether `law` (a `selection_law`) samples a count that varies from sample to sample, so the sessions of one registration
     set up tables of different shapes: `bernoulli` at 0 < p < 1. A work sample's closure varies too, and `Stream.select`
     refuses a closure map (`closure`). The Lean verifier's `Draw.countVaries` is this. A Spec
     that wants Bernoulli's public rate at a fixed count states the rate sampling design, `rate:NUM/DEN[:T]`."""
@@ -709,7 +709,7 @@ def count_varies(law: Mapping[str, Any]) -> bool:
 def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable[[int], bytes], *,
                 closure: Mapping[int, Sequence[int]] | None = None, sampler: Sampler | None = None) -> dict[str, Any]:
     """The challenger's sample object over [0, n) under its expanded `law`: every proof block for `All`, reading no coins;
-    otherwise `sampler`'s draw, or `coins.draw_first` on `coins` read in order. With `closure`, the challenger's
+    otherwise `sampler`'s sample, or `coins.draw_first` on `coins` read in order. With `closure`, the challenger's
     closure map, a work sample carries the sampled proof blocks' closure (`coins.closure_of`) when it is not empty. Raises
     `Refused` (`closure`) for a closure map on another sampling design or outside [0, n), before any coin is read, and `ValueError`
     where `draw_first` does. The Lean verifier's `Select.select` is this, from the rule on."""
@@ -739,10 +739,10 @@ def second_law(sample: Sequence[int], n: int, k: int) -> dict[str, Any]:
 
 def select_second(sample: Sequence[int], n: int, k: int, coins: Callable[[int], bytes], *,
                   sampler: Sampler | None = None) -> dict[str, Any]:
-    """The second stage: `second_law`'s sample object over the replay sample's proof blocks, `sampler`'s draw or
+    """The second stage: `second_law`'s sample object over the replay sample's proof blocks, `sampler`'s sample or
     `coins.draw_first` on `coins` (the challenger's, opened after the interior registration's digest), held to
     `draw.check_draw`. Raises `ValueError` for a replay sample that isn't ascending replay blocks, each once, a replay
-    block of fewer than two proof blocks (its design is `Law`'s), `k` not in [1, n), a sample not well formed under its law,
+    block of fewer than two proof blocks (its design is `Law`'s), `k` not in [1, n), a sample not well formed under its sampling design,
     and where `draw_first` does. The Lean verifier's `Select.selectSecond` is this."""
     if not (sample and all(type(r) is int and r >= 0 for r in sample) and all(a < b for a, b in zip(sample, sample[1:]))):
         raise ValueError("a replay sample is one or more replay blocks, ascending, each once")
@@ -859,7 +859,7 @@ _EMPTY = {"size": 0, "opened": [], "failures": 0, "salted_at": None, "ended": No
 class _Control:
     """A stream's own rules, the reference for the verifier's (`SampledProofs.Stream`, whose docstring has the
     state and the ops): the failure budget, the registrations open at once, the epoch's salt and registration deadline,
-    and each registration's once-only orders (drawn, session, delivered, final) and proof deadline, on what
+    and each registration's once-only orders (sampled, session, delivered, final) and proof deadline, on what
     they hold of the stream that one op reads (`_step`). A refusal's or a pending outcome's `detail` is the stream's
     own, which the Lean doesn't write. `ValueError` is an op or a state the Lean doesn't read."""
 
@@ -1276,15 +1276,15 @@ class Stream:
     registration's population program is their mixed population (`partition.mixed_population_program`) at the counts
     `register` is given, under one sample by the Spec's sampling design (`stratified:K`: a stratum per template, each sampled at least
     once; `work:K`: at least the work table's floor). It is one program and one query, as for one template, so the
-    verifier of record's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
+    verifier's sample and run (`Select.select`, `Run.run`) read it in the same form. `budget` (b), `delta`
     (the profile's) and `rounds` (R, the most registrations open at once, and so the most one `Session` covers) are
     public parameters of the stream. `coins` is
     the auditor's challenger's coins, a `coins.ChallengerCoins` (n bytes a call, read in order by `OwnRandomness`), which
     the stream's digest names: the verifier has no coins of its own, so there is no default, and a stream whose
     selection reads coins refuses any other source (`NO_OWN_COINS`). Every outcome's run by the verifier needs the
     coins' evidence (`outcome`'s `coins`), refusing a sample without it. A stream that reads no coins (`All`, or one a
-    `sampler` draws for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
-    their own. `sampler`, when given, draws instead of the coins (`flock-verify draw` in a process of its own, say), never
+    `sampler` samples for) needs none and reads none it is given. `clock` is its clock in seconds; tests inject both, the coins from a challenger of
+    their own. `sampler`, when given, samples instead of the coins (`flock-verify draw` in a process of its own, say), never
     beside the challenger's: it takes the challenger's sampling design and N, and its sample is held to them like any
     other. `prover`, when given, is the identity the challenger registered the stream's prover under
     (lowercase hex): the stream's digest names it, and every registration is bound to the stream and the prover
@@ -1758,14 +1758,14 @@ class Stream:
         return op
 
     def select(self, registration: WindowCommitmentRecord, *, closure: Mapping[int, Sequence[int]] | None = None) -> Draw:
-        """The draw, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
-        the selection rule's sampling design (`select_draw`; `All` draws every proof block and reads no coins). A `closure`,
+        """The sample, once per registration, from the challenger's own randomness after the receipt: indices in [0, N) by
+        the selection rule's sampling design (`select_draw`; `All` samples every proof block and reads no coins). A `closure`,
         the challenger's closure map, is refused before any coin is read (`closure`, as the Lean's `Run.run` refuses it): a
         work sample it widens proves a set whose size varies with the sample, which the sampled audit's soundness
-        statement doesn't cover. The draw of record is the verifier's (`verifier.select`: the Lean's `Select.select` on the
-        bytes of the coins this draw read), unless a `sampler` draws. Raises `Refused` for a registration drawn before
-        (nothing redraws), a closure map (before any coin is read), the two verifiers drawing differently
-        (`disagree`), and a draw that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`).
+        statement doesn't cover. The sample of record is the verifier's (`verifier.select`: the Lean's `Select.select` on the
+        bytes of the coins this sample read), unless a `sampler` samples. Raises `Refused` for a registration sampled before
+        (nothing resamples), a closure map (before any coin is read), the two verifiers sampling differently
+        (`disagree`), and a sample that isn't well formed under the sampling design (`draw.check_draw`, by `verifier.check_draw`).
 
         Under a two-stage design, `select` of a registration is the first stage, and of its interior registration
         (`register_interiors`) the second (`select_second`, by `verifier.select_second`): `k` proof blocks in each
@@ -1848,10 +1848,10 @@ class Stream:
 
     def session(self, draws: Sequence[Draw]) -> Session:
         """Open one proof session over `draws`, the samples of 1 to `rounds` consecutive registrations in order, each
-        round's registration its own tables of the session's statement: once, after the last covered draw. Its proof
-        deadline is the first covered draw's (`Check.proof_deadline` from that sample), for every round it covers. Raises
+        round's registration its own tables of the session's statement: once, after the last covered sample. Its proof
+        deadline is the first covered sample's (`Check.proof_deadline` from that sample), for every round it covers. Raises
         `Refused`, changing nothing: `rounds` (no sample, or more than `rounds`), `unknown`,
-        `not-drawn` (a covered registration not sampled yet, or another draw), `final`, `delivered`, `covered` (a sample
+        `not-drawn` (a covered registration not sampled yet, or another sample), `final`, `delivered`, `covered` (a sample
         another session covers: nothing reopens it) or `order` (not consecutive registrations in order)."""
         draws = tuple(draws)
         self._held(self._decide({"op": "session", "draws": [_covered(d) for d in draws]}))
@@ -1878,7 +1878,7 @@ class Stream:
         binds. A proof after the proof deadline is a reject (`late`), returned at once; otherwise None, and the outcome waits
         on the verifier (`outcome`). A `Session`'s proof is delivered as the session, once, for every sample it
         covers (`covered`, delivering one of them alone): each binds the same `sessions`, and past the first covered
-        draw's deadline each is `late`, returned in order. Raises `Refused` (`not-session`) for a session the stream
+        sample's deadline each is `late`, returned in order. Raises `Refused` (`not-session`) for a session the stream
         didn't open. Under a two-stage design the proof is the second stage's sample's, and the deadline counts from the
         first stage: before it, the first stage's sample is refused (`second` before the second stage, `not-drawn`
         after)."""
@@ -1898,10 +1898,10 @@ class Stream:
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by the verifier,
         `verifier.check_verdicts`); then one-stage's audit record by the verifier
-        (`verifier.audit_record`; `proved_units` and `instances` default to the draw's, `served` and `session_roots` are
-        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A draw a `Session` covers is decided alone, on the session's delivered records and its own
+        (`verifier.audit_record`; `proved_units` and `instances` default to the sample's, `served` and `session_roots` are
+        its, and the registered roots it reads are the verdicts' own) decides accept or reject. A sample a `Session` covers is decided alone, on the session's delivered records and its own
         audit record: its `proved_units`, `instances`, `served` and `session_roots` are its round's (its own tables'),
-        never another round's. On a draw from the coins and an audit record its two verifiers agree on, the whole run is
+        never another round's. On a sample from the coins and an audit record its two verifiers agree on, the whole run is
         held to the verifier's (`verifier.run`, the Lean's `Run.run` from the
         registration on): where they differ the outcome is a reject, its audit record failing `run`. The verifier has
         no coins of its own, so the Lean's run refuses every sample that read coins unless `coins` is their evidence

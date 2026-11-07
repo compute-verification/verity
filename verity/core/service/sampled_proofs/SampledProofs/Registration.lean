@@ -1,5 +1,5 @@
 /-
-The registration record (`one_stage/registration.py`): what serving is committed to, fixed before the verifier draws, its
+The registration record (`one_stage/registration.py`): what serving is committed to, fixed before the verifier samples, its
 digest, and R1–R7 against the verifier's own copies (`check`).
 
     {"format": "verity/registration/v1", "protocol": "verity/sampled-proofs/one-stage/v1",
@@ -120,7 +120,7 @@ structure Verifier where
   /-- of `registered`, values it holds across windows, whose domain leaves `windowRoot` out -/
   held : Array String := #[]
   /-- the window's day and the registration log's declarations as `(day, program)` each, from the log it holds when it
-  draws; none when it reads no declarations -/
+  samples; none when it reads no declarations -/
   declared : Option (Nat × Array (Nat × String)) := none
 
 /-- The programs the declarations declare for `day`, in the log's order. -/

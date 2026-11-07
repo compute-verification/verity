@@ -612,7 +612,7 @@ theorem plainSimLockstep (x : Claims.Msg) : PlainSimLockstep x := fun _ hs hin _
 
 /-! ## The abort -/
 
-/-- **The verdict at the draw refuses an outcome without proof files**: what `wrPD` writes has the outcome's proof
+/-- **The verdict at the sample refuses an outcome without proof files**: what `wrPD` writes has the outcome's proof
 files wherever `verify` accepts it (`recordsLiveAtD_wrPD`), and `verify` refuses none (`not_acceptsAtD_nil`). -/
 theorem not_plainVerdictAt_nil (I : Discharge.Exec.Inputs) (d : Lean.Json) {N mPts : ℕ} (C : Fin N → List 𝔽)
     (rootB₀ : Array ByteArray) {o : LiveOutJ 1 mPts} (h : o.proofs = #[]) : ¬ plainVerdictAt I d C rootB₀ o := by
@@ -648,7 +648,7 @@ theorem plainSim_proofs_nil {Ω : Type} (P : Claims.Prover Ω) {x : Claims.Msg} 
   plainSim_proofs_nilK id (Ω := Ω) (P := P) (x := x) (ω := ω) (ins := ins) (spec := spec) (sts := sts) (st := st) (hset := hset) (hw := hw) (hm1 := hm1) (u := u) (r' := r') (hna := hna)
 
 /-- **The abort** (`PlainSimAbort`): at every plain statement in scope with one table, every prover `P` and its tape
-`ω`, the plain simulator's live outcome fails the verdict at any draw wherever `P`'s run at `plainΦ`'s coins is
+`ω`, the plain simulator's live outcome fails the verdict at any sample wherever `P`'s run at `plainΦ`'s coins is
 rejected. -/
 def PlainSimAbortAt (x : Claims.Msg) : Prop :=
   ∀ (s : Claims.Flock.Stmt) (hs : parse false Readable.relation x = some s) (hin : Claims.Flock.InScope false s)

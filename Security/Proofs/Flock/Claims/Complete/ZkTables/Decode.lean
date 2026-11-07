@@ -52,7 +52,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 `root_B` per table is printable (`good_recordObjZkJ`); a printable object with the plain record's fields decodes as
 `sessOf` (`decodeZk_ofFieldsJ`: S5 reads each table's `root_B` under its name, and S11/S13 find each rep stream under
 its name, `find?_name`), and `liveOf` reads it (`liveZk_ofFieldsJ`); so the masked record decodes
-(`decode_recordObjZkJ`), reads live (`live_recordObjZkJ`) and carries the draw (`recordDraw_recordObjZkJ`).
+(`decode_recordObjZkJ`), reads live (`live_recordObjZkJ`) and carries the sample (`recordDraw_recordObjZkJ`).
 -/
 
 @[expose] public section
@@ -78,7 +78,7 @@ theorem good_linkObjJ {spec : SessionSpec} (hn : spec.tables.toList.Nodup) (h : 
   obtain ⟨p, -, rfl⟩ := Array.mem_map.1 hx
   exact good_arr_str _
 
-/-- **The masked record is printable** at any number of tables, named distinctly, when the statement's draw is. -/
+/-- **The masked record is printable** at any number of tables, named distinctly, when the statement's sample is. -/
 theorem good_recordObjZkJ {spec : SessionSpec} (hn : spec.tables.toList.Nodup) (h : ByteArray → ByteArray)
     (hz : String) (ct : CoinTree.Spec) {rootB : Array ByteArray} (hs : rootB.size = spec.tables.size)
     (points : Array (Array F128)) (streams : Array (Array Round)) (proofs : Array ByteArray)
@@ -428,7 +428,7 @@ theorem liveZk_ofFieldsJ {h : ByteArray → ByteArray} {spec : SessionSpec}
     exact hr]
   rfl
 
-/-- **A printable object with the honest record's fields carries the statement's draw**, up to key order, at any root
+/-- **A printable object with the honest record's fields carries the statement's sample**, up to key order, at any root
 `B`s, as `recordDrawZk_ofFields`. -/
 theorem recordDrawZk_ofFieldsJ {h : ByteArray → ByteArray} {spec : SessionSpec}
     (hdraw : DrawOk spec) (rootB : Array ByteArray) (points : Array (Array F128)) (streams : Array (Array Round))
@@ -497,7 +497,7 @@ theorem live_recordObjZkJ {h : ByteArray → ByteArray} {spec : SessionSpec}
   liveZk_ofFieldsJ (h := h) (spec := specZ spec hz) hn hrbs hss proofs
     (good_recordObjZkJ hn h hz ct hrbs points streams proofs hd) fun hm => recordObjZk_fields _ _ _ _ _ _ _ _ hm
 
-/-- **The honest masked record's draw is the statement's**, up to key order (`JsonEquiv`), at any number of tables
+/-- **The honest masked record's sample is the statement's**, up to key order (`JsonEquiv`), at any number of tables
 named distinctly. -/
 theorem recordDraw_recordObjZkJ {h : ByteArray → ByteArray} {spec : SessionSpec}
     (hn : spec.tables.toList.Nodup) (hdraw : DrawOk spec) (hz : String) (ct : CoinTree.Spec)

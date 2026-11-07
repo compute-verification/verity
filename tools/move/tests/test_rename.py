@@ -233,6 +233,20 @@ def test_a_read_definition_is_renamed_as_its_modules_file_renames_it(tmp_path):
     assert M.lock_moves(tmp_path, words, files) == {"Compose.Declared": "Compose.RegisteredCircuit"}
 
 
+def test_a_lock_under_tests_fixtures_is_a_tests_data_and_never_read(tmp_path):
+    """A fixture lock holds what its test needs (`unread`'s holds `reads` of lists) and is no package's record: under a map
+    that excludes no fixture, the moves are the package lock's alone."""
+    words = M.Words({"words": {"Warden": "NetworkCertifier"}})
+    locks = {"Security/lean-audit.json": {"guarantees": {"NetTiming.SecurityProofs.W1": {}},
+                                          "reads": {"M": {"definitions": {"Warden.Obs": "00"}}}},
+             "tools/verity/lean/tests/fixtures/unread/Security/lean-audit.json": {
+                 "guarantees": {"NetTiming.Warden.spec": {}}, "reads": {"NetTiming.Warden.spec": ["NetTiming.Warden.helper"]}}}
+    for path, lock in locks.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(json.dumps(lock))
+    assert M.lock_moves(tmp_path, words, list(locks)) == {"Warden": "NetworkCertifier"}
+
+
 def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
     """`Properties.RemoteAudit.Line` and `.Line.Record` are modules, a namespace and a structure: a whole import line or
     quoted string names the module, and everywhere else the name stands."""

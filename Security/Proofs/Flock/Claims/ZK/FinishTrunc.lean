@@ -41,7 +41,7 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 
 /-!
-# The firewall's rounds as the session's, at coins that agree below each round's count
+# The ZK server's rounds as the session's, at coins that agree below each round's count
 
 `repFw_cut` answers the session's rounds with the port's own coins (`coinsFrom`), which are `0` past each round's count.
 The session's opened coins are not: an opening carries its round's `n` coins and then more bytes, all of which its coin
@@ -371,7 +371,7 @@ theorem innerP_br (lay : Zk.PadLayout) (p : FlockComplete.PadsZk) (ic : FlockCom
     squeezeP_br coins base N coin hn hc _ (lt64 (show Zk.Q ≤ 65536 by decide)),
     squeezeP_br_cons coins base N coin hn hc lay cons hcs, zk_tauCommitmentWith_sim (bridge base) hh]
 
-/-- **The firewall's rep is related**, at the port's coins and at the session's coins from round `base`, given
+/-- **The ZK server's rep is related**, at the port's coins and at the session's coins from round `base`, given
 `m − 13`, `n + 1` and every level's `q + 1` at most `65536` and the claims below `2^64`. -/
 theorem repFwC_br (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : ByteArray) (g : Array F128)
     (cm0 : FlockComplete.Commit) (extras : Array Claim) (pads : FlockComplete.PadsZk)
