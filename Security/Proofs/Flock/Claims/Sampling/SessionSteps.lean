@@ -151,7 +151,7 @@ theorem mem_rounds_iff (x : Msg) (u : ℕ) {k : ℕ} (hk : k = S.kS x) (t : Fin 
   · rintro ⟨i, rfl⟩
     exact Nat.le_add_right _ _
 
-omit [DecidableEq Col] [Zero Col] in
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
 /-- **The prefix's rounds**: from a transcript `ms` of answered rounds of the prefix, `j` more rounds either answer every
 prefix round, reaching a transcript `ms'` of all of it whose last round the verifier answers with a message at `r`, or
 refuse one, ending the run; and both, with the transcript and the prover's calls, are the same at every coins `r'` that
@@ -232,6 +232,7 @@ theorem run_prefix (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω :
 
 end SessionSteps
 
+omit [DecidableEq Col] [Zero Col] in
 /-- **`SessionRuns` from the step structure**: at coins that check a unit, its session is Flock's run on the rounds after
 the prefix, of the prover that plays the sampled prover's messages after the prefix's transcript (or, where the prefix
 refused, of a prover whose first message Flock refuses at `xR x`), and it decides the run, is the session the run shows,
@@ -284,7 +285,8 @@ theorem sessionRuns_of_steps {D : Deploy Coin Col T} (S : SessionSteps D) (H : M
             omega
           show coinSeq r' (S.pre x + i) = coinSeq (fun i => r' (S.emb x hk i)) i
           by_cases hi : i < D.flock.V.k (S.stmt x (ms.map Prod.fst))
-          · simp only [coinSeq, hiff.2 hi, hi, ↓reduceDIte] <;> rfl
+          · simp only [coinSeq, hiff.2 hi, hi, ↓reduceDIte]
+            rfl
           · simp only [coinSeq, mt hiff.1 hi, hi, ↓reduceDIte])
         (D.flock.V.k (S.stmt x (ms.map Prod.fst))) [] [] ⟨[], [], [], .rej⟩
       simp only [List.append_nil, List.nil_append] at this
