@@ -9,8 +9,8 @@ public import Proofs.Nci.Lemmas
 # The partial-sum law with dark gates, on a chain with several products to a gate
 
 Lemma 2 and the split entries' count for a `PackedChain`, then `PackedIncompressibleContainedMatMulOn` and
-`PackedIncompressibleContainedTrainingOn`. As for the fan-out bound, the counts are of products and entries, and
-`prod_mult` is read once: the chain's products whose gates are dark number at most `k` per dark gate
+`PackedIncompressibleContainedTrainingOn`. As for Lemma 1 (`Proofs.Nci.Packed`), the counts are of products and
+entries, and `prod_mult` is read once: the chain's products whose gates are dark number at most `k` per dark gate
 (`card_products_le_dark_packed`), which is where `k` enters the training form, as `2 k #dark`. At `k = 1` both are the
 per-product guarantees (`incompressibleContainedMatMulOn_of_packed`, `incompressibleContainedTrainingOn_of_packed`).
 -/

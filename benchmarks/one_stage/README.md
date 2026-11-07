@@ -152,7 +152,7 @@ negatives.
   `prove_bundle.py`: `PB_BUNDLE` of the window `PB_WINDOW`, else `BUNDLE_WINDOW`, the registered fixture `tests/fixtures/bundle-window` (a W8A8 MLP's window under a
   test key, its tampered twin and the interfaces' bundle of four sampled proof blocks under the window's registered `subset:4`).
   `tests/test_prove_bundle.py` holds that bundle to the window's public part (`tests/fixtures/bundle-window-public`). `PB_LIVE=1` requires the bundle's sample to be live. The bundle is held to the prover's window: its own check (the sample's
-  law the registered one among it), its run, registration and partition, each sampled member's public body and a live
+  sampling design the registered one among it), its run, registration and partition, each sampled member's public body and a live
   sample's receipt and record. Each sampled member is one `prove --zk` session behind the Lean ZK server, one at a time, served the bundle's
   sample, with Lean `verify --zk` as the verdict, overlapping the next session. The negatives are `zk_mutants.py`'s one-bit
   proof edits (`PB_FLIPS=N`: the first N), refused by Lean, and a tampered window's member, stopped by the ZK server and
@@ -171,7 +171,7 @@ negatives.
   the request Program's root Calls by Definition kind and tries one unit of each through the circuit prover (a kind whose word units it
   refuses, through its Boolean version's); `a11_slice.py` cuts the
   capture's values and the checkpoint's tensors for a few layers off the serving node; `a11.py` stages each lowering kind's
-  units from those values, one template each, under the stratified law, proved under `--zk` and held by the Lean verifier;
+  units from those values, one template each, under the stratified sampling design, proved under `--zk` and held by the Lean verifier;
   `a11_table.py` renders the per-kind table and its gap lines from the audits' summaries.
 - `a9.sh`: run A9's entry point, on the same builds. A9 is GLM-5.3's routed-expert FP8 GEMMs in the registry's Boolean
   static pair form (`boolean_fp8_moe`): `a9.py` holds one coordinate of each launch's first routed pair to the capture in
