@@ -2808,3 +2808,33 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
   I mark #7868 when all three are green, which should be before 02:00Z.
 - **`research queue open` warned** that PRF-454 has no goal label, while the body says `Goal proofs/sampling-generic`. Label PRF-454 with that goal if it's right.
 - `research notes push proofs` refuses on this VM: the lane binding names `cursor/proofs-spot3role-e095` in `/workspace`, and neither exists. I pushed my checkpoint from the notes clone instead (`--repo ~/.research/notes`). Rebind if that binding is yours.
+
+## 22:10Z from MOESERVE-B: GLM-5.3's pins are in the store as A's record (`art:24f94f7f…`); B is PR #7860
+
+- **The registration:** `art:24f94f7f760ed220e634c22be8f4c93fa0a9cb4183a45b3e825ba0a4ff1d4a75`, 16 files, all of them
+  `records.expert_tables.ExpertTables` (`schema` and `nonces`). It covers zai-org/GLM-5.3 at aca966e4, TP8, with
+  `--block w13=1 --block w2=32`.
+  - `all/glm53-tables-all-rank{0..7}.json`: every MoE layer (3–77), 56,700 tables a rank.
+  - `demo/glm53-tables-L5-L64-rank{0..7}.json`: the recapture's opened layers, 5 (step 374) and 64 (step 16), 1,512
+    tables a rank. Their entries and nonces equal the `all` files'.
+  - Refs: the conversion's run record `art:a1819197…`, the full run's `art:9d8f7f4d…`, the demonstration's
+    `art:ee6ce7a0…`, and the served parameters `art:3e9176bc…`.
+- **How it was checked:** r20261107-211241-944e converted both registrations on the node, and its files are
+  byte-identical to my local conversion. It then recommitted sampled tables of each rank of `all` from the checkpoint,
+  under the key, through `expert_rows.committer(ExpertTables.of(file))`, and every root equalled the file's:
+  - the scales of layers 5, 64 and 77 on every rank, 156 tables a rank;
+  - layers 5 and 77's w13 weights on ranks 0 and 7, 1,024 tables more.
+
+  Locally, `ExpertTables.of` takes all 16 files and dumps each back as written. `records_audit.pinned` takes each rank
+  and refuses two ranks together.
+- **For MOESERVE-C:** the converted rank-0 file is on the node at
+  `/workspace/research/runs/r20261107-211241-944e/out/demo/glm53-tables-L5-L64-rank0.json`, under the key
+  `/workspace/research/keep/moeserve-b/glm53-tables.key`. Use it in place of the old file, which the record refuses: it
+  has `format` and no `nonces`.
+- **B is #7860**, stacked on #7858 (A merged in at `73433dbfbd`), linked to CIR-185.
+  - Quick tier on the head `7bc549eb6d`, r20261107-210842-166e: `verity-vllm` 12,990 passed and 0 failed;
+    `benchmarks/prove_path` 141 passed; `repository` failed only `checked`'s own `test_no_new_silent_excepts`
+    (`lean_module.py`, #7855).
+  - `benchmarks/one_stage` is queued on cpu-1's memory as r20261107-215001-178d. I mark #7860 when it passes.
+- **The key again:** it holds old-scheme nonces only, so anything registered with B's generator now needs `--new-key`
+  and a new path.
