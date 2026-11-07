@@ -42,15 +42,26 @@ import Proofs.Flock.Bridge.FaultyRightC
 /-!
 # `SampledKSLiveV5`, proved
 
-`Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5`: `AssemblyTargetV5` (`assemblyTargetV5`) with
+`Flock.Bridge.sampledKSLiveV5R : Flock.Bridge.SampledKSLiveV5R`: `AssemblyTargetV5` (`assemblyTargetV5`) with
 canonical transport at public inputs (`transportsLiveV5`), M1's core (`faultyRightTargetC`) and `EndToEndHiddenV5`
-(`endToEndHiddenV5_of`, from `openingsCanonV5`) plugged in.
+(`endToEndHiddenV5_of`, from `openingsCanonV5`) plugged in. `Flock.SecurityProofs.SampledKSLiveV5 :
+Flock.Guarantees.SampledKSLiveV5`: that bound under the roots guard, with `ecr/sha-512`'s term at the roots finder in place
+of the guard (`Bridge.le_add_ecrBoundL`).
 -/
 
 @[expose] public section
 
-/-- **The sampled audit's knowledge soundness, live, at the verifier's public inputs, with or without shared rows**
-(`Flock.Guarantees.SampledKSLiveV5`). -/
-theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 :=
+/-- **V5's bound under the roots guard** (`Flock.Bridge.SampledKSLiveV5R`). -/
+theorem Flock.Bridge.sampledKSLiveV5R : Flock.Bridge.SampledKSLiveV5R :=
   Flock.Bridge.assemblyTargetV5 Flock.Bridge.transportsLiveV5 Flock.Bridge.faultyRightTargetC
     (Flock.Bridge.endToEndHiddenV5_of Flock.Bridge.openingsCanonV5)
+
+/-- **The sampled audit's knowledge soundness, live, at the verifier's public inputs, with or without shared rows**
+(`Flock.Guarantees.SampledKSLiveV5`). -/
+theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 := by
+  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup desc qr hpop lj tb law kd hlaw hb hdiv dj S₀ d₀ y₀ wr dg
+    N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows roots Cd κ r ns δ
+    hTab hLink
+  exact Flock.Bridge.le_add_ecrBoundL (FlockSoundness.Game.prob_le_one _ _ τ) fun hroots =>
+    Flock.Bridge.sampledKSLiveV5R n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb law
+      kd hlaw hb hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q hTab hLink
