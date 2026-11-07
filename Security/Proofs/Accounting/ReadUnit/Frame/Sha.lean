@@ -26,6 +26,9 @@ theorem getD_take_drop {α : Type} (l : List α) (s k q : ℕ) (d : α) (hq : q 
     ((l.drop s).take k).getD q d = l.getD (s + q) d := by
   rw [List.getD_eq_getElem?_getD, List.getD_eq_getElem?_getD, List.getElem?_take_of_lt hq, List.getElem?_drop]
 
+theorem getD_of_lt {α : Type} (l : List α) (i : ℕ) (h : i < l.length) (d : α) : l.getD i d = l[i] := by
+  rw [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h, Option.getD_some]
+
 theorem ext_getD {α : Type} {l l' : List α} (d : α) (hl : l.length = l'.length)
     (h : ∀ n < l.length, l.getD n d = l'.getD n d) : l = l' := by
   refine List.ext_getElem hl fun n h1 h2 => ?_
@@ -59,12 +62,13 @@ theorem ev_flatten (z : Var → Bool) {ws : List Word} (h : Words64 ws) {i p : �
   have h1 := bit_flatten z h (64 * i + p)
   rw [show (64 * i + p) / 64 = i by omega, show (64 * i + p) % 64 = p by omega,
     ← bit_eq_getLsbD (w := ws.getD i []) (h.getD hi).le] at h1
-  simpa only [bit, List.getD_eq_getElem?_getD] using h1
+  simpa only [FlockSoundness.Discharge.Hm.bit, List.getD_eq_getElem?_getD] using h1
 
 theorem length_wordsBytes' (z : Var → Bool) {ws : List Word} (hw : Words64 ws) :
     (wordsBytes z ws).length = 8 * ws.length := by
   rw [wordsBytes, ReadUnit.bytesOf, length_flatMap_range]
-  simp only [evs, List.length_map, length_flatten_words64 hw] <;> omega
+  simp only [evs, List.length_map, length_flatten_words64 hw]
+  omega
 
 /-- **Words holding bytes hold them in leaf order.** -/
 theorem wordsBytes_of_holds {z : Var → Bool} {ws : List Word} {bs : List UInt8} (h : HoldsBytes z ws bs) :
@@ -104,8 +108,8 @@ theorem wordsDigest_of_holds {z : Var → Bool} {ws : List Word} {d : Verity.Dig
   have := congrArg (fun l => l.getD i.val 0) (wordsBytes_of_holds h)
   simp only [wordsBytes] at this
   show (ReadUnit.bytesOf (evs z ws.flatten)).getD i.val 0 = d i
-  rw [this]
-  simp [Verity.Digest.bytes, List.getD_eq_getElem?_getD, List.getElem?_ofFn]
+  rw [this, Verity.Digest.bytes, getD_of_lt (List.ofFn d) i.val (by rw [List.length_ofFn]; exact i.isLt) 0,
+    List.getElem_ofFn]
 
 theorem bytes_wordsDigest (z : Var → Bool) {ws : List Word} (h : Shaped 8 ws) :
     (wordsDigest z ws).bytes = wordsBytes z ws := by
@@ -162,11 +166,7 @@ theorem bytesV_flatMap {α : Type} (z : Var → Bool) (f : α → List Byte) (l 
 theorem bytesV_msgData (z : Var → Bool) (tag : List UInt8) (parts : List (List Byte)) :
     bytesV z (msgData tag parts) =
       FRAME ++ beBytes 4 tag.length ++ tag ++ (parts.map (bytesV z)).flatMap fun p => beBytes 8 p.length ++ p := by
-  rw [msgData, bytesV_append, bytesV_constBytes, bytesV_flatMap, List.flatMap_map]
-  congr 1
-  congr 1
-  funext p
-  rw [bytesV_append, bytesV_constBytes, length_bytesV]
+  simp only [msgData, bytesV_append, bytesV_constBytes, bytesV_flatMap, List.flatMap_map, length_bytesV]
 
 theorem frame_eq (tag : String) (ps : List Hash.Msg) :
     FRAME ++ beBytes 4 (Hash.utf8 tag).length ++ Hash.utf8 tag ++ ps.flatMap (fun p => beBytes 8 p.length ++ p) =
@@ -184,25 +184,27 @@ theorem bytes8_msgData (tag : List UInt8) {parts : List (List Byte)} (h : ∀ p 
 
 theorem length_padTail (len : ℕ) : (padTail len).length = 17 + (128 - (len + 17) % 128) % 128 := by
   simp only [padTail, beBytes, List.length_cons, List.length_append, List.length_replicate, List.length_map,
-    List.length_range] <;> omega
+    List.length_range]
+  omega
 
 theorem length_msgData (tag : List UInt8) (parts : List (List Byte)) :
     (msgData tag parts).length = FRAME.length + 4 + tag.length + (parts.map fun p => 8 + p.length).sum := by
   simp only [msgData, List.length_append, length_constBytes, beBytes, List.length_map, List.length_range,
-    List.length_flatMap] <;> omega
+    List.length_flatMap]
 
 theorem length_message (tag : List UInt8) (parts : List (List Byte)) :
     (message tag parts).length =
       ((msgData tag parts).length + 17 + (128 - ((msgData tag parts).length + 17) % 128) % 128) / 8 := by
   rw [message_eq, wordsB, List.length_map, List.length_range, List.length_append, length_constBytes,
-    length_padTail] <;> omega
+    length_padTail]
+  omega
 
 /-- **A framed message's words** hold the frame's bytes and SHA-512's padding. -/
 theorem holds_message (z : Var → Bool) (tag : List UInt8) {parts : List (List Byte)} (h : ∀ p ∈ parts, Bytes8 p) :
     HoldsBytes z (message tag parts) (bytesV z (msgData tag parts) ++ padTail (msgData tag parts).length) := by
   have := holds_wordsB z (data := msgData tag parts ++ constBytes (padTail (msgData tag parts).length))
     (bytes8_append (bytes8_msgData tag h) (bytes8_constBytes _))
-    (by rw [List.length_append, length_constBytes, length_padTail] <;> omega)
+    (by rw [List.length_append, length_constBytes, length_padTail]; omega)
   rwa [bytesV_append, bytesV_constBytes] at this
 
 /-! ## SHA-512 -/
@@ -251,7 +253,7 @@ theorem sound_chain (ws : List Word) : ∀ (k i : ℕ) (st : List Word),
   | k + 1, i, st => by
     rw [List.range'_succ, List.foldlM_cons]
     refine Sound.bind' (sound_compress st _) fun st' =>
-      Sound.mono (sound_chain k (i + 1) st') fun z out h hc data hb hw hl hv => ?_
+      Sound.mono (sound_chain ws k (i + 1) st') fun z out h hc data hb hw hl hv => ?_
     obtain ⟨hbl, hbw, hbv⟩ := hb i le_rfl (by omega)
     obtain ⟨hw', hv'⟩ := hc hl hw hbl hbw
     have hv'' : st'.map (bv z) = toBV (chain data (i + 1)) := by
@@ -273,7 +275,8 @@ theorem blockHolds_of_holds {z : Var → Bool} {ws : List Word} {m : List UInt8}
   have hj : 16 * b + j < ws.length := by omega
   have hw64 : ws[16 * b + j].length = 64 := hw _ (List.getElem_mem hj)
   refine bv_ext (by omega) fun p hp => ?_
-  rw [wordBE_eq_wordL, getLsbD_wordL _ _ _ hp, padData_toList, bit, ← List.getD_eq_getElem?_getD]
+  rw [wordBE_eq_wordL, getLsbD_wordL _ _ _ hp, padData_toList, FlockSoundness.Discharge.Hm.bit,
+    ← List.getD_eq_getElem?_getD]
   have := hbits (16 * b + j) hj p hp
   rw [List.getD_eq_getElem?_getD (l := ws), List.getElem?_eq_getElem hj, Option.getD_some] at this
   rw [this, show 8 * (16 * b + j) + 7 - p / 8 = 128 * b + 8 * j + (7 - p / 8) by omega]
@@ -302,11 +305,14 @@ theorem sound_sha512W (ws : List Word) : Sound (sha512W ws) fun z out => ∀ m :
   have hwb : wordBit (8 * (8 * i + 7 - p / 8) + p % 8) = 64 * i + p := by unfold wordBit; omega
   have eb : (Verity.sha512 m).bytes.getD (8 * i + 7 - p / 8) 0 =
       (Flock.Sha512.hash ⟨m.toArray⟩).data.toList.getD (8 * i + 7 - p / 8) 0 := by
-    simp [Verity.Digest.bytes, Verity.sha512, List.getD_eq_getElem?_getD, List.getElem?_ofFn, hk]
+    rw [Verity.Digest.bytes, getD_of_lt (List.ofFn (Verity.sha512 m)) _ (by rw [List.length_ofFn]; exact hk) 0,
+      List.getElem_ofFn]
+    show (Flock.Sha512.hash ⟨m.toArray⟩).data.getD (8 * i + 7 - p / 8) 0 = _
+    rw [Array.getD_eq_getD_getElem?, List.getD_eq_getElem?_getD, Array.getElem?_toList]
   have e1 : bv z (out.getD i []) = ((chain (padData ⟨m.toArray⟩) ((padData ⟨m.toArray⟩).size / 128))[i]!).toBitVec := by
     rw [← getD_toBV, ← h3]
     simp [List.getD_eq_getElem?_getD, hi]
-  change bit z (out.getD i []) p = _
+  change FlockSoundness.Discharge.Hm.bit z (out.getD i []) p = _
   rw [eb, bitL_eq _ _ _ (Nat.mod_lt _ (by norm_num)), hash_eq, bitL_digestOf _ ht, hwb, wbit,
     show (64 * i + p) / 64 = i by omega, show (64 * i + p) % 64 = p by omega, getD_toBV, ← e1]
   exact bit_eq_getLsbD (h1.getD hi).le p
