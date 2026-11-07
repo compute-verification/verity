@@ -96,11 +96,19 @@ def with_checks(model, out: Coll) -> tuple[Coll, dict | None]:
     return ret, {"output": 1, "accept": 1, "of": [w for _, w in checks]}
 
 
-def with_edge(model, out: Coll) -> Coll:
+def edge_config(edge: tuple[str, ...]) -> dict:
+    """What a request Program's SRC config, and its unit's key, say of its `edge` (`with_edge`): nothing where it has none, True
+    where it returns the latent rows alone, else its groups."""
+    return {"edge": True if tuple(edge) == ("prefix",) else list(edge)} if edge else {}
+
+
+def with_edge(model, out: Coll, edge: tuple[str, ...]) -> Coll:
     """`out` (the samples, then any checks: `with_checks`), then for a request a Commit window leaves, every layer's rows so far of
-    the history groups a later row reads (`dsa._Model.edge_rows`), so a window's edge reads them at the fields after its outputs."""
+    each history group of `edge` (`dsa._Model.edge_rows`), so a window's edge reads them at the fields after its samples and checks."""
+    if not edge:
+        return out
     from verity.ml.circuits.types import Tuple, field_types
-    rows = model.edge_rows()
+    rows = model.edge_rows(tuple(edge))
     head = field_types(out.type) if isinstance(out.type, Tuple) else (out.type,)
     return Coll(Tuple(*head, *(r.type for r in rows)), concat([out.refs, *[r.refs for r in rows]]))
 

@@ -39,10 +39,10 @@
   Program's boundary inputs (`build.build_program`'s C): a cache hit's C rows, the producers', which GP-01 records per block; or,
   for a request the window carries in, its own rows up to where it continues (its carried `computed`), from its prompt's end on
   with its last kept output (`last_token`, from which it resumes at decode C), which GP-01 reads from the last window's edge
-  values (`segment.edge_of`, `workload.Edge`): registered parameters `edge.kv` (the latent rows) and `edge.last`, each the
-  carried requests' fields of one group in the last window's `close` order, that window's output ports; a history group no edge
-  carries stays an Input of the request's own, which no row reads, and a request whose rows read past INDEX_TOPK keys, which
-  read the indexer's, is refused. A request the window leaves with outputs to keep reaches as far as
+  values (`segment.edge_of`, `workload.Edge`): registered parameters `edge.kv` (the latent rows), `edge.ik` and `edge.iks` (the
+  indexer's keys and scales, of a request whose rows read past INDEX_TOPK keys in some window) and `edge.last`, each the carried
+  requests' fields of one group in the last window's `close` order, that window's output ports; a history group no edge carries
+  stays an Input of the request's own, which no row reads. A request the window leaves with outputs to keep reaches as far as
   its rows go, inside its prompt too (sampling nothing), and returns its rows so far and its last kept output
   (`build_program(edge=)`), which GP-01 composes into this window's edge ports in its `close` order; the next window carries its
   state. One whose rows here are all past its last kept output has no Program here. The launch and the chunks are the advice's
@@ -111,9 +111,10 @@ from verity_vllm.program.prune import dead_units
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.topp_geometry import registered_splits
 
-from .build import Unexpressible, build_program, model_shape
+from .build import Unexpressible, build_program, decoder, model_shape
+from .common import edge_config
 from .phi import Phi
-from .segment import edge_of, launch_of, segment_of
+from .segment import edge_groups, edge_of, launch_of, segment_of
 
 SCHEMA = "verity-vllm/compiled-steps/v2"
 #: the token-select families, whose units' sampled ids are a request Program's egress (`Compiled.transfer_gates`)
@@ -191,15 +192,11 @@ class RequestUnit:
     carried_out: bool = False   # left to the next window with outputs to keep
     launch: tuple[tuple[tuple[int, int], ...], ...] | None = None  # class G: per Program step, every row its forward ran, (n, start)
     chunks: tuple[int, ...] = ()  # class G: the prefill's rows per launch, where it ran in more than one
-
-    @property
-    def edge(self) -> bool:
-        """In class G, carried out: its Program returns its rows so far for the window's edge (`build_program(edge=)`)."""
-        return self.carried_out and self.launch is not None
+    edge: tuple[str, ...] = ()    # class G, carried out: the history groups its Program returns (`segment.edge_groups`)
 
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else []), *([{"chunks": self.chunks}] if self.chunks else []),
-                           *([{"launch": self.launch}] if self.launch is not None else []), *([{"edge": True}] if self.edge else [])],
+                           *([{"launch": self.launch}] if self.launch is not None else []), *([edge_config(self.edge)] if self.edge else [])],
                           sort_keys=True)
 
     def events(self) -> int:
@@ -247,7 +244,7 @@ class Compiled:
                 "requests": [None if u is None else {"request": u.request, "id": u.id, "digest": u.digest, "LP": u.LP, "T": u.T, "C": u.C,
                                                      "policy": u.policy, "seed": u.seed, "first_step": u.first_step,
                                                      "parse": u.parse and u.parse.id, **({"launch": u.batch()} if u.launch else {}),
-                                                     **({"chunks": list(u.chunks)} if u.chunks else {}), **({"edge": True} if u.edge else {})}
+                                                     **({"chunks": list(u.chunks)} if u.chunks else {}), **edge_config(u.edge)}
                              for u in self.requests],
                 "steps": [[[r.request, r.start, r.n, r.samples] for r in rows] for rows in self.steps],
                 "discarded": [list(d) for d in self.discarded], "refused": {str(i): why for i, why in sorted(self.refused.items())},
@@ -646,6 +643,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                     units.append(None)
                     continue
                 chunks, launch = ((), None) if bi else launch_of(i, LP, T, C, rows[i], adv.steps)
+                edge = edge_groups(decoder(phi0, 1, 0), q) if i in left and launch is not None else ()
                 policy, seed = policy_of(i, params[i], registered.default_seed, phi0.target_profile().num_sms)
                 if bi and C and policy["kind"] != "greedy":
                     raise Unexpressible(f"request {i}: a prefix-cache hit of {C} tokens on a stochastic request (the cached stochastic "
@@ -660,7 +658,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
             else:
                 parse = bind(IO.IngressPrompt, MODEL=registered.served_model, LP=LP, V=V) if i in wired else None
                 units.append(RequestUnit(i, "", LP, T, policy, seed, s0, q.id, C, producers, parse, carry is not None, i in left,
-                                         launch, chunks if len(chunks) > 1 else ()))
+                                         launch, chunks if len(chunks) > 1 else (), edge))
                 placed.update(own)
                 continue
         units.append(None)

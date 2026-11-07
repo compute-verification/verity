@@ -407,10 +407,10 @@ def test_chronology_is_declared_and_bounded():
 _ROWS = ("prefix", "prefix_ik", "prefix_iks")
 
 
-def _toy_edge_request(LP: int, C: int, E: int, last: bool):
-    """`GpTestEdge{LP,C,E,LAST}`: a request after a history of C rows of each group (`prefix`, `prefix_ik`, `prefix_iks`, and with
-    LAST its `last_token`) that samples one token reading the history's last scale, and with E returns its rows [0, E) of each
-    group after its sample, the history's then its own, as `build_program(edge=)` does."""
+def _toy_edge_request(LP: int, C: int, E: int, last: bool, checks: bool = False):
+    """`GpTestEdge{LP,C,E,LAST,CHK}`: a request after a history of C rows of each group (`prefix`, `prefix_ik`, `prefix_iks`, and
+    with LAST its `last_token`) that samples one token reading the history's last scale, and with E returns its rows [0, E) of each
+    group after its sample (and with CHK a check after it), the history's then its own, as `build_program(edge=)` does."""
     V = Value(16)
 
     def params(S):
@@ -418,7 +418,7 @@ def _toy_edge_request(LP: int, C: int, E: int, last: bool):
                 *([("last_token", Array(1, V))] if S.LAST else []), ("weights", Array(4, V))]
 
     def sig(S):
-        return tuple(params(S)), W.TupleT(Array(1, V), *[Array(S.E, V)] * 3) if S.E else Array(1, V)
+        return tuple(params(S)), W.TupleT(Array(1, V), *[Array(1, V)] * S.CHK, *[Array(S.E, V)] * 3) if S.E else Array(1, V)
 
     def body(B, S, *args):
         a = dict(zip([n for n, _ in params(S)], args))
@@ -428,10 +428,12 @@ def _toy_edge_request(LP: int, C: int, E: int, last: bool):
             return sample
         rows = [coll_concat(Array(S.E, V), [*([a[g]] if S.C else []), *(B.call(_ADD, a["prompt"][j % S.LP], a["weights"][1 + k])
                                                                        for j in range(S.C, S.E))]) for k, g in enumerate(_ROWS)]
-        return coll_concat(sig(S)[1], [sample, *rows])
+        check = [coll_concat(Array(1, V), [B.call(_ADD, s, a["weights"][3])])] * S.CHK
+        return coll_concat(sig(S)[1], [sample, *check, *rows])
 
-    d = REGISTRY["GpTestEdge_v1"] if "GpTestEdge_v1" in REGISTRY else CompositeDefinition("GpTestEdge", 1, ("LP", "C", "E", "LAST"), sig, body)
-    return d.bind(LP=LP, C=C, E=E, LAST=last)
+    d = REGISTRY["GpTestEdge_v1"] if "GpTestEdge_v1" in REGISTRY else CompositeDefinition("GpTestEdge", 1, ("LP", "C", "E", "LAST", "CHK"),
+                                                                                         sig, body)
+    return d.bind(LP=LP, C=C, E=E, LAST=last, CHK=int(checks))
 
 
 def _edge_wl(units: dict, edge: W.Edge) -> W.WorkloadProgram:
@@ -489,6 +491,20 @@ def test_a_window_edge_is_registered_values_its_carried_requests_read_and_output
         _edge_wl({2: (3, 4, 0, True)}, W.Edge(ins=((2, _groups(3)),)))
     with pytest.raises(ValueError, match=r"request 3 leaves with .* nor came in so"):
         _edge_wl({1: (3, 0, 2, False)}, W.Edge(outs=((1, _groups(2)), (3, _groups(1)))))
+
+
+def test_an_edge_request_returning_checks_keeps_them_its_output():
+    """A request Program whose rows read past INDEX_TOPK returns its samples, then its checks, then its edge rows (`with_checks`,
+    then `build_program(edge=)`): GP-01's output for it is (samples, checks), as for a request no edge carries, and its out-port
+    fields are the rows after them."""
+    from verity.ml.circuits.evaluation.reference import evaluate
+    V = Value(16)
+    wl = _edge_wl({0: (3, 0, 0, False), 1: (3, 0, 2, False, True)}, W.Edge(outs=((1, _groups(2)),)))
+    assert wl.fn.signature()[1] == W.TupleT(Array(1, V), W.TupleT(Array(1, V), Array(1, V)), *[W.TupleT(Array(2, V))] * 3)
+    o = evaluate(wl.fn, [1, 2, 3, 4], [10, 11, 12], [20, 21, 22])
+    assert o == (11, 21, 21 + 4, 20 + 2, 21 + 2, 20 + 3, 21 + 3, 20 + 4, 21 + 4)
+    with pytest.raises(ValueError, match=r"request 1's Program doesn't return its samples \(and checks\), then its rows"):
+        _edge_wl({1: (3, 0, 2, False, True)}, W.Edge(outs=((1, _groups(2)[:2]),)))
 
 
 def test_population_partitions_the_gates():

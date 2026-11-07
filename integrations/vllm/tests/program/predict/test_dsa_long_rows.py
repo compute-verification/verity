@@ -178,3 +178,57 @@ def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_pat
     alone = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": long.policy}), "request", LP=10, T=2, dead_free=True,
                           batch=long.batch(), chunks=long.chunks)
     assert alone.digest in c.programs
+
+
+def _step(*rows: tuple[int, int, int, int]):
+    from verity_vllm.pipeline import window_advice as WA
+    return WA.StepAdvice(tuple(WA.Row(i, "decode" if n == 1 and s >= lp else "prefill", s, n, 0, False, ()) for i, lp, s, n in rows))
+
+
+@pytest.mark.slow
+def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_path):
+    """Class G (about half a minute): A (a 3-token prompt, 5 outputs: its rows past INDEX_TOPK from position 4) and B (2 and 3,
+    within it) whole in one window are, call for call, their Programs in the window that leaves A at position 6 and B at 3, then
+    in the next, which carries both in. A's rows read the indexer's keys and scales past INDEX_TOPK, so the edge carries them for
+    A alone: the first window's A returns its samples and its checks (rows 4 and 5), then every layer's latent rows, index-K slots
+    and scales so far, out-ports `edge.kv`, `edge.ik`, `edge.iks` and `edge.last`; the next reads them as A's history, `edge.ik`
+    and `edge.iks` one field each, A's, while B's index-K history stays its own unread Inputs. Each window's `run` holds the
+    orders of the rows it computes. What no cheaper test can: that a window's edge carries a request past INDEX_TOPK whole."""
+    from verity.ml.circuits.types import field_types
+    from verity_vllm.pipeline import window_advice as WA
+    from verity_vllm.program.predict.steps import Registered, compile_steps
+    from tests.program.predict.test_steps import CACHE_ON
+    hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
+    reg = _class_g(tmp_path, engine=CACHE_ON, model={"hf_config": hf})
+    reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
+    a, b = WA.RequestAdvice("a", 3, 5, "length"), WA.RequestAdvice("b", 2, 3, "length")
+    steps = [_step((0, 3, 0, 3), (1, 2, 0, 2)), _step((0, 3, 3, 1), (1, 2, 2, 1)), _step((0, 3, 4, 1)), _step((0, 3, 5, 1)),
+             _step((0, 3, 6, 1), (1, 2, 3, 1))]
+    out = WA.Advice((a, b), tuple(steps[:4]), (0,) * 6)
+    into = WA.Advice((a, b), tuple(steps[4:]), (0, 0), (WA.Carried(0, 6, 4, ((0, 6),)), WA.Carried(0, 3, 2, ((0, 3),))))
+    assert WA.follows(out, into) is None
+    ingress = {"a": {**GREEDY, "max_tokens": 5, "prompt": [1, 2, 3]}, "b": {**GREEDY, "max_tokens": 3, "prompt": [4, 5]}}
+    cs = [compile_steps(reg, adv, ingress) for adv in (WA.Advice((a, b), tuple(steps), (0,) * 8), out, into)]
+    assert all(c.batch_rule is None for c in cs)
+    progs = [[c.programs[u.digest] for u in c.requests] for c in cs]
+    for r in (0, 1):
+        assert [n.fn.id for n in progs[0][r].fn.body.nodes] == [n.fn.id for p in progs[1:] for n in p[r].fn.body.nodes]
+    assert [u.edge for u in cs[1].requests] == [("prefix", "prefix_ik", "prefix_iks"), ("prefix",)]
+    ret = field_types(progs[1][0].fn.signature()[1])
+    assert ret[1] == Array(3 * 2, BIT) and ret[2:] == (Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))),
+                                                       Array(3, Array(6, Value(32))))
+    wls = [c.workload for c in cs]
+    assert wls[1].edge.outs == wls[2].edge.ins and [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [
+        ["prefix", "prefix_ik", "prefix_iks", "last_token"], ["prefix", "last_token"]]
+    params, wret = wls[2].fn.signature()
+    assert wls[2].ports == ("edge.kv", "edge.ik", "edge.iks", "edge.last")
+    assert [len(field_types(dict(params)[p])) for p in wls[2].ports] == [2, 1, 1, 2]
+    assert [t.leaves for t in field_types(dict(params)["edge.ik"])] == [ret[3].leaves]
+    assert field_types(wls[1].fn.signature()[1])[0] == TupleT(Array(4, I32), Array(6, BIT))
+    rids = [r.request_id for r in wls[2].requests]
+    assert [n for n, _ in params if n.startswith("request[") and ".peers_" not in n] == [
+        f"request[{rids[0]}].prompt", f"request[{rids[0]}].run", f"request[{rids[1]}].prompt", f"request[{rids[1]}].prefix_ik",
+        f"request[{rids[1]}].prefix_iks"]
+    for p, pos in zip(progs, ({4, 5, 6}, {4, 5}, {6})):
+        assert {int(re.findall(r"\d+", f)[-1]) for f, _ in dict(p[0].fn.signature()[0])["run"].fields} == pos
+        assert "run" not in dict(p[1].fn.signature()[0])

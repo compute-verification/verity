@@ -47,22 +47,25 @@ def launch_of(i: int, LP: int, T: int, C: int, rows: Sequence[tuple[int, int, An
     return tuple(chunks), tuple(tuple((r.n, r.start) for r in steps[s].rows) for s, _, _ in rows[:k + decodes])
 
 
+def edge_groups(net: Any, q: Any) -> tuple[str, ...]:
+    """The history groups a window's edges carry of request `q` (its record, the same in every window: `window_advice.follows`):
+    each one a row of its whole Program reads (`dsa.Net.edge_groups` at its last row's keys, its prompt and `output_len` - 1
+    decodes), so each window computes and hands on a group's rows exactly where the request compiled whole computes them."""
+    return net.edge_groups(int(q.prompt_len) + int(q.output_len) - 1)
+
+
 def edge_of(phi: Any, advice: WA.Advice, units: Sequence[Any], idle: Sequence[int]) -> Edge | None:
     """What the window's edges carry in class G (`workload.Edge`): each request's rows [0, E) of every layer, E where it continues,
-    of the history groups a later row reads (`dsa.Net.EDGE_GROUPS`) as `Net.prefix_params(E)` lays them out, and from its prompt's
-    end on its last kept output. In, each request the last window left with outputs to keep (carried here with outputs left, in
-    that window's `close` order), E its carried `computed`; out, each one this window leaves so, in its `close` order, E its
-    `computed` at the close, its unit's LP + T (an idle one's as it came in, its fields passed through). A request with no Program
-    here (`partial` refused it) leaves no out member, and one whose rows read past INDEX_TOPK keys is refused. None when neither
-    edge carries one."""
+    of its history groups (`edge_groups`) as `Net.prefix_params(E)` lays them out, and from its prompt's end on its last kept
+    output. In, each request the last window left with outputs to keep (carried here with outputs left, in that window's `close`
+    order), E its carried `computed`; out, each one this window leaves so, in its `close` order, E its `computed` at the close,
+    its unit's LP + T (an idle one's as it came in, its fields passed through). A request with no Program here (`partial` refused
+    it) leaves no out member. None when neither edge carries one."""
     net = decoder(phi, 1, 0)
 
     def groups(i: int, E: int) -> tuple[tuple[str, int, int], ...]:
-        q = advice.requests[i]
-        if net.reads_run(int(q.prompt_len) + int(q.output_len) - 1):
-            raise Unexpressible(f"request {i}: carried across a window's edge with rows past INDEX_TOPK keys, whose index-K history "
-                                f"the edge doesn't carry")
-        return (*((g, t.leaves, t.homogeneous_width()) for g, t in net.prefix_params(E) if g in net.EDGE_GROUPS),
+        q, carried = advice.requests[i], edge_groups(net, advice.requests[i])
+        return (*((g, t.leaves, t.homogeneous_width()) for g, t in net.prefix_params(E) if g in carried),
                 *((("last_token", 1, 32),) if E >= q.prompt_len else ()))
 
     ins = {i: groups(i, c.computed) for i, c in enumerate(advice.carried) if c.kept < advice.requests[i].output_len and c.computed}
