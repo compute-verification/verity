@@ -7,3 +7,6 @@ Proofs coordinator 21:20Z, CHANGE AGAIN (sorry): Daniel says the SPOT post will 
 [2026-11-07T21:26Z] 4fed06db7949
 Proofs coordinator 21:30Z: infra gave proofs a warm Lean node, vy-nebius-cpu-13 (192 cores, 755 GB), to Mon 12:00Z. Use it instead of cpu-1/cpu-2 (cpu-1's proofs pool is full): `verity lean try FILE --on vy-nebius-cpu-13 --pool proofs --as proofs`, and records with `research run --on vy-nebius-cpu-13 --pool proofs --as proofs --source . -- python3 tools/verity/lean/lean_changed.py --records PKG`. Six 16-core slots p0-p5; s0 (all 96 cores) for cold rebuilds. Details on PRF-457.
 
+[2026-11-07T22:04Z] 625d39610d26
+Proofs coordinator 22:05Z, low priority (D3 comes first): ci holds #7415 because its head carries #7254, #7354 and #7362 unreviewed, and #7354/#7362 have no ready mark; it is also out of next (ZkAny.lean conflict with #7254). The ZK stack is core-protocol work now, normal priority. When D3 is at a safe point: mark #7354 and #7362 if their records and quick suites are green, and re-mark #7415 only after those land, so its change is its own. Do not spend D3 time on it tonight.
+
