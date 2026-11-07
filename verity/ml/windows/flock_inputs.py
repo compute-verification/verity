@@ -70,15 +70,40 @@ class Complete:
     reads: dict[str, Any]
 
 
+def identity_refs(n: int, ports: int) -> np.ndarray:
+    """A re-laid body's refs: each of ``n`` instances' ref to its own row of each of ``ports`` ports."""
+    return np.repeat(np.arange(n, dtype="<u4")[:, None], ports, axis=1)
+
+
+def relay(body: bytes, n: int, ports: int) -> bytes:
+    """An instance-major public body, ``n`` instances of ``ports`` rows' b || c, re-laid port-major under identity refs
+    (`complete`'s body for an instance-major member): each port's rows in instance order, then `identity_refs`."""
+    if len(body) != n * ports * BC_BYTES:
+        raise ValueError(f"a public body of {len(body)} bytes, not {n} instances of {ports} rows' b || c")
+    rows = np.frombuffer(body, dtype=np.uint8).reshape(n, ports, BC_BYTES)
+    return b"".join(rows[:, j].tobytes() for j in range(ports)) + identity_refs(n, ports).tobytes()
+
+
+def unrelay(body: bytes, n: int) -> bytes | None:
+    """The instance-major body of ``n`` instances that `relay` re-lays to ``body``, else None: `relay` is one to one, so
+    its only candidate, read off ``body``'s port-major rows, is it exactly when `relay` gives ``body`` back."""
+    if n <= 0 or not body or len(body) % (n * (BC_BYTES + 4)):
+        return None
+    ports = len(body) // (n * (BC_BYTES + 4))
+    rows = np.frombuffer(body, dtype=np.uint8, count=n * ports * BC_BYTES).reshape(ports, n, BC_BYTES)
+    staged = rows.transpose(1, 0, 2).tobytes()
+    return staged if relay(staged, n, ports) == body else None
+
+
 def complete(window: Binding, k: int, roots: Mapping[str, Mapping[str, Any]], body: bytes, *, registered: Any,
              params: Mapping[str, Any] | None = None, header: Mapping[str, Mapping[str, Any]] | None = None) -> Complete:
     """Member ``k``'s files completed so the verifier's ``--registered`` file names every port of its circuit: each port the
     registration makes a parameter port at the root it names (``params``: the verifier's own file of the member's parameter
     reads, a pinned value's or a row table's, never the member's), and every other port at its window tree, a read of
     `window_value`. ``roots``
-    (``{<member>/<port>: {"root", "domain", "leaves"}}``) are the window's registered roots, taken only once the auditor's
-    record has tied the registration to the coins; ``window`` is the verifier's own, its run the root the auditor's record
-    opens. Each window port's tree is folded again from ``body``, the member's public body as served (each row's ``b || c`` a
+    (``{<member>/<port>: {"root", "domain", "leaves"}}``) are the window's registered roots, fixed before the coins, which
+    the auditor's record must tie to the coins before anything completed from them is pinned; ``window`` is the
+    verifier's own, its run the root the auditor's record opens. Each window port's tree is folded again from ``body``, the member's public body as served (each row's ``b || c`` a
     leaf, under the domain ``window`` derives for the port), and must be the registered root, so each read opens a root fixed
     before the coins. ``header``: the member's header ``registered`` entries as served (`rows.registered_header`), whose
     paths open its parameter ports. ``registered``: core's ``one_stage.registered`` (its ``READS_V1``, ``SCHEMA_KEY`` and
@@ -103,8 +128,8 @@ def complete(window: Binding, k: int, roots: Mapping[str, Mapping[str, Any]], bo
             raise ValueError(f"{m.key}: a public body of {len(body)} bytes, not {n} instances of {len(names)} rows' b || c")
         rows = np.frombuffer(body, dtype=np.uint8).reshape(n, len(names), BC_BYTES)
         bcs = {p: rows[:, j].tobytes() for j, p in enumerate(names)}
-        refs = np.repeat(np.arange(n, dtype="<u4")[:, None], len(names), axis=1)
-        out = b"".join(bcs[p] for p in names) + refs.tobytes()
+        refs = identity_refs(n, len(names))
+        out = relay(body, n, len(names))
     params_ports, head = dict((params or {}).get("ports") or {}), dict(header or {})
     trees = {x for r in roots.values() for x in (r.get("root"), r.get("domain"))}
     why: list[str] = []

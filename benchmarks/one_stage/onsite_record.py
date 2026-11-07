@@ -502,11 +502,12 @@ CHECKED = {
                       "registration the case commits to holds (R4), the case's commitment the one each composite that "
                       "reads the case states, so the registration the challenger's coins committed to; or a drawn "
                       "member's as a5 completed it from its staged file, the file its session proved, pinned once the "
-                      "tie held (its completed entry, a5.pin_completed): its header completed and its body the staged "
-                      "one's, or an instance-major member's re-laid port-major, a function of the staged file, the "
-                      "registration's roots and the verifier's reads. A public file changed after the draw isn't the "
-                      "pin's, nor is a pin rewritten to it, beyond that completion: the pin binds the completed header "
-                      "and a re-laid body only as the audit's own output, and v2 "
+                      "tie held (its completed entry, a5.pin_completed), whose body is checked here against the same "
+                      "member's staged body (`completed_from`): the staged body itself, or, for an instance-major "
+                      "member (the staged entry's relaid), the staged body re-laid port-major under identity refs "
+                      "(flock_inputs.relay), each by SHA-512 the staged body R4 holds. A public file changed after the "
+                      "draw isn't the pin's, nor is a pin rewritten to it, nor a completed entry whose body isn't its "
+                      "member's staged one so completed; the completed header is the audit's own, and v2 "
                       "holds its fields to what was fixed before the coin, publicHeld its scheme, roots, domains, "
                       "population and units.indices (instance i is unit i), and flock-verify its circuit_sha512 to the "
                       "circuit file θ names, its classes to that circuit's class and its shared_rows to the roots "
@@ -1630,15 +1631,19 @@ def pinned(pin: Path | None, commitment: Any, stated: set[Any], public: Path) ->
     layer, and a drawn member's as completed once the tie held, its ``completed``), else None. The pin's staged bodies
     are, by their leaf layer, those the registration the case commits to holds (``commitment``, which each composite
     that reads the case states, ``stated``): the registration the challenger's coins committed to, which R4 held to the
-    bodies before the draw. And ``public`` is, by SHA-512 and its body's, a pinned member's, as staged or completed."""
+    bodies before the draw. And ``public`` is, by SHA-512 and its body's, a pinned member's as staged, or a drawn
+    member's completed entry, completed from that member's staged body (`completed_from`)."""
     from verity.ml.circuits.codec import canonical_json
 
     if pin is None:
         return "the run gave no --public-pin, the public file's SHA-512 pinned at staging before the draw"
     try:
         doc = json.loads(pin.read_bytes())
-        members = {k: (m["file"], m["body"]) for k, m in doc["members"].items()}
-        completed = {(m["completed"]["file"], m["completed"]["body"]) for m in doc["members"].values() if "completed" in m}
+        entries = dict(doc["members"])
+        if bare := sorted(k for k, m in entries.items() if "completed" in m and not {"file", "body"} <= set(m)):
+            return f"--public-pin's {bare[0]} has a completed file and no staged one"
+        members = {k: (m["file"], m["body"]) for k, m in entries.items()}
+        completed = {k: (m["completed"]["file"], m["completed"]["body"]) for k, m in entries.items() if "completed" in m}
         layer = doc["leaf_layer"]
     except (OSError, AttributeError, KeyError, TypeError, ValueError) as e:
         return f"--public-pin isn't a pin of the public files at staging: {type(e).__name__}"
@@ -1658,9 +1663,40 @@ def pinned(pin: Path | None, commitment: Any, stated: set[Any], public: Path) ->
         for chunk in iter(lambda: f.read(1 << 20), b""):
             whole.update(chunk)
             body.update(chunk)
-    if (whole.hexdigest(), body.hexdigest()) not in {*members.values(), *completed}:
+    got = (whole.hexdigest(), body.hexdigest())
+    if got in members.values():
+        return None
+    if not (drawn := [k for k, pair in completed.items() if pair == got]):
         return ("the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw "
                 "or completed once the tie held")
+    return next((why for k in drawn if (why := completed_from(k, entries[k], public)) is not None), None)
+
+
+def completed_from(key: str, entry: Mapping[str, Any], public: Path) -> str | None:
+    """Why ``public``, member ``key``'s completed file by its pin ``entry`` (`pinned`), isn't completed from the member's
+    staged file (`a5.complete_drawn`, `flock_inputs.complete`), else None. Its body is the staged body, or, where
+    completing the member re-lays it (the staged entry's ``relaid``: an instance-major member's), the staged body re-laid
+    port-major under identity refs (`flock_inputs.relay`), its ``instances`` read off its header: either way by SHA-512
+    the staged ``body`` R4 holds to the registration. Its header v2 holds to the registration (``publicHeld``)."""
+    from verity.ml.windows import flock_inputs as FI
+
+    if not isinstance(relaid := entry.get("relaid"), bool):
+        return (f"--public-pin doesn't say whether completing {key} re-lays its body (its relaid), so its completed file "
+                "isn't held to its staged one")
+    if not relaid:
+        if entry["completed"]["body"] != entry["body"]:
+            return f"--public-pin's completed file for {key} isn't completed from its staged one: its body isn't the staged body"
+        return None
+    with open(public, "rb") as f:
+        head, rest = f.readline(), f.read()
+    try:
+        n = json.loads(head)["instances"]
+    except (KeyError, TypeError, ValueError):
+        n = None
+    staged = FI.unrelay(rest, n) if type(n) is int else None
+    if staged is None or hashlib.sha512(staged).hexdigest() != entry["body"]:
+        return (f"--public-pin's completed file for {key} isn't completed from its staged one: its body isn't the staged "
+                "body re-laid port-major")
     return None
 
 

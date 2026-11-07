@@ -249,7 +249,8 @@ negatives.
   by SHA-512 the one its params θ name (`proofs.circuit`, `proofs.public`), θ held to the params each composite that
   reads the case states, the files hashed and never read off the evidence, and the public file one a5 pinned
   (`--public-pin`): as staged before the draw, the staged bodies' leaf layer the one the registration the coins
-  committed to holds, or as a5 completed it from the staged file once the tie held; and `scan-state-pinned`, that
+  committed to holds, or as a5 completed it from the staged file once the tie held, its body that member's staged
+  body, or an instance-major member's (the pin's `relaid`) re-laid port-major (`completed_from`); and `scan-state-pinned`, that
   where an audit's window commits the scan's state in its activations (the entry `NetworkCheck.Period` holds to the
   scan's), V3c's audit opened its registered reads of it at that entry's
   value, root and domain (its published summary's `registered.own`), accepted, and reported each sampled member's

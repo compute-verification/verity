@@ -1504,6 +1504,7 @@ def test_an_instance_major_members_completed_files_are_its_rows_laid_out_as_a_sh
     names = [p for p, _ in m.all_rows]
     assert not m.tables and got.relaid and got.body == b"".join(c.bc[m.port(p)] for p in names) + np.repeat(
         np.arange(m.n, dtype="<u4")[:, None], len(names), axis=1).tobytes()
+    assert FI.unrelay(got.body, m.n) == c.public_body(k) and FI.unrelay(got.body[:-1] + b"\1", m.n) is None
     meta = {"scheme": CS.SCHEME, "ports": [[p, n, 1] for p, n in mem["ports"]], "input_ports": mem["input_ports"],
             "out_ports": mem["out_ports"], "row_schemas": mem["row_schemas"], "vus_per_block": 1, "units_per_vu": 1,
             "subcircuit": "gemm"}

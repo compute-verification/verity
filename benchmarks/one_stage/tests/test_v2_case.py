@@ -85,7 +85,7 @@ def kept_window(root: Path, RP, k: int = 0) -> Path:
         pub = w / f"m{i}" / "pub-4.bin"
         pub.parent.mkdir(exist_ok=True)
         pub.write_bytes(public_of(i))
-        staged.append({"k": i, "m": types.SimpleNamespace(key=f"m{i}-key"),
+        staged.append({"k": i, "m": types.SimpleNamespace(key=f"m{i}-key", tables=(("t", 4),)),
                        "st": {"public": hashlib.sha512(public_of(i)).hexdigest()}})
         publics[f"m{i}-key"] = a5.body(pub)
     if k:
@@ -257,10 +257,11 @@ def test_the_onsite_record_reads_a5s_pin_against_the_registration_the_coins_comm
 
 
 def test_a_drawn_member_a5_completed_is_named_by_its_completed_file_and_held_to_the_pin(tmp_path, RP):
-    """a5 rewrites its drawn member's public file after the draw (`a5.complete_drawn`, an instance-major member's body
-    re-laid) and pins it once the tie holds (`a5.pin_completed`). Before that pin a kept completed file is refused; with
-    it the case names the completed file, the onsite record holds it to the pin (`onsite_record.pinned`), the staged
-    bodies still the registration's leaf layer, and the staged file, or a file neither entry pins, is refused."""
+    """a5 rewrites its drawn member's public file after the draw under the completed header (`a5.complete_drawn`; a
+    member with tables keeps its body) and pins it once the tie holds (`a5.pin_completed`). Before that pin a kept
+    completed file is refused; with it the case names the completed file, the onsite record holds it to the pin and to
+    the member's staged body (`onsite_record.pinned`), the staged bodies still the registration's leaf layer, and the
+    staged file, or a file neither entry pins, is refused."""
     import onsite_record as OR
 
     from verity.ml.circuits.codec import canonical_json
@@ -268,7 +269,7 @@ def test_a_drawn_member_a5_completed_is_named_by_its_completed_file_and_held_to_
     w, scratch = kept_window(tmp_path, RP), tmp_path / "scratch"
     pub, pin = w / "m0" / "pub-4.bin", w / a5.PIN
     staged = pub.read_bytes()
-    completed = b"completed header\n" + a5.body(pub) + b", re-laid"
+    completed = b"completed header\n" + a5.body(pub)
     pub.write_bytes(completed)
     with pytest.raises(V.Refused, match="pinned for m0"):
         V.case(w, scratch)

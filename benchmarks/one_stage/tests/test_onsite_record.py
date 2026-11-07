@@ -2026,6 +2026,10 @@ def test_a_composite_of_record_withheld_on_two_counts_names_both(tmp_path):
 NOT_THETAS = "the {} file the case registers (its blob {}) isn't, by SHA-512, θ's proofs.{}"
 #: the public file changed after the draw, its header kept
 CHANGED = b"toy public header\nanother public body"
+#: the public file as a5 completed it once the tie held, a member's not re-laid: its header completed, its body the staged one
+COMPLETED = b"toy completed header\n" + FILES_REGISTERED[1].partition(b"\n")[2]
+NOT_PINNED = ("the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw or "
+              "completed once the tie held")
 
 
 @pytest.mark.parametrize("how, why", [
@@ -2038,13 +2042,13 @@ CHANGED = b"toy public header\nanother public body"
                   "case states (its params_sha512)"),
     ("no case", f"the run's composites read {SAMPLED_V1}'s case, and the run gave no --sampled-proofs-case"),
     ("a file gone", "the case's circuit file (its blob 0) can't be read: FileNotFoundError"),
-    ("a public file changed after the draw",
-     "the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw or "
-     "completed once the tie held"),
+    ("a public file changed after the draw", NOT_PINNED),
     ("a public file completed once the tie held, the pin's completed entry with it", None),
-    ("a public file completed once the tie held, the pin's completed entry another file's",
-     "the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw or "
-     "completed once the tie held"),
+    ("a public file completed once the tie held, the pin's completed entry another file's", NOT_PINNED),
+    ("a public file completed once the tie held, its body not the staged body",
+     "--public-pin's completed file for m0 isn't completed from its staged one: its body isn't the staged body"),
+    ("a public file completed once the tie held, on a member with no staged entry",
+     "--public-pin's m1 has a completed file and no staged one"),
     ("a public file changed after the draw, the pin with it",
      "--public-pin's bodies aren't, by their leaf layer, those the registration the case commits to holds (R4)"),
     ("no pin", "the run gave no --public-pin, the public file's SHA-512 pinned at staging before the draw"),
@@ -2058,10 +2062,13 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     file, the public file isn't bound: sampled proofs' verdict is not established, its accept beside it, crediting no
     member, so the run isn't of record, the circuit file still compared, and the evidence's digest of the public file
     never stands in for θ's. Where θ names the public file, it is also one V3c's audit pinned (``--public-pin``): as
-    staged before the draw, or as a5 completed it once the tie held, its completed entry (here with its body changed, as
-    an instance-major member's is re-laid). A public file changed after the draw, θ naming the changed one, isn't the
-    pin's, nor is one beside a completed entry of another file, and a pin rewritten to it isn't, by its bodies' leaf
-    layer, the registration's the case commits to, which the coins committed to. Where a file isn't θ's (the circuit file or the public file), θ isn't the one the composite states, the run
+    staged before the draw, or as a5 completed it once the tie held, its completed entry, its body the member's staged
+    body (`onsite_record.completed_from`; an instance-major member's re-laid,
+    `test_a_completed_public_file_is_held_to_its_members_staged_body`). A public file changed after the draw, θ naming
+    the changed one, isn't the pin's, nor is one beside a completed entry of another file, a completed entry whose body
+    isn't its member's staged body or one on a member with no staged entry, and a pin rewritten to it isn't, by its
+    bodies' leaf layer, the registration's the case commits to, which the coins committed to. Where a file isn't θ's
+    (the circuit file or the public file), θ isn't the one the composite states, the run
     gave no case or a file it registers is gone, the public file isn't the pinned one, or the run gave no pin or its
     case commits to a registration the composite doesn't state, auditor-listing doesn't hold: the network certifier's
     verdict, the composite of record's and sampled proofs', its leg there, are not established, each its Lean accept
@@ -2074,7 +2081,8 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     if unbound:
         sampled_case(out, {"circuit": circuit, "registered": None}, evidence={"proofs": {"public": public}})
     elif changed or completed:
-        sampled_case(out, {"circuit": circuit, "public": sha512_hex(CHANGED), "registered": None})
+        kept = COMPLETED if completed and not how.endswith("not the staged body") else CHANGED
+        sampled_case(out, {"circuit": circuit, "public": sha512_hex(kept), "registered": None})
     with_composite(out, "remote-network-no-pouw", WITHOUT, WITHOUT_IDS)
     with_onsite(out)
     case = auditor_args(out)["sampled_case"]
@@ -2092,10 +2100,15 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
         if how.endswith("the pin with it"):
             auditor_args(out)["public_pin"].write_text(json.dumps(pin_of(CHANGED)))
     elif completed:
-        Path(blobs[1]).write_bytes(CHANGED)
-        entry = CHANGED if how.endswith("with it") else b"toy public header\nanother file's body"
+        Path(blobs[1]).write_bytes(kept)
+        entry = b"toy completed header\nanother file's body" if how.endswith("another file's") else kept
         pin = pin_of(FILES_REGISTERED[1])
-        pin["members"]["m0"]["completed"] = {"file": sha512_hex(entry), "body": sha512_hex(entry.partition(b"\n")[2])}
+        pin["members"]["m0"]["relaid"] = False
+        done = {"file": sha512_hex(entry), "body": sha512_hex(entry.partition(b"\n")[2])}
+        if how.endswith("no staged entry"):
+            pin["members"]["m1"] = {"k": 1, "completed": done}
+        else:
+            pin["members"]["m0"]["completed"] = done
         auditor_args(out)["public_pin"].write_text(json.dumps(pin))
     elif how == "another commitment":
         case.write_text(json.dumps(json.loads(case.read_text()) | {"commitment": registration_of(pin_of(CHANGED))}))
@@ -2133,6 +2146,53 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     assert rec["bound"] == {"missing": f"the network certifier's verdict is {OR.NOT_ESTABLISHED} ({OR.FILES_UNMET}): "
                                        "only its accepted answer certifies K"}
     assert rec["periods"] == {"missing": "no bound"} and line["K"] is None
+
+
+RELAY_NOT = ("--public-pin's completed file for m0 isn't completed from its staged one: its body isn't the staged body "
+             "re-laid port-major")
+
+
+@pytest.mark.parametrize("how, relaid, done, why", [
+    ("no draw, its staged file", True, None, None),
+    ("completed, its staged body", False, "staged", None),
+    ("completed, re-laid", True, "re-laid", None),
+    ("completed, another body re-laid", True, "another re-laid", RELAY_NOT),
+    ("completed, re-laid, a ref not the identity's", True, "a ref off", RELAY_NOT),
+    ("completed, its staged body, the member re-laid", True, "staged", RELAY_NOT),
+    ("completed, re-laid, the member not re-laid", False, "re-laid",
+     "--public-pin's completed file for m0 isn't completed from its staged one: its body isn't the staged body"),
+    ("completed, the pin not saying whether it re-lays", None, "re-laid",
+     "--public-pin doesn't say whether completing m0 re-lays its body (its relaid), so its completed file isn't held to "
+     "its staged one"),
+    ("completed, no staged entry", True, "re-laid", "--public-pin's m0 has a completed file and no staged one"),
+])
+def test_a_completed_public_file_is_held_to_its_members_staged_body(tmp_path, how, relaid, done, why):
+    """A drawn member's completed file (a5's ``completed`` entry, pinned once the tie held) is accepted only completed
+    from the same member's staged body, which R4 holds to the registration: a member not re-laid keeps the staged body
+    under its completed header, and an instance-major member's (the staged entry's ``relaid``) is the staged body re-laid
+    port-major under identity refs (`flock_inputs.relay`), its instances read off the completed header. A member with no
+    draw is held to its staged pair alone. Any other completed entry is refused, naming the member."""
+    from verity.ml.windows import flock_inputs as FI
+
+    n, ports = 4, 2
+    body = bytes(i % 251 for i in range(n * ports * FI.BC_BYTES))
+    laid = FI.relay(body, n, ports)
+    bodies = {"staged": body, "re-laid": laid, "another re-laid": FI.relay(body[::-1], n, ports),
+              "a ref off": laid[:-4] + (n - 2).to_bytes(4, "little")}
+    staged = b'{"instances": 4, "staged": true}\n' + body
+    entry = {"k": 0, "file": sha512_hex(staged), "body": sha512_hex(body)} | ({} if relaid is None else {"relaid": relaid})
+    public = tmp_path / "pub-4.bin"
+    public.write_bytes(staged)
+    if done is not None:
+        public.write_bytes(b'{"instances": 4, "completed": true}\n' + bodies[done])
+        entry["completed"] = {"file": sha512_hex(public.read_bytes()), "body": sha512_hex(bodies[done])}
+    if how.endswith("no staged entry"):
+        entry = {"k": 0, "completed": entry["completed"]}
+    pin = {"format": "verity/public-pin/v1", "leaf_layer": sha512_hex(canonical_json({"m0": sha512_hex(body)})),
+           "members": {"m0": entry}}
+    (tmp_path / "public-pin.json").write_text(json.dumps(pin))
+    reg = registration_of(pin)
+    assert OR.pinned(tmp_path / "public-pin.json", reg, {reg}, public) == why
 
 
 @pytest.mark.parametrize("audit, credited, not_credited, missing", [
