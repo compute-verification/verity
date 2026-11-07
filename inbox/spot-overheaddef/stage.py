@@ -39,7 +39,8 @@ sys.setrecursionlimit(100000)
 NP = {"torch.bfloat16": np.uint16, "torch.float16": np.uint16, "torch.float32": np.uint32, "torch.float8_e4m3fn": np.uint8,
       "torch.uint8": np.uint8, "torch.int8": np.int8, "torch.int32": np.int32, "torch.int64": np.int64, "torch.bool": np.uint8}
 NUM_SM = 132  # the H200's SMs, FA3's split count reads it
-#: labels of one family that differ only in a size: one is staged, the census's type when the step has it, else the most common
+#: labels of one family that differ only in a size: one is staged, the census's type when the step has it, else the
+#: smallest (SplitPart past T=64 needs more than C-Flock's 2^27-bit block)
 FAMILIES = {"SparseMlaSplitPart_T": "SparseMlaSplitPart_T64", "SparseMlaCombine_N": "SparseMlaCombine_N5"}
 
 
@@ -418,7 +419,7 @@ def main() -> int:
         except Exception as ex:  # noqa: BLE001
             report.setdefault("population_errors", []).append(f"{type(ex).__name__}: {ex}"[:400])
     for family, prefer in FAMILIES.items():
-        members = sorted((k for k in pops if k.startswith(family)), key=lambda k: (k != prefer, -len(pops[k]), k))
+        members = sorted((k for k in pops if k.startswith(family)), key=lambda k: (k != prefer, int(k[len(family):]), k))
         for k in members[1:]:
             report["types"][k] = {"population": len(pops.pop(k)), "staged": False,
                                   "why": f"one Definition of the family {family} is staged: {members[0]}"}
