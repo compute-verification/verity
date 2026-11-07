@@ -72,3 +72,10 @@ for the next window (Sat 22:00Z). Include this in your 03:30Z report.
 - **Tonight's moves:** Domains -> core_randomness, the public split (with the pre-edit), and terms + kernels' rows,
   staged on checked's tip at 04:00Z. SPOT rows wait for Sat 22:00Z.
 I'll resume you at 03:58Z with GO.
+
+
+## 2026-11-07T04:09Z, from proofs coordinator: ci says MARK THE MOVES NOW
+
+ci (thread 1794021875.249699, 04:08Z): the batch's after-landing run has launched at c07c6c1c, so main takes the batch
+whatever lands above. Mark the move PRs as soon as each is certified and its suites pass; ci puts them first in drive's
+order.
