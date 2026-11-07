@@ -264,7 +264,7 @@ def test_a_read_of_a_table_the_committer_did_not_commit_and_a_pair_routed_outsid
 
 def test_the_committer_reads_its_tables_registration_through_its_record(layer, tmp_path):
     """A window's committer takes its key, program and each table's nonce from the rank's registration as the record reads it,
-    which refuses another schema, an unknown field, a table without its own nonce and another rank's registration."""
+    which refuses another schema, an unknown field, a table without its own nonce, another rank's registration and a missing key."""
     plan, _ms = cut(layer.rows)
     want = committer(plan)
     tables = EX.commit_tables(plan, layer.store, None, None, SRW._slices, want)
@@ -283,3 +283,5 @@ def test_the_committer_reads_its_tables_registration_through_its_record(layer, t
             XT.ExpertTables.of(bad, "t")
     with pytest.raises(ValueError, match="not of rank 1"):
         EX.of_request({**spec, "registration": str(tmp_path / "tables-rank0.json")}, 1)
+    with pytest.raises(ValueError, match="--tables-key"):
+        EX.of_request({**spec, "key": None})

@@ -366,6 +366,8 @@ def of_request(spec: Mapping[str, Any] | None, rank: int = 0) -> dict[str, Any] 
     registration's path its rank's), or None without one."""
     if not spec:
         return None
+    if not spec.get("key"):
+        raise ValueError("a tables registration is read under its committer's key file (--tables-key)")
     where = str(spec["registration"]).format(rank=rank)
     reg = XT.ExpertTables.of(json.loads(Path(where).read_text()), where)
     if reg.rank != int(rank):
