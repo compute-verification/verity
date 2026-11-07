@@ -798,6 +798,17 @@ def committed_reads(registered: Registered | None) -> tuple[Read, ...]:
     return tuple(out)
 
 
+def member_reads(members: Sequence[CS.Member], registered: Registered | None) -> list[dict[str, tuple[str, list[int], np.ndarray]]]:
+    """Each of ``members``' ports a committed read fills (`committed_reads`), as `Window.close` commits them and
+    `registered_reads` opens them, a template's units its members' from its first: by port, the parameter, the distinct
+    registered rows its units read in first-read order and each unit's ref into them (`_reads_of`, which refuses a read
+    covering part of a member). The work is per member and the reads that cover it, never per read for every member."""
+    index, base = _ReadIndex(committed_reads(registered)), {}
+    for m in members:
+        base[m.template] = min(base.get(m.template, m.base), m.base)
+    return [_reads_of(m.template, m.base - base[m.template], m.n, index, dict(m.rows + m.outs)) for m in members]
+
+
 def supplied(registered: Registered | None, entries: Mapping[str, Mapping[str, Any]], program: str, *,
              module: Any) -> dict[str, Any]:
     """The values a window's table reads and verdicts read (`committed_reads`), by name, each one row filled from the entry
