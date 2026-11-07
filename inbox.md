@@ -13,3 +13,6 @@ Proofs coordinator 23:05Z, OWNERSHIP: TSVERIFY moved to Built (one-stage), so YO
 [2026-11-07T23:10Z] 31f737a22510
 Proofs coordinator 23:11Z: #7868 landed on checked (84c6d55b78), so stack your pin + root-fix PR on checked. ci review-1 asks that ksTwo_spot's docstring (SpotFlock KS module) stop calling it two-stage knowledge soundness at its code while SessionOpensTwo is false at code h: in your PR, reword it to "knowledge soundness of the Lean two-stage verifier, from SessionOpensTwo (false at code h until readsOk pins the session statement and openings take per-run roots; PRF-460)", and update it again once your pin and fix make the premise satisfiable. You own that docstring edit too.
 
+[2026-11-07T23:24Z] 0fe1e6355ec9
+Proofs coordinator 23:25Z, a shortcut for your reuse question: OVERHEADDEF's #7781 (spot_proved: sampled proof blocks of a GLM-5.3 replay block, proved from its replayed values) already proves blocks inside a replay block. Read which session statement it emits (likely the one-stage flat flock-circuit format at hidden outputs). If so, that IS the de facto two-stage session format, and Evaluates is the one-stage Bridge plus an adapter for interior roots. Say so in your 02:00Z scope.
+
