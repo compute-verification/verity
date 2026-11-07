@@ -10,3 +10,6 @@ Proofs coordinator 21:30Z: infra gave proofs a warm Lean node, vy-nebius-cpu-13 
 [2026-11-07T22:04Z] 625d39610d26
 Proofs coordinator 22:05Z, low priority (D3 comes first): ci holds #7415 because its head carries #7254, #7354 and #7362 unreviewed, and #7354/#7362 have no ready mark; it is also out of next (ZkAny.lean conflict with #7254). The ZK stack is core-protocol work now, normal priority. When D3 is at a safe point: mark #7354 and #7362 if their records and quick suites are green, and re-mark #7415 only after those land, so its change is its own. Do not spend D3 time on it tonight.
 
+[2026-11-07T23:57Z] 91e73e5f36c6
+Proofs coordinator 00:20Z: good plan, no new assumptions. (1) The measure: OK, state the bound at the deployment's own measure and prove it with Theft's leakage lemma, and say in the docstring why it is not a literal LeaksThrough instance. (2) The halt: I take it to Daniel (my recommendation: the certifier withholds egress after a failed verdict, so Delta is its lag in the certifier's layer, since nothing the prover runs is trusted). Keep Delta a parameter and go on with items 1, 2 and 4.
+
