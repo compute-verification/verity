@@ -3761,3 +3761,18 @@ I'm on the fused serving rows (`cursor/proofs-moeserve-fused-0e9e`, on `checked`
 - The pod's lease ends 00:08Z, and it stops itself.
 - All four runs are preserved (`research data put --preserve`, evidence/v1), and every session in runs 2-4 was accepted.
 - Branch `cursor/proofs-stationary-9ca7` @ 6f4377828f: `zk_cost.py prove --provers K --stmt-cache` and `stationary_gpu.sh` with `ST_OVERLAP`, `ST_CACHE`, `ST_MPS` and `FC_VERIFY_AHEAD`.
+
+## 23:54Z from AOTE: PRF-461 item 2: no compiled circuit on GLM-5.3's sampled path checks either form of the length rule; a fix needs #7837 and a yes
+
+Full report, with every file:line: note `20261108T0000Z-report-aote-lengthrule` (research-notes `lanes/circuits/`). Posted on PRF-461; asks to circuits and vllm on CIR-162.
+
+- **What's checked.** Neither form, in any circuit on the served sampled path.
+  - L is advice. `compile_steps` builds each request Program at T = `output_len` − 1 (`program/predict/steps.py:344-356`); the Program returns its sampled ids and nothing holds them against a stop id (`predict/build.py:758-764`).
+  - Only Python holds L, against the certified body, reading no id: L ≤ max_tokens, `length` only at max_tokens (`steps.py:311-314`).
+  - The I/O tie reads id events, which carry no finish. Its designed compact form (`certifier/active.py:461-502`) checks only "stop at L": it catches truncation but accepts extension past the first stop. It leaves "no stop before L" to the compile slice, which has no stopping request (`compile_slice.py:75`).
+  - The full rule exists as Python (`derived.stop_rule`, advice v1's decoder; the Match's G6) and, as a circuit, only in the greedy window class's `SlotEntry_v1` (`io_shell.py:408-458`). `window_class` refuses sampled requests, so it is never reached.
+- **The charge.** Today the choice is paid as advice: the window advice writes `output_len` and the finish (`window_advice.py:434-435`), up to about log2(max_tokens) + 1 bits a request. #7816 (advice v1, open) would price both at 0 bits on the strength of `stop_rule`, which no proof holds. It should keep them charged until the check lands.
+- **Stop strings: not covered**, only stop ids. The id request fixes `"stop":[]`, but `compile_steps` accepts a body's `stop`, `stop_token_ids` and `ignore_eos` unread (`steps.py:117`). I'd refuse all three rather than build a detokenizer.
+- **The pin's stop set:** the tokenizer's EOS ∪ the generation config's EOS ids ∪ the body's `stop_token_ids`, stop ids before the length cap (`vllm/v1/core/sched/utils.py:94-115`). For GLM-5.3: {154820, 154827, 154829}. G6's comment that vLLM checks max_tokens first is stale at the pin.
+- **Fix.** `StopRule_v1{L, STOP, FINISH}`: no stop id in the first L − 1, and the last a stop id iff `eos`. It costs under 100 ANDs an output, about 3.1M for a 32,768-token response. The request Program returns it as one of #7837's checks (`BuildResult.checks`, open), so that the verdict requires it. It spans `registry/io_shell.py`, `predict/build.py` and `predict/steps.py`, about 250 lines with tests (early truncation refused, extension refused). Not small, and it depends on #7837, so no PR yet. **On your yes** (or circuits' on CIR-162), I write it on `cursor/proofs-lengthrule-<hex>`, stacked on #7837, by Sun 18:00Z. The alternative is one comparison in the compact tie's `IoTieMatch`, the certifier's, but that tie isn't built.
+- **A process slip.** My four CIR-178 comments today went through the Linear connector, so they show Daniel as the author. From now on I post through `research msg linear comment --worker AOTE`.
