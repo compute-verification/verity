@@ -8,9 +8,9 @@ the contract's property.
 Each session runs through the ZK server with `verity_flock.firewall_transcript` watching what it sends the challenger; the
 ZK server's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.Contract.run` on the
 transcript under the verifier's public input, the session's own schedule (`verdicts`, `decide`). `--cases` runs the built-in sessions (`cases`): honest ones (on live coins,
-as `rec_live serve`'s, and on coins the challenger committed to), the red team's six against the firewall (at
-c00b85b0c), challengers whose coins the firewall must refuse (an opening of live coins; of committed ones, an opening that
-does not open, or none), and tamper controls, firewalls that let out what the contract forbids, which the contract must refuse. `leaks` are the firewall review's transcripts that leak a bit, each with its public input and the item the
+as `rec_live serve`'s, and on coins the challenger committed to), the red team's six against the ZK server (at
+c00b85b0c), challengers whose coins the ZK server must refuse (an opening of live coins; of committed ones, an opening that
+does not open, or none), and tamper controls, firewalls that let out what the contract forbids, which the contract must refuse. `leaks` are the ZK server review's transcripts that leak a bit, each with its public input and the item the
 contract must cut. `--sessions` replays
 recorded inner sessions (`rec_live serve`'s output directories: ``session/session.json``, ``public.json``, ``private.json``,
 ``coins.json`` when the challenger committed, and ``schedule.json`` beside them or in their parent, or ``--schedule``) with
@@ -119,7 +119,7 @@ def requests(hello=None, y=bytes(32), order="prover", finish=True, ping=False):
 
 
 class ForwardsHello(RL.Proxy):
-    """The firewall before d828d3ea9 (red team's gap 2): the challenger records the prover's Hello, not the schedule's."""
+    """The ZK server before d828d3ea9 (red team's gap 2): the challenger records the prover's Hello, not the schedule's."""
 
     def _handle(self, r):
         if r[0] == RL.REQ_HELLO:
@@ -335,8 +335,8 @@ def verdicts(lean: str, out: Path, sessions: list[tuple[str, FT.Session]]) -> li
 
 
 def leaks() -> list[tuple[str, dict, dict, dict]]:
-    """The firewall review's transcripts, each a
-    bit the firewall could choose, built from the honest case's transcript: ``(name, transcript, public input,
+    """The ZK server review's transcripts, each a
+    bit the ZK server could choose, built from the honest case's transcript: ``(name, transcript, public input,
     expectation)``, the expectation the contract's verdict (``accepted``), the items it releases (``released``: the cut is
     the next one) and a part of why. B1, the commitments' count and place: one more, one fewer, one moved. B2, a tape
     number naming another's value: a salt's bytes under two numbers, the workers seeing one under another number, the same

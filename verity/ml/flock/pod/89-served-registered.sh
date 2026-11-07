@@ -9,7 +9,7 @@
 # challenger's release log. Outputs under out/: host.txt,
 # stage.json, statement.txt, serve.log, prove.txt and prove.err, live.json (the LIVE record), challenger/ (its record,
 # releases.jsonl, hellos.jsonl and audit.json), lean-honest.log and lean-root.log (each its VERDICT line), fixture.txt.
-# ZK=0 is the plain session instead (no --zk anywhere): a stratified sample of K units, Lean's (`flock-verify draw
+# ZK=0 is the plain session instead (no --zk anywhere): a stratified sample of K units, Lean's (`flock-verify sample
 # --stratified K` on the stage's program and partition, on DRAW_COINS=FILE, the challenger's bytes: the verifier has none
 # of its own, so ZK=0 without DRAW_COINS refuses), served from its file and verified with `--stratified K --coins tree`
 # (FC_COINS=tree: its coins the challenger's tree's, as --zk's); Lean also verifies it without --registered (lean-none.log,
@@ -90,7 +90,7 @@ python3 verity/ml/flock/tests/served_registered.py --out $D --schema ${SCHEMA:-v
 PIN=$(sha512sum $D/circuit.txt | cut -d' ' -f1)
 $B statement "${ZF[@]}" --circuit $D/circuit.txt --instances $D/pub-$N.bin --tables $D/tables > $O/statement.txt 2>&1
 if [ "${ZK:-1}" = 0 ]; then
-  # the plain claims draw by the stratified law: Lean's draw on the challenger's bytes, served from its file
+  # the plain claims sample by the stratified sampling design: Lean's sample on the challenger's bytes, served from its file
   [ -s "${DRAW_COINS:-}" ] || { echo "ZK=0 draws on the challenger's coins: give DRAW_COINS=FILE (the verifier has none of its own)" >&2; exit 2; }
   wait $LP; [ -x $LEAN_BIN ] || { tail -20 $O/build-lean.log; exit 1; }
   $LEAN_BIN draw --program $D/program.json --partition $D/partition.json --stratified $K --stream-file $DRAW_COINS > $O/draw.log 2>&1 || { cat $O/draw.log; exit 1; }

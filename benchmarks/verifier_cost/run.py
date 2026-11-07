@@ -1,4 +1,4 @@
-"""``verity bench verifier_cost COMMAND``: a verifier of record's time against the size of the description it reads and
+"""``verity bench verifier_cost COMMAND``: the verifier's time against the size of the description it reads and
 the size of the circuit that description unrolls to (README.md).
 
   measure --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
@@ -7,7 +7,7 @@ the size of the circuit that description unrolls to (README.md).
       gates, by `nci-check --policy --unrolled` (`NciCheck.check`) on the instance expanded gate by gate;
       DIR/results.json.
   partition --out DIR [--config NAME ...] [--ir word|boolean ...] [--unrolled-max GATES] [--exe PATH]
-      the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the law
+      the one-stage verifier's partition (`sampled-proofs-difftest`'s `partition`: `Partition.units`, `strata`, the sampling design
       and the digest) on Serve_v1 under the template query of its Calls, and under `Q_word` v1 and `Q_call` v1 at X = 16
       where its Calls' distinct Definitions have at most GATES gates in all; and on the served shape, the population
       program of Serve_v1's largest Definition at N instances (`Q_template_instance`); DIR/partition.json.
