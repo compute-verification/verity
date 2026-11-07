@@ -33,11 +33,12 @@
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
 #     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
-#     control compares to) and verdict lines that name no window and count none of a window's own: no window's number, no
-#     count of the windows closed, sealed or refused, no engine step, request count or user of one. Each line goes out
-#     through `served_verdicts.py public-lines`, in full to the serve dir's private/verdicts.txt, and once the run is
-#     done, however it ends, `served_verdicts.py publish` holds in full in the serve dir's private/out each file of $OUT
-#     that names or counts a window, its public form in its place. The advice registration's published copies
+#     control compares to) less the load's counts and span, and verdict lines that name no window and count none of a
+#     window's own: no window's number, no count of the windows closed, sealed or refused, no engine step, request count or
+#     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
+#     private/verdicts.txt, and once the run is done, however it ends, `served_verdicts.py publish` holds in full in the
+#     serve dir's private/out each file of $OUT that names or counts a window or holds a load's tokens or span (the
+#     aggregate's, which `served_overhead.py table` reads there), its public form in its place. The advice registration's published copies
 #     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
@@ -132,9 +133,10 @@
 # then a development check that claims no record, `served_composite.sh`, which refuses one there under 1) the run's
 # last step (`handoff`, after V3c in every run, so the composite reads V3c's audit's cases where it ran, the class window
 # of record, and step 3's audit's only in a run without V3c) writes the serve dir's private/compose: the
-# record's pieces (only the files the record reads of each), the inference-only verdict, the settings the follow-on
-# composes at (compose.env: the window and its engine steps, the product, COMPOSITE, ALPHA, GAMMA, the served node, the
-# serve dir's path, COMPOSE_NODE, the tree's commit and the host V3c's audit ran on) and its every input relative to the serve dir
+# record's pieces (only the files the record reads of each, Pearl+'s verdict of record's among them), the inference-only
+# verdict, the settings the follow-on composes at (compose.env: the window and its engine steps, the product, COMPOSITE,
+# ALPHA, GAMMA, the served node, the serve dir's path, COMPOSE_NODE, the tree's commit and the host V3c's audit ran on)
+# and its every input relative to the serve dir
 # (`handoff_inputs`: verifier-side files alone, the records audits' cases and the blobs they name, H1's log and records,
 # PoUW's period case, sampled proofs' summary and registration), listed (inputs.txt) and hashed (inputs.sha256). A list
 # holding a served run's witness (`served_verdicts.py witness`: a value file, a prover's instance, private or salts file,
@@ -149,14 +151,17 @@
 # row naming which in its answer_from) and the composite (`served_composite.sh`,
 # SERVED_NODE the served node, COMPOSE_HANDOFF set); its $OUT is published as every run's is. PRODUCT=onsite's composite
 # reads PoUS's and the wipe's cases, which only the served node's card writes, so under COMPOSE_OFF_NODE=1 the preflight
-# refuses it unless COMPOSITE is set empty. `served_verdicts.sh handoff`, in TREE with D, K and OUT, writes the hand-off
-# alone from OUT's pieces and its record's inference-only verdict.
+# refuses it unless COMPOSITE is set empty. `served_verdicts.sh handoff [HOST]`, in TREE with D, writes the hand-off
+# alone: on a deferral's serve dir from its pieces and inference-only verdict at its settings (deferred.env), HOST the
+# follow-on's, where V3c's audit ran, which a serve dir holding that audit must name; else, with K and OUT, from OUT's
+# pieces and its record's inference-only verdict.
 # `served_verdicts.sh copy deferred|compose HOST`, with D, on the node that holds the list, sends each file a deferral's
 # or a hand-off's inputs.txt lists, and nothing else, to the same path on HOST (RSYNC, default rsync over ssh), its log
 # in the serve dir's private/: the deferral's (prover-side, its window's witness) to a prover node, never COMPOSE_NODE;
 # the hand-off's only once `served_verdicts.py witness` passes its list again.
-# `served_verdicts.sh gate-compose PIECES [VERDICT]`, with D and OUT, on the node that holds the serve dir, writes the
-# hand-off from PIECES (and the inference-only VERDICT) and sends it to the compose gate on COMPOSE_NODE
+# `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`, with D and OUT, on the node that holds the serve dir, writes
+# the hand-off from PIECES and the inference-only VERDICT (on a deferral's serve dir, at its settings, HOST as
+# `handoff`'s) and sends it to the compose gate on COMPOSE_NODE
 # (`benchmarks/live_verifier/host.py`'s `compose`: COMPOSE_GATE, default lane vllm's gate key as research@ on
 # vy-auditor-2's public address, where the gate admits senders (set it for any other COMPOSE_NODE), the one word `compose`), a tar of the files its inputs.txt lists on the gate's stdin; the gate composes there at its
 # pinned tree (COMPOSE_BUILT: built at its pin; SAMPLED_EXE its prebuilt sampled proofs Lean; COMPOSE_TREE_ON the branch
@@ -341,7 +346,8 @@ follow_env() {  # $1's settings, those named in $2, read over the environment's,
   for v in $2; do [ -z "${given[$v]+x}" ] || [ "${given[$v]}" = "${!v-}" ] || CLASH+=" $v"; done
   VENV=${VENV:-$TREE/.venv}
 }
-if [ "${1:-}" = v3c ] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a deferral, at the settings it recorded
+if [[ ${1:-} =~ ^(v3c|handoff|gate-compose)$ ]] && [ -f "$DEFER_DIR/deferred.env" ]; then  # the follow-on of a deferral,
+  # or its compose hand-off written again (and sent to the compose gate), at the settings it recorded
   FOLLOW=1
   follow_env "$DEFER_DIR/deferred.env" "$FOLLOWS"
   COMPOSE_OFF_NODE=${COMPOSE_OFF_NODE-0}  # a deferral that names no COMPOSE_OFF_NODE predates it: it composes as it did
@@ -1157,7 +1163,9 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
 }
 # The compose hand-off (COMPOSE_OFF_NODE=1, the default): what the final record and the composite read, relative to the
 # serve dir, and nothing else. The record's: step 3's records audit's summary, audit record, registration and runs, and
-# of each piece the files `piece_row` and `piece_server` read (copied to private/compose/pieces). The composite's: each
+# of each piece the files `piece_row` and `piece_server` read (copied to private/compose/pieces), Pearl+'s verdict of
+# record's among them (`pearlplus_of_record`'s: the auditor's ledger, the coin record, Pearl+'s answer, the Lean verdict
+# and each challenger session's public key, out/key.json at its path, and no other file of a session). The composite's: each
 # records audit's cases (sampled-proofs-served's and V3c's window/case.json, case-v2.json and their error files), the
 # files a case names as its blobs (the circuit, the public file, each session's record and proofs, the lookup tables),
 # H1's log and each record it names, and PoUW's period case. And compose.env, its settings: the window, its engine steps
@@ -1165,7 +1173,8 @@ follow() {  # `served_verdicts.sh v3c` on a deferral's copy of the serve dir: th
 # the follow-on node COMPOSE_NODE, the tree's commit, and the host V3c's audit ran on (AUDITED_ON, empty where the hand-off carries none).
 # Every one is a verifier's input: `served_verdicts.py witness` refuses a list holding a value file, a prover's instance or
 # private file, the advice, a key, a row dir or the requests, and a blob outside the serve dir is refused too.
-COMPOSE_PIECE_FILES="answer.json development.json piece.json refused.txt served.json runs.json"
+COMPOSE_PIECE_FILES="answer.json development.json piece.json refused.txt served.json runs.json ledger.jsonl coin.json
+pearlplus-answer.json pearlplus-lean.json"
 handoff_inputs() {  # the hand-off's every input but its own sums, each existing file once
   local a blobs cases=()
   for a in sampled-proofs-served "v3c-w$K-$vtag/audit"; do
@@ -1206,8 +1215,9 @@ handoff() {  # the compose hand-off in private/compose, from the pieces in $1 an
   (umask 077; rm -rf "$COMPOSE_DIR" && mkdir -p "$COMPOSE_DIR/pieces") || return 1
   for d in "$1"/*/; do
     [ -d "$d" ] || continue
-    for f in $COMPOSE_PIECE_FILES; do
-      [ ! -f "$d$f" ] || { mkdir -p "$COMPOSE_DIR/pieces/$(basename "$d")" && cp "$d$f" "$COMPOSE_DIR/pieces/$(basename "$d")/"; } || return 1
+    for f in $COMPOSE_PIECE_FILES $(cd "$d" && find session -mindepth 3 -maxdepth 3 -path 'session/*/out/key.json' -type f 2>/dev/null | LC_ALL=C sort); do
+      [ ! -f "$d$f" ] || { mkdir -p "$COMPOSE_DIR/pieces/$(basename "$d")/$(dirname "$f")" \
+        && cp "$d$f" "$COMPOSE_DIR/pieces/$(basename "$d")/$f"; } || return 1
     done
   done
   [ ! -f "$2" ] || cp "$2" "$COMPOSE_DIR/inference-only.json" || return 1
@@ -1300,8 +1310,9 @@ copy() {  # `served_verdicts.sh copy deferred|compose HOST`: each file the list 
       "each to the same path there: $([ "$rc" = 0 ] && echo PASS || echo "FAIL (exit $rc, the serve dir's private/copy-$kind.log)")"
   return "$rc"
 }
-gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT]`: the hand-off from PIECES (and the inference-only
-  # VERDICT), sent to the compose gate as a tar of the files its inputs.txt lists and nothing else; its answer in $OUT/compose
+gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: the hand-off from PIECES (and the
+  # inference-only VERDICT), sent to the compose gate as a tar of the files its inputs.txt lists and nothing else; its
+  # answer in $OUT/compose
   local rc why answer=$OUT/compose/answer.json
   handoff "$1" "${2:-}" || return 1
   why=$("$SAY_PY" "$SV" witness < "$COMPOSE_DIR/inputs.txt") \
@@ -1315,6 +1326,12 @@ gate_compose() {  # `served_verdicts.sh gate-compose PIECES [VERDICT]`: the hand
     | publish_lines
   return "${PIPESTATUS[0]}"
 }
+follow_handoff() {  # whether $1 (handoff, gate-compose) may write a deferral's hand-off again: at its settings alone,
+  # naming the host V3c's audit ran on (V3C_AUDITED) where the serve dir holds that audit, as $2, its usage, says
+  [ -z "$CLASH" ] || { say "${1^^} refused: the hand-off is written at the deferral's settings (the serve dir's private/deferred/deferred.env), and the environment sets another$CLASH: unset it"; return 3; }
+  [ -n "$V3C_AUDITED" ] || [ ! -d "$D/v3c-w$K-$vtag/audit" ] \
+    || { say "${1^^} refused: the serve dir holds V3c's audit, so the hand-off names the host it ran on: $2"; return 3; }
+}
 
 if [ "${1:-}" = serve ]; then serve; exit $?; fi
 if [ "${1:-}" = tie ]; then shift; tie "$@"; exit $?; fi
@@ -1326,9 +1343,25 @@ if [ "${1:-}" = block-counts ]; then K=${2:?served_verdicts.sh block-counts WIND
 if [ "${1:-}" = front-flags ]; then front_ok; exit $?; fi
 if [ "${1:-}" = private-pieces ]; then private_pieces; exit $?; fi
 if [ "${1:-}" = defer ]; then defer "${2:?served_verdicts.sh defer WHY}"; exit $?; fi
-if [ "${1:-}" = handoff ]; then handoff "$OUT/pieces" "$OUT/record/inference-only.json"; exit $?; fi
+if [ "${1:-}" = handoff ]; then  # `served_verdicts.sh handoff [HOST]`: the compose hand-off written again, from a deferral's
+  # pieces and inference-only verdict at its settings where the serve dir holds one, else from $OUT's; HOST is where V3c's
+  # audit ran (a deferral's follow-on), which a serve dir holding that audit must name
+  V3C_AUDITED=${2:-${V3C_AUDITED:-}}
+  if [ -n "$FOLLOW" ]; then
+    follow_handoff handoff "served_verdicts.sh handoff HOST" || exit 3
+    handoff "$DEFER_DIR/pieces" "$DEFER_DIR/inference-only.json"
+  else
+    handoff "$OUT/pieces" "$OUT/record/inference-only.json"
+  fi
+  exit $?
+fi
 if [ "${1:-}" = copy ]; then copy "${2:?served_verdicts.sh copy deferred|compose HOST}" "${3:?served_verdicts.sh copy deferred|compose HOST}"; exit $?; fi
-if [ "${1:-}" = gate-compose ]; then gate_compose "${2:?served_verdicts.sh gate-compose PIECES [VERDICT]}" "${3:-}"; exit $?; fi
+if [ "${1:-}" = gate-compose ]; then  # `served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]`: on a deferral's
+  # serve dir at its settings, HOST where V3c's audit ran, as `handoff`'s
+  V3C_AUDITED=${4:-${V3C_AUDITED:-}}
+  [ -z "$FOLLOW" ] || follow_handoff gate-compose "served_verdicts.sh gate-compose PIECES VERDICT HOST" || exit 3
+  gate_compose "${2:?served_verdicts.sh gate-compose PIECES [VERDICT [HOST]]}" "${3:-}"; exit $?
+fi
 
 # $OUT leaves the node: once the run is done, however it ends, each of its files that names a window or counts its own is
 # held in full in the serve dir's private/out, its public form in its place (`served_verdicts.py publish`)
@@ -1645,7 +1678,8 @@ EOF
 cp "$D/period.json" "$OUT/serve/" 2>/dev/null
 [ -d "$D/h1" ] && (cd "$D" && cp --parents h1/window-program.json.gz h1/window-program.meta.json "$OUT/serve/" 2>/dev/null)
 [ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/circuit-files.json" ] && cp "$H1_CIRCUITS/circuit-files.json" "$OUT/serve/"
-# the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate.
+# the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate,
+# in full in the serve dir's private/out/serve once `publish` holds the load's counts and span.
 # A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
 if [ "$LOAD" = front ]; then
   say "OVERHEAD: none with LOAD=front (the warden paces its requests, so no stock control compares)"

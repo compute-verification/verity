@@ -28,8 +28,10 @@ registration log, and nothing of either without DAY; its preflight refuses a DAY
 without them. There
 step 6 defers the audit and the composite, leaving the follow-on's settings and its every input, listed and hashed, and
 nothing in $OUT but a line; the follow-on holds the copy to those sums, refuses another setting, a node short of the
-memory or another tree, under DAY holds the day's log as the deferral copied it to the serve's declaration, and audits, records about the served node and composes, each saying it composed elsewhere, as
-the record says where it was composed and what was deferred. Its load, `serve_load.py
+memory or another tree, under DAY holds the day's log as the deferral copied it to the serve's declaration, and audits,
+records about the served node and composes, each saying it composed elsewhere, as the record says where it was composed
+and what was deferred. What it publishes holds a load's tokens and span by path, leaving the inference-only policy, its
+digest and its verdict line as written. Its load, `serve_load.py
 --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
 endpoint."""
 from __future__ import annotations
@@ -235,6 +237,86 @@ def test_publish_holds_each_file_that_names_or_counts_a_window_and_leaves_its_pu
                                                   "COMPOSITE CASE verity/pous/p2/v4/run accept\n")
     assert gzip.decompress((out / "serve" / "h1" / "window-program.json.gz").read_bytes()) == b'{"rows": 512}'
     assert S.publish(out, private) == []
+
+
+#: `served_overhead.py metrics`' aggregate of a composed run's one load: 4 requests of 4 tokens, so 16 tokens, one block
+#: a request
+AGGREGATE = {"schema": "verity-bench/served-overhead-metrics/v0", "run_id": "r1", "commit": True, "protocols": ["commit"],
+             "identity": {"precision": "verity_int8"}, "scheduler": {"max_num_batched_tokens": 512},
+             "loads": [{"requests": 4, "tokens": 16, "steps": 9, "span_s": 2.5, "windows": {"n": 1, "open_s": 0.5, "h1": ["tied"]},
+                        "time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}]}
+#: an inference-only policy as `inference_only.py policy` writes it, whose ``n_inputs.span_s`` is the lease's, not a load's
+POLICY = {"format": "verity-bench/inference-only-policy/v1", "written_utc": "2026-11-06T05:58:00+00:00", "tree": "ab" * 20,
+          "class": {"slots": 4, "prompt": 32, "outputs": 4, "positions": 35},
+          "serve": {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d", "precision": "verity_int8"},
+          "session": {"definition": "cd" * 32, "key": "Session_v1{S=4}", "slots": 4, "positions": 35},
+          "c": 123_456_789, "k": 4_096, "n": 25_165_824,
+          "theta": "every weight parameter the class's circuit registers (147), held",
+          "table": {"sha512": "ef" * 64, "entries": 40, "priced": ["BitAtx32_v1"]},
+          "n_inputs": {"n": 25_165_824, "raw": 24_570_799, "grid_bits": 3,
+                       "rate": {"macs_per_s": 989_429_760_000_000, "clock_mhz": 1830, "source": "θ"},
+                       "utilization": [1, 4], "span_s": 3600, "utilization_source": "the declared share",
+                       "span_source": "the serve's GPU lease limit",
+                       "work": {"linears": 34_057_748_480, "attention": 41_287_680, "lm_head": 1_050_673_152,
+                                "theta_macs": 36_241_670_144, "source": "one slot of the class's fixed load"}}}
+
+
+def test_publish_holds_the_loads_tokens_and_span_by_path_and_leaves_the_policy_and_its_digest_as_written(tmp_path):
+    """The load's tokens over a block's outputs are its exact block count, so `publish` holds each load's ``tokens`` and
+    ``span_s`` (`OWN_AT`, by path) with its counts, keeping its rates; the inference-only policy's ``n_inputs.span_s``, a
+    ``tokens`` under no load and the verdict citing the policy's digest stay byte for byte, and the digest is the same
+    before and after."""
+    import inference_only as IO
+
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    (out / "serve").mkdir(parents=True)
+    (out / "serve" / "overhead.json").write_text(json.dumps(AGGREGATE) + "\n")
+    IO._write(out / "inference-only-policy.json", POLICY)
+    before = IO.digest(json.loads((out / "inference-only-policy.json").read_text()))
+    verdict = {"format": IO.VERDICT_FORMAT, "verdict": "accept", "reason": None, "complies": True, "failure": None,
+               "policy": {"sha512": before, "written_utc": POLICY["written_utc"]}, "c": POLICY["c"], "k": POLICY["k"],
+               "n": POLICY["n"], "classes": [["cd" * 32, 1_000, 4_000]], "counts": IO.COUNTS, "slots": 4, "positions": 35}
+    IO._write(out / "record" / "inference-only.json", verdict)
+    (out / "pieces" / "pearlplus").mkdir(parents=True)
+    (out / "pieces" / "pearlplus" / "load.json").write_text(json.dumps({"tokens": 1024, "span_s": 9.5, "served_tokens": 64}))
+    kept = {p: p.read_bytes() for p in out.rglob("*.json") if p.name != "overhead.json"}
+    assert S.publish(out, private) == ["serve/overhead.json"]
+    (ld,) = json.loads((out / "serve" / "overhead.json").read_text())["loads"]
+    assert ld == {"time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}
+    assert json.loads((private / "serve" / "overhead.json").read_text()) == AGGREGATE
+    assert {p: p.read_bytes() for p in kept} == kept
+    after = json.loads((out / "inference-only-policy.json").read_text())
+    assert after["n_inputs"]["span_s"] == 3600 and IO.digest(after) == before == IO.digest(POLICY)
+    assert json.loads((out / "record" / "inference-only.json").read_text())["policy"]["sha512"] == before
+    assert S.public_json(POLICY) == POLICY and S.public_json(verdict) == verdict
+    assert S.publish(out, private) == []
+
+
+def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference_only_lines(tmp_path):
+    """A verdict line's published form has no load's ``tokens`` or ``span_s`` in its JSON, in a JSON string's text or in a
+    JSON object cut short, and the INFERENCE-ONLY lines, the policy's (its span in seconds) and the verdict's (the policy's
+    digest), are their own published form."""
+    import inference_only as IO
+
+    agg = json.dumps(AGGREGATE)
+    assert S.public_line(f"OVERHEAD {agg}") == "OVERHEAD " + json.dumps(S.public_json(AGGREGATE))
+    assert not re.search(r'"(?:tokens|span_s)"', S.public_line(f"OVERHEAD {agg}"))
+    assert S.public_line('OVERHEAD {"loads": [{"tokens": 16, "span_s": 2.5, "tokens_per_s": 6.') == f"OVERHEAD {S.CUT}"
+    quoted = json.dumps({"said": agg})
+    assert json.loads(json.loads(S.public_line(quoted))["said"]) == S.public_json(AGGREGATE)
+    for kept in ('{"n_inputs": {"span_s": 3600, "raw": 24570799}}', '{"tokens": 1024, "span_s": 9.5}',
+                 'POLICY {"n_inputs": {"span_s": 3600, "raw": 2457',
+                 'PEARL+ {"load": {"requests": "all", "prompt_tokens": 1024}, "served_tokens": 64}'):
+        assert S.public_line(kept) == kept
+    i = POLICY["n_inputs"]
+    policy_line = (f"INFERENCE-ONLY POLICY at class 4,32,4: c {POLICY['c']} gates, k {POLICY['k']} fresh bits, n {POLICY['n']} "
+                   f"sessions (⌈{i['utilization'][0]}/{i['utilization'][1]} x {i['rate']['macs_per_s']} MAC/s x {i['span_s']} s / "
+                   f"{i['work']['theta_macs']} θ-MACs⌉ = {i['raw']}, on the grid); session {POLICY['session']['definition'][:16]}…, "
+                   f"policy {IO.digest(POLICY)[:16]}…")
+    pub = {"verdict": "accept", "reason": None, "classes": [["cd" * 32, 1_000, 4_000]], "registered_session": True,
+           "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": IO.digest(POLICY)}}
+    for line in (policy_line, f"INFERENCE-ONLY {IO.line(pub)}", f"INFERENCE-ONLY {json.dumps(pub)}"):
+        assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
 
 
 def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
@@ -3408,14 +3490,14 @@ def _env_of(f: Path, names: str) -> dict[str, str]:
 
 
 def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True, files: Mapping[str, Any] | None = None,
-            cmd: Sequence[str] = ("handoff",), pouw: Mapping[str, Any] | None = None,
-            **extra: str) -> subprocess.CompletedProcess:
+            cmd: Sequence[str] = ("handoff",), pouw: Mapping[str, Any] | None = None, piece: Path | None = None,
+            **extra: str | None) -> subprocess.CompletedProcess:
     """Window 7 of a toy serve dir as the served node leaves it at its record under H1's tie: its records audits' cases
     (a5's v2 case naming ``blobs``, relative to the serve dir unless absolute), H1's log and records, PoUW's period case,
     the window's seal, Commit line and request, every file of `HELD_BACK`, and in $OUT the record's pieces and (if
     ``verdict``) inference-only verdict; then `served_verdicts.sh handoff` (or ``cmd``) on vy-dc-h200 at the tree of
-    commit SHA (``files`` replaces a file's body, by its path, None leaving it unwritten; ``pouw`` PoUW's answer;
-    ``extra`` adds to the environment)."""
+    commit SHA (``files`` replaces a file's body, by its path, None leaving it unwritten; ``pouw`` PoUW's answer, or
+    ``piece`` PoUW's piece dir, copied whole; ``extra`` adds to the environment, None unsetting)."""
     d, out = tmp_path / "serve", tmp_path / "served-out"
     sp = "sampled-proofs-served"
     served = {"seals.jsonl": {"window": 7, "requests": ["a"]},
@@ -3439,10 +3521,13 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
         (d / f).write_text(json.dumps(body) + "\n")
     with open(d / "h1" / "log.jsonl", "a") as log:
         log.write(json.dumps({"window": 7, "kind": "record", "file": "w7/record.json"}) + "\n")
-    (out / "pieces" / "pouw").mkdir(parents=True)
-    for f, body in (("answer.json", pouw or {"verdict": "accept"}), ("served.json", {"server": "vy-dc-h200"}),
-                    ("piece.log", "")):
-        (out / "pieces" / "pouw" / f).write_text(json.dumps(body))
+    if piece is not None:
+        shutil.copytree(piece, out / "pieces" / "pouw")
+    else:
+        (out / "pieces" / "pouw").mkdir(parents=True)
+        for f, body in (("answer.json", pouw or {"verdict": "accept"}), ("served.json", {"server": "vy-dc-h200"}),
+                        ("piece.log", "")):
+            (out / "pieces" / "pouw" / f).write_text(json.dumps(body))
     (out / "record").mkdir()
     if verdict:
         (out / "record" / "inference-only.json").write_text(json.dumps({"verdict": "accept"}))
@@ -3450,7 +3535,8 @@ def _handed(tmp_path: Path, blobs: tuple[str, ...] = BLOBS, verdict: bool = True
     env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "VENV": str(tmp_path / "served-venv"),
            "D": str(d), "K": "7", "OUT": str(out), "SERVE_ROOT": str(tmp_path / "root"), "V3C_CLASS": W63K4,
            "PRODUCT": "remote", "H1_TIE": "1", "HOST": "vy-dc-h200", "RESEARCH_SOURCE_SHA": SHA,
-           "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
+           "GIT_CEILING_DIRECTORIES": str(tmp_path)}
+    env = {k: v for k, v in {**env, **extra}.items() if v is not None}
     return subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), *cmd], cwd=tmp_path / "served-tree",
                           env=env, check=False, capture_output=True, text=True)
 
@@ -3680,6 +3766,152 @@ def test_a_follow_on_under_compose_off_node_audits_then_hands_off_and_composes_n
     (tmp_path / "order").unlink()
     rc, lines, order = _compose(tmp_path, keep=(f"v3c-w7-{VTAG}/window/values/a.bin",), HOST="cpu-6")
     assert rc == 3 and order == [] and lines[0].startswith("PREFLIGHT: the compose follow-on holds no witness")
+
+
+#: what the compose hand-off carries of `_pearlplus_piece`'s piece: the record's files of a piece, and what
+#: `pearlplus_of_record` reads, each challenger session's public key at its path
+PEARLPLUS_HANDED = ("coin.json", "development.json", "ledger.jsonl", "pearlplus-answer.json", "pearlplus-lean.json",
+                    "piece.json", f"session/{SID}/out/key.json", f"session/{DSID}/out/key.json")
+
+
+def test_the_hand_off_carries_pearlpluss_piece_of_record_which_the_compose_follow_on_composes_as_pouws_verdict(
+        tmp_path, monkeypatch, capsys, live):
+    """Pearl+'s piece goes with the compose hand-off with what `pearlplus_of_record` reads: the auditor's ledger, the coin
+    record, Pearl+'s answer, the Lean verdict and each challenger session's public key, and no other file of the piece or
+    its sessions, none a witness. The compose follow-on's record, from the hand-off alone with the window tied to W, its
+    argv the follow-on's, composes accept with PoUW's W_cert the Lean's work; from a piece's files alone (no session key)
+    it composes pending, naming the challenger key it can't read."""
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
+    monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-auditor-2")
+    monkeypatch.setattr(S, "lean_sampled_row", lambda *_a, **_k: _accepted())
+    pieces, tie, pin, lane = _pearlplus_piece(tmp_path / "pp", monkeypatch, live)
+    for f in ("piece.log", "verify.json", "session.tgz", f"session/{SID}/request.json", f"session/{SID}/out/record.json"):
+        (pieces / "pouw" / f).write_text("{}")
+    shutil.copytree(tie, tmp_path / "serve" / "pearlplus" / "w7" / "tie")
+    run = _handed(tmp_path, piece=pieces / "pouw", POUW="pearlplus", PEARLPLUS_TIE="1", H1_TIE=None)
+    assert run.returncode == 0, run.stderr
+    d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
+    handed = dc / "pieces" / "pouw"
+    assert sorted(p.relative_to(handed).as_posix() for p in handed.rglob("*") if p.is_file()) == sorted(PEARLPLUS_HANDED)
+    listed = (dc / "inputs.txt").read_text().splitlines()
+    tied = [f"pearlplus/w7/tie/{f}" for f in (S.WINDOW_REGISTRATION, S.AUDIT_SUMMARY, S.CIRCUIT_RECORD)]
+    assert set(listed) >= {*tied, *(f"private/compose/pieces/pouw/{f}" for f in PEARLPLUS_HANDED)}
+    assert S.witness(listed) == []
+    rc, lines, order = _compose(tmp_path, H1_KEY_SHA512=pin)
+    assert rc == 0 and order == ["record", "composite"], (lines, order)
+    assert lines[0] == COMPOSED.format(audit="no V3c audit", verdict="PASS")
+    argv = json.loads((tmp_path / "order.record").read_text())
+    assert argv[argv.index("--window-tie") + 1] == str(d / "pearlplus" / "w7" / "tie")
+    assert (argv[argv.index("--key-sha512") + 1], argv[argv.index("--lane") + 1]) == (pin, lane)
+    argv[argv.index("--out") + 1] = str(tmp_path / "record")
+    assert S.main(argv) == 0
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
+    assert (line["composed"], line["verdicts"]["PoUW"], line["check"]) == ("accept", "accept", {})
+    assert line["composed_on"]["from"] == S.HANDED_FROM
+    assert rec["legs"]["pouw"]["quantity"] == {"symbol": "W_cert", "value": 5400, "unit": "work", "tiles": 40}
+    alone = tmp_path / "alone" / "pouw"
+    alone.mkdir(parents=True)
+    for f in ("answer.json", "development.json", "piece.json", "refused.txt", "served.json", "runs.json"):
+        if (handed / f).exists():
+            shutil.copy2(handed / f, alone / f)
+    argv[argv.index("--pieces") + 1], argv[argv.index("--out") + 1] = str(alone.parent), str(tmp_path / "alone-record")
+    S.main(argv)
+    line = json.loads(capsys.readouterr().out.strip().splitlines()[-1].removeprefix("RECORD "))
+    assert (line["composed"], line["verdicts"]["PoUW"]) == ("pending", S.DEV_VERDICT)
+    assert "the live session's challenger key is not the compose's pin: no challenger key at " in line["missing"]["PoUW"]
+
+
+def test_handoff_host_writes_a_deferrals_hand_off_again_at_its_settings_naming_where_v3cs_audit_ran(tmp_path):
+    """`served_verdicts.sh handoff HOST` on a deferral's serve dir (its follow-on's copy, V3c's audit there) writes the
+    compose hand-off again from the deferral's pieces and inference-only verdict at the settings it recorded, HOST where
+    V3c's audit ran and the served node the record's. Without HOST where the serve dir holds V3c's audit, or with a
+    setting other than the deferral's, it is refused and writes none."""
+    verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept"}
+    (tmp_path / "served-out" / "record").mkdir(parents=True)
+    (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
+    assert _deferred(tmp_path).returncode == 0
+    d, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "compose"
+    (d / f"v3c-w7-{VTAG}" / "audit" / "window").mkdir(parents=True)
+    (d / f"v3c-w7-{VTAG}" / "audit" / "window" / "case.json").write_text(json.dumps({"evidence": "cafe"}))
+
+    def handoff(out: str, *host: str, **extra: str) -> tuple[int, list[str]]:
+        env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / out),
+               "SERVE_ROOT": str(tmp_path / "root"), "HOST": "cpu-6", "RESEARCH_SOURCE_SHA": SHA,
+               "GIT_CEILING_DIRECTORIES": str(tmp_path), **extra}
+        rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "handoff", *host],
+                            cwd=tmp_path / "served-tree", env=env, check=False, capture_output=True).returncode
+        said = tmp_path / out / "verdicts.txt"
+        return rc, said.read_text().splitlines() if said.exists() else []
+
+    assert handoff("no-host") == (3, ["HANDOFF refused: the serve dir holds V3c's audit, so the hand-off names the host it "
+                                      "ran on: served_verdicts.sh handoff HOST"])
+    assert handoff("clash", "cpu-6", K="8") == (3, [
+        "HANDOFF refused: the hand-off is written at the deferral's settings (the serve dir's "
+        "private/deferred/deferred.env), and the environment sets another K: unset it"])
+    assert not dc.exists()
+    assert handoff("out", "cpu-6") == (0, [HANDOFF_LINE.replace("{d}", str(d))])
+    assert _env_of(dc / "compose.env", COMPOSES) == {
+        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6", "STEPS": "0,3"}
+    listed = (dc / "inputs.txt").read_text().splitlines()
+    assert {"private/compose/pieces/pouw/answer.json", f"v3c-w7-{VTAG}/audit/window/case.json"} <= set(listed)
+    assert S.witness(listed) == [] and json.loads((dc / "inference-only.json").read_text()) == verdict
+
+
+#: a compose gate that answers that it composed the record, accepted, at its pin on remote, keeping in $GATE_SEEN its
+#: argv and each file of the tar it was sent
+STUB_GATE = '''import json, os, sys, tarfile
+with tarfile.open(fileobj=sys.stdin.buffer, mode="r|") as t:
+    sent = {m.name: t.extractfile(m).read().decode(errors="replace") for m in t if m.isreg()}
+open(os.environ["GATE_SEEN"], "w").write(json.dumps({"argv": sys.argv[1:], "sent": sent}))
+print(json.dumps({"pinned": "c0" * 20, "pin": {"on": "remote"},
+                  "compose": {"rc": 0, "files": {"verdicts.txt": 'RECORD {"composed": "accept"}\\n'}}}))
+'''
+
+
+def test_gate_compose_sends_a_deferrals_hand_off_at_its_settings_naming_where_v3cs_audit_ran(tmp_path):
+    """`served_verdicts.sh gate-compose PIECES VERDICT HOST` on a deferral's serve dir (its follow-on's copy, V3c's audit
+    there) writes the hand-off at the settings the deferral recorded, not the environment's, HOST where V3c's audit ran,
+    and sends it to the compose gate. Without HOST where the serve dir holds V3c's audit, or with a setting other than
+    the deferral's, it is refused and sends nothing."""
+    verdict = {"format": "verity-bench/inference-only-verdict/v3", "verdict": "accept"}
+    (tmp_path / "served-out" / "record").mkdir(parents=True)
+    (tmp_path / "served-out" / "record" / "inference-only.json").write_text(json.dumps(verdict))
+    assert _deferred(tmp_path).returncode == 0
+    d, dd, dc = tmp_path / "serve", tmp_path / "serve" / "private" / "deferred", tmp_path / "serve" / "private" / "compose"
+    (d / f"v3c-w7-{VTAG}" / "audit" / "window").mkdir(parents=True)
+    (d / f"v3c-w7-{VTAG}" / "audit" / "window" / "case.json").write_text(json.dumps({"evidence": "cafe"}))
+    gate, seen = tmp_path / "stub-gate.py", tmp_path / "gate-seen.json"
+    gate.write_text(STUB_GATE)
+
+    def gate_compose(out: str, *host: str, **extra: str) -> tuple[int, list[str]]:
+        env = {"PATH": f"{_hosts(tmp_path)}:{os.defpath}", "HOME": str(tmp_path), "D": str(d), "OUT": str(tmp_path / out),
+               "SERVE_ROOT": str(tmp_path / "root"), "HOST": "cpu-6", "RESEARCH_SOURCE_SHA": SHA,
+               "GIT_CEILING_DIRECTORIES": str(tmp_path), "COMPOSE_GATE": f"{sys.executable} {gate}",
+               "GATE_SEEN": str(seen), **extra}
+        rc = subprocess.run(["bash", str(HERE.parent / "served_verdicts.sh"), "gate-compose", str(dd / "pieces"),
+                             str(dd / "inference-only.json"), *host], cwd=tmp_path / "served-tree", env=env, check=False,
+                            capture_output=True).returncode
+        said = tmp_path / out / "verdicts.txt"
+        return rc, said.read_text().splitlines() if said.exists() else []
+
+    assert gate_compose("no-host") == (3, ["GATE-COMPOSE refused: the serve dir holds V3c's audit, so the hand-off names "
+                                           "the host it ran on: served_verdicts.sh gate-compose PIECES VERDICT HOST"])
+    assert gate_compose("clash", "cpu-6", K="8") == (3, [
+        "GATE-COMPOSE refused: the hand-off is written at the deferral's settings (the serve dir's "
+        "private/deferred/deferred.env), and the environment sets another K: unset it"])
+    assert not seen.exists() and not dc.exists()
+    assert gate_compose("out", "cpu-6") == (0, [
+        HANDOFF_LINE.replace("{d}", str(d)), f"GATE-COMPOSE at the compose gate's tree {'c0' * 6} (on remote): exit 0, "
+        f"the record accept, 1 files of its $OUT in {tmp_path / 'out' / 'compose'}"])
+    assert _env_of(dc / "compose.env", COMPOSES) == {
+        "K": "7", "PRODUCT": "remote", "COMPOSITE": "1", "ALPHA": "", "GAMMA": "", "SERVED_NODE": "vy-dc-h200",
+        "SERVED_DIR": str(d), "COMPOSE_NODE": "vy-auditor-2", "COMPOSE_TREE": SHA, "AUDITED_ON": "cpu-6", "STEPS": "0,3"}
+    sent, listed = json.loads(seen.read_text()), (dc / "inputs.txt").read_text().splitlines()
+    assert sent["argv"] == ["compose"] and sorted(sent["sent"]) == sorted(listed)
+    assert sent["sent"]["private/compose/compose.env"] == (dc / "compose.env").read_text()
+    assert f"v3c-w7-{VTAG}/audit/window/case.json" in listed and S.witness(listed) == []
 
 
 #: the compose gate as `vy-compose-gate` serves it over ssh, its words its argv: `host.gate` on a compose host under
