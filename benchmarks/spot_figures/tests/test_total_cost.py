@@ -1,16 +1,14 @@
 """Figure 1 in its total-cost form: the configurations and their serve-tax card, the registrations' spans, the write form
 against every admissible set of a small design, the break-even's search, and one scope end to end with a measured tax
 dropped in."""
-from fractions import Fraction
 from itertools import product
 from math import comb
-from types import SimpleNamespace
 
 import cards
 import figure1 as f1
 import pytest
 import total_cost as t
-from verity.core.protocols.sampled_proofs.optimize import Cell, Grain, leak_count
+from verity.core.protocols.sampled_proofs.optimize import Cell
 
 
 def test_the_configurations_are_the_cards():
@@ -178,33 +176,10 @@ def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
         t.computed_proving(cells, row, (True,))
 
 
-def test_every_blocks_point_plots_what_lean_certifies(monkeypatch):
-    """(C)'s exfiltration count is the bits Lean certifies for the planner's design, a point at the trivial bound has no
-    design to check, and a design Lean refuses is an error.  Lean's answers are stubbed: the sampled-proofs suite runs
-    the checker on the planner's designs (`test_plancheck.py`)."""
-    g = Grain("proof block", 10**6, 1e9, 64, 8.0, 1.0)
-    m = SimpleNamespace(dot=g, dot_work=g, delta=0.01, scope=SimpleNamespace(name="s"))
-    seen = []
-
-    def check(designs):
-        seen.extend(designs)
-        return [Fraction(10**5 + 1, 3) if d["kind"] == "leak" else True for d in designs]
-
-    monkeypatch.setattr(t.plancheck, "check", check)
-    leak, work = {"bound": 1e5, "capped": False}, {"bound": 1e15, "capped": False}
-    assert t.lean_one_stage(m, leak, work) == (True, True, t.plancheck.upper(Fraction(10**5 + 1, 3)))
-    assert [(d["kind"], d.get("count")) for d in seen] == [("leak", str(leak_count(g, 1e5))), ("work", None)]
-    capped = ({"bound": 1e9, "capped": True}, {"bound": 1e30, "capped": True})
-    assert t.lean_one_stage(m, *capped) == (None, None, 1e9)
-    monkeypatch.setattr(t.plancheck, "check", lambda ds: [None if d["kind"] == "leak" else True for d in ds])
-    with pytest.raises(t.plancheck.LeanError, match="refuses"):
-        t.lean_one_stage(m, leak, work)
-
-
 @pytest.fixture(scope="module")
 def measured(tmp_path_factory) -> dict:
-    """One scope at four shares, with (A)'s tax measured, planned without Lean's check of (C)'s designs, which the
-    sampled-proofs suite holds to the planner (`test_plancheck.py`)."""
+    """One scope at four shares, with (A)'s tax measured, planned without Lean's check of (C)'s designs (`test_figure1.py`
+    stubs it, and the sampled-proofs suite runs it)."""
     mp = pytest.MonkeyPatch()
     load = cards.load
 

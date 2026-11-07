@@ -31,9 +31,9 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits by
   the same count, which Lean states for two-stage only; infiltration is its write form (the K incorrect blocks the plan
   detects, each the widest block's bits) and skipped work the work target's plan.  Lean checks each of its designs
-  (`plancheck`, unless `run`'s `lean` is off): a point's `lean` says it did, its exfiltration plots the bits Lean
-  certifies (at least the planner's), and a refused design is an error.  A point without a design (the trivial bound,
-  or a count of every proof block, which samples none) has `lean` None.
+  (`figure1.lean_check`, unless `run`'s `lean` is off): a point's `lean` says it did, its exfiltration plots the bits
+  Lean certifies (at least the planner's), and a refused design is an error.  A point without a design (the trivial
+  bound, or a count of every proof block, which samples none) has `lean` None.
 
 Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
@@ -320,29 +320,11 @@ def _plan(row: dict | None) -> dict | None:
     return None if row is None else f1._plan(row)
 
 
-def lean_one_stage(m: f1.Model, leak: dict, work: dict) -> tuple[bool | None, bool | None, float]:
-    """Lean's check (`plancheck`) of the every-block line's one-stage designs at one budget, `f1.point`'s `leak` and
-    `work`: whether it checked the leak design and the work design, and the exfiltration count to plot, the bits Lean
-    certifies rounded up to a float where it checked the leak design and the planner's elsewhere.  A point at the
-    trivial bound, or whose count is every proof block (which samples none), has no design to check (None); a design Lean
-    refuses is an error."""
-    designs = {}
-    if not leak["capped"] and leak_count(m.dot, leak["bound"]) < m.dot.units:
-        designs["leak"] = plancheck.leak_design(m.dot, leak["bound"], m.delta)
-    if not work["capped"]:
-        designs["work"] = plancheck.work_design(m.dot_work, work["bound"], m.delta)
-    got = dict(zip(designs, plancheck.check(list(designs.values()))))
-    if ("leak" in got and got["leak"] is None) or got.get("work") is False:
-        raise plancheck.LeanError(f"Lean refuses the planner's one-stage design at {m.scope.name}: {designs}")
-    count = plancheck.upper(got["leak"]) if "leak" in got else leak["bound"]
-    return ("leak" in got) or None, ("work" in got) or None, count
-
-
 def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
     exfiltration, which of the count and the served bits binds, the requests a registration samples and its cap (`REG`),
     and the computed share of its design's proving.  A two-stage line's `form` and its registration's replay blocks
-    (`span`) come with it; with `lean`, Lean's check of a one-stage line's designs (`lean_one_stage`)."""
+    (`span`) come with it; with `lean`, Lean's check of the one-stage line's designs (`figure1.lean_check`)."""
     name, m, g, budget, computed, form, span, lean = job
     served = f1.served_total(m)
     if name == "every_block":
@@ -353,7 +335,8 @@ def _point(job: tuple) -> dict:
                                                              total_bits)
         count, checked = leak["bound"], {"leak": {}, "work": {}}
         if lean:
-            on_leak, on_work, count = lean_one_stage(m, leak, work)
+            (on_leak, count), (on_work, _) = f1.lean_check([(m, "one-stage", "leak", leak),
+                                                             (m, "one-stage", "work", work)])
             checked = {"leak": {"lean": on_leak}, "work": {"lean": on_work}}
         return {"exfiltration": {"y": min(count, served), "count": count,
                                  "binds": "served" if served <= count else "count", "plan": _plan(leak["row"]),

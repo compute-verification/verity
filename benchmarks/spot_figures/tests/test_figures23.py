@@ -82,7 +82,7 @@ def test_the_hash_loop_card_keeps_its_sha512_arms_with_their_runs():
 
 def test_figure3_prices_the_cuts_as_figure1_does():
     out = figure3.run("GLM-5.3")
-    f1 = figure1.run("GLM-5.3", 3, ("world year",))
+    f1 = figure1.run("GLM-5.3", 3, ("world year",), lean=False)
     share = {m["cut"]: m["share"] for m in out["modeled"]}
     assert share["every_block"] == pytest.approx(f1["scopes"]["world year"]["serve_hash_share"])
     assert share["tokens"] < 1e-6
@@ -100,14 +100,14 @@ def test_macs_in_no_proof_block_are_served_and_shown(card_dir):
     work = cards.load("workload", "GLM-5.3")
     work["value"]["served_macs_per_token"] = None
     cards.write(work, force=True)
-    base, base3 = figure1.run("GLM-5.3", 2, ("world year",)), figure3.run("GLM-5.3")
+    base, base3 = figure1.run("GLM-5.3", 2, ("world year",), lean=False), figure3.run("GLM-5.3")
     strata = work["value"]["strata"]
     macs = sum(s["per_token"] * s["macs"] for s in strata)
     first = next(s for s in strata if s["macs"])
     first["modeled"] = True
     work["value"]["served_macs_per_token"] = 2 * macs
     cards.write(work, force=True)
-    out = figure1.run("GLM-5.3", 2, ("world year",))
+    out = figure1.run("GLM-5.3", 2, ("world year",), lean=False)
     modeled = first["per_token"] * first["macs"] / (2 * macs)
     assert out["partition"]["uncovered_mac_share"] == pytest.approx(.5)
     assert out["partition"]["modeled_mac_share"] == pytest.approx(modeled)
