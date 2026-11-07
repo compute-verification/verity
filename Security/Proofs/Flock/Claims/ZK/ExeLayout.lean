@@ -113,6 +113,15 @@ abbrev ExeCell : Type :=
   ExeBase × ((Fin (schMax + schMax) → ZkView.Salt) × (Fin 2 → Fin (_root_.Flock.Zk.Q + 2 ^ 64) → ZkView.Salt) ×
     (Fin 2 → ZkView.Salt)) × (ZkView.LeafPos zMax → ZkView.Bits × ZkView.Salt)
 
+set_option maxRecDepth 8192 in
+/-- The base samples' `Fintype`, synthesized once: the search through the cell's nested products needs more than the
+default recursion depth. -/
+noncomputable instance ExeBase.fintype : Fintype ExeBase := inferInstance
+
+set_option maxRecDepth 8192 in
+/-- The cell's `Fintype`, over `ExeBase.fintype`. -/
+noncomputable instance ExeCell.fintype : Fintype ExeCell := inferInstance
+
 /-! ## A statement's reading of a cell -/
 
 section Read
