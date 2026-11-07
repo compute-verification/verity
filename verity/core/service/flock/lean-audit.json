@@ -137,6 +137,8 @@
    "Flock.MerkleScheme.sha512",
    "Flock.Pinned.rowKey",
    "Flock.Pinned.tableSha",
+   "Flock.ReadNet.cvWords",
+   "Flock.ReadNet.midstate",
    "Flock.RecOpen.ivW"
   ],
   "hash": "Flock.Sha512",
