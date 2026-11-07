@@ -3790,3 +3790,51 @@ Full report, with every file:line: note `20261108T0000Z-report-aote-lengthrule` 
     - one-stage's `LayoutIs`, which gains a conjunct.
     - I can write it on my own branch if TSVERIFY hands it to me.
   - 23:57Z: r20261107-235241-3a91 (`AtPorts`, `opens_atPorts`) is clean: exit 0, and none of the 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound. Nothing of mine is in flight. `FrameIs h` waits on the `ownAt` adoption and on TWOOPENS's `Layout`/`rowOf`.
+
+## 00:15Z from ZKSTACK: the weight-security bridge's plan (proofs/weight-security-bridge)
+
+**The composed statement**, `WeightSecurity.Guarantees.TheftAudited` in a new spec module `Definitions/WeightSecurity/Audited.lean`. It covers a deployment of `T` windows (a monitoring period). Each window is the deployed one-stage audit (`JointAuditV5`: one live sample over its members' proof blocks, then one `--zk --public-inputs` session per member), with the network certifier at the edge. For every datacenter strategy (it knows θ, sees the queries and adapts across windows), every outsider `O` making `q` queries and every `K`:
+
+`Pr[O steals] ≤ 2^{C_K} · p_hon(q) + e^{−κ(K − Δ − |O|)} + T·η`
+
+- `C_K = a + b + log₂ Σ_{j≤K} C(T·|O|, j) + K·log₂|V|`: the advice bits `a`, the timing bits `b` (the release patterns the certified ticks and buckets allow), then position bits and value bits of at most `K` changed egress slots. `K` is free, and trades the two terms.
+- `κ = k_d/(n·|O|)`, the sample's rate per egress slot (subset law; stratified at its least stratum rate). A window whose wrong set is `W` changes at most `|O|` of its slots, and none when `W = ∅`.
+- `η` is the window's `Σ_m (ε_ks,m + ε_bind,m)` (`JointAuditV5.eps`). It doesn't depend on the prover's strategy.
+- `Δ` is the egress slots that leave after a failed verdict, before the halt.
+- The probability is over the weights' and the outsiders' coins (uniform) and the verifiers' coins as the audit game draws them.
+
+**Named assumptions: nothing new.** It reads `honest-use-hard`; `JointSampledV5`'s A3, `live-verifier`, `cr/sha-512` and `ecr/sha-512`; and, through the certifier, `trusted-host` and `DeviceIntact`. So nothing has to go to Daniel before I prove against it.
+
+**Premises that aren't assumptions:**
+- `Simulable`, which already exists and holds when the class is all parties.
+- `EgressTied`: what leaves in window `t` is the committed outputs of its requests, at the certified bucket. That is network/egress-tied-to-trace, due Fri 13 Nov. It stays an open premise naming network-accounting's issue until that lands; neither layer imports the other.
+- The halt, which is your call (below).
+
+**Already on main:**
+- `Theft` and its leakage lemma (`rebuild_view`, `withString_model`).
+- Exfil's `tail_cum` and `exfiltration_bound_windows`.
+- `samplePressure` (pressure `k/n` under subset sampling) and `Bridge.miss_le_exp`.
+- `JointSampledV5`, proved: `Pr[accept ∧ W ⊆ wrongSet τ] ≤ P_a(W) + eps` at every window and every strategy.
+- The period game: `periodG`, `value_runBind_le_add`/`_mul` and `prob_bind_tape`.
+
+**Missing, about 1,300 lines:**
+1. Pressure with slack, ~120 lines: `DetectionPressureUpTo μ κ η` and `tail_cum_upTo` (`Pr[cum ≥ x] ≤ e^{−κ(x−ℓ)} + Tη`). The deployed escape is `P_a(W) + η`, so the exact form doesn't apply.
+2. Piece 1, ~120 lines: `JointPressureV5`, `Pr[accept] ≤ e^{−(k_d/n)|wrongSet τ|} + eps` at every window and strategy, from `JointSampledV5` at `W = wrongSet τ` and `miss_le_exp`.
+3. The stopping-time bound over the audit's own game, ~250 lines: windows one after another, each window's configuration the requests it registers. **This is the risk.** Each window's coins (its sample and its sessions) form a different type, so Exfil's one flat coin space doesn't fit. I'll redo item 1's induction on the game's `prob` with `prob_bind_tape`.
+4. The deployment model, the audited channel and the statement, ~150 lines. The channel's covert string is the advice, a deviation in the `K`-ball and the timing.
+5. Piece 2, ~300 lines. The bad event (no covert string explains the outsider's view) lies inside "more than `K` slots changed" or "`EgressTied` fails". Then `Theft`'s union bound over the strings.
+6. No wrong block means the window's outputs are honest, at the deployed partition, ~200 lines. If it slips, it's an open premise in the first PR.
+7. If time allows, the two-stage audit at its premises (`CompilerKSTwo`'s `RTwo` form), ~100 lines.
+8. Honest and nontrivial witnesses and the lock entries, ~200 lines. The honest one is `Theft`'s toy as one window with no wrong blocks; the nontrivial one is the cheating toy without `EgressTied`.
+
+**Order:**
+- Items 1, 2 and 4 tonight and Sunday.
+- Items 3 and 5 Sunday and Monday.
+- Items 6 and 8 Monday, with the PR (`--issue PRF-413 --by proofs`) Monday night.
+- Item 7 Tuesday.
+
+The branch is `cursor/proofs-wsbridge-7a3c`, built on vy-nebius-cpu-13.
+
+**Two decisions for you:**
+- **The halt.** The bound counts what leaves through the first detection plus `Δ`. Is it the certifier that withholds egress after a failed verdict (then `Δ` is its lag, in its layer), or the operator's policy (a domain premise)? `Δ` stays a parameter either way.
+- **The measure.** I state the bound at the deployment's own measure and prove it with `Theft`'s leakage lemma. A literal `LeaksThrough` instance needs every coin uniform in one `R`, which the audit game's sessions don't give. OK?
