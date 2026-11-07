@@ -8,6 +8,7 @@ import figure2
 import figure3
 import figures
 import pytest
+import total_cost
 
 
 @pytest.fixture
@@ -25,9 +26,12 @@ def test_figure2_joins_the_workload_to_the_measured_blocks():
     assert out["uncovered_mac_share"] == pytest.approx(1 - macs / (work.get("served_macs_per_token") or macs))
     assert sum(t["block_share"] for t in out["types"]) == pytest.approx(1)
     assert sum(t["mac_share"] for t in out["types"]) == pytest.approx(1 - out["uncovered_mac_share"])
-    assert out["pending_mac_share"] == pytest.approx(1 - out["uncovered_mac_share"])
-    assert out["derived_model_overhead"] is None
-    assert [s["stands_in"] for s in out["stand_ins"]] == [True]
+    blocks = cards.load("proof_overhead", "GLM-5.3")["value"]["blocks"]
+    assert [t["measured"] for t in out["types"]] == [t["block"] in {b["block"] for b in blocks} for t in out["types"]]
+    assert out["pending_mac_share"] + sum(t["mac_share"] for t in out["types"] if t["measured"]) == pytest.approx(
+        1 - out["uncovered_mac_share"])
+    assert (out["derived_model_overhead"] is None) == (not all(t["measured"] for t in out["types"]))
+    assert [s["block"] for s in out["stand_ins"]] == [b["block"] for b in blocks if b.get("stands_in")]
 
 
 def test_figure2_tells_apart_the_blocks_sharing_a_name():
@@ -127,9 +131,13 @@ def test_figure3_without_the_hillclimb_card_is_pending(card_dir, tmp_path):
 
 
 @pytest.mark.slow
-def test_figures_writes_every_figure(tmp_path):
+def test_figures_writes_every_figure(tmp_path, monkeypatch):
+    monkeypatch.setattr(total_cost, "BETAS", (1e-2, 1.0))
     figures.main(["--model", "GLM-5.3", "--out", str(tmp_path), "--points", "2"])
-    for n, schema in ((1, figure1.SCHEMA), (2, figure2.SCHEMA), (3, figure3.SCHEMA)):
-        assert json.loads((tmp_path / f"figure{n}.json").read_text())["schema"] == schema
-        assert (tmp_path / f"figure{n}.png").stat().st_size > 0 and (tmp_path / f"figure{n}.svg").exists()
-    assert len(list(tmp_path.glob("figure1_appendix*.png"))) == 6 and len(list(tmp_path.glob("figure1*.png"))) == 12
+    for name, schema in (("figure1", total_cost.SCHEMA), ("figure1_overhead", figure1.SCHEMA),
+                         ("figure2", figure2.SCHEMA), ("figure3", figure3.SCHEMA)):
+        assert json.loads((tmp_path / f"{name}.json").read_text())["schema"] == schema
+        assert (tmp_path / f"{name}.png").stat().st_size > 0 and (tmp_path / f"{name}.svg").exists()
+    for pattern in ("figure1_overhead_appendix*", "figure1_skipped_work*"):
+        assert len(list(tmp_path.glob(f"{pattern}.png"))) == 6, pattern
+    assert len(list(tmp_path.glob("figure1*.png"))) == 24

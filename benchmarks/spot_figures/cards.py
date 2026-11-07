@@ -15,8 +15,10 @@ token over its ranks; a stratum whose Definition has no cut on main, sized at th
 total parameters, scales the references that go as the model's size.  The `references` cards
 of a model add up: each is kept as `cards/references.MODEL.ART.json`, under the first twelve hex digits of its art id,
 and the figures plot every card's lines, with its `caption` appended to the caption of each panel it has lines on; a
-line at 0 is named in its panel's caption, not plotted.  A card reaches the figures by art id, a later one naming the
-earlier card it replaces:
+line at 0 is named in its panel's caption, not plotted.  A `partition` card is another cut of the model's circuit: its
+strata take the place of the `workload` card's strata of the kinds it `replaces`, each with the k_log it is staged at,
+which prices it until the `proof_overhead` card measures its type; they add up as `references` cards do, each Figure
+1's line of its own.  A card reaches the figures by art id, a later one naming the earlier card it replaces:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
     research data put --kind spot-card/v1 --file CARD.json --preserve --json
@@ -39,9 +41,11 @@ SCHEMA = "spot-card/v1"
 MODELS = ("GLM-5.3", "DeepSeek-V4-Pro")
 MODEL_FREE = ("design", "commitment", "references", "commit_hillclimb")
 #: the slots whose cards add up rather than replace one another: each is kept under its art id
-MANY = ("references",)
+MANY = ("references", "partition")
 PANELS = ("exfiltration", "infiltration", "skipped_work")
 CUTS = ("tokens", "kv", "layer_of_token", "every_block")
+#: the server configurations that pay a serve tax of their own (`total_cost.CONFIGURATIONS`)
+CONFIGURATIONS = ("tokens", "layer_of_token", "every_block")
 RUN = re.compile(r"r\d{8}-\d{6}-[0-9a-f]{4}")
 NUM = (int, float)
 
@@ -78,6 +82,9 @@ SERIES = {"scope": F(str), "budget": F(NUM), "x": F(list), "y": F(list)}
 AXIS = {"label": F(str), "unit": F(str)}
 POINT = {"x": F(NUM), "y": F(NUM), "runs": _opt(list), "note": _opt(str)}
 CURVE = {"label": F(str), "model": _opt(str, nullable=True, choices=MODELS), "points": F(list, each=POINT)}
+TAX_PART = {"part": F(str), "share": F(NUM), "low": F(NUM), "high": F(NUM), "source": F(str)}
+TAX = {"config": F(str, choices=CONFIGURATIONS), "status": F(str, choices=("priced", "measured")), "tax": F(NUM),
+       "low": F(NUM), "high": F(NUM), "lower_bound": F(bool), "parts": F(list, each=TAX_PART), "runs": _opt(list)}
 SLOTS = {
     "workload": {"ranks": F(int), "device": F(str), "request": F(dict), "tokens": F(int), "weights_bytes": F(NUM),
                  "strata": F(list, each=STRATUM), "served_macs_per_token": _opt(NUM, nullable=True),
@@ -98,6 +105,8 @@ SLOTS = {
                      "vector_bits": _opt(NUM), "series": _opt(list, each=SERIES)},
     "commit_hillclimb": {"x": F(dict, each=AXIS), "y": F(dict, each=AXIS), "workload": F(str),
                          "series": F(list, each=CURVE)},
+    "serve_tax": {"baseline": F(str), "configurations": F(list, each=TAX)},
+    "partition": {"name": F(str), "label": F(str), "replaces": F(list), "strata": F(list, each=STRATUM)},
 }
 
 
@@ -147,6 +156,16 @@ def check(card: dict) -> dict:
         errors += [f"references.value.lines[{i}]: give exactly one of value and by_scope"
                    for i, line in enumerate(value.get("lines") or [])
                    if isinstance(line, dict) and ("value" in line) == ("by_scope" in line)]
+    if slot == "serve_tax" and not errors:
+        names = [t["config"] for t in value["configurations"]]
+        errors += [f"serve_tax.value.configurations: {n!r} given {names.count(n)} times" for n in sorted(set(names))
+                   if names.count(n) > 1]
+        errors += [f"serve_tax.value.configurations[{i}]: low <= tax <= high, but {t['low']}, {t['tax']}, {t['high']}"
+                   for i, t in enumerate(value["configurations"]) if not 0 <= t["low"] <= t["tax"] <= t["high"]]
+    if slot == "partition" and not errors:
+        errors += [f"partition.value.strata[{i}]: no k_log, so no staged witness bits to price it by until its type is "
+                   "measured; give the k_log circuit-check stages it at"
+                   for i, x in enumerate(value["strata"]) if "k_log" not in x]
     if slot == "workload" and not errors and value.get("served_macs_per_token") is not None:
         in_blocks = sum(s["per_token"] * s["macs"] for s in value["strata"])
         if value["served_macs_per_token"] < in_blocks * (1 - 1e-9):

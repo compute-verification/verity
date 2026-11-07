@@ -1054,6 +1054,9 @@ def sqrt_grain(beta: float, h: float, target: float, o: float, delta: float, wei
 CHORDS = (0.0, 2.0 ** -8, 2.0 ** -4, 2.0 ** -2, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 8.0)
 #: `two_stage_design`'s family of designs, one at each κ
 KAPPAS = (0.0, 0.125, 0.25, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0)
+#: the tolerance in ln θ `two_stage_design` compares its designs at, each bound holding at any θ; the chosen one's is
+#: then taken to `two_stage_exfil`'s
+SCREEN = 1e-2
 _LN2F = log(2.0)
 
 
@@ -1102,7 +1105,55 @@ def _strata(cells: Sequence[Cell], k: Mapping[int, float]) -> dict[int, float]:
     return out
 
 
-def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: int, q: float, delta: float) -> float:
+def _log_expm1_exp(z: float) -> float:
+    """At least ln(e^{e^z} − 1), finite however small e^z is: ln z' + z' at z' = e^z once it is below 2^-40, as
+    e^{z'} − 1 <= z' e^{z'}."""
+    if z < -28:
+        return z + exp(z)
+    return _log_expm1(exp(z)) if z < 700 else inf
+
+
+def _log_grow(gs: Iterable[tuple[float, float, float]]) -> float:
+    """At least ln(∏ (1 + e^x)^n − 1) over (n, ln n, x), finite however small the e^x: once Σ n ln(1 + e^x) is below
+    2^-40, ln(e^{Σ n e^x} − 1) by `_log_expm1_exp`."""
+    gs = list(gs)
+    total = fsum(n * _softplus(x) for n, _, x in gs)
+    if total > 2.0 ** -40:
+        return _log_expm1(total)
+    return _log_expm1_exp(_logsumexp([ln_n + x for _, ln_n, x in gs])) if gs else -inf
+
+
+def _log_head(ln_x: float, m: float) -> float:
+    """ln Σ_{1<=j<=m} x^j/j!, at most e^x − 1 and, once x > m, its last term times min(m, 1/(1 − m/x)) (the terms
+    rise to it, each at most m/x of the next)."""
+    if m < 1:
+        return -inf
+    out = _log_expm1_exp(ln_x)
+    if m < inf and ln_x > (ln_m := log(m)):
+        out = min(out, m * ln_x - lgamma(m + 1) + min(ln_m, -log(-expm1(ln_m - ln_x))))
+    return out
+
+
+def _capped(g: tuple[float, ...], lw: float) -> tuple[float, float]:
+    """A group of n proof blocks of b bits each (`g`, from `two_stage_exfil`) at weight w = e^{lw}: ln of Light =
+    Σ_{1<=m<=m*} C(n, m)(2^b w)^m and of Heavy = Σ_{m>m*} C(n, m) w^m, at m* = ⌊S/b⌋ the most of them a set of at most
+    S bits holds, each at most (1 + 2^b w)^n − 1 or (1 + w)^n − 1 and the least of its closed forms by
+    C(n, m) <= n^m/m!."""
+    n, b, m, ln_n, lg_m, ln_m2 = g[:6]
+    light = -inf
+    if m >= 1:
+        ln_na = ln_n + b + lw
+        light = _log_grow([(n, ln_n, b + lw)])
+        if ln_na > (ln_m := log(m)):
+            light = min(light, m * ln_na - lg_m + min(ln_m, -log(-expm1(ln_m - ln_na))))
+    heavy = _log_grow([(n, ln_n, lw)])
+    if (ln_nw := ln_n + lw) < ln_m2:
+        heavy = min(heavy, (m + 1) * ln_nw - lg_m - log(m + 1) - log1p(-exp(ln_nw - ln_m2)))
+    return light, heavy
+
+
+def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: int, q: float, delta: float,
+                    served: float | None = None, union: bool = False, tol: float = 1e-6) -> float:
     """At least log2 of `CompiledTwo.Exfil`'s count, Σ_{T ∈ admissibleTwo} 2^{b(T)}, over `replay_blocks` replay blocks
     (R) of the cells each, the first stage sampling each replay block with probability q and the second `k[t]` of
     stratum t's n_t proof blocks in a sampled one.
@@ -1116,43 +1167,102 @@ def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks
     G − 1 <= Σ_j e^{−θ a_j}(∏_v (1 + 2^{b_v} e^{−θ s_j r_v}) − 1) + e^{−θ h(Y_J)}(∏_{r_v<∞} (1 + 2^{b_v}) − 1)
     + e^{−θ h(∞)} ∏_{r_v<∞} (1 + 2^{b_v}) (∏_{r_v=∞} (1 + 2^{b_v}) − 1), each product over a replay block's proof
     blocks, a T meeting a stratum proved whole at h(∞).  The bound takes the θ minimizing it, by golden section on ln θ
-    (it is convex in θ), and is at most R log2 ∏_v (1 + 2^{b_v}), every T counted."""
+    to within `tol` (it is convex in θ, and holds at any θ), and is at most R log2 ∏_v (1 + 2^{b_v}), every T counted.
+
+    `served`, S, caps each replay block's charge at the bits it serves (a cap lemma in progress).  The sets' form
+    counts Σ_{T adm} 2^{Σ_ρ min(b(T_ρ), S)}: each product's factor over a group of n blocks of b bits and one rate
+    becomes Σ_m C(n, m) w^m 2^{min(m b, S)} <= 1 + Light + 2^S Heavy (`_capped`), by min(Σ_g x_g, S) <= Σ_g min(x_g, S),
+    and each sum over nonempty T is also at most 2^S (∏_v (1 + w_v) − 1), so a wholly incorrect replay block of N proof
+    blocks is charged about N + S bits, the sets it holds and what it serves.  The patterns' form (`union`) counts
+    the served outputs' patterns instead: a replay block's T_ρ either holds at most S bits, counted as itself, or
+    more, where all of them together serve at most 2^S outputs and each has y_ρ >= y_S = min_v r_v max(1, S/b_v) (as
+    Σ_v min(b_v, S) >= S over its blocks), so G <= Σ_{b(T)<=S} 2^{b(T)} e^{−θ h(y(T))} + 2^S e^{−θ h(y_S)}, the first sum bounded as above with each factor
+    1 + Light and also by 2^S Σ_{1<=j<=S/b_min} W^j/j!, W = Σ_v w_v."""
     cells = list(cells)
     if not 0 <= q <= 1 or not 0 < delta < 1 or replay_blocks < 1:
         raise ValueError("needs 0 <= q <= 1, 0 < delta < 1 and replay_blocks >= 1")
+    if (served is None and union) or (served is not None and not served >= 0):
+        raise ValueError("a served-output cap is at least 0 bits, and the patterns' form needs one")
     strata = _strata(cells, k)
     groups: dict[tuple[float, float], float] = {}
     for c in cells:
         n = strata[c.stratum]
-        key = (c.bits * _LN2F, inf if k[c.stratum] >= n else k[c.stratum] / n)
+        key = (c.bits, inf if k[c.stratum] >= n else k[c.stratum] / n)
         groups[key] = groups.get(key, 0.0) + c.n
-    full = fsum(n * _softplus(b) for (b, _), n in groups.items())
+    cap = 0.0 if served is None else served * _LN2F
+    parts = []
+    for (bits, r), n in groups.items():
+        m = inf if served is None or bits == 0 or served >= n * bits else floor(served / bits)
+        parts.append(((n, bits * _LN2F, m, log(n), lgamma(m + 1) if m < inf else 0.0, log(m + 2),
+                       log(m / 2) if 0 < m < inf else -inf), r))
+
+    def factor(g: tuple[float, ...], lw: float) -> float:
+        """ln of the group's factor at weight e^{lw}: uncapped, or where the cap binds (its blocks' mean count under
+        the tilted weights, n a/(1 + a), above m*/2), the least of that and its capped form."""
+        la = g[1] + lw
+        whole = g[0] * (sp := _softplus(la))
+        if g[2] == inf or g[3] + la - sp <= g[6]:
+            return whole
+        light, heavy = _capped(g, lw)
+        return min(whole, _softplus(light) if union else _logsumexp((0.0, light, cap + heavy)))
+
+    narrow = min(bits for bits, _ in groups)
+    most = inf if served is None or narrow == 0 else floor(served / narrow)
+
+    def light(gs: list[tuple[tuple[float, ...], float]]) -> float:
+        """ln of Σ over a replay block's nonempty T of these groups of T's charge times its weight: 2^{b(T)}, capped
+        at 2^S, or under `union` over the T of at most S bits; capped, also at most 2^S (∏_v (1 + w_v) − 1)."""
+        out = _log_expm1(fsum(factor(g, lw) for g, lw in gs))
+        if served is not None and gs:
+            out = min(out, cap + _log_grow([(g[0], g[3], lw) for g, lw in gs]))
+            if union and most < inf:
+                out = min(out, cap + _log_head(_logsumexp([g[3] + lw for g, lw in gs]), most))
+        return out
+
+    full = fsum(factor(g, 0.0) for g, _ in parts)
+    over = served is not None and fsum(n * bits for (bits, _), n in groups.items()) > served
+    if union and over:
+        full = _logsumexp((_softplus(light([(g, 0.0) for g, _ in parts])), cap))
+    elif served is not None:
+        full = min(full, (fsum(groups.values()) + served) * _LN2F)
     every = replay_blocks * full / _LN2F
     if q == 0 or full == 0:
         return every
     lam = log(1 / delta)
-    hs = [-log1p(q * expm1(-y)) for y in CHORDS]
+
+    def h_at(y: float) -> float:
+        return inf if q == 1 and y == inf else -log1p(q * expm1(-y))
+
+    hs = [h_at(y) for y in CHORDS]
     chords = [((h1 - h0) / (y1 - y0), h0 - (h1 - h0) / (y1 - y0) * y0)
               for y0, y1, h0, h1 in zip(CHORDS, CHORDS[1:], hs, hs[1:])]
-    finite = [(b, r, n) for (b, r), n in groups.items() if r < inf]
-    partial = fsum(n * _softplus(b) for b, _, n in finite)
-    tail, whole = _log_expm1(partial), partial + _log_expm1(full - partial)
-    h_whole = inf if q == 1 else -log1p(-q)
+    finite = [(g, r) for g, r in parts if r < inf]
+    partial = fsum(factor(g, 0.0) for g, _ in finite)
+    tail = light([(g, 0.0) for g, _ in finite])
+    whole = partial + _log_expm1(fsum(factor(g, 0.0) for g, r in parts if r == inf))
+    if served is not None:
+        whole = min(whole, cap + fsum(g[0] for g, _ in finite) * _LN2F
+                    + _log_expm1(fsum(g[0] for g, r in parts if r == inf) * _LN2F))
+    h_whole = h_at(inf)
+    heavy, h_heavy = -inf, inf
+    if union and over:
+        heavy, h_heavy = cap, h_at(min(r * max(1.0, served / bits) if bits > 0 else inf for bits, r in groups))
 
     def f(u: float) -> float:
         theta = exp(u)
-        terms = [tail - theta * hs[-1], whole - theta * h_whole if whole > -inf else -inf]
+        terms = [tail - theta * hs[-1], whole - theta * h_whole if whole > -inf else -inf,
+                 heavy - theta * h_heavy if heavy > -inf else -inf]
         for s, a in chords:
-            terms.append(_log_expm1(fsum(n * _softplus(b - theta * s * r) for b, r, n in finite)) - theta * a)
+            terms.append(light([(g, -theta * s * r) for g, r in finite]) - theta * a)
         return theta * lam + replay_blocks * _softplus(_logsumexp(terms))
 
     scales = [(full + 1 + log(replay_blocks)) / hs[-1]]
-    scales += [(b + 1 + log(n * replay_blocks)) / (q * r) for b, r, n in finite]
+    scales += [(g[1] + 1 + log(g[0] * replay_blocks)) / (q * r) for g, r in finite]
     lo, hi = log(min(scales)) - 8, log(max(scales)) + 8
     gold = (sqrt(5) - 1) / 2
     c, d = hi - gold * (hi - lo), lo + gold * (hi - lo)
     fc, fd = f(c), f(d)
-    while hi - lo > 1e-6:
+    while hi - lo > tol:
         if fc <= fd:
             hi, d, fd = d, c, fc
             c = hi - gold * (hi - lo)
@@ -1186,7 +1296,8 @@ def _size_class(bits: float) -> int:
 
 
 def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *, budget: float, replay: float,
-                     boundary: float = 0.0, h: float = 0.0, stratify: bool = True) -> dict | None:
+                     boundary: float = 0.0, h: float = 0.0, stratify: bool = True, served: float | None = None,
+                     union: bool = False) -> dict | None:
     """The two-stage design with the least `two_stage_exfil` bound at a cost of at most `budget`: width-stratified
     (`stratify`) or uniform (one stratum).  A width-stratified design merges the public size classes (`unit_class`) up
     to a threshold into stratum 0 and gives each wider class a stratum of its own, the threshold chosen with κ: at the
@@ -1194,8 +1305,10 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     worse.  At each κ of `KAPPAS` it samples k_t = κ n_t (b_t + ℓ_t)/B of stratum t's n_t proof blocks, at least 1 and at
     most n_t, at b_t the stratum's widest bits, ℓ_t = log2(e R n_t) and B a replay block's bits: at κ = 1 one incorrect
     proof block of a stratum's widest, with its location, leaks as much a unit of escape as a wholly incorrect replay
-    block does.  The first stage's q, at most 1, spends what `boundary` (serving's boundary hashing) leaves of the budget
-    on sampled replay blocks, each costing `replay`, its interior's `commit_bytes` at `h` a byte, and
+    block does.  Under a served-output cap (`served` and `union`, as `two_stage_exfil` takes them) b_t is at most the
+    cap and B is a replay block's capped charge, every T counted.  The first stage's q, at most 1, spends what
+    `boundary` (serving's boundary hashing) leaves of the budget on sampled replay blocks, each costing `replay`, its
+    interior's `commit_bytes` at `h` a byte, and
     `two_stage_price`'s proving.  Its row: `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `bound`
     (bits), `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`, `boundary`, `interior`, `commit` (their
     sum), `total` and `fill` (proving over its marginal); None when the boundary alone is over the budget."""
@@ -1204,7 +1317,9 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
         return None
     classes = [_size_class(c.bits) for c in cells]
     thresholds = sorted(set(classes)) if stratify else [max(classes)]
-    bits = fsum(c.n * c.bits for c in cells)
+    charge = fsum(c.n * c.bits for c in cells)
+    if served is not None:
+        charge = two_stage_exfil(cells, {c.stratum: 1 for c in cells}, 1, 0.0, 0.5, served, union)
     interior = fsum(c.n * c.commit_bytes for c in cells) * h
     rows, seen = [], set()
     for merged in thresholds:
@@ -1213,10 +1328,10 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
         widest: dict[int, float] = {}
         for c in split:
             strata[c.stratum] = strata.get(c.stratum, 0.0) + c.n
-            widest[c.stratum] = max(widest.get(c.stratum, 0.0), c.bits)
+            widest[c.stratum] = max(widest.get(c.stratum, 0.0), min(c.bits, inf if served is None else served))
         for kappa in KAPPAS:
-            k = {t: min(ceil(n), max(1, ceil(kappa * n * (widest[t] + 1 / _LN2F + log2(replay_blocks * n)) / bits)))
-                 if bits > 0 else 1 for t, n in strata.items()}
+            k = {t: min(ceil(n), max(1, ceil(kappa * n * (widest[t] + 1 / _LN2F + log2(replay_blocks * n)) / charge)))
+                 if charge > 0 else 1 for t, n in strata.items()}
             if (key := (merged, *sorted(k.items()))) in seen:
                 continue
             seen.add(key)
@@ -1225,12 +1340,15 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
             q = min(1.0, (budget - boundary) / (replay_blocks * per)) if per > 0 else 1.0
             sampled = q * replay_blocks
             rows.append({"design": "stratified" if stratify else "uniform", "merged": merged, "kappa": kappa,
-                         "k": k, "q": q, "bound": two_stage_exfil(split, k, replay_blocks, q, delta),
+                         "k": k, "q": q, "split": split,
+                         "bound": two_stage_exfil(split, k, replay_blocks, q, delta, served, union, SCREEN),
                          "replay_sample": sampled, "draws": sampled * blocks, "prove": sampled * prove,
                          "replay": sampled * replay, "boundary": boundary, "interior": sampled * interior,
                          "commit": boundary + sampled * interior, "total": boundary + sampled * per,
                          "fill": prove / marginal if marginal > 0 else 1.0})
-    return min(rows, key=lambda r: (r["bound"], r["total"]))
+    best = min(rows, key=lambda r: (r["bound"], r["total"]))
+    split = best.pop("split")
+    return best | {"bound": two_stage_exfil(split, best["k"], replay_blocks, best["q"], delta, served, union)}
 
 
 __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",

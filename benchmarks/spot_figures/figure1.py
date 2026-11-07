@@ -1,10 +1,11 @@
-"""Figure 1 of the SPOT post, derived from the sampled-proofs planner: what an adversary serving a model on all of a
-scope's compute over a monitoring period can exfiltrate, infiltrate or skip while evading detection with probability
-above δ, against proof overhead, at each share of compute spent on verification.
+"""Figure 1's model and its bounds against proof overhead, derived from the sampled-proofs planner: what an adversary
+serving a model on all of a scope's compute over a monitoring period can exfiltrate, infiltrate or skip while evading
+detection with probability above δ, against proof overhead, at each share of compute spent on verification.  Figure 1
+itself plots the same model against total cost (`total_cost.py`).
 
 Every input is a card marked measured or modeled with its source: the model's `spot-card/v1` cards (`cards.py`), the
-census and rho's reference.  The output carries them all beside every plotted series (`figure1.json`), which the
-console reads.
+census and rho's reference.  The output carries them all beside every plotted series (`figure1_overhead.json`), which
+the console reads.
 
 **Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
 a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`wipe_monitoring.PERIODS`), serving at
@@ -31,6 +32,13 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   (width-stratified, the threshold the planner's), or one stratum for all a request's blocks (uniform).  The bound is
   `CompiledTwo.Exfil`'s count, each admissible set of incorrect proof blocks charged its own blocks' committed bits
   (`optimize.two_stage_exfil`), so a wholly incorrect request is charged every bit it commits.
+* `two-stage-capped` and `two-stage-capped-uniform`, `two-stage-patterns` and `two-stage-patterns-uniform`: the same
+  designs with each request charged at most the bits it serves (the `served_bits` input: every one of its tokens
+  served as the token select's output word), in `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`),
+  which still counts which of a request's proof blocks are incorrect, and never above the scope's served bits
+  (`card_influenceTwo_le_min`), or its patterns' form (no lemma states it yet), which counts a request's sets of more
+  than its served bits once, at most the served bits too (`card_influenceTwo_le_two_pow_outs`).  `CAP_STATUS`,
+  `SERVED_STATUS` and `OUTS_STATUS` say what each rests on.
 * `one-stage`: every proof block sampled uniformly, each sampled one's request replayed.  Its serve-time commitment,
   every proof block's outputs, is outside the budget, and the output gives its share of compute (`serve_hash_share`).
   For exfiltration it is in `consumers.exfiltration_bound`'s form, the incorrect proof blocks' output bits plus which
@@ -38,21 +46,26 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   widest block's output bits, and a sampled one costs the count-weighted mean MACs to prove.
 * `request`: request-level sampling, each sampled request replayed and proved whole, its output the session's cap.
 
-Exfiltration is in bits: the main figure plots the two two-stage designs and request-level sampling (`MAIN`), and an
-appendix figure every design with the reference lines the `design` card's `main_lines` leaves out.  Skipped work is the
-work in incorrect proof blocks, under one-stage and request-level sampling: the two-stage design's interior commitments
-come after its first stage, so they don't show the work was done at serve time.  Infiltration is a panel of its own,
-plotted from the model's `infiltration` card and pending without one.  Each panel names the deployment it assumes
-(`DEPLOYMENT`).  The horizontal lines are rho's reference objects (`REFERENCES`, its reference model's; SparseLoCo's
-syncs scaled to the served model's parameters where its `workload` card gives them), the model's checkpoint and every
-`references` card's.  `figures.py` writes it with Figures 2 and 3.
+Exfiltration is in bits: the main figure plots the width-stratified two-stage design, uncapped and in the capped
+sets' form, and request-level sampling (`MAIN`), and an appendix figure every design with the reference lines the
+`design` card's `main_lines` leaves out.  A request is the census's mean, or with `request="workload"` the `workload`
+card's request.  Skipped work is the work in incorrect proof blocks, under one-stage and request-level sampling: the
+two-stage design's interior commitments come after its first stage, so they don't show the work was done at serve
+time.  Infiltration is a panel of its own, plotted from the model's `infiltration` card and pending without one.  Each
+panel names the deployment it assumes (`DEPLOYMENT`).  The horizontal lines are rho's reference objects
+(`REFERENCES`, its reference model's; SparseLoCo's syncs scaled to the served model's parameters where its `workload`
+card gives them), the model's checkpoint and every `references` card's.  `figures.py` writes it with Figure 1 and
+Figures 2 and 3.
 """
 from __future__ import annotations
 
 import json
 import re
 import tomllib
+from concurrent.futures import ProcessPoolExecutor
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
+from itertools import repeat
 from math import inf, log, sqrt
 from pathlib import Path
 
@@ -69,13 +82,26 @@ RHO, RHO_HARDWARE = "benchmarks/rho/data/reference.toml", "benchmarks/rho/data/h
 WORLD, DATACENTER, CENSUS_WORLD = "world-h200", "dc-12500-machines-600s", "world-inference-2027"
 #: the H200's dense FP8 peak is the H100 SXM5's (one die, one clock)
 PEAK = "h100-sxm5-80gb/e4m3"
-DESIGNS = {"exfiltration": ("two-stage", "two-stage-uniform", "request", "one-stage"),
+DESIGNS = {"exfiltration": ("two-stage", "two-stage-uniform", "two-stage-capped", "two-stage-capped-uniform",
+                            "two-stage-patterns", "two-stage-patterns-uniform", "request", "one-stage"),
            "skipped_work": ("one-stage", "request")}
-#: the designs the main figure plots; the appendix plots every one
-MAIN = {"exfiltration": ("two-stage", "two-stage-uniform", "request"), "skipped_work": ("one-stage", "request")}
+#: the designs the main figure plots, at most six lines with the design card's; the appendix plots every one
+MAIN = {"exfiltration": ("two-stage", "two-stage-capped", "request"), "skipped_work": ("one-stage", "request")}
 HEADLINE = {"exfiltration": "two-stage", "skipped_work": "one-stage"}
-#: the two-stage designs, each width-stratified (a stratum per public size class) or uniform
-TWO_STAGE = {"two-stage": True, "two-stage-uniform": False}
+#: the two-stage designs, each width-stratified (a stratum per public size class) or uniform, and each request's
+#: charge: every bit it commits (None), or at most the bits it serves in `optimize.two_stage_exfil`'s sets' or patterns'
+#: form
+TWO_STAGE = {"two-stage": (True, None), "two-stage-uniform": (False, None), "two-stage-capped": (True, "sets"),
+             "two-stage-capped-uniform": (False, "sets"), "two-stage-patterns": (True, "patterns"),
+             "two-stage-patterns-uniform": (False, "patterns")}
+#: what each served-output cap's form rests on
+CAP_STATUS = {"sets": "card_influenceTwo_le_served_min", "patterns": "no lemma states it yet"}
+#: what puts the sets' form at most the scope's served bits: the influence set is a set of served outputs
+SERVED_STATUS = "card_influenceTwo_le_min"
+#: what puts the patterns' form there: on any statement the influence set has at most 2^|outs| members
+OUTS_STATUS = "card_influenceTwo_le_two_pow_outs"
+#: a request's tokens: the census's mean, or the `workload` card's request
+REQUESTS = ("census", "workload")
 #: the deployment each panel assumes: what serving commits, and the replay block
 DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token ids, and a replay block is a request.",
               "skipped_work": "Every block: serving commits every proof block's outputs, and a replay block is a "
@@ -138,8 +164,12 @@ def _card(c: dict, value, unit: str, field: str) -> InputCard:
     return InputCard(value, unit, c["status"], f"{c['slot']} card's {field}{art}: {c['source']}", c["provisional"])
 
 
-def cards(model: str = "GLM-5.3") -> dict[str, InputCard]:
-    """Every input: the model's slot cards', and those read from the census and rho's reference."""
+def cards(model: str = "GLM-5.3", request: str = "census") -> dict[str, InputCard]:
+    """Every input: the model's slot cards', those read from the census and rho's reference, and the bits a request
+    serves, each of its tokens as the token select's output word, the `design` card's `token_bytes`.  A request is
+    the census's mean or, under `request="workload"`, the `workload` card's."""
+    if request not in REQUESTS:
+        raise ValueError(f"a request is one of {REQUESTS}, not {request!r}")
     sc = slot_cards(model)
     design, work, po = sc["design"], sc["workload"], sc["proof_overhead"]
     if po["value"]["model_overhead"] is None:
@@ -192,14 +222,22 @@ def cards(model: str = "GLM-5.3") -> dict[str, InputCard]:
         out["params"] = _card(work, work["value"]["params"], "param", "params")
     elif model == REF_MODEL:
         out["params"] = out["ref_params"]
+    if request == "workload":
+        out["tokens_per_request"] = _card(work, work["value"]["tokens"], "token", "tokens")
+    tokens, bits = out["tokens_per_request"].value, round(8 * out["token_bytes"].value)
+    out["served_bits"] = InputCard(tokens * bits, "bit", "modeled",
+                                   f"every one of a request's {tokens:,} tokens served as the token select's output "
+                                   f"word, {bits} bits (the design card's token_bytes), the registered circuit's "
+                                   "only output a token")
     return out
 
 
 @dataclass(frozen=True)
 class TokenBlocks:
     """The model's proof blocks a token: their count, MACs and the bytes one-stage commits, the mean MACs a proof
-    block weighted by count (a uniformly sampled block's) and by MACs (the work target's samples), and the mean and
-    widest output bits; beside them the whole circuit's MACs a token and those in `modeled` strata."""
+    block is proved at (`price`) weighted by count (a uniformly sampled block's) and by MACs (the work target's
+    samples), and the mean and widest output bits; beside them the whole circuit's MACs a token and those in `modeled`
+    strata."""
 
     blocks: float
     macs: float
@@ -218,7 +256,8 @@ class TokenBlocks:
         bits = sum(s["per_token"] * s["out_bits"] for s in strata)
         committed = sum(s["per_token"] * s.get("commit_bytes", s["out_bits"] / 8) for s in strata)
         modeled = sum(s["per_token"] * s["macs"] for s in strata if s.get("modeled"))
-        return cls(n, macs, committed, macs / n, sum(s["per_token"] * s["macs"] ** 2 for s in strata) / macs,
+        return cls(n, macs, committed, sum(s["per_token"] * price(s) for s in strata) / n,
+                   sum(s["per_token"] * s["macs"] * price(s) for s in strata) / macs,
                    bits / n, max(s["out_bits"] for s in strata if s["per_token"] > 0), served_macs or macs, modeled)
 
     def coverage(self) -> dict:
@@ -227,12 +266,19 @@ class TokenBlocks:
                 "modeled_mac_share": self.modeled_macs / self.served_macs}
 
 
+def price(stratum: dict) -> float:
+    """The MACs a stratum's block is proved at: its `price_macs` where its proving is priced in seconds
+    (`total_cost.priced`), else its MACs."""
+    return stratum.get("price_macs", stratum["macs"])
+
+
 @dataclass(frozen=True)
 class Fill:
     """Proving's price over its marginal at a statement's fill, per proof-block type: its share of the proof blocks, its
-    share of their MACs, its statement's fixed GPU-seconds over a block's marginal ones, and its statement's cap in
-    blocks.  A type the `proof_overhead` card doesn't measure takes the measured blocks' pooled fixed cost and least
-    cap.  Proving GPU-seconds go as MACs, so a design's price is the types' MAC-weighted mean."""
+    share of their proving (`price`), its statement's fixed GPU-seconds over a block's marginal ones, and its
+    statement's cap in blocks: the stratum's own where it is priced in seconds, else the `proof_overhead` card's block
+    of its name, else the measured blocks' pooled fixed cost and least cap.  Proving GPU-seconds go as `price`, so a
+    design's price is the types' mean weighted by it."""
 
     types: tuple[tuple[float, float, float, int], ...]
 
@@ -242,10 +288,11 @@ class Fill:
         pooled = (sum(b["fixed_seconds"] for b in blocks) / sum(b["seconds_per_block"] for b in blocks),
                   min(b["statement_blocks"] for b in blocks))
         n = sum(s["per_token"] for s in strata)
-        macs = sum(s["per_token"] * s["macs"] for s in strata)
-        return cls(tuple((s["per_token"] / n, s["per_token"] * s["macs"] / macs,
+        macs = sum(s["per_token"] * price(s) for s in strata)
+        return cls(tuple((s["per_token"] / n, s["per_token"] * price(s) / macs,
                           *((b["fixed_seconds"] / b["seconds_per_block"], b["statement_blocks"])
-                            if (b := by.get(s["block"])) else pooled)) for s in strata))
+                            if (b := s if "fixed_seconds" in s else by.get(s["block"])) else pooled))
+                         for s in strata))
 
     def factor(self, blocks: float) -> float:
         """The price over the marginal when a replay block holds `blocks` sampled proof blocks, each type's in
@@ -282,7 +329,8 @@ def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
 @dataclass(frozen=True)
 class Model:
     """One scope's grains and replay grain at one marginal proof overhead, every cost in the scope's GPU-seconds, the
-    fill that prices each design's statements, and a request's proof blocks by type as the two-stage planner's cells."""
+    fill that prices each design's statements, a request's proof blocks by type as the two-stage planner's cells, and
+    the bits a request serves."""
 
     scope: Scope
     dot: Grain
@@ -294,6 +342,7 @@ class Model:
     fill: Fill
     blocks_per_request: float
     cells: tuple[Cell, ...]
+    served: float
 
 
 def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float, fill: Fill) -> Model:
@@ -306,8 +355,8 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
     def dot(macs: float) -> Grain:
         return Grain("proof block", n, work, part.widest_bits, part.bytes / part.blocks, overhead * 2 * macs / peak)
 
-    cells = tuple(Cell(x["per_token"] * tokens, x["out_bits"], prove=overhead * 2 * x["macs"] / peak,
-                       fixed=ratio * overhead * 2 * x["macs"] / peak, cap=statement,
+    cells = tuple(Cell(x["per_token"] * tokens, x["out_bits"], prove=overhead * 2 * price(x) / peak,
+                       fixed=ratio * overhead * 2 * price(x) / peak, cap=statement,
                        commit_bytes=x.get("commit_bytes", x["out_bits"] / 8))
                   for x, (_, _, ratio, statement) in zip(c["partition"].value["strata"], fill.types)
                   if x["per_token"] > 0)
@@ -315,7 +364,7 @@ def model(c: dict[str, InputCard], part: TokenBlocks, s: Scope, overhead: float,
                  Grain("request", round(s.requests), s.flop_request, c["output_cap"].value, boundary,
                        overhead * tokens * 2 * part.macs / peak),
                  ReplayGrain(round(s.requests), c["replay_factor"].value * s.flop_request / (mfu * peak), boundary),
-                 1 / c["hash_rate"].value, c["delta"].value, fill, tokens * part.blocks, cells)
+                 1 / c["hash_rate"].value, c["delta"].value, fill, tokens * part.blocks, cells, c["served_bits"].value)
 
 
 def _priced(g: Grain, fill: float) -> Grain:
@@ -324,10 +373,12 @@ def _priced(g: Grain, fill: float) -> Grain:
 
 def two_stage(m: Model, design: str, budget: float) -> dict | None:
     """The two-stage design (`TWO_STAGE`) with the least exfiltration bound at `budget` GPU-seconds, serving's
-    boundaries, the token ids, paid from it: `optimize.two_stage_design` on the model's cells."""
+    boundaries, the token ids, paid from it: `optimize.two_stage_design` on the model's cells, a request's charge
+    capped at the bits it serves under a capped design."""
+    stratify, form = TWO_STAGE[design]
     return two_stage_design(m.cells, m.replay.replay_blocks, m.delta, budget=budget, replay=m.replay.cost,
                             boundary=m.replay.replay_blocks * m.replay.boundary_bytes * m.byte_s, h=m.byte_s,
-                            stratify=TWO_STAGE[design])
+                            stratify=stratify, served=None if form is None else m.served, union=form == "patterns")
 
 
 def cost(m: Model, design: str, target: str, value: float) -> dict:
@@ -363,14 +414,21 @@ def cap(m: Model, target: str) -> float:
     return m.request.units * m.request.out_bits if target == "leak" else m.request.units * m.request.work
 
 
-def point(m: Model, design: str, target: str, budget: float, rel: float = 1e-4) -> dict:
-    """The least target whose cost is at most `budget` GPU-seconds, by bisection in log, capped at `cap`; a two-stage
-    design's bound at the budget, which certifies exfiltration alone (its interiors are committed after its first
-    stage)."""
-    top = cap(m, target)
+def served_total(m: Model) -> float:
+    """The scope's served bits, |outs| of its period's audit: every request's `served`."""
+    return m.request.units * m.served
+
+
+def point(m: Model, design: str, target: str, budget: float, rel: float = 1e-4, top: float | None = None) -> dict:
+    """The least target whose cost is at most `budget` GPU-seconds, by bisection in log, capped at `top` (default
+    `cap`); a two-stage design's bound at the budget, which certifies exfiltration alone (its interiors are committed
+    after its first stage), a capped form at most the scope's served bits too (`SERVED_STATUS`, `OUTS_STATUS`)."""
+    top = cap(m, target) if top is None else top
     if design in TWO_STAGE:
         if target != "leak":
             raise ValueError("the two-stage design's interior commitments come after its first stage: no work target")
+        if TWO_STAGE[design][1]:
+            top = min(top, served_total(m))
         row = two_stage(m, design, budget)
         bound = top if row is None else min(row["bound"], top)
         return {"bound": bound, "capped": bound >= top, "row": row}
@@ -498,7 +556,10 @@ def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
 
 def captions(serve_hash_share: float, infiltration: dict | None = None, coverage: dict | None = None,
              boundary_hash_share: float = 0.0, zeros: dict[str, list[str]] | None = None,
-             notes: dict[str, list[str]] | None = None) -> dict[str, str]:
+             notes: dict[str, list[str]] | None = None, served: tuple[float, int, int, float] | None = None
+             ) -> dict[str, str]:
+    """Each panel's caption.  `served` is (S, tokens, bits a token, N, total) for the capped designs' sentences: the
+    bits a request serves, its tokens at their bits, a request's proof blocks and the scope's served bits."""
     serve = (f"hashes every proof block's outputs at serve time, {serve_hash_share:.2g}× the scope's compute, outside "
              "the budget")
     tokens = f"the token ids, {boundary_hash_share:.2g} of the scope's compute"
@@ -516,16 +577,29 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
     exact = ("A two-stage bound is the count the Lean bounds: every admissible set of incorrect proof blocks, each "
              "charged its own blocks' committed bits, so a wholly incorrect request is charged every bit it commits.")
     request = "Request-level (dotted) proves each sampled request whole; serving commits only the token ids."
+    capped = patterns = ""
+    if served:
+        cap, count, bits, blocks, total = served
+        capped = (f" Capped (dash-dot; {CAP_STATUS['sets']}): two-stage with each request charged at most the "
+                  f"{cap:,.0f} bits it serves ({count:,} tokens of {bits} bits), so a wholly incorrect request is "
+                  f"charged which of its {blocks:.2g} proof blocks are incorrect and what it serves, about "
+                  f"{blocks + cap:.2g} bits; and never above the {total:.2g} bits the scope serves ({SERVED_STATUS}), "
+                  "flat where that binds.")
+        patterns = (f" Patterns (dash-dot-dot; {CAP_STATUS['patterns']}): a request's incorrect sets of more than "
+                    f"{cap:,.0f} bits serve at most 2^{cap:,.0f} outputs together, so they count once, at the least "
+                    f"escape among them; never above the scope's served bits either ({OUTS_STATUS}).")
     inf = infiltration["value"] if infiltration else None
     out = {
         "exfiltration": (f"{DEPLOYMENT['exfiltration']} Two-stage, width-stratified (solid): {two}; the second stage "
                          "samples a request's proof blocks of the public size classes up to a threshold together and "
-                         "each wider class apart, at the threshold and rates with the least bound. Two-stage, uniform "
-                         f"(thin): one sample over a request's proof blocks. {request} {exact}{fill}{gaps}"),
+                         "each wider class apart, at the threshold and rates with the least bound. "
+                         f"{request} {exact}{capped}{fill}{gaps}"),
         "exfiltration_appendix": (f"{DEPLOYMENT['exfiltration']} Every design, with the reference lines the main "
-                                  f"figure leaves out. Two-stage, width-stratified (solid) and uniform (thin): {two}. "
+                                  f"figure leaves out. Two-stage, width-stratified (solid) and uniform (thin, one "
+                                  f"sample over a request's proof blocks): {two}. "
                                   f"One-stage (dashed) {serve}; its bound counts the incorrect proof blocks' output "
-                                  f"bits, each the widest block's, and which ones they are. {request} {exact}{fill}"),
+                                  f"bits, each the widest block's, and which ones they are. {request} {exact}{capped}"
+                                  f"{patterns}{fill}"),
         "infiltration": inf["caption"] if inf else "Pending: the design that certifies infiltration, and its consumer.",
         "skipped_work": (f"{DEPLOYMENT['skipped_work']} One-stage (solid) {serve}. Request-level (dotted) proves each "
                          f"sampled request whole; serving commits only {tokens}, inside the budget. Two-stage is left "
@@ -551,9 +625,19 @@ def infiltration_panel(card: dict | None, scope_names: list[str]) -> dict:
             "headline": v["design"], "consumer": v["consumer"], "series": series}
 
 
-def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, ...] | None = None) -> dict:
+def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, ...] | None = None,
+        request: str = "census", workers: int = 1, designs: tuple[str, ...] | None = None) -> dict:
+    """Figure 1's JSON at `points` proof overheads besides the vertical line's, over the scopes and designs named
+    (default all), each curve's points planned on `workers` processes."""
+    with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
+        return _run(model_name, points, scope_names, request, designs, pool.map if pool else map)
+
+
+def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, request: str,
+         designs: tuple[str, ...] | None, each) -> dict:
+    planned = {panel: [d for d in ds if designs is None or d in designs] for panel, ds in DESIGNS.items()}
     sc = slot_cards(model_name)
-    c = cards(model_name)
+    c = cards(model_name, request)
     part = TokenBlocks.of(c["partition"].value["strata"], c["partition"].value["served_macs_per_token"])
     fill = Fill.of(c["partition"].value["strata"], c["proof_blocks"].value)
     xs = overheads(c, points)
@@ -567,6 +651,9 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
     shown["exfiltration_appendix"] = [r for r in refs["exfiltration"] if not r["main"]]
     chosen = [s for s in scopes(c, part) if scope_names is None or s.name in scope_names]
     infiltration = infiltration_panel(sc.get("infiltration"), [s.name for s in chosen])
+    capped = {d: {"form": TWO_STAGE[d][1], "status": CAP_STATUS[TWO_STAGE[d][1]]}
+                 | {"served": SERVED_STATUS if TWO_STAGE[d][1] == "sets" else OUTS_STATUS}
+              for d in planned["exfiltration"] if d in TWO_STAGE and TWO_STAGE[d][1]}
     out_scopes, series = {}, {"exfiltration": [], "skipped_work": []}
     for s in chosen:
         base = model(c, part, s, 1.0, fill)
@@ -574,9 +661,9 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
         boundary_hash = base.replay.replay_blocks * base.replay.boundary_bytes * base.byte_s / s.gpu_seconds
         models = [model(c, part, s, x, fill) for x in xs]
         for panel, target in (("exfiltration", "leak"), ("skipped_work", "work")):
-            for design in DESIGNS[panel]:
+            for design in planned[panel]:
                 for beta in budgets:
-                    pts = [point(m, design, target, beta * s.gpu_seconds) for m in models]
+                    pts = list(each(point, models, repeat(design), repeat(target), repeat(beta * s.gpu_seconds)))
                     series[panel].append({
                         "scope": s.name, "design": design, "budget": beta, "headline": design == HEADLINE[panel],
                         "main": design in MAIN[panel], "x": xs, "y": [p["bound"] for p in pts],
@@ -587,14 +674,18 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
         out_scopes[s.name] = {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
                               "gpu_seconds": s.gpu_seconds, "requests": s.requests, "flop_request": s.flop_request,
                               "proof_blocks": base.dot.units, "output_bits": cap(base, "leak"),
+                              "served_bits": served_total(base),
                               "flop": cap(base, "work"), "ands": cap(base, "work") * and_per_flop,
                               "serve_hash_share": serve_hash, "boundary_hash_share": boundary_hash,
                               "captions": captions(serve_hash, sc.get("infiltration"), part.coverage(),
                                                    boundary_hash, zero_lines(shown, s.name),
                                                    notes | ({"infiltration": [*notes.get("infiltration", []), ratio]}
-                                                            if ratio else {}))}
+                                                            if ratio else {}),
+                                                   (base.served, c["tokens_per_request"].value,
+                                                    round(base.served / c["tokens_per_request"].value),
+                                                    base.blocks_per_request, served_total(base)) if capped else None)}
     return {
-        "schema": SCHEMA, "model": model_name,
+        "schema": SCHEMA, "model": model_name, "request": request,
         "inputs": {k: v.__dict__ for k, v in c.items()},
         "cards": sc,
         "partition": part.__dict__ | part.coverage(),
@@ -607,14 +698,15 @@ def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, .
                      "label": sc["proof_overhead"]["value"]["label"]},
         "panels": {
             "exfiltration": {"unit": "bit", "target": "leak", "headline": HEADLINE["exfiltration"],
-                             "deployment": DEPLOYMENT["exfiltration"], "designs": list(DESIGNS["exfiltration"]),
-                             "main": list(MAIN["exfiltration"]), "references": refs["exfiltration"],
-                             "series": series["exfiltration"]},
+                             "deployment": DEPLOYMENT["exfiltration"], "designs": planned["exfiltration"],
+                             "main": [d for d in MAIN["exfiltration"] if d in planned["exfiltration"]],
+                             "references": refs["exfiltration"], "capped": capped, "series": series["exfiltration"]},
             "infiltration": infiltration | {"deployment": DEPLOYMENT.get(infiltration.get("design"), ""),
                                             "references": refs["infiltration"]},
             "skipped_work": {"unit": "FLOP", "target": "work", "headline": HEADLINE["skipped_work"],
-                             "deployment": DEPLOYMENT["skipped_work"], "designs": list(DESIGNS["skipped_work"]),
-                             "main": list(MAIN["skipped_work"]), "and_per_flop": and_per_flop,
+                             "deployment": DEPLOYMENT["skipped_work"], "designs": planned["skipped_work"],
+                             "main": [d for d in MAIN["skipped_work"] if d in planned["skipped_work"]],
+                             "and_per_flop": and_per_flop,
                              "references": refs["skipped_work"], "series": series["skipped_work"]}},
     }
 

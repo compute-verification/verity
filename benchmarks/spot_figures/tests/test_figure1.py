@@ -10,11 +10,13 @@ import pytest
 from render import _lines, appendix_stem, render, render_appendix, stem
 
 SCOPES = ("world year", "datacenter week")
+#: the designs every bit charged, which plan in about a second; the capped ones take seconds a point
+UNCAPPED = tuple(d for ds in f.DESIGNS.values() for d in ds if f.TWO_STAGE.get(d, (True, None))[1] is None)
 
 
 @pytest.fixture(scope="module")
 def out() -> dict:
-    return f.run("GLM-5.3", 3, SCOPES)
+    return f.run("GLM-5.3", 3, SCOPES, designs=UNCAPPED)
 
 
 @pytest.fixture
@@ -60,7 +62,7 @@ def test_a_model_runs_once_its_workload_card_lands(card_dir):
     work = cards.load("workload", "GLM-5.3")
     work["value"].pop("params")
     cards.write(work | {"model": "DeepSeek-V4-Pro"})
-    out = f.run("DeepSeek-V4-Pro", 2, ("world year",))
+    out = f.run("DeepSeek-V4-Pro", 2, ("world year",), designs=UNCAPPED)
     assert out["model"] == "DeepSeek-V4-Pro"
     assert {out["cards"][s]["model"] for s in ("workload", "proof_overhead", "replay")} == {"DeepSeek-V4-Pro"}
     syncs, weights = out["panels"]["exfiltration"]["references"][:2]
@@ -99,6 +101,19 @@ def test_a_line_at_zero_is_captioned_and_coincident_lines_plotted_once():
     assert f.captions(1.0, zeros={"exfiltration": ["zero"]})["exfiltration"].endswith(" At 0, so not plotted: zero.")
 
 
+def test_a_capped_caption_says_what_it_rests_on():
+    """The capped sentences name each form's status, the patterns' form only in the appendix, beside every panel's own
+    sentences."""
+    caps = f.captions(1.0, boundary_hash_share=1e-7, served=(144000.0, 4500, 32, 3.36e11, 1.5e16))
+    assert "Capped (dash-dot; card_influenceTwo_le_served_min): two-stage with each request charged at most the " \
+           "144,000 bits it serves (4,500 tokens of 32 bits)" in caps["exfiltration"]
+    assert "never above the 1.5e+16 bits the scope serves (card_influenceTwo_le_min)" in caps["exfiltration"]
+    assert "Patterns" not in caps["exfiltration"]
+    assert "Patterns (dash-dot-dot; no lemma states it yet)" in caps["exfiltration_appendix"]
+    for panel in ("exfiltration", "skipped_work"):
+        assert "the token ids, 1e-07 of the scope's compute" in caps[panel], panel
+
+
 def test_a_references_cards_caption_joins_its_panels_captions():
     line = {"label": "x", "unit": "bit", "value": 1.0, "source": "s"}
     notes = f.reference_notes([
@@ -131,7 +146,8 @@ def test_the_design_card_picks_the_main_panels_lines(out):
 
 
 def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
-    xs = [1.0, 1.5e8, 1e14]
+    vertical = cards.load("proof_overhead", "GLM-5.3")["value"]["model_overhead"]
+    xs = [1.0, vertical, 1e14]
     card = envelope("infiltration", "GLM-5.3", {
         "design": "layer_of_token", "form": "write", "unit": "bit", "caption": "Deferred interiors at a layer.",
         "consumer": None, "series": [{"scope": s, "budget": b, "x": xs, "y": [1e3, 1e9, 1e15]}
@@ -142,13 +158,13 @@ def test_the_infiltration_panel_draws_its_card(card_dir, tmp_path):
         {"panel": "infiltration", "label": "a steering vector", "unit": "bit", "value": 98304.0, "source": "a test"},
         {"panel": "skipped_work", "label": "every token", "unit": "AND", "by_scope": {"world year": 1e30},
          "source": "a test"}]}))
-    out = f.run("GLM-5.3", 3, SCOPES)
+    out = f.run("GLM-5.3", 3, SCOPES, designs=UNCAPPED)
     inf = out["panels"]["infiltration"]
     assert inf["status"] == "card" and inf["headline"] == "layer_of_token" and len(inf["series"]) == 6
     caption = out["scopes"]["world year"]["captions"]["infiltration"]
     head = next(s for s in out["panels"]["exfiltration"]["series"]
                 if (s["scope"], s["budget"], s["design"]) == ("world year", f.RATIO_BUDGET, "two-stage"))
-    ratio = 1e9 / head["y"][head["x"].index(1.5e8)]
+    ratio = 1e9 / head["y"][head["x"].index(vertical)]
     assert caption.startswith("Deferred interiors at a layer. At the measured overhead and 1% of compute, this curve "
                               f"is 1e9 bits, {ratio:.2g}× the exfiltration panel's tokens-only two-stage bound")
     assert out["scopes"]["world year"]["captions"]["exfiltration_appendix"].endswith(
@@ -203,24 +219,42 @@ def test_two_stage_certifies_no_work(world):
         f.cost(m, "two-stage-uniform", "leak", 1e20)
 
 
-def test_a_two_stage_point_is_the_planners_design_at_its_budget(world):
-    """A two-stage point is `two_stage_design`'s on the model's cells, a request a replay block and the token ids its
-    boundary, paid from the budget; width-stratified is never above uniform, and each charges every committed bit of a
-    request it lets through, so it is at least ln(1/δ)/q − 1 requests' bits."""
+@pytest.fixture(scope="module")
+def two_stage_points(world):
+    """Each two-stage design's point at 1% of the world year's compute, at the measured overhead."""
     c, part, fill, s = world
     m = f.model(c, part, s, c["proof_overhead"].value, fill)
     budget = 0.01 * s.gpu_seconds
+    return m, budget, {d: f.point(m, d, "leak", budget) for d in f.TWO_STAGE}
+
+
+@pytest.mark.slow
+def test_a_two_stage_point_is_the_planners_design_at_its_budget(world, two_stage_points):
+    """A two-stage point is `two_stage_design`'s on the model's cells, a request a replay block and the token ids its
+    boundary, paid from the budget at its statement fill.  It lets ln(1/δ)/q − 1 wholly incorrect requests through,
+    each charged every bit it commits or, capped, the bits it serves, so its bound is at least theirs; a capped bound
+    is at most the uncapped one, the patterns' form at most the sets', and width-stratified at most uniform."""
+    c, part, fill, _ = world
+    m, budget, points = two_stage_points
     bits = sum(x.n * x.bits for x in m.cells)
     assert bits == pytest.approx(c["tokens_per_request"].value * part.bits * part.blocks)
+    assert m.served == c["served_bits"].value < bits
     rows = {}
-    for design in f.TWO_STAGE:
-        p = f.point(m, design, "leak", budget)
+    for design, (_, form) in f.TWO_STAGE.items():
+        p = points[design]
         row = rows[design] = p["row"]
-        assert row == f.two_stage(m, design, budget) and p["bound"] == row["bound"] and not p["capped"]
+        assert p["bound"] == row["bound"] and not p["capped"]
+        assert design not in f.MAIN["exfiltration"] or row == f.two_stage(m, design, budget)
         assert row["total"] <= budget * (1 + 1e-9) and row["boundary"] == pytest.approx(
             m.replay.replay_blocks * m.replay.boundary_bytes * m.byte_s)
-        assert p["bound"] >= (log(1 / m.delta) / -log1p(-row["q"]) - 1) * bits
-    assert rows["two-stage"]["bound"] <= rows["two-stage-uniform"]["bound"]
+        assert p["bound"] >= (log(1 / m.delta) / -log1p(-row["q"]) - 1) * (bits if form is None else m.served)
+        assert 1 + min(r / cap for _, _, r, cap in fill.types) <= row["fill"] <= 1 + max(r for _, _, r, _ in fill.types)
+    slack = 1 + 1e-3
+    for suffix in ("", "-capped", "-patterns"):
+        assert rows[f"two-stage{suffix}"]["bound"] <= rows[f"two-stage{suffix}-uniform"]["bound"] * slack
+    for suffix in ("", "-uniform"):
+        assert rows[f"two-stage-patterns{suffix}"]["bound"] <= rows[f"two-stage-capped{suffix}"]["bound"] * slack
+        assert rows[f"two-stage-capped{suffix}"]["bound"] <= rows[f"two-stage{suffix}"]["bound"] * slack
     assert set(rows["two-stage-uniform"]["k"]) == {0} and len(rows["two-stage"]["k"]) > 1
 
 
@@ -239,18 +273,18 @@ def test_a_statement_pays_its_fixed_cost_over_its_fill():
 
 
 def test_each_design_is_priced_at_its_fill(world):
-    """One-stage proves one block a statement, request-level a request's blocks, and two-stage the k its planner picks
-    at that price."""
+    """One-stage proves one block a statement, each type paying its own statement's fixed cost (an unmeasured type the
+    measured ones' pooled cost), MAC-weighted, and request-level a request's blocks (two-stage the k its planner picks,
+    at that price: the planner's-design test)."""
     c, part, fill, s = world
     m = f.model(c, part, s, c["proof_overhead"].value, fill)
-    budget = 0.01 * s.gpu_seconds
-    po = c["proof_blocks"].value[0]
-    assert f.cost(m, "one-stage", "leak", 1e12)["fill"] == pytest.approx(1 + po["fixed_seconds"]
-                                                                          / po["seconds_per_block"])
+    strata, blocks = c["partition"].value["strata"], c["proof_blocks"].value
+    by = {b["block"]: b["fixed_seconds"] / b["seconds_per_block"] for b in blocks}
+    pooled = sum(b["fixed_seconds"] for b in blocks) / sum(b["seconds_per_block"] for b in blocks)
+    macs = sum(x["per_token"] * x["macs"] for x in strata)
+    one = sum(x["per_token"] * x["macs"] / macs * (1 + by.get(x["block"], pooled)) for x in strata)
+    assert f.cost(m, "one-stage", "leak", 1e12)["fill"] == pytest.approx(one)
     assert f.cost(m, "request", "leak", 1e18)["fill"] == pytest.approx(fill.factor(f.inf), rel=1e-6)
-    for design in f.TWO_STAGE:
-        row = f.point(m, design, "leak", budget)["row"]
-        assert 1 + min(r / cap for _, _, r, cap in fill.types) <= row["fill"] <= 1 + max(r for _, _, r, _ in fill.types)
 
 
 def test_each_design_states_its_serve_time_hashing(out):
@@ -268,30 +302,86 @@ def test_each_design_states_its_serve_time_hashing(out):
             assert f"the token ids, {sc['boundary_hash_share']:.2g} of the scope's compute" in sc["captions"][panel]
 
 
-def test_curves_rise_with_overhead_and_fall_with_budget(out):
+def rises_and_falls(out: dict) -> None:
+    """Every planned series rises with overhead and falls with budget."""
     for panel in ("exfiltration", "skipped_work"):
-        series = out["panels"][panel]["series"]
-        assert {(s["scope"], s["design"]) for s in series} == {(x, d) for x in SCOPES for d in f.DESIGNS[panel]}
+        series, designs = out["panels"][panel]["series"], out["panels"][panel]["designs"]
+        assert {(s["scope"], s["design"]) for s in series} == {(x, d) for x in out["scopes"] for d in designs}
         for s in series:
             assert all(a <= b * (1 + 1e-3) for a, b in zip(s["y"], s["y"][1:])), (s["scope"], s["design"])
-        for scope in SCOPES:
-            for design in f.DESIGNS[panel]:
+        for scope in out["scopes"]:
+            for design in designs:
                 ys = [s["y"] for s in sorted(series, key=lambda s: s["budget"])
                       if (s["scope"], s["design"]) == (scope, design)]
                 for more, less in zip(ys, ys[1:]):
                     assert all(b <= a * (1 + 1e-3) for a, b in zip(more, less)), (panel, scope, design)
 
 
+def test_curves_rise_with_overhead_and_fall_with_budget(out):
+    assert out["panels"]["exfiltration"]["designs"] == [d for d in f.DESIGNS["exfiltration"] if d in UNCAPPED]
+    assert not out["panels"]["exfiltration"]["capped"]
+    assert "Capped" not in out["scopes"]["world year"]["captions"]["exfiltration"]
+    rises_and_falls(out)
+
+
+@pytest.mark.slow
+def test_the_capped_curves_charge_at_most_what_a_request_serves(tmp_path):
+    """The capped curves, which plan in seconds a point and no cheaper test plots: each rises with overhead and falls
+    with budget, the sets' form is at most the uncapped curve at every point and the patterns' form at most the sets',
+    and the panel and captions say what each rests on."""
+    out = f.run("GLM-5.3", 2, ("datacenter week",), designs=("two-stage", "two-stage-capped", "two-stage-patterns"))
+    rises_and_falls(out)
+    p = out["panels"]["exfiltration"]
+    assert p["capped"] == {"two-stage-capped": {"form": "sets", "status": "card_influenceTwo_le_served_min",
+                                                "served": "card_influenceTwo_le_min"},
+                           "two-stage-patterns": {"form": "patterns", "status": "no lemma states it yet",
+                                                  "served": "card_influenceTwo_le_two_pow_outs"}}
+    assert p["main"] == ["two-stage", "two-stage-capped"]
+    ys = {(s["design"], s["budget"]): s["y"] for s in p["series"]}
+    served = out["scopes"]["datacenter week"]["served_bits"]
+    for beta in out["budgets"]:
+        for patterns, sets, every in zip(*(ys[d, beta] for d in ("two-stage-patterns", "two-stage-capped",
+                                                                  "two-stage"))):
+            assert patterns <= sets * (1 + 1e-3) and sets <= every * (1 + 1e-3) and max(sets, patterns) <= served
+    caps = out["scopes"]["datacenter week"]["captions"]
+    assert (f"Capped (dash-dot; card_influenceTwo_le_served_min): two-stage with each request charged at most the "
+            f"{out['inputs']['served_bits']['value']:,.0f} bits it serves") in caps["exfiltration"]
+    assert "no lemma states it yet" in caps["exfiltration_appendix"] and "Patterns" not in caps["exfiltration"]
+    assert all(path.stat().st_size > 0 for path in render(out, "datacenter week", tmp_path)
+               + render_appendix(out, "datacenter week", tmp_path))
+
+
+def test_a_request_serves_each_token_as_the_token_selects_word():
+    """A request serves each of its tokens as the token select's 32-bit output word, the registered circuit's output,
+    which is wider than the vocabulary's ⌈log2 vocab_size⌉ = 18 bits because an incorrect token select can write any
+    word: the census's mean request or, with `request="workload"`, the workload card's; another request is refused."""
+    for request, tokens in (("census", f._entry(f.ADVERSARY, f.CENSUS_WORLD)["tokens_per_request"]),
+                            ("workload", cards.load("workload", "GLM-5.3")["value"]["tokens"])):
+        c = f.cards("GLM-5.3", request)
+        assert c["tokens_per_request"].value == tokens
+        assert c["served_bits"].value == tokens * 8 * c["token_bytes"].value == tokens * 32
+    with pytest.raises(ValueError, match="a request is one of"):
+        f.cards(request="mean")
+
+
 def test_the_headline_designs_win_at_the_measured_overhead(out):
     """The figure's claim at today's inputs: at the vertical line, two-stage bounds exfiltration below both comparisons,
-    width-stratified at most uniform, and one-stage bounds skipped work below request-level sampling."""
+    width-stratified at most uniform, and one-stage bounds skipped work below request-level sampling; where the
+    winner is at the trivial bound, everything the scope outputs or computes, every design is there with it."""
     rows = f.at_overhead(out)
     for scope in SCOPES:
         for beta in out["budgets"]:
-            at = {(r["panel"], r["design"]): r["bound"] for r in rows if (r["scope"], r["budget"]) == (scope, beta)}
-            assert at["exfiltration", "two-stage"] < min(at["exfiltration", "one-stage"], at["exfiltration", "request"])
+            here = [r for r in rows if (r["scope"], r["budget"]) == (scope, beta)]
+            at = {(r["panel"], r["design"]): r["bound"] for r in here}
+            top = {(r["panel"], r["design"]) for r in here if r["capped"]}
+
+            def wins(panel: str, design: str, *others: str) -> bool:
+                rest = min(at[panel, d] for d in others)
+                return at[panel, design] < rest or ((panel, design) in top and at[panel, design] == rest)
+
+            assert wins("exfiltration", "two-stage", "one-stage", "request")
             assert at["exfiltration", "two-stage"] <= at["exfiltration", "two-stage-uniform"]
-            assert at["skipped_work", "one-stage"] < at["skipped_work", "request"]
+            assert wins("skipped_work", "one-stage", "request")
 
 
 def test_compute_and_skipped_work_are_in_and_gates_too(out):
@@ -313,7 +403,8 @@ def test_the_json_is_plain_and_renders(out, tmp_path):
     for panel in ("exfiltration", "infiltration", "skipped_work"):
         assert back["panels"][panel]["deployment"]
     paths = render(back, "datacenter week", tmp_path) + render_appendix(back, "datacenter week", tmp_path)
-    assert [p.name for p in paths] == ["figure1_datacenter_week.png", "figure1_datacenter_week.svg",
-                                       "figure1_appendix_datacenter_week.png", "figure1_appendix_datacenter_week.svg"]
+    assert [p.name for p in paths] == ["figure1_overhead_datacenter_week.png", "figure1_overhead_datacenter_week.svg",
+                                       "figure1_overhead_appendix_datacenter_week.png",
+                                       "figure1_overhead_appendix_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (stem("world year"), appendix_stem("world year")) == ("figure1", "figure1_appendix")
+    assert (stem("world year"), appendix_stem("world year")) == ("figure1_overhead", "figure1_overhead_appendix")

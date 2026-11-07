@@ -1,14 +1,16 @@
-"""Figure 1's PNG and SVG for one scope, drawn from `figure1.json` alone, so anything holding the JSON draws the same
-figure: three panels (exfiltration, infiltration, skipped work) against proof overhead, a colour per share of compute
-spent on verification, the panel's headline design solid and thick, the uniform two-stage design solid and thin, and
-the other comparisons dashed or dotted, the measured overhead as a vertical line, the references as grey horizontal
-ones in the style the JSON gives each, and each panel's caption from the JSON.  The main figure plots the series and
-references the JSON marks `main`; the appendix figure (`appendix_stem`) is the exfiltration panel with every design
-and the references the main figure leaves out.  A panel's y-axis spans its headline curves and the references up to
-`OFF_SCALE` above them, so a comparison curve may leave it at the top; a reference further up is named at the axis's
-top, and one at 0 only in the caption.
+"""The bounds against proof overhead as PNG and SVG for one scope, drawn from `figure1_overhead.json` alone, so anything
+holding the JSON draws the same figure: three panels (exfiltration, infiltration, skipped work) against proof overhead,
+a colour per share of compute
+spent on verification, the panel's headline design solid and thick, the uniform two-stage design solid and thin, the
+capped two-stage designs dash-dotted (`CAPPED`, `PATTERNS`; uniform thin), and the other comparisons dashed or dotted,
+the measured overhead as a vertical line, the references as grey horizontal ones in the style the JSON gives each, and
+each panel's caption from the JSON.  The main figure plots the series and references the JSON marks `main`; the
+appendix figure (`appendix_stem`) is the exfiltration panel with every design and the references the main figure
+leaves out.  A panel's y-axis spans its headline curves and the references up to `OFF_SCALE` above them, so a
+comparison curve may leave it at the top; a reference further up is named at the axis's top, and one at 0 only in the
+caption.
 
-    uv run python benchmarks/spot_figures/render.py DIR/figure1.json [--scope "world year"] [--out DIR]
+    uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json [--scope "world year"] [--out DIR]
 """
 from __future__ import annotations
 
@@ -26,11 +28,19 @@ from matplotlib.ticker import FixedLocator, FuncFormatter, LogFormatterMathtext,
 from matplotlib.transforms import offset_copy
 
 COLORS = ("#9ECAE1", "#3182BD", "#08306B")
-COMPARISON = {"one-stage": (0, (6, 3)), "request": (0, (1.2, 2.4)), "two-stage-uniform": "-"}
+CAPPED, PATTERNS = (0, (7, 2.5, 1.5, 2.5)), (0, (7, 2.5, 1.5, 2.5, 1.5, 2.5))
+COMPARISON = {"one-stage": (0, (6, 3)), "request": (0, (1.2, 2.4)), "two-stage-uniform": "-",
+              "two-stage-capped": CAPPED, "two-stage-capped-uniform": CAPPED, "two-stage-patterns": PATTERNS,
+              "two-stage-patterns-uniform": PATTERNS}
 #: a comparison's line width; the headline's is `HEADLINE_LW`
-THIN = {"two-stage-uniform": 1.2}
+THIN = {"two-stage-uniform": 1.2, "two-stage-capped": 2.6, "two-stage-capped-uniform": 1.2,
+        "two-stage-patterns": 2.6, "two-stage-patterns-uniform": 1.2}
 HEADLINE_LW, COMPARISON_LW = 3.2, 1.8
 NAMES = {"two-stage": "Two-stage, width-stratified", "two-stage-uniform": "Two-stage, uniform",
+         "two-stage-capped": "Capped at served bits, width-stratified",
+         "two-stage-capped-uniform": "Capped at served bits, uniform",
+         "two-stage-patterns": "Served patterns, width-stratified",
+         "two-stage-patterns-uniform": "Served patterns, uniform",
          "one-stage": "One-stage, dot-product blocks", "request": "Request-level",
          "layer_of_token": "Deferred interiors, a layer of a token"}
 REFERENCE_STYLE = {"solid": "-", "dashed": (0, (4, 3))}
@@ -42,16 +52,18 @@ OFF_SCALE = 1e3
 COINCIDENT = 0.02
 #: the least gap, in the axis's height, between two labels on one side
 LABEL_GAP = 0.045
+#: how far below its axis, in the axis's height, a caption starts; the appendix's budget legend starts there beside it
+CAPTION_DROP = 0.17
 PANELS = (("exfiltration", "Exfiltration capacity"), ("infiltration", "Infiltration"),
           ("skipped_work", "Skipped work (H100-hours)"))
 
 
 def stem(scope: str) -> str:
-    return "figure1" if scope == PRIMARY else "figure1_" + scope.replace(" ", "_")
+    return "figure1_overhead" if scope == PRIMARY else "figure1_overhead_" + scope.replace(" ", "_")
 
 
 def appendix_stem(scope: str) -> str:
-    return "figure1_appendix" if scope == PRIMARY else "figure1_appendix_" + scope.replace(" ", "_")
+    return "figure1_overhead_appendix" if scope == PRIMARY else "figure1_overhead_appendix_" + scope.replace(" ", "_")
 
 
 def _bytes(v: float, _pos=None) -> str:
@@ -112,7 +124,7 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, ylabel: str, series: list
     ax.set_ylabel(ylabel, labelpad=8)
     for side in ("top", "right"):
         ax.spines[side].set_visible(False)
-    ax.text(0, -.17, textwrap.fill(caption, wrap), transform=ax.transAxes, ha="left", va="top", fontsize=15,
+    ax.text(0, -CAPTION_DROP, textwrap.fill(caption, wrap), transform=ax.transAxes, ha="left", va="top", fontsize=15,
             color="#444444")
     ax.axvline(v["x"], color=VERTICAL, lw=2.2, zorder=2)
     if not series:
@@ -154,8 +166,10 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, ylabel: str, series: list
         ax.plot(s["x"], [y * scale for y in s["y"]], color=colors[s["budget"]], ls=_style(s["design"], p["headline"]),
                 lw=_width(s["design"], p["headline"]), zorder=4 if headline else 3)
     designs = list(dict.fromkeys(s["design"] for s in series))
+    rests = p.get("capped", {})
     ax.legend([plt.Line2D([], [], color="#333333", ls=_style(d, p["headline"]), lw=THIN.get(d, 2.4)) for d in designs],
-              [NAMES[d] for d in designs], loc="lower left", bbox_to_anchor=(0, 1.01), ncol=min(len(designs), 2),
+              [NAMES[d] + (f" ({rests[d]['status']})" if d in rests else "") for d in designs],
+              loc="lower left", bbox_to_anchor=(0, 1.01), ncol=min(len(designs), 2),
               frameon=False, fontsize=15, handlelength=2.4, columnspacing=1.2, borderaxespad=0)
 
 
@@ -163,19 +177,21 @@ def _figure(out: dict, scope: str, panels: int, width: float, left: float):
     plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral", "DejaVu Serif"],
                          "mathtext.fontset": "stix", "font.size": 20, "axes.labelsize": 22, "xtick.labelsize": 18,
                          "ytick.labelsize": 18, "savefig.facecolor": "white", "figure.facecolor": "white"})
-    top = .84 if panels > 1 else .8
+    top, bottom = .84 if panels > 1 else .8, .27
     fig, axes = plt.subplots(1, panels, figsize=(width, 10), squeeze=False)
-    fig.subplots_adjust(left=left, right=.99, bottom=.27, top=top, wspace=.3)
+    fig.subplots_adjust(left=left, right=.99, bottom=bottom, top=top, wspace=.3)
     info = out["scopes"][scope]
     colors = dict(zip(out["budgets"], COLORS))
     where = "the world's compute" if info["who"] == "world" else "a datacenter's compute"
     fig.text(left, .985, f"{out['model']} served on all of {where} for a {info['period']}: {_sci(info['gpus'])} H200s, "
              f"{_sci(info['requests'])} requests", ha="left", va="center", fontsize=23)
+    one = panels == 1
     fig.legend([plt.Line2D([], [], color=colors[b], lw=3.2) for b in out["budgets"]],
-               [f"{b * 100:g}%" for b in out["budgets"]], title="Share of compute for replays and proofs:",
-               loc="lower right" if panels == 1 else "center right",
-               bbox_to_anchor=(.99, top + .01) if panels == 1 else (.99, .985), ncol=4, frameon=False, fontsize=18,
-               title_fontsize=18, alignment="left")
+               [f"{b * 100:g}%" for b in out["budgets"]],
+               title="Share of compute for\nreplays and proofs:" if one else "Share of compute for replays and proofs:",
+               loc="upper right" if one else "center right",
+               bbox_to_anchor=(.99, bottom - CAPTION_DROP * (top - bottom)) if one else (.99, .985),
+               ncol=1 if one else 4, frameon=False, fontsize=18, title_fontsize=18, alignment="left")
     return fig, list(axes[0])
 
 
@@ -214,7 +230,8 @@ def render_appendix(out: dict, scope: str, outdir: Path) -> list[Path]:
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("json", type=Path)
-    ap.add_argument("--scope", action="append", help="a scope's name, as figure1.json's `scopes` has it; default all")
+    ap.add_argument("--scope", action="append",
+                    help="a scope's name, as figure1_overhead.json's `scopes` has it; default all")
     ap.add_argument("--out", type=Path, help="default: the JSON's directory")
     args = ap.parse_args(argv)
     out = json.loads(args.json.read_text())
