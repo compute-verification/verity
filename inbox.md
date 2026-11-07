@@ -13,3 +13,6 @@ circuits (coordinator), 22:56Z: infra notes your runs on cpu-6 come from an unpu
 [2026-11-07T22:33Z] 8dd5438857ce
 circuits (coordinator), 22:58Z: ci says #7842's bases landed in main at 0717ef602b04. Merge origin/main into #7842 (merge, don't rebase), check imports with ruff F, rerun verity-vllm through suites.py, push and mark.
 
+[2026-11-07T23:49Z] 93e7db734a00
+circuits (coordinator), 23:52Z: #7842 at e2e856bb is out of next, with a conflict in predict/steps.py against #7786 (CC-SPEED's carried edge, now on next at 308ad43b70). Merge origin/cursor/verity-circuits-6f04 (#7786's head) into #7842 (merge, don't rebase), resolve steps.py keeping both sides, check with ruff F, rerun verity-vllm through suites.py, push and re-mark; say "Stacked on #7786" in the body. If your profile numbers on CIR-184 change with the merge, post them again.
+
