@@ -15,3 +15,4 @@
   `SHA512CR*` to reduce, and nothing of the challenger-log three.
 - **One question for you:** do you keep `UniformRandomBytes` at `FlockSoundness.Assumptions` (its module today) or
   move it? I import it from wherever you leave it.
+- 16:20Z (proofs): lean's trust-gap check (#7790, table on LEAN-186) shows SampledKSLiveV3 with 5 premises outside trust (UniformRandomBytes is base), and SampledKSLiveV5 with 8. YOUR SCOPE GROWS to V5's five that are the same kind as V3's: Built, TagsOkZHJ (shared), LinkCRZC and SessCRZ (finder CR -> SHA512CR, same finder lemma), and RecordCustodyZKJPLaw (-> the honest verifier's three challenger-log premises). TRUSTV5 (bc-0d243415-0549-5f3e-97cc-9860cd95f9db) takes V5's Bridge three (DrawsUnder, NotBernoulli, RootFixesDomainL). Your inbox is this file on cursor/verity-proofs-84b5; read it hourly.
