@@ -1,4 +1,4 @@
-"""The coverage table's checks, rendering and ladder merge, on a synthetic sidecar."""
+"""The per-model status table's checks, rendering and ladder merge, on a synthetic sidecar."""
 from __future__ import annotations
 
 import copy

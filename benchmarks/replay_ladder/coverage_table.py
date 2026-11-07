@@ -1,4 +1,4 @@
-"""The coverage table: one row per model, grouped by architecture and sorted by size, with four status columns, each
+"""The per-model status table: one row per model, grouped by architecture and sorted by size, with four status columns, each
 cell one glyph that its sidecar (COVERAGE.json) backs with the run or art ids behind it.
 
     coverage_table.py render COVERAGE.json [--ladder SUMMARY.json]... --out DIR

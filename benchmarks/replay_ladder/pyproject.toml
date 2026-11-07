@@ -1,6 +1,6 @@
-# The replay ladder and the coverage table (README.md). Not a package: its runs use a node's pinned vLLM venv; the suite
-# tests the ladder's registration, sample and summary on synthetic manifests and model directories, and the coverage
-# table on a synthetic sidecar, stdlib only.
+# The replay ladder and the per-model status table (README.md). Not a package: its runs use a node's pinned vLLM venv;
+# the suite tests the ladder's registration, sample and summary on synthetic manifests and model directories, and the
+# per-model status table on a synthetic sidecar, stdlib only.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
