@@ -322,10 +322,10 @@ def hello(own: Mapping[str, Any], received: str, coin_tree: Any, seen: Sequence[
 def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], program: Program, query: Mapping[str, Any],
            work_table: Mapping[str, Any] | None = None,
            closure: Mapping[int, Sequence[int]] | None = None) -> tuple[dict[str, Any], Verdict]:
-    """The challenger's draw by the verifier: the Lean's `Select.select` on `read`, the bytes of the challenger's
-    coins that the Python draw `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
+    """The challenger's sample by the verifier: the Lean's `Select.select` on `read`, the bytes of the challenger's
+    coins that the Python sample `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
     `to_json`) over the population `program` and the check's `query`, with the work table and the closure map. The two
-    agree when the Lean draws the same object and reads exactly `read`; the sample of record is then `RECORD_VERDICT`'s. Where
+    agree when the Lean samples the same object and reads exactly `read`; the sample of record is then `RECORD_VERDICT`'s. Where
     they disagree, or the Lean refuses, the verdict fails with `DISAGREE` alone (the sample returned is Python's, and the
     caller refuses it)."""
     got = lean("select", {"rule": dict(rule), "program": codec.encode_program(program), "query": dict(query),
@@ -366,10 +366,12 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
         held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None,
+        value_outputs: Mapping[str, Mapping[str, str]] | None = None,
         interior: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
-    `verifiers`): on `check`'s copies, `check_public`'s values and declared items, the receipt's challenger and place in
+    `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
+    log registered first), `check_public`'s values and declared items, the receipt's challenger and place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
     with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
@@ -384,7 +386,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     `{"receipt", "draw", "read", "audit"}` under `interior`."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                              registered, supplied, pinned, binding, schemas, window_root, held),
+                              registered, supplied, pinned, binding, schemas, window_root, held, value_outputs),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
             "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
             "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],

@@ -1,4 +1,4 @@
-"""j10r.py prepare|summarize: `run.py`'s protocol for a drawn J10-R leaf: one leaf of a one-call window over J10-R's
+"""j10r.py prepare|summarize: `run.py`'s protocol for a sampled J10-R leaf: one leaf of a one-call window over J10-R's
 `PouwH1Tile_v5` (16 × 16 by default, ``H1L_RC``) proved as its statements as `pouw.leaf_lanes`' J10-R leaf stages them
 (``j10r``): each lane in `weights.chunks`(K) chunks (`PouwH1LaneZyChunk_v2`, the whole lane `PouwH1LaneZy_v2` at
 n = 1), then `PouwH1Combine_v2`, which folds every lane's and chunk's ok row into the leaf's one ok. Each statement is

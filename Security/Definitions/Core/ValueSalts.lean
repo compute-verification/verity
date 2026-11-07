@@ -6,7 +6,7 @@ public import Definitions.Core.Game
 # The value commitments' salts, the ZK server's: what a registration shows
 
 The ZK server's value service holds a key `k` and derives every value commitment's salt from it and the commit session
-`s` it draws (`Service.salts`). A session's view is the session, the public commitments of the stack's values under its
+`s` it samples (`Service.salts`). A session's view is the session, the public commitments of the stack's values under its
 salts (`Service.out`) and their tags under `k` (`Service.tags`). A registration's record is its number `n` on the ZK
 server's record, the number `m` of sessions the service's epoch opened, the registered session's view and a record tag
 under `k` over all three (`Service.rtag`), and the session loop admits a record whose record tag is the server's

@@ -390,6 +390,54 @@ def test_a_rewrite_it_cannot_lay_out_fails_closed(text: str) -> None:
         PE.rewrite_pyproject(text, "", {"pyproject.toml"}, set(), {"privdist"})
 
 
+LISTED = {"pkg/run.sh", "pkg/private.sh", "pkg/m/__init__.py", "pkg/m/gone.py", "pkg/gone/a.py", "pkg/tests/t.py",
+          "lib/x.py", "lib/hidden.py"}
+COPIED = LISTED - {"pkg/private.sh", "pkg/m/gone.py", "pkg/gone/a.py", "lib/hidden.py"}
+
+
+def test_which_files_are_lists_of_the_tree_s_paths() -> None:
+    assert PE.path_list("pkg/tests/lint/allowlists/p06.json") == ("allowlist", "pkg")
+    assert PE.path_list("tests/lint/allowlists/repo_ruff.json") == ("allowlist", "")
+    assert PE.path_list("pkg/tests/census_roots.txt") == ("roots", "pkg")
+    assert PE.path_list("pkg/tests/dead_code_keep.json") == ("keep", "pkg")
+    assert PE.path_list("pkg/tests/lint/test_p06.py") is None
+    assert PE.path_list("pkg/attests/census_roots.txt") is None
+
+
+def test_an_allowlist_loses_the_entries_naming_a_file_the_export_does_not_copy() -> None:
+    """An entry names its file from the directory holding the list's `tests/`, or else from the root, as the lint reads it;
+    one naming nothing tracked stays, for the lint's own stale-entry test."""
+    lines = ['    {"file": "run.sh", "kind": "k", "count": 2},\n', '    {"file": "private.sh", "kind": "k"},\n',
+             '    {"file": "private.sh", "kind": "j"},\n', '    {"file": "lib/x.py", "kind": "k"},\n',
+             '    {"file": "untracked.py", "kind": "k"},\n', '    {"file": "lib/hidden.py", "kind": "k"}\n']
+    text = '{\n  "rule": "r",\n  "entries": [\n' + "".join(lines) + "  ]\n}\n"
+    new, dropped = PE.rewrite_path_list(text, "pkg/tests/lint/allowlists/r.json", LISTED, COPIED)
+    assert dropped == [("file", "private.sh"), ("file", "lib/hidden.py")]
+    assert new == '{\n  "rule": "r",\n  "entries": [\n' + "".join(lines[i] for i in (0, 3)) + lines[4].rstrip(",\n") + "\n  ]\n}\n"
+    assert PE.rewrite_path_list(new, "pkg/tests/lint/allowlists/r.json", LISTED, COPIED) == (new, [])
+
+
+def test_census_roots_lose_the_shells_directories_and_modules_the_export_does_not_copy() -> None:
+    text = ("# roots\nrun.sh        # kept\nprivate.sh    # gone\n**/*_negatives.sh\ngone/\ntests/\n"
+            "m             # a package\nm.gone\nlib.x\nlib.hidden\nnothing.sh\n")
+    new, dropped = PE.rewrite_path_list(text, "pkg/tests/census_roots.txt", LISTED, COPIED)
+    assert dropped == [("root", "gone/"), ("root", "lib.hidden"), ("root", "m.gone"), ("root", "private.sh")]
+    assert new == "# roots\nrun.sh        # kept\n**/*_negatives.sh\ntests/\nm             # a package\nlib.x\nnothing.sh\n"
+
+
+def test_the_keep_list_loses_the_modules_the_export_does_not_copy() -> None:
+    doc = {"schema": "s", "modules": {"m": "why", "lib.x": "why", "m.gone": "why"}}
+    new, dropped = PE.rewrite_path_list(json.dumps(doc, indent=1) + "\n", "pkg/tests/dead_code_keep.json", LISTED, COPIED)
+    assert dropped == [("module", "m.gone")]
+    assert json.loads(new) == {"schema": "s", "modules": {"m": "why", "lib.x": "why"}}
+
+
+def test_a_list_it_cannot_lay_out_fails_closed() -> None:
+    text = json.dumps({"rule": "r", "entries": [{"file": "run.sh"}, {"file": "private.sh"}]})
+    with pytest.raises(ValueError, match="public_export: the rewrite of pkg/tests/lint/allowlists/r.json"):
+        PE.rewrite_path_list(text, "pkg/tests/lint/allowlists/r.json", LISTED, COPIED)
+
+
 def test_the_export_is_one_fresh_commit_of_the_public_set(judged, tmp_path_factory) -> None:
     root, _, _ = judged
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)

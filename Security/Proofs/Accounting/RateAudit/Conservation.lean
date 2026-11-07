@@ -18,7 +18,7 @@ Every ingress step reads one address, of one tier, so the reads summed over the 
   footprint, link bits and rebuilt words) fell short of the stream and those words by `λ`: `RateAudit`'s compression,
   `C(q, k)·2^-λ`.
 
-No sample is drawn: these are `RateAudit`'s and `RateAuditInteractive`'s arguments on the correct receipts themselves.
+No sample is sampled: these are `RateAudit`'s and `RateAuditInteractive`'s arguments on the correct receipts themselves.
 At every count at once (`RatePaidRO`, `RatePaid`), the compression is taken at each `k ≤ q`, the most the run can have
 queried, and `∑ₖ C(q, k) = 2^q` (`RelayDevice.pr_compress_any_le`).
 -/
