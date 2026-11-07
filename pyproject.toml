@@ -92,7 +92,6 @@ untraced = [
     "tests/test_flock_json.py",
     "tests/test_gate_paths.py",
     "tests/test_glossary_lean_names.py",
-    "tests/test_infra_paths.py",
     "tests/test_lean_packages.py",
     "tests/test_lean_vocabulary.py",
     "tests/test_module_strings.py",
