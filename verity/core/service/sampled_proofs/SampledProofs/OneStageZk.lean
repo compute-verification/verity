@@ -44,6 +44,7 @@ import CoreProtocol.Blobs
 import SampledProofs.OneStage
 import SampledProofs.ChallengerTrees
 import SampledProofs.Slots
+import SampledProofs.PopOrder
 import Flock
 
 namespace SampledProofs.OneStageZk
