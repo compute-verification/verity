@@ -239,7 +239,7 @@ def test_the_spawns_and_the_custom_off_variant() -> None:
     assert [route(c) for c in on] == [route(c) for c in off]
     assert {c["setting"] for c in off if c["spawn"] in ("served", "served_again")} == {"custom-off"}
     glm = X.cases(False, {"fused", "allreduce", "probe", "again", "switch"})
-    assert [route(c) for c in glm] == [route(c) for c in on if c["spawn"] != "h7168"]
+    assert [route(c) for c in glm] == [route(c) for c in on if c["spawn"] != "h7168" and c["phase"] not in X.NCCL_PROBE_PHASES]
 
 
 def test_the_cases_cover_every_route() -> None:
@@ -370,7 +370,7 @@ def test_the_capture_probes_read_trees_at_glm53s_sizes(tmp_path) -> None:
 
 @pytest.mark.slow
 def test_the_multimem_probe_reads_trees_at_64_mib(tmp_path) -> None:
-    """The probe at 5461 tokens, symmetric memory's last M (64 MiB, about 30 s and 2 GB): its operands at the run's seed, read back
+    """The probe at 5461 tokens, symmetric memory's last M (64 MiB, about 10 s and 2 GB): its operands at the run's seed, read back
     through the model at 8 random trees and IEEE adds.  Catches an owner slice of `multimem_owners` that is not whole periods, or a
     seed or layout change, at the size that lets `CAPTURED` reach 5461; the smaller probes' tests can't, since the slices'
     remainders depend on the size."""
@@ -1088,12 +1088,11 @@ def test_main_end_to_end_on_stubbed_ranks(small, tmp_path, monkeypatch, capsys) 
     assert "served=custom-off prefill=switch trees=none ftz=None" in printed and "h7168=NO-GO" in printed
 
 
-@pytest.mark.slow
 def test_main_models_nccl_at_its_probes_runs(nccl_small, tmp_path, monkeypatch, capsys) -> None:
     """`main` over the all-reduce and NCCL probe phases with the rank processes stood in for, NCCL's words a simulated ring: the
     NCCL probes decoded into runs in both sets of rank processes, the NCCL launch modelled at them through the spawned worker
     pool, the nccl verdict, its record and its line, and the NCCL words saved, so a slip in the NCCL orchestration shows here and
-    not on the 8-GPU node.  About 15 s, the worker pool's start."""
+    not on the 8-GPU node."""
     monkeypatch.setattr(X, "gate", lambda *a: {"ok": True, "checks": {}})
     monkeypatch.setattr(X.G, "_environment", lambda: {})
     workload = tmp_path / "workload.json"
