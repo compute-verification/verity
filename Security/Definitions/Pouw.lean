@@ -98,6 +98,7 @@ import Definitions.Pouw.PearlC.TileCheck
 import Definitions.Pouw.PearlC.TileCheck8
 import Definitions.Pouw.PearlC.TileCheck4
 import Definitions.Pouw.PearlC.TileCircuit
+import Definitions.Pouw.PearlC.TileDraw
 import Definitions.Pouw.PearlC.Unscale
 import Definitions.Pouw.PearlC.W1
 import Definitions.Pouw.PearlC.W1Stop

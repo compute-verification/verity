@@ -133,16 +133,20 @@ def GγSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMod
         ≤ (1 - εs) ^ t + η q U.layout.N
 
 open Classical in
-/-- The tiles of the units `τ` commits whose replayed debit exceeds the cap: the tolerant audit accepts a sampled one and
-credits it nothing. -/
+/-- The tiles of the units `τ` commits whose inert work (the replayed debit) exceeds its bound: the tolerant audit
+accepts a sampled one and credits it nothing. -/
 noncomputable def overCapTiles (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Transcript) : Finset ℕ :=
   (range (TR.tiling U.layout).NT).filter fun g =>
     ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ ¬ TR.capOK H s U g c.act
 
-/-- **The γ-gap property under the tolerant sampled audit.** As `GγSampled`, for every miss-bound table `u` at `δ`
-(`MissBound`): the audit accepts (every sampled tile is good, of a blank unit, or over its cap) while `T` is below
-`1 − γ` of the claimed work less `u(X_O)` of the layout's, where `X_O` is the number of samples on tiles over their
-cap, with probability at most `δ + η(q, N)`. `GγSampled` is its case `u 0 = ε_s`, `u x = 1` otherwise. -/
+/-- **The gap property under the tolerant sampled audit.** Write `S` for the credit (the claimed work, the credited
+rows' `W_ref`; a number, where the type `S` is the salt's), `T` for the budget, `g` for the gap (the statement's `γ`),
+and `1 + ε_a = 1/(1 − g)`. As `GγSampled`, for every miss-bound table `u` at `δ` (`MissBound`), the audit accepts (every
+sampled tile is good, of a blank unit, or over its inert-work bound) while `S > (1 + ε)·T` with probability at
+most `δ + η(q, N)`, the failure probability. Here `1 + ε = (1 + ε_a)/(1 − ε_s)` is the advantage and
+`ε_s = u(X_O)·W/S` is the sampling tolerance: the share of `S` an accepted run may hold in incorrect work. `W` is the
+layout's work, and `X_O` the number of samples on tiles over their bound. `GγSampled` is its case `u 0 = ε_s`,
+`u x = 1` otherwise. -/
 def GγSampledTol [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →

@@ -19,6 +19,7 @@
   "Proofs.Properties.Pouw.PearlPlus.Open",
   "Proofs.Properties.Pouw.PearlPlus.Witnesses",
   "Proofs.Properties.Pouw.PearlPlus.Verdict",
+  "Proofs.Pouw.PearlPlus.Numerics",
   "Proofs.Properties.Nci",
   "Proofs.Properties.Nci.DescAgree",
   "Proofs.Properties.Nci.Walk",

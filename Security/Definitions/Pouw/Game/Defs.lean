@@ -243,9 +243,9 @@ def AuditAcceptsTol {w : ℕ → ℕ} {N t : ℕ} (K O : Finset ℕ) (c : Fin t 
   ∀ i, ((c i).1 : ℕ) ∈ K ∨ ((c i).1 : ℕ) ∈ O
 
 /-- **A miss bound for `t` work-weighted samples at `δ`**: whatever the set `S` of units, the table `u` at the number of
-samples in `S` falls below `S`'s share of the tickets with probability at most `δ`. Clopper–Pearson's one-sided upper
-bound at `δ` is one; `u 0 = ε_s` and `u x = 1` otherwise is the audit that accepts only checked units, at
-`δ = (1 − ε_s)^t`. -/
+samples in `S` falls below `S`'s share of the tickets with probability at most `δ`, the failure probability. `u` is
+the sampling tolerance read off the samples. Clopper–Pearson's one-sided upper bound at `δ` is one; `u 0 = ε_s` and
+`u x = 1` otherwise is the audit that accepts only checked units, at `δ = (1 − ε_s)^t`. -/
 def MissBound (t : ℕ) (u : ℕ → ℝ) (δ : ℝ) : Prop :=
   ∀ (N : ℕ) (w : ℕ → ℕ) (S : Finset ℕ), S ⊆ range N →
     pr (fun c : Fin t → Ticket w N => u (drawsIn S c) * ∑ g ∈ range N, (w g : ℝ) < ∑ g ∈ S, (w g : ℝ)) ≤ δ
