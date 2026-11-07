@@ -23,7 +23,7 @@ one escape set and that one halt, each with its own leak.
   the verdict (credited work, paid at the certificate) is bounded by `tail_cumPrev`, with no per-window term; egress
   that leaves before its verdict keeps `ℓ_i`.
 * `joint_of_maxRule`: the two together, from the sample's catch probabilities to every claim's bound.
-* `subsetSample_escape`, `subsetSample_escape_le`, `pressure_subsetSample`: a uniform `k`-subset of `N` units misses `b` given
+* `subsetSample_acceptProb`, `subsetSample_acceptProb_le`, `pressure_subsetSample`: a uniform `k`-subset of `N` units misses `b` given
   units with probability `C(N - b, k) / C(N, k) ≤ (1 - k/N)^b`, so a stratum sampled as a uniform `k`-subset meets
   `pressure_of_sample`'s escape premise with `a u = k / N`.
 -/
@@ -161,7 +161,7 @@ def misses {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (Finse
   univ.filter fun S => Disjoint S B
 
 /-- **A uniform `k`-subset misses `b` given units** with probability `C(N - b, k) / C(N, k)`. -/
-theorem subsetSample_escape {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (B : Finset U) :
+theorem subsetSample_acceptProb {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (B : Finset U) :
     ∑ S ∈ misses B, subsetSample U k S = ((Fintype.card U - B.card).choose k : ℝ) / (Fintype.card U).choose k := by
   have hset : (misses B).filter (fun S => S.card = k) = Bᶜ.powersetCard k := by
     ext S
@@ -207,10 +207,10 @@ theorem choose_ratio_le (N k : ℕ) (hk : k ≤ N) (hN : 0 < N) :
       exact mul_le_mul ih hratio (div_nonneg (Nat.cast_nonneg _) hMr.le) (pow_nonneg h1 _)
 
 /-- **A uniform `k`-subset escapes `b` given units with probability at most `(1 - k/N)^b`.** -/
-theorem subsetSample_escape_le {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (hk : k ≤ Fintype.card U)
+theorem subsetSample_acceptProb_le {U : Type} [Fintype U] [DecidableEq U] (k : ℕ) (hk : k ≤ Fintype.card U)
     (hN : 0 < Fintype.card U) (B : Finset U) :
     ∑ S ∈ misses B, subsetSample U k S ≤ ∏ _u ∈ B, (1 - (k : ℝ) / Fintype.card U) := by
-  rw [subsetSample_escape, prod_const]
+  rw [subsetSample_acceptProb, prod_const]
   exact choose_ratio_le _ k hk hN B.card
 
 /-- **A stratum sampled as a uniform `k`-subset gives detection pressure**: a strategy whose window escapes exactly when
@@ -226,6 +226,6 @@ theorem pressure_subsetSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} 
     (fun _ => ⟨div_nonneg (Nat.cast_nonneg k) hNr.le, by rw [div_le_one hNr]; exact_mod_cast hk⟩) hκE hleak
     fun h => ?_
   rw [hA h]
-  exact subsetSample_escape_le k hk hN (B h)
+  exact subsetSample_acceptProb_le k hk hN (B h)
 
 end Population.Exfil
