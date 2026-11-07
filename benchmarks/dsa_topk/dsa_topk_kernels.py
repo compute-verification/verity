@@ -1,5 +1,8 @@
 """The Triton kernels of `dsa_topk`'s device pass (its docstring has their contract), in a module of their own so
-that `dsa_topk` imports without Triton and Triton resolves the helpers through this module's globals."""
+that `dsa_topk` imports without Triton and Triton resolves the helpers through this module's globals.
+
+A block's two counts ride in one int32 (``gt + (eq << 16)``), so one prefix sum and one reduction a block serve both;
+``BLOCK`` must stay below 2**15. A row's counts accumulate per lane and reduce once."""
 import triton
 import triton.language as tl
 
@@ -41,16 +44,16 @@ def _hint(row, orow, n, ls1, K: tl.constexpr, KP2: tl.constexpr):
 
 
 @triton.jit
-def _count(row, n, start, end, tau, ls1, BLOCK: tl.constexpr):
-    c_gt = tau * 0
-    c_eq = tau * 0
+def _count(row, start, end, tau, ls1, BLOCK: tl.constexpr):
+    c_gt = tl.zeros([BLOCK], dtype=tl.int32)
+    c_eq = tl.zeros([BLOCK], dtype=tl.int32)
     for b in range(start, end, BLOCK):
         idx = b + tl.arange(0, BLOCK)
         m = idx < end
         key = _ordered(tl.load(row + idx.to(tl.int64) * ls1, mask=m, other=0.0))
-        c_gt += tl.sum((m & (key > tau)).to(tl.int32), axis=0)
-        c_eq += tl.sum((m & (key == tau)).to(tl.int32), axis=0)
-    return c_gt, c_eq
+        c_gt += (m & (key > tau)).to(tl.int32)
+        c_eq += (m & (key == tau)).to(tl.int32)
+    return tl.sum(c_gt, axis=0), tl.sum(c_eq, axis=0)
 
 
 @triton.jit
@@ -65,12 +68,15 @@ def _emit(row, orow, start, end, tau, skip, gt_before, eq_before, ls1, BLOCK: tl
         key = _ordered(tl.load(row + idx.to(tl.int64) * ls1, mask=m, other=0.0))
         gt = (m & (key > tau)).to(tl.int32)
         eq = (m & (key == tau)).to(tl.int32)
-        gt_ex = gt_before + tl.cumsum(gt, axis=0) - gt
-        eq_ex = eq_before + tl.cumsum(eq, axis=0) - eq
+        both = gt + (eq << 16)
+        p = tl.cumsum(both, axis=0) - both
+        gt_ex = gt_before + (p & 0xFFFF)
+        eq_ex = eq_before + (p >> 16)
         keep = (gt > 0) | ((eq > 0) & (eq_ex >= skip))
         tl.store(orow + gt_ex + tl.maximum(eq_ex - skip, 0), idx, mask=keep)
-        gt_before += tl.sum(gt, axis=0)
-        eq_before += tl.sum(eq, axis=0)
+        tot = tl.sum(both, axis=0)
+        gt_before += tot & 0xFFFF
+        eq_before += tot >> 16
 
 
 @triton.jit
@@ -80,17 +86,17 @@ def _bisect(row, orow, n, ls1, K: tl.constexpr, BLOCK: tl.constexpr):
     hi_t = lo_t + 4294967295
     for _ in range(32):
         mid = (lo_t + hi_t + 1) >> 1
-        cnt = n * 0
+        cnt = tl.zeros([BLOCK], dtype=tl.int32)
         for b in range(0, n, BLOCK):
             idx = b + tl.arange(0, BLOCK)
             m = idx < n
             key = _ordered(tl.load(row + idx.to(tl.int64) * ls1, mask=m, other=0.0)).to(tl.int64)
-            cnt += tl.sum((m & (key >= mid)).to(tl.int32), axis=0)
-        ge = cnt >= K
+            cnt += (m & (key >= mid)).to(tl.int32)
+        ge = tl.sum(cnt, axis=0) >= K
         lo_t = tl.where(ge, mid, lo_t)
         hi_t = tl.where(ge, hi_t, mid - 1)
     tau = lo_t.to(tl.int32)
-    n_gt, n_eq = _count(row, n, 0, n, tau, ls1, BLOCK)
+    n_gt, n_eq = _count(row, 0, n, tau, ls1, BLOCK)
     _emit(row, orow, 0, n, tau, n_eq - (K - n_gt), n * 0, n * 0, ls1, BLOCK)
     return n_eq > K - n_gt
 
@@ -98,8 +104,8 @@ def _bisect(row, orow, n, ls1, K: tl.constexpr, BLOCK: tl.constexpr):
 @triton.jit
 def canon_one(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
               K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr):
-    # one program a row: one descending pass that keeps the m largest-index tied keys, m from the fast kernel's
-    # selection, checked against the row's counts once the pass is done
+    # one program a row: one pass from the row's end that keeps every key above the candidate and the m tied keys
+    # with the largest indices (m from the fast kernel's selection), checked against the row's counts once done
     r = tl.program_id(0)
     lo, n = _bounds(r, A, B, ncols, next_n, MODE)
     if n > K:
@@ -117,14 +123,20 @@ def canon_one(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
             key = _ordered(tl.load(row + idx.to(tl.int64) * ls1, mask=m, other=0.0))
             gt = (m & (key > tau)).to(tl.int32)
             eq = (m & (key == tau)).to(tl.int32)
-            eq_tot = tl.sum(eq, axis=0)
-            keep = ((gt > 0) | ((eq > 0) & (eq_after + eq_tot - tl.cumsum(eq, axis=0) < m_eq))).to(tl.int32)
-            k_tot = tl.sum(keep, axis=0)
-            pos = K - 1 - (kept_after + k_tot - tl.cumsum(keep, axis=0))
-            tl.store(orow + pos, idx, mask=(keep > 0) & (pos >= 0))
-            kept_after += k_tot
+            both = gt + (eq << 16)
+            p = tl.cumsum(both, axis=0)
+            tot = tl.sum(both, axis=0)
+            gt_tot = tot & 0xFFFF
+            eq_tot = tot >> 16
+            gt_later = gt_tot - (p & 0xFFFF)
+            eq_later = eq_tot - (p >> 16)
+            quota = tl.maximum(m_eq - eq_after, 0)
+            keep = (gt > 0) | ((eq > 0) & (eq_later < quota))
+            pos = K - 1 - (kept_after + gt_later + tl.minimum(eq_later, quota))
+            tl.store(orow + pos, idx, mask=keep & (pos >= 0))
+            kept_after += gt_tot + tl.minimum(eq_tot, quota)
             eq_after += eq_tot
-            n_gt += tl.sum(gt, axis=0)
+            n_gt += gt_tot
         tl.atomic_add(stats + 0, 1)
         if (n_gt == gt_hint) & (m_eq >= 1) & (eq_after >= m_eq):
             if eq_after > m_eq:
@@ -136,8 +148,9 @@ def canon_one(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
 
 
 @triton.jit
-def count_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, wtau, SEG,
+def count_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, SEG,
               K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr):
+    # ws per row: SEG (gt, eq) pairs, then the candidate
     r = tl.program_id(0)
     s = tl.program_id(1)
     lo, n = _bounds(r, A, B, ncols, next_n, MODE)
@@ -146,15 +159,16 @@ def count_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, wtau, SEG,
         tau, _gt = _hint(row, out + r.to(tl.int64) * os0, n, ls1, K, KP2)
         seg = tl.cdiv(tl.cdiv(n, SEG), BLOCK) * BLOCK
         start = s * seg
-        c_gt, c_eq = _count(row, n, start, tl.minimum(start + seg, n), tau, ls1, BLOCK)
-        tl.store(ws + (r * SEG + s) * 2, c_gt)
-        tl.store(ws + (r * SEG + s) * 2 + 1, c_eq)
+        c_gt, c_eq = _count(row, start, tl.minimum(start + seg, n), tau, ls1, BLOCK)
+        w = ws + r * (2 * SEG + 1)
+        tl.store(w + 2 * s, c_gt)
+        tl.store(w + 2 * s + 1, c_eq)
         if s == 0:
-            tl.store(wtau + r, tau)
+            tl.store(w + 2 * SEG, tau)
 
 
 @triton.jit
-def emit_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, wtau, stats, SEG,
+def emit_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, stats, SEG,
              K: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, SEGP2: tl.constexpr):
     # each segment emits its keys at their ranks; the row's totals and the counts before the segment come from
     # count_seg's, so the candidate is checked before any write
@@ -164,11 +178,12 @@ def emit_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, wtau, stats, S
     if n > K:
         row = logits + r.to(tl.int64) * ls0 + lo.to(tl.int64) * ls1
         orow = out + r.to(tl.int64) * os0
-        tau = tl.load(wtau + r)
+        w = ws + r * (2 * SEG + 1)
+        tau = tl.load(w + 2 * SEG)
         segs = tl.arange(0, SEGP2)
         sm = segs < SEG
-        gts = tl.load(ws + (r * SEG + segs) * 2, mask=sm, other=0)
-        eqs = tl.load(ws + (r * SEG + segs) * 2 + 1, mask=sm, other=0)
+        gts = tl.load(w + 2 * segs, mask=sm, other=0)
+        eqs = tl.load(w + 2 * segs + 1, mask=sm, other=0)
         n_gt = tl.sum(gts, axis=0)
         n_eq = tl.sum(eqs, axis=0)
         if (n_gt < K) & (n_gt + n_eq >= K):

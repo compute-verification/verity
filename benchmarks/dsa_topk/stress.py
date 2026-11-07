@@ -175,10 +175,18 @@ def up_to_ties(case: Case, got: torch.Tensor, ref: torch.Tensor) -> dict:
     kg = key.gather(1, (lo[:, None] + g.clamp(min=0)).clamp(max=x.shape[1] - 1))
     kr = key.gather(1, lo[:, None] + r)
     tau = kr.min(dim=1, keepdim=True).values
-    same_above = bool(((kg > tau).sum(1) == (kr > tau).sum(1)).all())
-    at_least = bool((kg >= tau).all())
-    return {"long_rows": int(long.sum()), "set_ok": in_range and unique and same_above and at_least,
-            "short_ok": short_ok, "rows_order_differs": int((g != gs).any(1).sum())}
+    rel = torch.arange(x.shape[1], device=DEV)[None, :] - lo[:, None]
+    tied = ((key == tau) & (rel >= 0) & (rel < n[:, None])).sum(1)
+    above = (kg > tau).sum(1) == (kr > tau).sum(1)
+    at_least = (kg >= tau).all(1)
+    rows_in = ((g >= 0) & (g < n[:, None])).all(1)
+    rows_unique = (gs[:, 1:] != gs[:, :-1]).all(1)
+    bad = ~(above & at_least & rows_in & rows_unique)
+    return {"long_rows": int(long.sum()), "set_ok": in_range and unique and bool(above.all()) and bool(at_least.all()),
+            "short_ok": short_ok, "rows_order_differs": int((g != gs).any(1).sum()),
+            "rows_bad": {"out_of_range": int((~rows_in).sum()), "repeated": int((~rows_unique).sum()),
+                         "missing_above": int((~above).sum()), "below_kth": int((~at_least).sum())},
+            "bad_rows_n": n[bad][:8].tolist(), "rows_tie_straddles_kth": int(((kr == tau).sum(1) < tied).sum())}
 
 
 def check(args) -> None:
@@ -196,7 +204,7 @@ def check(args) -> None:
             row = {"case": case.name, "op": case.op, "dist": dist, "rows": case.x.shape[0], "cols": case.x.shape[1],
                    "long_rows": int((case.n > K).sum()), "unpatched": [], "canonical": [], "canonical_ref": [],
                    "unpatched_vs_ref": []}
-            before = canon.stats(DEV).clone()
+            before = canon.stats(case.x.device).clone()
             for rep in range(args.reps):
                 for which, ns in (("unpatched", real), ("canonical", canon_ns)):
                     if rep % 2:
@@ -210,12 +218,21 @@ def check(args) -> None:
                         row["canonical_ref"].append(bool(torch.equal(got, ref)))
                     else:
                         row["unpatched_vs_ref"].append(up_to_ties(case, got, ref))
-            row["counters"] = dict(zip(dsa_topk.STATS, (canon.stats(DEV) - before).tolist()))
+            row["counters"] = dict(zip(dsa_topk.STATS, (canon.stats(case.x.device) - before).tolist()))
+            # a garbage fast selection: the pass must bisect every long row and still write the reference
+            junk = torch.randint(-3, case.x.shape[1] + 3, (case.x.shape[0], K), generator=_gen(di), device=DEV,
+                                 dtype=torch.int32)
+            mode = {"top_k_per_row_prefill": 0, "top_k_per_row_decode": 1}.get(case.op, 1)
+            a, b = (case.lo, case.lo + case.n) if mode == 0 else (case.n, None)
+            canon.run("garbage", case.x, junk, K, mode, a.to(torch.int32), None if b is None else b.to(torch.int32),
+                      rows=case.x.shape[0], ncols=case.x.shape[1], ls0=case.x.stride(0), ls1=case.x.stride(1))
+            row["garbage_hint_ref"] = bool(torch.equal(junk, ref))
             record["cases"].append(row)
             print(json.dumps({k: row[k] for k in ("case", "dist", "long_rows", "counters")}),
                   "unpatched", len(set(row["unpatched"])), "canonical", len(set(row["canonical"])),
-                  "ref", all(row["canonical_ref"]), "ties", all(u["set_ok"] for u in row["unpatched_vs_ref"]),
-                  flush=True)
+                  "ref", all(row["canonical_ref"]), "garbage", row["garbage_hint_ref"],
+                  "ties", all(u["set_ok"] for u in row["unpatched_vs_ref"]),
+                  [u.get("rows_bad") for u in row["unpatched_vs_ref"] if not u["set_ok"]][:2], flush=True)
             del case
         torch.cuda.empty_cache()
     record["canon"] = canon.record()
@@ -231,10 +248,15 @@ def compare(args) -> None:
             s = by.setdefault((row["case"], row["dist"]), {"case": row["case"], "dist": row["dist"], "op": row["op"],
                                                            "long_rows": row["long_rows"], "unpatched": [],
                                                            "canonical": [], "canonical_ref": True, "set_ok": True,
-                                                           "short_ok": True, "counters": row["counters"]})
+                                                           "short_ok": True, "counters": row["counters"],
+                                                           "unpatched_rows_bad": {}, "unpatched_outputs_bad": 0})
+            for u in row["unpatched_vs_ref"]:
+                s["unpatched_outputs_bad"] += not u["set_ok"]
+                for k, v in u.get("rows_bad", {}).items():
+                    s["unpatched_rows_bad"][k] = s["unpatched_rows_bad"].get(k, 0) + v
             s["unpatched"] += row["unpatched"]
             s["canonical"] += row["canonical"]
-            s["canonical_ref"] &= all(row["canonical_ref"])
+            s["canonical_ref"] &= all(row["canonical_ref"]) and row["garbage_hint_ref"]
             s["set_ok"] &= all(u["set_ok"] for u in row["unpatched_vs_ref"])
             s["short_ok"] &= all(u["short_ok"] for u in row["unpatched_vs_ref"])
     table = []
@@ -256,7 +278,8 @@ def compare(args) -> None:
     for s in table:
         print(f"{s['case']:28s} {s['dist']:6s} long={s['long_rows']:5d} unpatched_distinct={s['unpatched_distinct']:2d}"
               f" canonical_distinct={s['canonical_distinct']} ref={s['canonical_ref']} ties={s['set_ok']}"
-              f" short={s['short_ok']} {s['counters']}")
+              f" short={s['short_ok']} {s['counters']} bad_outputs={s['unpatched_outputs_bad']}"
+              f" {s['unpatched_rows_bad']}")
 
 
 def device_us(fn, iters: int, trials: int = 7) -> float:
@@ -308,29 +331,44 @@ def time_cases() -> list[Case]:
     return out
 
 
+def variant(spec: str) -> dsa_topk.Canon:
+    """``BLOCK:WARPS:SEG_MIN_KEYS`` (``SEG_MIN_KEYS`` ``off``: one program a row), or ``default``."""
+    if spec == "default":
+        return dsa_topk.Canon()
+    block, warps, seg = spec.split(":")
+    return dsa_topk.Canon(seg_min_keys=1 << 40 if seg == "off" else int(seg), block=int(block), num_warps=int(warps))
+
+
 def time_(args) -> None:
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     real = SimpleNamespace(**{op: getattr(torch.ops._C, op) for op in dsa_topk.OPS})
-    canon_ns = SimpleNamespace(**vars(real))
-    canon = dsa_topk.install(canon_ns)
+    arms = {}
+    for spec in args.variants.split(","):
+        ns = SimpleNamespace(**vars(real))
+        arms[spec] = (ns, dsa_topk.install(ns, variant(spec)))
     rows = []
     for case in time_cases():
         o = torch.empty((case.x.shape[0], K), dtype=torch.int32, device=DEV)
         iters = max(2, min(args.iters, int(2e5 // max(case.x.numel() // 1024, 1))))
         t_real = device_us(lambda: case.call(real, o), iters)
-        t_both = device_us(lambda: case.call(canon_ns, o), iters)
-        t_real2 = device_us(lambda: case.call(real, o), iters)
         row = {"case": case.name, "op": case.op, "rows": case.x.shape[0], "cols": case.x.shape[1],
-               "long_rows": int((case.n > K).sum()), "iters": iters, "unpatched_us": min(t_real, t_real2),
-               "unpatched_us_runs": [t_real, t_real2], "canonical_us": t_both,
-               "host_unpatched_us": host_us(lambda: case.call(real, o), iters),
-               "host_canonical_us": host_us(lambda: case.call(canon_ns, o), iters)}
-        row["added_us"] = row["canonical_us"] - row["unpatched_us"]
-        row["ratio"] = row["canonical_us"] / row["unpatched_us"]
+               "long_rows": int((case.n > K).sum()), "iters": iters,
+               "host_unpatched_us": host_us(lambda: case.call(real, o), iters), "canonical": {}}
+        for spec, (ns, canon) in arms.items():
+            t = device_us(lambda: case.call(ns, o), iters)
+            row["canonical"][spec] = {"device_us": t, "host_us": host_us(lambda: case.call(ns, o), iters),
+                                      "segments": canon.segments(DEV, case.x.shape[0], int(case.n.max()))}
+        t_real2 = device_us(lambda: case.call(real, o), iters)
+        row["unpatched_us_runs"] = [t_real, t_real2]
+        row["unpatched_us"] = min(t_real, t_real2)
+        best = min(row["canonical"], key=lambda s: row["canonical"][s]["device_us"])
+        row["best"] = best
+        row["added_us"] = row["canonical"][best]["device_us"] - row["unpatched_us"]
         rows.append(row)
         print(json.dumps(row), flush=True)
-    rec = {"device": torch.cuda.get_device_name(), "iters": args.iters, "rows": rows, "canon": canon.record()}
+    rec = {"device": torch.cuda.get_device_name(), "iters": args.iters, "variants": list(arms), "rows": rows,
+           "canon": {spec: canon.record() for spec, (_, canon) in arms.items()}}
     (out / "time.json").write_text(json.dumps(rec, indent=1) + "\n")
 
 
@@ -342,6 +380,7 @@ def main() -> None:
     p.add_argument("--reps", type=int, default=4)
     p.add_argument("--dists", default="randn,bf16,int,relu,edge")
     p.add_argument("--iters", type=int, default=50)
+    p.add_argument("--variants", default="default", help="stress.py time: the pass's parameters (`variant`), by comma")
     args = p.parse_args()
     if args.mode != "compare":
         import vllm._custom_ops  # noqa: F401

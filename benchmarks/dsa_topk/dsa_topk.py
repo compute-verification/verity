@@ -43,9 +43,10 @@ LOG_ENV = "VERITY_DSA_TOPK_LOG"
 OPS = ("top_k_per_row_prefill", "top_k_per_row_decode", "persistent_topk", "cooperative_topk")
 #: the device counters: rows rewritten, rows with a tie across the k-th key, rows bisected
 STATS = ("rows_long", "rows_tied", "rows_bisected")
-#: a segment of a row (the decode pass splits a row over programs) is at least this many keys
-SEG_MIN_KEYS = 4096
-BLOCK = 1024
+#: a segment of a row (a call of few rows splits each over programs) is at least this many keys
+SEG_MIN_KEYS = 8192
+#: keys a program reads at a time (below 2**15: dsa_topk_kernels packs two block counts in an int32), and its warps
+BLOCK = 4096
 NUM_WARPS = 8
 
 INT32_MIN = -(1 << 31)
@@ -122,12 +123,15 @@ class Canon:
     """The device pass, and its counters: `run` rewrites the rows of ``out`` (int32, rows x k) longer than ``k`` keys of
     ``logits`` (float32, rows x columns) in place."""
 
-    def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK) -> None:
-        self.seg_min_keys, self.block = seg_min_keys, block
+    def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK, num_warps: int = NUM_WARPS) -> None:
+        if not 0 < block < 1 << 15 or block & (block - 1):
+            raise ValueError(f"block: a power of two below 2**15, not {block}")
+        self.seg_min_keys, self.block, self.num_warps = seg_min_keys, block, num_warps
         self.calls = {op: 0 for op in OPS}
-        self.launches = {op: 0 for op in OPS}
+        self.launches: dict[str, int] = {op: 0 for op in OPS}
         self._stats: dict[Any, Any] = {}
         self._sms: dict[Any, int] = {}
+        self._ws: dict[Any, Any] = {}
 
     def stats(self, device: Any) -> Any:
         import torch
@@ -150,7 +154,7 @@ class Canon:
             ncols: int, ls0: int, ls1: int, next_n: int = 1) -> None:
         import torch
 
-        self.launches[op] += 1
+        self.launches[op] = self.launches.get(op, 0) + 1
         K = kernels()
         dev = logits.device
         if out.stride(1) != 1:
@@ -160,15 +164,25 @@ class Canon:
         stats = self.stats(dev)
         seg = self.segments(dev, rows, ncols)
         args = (logits, ls0, ls1, out, out.stride(0), a, b, ncols, next_n)
-        const = dict(K=k, KP2=next_pow2(k), BLOCK=self.block, MODE=mode, num_warps=NUM_WARPS)
+        const = dict(K=k, KP2=next_pow2(k), BLOCK=self.block, MODE=mode, num_warps=self.num_warps)
         if seg == 1:
             K["canon_one"][(rows,)](*args, stats, **const)
             return
-        ws = torch.empty(rows * seg * 2, dtype=torch.int32, device=dev)
-        wtau = torch.empty(rows, dtype=torch.int32, device=dev)
-        K["count_seg"][(rows, seg)](*args, ws, wtau, seg, **const)
+        ws = self.workspace(dev, rows * (2 * seg + 1))
+        K["count_seg"][(rows, seg)](*args, ws, seg, **const)
         const.pop("KP2")
-        K["emit_seg"][(rows, seg)](*args, ws, wtau, stats, seg, SEGP2=next_pow2(seg), **const)
+        K["emit_seg"][(rows, seg)](*args, ws, stats, seg, SEGP2=next_pow2(seg), **const)
+
+    def workspace(self, device: Any, words: int) -> Any:
+        """An int32 scratch of at least ``words`` for the current stream, kept between calls (a call's two kernels
+        are ordered on its stream, and each stream has its own)."""
+        import torch
+
+        key = (device, torch.cuda.current_stream(device).cuda_stream if device.type == "cuda" else 0)
+        ws = self._ws.get(key)
+        if ws is None or ws.numel() < words:
+            ws = self._ws[key] = torch.empty(max(words, 1 << 16), dtype=torch.int32, device=device)
+        return ws
 
     def record(self) -> dict[str, Any]:
         """The counters so far (synchronizes each device it read)."""
