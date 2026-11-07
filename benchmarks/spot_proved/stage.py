@@ -21,8 +21,8 @@ top-k inputs (`long_rows`).
   or FlashInfer's MNNVL one (its received row the same on every rank; a call on NCCL's route is counted, not staged), an
   unbiased bf16 cuBLAS GEMM's token
   row (``aten::mm`` against a bf16 weight's transposed view, or ``aten::linear``) at the route its call's M rows take (a call past
-  ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), MLA's absorbs (``aten::bmm``) per row, the router's grouped top-k,
-  ``silu_and_mul`` and ``moe_sum`` per row,
+  ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), MLA's absorbs (``aten::bmm``), the first layer's ``_C::rms_norm``, the
+  MoE block's ``aten::add`` of its shared and routed outputs, the router's grouped top-k, ``silu_and_mul`` and ``moe_sum`` per row,
   and FA3's split combine per (token, head). Instances are sampled from it
   by the capture's coins, ``--per-type`` of each type.
 * **Match gate.** Each sampled instance's Definition is evaluated on the captured inputs and must return the captured outputs
@@ -669,6 +669,46 @@ def bmm_instances(cap: Capture, profile, unstaged: dict | None = None):
                        lambda r=r, y=y, i=i: [cap.tensor(r, y)[:, i, :]])
 
 
+def rms_norm_instances(cap: Capture):
+    """``_C::rms_norm`` (the first layer's input norm, before any residual) per token row on `RMSNormCudaVector8_v1` at its
+    launch block."""
+    from verity.ml.definitions.registry.cuda_rmsnorm import launch_block
+    for r in cap.ranks:
+        for e in cap.events[r]:
+            if e["op"] != "_C::rms_norm" or not cap.opened(e):
+                continue
+            a = e["in"]
+            T, N = a["input"]["shape"]
+            block = f'RMSNormCudaVector8_v1{{N={N},EPS={{"f64":"{float(a["epsilon"]).hex()}"}},BLOCK={launch_block(T, N, fused=False)}}}'
+            for t in cap.rows(r, T):
+                yield (f"RMSNormCudaVector8_N{N}", block, (r, e["seq"], t),
+                       lambda r=r, a=a, t=t: [cap.tensor(r, a["input"])[t], cap.tensor(r, a["weight"])],
+                       lambda r=r, e=e, t=t: [cap.tensor(r, e["out"]["result"])[t]])
+
+
+def add_instances(cap: Capture, unstaged: dict | None = None):
+    """``aten::add`` of two bf16 rows (the MoE block's shared and routed experts' outputs) per token row on `ResidualAdd_v1`,
+    torch's f32 add rounded to bf16; any other ``aten::add`` is counted in ``unstaged``."""
+    unstaged = {} if unstaged is None else unstaged
+    for r in cap.ranks:
+        for e in cap.events[r]:
+            if e["op"] != "aten::add" or not cap.opened(e):
+                continue
+            x, o, y = e["in"].get("self"), e["in"].get("other"), e["out"].get("ret0")
+            if not (all(isinstance(v, dict) and len(v.get("shape", ())) == 2 and v.get("dtype") == "torch.bfloat16" for v in (x, o, y))
+                    and x["shape"] == o["shape"] == y["shape"] and e["in"].get("alpha") in (None, 1)):
+                rec = unstaged.setdefault("AtenAdd_other", {"population": 0, "calls": [], "why": (
+                    "an aten::add that is no sum of two bf16 rows of one shape: no population reads it")})
+                rec["population"] += 1
+                rec["calls"].append({"rank": r, "seq": e["seq"]})
+                continue
+            T, N = x["shape"]
+            for t in cap.rows(r, T):
+                yield (f"ResidualAdd_N{N}", f"ResidualAdd_v1{{N={N}}}", (r, e["seq"], t),
+                       lambda r=r, x=x, o=o, t=t: [cap.tensor(r, x)[t], cap.tensor(r, o)[t]],
+                       lambda r=r, y=y, t=t: [cap.tensor(r, y)[t]])
+
+
 def fused_add_rms_norm_instances(cap: Capture):
     from verity.ml.definitions.registry.cuda_rmsnorm import launch_block
     for r in cap.ranks:
@@ -803,7 +843,7 @@ def gate_instance(spec, key, args_of, want_of, full_gates: int) -> tuple[dict, d
 GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm", "moe_launch",
              "vllm::flashinfer_trtllm_fused_allreduce_norm", "vllm::all_reduce", "_C::fused_add_rms_norm", "_vllm_fa3_C::fwd",
              "fa3_sparse_mla", "aten::mm", "aten::linear", "aten::bmm", "_moe_C::grouped_topk", "_C::silu_and_mul",
-             "_moe_C::moe_sum"}
+             "_moe_C::moe_sum", "_C::rms_norm", "aten::add"}
 _EVERY: dict = {}
 
 
@@ -970,8 +1010,8 @@ def main() -> int:
     unstaged: dict[str, dict] = {}
     sources = [quant_instances(cap), fp8_linear_instances(cap), moe_instances(cap, profile),
                fused_ar_norm_instances(cap), allreduce_instances(cap, unstaged), cublas_instances(cap, profile, unstaged),
-               bmm_instances(cap, profile, unstaged), fused_add_rms_norm_instances(cap), router_instances(cap, unstaged),
-               silu_mul_instances(cap),
+               bmm_instances(cap, profile, unstaged), fused_add_rms_norm_instances(cap), rms_norm_instances(cap),
+               add_instances(cap, unstaged), router_instances(cap, unstaged), silu_mul_instances(cap),
                moe_sum_instances(cap), mla_combine_instances(cap), mla_split_part_instances(cap)]
     for src in sources:
         try:
