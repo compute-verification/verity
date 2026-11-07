@@ -160,7 +160,7 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   `one_stage.proofs.check_v2` calls it, and `verdicts_v2` is its verdicts alone, which `tests/test_proofs.py` holds
   to `verify`'s. Onsite and remote read v2 as `VStar.Recursive.Sampled`'s one-stage form, and refuse v1.
 - **The challenger** (`challenger`, Lean of record `SampledProofs/Challenger.lean`): every protocol's live coins, by
-  label and index, each opened once, after its root is recorded. On the auditor host its coins reach the prover's
+  label and index, each opened once, after its root is recorded. On the auditor host its coins reach the developer's
   machine only through that machine's certifier coin link (`benchmarks/live_challenger/auditor.py`, the coins' path).
   A remote prover reads them the same way: one TCP stream at its own `127.0.0.1` port (`RemoteChallenger`), deployed
   as the far end of that coin link (`benchmarks/live_challenger/coin_link.py`).
@@ -175,11 +175,11 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   - `CoinsConfidential` is `Pouw.Assumptions.CoinsConfidential` (`Security/Definitions/Pouw/Assumptions/Dither.lean`,
     in the lock), whose docstring is its statement: a replica's coins reach no machine outside its certifier's boundary
     before it has them, so the strategy run on a replica reads none of its own coins, and ACCEL's pooled guarantee
-    `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the prover controls would need an encrypted,
+    `Pouw.Guarantees.Dither.FleetSound` takes it. A path across a host the developer controls would need an encrypted,
     authenticated channel, which the challenger doesn't have. Deployed, one auditor host runs the challenger and the
     certifier, and a window's coins leave it only on the peer's certifier coin link, which the gate refuses to open
     without (`auditor.coin_ports`).
-  - `OneClock`, a named premise under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
+  - `OneClock`, an assumption under the trusted auditor host, with no Lean statement yet: the challenger's release times and the certifier's
     ingress and receipt times are read on one clock. Deployed, that is the auditor host's. A challenger on a device of its own would have to keep its clock within
     1.03 s of the certifier's, the offset ACCEL's timing allows.
 - **The Python.** `verity.core.protocols.sampled_proofs.one_stage` is the one-stage audit's reference: `registration`,

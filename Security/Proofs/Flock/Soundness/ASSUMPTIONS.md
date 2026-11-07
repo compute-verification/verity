@@ -254,9 +254,9 @@ states (The circuit and the certificate, below). Once every Definition lowers to
 NOT, one generic Boolean-semantics lemma can state it for every template.
 
 **Its coins.** The statement is for live uniform coins: the model's proof coins are uniform and sampled after the
-prover's message. M0's non-ZK session has them on the challenger's keyed coin tree under `FC_COINS=tree` on both sides
+prover's message. The circuit prover's non-ZK session has them on the challenger's keyed coin tree under `FC_COINS=tree` on both sides
 (`serve --tree-from`), which `flock-verify verify --coins tree` reads (the verifier reads coins only from a challenger's
-log). The benches run M0 so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`, `61-circuit-cell.sh`),
+log). The benches run it so by default (`verity/ml/flock/pod/70-class-sweep.sh`, `60-circuit.sh`, `61-circuit-cell.sh`),
 and their records name the coins (`coins: coin-tree`). The binary's default still derives every coin from one OS seed
 through a SHA-512 PRF (`config_with` sets `cfg.coin_seed` from `seed_coins()`; `live/src/coin_seed.rs`). That rests on
 `prf/sha-512` and the seed commitment's hiding, and the headline takes neither, so the Lean verifier refuses such a
@@ -274,7 +274,7 @@ which guarantees take it.
 
 ## Other named assumptions
 
-Not soundness's: the PoUW window's keyed draw takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
+Not soundness's: the PoUW window's keyed sample takes A4 and A5, and `HmRowComputes` is a fact about the circuit, still to
 prove. Completeness takes none on the record's JSON: that the verifier's total parser (`Flock.JsonParse.parse`) reads
 back what the honest prover's printer (`printJ`) and `canon` print is proved
 (`Proofs/Flock/Claims/Complete/Json/RoundTrip.lean`). Zero knowledge's two are `Hm96Hiding`, stated in the spec (`Claims.Hm96Hiding`, `Definitions/Core/Hm96.lean`,
@@ -439,7 +439,7 @@ before the session's first coin, not bounds state by state.
 - **Live coins.** The theorems, the headline among them, are for coins that are uniform and unknown to the prover
   before it sent the round, as the model's coin nodes sample them. A session reads them from the challenger's keyed coin
   tree (`tree` coins, below). The randomness is trusted, not proved: A6, and for the unit sample A3.
-- **`seed` coins** (`coin-commit/sha256/v1`; M0's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
+- **`seed` coins** (`coin-commit/sha256/v1`; the circuit prover's non-ZK session's default, `cfg.coin_seed`, `coin-commit/sha512`)
   add two assumptions: the seed commitment hides the seed, and SHA-256 in counter mode is a PRF. No theorem takes them,
   so a run on seed coins is outside the headline (The headline, its coins), and the Lean verifier refuses it once every
   check has passed (`ProvedScope.SEED_COINS`).
