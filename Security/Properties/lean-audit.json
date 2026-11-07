@@ -130,7 +130,7 @@
    "owner": "@network-accounting",
    "digest": "d9457f2011bf51bdb5935b85ce9a848b489c67ef0a02ca412731b2f15d24255a"
   },
-  "Properties.RemoteAudit.Component.HonestSchedule": {
+  "Properties.RemoteAudit.Subprotocol.HonestSchedule": {
    "owner": "@memory-accounting",
    "digest": "78b64c8ef4f8e96c69c8f809928e38b51f2acc08b6fd52b48f9f65e4c17b4aa9"
   }
@@ -980,44 +980,44 @@
   "Firewall"
  ],
  "claims": {
-  "modules": ["Properties.RemoteAudit.Component"],
+  "modules": ["Properties.RemoteAudit.Subprotocol"],
   "witnesses": {
-   "Properties.RemoteAudit.Component.AcceptIsVerifiedFor": {
-    "fails": "Properties.RemoteAudit.Component.acceptIsVerified_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.AcceptIsVerifiedFor": {
+    "fails": "Properties.RemoteAudit.Subprotocol.acceptIsVerified_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.acceptIsVerified_honest",
-     "Properties.RemoteAudit.Component.acceptIsVerified_complete"
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest",
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete"
     ]
    },
-   "Properties.RemoteAudit.Component.LineHeldAtComponentBy": {
-    "fails": "Properties.RemoteAudit.Component.lineHeldAtComponent_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocolBy": {
+    "fails": "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest",
-     "Properties.RemoteAudit.Component.lineHeldAtComponent_bites"
+     "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_honest",
+     "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_bites"
     ]
    },
-   "Properties.RemoteAudit.Component.LineHeldBy": {
-    "fails": "Properties.RemoteAudit.Component.lineHeld_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.LineHeldBy": {
+    "fails": "Properties.RemoteAudit.Subprotocol.lineHeld_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.lineHeld_honest",
-     "Properties.RemoteAudit.Component.lineHeldAtComponent_honest"
+     "Properties.RemoteAudit.Subprotocol.lineHeld_honest",
+     "Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_honest"
     ]
    },
-   "Properties.RemoteAudit.Component.PublishedEpsFor": {
-    "fails": "Properties.RemoteAudit.Component.publishedEps_nontrivial",
+   "Properties.RemoteAudit.Subprotocol.PublishedEpsFor": {
+    "fails": "Properties.RemoteAudit.Subprotocol.publishedEps_nontrivial",
     "meets": [
-     "Properties.RemoteAudit.Component.acceptIsVerified_honest",
-     "Properties.RemoteAudit.Component.acceptIsVerified_complete"
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_honest",
+     "Properties.RemoteAudit.Subprotocol.acceptIsVerified_complete"
     ]
    }
   },
   "not": {
-   "Properties.RemoteAudit.Component.AcceptIsVerified": "a closed statement: the `AcceptIsVerifiedFor` form at the deployed verifier (`Properties.RemoteAudit.Component.acceptIsVerified_iff`, `Iff.rfl`), whose witnesses are this statement's",
-   "Properties.RemoteAudit.Component.LineHeldAtComponent": "a closed statement: the `LineHeldAtComponentBy` form at the deployed verifier (`Properties.RemoteAudit.Component.lineHeldAtComponent_iff`, `Iff.rfl`), whose witnesses are this statement's",
-   "Properties.RemoteAudit.Component.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtComponent` reads in its event: an event, no claim",
-   "Properties.RemoteAudit.Component.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtComponent_honest`: the honest case, no claim",
-   "Properties.RemoteAudit.Component.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtComponentBy` read in their event: an event, no claim",
-   "Properties.RemoteAudit.Component.PublishedEps": "a closed statement: the `PublishedEpsFor` form at the deployed verifier (`Properties.RemoteAudit.Component.publishedEps_iff`, `Iff.rfl`), whose witnesses are this statement's"
+   "Properties.RemoteAudit.Subprotocol.AcceptIsVerified": "a closed statement: the `AcceptIsVerifiedFor` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.acceptIsVerified_iff`, `Iff.rfl`), whose witnesses are this statement's",
+   "Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol": "a closed statement: the `LineHeldAtSubprotocolBy` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.lineHeldAtSubprotocol_iff`, `Iff.rfl`), whose witnesses are this statement's",
+   "Properties.RemoteAudit.Subprotocol.Plays": "the component's acceptance of a record's bytes, which `LineHeldAtSubprotocol` reads in its event: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.HonestSchedule": "the honest instance's schedule, a hypothesis of `lineHeldAtSubprotocol_honest`: the honest case, no claim",
+   "Properties.RemoteAudit.Subprotocol.ReadBy": "the line's bits-read claim at a verifier's record, which `LineHeldBy` and `LineHeldAtSubprotocolBy` read in their event: an event, no claim",
+   "Properties.RemoteAudit.Subprotocol.PublishedEps": "a closed statement: the `PublishedEpsFor` form at the deployed verifier (`Properties.RemoteAudit.Subprotocol.publishedEps_iff`, `Iff.rfl`), whose witnesses are this statement's"
   }
  },
  "witnesses": {
@@ -1714,7 +1714,7 @@
    "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
    "unfolded_hash": "1cbdf00ba5dbe5e7e90c3c839923b6104892a82cc56f463e2667e0cf2b29c167"
   },
-  "Properties.RemoteAudit.Component.publishedEps": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789",
+  "Properties.RemoteAudit.Subprotocol.publishedEps": "cf7c54d7f6c205f892c215116f64e504646a0e2fba5a236dea6c734cd5e15789",
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
    "unfolded_hash": "b65d52df519b37adb74e6f1d1332a9eb51b0fb18d82efd523b06d3fa26562928"
@@ -10811,7 +10811,7 @@
     "function": "RemoteAudit.checkOpening",
     "outcome": "accept"
    },
-   "Properties.RemoteAudit.Component.publishedEps": {
+   "Properties.RemoteAudit.Subprotocol.publishedEps": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
    },
