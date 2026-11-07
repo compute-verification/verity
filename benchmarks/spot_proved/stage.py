@@ -479,8 +479,8 @@ def mla_combine_instances(cap: Capture):
 
 
 def mla_split_part_instances(cap: Capture):
-    """Each split of a token whose KV rows the tap kept (its first ``kv_gathered_tokens``), per head: its keys' rows in, FA3's
-    (o_partial, lse) for that split out."""
+    """Each split of a token whose KV rows the tap kept (``kv_gathered_rows``, else its first ``kv_gathered_tokens``), per head:
+    its keys' rows in, FA3's (o_partial, lse) for that split out."""
     from verity.ml.definitions.registry import sparse_mla_split as SP
     for r, e, tap, valid, nss in fa3_calls(cap):
         if tap is None or "sha512" not in (tap["in"].get("kv_gathered") or {}):
@@ -489,7 +489,10 @@ def mla_split_part_instances(cap: Capture):
         DR = e["in"]["q"]["shape"][-1]
         BN = SP.BLOCK_N
         scale = float(tap["in"]["softmax_scale"]).hex()
-        for t in range(min(cap.tokens(r), T, int(tap["in"]["kv_gathered_tokens"]))):
+        kept = tap["in"].get("kv_gathered_rows") or list(range(int(tap["in"]["kv_gathered_tokens"])))
+        for i, t in enumerate(kept):
+            if t >= min(cap.tokens(r), T):
+                continue
             splits = SP.split_blocks(valid[t], nss[t])
             if len(splits) < 2:
                 continue
@@ -499,9 +502,9 @@ def mla_split_part_instances(cap: Capture):
                 block = (f'SparseMlaSplitPart_v1{{T={hi - lo},DR={DR},DV={DV},BN={BN},DOT={{"fn":"HopperBF16WgmmaDot16_v1"}},'
                          f'INV={{"fn":"Fa3InvSum_v1"}},SCALE={{"f64":"{scale}"}}}}')
                 yield (f"SparseMlaSplitPart_T{hi - lo}", block, (r, e["seq"], t, h, s),
-                       lambda r=r, e=e, tap=tap, t=t, h=h, lo=lo, hi=hi: [
+                       lambda r=r, e=e, tap=tap, i=i, t=t, h=h, lo=lo, hi=hi: [
                            cap.tensor(r, tap["in"]["q_v"])[t, h], cap.tensor(r, tap["in"]["q"])[t, h],
-                           cap.tensor(r, tap["in"]["kv_gathered"])[t, lo:hi]],
+                           cap.tensor(r, tap["in"]["kv_gathered"])[i, lo:hi]],
                        lambda r=r, e=e, t=t, h=h, s=s: [cap.tensor(r, e["out"]["ret2"])[s, h, t, :],
                                                         cap.tensor(r, e["out"]["ret3"])[s, h, t:t + 1]])
 

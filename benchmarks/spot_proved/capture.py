@@ -20,8 +20,8 @@ recorded. A step the engine runs without a graph is recorded as it runs. What is
 * calls no dispatcher sees: each Triton fused-MoE launch (``invoke_fused_moe_triton_kernel``: A, its scales, the expert
   ids, the sorted token ids, the routed weights, the config, and C after the launch), and each sparse MLA kernel call
   (FlashMLA's ``_bf16_flash_mla_kernel``, or FA3's ``flash_attn_varlen_func`` in the FlashAttention sparse backend: the
-  queries, the global top-k rows, the outputs, and the KV rows those indices read for the first ``--mla-tokens``
-  tokens).
+  queries, the global top-k rows, the outputs, and the KV rows those indices read for ``--mla-tokens`` tokens: FlashMLA's
+  first ones, FA3's with the most keys (``seqused_k``), the ones with the most splits, named in ``kv_gathered_rows``).
 
 Then the graph call runs as served, and its hidden states must equal the recorded forward's bit for bit (``check``). The
 extra forward writes the same KV values to the same slots, so the step and every later one are unchanged.
@@ -354,11 +354,15 @@ def _install_mla() -> None:
             n = min(S.mla_tokens, int(table.shape[0]))
             if n:
                 with _quiet():
-                    idx = table[:n].long().clamp(min=0).reshape(-1)
+                    used = kw.get("seqused_k")
+                    pick = (torch.sort(torch.argsort(used[:table.shape[0]].long(), descending=True, stable=True)[:n]).values
+                            if used is not None else torch.arange(n, device=table.device))
+                    idx = table[pick].long().clamp(min=0).reshape(-1)
                     rows = k.reshape(k.shape[0], -1), v.reshape(v.shape[0], -1)
                     gathered = torch.cat([rows[1][idx], rows[0][idx]], dim=-1).reshape(n, table.shape[1], -1)
                 ins["kv_gathered"] = _ref(gathered)
                 ins["kv_gathered_tokens"] = n
+                ins["kv_gathered_rows"] = [int(x) for x in pick.tolist()]
             out = orig(*a, **kw)
             outs = out if isinstance(out, tuple) else (out,)
             _event("fa3_sparse_mla", ins, {f"r{i}": _ref(t) for i, t in enumerate(outs) if isinstance(t, torch.Tensor)})
@@ -709,7 +713,7 @@ def main(argv: list[str]) -> int:
     s.add_argument("--capture", required=True, help="where each rank's capture goes")
     s.add_argument("--steps", required=True, help="the 0-based steps to record, comma-separated")
     s.add_argument("--open", default="dense:1,moe:1", help="how many layers of each kind the coins open, KIND:N,...")
-    s.add_argument("--mla-tokens", type=int, default=8, help="a sparse MLA call's tokens whose gathered KV rows are recorded")
+    s.add_argument("--mla-tokens", type=int, default=8, help="how many of a sparse MLA call's tokens have their gathered KV rows recorded (FA3: those with the most keys)")
     s.add_argument("--keep", choices=("opened", "all"), default="opened", help="all: write every recorded tensor")
     s.add_argument("--keep-steps", help="with --keep all, the steps that write every tensor (default: every step); the "
                    "others write the opened layers'")
