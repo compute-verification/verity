@@ -66,10 +66,10 @@ for m in "$@"; do
       if [ "$i" -gt "$replays" ]; then
         f=$(mktemp -d)
         env VLLM_DISABLE_COMPILE_CACHE=1 TORCHINDUCTOR_CACHE_DIR="$f/inductor" TRITON_CACHE_DIR="$f/triton" \
-          "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
+          "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" ${LOGPROBS:+--logprobs} > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
         rm -rf "$f"
       else
-        "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
+        "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" ${LOGPROBS:+--logprobs} > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
       fi
       grep '^{"mode"' "$d/replay-$i.log" | tail -n 1
       autotune "replay-$i"

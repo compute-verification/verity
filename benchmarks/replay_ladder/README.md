@@ -56,7 +56,9 @@ python benchmarks/replay_ladder/coverage_table.py render COVERAGE.json --ladder 
 
 `run.sh` takes `ARMS` (`pinned unpinned`; `rblock` too on request), `REPLAYS` (3), `FRESH` (1) and `ALONE` (64) for the pinned arm,
 `UNPINNED_REPLAYS` (3) for each other arm, `RBLOCK0_ARMS` (`pinned` to run the pinned arm at
-`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0` too, as the integration's engines do; each arm's `arm_env.txt` records it), and
+`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0` too, as the integration's engines do; each arm's `arm_env.txt` records it),
+`LOGPROBS` (`1`: each replay records its sampled tokens' logprobs, and from the second on compares them with the
+first's bit for bit, `replay.py --logprobs`), and
 `SPAN_S`, `OVER` and `BURST` for the window (`ladder.py serve --docs` caps the shard's documents a plan takes prompts
 from). Each arm's `autotune.sha256` holds the digest of every FlashInfer autotune cache after serving and after each
 replay. A TP2, TP4 or TP8 model needs a node with that many GPUs. GLM-5.3's window stays inside 2,048 tokens of

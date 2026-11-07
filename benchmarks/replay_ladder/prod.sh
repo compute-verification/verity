@@ -3,7 +3,7 @@
 #   prod.sh MODEL     fetches vLLM's benchmark_serving ShareGPT file at its pin, builds the plan over it, the C4 shard and the
 #                     model's chat template, serves and replays it with run.sh (PLAN, MAX_MODEL_LEN), and breaks each replay's
 #                     differing requests down by kind (kinds.json).
-# run.sh's variables pass through (ARMS, RBLOCK0_ARMS, REPLAYS, FRESH, ALONE, UNPINNED_REPLAYS, SPAN_S, OVER, BURST); N (8000)
+# run.sh's variables pass through (ARMS, RBLOCK0_ARMS, REPLAYS, FRESH, ALONE, UNPINNED_REPLAYS, LOGPROBS, SPAN_S, OVER, BURST); N (8000)
 # and SEED (0) set the plan, MAX_MODEL_LEN (40960) the servers' context limit.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out

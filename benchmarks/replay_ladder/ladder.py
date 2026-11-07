@@ -265,7 +265,8 @@ def replay(a: argparse.Namespace) -> int:
     out = Path(a.out)
     os.environ["LADDER_TILINGS"] = str(out / f"replay-{a.index}")
     P.apply(pin=pin() == "pinned", tilings=ENV.LADDER_TILINGS)
-    argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}")]
+    argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}"),
+            *(["--logprobs"] if a.logprobs else [])]
     if a.index > 1:
         argv += ["--against", str(out / "replay-1")]
     return R.main(argv)
@@ -367,6 +368,7 @@ def model_row(d: Path) -> dict:
             "token_positions_differing": r["token_positions_differing"],
             "rows_exact_share": 1 - r["token_positions_differing"] / tokens, "bit_exact": r["bit_exact"],
             "against_first_requests_differing": (r.get("against") or {}).get("requests_tokens_differing"),
+            "against_first_logprobs_differing": ((r.get("against") or {}).get("logprobs") or {}).get("requests_logprobs_differing"),
             "replay_over_served": r["replay_over_served"], "compile": compile_mode(d / f"{rd.name}.log"),
             "tilings": tilings(rd)})
     row["serve_tilings"] = tilings(d / SERVING_TILINGS)
@@ -436,6 +438,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--model", required=True, choices=sorted(LADDER))
     r.add_argument("--out", required=True)
     r.add_argument("--index", type=int, required=True)
+    r.add_argument("--logprobs", action="store_true", help="record each sampled token's logprob and, from the second "
+                                                           "replay on, compare them with the first replay's bit for bit")
     al = sub.add_parser("alone")
     al.add_argument("--model", required=True, choices=sorted(LADDER))
     al.add_argument("--out", required=True)
