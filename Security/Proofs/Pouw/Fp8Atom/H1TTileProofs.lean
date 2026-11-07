@@ -1,5 +1,7 @@
-import Proofs.Pouw.Fp8Atom.H1TRunningProofs
-import Definitions.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions
+module
+
+public import Proofs.Pouw.Fp8Atom.H1TRunningProofs
+public import Definitions.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions
 
 /-!
 # `TTH1T`'s two form checks
@@ -9,6 +11,8 @@ import Definitions.Pouw.Assumptions.Fp8Atom.H1TTileAssumptions
   `h1tGammaRunning` bounds its cost by 32 per credited word, and every credited word is in a right tile.
 * **`tth1tSat`**: at `γ = 1` the event is `cost < 0`, which never holds, so `TTH1T r c 1 0` holds for every domain.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T.Proofs
 

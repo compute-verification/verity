@@ -1,5 +1,9 @@
-import Proofs.Hash.TreeBinding
-import Proofs.Hash.RowBinding
-import Proofs.Hash.EmbeddingRead
+module
+
+public import Proofs.Hash.TreeBinding
+public import Proofs.Hash.RowBinding
+public import Proofs.Hash.EmbeddingRead
 
 /-! The hash area's proofs. -/
+
+@[expose] public section

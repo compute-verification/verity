@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResStepsWD
-import Proofs.Flock.Claims.Recursion.ResEndsW
-import Proofs.Flock.Claims.Recursion.AccFits
+module
+
+public import Proofs.Flock.Claims.Recursion.ResStepsWD
+public import Proofs.Flock.Claims.Recursion.ResEndsW
+public import Proofs.Flock.Claims.Recursion.AccFits
 
 /-!
 # The next rows' owners (`NextHeldW`)
@@ -18,6 +20,8 @@ Where a level part's unit holds `acc` at row `p` of the chain (`RecVStar.accRead
 consistency sum in both of its residuals (level 0's `queryFold` always adds one, and `Lin`'s operations keep every key),
 so `RecAlgebra.accTerms` adds `acc1` to them and `RecResiduals.groups` puts `acc1`'s port in a part's `P`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResLower
 

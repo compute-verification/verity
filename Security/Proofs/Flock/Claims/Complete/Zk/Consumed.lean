@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
-import Proofs.Flock.Claims.Complete.Zk.Count
-import Proofs.Flock.Claims.Complete.Zk.Discharge
-import Proofs.Flock.Claims.DeployRoundsZk
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.Json.Files
+public import Proofs.Flock.Claims.Complete.Zk.Count
+public import Proofs.Flock.Claims.Complete.Zk.Discharge
+public import Proofs.Flock.Claims.DeployRoundsZk
 
 /-!
 # Every recorded round of a masked rep is consumed (`ConsumedZk`)
@@ -14,6 +16,8 @@ import Proofs.Flock.Claims.DeployRoundsZk
 * The two streams together are the sends after the link (`Recs`), at most `rounds true` (`sendCountZk_goal`), so each
   holds exactly its rep's round count.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

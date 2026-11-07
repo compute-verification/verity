@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.Coins
+module
+
+public import Proofs.Flock.Claims.ZK.Coins
 
 /-!
 # The real run and the forced run
@@ -15,6 +17,8 @@ does (`agree`). So against one verifier:
 * `resp_zero_eq`: every committed-coin prover sends `Hello` first, so every run's commitment is the verifier's answer to
   it.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

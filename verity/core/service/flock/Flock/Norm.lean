@@ -2,8 +2,12 @@
 A parsed JSON value rebuilt: `JsonParse.parse` builds an object's tree in the order its keys arrived, so where the verifier
 keeps a parsed value (a draw) it keeps `norm` of it, whose trees depend only on each object's fields.
 -/
-import Lean.Data.Json
-import Flock.JsonParse
+module
+
+public import Lean.Data.Json
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock
 

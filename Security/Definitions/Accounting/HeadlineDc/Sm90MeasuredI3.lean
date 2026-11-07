@@ -1,4 +1,6 @@
-import Definitions.Accounting.HeadlineDc.Sm90Measured
+module
+
+public import Definitions.Accounting.HeadlineDc.Sm90Measured
 
 /-!
 # H200 (sm_90)'s (I3) twin: DC-90-ri at q = 3/5 and `dither-2s-licpw-redux-p1-l32` (trusted; generated)
@@ -14,6 +16,8 @@ this file. `Accounting.Guarantees.TS.Sm90MeasuredI3Headline` reads it.
 * `lamStar`: π*, the certificate minimising the bound over this menu at `q = 3/5` (JI90_0 0.819832 + JI90_1 0.033778 +
   JPA90_0 0.146390).
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Headline.Sm90MeasuredI3
 

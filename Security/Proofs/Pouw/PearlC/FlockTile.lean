@@ -1,7 +1,9 @@
-import Proofs.Pouw.PearlC.FlockTile.Bridge
-import Proofs.Pouw.PearlC.FlockTile.Audit
-import Proofs.Pouw.PearlC.FlockTile.Statement
-import Proofs.Pouw.PearlC.FlockTile.Gamma
+module
+
+public import Proofs.Pouw.PearlC.FlockTile.Bridge
+public import Proofs.Pouw.PearlC.FlockTile.Audit
+public import Proofs.Pouw.PearlC.FlockTile.Statement
+public import Proofs.Pouw.PearlC.FlockTile.Gamma
 
 /-!
 # Pearl-C under C-Flock's hidden audit
@@ -11,3 +13,5 @@ over the TileRead session with a `TileGame` per tile (`FlockTile.Audit`), the hi
 `TileProofSoundAll` discharged there, conditional on T3 at the session and the binding (`FlockTile.Gamma`), and that γ
 as the guarantee `Pouw.Guarantees.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192` (`FlockTile.Statement`).
 -/
+
+@[expose] public section

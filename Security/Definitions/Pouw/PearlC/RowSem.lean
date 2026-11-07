@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.Row4Circuit
-import Definitions.Pouw.PearlC.DeviceFp4
+module
+
+public import Definitions.Pouw.PearlC.Row4Circuit
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # A row's statistics, scales and forming as the Programs compute them (spec)
@@ -27,6 +29,8 @@ A `PearlCSem` reads a row as values (`wordsVal`), so these formulas run on the r
 `e4m3` of it is `F32ToE4m3Sat(D_t)` wherever the cast agrees with `e4m3Word` and `D_t` is not NaN. The noise
 (`noise`, `lines`) stays a parameter, of codes in both: `pc8`'s noise codes are the words the Program reads.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

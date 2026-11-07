@@ -25,7 +25,7 @@ measured = "the Server Edition's page states no clock; its 'TF32 Tensor Core 234
 mhz = 2430
 grade = "measured (driver)"
 source = "no Server Edition document states a clock"
-measured = "nvidia-smi's maximum SM clock on vy-nebius-1 is 2430 MHz (census rtx-pro-6000-server/e4m3); the census is taken at the node's 2,092 MHz lock (machine_model README 'Devices')"
+measured = "nvidia-smi's maximum SM clock on the deployed node is 2430 MHz (census rtx-pro-6000-server/e4m3); the census is taken at the node's 2,092 MHz lock (machine_model README 'Devices')"
 
 # ---- tensor cores: dense MACs a SM-clock, by format and shape
 # -------------------------------------------------------------
@@ -443,7 +443,7 @@ value = 134217728
 unit = "B"
 grade = "whitepaper"
 source = "WP Table 4 'L2 Cache Size 131072 KB'; p. 9: the full GB202's 128 MB 'as used in RTX PRO 6000 Blackwell'"
-gap = "read cudaDeviceProp.l2CacheSize on a vy-nebius node (no GPU time)"
+gap = "read cudaDeviceProp.l2CacheSize on a deployed node (no GPU time)"
 
 [[capacity]]
 key = "hbm"
@@ -722,7 +722,7 @@ what = "host cores a GPU on the nodes we run"
 value = 12
 unit = "cores/GPU"
 grade = "measured (the VM's CPU count)"
-source = "vy-nebius-1 and -2: 192 vCPUs (tools/research/src/research/pods/nebius/check.py), a VM of 2 sockets × 48 cores × 2 threads on 2 × Xeon 6776P, 8 GPUs"
+source = "the deployed nodes: 192 vCPUs (tools/research/src/research/pods/nebius/check.py), a VM of 2 sockets × 48 cores × 2 threads on 2 × Xeon 6776P, 8 GPUs"
 
 [[unit]]
 key = "tensor"
@@ -848,7 +848,7 @@ gap = "an OptiX probe of ray-triangle tests a SM-clock with exact barycentrics (
 
 [[unit]]
 key = "clocks"
-what = "clock limits: the census's 2,092 MHz lock, fmax 2,430 MHz on vy-nebius-1, the Workstation Edition's 2,617 MHz boost"
+what = "clock limits: the census's 2,092 MHz lock, fmax 2,430 MHz on the deployed node, the Workstation Edition's 2,617 MHz boost"
 verdict = "scale"
 why = "θ's rates are a SM-clock's, so d, the exchange rate, B_RF and r_H don't move with the clock; per-second figures use the clock the node runs at; the driver caps it at fmax, and a higher clock speeds the honest kernel too"
 
@@ -885,7 +885,7 @@ other = 0
 rotates = 864
 adds = 760
 add_form = "IADD.64"
-overlap = "yes: θ's census issues LOP3 and IMAD together at 4.0 warp instructions a SM-clock (alu.iadd3's runs); commit_gpu's SHA_ROT r3 (480 rotations, two IMAD.HI and two IMAD each) at 5.28 against 7.13 G/s fits IMAD.HI at about 16 lanes a SM-clock, not a shared pipe (RT-UNITS U8, revised), so with IMAD.HI unmeasured here the ceiling without it is the one on measured rates"
+overlap = "yes: θ's census issues LOP3 and IMAD together at 4.0 warp instructions a SM-clock (alu.iadd3's runs); commit_gpu's SHA_ROT r3 (480 rotations, two IMAD.HI and two IMAD each) at 5.28 against 7.13 G/s fits IMAD.HI at about 16 lanes a SM-clock, not a shared pipe, so with IMAD.HI unmeasured here the ceiling without it is the one on measured rates"
 source = "benchmarks/pouw/commit_gpu/README.md 'What decides the speed': our kernel's 1728 SHF (864 rotations and shifts), 927 LOP3 and 760 IADD.64 a block, every one on the integer pipe"
 
 [[public]]

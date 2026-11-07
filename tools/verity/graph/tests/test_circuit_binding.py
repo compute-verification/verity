@@ -1,6 +1,7 @@
 """The circuit-binding family: its listing is circuit-check's catalog bindings, read from the binding files' syntax without
 running them, the same bytes on every listing; its runners tell a pass, a fail and an error apart from circuit-check's exit and
-report (here a stand-in's), and the records tarball is the records' bytes alone."""
+report (a stand-in's run, its reports made by circuit-check's own writers), the records tarball is the records' bytes alone,
+and each binding's task reads only its own slice and the shared part."""
 from __future__ import annotations
 
 import json
@@ -10,6 +11,8 @@ import sys
 from pathlib import Path
 
 import pytest
+from circuit_check import checks as CK
+from circuit_check import shard as SH
 from conftest import git, toy_tree
 
 from verity_graph import ROOT, contract, graph, runners
@@ -69,18 +72,26 @@ def test_each_binding_is_a_task_named_as_circuit_check_names_it_from_the_files_s
     doc = graph.listing(root, {"circuit-binding"}, LISTERS)
     by = {t["id"]: t for t in doc["tasks"]}
     reads = [{"task": F.CATALOG, "output": "records"}]
-    assert sorted(by) == sorted([F.CATALOG, "circuit-coverage:catalog", *(f"circuit-binding:{f}:{e}" for f, e in BINDINGS.values())])
+    assert sorted(by) == sorted([F.CATALOG, "circuit-coverage:catalog",
+                                 *(f"circuit-binding:{f}:{e}" for f, e in BINDINGS.values())])
     base = sorted(f for f in files if f.startswith(("verity/", f"{F.CHECKER}/")) and not f.startswith(f"{F.CHECKER}/tests/")
                   and not f.endswith(".md") or f == "uv.lock")
     for name, (f, e) in BINDINGS.items():
         t = by[f"circuit-binding:{f}:{e}"]
-        assert t["vars"] == {"binding": name, "records": F.RECORDS["path"]} and t["reads"] == reads and t["key"] is None
-        assert t["inputs"] == sorted({*base, *graph.runner_sources("circuit-binding")}), name
-        assert t["about"] == f"circuit-check --binding {name}"
+        assert t["vars"] == {"binding": name, "slice": F.slice_of(name)["path"], "shared": F.SHARED["path"]}, name
+        assert t["reads"] == [{"task": F.CATALOG, "output": "shared"}, {"task": F.CATALOG, "output": f"slice {name}"}]
+        assert t["inputs"] == sorted({*base, *graph.runner_sources("circuit-binding")}) and t["key"] is None, name
+        assert t["about"] == f"circuit-check --binding {name}" and t["outputs"] == [F.failures(name)]
     cat, cov = by[F.CATALOG], by["circuit-coverage:catalog"]
-    assert cat["outputs"] == [F.RECORDS] and cat["reads"] == [] and cat["key"] and cov["reads"] == reads
+    assert cat["outputs"] == [F.RECORDS, F.SHARED, *sorted((F.slice_of(n) for n in BINDINGS), key=lambda o: o["name"])]
+    assert cat["reads"] == [] and cat["key"] and cov["reads"] == reads
+    pieces = [F.slice_of(name)["path"] for name in BINDINGS]
+    assert len(set(pieces)) == len(pieces) and F.SHARED["path"] not in pieces
+    assert all(p.rpartition("/")[0] == F.SLICES for p in [*pieces, F.SHARED["path"]])
     assert json.loads(cov["vars"]["bindings"]) == sorted(BINDINGS)
     assert f"{graph.RUNNERS}/circuit_binding.py" in cat["inputs"] and f"{graph.RUNNERS}/circuit_binding.py" in cov["inputs"]
+    paths = [F.failures(name)["path"] for name in BINDINGS]
+    assert len(set(paths)) == len(paths) and all(p.rpartition("/")[0] == F.FAILURES for p in paths)
 
 
 def test_the_listing_is_the_same_bytes_in_another_checkout_of_the_commit(tmp_path):
@@ -127,6 +138,8 @@ def test_the_runners_say_what_circuit_check_and_check_say():
     assert f'NO_BINDING = "{CB.NO_BINDING}"' in (ROOT / F.SOURCE / "cli.py").read_text()
     check = (ROOT / "tools" / "verity" / "check" / "check.py").read_text()
     assert f'CC_RECORDS = "{F.RECORDS["path"]}"' in check and f't.add(d / "cache", "{CB.TOP}")' in check
+    assert f'print(f"{CB.REFUSED}{{e}}", file=sys.stderr)' in (ROOT / F.SOURCE / "cli.py").read_text()
+    assert F.slice_of("n")["name"] == f"{circuit_catalog.SLICE}n"
 
 
 # --- the runners, on a stand-in for circuit-check --------------------------------------------------------------------------
@@ -138,13 +151,17 @@ def _graph(*tasks: dict) -> dict:
     return {"envs": {"py": {"digest": contract.digest(b"py")}}, "files": {}, "tasks": full}
 
 
-CATALOG = {"id": F.CATALOG, "kind": "circuit-catalog", "outputs": [F.RECORDS]}
+B_ROOTS = "verity.ml.x.circuit-check#_b_roots"
+#: a listed binding circuit-check's catalog made no slice for
+GONE = "verity.ml.x.circuit-check#_c_roots"
+CATALOG = {"id": F.CATALOG, "kind": "circuit-catalog", "outputs": [F.RECORDS, F.SHARED, F.slice_of(B_ROOTS), F.slice_of(GONE)]}
 READS = [{"task": F.CATALOG, "output": "records"}]
 
 
-def _stand_in(monkeypatch, module, rc: int, report: dict | None, say: str = "", records: dict | None = None) -> list:
+def _stand_in(monkeypatch, module, rc: int, report: dict | None, say: str = "", records: dict | None = None,
+              slices: dict | None = None) -> list:
     """circuit-check as ``module`` calls it: each call's argv and the cache's records then, appended to the list returned; it
-    writes ``records`` into --cache, ``report`` to --out and ``say`` to the log, and exits ``rc``."""
+    writes ``records`` into --cache, ``slices`` into --slices, ``report`` to --out and ``say`` to the log, and exits ``rc``."""
     calls = []
 
     def call(argv, work, cwd, env=None):
@@ -154,6 +171,9 @@ def _stand_in(monkeypatch, module, rc: int, report: dict | None, say: str = "", 
         for rel, body in (records or {}).items():
             (cache / rel).parent.mkdir(parents=True, exist_ok=True)
             (cache / rel).write_text(body)
+        for rel, body in (slices or {}).items():
+            (Path(argv[argv.index("--slices") + 1]) / rel).parent.mkdir(parents=True, exist_ok=True)
+            (Path(argv[argv.index("--slices") + 1]) / rel).write_text(body)
         if report is not None:
             Path(argv[argv.index("--out") + 1]).write_text(json.dumps(report))
         with open(work / graph.LOG, "a") as log:
@@ -221,70 +241,152 @@ def _machine(tmp_path, monkeypatch) -> str:
     return str(tmp_path / "home" / ".cache" / "verity-check" / "circuit-check")
 
 
-def _binding_run(tmp_path, monkeypatch, rc, report, say="") -> tuple[dict, list]:
+def _binding_run(tmp_path, monkeypatch, rc, report, say="", piece: dict | None = None) -> tuple[dict, list]:
+    """``B_ROOTS``' task on the stand-in, its slice ``piece`` (a slice's stand-in by default) and the shared part in place."""
     work = tmp_path / "work"
-    CB.pack(_records(tmp_path / "src", {"v/k/r.json": "{}"}), work / F.RECORDS["path"])
+    _records(work, {F.slice_of(B_ROOTS)["path"]: json.dumps(piece or {"binding": B_ROOTS, "entries": []}),
+                    F.SHARED["path"]: '{"schema": "s"}'})
     calls = _stand_in(monkeypatch, CB, rc, report, say)
-    task = {"id": "circuit-binding:verity/ml/x.circuit-check.py:_b_roots", "kind": "circuit-binding", "reads": READS,
-            "vars": {"binding": "verity.ml.x.circuit-check#_b_roots", "records": F.RECORDS["path"]}}
+    task = {"id": "circuit-binding:verity/ml/x.circuit-check.py:_b_roots", "kind": "circuit-binding",
+            "reads": [{"task": F.CATALOG, "output": "shared"}, {"task": F.CATALOG, "output": F.slice_of(B_ROOTS)["name"]}],
+            "outputs": [F.failures(B_ROOTS)],
+            "vars": {"binding": B_ROOTS, "slice": F.slice_of(B_ROOTS)["path"], "shared": F.SHARED["path"]}}
     doc = _graph(CATALOG, task)
     res = runners.execute(doc["tasks"][-1], doc, work, CB.run)
     assert contract.result_errors(res, doc["tasks"][-1]) == [], res
     return res, calls
 
 
-def _report(*targets: tuple[str, list[str]], new: list[str] = (), hits: int = 0) -> dict:
-    return {"targets": [{"kind": "definition", "target": t, "failures": [{"name": n} for n in fs]} for t, fs in targets],
-            "summary": {"new_failures": list(new)}, "cache": {"hits": hits}}
+def _failure(name: str) -> dict:
+    """A failure as circuit-check makes it (`checks.Findings.fail`), from its name ``<check>/<code> <definition>[ <what>]``."""
+    check, _, rest = name.partition("/")
+    code, _, rest = rest.partition(" ")
+    definition, _, what = rest.partition(" ")
+    found = CK.Findings()
+    found.fail(check, code, definition, what)
+    return found.failures[0]
+
+
+def _report(*targets: tuple[str, list[str]], hits: int = 0, others: tuple[dict, ...] = ()) -> dict:
+    """The report `circuit-check --binding` writes of its Definition ``targets`` (each a name and its failures' names) and the
+    records ``others``: unjoined, as a shard's (`shard.unjoined`, whose summary is `checks.summarize`'s), with the cache's
+    counts `cli.run` adds."""
+    records = [*({"kind": "definition", "target": t, "failures": [_failure(n) for n in fs], "warnings": []} for t, fs in targets),
+               *others]
+    return {**SH.unjoined(records, CK.Options()), "peaks": [],
+            "cache": {"hits": hits, "stored": 0, "untraced": [], "errors": [], "changed": []}}
 
 
 @pytest.mark.parametrize(("rc", "report", "say", "status", "detail"), [
-    (0, _report(("A", []), ("B", ["known/x B"]), hits=1), "", "pass",
-     {"targets": 2, "passed": 2, "failed": 0, "reused": 1, "records": 1}),
-    (1, _report(("A", ["eval/mismatch A"]), ("B", []), new=["eval/mismatch A"]), "", "fail",
-     {"targets": 2, "passed": 1, "failed": 1, "reused": 0, "records": 1, "failures": ["eval/mismatch A"]}),
-    (0, _report(), "", "pass", {"targets": 0, "passed": 0, "failed": 0, "reused": 0, "records": 1}),
+    (0, _report(("A", []), ("B", []), hits=1), "", "pass", {"targets": 2, "passed": 2, "failed": 0, "reused": 1}),
+    (1, _report(("A", ["eval/mismatch A"]), ("B", [])), "", "fail",
+     {"targets": 2, "passed": 1, "failed": 1, "reused": 0, "failures": ["eval/mismatch A"]}),
+    (0, _report(), "", "pass", {"targets": 0, "passed": 0, "failed": 0, "reused": 0}),
     (2, None, f"circuit-check: refused: --binding verity.ml.x.circuit-check#_b_roots: {CB.NO_BINDING}\n", "fail",
      {"error": "circuit-check's catalog has no binding verity.ml.x.circuit-check#_b_roots"}),
-    (2, None, "circuit-check: refused: --binding x: the bindings' records give no task list\n", "error",
-     {"error": "circuit-check --binding exited 2 and wrote no report"}),
+    (2, None, "circuit-check: refused: x: its record in the slice doesn't count here (a read changed)\n", "error",
+     {"error": "circuit-check --binding exited 2 and wrote no report: x: its record in the slice doesn't count here "
+               "(a read changed)"}),
     (1, None, "Traceback (most recent call last):\n", "error", {"error": "circuit-check --binding exited 1 and wrote no report"}),
     (-9, _report(("A", [])), "", "error", {"error": "circuit-check --binding exited -9"})])
-def test_a_binding_s_run_is_circuit_check_s_verdict_on_its_targets_from_the_records(tmp_path, monkeypatch, rc, report, say,
-                                                                                      status, detail):
+def test_a_binding_s_run_is_circuit_check_s_verdict_on_its_targets_from_its_slice(tmp_path, monkeypatch, rc, report, say,
+                                                                                    status, detail):
     cache = _machine(tmp_path, monkeypatch)
     res, calls = _binding_run(tmp_path, monkeypatch, rc, report, say)
     assert (res["status"], res["detail"]) == (status, detail), res
+    assert ("failures" in res["outputs"]) == (rc in (0, 1) and report is not None), "a report's failures are its output"
     (c,) = calls
-    assert c["argv"][1:] == ["-m", "circuit_check", "--all", "--catalog-units", "--cache", cache, "--binding",
-                             "verity.ml.x.circuit-check#_b_roots", "-q", "--jobs", "3", "--mem-gb", "5", "--out",
-                             str(tmp_path / "work" / CB.REPORT)]
-    assert c["cwd"] == ROOT and c["env"] is None and c["cache"] == ["v/k/r.json"], "the records are in the cache before it runs"
+    work = tmp_path / "work"
+    assert c["argv"][1:] == ["-m", "circuit_check", "--all", "--catalog-units", "--cache", cache, "--binding", B_ROOTS,
+                             "--slice", str(work / F.slice_of(B_ROOTS)["path"]), str(work / F.SHARED["path"]),
+                             "-q", "--jobs", "3", "--mem-gb", "5", "--out", str(work / CB.REPORT)]
+    assert c["cwd"] == ROOT and c["env"] is None and c["cache"] is None, "the run puts no record in the machine's cache"
+
+
+def test_a_binding_the_catalog_made_no_slice_for_fails_as_a_name_the_catalog_lacks_without_running_circuit_check(
+        tmp_path, monkeypatch):
+    _machine(tmp_path, monkeypatch)
+    res, calls = _binding_run(tmp_path, monkeypatch, 0, _report(("A", [])), piece=CB.absent(B_ROOTS))
+    assert (res["status"], res["detail"]) == ("fail", {"error": f"circuit-check's catalog has no binding {B_ROOTS}"}), res
+    assert calls == [] and res["outputs"] == {}
+
+
+@pytest.mark.parametrize(("targets", "status", "detail"), [
+    ((("A", []), ("B", [])), "pass", {"targets": 2, "passed": 2, "failed": 0, "reused": 2}),
+    ((("A", ["eval/mismatch A at bit 3", "partition/gate-recomputed A"]), ("B", []), ("C", ["eval/mismatch C"])), "fail",
+     {"targets": 3, "passed": 1, "failed": 2, "reused": 2,
+      "failures": ["eval/mismatch A at bit 3", "eval/mismatch C", "partition/gate-recomputed A"]})])
+def test_a_binding_s_verdict_is_circuit_check_s_on_the_report_its_own_writers_make(tmp_path, monkeypatch, targets, status,
+                                                                                  detail):
+    """The report and exit `circuit-check --binding` ends with, made by its own writers: `shard.unjoined`, whose summary is
+    `checks.summarize`'s, and `cli.verdict`, which writes it and exits 1 on a failure.  The binding fails on the failures that
+    summary names (``failure_names``), naming each, and passes with none."""
+    from circuit_check import cli
+
+    rep = _report(*targets, hits=2)
+    out = tmp_path / "circuit-check.json"
+    rc = cli.verdict(rep, out=out, what=f"binding {B_ROOTS}: {len(rep['targets'])} target(s)")
+    _machine(tmp_path, monkeypatch)
+    res, _ = _binding_run(tmp_path, monkeypatch, rc, json.loads(out.read_text()))
+    assert (rc, res["status"], res["detail"]) == (int(status == "fail"), status, detail), res
+
+
+def test_a_binding_s_output_is_each_failure_of_its_definition_targets_by_check_code_and_definition(tmp_path, monkeypatch):
+    _machine(tmp_path, monkeypatch)
+    template = {"kind": "template", "target": "t", "failures": [_failure("structural/mismatch t")], "warnings": []}
+    rep = _report(("B_v1{n=2}", ["partition/gate-recomputed B_v1{n=2}", "eval/mismatch B_v1{n=2} at bit 3"]),
+                  ("B_v1{n=3}", ["partition/gate-recomputed B_v1{n=3}", "partition/gate-recomputed B_v1{n=3}"]), ("A", []),
+                  others=(template,))
+    res, _ = _binding_run(tmp_path, monkeypatch, 1, rep)
+    out = tmp_path / "work" / F.failures(B_ROOTS)["path"]
+    assert json.loads(out.read_text()) == {"binding": B_ROOTS, "failures": [
+        {"check": "eval", "code": "mismatch", "definition": "B_v1{n=2}"},
+        {"check": "partition", "code": "gate-recomputed", "definition": "B_v1{n=2}"},
+        {"check": "partition", "code": "gate-recomputed", "definition": "B_v1{n=3}"}]}
+    assert res["status"] == "fail" and res["outputs"] == {"failures": contract.file_digest(out)}
+
+
+#: what the stand-in's ``--slices`` writes: B_ROOTS' slice and the shared part, none of GONE's
+SLICED = {"index.json": json.dumps({"shared": "shared.json", "bindings": {B_ROOTS: "b.json"}}), "shared.json": '{"s": 1}',
+          "b.json": '{"b": 1}'}
 
 
 @pytest.mark.parametrize(("rc", "report", "status", "detail"), [
-    (0, {"reused": 0, "rebuilt": ["a", "b"], "stored": 2, "bytes": 20, "scratch_bytes": 9}, "pass",
-     {"bindings": 2, "stored": 2, "records": 2, "bytes": 20}),
+    (0, {"reused": 0, "rebuilt": ["a", "b"], "stored": 2, "bytes": 20, "scratch_bytes": 9,
+         "slices": {"bindings": 1, "bytes": 8, "shared_bytes": 8, "largest": 8}}, "pass",
+     {"bindings": 2, "stored": 2, "records": 2, "bytes": 20, "slices": 1, "slice_bytes": 8, "shared_bytes": 8,
+      "absent": [GONE]}),
     (1, {"stored": 0, "why": "the tracer could not see what it did (g++)"}, "fail",
      {"error": "the tracer could not see what it did (g++)"}),
+    (1, {"stored": 2, "why": "no slices: _b_roots: a record with no reads to hold it to"}, "fail",
+     {"error": "no slices: _b_roots: a record with no reads to hold it to"}),
     (1, None, "error", {"error": "circuit-check --records-only exited 1 and wrote no report"}),
     (-9, None, "error", {"error": "circuit-check --records-only exited -9 and wrote no report"})])
-def test_the_catalog_s_run_builds_every_record_into_a_fresh_cache_and_tars_it(tmp_path, monkeypatch, rc, report, status,
-                                                                               detail):
+def test_the_catalog_s_run_builds_every_record_into_a_fresh_cache_tars_it_and_gives_each_binding_its_slice(
+        tmp_path, monkeypatch, rc, report, status, detail):
     work = tmp_path / "work"
-    (work / "cache" / "stale").mkdir(parents=True)
-    (work / "cache" / "stale" / "old.json").write_text("{}")
-    calls = _stand_in(monkeypatch, CB, rc, report, records={"v/k1/a.json": '{"a": 1}', "v/k2/b.json": '{"b": 2}'})
+    for d in ("cache", "slices"):
+        (work / d / "stale").mkdir(parents=True)
+        (work / d / "stale" / "old.json").write_text("{}")
+    calls = _stand_in(monkeypatch, CB, rc, report, records={"v/k1/a.json": '{"a": 1}', "v/k2/b.json": '{"b": 2}'},
+                      slices=SLICED)
     doc = _graph(CATALOG)
     res = runners.execute(doc["tasks"][0], doc, work, circuit_catalog.run)
     assert contract.result_errors(res, doc["tasks"][0]) == [], res
     assert (res["status"], res["detail"]) == (status, detail), res
     (c,) = calls
-    assert c["argv"][3:7] == ["--all", "--records-only", "--cache", str(work / "cache")] and not c["cache"]
-    assert not (work / "cache").exists(), "the fresh cache is the task's scratch"
+    assert c["argv"][3:9] == ["--all", "--records-only", "--cache", str(work / "cache"), "--slices", str(work / "slices")]
+    assert not c["cache"] and not (work / "cache").exists() and not (work / "slices").exists(), "both are the task's scratch"
     if status == "pass":
         CB.pack(_records(tmp_path / "same", {"v/k1/a.json": '{"a": 1}', "v/k2/b.json": '{"b": 2}'}), tmp_path / "same.tar.gz")
-        assert res["outputs"] == {"records": contract.file_digest(tmp_path / "same.tar.gz")}
+        gone = tmp_path / "gone.json"
+        gone.write_text(json.dumps(CB.absent(GONE), sort_keys=True) + "\n")
+        assert res["outputs"] == {"records": contract.file_digest(tmp_path / "same.tar.gz"),
+                                  "shared": contract.file_digest(work / F.SHARED["path"]),
+                                  F.slice_of(B_ROOTS)["name"]: contract.file_digest(work / F.slice_of(B_ROOTS)["path"]),
+                                  F.slice_of(GONE)["name"]: contract.file_digest(gone)}
+        assert (work / F.SHARED["path"]).read_text() == SLICED["shared.json"]
+        assert (work / F.slice_of(B_ROOTS)["path"]).read_text() == SLICED["b.json"]
     else:
         assert res["outputs"] == {}
 
@@ -311,3 +413,4 @@ def test_coverage_holds_the_bindings_circuit_check_makes_to_the_listed_ones(tmp_
     else:
         assert res["detail"]["error"].startswith(detail["error"])
     assert calls[0]["argv"][3:8] == ["--all", "--cache", cache, "--bindings", "-q"]
+

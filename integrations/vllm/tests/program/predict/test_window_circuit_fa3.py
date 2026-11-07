@@ -28,7 +28,7 @@ from verity_vllm.program.predict.window_circuit import Grain, WindowClass, class
 
 from verity.ml.windows import interface as IF
 
-#: the H200's declared target (`pins/NVIDIA_H200.json`): FA3, so `Attention_v4` at D = 16's kBlockN of 128
+#: the H200's declared target (its device pin, `bf16_gemm_check.device_pin`): FA3, so `Attention_v4` at D = 16's kBlockN of 128
 H200 = {"compute_capability": [9, 0], "num_sms": 132}
 DOT, INV = "DOT=HopperBF16WgmmaDot16_v1", "INV=Fa3InvSum_v1"
 LLAMA_1B = Path(__file__).resolve().parent / "fixtures/llama32-1b.config.json"

@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.Capability.Information
+module
+
+public import Definitions.Nci.Assumptions.Capability.Information
 
 /-!
 # Local bounds: the premises
@@ -20,3 +22,5 @@ computation evaluated; none is a universal bits-per-value constant. The smallest
 Protocol soundness and the device model are outside these: they establish where the block restrictions apply, not that
 learning is hard.
 -/
+
+@[expose] public section

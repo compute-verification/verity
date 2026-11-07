@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.FirewallRun
+module
+
+public import Proofs.Flock.Recursive.FirewallRun
 
 /-!
 # The firewall sends the schedule's transcript
@@ -15,6 +17,8 @@ commit strings at every salt list of that length (`sends_of_one`).
 The proof reads `step` one case at a time from states equal but for their salts (`H`, `Like`), and carries `Inv` through
 `run`'s loop: what was sent, blanked, is what the state's flags say the schedule has had so far (`sofar`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallTemplate
 

@@ -227,7 +227,8 @@ def check(fn: SpecializedDefinition) -> dict:
     from . import checks as CK
 
     F = CK.Findings()
-    out: dict[str, Any] = {"definition": fn.id, "form": "composite", "mode": CHECK, "gates": None}
+    out: dict[str, Any] = {"definition": fn.id, "form": "composite", "conformance": CK.conformance_of(fn), "mode": CHECK,
+                           "gates": None}
     with CK.spent(CHECK):
         try:
             body = unlaid(fn)

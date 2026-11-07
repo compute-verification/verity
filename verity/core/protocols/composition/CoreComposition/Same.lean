@@ -6,7 +6,11 @@ the run's record; at onsite the policy and the one-stage audit. Once the cases f
 whatever the components answer; one whose commitment doesn't decode rejects as a component. Its parameters, commitment
 and evidence are `product`'s.
 -/
-import CoreComposition.Product
+module
+
+public import CoreComposition.Product
+
+@[expose] public section
 
 namespace Core.Composition
 

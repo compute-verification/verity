@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.MoreSlots
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
-import Proofs.Flock.VBridge.InnerUnit
+module
+
+public import Proofs.Flock.Claims.Recursion.MoreSlots
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Ret
+public import Proofs.Flock.VBridge.InnerUnit
 
 /-!
 # A port V\* outputs is an output row (`PastIn`)
@@ -13,6 +15,8 @@ at least as many output ports as V\* has outputs: otherwise its output words wou
 (`pastIn_core`). `checkMsgNames` names each port once, so a port named as an output is none of the input rows, and
 sits at or past `HmOut.nIn`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.MoreSlots
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Sampling.Select.Scope
-import Proofs.Flock.Claims.Sampling.Select.Layout
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Scope
+public import Proofs.Flock.Claims.Sampling.Select.Layout
 
 /-!
 # The refusals the readable scope needs (`Claims.Sampling.ScopeMatches`, `Refuses`)
@@ -21,6 +23,8 @@ layouts (`DrawSlots`), `ScopeMatches` (`scopeMatches_of_refusals`) and, with `Ch
 (`refuses_of_refusals`). Each is needed: `ScopeMatches` at such a scope check gives all five
 (`refusals_of_scopeMatches`, `scopeMatches_iff_refusals`).
 -/
+
+@[expose] public section
 
 open SampledProofs
 

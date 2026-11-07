@@ -1,4 +1,6 @@
-import Mathlib
+module
+
+public import Mathlib
 
 /-!
 # The model M3 for Dither's words (trusted)
@@ -21,6 +23,8 @@ M3: a straight-line program over 32-bit words, each instruction any fixed functi
 * `Creates`: an instruction creates an incidence `(τ, p)` it holds and none of its instruction arguments holds
   (Theorem C's count).
 -/
+
+@[expose] public section
 
 namespace Pouw.Eps1
 

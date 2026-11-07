@@ -1,4 +1,6 @@
-import Definitions.Claims.Sampling
+module
+
+public import Definitions.Claims.Sampling
 
 /-!
 # The end-to-end error inside the claims form's (A2 of the bridge)
@@ -8,6 +10,8 @@ import Definitions.Claims.Sampling
 bounds `PrBad` in `ℝ` by `κ D δ x + √(γ·Pr[B]) + Pr[B_ext]`. `e2e_error_le_ks` puts the first sum under the second at a
 deployment `D` whose `δ` covers the draw's miss and whose `4·ε_table` covers the knowledge and link terms; the
 square-root and `B_ext` terms are only required to be nonnegative. -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

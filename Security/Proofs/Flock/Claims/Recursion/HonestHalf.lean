@@ -1,18 +1,20 @@
-import Proofs.Flock.Claims.Recursion.VStarFinal
-import Proofs.Flock.Claims.Recursion.HpEarlyStaged
-import Proofs.Flock.Claims.Recursion.HhHeld
-import Proofs.Flock.Claims.Recursion.HmsgRun
-import Proofs.Flock.Claims.Recursion.HonestRun
-import Proofs.Flock.Claims.Recursion.MoreSlotsAll
-import Proofs.Flock.Claims.Recursion.HonestPartsLayR
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.VStarDense
-import Proofs.Flock.Claims.Recursion.HonestWitR
-import Proofs.Flock.Claims.Recursion.NumsFixedR
-import Proofs.Flock.Claims.Recursion.VStarTopsOk
-import Proofs.Flock.Claims.Recursion.RoundWords
-import Proofs.Flock.Claims.Recursion.VStarPortNames
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarFinal
+public import Proofs.Flock.Claims.Recursion.HpEarlyStaged
+public import Proofs.Flock.Claims.Recursion.HhHeld
+public import Proofs.Flock.Claims.Recursion.HmsgRun
+public import Proofs.Flock.Claims.Recursion.HonestRun
+public import Proofs.Flock.Claims.Recursion.MoreSlotsAll
+public import Proofs.Flock.Claims.Recursion.HonestPartsLayR
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.VStarDense
+public import Proofs.Flock.Claims.Recursion.HonestWitR
+public import Proofs.Flock.Claims.Recursion.NumsFixedR
+public import Proofs.Flock.Claims.Recursion.VStarTopsOk
+public import Proofs.Flock.Claims.Recursion.RoundWords
+public import Proofs.Flock.Claims.Recursion.VStarPortNames
 
 /-!
 # The honest half of `RecursiveKSAt`'s non-vacuity at the deployed V\* (`honest_half`)
@@ -51,6 +53,8 @@ names from `VStar.parts`, `innerPorts_named`), and the holders of one round's ro
 exception (`hTops`).
 `bringsAt_deployedB`: the brings here are `RecursiveKS`'s `deployedB` at `bringsAt mask Ir b0 x`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.HonestHalf
 

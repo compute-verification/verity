@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.TmplSplitTab
+module
+
+public import Proofs.Flock.Soundness.TmplSplitTab
 
 /-!
 # A class's table, valued at a chunk origin
@@ -12,6 +14,8 @@ value an `Out`.
   low factors `walk` reads from its `eq` halves times the high factors.
 - `ref_tabExp`, `ref_tabSum`: `Tab.ref` adds its reference's term.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

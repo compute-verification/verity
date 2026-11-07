@@ -8,8 +8,9 @@ The per-target tests are marked `circuit_suite` and collected only under `-m cir
 same checks as `circuit-check --all`.
 
 The tests that read the suite (the `suite` fixture) or the Calls it gives (`targets.call_families`) are marked slow: the process
-that runs one builds circuit-check's catalog first (conftest.py), in about 8 minutes from `check`'s records and in about an
-hour without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
+that runs one builds circuit-check's catalog first (conftest.py), from the bindings' records when they count and binding by
+binding without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
+A test that selects targets by family reads the family off the catalog (`Catalog.reached`), so it makes only those.
 """
 from __future__ import annotations
 
@@ -41,12 +42,12 @@ def _clean(entry: dict) -> None:
 # --- coverage -----------------------------------------------------------------------------------------------------------------
 
 @pytest.mark.slow
-def test_every_registered_definition_is_checked(suite):
+def test_every_registered_definition_is_checked(catalog):
     """Every registered Definition family is checked at a binding the catalog reaches, and every catalog root builds: a new
     Definition without one fails here by name (add its binding to its module's sidecar, `circuit_check.sidecars`)."""
     assert not TG.ROOT_ERRORS, TG.ROOT_ERRORS
     assert len(TG.REGISTERED) > 200
-    checked = {TG.family(fn) for fn in suite.values()}
+    checked = {catalog.reached[fid][0] for fid in catalog.suite}
     missing = sorted(set(TG.REGISTERED) - checked)
     assert not missing, f"registered Definitions no circuit-check binding reaches: {missing}"
 
@@ -68,13 +69,14 @@ def test_the_registries_import_every_module_with_a_sidecar_and_key_the_task_list
 
 
 @pytest.mark.slow
-def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(suite):
+def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(catalog):
     """The guard does not visit an operation (`verity.ml.circuits.operations`), so a table an operation reached would be hidden: every
     listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""
     from verity.ml.circuits import constants as K
     from verity.ml.circuits import operations as O
 
-    ops = [fn for fn in suite.values() if O.is_operation(fn)]
+    suite = catalog.suite
+    ops = [fn for fid in suite if catalog.reached[fid][0] in O.OPERATIONS and O.is_operation(fn := suite[fid])]
     assert {fn.base_id for fn in ops} == O.OPERATIONS
     for fn in ops:
         held = sorted(p.id for p in TG.reachable([fn]).values() if K.held_tables(p, O.is_library_table))
@@ -141,7 +143,7 @@ def _without_the_catalog(monkeypatch) -> None:
 
 
 @pytest.mark.slow
-def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, suite):
+def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, catalog):
     """`is_call` decides without the catalog by a superset of the Boolean Calls (`boolean_call_candidates`, the Boolean table's
     links) and a subset of them (`certified_boolean_calls`, the catalog's roots), and refuses the rest (`Undecided`) rather than
     build the catalog: on every family the suite checks, every registered one and every Call, each one it decides it decides as
@@ -150,7 +152,7 @@ def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, sui
     words = TG.word_call_families()
     assert TG.certified_boolean_calls(words) <= calls
     _without_the_catalog(monkeypatch)
-    fams = set(TG.REGISTERED) | {TG.family(fn) for fn in suite.values()} | calls
+    fams = set(TG.REGISTERED) | {catalog.reached[fid][0] for fid in catalog.suite} | calls
     decided: dict[str, bool] = {}
     undecided: dict[str, str] = {}
     for f in fams:
@@ -163,14 +165,15 @@ def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, sui
 
 
 @pytest.mark.slow
-def test_the_boolean_call_candidates_drop_only_families_boolean_version_refuses(suite):
+def test_the_boolean_call_candidates_drop_only_families_boolean_version_refuses(catalog):
     """`boolean_call_candidates`, narrowed to the statics a binding of the word Call family could give, drops only Boolean
     families `boolean_version` refuses: on the real catalog, the Boolean version `boolean_version` accepts for each suite
     Definition of a word Call family (`boolean_call_families`) is a candidate, unless its family is a word Call family itself,
     which is decided as one first.  `units.call_families` looks for ``--all``'s Boolean Calls only among the candidates, and
     `is_call` says a family outside them is no Call, so a family dropped here would leave both short of `call_families`."""
     words = TG.word_call_families()
-    accepted = TG.boolean_call_families(words, suite) - words
+    suite = catalog.suite
+    accepted = TG.boolean_call_families(words, {fid: suite[fid] for fid in suite if catalog.reached[fid][0] in words}) - words
     assert accepted, "the served word Calls have Boolean versions"
     missing = sorted(accepted - TG.boolean_call_candidates(words))
     assert not missing, f"Boolean versions boolean_version accepts that the candidates drop: {missing}"
@@ -223,6 +226,20 @@ def test_a_boolean_version_made_on_demand_is_a_call_by_its_id(monkeypatch):
     assert TG.is_call("Const32[0x00000000]_v2") and TG.is_call("GatherI32x16_v2")
 
 
+def test_the_boolean_versions_made_on_demand_are_made_in_sorted_order(monkeypatch):
+    """Making a Boolean version on demand registers it, so `on_demand_boolean_families` makes them in sorted order: the
+    registry's order, which a slice's shared part notes (`units.slices`' ``families``), is not a set's."""
+    from verity.ml.definitions import boolean
+
+    asked: list[str] = []
+    monkeypatch.setattr(boolean, "made_on_demand", asked.append)
+    words = ["GatherI32x16_v1", "Const32[0x00000000]_v1", "GatherI32x129280_v1", "F32Add_v1"]
+    for order in (words, words[::-1]):
+        asked.clear()
+        assert TG.on_demand_boolean_families(set(order)) == set()
+        assert asked == sorted(words), asked
+
+
 #: one Definition target for each way `is_call` decides: a vocabulary kind's family, a template's, a Boolean version one of their
 #: bindings certifies, a word composite and a Boolean one outside the Boolean table's bound, and a primitive
 DECIDED = {"TokenSelect_v1{V=16}": "words", "RoPEHead_v1{D=8}": "words", "RoPEHead_v2{D=8}": "certified",
@@ -248,7 +265,8 @@ def test_a_targeted_run_without_the_catalog_reports_what_one_with_it_does(monkey
             "not a candidate" if TG.family(TG.definition(t)) not in short["candidates"] else "?" for t in DECIDED} == DECIDED
 
     def strip(rep):
-        return {**rep, "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
+        return {**{k: v for k, v in rep.items() if k != "prologue_s"},
+                "targets": [{k: v for k, v in t.items() if k not in ("seconds", "seconds_by_check")} for t in rep["targets"]]}
 
     assert strip(fast) == strip(full)
     assert [t["partition"]["applies"] for t in full["targets"]] == [v != "not a candidate" for v in DECIDED.values()]
@@ -464,6 +482,7 @@ def test_a_probe_that_reads_past_the_table_is_a_partial_reference(monkeypatch):
 
 def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
     e = CK.check_definition(_table_read(), TABLE_OPTS, memo={}, pins=PINS)
+    assert e["conformance"] == "not-yet-established"
     assert [f["name"] for f in e["failures"]] == [
         "correspondence/unprobed-table CircuitCheckTableRead_v1 parameter 1 has 8192 leaves, over the input budget 1024, and no "
         "registered table probes it (`circuit_check.targets.TABLE_PROBES`)"]
@@ -676,14 +695,13 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
     from verity.ml.circuits.evaluation.reference import signature_of
 
     suite = catalog.suite
-    gates = {k: catalog.reached[k][1] if k in catalog.reached else getattr(fn, "gates", 0) for k, fn in suite.items()}
     calls = TG.call_families()
-    over = {k: gates[k] for k, fn in suite.items() if TG.family(fn) in calls and gates[k] > OPTS.partition_max_gates}
+    called = [k for k in suite if catalog.reached[k][0] in calls]
+    over = {k: n for k in called if (n := catalog.reached[k][1]) > OPTS.partition_max_gates}
     assert {k: n for k, n in over.items() if k not in OVER_PARTITION_BUDGET} == {}
     assert sorted(set(OVER_PARTITION_BUDGET) - set(over)) == [], \
         "no longer an over-budget Call the suite checks: remove it from OVER_PARTITION_BUDGET"
-    wide = {k: n for k, fn in suite.items() if TG.family(fn) in calls
-            and (n := sum(pt.leaves for pt in signature_of(fn)[0])) > OPTS.partition_max_leaves}
+    wide = {k: n for k in called if (n := sum(pt.leaves for pt in signature_of(suite[k])[0])) > OPTS.partition_max_leaves}
     assert not wide
 
 
@@ -1104,8 +1122,12 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     [real] = json.loads(out.read_text())["targets"][0]["correspondence"]["realizations"]
     assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
     capsys.readouterr()
-    fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"
-    assert cli.main([fp8, *call]) == 1                       # a failure drive's policy allows is still its real verdict
+    fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"           # no Call: its shared-scale form is served in its place
+    assert cli.main([fp8, *call]) == 0
+    with pytest.MonkeyPatch.context() as mp:                  # as a Call, its coordinates' copies of each scale product fail by name
+        mp.setattr(TG, "_CALLS", set())
+        mp.setitem(TG._SHORT, "words", TG.word_call_families() | {"ScaledMmFp8Block_v1"})
+        assert cli.main([fp8, *call]) == 1
     assert f"FAIL partition/gate-recomputed {fp8}" in capsys.readouterr().out
     assert cli.main([BOOL_RECOMPUTE, *call]) == 0
     assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out

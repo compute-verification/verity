@@ -1,6 +1,8 @@
-import Definitions.Accounting.ServingBlocks
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Tactic.FinCases
+module
+
+public import Definitions.Accounting.ServingBlocks
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Tactic.FinCases
 
 /-!
 # Serving-block layouts: the honest instance and the counter-examples (trusted)
@@ -30,6 +32,8 @@ The counter-examples, each on one server:
 * `Detached`: `Straddle` with gate 2 reading gate 0, so the operation takes in gate 1, which no gate of it reads.
 -/
 
+@[expose] public section
+
 namespace Accounting.ServingBlocks
 
 open Verity
@@ -57,7 +61,7 @@ abbrev C : Circuit where
   outputs := {2, 3}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- The serving blocks `{1}` (before the wipe) and `{2}` (after it), and the dark remainder `{3}`. -/
 abbrev P : Partition d.D 3 := ⟨![none, some 0, some 1, some 2], by decide⟩
@@ -94,7 +98,7 @@ abbrev C : Circuit where
   outputs := {1}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- One serving block, `{1}`. -/
 abbrev P : Partition d.D 1 := ⟨![none, some 0], by decide⟩
@@ -138,7 +142,7 @@ abbrev C : Circuit where
   outputs := {2}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- The serving blocks `{1}` (before the wipe) and `{2}` (after it). -/
 abbrev P : Partition d.D 2 := ⟨![none, some 0, some 1], by decide⟩
@@ -176,7 +180,7 @@ abbrev C : Circuit where
   outputs := {2}
 
 /-- Gate 0 is registered. -/
-abbrev d : Declaration := ⟨C, {0}, by decide⟩
+abbrev d : RegisteredCircuit := .ofCircuit C {0} (by decide)
 
 /-- The serving blocks `{1}` (before the wipe) and `{2}` (after it). -/
 abbrev P : Partition d.D 2 := ⟨![none, some 0, some 1], by decide⟩

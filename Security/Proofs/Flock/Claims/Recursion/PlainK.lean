@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.FlockKSDeployK
-import Proofs.Flock.Claims.KS.ForkSlack
-import Proofs.Flock.Claims.KS.PlainBound
-import Proofs.Flock.Claims.KS.PlainFirst
-import Proofs.Flock.Claims.KS.PlainWrP
-import Proofs.Flock.Claims.KS.TableBound
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+public import Proofs.Flock.Claims.KS.ForkSlack
+public import Proofs.Flock.Claims.KS.PlainBound
+public import Proofs.Flock.Claims.KS.PlainFirst
+public import Proofs.Flock.Claims.KS.PlainWrP
+public import Proofs.Flock.Claims.KS.TableBound
 
 /-!
 # The plain record at `VK keep`, and the run-level facts the table bound's chain reads there
@@ -21,6 +23,8 @@ through a few run-level facts. Their files sit below `DeployVK`, so their forms 
   is in scope (`accK_inScope`) and sets up at a draw (`accK_draw`);
 * the simulation the plain mixture reads (`PlainSimRunK`, `PlainSimK`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

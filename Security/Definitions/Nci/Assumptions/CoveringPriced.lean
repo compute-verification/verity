@@ -1,4 +1,6 @@
-import Definitions.Nci.Assumptions.CoveringTwoCosts
+module
+
+public import Definitions.Nci.Assumptions.CoveringTwoCosts
 
 /-!
 # Parameter-hardness at a price per weight
@@ -10,6 +12,8 @@ cheapest weights cost several times less than the mean. Here each weight `i` has
 the weights it completes, which recovers about the mean. At `p = fun _ => c_w` it is `ParameterHardAt`. Activation-chaining
 is unchanged: `ActivationChainedAt` at an activation cost `c_a`, and `𝓜*` is `chainedBlocksAt`.
 -/
+
+@[expose] public section
 
 namespace Nci.Assumptions
 
@@ -31,7 +35,7 @@ barely moved since `θ`, a copy of a registered weight or of another updated one
 compute — break it at any price above that cost. Price them at what they cost, zero if need be: the covering bound
 (`Nci.Guarantees.CoveringBoundPriced`) asks only that any `D` weights together cost more than `k`, not that every price
 be large. -/
-def ParameterHardPricedAt (d : Declaration) (B : MulBlocks d) (s : ℕ) (p : Fin B.nw → ℝ) : Prop :=
+def ParameterHardPricedAt (d : RegisteredCircuit) (B : MulBlocks d) (s : ℕ) (p : Fin B.nw → ℝ) : Prop :=
   ∀ S : Subcircuit d.D, S.gates.card ≤ s → ∑ i ∈ B.weightsCompleted S, p i ≤ (S.ins \ d.θ).card
 
 end Nci.Assumptions

@@ -91,7 +91,8 @@ uv run research run --on vy-sp1 --project verity --source . --exclusive --stage 
      /root/.local/bin/uv run --no-project --with numpy --python 3.12 python benchmarks/tc_probe/tc_probe.py --arch sm_89 \
        --out "$RESEARCH_RUN_DIR" --procs 48 --replay-golden verity/ml/circuits/ops/tests/fixtures/golden/ada_bf16_m16n8k16.json --sweep'
 # A100 (sm_80): same, with --on vy-a100 --stage wp1.probe.a100, --arch sm_80, and instead of the (Ada) golden replay
-#   --replay-special verity/ml/circuits/ops/tests/fixtures/tc-total-2026-09-07/a100/mma_special.reduced.json.gz
+#   --replay-special PATH, PATH the A100 special-value fixture art:c32e2740a2da0e567f0121e77667081214e016b87149bab0b258cf69fbda7072
+#   (its a100/mma_special.reduced.json.gz path is in fixtures/artifacts.json)
 ~~~
 
 Recorded runs, by stage: wp1.exhaustive (SUCCESS, result valid: every counter zero over

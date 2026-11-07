@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Placed.Setup
-import Proofs.Flock.Soundness.Discharge.Placed.Typed
-import Proofs.Flock.Soundness.Discharge.Placed.Wiring
-import Proofs.Flock.Soundness.Discharge.Placed.Keyed
-import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
+module
+
+public import Proofs.Flock.Soundness.Discharge.Placed.Setup
+public import Proofs.Flock.Soundness.Discharge.Placed.Typed
+public import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+public import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
+
+@[expose] public section

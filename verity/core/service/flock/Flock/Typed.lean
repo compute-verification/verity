@@ -19,12 +19,18 @@ A flat class (no placed parts, Δ or reads) is one `CIRCUIT unit` section. A tem
 each placed layout's net, and Δ. A placed read's layout is generated (`table/v2`); its product rows' B side is the table,
 which the verifier holds (`hold`): the statement names each table by the SHA-512 of its words and never carries them.
 -/
-import Flock.Comp
-import Flock.DeriveCheck
-import Flock.Layout
-import Flock.Net
-import Flock.Tags
-import Flock.JsonParse
+module
+
+public import Flock.Comp
+public import Flock.DeriveCheck
+public import Flock.Layout
+public import Flock.Net
+public import Flock.Tags
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Typed
 

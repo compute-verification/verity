@@ -54,7 +54,7 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
             "vars": {}, "inputs": ["Security/Proofs/Flock/Claims/Recursion/AccTies.lean", "..."],
             "reads": [{"task": "lean-module:...", "output": "olean"}],
             "outputs": [{"name": "olean", "path": "out/AccTies.olean"}],
-            "resources": {"cores": 1, "mem_gb": 6, "disk_gb": 1}, "timeout_s": 900, "key": null}]}
+            "resources": {"cores": 1, "mem_gb": 6, "disk_gb": 1}, "timeout_s": 900, "priority": 251, "key": null}]}
 ~~~
 
 - The same bytes on any machine for one commit: no timings, store reads, environment or machine state. `--json` prints
@@ -72,6 +72,12 @@ lister, its kinds' runners, its tests and its own `tasks.toml` table, and edits 
 - `reads` name another task's output; `outputs` are files, by relative path in the task's work directory.
 - `key` is set when the task reads no artifact; otherwise it is `null`, and the executor computes it once the reads' digests
   exist.
+- `priority` is how many reads the longest chain of them through the task makes, the tasks that wait on it one after another
+  and those it waits on so (`graph.priorities`): the Lean modules under a lock and the lock itself have the graph's highest,
+  and a task that reads nothing and that nothing reads has 0. Of the queued tasks of submissions it ranks alike, an executor
+  claims one of the highest `priority` first, ahead of any order of its own (`timeout_s`, ids), so a chain never waits behind
+  the tasks off it. In a task's graph (`graph.task_graph`), which holds none of the tasks that read it, a priority counts the
+  chains that graph holds.
 
 ## The key rule
 
@@ -86,12 +92,12 @@ file digest  = "sha512:" + hex(SHA-512(file bytes))
 env digest   = "sha512:" + hex(SHA-512(b"verity-env/v1\n" + canonical(sorted [[path, file digest], ...])))
 ~~~
 
-Sorting is by code point (Python's string order, which is UTF-8's byte order). `id`, `about`, `resources` and `timeout_s`
-stay out of the key. A read enters by its output's digest, so an artifact rebuilt to the same bytes leaves its readers' keys
-unchanged (early cutoff). `contract.key(task, file_digests, read_digests, env_digest)` takes `read_digests` as {read task:
-its result's `outputs`}. `tests/key_vectors.json` covers inputs alone, outputs, reads of one and of two tasks, unicode paths,
-escapes in vars and argv, another env, and the fields the key leaves out; `python tests/test_contract.py --write` rewrites
-it from the cases in that file, which is a change to the contract.
+Sorting is by code point (Python's string order, which is UTF-8's byte order). `id`, `about`, `resources`, `timeout_s` and
+`priority` stay out of the key. A read enters by its output's digest, so an artifact rebuilt to the same bytes leaves its
+readers' keys unchanged (early cutoff). `contract.key(task, file_digests, read_digests, env_digest)` takes `read_digests` as
+{read task: its result's `outputs`}. `tests/key_vectors.json` covers inputs alone, outputs, reads of one and of two tasks,
+unicode paths, escapes in vars and argv, another env, and the fields the key leaves out; `python tests/test_contract.py
+--write` rewrites it from the cases in that file, which is a change to the contract.
 
 ## Running one task
 
@@ -160,14 +166,16 @@ runs them, one task a step:
 | `lean-build:verity/core/service/flock` | lean | `lake build` there (`suites.LAKE_BUILD`) | the package's files but its `lean-audit.json` | each `lean_exe` of its `defaultTargets`, at `.lake/build/bin/<exe>` |
 | `lean-unit-cut:verity/ml/flock/verifier/unit_cut_agree.py` | py | `unit_cut_agree.py --lean VERIFY --out WORK/lean-unit-cut` | the script and its import closure (the test-file family's `Imports`) | `lean-unit-cut/result.json`, the cuts and how many agreed |
 | `lean-agreement:verity/ml/flock/verifier` | py | `check.py --lean-agreement WORK UPSTREAM INPUTS VERIFY` | that directory, and what `check.py` reads as it starts (`families/build.py`'s `CHECK_READS`) | `flock-agreement/ci/sets.json`, ci.py's verdicts per set |
-| `lean-suites:after-lean` | py | `suites.py SUITE... --lean-built --json ... --timeouts --jobs N --mem-gb G` on `suites.AFTER_LEAN` | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
+| `lean-suites:SUITE`, `lean-suites:SUITE:K/M` | py | `suites.py SUITE --lean-built --json ... --timeouts --jobs N --mem-gb G` on each suite of `suites.AFTER_LEAN`, or with `--files K/M` on each part of one `families/build.py`'s `PARTS` splits; a parallel suite on the family's slot, another in one process | the whole tree, as tasks/v1 keys a job that declares no inputs: those suites build and run Lake packages, which no tracer follows | `suites-lean.json`, suites.py's report |
 | `flock-circuit-build:verity/ml/flock/live` | rust | `verity/ml/flock/check_build.sh` | the script, its patches and the live crate (`check.rust_tests_inputs`) | none: `cargo check` builds nothing a reader runs |
 | `flock-rust-tests:verity/ml/flock/live` | rust | `check_build.sh test`, cargo's jobs and test threads at the task's cores | as flock-circuit-build's | none |
 
 `lean-build`'s outputs sit at their paths in a built tree, where the suites that run them look (the Flock suite's
 `artifacts`); `lean-unit-cut` and `lean-agreement` read `flock-verify` and get its path as their var `verify`, and
-`lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A lean-suites fail
-names each failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
+`lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A part's task
+(its var `files`) hands suites.py a timing record with none of the suite's files (`--timings`), so part K is every M-th test
+file by path from the K-th, the same wherever it runs, and the M parts hold each file once. A lean-suites fail names each
+failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
 run that ran nothing is no pass: ci.py skipping every set of the agreement, a partition check that compared no cut, a suite
 suites.py didn't run. Each is an error, so no result. The agreement fetches the upstream
 build and inputs `upstream.json` pins (`research data fetch`, as ci.py fetches what it pins) and holds them to the pin's
@@ -175,14 +183,16 @@ sha256, so the store and its client are no input. Those fetches and ci.py's read
 environment names: a `research run` job on a node with no store config of its own gets one with `--store-read`, and without
 one the task is an error that says so. Each runner reports a fail only for the tree's fault and an error for the
 machine's: a toolchain that didn't set up, a pin that didn't fetch, check.py's `cannot run here`, a command a signal killed,
-and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile.
+and for `check_build.sh` any failing exit whose log shows no refused patch and no crate that didn't compile. Drive counts no
+lean-agreement task's result: it takes lean-agreement, and ratchet-gate, which no family lists, from a train.sh run beside
+the executor's check (`research.drive.SLIM_STEPS`).
 
 ## Writing a family
 
-A family's lister returns graph/v2 tasks without `key`, for the tree at `root`, reading nothing but files under `root` (its
-`files` is the tree's file list). The core fills what a task leaves out from its table, `about` from the table's template over
-the task's `id`, `kind`, `name` (the id after `<kind>:`) and `vars`, and refuses a field outside graph/v2, an input that isn't
-a file of the tree, a read of a task or output that doesn't exist, a cycle, and a path two things land on.
+A family's lister returns graph/v2 tasks without `priority` and `key`, for the tree at `root`, reading nothing but files under
+`root` (its `files` is the tree's file list). The core fills what a task leaves out from its table, `about` from the table's
+template over the task's `id`, `kind`, `name` (the id after `<kind>:`) and `vars`, and refuses a field outside graph/v2, an
+input that isn't a file of the tree, a read of a task or output that doesn't exist, a cycle, and a path two things land on.
 `graph.covered(root, family, files)` is the files the table's `files` globs cover. Test it on a toy checkout
 (`tests/conftest.py`'s `toy_tree`, which writes a `tasks.toml`, runner stubs and files into a fresh git repository), and the
 whole tree's invariants (`tests/test_invariants.py`) cover it once it lists.
@@ -192,7 +202,7 @@ runs its commands through `runners.call(argv, work, cwd)`, which logs them and s
 
 ## Invariants
 
-Each has a test: `test_invariants.py` on the whole tree (slow), `test_graph.py` and `test_local.py` on a toy checkout.
+Each but 5 has a test: `test_invariants.py` on the whole tree (slow), `test_graph.py` and `test_local.py` on a toy checkout.
 
 1. `verity graph` gives the same bytes in two checkouts of one commit at different paths (two `git worktree`s, listed from
    different working directories and environments).
@@ -201,6 +211,8 @@ Each has a test: `test_invariants.py` on the whole tree (slow), `test_graph.py` 
 4. No `owner` field.
 5. It lists the whole graph in under 60 CPU seconds of one core, as the tree is and with its Lean families at their size once
    its modules are `module` files (`tests/ported_listing.py`: of each module a task reads, `olean` and `ir`; seven outputs a
-   module).
+   module). It is measured on an idle machine (`verity graph --json` and `ported_listing.py` under `getrusage`), not in a
+   suite: on a node at load 160 the same listing takes twice the CPU seconds it takes idle (72 against 36), so a suite run
+   beside other work fails it whatever the tree.
 6. Errors never become results; a fail is never retried.
 7. The reference executor lists once: no task's run calls a lister, on a clean tree or a dirty one.

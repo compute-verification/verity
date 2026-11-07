@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.ResLowerD
-import Proofs.Flock.Claims.Recursion.DecodeAt
-import Proofs.Flock.Claims.Recursion.RestVerdictBases
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.C3.Reps.AtList
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.DecodeAt
+public import Proofs.Flock.Claims.Recursion.RestVerdictBases
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.C3.Reps.AtList
 
 /-!
 # The pieces of `resLowered_D`
@@ -25,6 +27,8 @@ facts at part `s`'s decision (`resSite_of_dec`), `ReadsAt` and the base checks (
   from P2 below `accBase` and P3 above), and the residuals vanish at one where they vanish at the other
   (`resZero_off`, at `structureOf_accLow`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecompBR
 

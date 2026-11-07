@@ -34,24 +34,27 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             (`tools/verity/check/slot.py`), the lock and cores the train checks take,
                                                             and in the run's own clone of the shipped tree (`--cwd clone`);
                                                             --priority takes the next free slot ahead of waiting lane checks,
-                                                            and one of TRAIN_GB or more when it runs pytest or circuit-check
+                                                            and one of TRAIN_GB or more when it runs pytest, lean-suites or
+                                                            circuit-check
                                                             (`train_gb`: a machine without one is skipped or refused, exit 75);
                                                             --agreement sends the upstream build whatever the commit changes
                                                             (a train that changes a guarantee elsewhere: `train.sh`);
                                                             a warning first when the commit can't land on REF as it is;
-                                                            --on auto (AUTO: vy-nebius-2) or --on M1,M2 picks M
+                                                            --on auto (the machines in AUTO) or --on M1,M2 picks M
                                                             from `--slots` (`choose`): the first where a check slot no window
                                                             blocks and a Lean `check` slot are free, else the one with the
                                                             fewest waiters ahead (priority ones only, with --priority), and
                                                             refuses when no machine's slots can be read; with no slot free on
                                                             any, twins: the check on each machine it can run on (`twins`),
                                                             the first to take a slot runs; exit 75 when none ran: rerun
-    uv run python tools/verity/check/check.py --record --on M --pool NAME [--deferred STEP,...]
-                                                            the same in a slot of M's NAME pool (`research run --pool`'s pools,
-                                                            e.g. `--on vy-nebius-cpu-1 --pool research`, any lane's), not its
-                                                            merge-check slots, which on the CPU nodes take train checks alone:
-                                                            a lane's own recorded check.  Launch it from a checkout, never inside
-                                                            a `research run`, where --record is refused with the command to run
+    uv run python tools/verity/check/check.py --record --on auto|M --pool NAME [--deferred STEP,...]
+                                                            the same in a slot of M's NAME pool (`research run --pool`'s pools),
+                                                            not its merge-check slots, which on the CPU nodes take train checks
+                                                            alone: a lane's own recorded check.  `--on auto --pool research`
+                                                            (any lane's) takes the machine whose research pool `research run
+                                                            --on auto` would spill to (`lane_machine`).  Launch it from a
+                                                            checkout, never inside a `research run`, where --record is refused
+                                                            with the command to run
     uv run python tools/verity/check/check.py --slots [M ...]      each machine's check slots (holders, blocking and upcoming
                                                             windows), check line, and Lean audit slots and their waiters, read
                                                             over ssh by this tree's slot.py and lean_slot.py (`--status --json`);
@@ -91,9 +94,10 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
 
 Sharding.  `check.py --shard K/N` runs the preflight and then only shard K's parts of the plan with N shards that `ci.toml`
 declares (`declaration.py`: each job in one shard, `lean-audit` split by Lake package, `circuit-check` into its `shards`, its
-targets by the hash of each one's id), so one commit's check runs on N pods at once and takes about as long as its longest
-shard. Its result is a `check-shard/v1` (`SHARD_KIND`) that names the shard, the
-commit, the config (the tree of `tools/verity/check/` at that commit), the shard's parts and every part an unsharded check covers, and
+targets by the hash of each one's id, `lean-suites` by suite, one that declares `[tool.verity.tests] parts = P` into its P
+parts by test id, `lean-suites:SUITE:K/P`, with lean-build again on each shard that holds some of them and not it), so one
+commit's check runs on N pods at once and takes about as long as its longest shard. Its result is a `check-shard/v1`
+(`SHARD_KIND`) that names the shard, the commit, the config (the tree of `tools/verity/check/` at that commit), the shard's parts and every part an unsharded check covers, and
 each step the parts it ran. `--record --combine RUN...` records, on the clean commit, a `check/v1` whose steps are the shards'
 parts, each once (the preflight's steps once, passed in every shard), when `research.merge.shard_set` accepts them: the
 shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
@@ -106,12 +110,13 @@ When circuit-check is on the gate and its parts ran in more than one shard, the 
 (`circuit_join`: each shard's `CC_SHARDS` from its Attempt's run files, through `circuit-check --combine`), and fails unless
 that gives the verdict the unsharded `--all` gives: a by-calls root whose callee another shard checked is judged only there.
 An auto plan (`--shard auto:K/N`, `shards.py`) has finer parts: each suite of pytest and lean-suites (`pytest:SUITE`,
-`lean-suites:SUITE`) is a part of its own, packed by measured cost, and one measured past `shards.SPLIT_S` (`--split-s`) is
-M parts by test file (`pytest:SUITE:K/M`, `suite_splits`), whose partition and timing record the plan carries (`splits`), so
+`lean-suites:SUITE`), or each of the parts by test id one declares, is a part of its own, packed by measured cost, and one
+measured past `shards.SPLIT_S` (`--split-s`) is M parts by test file (`pytest:SUITE:K/M`, `suite_splits`), whose partition and timing record the plan carries (`splits`), so
 each shard runs `suites.py SUITE:K/M@DIGEST --timings` of the planner's partition; the plan travels with each shard as its run's input
 (`AUTO_PLAN`; unrecorded, `--shard-plan-file PLAN`), which refuses one whose parts aren't its tree's, and its result names the plan's digest, floor and predicted wall time
 (`shard.plan`), so a combine joins only shards of one plan.  The combine also joins a split suite's parts across shards
-(`suite_join`, `suites.combine_parts`), and fails unless every part of one partition passed once.
+(`suite_join`, `suites.combine_parts`), and fails unless every part of one partition passed once; a shard that holds every
+part of a suite runs it whole (`suites.py`), and that pass is its verdict.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
 tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
@@ -363,16 +368,17 @@ RATCHET_BASE_FILE = "check-ratchet-base.txt"
 AUTO_PLAN = "check-shard-plan.json"
 #: what a `--record --on` check runs under on the machine: a free check slot's lock and cores (slot.py), from the shipped tree
 SLOT_WRAP = ["python3", "tools/verity/check/slot.py", "--"]
-#: the least slot memory a train check that runs pytest or circuit-check takes (slot.py's MIN_MEM_ENV): the train slots' mem=. In a
-#: lane slot every parallel suite gets one test worker and circuit-check one target at a time, about twice the wall time
+#: the least slot memory a train check that runs pytest, lean-suites or circuit-check takes (slot.py's MIN_MEM_ENV): the train
+#: slots' mem=. In a lane slot every parallel suite gets one test worker, the one-process suites share one process and circuit-check
+#: runs one target at a time: two to four times a train slot's wall time
 TRAIN_GB = 300
 #: the steps that need a train slot's memory
-TRAIN_STEPS = ("pytest", "circuit-check")
+TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check")
 
 
 def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combining: bool) -> int | None:
-    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest or
-    circuit-check, all of a check (``parts`` None) or a shard or post-landing run holding one; else None."""
+    """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest,
+    lean-suites or circuit-check, all of a check (``parts`` None) or a shard or post-landing run holding one; else None."""
     if not priority or pool is not None or combining:
         return None
     return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
@@ -380,8 +386,8 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's, so it takes the next
-    slot ahead of drive's unranked Lean checks) and --twin for one of a check's twins."""
+    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's and lock run's, so
+    they take the next slot ahead of unranked priority checks) and --twin for one of a check's twins."""
     by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
     rank = SETTINGS.CHECK_SLOT_RANK
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
@@ -409,15 +415,15 @@ def twins(names: list[str], docs: dict[str, dict | str], home: str, priority: bo
 #: the machines `--on auto` and `--slots` consider, in this order: the shared nodes' merge-check slots (the CPU nodes' are
 #: only=trains)
 AUTO = ("vy-nebius-2",)
-#: where a lane's own recorded check goes when it names no machine (`nested_record`): a pool any lane takes, one of
-#: research.auto's SPILL
-LANE_POOL = ("vy-nebius-cpu-1", "research")
+#: the pool a lane's own recorded check takes when it names none (`nested_record`): any lane's, research.auto's SPILL pool, on
+#: the machine `lane_machine` picks
+LANE_POOL = "research"
 #: how long reading one machine's slots may take, ssh included
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
 FULL_CHECK_S = 9000
 #: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
-LANE_RUN = ('`research run --on vy-nebius-cpu-K --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
+LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git rev-parse origin/main) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
 #: each `{"error": ...}` when it can't be read there, and the seconds left until the machine's DEADLINE (null without one)
@@ -711,8 +717,8 @@ LEAN_SLOT_WRAP = [sys.executable, str(ROOT / "tools" / "verity" / "check" / "lea
 
 def lean_regenerates() -> bool:
     """Whether this tree's lean-audit job takes `--regenerate`: a package whose only failures are record differences passes,
-    and its report names the regenerated lock, which drive commits onto the train it lands.  Read from the job, so a
-    tree from before it runs as it always did."""
+    and its report names the regenerated lock, which drive commits after its lock run (`research.drive.Driver._commit_locks`).
+    Read from the job, so a tree from before it runs as it always did."""
     try:
         return '"--regenerate"' in (LEAN_JOBS / "lean_audit.py").read_text()
     except OSError:
@@ -994,7 +1000,7 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
     pool `research run --pool NAME` takes (`slot_only.pool_slots`), rather than its merge-check slots, which on the CPU nodes are
     only=trains: slot.py reads the pool's slots file from CHECK_SLOTS.  The command stays `slot_wrap`'s around the declared one,
     not `slot_only.in_pool`'s (`env ... nice -n 19`), so `research merge` and `gather_verdicts` read the attempt as a check of its
-    commit.  ValueError when the pool can't be taken so."""
+    commit.  ValueError when the pool can't be taken so; with --on auto or none, `lane_machine` picks the machine."""
     if pool is None:
         return []
     from research.pods.nebius import slot_only
@@ -1002,18 +1008,38 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
     if not slot_only.POOL_NAME.fullmatch(pool):
         raise ValueError(f"{pool}: no such pool; a pool is a name of letters, digits, '_' or '-' (the pools every node may have are "
                          f"{', '.join(sorted(slot_only.POOLS))}; a node's own are under {slot_only.LOCKS})")
-    if not on or on == "auto" or "," in on:
-        raise ValueError(f"{pool} needs --on MACHINE, the one machine whose pool it waits in (`--on {LANE_POOL[0]} --pool "
-                         f"{LANE_POOL[1]}`); --on auto and lists choose among merge-check slots")
+    if on and "," in on:
+        raise ValueError(f"{pool} waits in one machine's pool: `--on auto --pool {LANE_POOL}` or --on MACHINE, not a list, which "
+                         f"chooses among merge-check slots")
     if priority:
         raise ValueError(f"{pool} takes no --priority: that is the lander's train checks' place in the merge-check slots' line")
     return ["--env", f"CHECK_SLOTS={slot_only.pool_slots(pool)}"]
 
 
+def lane_machine(pool: str) -> str:
+    """The machine a `--record --on auto --pool NAME` check waits on: the one whose NAME pool `research run --on auto` would
+    spill a run to now (`research.auto.choose` on the SPILL machines' lines, read as it reads them).  ValueError when NAME is
+    no SPILL pool (a node's own pool takes --on MACHINE) or no SPILL machine's pool can take it."""
+    from research import auto
+
+    spill = sorted({p for _, p in auto.SPILL})
+    if pool not in spill:
+        raise ValueError(f"{pool}: --on auto takes only research.auto's pools ({', '.join(spill)}); a node's own pool takes "
+                         f"--on MACHINE, the machine that keeps it")
+    try:
+        target, why = auto.choose(auto.read(ROOT, 1), 1, 0)
+    except auto.Unplaceable as e:
+        raise ValueError(f"{pool}: --on auto: {e}") from None
+    if target is None or target[1] != pool:
+        raise ValueError(f"{pool}: --on auto: no machine's {pool} pool can take it ({why}); name one with --on MACHINE")
+    print(f"check: --on auto --pool {pool}: {target[0]} ({why})", flush=True)
+    return target[0]
+
+
 def nested_record(argv: list[str]) -> str:
     """The command that records ``argv``'s check from outside a `research run`: `record` launches a `research run` of its own,
-    so inside one it is refused with this.  With no --on, on `LANE_POOL`, any lane's pool."""
-    where = [] if "--on" in argv else ["--on", LANE_POOL[0], *([] if "--pool" in argv else ["--pool", LANE_POOL[1]])]
+    so inside one it is refused with this.  With no --on, `--on auto` in its --pool, else `LANE_POOL`."""
+    where = [] if "--on" in argv else ["--on", "auto", *([] if "--pool" in argv else ["--pool", LANE_POOL])]
     return shlex.join(["uv", "run", "python", "tools/verity/check/check.py", "--record", *where,
                        *(a for a in argv if a != "--record")])
 
@@ -1027,8 +1053,9 @@ def record(argv: list[str]) -> int:
     launches `twins` there and on the others (one `research run` each, waited on together: 0 when one passed, the exit of the
     one that ran otherwise, and slot.py's NOT_STARTED (75) when none ran, say with HOME unreachable: rerun it).  With
     `--deferred STEP,...` it is a `research run` without `--tool check` of those steps alone (no gate reads it), with the
-    gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`) waits for a slot of that
-    machine's NAME pool instead of its merge-check slots (`pool_env`); `--timeout S` is the run's (`research run --timeout`, custody 24 h).
+    gathered verdicts and no upstream build or Lean dependencies.  `--pool NAME` (with `--on MACHINE`, or `--on auto` or none for
+    the machine `lane_machine` picks) waits for a slot of that machine's NAME pool instead of its merge-check slots (`pool_env`);
+    `--timeout S` is the run's (`research run --timeout`, custody 24 h).
     `--shard auto:K/N --shard-plan-file PLAN` (with --on) is shard K of the auto plan PLAN, sent as the run's `AUTO_PLAN` input."""
     on = base = ratchet_base = pool = timeout = plan_file = None
     agreement = priority = False
@@ -1055,6 +1082,8 @@ def record(argv: list[str]) -> int:
             rest.append(x)
     try:
         pooled = pool_env(pool, on, priority) + (["--timeout", timeout, "--custody-ttl", "24h"] if timeout else [])
+        if pool is not None and on in (None, "auto"):
+            on = lane_machine(pool)
     except ValueError as e:
         print(f"check: --pool {e}", file=sys.stderr)
         return 2
@@ -1483,7 +1512,8 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     a = max(1, n // 2)
     b = max(1, n - a)
     if only is not None:
-        # and the builds they need: an auto shard runs them beside its parts (`shards.py`); a hand-written plan's shard holds them
+        # and the builds they need, beside its parts when another shard holds them (an auto plan's, `shards.py`; a hand-written
+        # plan's lean-build, beside some of lean-suites' parts)
         names = DECLARATION.needed(JOBS, sorted({p.partition(":")[0] for p in only}))
         a, b = (n if not names & {"flock-circuit-build", "circuit-check", "flock-rust-tests"} else a), (n if "pytest" not in names else b)
     with_lean = only is None or any(x.startswith("lean") for x in names)
@@ -1566,9 +1596,9 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
     gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
     of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
-    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages (`declaration.resolve`).
-    DeclarationError when there is no such plan or shard, or the tree can't be listed.  `auto:K/N`: shard K of the auto plan
-    (`auto_shard`)."""
+    every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
+    provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
+    can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
     if spec.startswith("auto:"):
         return auto_shard(spec, gated, plan_file, jobs)
     m = re.fullmatch(r"(\d+)/(\d+)", spec)
@@ -1577,7 +1607,7 @@ def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file
         raise DECLARATION.DeclarationError(f"--shard {spec}: ci.toml's plans are {', '.join(f'K/{n}' for n in sorted(plans))}")
     k, n = int(m.group(1)), int(m.group(2))
     parts_of = _parts_of()
-    shards = DECLARATION.resolve(plans[n], JOBS, parts_of)
+    shards = DECLARATION.resolve(plans[n], JOBS, parts_of, audit_provers(parts_of["lean-audit"]))
     held = {p for s in shards for p in s}
     mine = set(shards[k - 1]) | ({p for p in DECLARATION.all_parts(JOBS, parts_of) if p not in held} if k == n and not gated else set())
     return {"k": k, "n": n,
@@ -1594,23 +1624,23 @@ def auto_parts(gated: bool = True, jobs: set[str] | None = None, circuit_shards:
                splits: dict[str, int] | None = None) -> list[str]:
     """The auto plan's parts on this tree (`shards.parts`): those of the jobs on the gate (or, not ``gated``, of every job),
     of ``jobs`` alone when given; circuit-check in ``circuit_shards`` parts when given, else its ci.toml `shards`; each suite
-    ``splits`` names in its M parts."""
+    ``splits`` names in its M parts, and each that declares parts in those (`suite_parts`)."""
     js = [replace(j, shards=circuit_shards) if circuit_shards and j.name == "circuit-check" else j
           for j in (DECLARATION.gated(JOBS) if gated else JOBS) if jobs is None or j.name in jobs]
     return SHARDS.parts(DECLARATION.all_parts(js, _parts_of()), [s.name for s in SUITES.discover()], list(AFTER_LEAN),
-                        (FLOCK_LEAN / "lakefile.toml").exists(), splits)
+                        (FLOCK_LEAN / "lakefile.toml").exists(), splits, suite_parts())
 
 
 def suite_splits(suite_s: dict[str, float], times: dict[str, dict[str, float]], split_s: float = SHARDS.SPLIT_S) -> dict[str, dict]:
-    """The suites of this tree measured past ``split_s`` (``suite_s``, by name) split by test file (`shards.split_m`): {name:
-    {"m", "seconds", "digest": its partition's (`suites.partition` by ``times``, its files' recorded seconds), "timings": those of
-    its files, "shares": each part's share of its seconds, "files": each part's test files}}."""
+    """The suites of this tree measured past ``split_s`` (``suite_s``, by name) split by test file (`shards.split_m`), but those
+    that declare parts by test id: {name: {"m", "seconds", "digest": its partition's (`suites.partition` by ``times``, its files'
+    recorded seconds), "timings": those of its files, "shares": each part's share of its seconds, "files": each part's test files}}."""
     out: dict[str, dict] = {}
     if not any(v is not None and v > split_s for v in suite_s.values()):
         return out
     tree, pkgs = SUITES.worktree(), SUITES.members()
     for s in SUITES.discover():
-        if suite_s.get(s.name) is None or suite_s[s.name] <= split_s:
+        if s.parts or suite_s.get(s.name) is None or suite_s[s.name] <= split_s:
             continue
         files = SUITES.test_files(s, tree, SUITES.dropped(s, SUITES.inputs_of(s, pkgs)))
         m = SHARDS.split_m(suite_s[s.name], len(files), split_s)
@@ -1631,12 +1661,17 @@ def split_shares(splits: dict[str, dict]) -> dict[str, float]:
             for job in SHARDS.SUITE_JOBS}
 
 
+def audit_provers(packages: list[str]) -> dict[str, list[str]]:
+    """{`lean-audit:PKG`: its provers' audits} for each of ``packages`` whose `proved_in` names some (`lean_audit.provers`): its
+    audit audits them beside it, from one build of theirs, so a plan puts them on one shard."""
+    la = _lean_audit()
+    return {f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p in packages if (qs := la.provers(p))}
+
+
 def shard_needs() -> dict[str, list[str]]:
     """What a shard runs beside a part (`shards.builds`): each job's `needs` and `after`, and each audited package's provers
-    (`lean_audit.provers`, the packages its `proved_in` names, which its audit audits beside it)."""
-    la = _lean_audit()
-    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS},
-            **{f"lean-audit:{p}": [f"lean-audit:{q}" for q in qs] for p in _parts_of()["lean-audit"] if (qs := la.provers(p))}}
+    (`audit_provers`), which `shards.units` holds on its shard."""
+    return {**{j.name: [*j.needs, *([j.after] if j.after else [])] for j in JOBS}, **audit_provers(_parts_of()["lean-audit"])}
 
 
 def given_suites(suites: dict[str, float], given: dict[str, float] | None) -> dict[str, float]:
@@ -1838,11 +1873,24 @@ def auto_shard(spec: str, gated: bool = True, plan_file: Path | None = None, job
             **({"splits": splits} if splits else {})}
 
 
+def suite_parts() -> dict[str, int]:
+    """{suite: P} for each suite of this tree that declares `[tool.verity.tests] parts = P`: its P parts by test id
+    (`suites.id_part_of`) are parts of the check's plans.  DeclarationError when a suite declares another `parts`."""
+    try:
+        return {s.name: s.parts for s in SUITES.discover() if s.parts}
+    except ValueError as e:
+        raise DECLARATION.DeclarationError(str(e)) from None
+
+
 def _parts_of() -> dict[str, list[str]]:
+    """The split jobs' parts on this tree (`declaration.job_parts`): lean-audit's Lake packages, lean-suites' suites (`AFTER_LEAN`),
+    each one in `suite_parts` as its parts `SUITE:K/P`."""
     files = tracked_files(ROOT)
     if files is None:
         raise DECLARATION.DeclarationError("this tree's files can't be listed, so its Lake packages aren't known")
-    return {"lean-audit": _lean_audit().packages(files)}
+    by = suite_parts()
+    return {"lean-audit": _lean_audit().packages(files),
+            "lean-suites": [x for s in AFTER_LEAN for x in ([f"{s}:{k}/{by[s]}" for k in range(1, by[s] + 1)] if s in by else [s])]}
 
 
 def shard_parts() -> list[str]:
@@ -1936,13 +1984,16 @@ def circuit_join(store, steps: list[dict], into: Path) -> str | None:
 
 
 def suite_join(store, steps: list[dict], into: Path) -> str | None:
-    """Why the parts of the suites a set of shards split by test file (``steps``, `shard_set`'s: `pytest:SUITE:K/M`, each with
-    the run that ran it) don't make each suite's passing verdict, or None: each run's suite reports (its `suites.json` and
-    `suites-lean.json`), from its Attempt's run files into ``into``, joined (`suites.combine_parts`), must hold every part of one
-    partition once, each passed, so a part run on another partition (a machine with another timing record) passes nothing."""
+    """Why the parts of the suites a set of shards split (``steps``, `shard_set`'s: `pytest:SUITE:K/M` by test file,
+    `lean-suites:SUITE:K/P` by test id, each with the run that ran it) don't make each suite's passing verdict, or None: each
+    run's suite reports (its `suites.json` and `suites-lean.json`), from its Attempt's run files into ``into``, joined
+    (`suites.combine_parts`), must hold every part of one partition once, each passed, so a part run on another partition (a
+    machine with another timing record) passes nothing; or the suite's own pass, from the shard that held every part and ran it
+    whole."""
     runs = sorted({s["run_id"] for s in steps if SHARDS.suite_part(s["step"])[2] and s.get("run_id")})
     if not runs:
         return None
+    split = {SHARDS.suite_part(s["step"])[1] for s in steps if SHARDS.suite_part(s["step"])[2]}
     rows = []
     for rid in runs:
         try:
@@ -1951,14 +2002,15 @@ def suite_join(store, steps: list[dict], into: Path) -> str | None:
                 return f"suites: {rid} published no run files, so its suites' parts can't be joined"
             names = [n for n in ("suites.json", "suites-lean.json") if any(f["path"] == n for f in store.listing(files))]
             got = Path(store.fetch(files, to=into / rid, paths=names))
-            rows += [r for n in names for r in json.loads((got / n).read_text()) if isinstance(r.get("part"), dict)]
+            rows += [r for n in names for r in json.loads((got / n).read_text())
+                     if isinstance(r.get("part"), dict) or r.get("name") in split]
         except Exception as e:  # noqa: BLE001  (a guard never fails open)
             return f"suites: {rid}'s suite reports can't be read ({type(e).__name__}: {e})"
-    split = {SHARDS.suite_part(s["step"])[1] for s in steps if SHARDS.suite_part(s["step"])[2]}
     joined = {r["name"]: r for r in SUITES.combine_parts(rows)}
-    bad = [f"{n}: {'; '.join(joined[n]['why'])}" if n in joined else f"{n}: no shard reported its parts" for n in sorted(split)
-           if n not in joined or joined[n]["status"] != "passed"]
-    return f"suites split by file don't make their suites' verdicts: {' / '.join(bad)}" if bad else None
+    bad = [f"{n}: {'; '.join(joined[n].get('why') or [str(joined[n].get('status'))])}" if n in joined
+           else f"{n}: no shard reported its parts" for n in sorted(split)
+           if n not in joined or joined[n]["status"] not in ("passed", "cached")]
+    return f"split suites don't make their suites' verdicts: {' / '.join(bad)}" if bad else None
 
 
 def circuit_combine(dirs: list[Path], out: Path) -> subprocess.CompletedProcess:

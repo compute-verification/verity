@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.DeployRoundsZk
-import Proofs.Flock.Claims.KS.ConflictMerkle
-import Proofs.Flock.Claims.KS.ConflictWithin
+module
+
+public import Proofs.Flock.Claims.DeployRoundsZk
+public import Proofs.Flock.Claims.KS.ConflictMerkle
+public import Proofs.Flock.Claims.KS.ConflictWithin
 
 /-!
 # The pads openings an accepted masked rep logs
@@ -18,6 +20,8 @@ position `w.lo mod innerN`, `w` the query's coin.
   in `L`.
 * `zkVerifyRepWith_inner`: an accepted masked rep ran its inner proof on its stream's rounds, ending at the last one.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

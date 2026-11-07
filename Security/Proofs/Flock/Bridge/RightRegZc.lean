@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
 
 /-!
 # Right on the registration, with canonical openings
@@ -18,6 +20,8 @@ right and more are wrong:
   unit's openings from the satisfying message are canonical (`OpeningsCanon`), so the unit is right with them.
 * `zk_flock_escapeC_regC`: the same bound at a set `W` of units, `Pr[accept ∧ W ⊆ wrong] ≤ escape W + ε_ks + δ_link`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

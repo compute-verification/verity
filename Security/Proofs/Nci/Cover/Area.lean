@@ -1,9 +1,11 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.GroupWithZero.Basic
-import Mathlib.Data.Finset.Prod
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
-import Proofs.Nci.Cover.Charge
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.GroupWithZero.Basic
+public import Mathlib.Data.Finset.Prod
+public import Mathlib.Tactic.Positivity
+public import Mathlib.Tactic.Ring
+public import Proofs.Nci.Cover.Charge
 
 /-!
 # The cover theorem: a block's products, by area
@@ -15,6 +17,8 @@ It is this vocabulary's form of the per-block step of the covering bound at `c_w
 to a compliant declaration (`CoverTraining`) sums it. `cover_sum` adds a per-block
 bound over a cover: every counted product's output gate is a non-input gate, so some block finishes it.
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.VBridge.Verifier
-import VStar.Stage
-import Std.Data.String.ToNat
+module
+
+public import Proofs.Flock.VBridge.Verifier
+public import VStar.Stage
+public import Std.Data.String.ToNat
 
 /-!
 # A rec-open unit's `(L, H)` is its pinned statement's
@@ -17,6 +19,8 @@ circuit under that name must give back the pinned pair, not another one the file
   pair `params` gives has the same name. This needs no lemma about `String.splitOn`.
 * `unit_check_pinned`: `unit_check` at the pinned name in place of `params`' answer.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

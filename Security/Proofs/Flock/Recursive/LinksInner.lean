@@ -1,11 +1,13 @@
-import Proofs.Flock.Recursive.LinksBind
-import Proofs.Flock.Verifier.RecLinks
-import Proofs.Flock.Verifier.Hash
-import Proofs.Flock.Claims.Recursion.InnerSetupSame
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Claims.Recursion.VStarCross
-import Proofs.Flock.Claims.Recursion.DeployChecked
-import Proofs.Flock.Claims.KS.TableBound
+module
+
+public import Proofs.Flock.Recursive.LinksBind
+public import Proofs.Flock.Verifier.RecLinks
+public import Proofs.Flock.Verifier.Hash
+public import Proofs.Flock.Claims.Recursion.InnerSetupSame
+public import Proofs.Flock.Claims.Recursion.SchedDense
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Recursion.DeployChecked
+public import Proofs.Flock.Claims.KS.TableBound
 
 /-!
 # The link clause's inner half: an accepted link row binds the inner witness's rows
@@ -24,6 +26,8 @@ two of a short list of strings (`innerMsgs`), each a function of the row's words
 * `inner_link`: the chain, `RecLinkBind.link_binding` (the openings), `innerSetup_rows` (the files' rows are the
   setup's), `InnerRows.rows_commit_check` (the witness commits them) and `commitString_binding`.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Links
 

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Faithful
-import Proofs.Flock.Claims.Complete.ZkTables.Run
-import Proofs.Flock.Claims.Complete.ZkTables.Count
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Faithful
+public import Proofs.Flock.Claims.Complete.ZkTables.Run
+public import Proofs.Flock.Claims.Complete.ZkTables.Count
 
 /-!
 # The masked prover's message from the session's run
@@ -15,6 +17,8 @@ prover sends it once each of the session's sends is answered; before that, the p
 * `honestP_sent`: fed fewer answers than the session sends, `honestP` sends the session's body at their count, tagged
   `0`; `honestPR_sent` the same for `honestPR` where the answers show no outer coin `1`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 

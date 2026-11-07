@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.LayoutBAcc
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+public import Proofs.Flock.Claims.Recursion.LayoutBAcc
 
 /-!
 # The extra calls' slots at any staged part (`MoreSlotsTrue`'s parts)
@@ -13,6 +15,8 @@ an output row's does wherever its unit's output group lies in the unit's slot (`
 every unit the parser built (`hin_of_check`: D11 in `Net.ofRows`, its group's bits within its words, and
 `HmRow.check`'s 16-bit returned outputs), so at every staged part (`slotOut_stagedG`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.MoreSlots
 

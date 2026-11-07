@@ -1,5 +1,7 @@
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditInteractive
+module
+
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditInteractive
 
 /-!
 # The remote rate audit: a store over tiers, and chained passes (trusted)
@@ -37,6 +39,8 @@ passes' coins and the store, and lets it pick one as any function of pass `j`'s 
 may depend on the pick. Keeping one candidate at every pass is a `Chain` (`GrindChain.atCand`), so grinding costs at
 most a factor `G` in each pass's error.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

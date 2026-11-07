@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.SegRowBc
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
 
 /-!
 # Output rows unsegmented, input rows of any kind (`OutputsCommittedSeg`, `OutputsBindingSeg`)
@@ -11,6 +13,8 @@ holds each output row's message bit's copy (`Any.msg_copyAll`); the row's `b ‖
 (`Any.row_bc_tgt`). An output row's columns and `outPairs`' copies need only the output rows unsegmented
 (`Any.OutRows`, `Any.deltaMsgCol_inj`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

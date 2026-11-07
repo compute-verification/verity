@@ -5,8 +5,12 @@ block, bit 1 from the pin and bit 0 from the unit range's forced-zero row), the 
 destination bits from its source's, then the typed tail. Δ writes each row's constant bits as `rowPairsOf`, which for
 `sha512/row/v1` rows (`16 · words` bits in at least one chunk) are `rowPairs`'s (`rowPairsAll_v1`).
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Accept
-import Proofs.Flock.Soundness.ExecFlatCopies
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Accept
+public import Proofs.Flock.Soundness.ExecFlatCopies
+
+@[expose] public section
 
 open Flock FlockLevel3
 

@@ -1,6 +1,8 @@
-import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
-import Proofs.Pouw.Period.Honest
-import Proofs.Pouw.Prob
+module
+
+public import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+public import Proofs.Pouw.Period.Honest
+public import Proofs.Pouw.Prob
 
 /-!
 # `WorkOfH1CheckedCreditPeriodH200`'s witnesses: an honest period on the H200, and the verifier that accepts everything
@@ -30,6 +32,8 @@ The verifier that accepts everything (`acceptAll`) is the same period with every
 At no windows its device runs nothing, so a work certificate `W = 1` fails on every coin and PoUW's guarantee fails
 there at any error below one (`WorkOfH1CheckedCreditPeriodH200_nontrivial`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge.HonestH200
 

@@ -1,19 +1,21 @@
-import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
-import Proofs.Flock.Claims.Recursion.InnerExtras
-import Proofs.Flock.Claims.Recursion.VerdictRowECoin
-import Proofs.Flock.Claims.Recursion.VerdictParts
-import Proofs.Flock.Claims.Recursion.CapLowerPin
-import Proofs.Flock.Claims.Recursion.VStarPartsSparse
-import Proofs.Flock.C3.RegLevels.VRows
-import Proofs.Flock.C3.Opening.SessionAcc
-import Proofs.Flock.VBridge.AccUnits
-import Proofs.Flock.VBridge.Family.Opened
-import Proofs.Flock.VBridge.Family.Structure
-import Proofs.Flock.Soundness.Refine.LigeritoRun
-import Proofs.Flock.Soundness.Refine.Seam
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.DecompBDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowDCover
+module
+
+public import Proofs.Flock.Claims.Recursion.OpenDirsDeployed
+public import Proofs.Flock.Claims.Recursion.InnerExtras
+public import Proofs.Flock.Claims.Recursion.VerdictRowECoin
+public import Proofs.Flock.Claims.Recursion.VerdictParts
+public import Proofs.Flock.Claims.Recursion.CapLowerPin
+public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
+public import Proofs.Flock.C3.RegLevels.VRows
+public import Proofs.Flock.C3.Opening.SessionAcc
+public import Proofs.Flock.VBridge.AccUnits
+public import Proofs.Flock.VBridge.Family.Opened
+public import Proofs.Flock.VBridge.Family.Structure
+public import Proofs.Flock.Soundness.Refine.LigeritoRun
+public import Proofs.Flock.Soundness.Refine.Seam
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.DecompBDeployed
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCover
 
 /-!
 # Check 5's `coef` tie at the deployed run
@@ -36,6 +38,8 @@ evaluations of the `coef` rows are `openSetupSt`'s, which the deployed setup lis
   run (`AtPieces`); `CopyCoefTieRP`, `copyCoefTieRP_dense` at each part's own witness (`AtPiecesP`, `JointP`), and
   `copyCoefTieRP_deployed` at the deployed brings, the deployed bound and row D's pieces, with no premise.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenCoef
 

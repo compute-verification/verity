@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
 
 /-!
 # Ligerito under `--zk`, as frames
@@ -9,6 +11,8 @@ followed by level 0's hiding frames (`l0Fr`, through `laneFr`); and level 0's qu
 (`queryLevel0_emit`), followed by a pure loop over the extra lanes that emits nothing. The final check is
 `Refine.finalProg`'s text returning the lane phase's record (`finalProgZ`), and it emits nothing (`finalProgZ_ok`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

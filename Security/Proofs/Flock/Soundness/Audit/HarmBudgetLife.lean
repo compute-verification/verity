@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.HarmBudget
+module
+
+public import Proofs.Flock.Soundness.Audit.HarmBudget
 
 /-!
 # The cumulative harm budget over a lifetime of one-stage audits
@@ -15,6 +17,8 @@ gives the lifetime's bound (`life_harm_budget`):
 $$\Pr\Big[\text{accept} \wedge \sum_{t \le T} h(\mathrm{wrong}(X_t)) \ge H\Big]
   \le e^{-\lambda H} + \sum_{m < N} (\varepsilon_{ks,m} + \delta_{link,m}).$$
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Adaptive
 

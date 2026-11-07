@@ -1,5 +1,7 @@
-import Proofs.Accounting.TS.Session.Lanes.Guarantees
-import Proofs.Accounting.TS.GroupSound
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Guarantees
+public import Proofs.Accounting.TS.GroupSound
 
 /-!
 # A leaf's 33 linked sessions realize one unit (the proof)
@@ -25,6 +27,8 @@ content (`knownOf`) is the `okKnown` form the group layer reads, its other known
 This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Accounting.TS.GroupSound`), whose imports make `X`
 a token, so `Proofs/Accounting.lean` imports it.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 

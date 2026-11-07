@@ -1,8 +1,11 @@
-import Proofs.Flock.Claims.ZK.FrameOwn
-import Proofs.Flock.Claims.ZK.FramePass
-import Proofs.Flock.Claims.ZK.FrameLoop
-import Proofs.Flock.Claims.ZK.FrameProg
-import Proofs.Flock.Soundness.Refine.Arith
+module
+
+public import Proofs.Flock.Claims.ZK.FrameOwn
+public import Proofs.Flock.Claims.ZK.FramePass
+public import Proofs.Flock.Claims.ZK.FrameLoop
+public import Proofs.Flock.Claims.ZK.FrameProg
+public import Proofs.Flock.Soundness.Refine.Arith
+import all Init.Data.String.Defs
 
 /-!
 # What the frame takes at the inner proof's rounds
@@ -27,6 +30,8 @@ At the inner proof's rounds the frame fixes every frame and value it computes fr
   but `hO`, the placeholder's pad row within a `u64`'s count (`hRow`) and `L₀`'s round at the inner proof's round 0
   the firewall's own at some `final_c'` (`hL0`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 

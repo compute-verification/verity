@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.KS.ZkAlign
-import Proofs.Flock.Claims.KS.ZkForkClash
-import Proofs.Flock.Claims.KS.ZkPadsSlot
-import Proofs.Flock.Claims.KS.ZkTauPair
+module
+
+public import Proofs.Flock.Claims.KS.ZkAlign
+public import Proofs.Flock.Claims.KS.ZkForkClash
+public import Proofs.Flock.Claims.KS.ZkPadsSlot
+public import Proofs.Flock.Claims.KS.ZkTauPair
 
 /-!
 # Masked KS from the `τ` alignment
@@ -11,6 +13,8 @@ message: the caps' alignment (`zkSlotAlign`) and clash (`zkForkClash`), the pads
 the pads' view clash (`zkViewClashQP`). The fifth, the fork bound at `τ`, rests on `τ`'s alignment alone
 (`zkSimForkLeTau_of_align`), so masked KS has the one premise `ZkTauAlign` (`zk_KS_of_tauAlign`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

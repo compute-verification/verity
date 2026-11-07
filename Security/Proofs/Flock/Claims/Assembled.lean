@@ -1,14 +1,16 @@
-import Proofs.Flock.Claims.Bits
-import Proofs.Flock.Claims.ERepCost
-import Proofs.Flock.Claims.KS.PlainAcc
-import Proofs.Flock.Claims.KS.ZkTauSlot
-import Proofs.Flock.Claims.DeployEfficient
-import Proofs.Flock.Claims.Complete.WalkPacked
-import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
-import Proofs.Flock.Claims.ZK.Hypotheses
-import Proofs.Flock.Claims.Complete.Coins
-import Proofs.Flock.Claims.Complete.Zk.Coins
-import Proofs.Flock.Soundness.CompiledSound
+module
+
+public import Proofs.Flock.Claims.Bits
+public import Proofs.Flock.Claims.ERepCost
+public import Proofs.Flock.Claims.KS.PlainAcc
+public import Proofs.Flock.Claims.KS.ZkTauSlot
+public import Proofs.Flock.Claims.DeployEfficient
+public import Proofs.Flock.Claims.Complete.WalkPacked
+public import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
+public import Proofs.Flock.Claims.ZK.Hypotheses
+public import Proofs.Flock.Claims.Complete.Coins
+public import Proofs.Flock.Claims.Complete.Zk.Coins
+public import Proofs.Flock.Soundness.CompiledSound
 
 /-!
 # Flock's claims at the deployed records, with what remains as hypotheses
@@ -85,6 +87,8 @@ prover: as an argument, or from the record. `Claims.Complete` stays folded: with
 `δc H` and `ZkTables.δc H` are `1`, so `Complete` asks nothing, where `ready H` and `ZkTables.ready H` fail. ZK and
 `Complete` read one reference prover, `ZkTables.honestPR`.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.Assembled
 

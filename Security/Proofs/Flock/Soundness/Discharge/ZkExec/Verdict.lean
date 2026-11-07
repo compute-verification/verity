@@ -1,11 +1,13 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
-import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
-import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLig
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSizes
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLig
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictOpens
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
 
 /-!
 # `RunsZC`'s verdict half: the compiled `--zk` table accepts at the two reps' results
@@ -18,6 +20,8 @@ import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
   `VerdictLig.lean`), the inner check (`zk_inner_of_rep`, `VerdictRows.lean`, through `zk_inner_accepts`) and the
   requested rows (`zk_opens_ok`, `VerdictOpens.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

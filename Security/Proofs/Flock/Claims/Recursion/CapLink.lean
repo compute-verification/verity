@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.FlockKSLin
-import Proofs.Flock.Claims.Recursion.CostExp
-import Proofs.Flock.Soundness.Game.LockLin
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSLin
+public import Proofs.Flock.Claims.Recursion.CostExp
+public import Proofs.Flock.Soundness.Game.LockLin
 
 /-!
 # A cap position's off mass at the abort law, linearly, as `FC`'s hits
@@ -18,6 +20,8 @@ coins before `q`'s round tie a collision among their calls:
   fork is the finder's loop), and averaging over the base run, a run opens `q` off the plurality after `q`'s round with
   probability at most `FC`'s hit at `q` plus `1/(M+1)`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

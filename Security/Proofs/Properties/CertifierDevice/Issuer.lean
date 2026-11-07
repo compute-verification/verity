@@ -1,4 +1,6 @@
-import Proofs.Properties.CertifierDevice.Lms
+module
+
+public import Proofs.Properties.CertifierDevice.Lms
 
 /-!
 # The issuer, proved: its certificates verify
@@ -9,6 +11,8 @@ digest and the message from the certificate's fields, which are the ones signed,
 and verifies it under the key's public key (`Lms.verify_signAt`), so it accepts (`verify_cert`). `Issuer.certify` signs
 only a complete record (`certify_complete`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierDevice
 

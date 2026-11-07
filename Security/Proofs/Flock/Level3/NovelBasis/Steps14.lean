@@ -1,7 +1,11 @@
 /-
 `NovelBasis`'s kernel checks of `svC`'s entries 14–19.
 -/
-import Proofs.Flock.Level3.NovelBasis.Svc
+module
+
+public import Proofs.Flock.Level3.NovelBasis.Svc
+
+@[expose] public section
 
 open Flock
 

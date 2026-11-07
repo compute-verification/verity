@@ -1,5 +1,7 @@
-import Properties.Flock.Circuit.Rows
-import Properties.Flock.Circuit.Keys
+module
+
+public import Properties.Flock.Circuit.Rows
+public import Properties.Flock.Circuit.Keys
 
 /-!
 # The circuit's program on Δ's source keys
@@ -9,6 +11,8 @@ net's rows stacked `units_per_vu` times), each unit's input `x` on the input gat
 `uniform` on the source-indexed input gates (`inGates`, `insOf`, `circuitProg`). Moved unchanged from
 `Proofs.Flock.Soundness.Discharge.Placed.{Setup,Wiring,Keyed}`; the lemmas about them stay there.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Placed
 

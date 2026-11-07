@@ -1,4 +1,6 @@
-import Proofs.Properties.RemoteAudit.Released
+module
+
+public import Proofs.Properties.RemoteAudit.Released
 
 /-!
 # Each append's blocks are read within `lifetime` windows (`LifetimeCapped`)
@@ -11,6 +13,8 @@ block a plan reads past `N` lies in exactly one append, and the plan is refused 
 windows. The invariant (`Life`): every block past `N` a recorded pass in window `t` reads lies in an append `k` with
 `joined[k] ≤ t < joined[k] + L`.
 -/
+
+@[expose] public section
 
 open RemoteAudit RemoteAudit.Session
 

@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS.Slots
+module
+
+public import Definitions.Accounting.TS.Slots
 
 /-!
 # Steering a segmented consumer (trusted)
@@ -15,6 +17,8 @@ spares a segment's work only once the segment has nothing left to sum.
 * `segUntouched seg act Z`, `adaptConsumer seg act c`: the same row under E1(b)'s accounting, which counts a segment's
   words as saved (adaptive) once any coordinate of the segment is zeroed.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
-import Proofs.Flock.Soundness.Discharge.Exec.Shape
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+public import Proofs.Flock.Soundness.Discharge.Exec.Shape
 
 /-!
 # The coin half of `DecodesAll` and `DecodesOn` (R11b): statements
@@ -24,6 +26,8 @@ messages, cut at the coins of the rep's spine, must be the decoder's groups.
 * `DecodesOfRunsAt`: `DecodesOfRuns` for a game with no spine, such as one that goes on past a reject: each rep's spine
   is chosen at the outcome and holds along the runs that end where its `RepRun` ends (`SpineAt`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlaysCoin
 

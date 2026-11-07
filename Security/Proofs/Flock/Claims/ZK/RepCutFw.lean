@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZK.RepReplay
-import Proofs.Flock.Claims.ZK.RepInner
-import Proofs.Flock.Claims.ZK.L0PinCut
-import Proofs.Flock.Claims.ZK.FinishTau
-import Proofs.Flock.Claims.Complete.Zk.Lanes
+module
+
+public import Proofs.Flock.Claims.ZK.RepReplay
+public import Proofs.Flock.Claims.ZK.RepInner
+public import Proofs.Flock.Claims.ZK.L0PinCut
+public import Proofs.Flock.Claims.ZK.FinishTau
+public import Proofs.Flock.Claims.Complete.Zk.Lanes
 
 /-!
 # The cut rep returns where the firewall's rep does
@@ -18,6 +20,8 @@ record's sizes, and its inner proof where the firewall's did (`innerP_cut_fw`). 
   level-0 commitment, pads commitment and extra claims of the same count returns from a log of the same size, with a
   log of the same size, wherever its rank check passes.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000

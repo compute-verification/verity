@@ -1,4 +1,6 @@
-import Proofs.Core.TC.Proofs.Fold
+module
+
+public import Proofs.Core.TC.Proofs.Fold
 
 /-!
 # Normalisation: the relation's columns against `group_sum`'s shifts
@@ -7,6 +9,8 @@ Pure arithmetic for the Hopper adder (`W = 26`, `B = 32`, `K = 36`). `norm_nat` 
 subnormal shift and rescale, written as the relation computes it: `normB = |T| * 2^(32 - L)`, `magW = normB / 2^6`,
 `mag24 = magW / 2^min(e_fin - e_out + 2, 36)`. The `*_of_*` lemmas read each column off the predicates that constrain it.
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs
 

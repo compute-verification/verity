@@ -218,4 +218,4 @@ def tile(jb: Job, a_rows: np.ndarray, b_rows: np.ndarray, rows: np.ndarray, cols
     c, u = c.reshape(na, nb), u.reshape(na, nb)
     checked = C.Checked(c.tolist(), u.tolist())
     tickets = C.tickets(jb.seed_a, checked, "h3")
-    return Tile(a, b, pa, pb, c, u, C.leaf(checked), tickets)
+    return Tile(a, b, pa, pb, c, u, C.leaf(checked, "h0"), tickets)

@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.PiopSrcLc
-import Proofs.Flock.Claims.ZK.SentE
+module
+
+public import Proofs.Flock.Claims.ZK.PiopSrcLc
+public import Proofs.Flock.Claims.ZK.SentE
 
 /-!
 # The deployed source's switched vectors at the opened coins
@@ -16,6 +18,8 @@ prover's `switchVec` of claim `k` at the opened coins wherever the rep sends it 
   lincheck's coins (`rhoF_out`, `rF_czExe`, `tsF_lc`); region claim `k − 2`'s is the witness's, the region's words off
   the mask slot (`regions_off_of_words`, `zWith_off`), at the link points of round `0`'s coin.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay.Rs
 

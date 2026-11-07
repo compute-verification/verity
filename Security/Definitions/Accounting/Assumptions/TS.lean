@@ -1,4 +1,6 @@
-import Definitions.Accounting.TS
+module
+
+public import Definitions.Accounting.TS
 
 /-!
 # The tensor–scalar model's named assumptions (trusted)
@@ -69,6 +71,8 @@ The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
 noise-active segments carry equal counts), and no guarantee rests on it; `Accounting.Guarantees.TS.SegmentSteer` is the
 bound that holds.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.TS
 

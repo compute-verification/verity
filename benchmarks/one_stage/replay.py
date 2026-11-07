@@ -41,10 +41,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import importlib
 import json
 import os
-import pkgutil
 import re
 import subprocess
 import sys
@@ -62,6 +60,7 @@ from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.definitions.registry import catalog
 
 import r2_population as R2
 
@@ -90,14 +89,6 @@ class Gap(Exception):
 
 
 # --- programs ----------------------------------------------------------------------------------------------------------
-
-def _registry() -> None:
-    """Every Definition a recorded program may call: the circuit ops and vLLM's program registry."""
-    for name in ("verity.ml.circuits.ops", "verity.ml.definitions.registry"):
-        pkg = importlib.import_module(name)
-        for m in pkgutil.walk_packages(pkg.__path__, pkg.__name__ + "."):
-            importlib.import_module(m.name)
-
 
 def _json(value: Any) -> Any:
     return json.loads(DT.canonical(value))
@@ -1646,7 +1637,7 @@ def served_window(run: Run) -> Iterator[Case]:
                            pv["grid_bits"])["law"]
     n0 = Wd.Work.at(levels[0], pv["grid_bits"]).n
     tiles = {"pc8.side_tile": pc8.side_tile(pv["k"], (1, 1), "sm120"),
-             "pc8's hiding tile": pc8.templates(pv["k"], (1, 1), "sm120", hidden=True)["tile"]}
+             "pc8's hiding tile": pc8.templates(pv["k"], (1, 1), "sm120", hidden=True, hashing="h0")["tile"]}
     def own(x):
         return own_population(lambda v: P.population_program(x, n0, version=v), rec["program"])
     how, t = next(((h, x) for h, x in tiles.items() if PO.program_sha512(own(x)) == rec["program"]),
@@ -1792,7 +1783,7 @@ def served_audit(run: Run) -> Iterator[Case]:
     def copies(side: str, rec: dict, run_id: str | None = None) -> tuple[Any, dict, dict, dict]:
         c = run.json(f"out/{side}/commitment.json")
         b, (rows, n) = c["binding"], c["statement"]["tiles"]
-        t = pc8.templates(b["shape"][1], (1, 1), "sm120", hidden=True)["tile"]
+        t = pc8.templates(b["shape"][1], (1, 1), "sm120", hidden=True, hashing="h0")["tile"]
         program = own_population(lambda v: P.population_program(t, rows * n, version=v), rec["program"])
         query = P.template_instance_query(t)
         part = P.partition(program, query)
@@ -2255,7 +2246,9 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--only", nargs="*", default=None, help="run ids (8 hex digits)")
     a = ap.parse_args()
-    _registry()
+    _, errors = catalog.load(("ops", "registry"))  # every Definition a recorded program may call
+    if errors:
+        raise ImportError("; ".join(errors))
     out = Path(a.out)
     (out / "cases").mkdir(parents=True, exist_ok=True)
     runs_root = Path(a.runs)
