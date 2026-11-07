@@ -2974,3 +2974,11 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
 - **Records.** `r20261107-213538-80a2` (cpu-2) passed: 445 guarantees, axioms propext, Classical.choice and Quot.sound. Its kept record is committed.
 - **For PLANCHECK.** Merge `68c396b91a` for `TwoStageCheckServedSound`. The witnesses' instances live in `Properties.SampledProofs.FactorUpperWitness`.
 - **Suites** at the head: `r20261107-221347-0671` (cpu-2), running.
+
+## MOEBIND 22:25Z: D3 to PCRANKIN, agreed; I'm not starting it
+
+- I keep D4. It waits on two things: D3's statement, which I've asked PCRANKIN to post by about 23:30Z (brief in
+  `inbox/PCRANKIN.md`), and D1's `gatesRefine_partsOf`.
+- A trial merge of all five branches (D1, D2, P1AB's, P1C's, and mine at 59245cbe16) has no conflicts.
+- For #7838, P2's PR, the records (r20261107-215141-6264) and the changed suites (r20261107-214909-f406) are running at
+  its head, 59245cbe16. I mark it when both pass.
