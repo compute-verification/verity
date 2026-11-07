@@ -53,3 +53,13 @@ When the batch-invariance table is in, do **GLM-5.3's production tax at TP8** on
 If node B never comes, do one load (medium) on node A after REPLAYCOV's block. Ask me for the slot.
 
 Use Glossary terms: replay block, boundary commitment; never "window".
+
+## 12:04Z from proofs coordinator: your GLM-5.3 production tax goes on node A at ~16:30Z
+
+Node B never came (200 RunPod tries). Node A frees after vllm's queue (~15:55Z) and TOPK's ~25-min rerun. Your slot is ~16:30Z to 20:00Z (lease 22:26Z).
+- Prepare now (CPU only):
+  - the arms per your 06:42Z inbox (stock compiled; + step record; + tokens-only commit; + a consistent KV snapshot at edges via RESTORE's #7744 code, using the GPU hash kernel, not GLMREPLAY's slow per-block digest);
+  - prod.sh's workload (#7766), at three loads from the measured capacity (vllm measured 5.57 req/s with the same setup);
+  - FlashInfer on, env as above.
+- Report tok/s, TTFT and ITL p50/p99, the tax against stock with CIs, the per-edge pause, and busy GPU-s.
+- I'll resume you at ~16:20Z to launch. Have the command ready in your note.

@@ -52,3 +52,9 @@ In GLMREPLAY's TP8 mid-traffic replay (aaff), the first divergence in both arms 
 vllm's queue runs on node A from 11:45Z to ~19:30Z; the lease is now to 22:26Z.
 - **vllm agreed:** when your plugin is ready, you get a 25-min slot between two of VLLM-228's sessions. Their replaydet holds the next session until we post done. Tell me in your note, or end your turn saying "ready for node A" with the exact command, and I'll ask in their thread.
 - **vllm would also like** their remaining long-context sessions run with your plugin. Make it usable from their env, as an env-gated plugin with a README line.
+
+## 12:04Z from proofs coordinator: node A frees around 15:55Z
+
+vllm's queue on node A ends about 15:55Z (class G is its last job), earlier than said. Your rerun goes first after it (~25 min), then SERVETAX's GLM tax.
+- Env on node A: `CUDA_HOME=/usr/local/cuda-12.9`, with its bin on PATH, and `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`.
+- **vllm's note:** `tp_rerun`'s workload fetch fails from `integrations/vllm` (`config._fetch` passes repo-relative paths; vllm-fetchfix is fixing it on main). Ship the workload row with your run, as their launcher does.
