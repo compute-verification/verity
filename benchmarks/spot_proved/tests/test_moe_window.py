@@ -20,9 +20,10 @@ import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 LAYER, STEP, E, TOPK, S = 3, 5, 8, 2, 3
-UP = {"K": 128, "N": 256, "config": {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 32, "BLOCK_SIZE_K": 128, "num_warps": 4}}
-DOWN = {"K": 128, "N": 128, "config": {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 128, "num_warps": 4}}
-BLOCKS = ["--block", "w13=64", "--block", "w2=32"]
+G = 32
+UP = {"K": 64, "N": 64, "config": {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 32, "BLOCK_SIZE_K": 32, "num_warps": 4}}
+DOWN = {"K": 64, "N": 64, "config": {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "num_warps": 4}}
+BLOCKS = ["--block", "w13=8", "--block", "w2=8"]
 DT = {np.uint8: "torch.float8_e4m3fn", np.uint16: "torch.bfloat16", np.uint32: "torch.float32", np.int32: "torch.int32"}
 
 
@@ -86,15 +87,15 @@ def write_capture(d: Path, MW, seed: int = 0) -> dict:
     for seq, (proj, sh, w) in enumerate((("up", UP, "w13"), ("down", DOWN, "w2")), start=1):
         K, N = sh["K"], sh["N"]
         W = MW._e4m3(rng, E, N, K)
-        WS = MW._f32(rng, 1e-4, 1e-2, E, N // 128, K // 128)
+        WS = MW._f32(rng, 1e-4, 1e-2, E, N // G, K // G)
         rows = S if proj == "up" else S * TOPK
-        x, sx = MW._e4m3(rng, rows, K), MW._f32(rng, 1e-3, 1e-1, rows, K // 128)
+        x, sx = MW._e4m3(rng, rows, K), MW._f32(rng, 1e-3, 1e-1, rows, K // G)
         ev = {"seq": seq, "op": "moe_launch", "layer": LAYER,
               "in": {"A": blob(x), "A_scale": blob(sx), "B": param(f"{pre}.experts.{w}_weight", W),
                      "B_scale": param(f"{pre}.experts.{w}_weight_scale_inv", WS),
                      "expert_ids": blob(np.array(expert_ids, dtype=np.int32)),
                      "sorted_token_ids": blob(np.array(sorted_ids, dtype=np.int32)),
-                     "topk_weights": blob(g.copy()), "config": sh["config"], "block_shape": [128, 128],
+                     "topk_weights": blob(g.copy()), "config": sh["config"], "block_shape": [G, G],
                      "mul_routed_weight": proj == "down"}, "out": {}}
         v[proj] = MW.tile(profile, ev)
         v.update({f"x{'13' if proj == 'up' else '2'}": x, f"s{'13' if proj == 'up' else '2'}": sx,
@@ -158,13 +159,13 @@ def test_the_cuts_tables_are_the_ones_expert_tables_registers(MW, captured):
     from verity_vllm.pipeline import expert_tables as XT
 
     _d, v = captured
-    blocks = {"w13": 64, "w2": 32}
+    blocks = {"w13": 8, "w2": 8}
     fns = MW.templates(v, 2.5, "block", blocks)
     lab = MW.labels({"up": ("model.layers.3.mlp.experts.w13_weight", "model.layers.3.mlp.experts.w13_weight_scale_inv"),
                      "down": ("model.layers.3.mlp.experts.w2_weight", "model.layers.3.mlp.experts.w2_weight_scale_inv")}, None)
     circuit, plan = MW.cut(v, fns, lab, blocks, "test")
     fields = [(f"model.layers.3.mlp.experts.{w}_weight", (E, sh["N"], sh["K"]), 8) for w, sh in (("w13", UP), ("w2", DOWN))]
-    fields += [(f"model.layers.3.mlp.experts.{w}_weight_scale_inv", (E, sh["N"] // 128, sh["K"] // 128), 32)
+    fields += [(f"model.layers.3.mlp.experts.{w}_weight_scale_inv", (E, sh["N"] // G, sh["K"] // G), 32)
                for w, sh in (("w13", UP), ("w2", DOWN))]
     registered = {p for ts in XT.tables_of(fields, blocks).values() for _b, p, _w, _n in ts}
     assert set(circuit.registered.params) == registered
@@ -172,11 +173,12 @@ def test_the_cuts_tables_are_the_ones_expert_tables_registers(MW, captured):
                          [f"weights/language_model.{p[len('weights/'):]}" for p in registered])
     assert prefixed["up"]["w"] == "language_model.model.layers.3.mlp.experts.w13_weight"
     want: dict[str, int] = {MW.descriptor_id(fns["router"]): S}
-    for p, B, NBG in (("up", 4, 2), ("down", 4, 1)):
+    for p, B, NBG in (("up", 8, 2), ("down", 8, 2)):
         for tid, n in ((plan[p]["rows"][0], B), (plan[p]["scales"][0], NBG), (MW.descriptor_id(fns[p]), B)):
             want[tid] = want.get(tid, 0) + n * TOPK * S
-    assert plan["up"]["scales"][0] == plan["down"]["scales"][0] and plan["down"]["scales"][3] == 2 * TOPK * S
-    assert circuit.units == want and len(want) == 6
+    for part, first in (("rows", 8), ("scales", 2)):
+        assert plan["up"][part][0] == plan["down"][part][0] and plan["down"][part][3] == first * TOPK * S
+    assert circuit.units == want and len(want) == 5
     lays = circuit.layouts
 
     def bits(fn, ports) -> int:

@@ -52,10 +52,19 @@ EOF
 fi
 sent() { [ -z "$1" ] || [ -e "$1" ] && echo "$1" || echo "$RESEARCH_RUN_DIR/inputs/$1"; }   # a --send file by its name
 MW_TABLES=$(sent "${MW_TABLES:-}") MW_CARD=$(sent "${MW_CARD:-}")
-CAP=$(sent "${MW_CAPTURE:?}")
+CAP=${MW_CAPTURE:?}
 case $CAP in
-  *.tar.gz) mkdir -p "$W/cap" && tar -xzf "$CAP" -C "$W/cap" || exit 2
-            CAP=$(dirname "$(dirname "$(find "$W/cap" -name commit.json -path "*step${MW_STEP:?}*" | head -1)")") ;;
+  art:*) mkdir -p "$W/cap" && research data fetch "$CAP" --to "$W/cap" > "$OUT/fetch.log" 2>&1 \
+           || { log "moe-window: fetching $CAP FAILED: $(tail -1 "$OUT/fetch.log")"; exit 2; } ;;
+  *) CAP=$(sent "$CAP") ;;
+esac
+case $CAP in
+  *.tar.gz) mkdir -p "$W/cap" && tar -xzf "$CAP" -C "$W/cap" || exit 2 ;;
+esac
+case $CAP in   # the directory whose rank*/step<S>/commit.json is the step's
+  art:*|*.tar.gz) CAP=$(find "$W/cap" -path "*/rank*/step${MW_STEP:?}/commit.json" | head -1)
+                  CAP=${CAP%/rank*/step*/commit.json}
+                  [ -n "$CAP" ] || { log "moe-window: no rank*/step$MW_STEP/commit.json in $MW_CAPTURE"; exit 2; } ;;
 esac
 LAW=${MW_LAW:-stratified:1}
 BASE=(--capture "$CAP" --step "${MW_STEP:?}" --layer "${MW_LAYER:?}" --rank "${MW_RANK:-0}" --tokens "${MW_TOKENS:-1}"
