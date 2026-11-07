@@ -51,8 +51,9 @@ import subprocess
 import sys
 import time
 
+from settings import INBOX, INBOX_POLL_S
+
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
-INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
 WRAPPER_ARG_OPTIONS = {"sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t"}, "doas": {"-u", "-C"}, "nice": {"-n"},
                        "timeout": {"-s", "-k", "--signal", "--kill-after"}, "taskset": {"-c", "-p"}}
@@ -438,7 +439,7 @@ def delivery(conversation: str) -> str | None:
 def poll(conversation: str, repo: str) -> bool:
     """Start `inbox.py pull` for agent `conversation` from checkout `repo`, detached, unless one started within the poll
     interval; whether it started one."""
-    every = os.environ.get("AGENT_INBOX_POLL_S", "30")
+    every = INBOX_POLL_S
     if every == "off" or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}", conversation) or not repo:
         return False
     os.makedirs(INBOX, exist_ok=True)
@@ -521,7 +522,8 @@ def main() -> int:
             message = None
         try:
             merge_drivers(command, cwd)
-        except Exception as e:                          # nor a merge driver git couldn't set
+        except (OSError, ImportError, SyntaxError, AttributeError,
+                subprocess.SubprocessError) as e:       # nor a merge driver git couldn't set
             print(f"shell_hook: merge drivers not set in {cwd}: {type(e).__name__}: {e}", file=sys.stderr)
         if message:
             note = ("MESSAGE FROM YOUR COORDINATOR, delivered by the shell hook (tools/agent-guard/inbox.py). This command was "
