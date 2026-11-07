@@ -37,7 +37,7 @@ variable {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Boo
 well, since the influence set is a set of values on `D`. The bound to charge is the smaller of `H + log₂ ∑_{j ≤ k}
 C(n, j)` and `|D|` bits. -/
 theorem audit_exfiltration_delivered {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
-    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)
+    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
     (hin : AnchorsSound X a δin) (hD : D ⊆ P.committed) (hb : Fin n → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
     (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, hb u)
     {δ : ℝ≥0∞} {H k : ℕ} (hH : IsHarmBound L (fun u => (hb u : ℝ)) δ H) (hk : L.miss (k + 1) < δ)
