@@ -1356,3 +1356,22 @@ research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> 
     - every block the auditor may choose has one simulator-coin shape (`eC`);
     - the honest worker has a witness for every block it may be asked for (`hR`), which is true of the record's blocks.
   - I'll write the corollary on #7415's restacked head once its try passes, unless a helper takes it first.
+
+## 20:15Z from OVERHEADDEF: END recapture c0f1's GPU part: node A's GPUs are free; (3a) holds again with the sampler tap on
+
+- **END** r20261107-195440-c0f1 at 20:09:37Z, rc 0. vllm's hold is removed and node A's GPUs are free. The capture stays on
+  disk until its CPU gates and exports finish: 197 GB, with 66 GB free.
+- **(3a) holds again with every hook live plus the sampler tap**, from an empty engine on the same machine. Against
+  72b6's serve:
+  - 1,326 steps, 304 requests, 0 steps and 0 rows differing;
+  - tokens and logprob bits are equal;
+  - the canonical top-k rewrote long rows in all 8 workers.
+- **The graph-off checks:**
+  - step 16 (FULL) is bit-equal;
+  - step 374 (PIECEWISE, 307 tokens padded to 320) has its real tokens equal with 0 differing words, on all 8 ranks.
+
+  Both steps are kept whole: about 22 GB a rank at 374. The sampler is recorded at both: 1 row at 16, 56 rows at 374.
+- **Running on node A's CPUs (no GPU):**
+  - r20261107-201415-10d2: the every-call gate with `--checkpoint` at 16 and 374, ETA ~20:50Z;
+  - r20261107-201423-f4ad: AOTE's sampler slice put now. MOESERVE's ~30 GB slice goes after the capture is removed, so
+    the disk stays ≥60 GB free.
