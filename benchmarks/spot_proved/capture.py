@@ -48,6 +48,9 @@ from pathlib import Path
 from typing import Any
 
 BIG = 1 << 30
+#: with ``--keep all``, every parameter the step read up to this size is written too (``commit.json``'s ``kept_params``: the
+#: norms' and biases' weights of the layers the coins didn't open, which a gate over every call reads)
+SMALL_PARAM = 1 << 20
 #: aten ops that only allocate, view or restride: their outputs alias or are uninitialized, never a value of the step
 SKIP = {"empty", "empty_strided", "empty_like", "as_strided", "view", "_unsafe_view", "reshape", "alias", "detach", "t",
         "permute", "transpose", "expand", "unsqueeze", "squeeze", "select", "slice", "_reinterpret_tensor", "lift_fresh",
@@ -636,9 +639,19 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
         (od / f"{name}.bin").write_bytes(memoryview(raw))
         files[name] = {"shape": list(t.shape), "dtype": str(t.dtype), "stride": list(t.stride()),
                        "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
+    small = {}
+    if S.keep_all:
+        for name in sorted(S.used_params - set(files)):
+            t = S.param_of[name]
+            if t.numel() * t.element_size() > SMALL_PARAM:
+                continue
+            raw = t.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy()
+            (od / f"{name}.bin").write_bytes(memoryview(raw))
+            small[name] = {"shape": list(t.shape), "dtype": str(t.dtype), "stride": list(t.stride()),
+                           "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
     commit = {"rank": S.rank, "step": S.step, "rank_roots": roots, "root": root, "t_root": t_root, "coins": coins_hex,
               "t_coins_received": time.time(), "coins_by": "rank 0's os.urandom(64), drawn after every rank's root was gathered",
-              "layers": layers, "opened": files,
+              "layers": layers, "opened": files, "kept_params": small,
               "kept": "every recorded tensor" if S.keep_all else f"the opened layers' {len(kept)} tensors, {kept_bytes} bytes"}
     (d / "commit.json").write_text(json.dumps(commit, indent=1, sort_keys=True))
     return commit
