@@ -84,6 +84,41 @@
    "owner": "@lean",
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
    "why": "The protocol accepts: the event the statement conditions on."
+  },
+  "Verity.Circuit.BitFaninPos": {
+   "owner": "@soundness",
+   "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e",
+   "why": "A scope: the policy's bit-level clause speaks of a declaration whose computed gates of positive width read one of positive width, the case whose expansion is Boolean."
+  },
+  "Verity.Circuit.Boolean": {
+   "owner": "@soundness",
+   "digest": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
+   "why": "A scope: the inference-only policy's partition clause speaks of a Boolean declaration; remote's policy reads word-level Programs, so the clause is conditional, never refused."
+  },
+  "Verity.Vocab.ComponentBound": {
+   "owner": "@soundness",
+   "digest": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5",
+   "why": "The layer below's guarantee: a subprotocol's bound at its compiled component, which the composition sums and each subprotocol's piece proves."
+  },
+  "Verity.Vocab.PeriodsCouple": {
+   "owner": "@soundness",
+   "digest": "9b9104bef15bbb693a89d823254efc6ca9911c36423d3d5b98375234d0f2e089",
+   "why": "The layer below's guarantee: the plays' coupling to a period run of the coins model, which each period audit's piece proves."
+  },
+  "Verity.Vocab.SubprotocolBound": {
+   "owner": "@soundness",
+   "digest": "1a4d2b3ea246dfa056c0ec2b3edc53f3eadc1d1f43645954fdb4b8a1aaa9b5ba",
+   "why": "The layer below's guarantee: a subprotocol's bound in one of its three forms, which the composition sums and each subprotocol's piece proves."
+  },
+  "Verity.Vocab.UpFrontFor": {
+   "owner": "@soundness",
+   "digest": "28dd9f723c811dcf0725b2d0bcb064f66c0eb969d4544047538b20753c43b475",
+   "why": "The layer below's guarantee: a subprotocol's bound over the coins drawn up front, which its piece proves and the coupling carries to the play."
+  },
+  "Verity.Vocab.WipeCoupling": {
+   "owner": "@soundness",
+   "digest": "76c34c31267421ba984076a5c46a5aeeb05af58bd6ec37763fc9c1e4d88e9a0e",
+   "why": "The layer below's guarantee: the play read at the wipe's boundary as the wipe's game, which the wipe's piece proves."
   }
  },
  "open": {
@@ -687,18 +722,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Circuit.BitFaninPos": {
-   "owner": "@soundness",
-   "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Circuit.Boolean": {
-   "owner": "@soundness",
-   "digest": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Verity.Site.Boundary": {
    "owner": "@lean",
    "digest": "50c25787a970be9a17ca64fb4e05503a0761b0713bc7559c426f3103eb93fa35",
@@ -710,12 +733,6 @@
    "digest": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc",
    "issue": "LEAN-186",
    "due": "2026-11-30"
-  },
-  "Verity.Vocab.ComponentBound": {
-   "owner": "@soundness",
-   "digest": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5",
-   "issue": "LEAN-62",
-   "due": "2026-11-06"
   },
   "Verity.Vocab.FinderCR": {
    "owner": "@soundness",
@@ -732,12 +749,6 @@
   "Verity.Vocab.NetworkCertifierSound": {
    "owner": "@network-accounting",
    "digest": "5f6f0e28c3d227e17c977a8e9470dcd3131f0719f67a8b665a92c402ecdeeb2e",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.PeriodsCouple": {
-   "owner": "@soundness",
-   "digest": "9b9104bef15bbb693a89d823254efc6ca9911c36423d3d5b98375234d0f2e089",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -759,27 +770,9 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Vocab.SubprotocolBound": {
-   "owner": "@soundness",
-   "digest": "1a4d2b3ea246dfa056c0ec2b3edc53f3eadc1d1f43645954fdb4b8a1aaa9b5ba",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Verity.Vocab.Target": {
    "owner": "@soundness",
    "digest": "548f5118cb15c0be50546298ea855af1004bbfd85138c2afe31efcaeb602b1cd",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.UpFrontFor": {
-   "owner": "@soundness",
-   "digest": "28dd9f723c811dcf0725b2d0bcb064f66c0eb969d4544047538b20753c43b475",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.WipeCoupling": {
-   "owner": "@soundness",
-   "digest": "76c34c31267421ba984076a5c46a5aeeb05af58bd6ec37763fc9c1e4d88e9a0e",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -6674,15 +6667,13 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
+    "domain": ["Verity.Circuit.BitFaninPos", "Verity.Circuit.Boolean"],
     "open": [
      "NciCheck.Properties.Divides",
      "NciCheck.Properties.Expands",
      "NciCheck.Properties.LaysOut",
      "NciCheck.Properties.Names",
-     "NciCheck.Properties.Parses",
-     "Verity.Circuit.BitFaninPos",
-     "Verity.Circuit.Boolean"
+     "NciCheck.Properties.Parses"
     ],
     "reads": []
    },
@@ -6697,15 +6688,13 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
+    "domain": ["Verity.Circuit.BitFaninPos", "Verity.Circuit.Boolean"],
     "open": [
      "NciCheck.Properties.Divides",
      "NciCheck.Properties.Expands",
      "NciCheck.Properties.LaysOut",
      "NciCheck.Properties.Names",
-     "NciCheck.Properties.Parses",
-     "Verity.Circuit.BitFaninPos",
-     "Verity.Circuit.Boolean"
+     "NciCheck.Properties.Parses"
     ],
     "reads": []
    },
@@ -8075,8 +8064,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Verity.Vocab.UpFrontFor"],
+    "domain": ["Verity.Vocab.UpFrontFor"],
+    "open": [],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
@@ -8238,8 +8227,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Verity.Vocab.ComponentBound"],
+    "domain": ["Verity.Vocab.ComponentBound"],
+    "open": [],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
@@ -8501,8 +8490,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Verity.Vocab.SubprotocolBound"],
+    "domain": ["Verity.Vocab.SubprotocolBound"],
+    "open": [],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
@@ -8582,8 +8571,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Verity.Vocab.PeriodsCouple"],
+    "domain": ["Verity.Vocab.PeriodsCouple"],
+    "open": [],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
@@ -8663,8 +8652,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Verity.Vocab.WipeCoupling", "Verity.Wipe.SurvivorBound"],
+    "domain": ["Verity.Vocab.WipeCoupling"],
+    "open": ["Verity.Wipe.SurvivorBound"],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
