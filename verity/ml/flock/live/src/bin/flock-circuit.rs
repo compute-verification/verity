@@ -3711,6 +3711,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let t0 = Instant::now();
     // registration done: the verifier samples the units (or none), and the statement is the sampled proof blocks', in the session's tables
     let reg = call(&t, Req::Register);
+    let t_register = t0.elapsed().as_secs_f64();
     let draw = match &reg {
         Ok(Resp::Draw(d)) if !plan.ignore_draw => d.clone(),
         _ => "null".to_string(),
@@ -3731,6 +3732,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         Ok(x) => x,
         Err(e) => return Err((json!({"accepted": false, "why": e, "prover_stopped": format!("the drawn statement: {e}")}), Vec::new())),
     };
+    if std::env::var_os("FC_PHASE_TIMES").is_some() {
+        eprintln!("SESSIONPHASE\t{}", json!({"register_s": t_register, "tables_s": t0.elapsed().as_secs_f64() - t_register}));
+    }
     let st = &tabs.list[0].st;
     // the ZK server's proof files of record: the Lean session loop's finish on the session's statement, at the verifier's sample
     let lean_fin = match firewall_on(st).then(|| {

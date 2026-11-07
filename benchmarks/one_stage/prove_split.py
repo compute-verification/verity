@@ -35,7 +35,7 @@ def cells(layout: dict) -> dict:
     return {"alloc": alloc, "used": used, "roles": {r["net"]: r["role"] for r in lay["ranges"]}}
 
 
-def session_split(conv: dict, wit: dict, phases: dict, live: dict, cl: dict) -> dict:
+def session_split(conv: dict, wit: dict, phases: dict, live: dict, cl: dict, setup: dict | None = None) -> dict:
     total = sum(cl["alloc"].values())
     share = {k: v / total for k, v in cl["alloc"].items()}
     w_hash = conv.get("row_inputs", 0.0)
@@ -65,8 +65,12 @@ def session_split(conv: dict, wit: dict, phases: dict, live: dict, cl: dict) -> 
     return {"hash_s": w_hash + p_hash, "arith_s": w_arith + p_arith, "witness_hash_s": w_hash, "witness_arith_s": w_arith,
             "piop_hash_s": p_hash, "piop_arith_s": p_arith, "mask_unused_s": w_other + p_other, "zk_s": zk,
             "other_prover_s": upstream_rest + w_rest, "witness_s": witness, "prove_total_s": prove, "piop_s": piop,
-            "phases": {k: phases.get(k, 0.0) for k in PIOP}, "e2e_s": live.get("e2e_s"), "wait_s": live.get("wait_s"),
-            "session_s": (live.get("e2e_s") or 0.0) - witness - prove}
+            "phases": {k: phases.get(k, 0.0) for k in PIOP}, "e2e_s": live.get("e2e_s"), "wait_e2e_s": live.get("wait_e2e_s"),
+            # before the witness: Register (the verifier's draw and its statement) and the prover's drawn statement
+            "setup_s": (live.get("e2e_s") or 0.0) - witness - (live.get("tp_s") or 0.0),
+            "register_s": (setup or {}).get("register_s"), "tables_s": (setup or {}).get("tables_s"),
+            # after the witness, beside the prover: the verifier's rounds and the transport
+            "rounds_s": (live.get("tp_s") or 0.0) - prove}
 
 
 def one(point: Path, stage: dict) -> dict | None:
@@ -78,15 +82,16 @@ def one(point: Path, stage: dict) -> dict | None:
         return None
     cl = cells(lay[0])
     lives = lines(out, "LIVE")
-    conv, wit = lines(err, "CONVERGE"), lines(err, "WITNESSCPU")
+    conv, wit, setups = lines(err, "CONVERGE"), lines(err, "WITNESSCPU"), lines(err, "SESSIONPHASE")
     core = [x for x in lines(err, "CPUPHASE") if "t.commit" in x]
     opens = [x for x in lines(err, "CPUPHASE") if "t.open" in x]
     n = len(lives)
     if not n or not (len(conv) == len(wit) == len(core) == len(opens) == n):
         return {"error": f"{n} sessions, {len(conv)} CONVERGE, {len(wit)} WITNESSCPU, {len(core)}+{len(opens)} CPUPHASE"}
     timed = [i for i, x in enumerate(lives) if not x.get("warm") and x.get("accepted") is True] or list(range(n))
-    rs = [session_split(conv[i], wit[i], {**core[i], **opens[i]}, lives[i], cl) for i in timed]
-    med = {k: statistics.median(r[k] for r in rs) for k in rs[0] if isinstance(rs[0][k], (int, float))}
+    rs = [session_split(conv[i], wit[i], {**core[i], **opens[i]}, lives[i], cl, setups[i] if len(setups) == n else None)
+          for i in timed]
+    med = {k: statistics.median(r[k] for r in rs) for k in rs[0] if all(isinstance(r[k], (int, float)) for r in rs)}
     med["phases"] = {k: statistics.median(r["phases"][k] for r in rs) for k in PIOP}
     alloc, used = cl["alloc"], cl["used"]
     used_hash = sum(used.get(r, 0) for r in HASH)
@@ -112,18 +117,18 @@ def main() -> int:
                 res[u] = r
     (o / "split.json").write_text(json.dumps(res, indent=1))
     print("| type | k | blocks | hash share of cells (alloc / used) | witness hash / arith s | PIOP hash / arith s | "
-          "mask+unused s | ZK extras s | hash / arith / prove s | hash share of prove |")
-    print("|---|---:|---:|---|---|---|---:|---:|---|---:|")
+          "mask+unused s | ZK extras s | hash / arith / prove s | hash share of prove | setup / rounds / e2e s |")
+    print("|---|---:|---:|---|---|---|---:|---:|---|---:|---|")
     for u, r in res.items():
         if "error" in r:
-            print(f"| {u} | | | {r['error']} | | | | | | |")
+            print(f"| {u} | | | {r['error']} | | | | | | | |")
             continue
         m = r["median"]
         prove = m["witness_s"] + m["prove_total_s"]
         print(f"| {u} | {r['k_log']} | {r['blocks']} | {r['hash_share_alloc']:.1%} / {r['hash_share_used']:.1%} | "
               f"{m['witness_hash_s']:.2f} / {m['witness_arith_s']:.2f} | {m['piop_hash_s']:.2f} / {m['piop_arith_s']:.2f} | "
               f"{m['mask_unused_s']:.2f} | {m['zk_s']:.2f} | {m['hash_s']:.2f} / {m['arith_s']:.2f} / {prove:.2f} | "
-              f"{m['hash_s'] / prove:.1%} |")
+              f"{m['hash_s'] / prove:.1%} | {m['setup_s']:.1f} / {m['rounds_s']:.1f} / {m['e2e_s']:.1f} |")
     return 0
 
 
