@@ -366,10 +366,6 @@ theorem session_table (o : Own) (hc1 : A.I.count = 1) (hpr : ProvedIn A o) {d : 
       (inputsJ A.I 0).program none = .ok st := by
     rw [htJ]
     exact hst
-  have hcJ : Flock.HmOut.parse (inputsJ A.I 0).tags (inputsJ A.I 0).circuitFile (inputsJ A.I 0).tables =
-      .ok A.D.unroll := by
-    rw [htJ]
-    exact Flock.Desc.parse_flat A.hD
   obtain ⟨⟨sch, tPad⟩, hz⟩ := FlockSoundness.Discharge.ZkHidden.schedule_ok_of_shapeOk hshape
   obtain ⟨sch₀, hf⟩ := FlockSoundness.Discharge.ZkHidden.fast100_of_schedule hz
   obtain ⟨pi', pop, -, -, hdr⟩ := FlockSoundness.Discharge.Hidden.setupHidden_drawnP hst
@@ -381,7 +377,7 @@ theorem session_table (o : Own) (hc1 : A.I.count = 1) (hpr : ProvedIn A o) {d : 
     exact FlockSoundness.Discharge.ZkHidden.setupHidden_mPts_of_proved (Flock.Desc.parse_flat A.hD)
       (fun D' hD' => by rw [Except.ok.inj (hD'.symm.trans hD)]) hst
   obtain ⟨xx, hxx⟩ := FlockSoundness.Discharge.HiddenExec.drawSetupHP_of_setupHiddenI (I := inputsJ A.I 0)
-    (own := none) (S := {(⟨u, hun⟩ : Fin A.n)}) (FlockSoundness.Discharge.Composed.typedJ A.ht 0) hcJ hstJ hf hD
+    (own := none) (S := {(⟨u, hun⟩ : Fin A.n)}) (FlockSoundness.Discharge.Composed.typedJ A.ht 0) hstJ hf hD
     (fun v hv => by rw [Finset.mem_singleton.1 hv]; exact huD) hmPts
   obtain ⟨y, -, -, -⟩ := FlockSoundness.Discharge.ZkHidden.drawSetupZHJP_of xx (by rw [hxx]; exact hshape)
     (sch := sch) (tPad := tPad) (by rw [hxx]; exact hz)
