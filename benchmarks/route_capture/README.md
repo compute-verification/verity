@@ -58,20 +58,21 @@ nodes each fused Triton kernel computes, and Triton's kernel metadata) in `compi
 
 ## The gap
 
-`gap.py` evaluates every captured step as the class G decoder (`verity_vllm.program.predict.dsa`) would write its launch,
-and lists what class G doesn't cover:
+`gap.py` evaluates every captured step as the class G decoder would write its launch (`verity_vllm.program.predict.step_needs`,
+which counts what `predict.dsa` calls without building the Program), and lists what class G doesn't cover:
 
     python benchmarks/route_capture/gap.py OUT/capture --check CIRCUIT_CHECK.json --json gap.json --md gap.md
 
 `--check` is circuit-check's JSON report over class G's Definitions: an id it lists is registered, and passes when it has
 no failures. Each selection the decoder makes reads the step's launch size (the graph dispatch's padded tokens, else its
 tokens) and its rows' key counts, through the decoder's own registry calls; each Definition is the vocabulary's kind at
-the statics the decoder passes. Where the decoder would refuse, the calls are counted against the refusal and the
-evaluation goes on. A row of the table is one (route, Definition or refusal, status), with the range of statics the
+the statics the decoder passes, and a Definition call counts as a proof block. Where the decoder would refuse, the calls
+are counted against the refusal and the evaluation goes on; the integration's tests hold the counts to the decoder's own
+Program for an engine step. A row of the table is one (route, Definition or refusal, status), with the range of statics the
 capture needed, whether a Definition exists at other statics, its owner (circuits for a Definition, kernels for a kernel
 capture or a deterministic kernel, vllm for serving), its Definition calls a scheduled token on the recording rank, and
 its share of all calls. A second table counts the tokens of steps outside class G's engine (CUDA graphs, padded
 launches, prefix-cache hits, class G's limits).
 
-The suite (`tests/`) runs the plugin on stand-ins for both model runners and torch's profiler, runs `gap.py` on
-synthetic steps, and holds its counts to the decoder's own Program for one engine step (slow).
+The suite (`tests/`) runs the plugin on stand-ins for both model runners and torch's profiler, and `gap.py` on synthetic
+steps.

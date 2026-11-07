@@ -1,12 +1,12 @@
-"""gap.py: a captured step evaluated as the class G decoder writes it, and the refusals counted instead of raised."""
+"""gap.py: captured steps evaluated as the class G decoder writes them (`step_needs`), the refusals rows of the table."""
 from __future__ import annotations
 
 import json
-from collections import Counter
 
 import pytest
 
 import gap
+from verity_vllm.program.predict.step_needs import StepNeeds, phi_of_row
 
 CLASS_G_STEP = {"tokens": 8, "reqs": 8, "new": 0, "prefix_hit_tokens": 0, "prefill": [], "decode": 8,
                 "decode_ctx": [100 + i for i in range(8)], "decode_ctx_max": 107, "sampling": {"greedy": 8},
@@ -22,7 +22,7 @@ MIXED_8192 = {"tokens": 8192, "reqs": 33, "new": 2, "prefix_hit_tokens": 512,
 
 @pytest.fixture(scope="module")
 def launches():
-    return gap.Launches(gap.phi_of())
+    return StepNeeds(phi_of_row())
 
 
 def _capture(out, rows, sampler="unset"):
@@ -40,8 +40,8 @@ def _check(ids, failing=()):
 def test_a_class_g_step_has_no_gap(tmp_path, launches):
     """The step class G registers (8 greedy decodes, eager, short contexts) needs only registered Definitions: no refusal and no
     engine fact, and one failing id is reported as circuit-check's, with circuits as its owner."""
-    need, facts = launches.step(CLASS_G_STEP, flashinfer_sampler=True)
-    assert all(n.gap is None for n in need) and not facts
+    need = gap.needs(launches, CLASS_G_STEP, flashinfer_sampler=True)
+    assert all(n.gap is None for n in need) and not gap.engine_facts(CLASS_G_STEP)
     ids = sorted({n.id for n in need})
     g = gap.gap(_capture(tmp_path, [CLASS_G_STEP]), _check(ids), phi=launches.phi)
     assert g["gaps"] == [] and g["tokens"] == 8 and g["blocks"] == sum(need.values())
@@ -52,7 +52,7 @@ def test_a_class_g_step_has_no_gap(tmp_path, launches):
 def test_production_steps_name_each_gap(tmp_path, launches):
     """A padded FULL-graph decode batch with long contexts and an 8,192-token mixed step: each family the production limits add
     is its own row, with its refusal, its owner and its statics' range."""
-    need, _ = launches.step(CLASS_G_STEP, flashinfer_sampler=False)
+    need = gap.needs(launches, CLASS_G_STEP, flashinfer_sampler=False)
     g = gap.gap(_capture(tmp_path, [CLASS_G_STEP, DECODE_PADDED, MIXED_8192]), _check({n.id for n in need}), phi=launches.phi)
     rows = {(r["definition"], r["status"]): r for r in g["gaps"]}
     radix = rows[("radix-topk", "radix top-k")]
@@ -79,30 +79,3 @@ def test_the_sampler_fallback_turns_its_row_off(tmp_path, launches):
     assert not gap.flashinfer_sampler_on(cap)
     (tmp_path / "engine_env.txt").write_text("VLLM_USE_FLASHINFER_SAMPLER=unset\n")
     assert gap.flashinfer_sampler_on(cap)
-
-
-@pytest.mark.slow
-@pytest.mark.parametrize("M", [8, 64])
-def test_a_step_counts_the_decoders_calls(M, launches):
-    """The class G decoder's own Program for one engine step of M rows (`build_program(..., "step")`: one call of M rows with no
-    history, the last row sampled greedily) calls each Definition exactly as often as gap.py counts for that step: the FlashInfer
-    linears and fused all-reduce + norm at 8, DeepGEMM, the multimem all-reduce and the fused norm at 64. This is what holds
-    gap.py's evaluation to the decoder; no cheaper test compares the two. About 20 s, nearly all of it the decoder's build."""
-    from verity_vllm.program.predict import dsa
-    from verity_vllm.program.predict.build import build_program
-    seen: Counter[str] = Counter()
-    orig = dsa._Model.call
-
-    def call(self, fn, *refs):
-        seen[fn.id] += 1
-        return orig(self, fn, *refs)
-
-    dsa._Model.call = call
-    try:
-        build_program(launches.phi, "step", M=M, pos0=8)
-    finally:
-        dsa._Model.call = orig
-    need, facts = launches.step({"tokens": M, "reqs": 1, "prefill": [[M, 0, M]], "decode": 0, "decode_ctx": [], "decode_ctx_max": 0,
-                                 "sampling": {"greedy": 1}, "prefix_hit_tokens": 0}, flashinfer_sampler=False)
-    assert all(n.gap is None for n in need)
-    assert Counter({n.id: c for n, c in need.items()}) == Counter({k: v for k, v in seen.items() if not k.startswith("Const")})
