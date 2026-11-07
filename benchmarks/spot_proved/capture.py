@@ -26,9 +26,11 @@ extra forward writes the same KV values to the same slots, so the step and every
 
 Each recorded tensor's bytes are written once under ``DIR/rank<r>/blobs/<sha512>``. ``DIR/rank<r>/step<s>/ops.jsonl`` lists
 the events in order. ``step<s>/meta.json`` holds the step (tokens, padding, graph mode, the scheduled requests and their
-token counts), the check, and the SHA-512 of ``ops.jsonl``: the rank's interior root for the step. Every recorded event
-names its blobs by SHA-512, so the root binds every recorded byte. ``params.json`` gives each parameter that a recorded op read:
-its shape, dtype and SHA-512 over its bytes.
+token counts), the check, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
+``params.json``, which gives each parameter a recorded op read (its shape, dtype and SHA-512 over its bytes). Every
+recorded event names its blobs by SHA-512 and its decoder layer, so the root binds every recorded byte. Then
+`_commit_and_open`: the step's root over the ranks' roots, the coins rank 0 draws only after that, and the layers they
+open, whose parameters each rank writes beside the step (``commit.json``, ``open/``).
 """
 from __future__ import annotations
 
@@ -41,7 +43,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-BIG = 1 << 30
+BIG = 128 << 20
 #: aten ops that only allocate, view or restride: their outputs alias or are uninitialized, never a value of the step
 SKIP = {"empty", "empty_strided", "empty_like", "as_strided", "view", "_unsafe_view", "reshape", "alias", "detach", "t",
         "permute", "transpose", "expand", "unsqueeze", "squeeze", "select", "slice", "_reinterpret_tensor", "lift_fresh",
@@ -62,12 +64,15 @@ class _State:
         self.attn: Any = None
         self.slot_maps: Any = None
         self.params: dict[tuple, str] = {}
+        self.storages: dict[int, tuple[int, str]] = {}
         self.param_of: dict[str, Any] = {}
         self.used_params: set[str] = set()
         self.seen: set[str] = set()
         self.events: list[dict] = []
         self.piece = -1
         self.parents: list[int] = []
+        self.layer: int | None = None
+        self.quiet = False
         self.whole = False
         self.check: dict | None = None
         self.t0 = time.time()
@@ -106,7 +111,9 @@ def _install() -> None:
     def execute_model(orig):
         def run(self, scheduler_output, *a, **kw):
             dummy = kw.get("dummy_run", a[1] if len(a) > 1 else False)
-            real = (not dummy) and getattr(scheduler_output, "total_num_scheduled_tokens", 0) > 0
+            reqs = getattr(scheduler_output, "num_scheduled_tokens", None) or {}
+            real = ((not dummy) and getattr(scheduler_output, "total_num_scheduled_tokens", 0) > 0
+                    and not any(str(r).startswith("_warmup") for r in reqs))
             if real:
                 S.step += 1
                 S.active = S.step in S.targets
@@ -191,6 +198,16 @@ def _bind_model_state(runner: Any) -> None:
     ms.prepare_attn = prepare_attn
     ms._spot_bound = True
     model = runner.model
+    import re
+    for name, mod in model.named_modules():
+        if m := re.search(r"(?:^|\.)layers\.(\d+)$", name):
+            def pre(_mod, _args, n=int(m[1])):
+                S.layer = n
+
+            def post(_mod, _args, _out):
+                S.layer = None
+            mod.register_forward_pre_hook(pre)
+            mod.register_forward_hook(post)
     fwd = model.forward
 
     def forward(*a, **kw):
@@ -252,8 +269,10 @@ def _install_mla() -> None:
             ins = {"q": _ref(q), "kv_rows": _ref(kv_rows), "topk_indices": _ref(topk_indices), **{k: _ref(v) for k, v in rest.items()}}
             n = min(S.mla_tokens, int(topk_indices.shape[0]))
             if n:
-                idx = topk_indices[:n].long().clamp(min=0)
-                ins["kv_gathered"] = _ref(kv_rows.reshape(-1, kv_rows.shape[-1])[idx.reshape(-1)].reshape(n, idx.shape[1], -1))
+                with _quiet():
+                    idx = topk_indices[:n].long().clamp(min=0)
+                    rows = kv_rows.reshape(-1, kv_rows.shape[-1])[idx.reshape(-1)].reshape(n, idx.shape[1], -1)
+                ins["kv_gathered"] = _ref(rows)
                 ins["kv_gathered_tokens"] = n
             out = orig(self, q, kv_rows, topk_indices, *a, **kw)
             outs = out if isinstance(out, tuple) else (out,)
@@ -277,9 +296,11 @@ def _install_mla() -> None:
             ins["k"] = {"shape": list(k.shape), "dtype": str(k.dtype), "kv_rows": True}
             n = min(S.mla_tokens, int(table.shape[0]))
             if n:
-                idx = table[:n].long().clamp(min=0).reshape(-1)
-                rows = k.reshape(k.shape[0], -1), v.reshape(v.shape[0], -1)
-                ins["kv_gathered"] = _ref(torch.cat([rows[1][idx], rows[0][idx]], dim=-1).reshape(n, table.shape[1], -1))
+                with _quiet():
+                    idx = table[:n].long().clamp(min=0).reshape(-1)
+                    rows = k.reshape(k.shape[0], -1), v.reshape(v.shape[0], -1)
+                    gathered = torch.cat([rows[1][idx], rows[0][idx]], dim=-1).reshape(n, table.shape[1], -1)
+                ins["kv_gathered"] = _ref(gathered)
                 ins["kv_gathered_tokens"] = n
             out = orig(*a, **kw)
             outs = out if isinstance(out, tuple) else (out,)
@@ -304,7 +325,7 @@ class Recorder(_recorder_base()):
         packet = getattr(func, "_overloadpacket", None)
         base = getattr(packet, "__name__", str(func)).split(".")[-1]
         ns = getattr(func, "namespace", "aten")
-        if ns == "aten" and base in SKIP:
+        if S.quiet or (ns == "aten" and base in SKIP):
             return func(*args, **kwargs)
         schema = func._schema
         flat = list(args) + [kwargs.get(a.name) for a in schema.arguments[len(args):]]
@@ -331,17 +352,51 @@ def _params(runner: Any) -> None:
     if S.params:
         return
     for name, t in list(runner.model.named_parameters()) + list(runner.model.named_buffers()):
+        if t.numel() == 0:
+            continue
         S.params[(t.data_ptr(), tuple(t.shape), tuple(t.stride()), str(t.dtype))] = name
         S.param_of[name] = t
+        lo = t.untyped_storage().data_ptr()
+        S.storages.setdefault(lo, (lo + t.untyped_storage().nbytes(), name))
+
+
+def _param_view(v: Any) -> dict | None:
+    """A tensor that is a parameter, or a view of one's storage (a transposed or reshaped weight), named with its view."""
+    key = (v.data_ptr(), tuple(v.shape), tuple(v.stride()), str(v.dtype))
+    if key in S.params:
+        S.used_params.add(S.params[key])
+        return {"param": S.params[key], "shape": list(v.shape), "dtype": str(v.dtype)}
+    if v.numel() == 0:
+        return None
+    hit = S.storages.get(v.untyped_storage().data_ptr())
+    if hit is None:
+        return None
+    S.used_params.add(hit[1])
+    base = S.param_of[hit[1]]
+    return {"param": hit[1], "shape": list(v.shape), "dtype": str(v.dtype), "stride": list(v.stride()),
+            "byte_offset": v.data_ptr() - base.data_ptr()}
+
+
+class _quiet:
+    """Tensor work of the capture's own (copies, gathers): not recorded."""
+
+    def __enter__(self):
+        self.was, S.quiet = S.quiet, True
+
+    def __exit__(self, *exc):
+        S.quiet = self.was
 
 
 def _ref(v: Any) -> Any:
+    with _quiet():
+        return _ref_quiet(v)
+
+
+def _ref_quiet(v: Any) -> Any:
     import torch
     if isinstance(v, torch.Tensor):
-        key = (v.data_ptr(), tuple(v.shape), tuple(v.stride()), str(v.dtype))
-        if key in S.params:
-            S.used_params.add(S.params[key])
-            return {"param": S.params[key], "shape": list(v.shape), "dtype": str(v.dtype)}
+        if v.device.type == "cuda" and (pv := _param_view(v)) is not None:
+            return pv
         nb = v.numel() * v.element_size()
         d = {"shape": list(v.shape), "dtype": str(v.dtype), "stride": list(v.stride())}
         if v.device.type != "cuda" and v.device.type != "cpu":
@@ -368,8 +423,8 @@ def _ref(v: Any) -> Any:
 
 def _event(kind: str, ins: dict, outs: dict) -> int:
     seq = len(S.events)
-    S.events.append({"seq": seq, "piece": S.piece, "parent": S.parents[-1] if S.parents else None, "op": kind, "in": ins,
-                     "out": outs})
+    S.events.append({"seq": seq, "piece": S.piece, "layer": S.layer, "parent": S.parents[-1] if S.parents else None, "op": kind,
+                     "in": ins, "out": outs})
     return seq
 
 
@@ -459,14 +514,71 @@ def _finish(runner: Any) -> None:
     with ThreadPoolExecutor(8) as pool:
         params = dict(pool.map(digest, sorted(S.used_params)))
     (S.root() / "params.json").write_text(json.dumps(params, indent=0, sort_keys=True))
-    meta = {"rank": S.rank, "step": S.step, "check": getattr(S, "check", None), "scheduled": reqs, "events": len(S.events),
+    ops_sha, params_sha = hashlib.sha512(lines).hexdigest(), hashlib.sha512((S.root() / "params.json").read_bytes()).hexdigest()
+    meta = {"rank": S.rank, "step": S.step, "check": S.check, "scheduled": reqs, "events": len(S.events),
             "blob_bytes": S.bytes, "errors": S.errors, "seconds": round(time.time() - S.t0, 1),
-            "ops_sha512": hashlib.sha512(lines).hexdigest(),
-            "params_sha512": hashlib.sha512((S.root() / "params.json").read_bytes()).hexdigest()}
+            "ops_sha512": ops_sha, "params_sha512": params_sha,
+            "rank_root": hashlib.sha512(f"verity/spot/rank-root\0{ops_sha}\0{params_sha}".encode()).hexdigest()}
     (d / "meta.json").write_text(json.dumps(meta, indent=1, sort_keys=True))
+    commit = _commit_and_open(runner, d, meta["rank_root"])
     print(f"[spot-capture] rank {S.rank} step {S.step}: {len(S.events)} events, {S.bytes >> 20} MiB, check {meta['check']}, "
-          f"errors {len(S.errors)}", flush=True)
+          f"errors {len(S.errors)}, root {commit.get('root', '')[:16]}, opened layers {commit.get('layers')}", flush=True)
     S.events, S.errors, S.check = [], [], None
+
+
+def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
+    """The step's interior root over every rank's, then the coins, drawn by rank 0 only after every rank's root is fixed, and
+    the layers they open: ``VERITY_SPOT_OPEN`` (default ``dense:1,moe:1``) layers of each kind, whose parameters each rank
+    writes under ``open/`` (the bytes its sampled proof blocks read). Written to ``commit.json``."""
+    import torch
+    import torch.distributed as dist
+    group = None
+    try:
+        from vllm.distributed.parallel_state import get_world_group
+        group = get_world_group().cpu_group
+    except Exception:  # noqa: BLE001
+        group = None
+    world = dist.get_world_size() if dist.is_initialized() else 1
+    roots = [None] * world
+    if world > 1:
+        dist.all_gather_object(roots, rank_root, group=group)
+    else:
+        roots = [rank_root]
+    root = hashlib.sha512(("verity/spot/step-root\0" + "\0".join(roots)).encode()).hexdigest()
+    t_root = time.time()
+    coins = [os.urandom(64).hex() if S.rank == 0 else None]
+    if world > 1:
+        dist.broadcast_object_list(coins, src=dist.get_global_rank(group, 0) if group is not None else 0, group=group)
+    coins_hex = coins[0]
+    hf = getattr(runner.model_config, "hf_text_config", None) or runner.model_config.hf_config
+    n_layers = int(getattr(hf, "num_hidden_layers"))
+    dense_k = min(int(getattr(hf, "first_k_dense_replace", 0) or 0), n_layers)
+    pools = {"dense": list(range(dense_k)), "moe": list(range(dense_k, n_layers))}
+    want = dict(x.split(":") for x in os.environ.get("VERITY_SPOT_OPEN", "dense:1,moe:1").split(",") if x)
+    layers: dict[str, list[int]] = {}
+    for kind, n in want.items():
+        pool = list(pools.get(kind, []))
+        layers[kind] = []
+        for i in range(min(int(n), len(pool))):
+            j = int.from_bytes(hashlib.sha512(bytes.fromhex(coins_hex) + f"open/{kind}/{i}".encode()).digest(), "big") % len(pool)
+            layers[kind].append(pool.pop(j))
+    opened = sorted(x for v in layers.values() for x in v)
+    marks = tuple(f"layers.{x}." for x in opened)
+    od = d / "open"
+    od.mkdir(exist_ok=True)
+    files = {}
+    for name, t in sorted(S.param_of.items()):
+        if not any(m in f".{name}" for m in marks):
+            continue
+        raw = t.detach().contiguous().view(torch.uint8).reshape(-1).cpu().numpy()
+        (od / f"{name}.bin").write_bytes(memoryview(raw))
+        files[name] = {"shape": list(t.shape), "dtype": str(t.dtype), "stride": list(t.stride()),
+                       "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
+    commit = {"rank": S.rank, "step": S.step, "rank_roots": roots, "root": root, "t_root": t_root, "coins": coins_hex,
+              "t_coins_received": time.time(), "coins_by": "rank 0's os.urandom(64), drawn after every rank's root was gathered",
+              "layers": layers, "opened": files}
+    (d / "commit.json").write_text(json.dumps(commit, indent=1, sort_keys=True))
+    return commit
 
 
 def site(d: Path) -> Path:

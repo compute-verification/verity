@@ -1,12 +1,12 @@
-"""A compiled GLM-5.3 engine at the integration's pin with dummy weights and a few layers, run with `capture.py` on two steps.
-It answers two questions before the capture runs on served values: which kernels the compiled serve runs where the eager
-census types sit, and whether the recorded forward equals the graph's bit for bit.
+"""A GLM-5.3 engine at the integration's pin with dummy weights and a few layers, served with CUDA graphs and run with
+`capture.py` on a few steps: a rehearsal of the capture before it runs on served values. It answers which kernels the
+served engine runs where the census types sit, and whether the recorded forward equals the graph's bit for bit.
 
-    python discover.py --config DIR --out OUT [--tp 2] [--layers 4] [--steps 0,3] [--prompts 8] [--max-tokens 8]
+    python discover.py --config DIR --out OUT --capture DIR [--tp 2] [--layers 4] [--steps 0,3] [--prompts 8] [--max-tokens 8]
 
 ``--config`` holds GLM-5.3's config and tokenizer, without weights (``load_format=dummy``). The engine takes vLLM's
-defaults (``-O2``, FULL_AND_PIECEWISE graphs, the V2 model runner) and replay.py's flags. ``OUT/summary.json`` gives, per
-rank and captured step, the check, the events by op, and each piece's ops in order.
+defaults (for GLM-5 at the pin: breakable CUDA graphs, compilation off, the V2 model runner). ``OUT/summary.json`` gives,
+per rank and captured step, the check, the events by op, and each piece's ops in order.
 """
 from __future__ import annotations
 
@@ -25,12 +25,12 @@ def summarize(cap: Path) -> dict:
         ops = [json.loads(x) for x in (meta.parent / "ops.jsonl").read_text().splitlines()]
         pieces: dict[int, list[str]] = {}
         for e in ops:
-            pieces.setdefault(e["piece"], []).append(e["op"])
+            pieces.setdefault(e.get("layer") if e.get("layer") is not None else -1, []).append(e["op"])
         out[f"{meta.parent.parent.name}/{meta.parent.name}"] = {
             "check": m["check"], "events": m["events"], "blob_mib": m["blob_bytes"] >> 20, "seconds": m["seconds"],
             "errors": [x[-600:] for x in m["errors"]], "scheduled": m["scheduled"],
             "ops": dict(Counter(e["op"] for e in ops).most_common()),
-            "pieces": {str(k): v for k, v in sorted(pieces.items())[:6]}}
+            "layers": {str(k): v for k, v in sorted(pieces.items())}}
     return out
 
 
@@ -38,19 +38,20 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--capture", required=True, help="the capture directory (VERITY_SPOT_CAPTURE)")
     ap.add_argument("--tp", type=int, default=2)
     ap.add_argument("--layers", type=int, default=4)
     ap.add_argument("--steps", default="0,3")
     ap.add_argument("--prompts", type=int, default=8)
     ap.add_argument("--max-tokens", type=int, default=8)
-    ap.add_argument("--summarize", action="store_true", help="only summarize OUT/capture")
+    ap.add_argument("--summarize", action="store_true", help="only summarize --capture")
     a = ap.parse_args()
     out = Path(a.out)
     if a.summarize:
-        (out / "summary.json").write_text(json.dumps(summarize(out / "capture"), indent=1))
+        (out / "summary.json").write_text(json.dumps(summarize(Path(a.capture)), indent=1))
         return 0
-    if os.environ.get("VERITY_SPOT_CAPTURE") != str(out / "capture") or os.environ.get("VERITY_SPOT_STEPS") != a.steps:
-        raise SystemExit("discover.py: run under VERITY_SPOT_CAPTURE=OUT/capture VERITY_SPOT_STEPS=--steps with capture.py's "
+    if os.environ.get("VERITY_SPOT_CAPTURE") != a.capture or os.environ.get("VERITY_SPOT_STEPS") != a.steps:
+        raise SystemExit("discover.py: run under VERITY_SPOT_CAPTURE=--capture VERITY_SPOT_STEPS=--steps with capture.py's "
                          "site on PYTHONPATH (run_discover.sh)")
     import random
 
@@ -65,8 +66,8 @@ def main() -> int:
     cfg = llm.llm_engine.vllm_config
     (out / "config.txt").write_text(f"{cfg.compilation_config}\n\nuse_v2_model_runner={getattr(cfg, 'use_v2_model_runner', None)}\n")
     del llm
-    (out / "summary.json").write_text(json.dumps(summarize(out / "capture"), indent=1))
-    print(json.dumps({k: {x: v[x] for x in ("check", "events", "blob_mib", "errors")} for k, v in summarize(out / "capture").items()},
+    (out / "summary.json").write_text(json.dumps(summarize(Path(a.capture)), indent=1))
+    print(json.dumps({k: {x: v[x] for x in ("check", "events", "blob_mib", "errors")} for k, v in summarize(Path(a.capture)).items()},
                      indent=1)[:4000], flush=True)
     return 0
 
