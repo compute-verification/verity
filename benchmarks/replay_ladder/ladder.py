@@ -51,6 +51,9 @@ sys.path.insert(0, str(SERVE_TAX))
 import inductor_pin as P  # noqa: E402 (beside this file, on sys.path when it runs and when its tests import it)
 import replay as R  # noqa: E402 (serve_tax's, put on sys.path above)
 import serve_tax as S  # noqa: E402
+from verity_config.settings import of  # noqa: E402 (put on sys.path by serve_tax)
+
+ENV = of(__file__)
 SCHEMA = "verity-bench/replay-ladder/v0"
 #: the load each model's window is served at, and the one each replay and the alone sample read
 LOAD = "saturated"
@@ -117,8 +120,8 @@ def tp_engine(tp: int) -> Any:
 
 # ------------------------------------------------------------------------------------------------------------ serve
 
-#: each arm's environment, which run.sh sets and `pin` reads back
-PIN_ENV = {"pinned": f"{P.PIN}=1", "rblock": "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0", "unpinned": "none"}
+#: how each arm (``LADDER_ARM``, which run.sh sets) pins Inductor's choices
+PIN_ENV = {"pinned": "inductor_pin", "rblock": "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0", "unpinned": "none"}
 
 
 def pin() -> str:
@@ -126,9 +129,7 @@ def pin() -> str:
     in each process and keeps the fastest, so two processes can sum in different orders. ``pinned`` (`inductor_pin`)
     keeps Inductor's first candidate everywhere; ``rblock`` (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`) only drops the
     halved-R0_BLOCK candidate, leaving a reduction's static candidates to the timing."""
-    if os.environ.get(P.PIN) == "1":
-        return "pinned"
-    return "rblock" if os.environ.get("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK") == "0" else "unpinned"
+    return ENV.LADDER_ARM
 
 
 def native_tokens(tok: Any) -> tuple[int, int]:
@@ -150,13 +151,17 @@ def serve(a: argparse.Namespace) -> int:
     out = Path(a.out)
     cap = out / "capacity"
     real_site = S.plugin_site
-    S.plugin_site = lambda site, tick: P.site(real_site(site, tick))
+
+    def plugin_site(site: Path, tick: bool) -> Path:
+        """serve_tax's plugins and inductor_pin, whose log the capacity server's processes write."""
+        return P.site(real_site(site, tick), pin=pin() == "pinned",
+                      tilings=str(out / SERVING_TILINGS) if site.parent == cap else None)
+
+    S.plugin_site = plugin_site
     base = ["--model-id", a.model, "--checkpoint", str(ck), "--c4", a.c4, "--docs", str(a.docs), "--reps", "1",
             "--warm-s", "10"]
-    os.environ[P.TILINGS] = str(out / SERVING_TILINGS)
     if S.main(["run", "--arm", "compiled", *base, "--rates", "burst=1000", "--requests", str(a.burst), "--out", str(cap)]):
         return 1
-    del os.environ[P.TILINGS]
     burst = S.arm_metrics(cap)["loads"]["burst"][0]
     capacity = burst["req_per_s"]
     rate = round(a.over * capacity, 2)
@@ -202,8 +207,8 @@ def replay(a: argparse.Namespace) -> int:
     ck = register(a.model)
     R.engine = tp_engine(LADDER[a.model].tp)
     out = Path(a.out)
-    os.environ[P.TILINGS] = str(out / f"replay-{a.index}")
-    P.apply()
+    os.environ["LADDER_TILINGS"] = str(out / f"replay-{a.index}")
+    P.apply(pin=pin() == "pinned", tilings=ENV.LADDER_TILINGS)
     argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}")]
     if a.index > 1:
         argv += ["--against", str(out / "replay-1")]
@@ -384,7 +389,8 @@ def main(argv: list[str] | None = None) -> int:
     return {"serve": serve, "replay": replay, "alone": alone, "summary": summary}[a.cmd](a)
 
 
-P.apply()  # a spawned engine process imports this module as __mp_main__ and inherits the environment
+# a spawned engine process imports this module as __mp_main__ and inherits the environment
+P.apply(pin=pin() == "pinned", tilings=ENV.LADDER_TILINGS)
 
 if __name__ == "__main__":
     sys.exit(main())

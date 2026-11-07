@@ -449,7 +449,7 @@ def _tar_exiting(tmp_path: Path, monkeypatch, rc: int) -> None:
     shim.write_text(f"#!/bin/sh\n{shutil.which('tar')} \"$@\"\necho 'tar: ./resources.jsonl: file changed as we read it' >&2\n"
                     f"exit {rc}\n")
     shim.chmod(0o755)
-    monkeypatch.setenv("PATH", f"{shim.parent}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv("PATH", str(shim.parent), prepend=os.pathsep)
 
 
 def test_fetch_all_of_a_live_run_takes_the_archive_tar_wrote_while_a_log_grew(tmp_path, monkeypatch):

@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -105,14 +107,39 @@ def test_only_a_reductions_choice_can_change_a_sum():
     assert not L.sums({"kernel": "triton_poi_fused_1", "candidates": [{"XBLOCK": 1024}, {"XBLOCK": 512}]})
 
 
-def test_the_pin_is_read_from_the_environment(monkeypatch):
-    monkeypatch.delenv("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", raising=False)
-    monkeypatch.delenv(L.P.PIN, raising=False)
+def test_the_arm_is_read_from_the_ladder_s_settings(monkeypatch):
+    monkeypatch.delenv("LADDER_ARM", raising=False)
     assert L.pin() == "unpinned"
-    monkeypatch.setenv("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", "0")
-    assert L.pin() == "rblock"
-    monkeypatch.setenv(L.P.PIN, "1")
-    assert L.pin() == "pinned" and set(L.PIN_ENV) == {"pinned", "rblock", "unpinned"}
+    for arm in L.PIN_ENV:
+        monkeypatch.setenv("LADDER_ARM", arm)
+        assert L.pin() == arm
+    monkeypatch.setenv("LADDER_ARM", "deterministic")
+    with pytest.raises(ValueError, match="pinned, rblock, unpinned"):
+        L.pin()
+
+
+def test_serving_loads_the_pin_and_the_capacity_server_logs(tmp_path, monkeypatch):
+    out = tmp_path / "qwen3-8b"
+    monkeypatch.setenv("LADDER_ARM", "pinned")
+    monkeypatch.setattr(L.S, "plugin_site", lambda site, tick: site)
+    sites = []
+
+    def main(argv):
+        o = Path(argv[argv.index("--out") + 1])
+        sites.append(L.S.plugin_site(o / ".site", False))
+        return 1
+
+    monkeypatch.setattr(L.S, "main", main)
+    monkeypatch.setattr(L, "register", lambda model: tmp_path)
+    monkeypatch.setattr(L, "native_tokens", lambda tok: (1, 2))
+    monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(AutoTokenizer=SimpleNamespace(
+        from_pretrained=lambda *a, **k: None)))
+    monkeypatch.setattr(L.S, "corpus", lambda: SimpleNamespace(traffic=SimpleNamespace()))
+    a = SimpleNamespace(model="qwen3-8b", c4="c4.json.gz", out=str(out), docs=10, burst=8, over=1.45, span_s=60.0)
+    assert L.serve(a) == 1
+    assert json.loads((sites[0] / L.P.CONFIG).read_text()) == {"pin": True, "tilings": str(out / L.SERVING_TILINGS)}
+    assert L.S.plugin_site(out / "record" / ".site", False) == out / "record" / ".site"
+    assert json.loads((out / "record" / ".site" / L.P.CONFIG).read_text()) == {"pin": True, "tilings": None}
 
 
 def test_summary_reads_a_model_directory(tmp_path):
@@ -140,7 +167,7 @@ def test_summary_reads_a_model_directory(tmp_path):
     md = L.markdown([row])
     assert row["serve_tilings"]["digest"] == row["replays"][0]["tilings"]["digest"]
     assert row["tilings"] == {"runs": 3, "distinct": 2, "choices": 2}
-    assert ("| qwen3-8b | 1 | LADDER_PIN=1 | 4, 10, 40 | 1 of 2 | "
+    assert ("| qwen3-8b | 1 | inductor_pin | 4, 10, 40 | 1 of 2 | "
             "90.000000% | 0, 1 (fresh compile) | 1 | 2 of 3 (2) | 1 of 2 |") in md
     for legacy, arm in ((True, "rblock"), (False, "unpinned"), (None, "unpinned")):
         (d / "serve.json").write_text(json.dumps({"model": "qwen3-8b", "inductor_pin": legacy}))

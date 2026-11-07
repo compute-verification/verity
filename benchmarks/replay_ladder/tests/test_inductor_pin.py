@@ -1,8 +1,10 @@
 """The pin and the tiling log on stand-ins for Inductor's benchmarker and autotuner, and the plugin's site directory."""
 from __future__ import annotations
 
+import importlib
 import importlib.metadata
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -53,13 +55,12 @@ class Autotuner:
         self.launchers = [x for x in self.launchers if x.config.kwargs["R0_BLOCK"] == self.keep]
 
 
-def test_the_tiling_log_records_each_runtime_choice(tmp_path, monkeypatch):
+def test_the_tiling_log_records_each_runtime_choice(tmp_path):
     class Tuner(Autotuner):
         pass
 
-    monkeypatch.setenv(P.TILINGS, str(tmp_path / "replay-1"))
-    P.log_tilings(Tuner)
-    P.log_tilings(Tuner)
+    P.log_tilings(str(tmp_path / "replay-1"), Tuner)
+    P.log_tilings(str(tmp_path / "replay-1"), Tuner)
     Tuner(512).autotune_to_one_config()
     recs = [json.loads(x) for f in (tmp_path / "replay-1").glob("tilings.*.jsonl") for x in f.read_text().splitlines()]
     assert recs == [{"kernel": "triton_red_fused_add_rms_norm_1", "heuristic": "REDUCTION",
@@ -67,9 +68,16 @@ def test_the_tiling_log_records_each_runtime_choice(tmp_path, monkeypatch):
                      "candidates": [{"XBLOCK": 2, "R0_BLOCK": r, "num_warps": 8, "num_stages": 1} for r in (1024, 512)]}]
 
 
-def test_the_site_declares_the_module_as_a_vllm_general_plugin(tmp_path):
-    assert P.site(tmp_path) == tmp_path
+def test_the_site_declares_the_module_as_a_vllm_general_plugin_with_its_configuration(tmp_path, monkeypatch):
+    assert P.site(tmp_path, pin=True, tilings=str(tmp_path / "serving")) == tmp_path
     eps = [ep for dist in importlib.metadata.distributions(path=[str(tmp_path)]) for ep in dist.entry_points]
     assert [(ep.group, ep.name, ep.value) for ep in eps] == \
         [("vllm.general_plugins", "verity_replay_ladder", "inductor_pin:register")]
-    assert (tmp_path / "inductor_pin.py").read_bytes() == Path(P.__file__).read_bytes()
+    monkeypatch.syspath_prepend(str(tmp_path))
+    monkeypatch.delitem(sys.modules, "inductor_pin")
+    copy = importlib.import_module("inductor_pin")
+    assert Path(copy.__file__) == tmp_path / "inductor_pin.py"
+    applied = []
+    monkeypatch.setattr(copy, "apply", lambda **kw: applied.append(kw))
+    copy.register()
+    assert applied == [{"pin": True, "tilings": str(tmp_path / "serving")}]

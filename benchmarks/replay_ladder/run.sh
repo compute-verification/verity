@@ -3,8 +3,8 @@
 #   run.sh MODEL...   for each model (ladder.LADDER) and each arm of ARMS: serve its saturated window (a capacity burst,
 #                     then the record arm), replays of it compiled, and some of its requests served alone; then
 #                     summary.json and summary.md over every model and arm.
-# The arms (ladder.pin): `pinned` serves and replays with each of Inductor's on-device choices pinned to its first
-# candidate (LADDER_PIN=1, inductor_pin.py): REPLAYS replays from vLLM's compile cache, FRESH more each compiled from
+# The arms (LADDER_ARM, ladder.pin): `pinned` serves and replays with each of Inductor's on-device choices pinned to its
+# first candidate (inductor_pin.py): REPLAYS replays from vLLM's compile cache, FRESH more each compiled from
 # empty caches, and ALONE requests alone. `unpinned` serves and replays without it, and `rblock` with only the
 # halved-R0_BLOCK candidate dropped (TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0): UNPINNED_REPLAYS replays each, which say
 # whether the model needs the pin. Each arm compiles into caches of its own: a compile cache keeps the choices made where
@@ -43,10 +43,11 @@ for m in "$@"; do
     d=$OUT/$arm/$m; mkdir -p "$d"
     cache=$(mktemp -d)
     export VLLM_CACHE_ROOT=$cache/vllm TORCHINDUCTOR_CACHE_DIR=$cache/inductor TRITON_CACHE_DIR=$cache/triton
-    unset LADDER_PIN TORCHINDUCTOR_DETERMINISTIC TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK
+    unset TORCHINDUCTOR_DETERMINISTIC TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK
+    export LADDER_ARM=$arm
     replays=$UNPINNED_REPLAYS; fresh=0; alone=0
     case $arm in
-      pinned) export LADDER_PIN=1; replays=$REPLAYS; fresh=$FRESH; alone=$ALONE ;;
+      pinned) replays=$REPLAYS; fresh=$FRESH; alone=$ALONE ;;
       rblock) export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 ;;
     esac
     echo "== $m $arm serve $(date -u +%FT%TZ)"
@@ -76,6 +77,6 @@ for m in "$@"; do
     rm -rf "$cache"
   done
 done
-unset LADDER_PIN
+unset LADDER_ARM
 "$PY" "$here/ladder.py" summary "$OUT"/*/*/ --out "$OUT"
 exit $rc
