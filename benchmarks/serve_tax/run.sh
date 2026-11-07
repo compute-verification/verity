@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The serve tax on one node (README.md), from the shipped tree's root under `research run`, the C4 shard sent with
-# --send (or C4=PATH):
+# --send (or C4=PATH) unless a ready plan is:
 #   ARMS="compiled eager ..." RATES=light=R,medium=R,saturated=R [MODEL_ID=moonlight] [REPS=3] [SPAN_S=60]
 #     [REQUESTS=N] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR]
 #     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"] [REPLAY_LOGPROBS=1]] [MAX_MIN=240]
@@ -73,7 +73,7 @@ unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 # Inductor's runtime R0_BLOCK choice (each process times a halved candidate) changes the reduction order: pin it
 export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0
 replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY_FROM:-}${RESTORE_FROM:-}" ] && replay_only=1
-[ -f "$C4" ] || [ $replay_only = 1 ] || { echo "serve-tax: no C4 shard (--send it, or C4=PATH)"; exit 2; }
+[ -f "$C4" ] || [ $replay_only = 1 ] || [ -n "$PLAN_FILE" ] || { echo "serve-tax: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 [ -d "$CK" ] || { echo "serve-tax: no checkpoint at $CK"; exit 2; }
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "serve-tax: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac

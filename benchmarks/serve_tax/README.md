@@ -62,10 +62,10 @@ snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the pa
 
 The production tax serves the replay ladder's production plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
 multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at
-its end of text or its cap), sent as `plan.jsonl` or named by `PLAN_FILE`, with FlashInfer on:
+its end of text or its cap), sent as `plan.jsonl` or named by `PLAN_FILE` (then no C4 shard is needed), with FlashInfer on:
 
 ~~~text
-research run --on NODE --source . --cwd source --send C4.json.gz --send plan.jsonl [--send fi_smoke.py] \
+research run --on NODE --source . --cwd source --send plan.jsonl [--send fi_smoke.py] \
   --env MODEL_ID=glm53 --env 'ARMS=compiled record tokens-only boundary' --env RATES=light=R1,medium=R2,saturated=R3 \
   --env EDGES_EVERY_S=30 --env KV_COPY=first --env MAX_MODEL_LEN=40960 --env FLASHINFER=1 --env CUDA_HOME=DIR \
   --env BUDGET_MIN=M -- bash benchmarks/serve_tax/run.sh
