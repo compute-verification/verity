@@ -3,6 +3,7 @@
 # benchmarks/serve_tax/replay.py at its root (--cwd source), with capture.py, stage.py and this file sent (--send):
 #   ARM=RECORD_ARM_DIR LOAD=NAME [OPEN=dense:1,moe:1] [PER_TYPE=8] [SMALL=1,31] [BIG=256,384] [STEPS=s,...] [VENV=...]
 #     bash "$RESEARCH_RUN_DIR/inputs/spot_job.sh"
+#   ARM=... LOAD=... CAPTURE=DIR STEPS=s,... bash .../spot_job.sh   # only stage an earlier run's capture again (CPU only)
 # 1. The first-stage coin: one step of the window's with SMALL tokens (the FP8 linears' FlashInfer branch, the fused MNNVL
 #    all-reduce + norm) and one with BIG (DeepGEMM and its group quants, the multimem all-reduce, the fused add + RMSNorm at
 #    its 256-thread block, FA3 still split), each uniform over those steps, drawn here before the replay starts
@@ -12,7 +13,8 @@
 #    tensors are written (/workspace/spot-capture/<run>, outside OUT, which custody uploads). The graph-off forward holds the
 #    step's tensors in host memory until the coins: about 10 GB a rank at 384 tokens.
 # 3. stage.py stages each step's sampled proof blocks into OUT/values-step<s> (a11's saved values: a few MB) and the
-#    commitment's small files are copied to OUT/commit; the capture's blobs are then deleted unless KEEP=1.
+#    commitment's small files are copied to OUT/commit. The capture (the opened layers only) stays for a restage; KEEP=0
+#    deletes it once every step staged.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out; IN=$D/inputs; mkdir -p "$OUT"
 TREE=$(pwd)
@@ -30,14 +32,16 @@ CK=${CHECKPOINT:-$CK}
 [ -d "$CK" ] || { echo "spot: no checkpoint at $CK"; exit 2; }
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "spot: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
-CAP=/workspace/spot-capture/$(basename "$D"); mkdir -p "$CAP/site"
+CAP=${CAPTURE:-/workspace/spot-capture/$(basename "$D")}; mkdir -p "$CAP/site"
+restage=0; [ -n "${CAPTURE:-}" ] && { restage=1; : "${STEPS:?STEPS: the captured steps to stage again}"; }
 free=$(df -BG --output=avail "$CAP" | tail -1 | tr -dc 0-9)
 [ "${free:-0}" -ge 40 ] || { echo "spot: ${free}G free under $CAP, want 40G"; exit 2; }
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 echo "spot: tree $(git -C "$TREE" rev-parse HEAD 2>/dev/null) venv $VENV checkpoint $CK capture $CAP ($free G free)"
 
-if [ -z "${STEPS:-}" ]; then
+rc=0
+if [ $restage = 0 ] && [ -z "${STEPS:-}" ]; then
   "$PY" - "$TREE" "$ARM" "$LOAD" "${SMALL:-1,31}" "${BIG:-256,384}" "$OUT/first_stage.json" <<'EOF' || exit 2
 import json, os, sys, time
 from pathlib import Path
@@ -67,6 +71,7 @@ EOF
   STEPS=$("$PY" -c "import json; print(','.join(str(s) for s in sorted(json.load(open('$OUT/first_stage.json'))['steps'].values())))")
 fi
 [ -n "$STEPS" ] || { echo "spot: no step drawn"; exit 2; }
+if [ $restage = 0 ]; then
 "$PY" "$IN/capture.py" site "$CAP/site" >/dev/null || exit 2
 export PYTHONPATH="$CAP/site${PYTHONPATH:+:$PYTHONPATH}"
 export VERITY_SPOT_CAPTURE=$CAP VERITY_SPOT_STEPS=$STEPS VERITY_SPOT_OPEN=${OPEN:-dense:1,moe:1}
@@ -78,6 +83,7 @@ GPU_LEASE_WHO=${GPU_LEASE_WHO:-spot-capture} gpu-lease 8 --wait --max-min "${MAX
 rc=$?
 grep -a "spot-capture" "$OUT/replay.log" | tail -n 40
 tail -n 3 "$OUT/replay.log"
+fi
 "$PY" - "$TREE" "$ARM" "$LOAD" "$CAP" "$STEPS" "$OUT/alignment.json" <<'EOF'
 import json, sys
 from pathlib import Path
@@ -115,5 +121,5 @@ for s in ${STEPS//,/ }; do
   tail -n 40 "$OUT/stage-step$s.log"
 done
 du -sh "$CAP" "$OUT"/* 2>/dev/null
-if [ "${KEEP:-0}" = 1 ] || [ $staged = 0 ]; then echo "spot: capture kept at $CAP"; else rm -rf "$CAP"; fi
+if [ "${KEEP:-1}" = 1 ] || [ $staged = 0 ]; then echo "spot: capture kept at $CAP"; else rm -rf "$CAP"; fi
 exit $rc

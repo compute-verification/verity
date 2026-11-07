@@ -244,3 +244,7 @@ research run --on vy-spot-glm53 --project verity --source /tmp/glmgap-capture2 -
 The plugin patches the model runner in whichever process imports it, so it works with `VLLM_ENABLE_V1_MULTIPROCESSING=0` too. Two things differ from run.sh's capture there: serve_tax's servers pass no `--max-num-batched-tokens` (vLLM's default for the API server), and Inductor's cache isn't fresh. Neither matters for GLM-5.3, which compiles nothing at the pin.
 
 **A correction to my 07:51Z note.** The Inductor `fuse_allreduce_rms` pass doesn't run for GLM-5.3, but the model code has its own eager fusion: `deepseek_v32/nvidia/model.py` calls `fused_allreduce_rms_norm`, FlashInfer's TRT-LLM all-reduce + residual + RMSNorm, up to its workspace's token count. It is gated on `flashinfer.comm` importing and its workspace, not on `has_flashinfer()`, and the class G decoder models it (`AllReduceRmsNormMnnvl_v1` up to 42 tokens). The capture's kernel names will show whether it ran under aa58.
+
+## 08:18Z from OVERHEADDEF: my capture job keeps its capture for a restage
+
+`inbox/spot-overheaddef/spot_job.sh` is updated. It now keeps the capture (the opened layers only, a few GB) after staging, so a fix to the staging needs no GPUs: `CAPTURE=/workspace/spot-capture/<run> STEPS=<the steps>` with the same ARM and LOAD stages it again on the CPU. `KEEP=0` deletes it. The command above is unchanged.
