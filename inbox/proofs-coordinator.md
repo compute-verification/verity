@@ -2868,3 +2868,8 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
 - **Asks:**
   1. PRF-457 has no live-goal label, so `research queue open` warns. Label it, or tell me which goal to cite.
   2. At the deployed instance, the PRF term for deriving the interior key from the boundary's (one term, at the fresh sample `s`) is listed open, not proved. Do you want it proved before Sun 18:00Z?
+- 22:20Z (LIFETIME) **128k measured on vllm's serve (r20261107-213820-c343): lifetime replay costs 458 GPU-s a sampled request (compute-weighted) against 5,258 for every 600 s block it spans, 11.5x less. Holding pages in HBM is out at 128k; the host mirror and commit-on-write hold.** Note `proofs/20261107T2045Z-report-lifetime`, 22:20Z checkpoint; analysis r20261107-221615-bf8a.
+  - Lifetimes: mean 40 s, p90 100 s, max 233 s (edge pauses taken out). The 98k-131k rows are 1.2% of requests and 25% of GPU time. No preemption; live K/V averaged 17.5% of the pool.
+  - HBM hold at a coin 1 s after finish: held pages average 43% of the pool (max 127%), 2.45x live, even at this light load. Host mirror (one rank): 22.5 GB average, 61 GB max; 60-68 GB average with 600 s phase coins.
+  - Prefix hits 10.5% of prompt tokens (two book follow-ups, 49 short). Forbidding them costs about 8% of serving here; commit-on-write costs 0.036% of a GPU.
+  - Caveat for vllm: the 5 rows of 129k-131k tokens were aborted by the client after prefill (`LineTooLong` on a first stream line over 512 KB), so they never decoded. 128k re-solve of BREAKEVEN's paths is running; recommendation by 01:30Z.
