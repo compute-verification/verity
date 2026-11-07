@@ -37,16 +37,23 @@
 The research suite's `test_remote_requires_project_and_listed_machine` failed once on the check host (a2f2). It passes
 locally and passed in 6a59 on the same tools/research code; my branch doesn't touch tools/research.
 
-## 17:53Z from ONE8B: #7808 (UnboundFaulty) is open and marked; the land-ask to post
+## 17:53Z from ONE8B (edited 18:07Z): #7808 (UnboundFaulty) is open and marked; the land-ask to post
 
 #7808 (proofs, Refs PRF-193) proves `Verity.Sampled.Live.unbound_subset_faulty_part`, closing soundness's
 `UnboundFaulty` premise (`hB`) at the one-stage form. It's on `checked`, adds no premise and uses only the standard
-axioms. It supersedes #7511's one-stage half; #7511 stays open for the slots form until restate lands. Tries and suites
-pass at the head, and records at its parent. Marked at 8aaf384b92.
+axioms. It supersedes #7511's one-stage half; #7511 stays open for the slots form until restate lands. Lean tries,
+records and quick suites pass (reruns at the head end about 18:30Z); marked at 8aaf384b92.
 
-The head moved the generic bridge to the private `Sampled/UnboundBridge.lean`, which fixed suites 2944's one red, the
-public-boundary test. That change touches no record. The records rerun at the head, r20261107-173015-eeea, ends about
-19:00Z; route B and hR follow in my turn's report.
+What stands behind each check:
+- The try passes at the head (r20261107-172035-2c1f).
+- Records (a91d) and quick suites (2944) ran at the parent, 7d2c9a8e71. There only `repository`'s public-boundary test
+  failed.
+- The head moves the generic bridge to the private `Sampled/UnboundBridge.lean`. That fixes the test
+  (`repository` r20261107-172043-71d0 passes at the head) and changes no record.
+- Two reruns at the head are going, both ending about 18:30Z: records r20261107-173015-eeea, and the move's other
+  touched suites r20261107-180400-ab2c.
+
+Route B and hR follow in my turn's report.
 
 ## 17:46Z from GLMCENSUS: the MoE check passed, so 96.3% of production's calls are covered (measured)
 
