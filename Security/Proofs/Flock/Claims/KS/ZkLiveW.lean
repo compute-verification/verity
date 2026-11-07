@@ -372,7 +372,7 @@ def ZkLiveAccWJ (x : Claims.Msg) : Prop :=
     ZkLiveAccAtWJ execArith Discharge.ZkExec.hs512 (wideJ true) x (zkTabs h0 L hz hk hlay)
 
 /-- **Every masked table's bound at a statement in scope, off the table on a witness lane**, the escapes counted per
-round: `zk_tableBoundJAccAtR_of_liveW` at C-Flock ZK's padded tables (`zk_atTabs`). -/
+round: `zk_tableBoundJAccAtR_of_liveW` at Flock ZK's padded tables (`zk_atTabs`). -/
 theorem zk_tableBoundJAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)
@@ -388,7 +388,7 @@ theorem zk_tableBoundJAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
 end Gen
 
 /-- **Every masked table's bound at a statement in scope, off the table on a witness lane**, the escapes counted per
-round: `zk_tableBoundJAccAtR_of_liveW` at C-Flock ZK's padded tables (`zk_atTabs`). -/
+round: `zk_tableBoundJAccAtR_of_liveW` at Flock ZK's padded tables (`zk_atTabs`). -/
 theorem zk_tableBoundJAccAtR_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)

@@ -51,7 +51,7 @@ shared = [
     "verity/core/difftest",
     "tools/config",
     "Security/Properties/SampledProofs/{Draw,Bits}.lean",
-    "Security/Proofs/Properties/RemoteAudit/Sort.lean",
+    "Security/Proofs/Properties/Accounting/Remote/Sort.lean",
     # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
     # Draw.lean's
     "Security/Properties/SampledProofs/Second.lean",
@@ -92,7 +92,7 @@ team = [
     "integrations/vllm/tools/topp_pin_gpu.sh",
     "integrations/vllm/tests/ops/test_{epoch_row,pod_bootstrap}.py",
     "integrations/vllm/tests/lint/test_merge_allowlist.py",
-    "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools}.py",
+    "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools,workload_fetch}.py",
     "integrations/vllm/tests/regression/test_attempt_resolution.py",
 ]
 

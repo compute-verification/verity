@@ -96,7 +96,7 @@ def test_a_failed_fetch_names_the_workload_and_the_fix(tmp_path, monkeypatch):
                                            r"them \(rc 1: no source configured\)"):
         C.workload_file(repo / "w" / "a.json")
     (argv, pythonpath), = seen
-    assert argv[2:] == ["research", "data", "fetch-fixtures", "--repo", str(repo.resolve()), "--json", "w/a.json"]
+    assert argv[2:] == ["research", "data", "fetch-fixtures", "--repo", str(repo.resolve()), "--json", str(repo.resolve() / "w" / "a.json")]
     assert pythonpath == str(repo.resolve() / "tools" / "research" / "src")
 
 

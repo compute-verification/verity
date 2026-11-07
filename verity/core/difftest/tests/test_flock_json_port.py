@@ -1,7 +1,7 @@
 """C-Flock's JSON parser (`Flock.JsonParse.parse`, `lean/FlockJsonDifftest.lean`) and Lean core's `Lean.Json.parse`, which
 it reads as, against `parse`, their Python mirror: the same value, or the same refusal (`offset N: why`, at the same
 UTF-8 byte offset). Both Lean functions are held to the one mirror, so the run also shows the two agree on every text
-drawn. A refusal is an output (`["error", why]`), so its text is compared, not only the fact of it."""
+sampled. A refusal is an output (`["error", why]`), so its text is compared, not only the fact of it."""
 
 from __future__ import annotations
 
@@ -332,7 +332,7 @@ def test_reference_reads_examples():
 
 
 def test_cases_reach_both():
-    """The draws reach both of the parser's answers: some texts parse, some are refused."""
+    """The samples reach both of the parser's answers: some texts parse, some are refused."""
     for kind in ("ok", "error"):
         find(CASES, lambda c, kind=kind: parse(c["text"])[0] == kind, settings=settings(database=None, derandomize=True))
 
@@ -342,11 +342,11 @@ def test_parse(server):
 
 
 def test_parse_core(server):
-    """Lean core's parser on the same draws: the same answers as the mirror, so as `Flock.JsonParse.parse`."""
+    """Lean core's parser on the same samples: the same answers as the mirror, so as `Flock.JsonParse.parse`."""
     D.run(PARSE_CORE, examples=3000, server=server)
 
 
-#: The public files C-Flock's producers wrote, recorded in `verity/ml/flock/tests`' fetched fixtures
+#: The public files Flock's producers wrote, recorded in `verity/ml/flock/tests`' fetched fixtures
 #: (`fixtures/artifacts.json`), whose header line the sampled proofs verifier reads (`SampledProofs.FilePart.header`).
 RECORDED = Path(__file__).resolve().parents[3] / "ml" / "flock" / "tests" / "fixtures"
 RECORDED_FIXTURES = ("forged-proofs", "public-inputs", "public-inputs-blocks", "rec-coins", "rec-links", "zk-sessions")

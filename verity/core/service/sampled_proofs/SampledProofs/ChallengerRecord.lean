@@ -1,6 +1,6 @@
 /-
 The challenger's record: the verifier's trusted coin commitment (`challenger.py`'s record, which
-`tests/test_challenger_difftest.py` holds to this, the verifier of record).
+`tests/test_challenger_difftest.py` holds to this, the verifier).
 
 Before any coin opens, the challenger signs its coin commitment with its LMS key over SHA-512 and writes the record on
 its own host:

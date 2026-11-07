@@ -330,7 +330,8 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
         dead_free: bool = False) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
     the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
-    reports, answered on a GPU-free host (`engine.profiles.devices`, `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
+    reports, answered on a GPU-free host (`--device-name`, else the workload row class's: `engine.profiles.devices`;
+    `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
     `cached`: the request's prefix-cached rows C (`vllm_meta.CachedGreedyRequest`; `prefix_cache.json`, `program.prefix_plan`).
     `dead_free`: a TP rank's request wrapper in the registered compiler's form too (`program.prune.dead_free`), as one rank's always is:
     the rank Programs `predict.steps.compile_steps` compiles.  A TP row of record keeps every unit (its Match counts every collective row)."""
@@ -718,8 +719,10 @@ class Options:
     max_model_len: int = option("--max-model-len", type=int, default=2048)
     target: str | None = option("--target", default=None,
                                 help="TargetProfile: JSON overrides of the default (e.g. '{\"compute_capability\": [9, 0]}') or a path to a JSON profile")
-    device_name: str | None = option("--device-name", default=None, help="the name the target's GPU reports, which keys vLLM's tuned kernel configs "
-                                     "on a host with no visible GPU (engine.profiles.devices; default: --workload's class's)")
+    device_name: str | None = option("--device-name", default=None,
+                                     help="the name the declared target's GPU reports (vLLM's get_device_name, the key of its tuned fused-MoE configs), "
+                                     "answered on any host; default: the --workload row class's (engine.profiles.devices), "
+                                     "which it must agree with")
     sampling: str | None = option("--sampling", default=None,
                                   help="the row's sampling policy: greedy | stoch-t<T>-p<P>[-k<K>] | JSON (must agree with --workload if both)")
     workload: str | None = option("--workload", type=workload_arg, default=None,
@@ -752,10 +755,13 @@ def main(a: Options) -> int:
         from verity_vllm.pipeline.tp.emit_ranks import parse_ranks
         from verity_vllm.engine.profiles.devices import device_name
         emit = parse_ranks(a.emit_ranks, a.tp, a.rank, a.emit_root) if a.emit_ranks else None
+        named = device_name(a.workload)
+        if a.device_name and named and a.device_name != named:
+            raise ValueError(f"--device-name {a.device_name!r} is not the name the --workload row's class reports ({named!r})")
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
                   tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_context), emit=emit,
-                  engine_args=workload_engine_args(a.workload, a.tp), device_name=a.device_name or device_name(a.workload), batch_dispatch=LC.batch_dispatch_of(a.workload),
+                  engine_args=workload_engine_args(a.workload, a.tp), device_name=a.device_name or named, batch_dispatch=LC.batch_dispatch_of(a.workload),
                   cached=a.cached, dead_free=a.dead_free)
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
