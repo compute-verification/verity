@@ -74,7 +74,8 @@ def constRel (R : Type) : LeanRelease Flock.Wit R where
   last _ := 0
 
 /-- Tables that never compute. -/
-def noReal : Msg → Flock.Wit → NT → ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray) :=
+def noReal :
+    Msg → Flock.Wit → NT → ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray) :=
   fun _ _ _ _ => .error ""
 
 /-- A worker that never answers. -/
