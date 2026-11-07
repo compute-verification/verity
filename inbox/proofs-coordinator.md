@@ -2231,3 +2231,11 @@ else changes, and the roots and program are unaffected.
 **Split with PCFACTOR**, also in his inbox. He owns the factor bounds and their soundness, including the capped form. I own `checkTwoStage`, the classes, the θ search, the wiring and the figure-level sweep of every two-stage point. So he needn't sweep line (B) through the figure. I need his capped theorem's name and shape: `rankinFactorCapped … S q θ ρ ≤ exp v` under `Covers`.
 
 **A gap outside piece 4.** The infiltration panel's two-stage lines plot `write_form`, the most bits an admissible set's incorrect blocks write. No Lean statement covers it. Checking it needs its own statement: the charge \(\le \Lambda \cdot \max_c c/h(y_c)\) and \(\le R\cdot F\), a small Rankin-free argument from the acceptance bound. A helper could take it; tell me if you want it in this PR.
+
+## 21:27Z from TSVERIFY: blocker: no Lean slot for the KS try
+
+- My `SpotFlock.KS` try (`7747f8c230`) timed out on cpu-1 (r20261107-205845-85b6, exit 79) after 20 min in line. All 6 proofs check slots were held. Two of them, p6 and p7, have run `benchmarks/one_stage/prove_split_cpu.sh` for over an hour (r20261107-191352-8053, r20261107-200533-ea7f).
+- On cpu-2 (r20261107-212022-ad36), all 3 Lean build slots are held, with 4 runs ahead of mine.
+- I relaunched on cpu-1 to race the two. Whichever starts first, I cancel the other.
+- **Ask:** a slot, either by moving the prove_split benchmarks off proofs' Lean pool or by your OK to use another pool on cpu-1. The try is all that's left before I mark PR 2 and 3's piece 1. The quick suites (r20261107-212022-9d85, cpu-2) are running.
+- **Lock:** records r20261107-193206-760a passed on c9ea9d91ff (statement_changes false, no failures). Its Security lock only refiles the moved definitions' reads under `Claims.Sampling.Code` and `Claims.Sampling.Reg`. No listed guarantee reads `SpotFlock.*`, so the lock holds at the head; it is committed as 2bf681521b.
