@@ -978,6 +978,10 @@
    "honest": ["Properties.SampledProofs.SecurityProofs.secondMisses_honest"],
    "nontrivial": "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial"
   },
+  "Properties.SampledProofs.haltEndsOpen": {
+   "honest": ["Properties.SampledProofs.haltEndsOpen_honest"],
+   "nontrivial": "Properties.SampledProofs.haltEndsOpen_nontrivial"
+  },
   "Verity.soundness_at_of_componentBounds": {
    "honest": ["Verity.soundness_at_of_componentBounds_honest"],
    "nontrivial": "Verity.soundness_at_of_componentBounds_nontrivial"
@@ -1674,10 +1678,6 @@
   "Properties.SampledProofs.haltCoversOperator": {
    "type_hash": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
    "unfolded_hash": "f67acbfdf1493d8b55b2cd8a2e106c39a8aee72d9451fd0174a3ad1a15dfbd94"
-  },
-  "Properties.SampledProofs.haltEndsOpen": {
-   "type_hash": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
-   "unfolded_hash": "2570ab7b9e8f001b58b5b4c7a22777dfcf855e9da415abe5c56f32717c6c020f"
   },
   "Properties.SampledProofs.haltIsFinal": {
    "type_hash": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
@@ -7658,6 +7658,12 @@
    },
    "type_hash": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
    "unfolded_hash": "f67acbfdf1493d8b55b2cd8a2e106c39a8aee72d9451fd0174a3ad1a15dfbd94"
+  },
+  "Properties.SampledProofs.haltEndsOpen_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.haltEndsOpen_nontrivial": {
+   "owner": "@proofs"
   },
   "Properties.SampledProofs.haltEndsOpen": {
    "owner": "@proofs",
