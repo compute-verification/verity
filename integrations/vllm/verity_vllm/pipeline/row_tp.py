@@ -151,7 +151,7 @@ class TpRow(Row):
             self.verdict("precheck", "FAIL", f"PRECHECK_FAIL_SOURCE_IDENTITY (see {self.d}/source_identity.json and row.log)")
             raise Stop(3)
         self.tl("precheck", "end", ("rc", 0))
-        self.verdict("precheck", "PASS", f"source identity == {self.tree}{' @ ' + sha if sha else ''} (verity verity_vllm hidden_gpu research)", quiet=True)
+        self.verdict("precheck", "PASS", f"source identity == {self.tree}{' @ ' + sha if sha else ''} (verity verity_vllm research)", quiet=True)
         rc, line = self.target_family(*([] if self.reads_device() else ["--no-device"]), out=f"{self.d}/target_family.json")
         if rc != 0:
             self.verdict("precheck-target", "FAIL", line)

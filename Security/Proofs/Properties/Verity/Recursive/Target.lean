@@ -746,7 +746,7 @@ theorem sampledProofsRecursive (q : Dep)
   swap
   · exact le_top
   -- where the claim holds, the event is empty
-  by_cases hH : V.Holds k θ F c σ .sampled ⟨θ, F, c, [], ByteArray.empty, #[]⟩
+  by_cases hH : V.Holds k θ F c σ .sampled ⟨θ, F, c, .empty, [], .empty, [], [], .empty, #[]⟩
   · refine le_trans (Game.prob_mono (q := fun _ => False) (fun o ho => ho.2 hH) _ σ) ?_
     rw [Game.prob_false]
     exact zero_le
@@ -754,7 +754,7 @@ theorem sampledProofsRecursive (q : Dep)
   by_cases hreg : V.Registered θ F
   swap
   · rw [show Game.prob (fun o => RecVerdict V k o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ = 0 from
-      prob_play_eq_zero (V.rounds θ) θ F c _ (fun _ _ h => hreg h.1.1) σ]
+      prob_play_eq_zero (V.families θ) (D := V.signer θ) θ F c _ (fun _ h3 h => hreg (h3.1 ▸ h3.2.1 ▸ h.1.1)) σ]
     exact zero_le
   -- more than an `ε` share of the units is unbound in the extracted transcript
   have hU : K₀ ≤ (Accounting.unbound (V.partsOf θ F) (V.Opens θ F c) (q.extract V S readX)).card := by

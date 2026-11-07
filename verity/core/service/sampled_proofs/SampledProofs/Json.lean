@@ -4,11 +4,14 @@ integer tests. The one difference is deliberate: `jeq` tells `true` from `1`, wh
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
+meta import Lean.Data.Json
+meta import Flock.Canon
+meta import Flock.Hash
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -56,9 +59,40 @@ def field? (j : Json) (k : String) : Option Json := (j.getObjVal? k).toOption
 /-- Python's `d.get(k)`: a missing key reads as `null`. -/
 def getD (j : Json) (k : String) : Json := (field? j k).getD Json.null
 
+/-- `j == .str s`, by a match the kernel reduces: `BEq Json` is a `partial def`, opaque to the kernel, so a property of a
+check that compares with it can't be proved. -/
+def jsonStrIs (j : Json) (s : String) : Bool := match j with | .str t => t == s | _ => false
+
+example : jsonStrIs (getD (Json.mkObj [("label", .str "draw")]) "label") "draw" = true := by decide
+example : jsonStrIs (getD (Json.mkObj [("label", .str "other")]) "label") "draw" = false := by decide
+example : jsonStrIs (getD (Json.mkObj [("label", .arr #[.str "draw"])]) "label") "draw" = false := by decide
+example : jsonStrIs (getD (Json.mkObj [("label", .null)]) "label") "" = false := by decide
+example : jsonStrIs (getD (Json.mkObj [("after", .str "draw")]) "label") "draw" = false := by decide
+example : jsonStrIs (getD (Json.str "draw") "label") "draw" = false := by decide
+
 def entries : Json → Array (String × Json)
   | .obj kvs => kvs.toArray
   | _ => #[]
+
+def increasing : List String → Bool
+  | a :: b :: t => decide (a < b) && increasing (b :: t)
+  | _ => true
+
+/-- Every object in `j` holds its keys in strictly increasing order, as every object `Json.parse` builds does. Proofs
+can't see inside `Json.parse`; this is what tells them a field read, a search of the object's tree, finds the field
+the object's canonical text prints. -/
+def sortedKeys : Json → Bool
+  | .arr a => a.attach.all fun x => sortedKeys x.1
+  | .obj kvs => increasing (kvs.toArray.toList.map (·.1)) && kvs.toArray.attach.all fun p => sortedKeys p.1.2
+  | _ => true
+termination_by j => sizeOf j
+decreasing_by
+  · have := Array.sizeOf_lt_of_mem x.2
+    simp only [Json.arr.sizeOf_spec]
+    omega
+  · exact Flock.sizeOf_lt_of_mem_toArray p.2
+
+#guard sortedKeys (Json.mkObj [("b", .arr #[Json.mkObj [("y", 1), ("x", 2)]]), ("a", .null)])
 
 /-- A failure code, kept once, in the order first found (`verdict._Collect`). -/
 def addCode (cs : Array String) (code : String) : Array String := if cs.contains code then cs else cs.push code

@@ -2,11 +2,13 @@ module
 
 public import Definitions.Flock.Lowering
 public import Proofs.Flock.Soundness.Audit.Circuit
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The compiled lowering: a satisfied table makes every placed unit correct
 
-**The audit's circuit is the rows the verifier parses** (PROTOCOL.md §16.5, `Flock/Net.lean`). A
+**The audit's circuit is the rows the verifier parses** (`Flock.Circuit`, `Flock/Net.lean`). A
 template's unit is `nIn` input columns, `nComp` computed rows and the constant, its last column
 (`Rows`). Computed row `i` is column `nIn + i`:
 
@@ -22,8 +24,8 @@ which unit `u`'s rows are placed in block `o` (`Placement`: the block matrices' 
 computed columns read exactly its rows' columns, and its constant's rows read the pin), and the
 unit's input columns on one gate carry one value there. Then the transcript decoded from that
 block makes `u` correct, and carries `true` on the constant (`UnitPlace.decode_one`). What each
-template's rows compute is the certificate's (`IsRowsUnit.computes_of_cert`, `Certificate.lean`),
-not a hypothesis.
+template's rows compute is not a hypothesis of it: rows derived from a gate circuit carry its outputs
+(`GateRows.rows_sound`), and no theorem carries that to a unit (`ASSUMPTIONS.md`).
 
 `UnitPlace` bundles a drawn unit's place in a table: its rows, its instance, its block and its
 columns, where every satisfying witness carries one value on the unit's inputs that share a gate.

@@ -1,13 +1,17 @@
 module
 
-public import Definitions.Pouw.Assumptions.Pinned
 public import Definitions.Pouw.Assumptions.Deadline
+public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.PearlC.Deadline
 public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Definitions.Pouw.Assumptions.Pinned
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.PearlC.Deadline
 public import Definitions.Pouw.PearlC.DeviceKernelWref
 public import Definitions.Pouw.PearlC.DevicePricesLoop
 public import Definitions.Pouw.PearlC.Tile
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # Work between the salt and the deadline (trusted)

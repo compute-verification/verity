@@ -1,7 +1,19 @@
 module
 
 public import Proofs.Flock.Recursive.Property
-public import Proofs.Flock.Recursive.Firewall
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The recursive audit at public units (trusted)
@@ -37,7 +49,7 @@ What it takes, against `RecursiveAudit`:
   `RecursiveFirewallPrivate` takes.
 
 Its proof is `Flock.SecurityProofs.PublicAudit` (`Proofs.Flock.Recursive.PublicAuditProof`). Its non-vacuity is to be
-shown at one recorded recursive run with a public inner unit (the F1 gate).
+shown at one recorded recursive run with a public inner unit (`test_lean_witness.py`).
 -/
 
 @[expose] public section
@@ -53,11 +65,11 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **Lean's verifier builds the inner statement from its own partition object and program**: `setupTables` at the inner
-tags, the coin server's coins and one table, given the circuit and public files and the verifier's own `obj` and `prog`,
-returns `st`, and `Flock.Zk.schedule` accepts its `m`. -/
+tags, the challenger's coin tree (`RecVStar.innerTree`) and one table, given the circuit and public files and the
+verifier's own `obj` and `prog`, returns `st`, and `Flock.Zk.schedule` accepts its `m`. -/
 def AcceptsPublic (obj : Lean.Json) (prog : ByteArray) (st : Flock.Stmt) : Prop :=
   (∃ (cf pf : ByteArray) (spec : Flock.SessionSpec),
-    Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.Coins.os 1 (partition := some obj)
+    Flock.Stmt.setupTables Flock.RecVStar.innerTags cf pf Flock.RecVStar.innerTree 1 (partition := some obj)
       (program := some prog) = .ok (spec, #[st])) ∧
   ∃ p, Flock.Zk.schedule st.m = .ok p
 

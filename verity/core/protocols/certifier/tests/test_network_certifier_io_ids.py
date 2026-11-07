@@ -1,8 +1,8 @@
-"""The ingress-ids tie on a fake upstream Commit and the warden's own ingress (`io_ids`): each prompt id the warden
-certified on ingress held to every computation of its position in the Commit's `c00.input/ids` rows, and every
-prefix-cache read in place of one, a bucket row at a time, by the reference and by the Boolean Definitions. The first
-negative is a prompt substitution: IoTieRequest alone leaves the prompt ids' values bound to nothing, so the model
-could compute on another prompt of the same length."""
+"""The ingress-ids tie on a fake upstream Commit and the network certifier's own ingress (`io_ids`): each prompt id the
+network certifier certified on ingress held to every computation of its position in the Commit's `c00.input/ids` rows,
+and every prefix-cache read in place of one, a bucket row at a time, by the reference and by the Boolean Definitions.
+The first negative is a prompt substitution: IoTieRequest alone leaves the prompt ids' values bound to nothing, so the
+model could compute on another prompt of the same length."""
 from __future__ import annotations
 
 import hashlib
@@ -18,7 +18,7 @@ from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.commitments import advice as ADV
 from verity.ml.commitments.gates.frame_v3 import _part
 from verity.core.protocols.certifier import head_check as HC
-from verity.core.protocols.certifier import io_ids as I
+from verity.ml.protocols.certifier import io_ids as I
 from verity.core.protocols.certifier import io_request as Q
 from verity.core.protocols.certifier import io_tie as IT
 from verity.core.protocols.certifier import warden as W
@@ -69,8 +69,8 @@ def _tokens(ps):
 
 
 def _link(sources, ps=None, tokens=None, shape=SHAPE):
-    """Each bucket's instance: the warden's cells of the requests with prompts `ps` (the sources' by default), the
-    Commit of `tokens` (the prompts' by default) on the schedule, and the verifier's lanes and map."""
+    """Each bucket's instance: the network certifier's cells of the requests with prompts `ps` (the sources' by
+    default), the Commit of `tokens` (the prompts' by default) on the schedule, and the verifier's lanes and map."""
     ps = _prompts(sources) if ps is None else ps
     reqs = [id_request(model="glm", user=f"u{i}", prompt=p, max_tokens=16, temperature=0.7, top_p=0.95, seed=i,
                        frame_bytes=B, offset=0) for i, p in enumerate(ps)]

@@ -1,8 +1,5 @@
 module
 
-public import CoreProtocol.Live
-public import SampledProofs.ChallengerDraw
-public import SampledProofs.OneStage
 public import SampledProofs.OneStageZk
 
 /-!
@@ -186,7 +183,7 @@ def fv3Message (tag : String) (parts : List ByteArray) : ByteArray :=
 
 /-- What `taggedSha512 tag manifest` hashes, when the manifest has a canonical form. -/
 def taggedMessage (tag : String) (manifest : Json) : List ByteArray :=
-  match Flock.canon manifest with
+  match Flock.canonUtf8 manifest with
   | .ok s =>
     let t := tag.toUTF8
     let b := s.toUTF8

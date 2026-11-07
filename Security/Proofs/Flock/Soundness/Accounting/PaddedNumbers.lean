@@ -1,7 +1,12 @@
 module
 
+public import Definitions.Flock.Accounting.Fast100
 public import Definitions.Flock.Accounting.Padded
 public import Proofs.Flock.Soundness.Accounting.Numbers
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Accounting.Fast100
 
 /-!
 # The numbers with C-Flock ZK's padded level 0
@@ -221,7 +226,7 @@ theorem padTableError_le_up (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
 
 /-! ## C-Flock ZK's values -/
 
-/-- C-Flock ZK's level-0 query count at `m` (`PROTOCOL.md` §7 item 6, `Zk.queries0`), where it differs from
+/-- C-Flock ZK's level-0 query count at `m` (live `PROTOCOL.md` §7 item 6, `Zk.queries0`), where it differs from
 `fast100`'s 218. -/
 def m1Queries₀ : ℕ → ℕ
   | 25 => 277

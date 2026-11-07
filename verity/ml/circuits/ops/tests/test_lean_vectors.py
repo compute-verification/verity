@@ -6,7 +6,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16 as AMP
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16 as AMP
 from verity.ml.circuits.silicon.total import HOPPER_BF16_WGMMA_K16 as HOP, cvt_rn_bf16_f32, tc_dot_total
 
 VECTORS = Path(__file__).resolve().parents[5] / "Security" / "Proofs" / "Core" / "TC" / "Vectors.lean"

@@ -15,6 +15,11 @@ public import Proofs.Flock.SamplingGeneric.Deployed
 public import Proofs.Flock.SamplingGeneric.Instance
 public import Proofs.Flock.SamplingGeneric.ZK
 public import Proofs.Flock.SamplingGeneric.FlockZk
+public import Proofs.Flock.SamplingGeneric.Two
+public import Proofs.Flock.SamplingGeneric.TwoCount
+public import Proofs.Flock.SamplingGeneric.TwoServed
+public import Proofs.Flock.SamplingGeneric.TwoTable
+public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 public import Proofs.Flock.SamplingGeneric.Complete
 
 /-!
@@ -67,6 +72,10 @@ and the server's error, under the premises `Claims.ZKServer.Flock.zk_server_lean
 **`CompilerComplete` is proved** (`compilerComplete`, `SamplingGeneric/Complete.lean`): each sampled slot rejects with
 at most its session's error, the session's coins being uniform once the coins off its rounds are fixed, and a union
 bound over the first `K` slots gives the compiled error.
+
+At a two-stage design whose first stage draws a uniform `Q`-subset of the population's `N` replay blocks, its `P̄_a` is
+at most the product a Bernoulli(Q/N) replay level gives, `∏_{ρ<N} (1 − Q/N + (Q/N)·e_ρ)` (`SamplingGeneric/TwoBernoulli.lean`:
+`Design.Two.Pa_le_bernoulli_pop`), the integrity profile's acceptance.
 -/
 
 @[expose] public section

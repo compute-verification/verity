@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Accounting.Confidence
-public import Mathlib.Data.Fintype.Pi
 
 /-!
 # Composition and fit (trusted)

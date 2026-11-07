@@ -45,7 +45,7 @@ def work(result: Result, flops: float) -> dict[str, float]:
     s = result.scenario
     f, phi = s.context.fleet, s.total_phi
     gates = s.context.units.gates(flops)
-    dark = f.eps_dark * f.dark_mfu * phi
+    dark = f.eps_unreg * f.dark_mfu * phi
     return {"unencumbered": gates / (f.mfu_train * phi), "lower bound": result.lo * gates / (s.mfu * phi),
             "best attack": result.attack * gates / (s.mfu * phi), "dark pool": gates / dark if dark > 0 else math.inf}
 

@@ -10,9 +10,8 @@ at `Frame.innerSched`): its round `j` is `Frame.ownRound`, every word the frame'
 count) but `final_c'` (round 0) and `τ`'s commitment (round 2), which it reads off the finish's round `j`, as the
 finish hands it to the frame (`Sessions.innerRound`, from `Finish.liveAsks`'s `sent`) before Rust relays it. A relayed
 round that differs from the frame's fails the frame's check at `.sched`, which asks for the round byte for byte: the
-frame's own round stands in and the rep stops (`standIn`). So does a round the finish has not computed, where the loop
-hands the frame no device round whatever Rust relays (`Frames.roundStep`), the frame's own round reading zero words for
-the finish's: a failure that `LeanRelease.cross` covers, since it may fail any round. This file defines that release and
+frame's own round stands in and the rep stops (`standIn`). A round the finish has not computed has no place: the loop
+refuses it whatever Rust relays (`Frames.roundPlace`), and the session stops there. This file defines that release and
 proves `LoopInnerRound0` at it, at every finish:
 
 * `Loop.innerOf`: the round in the device's place past the located rep's schedule, at the inner proof's round `j`
