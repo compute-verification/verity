@@ -14684,15 +14684,11 @@
      "FlockSoundness.Assumptions.UniformRandomBytes"
     ],
     "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
-    ],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
     "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
-   "unfolded_hash": "efc4e98bf4082e88a395254b33ae1a520f107ed14a276746c33d4002ab17287a"
+   "unfolded_hash": "71b463eb7e33489b832e89c9270918f2c6f463791a3a7329d3e9277be8617884"
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "owner": "@proofs",
@@ -26183,13 +26179,10 @@
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV3": {
-    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq pub.n n": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV5": {
@@ -26202,8 +26195,7 @@
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -39339,11 +39331,12 @@
    }
   },
   "Flock.KsScope": {
-   "digest": "50cf5d56ff405d2414e18eadd134f9170a4dc30556a902a8f1452a9fce4dd963",
+   "digest": "dbf0fb429a3d8051910558463f0689cef64e9505aff06a5a02f70d6d8b2f3b3c",
    "definitions": {
     "Flock.KsScope.ROOTS_WHY": "856122f76860449b1a6c7504a4ecf832f3c95daaabfa94f7812092d433ee5c64",
     "Flock.KsScope.SCOPE_WHY": "dd0e53f27f892c737ac8ffd6097ac7a8412479c7e79053f6fda35dc725ada0c0",
     "Flock.KsScope.TABLES_WHY": "09402a61bb542aa4c0887e6cf8dbcafe20c58a7975c87d0c5edadc53e3fbdaad",
+    "Flock.KsScope.check": "98de35be0ebbf86b7d0acfab0d7c936f53624812bda256da2c05c348fb4d644d",
     "Flock.KsScope.checkOf": "f059a38c0005f2721a8884d7e3caed1b60cd8f1a6ccf7494e78dbc47d4cec658",
     "Flock.KsScope.collidesT": "d64b1507c7afd599e8161438c8ea995b72b9f89b67f3f3552c4cf8848a99d6a0",
     "Flock.KsScope.drawWhy": "31490eabd56ff3e8894152ecbe4e94d5669e623c79d6f763cc1121f716063779",
@@ -44124,11 +44117,10 @@
    }
   },
   "Proofs.Flock.Bridge.Refused": {
-   "digest": "2aa4248b4142106a135a2772699be6812b80efe6a645d78ab840a4e129c5d505",
+   "digest": "38c5e15307728ff239b14228ec1154a4d0431dca4f76af8813ab90798bc5818b",
    "definitions": {
     "Flock.Bridge.LiveAcceptsKS": "ff1729b1b2b29a48f0e3c4f42af32de19e8d6788d41de2e6974ce1ca0f50394a",
-    "Flock.Bridge.RunPopOk": "dd047eafc6272926a4f7e7a5d4b7f159d99ec157a6f09947283adfcf55e97c10",
-    "Flock.Guarantees.SampledKSLiveV3": "2257c82ca50b98636fc8505bb393ce62b43c0c494a9e36c15f90e44351d15e58"
+    "Flock.Bridge.RunPopOk": "dd047eafc6272926a4f7e7a5d4b7f159d99ec157a6f09947283adfcf55e97c10"
    }
   },
   "Proofs.Flock.Bridge.RightRegZc": {
@@ -44136,6 +44128,14 @@
    "definitions": {
     "FlockSoundness.Discharge.ZkLink.RightRegZc": "79c5624417d002617cd89e78dc1ca9987e489e4b0f4e19a773336d3f981753d1",
     "FlockSoundness.Discharge.ZkLink.wrongRegZc": "f8e0d67b6fbd0e862780a5313cb825b00629f6b45da6e8011ebf79e7b58f753b"
+   }
+  },
+  "Proofs.Flock.Bridge.ScopeGate": {
+   "digest": "fa9f31a33786495ef96d1eee4baae09aee4fa864b3c68bf53f087af0e26650f4",
+   "definitions": {
+    "Flock.Bridge.KsScoped": "074ba0ee5c488cef95ca553617ceaff8a9b1ddb57243bd560341a5cf98e48de0",
+    "Flock.Bridge.LiveAcceptsScoped": "a531747d4fbb38fbba1265d4d0912c31c1eadb7a7acda28169286cee6c300ce0",
+    "Flock.Guarantees.SampledKSLiveV3": "ceb4ac09b7be1016ce4427987299af83b07afe24b5579fc153700aee703d1697"
    }
   },
   "Proofs.Flock.Bridge.Statement": {
