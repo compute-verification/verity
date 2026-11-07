@@ -15,7 +15,7 @@ torch at module level:
     def production(statics: dict, inputs: list["torch.Tensor"]) -> list["torch.Tensor"]:   # runs the pinned production op (imports torch inside)
     def spec(statics: dict) -> "SpecializedDefinition":            # the Verity specialization under test (torch-free)
 
-`produce` draws the inputs (uint16/uint32 words -> device tensors), runs `production`, and stores every case's input and
+`produce` samples the inputs (uint16/uint32 words -> device tensors), runs `production`, and stores every case's input and
 output words (`case_<i>/in_<j>.npy`, `out_<k>.npy`, `case.json`).  `check` rebuilds `spec(statics)`, evaluates its body on
 the SAME input words through the Verity evaluator (core `verity.ml.circuits.evaluation.evaluate`) and compares the output encodings
 word for word.  Gate G4 reads the resulting `quarantine.json`: `differential.passed == differential.total > 0` for every

@@ -142,7 +142,7 @@ ARMS = {
 }
 #: what every request's body adds to the corpus's (`corpus`), set by `run` from its arm
 BODY_EXTRA: dict = {}
-#: the corpus's seeded sampling without the request's seed, as production clients send it: vLLM then draws each
+#: the corpus's seeded sampling without the request's seed, as production clients send it: vLLM then samples each
 #: request's seed from the engine's numpy generator when the request reaches the model runner
 UNSEEDED = "unseeded"
 

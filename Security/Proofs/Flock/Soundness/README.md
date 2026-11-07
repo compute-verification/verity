@@ -13,7 +13,7 @@ is the Lean package `verity/core/service/flock/` (outlined in `verity/ml/flock/v
 
 ### 1.1 Soundness at the oracle layer (`table_sound`, `table_sound_fast100`, `table_sound_fast100_34_35`)
 
-Consider one table of a session, run as the verifier of record runs it: the `fast100` profile, run twice on one committed
+Consider one table of a session, run as the verifier runs it: the `fast100` profile, run twice on one committed
 root, with live coins, for any statement of `Flock.Statement`. For every prover strategy, the probability of this event is
 at most `tableError(fast100 m, shape)`:
 
@@ -79,7 +79,7 @@ recursion track, whose outer proof must be a proof of knowledge (DESIGN.md §3).
 **It is required for the partial-integrity composition of sampled audits** (§4). Halevi–Micali leaves are statistically
 hiding, so every commit string opens to essentially every value, and plain soundness says nothing about which values a
 unit used. The audit bound defines an incorrect proof block through extracted values, so it pays the table's knowledge error and a
-link term per audit.
+binding error per audit.
 
 - **The extractor** (`Knowledge.lean`) works in three steps:
   - It reruns the prover after its level-0 cap `K` times.
@@ -176,7 +176,7 @@ link term per audit.
 | Merkle binding: two verified openings of one position with different columns give a SHA-512 collision | 1b | `Merkle.opening_binding` | proved |
 | Rewinding: openings off the plurality table cost collisions, `#bad² ≤ N·Q·#conflict` | 1b | `Rewinding.bad_sq_le`, `prBad_le` | proved |
 | Compilation step: the oracle bound plus the rewinding term, for a table committed before any coin or after a prefix | 1c | `Compiled.compile_step`, `compile_step_prefix` | proved |
-| Session binding: the coin server keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
+| Session binding: the challenger's live-coin part keeps each round's bytes, so they are fixed before the round's coins | 1c | the `Game` model (`send` before `coin`) | by construction; no hash |
 | The compiled table theorem (§1.2): the compiled game (caps, openings at the end of the proof), the lockstep coupling with the plurality prover, rewinding at every cap | 1c, interactive | `table_sound_compiled` (`Model/Compiled.lean`, `Game/Lock.lean`, `CompiledLock.lean`, `CompiledSound.lean`; the definitions in `Definitions/Flock/Compiled.lean` and `Definitions/Core/Game/Lock.lean`) | proved |
 | Knowledge soundness (§1.3): extract the committed witness, then Halevi–Micali binding to registered data | 1c, 1e | `table_knowledge_sound`, `table_knowledge_sound_joint` (`Knowledge.lean`); `registered_weights` | the table theorems and the link theorem (A2) proved; `registered_weights` proved (`Binding/`) for rows under `HmRowComputes` (named, phase 2i) and the layout's facts; required for sampled audits (§4) |
 | The block R1CS means the named circuit (the lowering theorem) | 1d | level 3; its generic step `Lowering.lean`, the placement `ExecSetup.lean`, the derived rows' placement `Compose.lean` (§1.5) | the generic step and the placement from `Stmt.setupH` proved; for derived rows, the placement from the block matrices proved; the link from `setupH`'s unit net to the derived rows remains |
@@ -481,7 +481,7 @@ The weights are committed once and every later proof opens that root. The analys
   - In a sampled audit only the first incorrect sampled proof block matters. So an audit costs one table's hash term plus one
     serving-tree term (DESIGN.md §1.2): about `t·2^-(222…238)` per audit.
   - Halevi–Micali leaves are statistically hiding, so plain soundness is vacuous there: a proof block is incorrect only relative
-    to extracted values. Each audit therefore also pays the table's knowledge error and a link term (§1.3).
+    to extracted values. Each audit therefore also pays the table's knowledge error and a binding error (§1.3).
   - Under A2 that term is `t·Q_s(8N₀/e)/2^256` (audit B: 2^-129.4 at `t = 2^80`; under strict time alone, proved
     for the non-ZK session, 2^-70.2), and it dominates. So 2^-128 over the lifetime holds while `N·t ≤ 2^78.4`
     to `2^90.4`, with `N` counting audits.

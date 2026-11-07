@@ -184,7 +184,7 @@ def test_a_block_whose_write_is_recorded_two_steps_after_it_completed_is_residen
     whose attention reads it encoded, so its write is recorded at step 3, two steps after it was completed.  Until then
     it is in no record: the passes at steps 2 and 3 don't hold it, and the pass at step 4 adds it.  The verifier takes
     the append before the record writes the block, the record's write names the append's index and digest, and every
-    pass is accepted with every receipt drawn."""
+    pass is accepted with every receipt sampled."""
     st = store()
     head = Header(st.registration.digest, N)
     replay, run = Replay(head, st.registration), Run(st)

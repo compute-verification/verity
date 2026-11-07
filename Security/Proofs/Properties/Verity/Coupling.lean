@@ -8,23 +8,23 @@ public import Proofs.Core.Blocks
 public import Proofs.Pouw.Prob
 
 /-!
-# The causal game's coins, drawn up front: the coupling and the bounds it carries
+# The causal game's coins, flipped up front: the coupling and the bounds it carries
 
 `play_couples` proves the coupling (`Verity.PlayCouples`, a lemma every guarantee here rests on) by induction over the
 device's recursion (`releases`), from every state whose families' coins left `fs` the coin commitment's families `fs₀`
 reach (`Coupling.Shape`), for every continuation:
 
-* at a fresh coin, the coin the device draws is the coin of `t` its family's coins left name, and the rest of the play
-  reads no coin of that family it has read already (`Coupling.outK_congr`, over `Coupling.Agree`), so drawing it apart is
-  drawing `t` (`Coupling.avg_lazy`). Each coin's continuation resolves the coin trees' coins after its own release, so
+* at a fresh coin, the coin the device samples is the coin of `t` its family's coins left name, and the rest of the play
+  reads no coin of that family it has read already (`Coupling.outK_congr`, over `Coupling.Agree`), so sampling it apart is
+  sampling `t` (`Coupling.avg_lazy`). Each coin's continuation resolves the coin trees' coins after its own release, so
   one resolution serves them all, glued by the release that extends the log (`Coupling.AgreeFrom`);
-* at a coin tree's `Hello` or an opening, the device draws the tree's sample or the opened leaf's draw, and the
+* at a coin tree's `Hello` or an opening, the device samples the tree's sample or the opened leaf's sample, and the
   resolution takes the one at which the continuation's probability is largest (`avg_le_of_max`), so the play's
-  probability is at most that resolution's over the coins drawn up front;
-* where a tree-line guard fails, the releases end in the play and at the coins drawn up front alike
+  probability is at most that resolution's over the coins flipped up front;
+* where a tree-line guard fails, the releases end in the play and at the coins flipped up front alike
   (`Coupling.prob_ifPos`, `Coupling.prob_ifNeg`).
 
-The device's draw at the close is the last coordinate of the coins drawn up front (`Coupling.avg_prod`). The lower half is the upper half of the complement (`Coupling.prob_add_not`). From it: `coins_couple`
+The device's sample at the close is the last coordinate of the coins flipped up front (`Coupling.avg_prod`). The lower half is the upper half of the complement (`Coupling.prob_add_not`). From it: `coins_couple`
 (`Verity.CoinsCouple`); `target_of_periods` (`Verity.TargetOfPeriods`: `PeriodRun.Sound` at the coupled run's own
 coordinate, its verdict and claim carried by the coupling, and the rest of the event by `BreakBound` and the forger's
 `Unforgeable`); `wipe_target` (`Verity.WipeTarget`, through `Wipe.OfRun.prob_kept_le`); and `soundness_of_upFront`
@@ -62,8 +62,8 @@ theorem avg_prod {C D : Type} [Fintype C] [Fintype D] (f : C × D → ℝ≥0∞
     ENNReal.mul_inv (Or.inr (ENNReal.natCast_ne_top _)) (Or.inl (ENNReal.natCast_ne_top _))]
   simp only [Finset.mul_sum, mul_assoc]
 
-/-- **Lazy sampling**: drawing a coordinate `π t` of a uniform `t` and reading the rest of `t` where the coordinate is
-not read is drawing the coordinate apart. -/
+/-- **Lazy sampling**: sampling a coordinate `π t` of a uniform `t` and reading the rest of `t` where the coordinate is
+not read is sampling the coordinate apart. -/
 theorem avg_lazy {T X : Type} [Fintype T] [Fintype X] [Nonempty X] (π : T → X) (upd : T → X → T)
     (h1 : ∀ t x, π (upd t x) = x) (h2 : ∀ t, upd t (π t) = t) (h3 : ∀ t x y, upd (upd t x) y = upd t y)
     (Ψ : X → T → ℝ≥0∞) (hΨ : ∀ x t y, Ψ x (upd t y) = Ψ x t) :
@@ -77,7 +77,7 @@ theorem avg_lazy {T X : Type} [Fintype T] [Fintype X] [Nonempty X] (π : T → X
     _ = avg fun p : X × T => Ψ p.1 p.2 := avg_equiv φ (fun p => Ψ p.1 p.2)
     _ = _ := avg_prod _
 
-/-! ## The coins drawn up front, as the device takes them -/
+/-! ## The coins flipped up front, as the device takes them -/
 
 /-- `t` with coin `n` of the first family labelled `l` set to `x`. -/
 def _root_.Verity.UpFront.set : {fs : List (String × ℕ)} → UpFront fs → String → ℕ → (Fin 512 → Bool) → UpFront fs
@@ -217,7 +217,7 @@ theorem agree_set : ∀ {fs₀ fs : List (String × ℕ)} (t : UpFront fs₀) (l
       exact ⟨fun _ _ => rfl, agree_set t.2 l n x h3 h⟩
 
 
-/-! ## The play at the coins drawn up front reads only the coins left and the coin trees' coins from its log on -/
+/-! ## The play at the coins flipped up front reads only the coins left and the coin trees' coins from its log on -/
 
 /-- `ρ` and `ρ'` resolve every coin tree's coins alike after every log that extends `pre`. -/
 def AgreeFrom (pre : List Release) (ρ ρ' : TreeCoins) : Prop :=
@@ -332,7 +332,7 @@ theorem prCoin_eq_ofReal_pr {C : Type} [Fintype C] (p : C → Prop) :
     simp
   · rw [ENNReal.ofReal_div_of_pos (by exact_mod_cast h), ENNReal.ofReal_natCast, ENNReal.ofReal_natCast]
 
-/-- An event of a value every play's outcome is mapped to has the probability of that value's event under a draw of a
+/-- An event of a value every play's outcome is mapped to has the probability of that value's event under a sample of a
 type with one value. -/
 theorem prob_const_eq {O X : Type} [Fintype X] [Nonempty X] (P : X → Prop) (x : X) (hX : ∀ y, y = x)
     (G : Game O) (t : Strategy G) : prob (fun _ => P x) G t = value P (draw X) := by
@@ -410,7 +410,7 @@ theorem ne_of_prefix {pre w : List Release} {r : Release} (h : pre ++ [r] <+: w)
   simp at this
 
 open Classical in
-/-- **The play's probability is at most the coins drawn up front's**, at some resolution of the coin trees' coins:
+/-- **The play's probability is at most the coins flipped up front's**, at some resolution of the coin trees' coins:
 from the device's state, for every continuation `f` and strategy. -/
 theorem upper (fs₀ : List (String × ℕ)) {β : Type} (q : β → Prop) : ∀ (k : ℕ) (fs : List (String × ℕ))
     (ts : List OpenTree) (pre : List Release) (f : List Release → Game β)
@@ -581,9 +581,9 @@ theorem upper (fs₀ : List (String × ℕ)) {β : Type} (q : β → Prop) : ∀
 
 end Coupling
 
-/-- **The coupling of the play to the coins drawn up front.** For every families `fs`, device signer `D`, parameters,
+/-- **The coupling of the play to the coins flipped up front.** For every families `fs`, device signer `D`, parameters,
 committed files, commitment, strategy `σ` and event `q`, the probability of `q` in the play of `σ` is at least its
-probability over the coins drawn up front (the families' coins and the device's draw at the close) at some resolution
+probability over the coins flipped up front (the families' coins and the device's sample at the close) at some resolution
 of the coin trees' coins, and at most its probability at another. -/
 def PlayCouples : Prop :=
   ∀ (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
@@ -592,9 +592,9 @@ def PlayCouples : Prop :=
       ∃ ρ : TreeCoins, Game.prob q (play fs D θ F c) σ ≤ Game.prCoin fun t => q (outUp fs D θ F c ρ σ t)
 
 open Game in
-/-- **`PlayCouples`**: the upper half from the device's state after the request (`Coupling.upper`), the close's draw
-being the last coordinate of the coins drawn up front (`Coupling.avg_prod`); the lower half from the upper half of the
-complement, whose probabilities with the event's sum to one in the play and over the coins drawn up front. -/
+/-- **`PlayCouples`**: the upper half from the device's state after the request (`Coupling.upper`), the close's sample
+being the last coordinate of the coins flipped up front (`Coupling.avg_prod`); the lower half from the upper half of the
+complement, whose probabilities with the event's sum to one in the play and over the coins flipped up front. -/
 theorem play_couples : PlayCouples := by
   have up : ∀ (fs : List (String × ℕ)) (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
       (σ : Game.Strategy (play fs D θ F c)) (q : Exchange → Prop),
@@ -617,9 +617,9 @@ theorem play_couples : PlayCouples := by
   rw [e2, ← e1]
   exact add_le_add le_rfl h
 
-/-! ## Each subprotocol's target from its bound over the coins drawn up front -/
+/-! ## Each subprotocol's target from its bound over the coins flipped up front -/
 
-/-- **`CoinsCouple`**: the play's probability of the event is at most its probability over the coins drawn up front at
+/-- **`CoinsCouple`**: the play's probability of the event is at most its probability over the coins flipped up front at
 some resolution of the coin trees' coins (`play_couples`), which the bound takes at every resolution. -/
 theorem coins_couple : CoinsCouple := by
   intro ι α _ d V acc k a h θ F c σ
@@ -673,7 +673,7 @@ theorem wipe_target : WipeTarget := by
   exact (Wipe.OfRun.prob_kept_le (hS θ F) _ σ (hW.preserves θ F c σ)).trans (hW.error θ F c σ)
 
 /-- **`SoundnessOfUpFront`**: each subprotocol's bound at its component or as its target gives its target
-(`Vocab.sound_of`), and its bound over the coins drawn up front its bound at its component (`coins_couple`); the
+(`Vocab.sound_of`), and its bound over the coins flipped up front its bound at its component (`coins_couple`); the
 targets give soundness (`soundness_at_of_targets`). -/
 theorem soundness_of_upFront : SoundnessOfUpFront := by
   intro ι α _ d V k h
@@ -693,7 +693,7 @@ theorem pouw_nontrivial : ¬ exact.TargetFor (fun _ => True) .remote .pouw :=
 end Idle
 
 /-- **`CoinsCouple`'s honest lemma**: at the idle deployment, PoUW meets its bound at its component at remote over the
-coins drawn up front, its error being `⊤`. -/
+coins flipped up front, its error being `⊤`. -/
 theorem coins_couple_honest :
     Idle.unbounded.UpFrontFor (fun o => ComponentAccepts .remote .pouw o.sent) .remote .pouw := by
   intro θ F c σ ρ
