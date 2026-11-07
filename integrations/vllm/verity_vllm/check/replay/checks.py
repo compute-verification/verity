@@ -13,10 +13,10 @@ from typing import Any, Callable
 import numpy as np
 
 from verity_vllm.check.replay.compare import _interior_slice
-from verity_vllm.check.replay.evaluate import _evaluate_row, _Unresolved
+from verity_vllm.check.replay.evaluate import evaluated
 from verity_vllm.check.replay.index import ProgramIndex
 from verity_vllm.check.replay.opening import CommittedStore
-from verity_vllm.commit.opened import OpeningNotVerified, opened_check
+from verity_vllm.commit.opened import opened_check
 
 RULE = ("every check of every request's Program (instances header `checks`), evaluated from its committed inputs at every executed "
         "step, is its `accept` value")
@@ -39,14 +39,9 @@ def _check(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int,
     r = pi.by_i[i]
     step = pi.step_of(i)
     rec.update({"check": what, "request_id": rid, "step": step, "engine_step": arrive + step, "i": i, "spec": r["spec"], "inputs": []})
-    try:
-        got = _evaluate_row(pi, store, weights, r, rid, arrive, rec["inputs"], depth=0, interior={})
-    except _Unresolved as u:
-        return rec | {"result": None, "why": str(u)}
-    except OpeningNotVerified:
-        raise
-    except Exception as e:  # noqa: BLE001
-        return rec | {"result": None, "why": f"evaluator error: {e!r}"[:300]}
+    got, why = evaluated(pi, store, weights, r, rid, arrive, rec["inputs"])
+    if why is not None:
+        return rec | {"result": None, "why": why}
     bit = _interior_slice(got, lo, hi)
     if bit is None or bit.size != 1:
         return rec | {"result": None, "why": f"leaf [{lo}, {hi}) is not one leaf of row {i}'s output"}

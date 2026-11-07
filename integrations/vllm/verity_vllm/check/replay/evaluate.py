@@ -367,6 +367,20 @@ def plane_ports(d: dict) -> dict[str, str]:
     return {str(j): m[0] for j, m in enumerate(d["members"])} if d.get("plane_kind") else {}
 
 
+def evaluated(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], r: dict, rid: str,
+              arrive: int, inputs_rec: list) -> tuple[dict[str, np.ndarray] | None, str | None]:
+    """Row `r` of request `rid` evaluated from its committed inputs (`_evaluate_row`) -> (its outputs, None), or (None, why) when an
+    input is unresolved or the evaluator raised; an opening that doesn't verify is raised."""
+    try:
+        return _evaluate_row(pi, store, weights, r, rid, arrive, inputs_rec, depth=0, interior={}), None
+    except _Unresolved as u:
+        return None, str(u)
+    except OpeningNotVerified:
+        raise
+    except Exception as e:  # noqa: BLE001
+        return None, f"evaluator error: {e!r}"[:300]
+
+
 def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], vu: dict, arrive: int,
                rec: dict[str, Any]) -> dict[str, Any]:
     r = pi.by_i[vu["i"]]
@@ -375,15 +389,9 @@ def _replay_vu(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, 
     fam, st = d["family"], d["statics"]
     rec.update({"i": vu["i"], "spec": r["spec"], "request_id": rid, "step": d["step"], "engine_step": arrive + d["step"], "op_path": d["op_path"],
                 "row": d["row"], "phase": vu["phase"], "inputs": []})
-    try:
-        got = _evaluate_row(pi, store, weights, r, rid, arrive, rec["inputs"], depth=0, interior={})
-    except _Unresolved as u:
-        rec["why"] = str(u)
-        return rec | {"result": None}
-    except OpeningNotVerified:
-        raise
-    except Exception as e:  # noqa: BLE001
-        rec["why"] = f"evaluator error: {e!r}"[:300]
+    got, why = evaluated(pi, store, weights, r, rid, arrive, rec["inputs"])
+    if why is not None:
+        rec["why"] = why
         return rec | {"result": None}
     if len(got) > 1:
         got = by_member(got, pi.member_of_port(vu["i"]) or plane_ports(d))

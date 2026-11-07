@@ -23,7 +23,7 @@ import pytest
 import torch
 
 from tests.check.test_commit_verdict_replay_seed_of_record import BASE, ROOT_FORM, RUN_ROOT, SEED_ROOT
-from tests.program.predict.test_dsa_long_rows import phi  # noqa: F401  (GLM-5.3 cut to 4 layers, INDEX_TOPK 4)
+from tests.program.predict import test_dsa_long_rows as DL
 from verity.ml.definitions.numerics import rows as RK
 from verity.ml.definitions.registry.dsa_topk import canonical_ok, topk_set, waksman_apply, waksman_settings, waksman_switches
 from verity_vllm.check.commit_pass import commit_verdict
@@ -48,6 +48,7 @@ LEAVES = waksman_switches(N, K)
 FIELD = D.run_field(LAYER, POS)
 X, Y, LOGITS = f"model.layers.{LAYER}.self_attn.indexer.x", f"model.layers.{LAYER}.self_attn.indexer.y", "lm_head.logits"
 RES = {"program": {"digest": "d" * 64, "function": "f"}, "target": {"declared": {"compute_capability": [9, 0]}}}
+phi = DL.phi  # the fixture: GLM-5.3 cut to 4 layers, INDEX_TOPK 4
 
 
 def _doc() -> dict:
