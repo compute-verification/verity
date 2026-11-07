@@ -64,7 +64,7 @@ theorem classSum_spec (f : ReplayClass → Option ℚ) :
         simp only [List.getElem?_cons_succ] at hi
         simpa using hv i c' hi
     · rw [← h, List.length_cons, sum_range_succ']
-      simp only [List.getD_cons_succ, List.getD_cons_zero, eq_self_iff_true, ite_true, Nat.add_one_ne_zero, ite_false,
+      simp only [List.getD_cons_succ, List.getD_cons_zero, ite_true, Nat.add_one_ne_zero, ite_false,
         Nat.add_sub_cancel]
       ring
 
@@ -150,7 +150,7 @@ theorem bits_of_rankin {D : Point} {b : ℚ} (hb : checkTwoStage D = some b) {n 
     by_contra hv
     simp [lnCount, hv] at hL
   unfold lnCount at hL
-  rw [if_pos hv] at hL
+  simp only [hv, ↓reduceIte] at hL
   obtain ⟨x, hx, hLx⟩ : ∃ x, classSum (classFactor D) D.classes = some x ∧
       D.θ * lnUpper (1 / D.δ) D.p + x = L := by
     cases h : classSum (classFactor D) D.classes with
@@ -175,7 +175,8 @@ theorem bits_of_rankin {D : Point} {b : ℚ} (hb : checkTwoStage D = some b) {n 
           (Real.exp_pos _).le
     _ = Real.exp L := by
         rw [← Real.exp_add, ← hLx]
-        push_cast <;> ring
+        push_cast
+        ring
 
 /-- **The registered first stage meets Rankin's rates' hypothesis** at the uniform rate `q`. -/
 theorem firstStage_le {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hs : InScopeTwo Pt d s) {q : ℝ}
