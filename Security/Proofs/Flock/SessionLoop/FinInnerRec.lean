@@ -6,14 +6,14 @@ public import Proofs.Flock.SessionLoop.FinInner
 # The finish's transcript at a rep answered by the request's coins
 
 `Loop.asksPad C` answers a rep's round `k`, counted in the state, by `C[k]` while `C` lasts and past it by ones
-(`padCoin`). Every round the firewall's PIOP and opening add to the prover's transcript is a round it sends, recorded
+(`padCoin`). Every round the ZK server's PIOP and opening add to the prover's transcript is a round it sends, recorded
 with the coins that answer it:
 
 * **`Loop.RecStep`**: from the transcript `t` at round `k` to `t'` at round `k'`, the rounds appended to `t`'s are
   `k' - k` and record the appended round `i` with at least one coin, its coins round `k + i`'s.
 * **`Loop.RecP`**, **`Loop.recP`**: a transcript computation answered by `asksPad C` whose every run that returns is a
   `RecStep`; as a simulation (`With.Sim`) of the computation with itself.
-* `squeezeP_recP`, …, `repOpening_recP`: the firewall's PIOP and opening are `RecP`, walked once (`sim_walk`), as the
+* `squeezeP_recP`, …, `repOpening_recP`: the ZK server's PIOP and opening are `RecP`, walked once (`sim_walk`), as the
   session's are under `JsonRT.recS`.
 * **`Loop.Rets`**: what a run that returns returns; a rep's PIOP returns the zerocheck proof whose round-1c values and
   `final_c` are the masked values at their pads (`repPiop_rets`).

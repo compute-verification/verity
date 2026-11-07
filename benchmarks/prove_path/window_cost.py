@@ -24,7 +24,7 @@ Levers (`LEVERS`), each a change to the circuit's layout or the commitment's for
 - ``L3b``, one state row. A key block's running state (max, lane sums, O) is three rows, each hashed and re-leafed by its
   reader; as one row it is one.
 - ``W`` and ``R``, ports by reference: a reader's wired or registered port is the writer's or the pinned weight's leaves
-  (a drawn member's port tree is derived at the audit), so no input row is re-leafed.
+  (a sampled member's port tree is derived at the audit), so no input row is re-leafed.
 - ``P``, shared output rows (`commit_slots --row-bytes`): units' outputs packed into rows of `ROW_BYTES`, so a
   fresh row's fixed cost is paid a KiB, not a unit's few bytes (its readers re-leaf as many rows as before, and a unit reads
   its segment for a few thousand ANDs, which this doesn't price).

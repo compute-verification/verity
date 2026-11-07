@@ -242,7 +242,7 @@ def test_the_runs_hello_is_checked_by_both(monkeypatch):
 def test_the_leans_coins_are_a_challengers_entropy_and_never_a_streams(monkeypatch):
     """The Lean verifier's `IO.getRandomBytes` (A3, `verifier.coins`) is a challenger's entropy, never a stream's own
     coins: a stream given it, or no coins, refuses (`NO_OWN_COINS`). A challenger on it commits to its coins, and a
-    stream drawing from that challenger has the Lean's draw of record on coins it released after the registration."""
+    stream sampling from that challenger has the Lean's sample of record on coins it released after the registration."""
     a, b = V.coins(64), V.coins(64)
     assert len(a) == len(b) == 64 and a != b and V.coins(0) == b""
     for coins in (None, V.coins):

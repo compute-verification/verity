@@ -5,11 +5,11 @@ public import Proofs.Flock.Claims.ZK.L0PinFrame
 public import Proofs.Flock.Claims.Complete.Json.Goals
 
 /-!
-# The firewall's `repCons` returns where the cut rep does
+# The ZK server's `repCons` returns where the cut rep does
 
 `flock-firewall finish` runs a rep's PIOP and opening (`Finish.repCons`) in `StateT Nat V`, round `k` answered by the
 rep's coins `C[k]` (`asksOf C`). Here it returns on any values, pads, level-0 commitment and extra claims, wherever the
-coins pass the checks the rep draws them for, at the round count `consCounts` gives:
+coins pass the checks the rep samples them for, at the round count `consCounts` gives:
 
 * **The opening's asks** (`Count.repCons_ot`): over `OpenM`, every round asking for its coins, `repCons` asks for the
   algebraic phase's counts (`replayCoins` without its zeros), then the ring switch's and Ligerito's (`openList`).
@@ -419,7 +419,7 @@ theorem repCons_cut (coin : ℕ → ℕ → F128) (n : ℕ) {resp : ℕ → Clai
 
 end FlockComplete.CutFree
 
-/-! ## The firewall's `repCons` at `asksOf` -/
+/-! ## The ZK server's `repCons` at `asksOf` -/
 
 namespace Flock.Firewall.Finish
 
@@ -660,7 +660,7 @@ theorem portRel (C : Array (Array F128)) (N : ℕ) :
 /-! ### `repCons` at `asksOf` -/
 
 set_option maxHeartbeats 4000000 in
-/-- **The firewall's `repCons` returns on its coins alone**: at a `--zk` schedule of `m ∈ [25, 35]`, `hm96-sha512/v1`
+/-- **The ZK server's `repCons` returns on its coins alone**: at a `--zk` schedule of `m ∈ [25, 35]`, `hm96-sha512/v1`
 and a fold defined at every point of the lincheck's shape, on any values, pads, table, level-0 commitment and extra
 claims, `repCons` answered by `asksOf C` from round `0` returns at round `|consCounts|`, wherever `consCounts` is a prefix
 of `C`'s sizes and the pair's coins at the opening's lane rounds are independent. Its `final_c` is the masked value at

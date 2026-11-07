@@ -1,4 +1,4 @@
-"""One-stage audit, run A3: every unit type M0's statement proves in one Llama-3.2-1B decoder layer, as one audit with one draw and
+"""One-stage audit, run A3: every unit type M0's statement proves in one Llama-3.2-1B decoder layer, as one audit with one sample and
 one integrity profile.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm:<tree>/catalog:<tree>/kernels:<tree>/experimental \\
@@ -11,10 +11,10 @@ one integrity profile.
   `Q_template_instances` v0: one unit per instance, no width rule.
 * **One registration** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
   canonical map from set to the SHA-512 of its public file.
-* **One sample, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` draws k units over the whole
+* **One sample, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` samples k units over the whole
   population, on a development challenger's coins opened after the registration (`a0.challenger_draw`).
-  With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very draw, so the audited
-  draw is the verifier's; without it, the Lean draw fixes only how many units fall in each template and each server draws
+  With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very sample, so the audited
+  sample is the verifier's; without it, the Lean sample fixes only how many units fall in each template and each server samples
   a uniform subset of that size, which is still exactly `Subset(k)` over the union (conditioned on the counts, a uniform
   k-subset of the union is uniform within each template). The per-template sessions are one table each (M0 has no
   multi-table statement yet).
@@ -189,7 +189,7 @@ def main() -> int:
         statement[m["name"]]["timing"]["lean_verify_s"] = verdicts[f"lean-verify/{m['name']}"].get("verify_s")
         sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
     union = {"law": "subset", "population": n, "k": a.k, "units": sorted(union_units)}
-    # with --draw-file the audited draw is the verifier's Lean draw, and every session must have served exactly its share
+    # with --draw-file the audited sample is the verifier's Lean sample, and every session must have served exactly its share
     audited, served = (split, sorted(union_units)) if a.draw_file else (union, None)
     result = V.audit_record(rec, receipt, audited, law, sorted(proved), instances, statement, verdicts, a.delta,
                             sessions=sessions, served=served, session_roots=session_roots)

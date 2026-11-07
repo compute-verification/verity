@@ -49,7 +49,7 @@ import Proofs.Flock.VBridge.Algebra.RunSkel
 # The schedule's coin counts are the rounds `verifierRows` takes
 
 `roundSizes sh` is the one list of round sizes at which `verifierRows sh` returns (`verifierRows_schedule`). It is the
-list `run` draws: the zerocheck's, the lincheck's and ring switching's (`headSz`, from `zerocheck_coins`,
+list `run` samples: the zerocheck's, the lincheck's and ring switching's (`headSz`, from `zerocheck_coins`,
 `lincheck_coins`, `ringSwitch_spec`), then Ligerito's up to its final check (`ligSz`, `ligeritoRun_sz`, step by step
 as `ligeritoRun_k` counts them), at a schedule of the seams (`roundSizes_eq`). The deployed schedule `repRounds` lists
 the same counts (`repRounds_sz`): its head's at every `k_log` and claim count (`repHead_sz`), and its tail, which
@@ -72,7 +72,7 @@ consistency coins, one coin. -/
 def qSz (sch : Flock.Schedule) (i : ℕ) : List ℕ :=
   [(sch.levels.getD i default).q, Nat.log2 ((sch.levels.getD i default).q - 1) + 1, 1]
 
-/-- The coin counts `levelsLoop` draws, `fuel` levels from level `i` at the split dimension `split`
+/-- The coin counts `levelsLoop` samples, `fuel` levels from level `i` at the split dimension `split`
 (RecAlgebra.lean:419–436). -/
 def loopSz (sch : Flock.Schedule) (R : ℕ) : ℕ → ℕ → ℕ → List ℕ
   | 0, _, _ => []
@@ -82,7 +82,7 @@ def loopSz (sch : Flock.Schedule) (R : ℕ) : ℕ → ℕ → ℕ → List ℕ
         [split - 4 + 1, 1] ++ ([split - 4 + 1, 1] ++ (qSz sch (i + 1) ++ loopSz sch R fuel (i + 1) (split - 4 + 1)))
       else qSz sch R ++ loopSz sch R fuel (i + 1) split
 
-/-- **The coin counts Ligerito draws up to its final check** (`ligeritoRun`, RecAlgebra.lean:440–454). -/
+/-- **The coin counts Ligerito samples up to its final check** (`ligeritoRun`, RecAlgebra.lean:440–454). -/
 def ligSz (sch : Flock.Schedule) : List ℕ :=
   [sch.n, 1] ++ (List.replicate sch.k0 2 ++ ([sch.n - sch.k0 + 1, 1] ++ ([sch.n - sch.k0 + 1, 1] ++
     (qSz sch 0 ++ loopSz sch (sch.levels.size - 1) (sch.levels.size - 1) 0 (sch.n - sch.k0 + 1)))))
@@ -145,7 +145,7 @@ theorem sizes {l : List ℕ} (h : SzAt w 0 l) (hs : w.size = l.length) : w.toLis
 
 end SzAt
 
-/-! ## Ligerito's draws -/
+/-! ## Ligerito's samples -/
 
 section Lig
 
@@ -244,7 +244,7 @@ theorem levelsLoop_sz {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.l
       refine ⟨?_, SzAt.app s₁ (SzAt.app s₄ s₅ ?_) ?_⟩
       all_goals simp [qSz] <;> omega
 
-/-- **Ligerito up to its final check draws `ligSz`'s rounds**, at a schedule of the seams. -/
+/-- **Ligerito up to its final check samples `ligSz`'s rounds**, at a schedule of the seams. -/
 theorem ligeritoRun_sz {sch : Flock.Schedule} {st₀ : Flock.RecAlgebra.LSt F128} {k₀ k' : ℕ}
     {out : Array F256 × Array (Array F256) × ℕ} {stV : Flock.RecAlgebra.LSt F128} (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -355,7 +355,7 @@ theorem repHead_sz {m : ℕ} (hm : 6 ≤ m) (kLog claims : ℕ) :
   simp only [FlockC3.Compose.repHead, headSz, show m + 6 - 5 = m + 1 by omega, show m + 6 - 6 = m by omega]
   simp [List.map_replicate, List.replicate_succ']
 
-/-- **`repRounds` lists the counts `run` draws**: its head's (`repHead_sz`) at every `k_log` and claim count, and
+/-- **`repRounds` lists the counts `run` samples**: its head's (`repHead_sz`) at every `k_log` and claim count, and
 Ligerito's after it, which neither reaches (`repRounds_tail`), by evaluating `repRounds` at each `m` below 36 at
 `k_log = 6` and one claim. -/
 theorem repRounds_sz {m kLog claims : ℕ} {out : Array RecVStar.SchedRound} {sch : Flock.Schedule}

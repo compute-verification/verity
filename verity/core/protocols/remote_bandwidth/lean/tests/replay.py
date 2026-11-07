@@ -18,7 +18,7 @@ A record is one of two kinds:
   (else its count in the session), each boundary at its time and each sample closed at its last window at its time
   (every window at `groups_per_coin` 1), under synthetic coins and with no appends, releases or openings. A session
   recorded before the window was stated (commit 36e0ea654) may have a window shorter than its `window_ns`, a
-  boundary today's `AuditRun` refuses; its case states its shortest. A session drawn more than one window a coin at
+  boundary today's `AuditRun` refuses; its case states its shortest. A session sampled more than one window a coin at
   one window in flight isn't replayed: no property covers it, and the driver refuses it. Both verifiers replay that
   case as above, and `held` holds their verdict to the recorded one:
   - an accepted session samples every sample, each as many receipts as recorded over its windows;
@@ -172,7 +172,7 @@ def last_of(t: int, g: int, W: int) -> int:
 
 
 def case_of(reg: dict, session: dict) -> tuple[dict, dict]:
-    """The case of what a `verifier.json` session keeps (the module's docstring), and how each part of it was made. Drawn
+    """The case of what a `verifier.json` session keeps (the module's docstring), and how each part of it was made. Sampled
     `groups_per_coin` g windows a coin, each sample closes at its last window, at the time its samples were sent, under
     W + ⌈W/g⌉ coins."""
     W, N, g = session["windows"], reg["blocks"], session.get("groups_per_coin", 1)

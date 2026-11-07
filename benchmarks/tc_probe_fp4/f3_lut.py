@@ -158,9 +158,9 @@ def _ue4m3_rn(v: np.ndarray) -> np.ndarray:
 
 
 def gaussian_operand(x: np.ndarray, delta: float, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
-    """The ``gaussian`` family's input generator, not a model: an NVFP4 operand drawn the way Pearl-C4's clean path forms one
+    """The ``gaussian`` family's input generator, not a model: an NVFP4 operand sampled the way Pearl-C4's clean path forms one
     (alpha0 from the row max and RMS, row-relative noise, noisy UE4M3 block scales, RN E2M1 codes), in float64 with its own
-    draws.  Its draws and roundings fix the family's operands, so it stays as written.  Returns E2M1 codes (n, k) and UE4M3
+    samples.  Its samples and roundings fix the family's operands, so it stays as written.  Returns E2M1 codes (n, k) and UE4M3
     scales (n, k / 16)."""
 
     s = np.abs(x).max(axis=1, keepdims=True)

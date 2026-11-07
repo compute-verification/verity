@@ -225,7 +225,7 @@ theorem finOf_tau_own (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (Loop.finInner_tau_own L₁ src real vs hreal x w hR hSv hsc hSrc hcaus wk hSch hC hrows hH hs hrt hq hfi)
 
 /-- **`LiveInner` at every worker taking some `vs`'s values, on its own histories**: at `withInner` on the loop's
-finish's rounds (`Loop.finOf`, at `L₁`'s frame draws), at a statement in the masked scope with a witness that the loop
+finish's rounds (`Loop.finOf`, at `L₁`'s frame samples), at a statement in the masked scope with a witness that the loop
 serves, on the loop's own tables (`Loop.realOf`) and inputs (`Loop.Src`), at the session's `Tables` and `TapeOK`,
 `LiveInnerOwn` holds at every worker whose free words are `vs`'s at its own histories (`Loop.TakesValsOwn`), for every
 `vs` causal at the coins `Loop.SwOk` admits (`SwCausalOn`), whose `final_c` its round-1c values fix

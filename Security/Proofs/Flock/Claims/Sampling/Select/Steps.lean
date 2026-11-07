@@ -46,11 +46,11 @@ namespace Properties.SampledProofs.SecurityProofs
 
 open Lean (Json)
 
-/-- The law object `Select.select` reads: the expansion's, else the named law's. -/
+/-- The sampling design object `Select.select` reads: the expansion's, else the named law's. -/
 def lawObj (named : Json) (derived : Option Flock.Draw.Law) : Json := (derived.map (·.toJson)).getD named
 
-/-- **`Select.select`'s steps**: an accepted draw read the population `n`, the rule's law over it and its expansion, and
-proves every unit it drew: all of `[0, n)` under `All`, else the units `drawUnits` draws from the coins under the law
+/-- **`Select.select`'s steps**: an accepted sample read the population `n`, the rule's law over it and its expansion, and
+proves every unit it drew: all of `[0, n)` under `All`, else the units `drawUnits` samples from the coins under the sampling design
 `flockLaw` accepts. -/
 theorem select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (draw : Json) (proved : Array ℕ) (read : ℕ)
@@ -93,7 +93,7 @@ theorem select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Opt
       obtain ⟨⟨units, read'⟩, hu, h⟩ := bind_eq_ok.1 h
       exact ⟨units, tail _ _ _ _ _ _ h, Or.inr ⟨fun e => hne e, parsed, read', hp, hu⟩⟩
 
-/-- A law object's kind, as `flockLaw` and `deriveLaw` read it. -/
+/-- A sampling design object's kind, as `flockLaw` and `deriveLaw` read it. -/
 def kindOf (law : Json) : String := match getD law "law" with | .str s => s | _ => ""
 
 /-- A probability `NUM/DEN` `probability?` accepts has `0 < DEN` and `NUM ≤ DEN`. -/
@@ -116,8 +116,8 @@ theorem throw_bind_ne {ε α β : Type} (e : ε) (f : α → Except ε β) (b : 
 theorem throw_ne {ε α : Type} (e : ε) (b : α) : (throw e : Except ε α) ≠ .ok b := by
   simp [throw, throwThe, MonadExceptOf.throw]
 
-/-- **The law `flockLaw` accepts**: a subset of the law object's `k` units, no more than the population, a Bernoulli law
-at a probability, or a law of kind `stratified` or `work`. -/
+/-- **The sampling design `flockLaw` accepts**: a subset of the sampling design object's `k` units, no more than the population, a Bernoulli law
+at a probability, or a sampling design of kind `stratified` or `work`. -/
 theorem flockLaw_cases (law : Json) (n : ℕ) (parsed : Flock.Draw.Law) (h : Draw.flockLaw law n = .ok parsed) :
     (∃ k, parsed = .subset k ∧ k ≤ n ∧ nat? (getD law "k") = some k) ∨
       (∃ a b, parsed = .bernoulli a b ∧ 0 < b ∧ a ≤ b) ∨ kindOf law = "stratified" ∨ kindOf law = "work" := by
@@ -149,7 +149,7 @@ theorem flockLaw_cases (law : Json) (n : ℕ) (parsed : Flock.Draw.Law) (h : Dra
     · exact absurd h (throw_ne _ _)
   next => exact absurd h (throw_ne _ _)
 
-/-- **`deriveLaw`'s expansion**: none for a law of neither kind `stratified` nor `work`, else the stratified or work law
+/-- **`deriveLaw`'s expansion**: none for a sampling design of neither kind `stratified` nor `work`, else the stratified or work sampling design
 `Flock.Draw.derive` or `Flock.Draw.deriveWork` expands over the query's strata. -/
 theorem deriveLaw_cases (d : Program) (query law : Json) (table : Option Json)
     (derived : Option Flock.Draw.Law) (h : Draw.deriveLaw d query law table = .ok derived) :
@@ -221,7 +221,7 @@ theorem size_strata (S : Array (String × Array (ℕ × ℕ))) :
   rw [← Array.foldl_toList]
   exact (foldl_strata S.toList 0).trans (Nat.zero_add _)
 
-/-- **`Flock.Draw.derive`'s law**: each stratum its ranges, drawing `stratumK` of its units. -/
+/-- **`Flock.Draw.derive`'s law**: each stratum its ranges, sampling `stratumK` of its units. -/
 theorem derive_ok (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law' : Flock.Draw.Law)
     (h : Flock.Draw.derive k S = .ok law') :
     law' = .stratified k (S.map fun p => { template := p.1, units := p.2, k := Flock.Draw.stratumK k (rsSize p.2) (strataSize S) }) := by
@@ -232,7 +232,7 @@ theorem derive_ok (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (law' : F
   · obtain rfl := (Except.ok.inj h).symm
     simp only [size_rs, size_strata]
 
-/-- **`Flock.Draw.deriveWork`'s law**: each stratum its ranges, drawing `workK` of its units by its work and floor. -/
+/-- **`Flock.Draw.deriveWork`'s law**: each stratum its ranges, sampling `workK` of its units by its work and floor. -/
 theorem deriveWork_ok (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (tab : Array (String × ℕ × ℕ))
     (law' : Flock.Draw.Law) (h : Flock.Draw.deriveWork k S tab = .ok law') :
     ∃ ws : Array Flock.Draw.WorkStratum, List.Forall₂ (fun p (w : Flock.Draw.WorkStratum) => w.units = p.2) S.toList ws.toList ∧
@@ -251,7 +251,7 @@ theorem deriveWork_ok (k : ℕ) (S : Array (String × Array (ℕ × ℕ))) (tab 
       · exact absurd h (throw_bind_ne _ _ _)
       · exact (Except.ok.inj h).symm
 
-/-- `Slots.select`'s steps: the layout, and the checked proof units of the units `Select.select` proves. -/
+/-- `Slots.select`'s steps: the layout, and the checked proof blocks of the units `Select.select` proves. -/
 theorem slots_select_ok (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json)
     (cm : Option (Array (Int × Array Int))) (src : ByteArray) (l : Slots.Layout) (c : Array ℕ)
     (h : Slots.select rule d query table cm src = .ok (l, c)) :
@@ -263,7 +263,7 @@ theorem slots_select_ok (rule : Select.Rule) (d : Program) (query : Json) (table
   obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Except.ok.inj h)
   exact ⟨hl, draw, proved, read, hs, rfl⟩
 
-/-- The design under the `All` rule draws both classes `all`. -/
+/-- The design under the `All` rule samples both classes `all`. -/
 theorem slotDesign_all (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.Law) (hn : Partition.units d query = .ok n) (hnamed : Select.Rule.all.lawOver n = .ok named)
     (hd : Draw.deriveLaw d query named table = .ok derived) :
@@ -272,7 +272,7 @@ theorem slotDesign_all (d : Program) (query : Json) (table : Option Json) (n : �
   rw [hn, bind_ok, hnamed, bind_ok, hd, bind_ok]
   rfl
 
-/-- The design under a law draws the population as the law `Select.select` samples and the inputs `all`. -/
+/-- The design under a sampling design samples the population as the sampling design `Select.select` samples and the inputs `all`. -/
 theorem slotDesign_law (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (n : ℕ)
     (named : Json) (derived : Option Flock.Draw.Law) (parsed : Flock.Draw.Law) (hne : rule ≠ .all)
     (hn : Partition.units d query = .ok n) (hnamed : rule.lawOver n = .ok named)

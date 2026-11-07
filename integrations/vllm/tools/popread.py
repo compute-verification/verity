@@ -17,7 +17,7 @@ no earlier token was an EOS, so their units are programmed (their reads stay pub
 a stop rule with ignore_eos no request stops early, and the counts say what an EOS stop would key.
 
 Each report also carries `egress`: E(u) = |O ∩ W(down{u})|, the declared output slots O in unit u's downstream cone, which
-bounds what wrong units can put on the egress (Reach_inf(B) <= sum of E(u) over B <= |B| E_max).  It is a wiring property,
+bounds what incorrect proof blocks can put on the egress (Reach_inf(B) <= sum of E(u) over B <= |B| E_max).  It is a wiring property,
 bounded per unit by its Call's cone, and given in slots and bits (a sampled id's bits are ceil(log2 V), its word's 32).
 
     python tools/popread.py descriptor DESCRIPTOR.json.gz [--units] [--workload-program workload_program.json] --out OUT.json

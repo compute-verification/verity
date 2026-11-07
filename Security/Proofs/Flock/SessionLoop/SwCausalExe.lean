@@ -841,14 +841,14 @@ theorem vsWord_vsOf_l0 (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (
   · unfold vsWord
     rw [vsOf_of_not _ bx hg]
 
-/-- **`vsOf`'s level 0 is the firewall's where the honest values' is**: `L0Fixed` reads `vsWord` only from `zp 64` on,
+/-- **`vsOf`'s level 0 is the ZK server's where the honest values' is**: `L0Fixed` reads `vsWord` only from `zp 64` on,
 where `vsOf` is the honest values (`vsWord_vsOf_l0`). -/
 theorem l0Fixed_vsOf_of (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) {x : Msg} {w : Flock.Wit}
     (h : L0Fixed (CoinLayer.session loopNr Masked.dataE).honestVals x w) : L0Fixed (vsOf _ bx) x w :=
   fun ν τ c n hR s spec hsx j r extras he k hk hk' =>
     (vsWord_vsOf_l0 L₀ src real bx x w ν c τ j r hk).trans (h ν τ c n hR s spec hsx j r extras he k hk hk')
 
-/-- **`vsOf`'s level 0 is the firewall's at every worker**: at every live statement and witness of the masked relation,
+/-- **`vsOf`'s level 0 is the ZK server's at every worker**: at every live statement and witness of the masked relation,
 `L0Fixed` holds at the honest values (`l0Fixed_honestVals`), so at `vsOf bx` (`l0Fixed_vsOf_of`). -/
 theorem l0Fixed_vsOf (bx : AlgWorker (LeanRelease.ofLoopLink L₀ src real)) (x : Msg) (w : Flock.Wit)
     (hx : Masked.Live x) (hw : Masked.RZk x w) : L0Fixed (vsOf _ bx) x w :=

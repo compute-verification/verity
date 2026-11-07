@@ -78,7 +78,7 @@ theorem rsBody_congr {sv sv' : ℕ → Array F128} {N : ℕ} (P : List UInt8) {k
 
 set_option maxHeartbeats 1000000 in
 /-- **The loop's switched vectors are the switched source's**: on the loop's table `tr` at rep stream `2j + r`, where
-`src` draws the tape's level 0, with the zerocheck's and lincheck's claims at the points of the openings' words from
+`src` samples the tape's level 0, with the zerocheck's and lincheck's claims at the points of the openings' words from
 the rep's start, after openings `ops` that show no refusal by round `rankSlot + k`, the loop's extra claims (at the
 link points off the first opening's words) are as many as the session's, and the loop's claim `k`'s switched vector,
 `k` at most the claims' count, is the switched source's. -/

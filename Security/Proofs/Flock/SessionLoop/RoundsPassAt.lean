@@ -27,7 +27,7 @@ the premise `Loop.ScheduleTotal` instead:
   refused: on no coins it is the algebraic phase's; past them `ScheduleTotal` carries the schedule `repState` read on
   the coins before the last to all of them, each coin of the plan's count (`loopNr_succ`, `Count.plan_sched`) and
   `ρ₀, ρ₁` independent (`rho_words_unrefused`).
-* `Loop.realOf_ok`: where `src` draws the tape's level 0 (`Loop.Level0Src`), the rep's own table is answered, of the
+* `Loop.realOf_ok`: where `src` samples the tape's level 0 (`Loop.Level0Src`), the rep's own table is answered, of the
   placeholder's shape (`Sched.tabOfLevel0_alike`).
 * **`LeanRelease.ofLoop_sched_unrefused`**: so the rep's own table is answered and its schedule so far not refused
   (`Sched.schedSoFar_alike`): `ofLoop_sched_live`'s conclusion, at the loop's own tables, without liveness.
@@ -501,8 +501,8 @@ open _root_.Flock (V F128 Stmt SessionSpec)
 open _root_.Flock.Firewall.Frame (Cfg)
 open _root_.Flock.Firewall.Finish (Tab)
 
-/-- **The loop's own table is answered** at a rep stream of the session, where `src` draws the tape's level 0
-(`Level0Src`): its level 0 is drawn, and `tabOfLevel0` of it is of the placeholder's shape, which is answered
+/-- **The loop's own table is answered** at a rep stream of the session, where `src` samples the tape's level 0
+(`Level0Src`): its level 0 is sampled, and `tabOfLevel0` of it is of the placeholder's shape, which is answered
 (`Sched.tabOfLevel0_alike`). -/
 theorem realOf_ok {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray)}
     {x : Msg} {w : Flock.Wit} (hx : Masked.Live x) (hS0 : Level0Src src x w) (ν : finS.Nonce) (t : finS.Tape)
@@ -566,7 +566,7 @@ open _root_.Flock (V F128 Stmt SessionSpec)
 open Loop
 
 /-- **Where the loop's frame takes a history's last coins, the round's rep has its own table and schedule**, at the loop's
-own tables (`Loop.realOf`) where `src` draws the tape's level 0: `ofLoop_sched_live`'s conclusion without liveness. The
+own tables (`Loop.realOf`) where `src` samples the tape's level 0: `ofLoop_sched_live`'s conclusion without liveness. The
 rep's schedule at its placeholder table is not refused (`ofLoop_sched_placeholder`), its own table is answered
 (`Loop.realOf_ok`) and of the placeholder's shape (`Count.real_tabAlike`), so its schedule there is not refused either
 (`Sched.schedSoFar_alike`). -/

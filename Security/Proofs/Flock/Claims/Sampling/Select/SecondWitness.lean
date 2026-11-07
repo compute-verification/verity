@@ -18,7 +18,7 @@ import all Lean.Data.Json.Basic
 # `SecondMisses` says something: the second stage accepts, and a stage that accepts everything breaks its bound
 
 * `secondMisses_honest`: the deployed `Select.selectSecond` accepts one sampled replay block of two proof blocks, one
-  drawn, on 82 zero bytes. The kernel evaluates it (`decide +kernel`) once the definitions it can't unfold are their
+  sampled, on 82 zero bytes. The kernel evaluates it (`decide +kernel`) once the definitions it can't unfold are their
   twins: `Array.qsort` and `Flock.canon` with fuel (`qsort_fuel`, `canon_fuel`), `Flock.Draw.onWith`'s `repeat` with
   fuel (`onWith_fuel`) and `Flock.Draw.subset` with its map a function (`subset_fn`).
 * `secondMisses_nontrivial`: at `acceptAllSecond`, which accepts everything and proves nothing, both proof blocks of
@@ -290,7 +290,7 @@ theorem subset_fn : Flock.Draw.subset = subsetFn := by
 /-! ## The witnesses -/
 
 /-- **`SecondMisses`'s honest lemma**: the deployed second stage accepts one sampled replay block of two proof blocks,
-one drawn, on 82 zero bytes (its stratum's `need`). The kernel evaluates `selectSecond` (`decide +kernel`) once its
+one sampled, on 82 zero bytes (its stratum's `need`). The kernel evaluates `selectSecond` (`decide +kernel`) once its
 well-founded sorts and canonical JSON, its `repeat` and its map are their fuelled twins. -/
 theorem secondMisses_honest : (Select.selectSecond #[0] 2 1 ⟨Array.replicate 82 0⟩).isOk = true := by
   unfold Select.selectSecond Draw.drawFirstRead Draw.drawUnits Flock.Draw.drawWith Flock.Draw.stratifiedWith
@@ -306,7 +306,7 @@ theorem proved_null : Draw.proved Json.null = #[] := by
   decide +kernel
 
 /-- **`SecondMisses`'s nontrivial lemma**: its bound fails at a second stage that accepts everything
-(`acceptAllSecond`): the draw proves nothing, so both proof blocks of the one sampled replay block escape whatever the
+(`acceptAllSecond`): the sample proves nothing, so both proof blocks of the one sampled replay block escape whatever the
 bytes, with probability 1, and `escCell 2 1 2 = 0`. -/
 theorem secondMisses_nontrivial : ¬ Claims.Pr (fun src : Fin 0 → Fin 256 =>
       (acceptAllSecond #[0] 2 1 (bytesOf src)).isOk = true ∧

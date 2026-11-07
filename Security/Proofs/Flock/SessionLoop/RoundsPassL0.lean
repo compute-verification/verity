@@ -107,7 +107,7 @@ open Loop Ranked in
 set_option maxHeartbeats 4000000 in
 /-- **The frame takes a rep's level-0 round past the binding where it takes its coins**: at a history whose next round
 is rep stream `2j + r`'s level-0 round `1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), whose coins the loop's frame takes, on
-the loop's own tables where `src` draws the tape's level 0. The frame is in level 0's masked phase at body `i`'s first
+the loop's own tables where `src` samples the tape's level 0. The frame is in level 0's masked phase at body `i`'s first
 value (`RhoKeep.repState_l0`), the scheduled round is body `i` at zero pads on the rep's own table
 (`ofLoop_sched_unrefused`, `Bind.sched_l0`, `Loop.loopNr_l0r`), and the frame takes it (`l0_taken`). -/
 theorem schedTaken_l0 (L₁ : LeanRelease Flock.Wit Loop.Tp)

@@ -264,7 +264,7 @@ open Loop Ranked in
 set_option maxHeartbeats 4000000 in
 /-- **The frame takes a rep's Ligerito round from level 0's close where it takes its coins**: at a history whose next
 round is rep stream `2j + r`'s round `i` from level 0's close at `k₀ + 4` to the last before the inner proof
-(`Masked.repSlot` `i`), whose coins the loop's frame takes, on the loop's own tables where `src` draws the tape's
+(`Masked.repSlot` `i`), whose coins the loop's frame takes, on the loop's own tables where `src` samples the tape's
 level 0. The scheduled round on the rep's own table is `PastRound`'s (`ofLoop_sched_unrefused`, `LigOff.sched_past`);
 the frame is outside the inner proof there (`repState_answer_inner`), at the close in level 0 at the layout's last masked
 value with all of `ρ`'s words (`RhoKeep.repState_closeIn`) and past it outside every masked phase

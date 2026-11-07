@@ -169,7 +169,7 @@ theorem askOf_draws (q₀ : RepIn) (fc i : ℕ) (a : F128) : (askOf q₀ fc i a)
 
 open Classical in
 /-- **The rounds the loop's finish hands a rep's frame for its inner proof** on the history `h` at `x`, the witness `w`
-and the tape `ρ`, on the rep tables and salts `real` and the frame draws `draws`: where the history's next round is rep
+and the tape `ρ`, on the rep tables and salts `real` and the frame samples `draws`: where the history's next round is rep
 stream `k`'s round `i` (`CoinLayer.locate`, as `Loop.innerOf` places it), the finish's live inner proof (`finInner`) on
 rep stream `k`'s table and salts and the loop's request for it (`repInOf`: the values the frame took and the coins of the
 stream's first `i` rounds), at the `final_c` slot at which the finish accepts the request, if one does (the passed values
