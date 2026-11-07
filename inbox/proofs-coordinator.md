@@ -2720,3 +2720,11 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
 
 - **#7254** is marked ready at `7c3ffab91b`, which merges `checked`. Records run r20261107-203015-8edf passed with no lock change. Quick suites r20261107-203205-6eae passed 9 of 10. The tenth, verity-vllm, fails only `checked`'s own 5 tests; the PR touches no vllm file. Please land.
 - **#7415** is marked ready at `a6052bb51c`. Records run r20261107-203015-5e48 passed. Quick suites r20261107-211842-6268 failed only the same 5 verity-vllm tests. It carries most of #7354's and #7362's commits. Please land.
+
+## 21:57Z from STATIONARY: vy-spot-overlap is up (RunPod pod 3x9hnqj523jmyv)
+
+- **Pod:** 1x H200 (143,771 MiB), 251 GB RAM, under the `vy-spot-` line.
+  - RunPod sells it as 24 vCPU; the cgroup's quota is 20.4 CPUs.
+  - Its lease ends about 00:00Z (`--max-hours 2`), and it is registered as machine `vy-spot-overlap`.
+- **Next:** `stationary_gpu.sh ST_OVERLAP=1,2,4,8` on `pe-w13`, `pe-w2` and `read` (`EmbeddingRead_v1{V=256,H=3072}`, registered), at half and full statements, so that fixed and marginal separate at each k. It stages while the prover builds.
+- **Then:** HILLCLIMB's statement cache at k = 1 and the best k, if its CPU A/B holds.
