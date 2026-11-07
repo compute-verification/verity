@@ -3763,6 +3763,7 @@
    "Claims.Sampling.OneStage.WellFormed": "a helper the claims read: a well-formed one-stage design",
    "Claims.Sampling.Partition.Partitions": "a helper the claims read: a partition of a program's gates into proof units",
    "Claims.Sampling.Prog.Correct": "a helper the claims read: a correct gate interval on committed values",
+   "Claims.Sampling.Prog.Reads": "a helper the claims read: a gate reads another through the program's gates",
    "Claims.Sampling.Prog.Topological": "a helper the claims read: a topologically ordered program",
    "Claims.Sampling.RelS": "a helper the claims read: a statement's sampling relation",
    "Claims.Sampling.Scope": "a helper the claims read: the scope the sampling claims read",
@@ -3836,7 +3837,8 @@
    "Claims.SamplingGeneric.CompilerKSTwo": "Claims.SamplingGeneric.compilerKSTwo",
    "Claims.SamplingGeneric.CompilerExfilTwo": "Claims.SamplingGeneric.compilerExfilTwo",
    "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
-   "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS"
+   "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS",
+   "Claims.Guarantees.InfluenceTwoPatterns": "Claims.SecurityProofs.InfluenceTwoPatterns"
   }
  },
  "witnesses": {
@@ -24934,8 +24936,7 @@
    "Pouw.SecurityProofs.PeriodBindingPerProver": "frozen (no-function): a bound on a period's binding (DrawnLayer.BindingAt at Declared.periodLayer, which J10-R's tileLayer is) for every circuit, outcomes and openings, not a property of a Lean function's acceptance; it takes ecr/sha-512 at the prover's own fork finder (Claims.ExpectedCR, applied to that finder alone) and states kappa, the unverified-opening and split terms, in full, since no premise bounds them yet (CMP-33).",
    "Pouw.SecurityProofs.PeriodBindingPerProver_honest": "completeness: PeriodBindingPerProver's honest witness (LEAN-66): at onePeriod with every proof accepted and every slot opened to false by a verified path, the proofs are accepted on every coin, kappa is 0 and binding never fails (CMP-33).",
    "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial": "lemma: PeriodBindingPerProver's nontrivial witness (LEAN-66): at onePeriod with every proof accepted, opening every slot to the coin bit by a verified path, kappa is 0 and the bound at q = 0, which is 0, fails, since the opened bit moves with every fresh sample; a counterexample about no protocol function (CMP-33).",
-   "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed round order (SamplingDeploy.codeTwoAt), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform) and six facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until SampledProofs.Run.run's checks prove them; it reads SampledKSTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
-   "Claims.SecurityProofs.InfluenceTwoPatterns": "frozen (no-function): the patterns' form of the two-stage influence set (card_influenceTwo_le_patterns), a bound on the served outputs of the two-stage relation's boundary traces in the two-stage scope (InScopeTwo); it names no verifier function."
+   "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed round order (SamplingDeploy.codeTwoAt), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform) and six facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until SampledProofs.Run.run's checks prove them; it reads SampledKSTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {

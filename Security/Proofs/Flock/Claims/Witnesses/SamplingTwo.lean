@@ -314,8 +314,10 @@ namespace Claims.Witness.SamplingGeneric
 
 open Claims.Sampling
 
-/-- **`InfluenceTwoPatterns`'s premise holds** at the two-session toy: it is in the two-stage scope. -/
-theorem influenceTwoPatterns_honest : InScopeTwo twoPart twoTwo twoStmt := inScopeTwo_two
+/-- **`InfluenceTwoPatterns`'s premise holds** at the two-session toy: it is in the two-stage scope, the scope its
+compiled two-stage verifier checks. -/
+theorem influenceTwoPatterns_honest : InScopeTwo twoPart twoTwo twoStmt ∧ (twoLTwo Bool).Scope [] :=
+  ⟨inScopeTwo_two, twoLTwo_scope []⟩
 
 /-- A commitment scheme under which every opening opens. -/
 def openCm : CommitmentScheme Bool := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
