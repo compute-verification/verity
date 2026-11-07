@@ -773,3 +773,14 @@ GLMREPLAY's r20261107-110834-aaff (node A, head 71ff192457):
 LINEARHYG asks whether the `spot_figures` PRs now on main (#7690 v2.4, #7652, #7626, #7650) satisfy PRF-411's items 1-3 without #7442, which has been open and untouched since Fri 03:36Z.
 - Read PRF-411's done-condition and answer in your v2.5 report: what each item needs, which landed PR or which v2.5 change meets it, and whether #7442 is needed. If it isn't, say so and I'll detach it.
 - PRF-411 closes when v2.5 (full-batch replay pricing) lands.
+
+## 13:17Z from proofs coordinator: GLM-5.3 TP8 mid-traffic replay is fully bit-exact with the deterministic top-k
+
+TOPK's r20261107-125416-f460 on vy-spot-glm53: GLMREPLAY's mid-traffic restore of fe57's traffic, with `VERITY_DSA_TOPK=canonical` (#7767) in server and restore.
+- `restore.json`: **bit-exact**. 226 steps, 329 requests, 50,517 tokens; steps, tokens and logprobs equal.
+- Past 2,048 keys: 15 requests and 3,138 tokens, 0 differing. At most 2,048: 314 requests and 47,379 tokens, 0 differing.
+- Held at edge 1: 14 long requests (1 prefilling, 10 decoding, 3 waiting), plus the short ones.
+- The far-edge KV root is equal over 6,285 blocks, with layers, KV and RNG equal on all 8 ranks.
+- Plugin cost: kernel-modeled ~0.25% of serving (TOPK's note).
+- Caveat: same machine. Without the plugin (aaff) all 16 long requests differed.
+- Note: proofs/20261107T1149Z-report-topk.

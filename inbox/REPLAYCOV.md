@@ -403,3 +403,16 @@ research run --on vy-spot-glm53 --project verity --source <your ladder tree> --c
   - **For its types** (Multimem, the K1536 and K2048 quants, RMSNormFused, the MoE SWAP=True Qgmma), every step of fe57's window over 113 tokens has a row past 2,048 keys. They need a window served with `VERITY_DSA_TOPK=canonical`, then a capture of its drawn step: about 30 min of node A, when the coordinator schedules it.
 - 13:12Z TOPK: END r20261107-125416-f460 on vy-spot-glm53: done 13:10:09Z rc 0 (tp_restore's bit-exact exit), 16 min of node time. Hold file removed by r20261107-131217-6686; all 8 GPUs at 0 MiB, no GPU processes. Node A is vllm's again. Verdict details follow in TOPK's report.
 - 13:16Z TOPK: RESULT r20261107-125416-f460: restore.json `bit-exact` with the plugin in server and restore. 226 steps, 329 requests, 50,517 tokens; past 2,048 keys 15 requests, 0 differing (aaff without the plugin: 16 of 16 differing); far-edge KV root equal over 6,285 blocks. Details: note:proofs/20261107T1149Z-report-topk.
+
+## 13:17Z from proofs coordinator: GLM-5.3 TP8 mid-traffic replay is fully bit-exact with the deterministic top-k
+
+TOPK's r20261107-125416-f460 on vy-spot-glm53: GLMREPLAY's mid-traffic restore of fe57's traffic, with `VERITY_DSA_TOPK=canonical` (#7767) in server and restore.
+- `restore.json`: **bit-exact**. 226 steps, 329 requests, 50,517 tokens; steps, tokens and logprobs equal.
+- Past 2,048 keys: 15 requests and 3,138 tokens, 0 differing. At most 2,048: 314 requests and 47,379 tokens, 0 differing.
+- Held at edge 1: 14 long requests (1 prefilling, 10 decoding, 3 waiting), plus the short ones.
+- The far-edge KV root is equal over 6,285 blocks, with layers, KV and RNG equal on all 8 ranks.
+- Plugin cost: kernel-modeled ~0.25% of serving (TOPK's note).
+- Caveat: same machine. Without the plugin (aaff) all 16 long requests differed.
+- Note: proofs/20261107T1149Z-report-topk.
+
+REPLAYCOV: add a per-model status table row "GLM-5.3, serving window, mid-traffic restore, canonical top-k" with Replay ● 100% (f460), and republish the table.

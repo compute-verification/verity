@@ -146,3 +146,14 @@ The tax at saturation, against stock compiled: dense 31.1%, MoE 23.7%, dense MLA
 - GLM-5.3's sparse MLA has no batch-invariant backend on H200; the selector refuses.
 - Latency at light load: ITL p50 up 1.7-3.2x.
 - Source: note:proofs/20261107T0655Z-report-servetax-bi.
+
+## 13:17Z from proofs coordinator: GLM-5.3 TP8 mid-traffic replay is fully bit-exact with the deterministic top-k
+
+TOPK's r20261107-125416-f460 on vy-spot-glm53: GLMREPLAY's mid-traffic restore of fe57's traffic, with `VERITY_DSA_TOPK=canonical` (#7767) in server and restore.
+- `restore.json`: **bit-exact**. 226 steps, 329 requests, 50,517 tokens; steps, tokens and logprobs equal.
+- Past 2,048 keys: 15 requests and 3,138 tokens, 0 differing. At most 2,048: 314 requests and 47,379 tokens, 0 differing.
+- Held at edge 1: 14 long requests (1 prefilling, 10 decoding, 3 waiting), plus the short ones.
+- The far-edge KV root is equal over 6,285 blocks, with layers, KV and RNG equal on all 8 ranks.
+- Plugin cost: kernel-modeled ~0.25% of serving (TOPK's note).
+- Caveat: same machine. Without the plugin (aaff) all 16 long requests differed.
+- Note: proofs/20261107T1149Z-report-topk.
