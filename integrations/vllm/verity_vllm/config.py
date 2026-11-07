@@ -339,8 +339,9 @@ def _fetch(paths: list[Path]) -> None:
         rels = [os.path.relpath(p.resolve(), repo) for p in ps]
         env = settings.environ()
         env["PYTHONPATH"] = os.pathsep.join(filter(None, [str(repo / "tools" / "research" / "src"), env.get("PYTHONPATH")]))
-        r = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(repo), "--json", *rels],
-                           capture_output=True, text=True, env=env)
+        # absolute: fetch-fixtures reads a relative PATH from its working directory, not from --repo
+        r = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(repo), "--json",
+                            *(str(p.resolve()) for p in ps)], capture_output=True, text=True, env=env)
         if missing := [rel for p, rel in zip(ps, rels) if not p.is_file()]:
             raise RuntimeError(f"{', '.join(missing)}: stored workloads, not here, and `research data fetch-fixtures` could not fetch "
                                f"them (rc {r.returncode}: {(r.stderr or r.stdout).strip()[-300:]}); fetch them where the evidence store "

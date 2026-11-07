@@ -477,7 +477,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap.add_argument("--hf-home", type=Path, required=True, help="the HF cache the serve read its snapshot from")
     ap.add_argument("--p2-lib", help="libp2v1.so's directory (benchmarks/torch_gpu/p2_stage/build.sh's lib/)")
     ap.add_argument("--device", default="cuda")
-    ap.add_argument("--node", help="the prover's node, as the session names it (default: this host's name)")
+    ap.add_argument("--node", help="the developer's node, as the session names it (default: this host's name)")
     ap.add_argument("--private", type=Path, help="where the private record goes (default SERVE_DIR/private/pous/wK)")
     ap.add_argument("--rounds", type=int, default=ROUNDS, help=f"the session's challenges (default {ROUNDS})")
     ap.add_argument("--challenger-host", default=CHALLENGER_HOST)

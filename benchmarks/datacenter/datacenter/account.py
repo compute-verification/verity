@@ -1,6 +1,6 @@
 """The physical layer's reading of the claims: credit, headroom, where things were, and the covert budget, per block.
 
-`account` reads only public things: the claims (logical facts about the prover system) and the profile (the
+`account` reads only public things: the claims (logical facts about the developer's hardware) and the profile (the
 placement's public properties, the declaration with its named assumptions, the verifier's plan). For each block it
 concludes:
 
@@ -13,8 +13,8 @@ concludes:
   work that must have run on the block. Crossing bytes bound nothing by themselves: a helper holding the registered
   weights needs only small inputs and outputs. Work is pinned to the block only by data it must consume that only the
   block receives, a trusted device's fresh data (a run input placed on a trusted device), which a helper could get only through the
-  block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the named premise `FLEET_CLOSED`. Or,
-  under the premise `SALT_CUSTODY`, by a salt the block's own certifier releases only into it: the work that depends
+  block's certified egress: outsourceable ≤ egress × work per forced bit. Or by the proposed assumption `FLEET_CLOSED`. Or,
+  under the proposed assumption `SALT_CUSTODY`, by a salt the block's own certifier releases only into it: the work that depends
   on it is pinned while `custody`, k, the bits that could carry the salt out before registration (the block's egress
   timing advice, the profile's advice, inside inputs and salt-dependent values crossing out), stays at most 384. With
   none, it is unbounded and nothing is attributed;
@@ -37,7 +37,7 @@ Every claim's credit is also a `Credit` on a unit: compute in block-ticks, PoUW'
 of the floor program's block-ticks, which no accepted window undercuts over any route) as `compute` on the whole block
 where the scheme gives one, else the honest routing's
 time on each facet (kinds on one facet add up, kinds on different facets run at once) as `compute:<facet>`, on the block as far as attribution places it there and graded by its anchor,
-the rest on the whole datacenter, since PoUW credits the prover system; a store's device the bits read from it and the
+the rest on the whole datacenter, since PoUW credits the developer's hardware; a store's device the bits read from it and the
 bit-ticks it held over the interval the claim proves (a snapshot proves an instant, and carries none). `capacity` gives each unit's resources a tick by the
 declaration, and an account whose credits exceed them anywhere (`overcredited`, by `double_credit`, Horn's interval
 test) is unsound. `Accounts` joins the accounts of successive epochs or of overlapping audits, and applies the same rule
@@ -215,7 +215,7 @@ def _sample(profile: Profile, c: Held) -> float:
 
 def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...] = ()) -> Account:
     """Read `claims` against `profile`: credit their ANDs, and the time the work takes at the devices' declared rates for
-    each kind of it, under the named premises in `assume`."""
+    each kind of it, under the assumptions in `assume`."""
     dc, epoch = profile.datacenter, profile.plan.epoch
     seconds = dc.cadence.seconds(epoch.length)
     inside = lambda c: getattr(c, "during", epoch) in epoch  # noqa: E731
@@ -305,7 +305,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
 
 
 def _credits(claims: list[Claim], profile: Profile, blocks: list[BlockAccount], inside, refused_stores) -> list[Credit]:
-    """What the claims credit each unit. PoUW credits the prover system, so a block's busy share is the block's only as
+    """What the claims credit each unit. PoUW credits the developer's hardware, so a block's busy share is the block's only as
     far as attribution places it there (`local_at_least`, graded by its anchor), and the rest is the whole datacenter's.
     A store's device is credited the bits read from it and the bit-ticks it held."""
     epoch, stores, fleet = profile.plan.epoch, profile.stores, profile.datacenter.name
