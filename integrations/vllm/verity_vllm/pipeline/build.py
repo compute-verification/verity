@@ -718,6 +718,8 @@ class Options:
     max_model_len: int = option("--max-model-len", type=int, default=2048)
     target: str | None = option("--target", default=None,
                                 help="TargetProfile: JSON overrides of the default (e.g. '{\"compute_capability\": [9, 0]}') or a path to a JSON profile")
+    device_name: str | None = option("--device-name", default=None, help="the name the target's GPU reports, which keys vLLM's tuned kernel configs "
+                                     "on a host with no visible GPU (engine.profiles.devices; default: --workload's class's)")
     sampling: str | None = option("--sampling", default=None,
                                   help="the row's sampling policy: greedy | stoch-t<T>-p<P>[-k<K>] | JSON (must agree with --workload if both)")
     workload: str | None = option("--workload", type=workload_arg, default=None,
@@ -753,7 +755,7 @@ def main(a: Options) -> int:
         res = run(a.out, a.M, a.pos0, a.profile, a.backend, wrapper=a.wrapper, LP=a.LP, T=a.T, eos=a.eos, model_id=a.model, revision=a.revision,
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
                   tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_context), emit=emit,
-                  engine_args=workload_engine_args(a.workload, a.tp), device_name=device_name(a.workload), batch_dispatch=LC.batch_dispatch_of(a.workload),
+                  engine_args=workload_engine_args(a.workload, a.tp), device_name=a.device_name or device_name(a.workload), batch_dispatch=LC.batch_dispatch_of(a.workload),
                   cached=a.cached, dead_free=a.dead_free)
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()

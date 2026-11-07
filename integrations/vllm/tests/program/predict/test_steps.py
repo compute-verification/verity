@@ -635,6 +635,7 @@ def test_class_g_plans_a_long_prompt_as_its_prefill_chunks_each_at_the_launch_it
     assert [c[c.index("--out") + 1] for c in cmds] == [str(tmp_path / trace_dir(u)) for u in plan.requests]
     assert trace_dir(plan.requests[2]) == trace_dir(summary["requests"][2]) != trace_dir({**summary["requests"][2], "chunks": []})
     for u, c in zip(plan.requests, cmds):
+        assert c[c.index("--device-name") + 1] == reg.phi.target["device_name"] == "NVIDIA H200"
         ctx = parse_launch_context(c[c.index("--launch-context") + 1])
         assert (ctx.get("chunks", []), len(ctx["batch_by_step"])) == (list(u.chunks), len(u.launch))
         assert LC.bad_chunks(ctx, "request", u.LP, u.T, u.C) is None

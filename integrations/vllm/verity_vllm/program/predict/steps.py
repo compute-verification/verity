@@ -717,12 +717,13 @@ def trace_dir(u: RequestUnit | dict) -> str:
 
 def trace_commands(summary: dict, registered: Registered, root: str, *, max_model_len: int = 2048) -> list[list[str]]:
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
-    vLLM (CPU, on meta), each writing `<root>/<trace_dir>`; at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`);
+    vLLM (CPU, on meta), each writing `<root>/<trace_dir>`, under φ's GPU's name where φ states one (`--device-name`: the tuned kernel
+    configs a GPU-free host reads); at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`);
     in class G at the unit's launch context (`--launch-context '{"batch": ...}'`), with its prefill chunks there when it has them
     (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper, `vllm_meta.ChunkedGreedyRequest`)."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
-    target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
+    target, device = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}, phi.target.get("device_name")
     world = int(phi.tp.get("world", 1))
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
@@ -735,7 +736,8 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
                      *(["--cached", str(u["C"])] if u.get("C") else []),
                      *(["--launch-context", json.dumps(ctx, separators=(",", ":"))] if u.get("launch") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"], "--max-model-len", str(max_model_len),
-                     "--target", json.dumps(target, sort_keys=True), "--profile", phi.profile, "--sampling", sampling, *tp])
+                     "--target", json.dumps(target, sort_keys=True), *(["--device-name", device] if device else []),
+                     "--profile", phi.profile, "--sampling", sampling, *tp])
     return cmds
 
 
