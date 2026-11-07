@@ -216,7 +216,9 @@ def WitOpens : Prop :=
 wherever the proof block's correctness reads them. -/
 theorem stmtOpens (hw : WitOpens h) : StmtOpens h := by
   intro x s Pt d m₀ m₁ xS c₀ c₁ rest wF u hx hP hd hin hok hu hck
-  have hlt : u < Pt.blocks.length := units_base h hx hP ▸ mem_checked_lt hu
+  have hlt : u < Pt.blocks.length := by
+    have := mem_checked_lt hu
+    rwa [units_base h hx hP] at this
   obtain ⟨ρ, hρ⟩ := Option.isSome_iff_exists.1 (hin.2.2.2.1 u hlt)
   obtain ⟨rb, hrb⟩ := replay_block hρ
   refine ⟨Pt.blocks[u], ρ, rb, List.getElem?_eq_getElem hlt, hρ, hrb, fun val ι hv => ?_⟩
