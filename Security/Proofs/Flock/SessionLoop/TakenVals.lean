@@ -50,14 +50,14 @@ The session loop's frame takes each value of a rep's algebraic phase as the free
 releases it masked, `v + h_i` under the rep's pad `h_i` (`Frame.Masker.absorb`); the loop reads the value back as the
 released word plus the pad (`Loop.valsOf`). The switched session at the deployed tables (`CoinLayer.session Loop.loopNr
 Masked.dataE`) masks the values `vs` gives at the opened coins the same way (`Masked.swSrcE_masked_pad_any`). This file
-states the switched session's side by pad index, as the firewall's words:
+states the switched session's side by pad index, as the ZK server's words:
 
 * **`Loop.vsWord`**: table `j`'s rep `r` value `k` of `vs` at the opened coins and what the workers see of the tape
   (`RefSession.seenOf`, as the switched session reads `vs`), at the table's base on the tape (its mask slot and level
-  0's hiding, which a table's values may read), as the firewall's word; `0` from `n_E` on.
+  0's hiding, which a table's values may read), as the ZK server's word; `0` from `n_E` on.
 * **`Loop.RowsOK`**: each table's rows hold at `vs` at its base, at every nonce, opened coins and tape at which none of
   the table's zerocheck outer coins is `1`. Where they fail the switched session commits its pads tree over the moved
-  pads (`Table.swPads`), while the frame commits it over the drawn ones, so a rep's first round, which carries the pads
+  pads (`Table.swPads`), while the frame commits it over the sampled ones, so a rep's first round, which carries the pads
   root, is the switched message only where they hold. `Loop.rowsOK_honestVals`: they hold at the honest values.
 * **`Loop.TakesVals`**: at every live round, each word the frame frees in the worker's round is `vs`'s value there.
 * **`Loop.TakesFinalC`**: at the inner proof's round 0, which the frame frees nothing of, the worker's `final_c'` plus
@@ -101,7 +101,7 @@ namespace FlockSoundness.ZK.Table
 
 set_option smartUnfolding false in
 /-- **The rows at the honest values are the table's own**: where each rep's batched constraint holds at `w`'s view at
-every draw, the rows hold at `w` and the table's values. -/
+every sample, the rows hold at `w` and the table's values. -/
 theorem rowsAt_vals {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (w : W) (u : T.Mask) (R : T.Vis)
     (h : ∀ (ω : T.Rand) (r : Fin 2),
@@ -122,7 +122,7 @@ open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 namespace Loop
 
 /-- **`vs`'s value at pad `k`** of table `j`'s rep `r`, at the opened coins `c` and what the workers see of the tape `τ`
-(`RefSession.seenOf`), at table `j`'s base on `τ` (its mask slot and level 0's hiding), as the firewall's word; `0`
+(`RefSession.seenOf`), at table `j`'s base on `τ` (its mask slot and level 0's hiding), as the ZK server's word; `0`
 from `n_E` on. -/
 noncomputable def vsWord (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit)
     (ν : CoinLayer.Nonce) (c : Fin (refK x) → FlockDeploy.Coin) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (k : ℕ) :
@@ -522,7 +522,7 @@ def withDevice {W R : Type} (L : LeanRelease W R)
     (d : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg) : LeanRelease W R :=
   { L with device := d }
 
-/-- **The server's checks don't read the device**: they read the workers' values and the firewall's own rounds, so a run
+/-- **The server's checks don't read the device**: they read the workers' values and the ZK server's own rounds, so a run
 is live at `L` with any device exactly where it is at `L`. -/
 theorem live_withDevice {W R : Type} (L : LeanRelease W R)
     (d : Msg → W → R → List (Msg × Msg) → (String → Option ByteArray) → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : W)
@@ -1055,7 +1055,7 @@ theorem valsWk_masked (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
   rfl
 
 /-- **`valsWk` is live short of the `Finish`** wherever each frame round so far passes the frame's checks at its round
-(`roundOk` at the device `valsDev`): `Hello` is the server's own, at the link it sends the firewall's own message, and
+(`roundOk` at the device `valsDev`): `Hello` is the server's own, at the link it sends the ZK server's own message, and
 it never sends a stand-in. -/
 theorem live_valsWk (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L : LeanRelease Flock.Wit

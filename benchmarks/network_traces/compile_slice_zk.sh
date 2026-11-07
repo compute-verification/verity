@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The compile slice in zero knowledge (compile_slice_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
-# C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the sampled-proofs verifier built
+# Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the sampled-proofs verifier built
 # in the tree. From a clone, in one of the network pool's pinned slots, as a job of at most 180 minutes:
 #   env CS_MEM_GB=64 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
 #     --by LANE -- bash benchmarks/network_traces/compile_slice_zk.sh

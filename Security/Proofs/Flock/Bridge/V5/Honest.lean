@@ -15,11 +15,12 @@ concludes them at the served registered session's files, from the one named prem
 inputs (`Flock.Bridge.Assumptions.ServedFilesParseV5`): inputs `I` whose files have the served SHA-512 digests, at
 `verity/flock-circuit`'s tags with one table and no session tables, at which the circuit file parses to `D`, the circuit of
 `D`'s proof block is built (`Built`), its public input ports `pi` parse and the public file loads over them, `D` is in `scopeOkH` and has
-the row layout it needs (`RowsOk`), no two of its ports share a name, every draw size divides into the session's tables,
-and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's roots (`RootFixesDomainL`), its
-population (`PopMatches`), the law the verifier draws under from it (`DrawsUnder`) and that it is no Bernoulli law
-(`NotBernoulli`) are statements about the registration, not the files, and are no conjunct here; the finders' collision
-resistance is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
+the row layout it needs (`RowsOk`), no two of its ports share a name, every sample size divides into the session's tables,
+and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's population (`PopMatches`) and that its
+sampling design is no Bernoulli law (`NotBernoulli`) are statements about the registration, not the files, and are no
+conjunct here; the statement takes no hypothesis on the sampling design it samples under (it is `lawOf`'s) or on the
+registration's roots (its `ecr/sha-512` term at the roots finder pays for them), and the finders' collision resistance
+is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
 -/
 
 @[expose] public section
@@ -27,7 +28,7 @@ resistance is no hypothesis either: the statement takes it as `TableCRZ` and `Li
 namespace Flock.Bridge
 
 /-- **`verify --zk`'s inputs for one session of the files `cf` and `pf`**: `verity/flock-circuit`'s tags, one table, no
-session tables, on the coin tree `verify --zk` draws them on. The partition and the program it also reads are none here:
+session tables, on the coin tree `verify --zk` samples them on. The partition and the program it also reads are none here:
 no hypothesis on the files reads them. -/
 def servedIV5 (cf pf : ByteArray) : FlockSoundness.Discharge.Exec.Inputs :=
   { tags := Flock.Tags.circuit, circuitFile := cf, publicFile := pf,
@@ -46,7 +47,7 @@ public inputs (`Bridge.Assumptions.ServedFilesParseV5`), there are inputs `I`, a
 and a public file `pub` at which every hypothesis `SampledKSLiveV5` takes of the files holds: `I`'s files are the served
 ones (their SHA-512 digests), its tags `verity/flock-circuit`'s with one table and no session tables, untyped, the
 circuit file parses to `D` and the circuit of `D`'s proof block is built, `pi` parses at `D` and the public file loads over it, `D` is in
-`scopeOkH` with `RowsOk` and no duplicate port name, every draw size is a multiple of the session's tables, and the tags
+`scopeOkH` with `RowsOk` and no duplicate port name, every sample size is a multiple of the session's tables, and the tags
 are hidden-output ones (`TagsOkZHJ`). -/
 def SampledKSLiveV5Honest : Prop :=
   Bridge.Assumptions.ServedFilesParseV5 →
@@ -70,7 +71,7 @@ open FlockSoundness FlockSoundness.Discharge.ZkExec in
 /-- **`SampledKSLiveV5`'s file hypotheses hold at the served registered session**
 (`Flock.Guarantees.SampledKSLiveV5Honest`): the proof block's circuit is built because `HmRow.parse` built it (`built_of_parse`, through
 `parse_untyped` at untyped tags), the verifier's `scopeOkH` is the analysis's (`scopeOkH_eq`), which carries `RowsOk`
-(`rowsOk_of_scopeOkH`), and one table divides every draw size. -/
+(`rowsOk_of_scopeOkH`), and one table divides every sample size. -/
 theorem Flock.SecurityProofs.SampledKSLiveV5Honest : Flock.Guarantees.SampledKSLiveV5Honest := by
   rintro ⟨cf, pf, hcf, hpf, D, hD, hsc, hdup, pi, hpi, pub, hpub⟩
   have hD' : Flock.Desc.parse (zkTags (Flock.Bridge.servedIV5 cf pf)) cf [] = .ok D := hD

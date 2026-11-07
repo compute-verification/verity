@@ -84,7 +84,7 @@ compiled verifier's runs at any server (`Proofs.Flock.RecGeneric.ServerRun`) and
 composition, which bounds the inner stage's failure where every outer extraction succeeds
 (`Proofs.Flock.RecGeneric.Plurality`), its aborting runs as the composite's reruns
 (`Proofs.Flock.RecGeneric.Coupling`), and the inner protocol's run finders at those runs read at the reruns
-(`Proofs.Flock.RecGeneric.Lift`), the plurality prover's bad draws bounded by the link
+(`Proofs.Flock.RecGeneric.Lift`), the plurality prover's bad samples bounded by the link
 (`Proofs.Flock.RecGeneric.BadDev`), and L1 with the recursive audit from it (`Proofs.Flock.RecGeneric.StatementProof`).
 `E_O`'s knowledge soundness from the outer argument's (O1), and L2 from L1 and O1
 (`Proofs.Flock.RecGeneric.OuterProof`). Zero knowledge (Z1) from the outer phase's and the leaves' hiding
@@ -93,7 +93,7 @@ compiled simulator's calls (Z1-cost, `Proofs.Flock.RecGeneric.ZKCost`). An outer
 turn is zero knowledge per outcome, within the exact sum of the sessions' errors and counted where the session simulator
 is (Z1-S and Z1-S-cost: `Proofs.Flock.RecGeneric.ZKSessions`, proved in `Proofs.Flock.RecGeneric.ZKSessionsProof`),
 and so is the release of a first part and those sessions (Z1 at `ZkRelease.ofSessions`). A proof system whose simulator
-draws its statement's coins is such a session system within its own error (Z1-L, `ZkSess.ofZKOut`), and with Flock's
+samples its statement's coins is such a session system within its own error (Z1-L, `ZkSess.ofZKOut`), and with Flock's
 ZK server as each session the release is zero knowledge per outcome within the sessions' summed server errors (Z1-F:
 `Proofs.Flock.RecGeneric.ZKAtFlock`, proved in `Proofs.Flock.RecGeneric.ZKAtFlockProof`). The same server is zero
 knowledge per outcome at the recursive outer record, whose statements are the V\* sessions'

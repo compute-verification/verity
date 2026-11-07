@@ -180,7 +180,7 @@ def credited_word(device: str, reading: str) -> tuple[float, int, float]:
 
 def host_tile_fraction(word: tuple[float, int, float], cores: int, gpus: int, amx: float, fold: bool = True) -> float:
     """WHOLE-TILE: the share of one GPU's credited time a host frees computing whole tiles, each word's L MACs on AMX at
-    `amx` MACs/s a core, then its lane instructions on the same core, split across the `gpus` beside it. No link term:
+    `amx` MACs/s a core, then its lane instructions on the same core, split across the `gpus` beside it. No binding error:
     a tile crosses as one digest. With fold False it is an upper bound."""
     gpu_seconds, macs, lanes = word
     host_seconds = macs / amx + (lanes / LANE_PER_CORE if fold else 0.0)

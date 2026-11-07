@@ -5,7 +5,7 @@ step (step 0) and the decode steps, per token and per request.
 A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_rows.unit_templates`):
 a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``SPLITS`` row's split parts and combine are a slot each; a
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, and a ``KCHUNKS`` row's slot is its
-coordinate or its K-chunks of one width. A unit template fits when it binds, C-Flock has a piece for every leaf, its block
+coordinate or its K-chunks of one width. A unit template fits when it binds, Flock has a piece for every leaf, its block
 (`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
 row itself is taken when it fits, else each slot's coarsest fitting option; a row with a slot that has none is a gap, with
 its finest option's reason. A row whose Definition has no gate (a gather) or no input (a constant) is no proof block.
@@ -27,6 +27,7 @@ from pathlib import Path
 from m1_families import K_MAX
 from verity.core.protocols.sampled_proofs.optimize import row_ands, unit_class
 from verity.ml.definitions.call_scope import spec_base, spec_statics
+from verity_flock import ir_lower as IL
 from verity_vllm.pipeline import serving_rows as ST
 
 PHASES = ("prefill", "decode")
@@ -37,7 +38,7 @@ def misfit(e: dict) -> str | None:
     if "error" in e:
         return e["error"]
     if e.get("unpieced"):
-        return f"C-Flock has no piece for {', '.join(e['unpieced'][:3])}"
+        return IL.no_piece(e["unpieced"][:3])
     b = e["block"]
     if b["rows_log"] > K_MAX:
         return f"its rows alone need a 2^{b['rows_log']} block"

@@ -68,6 +68,8 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
                           "a person (send it a message)",
        "long_call": "has had a tool call running since {since} (45+ min); not cancelled",
        "crashed": "ended in ERROR; the watch {action}",
+       "dropped": "got a message at {since} that never became a run (its last run ended at {ended}); Cursor shows it in "
+                  "ERROR: resume it, or relaunch it fresh",
        "erroring": "ended in ERROR again after {restarts} restarts in a row: left for a person (relaunch it, or report it to Cursor)",
        "stuck": "has a run in {status} since {since} ({minutes} min), nothing streamed or started behind it; not cancelled",
        "cancel_refused": "was held since {since} ({minutes} min), and the API refused to cancel it (409) and still reads it "
@@ -96,7 +98,7 @@ SAY = {"held": "was held after a finished tool call or the end of its turn since
 TOP = {"erroring", "stuck", "cancel_refused", "held_again", "unreadable", "no_step", "outage"}
 WORKER = {"worker_idle", "worker_long"}         # rung to the lane's handle: only its coordinator can resume a worker
 HANDLE = WORKER | {"silent", "run_ended", "workers_failed", "archived"}       # rung to the record's handle
-FAIL = {"held", "stalled", "crashed", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
+FAIL = {"held", "stalled", "crashed", "dropped", "idle_after_run", "relaunch", "held_unread"}  # rung to the record's owner: who follows it up
 UNROUTED = "infra"      # rung for a worker whose lane no handle owns: a worker alert is never posted unrung
 UNSENT_LISTED = 12      # runs of unknown senders one post names; the rest are counted
 RING_RUN = [sys.executable, "-m", "research", "msg", "ring-run"]

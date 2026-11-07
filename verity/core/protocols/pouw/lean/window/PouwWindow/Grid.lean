@@ -1,9 +1,9 @@
 module
 
 /-!
-# The grid a window's tile count is padded to (`window.py`, "The grid")
+# The grid an execution phase's tile count is padded to (`window.py`, "The grid")
 
-The grid of `s` bits is the positive integers with at most `s + 1` significant bits. A window of `real` real tiles
+The grid of `s` bits is the positive integers with at most `s + 1` significant bits. An execution phase of `real` real tiles
 registers one level ℓ, the largest point `g_ℓ ≤ real`, is credited `g_ℓ` tiles and pads to `g_(ℓ+1)` (`bucket`).
 Python's `n >> e << e` and `1 << b` are `n / 2 ^ e * 2 ^ e` and `2 ^ b` here.
 -/
@@ -49,7 +49,7 @@ Python). -/
 def levels (bits lo hi : Nat) : Int :=
   (level bits (floorPoint bits hi) : Int) - level bits (floorPoint bits lo) + 1
 
-/-- `Work`: a window's work level; it is credited `credited` tiles, `point level`, and pads to `n`, `point (level + 1)`. -/
+/-- `Work`: an execution phase's work level; it is credited `credited` tiles, `point level`, and pads to `n`, `point (level + 1)`. -/
 structure Work where
   level : Nat
   credited : Nat
@@ -59,7 +59,7 @@ structure Work where
 /-- `Work.at`. -/
 def Work.at (bits ell : Nat) : Work := ⟨ell, point bits ell, point bits (ell + 1)⟩
 
-/-- `bucket`: the level of a window of `real` real tiles, credited `floorPoint real` and padded to the next point. -/
+/-- `bucket`: the level of an execution phase of `real` real tiles, credited `floorPoint real` and padded to the next point. -/
 def bucket (bits real : Nat) : Work := Work.at bits (level bits (floorPoint bits real))
 
 /-! Python's functions on any integer, with its refusals (`ValueError`'s message). -/

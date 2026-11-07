@@ -43,7 +43,7 @@ each compute audit's layout terms (`free`, the free inputs it doesn't register, 
 monitoring period `k`) and its Program, the descriptor (`verity-ir/descriptor/v1`) of the window's population program,
 which must decode (`Flock.Program.decode`) with a template in its root: the audit's proof blocks are the root's template
 instances, and each commits its template's return, the outputs it computes that other proof blocks or the client read, which
-can be wider than a proof unit's 16-bit public output; each network certifier connection's cell cap over the period
+can be wider than a proof block's 16-bit public output; each network certifier connection's cell cap over the period
 (`cap_c`), the session's window
 the period starts at (`w₀`: its link-windows are the session's `w₀ … w₀ + m − 1`, so one certifier session spans many
 periods),
@@ -119,8 +119,8 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   digest it signs has the salted form: no sync of Σ_sync's `clock_digest` itself (the unsalted form, which shows the
   sync), and no earlier link-window's clock digest in the period (a reused salt, under which two windows of one sync
   sign one digest); and the answer is one-stage's for that registration's digest,
-  accepted with the profile of one unit drawn `subset:1`: the link-window was proved (N2's verifier of record,
-  `LinkWindows.verify`, is the answer's verifier of record);
+  accepted with the profile of one unit sampled `subset:1`: the link-window was proved (N2's verifier,
+  `LinkWindows.verify`, is the answer's verifier);
 * in the rows form, link-window `w`: its registration (the scan's, per window) names the scan's Program; its three
   certificates are the requests' record's (the link's ingress), the responses' (its egress) and the fails'
   (`<link>-fails`, egress) at `w`, each the key's and verifying in the session, so a link-window missing any record's
@@ -135,13 +135,13 @@ against that salted digest is a later change to its circuit (the certifier PROTO
   entry names the root and domain of an output port's entry (`<unit>/o<j>`, j ≥ 1) or a `SlotEntry_v1` template's
   entries port's (`<descriptor id>/c0/o0`, `entriesPortName`) in the `roots` of an audit's registration, so a scan
   whose `prog` the prover committed alone is refused; and the answer is one-stage's for that
-  registration's digest, accepted with one level of the scan's 2T units drawn `subset:k` or stratified, and its
+  registration's digest, accepted with one level of the scan's 2T units sampled `subset:k` or stratified, and its
   `bound`;
 * in the rows form, every accepted link-window's scan is at one δ, `PeriodLeakAccepted`'s;
 * audit `i`: its registration names its Program (the descriptor's SHA-512), and the answer is one-stage's for its
-  registration's digest, accepted with one level of its Program's units drawn `subset:k` or stratified (a work law's
-  draw is stratified), and its `bound`; in the rows form, an audit tied to a link-window's scan (`tiedIn`: some
-  link-window's `prog` is its output) is refused unless every unit is drawn (`Σ k = N`), as `K` charges no faulty term
+  registration's digest, accepted with one level of its Program's units sampled `subset:k` or stratified (a work sampling design's
+  sample is stratified), and its `bound`; in the rows form, an audit tied to a link-window's scan (`tiedIn`: some
+  link-window's `prog` is its output) is refused unless every unit is sampled (`Σ k = N`), as `K` charges no faulty term
   for it;
 * in the rows form, link-window `w`'s scan's Programs' row is a compute audit's slot entries (`wired`): its `scan/prog`
   entry names the root and domain of the entries port `<descriptor id>/c0/o0` in the `roots` of an audit's
@@ -167,11 +167,11 @@ against that salted digest is a later change to its circuit (the certifier PROTO
                          "wrong_units": b}, …],
      "cells": Σ_c ⌈log2 (cap_c + 1)⌉, "eps": Σ_i δ_i, "schedules": ⌈log2 #Σ_sync^m⌉, "windows": m}
 
-with `b` the audit's bound on faulty proof blocks at its δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
+with `b` the audit's bound on incorrect proof blocks at its δ (one-stage's `bound`, `Bound.boundOf`), `faulty_sets` =
 `⌈log2 Σ_{j ≤ b} C(N, j)⌉` (every set of at most `b` proof blocks, which holds the sets a `subset:k` or a stratified
 sample leaves possible; `drawn` is the sample's `k`, or its `Σ k` stratified),
 `faulty_bits` = `b · bits`, with `bits` the most one of its Program's proof blocks commits (its template's return,
-`bitsOf`: the committed values `faultyBits` counts, the outputs a faulty proof block computes and other proof blocks or
+`bitsOf`: the committed values `faultyBits` counts, the outputs an incorrect proof block computes and other proof blocks or
 the client read), `jitter` = `⌈log2 Dj^steps⌉`, and `K` the sum of the terms. The schedules term counts every assignment
 of a sync of Σ_sync to the `m` execution phases, so it is the same whichever syncs the certifier ran them under, and
 needs none of them. `eps` is the probability that `K` fails to bound the period's leak, the union of its audits' `δ`:
@@ -181,10 +181,10 @@ carry theirs.
 In the rows form the terms are `PeriodLeakAccepted`'s over its windows, the link-windows' scans, whose statements read
 the network certifier's rows. A compute audit reads none, so its own terms are in none (it is an acceptance condition),
 but the free inputs of each audit a scan's `prog` is an output of are in that scan's link-window's term: the egress
-renders the audit's outputs, so the bits the prover chose of its inputs are the egress's to leak. A wrong unit of such
+renders the audit's outputs, so the bits the prover chose of its inputs are the egress's to leak. An incorrect proof block of such
 an audit would leak through the egress too, and no term charges one: the check refuses a tied audit with any unit
-undrawn (`Properties.NetworkPeriod.RowsTiedDrawn`), and a tied audit's `faulty_bits` and the audit's δ in `eps` come
-with the change that ties a compute audit drawn in part and lifts that refusal:
+unsampled (`Properties.NetworkPeriod.RowsTiedDrawn`), and a tied audit's `faulty_bits` and the audit's δ in `eps` come
+with the change that ties a compute audit sampled in part and lifts that refusal:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ,
      "scans": [terms, …], "schedules": c, "windows": m}
@@ -202,18 +202,18 @@ with the change that ties a compute audit drawn in part and lifts that refusal:
   `b · max(b_ing, b_eg)` with `b_ing` an ingress instance's return bits (its verdict u16, state and view) and `b_eg` an
   egress instance's (its u16 and row): each instance's committed values (`faultyBits`), the outputs it computes and
   other proof blocks or the client read. `b` is its answer's `bound` (over its sample's strata, `countBound`), 0 when every
-  unit is drawn, `drawn` its draw's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
-  sets a stratified draw leaves possible too.
+  unit is sampled, `drawn` its sample's `Σ k`, and `faulty_sets` every set of at most `b` of its 2T units, which holds the
+  sets a stratified sample leaves possible too.
 * `eps` is the scans' δ summed, `m · δ`: the δ part of the union over the monitoring period's windows that
   `CommOfPeriodLeakAccepted` states, each window at δ plus its knowledge error and its collision errors.
 
 **Profile**: the link and `m`.
 
 What it doesn't check: the proof's public row against the certificates' digests and the output word, which N2's
-verifier of record checks inside the answer (`LinkWindows.verify`, with C-Flock's Lean verifier on the `--zk` proof);
+verifier checks inside the answer (`LinkWindows.verify`, with Flock's Lean verifier on the `--zk` proof);
 the clock form's link-window registration's domain; in the rows form, the records' certificates' digests against the
 rows (each signs its salted record, witness) and the scan's statements against its registration, which one-stage's
-verifier of record checks inside the answer, and each connection's cap against its lane (the parameters' `cells`; the
+verifier checks inside the answer, and each connection's cap against its lane (the parameters' `cells`; the
 network certifier holds a lane to `egress_cells`); and that the audits' answers are the sampled-proofs component's own,
 which the composition's theorem is to bind.
 
@@ -238,7 +238,7 @@ def protocolId : String := "verity/certifier/v0"
 def commitmentTag : String := "verity-network-certifier/period/v0"
 def clockTag : String := "verity-network-certifier/clock/v1"
 def oneStage : String := "verity/sampled-proofs/one-stage/v1"
-/-- A proof unit's public outputs are at most 16 bits (the values it commits can be wider). -/
+/-- A proof block's public outputs are at most 16 bits (the values it commits can be wider). -/
 def outBits : Nat := 16
 def unitLevel : String := "unit"
 def scheduleTag : String := "verity-network-warden/parameters/v3"
@@ -370,7 +370,7 @@ structure Evidence where
   audits : Array Core.Answer
   windows : Array Window
 
-/-- What an accepted audit establishes: its proof blocks, its sample, its δ, and its bound on faulty proof blocks. -/
+/-- What an accepted audit establishes: its proof blocks, its sample, its δ, and its bound on incorrect proof blocks. -/
 structure Facts where
   units : Nat
   drawn : Nat
@@ -649,7 +649,7 @@ form, is refused first, by name: there the egress row is an input gate, which `N
 would count the free inputs of a Program that only compares its egress rows.
 
 Then what `NetTiming.Layout.Fits` asks of the layout the templates give (`Properties.NetworkScan.scanLayout`), read off
-the description, at the cost of its nodes and returns: the Program is laid out as C-Flock's decoder lays one out and
+the description, at the cost of its nodes and returns: the Program is laid out as Flock's decoder lays one out and
 within what its resolution walks (`NciCheck.Desc`'s `rootLaidOut`, `inputsAtRoot` and `walkable`); the root returns
 every egress leaf (one affine run from the egress node's first leaf over all `T` instances'); the egress template
 returns only gates it computes (`ownReturns`: no parameter's leaf passed through, so no egress gate is an input); each
@@ -1070,7 +1070,7 @@ def rowsWindowCheck (p : Params) (s : Schedule) (sd : ByteArray) (audits : Array
   pure (f, (tiedAudits audits reg).foldl (fun n i => n + ((p.audits[i]?.map (·.free)).getD 0)) 0)
 
 /-- Audit `i`'s findings, and on acceptance its facts: its registration names its Program, the answer's units are the
-Program's, and one tied to a link-window's scan (`tied`: `tiedIn`, in the rows form) has every unit drawn, since its
+Program's, and one tied to a link-window's scan (`tied`: `tiedIn`, in the rows form) has every unit sampled, since its
 link-window's term charges its free inputs and no faulty term for it. -/
 def auditCheck (i : Nat) (a : Audit) (reg : Json) (x : Core.Answer) (tied : Bool := false) : Found Facts := do
   let what := s!"audit {i}"
@@ -1152,14 +1152,14 @@ structure AuditTerms where
 def AuditTerms.bits (t : AuditTerms) : Nat := t.free + t.faultySets + t.faultyBits + t.jitter
 
 /-- A compute audit's terms in the clock form, from its layout terms, its facts and the jitter bound: each of its at
-most `b` faulty proof blocks commits at most its Program's widest proof block's bits. -/
+most `b` incorrect proof blocks commits at most its Program's widest proof block's bits. -/
 def AuditTerms.of (a : Audit) (f : Facts) (jitter : Nat) : AuditTerms :=
   { facts := f, free := a.free, faultySets := clog2 (atMost f.units f.wrong), faultyBits := f.wrong * a.bits,
     jitter := clog2 (jitter ^ a.steps) }
 
 /-- A link-window's scan's terms in the rows form, from the scan's terms, its facts, its tied audits' free inputs
 (`tied`: the egress renders their outputs, so the bits the prover chose of them are the link-window's free inputs) and
-the jitter bound: each of its at most `b` wrong units commits at most the wider instance's bits. -/
+the jitter bound: each of its at most `b` incorrect proof blocks commits at most the wider instance's bits. -/
 def Scan.terms (s : Scan) (f : Facts) (tied jitter : Nat) : AuditTerms :=
   { facts := f, free := s.free + tied, faultySets := clog2 (atMost f.units f.wrong),
     faultyBits := f.wrong * max s.ingress s.egress, jitter := clog2 (jitter ^ s.steps) }
@@ -1398,7 +1398,7 @@ def clocksFn (j : Json) : Except String Json := do
 -- connection and none on another, 2 syncs over 3 link-windows, and jitter below 2 over 3 steps
 #guard (terms #[⟨0, 3, "", 10, 16, #[]⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] #[7, 0] 2 2 3).K ==
   3 + 3 + (0 + 9 + 64 + 3)
--- the same audit with a unit committing 40 bits: its 4 wrong units carry 160 bits, not 16 · 4
+-- the same audit with a unit committing 40 bits: its 4 incorrect proof blocks carry 160 bits, not 16 · 4
 #guard (terms #[⟨0, 3, "", 10, 40, #[]⟩] #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] #[7, 0] 2 2 3).K ==
   3 + 3 + (0 + 9 + 160 + 3)
 -- two audits at δ = 1/100 and 1/10^6: ε = 10001/1000000
@@ -1409,17 +1409,17 @@ def clocksFn (j : Json) : Except String Json := do
   #[⟨1, 1, ⟨1, 10⟩, 0⟩, ⟨1, 1, ⟨1, 15⟩, 0⟩, ⟨1, 1, ⟨1, 6⟩, 0⟩] #[] 1 1 1).eps.toString == "1/3"
 #guard (terms #[] #[] #[] 1 1 1).eps.toString == "0"
 -- the rows form over 1 link-window: 7 cells on one connection and 2 on another (3 + 2 bits, for the schedules and
--- again for the fail cells), an audit whose own terms are in none, and one scan of 20 units (T = 10) drawn at
+-- again for the fail cells), an audit whose own terms are in none, and one scan of 20 units (T = 10) sampled at
 -- δ = 1/15 with at most 3 wrong, 1,120 free inputs, ingress and egress instances committing 300 and 512 bits, and
 -- jitter below 2 over its 10 steps: 1351 sets of at most 3 of 20 units
 #guard atMost 20 3 == 1351 && clog2 1351 == 11
 #guard (rowsTerms #[{ units := 10, drawn := 3, delta := ⟨1, 10⟩, wrong := 4 }] ⟨10, 1120, 300, 512⟩
   #[({ units := 20, drawn := 5, delta := ⟨1, 15⟩, wrong := 3 }, 0)] #[7, 2] 2 1).K ==
   (3 + 2) + (3 + 2) + (1120 + 11 + 3 * 512 + 10)
--- every unit drawn: no wrong unit, so no faulty set and no faulty bits
+-- every unit sampled: no incorrect proof block, so no incorrect set and no faulty bits
 #guard (rowsTerms #[] ⟨4, 0, 300, 512⟩ #[({ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }, 0)] #[] 1 1).K ==
   0
--- w63's class with the egress tie: T = 32, the scan's own free inputs none, every unit drawn, and its tied audit (the
+-- w63's class with the egress tie: T = 32, the scan's own free inputs none, every unit sampled, and its tied audit (the
 -- slot entries' `SlotEntry_v1` template) of 8 units, a slot at each of the 2 boundaries, whose free inputs are their
 -- entries, 1,136 bits each: K is the tied audit's 9,088
 #guard (rowsTerms #[{ units := 8, drawn := 8, delta := ⟨1, 100⟩, wrong := 0 }] ⟨32, 0, 300, 512⟩

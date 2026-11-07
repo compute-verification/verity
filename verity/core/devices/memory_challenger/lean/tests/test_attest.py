@@ -2,7 +2,7 @@
 `memory-challenger-difftest`) against `verity.ml.crypto.lms`, `verity.ml.commitments.merkle` and `verity.core.attest`: the
 three role digests, two-level verification, the range-u64 domain id, the period tree's root, the verifier's acceptance
 of a period (the public key check in the clear, then the period check a period's proof runs) and the liveness check,
-each on drawn inputs around a real device's signatures (a small identity, H = 2) that include what both sides must
+each on sampled inputs around a real device's signatures (a small identity, H = 2) that include what both sides must
 refuse."""
 
 from __future__ import annotations
@@ -83,7 +83,7 @@ def _params(v) -> lms.Params:
 
 
 def test_role_digests(server):
-    """Each role's digest over drawn fields, malformed ones (an identifier not 16 bytes, a deployment hash not 64 bytes,
+    """Each role's digest over sampled fields, malformed ones (an identifier not 16 bytes, a deployment hash not 64 bytes,
     an index past a u64) refused by both."""
     base = {"I": hexed(IDENT), "deployment": DEPLOYMENTS, "party": PARTIES, "attachment": hexed(st.binary(max_size=40)),
             "link": LINKS, "period": U64}
@@ -112,7 +112,7 @@ def domain_u64(v) -> str:
 
 
 def test_domain_u64(server):
-    """`Domain.makeU64` against `merkle`'s range-u64 domain over drawn bindings, owners and counts up to 2^64 - 1, the
+    """`Domain.makeU64` against `merkle`'s range-u64 domain over sampled bindings, owners and counts up to 2^64 - 1, the
     period tree's binding and owner among them, and what both refuse: a binding not 64 bytes, an owner below -2 or
     whose owner + 2 is past a u64, a count past a u64."""
     bindings = mostly(st.one_of(st.just(attest.BINDING), st.binary(min_size=64, max_size=64)),

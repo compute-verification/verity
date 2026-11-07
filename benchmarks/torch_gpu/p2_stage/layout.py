@@ -9,7 +9,7 @@ The store's layout is p2_v1's fixture (`benchmarks/pous/p2_v1/store.py`, schema
   i = blocks_per_segment · s + v being block v of segment s;
 - block i's payload is W bytes [2054 i, 2054 i + 2054), bytes 2 .. 2055 of its decoded row, whose bytes 0 and 1 are zero;
 - each tensor (s8 [N, K] row-major) starts on a block, `first_block`, takes ⌈N K / 2054⌉ blocks, and its last block's
-  payload is zero past the tensor; in its layer's staging buffer it starts at `staging_offset`;
+  payload is zero past the tensor; in its layer's load buffer it starts at `staging_offset`;
 - K and t from counter-mode SHA-512 after `schemes.p2.expand_prefix` of the protocol's 24-byte salt (`registered_prefix`).
 
 A layer's matrices (`MATRICES`) are its four tensors: QKV (the query heads, then K, then V: 16,512 x 16,384 at the frozen
@@ -41,7 +41,7 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 from p2_v1 import reference as R  # noqa: E402
 
 PARAMS = S.P2Params(*S.POINT)
-SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)
+SPEC = R.DEPLOYMENT
 ROW = PARAMS.block_bytes          # 2,056
 PAYLOAD = PARAMS.payload_bytes    # 2,054
 LEAD = ROW - PAYLOAD              # a decoded row's zero bytes before its payload
@@ -135,8 +135,7 @@ class StoreLayout:
 
     @property
     def spec(self) -> R.Params:
-        p = self.params
-        return R.Params(p.w, p.c0, p.payload_bytes, p.blocks_per_segment, p.segments)
+        return R.Params.of(self.params)
 
     def layer(self, layer: int) -> tuple[Tensor, ...]:
         out = tuple(t for t in self.tensors if t.layer == layer)
