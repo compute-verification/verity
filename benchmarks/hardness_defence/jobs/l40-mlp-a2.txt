@@ -1,0 +1,5 @@
+# HT-LEVERS arm B: 70B's gate, up and down on layers 40-79 at design U's 2% codes with E on a = 2 values, priced with
+# the exact split and the generous bound (svd and rpca at lr1) in all three orders, at the ranks the defence priced them
+# at a = 4 (1, 8 and 32: on a flat matrix the split is cheapest at its smallest rank)
+70b-l40-gu-a2 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79 --match gate_proj,up_proj --ranks 1,8,32 --orders none,fold,sort --a-noise 2 --workers 30
+70b-l40-down-a2 --hf unsloth/Meta-Llama-3.1-70B --target 0.02 --layers 40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70,71,72,73,74,75,76,77,78,79 --match down_proj --ranks 1,8,32 --orders none,fold,sort --a-noise 2 --workers 14
