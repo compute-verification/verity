@@ -438,6 +438,59 @@ def table_probe(fn: Any) -> Any:
     return None if make is None else make()
 
 
+#: the parameters over `checks.Options.input_budget` leaves that are operands, not a registered table, by the id of their
+#: Definition without statics: each takes the vectors' edge and random words like any other parameter, drawn one vector at a
+#: time and read lazily (`checks._wide_correspondence`, `vectors.wide_words`); a wide parameter in neither this nor
+#: `TABLE_PROBES` fails ``correspondence/unprobed-table``
+LAZY_OPERANDS: dict[str, tuple[str, ...]] = {
+    # weights: a linear's or a GEMM's [N][K], an MoE launch's every expert's (with Marlin's per-32 group scales), and the
+    # vocabulary's rows
+    "CublasSplitKGemmF32Out_v1": ("w",),
+    "DeepGemmFp8Linear_v1": ("w",),
+    "Embedding_v1": ("table",),
+    "EmbeddingShard_v1": ("table",),
+    "FlashInferFp8Linear_v1": ("w",),
+    "GemmF32Out_v1": ("w",),
+    "Gemm_v2": ("w",),
+    "MarlinMoeExpertGemm_v1": ("wq", "ws"),
+    "MarlinMoeExpertGemmW_v1": ("wq", "ws"),
+    "MoeExpertFp8Gemm_v1": ("w",),
+    "MoeExpertFp8GemmW_v1": ("w",),
+    "ScaledMmFp8BlockGrouped_v1": ("w",),
+    # activations: every rank's partial sums
+    "AllReduceMultimem_v1": ("parts",),
+}
+
+
+#: the index values, by the id of a Definition without statics and a function of its statics, at which a `LAZY_OPERANDS`
+#: Definition reads its operand's first and last rows: one more vector each, the index parameters at these values and every
+#: other parameter at random words, since an edge index (0, 1, the sign bit, ...) lies outside a shard or past an expert
+#: count, and no vector would read the rows between
+OPERAND_PROBES: dict[str, Callable[[dict], list[dict[str, int]]]] = {
+    "Embedding_v1": lambda S: [{"tok": 0}, {"tok": S["V"] - 1}],
+    "EmbeddingShard_v1": lambda S: [{"tok": S["START"]}, {"tok": S["START"] + S["VS"] - 1}],
+    "MarlinMoeExpertGemm_v1": lambda S: [{"e": S["E"] - 1}],
+    "MarlinMoeExpertGemmW_v1": lambda S: [{"e": S["E"] - 1}],
+    "MoeExpertFp8Gemm_v1": lambda S: [{"e": S["E"] - 1}],
+    "MoeExpertFp8GemmW_v1": lambda S: [{"e": S["E"] - 1}],
+}
+
+
+def lazy_operands(fn: Any) -> tuple[str, ...]:
+    """The names of ``fn``'s parameters `LAZY_OPERANDS` lists."""
+    from verity.ml.circuits.evaluation.reference import key_of
+
+    return LAZY_OPERANDS.get(key_of(fn), ())
+
+
+def operand_probes(fn: Any) -> list[dict[str, int]]:
+    """``fn``'s `OPERAND_PROBES` at its statics."""
+    from verity.ml.circuits.evaluation.reference import key_of, statics_of
+
+    make = OPERAND_PROBES.get(key_of(fn))
+    return [] if make is None else make(statics_of(fn))
+
+
 #: roots the catalog could not build: (label, error); the suite requires none
 ROOT_ERRORS: list[tuple[str, str]] = []
 
