@@ -7,7 +7,7 @@ import all Init.Data.Ord.String
 /-!
 # The design the draw runs is well formed (`Properties.SampledProofs.DesignWellFormed`)
 
-* `parseLaw_k`: a law `parseLaw` writes names a `k` of at least one, where it names one.
+* `parseDesign_k`: a law `parseDesign` writes names a `k` of at least one, where it names one.
 * `derive_bounds`, `deriveWork_wf`, `workTable_floor`: the expansions' refusals: `1 ≤ k ≤ N`, a floor of at least one
   per stratum, and some work.
 * `strataOf_pos`, `partition_covered`: every stratum of an evaluated query has a unit: `TemplateQuery.evaluate` refuses
@@ -31,11 +31,11 @@ theorem getD_k (v : Json) (m : ℕ) : getD (Json.mkObj [("law", v), ("k", Lean.t
 
 theorem getD_p (v : Json) : getD (Json.mkObj [("law", "bernoulli"), ("p", v)]) "k" = Json.null := (rfl)
 
-/-- **A law `parseLaw` writes names `k ≥ 1`**, where it names a `k`: `subset:K`, `stratified:K` and `work:K` at
+/-- **A law `parseDesign` writes names `k ≥ 1`**, where it names a `k`: `subset:K`, `stratified:K` and `work:K` at
 `K ≥ 1`, and a Bernoulli law none. -/
-theorem parseLaw_k (t : String) (named : Json) (h : Select.parseLaw t = .ok named) (k : ℕ)
+theorem parseDesign_k (t : String) (named : Json) (h : Select.parseDesign t = .ok named) (k : ℕ)
     (hk : nat? (getD named "k") = some k) : 1 ≤ k := by
-  unfold Select.parseLaw at h
+  unfold Select.parseDesign at h
   repeat' split at h
   all_goals first
     | exact absurd h (throw_ne _ _)
@@ -407,14 +407,14 @@ theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Opti
     (oneStageOf (derived.getD parsed)).WellFormed (S.toList.map fun p => rsSize p.2) := by
   have hsum' : (S.toList.map fun p => rsSize p.2).sum = n := hsum
   rcases deriveLaw_cases d query named table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S', k, law', hS', rfl, hlaw⟩
-  · have hnamed' : ∃ t, Select.parseLaw t = .ok named := by
+  · have hnamed' : ∃ t, Select.parseDesign t = .ok named := by
       cases rule with
       | all => exact absurd rfl hne
       | law t => exact ⟨t, hnamed⟩
       | twoStage _ t _ => exact ⟨t, hnamed⟩
     obtain ⟨t, ht⟩ := hnamed'
     rcases flockLaw_cases _ _ _ hp with ⟨k, rfl, hk, hnat⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
-    · exact ⟨parseLaw_k t named ht k hnat, by rw [hsum']; exact hk⟩
+    · exact ⟨parseDesign_k t named ht k hnat, by rw [hsum']; exact hk⟩
     · exact ⟨hb, hab⟩
     · exact absurd hk hk1
     · exact absurd hk hk2

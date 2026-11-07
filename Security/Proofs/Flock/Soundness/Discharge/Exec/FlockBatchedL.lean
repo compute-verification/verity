@@ -33,7 +33,7 @@ each drawn unit's place in its table (`UnitPlace`), with `C` the rows the verifi
 **The discharge** (`flock_batched_knowledgeSoundL`): per draw, the unit's table's
 `ε_c⁻ + K·Adv₀ + N₀/(eK)`, computed in the session (`joint_le_BL'`, from `session_knowledge_soundL`),
 bounded by the largest over the plan's tables, and averaged over the draw (`ksAvgBL`), with no
-named assumption; `δ_link` stays named (`LinkSound`).
+named assumption; `δ_link` stays named (`BindSound`).
 
 `flock_batched_countL`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/
@@ -120,7 +120,7 @@ theorem flock_batched_countL
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {Kr : ℕ}
     (hK : 1 ≤ Kr) (hlow : P.LoweringSoundB plan tab decode)
     {δlink : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
-    (hlink : (analysisBL P H E Lf plan tab decode Xc Kr hlow).LinkSound δlink) (K : ℕ)
+    (hlink : (analysisBL P H E Lf plan tab decode Xc Kr hlow).BindSound δlink) (K : ℕ)
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤
@@ -134,7 +134,7 @@ theorem flock_batched_drawnL
     (Xc : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → (Fin C.N → Bool)) {Kr : ℕ}
     (hK : 1 ≤ Kr) (hlow : P.LoweringSoundB plan tab decode)
     {δlink : (R : Reg) → Cont L Reg (batchedSessionL H E Lf plan) R → ℝ≥0∞}
-    (hlink : (analysisBL P H E Lf plan tab decode Xc Kr hlow).LinkSound δlink)
+    (hlink : (analysisBL P H E Lf plan tab decode Xc Kr hlow).BindSound δlink)
     (σ : Strategy (audit L Reg (batchedSessionL H E Lf plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (batchedSessionL H E Lf plan)) σ ≤

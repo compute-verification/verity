@@ -504,7 +504,7 @@ variable {n m : ℕ} {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → �
 /-- **The work audit** (oracle layer): the audit accepts while its wrong units do at least `T` of the work with
 probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
 theorem audit_work (A : Analysis (Law.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ T ≤ Law.workOf σ w (A.wrong (A.committedOf σ')))
         (audit (Law.work σ w f K) Reg session) σ' ≤
@@ -517,7 +517,7 @@ theorem audit_work (A : Analysis (Law.work σ w f K) Reg session) {εks δlink :
 `((W − T)/W)^K + ε_ks(σ) + δ_link(σ)`. -/
 theorem extraction_audit_work (A : ExtractionAnalysis (Law.work σ w f K) Reg session)
     {εks δlink : (R : Reg) → Cont (Law.work σ w f K) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ T ≤ Law.workOf σ w (A.wrong (A.committedOf σ')))
         (audit (Law.work σ w f K) Reg session) σ' ≤
@@ -532,7 +532,7 @@ theorem extraction_audit_work (A : ExtractionAnalysis (Law.work σ w f K) Reg se
 /-- **The work audit at the sizing of record**: with `K = 27,713`, the audit accepts while its wrong units do at least
 0.1% of the work with probability at most `2^-40 + ε_ks + δ_link`. -/
 theorem audit_work_of_record (A : Analysis (Law.work σ w f 27713) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w)
     (σ' : Strategy (audit (Law.work σ w f 27713) Reg session)) :
     prob (fun o => o.1 = true ∧ Law.totalWork σ w ≤ 1000 * Law.workOf σ w (A.wrong (A.committedOf σ')))
         (audit (Law.work σ w f 27713) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by
@@ -543,7 +543,7 @@ theorem audit_work_of_record (A : Analysis (Law.work σ w f 27713) Reg session) 
 /-- **The integrity floor, audited** (oracle layer): a wholly wrong non-empty stratum, one that does no PoUW work
 included, is caught: the audit accepts while all of it is wrong with probability at most `ε_ks + δ_link`. -/
 theorem audit_work_whole_stratum (A : Analysis (Law.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (hf : 1 ≤ f s)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hf : 1 ≤ f s)
     (hs : (Law.stratum σ s).Nonempty) (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.wrong (A.committedOf σ'))
         (audit (Law.work σ w f K) Reg session) σ' ≤ εks + δlink :=
@@ -552,7 +552,7 @@ theorem audit_work_whole_stratum (A : Analysis (Law.work σ w f K) Reg session) 
 /-- **The integrity floor, audited** (compiled layer, randomized extractor): at most `ε_ks(σ) + δ_link(σ)`. -/
 theorem extraction_audit_work_whole_stratum (A : ExtractionAnalysis (Law.work σ w f K) Reg session)
     {εks δlink : (R : Reg) → Cont (Law.work σ w f K) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (hf : 1 ≤ f s)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hf : 1 ≤ f s)
     (hs : (Law.stratum σ s).Nonempty) (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.wrong (A.committedOf σ'))
         (audit (Law.work σ w f K) Reg session) σ' ≤ εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') :=
@@ -561,7 +561,7 @@ theorem extraction_audit_work_whole_stratum (A : ExtractionAnalysis (Law.work σ
 /-- **The per-stratum floor, audited** (oracle layer): the audit accepts while at least `b` units of a non-empty stratum
 `s` are wrong with probability at most `((n_s − b)/n_s)^(f_s) + ε_ks + δ_link`. -/
 theorem audit_work_floor (A : Analysis (Law.work σ w f K) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (hs : (Law.stratum σ s).Nonempty) (b : ℕ)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hs : (Law.stratum σ s).Nonempty) (b : ℕ)
     (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ b ≤ ((A.wrong (A.committedOf σ')).filter (σ · = s)).card)
         (audit (Law.work σ w f K) Reg session) σ' ≤
@@ -574,7 +574,7 @@ theorem audit_work_floor (A : Analysis (Law.work σ w f K) Reg session) {εks δ
 `((n_s − b)/n_s)^(f_s) + ε_ks(σ) + δ_link(σ)`. -/
 theorem extraction_audit_work_floor (A : ExtractionAnalysis (Law.work σ w f K) Reg session)
     {εks δlink : (R : Reg) → Cont (Law.work σ w f K) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (hs : (Law.stratum σ s).Nonempty) (b : ℕ)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hs : (Law.stratum σ s).Nonempty) (b : ℕ)
     (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ b ≤ ((A.wrong (A.committedOf σ')).filter (σ · = s)).card)
         (audit (Law.work σ w f K) Reg session) σ' ≤
@@ -592,7 +592,7 @@ strata form a set in `𝓑` with probability at most the stratified law's `sup_{
 `ε_ks + δ_link`. -/
 theorem audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK σ C s ≤ f s)
     (A : Analysis (Law.work σ w f K) Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin n) → Prop) (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
+    (hlink : A.BindSound δlink) (𝓑 : Finset (Fin n) → Prop) (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ 𝓑 ((A.wrong (A.committedOf σ')).filter fun u => w (σ u) = 0))
         (audit (Law.work σ w f K) Reg session) σ' ≤
       (⨆ (B : Finset (Fin n)) (_ : 𝓑 B), (Law.stratified σ (Law.countK σ C) (Law.countK_le σ C)).escape B) +
@@ -608,7 +608,7 @@ theorem audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK σ C s ≤
 theorem extraction_audit_work_rest {C : ℕ} (hf : ∀ s, w s = 0 → Law.countK σ C s ≤ f s)
     (A : ExtractionAnalysis (Law.work σ w f K) Reg session)
     {εks δlink : (R : Reg) → Cont (Law.work σ w f K) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin n) → Prop)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (𝓑 : Finset (Fin n) → Prop)
     (σ' : Strategy (audit (Law.work σ w f K) Reg session)) :
     prob (fun o => o.1 = true ∧ 𝓑 ((A.wrong (A.committedOf σ')).filter fun u => w (σ u) = 0))
         (audit (Law.work σ w f K) Reg session) σ' ≤

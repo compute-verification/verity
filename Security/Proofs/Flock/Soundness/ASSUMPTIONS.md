@@ -406,7 +406,7 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 | Hypothesis | Term | Meaning | To be discharged by |
 |---|---|---|---|
 | `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a sampled proof block (picked before the session's first coin) fails | `table_knowledge_sound_joint` (`README.md` §1.3), after Jensen over the prover's states |
-| `Analysis.LinkSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (`SHA512CRExpected`, `ValueBinding`) |
+| `Analysis.BindSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (`SHA512CRExpected`, `ValueBinding`) |
 | `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (`README.md` §1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
 | `Partition.AnchorsSound₂` | `δ_in` | two-stage audits: for every strategy, the session accepts while the committed coarse trace's inputs differ from the anchors' values | as `AnchorsSound`, for the two-stage game |
 | `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-205`), given `InputsLoweringSound` |
@@ -420,7 +420,7 @@ before the session's first coin, not bounds state by state.
 
 | Named at the compiled layer | Meaning | Discharged by |
 |---|---|---|
-| `ExtractionAnalysis.LinkSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed trace's | for `analysisBE`: `flock_batched_linkSoundE`, under `SHA512CRExpected` for each commit string's finder and `ValueBinding` (named; for the serving rows it is `HmRows.binding`, from `HmRowComputes` and the layout's facts); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
+| `ExtractionAnalysis.BindSound` (`analysisB`, `analysisC`, `analysisBE`) | `δ_link`: extraction succeeds, but every close satisfying candidate decodes, on the unit's committed wires, to values other than the committed trace's | for `analysisBE`: `flock_batched_linkSoundE`, under `SHA512CRExpected` for each commit string's finder and `ValueBinding` (named; for the serving rows it is `HmRows.binding`, from `HmRowComputes` and the layout's facts); composed in `flock_batched_count_linked`, `_drawn_linked` (`_placed`: from `UnitPlace`) |
 | `Partition.LoweringSoundB`, `Partition.LoweringSoundC` | a message packing a witness that satisfies the statement of a sampled proof block's table decodes, for that unit, to values on which it is correct | `loweringSoundB_of_place`, `loweringSoundC_of_place` from each sampled proof block's `UnitPlace` (`lowering_sound`, `README.md` §1.5), given the statement construction's `Placement` and `aliased` (level 3). `unitPlace_of_setupH` gives it from `Stmt.setupH`, given the unit's instance in the audit circuit and `aliased` |
 
 ## Cryptographic assumptions and coins

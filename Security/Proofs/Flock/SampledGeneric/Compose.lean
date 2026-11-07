@@ -70,7 +70,7 @@ theorem knowledgeSound_analysis (h : Ex.Covers Correct) :
 theorem linkSound_analysis (h : Ex.Covers Correct) (δ : (R : Reg) → Cont L Reg PS.session R → ℝ≥0∞)
     (hδ : ∀ R τ (tgt : L.Ω → Option (Fin n)),
       avg (fun ω => atTgt (L.draw ω) (tgt ω) fun u => Ex.link (L.draw ω) R (τ ω) u (Xc R τ)) ≤ δ R τ) :
-    (Ex.analysis Correct Xc h).LinkSound δ := by
+    (Ex.analysis Correct Xc h).BindSound δ := by
   intro R τ tgt
   refine le_of_eq_of_le (congrArg avg (funext fun ω => ?_)) (hδ R τ tgt)
   simp only [analysis, ↓reduceIte]

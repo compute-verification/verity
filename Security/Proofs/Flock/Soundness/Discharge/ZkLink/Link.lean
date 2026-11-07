@@ -12,7 +12,7 @@ import Proofs.Flock.Soundness.Game.Seq
 /-!
 # `δ_link` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
 
-`zk_flock_count_execOS_m1` leaves the link term as the named hypothesis `LinkSound δ_link`. It is discharged here in the
+`zk_flock_count_execOS_m1` leaves the link term as the named hypothesis `BindSound δ_link`. It is discharged here in the
 shape of `Audit.Partition.flock_batched_linkSoundE`, for the protocol as Lean defines it at the interactive-oracle layer
 (`sessionZK`), under expected-time collision resistance of SHA-512 for an explicit finder
 (`Assumptions.SHA512CRExpected`):
@@ -379,7 +379,7 @@ $$\delta_{\rm link}\le Q_s\Big(\frac{2t'}{2^{256}}+\frac{1}{eM}\Big),$$
 with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read and `M` the finder's further trials. At
 any other prover the bound is `⊤` (`linkBoundZ`). -/
 theorem zk_linkSoundE (hlow : LoweringSoundZK A P planZ tab decode) {M : ℕ} (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') :
-    (analysisZK (L := L) A P planZ tab decode (fun R τ => XplurZ A P planZ tab vb R τ) hlow).LinkSound
+    (analysisZK (L := L) A P planZ tab decode (fun R τ => XplurZ A P planZ tab vb R τ) hlow).BindSound
       (linkBoundZ A P planZ tab L vb M t') := by
   intro R τ tgt
   unfold linkBoundZ

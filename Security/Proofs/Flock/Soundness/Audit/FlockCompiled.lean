@@ -44,7 +44,7 @@ carry its outputs, `GateRows.rows_sound`; `ASSUMPTIONS.md`, The circuit and the 
 theorem's bound for the prover's strategy after each draw, averaged over the draw,
 $$\varepsilon_{ks}(R, \tau) = \mathbb E_\omega\big[\varepsilon_c^-(\sigma_\omega) + K\,\mathrm{Adv}_0(\sigma_\omega) + N_0/(eK)\big],$$
 from `table_knowledge_sound_joint_tight`, with no named assumption. The link term
-stays a named hypothesis (`LinkSound`) until the link theorem, under expected-time collision
+stays a named hypothesis (`BindSound`) until the link theorem, under expected-time collision
 resistance (`Assumptions.SHA512CRExpected`, DESIGN.md §3).
 
 `flock_compiled_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
@@ -272,7 +272,7 @@ theorem flock_compiled_count
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
     {δlink : (R : Reg) → Cont L Reg (sessionC H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisC H E plan decode Xc Kr hlow).LinkSound δlink) (K : ℕ)
+    (hlink : (P.analysisC H E plan decode Xc Kr hlow).BindSound δlink) (K : ℕ)
     (σ : Strategy (audit L Reg (sessionC H E plan))) :
     prob (fun o => o.1 = true ∧ K ≤ (P.wrong (Xc (reg σ) (cont σ))).card)
         (audit L Reg (sessionC H E plan)) σ ≤
@@ -288,7 +288,7 @@ theorem flock_compiled_drawn
     (Xc : (R : Reg) → Cont L Reg (sessionC H E plan) R → (Fin C.N → Bool)) {Kr : ℕ} (hK : 1 ≤ Kr)
     (hlow : P.LoweringSoundC plan decode)
     {δlink : (R : Reg) → Cont L Reg (sessionC H E plan) R → ℝ≥0∞}
-    (hlink : (P.analysisC H E plan decode Xc Kr hlow).LinkSound δlink)
+    (hlink : (P.analysisC H E plan decode Xc Kr hlow).BindSound δlink)
     (σ : Strategy (audit L Reg (sessionC H E plan))) :
     prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (Xc (reg σ) (cont σ))) o.2)
         (audit L Reg (sessionC H E plan)) σ ≤

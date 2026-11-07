@@ -10,7 +10,7 @@ prover's state at registration (its registration and its session strategy for ev
 its incorrect proof blocks; nobody computes it. A unit is **incorrect** in `X` (the Lean's `wrong`) when its committed outputs differ
 from its gates applied to its committed inputs (`Partition.Correct`). Every bound holds for every prover strategy
 (`Game.prob … σ`), the form `table_sound_exec` takes. The Lean's names predate the Glossary's: a `Law` is a sampling
-design, its `escape` (here $e_L(B)$) is the acceptance probability $P_a(B)$, and $\delta_{link}$ (`LinkSound`) is the
+design, its `escape` (here $e_L(B)$) is the acceptance probability $P_a(B)$, and $\delta_{link}$ (`BindSound`) is the
 Glossary's $\varepsilon_{bind}$.
 
 **Named hypotheses** (`Prop`s taken as hypotheses; no `axiom`): each is stated in `../ASSUMPTIONS.md`.
@@ -18,7 +18,7 @@ Glossary's $\varepsilon_{bind}$.
 **What the reviewer checks here.** The theorems hold for every choice of committed trace `X` and extractor `ext`,
 so their meaning rests on `X` being the committed values. At the oracle layer `X` is the registration itself
 (`Partition.oracle`). At the compiled layer it is the plurality of what the extractor recovers behind each commit
-string, which the instantiation defines and `LinkSound` ties to the extractor. A consumer who opens values under the
+string, which the instantiation defines and `BindSound` ties to the extractor. A consumer who opens values under the
 roots gets `X`'s values up to that opening's own binding term, which the audit does not count.
 
 **Theorems, one-stage** (`Audit/OneStage.lean`), with $e_L(B)$ the probability that the sample misses $B$:
@@ -288,7 +288,7 @@ The hypotheses are the lowerings.
   extractor**. Per sampled proof block, `Pr[accept ∧ extraction fails]` and `Pr[accept ∧ extraction disagrees]` are joint
   probabilities over the fresh run and the extractor's reruns (`ExtractionAnalysis`), and the named bounds may depend
   on the prover's state. A deterministic extractor is the special case (`Analysis.toExtraction`, with
-  `KnowledgeSound.toExtraction` and `LinkSound.toExtraction`);
+  `KnowledgeSound.toExtraction` and `BindSound.toExtraction`);
 - `flock_batched_knowledgeSound`: **ε_ks is discharged** for the compiled Flock audit in the protocol's batched session
   of several tables (`batchedSession`, `sessionB`), with the leaf layer registered. Each sampled proof block is read from one
   table of the plan (`tab`). The knowledge term is, after each sample, the largest over the plan's tables of the table's
