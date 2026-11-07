@@ -147,23 +147,23 @@ theorem readUnitDrawn_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash
     (hcom : ∀ u, ∀ i < 16 * H + 1,
       Flock.Bridge.copyGate D hU n u hj (hr.out i) ∈ (Flock.Bridge.partsOf D hU n).committed)
     (units : Finset (Fin n)) (root domain : Fin n → Verity.Digest) (table : Fin n → ℕ → Hash.RowLeaf.Opening)
-    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → (Flock.Bridge.circuitOf D hU n).Transcript)
+    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Transcript)
     (cost : Ω → ℕ) (ε : ℝ)
     (hcommitted : (readsOf D hU n hr hj units root domain table).Committed Verity.sha512 Verity.sha512 key)
     (below : Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ units ∧
-      ¬ ((Flock.Bridge.partsOf D hU n).Correct (X ω) u ∧
+      ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) u ∧
         ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf D hU n) u
-          (readPorts (Flock.Bridge.copyGate D hU n u hj) hr V H) (root u) (domain u) (X ω))) ≤ ε)
+          (readPorts (Flock.Bridge.copyGate D hU n u hj) hr V H) (root u) (domain u) (tr ω))) ≤ ε)
     (hcr : Claims.ExpectedCR (fun m => (Verity.sha512 m).bytes)
-      ((readsOf D hU n hr hj units root domain table).finder Verity.sha512 key drawn X cost)) :
+      ((readsOf D hU n hr hj units root domain table).finder Verity.sha512 key drawn tr cost)) :
     Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ units ∧
-      (readsOf D hU n hr hj units root domain table).index u (X ω) < V ∧
-      (readPorts (Flock.Bridge.copyGate D hU n u hj) hr V H).hOf (X ω) ≠
-        (table u ((readsOf D hU n hr hj units root domain table).index u (X ω))).row) ≤
+      (readsOf D hU n hr hj units root domain table).index u (tr ω) < V ∧
+      (readPorts (Flock.Bridge.copyGate D hU n u hj) hr V H).hOf (tr ω) ≠
+        (table u ((readsOf D hU n hr hj units root domain table).index u (tr ω))).row) ≤
       ε + Claims.Ex (fun ω => (cost ω : ℝ)) / 2 ^ (256 : ℝ) :=
   Accounting.SecurityProofs.readUnitDrawnCR Verity.sha512 key consts (Flock.Bridge.partsOf D hU n)
     (readsOf D hU n hr hj units root domain table)
-    acc drawn X cost ε
+    acc drawn tr cost ε
     (fun u _ => gatesRefine_partsOf key D hU n hr hsound consts u hj (hone u) (hone_io u) (hcom u))
     hcommitted below hcr
 
