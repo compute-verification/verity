@@ -198,18 +198,35 @@ def stage_served(spec: str, n: int, d: Path) -> dict:
             "stage_cpu_s": round(ru1.children_user + ru1.children_system - ru0.children_user - ru0.children_system, 2)}
 
 
+def stage_counts(spec: str, counts: list[int], out: Path, tag: str) -> dict[int, dict]:
+    """``spec`` at each of ``counts`` on one built circuit (stage.py's ``N1,N2``), each into ``out/{tag}-c{n}/stage``."""
+    for n in counts:
+        (out / f"{tag}-c{n}" / "stage").mkdir(parents=True, exist_ok=True)
+    ru0 = os.times()
+    p = a0.run([sys.executable, str(STAGE_PY), spec, ",".join(map(str, counts)), str(out / f"{tag}-c{{n}}" / "stage")],
+               out / f"{tag}-stage.log", timeout=6 * 3600)
+    ru1 = os.times()
+    if p.returncode != 0:
+        raise SystemExit(f"stage.py {spec} {counts}: rc {p.returncode}: {p.stderr[-600:]}")
+    cpu = round(ru1.children_user + ru1.children_system - ru0.children_user - ru0.children_system, 2)
+    return {n: {**json.loads((out / f"{tag}-c{n}" / "stage" / "stage.json").read_text()), "stage_cpu_s": cpu} for n in counts}
+
+
 def stage_units(a, out: Path) -> list[dict]:
-    """Each ``--units`` type at each ``--sizes`` entry (a count, ``full`` or ``half``), and its samples' files."""
+    """Each ``--units`` type at each ``--sizes`` entry (a count, ``full`` or ``half``), and its samples' files; a type
+    written ``SPEC@N1,N2`` at those counts instead, staged on one built circuit with no probe."""
     plan = []
-    for spec in a.units.split():
+    for spec0 in a.units.split():
+        spec, _, own = spec0.partition("@")
         tag = spec.lower().replace(":", "-").replace(",", "-").replace("=", "")
-        probe = stage_served(spec, 2, out / f"{tag}-probe")
+        staged = stage_counts(spec, [int(x) for x in own.split(",")], out, tag) if own else {}
+        probe = next(iter(staged.values()), None) or stage_served(spec, 2, out / f"{tag}-probe")
         per = (1 << probe["k_log"]) // (probe.get("vus_per_block") or 1)
         full = max(1, MAX_BITS // per)
-        for size in a.sizes.split(","):
+        for size in (own or a.sizes).split(","):
             want = {"full": full, "half": max(1, full // 2)}.get(size) or int(size)
             sd = out / f"{tag}-c{want}"
-            st = stage_served(spec, want, sd / "stage")
+            st = staged.get(want) or stage_served(spec, want, sd / "stage")
             c = st["n"]
             name = spec.partition(":")[0]
             rec = {"unit": spec, "tag": tag, "c": c, "full": full, "ands": st["ands"], "k_log": st["k_log"],
