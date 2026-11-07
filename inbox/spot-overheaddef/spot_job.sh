@@ -115,13 +115,14 @@ EOF
 fi
 [ -n "$STEPS" ] || { echo "spot: no step drawn"; exit 2; }
 if [ "${KEEP_TENSORS:-opened}" = all ] && [ -z "${KEEP_STEPS:-}" ] && [ -f "$OUT/first_stage.json" ]; then
-  # whole steps in the order drawn (long, big, small) while about GB_PER_TOKEN (0.24: 30 MB a token on each of 8 ranks)
+  # whole steps in the order drawn (long, big, small) while about GB_PER_TOKEN (0.5: about 64 MB a token on each of 8
+  # ranks, the tensors up to capture.py's keep cap)
   # a token fits the free space less 40 GB; the others keep the opened layers'
   KEEP_STEPS=$("$PY" - "$OUT/first_stage.json" "$free" "$STEPS" <<'EOF'
 import json, os, sys
 fs, free, steps = json.load(open(sys.argv[1])), float(sys.argv[2]), sys.argv[3].split(",")
 tok = {str(fs["steps"][k]): fs["tokens"][k] for k in fs["steps"]}
-per, left, keep = float(os.environ.get("GB_PER_TOKEN", "0.24")), free - 40, []
+per, left, keep = float(os.environ.get("GB_PER_TOKEN", "0.5")), free - 40, []
 for s in steps:
     if tok.get(s, 0) * per <= left:
         keep.append(s)

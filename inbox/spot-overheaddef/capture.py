@@ -27,8 +27,9 @@ Then the graph call runs as served, and its hidden states must equal the recorde
 extra forward writes the same KV values to the same slots, so the step and every later one are unchanged.
 
 Each recorded tensor is hashed when recorded; its bytes are held in memory until the coins have opened layers, and only the
-opened layers' tensors are written, once each, under ``DIR/rank<r>/blobs/<sha512>`` (``--keep all`` writes every one as
-it is recorded, at every step or at the ``--keep-steps``). ``DIR/rank<r>/step<s>/ops.jsonl`` lists
+opened layers' tensors are written, once each, under ``DIR/rank<r>/blobs/<sha512>`` (``--keep all`` writes every one up
+to ``--keep-max-mib`` as it is recorded, at every step or at the ``--keep-steps``, until the disk would fall below
+``--min-free-gib``; the rest are written only in the opened layers). ``DIR/rank<r>/step<s>/ops.jsonl`` lists
 the events in order. ``step<s>/meta.json`` holds the step (tokens, padding, graph mode, the scheduled requests and their
 token counts), the check, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
 ``params.json``, which gives each parameter a recorded op read (its shape, dtype and SHA-512 over its bytes). Every
@@ -89,6 +90,9 @@ class _State:
         self.pending: dict[str, bytes] = {}
         self.keep = cfg["keep"]
         self.keep_steps = None if cfg.get("keep_steps") is None else set(cfg["keep_steps"])
+        self.keep_max = int(cfg.get("keep_max_mib", 64)) << 20
+        self.min_free = int(cfg.get("min_free_gib", 40)) << 30
+        self.floor_hit = False
         self.events: list[dict] = []
         self.piece = -1
         self.parents: list[int] = []
@@ -108,6 +112,16 @@ class _State:
     def keep_all(self) -> bool:
         """Whether this step writes every recorded tensor: ``--keep all``, at the ``--keep-steps`` (default every step)."""
         return self.keep == "all" and (self.keep_steps is None or self.step in self.keep_steps)
+
+    def write_now(self, nbytes: int) -> bool:
+        """Whether a blob is written as it is recorded: on a step kept whole, up to ``--keep-max-mib``, while the capture's
+        disk keeps ``--min-free-gib`` free. Any other blob waits for the coins and is written only in an opened layer."""
+        if not self.keep_all or nbytes > self.keep_max or self.floor_hit:
+            return False
+        import shutil
+        self.root().mkdir(parents=True, exist_ok=True)
+        self.floor_hit = shutil.disk_usage(self.root()).free - nbytes < self.min_free
+        return not self.floor_hit
 
 
 S: _State | None = None
@@ -163,6 +177,7 @@ def _install() -> None:
                         S.events, S.errors, S.check = [], [], None
                         S.pending.clear()
                         S.seen.clear()
+                        S.floor_hit = False
                 S.active = False
         return run
 
@@ -467,7 +482,7 @@ def _ref_quiet(v: Any) -> Any:
         if h not in S.seen:
             S.seen.add(h)
             S.bytes += len(raw)
-            if S.keep_all:
+            if S.write_now(len(raw)):
                 _write_blob(h, raw)
             else:
                 S.pending[h] = raw
@@ -633,6 +648,7 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
         if h in S.pending:
             _write_blob(h, S.pending[h])
     kept_bytes = sum(len(S.pending[h]) for h in kept if h in S.pending)
+    withheld = [len(raw) for h, raw in S.pending.items() if h not in kept]
     S.pending.clear()
     S.seen.clear()
     od = d / "open"
@@ -658,7 +674,13 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
     commit = {"rank": S.rank, "step": S.step, "rank_roots": roots, "root": root, "t_root": t_root, "coins": coins_hex,
               "t_coins_received": time.time(), "coins_by": "rank 0's os.urandom(64), drawn after every rank's root was gathered",
               "layers": layers, "opened": files, "kept_params": small,
-              "kept": "every recorded tensor" if S.keep_all else f"the opened layers' {len(kept)} tensors, {kept_bytes} bytes"}
+              "kept": ("every recorded tensor" if S.keep_all and not withheld else
+                       f"every recorded tensor but {len(withheld)} outside the opened layers, {sum(withheld)} bytes "
+                       f"({'past the disk floor' if S.floor_hit else 'each over the keep cap'})" if S.keep_all else
+                       f"the opened layers' {len(kept)} tensors, {kept_bytes} bytes"),
+              # every layer's calls can be gated: a withheld tensor is one over the keep cap, never one lost to the floor
+              "whole": S.keep_all and not S.floor_hit, "keep_max": S.keep_max if S.keep_all else None}
+    S.floor_hit = False
     (d / "commit.json").write_text(json.dumps(commit, indent=1, sort_keys=True))
     return commit
 
@@ -689,10 +711,15 @@ def main(argv: list[str]) -> int:
     s.add_argument("--keep", choices=("opened", "all"), default="opened", help="all: write every recorded tensor")
     s.add_argument("--keep-steps", help="with --keep all, the steps that write every tensor (default: every step); the "
                    "others write the opened layers'")
+    s.add_argument("--keep-max-mib", type=int, default=64,
+                   help="with --keep all, a larger tensor is written only in an opened layer (hashed into the root either way)")
+    s.add_argument("--min-free-gib", type=int, default=40,
+                   help="with --keep all, a step stops writing outside the opened layers once its disk would fall below this")
     a = ap.parse_args(argv)
     cfg = {"capture": str(Path(a.capture).resolve()), "steps": sorted({int(x) for x in a.steps.split(",") if x.strip()}),
            "open": {k: int(n) for k, n in (x.split(":") for x in a.open.split(",") if x)}, "mla_tokens": a.mla_tokens,
-           "keep": a.keep, "keep_steps": None if a.keep_steps is None else sorted({int(x) for x in a.keep_steps.split(",") if x.strip()})}
+           "keep": a.keep, "keep_steps": None if a.keep_steps is None else sorted({int(x) for x in a.keep_steps.split(",") if x.strip()}),
+           "keep_max_mib": a.keep_max_mib, "min_free_gib": a.min_free_gib}
     print(site(a.dir, cfg))
     return 0
 
