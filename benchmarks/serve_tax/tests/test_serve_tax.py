@@ -419,3 +419,10 @@ def test_nvml_says_why_a_run_has_no_busy_gpu_seconds(monkeypatch: pytest.MonkeyP
     assert S.nvml() == (fake, None)
     monkeypatch.setattr(importlib.util, "find_spec", lambda m, *a: None)
     assert S.nvml() == (None, "no NVML bindings (vllm.third_party.pynvml, pynvml)")
+
+
+def test_a_tax_against_one_rep_has_no_interval():
+    one = S.tax(S.summary([1000.0, 1010.0, 990.0]), S.summary([900.0]))
+    assert one["value"] == pytest.approx(1000 / 900 - 1) and one["n"] == [3, 1] and "ci95" not in one
+    assert "ci95" in S.tax(S.summary([1000.0, 1010.0, 990.0]), S.summary([900.0, 910.0]))
+    assert S._tax(one) == "+11.1%"

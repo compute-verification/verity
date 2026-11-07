@@ -868,14 +868,14 @@ def table(arms: list[dict]) -> dict:
 
 def tax(ref: dict, arm: dict) -> dict | None:
     """ref's mean over arm's, less one: the arm's extra compute per token; its interval by the delta method over both
-    means' relative standard errors."""
+    means' relative standard errors, only where each side has two reps or more (one rep has no spread to go by)."""
     if not ref.get("n") or not arm.get("n") or not arm["mean"]:
         return None
     r = ref["mean"] / arm["mean"]
     out = {"value": r - 1, "n": [ref["n"], arm["n"]]}
-    parts = [(x["sd"] / x["mean"]) ** 2 / x["n"] for x in (ref, arm) if x["n"] >= 2 and x["mean"]]
-    if parts:
-        df = min(x["n"] for x in (ref, arm) if x["n"] >= 2) - 1
+    if all(x["n"] >= 2 and x["mean"] for x in (ref, arm)):
+        parts = [(x["sd"] / x["mean"]) ** 2 / x["n"] for x in (ref, arm)]
+        df = min(ref["n"], arm["n"]) - 1
         half = T95[max(k for k in T95 if k <= df)] * r * math.sqrt(sum(parts))
         out["ci95"] = [r - half - 1, r + half - 1]
     return out
