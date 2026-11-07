@@ -1146,7 +1146,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
                                       "assumptions": sorted(a for a in listed_premises(policy) if isinstance(a, str)),
                                       "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                       "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
-                                      "out": str(out), "canon": str(canon)}))
+                                      "honest": honest_witnesses(policy), "out": str(out), "canon": str(canon)}))
         rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
         if rc or not out.exists():
             raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
@@ -2033,31 +2033,26 @@ def concluded_constants(read: dict) -> set[str]:
     return {c for k in read.get("conclusion") or [] for c in (k.get("head"), *(k.get("defs") or [])) if c}
 
 
-def args_agree(taken: list | None, concluded: list | None) -> bool:
-    """Whether a conjunct at the arguments ``concluded`` (`Facts.lean`'s `args`: a closed one's canon text, `∀` for one it
-    holds at every value of, None for one it fixes no value of) concludes a premise its guarantee takes at ``taken`` (a
-    closed one's text, None for one that ranges with the guarantee's binders): each argument the guarantee fixes is the
-    conjunct's, or one the conjunct holds at every value of. A premise read with no arguments (packed in `∧`, or under
-    binders of its own) agrees by its head alone."""
-    if not isinstance(taken, list):
-        return True
-    if not isinstance(concluded, list) or len(concluded) != len(taken):
-        return all(t is None for t in taken)
-    return all(t is None or c in (t, "∀") for t, c in zip(taken, concluded))
+def honest_witnesses(policy: dict) -> dict[str, list[str]]:
+    """{guarantee: the `honest` witnesses its `witnesses` entry lists}: `Facts.lean` reads their conclusions against the
+    guarantee's premises (`agree`)."""
+    ws = policy.get("witnesses")
+    return {g: [n for n in w["honest"] if isinstance(n, str)] for g, w in sorted((ws if isinstance(ws, dict) else {}).items())
+            if isinstance(w, dict) and isinstance(w.get("honest"), list)}
 
 
 def honest_concludes(pin: dict, witnesses: list[dict]) -> set[str]:
     """What the honest witnesses ``witnesses`` (their facts) conclude of the guarantee whose facts are ``pin``: each
     conjunct's head and the definitions it applies (`concluded_constants`), of each witness's statement as written and
     with a lifted definition unfolded once (`lifted`, which unfolds `P inst` past its head `P`); less a premise of
-    ``pin`` that conjuncts headed by it conclude only at other arguments than ``pin`` takes it at (`args_agree`). The
-    statements are the witnesses' types as the kernel has them (`Facts.lean`'s `body`), not their names."""
+    ``pin`` that fixes an argument (`args`) and that conjuncts headed by it conclude, unless `Facts.lean` found one of them
+    at the arguments it fixes (`agree`: each definitionally equal, by `isDefEq`, or a variable of the conjunct's `∀`s).
+    The statements are the witnesses' types as the kernel has them (`Facts.lean`'s `body`), not their names."""
     reads = [r for w in witnesses for r in (w.get("body") or {}, (w.get("body") or {}).get("lifted") or {})]
     out = set().union(*map(concluded_constants, reads)) if reads else set()
-    conjuncts = [k for r in reads for k in r.get("conclusion") or []]
+    heads = {k.get("head") for r in reads for k in r.get("conclusion") or []}
     for p in pin.get("premises") or []:
-        heads = [k for k in conjuncts if k.get("head") == p.get("head")]
-        if heads and not any(args_agree(p.get("args"), k.get("args")) for k in heads):
+        if p.get("head") in heads and any(a is not None for a in p.get("args") or []) and p.get("agree") is not True:
             out.discard(p.get("head"))
     return out
 
@@ -3755,7 +3750,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
                           "trees": policy.get("trees", {}), "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
-                          "assumptions": listed_premises(policy), "shape": policy.get("shape", {})}, qwork, moved, keep)
+                          "assumptions": listed_premises(policy), "shape": policy.get("shape", {}),
+                          "witnesses": policy.get("witnesses", {})}, qwork, moved, keep)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
                   if r.parts[:len(lib.parts)] == lib.parts}
