@@ -56,6 +56,9 @@ SMALL_PARAM = 1 << 20
 SKIP = {"empty", "empty_strided", "empty_like", "as_strided", "view", "_unsafe_view", "reshape", "alias", "detach", "t",
         "permute", "transpose", "expand", "unsqueeze", "squeeze", "select", "slice", "_reinterpret_tensor", "lift_fresh",
         "split", "split_with_sizes", "unbind", "chunk", "narrow", "view_as", "resize_", "set_", "record_stream"}
+#: the paged KV caches an op takes whole: hashed into the root but never written, since the rows a call reads are the sparse
+#: MLA tap's ``kv_gathered`` and no gate reads the rest
+CACHES = {"_vllm_fa3_C::fwd": ("k", "v"), "_C_cache_ops::cp_gather_indexer_k_quant_cache": ("kv_cache",)}
 
 
 #: the capture's settings, which `site` writes beside its copy of this file
@@ -390,7 +393,8 @@ class Recorder(_recorder_base()):
             return func(*args, **kwargs)
         schema = func._schema
         flat = list(args) + [kwargs.get(a.name) for a in schema.arguments[len(args):]]
-        ins = {a.name: _ref(v) for a, v in zip(schema.arguments, flat)}
+        cache = CACHES.get(f"{ns}::{base}", ())
+        ins = {a.name: _ref(v, write=a.name not in cache) for a, v in zip(schema.arguments, flat)}
         seq = _event(f"{ns}::{base}", ins, {})
         if ns == "vllm" and torch._C._dispatch_has_kernel_for_dispatch_key(func.name(), "CUDA"):
             S.parents.append(seq)
@@ -404,7 +408,7 @@ class Recorder(_recorder_base()):
         outs = {f"ret{i}": _ref(t) for i, t in enumerate(out if isinstance(out, (tuple, list)) else (out,))}
         for a, v in zip(schema.arguments, flat):
             if a.alias_info is not None and a.alias_info.is_write:
-                outs[a.name] = _ref(v)
+                outs[a.name] = _ref(v, write=a.name not in cache)
         S.events[seq]["out"] = outs
         return out
 
@@ -448,9 +452,9 @@ class _quiet:
         S.quiet = self.was
 
 
-def _ref(v: Any) -> Any:
+def _ref(v: Any, write: bool = True) -> Any:
     with _quiet():
-        return _ref_quiet(v)
+        return _ref_quiet(v, write)
 
 
 def _write_blob(h: str, raw: bytes) -> None:
@@ -471,7 +475,7 @@ def _blobs(v: Any):
             yield from _blobs(x)
 
 
-def _ref_quiet(v: Any) -> Any:
+def _ref_quiet(v: Any, write: bool = True) -> Any:
     import torch
     if isinstance(v, torch.Tensor):
         if v.device.type == "cuda" and (pv := _param_view(v)) is not None:
@@ -484,7 +488,7 @@ def _ref_quiet(v: Any) -> Any:
             return {**d, "big": nb}
         raw = v.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy().tobytes() if nb else b""
         h = hashlib.sha512(raw).hexdigest()
-        if h not in S.seen:
+        if write and h not in S.seen:
             S.seen.add(h)
             S.bytes += len(raw)
             if S.write_now(len(raw)):

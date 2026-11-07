@@ -42,3 +42,12 @@ def test_past_the_disk_floor_nothing_more_is_written(tmp_path, monkeypatch) -> N
     capture, S = _capture(tmp_path, monkeypatch, keep_max_mib=64, min_free_gib=1 << 30)
     ref = capture._ref(torch.arange(1 << 10, dtype=torch.int32))
     assert S.floor_hit and not _blob(S, ref).exists() and ref["sha512"] in S.pending
+
+
+def test_a_kv_cache_is_hashed_but_not_written_and_a_later_read_still_writes_it(tmp_path, monkeypatch) -> None:
+    capture, S = _capture(tmp_path, monkeypatch, keep_max_mib=64, min_free_gib=0)
+    t = torch.arange(1 << 10, dtype=torch.int32)
+    cache = capture._ref(t, write=False)
+    assert cache["sha512"] and not _blob(S, cache).exists() and cache["sha512"] not in S.pending
+    again = capture._ref(t)
+    assert again["sha512"] == cache["sha512"] and _blob(S, again).is_file()
