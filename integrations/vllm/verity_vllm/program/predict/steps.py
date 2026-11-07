@@ -7,11 +7,9 @@ certified record its string decodes against):
   and the advice code, if the registration selects it (`Registered.code`).
 - `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
-  that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Under a
-  registration that selects the advice code, it is the advice v1 string (`pipeline.advice_code.codec`): only what the certified
-  record (`codec.Record`, the network certifier's), vLLM's scheduler replayed under the registered engine and the derived rules
-  leave. `advice_of` decodes it against that record into the I1 v0 it carries, which the compiler plans from as it would I1's
-  bytes, and ℓ bounds the string's bits. Nothing else is advice.
+  that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Under the advice
+  code it is a v1 string (`pipeline.advice_code.codec`), which `advice_of` decodes against the network certifier's certified record
+  into the I1 v0 it carries, planned from as I1's bytes would be; ℓ bounds the string's bits. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
   OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice. A body
   given as the network certifier's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
@@ -93,7 +91,7 @@ import hashlib
 import json
 import math
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -107,8 +105,8 @@ from verity_vllm.program.prune import dead_units
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.topp_geometry import registered_splits
 
-from .advice_in import advice_bytes, advice_of, as_window_advice
 from .build import Unexpressible, build_program, model_shape
+from .dead_gates import dead_gates_of as dead_gates_of
 from .phi import Phi
 
 SCHEMA = "verity-vllm/compiled-steps/v2"
@@ -134,11 +132,9 @@ class Registered:
     """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), the
     default seed a request without one is sampled under (the public rule, `engine.served_seed`), ℓ, the cap on the advice's
     length in bits, the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no request's ingress is bytes), and
-    the advice code the registration selects, whose strings ℓ bounds in I1's place (None: the advice is I1's). The code is
-    advice v1's registration (`pipeline.advice_code.codec.Registered`: the replay's engine, the stop ids, the row order, the
-    window, the codebook and the tick), the network certifier's and private like its protocol, so the compiler reads it only
-    through its `decode(string, record, cap_bits)`: the I1 v0 `Advice` the string carries under the certified record, or a
-    `ValueError` naming why not."""
+    the advice code (None: the advice is I1's): advice v1's registration (`pipeline.advice_code.codec.Registered`), private like
+    the network certifier's protocol, read only through `decode(string, record, cap_bits)`, which gives the I1 v0 `Advice` the
+    string carries under the certified record or a `ValueError` naming why not; ℓ then bounds its strings."""
 
     phi: Phi
     default_seed: int
@@ -274,6 +270,63 @@ def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> 
         return {"kind": "greedy"}, None
     return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True,
              "splits": registered_splits(int(num_sms))}, int(default_seed if seed is None else seed))
+
+
+def advice_of(registered: Registered, advice: Any, record: Any = None) -> WA.Advice:
+    """The advice as a Commit window's (`window_advice`; I1 v0's when it carries nothing): under the advice code (`Registered.code`),
+    its v1 string within ℓ decoded against the certified `record` (`Registered.code.decode`) into the I1 v0 it carries; otherwise
+    I1's canonical bytes within ℓ, or an I1 or window `Advice` whose encoding is. Anything else is refused by name."""
+    if registered.code is not None:
+        return _coded_advice(registered, advice, record)
+    if record is not None:
+        raise Unexpressible("a certified record is for the advice code, and the registration selects none: its advice is I1's")
+    data = _advice_bytes(advice)
+    _within_cap(registered, data)
+    return _window_advice(data)
+
+
+def _advice_bytes(advice: Any) -> bytes:
+    if isinstance(advice, (I1.Advice, WA.Advice)):
+        try:
+            return (WA if isinstance(advice, WA.Advice) else I1).encode(advice)
+        except Exception as e:  # noqa: BLE001 -- an Advice built around its checks has no encoding: a refusal like any other
+            raise Unexpressible(f"ill-formed advice: an Advice with no encoding ({type(e).__name__}: {e})") from None
+    if type(advice) is bytes:
+        return advice
+    raise Unexpressible(f"the advice is I1's bytes or an I1 Advice, not a {type(advice).__name__}: nothing else is advice")
+
+
+def _within_cap(registered: Registered, data: bytes) -> None:
+    if 8 * len(data) > registered.cap_bits:
+        raise Unexpressible(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {registered.cap_bits} bits")
+
+
+def _window_advice(data: bytes) -> WA.Advice:
+    return _decoded("ill-formed advice", I1.MalformedAdvice, lambda: WA.decode(data))
+
+
+def _decoded(what: str, refusal: type[Exception], decode: Callable[[], Any]) -> Any:
+    """``decode()``, any failure refused by name: ``what: why`` for the decoder's own `refusal`, else the failure named."""
+    try:
+        return decode()
+    except Exception as e:  # noqa: BLE001 -- the decoder's refusal is `refusal`; any other failure on these bytes refuses them too
+        raise Unexpressible(f"{what}: {e}" if isinstance(e, refusal) else f"{what}: its decode failed ({type(e).__name__}: {e})") from None
+
+
+def _coded_advice(registered: Registered, advice: Any, record: Any) -> WA.Advice:
+    """A v1 string's I1 v0, held to ℓ before any of it is read and decoded under the registered code at that ℓ."""
+    if type(advice) is not bytes:
+        raise Unexpressible(f"under the advice code its advice is a v1 string's bytes, not a {type(advice).__name__}")
+    _within_cap(registered, advice)
+    if record is None:
+        raise Unexpressible("the advice code decodes against the session's certified record, and none was given")
+
+    def canonical_bytes() -> bytes:
+        adv = registered.code.decode(advice, record, registered.cap_bits)
+        if type(adv) is not I1.Advice:
+            raise TypeError(f"it gave a {type(adv).__name__}, not an I1 Advice")
+        return I1.encode(adv)
+    return _window_advice(_decoded("ill-formed v1 advice", ValueError, canonical_bytes))
 
 
 def ingress_body(i: int, q: I1.RequestAdvice, body: bytes, served: str | None, vocab: int) -> dict:
@@ -563,7 +616,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
 def _replan(registered: Registered, solo: WA.Advice, bodies: Mapping[str, Any]) -> Plan:
     """`batch.check_compiled`'s plan of one request alone: its solo window `Advice` held to I1's encoding, without ℓ, which bounds
     the session's advice as it was sent, not an I1 the compiler derives from it."""
-    return _plan(registered, as_window_advice(advice_bytes(solo)), bodies, False)
+    return _plan(registered, _window_advice(_advice_bytes(solo)), bodies, False)
 
 
 def _plan(registered: Registered, adv: WA.Advice, ingress: Any, partial: bool) -> Plan:
@@ -683,35 +736,6 @@ def _plan(registered: Registered, adv: WA.Advice, ingress: Any, partial: bool) -
             discarded += [(s, row.request, start, n) for start, n in past]
         steps.append(live)
     return Plan(units, steps, discarded, dict(sorted(refused.items())), idle)
-
-
-def dead_gates_of(compiled: Compiled) -> dict:
-    """Each compiled Program's dead gates as circuit-check counts them (`liveness.dead_gates`, transitive: gates no output depends
-    on), with the unread inputs apart, and the dead gates under each of the root's nodes by definition (its id up to `{`)."""
-    from verity.ml.circuits.defs import PrimitiveDefinition
-    from verity.ml.circuits.intervals import full, total
-    from verity.ml.circuits.liveness import Liveness, dead_gates
-    out = {}
-    for digest, program in sorted(compiled.programs.items()):
-        rep = dead_gates(program, limit=0, transitive=True)
-        root, lv = program.root, Liveness(transitive=True)
-        res = lv.analyse(root, full(root.body.ret_type.leaves))
-        by: dict[str, int] = {}
-        for node, live in zip(root.body.nodes, res.node_live):
-            if node.form == "call":
-                n = lv.analyse(node.fn, live).dead
-            elif node.form == "primitive" or isinstance(node.fn, PrimitiveDefinition):
-                n = (node.n if node.form == "batch" else 1) - total(live)
-            else:
-                n = 0
-            if n:
-                name = node.fn.id.split("{", 1)[0]
-                by[name] = by.get(name, 0) + n
-        if rest := res.dead - sum(by.values()):
-            by["(batch or scan at the root)"] = rest
-        out[digest] = {"dead_computed": rep.computed, "unread_inputs": rep.input, "approximate": rep.approximate,
-                       "by_definition": dict(sorted(by.items(), key=lambda kv: -kv[1]))}
-    return {"programs": out, "dead_computed": sum(p["dead_computed"] for p in out.values())}
 
 
 # ------------------------------------------------------------------------------------------------------------- the traced side
