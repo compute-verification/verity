@@ -1,6 +1,6 @@
 """Advice v0's residual under the derived rules, built and measured.
 
-The rules are `verity_vllm.pipeline.advice_code.derived` (`Config`, `Prefixes`, the walk `_walk`, the no-eviction and
+The rules are `verity_vllm.pipeline.advice_code.derived` (`Config`, `Prefixes`, the walk `walk_steps`, the no-eviction and
 pool bounds, the tie; its docstring states them and the residual), re-exported here for the modules and tests that load
 this one by path. This module builds advice v0's residual with them: `residual` (the encoder) and `reconstruct` and
 `rebuild` (the compile unit), the same walk, so they can't drift apart. `FIELDS` is the table of every I1 field: its
@@ -29,9 +29,9 @@ from typing import NamedTuple
 from verity.core.protocols.certifier import advice as I1
 from verity.core.protocols.certifier.advice import Advice, RequestAdvice, Row, Source, StepAdvice
 from verity_vllm.pipeline.advice_code.derived import (
-    CertifiedRequest, _chain as _chain, Config, Holdings, pool_bound, PREFIX_ROOT as PREFIX_ROOT, Prefixes, Residual,
-    stop_rule as stop_rule, tie_fields, TOKEN_BYTES as TOKEN_BYTES, unit_key as unit_key, _units as _units, Walk,
-    _walk, _want as _want,
+    CertifiedRequest, Config, Holdings, pool_bound, PREFIX_ROOT as PREFIX_ROOT, Prefixes, Residual,
+    stop_rule as stop_rule, tie_fields, TOKEN_BYTES as TOKEN_BYTES, unit_key as unit_key, Walk,
+    walk_steps,
 )
 
 
@@ -273,8 +273,8 @@ def residual(advice: Advice, cfg: Config, held: Holdings, *, order: Sequence[int
         return lags[-1]
 
     rows = tuple(tuple(r.request for r in st.rows) for st in advice.steps)
-    walk = _walk(rows, prompt_len, cfg, held=held, pool=pool, hit_of=hit_of, resumed_of=resumed_of, n_of=n_of,
-                 lag_of=lag_of, order_of=lambda s, numbers: tuple(order[i] for i in numbers))
+    walk = walk_steps(rows, prompt_len, cfg, held=held, pool=pool, hit_of=hit_of, resumed_of=resumed_of, n_of=n_of,
+                      lag_of=lag_of, order_of=lambda s, numbers: tuple(order[i] for i in numbers))
     for s, (mine, theirs) in enumerate(zip(walk.steps, advice.steps, strict=True)):
         for j, (a, b) in enumerate(zip(mine.rows, theirs.rows, strict=True)):
             if a != b:
@@ -314,9 +314,9 @@ def reconstruct(res: Residual, cfg: Config, held: Holdings) -> Walk:
         resume[0] = next(resumes, None)
         return True
 
-    walk = _walk(res.rows, res.prompt_len, cfg, held=held, pool=res.resumes is None,
-                 hit_of=lambda s, t, cached: cached if cached is not None else take("hit") * cfg.unit,
-                 resumed_of=resumed_of, n_of=lambda s, k: take("n"), lag_of=lambda i: take("lag"), order_of=order_of)
+    walk = walk_steps(res.rows, res.prompt_len, cfg, held=held, pool=res.resumes is None,
+                      hit_of=lambda s, t, cached: cached if cached is not None else take("hit") * cfg.unit,
+                      resumed_of=resumed_of, n_of=lambda s, k: take("n"), lag_of=lambda i: take("lag"), order_of=order_of)
     if resume[0] is not None or any(next(it, None) is not None for it in values.values()):
         raise ValueError("residual: more values than the rows read, or resumes out of order")
     if entry[0] is not None or walk.order_sent != tuple((s, tuple(o)) for s, o in res.order):

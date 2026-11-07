@@ -16,6 +16,10 @@ import bisect
 import math
 from dataclasses import dataclass
 
+__all__ = ["ArithDecoder", "ArithEncoder", "bin_of", "bin_range", "Binned", "BitReader", "BitWriter", "get_uniform",
+    "in_range", "MAX_TOTAL", "model_from_json", "put_uniform", "QUARTER", "Table", "THREE_QUARTERS", "uniform_bits",
+    "unzigzag", "width", "zigzag"]
+
 
 class BitWriter:
     """Bits, most significant first, one 0/1 per entry."""
@@ -91,9 +95,9 @@ def width(span: int) -> int:
 _P = 32
 _TOP = (1 << _P) - 1
 _HALF = 1 << (_P - 1)
-_Q1 = 1 << (_P - 2)
-_Q3 = 3 * _Q1
-#: The largest frequency total. After renormalization the range exceeds `_Q1 = 2^30`, so every symbol of frequency ≥ 1
+QUARTER = 1 << (_P - 2)
+THREE_QUARTERS = 3 * QUARTER
+#: The largest frequency total. After renormalization the range exceeds `QUARTER = 2^30`, so every symbol of frequency ≥ 1
 #: keeps an interval of at least 2^14 values, and distinct messages keep disjoint intervals.
 MAX_TOTAL = 1 << 16
 
@@ -132,10 +136,10 @@ class ArithEncoder:
                 self._emit(1)
                 self.low -= _HALF
                 self.high -= _HALF
-            elif self.low >= _Q1 and self.high < _Q3:
+            elif self.low >= QUARTER and self.high < THREE_QUARTERS:
                 self.pending += 1
-                self.low -= _Q1
-                self.high -= _Q1
+                self.low -= QUARTER
+                self.high -= QUARTER
             else:
                 break
             self.low, self.high = 2 * self.low, 2 * self.high + 1
@@ -143,7 +147,7 @@ class ArithEncoder:
     def finish(self) -> int:
         if self.used:
             self.pending += 1
-            self._emit(0 if self.low < _Q1 else 1)
+            self._emit(0 if self.low < QUARTER else 1)
         return len(self.out) - self.start
 
 
@@ -184,10 +188,10 @@ class ArithDecoder:
                 self.low -= _HALF
                 self.high -= _HALF
                 self.value -= _HALF
-            elif self.low >= _Q1 and self.high < _Q3:
-                self.low -= _Q1
-                self.high -= _Q1
-                self.value -= _Q1
+            elif self.low >= QUARTER and self.high < THREE_QUARTERS:
+                self.low -= QUARTER
+                self.high -= QUARTER
+                self.value -= QUARTER
             else:
                 break
             self.low, self.high = 2 * self.low, 2 * self.high + 1
@@ -382,7 +386,7 @@ def model_from_json(d: dict) -> Table | Binned:
     return Table(d["lo"], tuple(d["freqs"]), d["escape"])
 
 
-def _check(name: str, v: int, lo: int, hi: int) -> int:
+def in_range(name: str, v: int, lo: int, hi: int) -> int:
     if v is None or not lo <= v <= hi:
         raise ValueError(f"{name} {v} outside its feasible range [{lo}, {hi}]")
     return int(v)

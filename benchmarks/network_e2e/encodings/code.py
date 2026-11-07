@@ -62,8 +62,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, NamedTuple, Protocol
 
 from verity_vllm.pipeline.advice_code.arith import (
-    ArithDecoder, ArithEncoder, bin_of, Binned, BitReader, BitWriter, _check, _CHUNK as _CHUNK, MAX_TOTAL,
-    model_from_json, _Q1, Table, uniform_bits as uniform_bits, unzigzag, width, zigzag,
+    ArithDecoder, ArithEncoder, bin_of, Binned, BitReader, BitWriter, in_range, MAX_TOTAL,
+    model_from_json, QUARTER, Table, uniform_bits as uniform_bits, unzigzag, width, zigzag,
 )
 
 FAMILIES = ("fixed", "gamma", "static", "cond", "cond+adapt")
@@ -93,8 +93,8 @@ def get_gamma(r: BitReader) -> int:
     return (1 << (k - 1)) | r.uint(k - 1)
 
 
-#: Per symbol, the integer interval loses less than a `MAX_TOTAL / _Q1 = 2^-14` share to rounding.
-OVERHEAD_PER_SYMBOL = -math.log2(1 - MAX_TOTAL / _Q1)
+#: Per symbol, the integer interval loses less than a `MAX_TOTAL / QUARTER = 2^-14` share to rounding.
+OVERHEAD_PER_SYMBOL = -math.log2(1 - MAX_TOTAL / QUARTER)
 
 
 def fit_table(samples: Sequence[int], lo: int, hi: int, escape_share: float = 2 ** -12, total: int = MAX_TOTAL) -> Table:
@@ -284,8 +284,8 @@ class FixedStream(Stream):
     def sym(self, name: str, v: int | None, lo: int, hi: int) -> int:
         k = width(hi - lo + 1)
         if self.decoding:
-            return _check(name, lo + self.r.uint(k), lo, hi)
-        self.w.uint(_check(name, v, lo, hi) - lo, k)
+            return in_range(name, lo + self.r.uint(k), lo, hi)
+        self.w.uint(in_range(name, v, lo, hi) - lo, k)
         return int(v)
 
 
@@ -298,8 +298,8 @@ class GammaStream(Stream):
     def sym(self, name: str, v: int | None, lo: int, hi: int) -> int:
         if self.decoding:
             g = get_gamma(self.r)
-            return _check(name, unzigzag(g - 1) if lo < 0 else lo + g - 1, lo, hi)
-        v = _check(name, v, lo, hi)
+            return in_range(name, unzigzag(g - 1) if lo < 0 else lo + g - 1, lo, hi)
+        v = in_range(name, v, lo, hi)
         put_gamma(self.w, zigzag(v) + 1 if lo < 0 else v - lo + 1)
         return v
 
@@ -318,7 +318,7 @@ class ArithStream(Stream):
             raise KeyError(f"the codebook has no table {name!r}")
         if self.decoding:
             return t.get(self.dec, lo, hi)
-        v = _check(name, v, lo, hi)
+        v = in_range(name, v, lo, hi)
         t.put(self.enc, v, lo, hi)
         return v
 
@@ -333,7 +333,7 @@ class CountStream(Stream):
         self.seen: list[tuple[str, int, int, int]] = []
 
     def sym(self, name: str, v: int | None, lo: int, hi: int) -> int:
-        v = _check(name, v, lo, hi)
+        v = in_range(name, v, lo, hi)
         self.seen.append((name, v, lo, hi))
         return v
 

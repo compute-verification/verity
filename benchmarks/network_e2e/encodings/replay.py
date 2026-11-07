@@ -1,7 +1,7 @@
 """The scheduler replay's traces, and the timing input coded inside the replay.
 
 The replay is `verity_vllm.pipeline.advice_code.replay` (`Engine`, `Tick`, `replay`, `compare`, over the KV pool
-`pool._KV`; its docstring states what it models and refuses), re-exported here for the modules and tests that load this
+`pool.BlockPool`; its docstring states what it models and refuses), re-exported here for the modules and tests that load this
 one by path. This module reads step traces as `Trace`s (`read_step_trace`, a vLLM run's; `read_corpus_trace`, the trace
 corpus's) and codes the replay's timing input.
 
@@ -30,13 +30,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity_vllm.pipeline.advice_code.pool import _KV as _KV
+from verity_vllm.pipeline.advice_code.pool import BlockPool as BlockPool
 from verity_vllm.pipeline.advice_code.replay import (
-    compare, _drive as _drive, Emitted, Match as Match, Open, _Pass as _Pass, Queue as Queue, Replay, replay,
-    _Sched as _Sched,
+    compare, drive as drive, Emitted, Match as Match, Open, Queue as Queue, Replay, replay,
+    Scheduler as Scheduler,
 )
 from verity_vllm.pipeline.advice_code.schedule import (
-    cdiv, Engine, _Hashes as _Hashes, _R as _R, RequestIO, Row as Row, _RUN as _RUN, Step, Tick,
+    cdiv, Engine, BlockHashes as BlockHashes, RequestState as RequestState, RequestIO, Row as Row, RUNNING as RUNNING, Step, Tick,
 )
 
 STEP_TRACE = "verity-vllm/step-trace/v1"

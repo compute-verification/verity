@@ -11,7 +11,7 @@ pin, d9105ea80) decides those rows deterministically from:
   and, with prefix caching on, its tokens (their block hashes);
 - the order requests reached the engine (the certified ingress order);
 - hidden state that is a function of the history above: the waiting and running queues, each request's computed tokens,
-  in-flight tokens and output placeholders, and the KV block pool (`pool._KV`: its free count, and with caching its LRU
+  in-flight tokens and output placeholders, and the KV block pool (`pool.BlockPool`: its free count, and with caching its LRU
   free queue and hash map);
 - one timing input: the engine step each request is first visible at (the engine core adds every request that arrived
   before it calls `schedule`).
@@ -36,8 +36,21 @@ from collections import deque
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 
-from verity_vllm.pipeline.advice_code.pool import _KV
-from verity_vllm.pipeline.advice_code.schedule import _F, _P, _RUN, _W, Engine, RequestIO, Step, Tick, _Hashes, _R
+from verity_vllm.pipeline.advice_code.pool import BlockPool
+from verity_vllm.pipeline.advice_code.schedule import (
+    FINISHED,
+    PREEMPTED,
+    RUNNING,
+    WAITING,
+    BlockHashes,
+    Engine,
+    RequestIO,
+    RequestState,
+    Step,
+    Tick,
+)
+
+__all__ = ["compare", "Decide", "drive", "Emitted", "Match", "Open", "Queue", "Replay", "replay", "Scheduler"]
 
 
 @dataclass
@@ -50,9 +63,9 @@ class _Pass:
     step: Step
     sched: dict[int, int]
     starts: dict[int, int]
-    skipped_now: deque[_R]
+    skipped_now: deque[RequestState]
 
-    def fork(self, reqs: Sequence[_R]) -> _Pass:
+    def fork(self, reqs: Sequence[RequestState]) -> _Pass:
         st = self.step
         return _Pass(self.token_budget, self.input_budget,
                      Step(rows=list(st.rows), new=list(st.new), resumed=list(st.resumed), preempted=list(st.preempted),
@@ -60,21 +73,21 @@ class _Pass:
                      dict(self.sched), dict(self.starts), deque(reqs[r.i] for r in self.skipped_now))
 
 
-class _Sched:
+class Scheduler:
     def __init__(self, engine: Engine, requests: Sequence[RequestIO]) -> None:
         self.e = engine
-        self.kv = _KV(engine)
-        hashes = _Hashes() if engine.enable_prefix_caching else None
-        self.reqs = [_R(i, io, hashes, engine.block_size) for i, io in enumerate(requests)]
-        self.waiting: deque[_R] = deque()
-        self.skipped: deque[_R] = deque()
-        self.running: list[_R] = []
+        self.kv = BlockPool(engine)
+        hashes = BlockHashes() if engine.enable_prefix_caching else None
+        self.reqs = [RequestState(i, io, hashes, engine.block_size) for i, io in enumerate(requests)]
+        self.waiting: deque[RequestState] = deque()
+        self.skipped: deque[RequestState] = deque()
+        self.running: list[RequestState] = []
         self.finished_ids: set[int] = set()
 
-    def fork(self, touched: Iterable[int] = ()) -> _Sched:
+    def fork(self, touched: Iterable[int] = ()) -> Scheduler:
         """A copy to run on while this one waits, which may change only the requests in the engine and `touched` (the
         rest, and the block-hash interning, which only names contents, are shared)."""
-        c = object.__new__(_Sched)
+        c = object.__new__(Scheduler)
         c.e, c.kv = self.e, self.kv.fork()
         c.reqs = list(self.reqs)
         for i in {*touched, *(r.i for r in (*self.running, *self.waiting, *self.skipped))}:
@@ -95,10 +108,10 @@ class _Sched:
         """Nothing running or waiting: the next arrival is what starts the next executed step."""
         return not (self.waiting or self.skipped or self.running)
 
-    def _preempt(self, r: _R) -> None:
-        assert r.status == _RUN
+    def _preempt(self, r: RequestState) -> None:
+        assert r.status == RUNNING
         self.kv.free_request(r)
-        r.status = _P
+        r.status = PREEMPTED
         r.num_computed = 0
         r.drop_stale = r.drop_stale and r.stale > 0
         r.stale = r.in_flight
@@ -113,7 +126,7 @@ class _Sched:
         if token_budget <= 0 or input_budget <= 0 or len(self.running) >= e.max_num_seqs:
             return False
         r = self.reqs[i]
-        assert r.status == _W and r.num_computed == 0
+        assert r.status == WAITING and r.num_computed == 0
         hit = self.kv.hit(r)
         budget = min(token_budget, input_budget)
         n = r.num_tokens - len(hit) * e.block_size
@@ -208,7 +221,7 @@ class _Sched:
                 break
             q.popleft()
             self.running.append(r)
-            (step.new if r.status == _W else step.resumed).append(r.i)
+            (step.new if r.status == WAITING else step.resumed).append(r.i)
             if hit:
                 step.cache_hit[r.i] = len(hit) * e.block_size
                 runs: list[tuple[int, int]] = []
@@ -224,7 +237,7 @@ class _Sched:
             starts[r.i] = num_computed
             p.token_budget -= n
             p.input_budget -= n
-            r.status = _RUN
+            r.status = RUNNING
             r.num_computed = num_computed
         if p.skipped_now:
             self.skipped.extendleft(p.skipped_now)
@@ -248,7 +261,7 @@ class _Sched:
         step.rows = [(i, starts[i], n) for i, n in sched.items()]
         return step, samples
 
-    def _stop(self, r: _R) -> bool:
+    def _stop(self, r: RequestState) -> bool:
         if r.io.eos and r.n_out == r.io.output_len:
             r.finish = "stop"
             return True
@@ -271,7 +284,7 @@ class _Sched:
                 stale = True
                 r.stale -= n
                 assert r.stale >= 0
-            if r.status == _F or (stale and r.drop_stale) or not samples[i]:
+            if r.status == FINISHED or (stale and r.drop_stale) or not samples[i]:
                 continue
             before = r.status
             r.append_output()
@@ -280,13 +293,13 @@ class _Sched:
                 if not stale:
                     r.placeholders -= 1
                     assert r.placeholders >= 0
-                if before == _RUN and self.kv.caching:
+                if before == RUNNING and self.kv.caching:
                     self.kv.cache_blocks(r, r.num_computed - r.placeholders)
             if stopped:
-                r.status = _F
+                r.status = FINISHED
                 self.finished_ids.add(i)
                 self.kv.free_request(r)
-                (stopped_running if before == _RUN else stopped_preempted).add(i)
+                (stopped_running if before == RUNNING else stopped_preempted).add(i)
                 done.append(i)
         if stopped_running:
             self.running = [r for r in self.running if r.i not in stopped_running]
@@ -318,7 +331,7 @@ class Open:
     asked about arriving now (or before the next step) and nothing after it, until it has emitted `want` outputs (or
     finished, or `_WHATIF_STEPS` steps): what each executed step emitted."""
 
-    sched: _Sched
+    sched: Scheduler
     budget: int
     scheduled: dict[int, int]
     whatif: Callable[[bool, int], Emitted]
@@ -329,8 +342,8 @@ Queue = deque[tuple[Step, dict[int, bool]]]
 _WHATIF_STEPS = 256
 
 
-def _drive(s: _Sched, queue: Queue, *, top: Callable[[], bool], schedule: Callable[[], tuple[Step, dict[int, bool]]],
-           executed: Callable[[Step, dict[int, bool]], None], resume: tuple[Step, dict[int, bool]] | None = None) -> None:
+def drive(s: Scheduler, queue: Queue, *, top: Callable[[], bool], schedule: Callable[[], tuple[Step, dict[int, bool]]],
+          executed: Callable[[Step, dict[int, bool]], None], resume: tuple[Step, dict[int, bool]] | None = None) -> None:
     """The engine core's loop (`EngineCore.step`; `step_with_batch_queue` under async scheduling, two steps in flight):
     `top()` before each schedule (False ends it), `executed` after each step's update; `resume`, a step this iteration
     has already scheduled."""
@@ -354,7 +367,7 @@ def _drive(s: _Sched, queue: Queue, *, top: Callable[[], bool], schedule: Callab
         executed(step, samples)
 
 
-def _whatif(s: _Sched, queue: Queue, p: _Pass, i: int, now: bool, want: int) -> Emitted:
+def _whatif(s: Scheduler, queue: Queue, p: _Pass, i: int, now: bool, want: int) -> Emitted:
     c, q = s.fork({i, *(r.i for r in p.skipped_now), *(j for st, _ in queue for j, _, _ in st.rows)}), deque(queue)
     p, r, later = p.fork(c.reqs), c.reqs[i], not now
     if now:
@@ -368,7 +381,7 @@ def _whatif(s: _Sched, queue: Queue, p: _Pass, i: int, now: bool, want: int) -> 
         if later:
             c.add(i)
             later = False
-        return (c.has_requests() or bool(q)) and r.n_out < want and r.status != _F and count < _WHATIF_STEPS
+        return (c.has_requests() or bool(q)) and r.n_out < want and r.status != FINISHED and count < _WHATIF_STEPS
 
     def schedule() -> tuple[Step, dict[int, bool]]:
         nonlocal count
@@ -381,7 +394,7 @@ def _whatif(s: _Sched, queue: Queue, p: _Pass, i: int, now: bool, want: int) -> 
         if step.rows:
             out.append({j: m for j, m in before.items() if c.reqs[j].n_out > m})
 
-    _drive(c, q, top=top, schedule=schedule, executed=executed, resume=c._close(p))
+    drive(c, q, top=top, schedule=schedule, executed=executed, resume=c._close(p))
     return out
 
 
@@ -413,7 +426,7 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
             raise ValueError(f"{len(released)} release buckets for {n} requests")
         if any(type(a) is not int or a < 0 for a in released) or any(released[k] > released[k + 1] for k in range(n - 1)):
             raise ValueError("release buckets are ints ≥ 0, nondecreasing in release order")
-    s = _Sched(engine, requests)
+    s = Scheduler(engine, requests)
     out = Replay(steps=[], finish=[None] * n, admitted=[None] * n, forced=[False] * n, asked=[[] for _ in range(n)])
     nxt = 0
     T = 0
@@ -473,7 +486,7 @@ def replay(engine: Engine, requests: Sequence[RequestIO], *, admit: Sequence[int
         for i in s.update(step, samples):
             out.finish[i] = s.reqs[i].finish
 
-    _drive(s, queue, top=top, schedule=schedule, executed=executed)
+    drive(s, queue, top=top, schedule=schedule, executed=executed)
     return out
 
 

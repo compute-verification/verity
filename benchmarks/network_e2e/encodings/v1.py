@@ -26,10 +26,10 @@ from typing import Any, TypeVar
 
 from verity.core.protocols.certifier import advice as I1
 from verity_vllm.pipeline.advice_code.codec import (
-    _advice as _advice, AdviceCodeError, arrival_order as arrival_order, bits_by_window, _book, CAPS as CAPS,
-    _charged as _charged, _check as _check, Decision as Decision, _decode as _decode, decode as decode,
+    advice_of_replay as advice_of_replay, AdviceCodeError, arrival_order as arrival_order, bits_by_window, book_of, CAPS as CAPS,
+    charged as charged, check_record as check_record, Decision as Decision, decode as decode,
     decode_bits as decode_bits, decode_full, encode, Record, Registered, release_order as release_order,
-    _replay as _replay, Request, residual, streams, _string, TICK_CAPS as TICK_CAPS, windows,
+    replay_record as replay_record, Request, residual, streams, string_of, TICK_CAPS as TICK_CAPS, windows,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -182,12 +182,12 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
         t1 = time.monotonic()
         got = decode_full(data, rec, reg)
         by = bits_by_window(data, rec, reg)
-        unordered = sum(_string([CV.Window(w.arrived, w.hits) for w in wins], reg)[1])
-        untimed = sum(_string([CV.Window(hits=w.hits) for w in wins], reg)[1])
+        unordered = sum(string_of([CV.Window(w.arrived, w.hits) for w in wins], reg)[1])
+        untimed = sum(string_of([CV.Window(hits=w.hits) for w in wins], reg)[1])
         row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
                      "order_bits": sum(by.values()) - unordered, "timing_bits": sum(by.values()) - untimed,
                      "bytes": len(data), "round_trip": got.advice == adv and got.streams == streams(adv, rec),
-                     "book": _book(reg).digest(), "encode_s": round(t1 - t0, 1),
+                     "book": book_of(reg).digest(), "encode_s": round(t1 - t0, 1),
                      "decode_s": round(time.monotonic() - t1, 1)}
     row["decisions"] = sum(len(w.arrived) for w in wins)
     row["order_entries"] = sum(len(w.order) for w in wins)

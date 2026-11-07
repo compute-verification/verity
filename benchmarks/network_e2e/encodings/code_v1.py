@@ -19,7 +19,7 @@ from typing import Any
 from verity.ml.protocols.certifier.window_charge import Window
 from verity_vllm.pipeline.advice_code.window_code import (
     Book, Caps, DEFAULT_CAPS, decode as decode, Decoder as Decoder, encode as encode, Encoded as Encoded,
-    Encoder as Encoder, ints, _key, KT, pack as pack, _State, unpack as unpack, _window,
+    Encoder as Encoder, ints, context_key, KT, pack as pack, CoderState, unpack as unpack, code_window,
 )
 
 HERE = Path(__file__).resolve().parent
@@ -55,12 +55,12 @@ class _Ideal:
         self.book, self.kt, self.bits = book, KT(book.priors), 0.0
 
     def _sym(self, name: str, v: int, lo: int, hi: int) -> int:
-        v = C._check(name, v, lo, hi)
+        v = C.in_range(name, v, lo, hi)
         self.bits += self.book.models[name].cost(v, lo, hi)
         return v
 
     def _flag(self, name: str, b: bool, ctx: Any = 0) -> bool:
-        key, b = _key(name, ctx), bool(b)
+        key, b = context_key(name, ctx), bool(b)
         f0, f1 = self.kt.freqs(key)
         self.bits += math.log2((f0 + f1) / (f1 if b else f0))
         self.kt.update(key, b)
@@ -76,12 +76,12 @@ class _Count:
         self.bits: dict[str, list[int]] = {}
 
     def _sym(self, name: str, v: int, lo: int, hi: int) -> int:
-        v = C._check(name, v, lo, hi)
+        v = C.in_range(name, v, lo, hi)
         self.ints.setdefault(name, []).append(v)
         return v
 
     def _flag(self, name: str, b: bool, ctx: Any = 0) -> bool:
-        self.bits.setdefault(_key(name, ctx), [0, 0])[int(bool(b))] += 1
+        self.bits.setdefault(context_key(name, ctx), [0, 0])[int(bool(b))] += 1
         return bool(b)
 
 
@@ -90,10 +90,10 @@ class _Count:
 
 def ideal_bits(windows: Sequence[Window], book: Book) -> list[float]:
     """Each window's model cost: its charge less the coder's termination and rounding."""
-    c, st, out = _Ideal(book), _State(), []
+    c, st, out = _Ideal(book), CoderState(), []
     for win in windows:
         before = c.bits
-        _window(c, win, st)
+        code_window(c, win, st)
         out.append(c.bits - before)
     return out
 
@@ -104,9 +104,9 @@ def fit_book(history: Iterable[Sequence[Window]], caps: Caps = DEFAULT_CAPS, pri
     observations."""
     c = _Count(caps)
     for windows in history:
-        st = _State()
+        st = CoderState()
         for win in windows:
-            _window(c, win, st)
+            code_window(c, win, st)
     models = {n: C.Binned(C.fit_table([C.bin_of(v) for v in c.ints.get(n, [])], 0, C.bin_of(hi)))
               for n, (_, hi) in ints(caps).items()}
     priors = {}

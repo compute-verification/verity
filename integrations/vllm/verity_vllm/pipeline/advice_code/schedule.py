@@ -1,6 +1,6 @@
 """What the scheduler replay schedules (`replay`, over the KV pool `pool`): the registered engine configuration
-(`Engine`) and certified tick (`Tick`), each request's certified I/O (`RequestIO`) and its scheduler state (`_R`, with
-its block hashes, `_Hashes`), and the steps the engine executed (`Step`, its rows (request, start, n)).
+(`Engine`) and certified tick (`Tick`), each request's certified I/O (`RequestIO`) and its scheduler state (`RequestState`, with
+its block hashes, `BlockHashes`), and the steps the engine executed (`Step`, its rows (request, start, n)).
 """
 
 from __future__ import annotations
@@ -9,16 +9,19 @@ import copy
 from dataclasses import dataclass, field
 from typing import Any
 
+__all__ = ["BlockHashes", "cdiv", "Engine", "FINISHED", "PREEMPTED", "RequestIO", "RequestState", "Row", "RUNNING", "Step",
+    "Tick", "WAITING"]
+
 
 # a request's status (`vllm.v1.request.RequestStatus`)
-_W, _RUN, _P, _F = "waiting", "running", "preempted", "finished"
+WAITING, RUNNING, PREEMPTED, FINISHED = "waiting", "running", "preempted", "finished"
 
 
 def cdiv(a: int, b: int) -> int:
     return -(-a // b)
 
 
-class _Hashes:
+class BlockHashes:
     """Block hashes as interned ids: equal ids iff equal chained (parent, tokens), so there are no collisions."""
 
     def __init__(self) -> None:
@@ -116,17 +119,17 @@ class Step:
         return tuple(sorted(self.rows))
 
 
-class _R:
+class RequestState:
     """A request's scheduler state (`vllm.v1.request.Request`, the fields the served subset reads)."""
 
-    def __init__(self, i: int, io: RequestIO, hashes: _Hashes | None, block_size: int) -> None:
+    def __init__(self, i: int, io: RequestIO, hashes: BlockHashes | None, block_size: int) -> None:
         self.i = i
         self.io = io
         self.P = io.prompt_len
         self.n_out = 0
         self.num_computed = 0
         self.placeholders = 0
-        self.status = _W
+        self.status = WAITING
         self.is_prefill_chunk = False
         self.in_flight = 0
         self.stale = 0
@@ -158,7 +161,7 @@ class _R:
         if self._hashes is not None:
             self._extend_hashes()
 
-    def fork(self) -> _R:
+    def fork(self) -> RequestState:
         r = copy.copy(self)
         r.block_hashes = list(self.block_hashes)
         return r

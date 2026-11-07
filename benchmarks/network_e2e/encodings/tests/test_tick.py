@@ -74,7 +74,7 @@ def buckets(times: list[float]) -> list[int]:
 
 
 class Scheduler:
-    """The replay's scheduler (`replay._Sched`) as `serve_admit.install` and `TickGate` read vLLM's V1 one: its FCFS
+    """The replay's scheduler (`replay.Scheduler`) as `serve_admit.install` and `TickGate` read vLLM's V1 one: its FCFS
     queues and finished ids, ``add_request``, and ``schedule``, whose output counts the step's tokens. It keeps the steps
     that ran a row and the step count each request was added at."""
 
@@ -125,7 +125,7 @@ class Served:
 
 
 def serve(e, ios, times, seed: int, *, gated: bool = True) -> Served:
-    """Serve the plan in simulated physical time through the replay's engine loop (`replay._drive`). Release i is
+    """Serve the plan in simulated physical time through the replay's engine loop (`replay.drive`). Release i is
     certified at times[i], its record reaches the gate up to 20 ms later and the request the engine up to 250 ms later,
     watermark line t comes up to 60 ms after bucket t closes, and each step takes 15 to 45 ms, all drawn from `seed`.
     With `gated`, the gate stands in front of the scheduler and the loop waits while it isn't ready; without, each
@@ -133,7 +133,7 @@ def serve(e, ios, times, seed: int, *, gated: bool = True) -> Served:
     rng = random.Random(seed)
     a = buckets(times)
     now = [0.0]
-    s = R._Sched(e, ios)
+    s = R.Scheduler(e, ios)
     sched = Scheduler(s)
     gate = sa.TickGate(sa.Tick(*TICK), hold_s=3600.0, clock=lambda: now[0])
     if gated:
@@ -187,7 +187,7 @@ def serve(e, ios, times, seed: int, *, gated: bool = True) -> Served:
             for i, m in before.items():
                 out.output_t[i] += [now[0]] * (s.reqs[i].n_out - m)
 
-    R._drive(s, queue, top=top, schedule=schedule, executed=executed)
+    R.drive(s, queue, top=top, schedule=schedule, executed=executed)
     out.steps, out.admitted, out.gate = sched.steps, [sched.admitted[i] for i in range(len(ios))], gate.summary()
     return out
 
@@ -236,8 +236,8 @@ def test_v1_sends_no_timing_under_the_tick(asy):
     assert not any(w.arrived or w.order for w in wins) and any(w.hits for w in wins)
     data = V.encode(adv, rec, reg)
     assert V.decode(data, rec, reg) == adv
-    assert sum(V.bits_by_window(data, rec, reg).values()) == sum(V._string([CV.Window(hits=w.hits) for w in wins],
-                                                                           reg)[1])
+    assert sum(V.bits_by_window(data, rec, reg).values()) == sum(V.string_of([CV.Window(hits=w.hits) for w in wins],
+                                                                             reg)[1])
 
 
 def test_without_the_tick_the_same_run_needs_decisions():

@@ -1,9 +1,9 @@
-"""The KV cache the scheduler replay runs (`replay._Sched`): one full-attention group, vLLM V1's `KVCacheManager`,
+"""The KV cache the scheduler replay runs (`replay.Scheduler`): one full-attention group, vLLM V1's `KVCacheManager`,
 `FullAttentionManager` and `BlockPool` at the replay's pin.
 
-`_KV` holds the free-block queue (`_Free`: blocks taken from the front, freed to either end, and a cached one taken from
+`BlockPool` holds the free-block queue (`_Free`: blocks taken from the front, freed to either end, and a cached one taken from
 wherever it is on a hit), the hash map of full blocks, each request's blocks and the watermark, and gives prefix-cache
-hits (`_KV.hit`), allocation, caching and freeing. `_KV.fork` copies it for a what-if run, its free queue (`_FreeFork`)
+hits (`BlockPool.hit`), allocation, caching and freeing. `BlockPool.fork` copies it for a what-if run, its free queue (`_FreeFork`)
 and hash map overlays on the parent's, which stays as it is.
 """
 
@@ -12,7 +12,9 @@ from __future__ import annotations
 from collections import OrderedDict
 from collections.abc import Iterable, Sequence
 
-from verity_vllm.pipeline.advice_code.schedule import _P, _W, Engine, _R, cdiv
+from verity_vllm.pipeline.advice_code.schedule import PREEMPTED, WAITING, Engine, RequestState, cdiv
+
+__all__ = ["BlockPool"]
 
 
 class _Free:
@@ -77,7 +79,7 @@ class _FreeFork:
             self.back[b] = None
 
 
-class _KV:
+class BlockPool:
     def __init__(self, engine: Engine) -> None:
         self.B = engine.block_size
         self.L = engine.max_model_len
@@ -92,10 +94,10 @@ class _KV:
         self.num_cached: dict[int, int] = {}
         self.owner: list[int | None] = [None] * engine.num_gpu_blocks     # the request that computes a block's KV
 
-    def fork(self) -> _KV:
+    def fork(self) -> BlockPool:
         """A copy to run on while this one waits (its free queue and hash map are overlays on this one's)."""
         assert isinstance(self.free, _Free)
-        k = object.__new__(_KV)
+        k = object.__new__(BlockPool)
         k.B, k.L, k.caching, k.watermark_blocks = self.B, self.L, self.caching, self.watermark_blocks
         k.free, k.ref, k.block_hash, k.owner = _FreeFork(self.free), list(self.ref), list(self.block_hash), list(self.owner)
         k.by_hash, k.mine = dict(self.by_hash), set()
@@ -144,7 +146,7 @@ class _KV:
         for b in last:
             self.free.push(b, front=False)
 
-    def hit(self, r: _R) -> list[int]:
+    def hit(self, r: RequestState) -> list[int]:
         """`find_longest_cache_hit` over the request's full-block hashes, at most `num_tokens - 1` tokens."""
         if not self.caching:
             return []
@@ -156,16 +158,16 @@ class _KV:
             out.append(next(iter(blocks)))
         return out
 
-    def blocks_to_allocate(self, r: _R, num_tokens: int, hit: Sequence[int]) -> int:
+    def blocks_to_allocate(self, r: RequestState, num_tokens: int, hit: Sequence[int]) -> int:
         held = len(self.req_blocks.get(r.i, ()))
         evictable = sum(1 for b in hit if self.ref[b] == 0)
         return max(cdiv(num_tokens, self.B) - len(hit) - held, 0) + evictable
 
-    def allocate_slots(self, r: _R, n: int, hit: Sequence[int] = (), *, full_sequence_must_fit: bool = False,
+    def allocate_slots(self, r: RequestState, n: int, hit: Sequence[int] = (), *, full_sequence_must_fit: bool = False,
                        has_scheduled_reqs: bool = True, dry: bool = False) -> bool:
         num_local = r.num_computed + len(hit) * self.B
         total = min(num_local, self.L)
-        wm = self.watermark_blocks if has_scheduled_reqs and r.status in (_W, _P) else 0
+        wm = self.watermark_blocks if has_scheduled_reqs and r.status in (WAITING, PREEMPTED) else 0
         if full_sequence_must_fit and self.blocks_to_allocate(r, min(r.num_tokens, self.L), hit) + wm > len(self.free):
             return False
         need_slot = min(total + n, self.L)
@@ -191,7 +193,7 @@ class _KV:
             self.cache_blocks(r, min(total + n, r.num_tokens))
         return True
 
-    def cache_blocks(self, r: _R, num_tokens: int) -> None:
+    def cache_blocks(self, r: RequestState, num_tokens: int) -> None:
         done = self.num_cached.get(r.i, 0)
         full = num_tokens // self.B
         if done >= full:
@@ -206,7 +208,7 @@ class _KV:
             self.block_hash[b] = h
         self.num_cached[r.i] = full
 
-    def free_request(self, r: _R) -> None:
+    def free_request(self, r: RequestState) -> None:
         blocks = self.req_blocks.pop(r.i, [])
         self.num_cached.pop(r.i, None)
         self._free_blocks(reversed(blocks))

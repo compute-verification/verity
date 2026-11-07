@@ -2,8 +2,8 @@
 
 `check_trace` replays a trace as ReplayStep_v1 sees each unit (`replay_vectors.vectors`) and runs each unit's
 CacheStep_v2 calls from the empty pool, every lookup's hit and evictable count, every free's returns and every compute's
-threshold derived from the pool (the prover's run). It holds them to `_KV`'s: each hit and evictable count ReplayStep_v1
-reads (`_KV.hit`'s), each slot's returns (`_KV.free_request`'s), and at every unit the state's free count to the pool's
+threshold derived from the pool (the prover's run). It holds them to `BlockPool`'s: each hit and evictable count ReplayStep_v1
+reads (`BlockPool.hit`'s), each slot's returns (`BlockPool.free_request`'s), and at every unit the state's free count to the pool's
 hashless free count plus its queued copies, the equality CompileSlice_v2's ``cache`` checks. It also holds `pool_step`'s
 copy of ReplayStep_v1's wires (`compile_slice_v2.tap`) to the step's rows, and the calls the slice checks (the
 witness the prover's run derived) to the prover's pool.
@@ -70,9 +70,9 @@ def check_trace(path: Path, *, R: int, W: int, A: int, CD: int = 4, SW: int = 20
         for c in got.looked:
             if (got.hit[c], got.ev[c]) != (inp.hit[c], inp.evict[c]):
                 raise AssertionError(f"{where}: candidate {c}'s hit and evictable count {got.hit[c], got.ev[c]}, "
-                                     f"_KV's {inp.hit[c], inp.evict[c]}")
+                                     f"BlockPool's {inp.hit[c], inp.evict[c]}")
         if tuple(got.ret) != tuple(inp.ret):
-            raise AssertionError(f"{where}: returns {got.ret}, _KV's {inp.ret}")
+            raise AssertionError(f"{where}: returns {got.ret}, BlockPool's {inp.ret}")
         if out.state.free != got.pool.pool.hf + V2.queued(got.pool.pool):
             raise AssertionError(f"{where}: next free {out.state.free}, the pool's "
                                  f"{got.pool.pool.hf} + {V2.queued(got.pool.pool)}")

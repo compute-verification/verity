@@ -59,6 +59,19 @@ PUBLIC = {
     "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
                                         "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
                                         "the trace corpus serves under",
+    "verity_vllm.pipeline.advice_code.codec": "I1: advice v1, the network certifier's advice code: its certified record, its "
+                                              "registration, and I1 v0's encode and decode against the scheduler replay, which "
+                                              "the compiler reads and benchmarks/network_e2e measures",
+    "verity_vllm.pipeline.advice_code.schedule": "I1: the scheduler replay's engine config, certified tick, steps and request "
+                                                 "states",
+    "verity_vllm.pipeline.advice_code.pool": "I1: the replay of vLLM's KV block pool, which the certifier's cache vectors are "
+                                             "held to",
+    "verity_vllm.pipeline.advice_code.replay": "I1: the replay of vLLM's scheduler, which the certifier's replay vectors and "
+                                               "the traces' admission are held to",
+    "verity_vllm.pipeline.advice_code.derived": "I1: advice v1's derived rules (the walk, the prefixes, the tie), which the "
+                                                "certifier's derived vectors are held to",
+    "verity_vllm.pipeline.advice_code.window_code": "I1: advice v1's window code and its codebook",
+    "verity_vllm.pipeline.advice_code.arith": "I1: the arithmetic coder advice v1's window code runs on",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "

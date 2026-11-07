@@ -60,6 +60,9 @@ from typing import Any, NamedTuple
 from verity.ml.protocols.certifier.window_charge import Window
 from verity_vllm.pipeline.advice_code import arith as C
 
+__all__ = ["Book", "Caps", "code_window", "CoderState", "context_key", "decode", "Decoder", "DEFAULT_CAPS", "encode",
+    "Encoded", "Encoder", "ints", "KT", "pack", "unpack"]
+
 
 @dataclass(frozen=True)
 class Caps:
@@ -140,7 +143,7 @@ class KT:
             n[0], n[1] = (n[0] + 1) // 2, (n[1] + 1) // 2
 
 
-def _key(name: str, ctx: Any) -> str:
+def context_key(name: str, ctx: Any) -> str:
     return f"{name}/{ctx}"
 
 
@@ -197,12 +200,12 @@ class Encoder:
         return self.seg
 
     def value(self, name: str, v: int, lo: int, hi: int) -> int:
-        v = C._check(name, v, lo, hi)
+        v = C.in_range(name, v, lo, hi)
         self.book.models[name].put(self._open(), v, lo, hi)
         return v
 
     def bit(self, name: str, b: bool, ctx: Any = 0) -> bool:
-        key, b = _key(name, ctx), bool(b)
+        key, b = context_key(name, ctx), bool(b)
         f0, f1 = self.kt.freqs(key)
         self._open().encode(f0 if b else 0, f1 if b else f0, f0 + f1)
         self.kt.update(key, b)
@@ -249,10 +252,10 @@ class Decoder:
         return self.seg
 
     def value(self, name: str, lo: int, hi: int) -> int:
-        return C._check(name, self.book.models[name].get(self._open(), lo, hi), lo, hi)
+        return C.in_range(name, self.book.models[name].get(self._open(), lo, hi), lo, hi)
 
     def bit(self, name: str, ctx: Any = 0) -> bool:
-        key, seg = _key(name, ctx), self._open()
+        key, seg = context_key(name, ctx), self._open()
         f0, f1 = self.kt.freqs(key)
         b = seg.target(f0 + f1) >= f0
         seg.consume(f0 if b else 0, f1 if b else f0, f0 + f1)
@@ -271,7 +274,7 @@ class Decoder:
         return self.bit(name, ctx)
 
 
-class _State:
+class CoderState:
     """What the windows carry from one to the next: the run of decisions since the last arrival, and the last resumed
     position, order step and ingress index."""
 
@@ -279,7 +282,7 @@ class _State:
         self.run, self.resume, self.step, self.index = 0, -1, -1, -1
 
 
-def _window(c: Any, win: Window | None, st: _State) -> Window:
+def code_window(c: Any, win: Window | None, st: CoderState) -> Window:
     """One window's symbols, written once for every direction: `win` is None when decoding."""
     caps = c.book.caps
 
@@ -321,19 +324,19 @@ def _window(c: Any, win: Window | None, st: _State) -> Window:
 
 def encode(windows: Sequence[Window], book: Book) -> Encoded:
     """The run's residual, window by window; `lens[w]` is window w's charge."""
-    e, st = Encoder(book), _State()
+    e, st = Encoder(book), CoderState()
     for win in windows:
         e.window()
-        _window(e, win, st)
+        code_window(e, win, st)
     return e.finish()
 
 
 def decode(bits: bytes, nbits: int, book: Book, n_windows: int) -> list[Window]:
     """The windows back, refusing (ValueError) any string `encode` wouldn't produce."""
-    d, st = Decoder(bits, nbits, book), _State()
+    d, st = Decoder(bits, nbits, book), CoderState()
     out = []
     for _ in range(n_windows):
         d.window()
-        out.append(_window(d, None, st))
+        out.append(code_window(d, None, st))
     d.finish()
     return out

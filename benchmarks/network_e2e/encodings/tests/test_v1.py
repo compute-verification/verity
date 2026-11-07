@@ -135,7 +135,7 @@ def test_a_trace_corpus_trace_round_trips(smallkv):
 
 
 def _string(wins, reg) -> bytes:
-    return CV.pack(V._string(wins, reg)[0])[0]
+    return CV.pack(V.string_of(wins, reg)[0])[0]
 
 
 def _ordinals(t, rec) -> list[int]:
@@ -258,8 +258,8 @@ def test_no_hit_is_sent_while_the_bound_holds():
     rec, reg = _tiny(2)
     reg = dataclasses.replace(reg, engine=dataclasses.replace(reg.engine, enable_prefix_caching=True))
     order = V.release_order(rec)
-    rp, _, _ = V._replay(rec, reg, reg.engine, order, lambda i, k: True)
-    adv = V._advice(rec, reg, V._check(rec, reg, reg.engine), order, rp)
+    rp, _, _ = V.replay_record(rec, reg, reg.engine, order, lambda i, k: True)
+    adv = V.advice_of_replay(rec, reg, V.check_record(rec, reg, reg.engine), order, rp)
     assert V.decode(V.encode(adv, rec, reg), rec, reg) == adv
     assert not any(w.hits for w in V.residual(adv, rec, reg))
     t, rec, reg, adv = case("async-prefix-cache", T=20)
@@ -276,7 +276,7 @@ def test_each_value_goes_to_a5s_window(name):
     order = V.arrival_order(adv, rec, reg.row_order)
     first = [min(s for s, st in enumerate(adv.steps) if any(adv.requests[x.request].id == rec.requests[k].id
                                                               for x in st.rows)) for k in order]
-    _, decisions, _ = V._replay(rec, reg, reg.engine, order, lambda i, k: k >= first[i])
+    _, decisions, _ = V.replay_record(rec, reg, reg.engine, order, lambda i, k: k >= first[i])
     released, at, kept = [None] * len(adv.steps), 0, [0] * len(adv.requests)
     for s, st in enumerate(adv.steps):
         for x in st.rows:
@@ -305,9 +305,9 @@ def test_the_replay_chain_carries_what_a5_charges_early(name, n, early):
     order = V.arrival_order(adv, rec, reg.row_order)
     first = [min(s for s, st in enumerate(adv.steps) if any(adv.requests[x.request].id == rec.requests[k].id
                                                               for x in st.rows)) for k in order]
-    rp, decisions, _ = V._replay(rec, reg, reg.engine, order, lambda i, k: k >= first[i])
+    rp, decisions, _ = V.replay_record(rec, reg, reg.engine, order, lambda i, k: k >= first[i])
     W = V.windows(rec, reg.T)
-    window, _ = V._charged(rec, reg, order, rp, W)
+    window, _ = V.charged(rec, reg, order, rp, W)
     charged = [w for w, x in enumerate(wins) for _ in x.arrived]
     assert len(decisions) == n and all(k < len(window) for _i, k, _b in decisions)
     read = [window[k] for _i, k, _b in decisions]

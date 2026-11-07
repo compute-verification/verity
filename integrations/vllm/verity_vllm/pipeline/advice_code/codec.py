@@ -29,7 +29,7 @@ start, n), new and resumed requests, cache hits (its block pool's LRU, eviction 
 per open step: whether the next request had arrived.
 
 **Derived, 0 bits**: the batch order (`Registered.row_order`: Model Runner V2's stable sort of the scheduled rows by n,
-or the scheduler's own order), I1's numbering by first row, and the derived rules' walk (`derived._walk`) over the
+or the scheduler's own order), I1's numbering by first row, and the derived rules' walk (`derived.walk_steps`) over the
 replayed rows, which recomputes every start and n by vLLM's rules and checks them against the replay, holds each hit
 under the cumulative pool bound to the longest cached prefix, and gives `kind`, the canonical `sources`, and the request
 records (the tie: prompt and output lengths against the certified ids, `finish` by the stop rule).
@@ -37,14 +37,14 @@ records (the tie: prompt and output lengths against the certified ids, `finish` 
 **Sent**, as `window_charge.Window`s (`residual`), and nothing else:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived.
 - `order`: the order's deviations from release order, as above.
-- `hits`: past the pool bound, every prefix-cache lookup the replay's scheduler reads (`pool._KV.hit`: each candidate its
+- `hits`: past the pool bound, every prefix-cache lookup the replay's scheduler reads (`pool.BlockPool.hit`: each candidate its
   waiting loop reaches, the one whose allocation ends the loop included, and `would_admit`'s for an open step's
   arrival), in the order it reads them, as its shortfall: the longest prefix a cache that never evicts holds
   (`derived.Prefixes.cached` over the rows scheduled before the lookup) less the replay's hit, in whole blocks. Where
-  the bound holds (`derived._walk`'s: sync scheduling, and the blocks of the requests admitted through the step at most
+  the bound holds (`derived.walk_steps`'s: sync scheduling, and the blocks of the requests admitted through the step at most
   the pool less its null block) the shortfall is 0 by the bound and is derived at 0 bits. Past it, the hit is the
   prover's choice of eviction, so it is sent and charged, and no choice goes uncharged (the sampled leak bound's `hAs`).
-The resumes and the order of new requests that `derived._walk` would otherwise read are the replay's, so v1 sends none.
+The resumes and the order of new requests that `derived.walk_steps` would otherwise read are the replay's, so v1 sends none.
 The KV pool's size is registered before the run, never sent: a prover that chose it could declare a bigger pool and buy
 derived hits with it.
 
@@ -91,6 +91,11 @@ from verity_vllm.pipeline.advice_code import pool as P
 from verity_vllm.pipeline.advice_code import replay as R
 from verity_vllm.pipeline.advice_code import schedule as S
 from verity_vllm.pipeline.advice_code import window_code as CV
+
+__all__ = ["advice_of_replay", "AdviceCodeError", "arrival_order", "bits_by_window", "book_of", "CAPS", "charged",
+    "check_record", "Decision", "decode", "decode_bits", "decode_full", "Decoded", "encode", "Lookup", "Record",
+    "Registered", "release_order", "replay_record", "Request", "residual", "ROW_ORDERS", "streams", "string_of", "TICK_CAPS",
+    "windows"]
 
 T = TypeVar("T")
 
@@ -316,7 +321,7 @@ class Registered:
                         row_order=self.row_order)
 
 
-def _check(record: Record, reg: Registered, engine: Any) -> Any:
+def check_record(record: Record, reg: Registered, engine: Any) -> Any:
     """The derived config, once the record and the pool are ones the replay runs to the end on: every output the stop
     rule's, within max_model_len, and the pool holding any one request alone, async's two steps ahead included."""
     cfg = reg.config(engine)
@@ -357,11 +362,11 @@ Decision = tuple[int, int, bool]  # (request, step, whether it had arrived)
 
 @contextmanager
 def _recording() -> Iterator[list[tuple[list[Lookup], Any]]]:
-    """Every lookup the replay's scheduler reads (`_KV.hit`: each candidate the waiting loop reaches, the one whose
+    """Every lookup the replay's scheduler reads (`BlockPool.hit`: each candidate the waiting loop reaches, the one whose
     allocation ends it included, and `would_admit`'s for an open step's arrival), by `schedule()` call, with the step
     the call made."""
     calls: list[tuple[list[Lookup], Any]] = []
-    hit0, schedule0 = P._KV.hit, R._Sched.schedule
+    hit0, schedule0 = P.BlockPool.hit, R.Scheduler.schedule
 
     def hit(kv: Any, r: Any) -> list[int]:
         h = hit0(kv, r)
@@ -375,15 +380,15 @@ def _recording() -> Iterator[list[tuple[list[Lookup], Any]]]:
         calls[-1] = (calls[-1][0], out[0])
         return out
 
-    P._KV.hit, R._Sched.schedule = hit, schedule
+    P.BlockPool.hit, R.Scheduler.schedule = hit, schedule
     try:
         yield calls
     finally:
-        P._KV.hit, R._Sched.schedule = hit0, schedule0
+        P.BlockPool.hit, R.Scheduler.schedule = hit0, schedule0
 
 
-def _replay(record: Record, reg: Registered, engine: Any, order: Sequence[int],
-            bit_of: Callable[[int, int], bool]) -> tuple[Any, list[Decision], list[list[Lookup]]]:
+def replay_record(record: Record, reg: Registered, engine: Any, order: Sequence[int],
+                  bit_of: Callable[[int, int], bool]) -> tuple[Any, list[Decision], list[list[Lookup]]]:
     """The replay, each decision `bit_of(request, step)` (under the certified tick, the tick's rule from each request's
     `end`, and no decisions): its steps, its decisions in order, and each executed step's lookups in the order the
     scheduler read them (`would_admit`'s and the waiting loop's own of one request read once; a `schedule()` that
@@ -412,7 +417,7 @@ def _sent(record: Record, engine: Any, order: Sequence[int], rp: Any,
           looks: Sequence[Sequence[Lookup]]) -> list[tuple[int, int]]:
     """The hits v1 sends, as (step, shortfall): every lookup of a step the no-eviction bound doesn't cover, as the
     longest prefix a cache that never evicts holds less the replay's hit, in whole blocks. The bound is
-    `derived._walk`'s: sync scheduling, and the blocks of every request admitted so far, this step's included, at most
+    `derived.walk_steps`'s: sync scheduling, and the blocks of every request admitted so far, this step's included, at most
     the pool less its null block. The cache that never evicts is `derived.Prefixes` over the rows scheduled before the
     lookup, running rows first."""
     if not engine.enable_prefix_caching:
@@ -445,7 +450,7 @@ def _sent(record: Record, engine: Any, order: Sequence[int], rp: Any,
     return out
 
 
-def _charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: int) -> tuple[list[int], list[int]]:
+def charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: int) -> tuple[list[int], list[int]]:
     """A5's windows, as I1's `bits_by_window` charges: each step's, the earliest window an output at that step or later
     is released in (the last window where none follows); and each arrival's ingress window, the earliest of its own
     and every later arrival's last frame's, so that it never decreases where the arrivals deviate from release order."""
@@ -479,7 +484,7 @@ def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int]
     and the earliest window that shows the rows of the first step that reads that arrival (a lookup, a decision or its
     admission); and a sent hit's shortfall to the earliest window that shows its step's. Each is nondecreasing in the
     replay's order, so each field's values, window after window, are the replay's."""
-    earliest, win = _charged(record, reg, order, rp, W)
+    earliest, win = charged(record, reg, order, rp, W)
 
     def at(k: int) -> int:
         return earliest[k] if k < len(earliest) else W - 1
@@ -513,15 +518,15 @@ CAPS = CV.Caps(order_len=1)
 TICK_CAPS = replace(CAPS, arrived=0, order=0)
 
 
-def _book(reg: Registered) -> Any:
+def book_of(reg: Registered) -> Any:
     if reg.book is None:
         return CV.Book.uniform(CAPS if reg.tick is None else TICK_CAPS)
     return reg.book
 
 
-def _string(wins: Sequence[Any], reg: Registered) -> tuple[list[int], list[int]]:
+def string_of(wins: Sequence[Any], reg: Registered) -> tuple[list[int], list[int]]:
     """The string's bits, unpadded, and each window's charge: its segment's bits."""
-    enc = CV.encode(wins, _book(reg))
+    enc = CV.encode(wins, book_of(reg))
     return enc.bitlist(), list(enc.lens)
 
 
@@ -534,7 +539,7 @@ def _frames(bits: Sequence[int], reg: Registered, W: int, *, padded: bool) -> li
             break
         data, n = CV.pack(list(bits[:len(bits) - pad]))
         try:
-            return CV.decode(data, n, _book(reg), W)
+            return CV.decode(data, n, book_of(reg), W)
         except ValueError as e:
             err = err or e
     raise AdviceCodeError(f"no {W} windows end the string: {err}")
@@ -552,12 +557,12 @@ def _parse(data: Any, reg: Registered, W: int) -> list[Any]:
 def bits_by_window(data: bytes, record: Record, reg: Registered) -> dict[int, int]:
     """Each window's charge: its segment's bits, a function of the string alone. They sum to the string's bits less
     padding."""
-    return _total(lambda: dict(enumerate(_string(_parse(data, reg, windows(record, reg.T)), reg)[1])))
+    return _total(lambda: dict(enumerate(string_of(_parse(data, reg, windows(record, reg.T)), reg)[1])))
 
 
 # --- I1 from the replay ------------------------------------------------------------------------------------------------
 
-def _advice(record: Record, reg: Registered, cfg: Any, order: Sequence[int], rp: Any) -> I1.Advice:
+def advice_of_replay(record: Record, reg: Registered, cfg: Any, order: Sequence[int], rp: Any) -> I1.Advice:
     """I1 v0 from the replayed steps: the batch order, I1's numbering by first row, then the derived rules' walk, which
     must give the replay's every start and n back, and the tie's request fields; each kept output's release from the
     record."""
@@ -599,9 +604,9 @@ def _advice(record: Record, reg: Registered, cfg: Any, order: Sequence[int], rp:
     held = D.Holdings(tuple(D.CertifiedRequest(q.id, q.prompt, q.max_tokens) for q in reqs), tuple(q.output for q in reqs))
     prompt_len = tuple(len(reqs[i].prompt) for i in first_of)
     pool = D.pool_bound([[(num[i], start, n) for i, start, n in b] for b in batch], cfg)
-    walk = D._walk(rows, prompt_len, cfg, held=held, pool=pool, hit_of=hit_of,
-                   resumed_of=lambda s, k: first_of[rows[s][k]] in resumed[s], n_of=n_of, lag_of=lag_of,
-                   order_of=lambda s, numbers: tuple(first_of[i] for i in numbers))
+    walk = D.walk_steps(rows, prompt_len, cfg, held=held, pool=pool, hit_of=hit_of,
+                        resumed_of=lambda s, k: first_of[rows[s][k]] in resumed[s], n_of=n_of, lag_of=lag_of,
+                        order_of=lambda s, numbers: tuple(first_of[i] for i in numbers))
     if walk.order != tuple(first_of):
         raise AdviceCodeError("the walk numbers the requests otherwise than the replay's first rows")
     for s, (mine, b) in enumerate(zip(walk.steps, batch, strict=True)):
@@ -630,7 +635,7 @@ def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[li
     if type(advice) is not I1.Advice:
         raise AdviceCodeError(f"v1 encodes an I1 Advice, not a {type(advice).__name__}")
     engine = reg.engine
-    _check(record, reg, engine)
+    check_record(record, reg, engine)
     order = arrival_order(advice, record, reg.row_order)
     if reg.tick is not None and order != release_order(record):
         raise AdviceCodeError("under the certified tick the engine admits in release order, and this advice's arrival order "
@@ -642,7 +647,7 @@ def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[li
             e = index[advice.requests[x.request].id]
             if first[e] < 0:
                 first[e] = s
-    rp, decisions, looks = _replay(record, reg, engine, order, lambda i, k: k >= first[i])
+    rp, decisions, looks = replay_record(record, reg, engine, order, lambda i, k: k >= first[i])
     return _residual(record, reg, engine, order, rp, decisions, looks, windows(record, reg.T)), rp, order
 
 
@@ -657,7 +662,7 @@ def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = 
     replay's under its arrival order, whose rows aren't in the registered order, or whose sources aren't the canonical
     ones). `check` decodes the string back and holds it to the advice."""
     wins, rp, order = _residual_of(advice, record, reg)
-    data = CV.pack(_string(wins, reg)[0])[0]
+    data = CV.pack(string_of(wins, reg)[0])[0]
     if check:
         index = {record.requests[k].id: e for e, k in enumerate(order)}
         theirs = [[(index[advice.requests[x.request].id], x.start, x.n) for x in st.rows] for st in advice.steps]
@@ -707,7 +712,7 @@ def _total(run: Callable[[], T]) -> T:
 
 def _decode(wins: Sequence[Any], record: Record, reg: Registered) -> Decoded:
     engine = reg.engine
-    cfg = _check(record, reg, engine)
+    cfg = check_record(record, reg, engine)
     if any(w.resumes or w.lag for w in wins):
         raise AdviceCodeError("a window sends resumes or lag bits, which v1 replays or derives")
     if reg.tick is not None and any(w.arrived or w.order for w in wins):
@@ -726,13 +731,13 @@ def _decode(wins: Sequence[Any], record: Record, reg: Registered) -> Decoded:
         used += 1
         return arrived[used - 1]
 
-    rp, decisions, looks = _replay(record, reg, engine, order, bit_of)
+    rp, decisions, looks = replay_record(record, reg, engine, order, bit_of)
     if used != len(arrived):
         raise AdviceCodeError(f"the replay asks {used} of the string's {len(arrived)} decisions")
     if _residual(record, reg, engine, order, rp, decisions, looks, len(wins)) != list(wins):
         raise AdviceCodeError("the windows aren't the replay's residual: a hit that isn't the replay's, or a value charged to "
                               "another window than A5's")
-    advice = _advice(record, reg, cfg, order, rp)
+    advice = advice_of_replay(record, reg, cfg, order, rp)
     if arrival_order(advice, record, reg.row_order) != order:
         raise AdviceCodeError("the order isn't the one the advice's rows give (another arrival order gives the same schedule)")
     return Decoded(advice, streams(advice, record), tuple(order))

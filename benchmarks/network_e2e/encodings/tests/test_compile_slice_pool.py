@@ -1,6 +1,6 @@
 """CompileSlice_v2's pool calls (`verity.ml.protocols.certifier.compile_slice_v2.pool_step`) against the replay over
 whole traces, through `compile_slice_pool.check_trace`: at every unit each hit, evictable count and return the calls
-derive is `_KV`'s, the state's free count is the pool's hashless free count plus its queued copies, the tapped wires
+derive is `BlockPool`'s, the state's free count is the pool's hashless free count plus its queued copies, the tapped wires
 are ReplayStep_v1's rows, and the calls the slice checks rebuild the prover's pool."""
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ SYNC_CRUSH = {"clock": 26880, "compute": 7361, "copies_max": 1, "entries_max": 1
                                         pytest.param("async-crush.json.gz", ASYNC_CRUSH, marks=pytest.mark.slow),
                                         pytest.param("sync-crush.json.gz", SYNC_CRUSH, marks=pytest.mark.slow)])
 def test_the_slice_s_pool_is_vllm_s(name, want) -> None:
-    """Every unit of the trace fits (R 16, W 64, A 16) and its calls hold to `_KV` (`check_trace` raises otherwise),
+    """Every unit of the trace fits (R 16, W 64, A 16) and its calls hold to `BlockPool` (`check_trace` raises otherwise),
     with evicting computes, frees of a block another slot holds, preemptions (the crush traces) and late caches (the
     async ones), in N = NB − 1 entries of one copy each."""
     assert CSP.check_trace(HERE / "fixtures" / name, R=16, W=64, A=16) == want

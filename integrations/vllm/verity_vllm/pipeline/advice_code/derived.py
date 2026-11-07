@@ -13,7 +13,7 @@ pool's size, the token budget, the stop ids, the scheduler mode). As witness, in
 (each request's `user` id, prompt ids and `max_tokens`, in ingress order), the certified egress and the committed values
 (each kept row's sampled id). The compile unit holds every request's tokens (its prompt ids, then its kept sampled ids).
 
-**The derivations** are one walk over the steps (`_walk`), the same for the encoder and the decoder, so they can't drift
+**The derivations** are one walk over the steps (`walk_steps`), the same for the encoder and the decoder, so they can't drift
 apart. It takes each step's rows in vLLM d9105ea8's scheduling order: the rows' own (`row_order` "scheduling"), or, for
 rows in the runner's batch order ("batch"), the order vLLM's FCFS lists give them (the running requests by admission,
 then the resumed ones, then the new ones in arrival order, the certified ingress order). A request's known tokens K are
@@ -26,7 +26,7 @@ prompt. Two fields come from the tokens (`Prefixes`):
   the whole unit by this step (I1's rule) from the same tokens through it. Prefixes are looked up by a chain of SHA-512
   keys over whole units (`unit_key`), and a key names a request only where its tokens match, so no collision and no
   interpreter changes what is derived;
-- while nothing can have been evicted (`_walk`'s no-eviction bound), a `cache_hit` is the longest prefix, in hit units
+- while nothing can have been evicted (`walk_steps`'s no-eviction bound), a `cache_hit` is the longest prefix, in hit units
   and at most K − 1 tokens, whose every unit some row scheduled before it computed (vLLM's lookup: a block is cached as it
   is scheduled, and stays cached until evicted). A shorter or longer hit is refused. Past the bound, hits are sent.
 The request records come from the tie (`tie_fields`: the prompt and output lengths against the certified ids, `finish`
@@ -55,6 +55,9 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
 from verity.core.protocols.certifier.advice import RequestAdvice, Row, Source, StepAdvice
+
+__all__ = ["CertifiedRequest", "Config", "Holdings", "pool_bound", "PREFIX_ROOT", "Prefixes", "Residual", "stop_rule",
+    "tie_fields", "TOKEN_BYTES", "unit_key", "Walk", "walk_steps"]
 
 
 @dataclass(frozen=True)
@@ -171,7 +174,7 @@ class Prefixes:
     names a request only where that request's tokens through the prefix are the asking one's, so no collision can change
     what is derived, and the prover and the compile unit derive the same on any interpreter."""
 
-    def __init__(self, tokens: Sequence[Sequence[int]], unit: int):
+    def __init__(self, tokens: Sequence[Sequence[int]], unit: int) -> None:
         if type(unit) is not int or unit < 1:
             raise ValueError(f"a hit unit of {unit!r} tokens")
         self.unit = unit
@@ -262,10 +265,10 @@ class Walk:
     order_sent: tuple[tuple[int, tuple[int, ...]], ...] = ()
 
 
-def _walk(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config, *, held: Holdings, pool: bool,
-          hit_of: Callable[[int, int, int | None], int], resumed_of: Callable[[int, int], bool],
-          n_of: Callable[[int, int], int], lag_of: Callable[[int], bool],
-          order_of: Callable[[int, Sequence[int]], Sequence[int] | None]) -> Walk:
+def walk_steps(rows: Sequence[Sequence[int]], prompt_len: Sequence[int], cfg: Config, *, held: Holdings, pool: bool,
+               hit_of: Callable[[int, int, int | None], int], resumed_of: Callable[[int, int], bool],
+               n_of: Callable[[int, int], int], lag_of: Callable[[int], bool],
+               order_of: Callable[[int, Sequence[int]], Sequence[int] | None]) -> Walk:
     """The one derivation (the module's docstring), over the certified requests' tokens (`held`, witness). The callbacks
     give what the residual holds: `hit_of(s, t, cached)` the hit in tokens of step s's row admitting certified request t,
     given `cached`, the hit the walk derives, or None where it derives none; `resumed_of(s, k)` whether step s's row k,
