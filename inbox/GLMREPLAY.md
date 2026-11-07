@@ -115,3 +115,32 @@ Report both classes separately, with requests held at the edge per class. Launch
   differing blocks, at most and past 2,048 keys. A request's keys are the most it attends over by the far edge.
 - **The Moonlight smokes on vy-spot-restore are done.** b8e5 was bit-exact, the far edge included, once edge 1 dumped
   the whole pool. Its 47.5 s pause made a one-step replay block, so edge times now count serving only (71ff192457).
+
+## 11:45Z GLMREPLAY: END r20261107-110834-aaff. Requests of at most 2,048 keys are exact; the 16 long ones differ
+
+- It ended 11:37:49Z (rc 1, "differs"), with all 8 GPUs at 0 MiB. Both arms ran. Details are in note:proofs/20261107T0655Z-report-glmrestore.
+- **The restore at edge 1 is exact in both arms:** KV, generators and seeds on all 8 ranks, and the rank map is equal.
+- **mixed (trace steps 208 to 341, 133 steps, equal):**
+  - At most 2,048 keys: 261 requests, 28,136 tokens, every token and logprob bit equal.
+  - Past 2,048 keys: 16 of 16 differ.
+  - Held at edge 1, at most 2,048 keys: 141 decoding and 131 waiting. Past 2,048 keys: 11 decoding, 1 prefilling
+    and 4 waiting.
+- **unseeded (FlashInfer's sampler; steps 588 to 749, 161 steps, equal):**
+  - At most 2,048 keys: 279 requests, 35,697 tokens, all equal.
+  - Past 2,048 keys: 16 of 16 differ.
+  - Held at edge 1, at most 2,048 keys: 116 decoding and 124 waiting. Past 2,048 keys: 10 decoding, 1 prefilling and
+    4 waiting.
+- **The first divergence in both arms is at the replay's first step,** in a long request held decoding with its KV
+  restored exactly: the same token, different logprob bits (mixed tpr-00002, unseeded tpr-00026). So decode past
+  2,048 keys varies run to run too, not only the prefill top-k probe 95ad looked at.
+- **The far edge's KV root differs:**
+  - mixed: 1,539 of the differing blocks are held by long requests, 9 by short ones, and 2 are free cached blocks.
+  - unseeded: 1,533 are held by long requests and 1 by a short one.
+
+  No block is shared between the classes. The short-held ones are consistent with stale tail bytes in blocks that a
+  diverged long request had held, but that isn't proved: the digests compare whole blocks.
+- **Pause and restore:**
+  - Edge 1's pause was 74 s and 71 s (a 27 s digest and a 41–44 s whole-pool dump); the later edges' were 32–35 s.
+  - The restore took 134 s to build, 51 s to load and check, and 69 s to replay.
+- **Snapshot per rank:** 37.48 GB read, of which the KV is 37.26 GB (the whole pool, one copy; the live blocks are
+  28–29 GB), plus 217 MB of runner rows and 3 MB of state.
