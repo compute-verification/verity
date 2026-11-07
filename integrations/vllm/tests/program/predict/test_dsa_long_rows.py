@@ -209,7 +209,7 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     out = WA.Advice((a, b), tuple(steps[:4]), (0,) * 6)
     idle = WA.Advice((a, b), (steps[4],), (0,), (carried_a, WA.Carried(0, 3, 2, ((0, 3),))))
     into = WA.Advice((a,), (steps[5],), (0,), (carried_a,))
-    assert WA.follows(out, idle) is None and WA.follows(idle, into) is None
+    assert WA.follows(out, idle) == [(0, 0), (1, 1)] and WA.follows(idle, into) == [(0, 0)]
     ingress = {"a": {**GREEDY, "max_tokens": 5, "prompt": [1, 2, 3]}, "b": {**GREEDY, "max_tokens": 3, "prompt": [4, 5]}}
     cs = [compile_steps(reg, adv, {q.id: ingress[q.id] for q in adv.requests})
           for adv in (WA.Advice((a, b), tuple(steps), (0,) * 8), out, idle, into)]

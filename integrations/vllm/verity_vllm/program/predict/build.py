@@ -41,8 +41,8 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, finish_run, kind,
-                     launch_rows, launch_seqlen_q, open_launch, request_passes, run_input, select_token, served_class, with_checks,
+from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, finish_run, in_launch, kind,
+                     launch_batch, launch_rows, launch_seqlen_q, request_passes, run_input, select_token, served_class, with_checks,
                      with_edge, wrapper_keys)
 from .domain import check_phi
 from .phi import Phi
@@ -752,7 +752,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
                              S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
     model.run = run
-    batch = open_launch(model, net.model_class, phi, wrapper, LP, T, batch, chunks)
+    batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
+    in_launch(model, batch, net.model_class, chunks, T)
     if wrapper == "request" and isinstance(model, _Model):
         model.ctx = launch_rows(phi, LP, T, C)
     if C:

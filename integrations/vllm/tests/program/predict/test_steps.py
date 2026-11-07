@@ -753,6 +753,24 @@ def test_class_g_plans_each_request_at_the_launch_context_its_build_traced(tmp_p
     assert trace_dir(plan.requests[0]) == trace_dir(summary["requests"][0])
 
 
+def test_class_g_samples_by_the_selects_circuit_check_binds_at_its_vocabulary(tmp_path):
+    """GLM-5.3 in class G (an H200) samples a seeded top-p request at its registered split count and a greedy one by `TokenSelect`;
+    `prune`'s dead-free versions of the two at its vocabulary are the bindings `dead_free.circuit-check.py` holds for it."""
+    import runpy
+
+    from verity_vllm.program.predict.common import kind
+    from verity.ml.definitions.registry import dead_free as DF
+
+    reg = _class_g(tmp_path)
+    V = reg.phi.hf_config["vocab_size"]
+    policy, _ = policy_of(0, {"temperature": 1.0, "top_p": 0.95, "seed": 1}, 7, reg.phi.target_profile().num_sms)
+    table = dead_free_versions()
+    compiled = {bind(table[f.base_id], **f.bindings).id
+                for f in (kind("token_select_stochastic_split", V=V, S=policy["splits"]), kind("token_select", V=V))}
+    bound = {make().id for _, make in runpy.run_path(str(Path(DF.__file__).with_name("dead_free.circuit-check.py")))["_model_roots"]()}
+    assert compiled == {"GumbelTopPTokenSelect_v3{V=154880,S=32}", "TokenSelect_v4{V=154880}"} and compiled <= bound
+
+
 def test_class_g_compiles_a_request_alone_at_its_launch_context(tmp_path):
     """R2 in class G: each B8 request planned alone (`batch._solo`, each of its rows a launch of its own) is its unit in the batch
     apart from its launch context, with the same rows, while in the batch each request's launches hold another request's rows."""
@@ -867,7 +885,7 @@ def test_class_g_plans_a_request_from_its_history_in_the_window(session, units, 
         solo, bodies, k = B._solo(advice, ingress, r)
         a = plan_steps(reg, solo, bodies).requests[k]
         assert B._unit(a) == B._unit(u) and (a.carried_in, a.carried_out, a.prefix() is None) == (u.carried_in, u.carried_out, not u.C)
-    assert WA.follows(A_OUT, A_IN) is None and WA.follows(A_MID_OUT, A_MID_IN) is None
+    assert WA.follows(A_OUT, A_IN) == [(0, 0)] and WA.follows(A_MID_OUT, A_MID_IN) == [(0, 0)]
 
 
 def _traced_form(reg: Registered, u) -> str:

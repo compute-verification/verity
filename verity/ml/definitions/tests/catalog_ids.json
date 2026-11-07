@@ -877,6 +877,8 @@
 "MeanTriton_v2",
 "MeanWarpTriton_v1",
 "MeanWarpsTriton_v1",
+"MergeAttnStatesHead_v1",
+"MergeAttnStates_v1",
 "MhcFusedPostPre_v1",
 "MhcFusedPostPre_v2",
 "MhcFusedSplit_v1",

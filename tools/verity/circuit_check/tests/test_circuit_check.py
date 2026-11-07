@@ -1103,6 +1103,25 @@ def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
         assert [w["code"] for w in F.warnings] == (["unpinned"] if status == "unpinned" else [])
 
 
+def test_any_definition_holding_a_digests_pin_is_held_to_it():
+    """A Definition that isn't gated but holds a ``digests`` pin (a binding at served statics over `targets.MAX_GATES`, which
+    the pin keeps in ``--all``, `targets.pinned`) has its circuit digest checked against it, so no held pin goes uncompared:
+    its own digest passes and another fails by name. Without a pin it gets no digest check."""
+    from verity.ml.circuits.codec import program_digest
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.program import Program
+    from verity.ml.definitions.registry import tp_allreduce as TA
+
+    d = bind(TA.AllReduceMultimemVector, WORLD=8, TREE=TA.GLM53_H200_TREE, FTZ=False)
+    digest = program_digest(Program(d))
+    assert not getattr(getattr(d, "defn", d), "gated", False)
+    assert "digest" not in CK.check_definition(d, OPTS, memo={}, pins={**PINS, "digests": {}}, as_call=False)
+    for pinned, status in ((digest, "ok"), ("0" * 128, "mismatch")):
+        e = CK.check_definition(d, OPTS, memo={}, pins={**PINS, "digests": {d.id: {"sha512": pinned}}}, as_call=False)
+        assert e["digest"]["status"] == status and e["digest"]["counts"] == {"sha512": digest}
+        assert [f["name"].split(" [")[0] for f in e["failures"]] == ([f"lowering/pin-mismatch {d.id}"] if status == "mismatch" else [])
+
+
 def test_redundant_ands_are_counted():
     from verity_flock import gf2
 

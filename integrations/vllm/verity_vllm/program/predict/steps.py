@@ -757,7 +757,9 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
     `no_trace`."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
-    target, device = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}, phi.target.get("device_name")
+    target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
+    # the target's GPU name, which vLLM's get_device_name answers on any host (its tuned fused-MoE configs' key)
+    device = ["--device-name", str(phi.target["device_name"])] if phi.target.get("device_name") else []
     world = int(phi.tp.get("world", 1))
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
@@ -771,8 +773,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
                      *(["--launch-context", json.dumps(ctx, separators=(",", ":"))] if u.get("launch") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"],
                      "--max-model-len", str(max(max_model_len, int(u["LP"]) + int(u["T"]))),
-                     "--target", json.dumps(target, sort_keys=True), *(["--device-name", device] if device else []),
-                     "--profile", phi.profile, "--sampling", sampling, *tp])
+                     "--target", json.dumps(target, sort_keys=True), *device, "--profile", phi.profile, "--sampling", sampling, *tp])
     return cmds
 
 

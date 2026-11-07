@@ -280,13 +280,13 @@ def launch_batch(phi, LP: int, T: int) -> list | None:
     return batch
 
 
-def open_launch(model, model_class: str, phi, wrapper: str, LP: int | None, T: int | None, batch: list | None,
-                chunks: tuple[int, ...]) -> list | None:
-    """A `request`'s launch batch (`batch`, else `launch_batch`'s), set on `model` (`_Launch`), which must read it; its prefill
-    `chunks` need one: a step of it a chunk and one a decode."""
-    if (batch := (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None) is not None:
+def in_launch(model, batch: list | None, model_class: str, chunks: tuple[int, ...] = (), T: int = 0, note: str = "") -> None:
+    """`model`'s calls run in `batch` (`_Launch.with_batch`) where its request has one; `Unexpressible` for a decoder whose kernel
+    choices read its own rows only (`reads_launch`), or for prefill `chunks` that aren't one a step of `batch` before its T decodes
+    (none for a request a window leaves mid-prefill, T < 0)."""
+    if batch is not None:
         if not getattr(model, "reads_launch", False):
-            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance), whose kernel "
+            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance{note}), whose kernel "
                                 f"choices the {model_class} decoder reads at its own rows")
         model.launch = model.launch.with_batch(batch)
     steps = len(chunks) + max(int(T or 0), 0)
@@ -294,7 +294,6 @@ def open_launch(model, model_class: str, phi, wrapper: str, LP: int | None, T: i
         raise Unexpressible(f"vocabulary cannot express: a prefill in {len(chunks)} chunks " + (
             f"at a launch batch of {len(batch)} steps, not one a chunk and one a decode ({steps})" if batch is not None else
             "without a launch batch (on a batch-invariant target a chunked prefill is the request wrapper's Program)"))
-    return batch
 
 
 def graph_capture_sizes(phi) -> tuple[int, ...]:
