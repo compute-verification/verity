@@ -413,15 +413,16 @@ def rng_state() -> dict[str, Any]:
     """The process's random generators a step can draw from: numpy's global one (Model Runner V2 draws an unseeded
     request's seed from it when the request reaches the runner), Python's, torch's and each CUDA device's (FlashInfer's
     sampler, which an unseeded batch takes, draws from the current device's)."""
+    import importlib.util
     import random
 
     import numpy as np
 
     out = {"python": random.getstate(), "numpy": np.random.get_state()}
-    try:
-        import torch
-    except ImportError:
+    if importlib.util.find_spec("torch") is None:
         return out
+    import torch
+
     out["torch"] = torch.get_rng_state()
     if torch.cuda.is_available() and torch.cuda.is_initialized():
         out["cuda"] = torch.cuda.get_rng_state_all()
