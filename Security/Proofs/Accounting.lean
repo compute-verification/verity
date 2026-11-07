@@ -31,7 +31,7 @@ public import Proofs.Accounting.RateAudit
 public import Proofs.Accounting.ReadUnit
 public import Proofs.Accounting.ReadUnit.Gates
 public import Proofs.Accounting.ReadUnit.Net
-public import Proofs.Accounting.ReadGates.FrameV3
+public import Proofs.Accounting.ReadUnit.Frame
 public import Proofs.Accounting.BoundReceipt
 public import Proofs.Accounting.Capacity
 public import Proofs.Accounting.DeclaredCircuit
