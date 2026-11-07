@@ -149,7 +149,7 @@ On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: t
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
 `foreign_bytes` makes the prover the cheat that keeps prior content in place of the fill's first labels (`fM`: one label
-past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the prover's node the stand-in for
+past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the developer's node the stand-in for
 one on its own host. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
 the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe

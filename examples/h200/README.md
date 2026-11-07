@@ -1,20 +1,20 @@
 # The H200 demo
 
 It shows the remote protocol's sampled-proofs half (`examples/README.md`) at a frozen shape on one H200: a step's every
-value committed, proof blocks drawn by one live coin, each proved by Flock `--zk` and checked by the Lean verifier
+value committed, proof blocks sampled by one live coin, each proved by Flock `--zk` and checked by the Lean verifier
 (`phases.sh`, the run of record). It claims nothing else.
 
 The GPU serving loop of the one-H200 demo: steps of the frozen MQA shape (`shape.FROZEN`, `served_weights`'s `H200`) on the
 plain INT8 weights, loaded once into the card's memory and resident across steps (`--weights staged` decodes them from the
-store into staging instead), every op's output committed through the per-step commit call, drawn slots
-opened by replaying their requests and drawn proof blocks replayed bit for bit against the Definitions, each subprotocol run against the
+store into staging instead), every op's output committed through the per-step commit call, sampled slots
+opened by replaying their requests and sampled proof blocks replayed bit for bit against the Definitions, each subprotocol run against the
 step or named, and a replay bundle and block record written. `verity demo h200 --out OUT [...]` runs it
 (`run.py --help`): on the CPU at the small shapes, or on an H200 at the frozen one (`--shape h200 --device cuda`).
 
 Around sampled proofs, `e2e_h200/legs.py` runs the other subprotocols as a skeleton on fixture coins, not as runs, and
 nothing claims them: PoUW is per-call noise's tiles as a `--subcircuit`, PoUS is spot reads and the memory wipe and reload
 on the staged path's store, network certification's digests are a fixture, and the bandwidth audit isn't run. `interfaces/` holds the
-interfaces between its subprotocols, the drawn-unit replay bundle and the block record, a suite of its own (its README).
+interfaces between its subprotocols, the replay bundle of sampled proof blocks and the block record, a suite of its own (its README).
 
 It is a demo, not an integration: it composes pieces from several parts of the tree (the weights' store and decode
 call, the GEMMs, attention and commit call, circuits' Definitions, the subprotocols) for one recorded run. When the real pieces land
@@ -55,10 +55,10 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | Slots and KV cache | `slots.py`: `SlotKV` admits requests FIFO into the lowest free sequence slots, runs each at its own position, frees and reuses a slot when its request finishes, and holds each slot's K and V rows (the one KV head, the context's positions) as the step's bf16 bits, written and read a micro-batch of rows at a time; `check_slots.py` checks it at the frozen KV shape on a device | stays |
 | Attention | `attention.py`: on CUDA `attn_bf16`'s reference kernels (`benchmarks/torch_gpu/attn_bf16`'s `attn.py` with `path="ref"`; its cubin from `build.sh`, `$ATTN_BF16_CUBIN`) for QK^T and PV and `softmax_t` (the MUFU ex2 table in torch integer ops); elsewhere the Definitions' numpy kernels | kernels' fast attention (`attn_bf16`) |
 | Commit | `commit.py`: kernels' per-slot tree (`--commit slots`, `benchmarks/torch_gpu/commit_slots`: row/v2 leaves, step → slot → unit → rows), a group at a time on a side stream, salt keys fresh a step; or the by-table `verity_vllm.commit.row_tables` (`reference`, `host`, `device`), which keeps every step's tables | — |
-| Opening | `opening.py`: `--open K` slots drawn by a fixture coin, each replayed alone on the resident weights under its steps' salt keys and its own nonce, its slot roots compared with the committed ones; each drawn unit's one commit unit opened against the step's root (`slots.verify_unit`), its rows the unit's outputs, and the reference's slot root compared with the engine's | the sampling plan's live coins |
-| Window writer | `e2e_h200/window.py`: FAMILIES' shared-row layout (`shared_layout`: 1 KiB rows, 21,857 a slot at the frozen shape, circuits' writers). Each proof block's input ports as pieces (`Locator.locate`): committed rows' bytes named by step, slot, row and bytes (a linear's x over its quantizer's R rows; attention's K and V at the steps and rows that wrote them), registered rows and run inputs. `Locator.inputs` assembles them from a slot's rows; the same calls work on `families/v1` | the run's commit under the shared layout, and the drawn-block bundle over it |
-| Replay | `e2e_h200/units.py`: one family a unit kind of the map, each through compositions of `replay.py`'s templates (main's Definitions where they exist) until the map's own exist; a row's attention reads its slot's K and V rows at the steps that wrote them; a fixture coin draws K a family | templates for the whole map; the sampling plan through `replay.draw` |
-| PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (`percall:kraq` is the earlier build), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled units held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | J10-R's lane Definitions and Credit.window over the tile stratum; window_salt's live salt and the real roots (`percall.STANDS_IN`) |
+| Opening | `opening.py`: `--open K` slots sampled by a fixture coin, each replayed alone on the resident weights under its steps' salt keys and its own nonce, its slot roots compared with the committed ones; each sampled proof block's one commit unit opened against the step's root (`slots.verify_unit`), its rows the unit's outputs, and the reference's slot root compared with the engine's | the sampling plan's live coins |
+| Window writer | `e2e_h200/window.py`: FAMILIES' shared-row layout (`shared_layout`: 1 KiB rows, 21,857 a slot at the frozen shape, circuits' writers). Each proof block's input ports as pieces (`Locator.locate`): committed rows' bytes named by step, slot, row and bytes (a linear's x over its quantizer's R rows; attention's K and V at the steps and rows that wrote them), registered rows and run inputs. `Locator.inputs` assembles them from a slot's rows; the same calls work on `families/v1` | the run's commit under the shared layout, and the sampled-block bundle over it |
+| Replay | `e2e_h200/units.py`: one family a unit kind of the map, each through compositions of `replay.py`'s templates (main's Definitions where they exist) until the map's own exist; a row's attention reads its slot's K and V rows at the steps that wrote them; a fixture coin samples K a family | templates for the whole map; the sampling plan through `replay.draw` |
+| PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (`percall:kraq` is the earlier build), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled proof blocks held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | J10-R's lane Definitions and Credit.window over the tile stratum; window_salt's live salt and the real roots (`percall.STANDS_IN`) |
 | Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
 | Bundle and record | `record.py`: provisional v0 schemas | `verity/drawn-unit-bundle/v1` and `verity/block-record/v2` (`examples/h200/interfaces`) |
 | Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; sampled proofs are the replay and the opening | PoUS's and the memory wipe's runs, the bandwidth audit, network certification's signed records, Flock `--zk` and the Lean verifier |
@@ -71,7 +71,7 @@ in parallel chunks (`root`). No torch. `python -m e2e_h200.served_weights manife
 under the test salt key for the placeholder program `TEST_PROGRAM` are in the evidence store
 (the `manifest` command below writes them again).
 
-`replay.py` and `cpu_step.py` are the CPU replay of drawn proof blocks in the 16-bit forms, and an
+`replay.py` and `cpu_step.py` are the CPU replay of sampled proof blocks in the 16-bit forms, and an
 independent CPU decode step; the suite holds the driver's rows equal to `cpu_step`'s.
 
 ## Commands
@@ -97,6 +97,6 @@ PYTHONPATH=examples/h200 python -m e2e_h200.served_weights manifest --shape h200
     --digests --out M          # the served weights' manifest under DEMO_SEED, a frozen string (also write|root|fixture)
 ~~~
 
-Exit 0: every drawn proof block replays to its committed word, every opened slot to its committed root and every subcircuit's own
+Exit 0: every sampled proof block replays to its committed word, every opened slot to its committed root and every subcircuit's own
 check holds; 3: one doesn't; 4: a subprotocol's fixture check fails; 5: ``--weights-file`` isn't its manifest's W (a tensor's
 sha256, its size or its model), refused before the first step.

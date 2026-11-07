@@ -58,7 +58,7 @@ A spec-level reference for network accounting's timing channel:
   cell of CERT-VARLEN's id
   request, with its count of prompt fields carried across buckets from the lane's carry-in to its carry-out, which
   hold each request's prompt_len to the advice's and which the ingress tie's verdict (`tie_service.IoTieVerdict`) is
-  built from. It has the reference, the lanes the verifier computes from the advice and the warden's release
+  built from. It has the reference, the lanes the verifier computes from the advice and the network certifier's release
   (`lanes`, `Release`), and the proof block's Boolean Definition (`IoTieRequest`: one `IoTieRequestFrame` and
   `IoTieRequestStep` a cell, `IoTieRequestEnd` a lane); the ingress-ids tie (`io_ids`, `IoTieRequestIds`) adds the
   Commit's `c00.input/ids` rows to the same scan and holds every prompt id to them;
@@ -182,7 +182,7 @@ A spec-level reference for network accounting's timing channel:
 - the run's boundary in a window's circuit (`boundary`): the circuit record's ``boundary``, which names the template
   whose proof block ℓ·T + t holds bucket t of egress link ℓ (`EgressBucket`'s frame, the row it computes and returns,
   committed as a registered read of the network certifier's row, and its u16 verdict, whose bit 0 is the slots' presence) and of
-  ingress link ℓ (its frame parameter row, the warden's registered row; with ``first``, `IngressScanFirst` holds bucket
+  ingress link ℓ (its frame parameter row, the network certifier's registered row; with ``first``, `IngressScanFirst` holds bucket
   0), the same gates whatever the load, so arrival steps and prompt lengths stay private (`NetTiming.BoundaryGates`); its
   format is `verity/boundary/v3`. `refusal`, the verifier's check before it samples, checks that the layout fits the
   circuit (`NetTiming.BoundaryGates.Fits`: no egress gate is an input, and each is one the circuit returns) at the record's
@@ -206,7 +206,7 @@ A spec-level reference for network accounting's timing channel:
   load's registration on the host's uplink, ingress, in the session's first execution phase, kind ``load``), so the
   interface's ``input_count`` under them and the scan's state's root has no free input;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
-  warden ingress row, the slot state the bucket before carries and the Programs' entries, one port `prog<j>` a slot,
+  network certifier's ingress row, the slot state the bucket before carries and the Programs' entries, one port `prog<j>` a slot,
   each `SlotEntry_v1`'s word-aligned row of its slot (registered reads), and computes the next state (each block to the
   slot holding its connection, a new connection to the lowest free slot, its prompt ids appended, a due, occupied
   slot's output count and ids taken from its entry at its anchor, every other entry ignored, a slot held through its
@@ -220,11 +220,11 @@ A spec-level reference for network accounting's timing channel:
   each row but the empty state's the one a unit computes (its o1) and the next reads (its sin), both registered reads,
   so a Program reads the states the scan's steps computed;
   `IngressScanFirst`, the first bucket's, starts from the empty state, constants of its circuit. Programs start at
-  fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the warden's `every`, which divides its
+  fixed slots a network timestep (ASK-122): a timestep is `EVERY` buckets, the network certifier's `every`, which divides its
   window, with `SLOTS` = lanes Program slots each, and only `EVERY` and the slot count are public. The token-id row a
   slot's Program reads is the scan's state row b − 1 (`verity/certifier/scan-state/v1`, `token_row`): its occupancy
   word `occ` (1 for a slot whose Program starts at b, 0 for an empty slot), its prompt's length `fields` and its prompt
-  ids, which the scan reads off the warden's signed ingress cells, so no other tie holds them to the certified bytes;
+  ids, which the scan reads off the network certifier's signed ingress cells, so no other tie holds them to the certified bytes;
   `slot_row` gives each one's bits in the state row, for a reader that takes them as i32s (vllm's `ScanSlots_v2`), and
   `window_state` the rows a window circuit of the link-window from bucket t0 reads, the scan's rows t0 − 1 on (the
   empty state's for row −1). A Program gives all its outputs to its entry at its anchor (its read bit, n, u32, and 64
@@ -232,11 +232,11 @@ A spec-level reference for network accounting's timing channel:
   bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty slot's entry is
   ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's
   unit, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at
-  its anchor. A window whose warden refused a connection, traffic past its slots, has no certified record, and the
-  period check refuses it. `Class.serves` names the warden parameters it takes every run of.
+  its anchor. A window whose network certifier refused a connection, traffic past its slots, has no certified record, and the
+  period check refuses it. `Class.serves` names the network certifier parameters it takes every run of.
   `benchmarks/network_traces/scan_zk.py` proves both sides of a group of link-windows in one registration: ingress unit
   t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress unit
-  t + 1 and egress unit t read, and egress unit t's row as a registered read of the warden's egress row t, so the
+  t + 1 and egress unit t read, and egress unit t's row as a registered read of the network certifier's egress row t, so the
   chains are wires through the registered roots;
 - the active certifier (`active`): an asyncio TCP proxy that runs the certifiers on a live link and publishes their records.
   With its salt on (`Proxy(salt=active.fresh_salt)`, off by default), each PoUW window (`pouw_window` certifier
@@ -263,9 +263,9 @@ A spec-level reference for network accounting's timing channel:
 - the ingress tie through the proof system (`tie_service`): `IngressTie`, each ingress link-window's `IoTieRequest`
   proof blocks, one a bucket row of the network certifier's registered ingress cells, proved as
   `NetworkIngressTieBucket` (one gate
-  naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the warden's root
+  naming its pinned circuit digest, `io_request.circuit-check.json`) with the row read off the network certifier's root
   (`warden_rows.bucket_port`) and its lanes and output row off values the verifier registers at known content
-  (`IngressTie.known`), decided by the verifier on its own lanes from the advice and the warden's
+  (`IngressTie.known`), decided by the verifier on its own lanes from the advice and the network certifier's
   release, and `IngressTie.tie`, which builds `IoTieVerdict` on the link and the stream's registrations from the
   stream's outcomes of record alone; `Ties`, the tie, its stream and the release as the verifier's own tie source,
   which gives the verdict only on its own link. A size class no sidecar pins has no accepted proof.
@@ -353,7 +353,7 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   take as inputs what the proof system and the lowering give: the findings of the verifier's own Flock Lean run, the
   sessions' SHA-512s, the registration, the sample, and the Program's and partition's digests and the gate ids. The Lean
   reads an LMS key only, and rejects any other.
-- on a warden link (`service.WardenProfile`) the gap list is empty too: the Lean's warden form (`Kind.warden`) is the
+- on a network certifier's link (`service.WardenProfile`) the gap list is empty too: the Lean's form for it (`Kind.warden`) is the
   plain proof block's public row with both ends' grids at the network certifier's parameters digest, which both take as
   an input (the network certifier's deployment publishes it), and no sync read, as in the Python; it refuses a network
   certifier case whose digest isn't 64 bytes, whose ends have a profile, or whose two grids differ.

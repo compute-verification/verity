@@ -35,7 +35,7 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
   archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). New infra components go to
+  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). New infra tools go to
   compute-verification/infra, and `INFRA_PATHS` (`tests/test_infra_paths.py`) lists what is still here and only shrinks.
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
@@ -95,7 +95,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   or scan iteration: it summarizes once per specialized Definition and multiplies through batches and scans
   (`NciCheck.Desc`). An unrolled walk survives only as a difftest's reference. `tests/test_verifier_cost.py` enforces it
   (the walks still open are its `ALLOWED`), and `benchmarks/verifier_cost/` measures it.
-- **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest prover's GPU
+- **PoUW is mostly useful work.** A PoUW scheme leaves the useful work at least half of the honest developer's GPU
   effort, its commitments and checks included. The trivial PoUW, which hashes every product and leaves
   useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
   to the same floor.
@@ -179,7 +179,7 @@ team skill). A red's culprit is the one landing whose change touches what its fa
 a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
 forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
 rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
-is the only check before it joins, and a body naming no live goal draws a warning, never a refusal. A change a `warn_gates`
+is the only check before it joins, and a body naming no live goal gets a warning, never a refusal. A change a `warn_gates`
 gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
 ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
 next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s
