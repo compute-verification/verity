@@ -33,7 +33,9 @@ run's roots. Values that agree with those openings agree with `W` and `I` wherev
 the session witness, each gate's value: the decoded values make each checked unit correct (`Decodes`, what the session
 statement's relation says of its circuit), and the reveal opens each decoded value the unit's correctness reads, under
 the roots its gate is committed under (`Reveals`, what the commitment's layout and the reveal say of the witness).
-Neither holds of every `h`: both need the session statement's composition and its witness's encoding, which `h.frame`
+`Decodes` follows from `Evaluates`, that the decoded values evaluate each of the unit's gates on the decoded values of
+the gates it reads (`decodes_of_evaluates`, by `Prog.correct_of_eval`), which is what a session circuit that computes
+the unit's gates gives. Neither holds of every `h`: both need the session statement's composition and its witness's encoding, which `h.frame`
 and `stmtOk` leave open.
 -/
 
@@ -262,6 +264,26 @@ def Decodes (dec : Dec) : Prop :=
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     s.prog.Correct (s.prog.refIn rb (fun g => some (dec x m₁ xS wF g)) (dec x m₁ xS wF)) b
 
+/-- **The decoded values evaluate each checked unit**: at the same statements as `Decodes`, each gate of the unit but
+its inputs holds, in the decoded values, its value on the decoded values of the gates it reads, and each constant
+gate's decoded value is the constant. -/
+def Evaluates (dec : Dec) : Prop :=
+  ∀ x s Pt d (m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) wF u b ρ rb,
+    parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
+    stmtOk h x m₁ xS c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS wF = true →
+    Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
+    (∀ g ∈ b, ∀ y : BGate, s.prog.gates[g]? = some y → y ≠ .input →
+      y.val (fun i => some (dec x m₁ xS wF i)) none = some (dec x m₁ xS wF g)) ∧
+    ∀ g c, s.prog.gates[g]? = some (.const c) → dec x m₁ xS wF g = c
+
+/-- **`Decodes` from an evaluation**: the values a decoder gives every gate, committed or interior, make a unit correct
+where they evaluate its gates (`Prog.correct_of_eval`). -/
+theorem decodes_of_evaluates (dec : Dec) (he : Evaluates h dec) : Decodes h dec := by
+  intro x s Pt d m₁ xS c₀ c₁ wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb
+  obtain ⟨hv, hc⟩ := he x s Pt d m₁ xS c₀ c₁ wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb
+  exact s.prog.correct_of_eval (v := dec x m₁ xS wF) hin.1 hv hc fun g _ => by simp only [Prog.refIn, ite_self]
+
 /-- **The reveal opens each decoded value a checked unit's correctness reads**: at the same statements, for each gate
 `Prog.Needs` names, the reveal holds an opening of the decoded value at that gate that passes, under the interior roots
 `m₁` states for the replay block where the gate is one of its interior gates, and under the run's roots otherwise. -/
@@ -294,5 +316,12 @@ theorem sessionOpensTwo_of_dec (dec : Dec) (hd : Decodes h dec) (hr : Reveals h 
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots :=
   sessionOpensTwo_of_wit h (witOpens h dec hd hr)
+
+/-- **`SessionOpensTwo` at the deployed two-stage code from a decoder** whose values evaluate each checked unit
+(`Evaluates`) and that the reveal opens (`Reveals`). -/
+theorem sessionOpensTwo_of_eval (dec : Dec) (he : Evaluates h dec) (hr : Reveals h dec) :
+    Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
+      (two h) iroots :=
+  sessionOpensTwo_of_dec h dec (decodes_of_evaluates h dec he) hr
 
 end SpotFlock

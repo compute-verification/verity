@@ -188,4 +188,69 @@ theorem Prog.needs_iff (C : Prog) (u : List ℕ) (g : ℕ) : C.Needs u g ↔ g �
     simp only [Bool.and_eq_true, decide_eq_true_eq] at hm
     exact ⟨⟨g', hg', hm.1⟩, hm.2⟩
 
+/-! ## A proof block is correct on an evaluation -/
+
+/-- A gate on a topological program's boundary is one of its gates. -/
+theorem Prog.lt_of_boundary {C : Prog} (htop : C.Topological) {u : List ℕ} {g : ℕ} (hB : C.Boundary u g = true) :
+    g < C.gates.length := by
+  unfold Prog.Boundary at hB
+  simp only [Bool.or_eq_true, List.contains_iff_mem, decide_eq_true_eq, List.any_eq_true, List.mem_range,
+    Bool.and_eq_true] at hB
+  rcases hB with (hout | hin) | ⟨g', hg', -, hr⟩
+  · exact htop.2 g hout
+  · exact (List.getElem?_eq_some_iff.1 hin).1
+  · obtain ⟨x, hx, hi⟩ := C.mem_reads_getD.1 hr
+    exact lt_trans (htop.1 g' x hx g hi) hg'
+
+/-- **A proof block runs to an evaluation**: where `v` evaluates each gate of `u` but its inputs on `v`'s values of the
+wires it reads, `u`'s gates read only earlier gates of `u`, each value `u` reads from outside is `v`'s, and each input of
+`u` is committed at `v`'s value, `u` computes `v` at each of its gates. -/
+theorem Prog.runIn_of_eval (C : Prog) {ref : ℕ → Option Bool} {u : List ℕ} {v : ℕ → Bool}
+    (htop : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∈ u → i < g)
+    (hv : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → x ≠ .input → x.val (fun i => some (v i)) none = some (v g))
+    (hout : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∉ u → C.read ref i = some (v i))
+    (hin : ∀ g ∈ u, C.gates[g]? = some .input → ref g = some (v g)) :
+    ∀ g ∈ u, g < C.gates.length → C.runIn ref u g = some (v g) := by
+  intro g
+  induction g using Nat.strong_induction_on with
+  | _ g ih =>
+  intro hg hlt
+  rw [Prog.runIn]
+  cases hx : C.gates[g]? with
+  | none => exact absurd (List.getElem?_eq_none_iff.1 hx) (by omega)
+  | some x =>
+    by_cases hxi : x = .input
+    · subst hxi
+      exact hin g hg hx
+    · rw [← hv g hg x hx hxi]
+      refine BGate.val_congr (fun i hi => ?_) fun h => absurd h hxi
+      by_cases hiu : i ∈ u
+      · have hig := htop g hg x hx i hi hiu
+        rw [ite_eq_left hiu, dite_eq_left hig]
+        exact ih i hig hiu (lt_trans hig hlt)
+      · rw [ite_eq_right hiu]
+        exact hout g hg x hx i hi hiu
+
+/-- **A proof block is correct on an evaluation**: on a topological program, where `v` evaluates each gate of `u` but
+its inputs on `v`'s values of the wires it reads and holds each constant's own value, and the committed values `ref` are
+`v`'s wherever `u`'s correctness reads them (`Needs`), `u` is correct on `ref`. -/
+theorem Prog.correct_of_eval (C : Prog) {ref : ℕ → Option Bool} {u : List ℕ} {v : ℕ → Bool} (htop : C.Topological)
+    (hv : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → x ≠ .input → x.val (fun i => some (v i)) none = some (v g))
+    (hc : ∀ g b, C.gates[g]? = some (.const b) → v g = b)
+    (href : ∀ g, C.Needs u g → ref g = some (v g)) : C.Correct ref u := by
+  have hread : ∀ g ∈ u, ∀ x : BGate, C.gates[g]? = some x → ∀ i ∈ x.reads, i ∉ u → C.read ref i = some (v i) := by
+    intro g hg x hx i hi hiu
+    unfold Prog.read
+    split
+    · rename_i b hb
+      rw [hc i b hb]
+    · rename_i hk
+      exact href i (Or.inr ⟨⟨g, hg, x, hx, hi⟩, hiu, fun b hb => hk b hb⟩)
+  intro g hg
+  refine ⟨fun x hx i hi hiu => ?_, fun hB => ⟨v g, href g (Or.inl ⟨hg, hB⟩), ?_⟩⟩
+  · rw [hread g hg x hx i hi hiu]
+    exact Option.some_ne_none _
+  · exact C.runIn_of_eval (fun g _ x hx i hi _ => htop.1 g x hx i hi) hv hread
+      (fun g hg hin => href g (Or.inl ⟨hg, Prog.boundary_of_input u hin⟩)) g hg (Prog.lt_of_boundary htop hB)
+
 end Claims.Sampling
