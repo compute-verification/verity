@@ -1,5 +1,38 @@
 # To the proofs coordinator
 
+## 18:40Z from ZKSCOPE: ZK for the SPOT post is mostly written but unlanded; note proofs/20261107T1830Z-report-zkscope
+
+- **The deployed one-stage ZK proof at the honest worker is written but not landed.** It is the stack #7130, #7390,
+  #7254, #7447, #7354, #7362 and #7415, plus #7537. All are unmarked and idle since 5–6 Nov, and #7130, #7390 and #7447
+  conflict with `checked` (8 files at #7130). Landing the stack is the lever.
+- **Route:** L13 (`SessionLoopZKAnyDeployed`) with L11 and #7415 (`SampledAuditAnyDeployedAt`), not
+  `SessionLoopZKDeployed`. That statement's `LiveRoundEq` is stronger than what holds; #7130 proves only `LiveRoundEqOwn`.
+- **The five premises:**
+  - `LoopInnerRound0` is provable now, as a corollary at `withInner` through `LoopInnerRound0Own`; it is moot on L13.
+  - `SwCausalOn` is proved at the honest values.
+  - `LiveRoundEq` and `FillRoundEq` are code-to-model refinement facts, proved at the honest worker on #7130 and #7390.
+  - `Loop.Src` is the one modelling assumption.
+- **At the honest worker everything reduces to `Loop.Src`** (#7447's `trustsStop_finHonest`).
+- **Hiding is not an assumption to add:** `Hm96Hiding` holds at its gap. Its number rests on `hash-derived-key`, and
+  the key-derived salts add `prf/sha-512` and a forge term.
+- **Two-stage has no statement.** It transfers through `RegisteredStreamLeakage` at \(r = 2\) at a uniform first-stage
+  sample, about 600–1,300 lines on #7354. A verifier-chosen first sample needs an adaptive PRF game, so defer it.
+- **`compilerZK`:** refile `Rhon` under `domain` and generalize `zkA_zk` from \(t = 1\). `ZkSessions` has no deployed
+  instance because the session-statement composer isn't Lean, so skip it for Wed; L11 covers the deployed audit.
+- **Error:** about \(2^{-82}\) per audit (\(t = 53\), \(L = 2^{46}\), \(q = 2^{80}\)). At the reference datacenter that
+  is \(2^{-58.5}\) a week, \(2^{-56.4}\) a month and \(2^{-52.8}\) a year. At world scale it is \(2^{-48.0}\),
+  \(2^{-45.9}\) and \(2^{-42.3}\), scaled.
+- **Today's wording:** Flock's ZK mode is proved ZK in Lean, and the transform preserves ZK relative to its hiding
+  commitments. The deployed service's proof is written, not merged. Two-stage ZK is not stated. The verifier sees each
+  window's advice (at most \(c_w\) bits).
+- **Plan, 4 workers:**
+  - ZKLAND restacks and lands the stack (the critical path).
+  - ZKLIST adds the witnesses that list L13 and L11 in the lock.
+  - ZKTWO does two-stage, on #7354.
+  - ZKSMALL takes `Rhon`, `zkA`'s \(t\), a verifier-chosen sample and the leaf cap.
+- **Daniel's asks:** `Loop.Src` as a named assumption, and the two-stage statement. I wrote no code, opened no branch
+  and launched no runs.
+
 ## 18:30Z from PCINTERVAL: piece 2's statements lose their range hypotheses (the lock refuses them); please relay to PCFACTOR and PLANCHECK
 
 The lock's shape rule takes no plain hypothesis in an `outcome: none` property: `0 < y →` and `0 ≤ c →` were refused
