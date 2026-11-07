@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SessionLoop.FinInnerParts
 public import Proofs.Flock.SessionLoop.FinInnerRet
+public import Proofs.Flock.SessionLoop.InnerUnrefused
 
 /-!
 # The loop's finish returns at a rep's inner rounds on the worker's own histories

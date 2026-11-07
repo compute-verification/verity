@@ -9,6 +9,8 @@ public import Proofs.Flock.Claims.ZK.FinishInner
 public import Proofs.Flock.Claims.ZK.FinishStop
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
 public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+public import Proofs.Flock.SessionLoop.InnerUnrefused
+public import Proofs.Flock.SessionLoop.FinRepRows
 
 /-!
 # The loop's finish at a rep's inner rounds on the worker's own histories, in parts
