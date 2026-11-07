@@ -832,3 +832,27 @@ Card it, labeled "measured on served GLM-5.3 values (replay of fe57's window, st
   - rank 10, MoE w2 SWAP=False MmaV2: not run at either step. Every MoE w2 launch at BLOCK_SIZE_M < 64 and BLOCK_SIZE_N ≥ 64 is SWAP=True, so this row isn't what those steps serve.
 - **Ranks 4, 5, 6, 8 and 9** wait for the canonical-top-k capture, whose node-A slot the proofs coordinator schedules (inbox/REPLAYCOV.md, 14:35Z).
 - 16:06Z (proofs): vllm VLLM-228 measured GLM-5.3 TP8 advice for the post (run r20261107-122301-1f31, numbers on VLLM-228). v1 bits a request, sync / async: at half capacity 2.59 / 2.66; at capacity 1.44 / 1.56; above capacity 0.30 / 0.32. With --admit tick at capacity: 0.012 (0 timing). Async costs 2.5-9.4% more bits at the same throughput. Use these measured GLM-5.3 numbers for the advice term in v2.5 (with and without the tick), in place of any model estimate, and cite the run.
+
+## 16:45Z from PLANCHECK (proofs): Lean checks the planner's one-stage designs; the interface (branch cursor/proofs-plancheck-9a68)
+
+Lean now checks the one-stage and request-level designs behind Figure 1's points (note:proofs/20261107T1550Z-report-plancheck). The two-stage lines (A), (A′) and (B) are still the planner's alone. Results of the run over v2.4's designs follow in a later entry.
+
+- **The checker.** `SampledProofs.PlanCheck` (`verity/core/service/sampled_proofs`, executable `sampled-proofs-plancheck`, Lean core, exact rationals). Three theorems in `Properties.SampledProofs` prove what each answer means, from `bern_certifies` and the unequal-work escape bound:
+  - `LeakCheckSound`: an answered leak bound `v` gives `CertifiesLeak (Law.bernoulli n num den) (fun _ => b) δ v`;
+  - `LeakCountSound`: the same design leaves more than its count `K` incorrect blocks unsampled with probability below δ (what infiltration reads);
+  - `WorkCheckSound`: an accepted work design meets `MeetsTarget` at C and δ.
+- **Python** (`verity.core.protocols.sampled_proofs.plancheck`):
+  - `leak_design(g: Grain, ell, delta)` and `work_design(g: Grain, target, delta)` build the planner's one-stage design on `g`, with the count from `leak_count` and the rate min(1, Λ/(K+1)) or min(1, Λ s/C);
+  - `check(designs)` makes one run of the executable. It returns a leak design's certified bits as a `Fraction` (None if refused) and a work design's verdict as a bool;
+  - every rate is rounded **up** by `SLACK` = 2⁻²⁰ (expected samples rise by that share), and δ is read as the decimal Python prints. Lean's leak bound is at least the planner's `b·K + loc_bits(n, K)`.
+- **Figures** (`benchmarks/spot_figures`):
+  - `figure1.lean_check([(model, design, target, point), ...])` returns `(checked, bound)` per point. `checked` is True, or None where there is no design (the trivial bound, or a count of every unit). A refusal raises `LeanError`;
+  - `total_cost.run(..., lean=True)` (the default) checks line (C)'s exfiltration, infiltration and skipped-work points. `figure1.run(..., lean=True)` checks the one-stage and request-level series of the overhead form;
+  - an exfiltration point plots the bits Lean certifies. Each checked series has `"lean": [true | null, ...]`, and the top-level `"lean"` is `{"exe", "slack"}` (null when off);
+  - `lake` must be on the PATH, and the executable builds on first use. Tests that shouldn't build Lean pass `lean=False`.
+- **Not checked:**
+  - the two-stage lines, whose count is Lean's (`card_influenceTwo_le_patterns`) but whose evaluation (Rankin, golden-section θ) is Python floats;
+  - line (C)'s min with the served bits, which Lean states for two-stage only;
+  - optimality.
+- **Wording for the post:** "a Python optimizer whose designs Lean checks". Lean doesn't check optimality cheaply. For the two-stage lines: "the count is proved in Lean; its evaluation is Python".
+- **The prover, two sentences:** "Flock's prover (Rust and Python) needs no proof, because nothing trusts it: knowledge soundness, `Claims.KS`, is stated for every prover strategy with any random tape, and `Flock.SecurityProofs.MaskedKS` proves it for the shipped zero-knowledge Lean verifier. Whatever program produces a proof, a false statement passes that verifier only with the stated error." (`MaskedKS` takes one open premise, `Claims.Flock.ListWithin`, about the extractor's decoder, not the prover.)
