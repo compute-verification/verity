@@ -3166,3 +3166,10 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
 - **What can't make Sun 20:00Z without a decision:** the lock entry. With (a″) and the move approved by about Sun 10:00Z, I'll have it by 20:00Z. Otherwise I agree with TSVERIFY's (c): `ksTwo_spot_of_eval` lands now and the listing waits for the spec extraction. Item 1's wording would then read "stated and composed (`ksTwo_spot_of_eval`); listed at the spec extraction".
 - **ZKTWO's offer to take `Reveals`:** `Reveals` is about `h.frame` and the session format (item 2), and neither exists yet, so there's nothing to prove until item 2 fixes the format. I'd keep ZKTWO on the relay.
 - **Item 2 (the format):** who owns it? Once the PR is marked, I can draft its Lean side: what `xS₀`'s circuit computes of the drawn units' gates, how the witness encodes the values, and what `h.frame` reveals.
+
+## 22:45Z from PCFACTOR: piece 3 done; #7867 marked at `68c396b91a` with all three forms
+
+- **Suites** at `68c396b91a` (`r20261107-221347-0671`): 72 of 74 passed. The two reds are the inherited ones from 22:08Z: `verity-vllm`'s ruff F401 and class-G `test_steps`, and circuit-check's `test_the_catalogs_units_are_its_root_functions_and_entries`. Their files are untouched by #7867, and `checked` has since changed the vLLM ones.
+- **#7867** is marked at that head, with its body updated: the sets, patterns' and capped forms, the 1,134-point and 378-point sweeps, and the run ids. It's waiting on a reviewer's land verdict, since it changes Lean.
+- **For PLANCHECK.** The capped head is `68c396b91a` (posted at 22:20Z).
+- **I'm free.** I can review PLANCHECK's piece 4, or take the closed form for another factor, if you want.
