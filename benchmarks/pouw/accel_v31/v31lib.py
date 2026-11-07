@@ -20,7 +20,7 @@ d_B)^T mod 2^32 (u32; T_S is implied by O); a filler's commits T_1 .. T_S of its
 device, each commit beside the next call's compute; `prove` returns before the call is done, and a call's values can be
 opened until the call two after it is issued (`prove` waits for that call's commit first). Several Provers share a process
 (a domain slot each, up to 8; one ROW, one device). The weight side (b', W') is formed again only when the weight-side
-seeds (dB, U, P) or the weights change: weight coins drawn every call form it every call, and coins drawn once a
+seeds (dB, U, P) or the weights change: weight coins flipped every call form it every call, and coins flipped once a
 monitoring period form it once. The c-th call of a Prover salts its leaf pos prf_salt(Ks, c leaves + pos)
 (dither.salts(Ks, off), off = c leaves), Ks the Prover's own. A served call whose A + d_A (or B + d_B) has a row holding both -128 and 128 has no root: O's int8
 decomposition (a' = A + d_A - sigma) can't carry it, and `root` raises. v31.cu's knobs come from the environment when a
@@ -110,7 +110,7 @@ class Lib:
 
 
 class Prover:
-    """One shape's GPU prover: m x n output cells at contraction k, noise period lp, segments of L, leaf rows of `row`
+    """One shape's GPU prover: m x n output cells at contraction k, noise repeat length lp, segments of L, leaf rows of `row`
     bytes, served calls or a filler's. `params_dir` keeps its CGP1 file (default a temporary one)."""
 
     def __init__(self, m: int, n: int, k: int, lp: int = 256, L: int = 4096, row: int = 16384, *, served: bool = False,

@@ -28,7 +28,7 @@ recipe's loss law: 87.6B for a Llama 3.1 405B-class target under Besiroglu et al
 
 It fails when a model reaches `L*` with fewer weights per thread: a token-routed mixture of experts at token threads,
 whose tokens each use fewer than `N*` weights (about 32B a token for Kimi K2), sequence-routed path composition (the
-main open attack), retrieval, looped models, a better recipe than the one the law is fitted to, or a registered base in
+main open attack), retrieval, looped models, a better recipe than the one the sampling design is fitted to, or a registered base in
 `θ` that an update stacks on. -/
 def Reach (c : RegisteredCircuit) (T : Threading c) (Nstar : ℕ) : Prop :=
   ∀ t, (T.threadMults Finset.univ t).Nonempty → Nstar ≤ (T.threadWeights Finset.univ t).card
@@ -60,7 +60,7 @@ there it is `Reach`.
 
 It fails where `Reach` does: a token-routed mixture of experts whose tokens each use fewer than `N*` parameters (about
 32B a token for Kimi K2), sequence-routed path composition, retrieval, looped models, a better recipe than the one the
-law is fitted to, or a registered base in `θ` that an update stacks on. -/
+sampling design is fitted to, or a registered base in `θ` that an update stacks on. -/
 def ReachSlots (c : RegisteredCircuit) (T : Threading c) (σ : T.Slots) (Nstar : ℕ) : Prop :=
   ∀ t, (T.threadMults Finset.univ t).Nonempty → Nstar ≤ (σ.threadSlots Finset.univ t).card
 

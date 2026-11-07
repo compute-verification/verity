@@ -19,7 +19,7 @@ holds. This file restates how Python builds that unit's `S` and `v` (`verity_flo
 * `build` reads `GfResiduals`' `S`, the coefficient slots' values and the final check's coefficients on the consistency
   sums (`kappa`) off the symbolic residuals (`rec_algebra._build`).
 * `structureOf sh` is `S` at coins all zero (`rec_algebra.structure`: the structure depends on the rounds the verifier
-  draws, not on the coins); `verifierRows` is `v` and the coin-derived points at the rep's coins, and refuses when the
+  samples, not on the coins); `verifierRows` is `v` and the coin-derived points at the rep's coins, and refuses when the
   structure there is not `structureOf sh` (`rec_algebra.verifier_rows`).
 * `residuals` is `GfResiduals`' semantics: per residual, its added terms and the products of its operand pairs.
 
@@ -35,14 +35,14 @@ open Flock
 /-! ## Coins -/
 
 /-- Where the verifier's coins come from (`rec_algebra.CoinSource`, rec_algebra.py:229–249): `round k n` is round `k`'s coins
-when the verifier draws `n` of them, `drawnAll k` that every recorded round is drawn once `k` are. -/
+when the verifier samples `n` of them, `drawnAll k` that every recorded round is sampled once `k` are. -/
 structure CoinSource where
   round : Nat → Nat → Except String (Array F128)
   drawnAll : Nat → Bool
 
 /-- A session record's coins by round (`CoinSource(rounds)`, rec_algebra.py:232–242). A recorded round of no coins is no
-draw (`Flock.Transcript`), so it is skipped (`CoinSource.__init__`): z_partial's round in a holo session absorbs elements
-and draws none. -/
+sample (`Flock.Transcript`), so it is skipped (`CoinSource.__init__`): z_partial's round in a holo session absorbs elements
+and samples none. -/
 def CoinSource.ofRounds (recorded : Array (Array F128)) : CoinSource :=
   let rounds := recorded.filter (·.size ≠ 0)
   { round := fun k n => match rounds[k]? with
@@ -50,14 +50,14 @@ def CoinSource.ofRounds (recorded : Array (Array F128)) : CoinSource :=
       | none => .error s!"round {k}: {n} coins drawn, the record has no round"
     drawnAll := fun k => k == rounds.size }
 
-/-- Coins in whatever rounds the verifier draws, all zero (`_dummy_coins`, rec_algebra.py:884–901, whose coins are
+/-- Coins in whatever rounds the verifier samples, all zero (`_dummy_coins`, rec_algebra.py:884–901, whose coins are
 random: the structure depends on the rounds, not on the coins). -/
 def CoinSource.zeros : CoinSource := ⟨fun _ n => .ok (Array.replicate n 0), fun _ => true⟩
 
-/-- The coins drawn so far, read from a source. -/
+/-- The coins flipped so far, read from a source. -/
 abbrev CM := StateT Nat (ReaderT CoinSource (Except String))
 
-/-- `CoinSource.vec` (rec_algebra.py:235–242): a draw of `n` coins is one round of `n`; none is no round
+/-- `CoinSource.vec` (rec_algebra.py:235–242): a sample of `n` coins is one round of `n`; none is no round
 (`Flock.Transcript`). -/
 def coinVec (n : Nat) : CM (Array F128) := do
   if n = 0 then return #[]
@@ -402,7 +402,7 @@ def oodIntro (M : Messages α) (dim split : Nat) : LM α Unit := do
   modify fun st => { st with s := kadd st.s (kofF (sm b y)), oods := st.oods.push ⟨zz, b, some split⟩ }
 
 /-- `query` (rec_algebra.py:666–673): a level's positions, its consistency coins and its enforced sum
-`e = Σ_l eq(fold)[l] · cons(level, eq(α))[l]`. Python draws `(q − 1).bit_length()` consistency coins, which is
+`e = Σ_l eq(fold)[l] · cons(level, eq(α))[l]`. Python samples `(q − 1).bit_length()` consistency coins, which is
 `log2 (q − 1) + 1` for every `q ≥ 2`. -/
 def query (sch : Schedule) (M : Messages α) (i : Nat) (fold : Array F256) : LM α (Array Nat × Array F128 × KV α) := do
   let lv := sch.levels[i]!
@@ -596,7 +596,7 @@ def ligRounds (sch : Schedule) : Array (Array Key) := Id.run do
       mi := mi + 1
   return out
 
-/-- A holo shape's round of `h`, absorbed after `z_partial` and before `r′` is drawn (`H_ROUND`). -/
+/-- A holo shape's round of `h`, absorbed after `z_partial` and before `r′` is sampled (`H_ROUND`). -/
 def hRound (sh : Shape) : Array (Array Key) := if sh.holo then #[(Array.range 64).map .h] else #[]
 
 /-- The rep's message elements by the round that absorbs them, in protocol order (`rec_algebra.rounds`,

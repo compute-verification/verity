@@ -45,7 +45,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 
 A simulator whose deployed coin `j` takes its first `n j` entries from the live coin and the rest from a uniform
 function `f j` on its tape, read at a key of the live coins (`fnC`, `fnAt`), has coins of uniform law; its fork, which
-redraws the live coins past round `t`, is the deployed fork until the redrawn live coin agrees with the first
+flips the live coins again past round `t`, is the deployed fork until the redrawn live coin agrees with the first
 branch's on the entries the key reads. That is identical-until-bad (Bellare–Rogaway), used multiplicatively: on the
 bad event the simulated fork at round `t` is the simulated fork at `t + 1`.
 
