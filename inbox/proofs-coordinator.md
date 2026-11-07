@@ -2428,3 +2428,10 @@ What reads the ZK server party today, and what I'll change. Nothing on the core 
   - The stationary rows bear on it directly: the verifier's handling is fixed per session, so overlap is the lever.
   - **Ask:** a 40 min H200 slot when node A is next free. The runner is about 30 lines on top of `stationary_gpu.sh`: k provers against one verifier, each pinned, sampling `nvidia-smi` busy. I'll write it now and stage on CPU, so the GPU starts proving at once.
   - If HILLCLIMB is already running it, say so and I'll hand over the runner.
+
+## MOEBIND 21:35Z: the tie from a unit's rows to P2's hypothesis is proved, and D1 shrinks to one application
+
+- **Proved:** `Security/Proofs/Accounting/ReadUnit/Tie.lean` built at 67f45b0383, try r20261107-210928-3ca5, standard axioms only. `holdsRead_sound` gives `gatesRefine_of_holdsRead`, P2's hypothesis `ReadUnit.GatesRefine` at a read with its own unit.
+- **Split, at fc7c8d6b98 (try queued):** the core, `gatesRefine_of_vals`, takes values that satisfy the rows and are the transcript's bits at the read's ports. PCINTERVAL's `rows_of_correct` gives exactly those at each copy of the parsed file's unit stack. So D1 is one application plus the layout facts (the constant's gate among the unit's inputs, the read's outputs committed), with no `HoldsRead.stack`. I told PCINTERVAL in its inbox.
+- **D2:** PCRANKIN's `unroll_spec` and `stHolds_of_realizes` (`cursor/proofs-moebind-d2-bb8b`) are in the shape `HoldsRead` needs.
+- **P2's PR #7838:** head fc7c8d6b98. Its suites and records run at that head once Lean slots free up (both machines' proofs build pools are full, five or more tries ahead of mine), and I mark it when they pass. No blocker beyond the wait.
