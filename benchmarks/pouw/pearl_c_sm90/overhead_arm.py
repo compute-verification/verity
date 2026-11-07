@@ -64,7 +64,7 @@ INDEX = 0
 EPOCH = 1
 #: the price unit of `work`'s W_ref and credit: one dense FP8 MAC on the device (`pearl_c_device.Prices`)
 UNIT = "fp8-mac"
-#: the δ `epsilon` states ε at unless given one: compute-accounting's for the record (BENCH-38). γ doesn't depend on it.
+#: the δ `epsilon` states ε at unless given one; γ doesn't depend on it.
 DELTA = Fraction(1, 100)
 
 
