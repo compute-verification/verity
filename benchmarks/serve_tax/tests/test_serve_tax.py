@@ -180,3 +180,23 @@ def test_step_traces_are_read_plain_or_gzipped(tmp_path: Path):
         f.write(lines)
     plain, gz = S.step_traces(tmp_path)
     assert S.trace_records(plain) == S.trace_records(gz) == [{"kind": "header"}, {"kind": "step", "t": 1.0}]
+
+
+def test_edge_cost_reads_the_stall_across_an_edge_and_the_ttft_around_it(tmp_path: Path):
+    def rec(send: float, chunks: list[float]) -> dict:
+        return {"status": 200, "send_s": send, "send_unix": 100 + send, "first_token_s": chunks[0], "done_s": chunks[-1],
+                "chunks": [[c, 1] for c in chunks], "output_ids": [0] * len(chunks)}
+
+    recs = [rec(0.0, [0.1, 0.2, 3.5, 3.6]), rec(1.0, [0.1, 0.2]), rec(2.5, [1.2, 1.3]), rec(9.0, [0.1, 0.2])]
+    (e,) = S.edge_cost(recs, [(2.0, 1.0)], before_s=1.0)
+    assert (e["in_flight"], e["gap_max_s"], e["sent"], e["ttft_max_s"]) == (1, pytest.approx(3.3), 2, 1.2)
+    (e,) = S.edge_cost(recs, [(5.0, 0.5)])
+    assert (e["in_flight"], e["gap_max_s"], e["sent"]) == (0, None, 3)
+    d = tmp_path / "restore"
+    (d / "medium" / "rep-1").mkdir(parents=True)
+    (d / "server").mkdir()
+    (d / "medium" / "rep-1" / "meta.json").write_text(json.dumps({"t0_unix": 100.0}))
+    (d / "server" / "edges.7.jsonl").write_text("\n".join(json.dumps(r) for r in (
+        {"hash_build_s": 9.0}, {"edge": 1, "next_step": 9, "drained_unix": 130.0, "pause_s": 1.5},
+        {"edge": 0, "next_step": 4, "drained_unix": 110.0, "pause_s": 1.0}, {"edge": 0, "state_write_s": 0.2})))
+    assert S.edge_windows(d, "medium") == [(10.0, 1.0), (30.0, 1.5)]

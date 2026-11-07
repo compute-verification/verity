@@ -519,6 +519,37 @@ def load_metrics(recs: list[dict], slo: tuple[float, float]) -> dict:
             "tpot_p99_s": pct(tpots, 0.99)}
 
 
+def edge_cost(recs: list[dict], windows: list[tuple[float, float]], before_s: float = 10.0) -> list[dict]:
+    """What a load's client saw around each of ``windows`` (an edge's start and pause, in the load's seconds; a record's
+    chunk times count from its send): the requests streaming across it (sent before it, done after it) and the longest
+    gap between consecutive chunks that overlaps it, each request's; and the TTFT of the requests sent from ``before_s``
+    before it to its end. Given another arm's records and the same windows, the same requests at the same moments without
+    the edge."""
+    ok = served_records(recs)
+    out = []
+    for t, pause in windows:
+        gaps = []
+        for r in ok:
+            if r["send_s"] < t < r["send_s"] + r["done_s"]:
+                ts = [r["send_s"], *(r["send_s"] + c[0] for c in r["chunks"])]
+                gaps.append(max((b - a for a, b in zip(ts, ts[1:]) if b >= t and a <= t + pause), default=0.0))
+        ttft = [r["first_token_s"] for r in ok
+                if t - before_s <= r["send_s"] <= t + pause and r.get("first_token_s") is not None]
+        out.append({"t_s": t, "pause_s": pause, "in_flight": len(gaps), "gap_p50_s": pct(gaps, 0.5),
+                    "gap_max_s": max(gaps, default=None), "sent": len(ttft), "ttft_p50_s": pct(ttft, 0.5),
+                    "ttft_p99_s": pct(ttft, 0.99), "ttft_max_s": max(ttft, default=None)})
+    return out
+
+
+def edge_windows(arm_dir: Path, load: str, rep: int = 1) -> list[tuple[float, float]]:
+    """A restore arm's edges as `edge_cost` windows in ``load``'s rep ``rep``'s seconds: each from its drain's end, as
+    long as its pause."""
+    t0 = json.loads((arm_dir / load / f"rep-{rep}" / "meta.json").read_text())["t0_unix"]
+    recs = [json.loads(x) for f in sorted((arm_dir / "server").glob("edges.*.jsonl"))
+            for x in f.read_text().splitlines() if x.strip()]
+    return [(r["drained_unix"] - t0, r["pause_s"]) for r in sorted((r for r in recs if "next_step" in r), key=lambda r: r["edge"])]
+
+
 def arm_metrics(d: Path, slo: tuple[float, float] | None = None) -> dict:
     """An arm's run dir: its meta and each load's metrics by rep."""
     meta = json.loads((d / "meta.json").read_text())
@@ -668,7 +699,20 @@ def main(argv: list[str] | None = None) -> int:
     k = sub.add_parser("tick")
     k.add_argument("source", metavar="STEP_TRACE|RECORD_DIR")
     k.add_argument("--load", default="saturated")
+    e = sub.add_parser("edges", help="each edge of a restore arm as its client saw it, beside other arms at the same moments")
+    e.add_argument("arm", type=Path)
+    e.add_argument("others", nargs="*", type=Path)
+    e.add_argument("--load", default="medium")
+    e.add_argument("--rep", type=int, default=1)
     a = ap.parse_args(argv)
+    if a.cmd == "edges":
+        windows = edge_windows(a.arm, a.load, a.rep)
+        for d in (a.arm, *a.others):
+            f = d / a.load / f"rep-{a.rep}" / "client.jsonl"
+            recs = [json.loads(x) for x in f.read_text().splitlines() if x.strip()]
+            for k_, row in enumerate(edge_cost(recs, windows)):
+                print(json.dumps({"arm": d.name, "edge": k_, **row}))
+        return 0
     if a.cmd == "run":
         return run(a)
     if a.cmd == "plan":
