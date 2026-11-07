@@ -248,7 +248,7 @@ All values below are from `parameters.json`; render the index for the findings b
   - So `U`, the description of the update, sits at or below `K` for every demonstrated post-training method except
     full-weight training. At a 1T MoE, though, decoding seeds costs steps × parameters, and that is what binds.
 - **Activations set the floor.**
-  - Production systems send 8-bit activations across parallel links. The one boundary test in training is stable only
+  - Serving systems send 8-bit activations across parallel links. The one boundary test in training is stable only
     from about 4.4 bits (`b_a.activation/boundary-training`).
   - Retrained bottlenecks cut the bits a token carries across a shard boundary by 2–4x. One preprint claims 100x, and
     its matched-token replication loses 14–15% in loss at only 8x (`activation.boundary_bits/d7168`).
