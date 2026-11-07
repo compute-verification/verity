@@ -1012,6 +1012,10 @@
   "Verity.soundness_of_upFront": {
    "honest": ["Verity.soundness_of_upFront_honest"],
    "nontrivial": "Verity.soundness_of_upFront_nontrivial"
+  },
+  "Properties.SampledProofs.haltEndsOpen": {
+   "honest": ["Properties.SampledProofs.haltEndsOpen_honest"],
+   "nontrivial": "Properties.SampledProofs.haltEndsOpen_nontrivial"
   }
  },
  "unwitnessed": {
@@ -7734,6 +7738,12 @@
    },
    "type_hash": "ded0fc0d7fd329c2e1585319b811ad69f9e24c9fcceed2ab5560f109a9fb9735",
    "unfolded_hash": "95120c28f85bf8cc55d17cfec17772304d286445916827ce9ca7082afa57227a"
+  },
+  "Properties.SampledProofs.haltEndsOpen_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.haltEndsOpen_nontrivial": {
+   "owner": "@proofs"
   },
   "Properties.SampledProofs.haltIsFinal": {
    "owner": "@proofs",
