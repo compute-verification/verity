@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Hm.Gadget
-public import Proofs.Flock.Soundness.ParseStmt
+public import Proofs.Flock.Soundness.ExecRows
+public import Proofs.Flock.Soundness.TmplUnitNet
 public import Proofs.Flock.Soundness.TmplValue
 
 /-!
@@ -14,8 +15,8 @@ predicate `Spec d v inp` of a copy of Definition `d`: its own columns' values `v
 its callee's, and its unwritten columns are 0: a fact about one Definition at a time. `holds_spec` gives it at every copy
 that satisfies its Definition's equations (`Flock.Tmpl.Holds`), and `unroll_spec` at the unit: where the audit's `Rows` of
 the net `Tmpl.unroll` builds hold with the constant 1, the root's rows past the input rows hold, and every copy of each of
-the root's calls past the input rows meets its specification. `unrolled_spec` states it for a templated statement's
-circuit, `HmOut.unrolled` of the circuit `HmOut.parseTmpl` commits.
+the root's calls past the input rows meets its specification. `unrolled_spec` states it for the circuit a templated
+descriptor `Desc.tmpl ct` unrolls to, `HmOut.unrolled ct`, with its constant read where the audit's `Rows` put it.
 
 A Definition's own rows force the builder rows they realize (`Realizes`): `rowHolds_of_realizes`,
 `stHolds_of_realizes` and `outs_of_realizes` are `Discharge.Hm.laid_rows` and `laid_outs` for a Definition, its
@@ -150,28 +151,48 @@ theorem unroll_spec {t : Tmpl} {n : Net} (hwf : t.wellFormed = true) (ha : t.apa
     rw [← e, List.length_map]
     exact Flock.TmplValue.call_bound_length (hwfd t.root) hc _ j
 
-/-- **`unroll_spec` at a templated statement's circuit**: where the audit's `Rows` of `HmOut.unrolled ct`'s unit, for the
-circuit `ct` that `HmOut.parseTmpl` commits with its template `tu`, hold at `z` with the constant 1, the template's root
-rows past its input rows hold at `z`, and every copy of each of its root's calls past the input rows meets its
-specification. -/
-theorem unrolled_spec {tags : Tags} {cf : ByteArray} {tables : List (String × ByteArray)} {ct : Circuit}
-    {tu : TmplUnit} (hp : HmOut.parseTmpl tags cf tables = .ok ct) (ht : ct.tmpl = some tu)
-    (hu : (HmOut.unrolled ct).unit.unitLog ≤ 32) {Spec : ℕ → (ℕ → Bool) → List Bool → Prop}
-    (hS : Steps tu.t.defs Spec) {z : ℕ → Bool} (hs : (Rows.ofNet (unrolled_built hp)).Sat fun c => z c.val)
-    (hone : z tu.t.constPos = true) :
+/-- The audit `Rows` of the net a template unrolls to have their constant at the template's constant column. -/
+theorem unroll_one {t : Tmpl} {n : Net} (h : Flock.Tmpl.unroll t = .ok n) (hB : Built n) :
+    (Rows.ofNet hB).one.val = t.constPos := by
+  have h' := h
+  unfold Flock.Tmpl.unroll at h'
+  obtain ⟨_, -, hn⟩ := Flock.TmplOrder.bind_ok h'
+  obtain ⟨-, -, -, -, hc, -⟩ := Net.ofRows_ok hn
+  exact (Rows.ofNet_one hB).trans hc
+
+/-- A templated circuit's statement circuit (`HmOut.unrolled`) has its template's unrolled net as its unit. -/
+theorem unrolled_unit_of {ct : Circuit} {tu : TmplUnit} {n : Net} (ht : ct.tmpl = some tu)
+    (hun : Flock.Tmpl.unroll tu.t = .ok n) (hsz : ct.unitNet < ct.nets.size) : (HmOut.unrolled ct).unit = n := by
+  have he : HmOut.unrolled ct = { ct with nets := ct.nets.set! ct.unitNet ("unit", n), tmpl := none } := by
+    unfold HmOut.unrolled
+    rw [ht]
+    simp only [hun]
+  rw [he]
+  show ((ct.nets.set! ct.unitNet ("unit", n)).getD ct.unitNet default).2 = n
+  simp [Array.getD_eq_getD_getElem?, hsz]
+
+/-- **`unroll_spec` at a templated circuit's statement circuit**: for a circuit `ct` carrying its unit's template `tu`
+(`Desc.tmpl ct` unrolls to `HmOut.unrolled ct`), where the audit's `Rows` of `HmOut.unrolled ct`'s unit hold at `z` with
+their constant 1, the template's root rows past its input rows hold at `z`, and every copy of each of its root's calls past
+the input rows meets its specification. -/
+theorem unrolled_spec {ct : Circuit} {tu : TmplUnit} (ht : ct.tmpl = some tu) (hsz : ct.unitNet < ct.nets.size)
+    (hB : Built (HmOut.unrolled ct).unit) (hu : (HmOut.unrolled ct).unit.unitLog ≤ 32)
+    {Spec : ℕ → (ℕ → Bool) → List Bool → Prop} (hS : Steps tu.t.defs Spec) {z : ℕ → Bool}
+    (hs : (Rows.ofNet hB).Sat fun c => z c.val) (hone : z (Rows.ofNet hB).one.val = true) :
     (∀ r ∈ (tu.t.defs.getD tu.t.root default).rows.toList, tu.t.inCols ≤ r.1 →
       z r.1 = rowVal ((tu.t.defs.getD tu.t.root default).refV z [] true) r) ∧
     ∀ c ∈ (tu.t.defs.getD tu.t.root default).calls.toList, tu.t.inCols ≤ c.base → ∀ j < c.count,
       Spec c.def_ (fun y => z (c.base + j * c.stride + y))
         (c.boundV ((tu.t.defs.getD tu.t.root default).refV z [] true) j) := by
-  obtain ⟨tu', n, ht', hun, hl, -, -, -, -⟩ := unrolled_of_parseTmpl hp
-  obtain rfl : tu' = tu := Option.some.inj (ht'.symm.trans ht)
-  have hU : (HmOut.unrolled ct).unit = n := (unrolled_unit hp).trans hl
-  subst hU
-  have hok := tu'.ok
+  obtain ⟨-, n, -, -, -, hun⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
+  have hU := unrolled_unit_of ht hun hsz
+  generalize hm : (HmOut.unrolled ct).unit = m at hB hu hs hone
+  obtain rfl : m = n := hm.symm.trans hU
+  have hok := tu.ok
   unfold Tmpl.unrollOk at hok
   simp only [Bool.and_eq_true, List.all_eq_true, List.mem_range] at hok
   obtain ⟨⟨⟨⟨⟨⟨⟨hwf, ha⟩, -⟩, -⟩, -⟩, -⟩, -⟩, -⟩ := hok
+  rw [unroll_one hun hB] at hone
   exact unroll_spec hwf ha hun hu hS hs hone
 
 /-! ## A Definition's rows force the builder rows they realize -/
