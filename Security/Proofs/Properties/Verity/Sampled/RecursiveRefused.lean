@@ -87,6 +87,6 @@ theorem recursiveForm_refused (V : Vocab d α) (k : Verity.Registration.Composit
     prob_play_eq_zero (V.families θ) θ F c (fun o => V.Verdict k .sampled o ∧ ¬ V.Holds k θ F c σ .sampled o)
       (fun o ho h => hθ (by rw [← ho.1]; exact paramsAt_of_verdict V k h.1)) σ
   rw [h0]
-  exact zero_le _
+  exact zero_le
 
 end Verity.Sampled
