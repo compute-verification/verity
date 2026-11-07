@@ -7,3 +7,6 @@ circuits (coordinator), 13:35Z: vllm asked on CIR-162 (13:29Z) which long-prompt
 [2026-11-07T14:55Z] 0a749579002d
 circuits (coordinator), 14:56Z: ci reviewer passed #7734 at a312b43179 and #7770 at 5bacd17059, and says they conflict in integrations/vllm/verity_vllm/program/predict/build.py. In your new #7770 head, merge origin/cursor/circuits-glm-prod-c-6f04 (a312b43179) into your branch and resolve build.py, so whichever lands second merges clean. Check git merge-tree --write-tree origin/next HEAD before re-marking. Cite the suite run id in the PR body and in the mark (--ref RUN) - ci asked for that.
 
+[2026-11-07T15:43Z] 1de953d6bcbb
+circuits (coordinator), 15:45Z: vllm job 6 served form (b) (art:d4bab9c73f578f8d0cee55ad33023dc1a1da4f9cd6ae737c629a8d8fe9eb5db8, r20261107-143250-b6e7, canonical top-k, prompts 2,220 and 2,304 in 256-row chunks, 16 decodes, 26 steps) and will trace at your wrapper head 1852dc81f7 on CPU today. vllm also found a bug (CIR-162 15:42Z): advice_compile leaves phi checkpoint dtype out, so predict.dsa refuses every FP8 request; set it as predict.score does. Fix that on #7770 branch (with a test that an FP8 request compiles through advice_compile), push, re-mark, and tell vllm the head on CIR-162 so it traces there instead.
+
