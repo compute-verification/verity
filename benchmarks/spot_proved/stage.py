@@ -1,7 +1,6 @@
 """Stage sampled proof blocks of one captured step (`capture.py`) as the one-stage audit's saved values (`a11.py --load-values`).
 
-    PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
-      python benchmarks/spot_proved/stage.py --capture DIR --step S --out DIR [--per-type 8] [--types T,...]
+    python benchmarks/spot_proved/stage.py --capture DIR --step S --out DIR [--per-type 8] [--types T,...]
 
 * **Commitment.** Each rank's ``ops.jsonl`` and ``params.json`` are hashed again and held to its ``meta.json``'s rank root,
   the ranks' roots to the step root every rank's ``commit.json`` names, and the coins to one value on every rank. Every blob
@@ -32,7 +31,9 @@ import numpy as np
 
 #: the tree a11.py comes from: this file's, else (sent alone into a run's inputs) the working directory's
 TREE = Path(__file__).resolve().parents[2] if (Path(__file__).resolve().parents[1] / "one_stage").is_dir() else Path.cwd()
-sys.path.insert(0, str(TREE / "benchmarks" / "one_stage"))
+for _p in ("benchmarks/one_stage", "tools/verity/circuit_check/src", "benchmarks/numerical/python", "integrations/vllm",
+           "verity/ml/flock/python", "."):
+    sys.path.insert(0, str(TREE / _p))
 sys.setrecursionlimit(100000)
 
 NP = {"torch.bfloat16": np.uint16, "torch.float16": np.uint16, "torch.float32": np.uint32, "torch.float8_e4m3fn": np.uint8,
@@ -304,7 +305,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--per-type", type=int, default=8)
     ap.add_argument("--types", default=None, help="comma-separated labels (default: every type found)")
-    ap.add_argument("--profile", default="derived_GLM53_tp8")
+    ap.add_argument("--cc", default="9.0", help="the serving GPUs' compute capability (the MoE launches' e4m3 step)")
     ap.add_argument("--full-gates", type=int, default=4_000_000)
     ap.add_argument("--of", default="", help="what the window is (window.json)")
     ap.add_argument("--link", default="", help="how its values link to serving (window.json)")
@@ -314,13 +315,13 @@ def main() -> int:
     import a11_kinds as K
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity_vllm.check.fold_compare import load_profile
+    from verity_vllm.program.frontend.target_profile import TargetProfile
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     cap = Capture(Path(a.capture), a.step)
-    profile = load_profile(a.profile)
+    profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     report: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "coins": cap.coins.hex(),
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {}}
     pops: dict[str, list] = {}

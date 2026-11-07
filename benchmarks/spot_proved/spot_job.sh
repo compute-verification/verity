@@ -25,6 +25,9 @@ done
 REV=aca966e4e02791568aa6a4ced368624b3d897f42
 if [ -e "/workspace/cp/glm53-ckpt/$REV/.verified" ]; then CK=/workspace/cp/glm53-ckpt/$REV; else CK=/workspace/fs/glm53/$REV; fi
 CK=${CHECKPOINT:-$CK}
+[ -d "$CK" ] || { echo "spot: no checkpoint at $CK"; exit 2; }
+v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
+case $v in *+gd9105ea8*) ;; *) echo "spot: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
 CAP=/workspace/spot-capture/$(basename "$D"); mkdir -p "$CAP/site"
 free=$(df -BG --output=avail "$CAP" | tail -1 | tr -dc 0-9)
 [ "${free:-0}" -ge 100 ] || { echo "spot: ${free}G free under $CAP, want 100G"; exit 2; }
@@ -68,6 +71,24 @@ GPU_LEASE_WHO=${GPU_LEASE_WHO:-spot-capture} gpu-lease 8 --wait --max-min "${MAX
 rc=$?
 grep -a "spot-capture" "$OUT/replay.log" | tail -n 40
 tail -n 3 "$OUT/replay.log"
+"$PY" - "$TREE" "$ARM" "$LOAD" "$CAP" "$STEPS" "$OUT/alignment.json" <<'EOF'
+import json, sys
+from pathlib import Path
+tree, arm, load, cap, steps, out = sys.argv[1:]
+sys.path.insert(0, str(Path(tree) / "benchmarks" / "serve_tax"))
+import replay
+served = {s["step"]: {r[0]: int(r[2]) for r in s["rows"]} for s in replay.window(Path(arm), load, 1)["steps"]}
+res = {}
+for s in map(int, steps.split(",")):
+    m = Path(cap) / "rank0" / f"step{s}" / "meta.json"
+    got = json.loads(m.read_text())["scheduled"] if m.exists() else None
+    want = served.get(s)
+    same = got is not None and want is not None and len(got) == len(want) and all(
+        any(g == w or g.startswith(w + "-") for g in got if got[g] == n) for w, n in want.items())
+    res[s] = {"same_rows": same, "served": want, "captured": got}
+    print(f"spot: step {s}: the captured step's rows {'are' if same else 'are NOT'} the served window's step {s}'s")
+json.dump(res, open(out, "w"), indent=1)
+EOF
 echo "== stage $(date -u +%FT%TZ)"
 mkdir -p "$OUT/commit"
 staged=1
@@ -79,11 +100,11 @@ for s in ${STEPS//,/ }; do
     gzip -c "$r/step$s/ops.jsonl" > "$OUT/commit/$(basename "$r")/step$s/ops.jsonl.gz"
     cp "$r/params.json" "$OUT/commit/$(basename "$r")/" 2>/dev/null
   done
-  PYTHONPATH="$TREE:$TREE/verity/ml/flock/python:$TREE/integrations/vllm" "$PY" "$IN/stage.py" --capture "$CAP" --step "$s" \
+  (cd "$TREE" && "$PY" "$IN/stage.py" --capture "$CAP" --step "$s" \
     --out "$OUT/values-step$s" --per-type "${PER_TYPE:-8}" --row "glm53-spot-${LOAD}-step$s" \
     --of "GLM-5.3 FP8 TP8 on 8x H200: step $s of load $LOAD's served window ($ARM), replayed from an empty engine on the same machine with CUDA graphs as served; its interior recorded by a graph-off forward of the same step checked bit for bit against the graph's" \
     --link "the replay's tokens against the served window's (OUT/replay/replay.json); the weights are the served engine's parameters, committed by SHA-512" \
-    > "$OUT/stage-step$s.log" 2>&1 || { echo "spot: stage step $s failed"; staged=0; }
+    > "$OUT/stage-step$s.log" 2>&1) || { echo "spot: stage step $s failed"; staged=0; }
   tail -n 40 "$OUT/stage-step$s.log"
 done
 du -sh "$CAP" "$OUT"/* 2>/dev/null

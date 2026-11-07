@@ -124,7 +124,12 @@ def _install() -> None:
                 return orig(self, scheduler_output, *a, **kw)
             finally:
                 if S.active and S.events:
-                    _finish(self)
+                    try:
+                        _finish(self)
+                    except Exception:
+                        print(f"[spot-capture] rank {S.rank} step {S.step}: the capture failed, serving goes on\n"
+                              f"{traceback.format_exc()}", flush=True)
+                        S.events, S.errors, S.check = [], [], None
                 S.active = False
         return run
 
@@ -403,7 +408,7 @@ def _ref_quiet(v: Any) -> Any:
             return {**d, "device": v.device.type}
         if nb > BIG:
             return {**d, "big": nb}
-        raw = v.detach().contiguous().view(torch.uint8).reshape(-1).cpu().numpy().tobytes() if nb else b""
+        raw = v.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy().tobytes() if nb else b""
         h = hashlib.sha512(raw).hexdigest()
         if h not in S.seen:
             S.seen.add(h)
@@ -509,7 +514,7 @@ def _finish(runner: Any) -> None:
 
     def digest(name: str) -> tuple[str, dict]:
         t = S.param_of[name]
-        raw = t.detach().contiguous().view(torch.uint8).reshape(-1).cpu().numpy()
+        raw = t.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy()
         return name, {"shape": list(t.shape), "dtype": str(t.dtype), "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
     with ThreadPoolExecutor(8) as pool:
         params = dict(pool.map(digest, sorted(S.used_params)))
@@ -570,7 +575,7 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
     for name, t in sorted(S.param_of.items()):
         if not any(m in f".{name}" for m in marks):
             continue
-        raw = t.detach().contiguous().view(torch.uint8).reshape(-1).cpu().numpy()
+        raw = t.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy()
         (od / f"{name}.bin").write_bytes(memoryview(raw))
         files[name] = {"shape": list(t.shape), "dtype": str(t.dtype), "stride": list(t.stride()),
                        "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}

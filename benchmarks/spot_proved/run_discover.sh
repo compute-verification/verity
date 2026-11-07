@@ -26,7 +26,7 @@ rc=$?
 "$PY" "$here/discover.py" --config "$CFG" --out "$OUT" --capture "$CAP" --steps "$VERITY_SPOT_STEPS" --summarize
 ROOT=$(cd "$here/../.." && pwd)
 for s in ${VERITY_SPOT_STEPS//,/ }; do
-  PYTHONPATH="$ROOT:$ROOT/verity/ml/flock/python:$ROOT/integrations/vllm" "$PY" "$here/stage.py" --capture "$CAP" --step "$s" \
+  "$PY" "$here/stage.py" --capture "$CAP" --step "$s" \
     --out "$OUT/values-step$s" --per-type "${PER_TYPE:-4}" --of "rehearsal: GLM-5.3's config with dummy weights, ${LAYERS:-4} layers, TP${TP:-2}" \
     --link "none: dummy weights" > "$OUT/stage-step$s.log" 2>&1 || echo "stage step $s failed"
   tail -n 30 "$OUT/stage-step$s.log"
