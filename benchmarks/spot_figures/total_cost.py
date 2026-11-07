@@ -442,7 +442,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
                      f"{f1.CAP_STATUS['sets']}, at most the scope's served bits ({f1.SERVED_STATUS}):{binds(n)}")
         return text
 
-    patterns = (f"the patterns' form ({f1.CAP_STATUS['patterns']}, proved, in review): a request's incorrect proof "
+    patterns = (f"the patterns' form ({f1.CAP_STATUS['patterns']}): a request's incorrect proof "
                 f"blocks are charged their committed bits up to the {served:,.0f} bits it serves, so a wholly incorrect "
                 f"request costs {served:,.0f} bits, and the bound is at most the {sc['served_bits']:.2g} bits the "
                 f"scope serves ({f1.OUTS_STATUS}). It takes two modeling conditions: each request serves at most "

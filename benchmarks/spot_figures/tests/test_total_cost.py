@@ -221,7 +221,7 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     assert out["taxes"]["per_expert"] == out["taxes"]["tokens"]
     assert out["configurations"]["per_expert"]["cut"]["label"] in caps["exfiltration"]
     assert "card_influenceTwo_le_served_min" in caps["exfiltration"] and "card_influenceTwo_le_min" in caps["exfiltration"]
-    assert "card_influenceTwo_le_patterns, proved, in review" in caps["exfiltration"]
+    assert "the patterns' form (card_influenceTwo_le_patterns):" in caps["exfiltration"]
     assert ("each request serves at most S = 144,000 bits, and no proof block is shared across requests"
             in caps["exfiltration"])
     assert "serve tax 3%" in caps["exfiltration"] and "measured" in caps["exfiltration"]
