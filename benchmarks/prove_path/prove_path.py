@@ -32,7 +32,11 @@ Two kinds of committed run:
   it covers what the compile reads of ``serve.json`` (`I2Compiler.digest`). The advice is committed once, by the server:
   the prover commits the window under the published binding (no re-commit), and both sides hold the published records to their
   own (`serve_check`): the registration names this window, a compiler whose digest carries the cap ℓ and is the verifier's own,
-  and the root the opening opens; the root serve-openai published for the window is a SHA-512 root, the row dir's run root.
+  and the root the opening opens; the root serve-openai published for the window is a SHA-512 root, the row dir's run root;
+  and the advice, read as a Commit window's (`advice_codec`: `window_advice`, which carries requests across a window's open and
+  close), opens where the window before it closed: its carried requests are that window's close, opened under that window's
+  registration, each at the state it was left in (`serve_follows`, refusing by name). A served window's circuit and records
+  audit read I1's advice and refuse a window that carries a request.
 
     prove_path.py advice --workload F --out FILE
     prove_path.py commit (--tp-commit DIR --build-root DIR | --bundle DIR --row-dir DIR --workload F [--hf-config F] \\
@@ -178,6 +182,8 @@ from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
 from verity_vllm.pipeline import deferred_rows as DRW  # noqa: E402
+from verity_vllm.pipeline import edge as E  # noqa: E402
+from verity_vllm.pipeline import window_advice as WA  # noqa: E402
 from verity_vllm.pipeline.tp import serving_rows as SRT  # noqa: E402
 
 CAPPED = "verity/prove-path/capped-compiler/v0"
@@ -511,15 +517,20 @@ def _jsonl(path: Path) -> list[dict]:
 def serve_window(run: str, window: int) -> SimpleNamespace:
     """A serve-openai run's closed Commit window ``window``: ``serve.json`` (the engine), its line of ``windows.jsonl`` (its Commit:
     run id and run root), the requests of ``requests.jsonl`` with rows in it, and `verity-vllm advice`'s ``advice/w<K>/``:
-    ``registration.json`` (public: the binding) and the paths of ``private/advice.bin`` and ``private/opening.json``."""
+    ``registration.json`` (public: the binding) and the paths of ``private/advice.bin`` and ``private/opening.json``; and
+    ``last``, the window it follows (``windows.jsonl``'s last non-empty one before it, as `advice_compile.carry_of` takes it:
+    its number and its ``advice/w<J>/``), None when no window ran before it."""
     d, k = Path(run), int(window)
-    commits = [w for w in _jsonl(d / "windows.jsonl") if int(w["window"]) == k]
+    lines = _jsonl(d / "windows.jsonl")
+    commits = [w for w in lines if int(w["window"]) == k]
     if len(commits) != 1:
         raise ValueError(f"{d}/windows.jsonl: {len(commits)} lines for window {k}, not one")
+    j = max((int(w["window"]) for w in lines if not w.get("empty") and int(w["window"]) < k), default=None)
     adv = d / "advice" / f"w{k}"
     return SimpleNamespace(dir=d, window=k, serve=json.loads((d / "serve.json").read_text()), commit=commits[0],
                            registration=json.loads((adv / "registration.json").read_text()), requests=serve_requests(d, k),
-                           advice=adv / "private" / "advice.bin", opening=adv / "private" / "opening.json")
+                           advice=adv / "private" / "advice.bin", opening=adv / "private" / "opening.json",
+                           last=None if j is None else SimpleNamespace(window=j, dir=d / "advice" / f"w{j}"))
 
 
 def serve_requests(run: str | Path, window: int) -> list[dict]:
@@ -650,32 +661,86 @@ def served(a: argparse.Namespace) -> bool:
     return bool(getattr(a, "serve_run", None))
 
 
-def serve_check(s: SimpleNamespace, bound: Mapping[str, Any], run_root: str, commitment: str) -> dict[str, Any]:
+def serve_check(s: SimpleNamespace, bound: Mapping[str, Any], run_root: str, commitment: str, data: bytes) -> dict[str, Any]:
     """A served window's published records held to the verifier's own, each check by name: its registration
     (``advice/w<K>/registration.json``) names this window (``window``), a compiler whose digest carries the cap ℓ (``cap``: a
     `Capped` one) and is the verifier's own (``compiler``: I2 running the server's code under the run's ``serve.json``,
     `i2_of_serve`, and ℓ, so a ``serve.json`` other than the one the advice was registered under is refused here), and the advice root and length the
     opening opens (``advice``); the root serve-openai published for the window (``windows.jsonl``) is a SHA-512 root of a
     ``rows-sha512`` store (``sha512``), the row dir's run root ``run_root`` (``run_root``), and the Commit the registration names
-    (``commit``: its run id and run root)."""
+    (``commit``: its run id and run root); and its advice ``data`` opens where the window before it closed (``follows``:
+    `serve_follows`)."""
     reg, pub = s.registration, s.commit
     b = reg.get("binding") if isinstance(reg.get("binding"), Mapping) else {}
     c, root = b.get("compiler") or {}, str(pub.get("run_root") or "")
+    follows = serve_follows(s, bound["compiler"], data)
     ok = {"window": reg.get("window") == s.window, "cap": c.get("name") == CAPPED, "compiler": c == bound["compiler"],
           "advice": b.get("advice") == bound["advice"], "sha512": len(root) == 2 * DRW.SERVED_ROOT and commitment == SRT.ROWS_SCHEME,
-          "run_root": root == run_root, "commit": reg.get("commit") == {"run_id": pub.get("run_id"), "run_root": pub.get("run_root")}}
+          "run_root": root == run_root, "commit": reg.get("commit") == {"run_id": pub.get("run_id"), "run_root": pub.get("run_root")},
+          "follows": follows["ok"]}
     return {"ok": all(ok.values()), "codes": [k for k, v in ok.items() if not v],
             "detail": {"window": s.window, "published_root": root, "commitment": commitment, "compiler": c, "advice": b.get("advice"),
-                       "run_id": pub.get("run_id")}}
+                       "run_id": pub.get("run_id"), "follows": follows["detail"]}}
+
+
+#: the close of no window: what a window that no earlier one ran before follows
+NO_WINDOW = WA.Advice((), (), ())
+
+
+def serve_follows(s: SimpleNamespace, compiler: Mapping[str, str], data: bytes) -> dict[str, Any]:
+    """The verifier's `window_advice.follows` for a served window (`serve_window`) whose advice is ``data``: the window it follows
+    (``s.last``) opens, under the verifier's ``compiler`` (its name and digest), the root and length its own registration binds
+    (`last_advice`), and ``data``'s carried requests are that window's close, each at the state it left it in (`edge.carried`),
+    every one it left with outputs still to keep among them. A window no earlier one ran before carries nothing in.
+    -> {ok, detail}: ``detail`` names that window (``last``) and, where ``data`` follows it, each carried request's field in
+    each of its edge's ports (``carried``); else what doesn't follow, by name (``code``): `window_advice.FOLLOWS`'s (with
+    ``request``, the request's id), ``advice`` where ``data`` isn't a window's advice, or ``opening`` where the window before
+    has no opening of the root its registration binds, and ``why``."""
+    at = {"last": None if s.last is None else s.last.window}
+    try:
+        advice = WA.decode(data)
+    except WA.MalformedAdvice as e:
+        return {"ok": False, "detail": {**at, "code": "advice", "why": str(e)}}
+    try:
+        last = NO_WINDOW if s.last is None else last_advice(s.last, compiler)
+    except (OSError, ValueError) as e:
+        return {"ok": False, "detail": {**at, "code": "opening", "why": str(e)}}
+    try:
+        carried = E.carried(last, advice)
+    except WA.NotFollowing as e:
+        return {"ok": False, "detail": {**at, "code": e.code, "request": e.request, "why": str(e)}}
+    return {"ok": True, "detail": {**at, "carried": [{"id": x.id, "computed": x.computed, "fields": dict(x.fields)} for x in carried]}}
+
+
+def last_advice(last: SimpleNamespace, compiler: Mapping[str, str]) -> WA.Advice:
+    """The advice of the window ``last`` (`serve_window`'s ``last``): its opening (``private/opening.json``), held to the binding
+    its registration carries, recomputed under ``compiler`` (`advice_windows.opened`); a ValueError naming what doesn't hold."""
+    reg = json.loads((last.dir / "registration.json").read_text())
+    advice, bound = AW.opened(SimpleNamespace(**compiler), json.loads((last.dir / "private" / "opening.json").read_text()), WA)
+    if reg.get("window") != last.window or reg.get("binding") != bound:
+        raise ValueError(f"window {last.window}'s opening opens {bound['advice']} under {bound['compiler']}, not what its "
+                         f"registration of window {reg.get('window')!r} binds: {reg.get('binding')}")
+    return advice
 
 
 def serve_check_of(a: argparse.Namespace, bound: Mapping[str, Any]) -> dict[str, Any]:
     r = record1(str(a.bundle), str(a.row_dir))
-    return serve_check(serve_window(str(a.serve_run), int(a.window)), bound, bytes(r.run.run_root).hex(), r.store.commit_scheme)
+    return serve_check(serve_window(str(a.serve_run), int(a.window)), bound, bytes(r.run.run_root).hex(), r.store.commit_scheme,
+                       opened_bytes(json.loads(Path(a.opening).read_text())))
+
+
+def opened_bytes(doc: Any) -> bytes:
+    """The advice an opening holds, its bytes; a ValueError where it holds none in hex."""
+    if not isinstance(doc, Mapping) or doc.get("scheme") != AW.SCHEME or not isinstance(doc.get("advice"), str):
+        raise ValueError(f"an advice opening is a {AW.SCHEME} document with the advice in hex")
+    try:
+        return bytes.fromhex(doc["advice"])
+    except ValueError as e:
+        raise ValueError(f"an advice opening holds the advice in hex: {e}") from e
 
 
 def serve_negatives(s: SimpleNamespace, compiler: Capped, bound: Mapping[str, Any], run_root: str,
-                    commitment: str) -> dict[str, dict]:
+                    commitment: str, data: bytes) -> dict[str, dict]:
     """What `serve_check` refuses of a served window's published records: a registration whose compiler carries no cap (the inner
     compiler's name and digest, as `verity-vllm advice` registers by default), one naming another window, the window's root
     published under vllm-v1 (32 bytes), and another Commit's root."""
@@ -687,7 +752,7 @@ def serve_negatives(s: SimpleNamespace, compiler: Capped, bound: Mapping[str, An
              "published-root-of-another-commit (serve)": SimpleNamespace(**{**vars(s), "commit": {**pub, "run_root": "00" * 64}})}
     out = {}
     for name, x in cases.items():
-        v = serve_check(x, bound, run_root, commitment)
+        v = serve_check(x, bound, run_root, commitment, data)
         out[name] = {"refused": not v["ok"], "codes": v["codes"]}
     return out
 
@@ -717,24 +782,28 @@ def commit_advice(compiler: Capped, data: bytes) -> tuple[list[dict], dict, dict
     return requests, bound, AW.opening(data, reg)
 
 
-def open_advice(compiler: Capped, doc: Any) -> tuple[list[dict], dict]:
+def open_advice(compiler: Capped, doc: Any, codec: Any = None) -> tuple[list[dict], dict]:
     """The verifier's side of the opening (the named gap): the requests it compiles from the opened advice and the binding the
     registration must carry (`advice_windows.of_opening`: the root recomputed from the advice and its salts). A malformed opening is
-    a ValueError, as `compile_advice`'s refusals are."""
-    if not isinstance(doc, Mapping) or doc.get("scheme") != AW.SCHEME or not isinstance(doc.get("advice"), str):
-        raise ValueError(f"an advice opening is a {AW.SCHEME} document with the advice in hex")
-    try:
-        data = bytes.fromhex(doc["advice"])
-    except ValueError as e:
-        raise ValueError(f"an advice opening holds the advice in hex: {e}") from e
-    return compile_advice(compiler, data), AW.of_opening(compiler, doc)[1]
+    a ValueError, as `compile_advice`'s refusals are. Under a served window's codec (`advice_codec`), whose carried requests
+    the stand-in can't compile, the binding is recomputed without its requests (`advice_windows.opened`): I2's are the window's."""
+    requests = compile_advice(compiler, opened_bytes(doc), codec)
+    _of, bound = AW.of_opening(compiler, doc) if codec is None else AW.opened(compiler, doc, codec)
+    return requests, bound
+
+
+def advice_codec(a: argparse.Namespace) -> Any:
+    """The codec a run's advice is read by: a served window's is `window_advice`, which carries requests across a window's open
+    and close, every served window's carried requests held to the window before it (`serve_check`'s ``follows``); any other
+    run's is I1's (None)."""
+    return WA if served(a) else None
 
 
 def compiled(a: argparse.Namespace) -> tuple[Capped, list[dict], dict, dict]:
-    """The verifier's compiler, requests and binding from the opening ``a.opening``, and the opening."""
+    """The verifier's compiler, requests and binding from the opening ``a.opening`` (read by `advice_codec`), and the opening."""
     compiler = compiler_of_args(a)
     opening = json.loads(Path(a.opening).read_text())
-    return (compiler, *open_advice(compiler, opening), opening)
+    return (compiler, *open_advice(compiler, opening, advice_codec(a)), opening)
 
 
 def served_advice(a: argparse.Namespace) -> tuple[list[dict], dict, dict]:
@@ -965,7 +1034,7 @@ def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, 
         neg[name] = {"refused": not v["ok"], "codes": v["codes"]}
     salts = list(opening["salts"])
     salts[0] = f"{int(salts[0][:2], 16) ^ 1:02x}{salts[0][2:]}"
-    _reqs, resalted = AW.of_opening(compiler, {**opening, "salts": salts})
+    _advice, resalted = AW.opened(compiler, {**opening, "salts": salts}, advice_codec(a))
     v = src(w, mine, {**held, **resalted})
     neg["opening-under-another-salt (source)"] = {"refused": not v["ok"], "codes": v["codes"]}
     return neg
@@ -989,14 +1058,14 @@ def advice_before_draw(receipt: Mapping[str, Any], rec: Mapping[str, Any], bound
 
 
 def advice_after_draw(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping[str, Any], opening: Mapping[str, Any], mine: Any,
-                      held: dict, source: Callable[[dict | None, Any, dict], dict] = SRT.source) -> dict:
+                      held: dict, source: Callable[[dict | None, Any, dict], dict] = SRT.source, codec: Any = None) -> dict:
     """The negative: once the coins are read, the prover commits the same advice again (fresh salts, so a fresh root) and hands
     in a registration binding that root, with its opening. Every check before the sample passes on it (``source`` against the new
-    opening: the root is a true commitment of the advice), and `advice_before_draw` refuses it (``after-the-draw``): the sample
-    followed the registration received first."""
+    opening: the root is a true commitment of the advice, read by ``codec``), and `advice_before_draw` refuses it
+    (``after-the-draw``): the sample followed the registration received first."""
     data = bytes.fromhex(opening["advice"])
     late = AW.opening(data, AW.commit_advice(compiler, data))
-    _reqs, bound = open_advice(compiler, late)
+    _reqs, bound = open_advice(compiler, late, codec)
     late_rec = {**rec, "window": {**rec["window"], "advice": bound["advice"]}}
     src = source(late_rec["window"], mine, {**held, **bound})
     v = advice_before_draw(receipt, late_rec, bound)
@@ -1082,7 +1151,7 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
         rr = record1(str(a.bundle), str(a.row_dir))
         sv = serve_check_of(a, bound)
         more = {**more, **serve_negatives(serve_window(str(a.serve_run), int(a.window)), compiler, bound, bytes(rr.run.run_root).hex(),
-                                          rr.store.commit_scheme)}
+                                          rr.store.commit_scheme, opened_bytes(opening))}
         check = lambda w: with_serve(src(w, mine, held), sv)
     sets = A5.template_sets(Path(a.template_sets))
     s, ok = A5.audit(a, sets, out, mine, wdir, check, a.port + A5.RANK_PORTS * r,
@@ -1098,7 +1167,8 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
         rec, receipt = (json.loads((out / f).read_text()) for f in ("registration.json", "receipt.json"))
         row["advice_before_draw"] = advice_before_draw(receipt, rec, bound)
         row["negatives"] = {**(row["negatives"] or {}),
-                            "advice-root-after-the-draw": advice_after_draw(compiler, receipt, rec, opening, mine, held, src)}
+                            "advice-root-after-the-draw": advice_after_draw(compiler, receipt, rec, opening, mine, held, src,
+                                                                            advice_codec(a))}
         ordered = row["advice_before_draw"]["ok"] and row["negatives"]["advice-root-after-the-draw"]["refused"]
     else:
         ordered = False

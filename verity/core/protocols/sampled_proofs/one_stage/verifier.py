@@ -398,10 +398,11 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             "coins": None if coins is None else dict(coins)}
     if interior is not None:
         it = interior
-        i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held = it["copies"]
+        i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held, i_outputs = \
+            it["copies"]
         args["interior"] = {
             "params": _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log, None,
-                              None, i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held),
+                              None, i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held, i_outputs),
             "replay": codec.encode_program(it["replay"]),
             "values": [{"name": n, "registered": r} for n, r in it["values"]], "record": dict(it["record"]),
             "received": it["received"], "source": it["read"].hex(),
