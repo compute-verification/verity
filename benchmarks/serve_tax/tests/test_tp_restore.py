@@ -106,6 +106,20 @@ def test_a_restore_is_exact_on_blocks_and_generators_and_on_seeds_only_when_rows
     assert T.restored_exact(served, moved, seeds=True) == {"kv": False, "generators": False, "seeds": True}
 
 
+def test_the_served_autotune_results_go_where_the_restored_engines_config_hash_reads_them(tmp_path):
+    served = tmp_path / "served"
+    assert T.carry_autotune(served, tmp_path / "restored", "cfg-b")["served"] is None
+    src = T.autotune_file(served, "cfg-a")
+    src.parent.mkdir(parents=True)
+    src.write_text('{"op": "tactic 3"}')
+    got = T.carry_autotune(served, tmp_path / "restored", "cfg-b")
+    assert got["same_config"] is False and T.autotune_file(tmp_path / "restored", "cfg-b").read_text() == '{"op": "tactic 3"}'
+    T.autotune_file(served, "cfg-c").parent.mkdir()
+    T.autotune_file(served, "cfg-c").write_text("{}")
+    with pytest.raises(SystemExit, match="2 autotune files"):
+        T.carry_autotune(served, tmp_path / "restored", "cfg-b")
+
+
 def test_the_plugin_site_declares_the_edges_beside_the_step_trace(tmp_path):
     T.edge_site(tmp_path)
     eps = sorted(p.read_text() for p in tmp_path.glob("*.dist-info/entry_points.txt"))

@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import hashlib
 import json
 import os
 import re
@@ -56,6 +57,8 @@ PINS = {"PYTHONHASHSEED": "0", "VLLM_DISABLE_REQUEST_ID_RANDOMIZATION": "1", "TO
         "VLLM_USE_V2_MODEL_RUNNER": "1"}
 #: sampling a request asks for: ``production`` asks for nothing, so the generation config's defaults apply, unseeded
 SAMPLING = {"production": {}}
+#: vLLM's directory override for FlashInfer's autotune results (`resolve_flashinfer_autotune_file`)
+AUTOTUNE_ENV = "VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR"
 #: the client's request ids, ``tpr-<plan index>``; the engine's are ``cmpl-<client id>-0`` (with request ids not randomized)
 ID = "tpr"
 
@@ -117,15 +120,18 @@ def preflight(a: argparse.Namespace) -> int:
     sys.path.insert(0, str(ROOT / "integrations/vllm"))
     from verity_vllm.engine.hooks import Hooks  # noqa: F401
     from verity_vllm.engine.step_trace import StepTrace  # noqa: F401
+    from vllm.config import VllmConfig
     from vllm.v1.engine.core_client import InprocClient
     from vllm.v1.engine.llm_engine import LLMEngine
+    from vllm.v1.executor import Executor
 
     checkpoint = Path(a.checkpoint) if a.checkpoint else S.MODELS[a.model_id].checkpoint()
     args = engine_args(served_argv(a, checkpoint, 0)[1:], {"num_gpu_blocks": 1})
     got = {k: getattr(args, k) for k in ("model", "tensor_parallel_size", "max_model_len", "seed", "num_gpu_blocks_override",
                                          "enable_prefix_caching", "async_scheduling", "kv_cache_dtype", "block_size")}
-    missing = [n for n in ("from_engine_args",) if not hasattr(LLMEngine, n)] + \
-        [n for n in ("get_output",) if not hasattr(InprocClient, n)]
+    missing = [f"{c.__name__}.{n}" for c, n in ((LLMEngine, "__init__"), (InprocClient, "get_output"),
+                                                (Executor, "get_class"), (VllmConfig, "compute_hash"),
+                                                (type(args), "create_engine_config")) if not hasattr(c, n)]
     print(f"[tp-restore] preflight: {got}" + (f"; missing {missing}" if missing else ""), flush=True)
     return 1 if missing or got["tensor_parallel_size"] != (a.tp or (8 if a.model_id == "glm53" else 1)) else 0
 
@@ -144,12 +150,12 @@ def serve(a: argparse.Namespace) -> int:
     argv = served_argv(a, checkpoint, port)
     srv = out / "server"
     srv.mkdir(exist_ok=True)
-    env = S.server_env(arm, srv, site, None, 600.0, 600.0) | PINS
+    env = S.server_env(arm, srv, site, None, 600.0, 600.0) | PINS | {AUTOTUNE_ENV: str(scratch / "autotune")}
     env[E.ENV] = json.dumps({"out": str(scratch / "edges"), "at_s": a.edges_at, "dump": 1, "savers": a.saver})
     meta: dict[str, Any] = {"schema": SCHEMA, "model_id": a.model_id, "model": f"{model.repo}@{model.revision}",
                             "checkpoint": str(checkpoint), "plan": str(plan_file), "server_argv": argv[1:], "pins": PINS,
                             "edges_at": a.edges_at,
-                            "savers": a.saver, "scratch": str(scratch), "versions": S.versions(), "host": os.uname().nodename}
+                            "savers": a.saver, "scratch": str(scratch), "autotune_dir": str(scratch / "autotune"), "versions": S.versions(), "host": os.uname().nodename}
     rc = 0
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:
@@ -304,6 +310,26 @@ def restored_exact(served: Sequence[Mapping[str, Any]], restored: Sequence[Mappi
     return out
 
 
+def autotune_file(root: Path, config_hash: str) -> Path:
+    """Where an engine of this config hash (``VllmConfig.compute_hash(include_version=False)``) keeps FlashInfer's
+    autotune results under ``root``, as `resolve_flashinfer_autotune_file` puts them with the directory override."""
+    return root / hashlib.sha256(config_hash.encode()).hexdigest() / "autotune_configs.json"
+
+
+def carry_autotune(served_root: Path, root: Path, config_hash: str) -> dict[str, Any]:
+    """The served engine's FlashInfer autotune results put where an engine of ``config_hash`` reads them at startup, so
+    that it runs the served kernels instead of timing its own (its config hash may differ, the block count pinned)."""
+    files = sorted(served_root.glob("*/autotune_configs.json"))
+    dst = autotune_file(root, config_hash)
+    if len(files) > 1:
+        raise SystemExit(f"{served_root}: {len(files)} autotune files, where one served engine writes one")
+    if not files:
+        return {"served": None, "restored": dst.parent.name}
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(files[0], dst)
+    return {"served": files[0].parent.name, "restored": dst.parent.name, "same_config": files[0].parent.name == dst.parent.name}
+
+
 def resolve(name: str) -> Callable[..., Any]:
     return E.resolve(name)
 
@@ -318,7 +344,7 @@ def restore(a: argparse.Namespace) -> int:
     edge1, edge2 = Path(e1["dir"]), Path(e2["dir"])
     rec1, rec2 = (json.loads((d / "edge.json").read_text()) for d in (edge1, edge2))
     sys.path.insert(0, str(ROOT / "integrations/vllm"))
-    os.environ.update(PINS | {"VLLM_ENABLE_V1_MULTIPROCESSING": "0",
+    os.environ.update(PINS | {"VLLM_ENABLE_V1_MULTIPROCESSING": "0", AUTOTUNE_ENV: str(scratch / "autotune"),
                               "PYTHONPATH": os.pathsep.join(dict.fromkeys([str(HERE), *filter(None, sys.path)]))})
     recs = served_trace(served)
     header = recs[0]
@@ -333,10 +359,15 @@ def restore(a: argparse.Namespace) -> int:
     from verity_vllm.engine.step_trace import StepTrace
     from vllm.usage.usage_lib import UsageContext
     from vllm.v1.engine.llm_engine import LLMEngine
+    from vllm.v1.executor import Executor
 
     verdict = out / "restore.json"
     t0 = time.monotonic()
-    eng = LLMEngine.from_engine_args(engine_args(meta["server_argv"], header["config"]), UsageContext.OPENAI_API_SERVER)
+    usage = UsageContext.OPENAI_API_SERVER
+    vc = engine_args(meta["server_argv"], header["config"]).create_engine_config(usage)
+    res["autotune"] = carry_autotune(Path(meta["autotune_dir"]), scratch / "autotune", vc.compute_hash(include_version=False))
+    eng = LLMEngine(vllm_config=vc, executor_class=Executor.get_class(vc), log_stats=False, usage_context=usage,
+                    multiprocess_mode=False)
     core = eng.engine_core.engine_core
     rpc = core.model_executor.collective_rpc
     res["build_s"] = round(time.monotonic() - t0, 1)
