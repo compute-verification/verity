@@ -55,11 +55,22 @@ NUM_SM = 132  # the H200's SMs, FA3's split count reads it
 FAMILIES = {"SparseMlaSplitPart_T": "SparseMlaSplitPart_T64", "SparseMlaCombine_N": "SparseMlaCombine_N5"}
 
 
-def multimem_trees(world: int) -> str:
-    """TREES of `AllReduceMultimem_v1` at WORLD ranks, one per owner: the tree read off the H200 switch at 8, else a chain."""
+#: the file beside a step's ``params.json`` holding the node's multimem reduction tree (`capture.py site --allreduce-tree`)
+TREE_FILE = "allreduce_tree.json"
+
+
+def parse_tree(text: str, world: int):
+    """A reduction tree over WORLD ranks, as JSON pairs or as kernels' probe writes it, ``(((((((0,2),3),1),5),6),4),7)``."""
     from verity.ml.definitions.registry import tp_allreduce as AR
-    tree = AR.GLM53_H200_TREE if world == 8 else AR.chain(world)
-    return json.dumps([tree] * world, separators=(",", ":"))
+    return AR.multimem_tree(json.loads(text.replace("(", "[").replace(")", "]")), world)
+
+
+def multimem_trees(world: int, tree=None) -> str:
+    """TREES of `AllReduceMultimem_v1` at WORLD ranks, one per owner: TREE (the node's, read off its switch), else the
+    registry's H200 tree at 8 and a chain otherwise."""
+    from verity.ml.definitions.registry import tp_allreduce as AR
+    tree = tree if tree is not None else AR.GLM53_H200_TREE if world == 8 else AR.chain(world)
+    return json.dumps([AR.multimem_tree(tree, world)] * world, separators=(",", ":"))
 
 
 def load_roles(params: dict) -> dict:
@@ -112,6 +123,12 @@ class Capture:
         self.root, self.coins = c0["root"], bytes.fromhex(c0["coins"])
         self.layers = sorted(x for v in c0["layers"].values() for x in v)
         self.whole = all(self.commit[r].get("whole", self.commit[r].get("kept") == "every recorded tensor") for r in self.ranks)
+        trees = {r: json.loads(p.read_text()) for r in self.ranks
+                 if (p := d / f"rank{r}" / f"step{step}" / TREE_FILE).is_file()}
+        if trees and (len(trees) != len(self.ranks) or len({json.dumps(t["tree"]) for t in trees.values()}) != 1):
+            raise SystemExit(f"step {step}: the ranks' {TREE_FILE} are missing or disagree")
+        #: the node's multimem tree and where it was read (``--allreduce-tree`` replaces it), else None: the registry's
+        self.tree: dict | None = trees[self.ranks[0]] if trees else None
         self.every = False
         self.per_call = 0
         self.checkpoint: str | None = None
@@ -418,7 +435,7 @@ def allreduce_instances(cap: Capture, unstaged: dict | None = None):
         if AR.covered("defaults", H, route, T) is None:
             past = unstaged.setdefault(f"AllReduceMultimem_W{W}", {"past_captured": []})
             past["past_captured"].append({"seq": e0["seq"], "rows": T})
-        trees = multimem_trees(W)
+        trees = multimem_trees(W, cap.tree["tree"] if cap.tree else None)
         for t in range(rows):
             for c in range(2):
                 sl = slice(c * half, (c + 1) * half)
@@ -751,6 +768,9 @@ def main() -> int:
     ap.add_argument("--checkpoint", default=None,
                     help="the served checkpoint: a weight the capture didn't keep is composed from it and held to params.json")
     ap.add_argument("--deadline", type=float, default=0.0, help="--every-call stops at this Unix time (0: none)")
+    ap.add_argument("--allreduce-tree", default=None, metavar="TREE",
+                    help=f"the node's multimem reduction tree, replacing the capture's {TREE_FILE} (default: that file's, "
+                         "else the registry's GLM53_H200_TREE, which is another node's)")
     a = ap.parse_args()
     import a11
     import a11_kinds as K
@@ -764,9 +784,12 @@ def main() -> int:
     cap = Capture(Path(a.capture), a.step)
     cap.every, cap.per_call = bool(a.every_call) and cap.whole, a.every_call
     cap.checkpoint = a.checkpoint
+    if a.allreduce_tree:
+        cap.tree = {"tree": parse_tree(a.allreduce_tree, len(cap.ranks)), "source": "--allreduce-tree"}
     profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     report: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "coins": cap.coins.hex(),
-                    "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {}}
+                    "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {},
+                    "allreduce_tree": cap.tree or "the registry's GLM53_H200_TREE, not read off this node"}
     pops: dict[str, list] = {}
     unstaged: dict[str, dict] = {}
     sources = [quant_instances(cap), fp8_linear_instances(cap), moe_instances(cap, profile),
@@ -788,6 +811,7 @@ def main() -> int:
         rep = every_call(cap, pops, a)
         rep["population_errors"] = report.get("population_errors", [])
         rep["unstaged"] = unstaged
+        rep["allreduce_tree"] = report["allreduce_tree"]
         rep["seconds"] = round(time.time() - t0, 1)
         (out / "gate.json").write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
         for label, rec in rep["types"].items():

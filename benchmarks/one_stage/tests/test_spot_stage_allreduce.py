@@ -1,7 +1,8 @@
 """spot_proved's staging of a step's plain allreduces (`stage.allreduce_instances`) on a fake 8-rank capture, committed as
 `capture.py` commits one: symm-mem's multimem calls are staged per (token, half-row) with every rank's input and the received
 row every rank must agree on; a call on NCCL's route (no recorded multimem op inside it) is counted as not staged and the
-step's later calls are still staged; a multimem call no `tp_allreduce.CAPTURED` entry covers is named."""
+step's later calls are still staged; a multimem call no `tp_allreduce.CAPTURED` entry covers is named; the node's tree the
+capture recorded beside each rank's step is the one bound, and ranks that disagree on it are refused."""
 from __future__ import annotations
 
 import hashlib
@@ -111,6 +112,20 @@ def test_a_rank_that_received_other_words_fails_its_instance_by_name(tmp_path):
     with pytest.raises(LookupError, match="rank 5 received other words than rank 0"):
         insts[0][4]()
     assert insts[1][4]()[0].shape == (3072,)
+
+
+def test_the_steps_recorded_tree_is_bound_and_the_ranks_files_must_agree(tmp_path):
+    S = _stage()
+    fake_capture(tmp_path, [(6144, "symm_mem")])
+    node = [[[[[[[0, 2], 3], 1], 5], 6], 4], 7]
+    for r in range(W):
+        (tmp_path / f"rank{r}" / "step0" / S.TREE_FILE).write_text(json.dumps({"tree": node, "source": "art:probe"}))
+    cap = S.Capture(tmp_path, 0)
+    assert cap.tree == {"tree": node, "source": "art:probe"}
+    assert f"TREES={S.multimem_trees(W, node)}," in next(S.allreduce_instances(cap))[1]
+    (tmp_path / "rank5" / "step0" / S.TREE_FILE).write_text(json.dumps({"tree": AR.GLM53_H200_TREE, "source": "?"}))
+    with pytest.raises(SystemExit, match="disagree"):
+        S.Capture(tmp_path, 0)
 
 
 def test_a_multimem_call_past_the_captured_tokens_is_named(tmp_path):
