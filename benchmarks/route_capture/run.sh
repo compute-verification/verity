@@ -31,6 +31,8 @@ unset NCCL_P2P_DISABLE
 export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=${TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK:-0}
 DURATION_S=${DURATION_S:-600}; PORT=${PORT:-8031}; MAX_MODEL_LEN=${MAX_MODEL_LEN:-40960}; SERVED=glm-5.3
 mkdir -p "$OUT/clients"
+# a client holds a socket for each request in flight, and the greedy ramp queues past a soft limit of 1024 on a saturated engine
+ulimit -n "$(ulimit -Hn)"
 
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "route-capture: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
