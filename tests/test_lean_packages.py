@@ -9,6 +9,7 @@ import json
 import os
 import re
 import tomllib
+import warnings
 from collections import Counter
 from pathlib import Path
 from typing import NamedTuple
@@ -278,16 +279,17 @@ def _lock(pkg: Path) -> dict:
 
 def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: str) -> None:
     """``got``, a count by key, held to the cap ``caps`` (this file's ``name``), which equals it: a count above its cap
-    fails with ``fix``, and a cap above its count by more than its `ROOM` fails until the change that lowered the count
-    lowers the cap with it, so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
+    fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
+    change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
+    the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
     (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as counters."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
     assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each lowered the cap for the same entry, "
                       f"raise it to the count)")
     loose = {k: got.get(k, 0) + ROOM.get(f"{name} {k}", 0) for k in caps
              if caps[k] > got.get(k, 0) + ROOM.get(f"{name} {k}", 0)}
-    assert not loose, "; ".join(f"{what} in {k} is {got.get(k, 0)}, under its cap of {caps[k]}: lower {name}[{k!r}] to {n} "
-                                f"in this change" for k, n in loose.items())
+    for k, n in loose.items():
+        warnings.warn(f"{what} in {k} is {got.get(k, 0)}, under its cap of {caps[k]}: lower {name}[{k!r}] to {n}", stacklevel=2)
 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
@@ -562,21 +564,23 @@ def test_every_cap_merges_as_a_counter():
     assert all(merge.CAP_LINE.match(s) for s in caps), [s for s in caps if not merge.CAP_LINE.match(s)]
 
 
-def test_a_cap_fails_above_its_count_and_below_it_beyond_its_room():
-    """`_held`'s two refusals, on toy counts: a count above its cap names the check's fix, and a cap above its count by
-    more than its room names the value to lower it to."""
+def test_a_cap_fails_above_its_count_and_warns_below_it_beyond_its_room():
+    """`_held` on toy counts: a count above its cap fails, naming the check's fix, and a cap above its count by more than
+    its room only warns, naming the value to lower it to."""
     import pytest
 
     with pytest.raises(AssertionError, match=r"`x` grew in \{'A': '3 > 2'\}: say less"):
         _held("CAP", {"A": 2}, {"A": 3}, "`x`", "say less")
-    with pytest.raises(AssertionError, match=r"`x` in A is 1, under its cap of 2: lower CAP\['A'\] to 1 in this change"):
+    with pytest.warns(UserWarning, match=r"`x` in A is 1, under its cap of 2: lower CAP\['A'\] to 1"):
         _held("CAP", {"A": 2}, {"A": 1}, "`x`", "say less")
-    with pytest.raises(AssertionError, match=r"`x` in B is 0, under its cap of 1"):
+    with pytest.warns(UserWarning, match=r"`x` in B is 0, under its cap of 1"):
         _held("CAP", {"A": 2, "B": 1}, {"A": 2}, "`x`", "say less")
     ROOM["CAP A"] = 1
     try:
-        _held("CAP", {"A": 2}, {"A": 1}, "`x`", "say less")
-        with pytest.raises(AssertionError, match=r"lower CAP\['A'\] to 1 in this change"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            _held("CAP", {"A": 2}, {"A": 1}, "`x`", "say less")
+        with pytest.warns(UserWarning, match=r"lower CAP\['A'\] to 1"):
             _held("CAP", {"A": 2}, {"A": 0}, "`x`", "say less")
     finally:
         del ROOM["CAP A"]
