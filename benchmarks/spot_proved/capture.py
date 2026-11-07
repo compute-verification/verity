@@ -1,6 +1,6 @@
 """A vLLM general plugin that records one replayed step's interior, per TP rank, in an engine that serves with CUDA graphs.
 
-    python capture.py site SITE --capture DIR --steps s[,s2] [--open dense:1,moe:1] [--mla-tokens 8] [--keep all [--keep-steps s,...]]
+    python capture.py site SITE --capture DIR --steps s[,s2] [--open dense:1,moe:1] [--mla-tokens 8] [--keep all [--keep-steps s,...]] [--sampler]
     PYTHONPATH=SITE <a vLLM engine>
 
 Registered as a ``vllm.general_plugins`` entry point (`site` writes the dist-info, and the capture's settings into
@@ -76,6 +76,9 @@ class _State:
         self.dir = Path(cfg["capture"])
         self.targets = set(cfg["steps"])
         self.mla_tokens = int(cfg["mla_tokens"])
+        self.sampler = bool(cfg.get("sampler"))
+        self.sample_at: int | None = None
+        self.smp: dict | None = None
         self.open = dict(cfg["open"])
         self.step = -1
         self.active = False
@@ -166,6 +169,7 @@ def _install() -> None:
                 S.step += 1
                 S.active = S.step in S.targets
                 S.runner, S.sched = self, scheduler_output
+                S.sample_at = S.step if S.active and S.sampler else None
                 if S.active:
                     _bind_model_state(self)
             try:
@@ -230,6 +234,8 @@ def _install() -> None:
                 return orig(self, *args)
         return call
 
+    if S.sampler:
+        _install_sampler()
     _wrap(mr.GPUModelRunner, "execute_model", execute_model)
     _wrap(mr.GPUModelRunner, "prepare_inputs", prepare_inputs)
     _wrap(mr, "build_slot_mappings_by_layer", slot_maps)
@@ -239,6 +245,78 @@ def _install() -> None:
     _wrap(pb.PiecewiseBackend, "__call__", pb_call)
     _install_moe()
     _install_mla()
+
+
+def _install_sampler() -> None:
+    """Rank 0's sampler at each recorded step (``--sampler``), read only: the logits it takes, the logits entering top-k/top-p
+    (after penalties and temperature) and leaving it, the Gumbel draw's per-row seed, position and temperature, and the chosen
+    tokens, under ``step<s>/sampler/`` with their SHA-512s in ``sampler.json``, outside the step's root."""
+    import torch
+    from vllm.v1.worker.gpu.sample import sampler as smp
+
+    def host(t: Any) -> Any:
+        return None if t is None else t.detach().to("cpu", copy=True)
+
+    def call(orig):
+        def run(self, logits, input_batch, *a, **kw):
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            if S.sample_at is None or rank != 0:
+                return orig(self, logits, input_batch, *a, **kw)
+            S.smp = {"logits": host(logits)}
+            out = None
+            try:
+                out = orig(self, logits, input_batch, *a, **kw)
+                return out
+            finally:
+                rec, step, S.smp, S.sample_at = S.smp, S.sample_at, None, None
+                try:
+                    rec["chosen"] = host(getattr(out, "sampled_token_ids", None))
+                    _write_sampler(step, rec, list(getattr(input_batch, "req_ids", None) or []))
+                except Exception:  # noqa: BLE001
+                    _note(f"step {step}: the sampler record failed, serving goes on\n{traceback.format_exc()}")
+        return run
+
+    def top_k_top_p(orig):
+        def run(logits, top_k, top_p, *a, **kw):
+            if S.smp is None:
+                return orig(logits, top_k, top_p, *a, **kw)
+            S.smp.update(topp_in=host(logits), top_k=host(top_k), top_p=host(top_p))
+            out = orig(logits, top_k, top_p, *a, **kw)
+            S.smp["topp_out"] = host(out)
+            return out
+        return run
+
+    def gumbel(orig):
+        def run(logits, expanded_idx_mapping, temperature, seed, pos, *a, **kw):
+            out = orig(logits, expanded_idx_mapping, temperature, seed, pos, *a, **kw)
+            if S.smp is not None:
+                idx = expanded_idx_mapping.long()
+                S.smp.update(row_state=host(idx), seed=host(seed[idx]), temperature=host(temperature[idx]), pos=host(pos),
+                             gumbel_out=host(out), gumbel_args={k: v for k, v in kw.items() if isinstance(v, (bool, int, float))})
+            return out
+        return run
+
+    _wrap(smp.Sampler, "__call__", call)
+    _wrap(smp, "apply_top_k_top_p", top_k_top_p)
+    _wrap(smp, "gumbel_sample", gumbel)
+
+
+def _write_sampler(step: int, rec: dict, req_ids: list[str]) -> None:
+    import torch
+    d = S.dir / "rank0" / f"step{step}" / "sampler"
+    d.mkdir(parents=True, exist_ok=True)
+    if rec.get("topp_out") is not None:
+        rec["topp_kept"] = rec["topp_out"] != float("-inf")
+    doc: dict = {"step": step, "req_ids": req_ids, "gumbel_args": rec.pop("gumbel_args", None), "tensors": {},
+                 "path": "gumbel" if "gumbel_out" in rec else "flashinfer (no per-request seed in the batch)"}
+    for k, t in rec.items():
+        if t is None:
+            continue
+        raw = t.contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
+        (d / f"{k}.bin").write_bytes(raw)
+        doc["tensors"][k] = {"shape": list(t.shape), "dtype": str(t.dtype), "sha512": hashlib.sha512(raw).hexdigest()}
+    (d / "sampler.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
+    _note(f"step {step}: the sampler's {len(doc['tensors'])} tensors over {len(req_ids)} requests -> {d}")
 
 
 def _bind_model_state(runner: Any) -> None:
@@ -725,11 +803,12 @@ def main(argv: list[str]) -> int:
                    help="with --keep all, a larger tensor is written only in an opened layer (hashed into the root either way)")
     s.add_argument("--min-free-gib", type=int, default=40,
                    help="with --keep all, a step stops writing outside the opened layers once its disk would fall below this")
+    s.add_argument("--sampler", action="store_true", help="also record rank 0's sampler at each step (outside the step's root)")
     a = ap.parse_args(argv)
     cfg = {"capture": str(Path(a.capture).resolve()), "steps": sorted({int(x) for x in a.steps.split(",") if x.strip()}),
            "open": {k: int(n) for k, n in (x.split(":") for x in a.open.split(",") if x)}, "mla_tokens": a.mla_tokens,
            "keep": a.keep, "keep_steps": None if a.keep_steps is None else sorted({int(x) for x in a.keep_steps.split(",") if x.strip()}),
-           "keep_max_mib": a.keep_max_mib, "min_free_gib": a.min_free_gib}
+           "keep_max_mib": a.keep_max_mib, "min_free_gib": a.min_free_gib, "sampler": a.sampler}
     print(site(a.dir, cfg))
     return 0
 
