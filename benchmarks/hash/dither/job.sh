@@ -15,9 +15,6 @@
 #            with the exact wrap correction, gated against h1v3_ca.py (H1V3's reference) at small anchors and against
 #            h1zref.cu's z = X·(B + c)ᵀ at the served shapes, receipts against receipts.py, y = dequant(z), the no-write
 #            control and both faults; then timed against its two-launch receipts-only form, the noise floor and plain)
-#   j10hb    h1zref.so and every h1u*.so shipped: j10hb.py (measured only: each build's credited one-stream
-#            call on per-unit noise against J10 banded noise, both gated, then timed with each form's two launches alone;
-#            with h1noise.so shipped too, its --noise-lib, which BENCH_ARGS --tw's tile-width price needs)
 #   prof     every h1u*.so shipped: hb_prof.py under ncu (--set full, --clock-control none), each build gated as h1ubench.py
 #            gates it, then profiled once at the served shapes ($OUT/prof.ncu-rep and its text pages in $OUT/prof/)
 #   units    h1u_kr.so (dither-a's served receipts-only build, the base) and every h1u_kr*.so variant shipped:
@@ -40,7 +37,7 @@
 # beside NVCC).
 # Exit: the bench's (4 a gate failed), 2 a build failed or the shipped libraries are missing or another commit's.
 set -uo pipefail
-ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|j10hb|prof|units|unitsprof|partials[,...]}
+ARCH=${1:?usage: job.sh ARCH[,ARCH] build | job.sh sm_90a|sm_100a|sm_120a kbench|h1|h1u|h1z|prof|units|unitsprof|partials[,...]}
 BENCH=${2:-kbench}
 HERE=$(cd "$(dirname "$0")" && pwd)
 export OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}
@@ -138,16 +135,6 @@ for b in ${BENCH//,/ }; do
         v=$(basename "$f" .so); NEED+=("$v"); vars+=" --variant ${v#h1u_}=$f"
       done
       CMDS+=("$PY $HERE/h1zbench.py --lib $LIBS/h1u.so --ref-lib $LIBS/h1zref.so --noise-lib $LIBS/h1noise.so$vars --out $OUT ${BENCH_ARGS:-}") ;;
-    j10hb)
-      NEED+=(h1zref)
-      jl=""
-      for f in "$LIBS"/h1u.so "$LIBS"/h1u_*.so; do
-        [ -f "$f" ] || continue
-        v=$(basename "$f" .so); NEED+=("$v"); jl+=" --lib ${v#h1u_}=$f"
-      done
-      [ -n "$jl" ] || { echo "job.sh: j10hb needs an h1u*.so in $LIBS" >&2; exit 2; }
-      [ -f "$LIBS/h1noise.so" ] && { NEED+=(h1noise); jl+=" --noise-lib $LIBS/h1noise.so"; }
-      CMDS+=("$PY $HERE/j10hb.py$jl --ref-lib $LIBS/h1zref.so --out $OUT ${BENCH_ARGS:-}") ;;
     units|unitsprof)
       # h1u_kr.so (today's served receipts-only build) as the base, then every other h1u_kr*.so shipped
       ul=""
