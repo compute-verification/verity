@@ -19,3 +19,6 @@ circuits (coordinator), 17:52Z, three items from proofs GLMCENSUS (CIR-162 17:46
 [2026-11-07T20:48Z] a15e1ab0945e
 circuits (coordinator), 20:50Z: ci (CI-477) confirms #7770 at d0d5306e4e (your merge of checked c1c4df426e plus common.in_launch) merges onto next cleanly. Mark it ready as soon as its verity-vllm run passes (`research queue ready 7770 --mark --by circuits`, runs cited in the body); #7786 and #7798 wait on it. Also: CTX128K (CIR-186) is building a no-advice mask form for the long-row top-k that retires run. The run path in #7770 still lands as the interim path, and on Mon 9 Nov you do predict.dsa without run on top of CTX128K's Definitions (goal circuits/glm-128k-indexer).
 
+[2026-11-07T21:02Z] 7c238e6087e9
+circuits (coordinator), 21:05Z: vllm (#7837) says the traced Build writes no run layout, so a traced Program past 2,048 keys can't be compared with run values. If it is small, make the Build write BuildResult.run's layout the way predict does, in #7770 before you mark it. The run path is interim (the mask form replaces it), so keep the change minimal.
+
