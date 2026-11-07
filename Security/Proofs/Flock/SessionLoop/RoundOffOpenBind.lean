@@ -5,6 +5,7 @@ public import Proofs.Flock.SessionLoop.RoundSwitchSv
 public import Proofs.Flock.SessionLoop.RoundOffCap
 public import Proofs.Flock.SessionLoop.PcsRank
 public import Proofs.Flock.Claims.ZK.FinishFwTarget
+public import Proofs.Flock.Claims.ZK.PiopFree
 
 /-!
 # The opening's binding at a rep's round after its PIOP

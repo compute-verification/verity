@@ -2,6 +2,13 @@ module
 
 public import Proofs.Flock.SessionLoop.CutInnerLive
 public import Proofs.Flock.Claims.ZK.L0PinCoins
+public import Proofs.Flock.SessionLoop.FinRounds
+public import Proofs.Flock.Claims.ZK.CutPrefix
+public import Proofs.Flock.Claims.ZK.FinExe
+public import Proofs.Flock.SessionLoop.CutPiopLive
+public import Proofs.Flock.Claims.ZK.RepRet
+public import Proofs.Flock.Claims.ZK.L0PinCut
+public import Proofs.Flock.Claims.ZK.FinishRank
 
 /-!
 # The cut session at a rep's Ligerito rounds past level 0, on the opened coins alone

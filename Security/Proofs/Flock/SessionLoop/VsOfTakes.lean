@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.VsOf
 public import Proofs.Flock.SessionLoop.LiveInnerAt
 public import Proofs.Flock.SessionLoop.FinL0Vals
+public import Proofs.Flock.SessionLoop.RepSrc
 
 /-!
 # A pad-blind worker meets `TakesVals` at its own values

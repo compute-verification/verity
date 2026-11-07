@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SessionLoop.SchedAt
+public import Proofs.Flock.Claims.ZK.PiopFree
 
 /-!
 # The switched session at a rep's ring switch

@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SessionLoop.VsOfTakes
 public import Proofs.Flock.SessionLoop.CutPiopLive
 public import Proofs.Flock.SessionLoop.PiopState
+public import Proofs.Flock.SessionLoop.RepSrc
 
 /-!
 # A pad is freed no later than the PIOP round that absorbs it
