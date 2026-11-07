@@ -159,6 +159,8 @@ Their history is in the decisions log.
 - A claim reads `E`'s transcript, never a witness the prover picks, and a break counts only collisions the run or `E`
   exhibits. For a commit-then-coin step the break is the fork form (two runs of the prover's strategy sharing a
   commitment); the knowledge form (`EndToEndHidden`, `Claims.KS`) is preferred.
+- A PoUW scheme gets new Lean only once its honest overhead γ ≤ 10 at both operating points, as the benchmarks'
+  overhead front door measures it. Measure first, prove second.
 - Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails`;
   failing either, it says nothing. Both build their instance (`witnesses` in `check.py`), taking

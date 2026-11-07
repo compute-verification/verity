@@ -340,8 +340,9 @@ class _Run:
             "quantizer": QUANTIZER, "transcript_root": None, "units": 0, "tiles": 0}
         self.details: dict[str, Any] = {
             "scheme": scheme.name, "quantizer": QUANTIZER, "basis": "none", "layers": len(weight_roots),
-            "certificate": {"conjecture": cert.conjecture, "gamma": None if cert.gamma is None else str(cert.gamma),
-                            "parameters": dict(cert.parameters)},
+            # "gamma" is the gap g's stored name (records before the rename hold it); "eps" is ε = g/(1 − g)
+            "certificate": {"conjecture": cert.conjecture, "gamma": None if cert.gap is None else str(cert.gap),
+                            "eps": None if cert.eps is None else str(cert.eps), "parameters": dict(cert.parameters)},
             "units": 0, "tiles": 0, "padded_rows": 0, "uncovered": "every GEMM outside LinearBase (lm_head, attention)",
             "placeholder": list(PLACEHOLDER)}
 

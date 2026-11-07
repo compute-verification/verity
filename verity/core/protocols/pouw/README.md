@@ -89,15 +89,29 @@ Each scheme module's docstring states its steps and roundings, with pinned vecto
 
 ## Security assumptions and guarantees
 
+PoUW's security property is stated at the adversary's advantage ε, with failure probability δ: what an adversary
+spends is at least the honest work of its correct units over 1 + ε, except with probability δ (the game's and
+Pearl-C's, in `Security/Definitions/Pouw/Advantage.lean`). The proofs carry it as the gap g = ε/(1 + ε), the same
+property: an adversary of cost T wins when its correct units' honest work exceeds T/(1 − g)
+(`Security/Definitions/Pouw/Game/Defs.lean`), and a lemma in `Security/Proofs/Pouw/Advantage.lean` proves the two forms
+equivalent. The honest overhead γ is a cost, never a share of the bound: the honest prover's busy SM-time is at most
+(1 + γ) times the fastest stock time for the same MACs, capped at γ ≤ 10 at each operating point (`GLOSSARY.md`).
+
 Guarantees are stated in `Security/Definitions/Pouw` and proved in `Security/Proofs/Pouw`, as
 `Pouw.SecurityProofs.G : Pouw.Guarantees.G`; `Security/lean-audit.json` lists each proved one with what its statement
 reads. Proved:
 
+- **In ε form:** the audit end to end, `Pouw.SecurityProofs.EndToEndEps` (under TT(g₀) and the bound Ω_max, the
+  protocol's advantage is ε = Ω_max/(1 − g₀) − 1, and an audit of t work-weighted samples accepts while
+  (1 + ε)/(1 − ε_s)·T < W with probability at most (1 − ε_s)^t + δ, for every share ε_s < 1 of the reference work W);
+  NCP's `Pouw.SecurityProofs.NCP.EpsFromTTNCP_U_v1`; Pearl-C's served point,
+  `Pouw.SecurityProofs.PearlC.EpsSm120v1LoopCast8p72Rev1Cap1000_8192` (ε = 1648180439/444424569561, 0.371%); and
+  Pearl-C4's at 8192³, `Pouw.SecurityProofs.PearlC.EpsFp4Sm120_8192` (ε = 9875013901/1366788186099, 0.723%). Each
+  follows from its gap form below.
 - **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GapFromTT`, through two lemmas in
-  `Security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's gap g holds with failure probability δ, an
-  adversary's advantage ε = g/(1 − g), and the sample misses more than a share ε_s of the reference work with probability
-  at most δ_s, then the verifier accepts while the work done is below (1 − g)(1 − ε_s)·W with probability at most
-  δ_s + δ) and work-weighted sampling.
+  `Security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's gap g holds with failure probability δ, and the
+  sample misses more than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts
+  while the work done is below (1 − g)(1 − ε_s)·W with probability at most δ_s + δ) and work-weighted sampling.
 - **The deadline:** `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline`, `Pouw.SecurityProofs.SpareCapacityAtDeadline` and
   `Pouw.SecurityProofs.PearlCSampledByDeadline`.
 - **The schemes' gaps:** NCP's `Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1`; Pearl-C's at the served point,
