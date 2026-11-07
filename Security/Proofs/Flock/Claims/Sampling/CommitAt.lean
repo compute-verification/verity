@@ -23,6 +23,7 @@ at the port of `own roots` whose root it is. `commit c` is `commitAt c` at the c
 namespace SamplingDeploy
 
 open Claims Claims.Sampling
+open Properties.NetworkCertifier.Bytes (bs)
 
 /-- **An opening passes the deployed commitment only under a root of the code's own ports**: `regPath` finds its port
 by the root. -/
