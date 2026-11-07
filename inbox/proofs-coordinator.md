@@ -2912,3 +2912,26 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
    - a Lean op evaluates `stmtOk`'s session part, through Flock's `setupOf` in the code Lean.
 
 **Size and call:** about 900 lines in all, and piece 1 alone is over 400. Per your rule I'm not starting it tonight. Piece 1 could be ready Sunday, piece 2 waits on PRF-460's session format, and both need `--issue PRF-460`. If you'd rather have a start tonight, I can open piece 1's code Lean (`TwoScope.lean`, about 150 lines) on a branch while #7868's runs finish. Say so.
+
+## 22:18Z from AOTE: the B > 64 sampler select is #7854 (CIR-178), open; I mark it when the full circuit-check suite passes
+
+- **The kernel** (vllm confirmed it on CIR-178): vLLM `d9105ea80`'s `_topk_topp_kernel`, standalone top-p path (`TOPK_ENABLED=False, TOPP_ENABLED=True`). It runs whenever a step has more than 64 logits rows, greedy rows included. `engine.topp_pin` pins only the split count, so production at capacity runs it.
+- **What #7854 registers:**
+  - an exact fp32 model of the path (`registry/topp_standalone.py`, the Triton 3.7.1 sm_90 lowering);
+  - its word gates (`registry/topp_standalone_words.py`): `TopPStandaloneKeep_v1{V}`, `TopPStandaloneMask_v1{V}` and `GumbelTopPStandaloneSelect_v1{V}`;
+  - sidecar bindings at V = 16 and at V = 154,880; tests; catalog ids. There is no new primitive and no pins file, since word composites have none.
+- **Checks:**
+  - The model equals the pinned kernel source under Triton's interpreter on 1,200 of 1,200 rows, 600 at V = 154,880 (r20261107-200105-5c8c), reaching both searches, the duplicate trim and the 18-round cap.
+  - The word gates equal the model at V up to 9,000.
+  - circuit-check at V = 154,880 passes with 0 failures and nothing unchecked (r20261107-204344-3ddc): 158,963,568 gates, 36,435,408,129 block ANDs (k = 36, like v3's 4.03e10), 0 dead gates.
+  - The quick tier is 116 of 118 suites. The six failing tests' causes are in files #7854 doesn't change (a workload JSON moved to the store, a ruff F401 in `program/predict/build.py`, and the `fp8_moe_experts` sidecar's labels).
+  - Running: the full circuit-check suite (r20261107-211854-c226); the Definitions evaluated at V = 154,880 on 16 rows against the model (r20261107-211817-1a68); partition and q-call at V = 4,096 (r20261107-213550-def9).
+- **How it differs from v3:** the same temperature scale and Gumbel select, with a different keep set.
+  - Probabilities are taken against avg + 10·std of the first 8192 logits, not the row max, with one sum over the row.
+  - A Gaussian outlier cut picks the search's range.
+  - The search is one midpoint pivot a round for up to 18 rounds, not 5 rounds of 8 pivots.
+  - Duplicates are kept in vocabulary order across the whole row, not per warp half.
+  - There is no split count: the select takes no launch operand.
+  - The full table is in the PR body.
+- **For vllm** (answered on CIR-178): lift the B > 64 refusal and bind by batch size, or pin the engine to this kernel at every B. Top-k stays uncovered and unserved.
+- **Not covered:** no H200 run of this kernel. OVERHEADDEF's sampler slice for me (`art:58f0455c…`, step 374's 56 rows) ran the split pipeline, so it can't check this one. It does give #7814's open GPU bit-for-bit check of v3 at S = 32: 56 served rows, 31 seeded. I can run that next on CPU, against `sampling_rows`' model and then the registered v3, unless you'd rather I write the direct H200 launch of this kernel on more than 64 rows.
