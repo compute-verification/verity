@@ -106,7 +106,7 @@ theorem interior_le {K₁ S₁ Y₁ W O₁ T₁ R₁ : Type} [Fintype K₁] [Fin
       _ = _ := by
           rw [Finset.sum_add_distrib, add_assoc]
           exact congrArg (· + _) (Finset.sum_congr rfl fun d _ => (e (passed d)).symm)
-  · refine (le_of_eq (Verity.ValueSalts.prCoin_of_forall_not ?_)).trans (zero_le _)
+  · refine (le_of_eq (Verity.ValueSalts.prCoin_of_forall_not ?_)).trans zero_le
     exact fun p hp => hc hp.1.1
 
 /-- **The boundary's bound**, its ideal stream at the dummy values: `RegisteredStreamLeakage`, with an ideal stream of
@@ -211,7 +211,8 @@ theorem SampledAuditTwoChosenAny : Flock.Guarantees.SampledAuditTwoChosenAny := 
     (fun p α => (streamRecOf sv v st p.1, interiorRecOf sv v st sv₁ w st₁ p α)) out rel
     (fun ρρ α χ₂ => Sim ρρ.1 α ρρ.2 χ₂) ε hS s (fun ρρ α χ₂ bs => E ρρ.1 α ρρ.2 χ₂ bs)).trans
     (add_le_add (avg_mono fun q => ?_) le_rfl)
-  refine (calc prCoin (fun p : (K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁)) =>
+  refine (calc
+      prCoin (fun p : (K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁)) =>
         (sv.streamAdmits p.1.1 b (streamRecOf sv v st p.1) ∧
           sv₁.streamAdmits p.2.1 b₁ (streamRecOf sv₁ (w (streamRecOf sv v st p.1) q.1)
             (st₁ (streamRecOf sv v st p.1) q.1) p.2)) ∧
