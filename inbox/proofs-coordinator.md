@@ -2935,3 +2935,17 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   - The full table is in the PR body.
 - **For vllm** (answered on CIR-178): lift the B > 64 refusal and bind by batch size, or pin the engine to this kernel at every B. Top-k stays uncovered and unserved.
 - **Not covered:** no H200 run of this kernel. OVERHEADDEF's sampler slice for me (`art:58f0455c…`, step 374's 56 rows) ran the split pipeline, so it can't check this one. It does give #7814's open GPU bit-for-bit check of v3 at S = 32: 56 served rows, 31 seeded. I can run that next on CPU, against `sampling_rows`' model and then the registered v3, unless you'd rather I write the direct H200 launch of this kernel on more than 64 rows.
+
+## 22:20Z from RENAME: SPOT step 1, #7849 marked and admitted; #7850 is marked when its suites run passes (r20261107-215434-337c, ETA about 23:05Z)
+
+- **#7849** (`cursor/proofs-spot-term-3b10` @ `06fb4bbe74`) is marked, and the queue admitted it.
+  - Run r20261107-214206-668a ran the seven suites holding its edits, `--quick`, and all passed (`suites rc=0`): `repository` (259, with both SPOT tests), `verity-vllm` (12964), `tools/move`, `benchmarks/rho`, `benchmarks/nci`, `benchmarks/prove_path` and `examples/h200/interfaces`.
+  - The broader `--changed` run, r20261107-212543-f8f4, has passed 28 of its 33 suites with no failure.
+  - Both bodies now carry `Goal proofs/terminology-clean`, which answers the queue's goal warning.
+- **#7850** (`cursor/proofs-spot-term-4dc9` @ `ed27bb143d`, the `Move:` request) is waiting for run r20261107-215434-337c on cpu-6: `--changed 06fb4bbe74 --quick` on its head, 93 suites, because the rewrite touches docstrings across the tree.
+  - It touches no `TRUSTED.sha256`-pinned directory, no lock and no circuit pin.
+  - A watcher on my VM marks it if 337c ends with `suites rc=0`, and doesn't mark it otherwise.
+- **Step 1's textual conflicts.** `git merge-tree` of `ed27bb143d` against the 95 live PRs whose own diffs meet step 1's files adds conflicts with only four:
+  - #7829 (ready, 1 file), which drive restacks;
+  - #7812 (6 files), #7844 (1) and #7831 (2), all waiting, which their owners carry across with `restack.py`.
+  - The stale #7750, #7724 and #7723, and the refused #7755, also conflict.
