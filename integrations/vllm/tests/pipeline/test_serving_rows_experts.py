@@ -7,7 +7,9 @@ in blocks of two rows, and a window of the router's slots, the reads of the bloc
 * the members' words are each template's reference on its rows, each read's row, salt and path open its table's committed root at
   the pair's expert, and the block GEMMs' outputs are the pairs' served words;
 * the reads' roots, domain ids and verdicts are committed by reference to the tables' supplied values, and a listed record of the
-  window counts the tables' reads registered exactly where their roots are pinned.
+  window counts the tables' reads registered exactly where their roots are pinned;
+* the committer takes its tables' program and nonces from the rank's registration, read through its record
+  (`records.expert_tables`).
 """
 from __future__ import annotations
 
@@ -33,10 +35,11 @@ from verity.ml.windows import interface as IF
 from verity.ml.windows import rows as CS
 from verity_vllm.pipeline import chunk_rows as CR
 from verity_vllm.pipeline import expert_rows as EX
-from verity_vllm.pipeline import expert_tables as ET
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import weight_rows as WT
 from verity_vllm.query.program_view import spec_statics
+from verity_vllm.records import expert_tables as XT
+from verity_vllm.records.fields import RecordError
 
 E, TOPK, K, N, G, KB, NR, T = 8, 2, 64, 4, 32, 32, 2, 2
 NB, KG, B, P = -(-N // G), K // G, N // NR, T * TOPK
@@ -135,7 +138,7 @@ def cut(rows):
 
 def committer(plan):
     params = [param for t in plan.what if plan.what[t][0] != "gemm" for _at, _n, _b, param, _l in plan.tables(t)]
-    return {**COMMITTER, "nonces": ET.nonces(params, 0)}
+    return {**COMMITTER, "nonces": {p: (3 << 61) + i for i, p in enumerate(sorted(params))}}
 
 
 def stager(t: str) -> UnitStager:
@@ -257,3 +260,26 @@ def test_a_read_of_a_table_the_committer_did_not_commit_and_a_pair_routed_outsid
     rows = [rs[1:] if t == SLOTS else rs for t, rs in zip(TMPLS, layer.rows)]
     with pytest.raises(ValueError, match="routed by a row outside"):
         cut(rows)
+
+
+def test_the_committer_reads_its_tables_registration_through_its_record(layer, tmp_path):
+    """A window's committer takes its key, program and each table's nonce from the rank's registration as the record reads it,
+    which refuses another schema, an unknown field, a table without its own nonce and another rank's registration."""
+    plan, _ms = cut(layer.rows)
+    want = committer(plan)
+    tables = EX.commit_tables(plan, layer.store, None, None, SRW._slices, want)
+    doc = XT.ExpertTables(program=COMMITTER["program"], repo="test/moe", revision="0" * 40, world=1, rank=0, prefix="",
+                          blocks={"w13": NR}, values={p: v.entry() for p, v in tables.items()}, nonces=want["nonces"]).dump()
+    (tmp_path / "key").write_bytes(COMMITTER["key"])
+    (tmp_path / "tables-rank0.json").write_text(json.dumps(doc))
+    spec = {"key": str(tmp_path / "key"), "registration": str(tmp_path / "tables-rank{rank}.json")}
+    assert EX.of_request(spec) == want and EX.of_request(None) is None
+    assert XT.ExpertTables.of(json.loads(json.dumps(doc)), "t").dump() == doc
+    first = sorted(doc["nonces"])[0]
+    for bad, why in [({**doc, "schema": "verity-vllm/weights-registration/v1"}, "schema"), ({**doc, "format": 1}, "format"),
+                     ({**doc, "nonces": {p: n for p, n in doc["nonces"].items() if p != first}}, "nonces"),
+                     ({**doc, "nonces": dict.fromkeys(doc["nonces"], 7)}, "nonces")]:
+        with pytest.raises(RecordError, match=why):
+            XT.ExpertTables.of(bad, "t")
+    with pytest.raises(ValueError, match="not of rank 1"):
+        EX.of_request({**spec, "registration": str(tmp_path / "tables-rank0.json")}, 1)

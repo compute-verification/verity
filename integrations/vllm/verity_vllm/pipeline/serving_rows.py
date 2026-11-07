@@ -160,7 +160,6 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
     first, through their own opened reader and before the replay's seed exists; a failure is written beside them and changes no
     verdict."""
     from verity_vllm.check.oracle_compare import OpenedReader
-    from verity_vllm.pipeline import expert_tables as ET
 
     if request:
         req = json.loads(Path(request).read_text())
@@ -168,7 +167,7 @@ def readers(request: str | None, com: Any, rc: Any, weights: Callable, programs:
             after_commit(req["dir"], partition_file=req["partition"], programs=programs, bmap=bmap, committed=OpenedReader(com, rc),
                          weights=weights, manifest=manifest if isinstance(manifest, dict) else None, run_root=rc.run_root, run=req.get("run"),
                          row=row or None, arrivals=arrivals, program_dirs={k: v.get("dir") for k, v in loaded.items()},
-                         digests=digests, committer=req.get("committer"), tables=ET.of_request(req.get("tables")))
+                         digests=digests, committer=req.get("committer"), tables=EX.of_request(req.get("tables")))
         except Exception as e:  # noqa: BLE001
             Path(req["dir"]).mkdir(parents=True, exist_ok=True)
             (Path(req["dir"]) / "error.txt").write_text(traceback.format_exc())
@@ -736,7 +735,7 @@ def after_commit(out_dir: str, *, partition_file: str, programs: dict[str, dict[
     loaded its Programs with as ``reuse``.  ``transfer_gates`` are the templates the registered compiler lists as holding transfer
     gates, which the window's sampling design proves whole (`population`); ``weight_values`` (the committer's weights, by registered
     parameter) commit its weight reads by reference, their roots its ``registered_roots`` (`weight_rows.by_reference`); ``tables``
-    (the committer's key with its table registration's program and nonces, `expert_tables.committer`) commit the per-expert
+    (the committer's key with its table registration's program and nonces, `expert_rows.committer`) commit the per-expert
     cut's tables from the weights served (`expert_rows.commit_tables`), whose openings its reads read and whose roots and
     domain ids they read by reference (`interface.supplied`), their roots its ``registered_roots`` too.  A
     row-table layout takes the serving loop's ``row_tables``: ``{"context": <hex>, "key": <the run's row key>, "step_roots":
