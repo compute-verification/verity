@@ -162,7 +162,8 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
                       engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """The exact `LLM(**kw)` keyword set `build_engine` would build from these inputs (+ the env flags it applies and the
     checkpoint record), WITHOUT building: a hot worker compares it with its live engine's `kwargs` to decide reuse vs restart.  Applies the
-    same environment knobs as `build_engine` (idempotent).  Refusals (unknown execution, contradicting enforce_eager) are the same."""
+    same environment knobs as `build_engine` (idempotent).  Refusals (unknown execution, contradicting enforce_eager, an Inductor that
+    read a fixed switch otherwise: `engine_env.require_inductor`) are the same."""
     from verity_vllm.engine import engine_profile as prof
 
     if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
@@ -193,6 +194,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     if getattr(target, "int8_exact", None) is not None and kw.get("enforce_eager") is not True:
         # Inductor would fuse (and may re-round) the quantizer and dequantization, and replay the linears' call counters as constants
         raise RuntimeError(f"int8_exact {target.int8_exact!r} runs eagerly only; the engine args request enforce_eager={kw.get('enforce_eager')!r}")
+    engine_env.require_inductor(kw)
     return kw, env_flags, cp
 
 

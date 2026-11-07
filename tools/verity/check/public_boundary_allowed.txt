@@ -23,7 +23,6 @@ benchmarks/recursion_e2e/run.py -> tools/research/pyproject.toml
 benchmarks/recursion_e2e/settings.py -> benchmarks/harness
 benchmarks/recursion_e2e/settings.py -> benchmarks/harness/verity_bench/settings.py
 benchmarks/recursion_e2e/tests/test_settings.py -> benchmarks/harness/verity_bench/settings.py
-integrations/vllm/pyproject.toml -> tools/research/pyproject.toml
 integrations/vllm/tests/commit/test_memory_map.py -> verity/core/protocols/remote_bandwidth/__init__.py
 integrations/vllm/tests/commit/test_memory_map.py -> verity/core/protocols/remote_bandwidth/memory_map.py
 integrations/vllm/tests/engine/fattn_oracle.py -> benchmarks/pouw/edited_gemm

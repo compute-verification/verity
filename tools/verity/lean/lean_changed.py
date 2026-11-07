@@ -57,7 +57,9 @@ never reads that package's `.lake` (`check.proved`), which an earlier or interru
 
 Then it audits, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
 `closure`, by path or by `proved_in`), each after those it requires and on the records this run regenerated before it, its
-reports under `requirer-<path>/` beside PKG's. A change to what another package's pinned guarantees read
+reports under `requirer-<path>/` beside PKG's. Of the facts documents, only PKG's own stays beside its reports
+(`check_argv`: `check.py --facts named`, which `trusted_size.py --run` reads); its provers' and the requirers' are not
+kept. A change to what another package's pinned guarantees read
 (`Security/Properties`' when `Security` changes) fails here, not at the Lean check of `next`. With `--update`, a requirer whose every
 failure is a record difference (`settles`) is audited again with `--update` (and `--moved`), so one run regenerates every
 lock the change moved; one failing for any other reason fails. The exit status is the first failure's. A slot tree
@@ -374,7 +376,7 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
     policy = AUDIT.load(tree / pkg)
     work = tree / pkg / FACTS
     work.mkdir(parents=True, exist_ok=True)
-    plain, tool, programs = AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS
+    plain, tool, programs, scratch = AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH
     # the sandbox mounts a private /tmp, where this checkout may be; the copy sits in the writable `.lake`, as the audit runs
     # its tool from a copy
     shutil.copy2(tool / "Facts.lean", work / "Facts.lean")
@@ -383,14 +385,15 @@ def records(pkg: str, tree: Path, lake: str) -> list[str]:
         # the audit runs `lake env` unsandboxed on a tree of its own; here `.lake/packages` holds links to the files it keeps
         return plain(in_sandbox(pkg, tree, [lake, *argv[1:]] if argv[:1] == ["lake"] else argv), cwd, *a, **kw)
 
-    AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS = lake_in_sandbox, work, work
+    # `Facts.lean`, in the sandbox, writes its document under `work` for the same reason
+    AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH = lake_in_sandbox, work, work, work
     try:
-        facts = AUDIT.facts_of(tree / pkg, policy, work)
+        facts = AUDIT.facts_of(tree / pkg, policy, work, keep=False)
         cross: list[str] = []
         if "proved_in" in policy:
-            cross, facts, _ = AUDIT.proved(tree / pkg, policy, facts, work)
+            cross, facts, _ = AUDIT.proved(tree / pkg, policy, facts, work, keep=False)
     finally:
-        AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS = plain, tool, programs
+        AUDIT.run, AUDIT.TOOL, AUDIT.PROGRAMS, AUDIT.SCRATCH = plain, tool, programs, scratch
     fails, _ = AUDIT.judge(policy, facts, AUDIT.lean_modules(tree / pkg))
     return [f for f in cross + fails if (AUDIT.code_of(f) or "").split(".")[0] in ("guarantees", "assumptions")]
 
@@ -1139,10 +1142,10 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 write_links(tree, links)
                 mark(tree, package=p, phase="check")
                 mine_out, up, since = reports(out, pkg, p), update and p == pkg, time.time()
-                got = subprocess.run(check_argv(tree / p, mine_out, up, moved, artifacts=artifacts.store), cwd=tree, env=env,
-                                     pass_fds=fds).returncode
+                got = subprocess.run(check_argv(tree / p, mine_out, up, moved, p == pkg, artifacts=artifacts.store), cwd=tree,
+                                     env=env, pass_fds=fds).returncode
                 if again := regenerates(p, pkg, got, update, mine_out, tree / p, log):
-                    up, got = True, subprocess.run(check_argv(tree / p, mine_out, True, moved, artifacts=artifacts.store),
+                    up, got = True, subprocess.run(check_argv(tree / p, mine_out, True, moved, p == pkg, artifacts=artifacts.store),
                                                    cwd=tree, env=env, pass_fds=fds).returncode
                 if AUDIT.killed(got):
                     killed[p] = got
@@ -1205,9 +1208,9 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
     for p in todo:
         t0 = time.monotonic()
         mine_out, up = reports(out, pkg, p), update and p == pkg
-        got = subprocess.run(check_argv(ROOT / p, mine_out, up, moved, dev=True), cwd=ROOT).returncode
+        got = subprocess.run(check_argv(ROOT / p, mine_out, up, moved, p == pkg, dev=True), cwd=ROOT).returncode
         if again := regenerates(p, pkg, got, update, mine_out, ROOT / p, log):
-            up, got = True, subprocess.run(check_argv(ROOT / p, mine_out, True, moved, dev=True), cwd=ROOT).returncode
+            up, got = True, subprocess.run(check_argv(ROOT / p, mine_out, True, moved, p == pkg, dev=True), cwd=ROOT).returncode
         label(mine_out)
         log(f"lean-records: {p}: check.py --dev-cache{' --update' if again else ''} exit {got} in {time.monotonic() - t0:.0f} s "
             f"on {ROOT}, without the kernel replay or the tests: a {FAST_KIND} result, which check and research merge refuse; "
@@ -1457,12 +1460,13 @@ def report(out: Path, at: Path) -> dict:
         if isinstance(reps, list) else {}
 
 
-def check_argv(at: Path, out: Path, update: bool, moved: Path | None, dev: bool = False,
+def check_argv(at: Path, out: Path, update: bool, moved: Path | None, own: bool, dev: bool = False,
                artifacts: Path | None = None) -> list[str]:
     """check.py on ``at`` (a package's directory), without the kernel replay or the tests, its builds reading the node's
-    ``artifacts`` cache where given; with ``update``, `--update` and `--moved`."""
+    ``artifacts`` cache where given; with ``update``, `--update` and `--moved`. Only PKG's run (``own``) keeps a facts
+    document, its own (`--facts named`, which `trusted_size.py --run` reads); a requirer's keeps none."""
     return [sys.executable, str(AUDIT_PY), *(["--dev-cache"] if dev else []), "--build", "--no-replay", "--no-runs",
-            *(["--artifacts", str(artifacts)] if artifacts else []),
+            "--facts", "named" if own else "none", *(["--artifacts", str(artifacts)] if artifacts else []),
             *(["--update"] if update else []),
             *(["--moved", str(moved.resolve())] if moved and update else []), "--out", str(out), str(at)]
 

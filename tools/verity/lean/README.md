@@ -17,7 +17,10 @@ the same way, a `module`'s from the private part holding its proofs. The only pa
 after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox where the machine
 allows one; a test's data generator is the repository's code and runs outside it.
 
-A run keeps the facts only gzipped (`facts.json.gz`; `stored_facts` reads an older `facts.json` too).
+A run keeps the facts only gzipped (`facts.json.gz`; `stored_facts` reads an older `facts.json` too), and only those read
+back from the store (`check.py --facts`): a check run keeps each audit's and its provers' (`status_export.py --facts`), a
+records run only PKG's own (`trusted_size.py --run`). `Facts.lean` writes its document in a temporary directory outside the
+run's files.
 
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when

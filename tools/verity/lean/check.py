@@ -1,6 +1,6 @@
 """`check.py`: the Lean audit, one run over every Lake package that carries a `lean-audit.json`.
 
-    python tools/verity/lean/check.py [--build] [--update [--owner @LANE] [--moved FILE]] [--out DIR] PACKAGE_DIR...
+    python tools/verity/lean/check.py [--build] [--update [--owner @LANE] [--moved FILE]] [--out DIR] [--facts all|named|none] PACKAGE_DIR...
     python tools/verity/lean/check.py --regenerate [--bookkeeping warn] [--out DIR] PACKAGE_DIR...   the Lean check of `next`;
                                                     with --bookkeeping warn, drive's lock run (bookkeeping repaired, warned)
     python tools/verity/lean/check.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
@@ -180,6 +180,9 @@ The audits of `UNREAD_FACTS` that replay also write what each constant of their 
 through the packages they require by path, mentions (`Unread.lean`, `unread_facts`; the report's `unread_facts`), which
 `lean_audit.py`'s ratchet on wholly unread modules reads (`unread.py`): a failure of that program is the package's
 (`unread`).
+Each audit keeps its facts document beside its reports (`audit-TAG/facts.json.gz`, and its provers' under `proved-in-*/`),
+which `status_export.py --facts` reads of a check run; `--facts named` keeps only the named packages' own, which
+`trusted_size.py --run` reads of a records run, and `--facts none` keeps none (`facts_of`).
 The packages are audited side by side, and the controls beside them, after one `setup.sh` has installed the toolchain. A
 package's build starts once the builds of the packages it requires by path have ended, since its build writes their `.lake`
 too, and no two builds that write one `.lake` run at once (`writing`): two dependents of one path dependency take turns.
@@ -1016,6 +1019,9 @@ def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[s
 
 #: where `program` compiles (None: a temporary directory), one that `run` writes in and every package's `run` reads
 PROGRAMS: Path | None = None
+#: where `facts_of` makes the directory `Facts.lean` writes its document in, which it removes once read (None: the system's
+#: temporary directory); never the audit's output, which a recorded run publishes
+SCRATCH: Path | None = None
 #: {(directory, toolchain, the source's SHA-256): (the compiled program, its SHA-256)}
 _programs: dict[tuple[str, str, str], tuple[Path, str]] = {}
 #: one lock per key of `_programs`, so one program's compile doesn't hold up another's
@@ -1099,7 +1105,7 @@ def record_scope(policy: dict) -> list[str]:
     return list(dict.fromkeys([*meaning, *sorted(extra)]))
 
 
-def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None) -> dict:
+def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None, keep: bool = True) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
     runs): the facts document it writes, each guarantee's `reads` walked through `record_scope`.  A guarantee whose type is
     a definition under `meaning`, applied under binders, gets
@@ -1109,43 +1115,44 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     `lift` (`head`) that of its unfolded type under the old names (`unfolded_sha256`).  Each entry of `assumption_reads` (a
     named assumption's walk, `Facts.lean`) gets the SHA-256 of its text (`sha256`), and so does each definition and theorem
     of `constants` (the names of the lock's `shape.inline` texts, and those its premises print, that the build holds), for
-    `paired`, which reads ``moved`` as `moves`.  ``work`` keeps the document only gzipped, as `FACTS` (read back by
-    `stored_facts`), since a recorded run publishes ``work``."""
-    out, kept, canon = work / "facts.json", work / FACTS, work / "canon.jsonl"
-    for p in (out, kept, canon):
+    `paired`, which reads ``moved`` as `moves`.  `Facts.lean` writes the document and its canonical forms under `SCRATCH`,
+    since a recorded run publishes ``work``; with ``keep``, ``work`` keeps the document only gzipped, as `FACTS` (read back
+    by `stored_facts`), and without it keeps none."""
+    kept, config = work / FACTS, work / "facts-config.json"
+    for p in (kept, work / "facts.json", work / "canon.jsonl"):
         p.unlink(missing_ok=True)
-    config = work / "facts-config.json"
     premises = (policy.get("shape") or {}).get("premises")
     inline = (policy.get("shape") or {}).get("inline")
     texts = [t for es in inline.values() if isinstance(es, dict) for t in es] if isinstance(inline, dict) else []
     asked = sorted({".".join(p[:i]) for t in texts for n in NAMES.findall(t) for p in [n.split(".")] for i in range(1, len(p) + 1)})
-    config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
-                                  "recorded": record_scope(policy), "bounds": list(BOUND_HEADS),
-                                  "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
-                                  "spec": spec_of(policy),
-                                  "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
-                                  "assumptions": sorted(a for a in listed_premises(policy) if isinstance(a, str)),
-                                  "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
-                                  "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
-                                  "out": str(out), "canon": str(canon)}))
-    rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
-    if rc or not out.exists():
-        raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
-    data = out.read_bytes()
-    kept.write_bytes(gzip.compress(data, compresslevel=1, mtime=0))
-    out.unlink()
-    facts = json.loads(data)
     hashes, renamed_as, lifts = {}, {}, {}
-    with canon.open() as f:
-        for line in f:
-            rec = json.loads(line)
-            hashes[rec["id"]] = hashlib.sha256(rec["canon"].encode()).hexdigest()
-            if "as" in rec:
-                renamed_as[rec["id"]] = {"as": rec["as"]} | ({"head": rec["head"], "unfolded_sha256": hashlib.sha256(
-                    rec["unfolded"].encode()).hexdigest()} if "head" in rec else {})
-            elif rec["id"].startswith("lift:"):
-                lifts[rec["id"][5:]] = {"head": rec["head"], "module": rec["module"], "unfolded_sha256": hashes[rec["id"]]}
-    canon.unlink()
+    with tempfile.TemporaryDirectory(prefix="lean-facts-", dir=SCRATCH) as scratch:
+        out, canon = Path(scratch) / "facts.json", Path(scratch) / "canon.jsonl"
+        config.write_text(json.dumps({"roots": policy["roots"], "meaning": policy.get("meaning", policy["roots"]),
+                                      "recorded": record_scope(policy), "bounds": list(BOUND_HEADS),
+                                      "allowed": policy.get("axioms", STANDARD), "pins": sorted(policy.get("guarantees", {})),
+                                      "spec": spec_of(policy),
+                                      "premises": [p for p in premises if isinstance(p, str)] if isinstance(premises, list) else [],
+                                      "assumptions": sorted(a for a in listed_premises(policy) if isinstance(a, str)),
+                                      "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
+                                      "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
+                                      "out": str(out), "canon": str(canon)}))
+        rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
+        if rc or not out.exists():
+            raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
+        data = out.read_bytes()
+        if keep:
+            kept.write_bytes(gzip.compress(data, compresslevel=1, mtime=0))
+        facts = json.loads(data)
+        with canon.open() as f:
+            for line in f:
+                rec = json.loads(line)
+                hashes[rec["id"]] = hashlib.sha256(rec["canon"].encode()).hexdigest()
+                if "as" in rec:
+                    renamed_as[rec["id"]] = {"as": rec["as"]} | ({"head": rec["head"], "unfolded_sha256": hashlib.sha256(
+                        rec["unfolded"].encode()).hexdigest()} if "head" in rec else {})
+                elif rec["id"].startswith("lift:"):
+                    lifts[rec["id"][5:]] = {"head": rec["head"], "module": rec["module"], "unfolded_sha256": hashes[rec["id"]]}
     for name, p in facts["pins"].items():
         p["type_sha256"] = hashes.get(f"pin:{name}", "")
         if name in lifts:
@@ -3536,12 +3543,13 @@ def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str
 
 
 def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, str] | None = None,
-           ready=lambda q: None) -> tuple[list[str], dict, dict[str, list[str]]]:
+           ready=lambda q: None, keep: bool = True) -> tuple[list[str], dict, dict[str, list[str]]]:
     """(failures, ``facts`` with each guarantee's facts taken from the package that proves it, {package: the guarantees it
     proves}) for a policy whose `proved_in` names the packages that prove its guarantees. Each must require ``pkg`` by path
     and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended, False when it did not
     pass. `Facts.lean` reads its roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of
-    guarantees proved in ``pkg``. Raises RuntimeError when a package's build did not pass or its facts cannot be read."""
+    guarantees proved in ``pkg``; with ``keep``, its document is kept under `proved-in-*/` (`facts_of`). Raises
+    RuntimeError when a package's build did not pass or its facts cannot be read."""
     fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
     if not isinstance(named := policy["proved_in"], list) or not all(isinstance(p, str) for p in named):
         fails.append(Failure("proved_in.form", None, "proved_in: a list of paths, each relative to this package"))
@@ -3581,7 +3589,7 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
                           "trees": policy.get("trees", {}), "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
-                          "assumptions": listed_premises(policy), "shape": policy.get("shape", {})}, qwork, moved)
+                          "assumptions": listed_premises(policy), "shape": policy.get("shape", {})}, qwork, moved, keep)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
                   if r.parts[:len(lib.parts)] == lib.parts}
@@ -4247,7 +4255,8 @@ def template(pkg: Path) -> dict:
 def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, replay: bool = True, fresh: bool = False,
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
-          replay_cache: Path | None = None, closure: bool = False, bookkeeping: str | None = None) -> dict:
+          replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
+          bookkeeping: str | None = None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
@@ -4261,7 +4270,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     instead of auditing, and the report's `moved` holds their moves.  The report lists the spec's definitions
     that no guarantee reads (`unread_spec`).  ``replay_cache`` (a directory) holds each module whose replay passed, under
     its `replay_keys` key: such a module's constants join the replay unchecked, and each module checked is stored there
-    when the replay passes.  ``closure`` replays the import closure too (`replay_step`).  ``bookkeeping`` (a due date:
+    when the replay passes.  ``closure`` replays the import closure too (`replay_step`).  ``kept_facts`` says which facts
+    documents stay beside the reports (`facts_of`): `all` (the package's and its provers'), `own` or `none`.
+    ``bookkeeping`` (a due date:
     `--bookkeeping warn`, drive's lock run) regenerates a failing package's lock with its bookkeeping repaired (`repaired`,
     on `bookkeeping_ticket`) and judges the policy's checks again on that lock: the package fails on what fails there and
     on every failure those checks don't make (the build, the replay, the scans, the tests), else its report names the lock
@@ -4365,7 +4376,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
 
     replayed = scanned = digested = unread = None
     try:
-        facts = facts_of(pkg, current, work, moved)
+        facts = facts_of(pkg, current, work, moved, keep=kept_facts != "none")
         rep["seconds"]["facts"] = round(time.monotonic() - s, 1)
         if replay and not lifts and pkg.resolve().is_relative_to(ROOT) and \
                 pkg.resolve().relative_to(ROOT).as_posix() in UNREAD_FACTS:
@@ -4378,7 +4389,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         cross: list[str] = []
         if "proved_in" in policy:
             p = time.monotonic()
-            cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, built_prover)
+            cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, built_prover,
+                                                    keep=kept_facts == "all")
             rep["seconds"]["proved-in"] = round(time.monotonic() - p - sum(waited), 1)
     except RuntimeError as e:
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
@@ -4702,6 +4714,9 @@ def main(argv: list[str]) -> int:
                     "one this file is in)")
     ap.add_argument("--out", type=Path, default=None, help="where the reports and logs go (default $RESEARCH_RUN_DIR/lean-audit in a "
                     "recorded run, else a temporary directory)")
+    ap.add_argument("--facts", choices=("all", "named", "none"), default="all", help="the facts documents kept beside the "
+                    "reports: every audited package's and its provers' (all, which status_export.py --facts reads), the named "
+                    "packages' own (named, which trusted_size.py --run reads of a records run), or none")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):
@@ -4797,7 +4812,8 @@ def main(argv: list[str]) -> int:
                         moved=moved if mine else None,
                         ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
                         name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
-                        closure=a.closure, bookkeeping=due)
+                        closure=a.closure, kept_facts=a.facts if a.facts != "named" else "own" if mine else "none",
+                        bookkeeping=due)
         finally:
             if not built[pkg].is_set():
                 seal(pkg)
