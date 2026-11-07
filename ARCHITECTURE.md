@@ -38,10 +38,11 @@ that crosses a proof-block boundary
 register the commitment roots   --------------->   check the registration
                                 <---------------   the challenger flips coins: the sample
 prove the sampled proof blocks  --------------->   verify the proofs (the Lean verifier)
-(Flock, through the ZK server)                     record the integrity profile
+(Flock prove --zk; the core protocols              record the integrity profile
+ put it behind the ZK server)
 ~~~
 
-The auditor never runs the computation; it only checks proofs. The integrity profile it records bounds how many proof blocks are incorrect, given the committed trace.
+The auditor never runs the computation; it only checks proofs. The integrity profile it records bounds how many proof blocks are incorrect, given the committed trace. On its own, as SPOT[Flock], the developer's side is an inference server, which serves and commits, and a proof server, which replays the sampled proof blocks and proves them, and the auditor's is a verifier, with no ZK server and no recursion; the core protocols wrap it in both (`verity/core/protocols/sampled_proofs/parties.py`).
 
 ## Architecture
 
