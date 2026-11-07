@@ -38,7 +38,7 @@ theorem heq_send {M : Type} {k k' : M → Game β} (e : Game.send M k = Game.sen
   obtain rfl := eq_of_heq h
   exact ⟨rfl, HEq.rfl⟩
 
-/-- Equal strategies of equal games drawing a coin agree at each coin. -/
+/-- Equal strategies of equal games sampling a coin agree at each coin. -/
 theorem heq_coin {C : Type} {iF iF' : Fintype C} {iN : Nonempty C} {k k' : C → Game β} (hk : k = k')
     {s : Strategy (@Game.coin β C iF iN k)} {s' : Strategy (@Game.coin β C iF' iN k')} (h : HEq s s') (c : C) :
     HEq (s c) (s' c) := by

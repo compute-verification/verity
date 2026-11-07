@@ -2,7 +2,7 @@
 # The scan's per-sampling-block answers held by verity/certifier/v0's rows form on a CPU machine: two relay
 # rehearsals at SC_CLASS's schedule (the test class's by default; scan_zk.sh's SC_REHEARSE), honest and void (the fake
 # answering past the relay's delay, SC_LATE_MS: every connection fails late), each's sampling block 0 proved (a group
-# of 1: the rows form reads a registration of one sampling block's 2T proof blocks), every proof block drawn (SC_DRAW=K:
+# of 1: the rows form reads a registration of one sampling block's 2T proof blocks), every proof block sampled (SC_DRAW=K:
 # K of them, scan_zk.sh's); then scan_period.py's
 # cases (honest, late, the honest run's tampered and chain rounds, and its forged certificate) through the period's
 # mirror and network-period, both from the tree when it has them, else from SC_PERIOD_REF (the rows form's branch) in a

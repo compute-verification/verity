@@ -118,8 +118,8 @@ theorem g_pos_of_setupHidden (ht : tags.typed = false)
 
 variable {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json}
 
-/-- **A `DrawSetupH` from setupHidden's acceptance at a draw**, from the session alone (`drawSetupH_of_setupHiddenI`
-without its circuit hypothesis): a `fast100` schedule of its `m`, the draw proving `S`, and its link points `mPts`. -/
+/-- **A `DrawSetupH` from setupHidden's acceptance at a sample**, from the session alone (`drawSetupH_of_setupHiddenI`
+without its circuit hypothesis): a `fast100` schedule of its `m`, the sample proving `S`, and its link points `mPts`. -/
 theorem drawSetupH_of_setupHiddenU (ht : I.tags.typed = false) {st : Flock.Stmt}
     (h : Stmt.setupHidden I.tags I.circuitFile I.publicFile I.coins I.tables (some d) I.partition I.program = .ok st)
     {sch : Flock.Schedule} (hf : Flock.fast100 st.m = some sch) {D : Draw.UnitDraw}

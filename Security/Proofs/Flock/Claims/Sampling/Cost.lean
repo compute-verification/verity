@@ -49,7 +49,7 @@ The claims block's extractor `E` (`Definitions.Claims.Sampling`) is built of `of
   `ownLog_of_noHash`: their own `H` calls.
 * `eval_ofOC`, `flatMapRP_mem`, `checkRevealed_mem`: what they return. Each opening `checkRevealed` returns passes the
   commitment's check under its roots, and that check's calls are among its own.
-* `waitAccC_sum`, `accExp_le`: the weights of a wait's accepted draws, `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`.
+* `waitAccC_sum`, `accExp_le`: the weights of a wait's accepted samples, `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`.
 -/
 
 @[expose] public section
@@ -155,13 +155,13 @@ theorem waitAccC_length_le {R : Type} (H : Msg → Msg) (run : R → Trace) (k :
         omega
       · exact h
 
-/-- The weights `g` of a wait's accepted draws among `rs`, from `a` accepted so far. -/
+/-- The weights `g` of a wait's accepted samples among `rs`, from `a` accepted so far. -/
 noncomputable def accSum {R : Type} (run : R → Trace) (k : ℕ) (g : R → ℝ) : List R → ℕ → ℝ
   | [], _ => 0
   | r :: rs, a =>
     if k ≤ a then 0 else if (run r).out = .acc then g r + accSum run k g rs (a + 1) else accSum run k g rs a
 
-/-- **The accepted reruns' weights**: those `waitAccC` keeps are the accepted draws `accSum` counts. -/
+/-- **The accepted reruns' weights**: those `waitAccC` keeps are the accepted samples `accSum` counts. -/
 theorem waitAccC_sum {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (g : R → ℝ) :
     ∀ (rs : List R) (acc : List (R × Seen)),
       (((waitAccC k rs acc).eval H run).1.map fun p => g p.1).sum =
@@ -183,11 +183,11 @@ theorem waitAccC_sum {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) 
       · have hs : ¬ (run r).seen.out = .acc := ha
         simp only [hs, ha, ↓reduceIte]
 
-/-- `G(K, a)`: the accepted draws' weights over `K` uniform draws, from `a` accepted so far. -/
+/-- `G(K, a)`: the accepted samples' weights over `K` uniform samples, from `a` accepted so far. -/
 noncomputable def accExp {D : Type} [Fintype D] (run : D → Trace) (k : ℕ) (g : D → ℝ) (K a : ℕ) : ℝ :=
   Ex fun σ : Fin K → D => accSum run k g ((List.finRange K).map σ) a
 
-/-- **The accepted draws' weights**: `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`, so the `k` accepted draws weigh at most
+/-- **The accepted samples' weights**: `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`, so the `k` accepted samples weigh at most
 `k · 𝔼[g | acc]` in expectation. -/
 theorem accExp_le {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k : ℕ) (g : D → ℝ) (hg : ∀ d, 0 ≤ g d)
     (K : ℕ) : ∀ a, a ≤ k → Pr (fun d => (run d).out = .acc) * accExp run k g K a ≤
