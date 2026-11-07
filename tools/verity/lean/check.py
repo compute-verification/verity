@@ -533,14 +533,18 @@ def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 
     p = subprocess.Popen(argv, cwd=cwd, env=lake_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     got: dict[str, str] = {}
 
-    def read(k, f):
-        if k != "out" or on_line is None:
+    def read(k, f, give=on_line):
+        if k != "out" or give is None:
             got[k] = f.read()
             return
         lines = []
         for line in f:
             lines.append(line)
-            on_line(line)
+            try:
+                if give is not None:
+                    give(line)
+            except Exception:                           # the pipe must still be drained, or the build blocks on it
+                give = None
         got[k] = "".join(lines)
     readers = [threading.Thread(target=read, args=(k, f), daemon=True) for k, f in (("out", p.stdout), ("err", p.stderr))]
     for r in readers:

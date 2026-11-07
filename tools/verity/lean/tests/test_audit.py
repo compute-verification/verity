@@ -4762,6 +4762,13 @@ def test_run_hands_over_each_line_of_standard_output_as_it_comes_and_returns_the
                      tmp_path / "log", on_line=lines.append)
     assert rc == 0 and lines == ["a\n", "b\n"] and text == "a\nb\ne\n" == (tmp_path / "log").read_text()
 
+    def fails(line):
+        lines.append(line)
+        raise ValueError(line)
+    lines.clear()
+    rc, text = A.run([sys.executable, "-c", "print('a\\n' * 100000, end='')"], tmp_path, tmp_path / "log", on_line=fails)
+    assert rc == 0 and lines == ["a\n"] and text == "a\n" * 100000, "one that raises is dropped, and the pipe still drained"
+
 
 def pipeline(tmp_path, monkeypatch, files, loop=False, **kw):
     """A `Pipeline` of a package holding ``files`` under the root `P`; without ``loop``, no batch runs on its own."""
