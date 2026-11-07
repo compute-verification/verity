@@ -29,7 +29,8 @@ public import Proofs.Flock.Claims.Aggregate
   verifier's `k(x)` (`Compiled.Ex_sPrB_le`), so session `s` costs `κb_s + √(γb_s·k(x)·Pr[B])`
   (`Compiled.sessKS`), and the sum of the roots is `√(γ_O·Pr[B])`.
 
-`Flock.SecurityProofs.GenericRecursiveKSCompiled` is L2: L1 at `compile(Π, A, S)` with O1 for its `E_O`.
+`compilerKS` is L2, `Definitions.Claims.RecursionGeneric`'s `CompilerKS`: L1 (`compositionKS`) at
+`compile(Π_in, A, S)` with O1 for its `E_O`.
 -/
 
 @[expose] public section
@@ -489,17 +490,22 @@ theorem outerSessionsKS : OuterSessionsKS := by
         simp only [hk]
         rfl
 
-end Claims.RecGeneric
+/-- `κ_O` is nonnegative where the sessions' bounds are (`Compiled.Bounded`). -/
+theorem Compiled.κO_nonneg {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+    {L : Compiled Coin A} {H : Msg → Msg} (hS : L.Sessions H) (x : Msg) : 0 ≤ L.toComp.κO x :=
+  show (0 : ℝ) ≤ ∑ s : Fin (L.nS x), L.κb x s from Finset.sum_nonneg fun s _ => (hS.bounded x s).1
 
-open Claims Claims.RecGeneric in
-/-- **L2** (`Flock.Guarantees.GenericRecursiveKSCompiled`): L1 at `compile(Π, A, S)`, whose `E_O` is knowledge sound by
-O1 (`Claims.RecGeneric.outerSessionsKS`) at `κ_O`, `γ_O`, nonnegative by the sessions' bounds. -/
-theorem Flock.SecurityProofs.GenericRecursiveKSCompiled : Flock.Guarantees.GenericRecursiveKSCompiled := by
+/-- `γ_O` is a square. -/
+theorem Compiled.γO_nonneg {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+    (L : Compiled Coin A) (x : Msg) : 0 ≤ L.toComp.γO x :=
+  show (0 : ℝ) ≤ (∑ s : Fin (L.nS x), Real.sqrt (L.γb x s * L.V.k x)) ^ 2 from sq_nonneg _
+
+/-- **L2** (`CompilerKS`): L1 (`compositionKS`) at `compile(Π_in, A, S)`, whose `E_O` is knowledge sound by O1
+(`outerSessionsKS`) at `κ_O`, `γ_O`, nonnegative by the sessions' bounds. -/
+theorem compilerKS : CompilerKS := by
   intro Coin W _ _ _ H I S A C hWF hKS hCF hB hAKS hSess x hK Ω _ _ P m M
-  exact Flock.SecurityProofs.GenericRecursiveKS Coin W H I S (compile C I S).toComp hWF hKS hCF hB x
+  exact compositionKS Coin W H I S (compile C I S).toComp hWF hKS hCF hB x
     (fun Ω _ _ P => outerSessionsKS Coin H A (compile C I S) hAKS hSess x Ω P)
-    (show (0 : ℝ) ≤ ∑ s : Fin ((compile C I S).nS x), (compile C I S).κb x s from
-      Finset.sum_nonneg fun s _ => (hSess.bounded x s).1)
-    (show (0 : ℝ) ≤ (∑ s : Fin ((compile C I S).nS x),
-        Real.sqrt ((compile C I S).γb x s * (compile C I S).V.k x)) ^ 2 from sq_nonneg _)
-    hK Ω P m M
+    (Compiled.κO_nonneg hSess x) (Compiled.γO_nonneg _ x) hK Ω P m M
+
+end Claims.RecGeneric

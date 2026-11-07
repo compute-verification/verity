@@ -1,6 +1,6 @@
 """The memory challenger: PoUS's timed rounds, run by an auditor-trusted device beside the network certifier, which signs
-its rounds.  It is the auditor's hardware, on a machine the prover doesn't control at the prover's site (the auditor's
-own VM or box, under the auditor's account), never a process on the prover's node.  On the deployed path it replaces
+its rounds.  It is the auditor's hardware, on a machine the developer doesn't control at the developer's site (the auditor's
+own VM or box, under the auditor's account), never a process on the developer's node.  On the deployed path it replaces
 `audit.UnsignedRounds`, the same rounds unsigned.
 
 A session has four steps:
@@ -86,7 +86,7 @@ from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
 from .params import SALT_BITS
-from .protocol import Certificate, Scheme
+from .protocol import CapacityBound, Scheme
 from .verifier import DIGEST_BYTES
 
 PROTOCOL = "verity-pous/memory-challenger/v1"
@@ -364,7 +364,7 @@ class SignedSession:
                    doc["scheme"], bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]))
 
 
-def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> Certificate:
+def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> CapacityBound:
     """The first of `scheme`'s certificates that covers `k` rounds within `limit_ns`, as `protocol.TimedAudit` picks it;
     `ValueError` when none does, or when the scheme is experimental and `experimental` is not set."""
     if scheme.experimental and not experimental:

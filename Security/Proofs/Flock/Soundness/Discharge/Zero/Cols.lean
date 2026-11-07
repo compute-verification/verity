@@ -1,7 +1,7 @@
 module
 
-public import Proofs.Flock.Soundness.E2E
 public import Proofs.Flock.Soundness.Types.ProgramPlaces
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The zero's columns are input columns (`hZero`, e2e)

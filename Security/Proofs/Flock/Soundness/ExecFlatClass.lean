@@ -1,6 +1,14 @@
 module
 
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.ComposePlace
 public import Proofs.Flock.Soundness.ExecTemplateSetup
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.Types.Parts
 
 /-!
 # A typed flat class's unit, placed (1e for flat classes)

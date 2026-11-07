@@ -1,13 +1,6 @@
 module
 
 public import Definitions.Pouw.Assumptions.Pinned
-public import Mathlib.Data.ZMod.Basic
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Tactic.Ring
-public import Mathlib.Tactic.Abel
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.NormNum
 
 /-!
 # (e) Usefulness and int32 exactness

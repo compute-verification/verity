@@ -63,13 +63,14 @@ from verity.core.protocols.sampled_proofs.one_stage import (audit, draw as DR, h
 from verity.core.protocols.sampled_proofs.challenger import COIN_BYTES, NO_CLOSE, NO_TREE, ChallengerKey, CoinError
 from verity.core.protocols.sampled_proofs.coins import (LIMITS, MAX_PATH, OwnRandomness, coins_reason, coins_within,
                                                         draw_coins, draw_first)
+from verity.core.protocols.sampled_proofs.one_stage.proofs import order_why
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 
-from test_challenger_difftest import DEPLOYED, DRAW_MUTATIONS, Drawn, _flip, _mutated, lms_verify
+from test_challenger_difftest import DEPLOYED, DRAW_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
 
 PACKAGE = Path(__file__).resolve().parents[1]
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -960,16 +961,35 @@ def slots(j):
     return {"checked": [[v, 0] for v, b in enumerate(blocks) if b["unit"] is None or b["unit"] in proved], "classes": classes}
 
 
+def _public_units(public) -> list:
+    """`FilePart.unitIndices`: the public file's ``units.indices`` (``public``, its bytes in hex), off its header as the
+    Python verifier reads it (`proofs._header`: the first line, decoded, ``json.loads``)."""
+    if not (isinstance(public, str) and len(public) % 2 == 0 and re.fullmatch(r"[0-9a-f]*", public)):
+        raise D.Reject("public is not lowercase hex")
+    try:
+        head = json.loads(bytes.fromhex(public).split(b"\n", 1)[0].decode())
+    except ValueError as e:
+        raise D.Reject(f"the public file's header is not JSON: {e}") from None
+    units = head.get("units") if isinstance(head, dict) else None
+    indices = units.get("indices") if isinstance(units, dict) else None
+    if not (isinstance(indices, list) and all(map(_nat, indices))):
+        raise D.Reject("the public file's units.indices is not a list of natural numbers")
+    return indices
+
+
 def file_population(j):
     """`FilePart.why` (`proofs.population_why`): the registration's strata over the program and query
-    (`partition.strata`), against a public file's units (`units.indices`)."""
+    (`partition.strata`), against a public file's units (`units.indices`): given, or read off the public file."""
     j = _json(j)
     if not isinstance(j, dict):
         raise D.Reject("not an object")
     desc = _obj(j.get("program"), "program")
-    indices = j.get("indices")
-    if not (isinstance(indices, list) and all(map(_nat, indices))):
-        raise D.Reject("indices is not a list of natural numbers")
+    if j.get("public") is not None:
+        indices = _public_units(j["public"])
+    else:
+        indices = j.get("indices")
+        if not (isinstance(indices, list) and all(map(_nat, indices))):
+            raise D.Reject("indices is not a list of natural numbers")
     if not desc:
         raise D.Reject("not a program descriptor")
     sha = PO.program_sha512(desc)
@@ -2080,14 +2100,21 @@ def _sha(b: bytes) -> str:
     return hashlib.sha512(b).hexdigest()
 
 
-def _public_of(rec: dict, roots: dict | None = None) -> bytes:
+def _public_of(rec: dict, roots: dict | None = None, indices: list | None = None) -> bytes:
     """A public file whose header is `rec`'s as `registration.matches_public` reads one (`OneStageZk.publicHeld`): its
-    scheme, its ``frame_v3`` roots (`roots` in their place) and their ``domain_ids``, and its population as ``instances``.
-    No statement follows it, so a session set up on it is rejected."""
+    scheme, its ``frame_v3`` roots (`roots` in their place) and their ``domain_ids``, its population as ``instances``,
+    and its population's units in order as ``units.indices`` (`indices` in their place). No statement follows it, so a
+    session set up on it is rejected."""
     reg = {r["port"]: r for r in rec["roots"]}
     fv = {"domain_ids": {p: r["domain"] for p, r in reg.items()}, "roots": roots or {p: r["root"] for p, r in reg.items()}}
-    header = {"frame_v3": fv, "instances": rec["population"], "scheme": rec["scheme"]}
+    units = {"indices": list(range(rec["population"])) if indices is None else indices}
+    header = {"frame_v3": fv, "instances": rec["population"], "scheme": rec["scheme"], "units": units}
     return json.dumps(header, sort_keys=True).encode() + b"\nnot a public file"
+
+
+#: `OneStageZk.INDICES_WHY`
+INDICES_WHY = ("public file: its units.indices are not the registration's population units in order "
+               "(instance i is unit i)")
 
 
 #: `OneStageZk.NO_CHALLENGER`
@@ -2120,12 +2147,12 @@ def decode_params_v2(j) -> dict:
 
 
 def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: int = 1,
-                     keys: list[str] | None = None, seed: int = 0) -> tuple[Drawn, dict, dict]:
+                     keys: list[str] | None = None, seed: int = 0, order: str = "honest") -> tuple[Drawn, dict, dict]:
     """A draw under `law` from the coins of a challenger session its ledger opens withheld, under the key of `seed` at
     the deployed parameters, released after `rec`'s digest and read as `draw_first` reads them, the session's
     challenger sampling and opening `trees` coin trees too (`TreeSession`) on v2's one table (`OneStageZk.sessionTables`),
-    their links opened after `keys` (that table when none): the session, the draw, and the evidence's `coins` (the
-    session's record without the key, which the verifier's parameters name)."""
+    their links opened after `keys` (that table when none), its log in `order` (`ORDERS`): the session, the draw, and the
+    evidence's `coins` (the session's record without the key, which the verifier's parameters name)."""
     mine = DR.derive(s.program, s.query, law, None)
 
     def reads(coins) -> bytes:
@@ -2138,7 +2165,7 @@ def _challenger_draw(rng: random.Random, s: Setup, law: dict, rec: dict, trees: 
         draw_first(OwnRandomness(source), mine, s.population)
         return bytes(got)
     d = Drawn(rng, before=True, after=bytes.fromhex(R.digest(rec)), reads=reads, trees=trees, tables=V2_TABLES,
-              keys=keys, params=[DEPLOYED], seed=seed)
+              keys=keys, params=[DEPLOYED], seed=seed, order=order)
     at = [0]
 
     def source(k: int) -> bytes:
@@ -2156,11 +2183,12 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     a statement's; refused before the session is verified when its coins are not a tree the challenger logged or its
     link was opened after other keys than its one table (`LINK_TABLES`; the `root_B` length a statement fixes,
     `LINK_ROOT_LEN`, these files set up none to hold), or the public file is not the registration's
-    (`publicHeld`, its codes Python's `matches_public`'s); refused when a file it names is in no blob, as the public
-    file the parameters name is when the blobs hold another, or its sessions are not the evidence's. The public file is
-    the parameters', committed before any coin: evidence naming one of its own, or parameters naming none, are refused.
-    `test_proofs.py` holds the verdicts to `verify`'s on a real session, and `test_challenger_difftest.py` the trees'
-    check to its Python."""
+    (`publicHeld`, its codes Python's `matches_public`'s), or its ``units.indices`` are not the population's units in
+    order (`indicesHeld`): a header rewritten after the draw, its pin with it, to credit an honest instance as the drawn
+    unit, or naming none; refused when a file it names is in no blob, as the public file the parameters name is when
+    the blobs hold another, or its sessions are not the evidence's. The public file is the parameters', committed before
+    any coin: evidence naming one of its own, or parameters naming none, are refused. `test_proofs.py` holds the
+    verdicts to `verify`'s on a real session, and `test_challenger_difftest.py` the trees' check to its Python."""
     s = SETUPS[3]
     law = {"k": 2, "law": "subset"}
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
@@ -2226,6 +2254,14 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     assert run(one, blobs_=[circuit.hex(), wrong.hex(), *blobs[2:]],
                p=p2 | {"proofs": {**p2["proofs"], "public": _sha(wrong)}}) == (
         "reject", f"proofs: public file: not the registration's: {', '.join(codes)}")
+    n = rec["population"]
+    head, body = public.split(b"\n", 1)
+    unitless = json.dumps({k: v for k, v in json.loads(head).items() if k != "units"}, sort_keys=True).encode()
+    relabelled = [_public_of(rec, indices=is_) for is_ in ([0, *range(2, n + 1)], [*range(1, n), 0], list(range(n - 1)),
+                                                           list(range(n + 1)))]
+    for f in (*relabelled, unitless + b"\n" + body):
+        assert run(one, blobs_=[circuit.hex(), f.hex(), *blobs[2:]],
+                   p=p2 | {"proofs": {**p2["proofs"], "public": _sha(f)}}) == ("reject", f"proofs: {INDICES_WHY}"), f
     assert run(base | {"proofs": {"public": _sha(public), **proofs(["s"])}, "sessions": ["s"]}) == (
         "reject", "evidence: the keys of the evidence's proofs are not sessions")
     got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
@@ -2269,6 +2305,45 @@ def test_v2_refuses_a_population_out_of_order(server, server_v2):
         out = server_v2.exchange(_json(case))
         want = "verdict flock-verify/s did not accept" if ok else f"proofs: {POPULATION_ORDER}"
         assert (out["verdict"], out["reason"]) == ("reject", want), (s.templates, out)
+
+
+def test_v2_refuses_a_release_log_out_of_order(server, server_v2):
+    """v2 holds its challenger session's release log to the sample, then the link, then the other rounds
+    (`OneStageZk.orderHeld`, `Challenger.sampleLinkFirst`) before any session's record is read. Of three audits v1
+    accepts on their verdict and their challenger's coins, their coin trees all as the challenger logged them, the
+    honest log goes on to its session's verdict; one releasing a coin of the sample after a tree's link is opened
+    (`sample-late`), and one whose first round opened is of another stream than the link's (`link-late`), are refused
+    (`SAMPLE_LINK_FIRST`). The Python twins (`challenger.sample_link_first`, `one_stage.proofs.order_why`) agree;
+    `test_challenger_difftest.py` holds the first to Lean's piece."""
+    s = SETUPS[3]
+    law = {"k": 2, "law": "subset"}
+    rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
+                   WINDOW, leaf_layer=LEAF)
+    circuit, public = b"not a circuit file", _public_of(rec)
+    for order in ORDERS:
+        ch, d, coins = _challenger_draw(random.Random(f"v2-order-{order}"), s, law, rec, 1, order=order)
+        proved = DR.proved(d)
+        evidence = {"coins": coins, "draw": d, "instances": len(proved), "proved_units": proved,
+                    "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
+                    "sessions": [], "statement": {}, "verdicts": {"lean": {"accepted": True, "of_record": True}}}
+        params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "delta": "1/20",
+                  "law": law, "leaf_layer": LEAF, "log": [], "partition": P.partition(s.program, s.query),
+                  "ports": s.ports, "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME,
+                  "window_root": ch.ledger.window["root"], "work_table": None}
+        v1 = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+        assert D.replay(ONE_STAGE, v1, server)[0] == "accept", order
+        want = None if order == "honest" else f"coins: {Ch.SAMPLE_LINK_FIRST}"
+        assert order_why(params, rec, evidence) == want, order
+        assert Ch.sample_link_first("draw", bytes.fromhex(R.digest(rec)), ch.s.lines[1:]) == (want is None), order
+        record = D.canonical(ch.trees[0].record).encode()
+        proofs = {"sessions": [{"name": "s", "record": _sha(record), "reps": {}}]}
+        base = {k: v for k, v in evidence.items() if k != "verdicts"}
+        case = {"blobs": [circuit.hex(), public.hex(), record.hex()], "commitment": _hex(rec),
+                "evidence": _hex(base | {"proofs": proofs, "sessions": ["s"]}),
+                "params": params | {"proofs": {"circuit": _sha(circuit), "public": _sha(public), "registered": None}}}
+        out = server_v2.exchange(_json(case))
+        assert (out["verdict"], out["reason"]) == (
+            "reject", "verdict flock-verify/s did not accept" if want is None else f"proofs: {want}"), order
 
 
 def test_v2_reads_its_draw_from_the_challengers_coins(server_v2):
@@ -2861,8 +2936,35 @@ def file_populations(draw) -> dict:
     return {"indices": indices, "program": desc, "query": query}
 
 
-FILE_POPULATION = D.Port(PIECES, "file_population", file_population, st.one_of(file_populations(), file_populations(),
-                                                                                  JSON), package=PACKAGE)
+@st.composite
+def file_population_publics(draw) -> dict:
+    """The file_population piece's input with the public file itself (``public``, in hex): a header written as
+    `verity_flock`'s producers write theirs (`json.dumps(head, sort_keys=True)`, a newline, then the body), over
+    `file_populations`' units; else that header cut short, without its units, or after a byte that isn't UTF-8."""
+    j = draw(file_populations())
+    indices = j.pop("indices")
+    n, g = len(indices), draw(st.integers(1, 4))
+    head = {"format": "flock-instances/v3", "statement": "hm96-sha512-rows", "scheme": "hm96-sha512", "set": "eval",
+            "subcircuit": "unit", "range": [0, n], "instances": n, "circuit_sha512": "ab" * 64, "rows": True,
+            "units": {"vus_per_block": g, "units_per_vu": draw(st.integers(1, 2)), "indices": indices,
+                      "blocks": [indices[b:b + g] for b in range(0, n, g)], "classes": ["cd" * 64] * n},
+            "frame_v3": {"roots": {"x": "ef" * 64}, "domain_ids": {"x": "01" * 32}},
+            **draw(st.sampled_from([{}, {"identifier": {"name": "caf\u00e9 \u2603"}}, {"shared_rows": {"x": n}},
+                                    {"registered": {"w": {"value": "w", "positions": [0, 3], "paths": ["a/b"]}}}]))}
+    kind = draw(st.integers(0, 9))
+    if kind == 8:
+        del head["units"]
+    line = json.dumps(head, sort_keys=True).encode()
+    if kind == 7:
+        line = line[:draw(st.integers(0, len(line) - 1))]
+    elif kind == 9:
+        line = b"\xff" + line
+    return {**j, "public": (line + b"\n" + draw(st.binary(max_size=64))).hex()}
+
+
+FILE_POPULATION = D.Port(PIECES, "file_population", file_population,
+                         st.one_of(file_populations(), file_populations(), file_population_publics(),
+                                   file_population_publics(), JSON), package=PACKAGE)
 
 STRATA = st.lists(st.builds(lambda name, size, dk: {"k": max(0, size - dk), "name": name, "size": size},
                             st.sampled_from(["a", "b", "c", "unit"]), st.integers(0, 14), st.integers(0, 14)),
@@ -4557,3 +4659,32 @@ def test_the_run_refuses_a_population_out_of_order(pieces):
         else:
             assert (out.get("step"), out.get("codes")) == ("register", ["population-order"]), out
     assert not P.in_order(SETUPS[3].program, SETUPS[3].query, SETUPS[3].population + 1)
+
+
+#: The public files C-Flock's producers wrote, recorded in `verity/ml/flock/tests`' fetched fixtures
+#: (`fixtures/artifacts.json`): `verity_flock`'s staging (`json.dumps(sort_keys=True)`), and the selftest's and the
+#: recursive links' (compact, sorted).
+RECORDED = PACKAGE.parents[2] / "ml" / "flock" / "tests" / "fixtures"
+RECORDED_FIXTURES = ("forged-proofs", "public-inputs", "public-inputs-blocks", "rec-coins", "rec-links", "zk-sessions")
+
+
+def _recorded_publics() -> list[Path]:
+    missing = [f"verity/ml/flock/tests/fixtures/{f}" for f in RECORDED_FIXTURES if not (RECORDED / f).is_dir()]
+    assert not missing, f"not fetched: `uv run research data fetch-fixtures {' '.join(missing)}`"
+    return sorted(p for f in RECORDED_FIXTURES for p in (RECORDED / f).rglob("*.bin")
+                  if re.fullmatch(r"(.+\.)?pub(-\d+)?\.bin", p.name))
+
+
+def test_the_recorded_public_files_pass_the_population_check(pieces):
+    """Each public file the producers recorded (`RECORDED`) passes `FilePart.check` against a population of as many units
+    in order as it names, its header read by `FilePart.header` (`Flock.JsonParse.parse`, then `Flock.norm`) as Python's
+    `json.loads` reads it: the check refuses none of them."""
+    files = _recorded_publics()
+    assert len(files) >= 23, files
+    query = P.template_instance_query(MEMBERS[0].id)
+    for p in files:
+        b = p.read_bytes()
+        n = len(json.loads(b.split(b"\n", 1)[0])["units"]["indices"])
+        case = {"program": json.loads(_population(((0, n),))), "query": query, "public": b.hex()}
+        assert file_population(copy.deepcopy(case)) == {"why": None}, p
+        assert D.replay(FILE_POPULATION, case, pieces) == ("output", D.canonical({"why": None})), p

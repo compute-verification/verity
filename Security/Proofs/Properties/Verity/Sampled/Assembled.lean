@@ -4,22 +4,28 @@ public import Proofs.Properties.Verity.Sampled.CoinMap
 public import Proofs.Properties.Verity.Sampled.Accepts
 public import Proofs.Properties.Verity.Sampled.Binding
 public import Proofs.Properties.Verity.SampledRead
+public import Proofs.Properties.Verity.Sampled.Digest
 
 /-!
 # Sampled proofs' coupling, assembled from its pieces
 
 `CouplingTarget` at the leg's constructions with the binding's read finder and forger (`Binding.withBinding`), the
-projection at the sample-coupled coin maps (`Constructions.withProject` at `sampleMaps`) and the messages'
-two-continuation finders (`Constructions.withMessages`), cut at the binding's property of the play: the log v2's check
-read is the device's (`Binding.Logged Binding.readsV2`).
+bound digests' two-continuation finder (`Constructions.withBind`), the projection at the sample-coupled coin maps
+(`Constructions.withProject` at `sampleMaps`) and the messages' two-continuation finders (`Constructions.withMessages`),
+cut at the binding's property of the play, the log v2's check read is the device's (`Binding.Logged Binding.readsV2`),
+and at the digest's: v2 draws at the strategy's `afterAt` (`SampledDigest`).
 
 * **(a), the binding** (`Binding.logged_le`): an accepted play whose log v2 read isn't the device's is at most as likely
   as the read finder's collision plus the forger's forgery, wherever the device printed each play's log
   (`Binding.binds_of_prints`, at `Lines.PrintsLog`).
-* **(b), the logged coupling** (`couplingTarget_withProject_of_sample`): the coin map's premise holds within the
-  openings' gaps over the stops wherever the session's sampling coins are uniform (`sampleMap_couples`), and the
-  decoders' premise holds pointwise (`decodes_of_digests`) wherever v2's parameters name the vocabulary's digests, the
-  writer keeps an accepted transcript's view and the outcomes on the joint law's support are the writer's at the moves
+* **(a'), the digest** (`digestBound_of`): an accepted play whose draw doesn't answer `afterAt` is at most as likely as
+  the square root of the bound digests' finder's success, a SHA-512 collision on `bind`'s messages
+  (`prob_not_sampledDigest_le`).
+* **(b), the logged coupling** (`couplingTarget_withProject_of_sample`), off the openings' empty classes (`linkEmpty`,
+  `roundEmpty`): the coin map's premise holds within the openings' gaps and empty classes over the stops wherever the
+  session's sampling coins are uniform (`sampleMap_couples`), and the decoders' premise holds pointwise
+  (`decodes_of_digests`) wherever v2's parameters name the vocabulary's digests, the writer keeps an accepted
+  transcript's view and the outcomes on the joint law's support off the empty classes are the writer's at the moves
   v2's files decode to.
 * **The sample's coins** (`srcCoinsAt`, `avg_srcCoinsAt`): the session's bytes as `m` fresh frames' coins, uniform by A3
   wherever the session's bytes are `m` frames.
@@ -30,10 +36,10 @@ read is the device's (`Binding.Logged Binding.readsV2`).
   (`freshCoins_ofV2`).
 
 What the pieces leave is this module's hypotheses, each named in `couplingTarget_assembled`: the device's printed log
-(`hP`), the session's bytes as whole frames (`hL`), the openings' gaps within the hiding term (`hε`), the session v2
-sets up (`hA`), the vocabulary's digests (`hDg`), the writer's view (`hW`), and the moves on the joint law's support
-(`hM`), with the readings `rd`, the decoders `D`, the sample's family `label` and digest `after` and the field's
-encoding `e` as parameters.
+(`hP`), the session's bytes as whole frames (`hL`), the openings' gaps and empty classes within the hiding term
+(`hε`), the session v2 sets up (`hA`), the vocabulary's digests (`hDg`), the writer's view (`hW`), and the moves on the
+joint law's support off the empty classes (`hM`), with the readings `rd`, the decoders `D`, the sample's family `label`
+and the field's encoding `e` as parameters, and the sample's digest the strategy's `afterAt`.
 -/
 
 @[expose] public section
@@ -217,47 +223,63 @@ theorem coupled_draw_coins_v2 {V : Vocab d α} {k : Verity.Registration.Composit
       (List.IsPrefix.trans hs (by rw [hsrc]; exact fresh_prefix_coinBytes hp)))⟩
 
 /-- **The leg's constructions, assembled**: `K`'s with the binding's read finder and forger at the device's history
-`dev`, the projection at the readings `rd`, the decoders `D` and the sample-coupled coin maps at the sample's family
-`label`, its digest `after` and the coins `κ`, and the messages' two-continuation finders at `rd`. -/
+`dev`, the bound digests' finder at composite `k`, the projection at the readings `rd`, the decoders `D` and the
+sample-coupled coin maps at the sample's family `label`, its digest `after` and the coins `κ`, and the messages'
+two-continuation finders at `rd`. -/
 noncomputable def Constructions.assembled (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α} (K : Constructions V)
-    (dev : Exchange → Properties.Challenger.History) (rd : Readings)
+    (dev : Exchange → Properties.Challenger.History) (k : Verity.Registration.Composite) (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
     (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
     (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) : Constructions V :=
-  ((Binding.withBinding K dev).withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd
+  (((Binding.withBinding K dev).withBind k).withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd
+
+/-- **The stops' gaps within the hiding term**: at `2^-257` a gap, four gaps at the first stop and at each of the at
+most `A.N` stops after it (`couplesErr`: twice the opened coins' gap, `openGap`, and twice the empty class's,
+`openEmpty`) are at most the coin trees' hiding term wherever `2(1 + A.N) ≤ maxLeaves`. -/
+theorem Live.stops_le_hidingTerm {A : Live} (h : 2 * (1 + A.N) ≤ maxLeaves) :
+    4 * ((1 + A.N : ℕ) : ℝ≥0∞) / 2 ^ 257 ≤ A.hidingTerm := by
+  unfold Live.hidingTerm
+  refine ENNReal.div_le_div_right ?_ _
+  exact_mod_cast (by omega : 4 * (1 + A.N) ≤ 2 * maxLeaves)
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool)) (V : Vocab d α) (k : Verity.Registration.Composite)
 
 /-- **The coupling, assembled from its pieces**: at the assembled constructions, `CouplingTarget` holds at the session
 `A`, the parameters `θ` and the committed files `F` wherever the device printed each play's log after `θ` (`hP`), its
 history at each play signed what the play's signatures are on (`hS`, `Binding.SignsPlay`; `Device.signsPlay_dev` at
-the deployed device), the sample's coins are uniform (`hκ`), the openings' gaps over the stops are at most the hiding
-term (`hε`), `A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the
-session's writer keeps an accepted transcript's view (`hW`), and on the joint law's support the outcomes beside
-accepted plays whose log v2 read is the device's are the writer's at the moves v2's files decode to (`hM`). -/
+the deployed device), the sample's coins are uniform (`hκ`), the openings' gaps and empty classes over the stops are at
+most the hiding term (`hε`, which four gaps a stop meet wherever `2(1 + A.N) ≤ maxLeaves`, `Live.stops_le_hidingTerm`),
+`A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`), the session's writer keeps
+an accepted transcript's view (`hW`), and on the joint law's support off the empty classes the outcomes beside accepted
+plays whose log v2 read is the device's and whose draw answers the strategy's `afterAt` are the writer's at the moves
+v2's files decode to (`hM`). -/
 theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Properties.Challenger.History)
     (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
-    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
-    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (θ : ByteArray) (F : Array ByteArray)
     (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
     (hS : ∀ c, Binding.SignsPlay V dev θ F c)
     (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
-    (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)
-      (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤ A.hidingTerm)
+    (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label (afterAt V k) κ A θ F c σ)
+      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
+        A.hidingTerm)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
-    (hM : ∀ c σ, MovesReach V θ F c k (Binding.Logged Binding.readsV2) A (rd A θ F c) σ (D A θ F c σ)
-      (sampleMaps e V rd label after κ A θ F c σ)) :
-    CouplingTarget V k (K.assembled e dev rd D label after κ) A θ F :=
-  couplingTarget_withProject_of_sample e V k rd (Binding.withBinding K dev) D label after κ A
-    (Binding.Logged Binding.readsV2) θ F hκ
-    (fun c σ => Binding.logged_le V k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP) (hS c)) hε
-    (fun c σ => decodes_of_digests hA hDg hW (hM c σ))
+    (hM : ∀ c σ, MovesReach V θ F c k
+      (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A (rd A θ F c) σ
+      (D A θ F c σ) (sampleMaps e V rd label (afterAt V k) κ A θ F c σ) (linkEmpty e (finish (V.signer θ) θ F c σ.1))
+      (roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
+    CouplingTarget V k (K.assembled e dev k rd D label (afterAt V k) κ) A θ F :=
+  couplingTarget_withProject_of_sample e V k rd ((Binding.withBinding K dev).withBind k) D label (afterAt V k) κ A
+    (Binding.Logged Binding.readsV2) θ F (fun c σ o => SampledDigest k o.sent (afterAt V k θ F c σ)) hκ
+    (fun c σ => Binding.logged_le V k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP) (hS c))
+    (digestBound_of V k _ (by rfl) A θ F) hε (fun c σ => decodes_of_digests hA hDg hW (hM c σ))
 
 /-- **The coupling, assembled, at the session's own coins**: `couplingTarget_assembled` with the sample's coins the
 session's bytes as `m` fresh frames (`srcCoinsAt`), uniform by A3 wherever the session reads `m` frames' bytes
@@ -266,19 +288,22 @@ theorem couplingTarget_assembled_src (K : Constructions V) (dev : Exchange → P
     (rd : Readings)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
-    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
-    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) (m : ℕ)
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) (m : ℕ)
     (A : Live) (θ : ByteArray) (F : Array ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
     (hS : ∀ c, Binding.SignsPlay V dev θ F c) (hL : A.Lb 0 = m * 64)
     (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ)
-      (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ)
-      (fun q _ s => openGap q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun q => openGap q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤ A.hidingTerm)
+      (sampleMaps e V rd label (afterAt V k) (srcCoinsAt m) A θ F c σ)
+      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
+      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
+        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
+        A.hidingTerm)
     (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
-    (hM : ∀ c σ, MovesReach V θ F c k (Binding.Logged Binding.readsV2) A (rd A θ F c) σ (D A θ F c σ)
-      (sampleMaps e V rd label after (srcCoinsAt m) A θ F c σ)) :
-    CouplingTarget V k (K.assembled e dev rd D label after (srcCoinsAt m)) A θ F :=
-  couplingTarget_assembled e V k K dev rd D label after (srcCoinsAt m) A θ F hP hS (avg_srcCoinsAt hL) hε hA hDg hW
-    hM
+    (hM : ∀ c σ, MovesReach V θ F c k
+      (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent (afterAt V k θ F c σ)) A (rd A θ F c) σ
+      (D A θ F c σ) (sampleMaps e V rd label (afterAt V k) (srcCoinsAt m) A θ F c σ)
+      (linkEmpty e (finish (V.signer θ) θ F c σ.1)) (roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
+    CouplingTarget V k (K.assembled e dev k rd D label (afterAt V k) (srcCoinsAt m)) A θ F :=
+  couplingTarget_assembled e V k K dev rd D label (srcCoinsAt m) A θ F hP hS (avg_srcCoinsAt hL) hε hA hDg hW hM
 
 end Verity.Sampled

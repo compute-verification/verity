@@ -1,11 +1,12 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
+public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 public import Proofs.Flock.Soundness.Discharge.Zero.Cols
 public import Proofs.Flock.Soundness.Discharge.Zero.Stack
-public import Proofs.Flock.Soundness.Discharge.Aliased.Keys
-public import Proofs.Flock.Soundness.Discharge.Placed.Wiring
-public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
-public import Proofs.Flock.Soundness.Discharge.Const.Inst
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 /-!
 # `hZero` at the circuit's program (e2e, untyped statements)

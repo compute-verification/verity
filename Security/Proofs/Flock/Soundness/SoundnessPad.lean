@@ -1,8 +1,17 @@
 module
 
-public import Proofs.Flock.Soundness.LigeritoPadSound
-public import Proofs.Flock.Soundness.Soundness
 public import Proofs.Flock.Soundness.Accounting.PaddedNumbers
+public import Proofs.Flock.Soundness.LigeritoPadLevel0
+public import Proofs.Flock.Soundness.LigeritoPadSound
+public import Proofs.Flock.Soundness.LigeritoPhase
+public import Proofs.Flock.Soundness.LinkSound
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.RepSound
 
 /-!
 # Soundness of a table with C-Flock ZK's padded level 0

@@ -28,11 +28,11 @@ the prover's bytes:
   prover put after its round is dropped): the algebraic phase's scheduled round, the opening's (the loop's own
   `Drive.openStep`, on the session's `Commit` coins and the rep's salts for levels ≥ 1), then the inner proof's, the
   frame's own on the rounds the loop's finish computed and handed the loop's frames before the prover relays them
-  (`Frame.innerSched`, `Frames.Sessions.innerRound`). At an inner round the finish has not computed, the frame takes no
-  device round: whatever the prover relays fails, the frame's own round stands in, and the rep stops
-  (`Frames.roundStep`). Nor does any rep's frame take one once a rep of the session stopped (`Frames.Sessions.stopped`):
-  the session stops at its first failure, every rep with it. Its coins, once opened, are the frame's (`Frames.feedOf`,
-  `Frames.coins`), and the prover receives them only once the frame took them.
+  (`Frame.innerSched`, `Frames.Sessions.innerRound`). An inner round the finish has not computed is refused, whatever
+  the prover relays (`Frames.roundPlace`). Nor does any rep's frame take a device round once a rep of the session
+  stopped (`Frames.Sessions.stopped`): the session stops at its first failure, every rep with it. Its coins, once
+  opened, are the frame's (`Frames.feedOf`, `Frames.coins`), and the prover receives them only once the frame took
+  them.
 * Each table's level 0 is the loop's: on its frames port the prover hands the loop every table's packed witness in one
   request, and only then does the loop draw each table's mask-slot words, level-0 hiding and salts from the operating
   system, write the words into the witness's mask slot, and commit level 0 on them (`level0`, `Level0.draw`), for the

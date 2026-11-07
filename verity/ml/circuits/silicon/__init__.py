@@ -1,11 +1,10 @@
 """verity.ml.circuits.silicon: the exact, hardware-faithful semantics of one tensor-core accumulator step, as integer arithmetic on encodings.
 
     term          operand formats (bf16, e4m3, e5m2, e2m1): exact decoders and exact products as `Term`s; the FP32 word codecs
-    models        the step semantics: `GroupSum` (Hawkeye's grouped truncating accumulation; alias `Pipeline`) and
+    models        the step semantics: `GroupSum` (Hawkeye's grouped truncating accumulation) and
                   `BlockScaledAlignAdd` (autoproof's model of Blackwell's block-scaled FP4 path); the validated instances
     integer       `IntegerMma`: the integer mma step (s8 x s8 -> s32, exact, `.satfinite` clamps or wraps modulo 2^32)
     instructions  the registry `INSTRUCTIONS`: PTX instruction class -> model, status (pinned / hypothesis / unprobed), evidence
-    silicon       the historical entry point; a shim re-exporting `term` and `models` (`silicon.tc_dot` is the frozen target's step)
     total         the total function on every encoding (NaN, infinities, saturation; measured on A100, RTX 4090, H100)
     total_fp8     the same total rules for the Hopper E4M3 k32 step (wgmma m64nNk32 f32.e4m3.e4m3; measured on H100)
     cast          FP32 <-> BF16 word casts
@@ -16,30 +15,28 @@
     errors        ``InvalidArtifact``, which the step raises
 
 The step is `model.step(acc_word, a_words, b_words) -> acc_word'` (`total.tc_dot_total` on every encoding), with `model`
-one of `models.MODELS`, e.g. `silicon.AMPERE_BF16_M16N8K16` or `total.HOPPER_BF16_WGMMA_K16`; the FP8 step is
+one of `models.MODELS`, e.g. `models.AMPERE_BF16_M16N8K16` or `total.HOPPER_BF16_WGMMA_K16`; the FP8 step is
 `total_fp8.tc_dot_total_e4m3(total_fp8.HOPPER_E4M3_WGMMA_K32, ...)`.  The semantics import nothing but the standard library;
 the GF(2) circuits (`tc_step`, `fp4`, `fp`) build on `verity.ml.circuits.boolean.forms`.
 """
 from .cast import bf16_to_f32_word, f32_is_nan, f32_to_bf16_hw_word, f32_to_bf16_word  # noqa: F401
 from .errors import InvalidArtifact  # noqa: F401
 from .instructions import INSTRUCTIONS, Instruction  # noqa: F401
-from .models import MODELS, BlockScaledAlignAdd, GroupSum, Model  # noqa: F401
-from .silicon import (  # noqa: F401
+from .models import (  # noqa: F401
     ADA_BF16_M16N8K16,
     AMPERE_BF16_M16N8K16,
     HOPPER_BF16_M16N8K16,
+    MODELS,
     PIPELINES,
-    Pipeline,
-    Term,
-    ZERO,
-    bf16_product,
-    fp32_term,
+    BlockScaledAlignAdd,
+    GroupSum,
+    Model,
     group_sum,
-    pack_fp32,
     pipeline_for,
     tc_dot,
     tc_dot_chain,
 )
+from .term import ZERO, Term, bf16_product, fp32_term, pack_fp32  # noqa: F401
 from .total import (  # noqa: F401
     HOPPER_BF16_WGMMA_K16,
     Inf,

@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.BandwidthAudit
 public import Definitions.Accounting.PerRun
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The bandwidth audit's guarantee as a joint run's bandwidth guarantee (trusted)

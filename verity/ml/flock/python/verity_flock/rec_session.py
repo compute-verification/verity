@@ -10,7 +10,7 @@ circuits' share of the lincheck's fold, as a round of its own after z_partial (`
 **The relay** (`Relay`) passes every request to the proxy except each rep's round that absorbs z_partial and squeezes r′. That
 round reaches the proxy as two: z_partial's frames ending in a squeeze of no coins, then a round that absorbs h's 64 elements
 and squeezes r′. h is computed between them, at the rep's fold points (`rec_algebra.fold_points`, from the coins the prover
-has had: they are sampled before z_partial). So the coin server draws r′ after the ``c_k`` of z_partial and of h, on the rep's
+has had: they are sampled before z_partial). So the challenger draws r′ after the ``c_k`` of z_partial and of h, on the rep's
 one coin stream, and the prover gets r′ as its round's answer and never sees h.
 
 **h** (`hidden_fold`) is `Stmt.partialRanges` (``Flock/Statement.lean``) on the hidden circuits' ranges alone: per range, its

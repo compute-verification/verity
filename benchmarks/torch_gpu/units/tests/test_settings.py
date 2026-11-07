@@ -18,13 +18,13 @@ def shipped() -> list[str]:
     return m.group(1).split(",")
 
 
-def test_the_ship_carries_the_registry_of_every_module_that_reads_it():
+def test_the_ship_carries_the_registry_of_every_module_that_reads_it() -> None:
     names = shipped()
     readers = [n for n in names if "of(__file__)" in (UNITS / f"{n}.py").read_text()]
     assert {"check", "bench", "lib"} <= set(readers) and "settings" in names
 
 
-def test_a_shipped_module_finds_the_registry_beside_it(tmp_path, monkeypatch):
+def test_a_shipped_module_finds_the_registry_beside_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     ship = tmp_path / "ship"
     ship.mkdir()
     shutil.copy(UNITS / "settings.py", ship)
@@ -35,7 +35,7 @@ def test_a_shipped_module_finds_the_registry_beside_it(tmp_path, monkeypatch):
     assert reg.BATCHES == (1, 7, 128, 4096, 16384, 20480) and reg.TIME_B == (8, 32) and reg.UNITS_LIBCUDA == "libcuda.so.1"
 
 
-def test_refuses_an_unknown_units_variable():
+def test_refuses_an_unknown_units_variable() -> None:
     reg = of(UNITS / "settings.py")
     with pytest.raises(UnknownSetting, match="UNITS_CUBN"):
         reg.validate_environ({"UNITS_CUBN": "x", "UNITS_CUBIN": "x", "SWEEP": "0"})

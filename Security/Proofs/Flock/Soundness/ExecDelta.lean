@@ -1,7 +1,19 @@
 module
 
-public import Proofs.Flock.Soundness.ExecRows
 public import Flock.HmRow
+public import Aesop.BuiltinRules
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Simps
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Algebra.Order.AbsoluteValue.Basic
+import Mathlib.Algebra.Order.Field.Basic
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The rows Δ writes (`HmRow.delta`)
