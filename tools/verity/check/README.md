@@ -23,8 +23,10 @@ A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and 
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
 checks `checked`'s tip, and doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
 `lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run's preflights and
-`lean-agreement`, not its `ratchet-gate`. A red `circuit-check` or `ratchet-gate` names its culprit, fixed forward or else
-reverted, as every after-landing red does, and while `circuit-check` is red no PR touching its inputs lands.
+`lean-agreement`, not its `ratchet-gate`. A red `circuit-check` names its culprit, fixed forward or else reverted, as every
+after-landing red does, and while it is red no PR touching its inputs lands. A red `ratchet-gate` names as culprits the
+merges its log fails and never reverts one (drive.toml's `warn_steps`): drive rings each one's lane, which fixes it forward in
+its next PR, and the next run's `ratchet-gate` judges only the merges above the tip it judged.
 `circuit-check` goes back on the gate once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no
 shard plan, and reports without blocking a merge.
 
@@ -196,8 +198,9 @@ PRs land through the merge queue (`research queue drive`): its flags are `drive.
 PR. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
 with every job, those off the gate too (`train.sh --deferred`), and `main` moves only to a commit whose run passed every step
 on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red names its culprit by what its failure names,
-never by bisecting: its lane marks a fix within 2 h, or drive reverts it on `checked` (`research.drive`); a red job off the
-gate doesn't hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
+never by bisecting: its lane marks a fix within 2 h, or drive reverts it on `checked` (`research.drive`), but a warn step's
+(drive.toml's `warn_steps`) is never reverted, and its lane fixes it forward in its next PR; a red job off the gate doesn't
+hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
 body) lands from `next` too: drive regenerates it on the tip below it and lands it only if `move_check.py` certifies it there
 (`verity check move BASE HEAD`), running both scripts as `checked` has them.
 

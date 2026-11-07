@@ -83,13 +83,13 @@ def survey(gm_ex, model, batch, opt, rules, label: str) -> tuple[dict, StepSurve
 def boolean_prices(prims: dict) -> dict[str, dict]:
     from verity.ml.circuits.evaluation.bits import compile as compile_bits
     from verity.ml.circuits.codec import descriptor_id
-    from verity.ml.definitions.boolean import boolean_version
+    from verity.ml.definitions.boolean import NoBooleanVersion, boolean_version
 
     out = {}
     for pid, fn in sorted(prims.items()):
         try:
             bv = boolean_version(fn)
-        except Exception as e:  # noqa: BLE001  (named in the output: a primitive without a Boolean version is unpriced)
+        except NoBooleanVersion as e:
             out[pid] = {"boolean": None, "why": f"{type(e).__name__}: {str(e)[:200]}"}
             continue
         c = compile_bits(bv).counts
