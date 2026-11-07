@@ -2562,3 +2562,70 @@ What reads the ZK server party today, and what I'll change. Nothing on the core 
 - **Not listed:** `ksTwo_spot` isn't in the lock yet. Its statement reads Proofs-tree definitions, and `trees.except` is at its cap of 40. Listing it needs a spec-side statement of the deployment layer (SPOTIFACE's `SpotFlock.deployedTwo`, if it reaches the spec tree). Once SessionRuns and SessionOpensTwo land, I can list it against that: a new guarantee whose premises are `UniformRandomBytes` plus `zkOk xS₀` as a domain premise.
 - **Still open from 20:35Z:** the cost flag. `scopeOk` and `cellsOk` run at round 2 of every run but depend only on `h`. I'll move them to a registration-time check if you want the verifier-cost rule applied here. That change is self-contained: `two` and `stmtOk`, and the facts that read them.
 - **Free now:** I can take a piece of SessionRuns or SessionOpensTwo, or the listing, as you prefer.
+
+## 21:50Z from RENAME: SPOT step 1 is open as two PRs (#7849, #7850), to be marked when its suites pass; step 2 is planned, with its maps on `cursor/proofs-spot-move-36bb`
+
+### Step 1: the term
+
+Step 1 is two PRs, because a word map lands as an ordinary change before its move does (`tools/move/README.md`):
+- **#7849** (`cursor/proofs-spot-term-3b10` @ `06fb4bbe74`, `--issue PRF-454`, Lane proofs) is the ordinary PR. It carries:
+  - `tools/move/spot_term_map.toml`, the prose move's word map (`scope = "prose"`). It renames "sampled proofs" to SPOT and the possessive to "SPOT's". A verb whose subject is SPOT alone takes the singular, while a compound subject keeps its verb. "A sampled proof" and "sampled proof blocks" keep their sense.
+  - the ratchet `SPOT_NAMES` in `tests/test_retired_terms.py`, one count per spelling over every scanned file's whole text, held by `_held`. Its caps are #7849's counts: 435 for "sampled proof(s)" (not before "block"), 1134 for `sampled_proofs`, 2530 for `SampledProofs` and 507 for `sampled-proofs`. It is in `BOOKKEEPING`, so an in-flight PR that adds a use warns rather than going red.
+  - a GLOSSARY Older names row: "sampled proofs" and the code's names, until renamed, become SPOT (`spot` in paths and Python, `Spot` in Lean).
+  - hand edits to about 30 strings the prose scope can't reach, each with the test that matches it: `verity-vllm row`'s help, refusal messages in `verity_vllm` and `rho`, the `nci` slider labels, and the h200 demo report and its template.
+- **#7850** (`cursor/proofs-spot-term-4dc9` @ `ed27bb143d`) is the `Move: tools/move/spot_term_map.toml` request stacked on #7849. Drive regenerates it on the tip and restacks `next`'s members across it.
+  - This head is `stage.py`'s commit. `verity check move 06fb4bbe74 ed27bb143d` certifies it a pure move: 196 files, 0 renames, and a rerun changes nothing.
+  - It covers `AGENTS.md`'s map line 13, `ARCHITECTURE.md`, the READMEs, the skills, the docstrings, and the Lean's comments and docstrings. It doesn't touch #7843's lines.
+- **What step 1 leaves, 51 phrase sites after #7850**, all things a record, digest, difftest or another system reads:
+  - the Lean `throw` texts in `Proofs/Properties/Verity/Sampled.lean`;
+  - the one-stage v1 refusal, which `VStarRecursive/Sampled.lean` shares with `composition/tests/reference.py`;
+  - lock reasons, and `served_verdicts`' and `lifecycle.py`'s verdict reasons;
+  - the `ncp2` Definition's `doc=`;
+  - comments in TOML and lakefiles.
+  A follow-up lowers the phrase cap to 51 once #7850 lands.
+- **Runs.** Both PRs get marked once r20261107-214206-668a, the touched suites `--quick`, passes on cpu-5; its ETA is about 22:10Z. The broader `suites.py --changed 1ac986b763 --quick` run, r20261107-212543-f8f4 on cpu-6 (33 suites, behind Flock's lake build), may hit its 1 h timeout.
+
+### Step 2: the code move (on your go, after Sunday's critical PRs land)
+
+**The maps** are on `cursor/proofs-spot-move-36bb` @ `1b4d39c2fb`, from main `1ac986b763`, pushed but not staged or opened. `stage.py` refuses a map with both words and paths, so there are two, staged in this order:
+1. `tools/move/spot_layout_map.toml` (`layout.py`) moves the uv workspace member `verity/core/service/sampled_proofs/` to `verity/core/service/spot/`, which is a `uv.lock` edit. Its distribution and executables keep their names.
+2. `tools/move/spot_map.toml` (`rename.py`, not prose scope) renames `SampledProofs` to `Spot`, `sampledProofs` to `spot`, `SAMPLED_PROOFS` to `SPOT` and `sampled_proofs` to `spot`, in paths, modules, Lean names and text.
+   - That moves the Lean areas (`Definitions`, `Properties`, `Proofs` and `Proofs/Properties`'s `SampledProofs` become `Spot`), the Lake package `core_sampled_proofs` (becomes `core_spot`) with its library `SampledProofs` (becomes `Spot`), and `verity.core.protocols.sampled_proofs` (becomes `.spot`).
+   - Its dry run on main rewrites 779 files, moves 151 and repins 4 `TRUSTED.sha256` pins.
+   - It leaves 1692 sites standing, most of them lock records in `Security/lean-audit.json` and `Security/Properties/lean-audit.json`. Those go through `tools/verity/lean/check.py --update --moved`, fed by `rename.py --moves`.
+   - Name clashes: none on main. The only Lean `Spot` is `RoundGame.Spot` (PoUW, nested). TSVERIFY's `SpotFlock` namespace reads consistently beside `Spot`, and no Python file both spells the old name and uses `spot` as an identifier.
+
+**How it lands:**
+1. A small PR lands the two maps (`tools/move` only; `test_maps` checks that no word gets two names).
+2. On a node, `stage.py tools/move/spot_layout_map.toml tools/move/spot_map.toml --base <main>` makes two commits, each certified by `verity check move`.
+3. The lock commit: `check.py --update --moved MOVES.json` for each package, which needs a lake build.
+4. It lands alone, ahead of the queue. Open branches then cross it with `restack.py`.
+5. A follow-up lowers `SPOT_NAMES`' code caps and trims the GLOSSARY row to what stays.
+
+If the proof-system layout move (`proof_system_map.toml`, landed but not staged, not in the queue) lands first, the service path becomes `verity/core/proof_system/sampled_proofs/`, and the layout map is rewritten to match.
+
+**Hashed and wire-visible spellings.** For each I recommend keep, since changing a hashed string isn't a pure move. The words map matches none of them: kebab-case ids aren't among its words, and `[keep]` holds the label.
+
+| Spelling | What reads or hashes it | Recommendation |
+|---|---|---|
+| `verity/sampled-proofs/v1` (`VStar.Recursive.Sampled.PROTOCOL`) | the subprotocol's `protocol.id`, which composite ids (`CoreComposites.idOf`), `Remote.lean`'s statements (`id_sampled`, whose lock records would change) and recorded evidence read | keep |
+| `.../one-stage/v1`, `.../one-stage/v2` (`Identity/Domains.lean`, `ml/commitments/domains.py`, `Registration.lean`, `OneStageZk.lean`) | the registration record's protocol id, which its digest hashes, and recorded fixtures (`block-record-*.json`, `drawn-unit-registration.json`) | keep |
+| `.../recursive/v1` | the recursive audit's protocol id | keep |
+| `.../ru-sample/v1`, `.../vu-sample/v1` | coin domains: `derive(key, domain, …)`, so a new string means new samples | keep |
+| `.../two-stage/v1` | tests only, as an unknown-protocol probe | keep |
+| the option token `sampled-proofs:rows-sha512` (`:hm96`, `:vllm-v1`) and the label `sampled_proofs` (vLLM draws records, `w<N>.sampled_proofs.json`, the h200 `demo.toml`), with the adapter module `verity_vllm/protocols/sampled_proofs.py` | target profiles, row records, recorded draws | keep; a versioned rename by the integration's owner if wanted |
+| executables (`sampled-proofs-verifier`, `-difftest`, `-one-stage`, `-one-stage-zk`), the distribution `verity-core-sampled-proofs`, check steps and output names | scripts, `check`, recorded runs; not hashed | keep in step 2; renaming them needs scripts, check and drive's config together |
+| JSON fixtures that hold the names (`**/fixtures/**`) and the test seed `b"sampled proofs' parties"` | digests, derived keys | keep (excluded from the rewrite) |
+
+**PRs that would conflict.** I found these by intersecting each live PR's own diff with step 2's 806 files. #7850 itself is carried by drive, as a `Move:`.
+- **Already landed on `checked`** (25), so they are on main before step 2 if main advances: PCRANKIN #7820 and #7839; TRUSTV5 #7818, #7823, #7833 and #7840; TSVERIFY #7821; and #6643, #6940, #6965, #6986, #7024, #7745, #7749, #7766, #7770, #7776, #7788, #7789, #7808, #7815, #7819, #7824, #7826 and #7836.
+- **Open, with own changes in step 2's files.** Each needs `restack.py` after step 2, or should land before it:
+  - PLANCHECK #7845 (ready) adds `Properties/SampledProofs/PlanCheck.lean` and `Proofs/Properties/SampledProofs/PlanCheck.lean`. Best landed before step 2; the move renames its modules.
+  - The top-rename pair, #7832 (`SampledProofs/Select.lean`, exfiltration vectors) and #7831 (`SampledProofs/Partition.lean`), edit Lean in the package step 2 moves. Land them first.
+  - #7780 edits `sampled_proofs/service.py`, `one_stage/verifier.py` and the README.
+  - #7812 (one-stage refuses the recursive form) edits `Properties/Verity/*` and both locks.
+  - The ZK stack (#7841, #7254, #7354, #7362, #7415, #7447, #7537, #7130, #7390), #7844 (trust6), #7781, #7786, #7798, #7837 and #7848 touch `Proofs/Properties/Verity/Sampled.lean`, `Soundness.lean`, `Definitions.lean` and the lakefile and locks. Most of those hits come from their merges of `checked`, so their own changes are smaller.
+- **Held:** #7716 (Domains move) moves the table that holds the one-stage ids, without renaming them, so it is compatible in either order.
+- **Superseded or stale, no action:** #7717, #7723, #7724, #7750, #7492, and the old `next`-merge heads #7306, #7311 and #7326.
+
+Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdict here. Step 2 waits for your go.
