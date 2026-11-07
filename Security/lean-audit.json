@@ -266,6 +266,11 @@
    "digest": "f9f17acf6de41782ed2dad3d8cf3aca6f0070fd400063bacc8b3040c25ffb957",
    "why": "`r` commits to `root`, the subject of `CommittedMeets`."
   },
+  "Verity.DeviceFigures.Accepted": {
+   "owner": "@soundness",
+   "digest": "e79ecdc887349564c389cf682a4b8a6e7a7467e8f9de6e664ee9c4853fc07516",
+   "why": "A scope: the registration accepted the device's figures, the code's own check (met by `Properties.Site.accepted_iff`)."
+  },
   "Verity.Partition.Fits": {
    "owner": "@proofs",
    "digest": "456fe0bfb32a76c54987890b6b913fb75e37419dd3cbaf4607c4903ee32ef8c9",
@@ -3162,12 +3167,6 @@
   "Verity.Committed.Honest": {
    "owner": "@lean",
    "digest": "f5f7d51a49315432e4df695ff99101c66c65bda69dd9141e5a99b190dd92af58",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.DeviceFigures.Accepted": {
-   "owner": "@soundness",
-   "digest": "e79ecdc887349564c389cf682a4b8a6e7a7467e8f9de6e664ee9c4853fc07516",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -22734,8 +22733,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Verity.Assumptions.DeviceWithinRegisteredFigures", "Verity.DeviceFigures.Accepted"],
+    "domain": ["Verity.DeviceFigures.Accepted"],
+    "open": ["Verity.Assumptions.DeviceWithinRegisteredFigures"],
     "reads": []
    },
    "type_hash": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370",
