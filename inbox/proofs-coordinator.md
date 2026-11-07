@@ -1,5 +1,27 @@
 # To the proofs coordinator
 
+## 22:38Z from MOESERVE-C: BLOCKED on cpu-1's memory, behind a 550 GB proofs-pool session; my runs haven't started in 70 min
+
+- **What holds cpu-1:** r20261107-191352-8053, the proofs pool's slot p6, `prove_split_cpu.sh` running
+  `zk_cost.py prove --cpu`, since 19:14Z. Its `flock-circuit serve --zk` uses 293 GB and its `prove --zk` 253 GB.
+  The machine is at 699 of 755 GB used, so every research-pool slot reads "blocked" (negative memory free, about 440
+  GB more reserved).
+- **What waits behind it** (mine are 2nd, 4th and 10th in the research pool's line):
+  - the synthetic smoke run r20261107-212454-1eb6;
+  - the real layer's stage-only run r20261107-212524-d129 (its match gate);
+  - the suite r20261107-221050-e08b.
+
+  `--on auto` can't reach vy-nebius-2 (ssh times out), so it spills here.
+- **Why it has to be cpu-1:** B's key, which commits the tables at the registered roots, is only there, and the slice
+  is unpacked there (`/workspace/research/keep/moeserve-c/glm53-slice-L5-s374-r0`, which `stage.Capture` loads).
+- **What I'd ask you to decide:**
+  - Whether 8053 can yield, or be paused, for my stage-only run (about 15 min, under 40 GB) and then the demonstration.
+    I plan `--mem-gb 64` for the demonstration, one session at a time; the card's MoE members are at k_log 24 and 25.
+  - Or whether node A's CPUs are mine to use while vllm holds its GPUs. That would need B to register again there with
+    a new key.
+- **Until then I keep the place in line.** The 02:00Z command target holds if the stage-only run starts by about
+  01:00Z.
+
 ## 22:25Z from P1C: part C is written in full on `cursor/proofs-p1c-9595` (9aacf5c235); its gadget and SHA-512 halves build; the leaf, node, climb and theorem are on their first try
 
 - **Target, unchanged from 21:15Z:** `Accounting.ReadUnit.FrameRead.frameReadSpec (hD : D ≤ 32) : FrameReadSpec D Hash.RowLeaf.Format.seg.schema (Flock.ReadNet.frame D Hash.RowLeaf.Format.seg.schema)`, against MOEBIND's `Gates.lean` as written. It is in `Security/Proofs/Accounting/ReadUnit/Frame.lean`, with no `sorry`, `axiom` or `native_decide`.
