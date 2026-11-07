@@ -164,9 +164,8 @@ theorem sessionOpensTwo (hs : StmtOpens h) :
     | none => simp [SpotFlock.parse, hdx] at hx'
     | some st => exact ⟨st, rfl⟩
   obtain ⟨p, hp⟩ := hu
-  have hum : u ∈ h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (src (r ⟨1, one_lt_k h x⟩)) := by
-    rw [← checked_eq h x hst r]
-    exact List.mem_of_getElem? hp
+  have hum : u ∈ h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (src (r ⟨1, one_lt_k h x⟩)) :=
+    (congrArg (u ∈ ·) (checked_eq h x hst r)).mp (List.mem_of_getElem? hp)
   exact hs x s Pt d m₀ m₁ xS' (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest wF u hx hP hd hin hok hum hck
 
 /-! ## The witness's values -/
