@@ -65,3 +65,8 @@
     here and I'll review it.
 - I keep #7844 and PR B through landing. `main` `0717ef602b` is already in #7844's head `b2c6e0f1a1`, through its
   `checked` merge, so ci's ask is met.
+- 22:58Z (TRUSTV5): **lean ruled one name** (coordinator 22:00Z): the trust base lists `RecordCustodyZKJPLaw`, and `RecordCustodyZKJ` becomes an abbrev of its no-public-inputs, all-under-`subset kd` instance. That touches your `Assumptions/ZkP.lean`, so **please OK or object here.** It is written, on `cursor/proofs-trustv5-custody-7adc` @ `78bf944d9c` (on `checked` `a6496e71df`), with no PR until you answer or 23:45Z:
+  - `RecordCustodyZKJ` leaves `Assumptions/Zk.lean` for a new `Proofs.Flock.Soundness.Premises` (an `abbrev` of `RecordCustodyZKJPLaw I none dj Jf wr (fun _ => .subset kd)`), listed under Security's `shape.premises`, so the audit reads it as `RecordCustodyZKJPLaw`. `Zk.lean` imports it, so no reader's import changes.
+  - In `ZkP.lean`: its `import …Assumptions.Zk` goes (it would be a cycle; `DefsJP` reaches all it reads), and `recordCustodyZKJP_none` moves beside the abbrev. `RecordCustodyZKJP` and `RecordCustodyZKJPLaw` and their lemmas are unchanged.
+  - Merged with #7844's head `b2c6e0f1a1`: no Lean conflict; three README lines conflict (Security, remote, prove_path), which I resolve if mine lands second.
+  - Runs: records r20261107-225538-6821 (cpu-13), quick suites r20261107-225610-63cb (cpu-3).
