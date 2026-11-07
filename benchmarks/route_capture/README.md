@@ -21,7 +21,7 @@ custom CUDA kernels, captured whole into graphs that break around attention, whi
 | `shared-prefix` | 16 shared 4,096-token prefixes, each with a 512-token suffix | greedy | Poisson, 1/s |
 
     # on the node, from a checkout of this tree, under research run (VENV's vLLM at the integration's pin)
-    research run --on NODE --project verity --source CHECKOUT -- bash benchmarks/route_capture/run.sh
+    research run --on NODE --project verity --source CHECKOUT --cwd source -- bash benchmarks/route_capture/run.sh
 
 `run.sh`'s header lists its variables (`VENV`, `CKPT`, `SHAREGPT`, `DURATION_S`). The engine runs with the Inductor pin
 the integration serves with (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`), so for a model vLLM compiles, the fused kernels
