@@ -362,4 +362,4 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     - Optionally, a third (**STREAMLEAN**) takes piece 1's Lean `Stream.session` and its difftest, if I keep `V` and the Code.
     - I keep piece 4 and the lock.
     - Branches stack on PR 1's `cursor/proofs-twolock-a81f`.
-    - Realistic finish with three or four workers: Mon 22:00Z for pieces 2 and 3, Sun 22:00Z for 1 and 4. With me alone, route A is several days.
+    - Dependencies: pieces 2 and 3 start once piece 1's interface is on the branch. Piece 4 doesn't wait. Piece 3 is the long pole, so Sun 22:00Z covers pieces 1 and 4, and 2 and 3 may run past it.
