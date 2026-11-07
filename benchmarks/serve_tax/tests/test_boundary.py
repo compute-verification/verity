@@ -224,6 +224,19 @@ def test_dump_and_diff_find_what_a_restore_missed_and_set_clock_readings_apart()
     req.num_computed_tokens, req.tokens[39] = 6, -1
     d = B.diff(a, B.dump(Scheduler(req), "sched"))
     assert sorted(x["path"] for x in d["first"]) == ["sched.requests['a'].num_computed_tokens", "sched.requests['a'].tokens"]
+    assert d["patterns"] == {"sched.requests[*].num_computed_tokens": 1, "sched.requests[*].tokens": 1}
+
+
+def test_diff_sets_paths_on_one_side_apart_and_dump_leaves_out_the_harness():
+    s = Scheduler(Request(5, 1.0))
+    a = B.dump(s, "sched")
+    s._verity_trace = ["hooks"]
+    s.extra = 3
+    b = B.dump(s, "sched")
+    assert not any("_verity" in p for p in b)
+    d = B.diff(a, b)
+    assert (d["differing"], d["only_served"], d["only_restored"]) == (0, [], ["sched.extra"])
+    assert B.attrs(s)[0].keys() == {"requests", "running", "extra"}
 
 
 # ------------------------------------------------------------------------------------------------------- the edges

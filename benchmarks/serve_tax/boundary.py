@@ -30,8 +30,9 @@ import hashlib
 import io
 import json
 import pickle
-from collections import deque
-from collections.abc import Callable, Iterable, Iterator
+import re
+from collections import Counter, deque
+from collections.abc import Callable, Iterable
 from typing import Any, NamedTuple
 
 SCHEMA = "verity-bench/serve-tax/boundary/v0"
@@ -108,7 +109,7 @@ def attrs(obj: Any, skip: Iterable[str] = ()) -> tuple[dict[str, Any], dict[str,
     """Every attribute of ``obj`` that `encode` takes, and the type of each it doesn't."""
     out, skipped = {}, {}
     for name, v in vars(obj).items():
-        if name in skip:
+        if name in skip or name.startswith(HARNESS):
             continue
         try:
             out[name] = encode(v)
@@ -435,6 +436,8 @@ def sizes(st: dict[str, Any]) -> dict[str, int]:
 
 #: the modules whose objects `dump` follows into (the rest it renders by type)
 DUMP_MODULES = ("vllm.v1.core", "vllm.v1.request", "vllm.sampling_params", "vllm.v1.worker.gpu")
+#: the prefix of the attributes this harness hangs on vLLM's objects, which `dump` leaves out
+HARNESS = "_verity"
 
 
 def _digest(b: bytes) -> str:
@@ -508,7 +511,7 @@ def dump(root: Any, path: str, out: dict[str, Any] | None = None, *, seen: dict[
     else:
         names = list(vars(root)) if hasattr(root, "__dict__") else list(getattr(type(root), "__slots__", ()))
     for name in names:
-        if "ptr" in name:
+        if "ptr" in name or name.startswith(HARNESS):
             continue
         dump(getattr(root, name, None), f"{path}.{name}", out, seen=seen, depth=depth + 1, max_depth=max_depth, wide=wide)
     return out
@@ -523,7 +526,7 @@ def dump_core(core: Any) -> dict[str, Any]:
         if hasattr(runner, root):
             dump(getattr(runner, root), f"runner.{root}", out)
     for name, v in vars(core).items():
-        if is_plain(v):
+        if is_plain(v) and not name.startswith(HARNESS):
             dump(v, f"core.{name}", out)
     st = pool_state(pool)
     for f in ("ref_cnt", "hash", "hash_tokens", "free"):
@@ -536,13 +539,25 @@ def dump_core(core: Any) -> dict[str, Any]:
 CLOCK_NAMES = ("arrival_time", "timestamp", "_time", "events", "prefill_stats", "first_token_latency", "start_time")
 
 
+def pattern(path: str) -> str:
+    """A dump path with its keys and indices starred, to count differences by kind."""
+    return re.sub(r"\[[^\]]*\]", "[*]", path)
+
+
 def diff(a: dict[str, Any], b: dict[str, Any], limit: int = 200) -> dict[str, Any]:
-    """The paths whose renderings differ between two `dump`s, those under a clock reading (`CLOCK_NAMES`) apart."""
+    """The paths whose renderings differ between two `dump`s: those in both (``differing``), only in ``a``
+    (``only_served``) and only in ``b`` (``only_restored``), each counted by `pattern`, those under a clock reading
+    (`CLOCK_NAMES`) apart."""
     paths = sorted(p for p in set(a) | set(b) if a.get(p) != b.get(p))
     clock = [p for p in paths if any(n in p for n in CLOCK_NAMES)]
     rest = [p for p in paths if p not in set(clock)]
-    return {"paths": len(a), "differing": len(rest), "clock_differing": len(clock),
-            "first": [{"path": p, "served": a.get(p), "restored": b.get(p)} for p in rest[:limit]],
+    both = [p for p in rest if p in a and p in b]
+    only_a = [p for p in rest if p not in b]
+    only_b = [p for p in rest if p not in a]
+    return {"paths": len(a), "differing": len(both), "only_served": only_a[:limit], "only_restored": only_b[:limit],
+            "only_served_n": len(only_a), "only_restored_n": len(only_b), "clock_differing": len(clock),
+            "patterns": dict(Counter(map(pattern, rest)).most_common(40)),
+            "first": [{"path": p, "served": a.get(p), "restored": b.get(p)} for p in both[:limit]],
             "clock_first": clock[:20]}
 
 

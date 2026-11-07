@@ -25,6 +25,7 @@ import os
 import pickle
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +43,8 @@ STEP_FIELDS = ("rows", "new", "resumed", "cache_hit", "preempted", "emitted", "f
 
 def served(arm_dir: Path, kv_dir: Path, a: int, b: int) -> dict[str, Any]:
     """The served arm's edges ``a`` and ``b`` (records and states), the step trace between them, the arrivals the replay
-    adds (each with its plan prompt) and the served steps' outputs."""
+    adds (each with its plan prompt: those before a step between the edges, and those that arrived while edge ``b``
+    drained, which its state holds) and the served steps' outputs."""
     srv = arm_dir / "server"
     recs = [json.loads(x) for f in sorted(srv.glob("edges.*.jsonl")) for x in f.read_text().splitlines() if x.strip()]
     edges = {r["edge"]: r for r in recs if "next_step" in r}
@@ -54,7 +56,7 @@ def served(arm_dir: Path, kv_dir: Path, a: int, b: int) -> dict[str, Any]:
     lo, hi = edges[a]["next_step"], edges[b]["next_step"]
     (trace,) = S.step_traces(arm_dir)
     tr = S.trace_records(trace)
-    held = {r.request_id for r in B.unpickle_requests(st[a]["requests"], {"block_hasher": None})}
+    held, held_far = ({r.request_id for r in B.unpickle_requests(st[k]["requests"], {"block_hasher": None})} for k in (a, b))
     named = json.loads((arm_dir / "meta.json").read_text()).get("plan")
     plan_file = next((p for p in (Path(named) if named else None, arm_dir / "plan.jsonl") if p and p.is_file()), None)
     if plan_file is None:
@@ -64,7 +66,9 @@ def served(arm_dir: Path, kv_dir: Path, a: int, b: int) -> dict[str, Any]:
     client |= {r["id"]: r for f in arm_dir.glob("warm/client.jsonl") for r in map(json.loads, f.read_text().splitlines())}
     arrive = []
     for r in tr:
-        if r["kind"] == "arrive" and lo <= r["before_step"] < hi and r["request"] not in held:
+        if r["kind"] != "arrive" or r["request"] in held:
+            continue
+        if lo <= r["before_step"] < hi or (r["before_step"] == hi and r["request"] in held_far):
             http = r["request"].split("-", 1)[1].rsplit("-", 2)[0]
             arrive.append({"engine_id": r["request"], "before_step": r["before_step"], "sampling": r["sampling"],
                            "max_tokens": r["sampling"].get("max_tokens"), "prompt_ids": plan[client[http]["i"]]["prompt_ids"]})
@@ -91,12 +95,33 @@ def engine(checkpoint: Path, header: dict, eager: bool, log_stats: bool) -> Any:
 
 
 def params(r: dict) -> Any:
+    """The served request's sampling parameters as the server's completions endpoint built them for the streaming client,
+    but for ``detokenize`` (`BY_CONSTRUCTION`)."""
     from vllm import SamplingParams
+    from vllm.sampling_params import RequestOutputKind
 
     s = r["sampling"]
     keep = {k: s[k] for k in ("temperature", "top_p", "top_k", "min_p", "seed", "min_tokens", "presence_penalty",
                               "frequency_penalty", "repetition_penalty", "stop_token_ids", "ignore_eos") if s.get(k) is not None}
-    return SamplingParams(n=1, max_tokens=r["max_tokens"], logprobs=0, detokenize=False, **keep)
+    return SamplingParams(n=1, max_tokens=r["max_tokens"], logprobs=0, detokenize=False, output_kind=RequestOutputKind.DELTA,
+                          skip_clone=True, **keep)
+
+
+def by_construction(path: str, served: dict[str, Any], replayed: dict[str, Any]) -> bool:
+    """A dump path where the replay differs from serving by construction, read by no engine core: the served engine
+    core's process wrapper's own attributes (`EngineCoreProc`: the replay's engine core runs in this process), and each
+    request's ``detokenize``, which the served frontend set and this replay, which detokenizes nothing, leaves off."""
+    return (path.startswith("core.") and path not in replayed) or path.endswith(".sampling_params.detokenize")
+
+
+def dump_diff(served: dict[str, Any], replayed: dict[str, Any]) -> dict[str, Any]:
+    """`boundary.diff` of the leaves but those `by_construction`, which are counted by pattern apart."""
+    skip = {p for p in set(served) | set(replayed)
+            if served.get(p) != replayed.get(p) and by_construction(p, served, replayed)}
+    out = B.diff({p: v for p, v in served.items() if p not in skip}, {p: v for p, v in replayed.items() if p not in skip})
+    out["by_construction"] = dict(Counter(map(B.pattern, skip)))
+    out["clean"] = out["differing"] == 0 and out["only_served_n"] == 0 and out["only_restored_n"] == 0
+    return out
 
 
 def step_diff(want: dict[int, dict], got: dict[int, dict]) -> dict[str, Any]:
@@ -161,7 +186,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     out["restore_s"] = out["kv_load_s"] + out["state_restore_s"]
     out["runner_paths_missing"] = missing
     t = time.monotonic()
-    out["restored"] = {"dump": B.diff(w["dumps"][a.from_edge], B.dump_core(core)),
+    out["restored"] = {"dump": dump_diff(w["dumps"][a.from_edge], B.dump_core(core)),
                        "pool": B.pool_diff(st0["pool"], B.pool_state(pool))}
     kv0 = kv.take()
     out["restored"]["kv_root_equal"] = kv0["root"] == st0["kv"]["root"]
@@ -196,6 +221,10 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     def take(e: B.Edges, info: dict) -> None:
         torch.cuda.synchronize()
         taken["drained_t"] = info["drained_t"]
+        for r in pending:
+            eng.add_request(r["engine_id"], {"prompt_token_ids": r["prompt_ids"]}, params(r))
+        taken["added_at_edge"] = len(pending)
+        pending.clear()
         taken["state"] = B.capture(core)
         taken["dump"] = B.dump_core(core)
         taken["kv"] = kv.take()
@@ -223,11 +252,14 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
             "far_edge": {"kv_root_equal": taken["kv"]["root"] == w["state"][a.to_edge]["kv"]["root"],
                          "kv_fingerprints": fingerprint_diff(fp_served, taken["kv"]["fingerprint"]),
                          "pool": B.pool_diff(w["state"][a.to_edge]["pool"], taken["state"]["pool"]),
-                         "dump": B.diff(w["dumps"][a.to_edge], taken["dump"])}}
-    out["bit_exact"] = (out["schedule"]["steps_differing"] == 0 and out["outputs"]["first"] is None
-                        and out["far_edge"]["kv_root_equal"] and not out["far_edge"]["pool"]
-                        and out["far_edge"]["dump"]["differing"] == 0)
+                         "dump": dump_diff(w["dumps"][a.to_edge], taken["dump"]),
+                         "added_at_edge": taken["added_at_edge"]}}
+    far, near = out["far_edge"], out["restored"]
+    out["bit_exact"] = (near["kv_root_equal"] and not near["pool"] and near["dump"]["clean"]
+                        and out["schedule"]["steps_differing"] == 0 and out["outputs"]["first"] is None
+                        and far["kv_root_equal"] and not far["pool"] and far["dump"]["clean"])
     hooks.uninstall()
+    (a.out / f"replay-edge-{a.to_edge}.dump.json").write_text(json.dumps(taken["dump"]))
     with open(a.out / "replay_outputs.jsonl", "w") as f:
         for s in sorted(outs):
             f.write(json.dumps({"step": s, "out": outs[s]}, separators=(",", ":")) + "\n")
@@ -258,9 +290,10 @@ def main(argv: list[str] | None = None) -> int:
     (a.out / "restore.json").write_text(json.dumps(rec, indent=1, default=str))
     print(json.dumps({k: rec.get(k) for k in ("bit_exact", "restore_s", "kv_load_s", "state_restore_s", "replay_wall_s",
                                                "replay_busy_s", "served_busy_s")} |
-                     {"restored_dump_differing": rec["restored"]["dump"]["differing"],
+                     {"restored_dump_clean": rec["restored"]["dump"]["clean"],
                       "steps_differing": rec["schedule"]["steps_differing"], "outputs_first": rec["outputs"]["first"],
-                      "far_kv_root_equal": rec["far_edge"]["kv_root_equal"]}, default=str))
+                      "far_kv_root_equal": rec["far_edge"]["kv_root_equal"], "far_dump_clean": rec["far_edge"]["dump"]["clean"],
+                      "far_dump_patterns": rec["far_edge"]["dump"]["patterns"]}, default=str))
     return 0
 
 

@@ -332,7 +332,8 @@ def step_outputs_hook(trace: Any, sink: Callable[[dict], None], active: Callable
 def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = time.monotonic) -> Any:
     """The engine core's `boundary.Edges` under ``cfg``: due ``edges_s`` after the first request whose id holds ``edge_tag``,
     each taking the boundary state as module `boundary` reads it (the KV pool copied to a pinned host buffer allocated
-    here, once, and hashed), its record and files written as the module's docstring says."""
+    here, once, and hashed), its record and files written as the module's docstring says. The pool is hashed once here,
+    at the engine's first step, so the hash kernels are built before the first edge and its pause is only the edge's."""
     import pickle
 
     import numpy as np
@@ -359,6 +360,9 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
     kv_dir = Path(cfg.get("kv_dir") or d)
     kv_dir.mkdir(parents=True, exist_ok=True)
     record = _lines(out / f"edges.{pid}.jsonl")
+    t = clock()
+    kv.take()
+    record({"hash_build_s": clock() - t})
     busy = B.Busy(lambda: torch.cuda.Event(enable_timing=True), first=trace.scheduled)
     runner._verity_busy = busy
     active = [False]
