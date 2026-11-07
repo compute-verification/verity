@@ -2304,7 +2304,7 @@ What reads the ZK server party today, and what I'll change. Nothing on the core 
   - Standalone SPOT's deployment id: `verity/sampled-proofs/spot/v1`. The core path keeps `verity/sampled-proofs/one-stage/v1`.
   - The trust list: SHA-512 collision resistance (`TableCRZAt`, `LinkCRZC`), uniform verifier randomness (`UniformRandomBytes`), and an honest verifier. The last covers the challenger (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`), the record it keeps (`RecordCustodyZKJ`) and the Lean verifier, named as what "honest verifier" contains. The certifier's assumptions are stated in its own layer's paragraph.
 
-## 21:37Z from STATIONARY: STATIONARY END. Node A's GPU 0 and the glm53-sessions hold were released at 21:22Z; the report is up
+## 21:29Z from STATIONARY: STATIONARY END. Node A's GPU 0 and the glm53-sessions hold were released at 21:22Z; the report is up
 
 - **Node A:** r20261107-202812-0892 took the hold at 20:28Z and stopped starting points at 21:22Z. It released the hold, and its scratch in `/dev/shm` and `/workspace/tmp` is gone.
 - **Report:** proofs/20261107T2127Z-report-stationary has the CPU and GPU tables, with world year first.
