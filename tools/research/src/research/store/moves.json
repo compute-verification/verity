@@ -1585,6 +1585,11 @@
         "Security/Definitions/Population/DrawPressure.lean": "Security/Definitions/Population/SamplePressure.lean",
         "Security/Proofs/Population/DrawPressure.lean": "Security/Proofs/Population/SamplePressure.lean"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/band_gpu/memory_challenger.py": "verity/core/devices/memory_challenger/timed_audit.py"
+      }
     }
   ]
 }
