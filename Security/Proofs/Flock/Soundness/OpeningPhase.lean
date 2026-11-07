@@ -1,8 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.Defs
-public import Proofs.Flock.Soundness.Game.Poly
+public import Definitions.Core.Game
+public import Definitions.Flock.Defs
+public import Mathlib.Algebra.MvPolynomial.Degrees
 public import Proofs.Flock.Soundness.Game.Union
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Poly
 
 /-!
 # The opening phase: ring switching and batching (`Flock.Opening`)

@@ -148,6 +148,7 @@ def main(args: Options) -> None:
         kw["worker_extension_cls"] = ext
     mode = "control" if args.no_observer else ("census" if args.census else "capture")
     print(f"[tp2] mode={mode} tp={args.tp} case={case} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
+    engine_env.require_inductor(kw)
     t0 = time.perf_counter()
     llm = LLM(**kw)
     build_s = time.perf_counter() - t0

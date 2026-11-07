@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.Mixing
-public import Definitions.Pouw.Dimension.Lift
 
 /-!
 # The closed scalar pipe (trusted definitions)

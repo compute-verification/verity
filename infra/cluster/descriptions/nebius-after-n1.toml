@@ -1,4 +1,4 @@
-# nebius.toml once vy-nebius-1 has stopped (INF-57, 19 Oct 15:00Z): node 2 alone, with Verity's share on it. The PR that
+# nebius.toml once vy-nebius-1 has stopped: node 2 alone, with Verity's share on it. The PR that
 # retires node 1 moves this file over nebius.toml (pods/nebius/n1_replacement.sh prints that step); until then nothing reads it
 # but the tests and `cluster validate`.
 #

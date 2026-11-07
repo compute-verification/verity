@@ -7,7 +7,7 @@ The engine stands in for vLLM's in-process engine core at d9105ea80: a schedule 
 ``execute_model``, an empty schedule's too, then ``sample``), and under async scheduling ``step`` is
 ``EngineCore.step_with_batch_queue`` with a queue of two, so a call runs the next schedule and returns the previous one's
 outputs, and a request whose last token is scheduled keeps its seat but isn't scheduled again (`AsyncScheduler`'s
-placeholders). The rest is the server's own: `serve_openai.EngineLoop`, `serve_commit.CommitWindows` and its record's
+placeholders). The rest is the server's own: `serve_loop.EngineLoop`, `serve_commit.CommitWindows` and its record's
 checks, and H1's `hooks.admitting` on top of the committer's patches. A load with no early stop schedules the same batches
 either way while the scheduler has seats for a step's requests and the next's; with fewer, async scheduling runs an empty
 schedule between forwards, which commits nothing and admits nothing."""

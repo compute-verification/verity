@@ -3,7 +3,6 @@ module
 public import Difftest
 public import Lms.Sign
 public import Attest.Period
-public import MemoryChallenger.Protocol
 public import MemoryChallenger.WipeJudge
 
 /-!

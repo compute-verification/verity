@@ -51,9 +51,10 @@ theorem zk_flock_countC {L : Law n} (hlow : LoweringSoundZK A P planZ tab decode
     (zc_knowledgeSound A Hs P planZ tab decode _ _ hlow hj)
     (zk_linkSoundC A Hs P planZ tab vb hlow hRw hM hρ hr hj ht) K σ
 
-/-- **The compiled `--zk` count curve at the live draw, with `δ_tree`.** With the units drawn by `Flock.Draw.drawOS`'s
-stratified law on a byte source that A3 makes uniform (`hA3`), and an acceptance event `execAccept` whose excess over
-the compiled session's acceptance a rewinding at the serving roots covers (`tr`, under A1 through `hT`):
+/-- **The compiled `--zk` count curve at the live draw, with `δ_tree`.** With the units drawn by
+`Flock.Draw.drawWith`'s stratified law on a byte source that A3 makes uniform (`hA3`, the challenger's coins), and an
+acceptance event `execAccept` whose excess over the compiled session's acceptance a rewinding at the serving roots
+covers (`tr`, under A1 through `hT`):
 `Pr[execAccept ∧ at least K wrong units] ≤ miss(K) + ε_ks + δ_link + δ_tree`, `miss(K)` `Law.stratified`'s count
 curve. -/
 theorem zk_flock_countC_execOS (hlow : LoweringSoundZK A P planZ tab decode)

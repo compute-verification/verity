@@ -1,6 +1,7 @@
 module
 
 public import Flock.Ligerito
+public import Flock.Opening
 
 /-!
 # V*'s algebra: `GfResiduals`' structure and its verifier rows

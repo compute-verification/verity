@@ -176,7 +176,7 @@ def _run_two_groups(tmp_path, monkeypatch, first_status: str):
     monkeypatch.setattr(CHECK.threading, "Event", Event)
     monkeypatch.setattr(CHECK, "preflight", lambda: [])
     monkeypatch.setattr(CHECK, "take_lean_deps_urls", lambda out: None)
-    monkeypatch.setattr(CHECK.subprocess, "run", lambda *a, **k: None)
+    monkeypatch.setattr(CHECK, "prebuild", lambda out, steps: None)
     monkeypatch.setattr(CHECK, "groups", lambda out, n, cache, urls, **kw: [[("a", ["true"], tmp_path)], [("b", ["true"], tmp_path)]])
     monkeypatch.setattr(CHECK, "_step", step)
     ok, results = CHECK.run(tmp_path, 2)
