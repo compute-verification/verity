@@ -129,6 +129,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "Candidate A", "Candidate B"; the `candidate` feature and label keys | the archived proof systems A-GKR, B-Ligero |
 | the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not Flock) |
 | "C-Flock"; the stored candidate label `C-Flock`, backend ids `C-interactive`, `C-fs` | Flock (Succinct's is "upstream Flock") |
+| "sampled proofs", the sampled proof system's name; `sampled_proofs`, `SampledProofs`, `sampled-proofs`, the Lake package `core_sampled_proofs` and the ids under `verity/sampled-proofs/`, until renamed | SPOT (`spot` in paths and Python names, `Spot` in Lean); a sampled proof block's proof keeps its words |
 | `verity.ml.circuits.targets.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
 | `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
 | "backend", "backend family", "configured backend" for Flock; `backends/` (Flock's old directory), `verity_flock.backend`, `BACKENDS` | the proof system |
