@@ -49,9 +49,9 @@ import Proofs.Flock.Soundness.Refine.Arith
 /-!
 # `hinner` at the switched source
 
-`FinishSrc.repCut_fw` asks of its source, at the firewall's Ligerito and constraints, the inner proof's (`hinner`,
-`InnerSrc`). At the switched prover's source (`swSrcE`) at the firewall's clear values (`valsFw`), `InnerSrc` holds
-where the firewall's constraints are the worker's view's first seven rows (`swSrcE_innerSrc_rows`, `SwRows`), and
+`FinishSrc.repCut_fw` asks of its source, at the ZK server's Ligerito and constraints, the inner proof's (`hinner`,
+`InnerSrc`). At the switched prover's source (`swSrcE`) at the ZK server's clear values (`valsFw`), `InnerSrc` holds
+where the ZK server's constraints are the worker's view's first seven rows (`swSrcE_innerSrc_rows`, `SwRows`), and
 `Composed.tauFw_at_coef` gives those rows from what the deployed rep fixes: the coins are the opened coins from the
 rep's base (`czExe`'s), the masked values below `zp 64` are the view's (`swViewMasked`, `swSrcE_hmk_frame`), the fold
 is the model's (`folded_unique`), and level 0's record holds the coins at the rep's slots (`ligeritoPZk_lanes`'
@@ -65,7 +65,7 @@ begins at `repSlot … (innerOff 0)`.
 * `FlockComplete.ringSwitchCut_ss`: a returned ring switch's `ŝ`s are its switched vectors in turn.
 * `swSrcE_sv_rank`: past rep `r`'s rank check, the switched source's switched vector `k < 2` is the view's `ŝ_{2r+k}`.
 * **`swSrcE_hinner_sv`**: `swSrcE_hinner` with `hsw` from `hpiop`'s switched vectors (`hpsv`): no premise on the
-  firewall's runs is left.
+  ZK server's runs is left.
 -/
 
 @[expose] public section
@@ -161,12 +161,12 @@ theorem swViewMasked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
   all_goals first | rfl | (exfalso; exact h₂ h₁) | (exfalso; exact h₁ h₂) | (exfalso; contradiction) |
     exact FlockLevel3.GF128.zero_eq
 
-/-- **`repCut_fw`'s `hinner` at the switched source**, for table `j`'s rep `r` at the firewall's request `q` (frame rep
+/-- **`repCut_fw`'s `hinner` at the switched source**, for table `j`'s rep `r` at the ZK server's request `q` (frame rep
 `frep j r` of the release `Lr`), at the setup `st` of table `j`'s statement and the log `l` at the rep's base: where
-table `j`'s rows hold at its base at the firewall's clear values (`valsFw`), the passed values are `q`'s and the pads
-the request's (`swSrcE_hmk_frame`'s and `swSrcE_innerSrc_rows`'s premises), then wherever the firewall's PIOP and
+table `j`'s rows hold at its base at the ZK server's clear values (`valsFw`), the passed values are `q`'s and the pads
+the request's (`swSrcE_hmk_frame`'s and `swSrcE_innerSrc_rows`'s premises), then wherever the ZK server's PIOP and
 Ligerito return, its replay and level 0's constraints return, and the batched constraint holds, `InnerSrc` holds at the
-switched source. The firewall's constraints are the worker's view's first seven rows (`tauFw_at_coef`, `swRows_coef`)
+switched source. The ZK server's constraints are the worker's view's first seven rows (`tauFw_at_coef`, `swRows_coef`)
 where the ring switch's vectors are the view's (`hsw`), level 0's record holding the rep's coins
 (`ligeritoPZk_lanes`), and the inner proof begins at `repSlot … (innerOff 0)`. -/
 theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)
@@ -444,7 +444,7 @@ theorem swSrcE_sv_rank (x : Msg) (hx : Live x) (c : Fin (refK x) → FlockDeploy
   rw [dite_eq_left hC]
 
 /-- **`swSrcE_hinner` at the ring switch's vectors from `repCut_fw`'s `hpiop`**: where the switched source's switched
-vectors are the firewall's (`hpsv`, `hpiop`'s second half), the firewall's `ŝ`s for claims `0` and `1` are the
+vectors are the ZK server's (`hpsv`, `hpiop`'s second half), the ZK server's `ŝ`s for claims `0` and `1` are the
 worker's view's `ŝ_{2r}` and `ŝ_{2r+1}` (`ringSwitchCut_ss`, `swSrcE_sv_rank`), the rank check's slot being the ring
 switch's start. -/
 theorem swSrcE_hinner_sv {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : R) (tz : FlockComplete.TapeZk)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# flock_s8_block: C-Flock --zk's price for proof blocks of ROWS adjacent cells of one int8 GEMM output row (program.py), each
+# flock_s8_block: Flock --zk's price for proof blocks of ROWS adjacent cells of one int8 GEMM output row (program.py), each
 # instance's rows hashed in the circuit, on one GPU node. Run from the tree (research run --on NODE --cwd source):
 #   1. build    flock-circuit with the CUDA prover (60-circuit.sh MODE=build), outside any lease
 #   2. stage    each K:N[:R] of the statement lists (class_statement --stage-only, N instances of S8Matmul_v1{N=R, K}; R
@@ -20,13 +20,13 @@
 #               (the CPU prover), no lease
 #   6. lean     Lean's flock-verify (verity/core/service/flock, built into FLOCK_WORK keyed by its sources) on every session
 #               steps 4 and 5 kept of `served` and `served-plain`, on the verifier's cores: `verify --zk` of served's --zk sets,
-#               and `verify` of served-plain's plain sets as the plain-leaves statement on its full draw; per session its verdict,
+#               and `verify` of served-plain's plain sets as the plain-leaves statement on its full sample; per session its verdict,
 #               wall and peak memory in out/lean (hm96 leaves without --zk are outside Lean's plain scope, so not verified)
 # A session set passes once the verifier recorded each of its sessions and accepted it (out/MODE/NAME/verdicts.jsonl).
 # out/summary.json: per statement and mode, the median timed session's prove time, its phases, GPU busy share and peaks.
 # env: STATEMENTS="4096:1 4096:8 14336:1"  CPU_STATEMENTS="4096:1"  PLAIN_STATEMENTS=  CPU_PLAIN_STATEMENTS=  ROWS=8  WARM=1
 #      RUNS=3  VCPUS=4  LEASE_MIN=20  SM=90  DRAW=all (a --zk verifier samples every proof block, subset:N, and a plain one
-#      of a served statement its staged full draw, draw.json; unset, no sample)
+#      of a served statement its staged full sample, draw.json; unset, no sample)
 #      WINDOW=DIR (prove_path.py commit's window dir, the prover's files included) MEMBER=0  SUBCIRCUIT=ID  SERVE_RUN=DIR
 #      SERVE_WINDOW=0  CUDA_TK (default: verity/ml/flock/pod/cuda-13.3.sh's)  NSYS=1  NSYS_STATEMENT (default the first)
 #      FLOCK_WORK (default: a directory under /workspace/tmp, kept between steps; it holds the staged values)

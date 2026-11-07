@@ -16,7 +16,7 @@ commit-and-open's extraction (`Definitions.Pouw.Assumptions.ShaRealize.ExtractAd
 * `OutsourceWithinEgress`: an exchanged bit replaces at most `β` of priced work, the one premise that prices outside
   machines;
 * `ProofSystemSound`: the service's verdict accepts only periods whose rounds' checks pass, but with probability `κ_S`
-  (C-Flock sound and zero knowledge, live coins from the auditor's challenger);
+  (Flock sound and zero knowledge, live coins from the auditor's challenger);
 * `ImportWithinCertifier`: an accepted period exchanged at most `K` bits, the network certifier's count (class L).
 
 `Definitions.Pouw.Guarantees.Dither.FleetSound` adds two on the challenger's coins across a fleet's replicas:
@@ -54,7 +54,7 @@ priced cost `pub a`, outside a set `Deg` of the round's dithers of probability a
 
 `pub a` is the public best matmul method's priced cost of the instance's words at the period's dual
 prices: no program computes the noised products' segment prefix sums (or all but a small fraction of the words the
-check could draw) more cheaply at `μ` than the best public method. Exchanged bits are priced by
+check could sample) more cheaply at `μ` than the best public method. Exchanged bits are priced by
 `OutsourceWithinEgress`, not here.
 
 **What the advice holds.** Anything computed before the round within (G1)'s memory, so `pub` must hold against that
@@ -147,8 +147,8 @@ def OutsourceWithinEgress (G : Accel) (μ : G.Res → ℝ) (β : ℝ) : Prop :=
 /-- `pouw-nofold-service` (proposed; `pouw-rs-staged-service`'s form, per prover, on a period of rounds). **The proof
 system's verdict accepts only periods whose sampling blocks' checks pass** at the registrable instances `Reg`, but
 with probability `κ_S` over the oracle and the verifier's coins, for every prover: every block's committed instance is
-one of its registrable ones and its check passes (`Prover.Accepted`). The checks run inside C-Flock's zero-knowledge
-proofs (sound and zero knowledge), on live coins drawn by the auditor's challenger after each block's commitments
+one of its registrable ones and its check passes (`Prover.Accepted`). The checks run inside Flock's zero-knowledge
+proofs (sound and zero knowledge), on live coins flipped by the auditor's challenger after each block's commitments
 (`trusted-host`). The verdict reads the transcript and the devices' readings, never the prover's
 code. It assumes nothing of the prover's algorithms. -/
 def ProofSystemSound (G : Accel) (P : RoundProto) (k : ℕ) (Reg : Fin k → Set P.Inst) {Obs : Type}
@@ -167,7 +167,7 @@ def ImportWithinCertifier (G : Accel) (P : RoundProto) (k : ℕ) {Obs : Type} (v
 
 /-- `pouw-own-dither` (proposed; the challenger on `trusted-host`). **Each
 replica's coins are its own**: the challenger issues every replica of a fleet of `N` its own dither and check coins,
-drawn fresh for it, so its randomness `Ω` gives every replica's coins together the uniform distribution (`coin`
+flipped fresh for it, so its randomness `Ω` gives every replica's coins together the uniform distribution (`coin`
 carries the uniform measure on `Ω` to the uniform measure on `Fin N → Fin k → Draw × Chk`). With each replica's own
 coins uniform, as `MomentSound`'s sample space has them, this makes the replicas' coins independent across the fleet.
 

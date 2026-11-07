@@ -56,7 +56,7 @@ the monitoring-period step (`FlockSoundness.Audit.Periods.prCoin_forall_prod_le`
 whose product is at most the product of the escapes plus the errors' sum (`prod_min_add_le`); a union bound adds the
 leak relations' errors `e' i`.
 
-The count half: a family of faulty sets with fewer than `Fmax` proof blocks in total is the proof blocks listed by some
+The count half: a family of incorrect sets with fewer than `Fmax` proof blocks in total is the proof blocks listed by some
 `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
 each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` (`encard_leakAt_le`, from
 `encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the cells
@@ -139,7 +139,7 @@ theorem pr_adaptive_add_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0
   rw [Claims.Sampling.Pr_eq_toReal_prCoin]
   exact (ENNReal.toReal_mono ENNReal.ofReal_ne_top hmono).trans_eq (ENNReal.toReal_ofReal he0)
 
-/-! ### The families of faulty sets -/
+/-! ### The families of incorrect sets -/
 
 /-- The proof blocks that `g` lists in window `i`. -/
 def famOf {m : ℕ} {n : Fin m → ℕ} {F : ℕ} (g : Fin F → Option (Σ i : Fin m, Fin (n i))) (i : Fin m) : Finset ℕ :=
@@ -311,7 +311,7 @@ theorem encard_pooledGood_le {L K S : ℕ} (lay : AuditStatement → BoundaryGat
 
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.PooledLeakAccepted`, from
 `pr_adaptive_add_le` at the conditional escape, a union bound over the leak relations, and `encard_pooledGood_le` at
-each draw of the coins. -/
+each sample of the coins. -/
 theorem horizonLeak : Guarantees.PooledLeakAccepted := by
   intro L K S lay k reg Dj m sw Pw ρ op n b hb Ω _ _ Conn Cell Srv Dev Z _ arr f tap run htrust cap Ss hcap hfit Zs
     schedOf srvOf hs dec hdz acc hacc W hW hWn e e' he q hq0 hq1 hesc hleak δ hδ Fmax hF

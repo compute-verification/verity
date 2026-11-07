@@ -39,16 +39,16 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-! `Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge`: the reduction
-`Flock.SoundAtBridge.soundAtBridge_of_rows` at C-Flock's rows link, `Flock.SecurityProofs.EndToEndRegisteredRows`.
+`Flock.SoundAtBridge.soundAtBridge_of_rows` at Flock's rows link, `Flock.SecurityProofs.EndToEndRegisteredRows`.
 `Flock.SecurityProofs.ServedRowsLinked : Flock.Guarantees.ServedRowsLinked`: `Flock.SoundAtBridge.servedRowsLinked`.
 Its witness is `Flock.SoundAtBridge.soundAtBridge_nonvacuous`. -/
 
 @[expose] public section
 
-/-- **PoUW's proof premise from C-Flock's rows link** (`Flock.Guarantees.SoundAtBridge`). -/
+/-- **PoUW's proof premise from Flock's rows link** (`Flock.Guarantees.SoundAtBridge`). -/
 theorem Flock.SecurityProofs.SoundAtBridge : Flock.Guarantees.SoundAtBridge :=
   Flock.SoundAtBridge.soundAtBridge_of_rows Flock.SecurityProofs.EndToEndRegisteredRows
 
-/-- **C-Flock's rows link at served roots** (`Flock.Guarantees.ServedRowsLinked`). -/
+/-- **Flock's rows link at served roots** (`Flock.Guarantees.ServedRowsLinked`). -/
 theorem Flock.SecurityProofs.ServedRowsLinked : Flock.Guarantees.ServedRowsLinked :=
   Flock.SoundAtBridge.servedRowsLinked

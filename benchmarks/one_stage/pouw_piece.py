@@ -14,8 +14,8 @@ it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's 
 first-parent history, ``--main``, one commit a line; the period, ``--name``), its commitment the auditor's ledger
 (``--ledger``, its lines), its evidence ``{pins, windows}`` (the host's pins log, ``--pins``, its lines; each window's
 evidence in the close's order, ``--windows``, a JSON list in `credit.PROVED_KEYS`'s form). Windows carrying their
-statements' proof files instead (`credit.PERIOD_KEYS`, the drawn calls' ``statements`` and the live ``statements``) are
-put in that form by `proved`: credit's own period reference runs the verifier of record on them, and each session's
+statements' proof files instead (`credit.PERIOD_KEYS`, the sampled calls' ``statements`` and the live ``statements``) are
+put in that form by `proved`: credit's own period reference runs the verifier on them, and each session's
 answer is the outcome of each unit it proved, so the Lean judges every one.
 
 The directory, private as `composite.py` reads it (0700, its files 0600: the evidence and params are witness), gets
@@ -31,10 +31,11 @@ it is undecided, as the check does.
 `period_missing`): the directory then holds only ``missing.json`` saying why, no case and no answer, so `composite.py`
 leaves the protocol out and Lean's verdict on the product names it missing. It prints one ``MISSING`` line and exits
 2: nothing was decided. ``period``'s are the closed period ``SERVE_DIR/period.json`` names (`served_verdicts.py period
-open|close`) holding window K alone (``--cap 1``); its ledger, pins log and window K's session as PoUW's served piece
-fetched them from the gate (``--pouw``, ``pieces/pouw``: ``ledger.jsonl``, ``pins.jsonl``, ``session/<id>/out``), the
+open|close`) holding window K's session and its sample's alone (``--cap 2``); its ledger, pins log and both sessions
+as PoUW's served piece fetched them from the gate (``--pouw``, ``pieces/pouw``: ``ledger.jsonl``, ``pins.jsonl``,
+``session/<id>/out``), the
 key in that session pinned by ``--key-sha512`` (the auditor's); ``--main``; the declared Program
-(``h1/window-program.json.gz``); and the drawn calls' statements (``--statements``, a JSON list) and the live evidence
+(``h1/window-program.json.gz``); and the sampled calls' statements (``--statements``, a JSON list) and the live evidence
 (``--live-evidence``, ``h1_prove/live.py evidence``'s), from the proving runs (`period_inputs`).
 
 The ``PIECE`` line is public: the protocol, its verdict and its refusal's name (`composite.outcome`), with ``REFERENCE``,
@@ -140,8 +141,8 @@ def v1_missing(serve_dir: Path, k: int) -> str:
 
 
 def period_missing(serve_dir: Path, k: int) -> str:
-    """Why served window `k` has no `verity/pouw/period/v1` case: the first of its period, its record and its drawn
-    units' proof outcomes it lacks."""
+    """Why served window `k` has no `verity/pouw/period/v1` case: the first of its period, its record and its sampled
+    proof blocks' proof outcomes it lacks."""
     try:
         h1 = _window(serve_dir, k).get("pouw_h1")
     except Missing as e:
@@ -161,7 +162,7 @@ def period_missing(serve_dir: Path, k: int) -> str:
 
 
 def _statements(w: Any) -> list[tuple[str, dict]]:
-    """Window `w`'s statements (`credit.PERIOD_KEYS`'s form) by leg: ``proofs`` its drawn calls', ``live`` its rounds'."""
+    """Window `w`'s statements (`credit.PERIOD_KEYS`'s form) by leg: ``proofs`` its sampled calls', ``live`` its rounds'."""
     if not (isinstance(w, dict) and sorted(w) == list(Cr.PERIOD_KEYS) and isinstance(w["statements"], list)
             and isinstance(w["live"], dict) and sorted(w["live"]) == list(Cr.LIVE_STATEMENTS)
             and isinstance(w["live"]["statements"], list)):
@@ -188,9 +189,9 @@ def proved(key: Any, ledger: list[str], pins: list[str], main: list[str], name: 
            run: Any = PF.verify) -> tuple[list[dict], tuple[dict | None, tuple[str, str] | None]]:
     """The period's `windows` in the form ``pouw-period`` reads (`credit.PROVED_KEYS`), from windows carrying their
     statements' proof files (`credit.PERIOD_KEYS`), and credit's own verdict on them: `credit.period_credit` runs the
-    verifier of record `run` on the statements, and each session it answers is one outcome a unit it proved
+    verifier `run` on the statements, and each session it answers is one outcome a unit it proved
     (`credit.PROOF_KEYS`: accept or reject, the program it names and its registered finding), on its window's leg, the
-    drawn calls' ``proofs`` or the live rounds' (a rejected session's: the units its record drew). Outcomes are
+    sampled calls' ``proofs`` or the live rounds' (a rejected session's: the units its record drew). Outcomes are
     recorded unjudged, so the Lean judges each one, and a statement the reference refused before running the verifier
     has none. ValueError on windows not in that form, or proof files two statements name."""
     where: dict[tuple, tuple[int, str]] = {}
@@ -222,7 +223,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     """Period ``verity/pouw/period/v1``'s params, ledger, pins log and windows (`credit.PERIOD_KEYS`, statements) from a
     served run's kept records (module docstring), or Missing naming the first record or leg it lacks: the closed
     period ``period.json`` names holding window `k` alone, its record, the session, ledger and pins PoUW's served piece
-    fetched (`pouw`), the declared Program, and the drawn calls' `statements` and the `live` evidence."""
+    fetched (`pouw`), the declared Program, and the sampled calls' `statements` and the `live` evidence."""
     h1 = _window(serve_dir, k).get("pouw_h1")
     if not h1:
         raise Missing(f"window {k} served no PoUW (its line has no pouw_h1: served without --protocols)")
@@ -244,17 +245,21 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
         raise Missing(f"window {k} has no H1 record (h1/w{k}/pouw-h1-calls.json) in {serve_dir}")
     rec = json.loads(calls.read_text())
     sid = rec["commitment"]["session"]["session"]
-    tree = pouw / "session" / sid / "out"
-    for p in (pouw / "ledger.jsonl", pouw / "pins.jsonl", tree / "key.json"):
+    dsid = (rec["commitment"].get("draw_session") or {}).get("session")
+    if not dsid:
+        raise Missing(f"window {k}'s record names no sample session (draw_session), whose coin credit reads its sample from")
+    tree, draw = pouw / "session" / sid / "out", pouw / "session" / dsid / "out"
+    for p in (pouw / "ledger.jsonl", pouw / "pins.jsonl", tree / "key.json", draw):
         if not p.exists():
             raise Missing(f"no {p.relative_to(pouw)} in {pouw}: PoUW's served piece (served_verdicts.py pouw) fetches "
-                          "the gate's ledger, pins log and the window's session after the period's close")
+                          "the gate's ledger, pins log and the window's session and its sample's after the period's close")
     ledger = lines(pouw / "ledger.jsonl")
     close = next((json.loads(x)["body"] for x in ledger if json.loads(x).get("kind") == "period-close"
                   and json.loads(x)["body"].get("period") == name), None)
-    if close is None or len(close.get("windows") or ()) != 1:
-        raise Missing(f"period {name}'s close in the ledger lists {len((close or {}).get('windows') or ())} windows, "
-                      "and this piece is built for a period of one window (period-open --cap 1)")
+    listed = [w.get("session") for w in (close or {}).get("windows") or ()]
+    if listed != [sid, dsid]:
+        raise Missing(f"period {name}'s close in the ledger lists the sessions {listed}, and this piece is built for a "
+                      f"period of one served window, its session {sid} and then its sample's {dsid} (period-open --cap 2)")
     program = serve_dir / "h1/window-program.json.gz"
     if not program.is_file():
         raise Missing(f"no declared window Program (h1/window-program.json.gz) in {serve_dir}, the circuit the "
@@ -270,7 +275,7 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
     key = PHC.pinned_key(tree / "key.json", key_sha512)
     ev = PHC.window_evidence(rec, tree, {"root": rec["commitment"]["session"]["root"]},
                              json.loads(statements.read_text()), gzip.decompress(program.read_bytes()),
-                             json.loads(live.read_text()))
+                             json.loads(live.read_text()), draw_directory=draw)
     return {"key": key.to_json(), "main": lines(main), "name": name}, ledger, lines(pouw / "pins.jsonl"), [ev]
 
 

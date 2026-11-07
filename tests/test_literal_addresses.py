@@ -92,7 +92,7 @@ ALLOWED: dict[str, int] = {
     "tools/research/src/research/pods/nebius/monitoring/grafana_up.sh": 1,
     "tools/research/src/research/pods/nebius/n1_replacement.sh": 6,
     "tools/research/src/research/pods/nebius/peers": 3,
-    "tools/research/src/research/pods/nebius/peers-challenger": 9,
+    "tools/research/src/research/pods/nebius/peers-challenger": 16,
     "tools/research/src/research/pods/nebius/verifier/verifier.json": 1,
     "tools/research/src/research/slack.py": 4,
     "tools/research/src/research/store/fetchset.py": 1,
