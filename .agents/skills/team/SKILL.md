@@ -62,7 +62,6 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
 - Before marking, run the Lean check of the packages you touched and the suites your change touches, `research run --on
   auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py
   --changed $(git rev-parse origin/main) --quick"`, plus a suite's slow tier when you changed its core. Prefer small PRs.
-  You hear back only if yours is held, ejected or reverted.
 - Drive stacks admitted PRs on `next`. Reviewers ci staffs, never the owner, record a verdict at
   the head (`research queue review N --land|--hold REASON --by LANE`); no other per-head grant exists. Drive
   fast-forwards `checked` (`land_into`) to the longest reviewed prefix whose merges are clean and whose `.py` files compile; each sync
@@ -77,11 +76,11 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   with no verdict (the low-risk lane: up to `lowrisk_per_tick` a tick).
 - One run checks `checked`'s tip after each landing (circuit-check is off the merge gate). A red's culprit, the one landing
   touching what its failure names (never bisected), is rung to fix it forward: mark a fix (its new head, or a PR whose
-  body names it or says `fixes suite NAME`) within 2 h, or drive reverts it on `checked`; if several touch it, each is
-  rung with @ci and @top, none reverted. A shard whose failures name no failing test or error line first runs again once
-  on other machines, ringing @infra. The next run waits up to 45 min after its mark for a marked low-risk fix of a red
-  with no culprit to land. Until circuit-check passes on `checked` no PR touching its inputs lands (a PR whose body says
-  `fixes step circuit-check` does).
+  body names it or says `fixes suite NAME`) within 2 h, or drive reverts it on `checked`, unless the red is ratchet-gate's
+  (fix that in your next PR); if several touch it, each is rung with @ci and @top, none reverted. A shard whose failures
+  name no failing test or error line first runs again once on other machines, ringing @infra. The next run waits up to
+  45 min after its mark for a marked low-risk fix of a red with no culprit to land. Until circuit-check passes on
+  `checked` no PR touching its inputs lands (a PR whose body says `fixes step circuit-check` does).
   Citations and tables read only commits whose after-landing run passed: `main`'s.
 - A layout move lands from `next` with no pause in landing: its PR's body says `Move: tools/move/MAP.toml`, and it needs a
   mark and a land verdict like any PR. Where the sync puts it, drive regenerates it on the tip below it (`rename.py --map
