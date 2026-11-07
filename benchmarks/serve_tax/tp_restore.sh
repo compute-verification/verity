@@ -35,6 +35,8 @@ export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLIN
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "tp-restore: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
 mkdir -p "$OUT"
+[ "${1:-}" = leased ] || "$PY" "$here/tp_restore.py" preflight --model-id "$MODEL_ID" --checkpoint "$CK" \
+  ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} ${TP:+--tp "$TP"} || exit 2
 
 if [ "${1:-}" = leased ]; then
   nvidia-smi --query-gpu=index,name,uuid,pci.bus_id,memory.used,memory.total --format=csv

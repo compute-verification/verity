@@ -1,6 +1,7 @@
 """A model served mid-traffic with drained edges (`tp_edge`), restored at its first edge into a fresh engine, replayed to
 its second and compared. GLM-5.3 at TP8 is the case it is for; any `serve_tax` model runs.
 
+    tp_restore.py preflight --model-id glm53 [--max-model-len N] [--tp N]
     tp_restore.py serve --model-id glm53 --c4 C4 --out OUT --scratch DIR [--rate 10] [--span-s 240] [--edges-at 150,210]
                         [--sampling production] [--max-model-len 32768] [--tp N] [--saver MODULE:FUNCTION ...]
     tp_restore.py restore --served OUT --scratch DIR --out OUT2 --loader MODULE:FUNCTION [--no-fill] [--rank-map-free]
@@ -103,6 +104,32 @@ def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, 
     return meta
 
 
+def served_argv(a: argparse.Namespace, checkpoint: Path, port: int) -> list[str]:
+    """`serve_tax`'s ``record`` arm's server argv for ``a``'s model, with ``a``'s context and tensor-parallel size."""
+    return S.server_argv(S.ARMS["record"], S.MODELS[a.model_id], checkpoint, port) \
+        + (["--max-model-len", str(a.max_model_len)] if a.max_model_len else []) \
+        + (["--tensor-parallel-size", str(a.tp)] if a.tp else [])
+
+
+def preflight(a: argparse.Namespace) -> int:
+    """Before any engine starts: the served argv parses as `restore` parses it, and every name `restore` reads
+    imports."""
+    sys.path.insert(0, str(ROOT / "integrations/vllm"))
+    from verity_vllm.engine.hooks import Hooks  # noqa: F401
+    from verity_vllm.engine.step_trace import StepTrace  # noqa: F401
+    from vllm.v1.engine.core_client import InprocClient
+    from vllm.v1.engine.llm_engine import LLMEngine
+
+    checkpoint = Path(a.checkpoint) if a.checkpoint else S.MODELS[a.model_id].checkpoint()
+    args = engine_args(served_argv(a, checkpoint, 0)[1:], 1)
+    got = {k: getattr(args, k) for k in ("model", "tensor_parallel_size", "max_model_len", "seed", "num_gpu_blocks_override",
+                                         "enable_prefix_caching", "async_scheduling", "kv_cache_dtype", "block_size")}
+    missing = [n for n in ("from_engine_args",) if not hasattr(LLMEngine, n)] + \
+        [n for n in ("get_output",) if not hasattr(InprocClient, n)]
+    print(f"[tp-restore] preflight: {got}" + (f"; missing {missing}" if missing else ""), flush=True)
+    return 1 if missing or got["tensor_parallel_size"] != (a.tp or (8 if a.model_id == "glm53" else 1)) else 0
+
+
 def serve(a: argparse.Namespace) -> int:
     model = S.MODELS[a.model_id]
     checkpoint = Path(a.checkpoint) if a.checkpoint else model.checkpoint()
@@ -114,8 +141,7 @@ def serve(a: argparse.Namespace) -> int:
     arm = S.ARMS["record"]
     site = edge_site(scratch / ".site")
     port = S.corpus().free_port()
-    argv = S.server_argv(arm, model, checkpoint, port) + (["--max-model-len", str(a.max_model_len)] if a.max_model_len else []) \
-        + (["--tensor-parallel-size", str(a.tp)] if a.tp else [])
+    argv = served_argv(a, checkpoint, port)
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     env = S.server_env(arm, srv, site, None, 600.0, 600.0) | PINS
@@ -373,6 +399,11 @@ def restore(a: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="cmd", required=True)
+    f = sub.add_parser("preflight")
+    f.add_argument("--model-id", default="glm53", choices=sorted(S.MODELS))
+    f.add_argument("--checkpoint")
+    f.add_argument("--max-model-len", type=int)
+    f.add_argument("--tp", type=int)
     s = sub.add_parser("serve")
     s.add_argument("--model-id", default="glm53", choices=sorted(S.MODELS))
     s.add_argument("--checkpoint")
@@ -400,7 +431,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--no-fill", action="store_true")
     r.add_argument("--rank-map-free", action="store_true")
     a = p.parse_args(argv)
-    return serve(a) if a.cmd == "serve" else restore(a)
+    return {"preflight": preflight, "serve": serve, "restore": restore}[a.cmd](a)
 
 
 if __name__ == "__main__":
