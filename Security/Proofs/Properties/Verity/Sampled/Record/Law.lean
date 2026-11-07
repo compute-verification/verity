@@ -7,6 +7,7 @@ public import Proofs.Flock.Bridge.Draw
 public import Proofs.Flock.Bridge.Count
 public import Proofs.Flock.Bridge.Scope
 public import Proofs.Flock.Bridge.PopMatches
+public import Proofs.Flock.Bridge.Slots
 public import Proofs.Flock.Claims.ZK.Prefix
 public import Proofs.Flock.Claims.ERepCost
 public import Proofs.Flock.Level3.ArithFacts
@@ -26,6 +27,9 @@ public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
   failed draw draws every unit and misses no nonempty `B`.
 * `refuses_of_scopeSlotsOk`: the record refuses what is out of scope (`Refuses`) where its statement is in scope, and of
   that scope `Live` gives the program's order; `ScopeSlotsOk` is the rest.
+* `partSlotsTarget`: `partSlots` partitions the lowered program where every unit has a lowered gate and commits at most
+  `unitClassMax` bits (`Flock.Bridge.partitions_slots`), since the registration's strata hold the population's `n` units
+  (`Flock.Bridge.nsOf_sum`).
 * `pr_drawBytes`: the draw coins' bytes, as v2's challenger reads them (`drawBytes`), are a bijective image of the draw
   rounds' coins (`srcOf`: every coin's elements' 16 bytes, in order), so an event of them has its probability on uniform
   bytes.
@@ -315,5 +319,11 @@ theorem inScope_of_scopeSlotsOk (h : ScopeSlotsOk A) : InScope (partSlots A) (st
 /-- **The record's scope refusal**, where `ScopeSlotsOk` holds. -/
 theorem refuses_of_scopeSlotsOk (H : Msg → Msg) (h : ScopeSlotsOk A) : Refuses H (record A o e) :=
   refuses_of_inScope A o e H (inScope_of_scopeSlotsOk A h)
+
+/-- **`partSlots` partitions the lowered program** where every unit has a lowered gate and commits at most
+`unitClassMax` bits: the population's slots, then the input class, partition it (`Flock.Bridge.partitions_slots`), at
+strata that hold the population's `n` units (`Flock.Bridge.nsOf_sum`). -/
+theorem partSlotsTarget : PartSlotsTarget := fun A hne hw =>
+  Flock.Bridge.partitions_slots A.P A.κ (Flock.Bridge.nsOf_sum A.hpop).ge hne hw
 
 end Verity.Sampled.Record
