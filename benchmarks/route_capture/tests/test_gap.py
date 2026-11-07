@@ -6,7 +6,7 @@ import json
 import pytest
 
 import gap
-from verity_vllm.program.predict.step_needs import StepNeeds, phi_of_row
+from verity_vllm.program.predict.step_needs import StepNeeds, workload_phi
 
 CLASS_G_STEP = {"tokens": 8, "reqs": 8, "new": 0, "prefix_hit_tokens": 0, "prefill": [], "decode": 8,
                 "decode_ctx": [100 + i for i in range(8)], "decode_ctx_max": 107, "sampling": {"greedy": 8},
@@ -22,7 +22,7 @@ MIXED_8192 = {"tokens": 8192, "reqs": 33, "new": 2, "prefix_hit_tokens": 512,
 
 @pytest.fixture(scope="module")
 def launches():
-    return StepNeeds(phi_of_row())
+    return StepNeeds(workload_phi())
 
 
 def _capture(out, rows, sampler="unset"):

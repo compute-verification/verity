@@ -5,12 +5,12 @@ from collections import Counter
 
 import pytest
 
-from verity_vllm.program.predict.step_needs import StepNeeds, phi_of_row
+from verity_vllm.program.predict.step_needs import StepNeeds, workload_phi
 
 
 @pytest.fixture(scope="module")
 def S():
-    return StepNeeds(phi_of_row())
+    return StepNeeds(workload_phi())
 
 
 def _gaps(need):

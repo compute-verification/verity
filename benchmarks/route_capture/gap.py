@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from routes import ranks, steps
-from verity_vllm.program.predict.step_needs import Need, StepNeeds, phi_of_row
+from verity_vllm.program.predict.step_needs import Need, StepNeeds, workload_phi
 
 #: what closes each refusal: a Definition (circuits), a kernel capture or a deterministic kernel (kernels), serving (vllm)
 OWNERS = {"no capture": "kernels", "unregistered": "circuits", "fails circuit-check": "circuits", "no kind": "circuits",
@@ -102,7 +102,7 @@ def _statics(ids: list[str]) -> str:
 def gap(capture: Path, check: dict[str, Any], rank: int | None = None, phi=None) -> dict[str, Any]:
     """The capture's needs at one recording rank (the lowest unless named) against class G's registered, passing Definitions."""
     rank = min(ranks(capture)) if rank is None else rank
-    S = StepNeeds(phi if phi is not None else phi_of_row())
+    S = StepNeeds(phi if phi is not None else workload_phi())
     reg = statuses(check)
     fi = flashinfer_sampler_on(capture)
     need: Counter[Need] = Counter()
