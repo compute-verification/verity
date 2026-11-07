@@ -33,3 +33,6 @@ CHECKS 16:0xZ, CI-221 diff summary (5f340a7bb99 on cursor/lean-merge-driver-curr
 - Review text and research spec_alert print "no issue" for an issue-less entry. README bookkeeping paragraph updated; test_audit strings + new asserts (default_owner, issue-less repair passes with its warning, under the flag too).
 Left alone (outside your list): @proofs examples in check.py help strings, "(LEAN-66)" in tests/test_lean_packages.py:87.
 
+[2026-11-07T16:19Z] 15f30a14b43a
+CHECKS: merge-driver + CI-221 PR is #7789 (https://github.com/compute-verification/verity/pull/7789), marked ready at 8c5ce36fd798ae83e63294561f046be0f6ee4051 by lean with main's queue code; preflight onto next refused nothing. Remote suites r20261107-155249-9dab on 5f340a7bb99: lean-audit 438, verity-check 793, repository 256, research 3053, agent-guard 194, all passed. The last commit only trims tools/verity/lean/README.md back under its 49,152-byte markdown cap (the preflight had warned 939 over); markdown_caps and test_doc_paths pass on it. Body names proofs (report), ci (clone.py, spec_alert one-liner, CI-221) and infra (shell_hook.py).
+
