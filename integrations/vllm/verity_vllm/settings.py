@@ -252,6 +252,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("TOKENIZERS_PARALLELISM", str, None, WHERE, "the tokenizers library's threads, true or false (`engine.env.EXPORT` sets false); "
       "a Build records it"),
     S("TORCHINDUCTOR_CACHE_DIR", str, None, WHERE, "Inductor's output-code cache; unset, torch's default"),
+    S("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", str, None, VALUE, "1, torch's default: Inductor picks a reduction kernel's tiling per "
+      "process at its first launch; an engine pins 0 (`engine.env.ENGINE`) and refuses another"),
     S("TORCH_CUDA_ARCH_LIST", str, None, VALUE, "the architectures torch's extension builds compile for (a tap build sets it)"),
     S("TRITON_CACHE_DIR", str, None, WHERE, "Triton's compiled-kernel cache; unset, ~/.triton/cache"),
     S("VLLM_API_KEY", str, None, VALUE, "the key vLLM's OpenAI-compatible server asks of its clients (its family's role): a "
