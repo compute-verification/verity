@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Verifier.Registered
-public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.NetworkCertifier.Check.Bytes
 public import Batteries.Data.ByteArray
 public import Definitions.Claims.Sampling
 import Mathlib.Algebra.Order.Floor.Extended
