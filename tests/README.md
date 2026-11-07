@@ -36,11 +36,11 @@ Markdown caps. A scan's own tests, and a listed test that raises anything but a 
 ~~~sh
 python3 tests/lint/test_repo_ruff.py --move OLD NEW   # a file or directory moved: its entries follow it, in the same change
 python3 tests/lint/test_repo_ruff.py --prune          # delete and lower what this tree no longer finds
-python3 tests/lint/test_repo_lane_text.py --record    # the list becomes what this tree finds (the gate still refuses a rise)
+python3 tests/lint/test_repo_lane_text.py --record    # the list becomes what this tree finds (the ratchet gate still flags a rise)
 ~~~
 
 Every lint takes `--move` and `--prune`; only lane text takes `--record`. Each lint reads no history, so a renamed file's
-findings count under its new path: move its entry with it, or the gate refuses the change.
+findings count under its new path: move its entry with it, or the ratchet gate flags the change.
 
 ~~~sh
 uv run tools/verity/check/suites.py .                 # this suite, on a node through `research run --on auto`

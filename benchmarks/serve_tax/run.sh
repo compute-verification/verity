@@ -13,11 +13,14 @@
 # REPLAY then replays LOAD's first rep of the record arm (by default this job's) in each of REPLAY_MODES (replay.py)
 # into OUT/replay-<mode>; a mode listed again replays into OUT/replay-<mode>-<k>, its tokens compared with the first's too
 # (REPLAY_MODES="compiled compiled": does the replay agree with itself?). Then OUT/table.{json,md}. MODEL_ID moonlight serves the replay-determinism benchmark's kept
-# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight. VENV's vLLM
-# must be d9105ea80, the integration's pin.
+# checkpoint on one GPU; glm53 the GLM-5.3 TP drivers' (benchmarks/served_commit/tp_decode.sh) on eight; llama8b and
+# qwen3-30b their pinned snapshots under HF_HOME on one. VENV's vLLM must be d9105ea80, the integration's pin.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
+export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
+export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 MODEL_ID=${MODEL_ID:-moonlight}
 case $MODEL_ID in
   moonlight) CK=${CHECKPOINT:-/workspace/research/scratch/replay-determinism/moonlight}; GPUS=1 ;;
@@ -25,10 +28,9 @@ case $MODEL_ID in
     REV=aca966e4e02791568aa6a4ced368624b3d897f42
     if [ -e "/workspace/cp/glm53-ckpt/$REV/.verified" ]; then CK=/workspace/cp/glm53-ckpt/$REV; else CK=/workspace/fs/glm53/$REV; fi
     CK=${CHECKPOINT:-$CK}; GPUS=8 ;;
-  *) echo "serve-tax: MODEL_ID is moonlight or glm53, not $MODEL_ID"; exit 2 ;;
+  llama8b|qwen3-30b) CK=${CHECKPOINT:-$("$PY" "$here/serve_tax.py" checkpoint --model-id "$MODEL_ID")}; GPUS=1 ;;
+  *) echo "serve-tax: MODEL_ID is moonlight, glm53, llama8b or qwen3-30b, not $MODEL_ID"; exit 2 ;;
 esac
-VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
-export PATH="$VENV/bin:$PATH"   # the venv's ninja, which FlashInfer's JIT (vLLM's default sampler) runs
 # nvcc, which the kv arm builds the row-table kernels with: CUDA_HOME's, else the newest toolkit under /usr/local
 command -v nvcc >/dev/null || for d in ${CUDA_HOME:+"$CUDA_HOME/bin"} $(ls -d /usr/local/cuda*/bin 2>/dev/null | sort -rV); do
   [ -x "$d/nvcc" ] && { export PATH="$PATH:$d"; break; }
@@ -37,7 +39,6 @@ C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-45000}
 WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=$OUT/plan.jsonl
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
-export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 # Inductor's runtime R0_BLOCK choice (each process times a halved candidate) changes the reduction order: pin it
 export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0
 replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY_FROM:-}" ] && replay_only=1
