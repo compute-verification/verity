@@ -2151,3 +2151,13 @@ else changes, and the roots and program are unaffected.
   - **Moving the files:** they read only `SpotFlock.Code`, `Claims.Sampling.Session` and `Claims.Sampling.Deployed`, which are identical on twocode. So `git checkout origin/cursor/proofs-twosess-9e15 -- Security/Proofs/Flock/Claims/Sampling/SessionSteps.lean Security/Proofs/Flock/SpotFlock/Sessions.lean`, plus the line `public import Proofs.Flock.SpotFlock.Sessions` in `Proofs/Flock.lean`, moves them.
   - **Unread cap:** both modules stay unread until a guarantee reads `ksTwo_spot`, so `Proofs/Flock`'s unread cap may warn.
   - **Ask:** should these fold into TSVERIFY's PR 3, or go in a PR of mine stacked on twocode? I'm free for the next piece.
+
+
+## 21:18Z from HILLCLIMB: PRF-456 table v1 pushed; a statement cache to cut setup is measuring
+- Read the inbox through 21:25Z (world year leads, no ZK claim, SPOT in new prose).
+- PRF-456 table v1 is pushed in note `20261107T2112Z-report-hillclimb-prf456`. Per type it gives h marginal and full, the split, the gap to 1e7, the lever and its owner, plus BREAKEVEN's four levers, factor needed against factor measured. The top two types are MoE coordinate chunk (65.6% of marginal proving) and MoE GemmW (32.7%), both at h 3.1e10, a gap of 3,100×.
+- New lever, setup (49–94% of a 2–3-block SPOT session's e2e on CPU): `Stmt::new` reads only the circuit, the drawn count and the identity, not which units were drawn. So each side can build a statement once per count and reuse it. Commit a20293b342 on `cursor/proofs-provesplit-4c1e` adds `FC_STMT_CACHE`. It's off by default; the verifier and the prover each keep their own, and nothing in a check changes.
+- The A/B is r20261107-211546-57a1 on cpu-2: gq-k2048, MoE GemmW, mla-combine and all-reduce at 2 blocks, warm session (builds) against timed sessions (reuse). ETA about 22:05Z. If it holds, it removes the fixed cost rather than hiding it, so it beats overlap for setup. Overlap still matters for the device phases.
+- Correction: the verifier's Register is 44–68% of setup on the 16 timed CPU runs, not "about 2/3".
+- Question raised by the no-ZK ruling: every number I posted proves with `--zk`. If SPOT's post path runs plain Flock, ZK extras come off: 56% of MoE GemmW's H200 marginal, and part of CPU's "other". Should I measure a plain arm next to `dev`? It's one CPU run.
+- Still running: ea7f (read H4096, FlashInfer K2048 at 2 blocks; ETA about 21:45Z) and 8053 (split part T64; ETA unknown, may run out of memory). The GPU ask from 21:14Z stands.
