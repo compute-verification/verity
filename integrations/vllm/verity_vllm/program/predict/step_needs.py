@@ -7,8 +7,9 @@ covers it, the captured cuBLAS route, the LL bf16 tier, the grouped top-k kernel
 the launch's key counts) and the vocabulary's kind at the statics `dsa` passes (`common.kind`). Every token-count-dependent
 selection reads the step's launch: the tokens the CUDA-graph dispatch pads it to. A request's query rows past the decode threshold
 are one refusal per row and layer (the dense-MHA prefill backend while its sequence fits INDEX_TOPK keys, the sparse-MQA prefill past
-it), and a row past INDEX_TOPK keys refuses only its top-k (the radix selection); its other Definitions are counted. Consts are not
-counted. Where `dsa` writes a request's calls in their own launch, this counts the step's: the grouped top-k kernel reads the
+it). A row past INDEX_TOPK keys calls DsaWaksmanOrder and DsaTopKLongRow at each indexer layer and DsaWaksmanRows at every layer,
+its order a `run` value, not a call; under an engine whose stated environment lacks the canonical top-k (`dsa.Net.long_rows`) its
+top-k is one refusal in place of the indexer layer's two calls, and its other Definitions are counted. Consts are not counted. Where `dsa` writes a request's calls in their own launch, this counts the step's: the grouped top-k kernel reads the
 launch's tokens, as the served kernel does. `tests/program/predict/test_step_needs.py` holds the counts to `dsa`'s own Program for
 an engine step it writes.
 """
@@ -22,11 +23,12 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from .common import Unexpressible, _arr_shape, kind
 from .phi import Phi
 
-__all__ = ["Need", "StepNeeds", "workload_phi"]
+__all__ = ["Need", "StepNeeds", "engine_class", "workload_phi"]
 
 _CAPTURE_MAP = "glm-moe-dsa-eager-hopper-tp8-v0.json"
 
@@ -60,11 +62,21 @@ def workload_phi(row: str, case: str) -> Phi:
     return S.phi_of({"row": row, "workload": w}, hf_home=str(home))
 
 
+def engine_class(name: str) -> dict[str, Any]:
+    """Engine class `name`'s limits as `engine_classes` states them: the most a registration may state (`limits`), what a served
+    engine of the class runs at (`served`, each limit it serves at no value of its own the class's) and the environment it serves
+    a row past INDEX_TOPK keys under (`long_rows_env`)."""
+    from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV, of
+    _, limits, served, _ = of(name)
+    return {"limits": dict(limits), "served": {**limits, **served}, "long_rows_env": dict(DSA_TOPK_ENV)}
+
+
 def _routes_of_definitions() -> dict[str, str]:
     """Each Definition name (version dropped) -> its route in the capture map's `programs`."""
     from verity_vllm.config import MANIFESTS
     progs = json.loads((MANIFESTS / "capture-maps" / _CAPTURE_MAP).read_text())["programs"]
-    out = {"GumbelTopPTokenSelectSharedGreedy": "token-select", "GumbelTopPTokenSelect": "token-select"}
+    out = {"GumbelTopPTokenSelectSharedGreedy": "token-select", "GumbelTopPTokenSelect": "token-select",
+           "DsaWaksmanOrder": "dsa-topk", "DsaTopKLongRow": "dsa-topk", "DsaWaksmanRows": "mla-sparse-attention"}
     for route, p in progs.items():
         for d in p.get("definitions") or ():
             out.setdefault(re.sub(r"_v\d+$", "", d), route)
@@ -245,12 +257,20 @@ class StepNeeds:
         if indexer:
             out += [(self._cublas(M, (L, "wk_w")), n), (self.kind("dsa_indexer_k_row", D=ID, ROPE=R, EPS=float(C["INDEX_K_EPS"])), n),
                     (self._fp8_linear(M, (L, "wq_b_w")), n), (self.kind("dsa_indexer_q", H=IH, D=ID, ROPE=R), n)]
+        TOPK = self.index_topk
         for k, c in keys.items():
-            T = min(k, self.index_topk)
+            T = min(k, TOPK)
             if indexer:
                 out.append((self.kind("dsa_mqa_logits", N=k, H=IH, D=ID), c))
-                out.append((self.kind("dsa_topk_short_row", TOPK=self.index_topk), c) if k <= self.index_topk else
-                           (Need("dsa-topk", _id("radix-topk", TOPK=self.index_topk, KEYS=k), "radix top-k", "no"), c))
+                if k <= TOPK:
+                    out.append((self.kind("dsa_topk_short_row", TOPK=TOPK), c))
+                elif self.net.long_rows:
+                    out.append((Need("dsa-topk", _id("kernel-topk-order", TOPK=TOPK, KEYS=k), f"kernel top-k order: {self.net.long_rows}"),
+                                2 * c))
+                else:
+                    out += [(self.kind("dsa_waksman_order", N=k, TOPK=TOPK), c), (self.kind("dsa_topk_long_row", N=k, TOPK=TOPK), c)]
+            if k > TOPK:
+                out.append((self.kind("dsa_waksman_rows", N=k, TOPK=TOPK, W=KVL + R), c))
             out.append((self.kind("sparse_mla_split", T=T, NS=splits[T], NH=NH, DR=R, DV=KVL, BN=G["BN"], DOT=G["DOT"], INV=G["INV"],
                                   SM_SCALE=float(C["ATTN_SCALE"])), c))
         return out
