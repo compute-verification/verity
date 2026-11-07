@@ -76,11 +76,13 @@ The rules in force, each stated as itself; the friction skill has the standing r
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
-  model's size is public. These core protocols wrap SPOT, the sampled proof system, in the recursion layer and the ZK
-  server. SPOT on its own (the research release and its post) has none of that: an inference server serves and commits
-  its values, a proof server replays the sampled requests and proves them, and the verifier (the challenger and the Lean
-  verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not exfiltration
-  (Daniel, 7 Nov).
+  model's size is public. These core protocols wrap SPOT[Flock], the sampled proof system, in the recursion layer and the
+  ZK server. SPOT[Flock] on its own (the research release and its post) has none of that: an inference server serves and
+  commits its values, a proof server replays the sampled requests and proves them, and the verifier (the challenger and
+  the Lean verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not
+  exfiltration. The demonstration adds the network certifier as a separate layer: it stamps each request's release order
+  at ingress, so the scheduler's advice is zero. SPOT[Flock] takes that order as a public input and never imports the
+  certifier, which has its own code, guarantee and proof; the two compose only above both.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows, or keyed
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
