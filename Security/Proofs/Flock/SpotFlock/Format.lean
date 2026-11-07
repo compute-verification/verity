@@ -20,6 +20,11 @@ inputs Flock's relation gives that block at the witness's hidden values (`valueA
 each of the unit's gates but its inputs, and every constant of the program. That reads no witness: only the session
 statement's circuit, inputs and public values, which the verifier's check fixes to `xS₀`'s but for the sample and the
 registered reads (`pin_of_stmtOk`), and the layout. So it is a property of the registration.
+
+**Where the reveal's values sit** (`decOf_input`, `decOf_output`). At a wire that is an input of `C`, a decoded value
+is the input's value in the unit's block (`S.inp β j`), and at an output, under a witness the check accepts, the
+output's (`S.out β j`): a hidden value where that source is hidden. `Reveals` at `decOf L` is then the commitment's
+side: for each value the unit needs, the reveal opens that hidden value, under the roots the opening's position reads.
 -/
 
 @[expose] public section
@@ -49,6 +54,43 @@ def decOf (L : Layout) : Dec := fun x m₁ xS wF u g =>
   | some S, some β => valueAt S β wF (L.wire u g)
   | _, _ => false
 
+theorem decOf_eq {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β : ℕ}
+    (hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S) (hβ : L.blockOf x m₁ xS u = some β)
+    (w : Claims.Flock.Wit) (g : ℕ) : decOf L x m₁ xS w u g = valueAt S β w (L.wire u g) := by
+  simp only [decOf, hS, hβ]
+
+/-- **At an input gate** the block circuit's value is the input Flock's relation gives it. -/
+theorem valueAt_input {S : Claims.Flock.Stmt} {β j : ℕ} (w : Claims.Flock.Wit) (hj : j < S.C.N)
+    (hin : (S.C.op ⟨j, hj⟩).isInput = true) : valueAt S β w j = Claims.Flock.val S w (S.inp β j) := by
+  rw [valueAt, dif_pos hj, Verity.Circuit.eval_input _ _ (g := (⟨j, hj⟩ : Fin S.C.toCircuit.N)) hin]
+  exact (fun b => by cases b <;> rfl : ∀ b : Bool, (BitVec.ofBool b).getLsbD 0 = b) _
+
+/-- **At an output gate** of a block, under a witness Flock's relation accepts, the block circuit's value is the
+output's value. -/
+theorem valueAt_output {S : Claims.Flock.Stmt} {β j : ℕ} {w : Claims.Flock.Wit} (hR : Claims.Flock.RelS S w)
+    (hβ : β < S.nBlocks) (hj : j < S.C.N) (ho : (⟨j, hj⟩ : Fin S.C.N) ∈ S.C.outputs) :
+    valueAt S β w j = Claims.Flock.val S w (S.out β j) := by
+  rw [valueAt, dif_pos hj]
+  exact hR β hβ ⟨j, hj⟩ ho
+
+/-- **A decoded value at an input wire** is the input's value: the hidden or public value the session statement
+gives that input in the unit's block. -/
+theorem decOf_input {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β g : ℕ}
+    (hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S) (hβ : L.blockOf x m₁ xS u = some β)
+    (w : Claims.Flock.Wit) (hj : L.wire u g < S.C.N) (hin : (S.C.op ⟨L.wire u g, hj⟩).isInput = true) :
+    decOf L x m₁ xS w u g = Claims.Flock.val S w (S.inp β (L.wire u g)) := by
+  rw [decOf_eq hS hβ, valueAt_input w hj hin]
+
+/-- **A decoded value at an output wire**, under a session witness the verifier's check accepts, is the output's value:
+the hidden or public value the session statement gives that output in the unit's block. -/
+theorem decOf_output {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β g : ℕ} {w : Claims.Flock.Wit}
+    (hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S) (hβ : L.blockOf x m₁ xS u = some β)
+    (hck : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS w = true)
+    (hβS : β < S.nBlocks) (hj : L.wire u g < S.C.N) (ho : (⟨L.wire u g, hj⟩ : Fin S.C.N) ∈ S.C.outputs) :
+    decOf L x m₁ xS w u g = Claims.Flock.val S w (S.out β (L.wire u g)) := by
+  have hR : Claims.Flock.RelS S w := by simpa [Claims.Flock.check, hS] using hck
+  rw [decOf_eq hS hβ, valueAt_output hR hβS hj ho]
+
 variable (h : Held)
 
 /-- **The session circuit computes each checked unit's gates at a layout's wires**: at a run's statement in the
@@ -73,13 +115,11 @@ theorem evaluates_of_embeds (L : Layout) (he : Embeds h L) : Evaluates h (decOf 
   | none => simp [Claims.Flock.check, hS] at hck
   | some S =>
     obtain ⟨β, hβ, hw⟩ := he x s Pt d m₁ xS c₀ c₁ u b ρ rb S hx hP h2 hin hok hu hS hb hρ hrb
-    have hdec : ∀ g, decOf L x m₁ xS wF u g = valueAt S β wF (L.wire u g) := fun g => by
-      simp only [decOf, hS, hβ]
     obtain ⟨hg, hc⟩ := hw wF
     refine ⟨fun g hgb y hy hne => ?_, fun g c hgc => ?_⟩
-    · simp only [hdec]
+    · simp only [decOf_eq hS hβ]
       exact hg g hgb y hy hne
-    · rw [hdec]
+    · rw [decOf_eq hS hβ]
       exact hc g c hgc
 
 /-- **`SessionOpensTwo` at SPOT[Flock]'s two-stage code from a layout** where the session circuit computes each
