@@ -3311,8 +3311,8 @@ def _tail(r: subprocess.CompletedProcess, n: int = 6) -> str:
 
 def restack_end(job: dict, now: float) -> tuple[dict | None, str] | None:
     """A restack job's end (`Queue._launch_restack`), its directories removed: (what `restack.py` said of its head, as a sync
-    caches it, {"result": the restacked commit} or {"why": what it says}, else None; how the job ended, with its output's tail).
-    None while it runs, up to `RESTACK_LOST_S` after its start."""
+    caches it, {"result": the restacked commit} or {"why": what it says}, else None; how the job ended, with its output's tail,
+    and why its results don't read when it exited 0).  None while it runs, up to `RESTACK_LOST_S` after its start."""
     from .drive import _job_end
 
     if (end := _job_end(job, RESTACK_OUT)) is None and now - job["at"] <= RESTACK_LOST_S:
@@ -3320,20 +3320,22 @@ def restack_end(job: dict, now: float) -> tuple[dict | None, str] | None:
     if not isinstance(end, tuple):
         shutil.rmtree(job["dir"], ignore_errors=True)
         end = end or f"no exit written {RESTACK_LOST_S // 60} min after its start"
+    unread = ""
     try:
         (x,) = json.loads(Path(job["out"], RESTACK_OUT).read_text())
         said = ({"result": x["result"]} if x["status"] in ("clean", "up-to-date") else
                 {"why": f"{RESTACK} conflicts at its {x.get('step')} merge in {', '.join(x.get('files') or [])}"}
                 if x["status"] == "conflicted" else
                 {"why": f"{RESTACK}: {x['status']}: {((x.get('error') or '').splitlines() or [''])[0][:300]}"})
-    except (OSError, ValueError, TypeError, KeyError, AttributeError):
-        said = None
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
+        said, unread = None, f"; its results don't read ({type(e).__name__}: {e})"
     shutil.rmtree(job["out"], ignore_errors=True)
     if isinstance(end, str):
         return said, end
     rc, tail, _ = end
     stopped = f", stopped {RESTACK_WAIT_S // 60} min after its start" if rc == "124" else ""
-    return said, f"exit {rc}{stopped}: {' | '.join(tail.splitlines()[-6:])}"
+    tail = " | ".join(tail.splitlines()[-6:])
+    return said, f"exit {rc}{stopped}" + (f": {tail}" if tail else "") + (unread if rc == "0" else "")
 
 
 def changed(repo: Path, base: str, commit: str) -> set[str]:

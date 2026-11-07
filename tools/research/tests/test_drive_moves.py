@@ -258,6 +258,29 @@ def test_a_restack_job_whose_process_is_gone_with_no_exit_runs_once_more_and_lea
     assert not Path(lost["dir"]).exists() and not Path(lost["out"]).exists()
 
 
+@pytest.mark.parametrize("rc, log, results, said, how", [
+    (0, "", [{"status": "clean", "result": "c0ffee"}], {"result": "c0ffee"}, "exit 0"),
+    (0, "", [{"status": "up-to-date", "result": "c0ffee"}], {"result": "c0ffee"}, "exit 0"),
+    (1, "a\nb", [{"status": "conflicted", "step": "moved", "files": ["a.py", "b.py"]}],
+     {"why": f"{Q.RESTACK} conflicts at its moved merge in a.py, b.py"}, "exit 1: a | b"),
+    (1, "", [{"status": "based-after", "error": "based after the move\nmerge it as usual"}],
+     {"why": f"{Q.RESTACK}: based-after: based after the move"}, "exit 1"),
+    (0, "", None, None, "exit 0; its results don't read (JSONDecodeError: Expecting value: line 1 column 1 (char 0))"),
+    (137, "Killed", None, None, "exit 137: Killed"),
+])
+def test_a_restack_jobs_end_reads_as_the_sync_caches_it(tmp_path, rc, log, results, said, how):
+    """What `restack.py --json` said of its head, as a sync caches it ({result} or {why}), and how its job ended; its
+    directories removed."""
+    d, out = tmp_path / "job", tmp_path / "out"
+    d.mkdir()
+    out.mkdir()
+    (d / "log").write_text(log)
+    (d / "rc").write_text(f"{rc}\n")
+    (out / Q.RESTACK_OUT).write_text("" if results is None else json.dumps(results))
+    assert Q.restack_end({"dir": str(d), "out": str(out), "pid": os.getpid(), "at": 0.0}, 0.0) == (said, how)
+    assert not d.exists() and not out.exists()
+
+
 def test_a_restack_job_is_saved_as_it_starts_so_a_sync_that_fails_after_starting_it_leaves_no_second(world, monkeypatch, jobs):
     """A job is in the state from its start, as drive's launches are: the sync that started it fails before its own save (here
     at its last step), and the next finds the job running and starts no second `restack.py` for the head."""
