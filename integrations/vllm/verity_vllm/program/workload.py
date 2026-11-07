@@ -338,8 +338,8 @@ class WorkloadRequest:
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
 # wrapper's `seed` and `splits` are its request's own, like the prompt, and so are a warm request's cached `prefix`, a TP rank
-# Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`) and its `run` (the top-k orders its served rows past
-# INDEX_TOPK took, `predict.dsa.run_field`)
+# Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`) and its `run` (the Waksman settings of its rows past
+# INDEX_TOPK, `predict.dsa.run_field`, whose checks fix them by its own logits)
 _REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", "prefix", "schedule", "run")
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 

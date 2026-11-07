@@ -1,5 +1,6 @@
 """verity_vllm.program.predict.dsa past INDEX_TOPK: a row of more than INDEX_TOPK keys reads its top-k order as the Build's
-`vllm_dsa` rule does, from a field of the Program's `run` input, and the Program returns the bit that the order is the top-k set.
+`vllm_dsa` rule does, from a field of the Program's `run` input, and the Program returns the bit that the order is the top-k set
+in ascending index order (the canonical row, which an engine under `VERITY_DSA_TOPK=canonical` serves).
 
 GLM-5.3's checkpoint is cut to its first 4 layers (three full indexers, then one that shares the third's top-k) and its
 INDEX_TOPK to 4, so a few rows reach past it without the 2,048 keys of the served one."""
@@ -16,6 +17,7 @@ from verity.ml.circuits.refs import runs
 from verity.ml.circuits.types import Array, Tuple as TupleT, Value
 from verity.ml.definitions.registry.dsa_topk import waksman_apply, waksman_switches
 from verity_vllm.check.batch import own
+from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 from verity_vllm.program import workload as W
 from verity_vllm.program.predict.batch import workload_labels
 from verity_vllm.program.predict.build import build_program
@@ -38,11 +40,15 @@ def _short(hf: dict) -> dict:
     return hf
 
 
+def _canonical(engine: dict) -> dict:
+    return {**engine, "env": {**engine.get("env", {}), **DSA_TOPK_ENV}}
+
+
 @pytest.fixture
 def phi(tmp_path) -> Phi:
     p = _first_layers(_row_phi(GLM53, "GLM53", tmp_path), 4)
     assert p.hf_config["indexer_types"] == ["full"] * 3 + ["shared"]
-    return Phi.from_json({**p.to_json(), "model": {**p.model, "hf_config": _short(p.hf_config)}})
+    return Phi.from_json({**p.to_json(), "model": {**p.model, "hf_config": _short(p.hf_config)}, "engine": _canonical(p.engine)})
 
 
 def _families(r) -> Counter:
@@ -54,13 +60,14 @@ def _calls(r, family: str) -> list:
 
 
 def _order(L: int, p: int) -> list[int]:
-    """A served order of TOPK of the row's p + 1 keys, a different one per (layer, position)."""
+    """An order of TOPK of the row's p + 1 keys, a different one per (layer, position): `run_bits` routes any order, the served
+    canonical one among them."""
     return list(dict.fromkeys([(p - k * (L + 1)) % (p + 1) for k in range(TOPK)] + list(range(p + 1))))[:TOPK]
 
 
 def test_a_row_past_index_topk_reads_its_order_from_run_and_returns_its_check(phi):
     """A step of 6 rows: rows 4 and 5 have 5 and 6 keys. Each full indexer layer reads one `run` field per such row, in first-read
-    order, routes the row indices through it (DsaWaksmanOrder) and checks them against its logits (DsaTopKOrder); every layer,
+    order, routes the row indices through it (DsaWaksmanOrder) and checks them against its logits (DsaTopKLongRow); every layer,
     the shared one included, reads the TOPK rows DsaWaksmanRows routes at those settings, and the sparse MLA reads TOPK rows."""
     r = build_program(phi, "step", M=6, pos0=0, with_desc=False)
     params, ret = r.program.fn.signature()
@@ -73,7 +80,8 @@ def test_a_row_past_index_topk_reads_its_order_from_run_and_returns_its_check(ph
     assert (r.checks["output"], r.checks["accept"], len(r.checks["of"])) == (1, 1, 6)
     assert r.run["name"] == "run" and [f["name"] for f in r.run["fields"]] == [f for f, _ in fields]
     fam = _families(r)
-    assert (fam["DsaWaksmanOrder_v1"], fam["DsaTopKOrder_v1"], fam["DsaWaksmanRows_v1"], fam["DsaTopKShortRow_v1"]) == (6, 6, 8, 12)
+    assert (fam["DsaWaksmanOrder_v1"], fam["DsaTopKLongRow_v1"], fam["DsaWaksmanRows_v1"], fam["DsaTopKShortRow_v1"]) == (6, 6, 8, 12)
+    assert fam["DsaTopKOrder_v1"] == 0
     assert fam["DsaMqaLogits_v3"] == 18
     assert [n.fn.bindings["T"] for n in _calls(r, "SparseMlaSplit_v1")] == [min(i + 1, TOPK) for i in range(6)] * 4
     src = r.program.fn.bindings["SRC"]["inputs"]
@@ -89,6 +97,20 @@ def test_the_shared_layer_reads_the_last_indexer_layers_settings(phi):
     read = [list(runs(n.args[0].refs)) for n in _calls(r, "DsaWaksmanRows_v1")]
     assert all(len(x) == 1 and x[0][:2] == ("p", at) for x in read), "each DsaWaksmanRows reads one field of `run`"
     assert [x[0][2] for x in read] == [offset[run_field(L, p)] for L in (0, 1, 2, 2) for p in (4, 5)]
+
+
+def test_a_row_past_index_topk_under_an_engine_without_the_canonical_top_k_is_refused(phi):
+    """An engine whose stated environment lacks `VERITY_DSA_TOPK=canonical` serves the kernels' own order past INDEX_TOPK, which
+    DsaTopKLongRow refuses: its row past INDEX_TOPK is refused by name. A registration that states no environment builds it, and a
+    step within INDEX_TOPK builds under any."""
+    def at(env: dict | None) -> Phi:
+        eng = {k: v for k, v in phi.engine.items() if k != "env"}
+        return Phi.from_json({**phi.to_json(), "engine": eng if env is None else {**eng, "env": env}})
+    with pytest.raises(Unexpressible, match=re.escape("a row past INDEX_TOPK (4) keys under an engine whose environment sets "
+                                                      "VERITY_DSA_TOPK=None, not {'VERITY_DSA_TOPK': 'canonical'}")):
+        build_program(at({"VLLM_BATCH_INVARIANT": "0"}), "step", M=5, pos0=0, with_desc=False)
+    assert build_program(at(None), "step", M=5, pos0=0, with_desc=False).run is not None
+    assert build_program(at({"VLLM_BATCH_INVARIANT": "0"}), "step", M=TOPK, pos0=0, with_desc=False).run is None
 
 
 def test_no_row_past_index_topk_has_no_run_input(phi):
@@ -143,8 +165,9 @@ def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_pat
     long one reading `run` and returning its checks, and that Program is `build_program`'s at the unit's launch batch and chunks.
     The fast tests build each Program alone; this one holds the batch rules to a Program that reads `run`."""
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
+    from verity_vllm.program.predict.steps import Registered, compile_steps
     reg = _class_g(tmp_path, model={"hf_config": hf})
-    from verity_vllm.program.predict.steps import compile_steps
+    reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
     advice, ingress = _session([(10, 3, {**GREEDY, "max_tokens": 3}), (3, 2, {**GREEDY, "max_tokens": 2})],
                                [[(0, 0, 6)], [(0, 6, 4), (1, 0, 3)], [(0, 10, 1), (1, 3, 1)], [(0, 11, 1)]])
     c = compile_steps(reg, advice, ingress)

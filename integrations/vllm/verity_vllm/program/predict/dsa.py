@@ -16,7 +16,8 @@ the shared expert, MoeRouterSigmoidBias, Fp8GroupQuantUe8m0, the block-FP8 exper
 shared expert's add; then the last row's logits, their all-gather and the token select (greedy, or the seeded temperature + top-p
 select: `common.select_token`).  A row of more than INDEX_TOPK keys reads its top-k order as the `vllm_dsa` rule does: the
 Waksman settings that route it are a field of the Program's `run` input (`run_field`, read by `_Model.run`), DsaWaksmanOrder routes
-the row indices through them, DsaTopKOrder's bit that the order is the logits' top-TOPK set is one of the Program's checks
+the row indices through them, DsaTopKLongRow's bit that the order is the logits' top-TOPK set in ascending index order (the one
+order the logits fix, which `VERITY_DSA_TOPK=canonical` serves) is one of the Program's checks
 (`_Model.checks`), and both kinds of layer read the TOPK rows DsaWaksmanRows routes at those settings.  A fact outside it raises
 `Unexpressible`, φ's when the decoder is made and a launch's (a prefill past the decode threshold, a GEMM, all-reduce or MoE tile
 no record covers) when the launch is written.
@@ -86,6 +87,7 @@ class Net:
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
         from verity_vllm.engine.profiles import family_facts as FF
+        from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
         from verity_vllm.observe.fold.profiles.generic import _MLA_SCALES, _mla_weight_field, derive_config
         from verity_vllm.program import model as analytic
         from verity_vllm.program.frontend import targets as TG
@@ -129,6 +131,11 @@ class Net:
         if facts:
             _refuse("; ".join(facts))
         self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), phi.engine.get("env") or {})
+        env = phi.engine.get("env")
+        self.long_rows = None if env is None or all(env.get(k) == v for k, v in DSA_TOPK_ENV.items()) else (
+            f"a row past INDEX_TOPK ({int(C['INDEX_TOPK'])}) keys under an engine whose environment sets "
+            f"{', '.join(f'{k}={env.get(k)!r}' for k in DSA_TOPK_ENV)}, not {DSA_TOPK_ENV} (the kernels' own order past INDEX_TOPK, "
+            f"which DsaTopKLongRow refuses; serve it under the DSA top-k plugin's canonical row)")
         ff = FF.facts_for(hf)
         self.model_class, self.NL = served_class(ff["vllm_class"]), int(C["NL"])
         self.nodes_per_row_layer = 26 + int(C["NH"]) + 4 * int(C["TOPK"])
@@ -354,11 +361,13 @@ class _Model:
                 if n <= TOPK:
                     self.call(select, self.call(self.k("const", W=32, BITS=n)).refs)
                     continue
+                if self.net.long_rows:
+                    _refuse(self.net.long_rows)
                 sw = self.run.value(run_field(L, pos0 + i), Array(waksman_switches(n, TOPK), Value(1)))
                 order = self.call(self.k("dsa_waksman_order", N=n, TOPK=TOPK), sw.refs)
-                self.checks.append((self.call(self.k("dsa_topk_order", N=n, TOPK=TOPK), logits.refs, order.refs),
+                self.checks.append((self.call(self.k("dsa_topk_long_row", N=n, TOPK=TOPK), logits.refs, order.refs),
                                     f"{run_field(L, pos0 + i).split('/')[0]} t={pos0 + i}: the top-{TOPK} order the run's Waksman "
-                                    f"settings route is a permutation of the top-{TOPK} set of {n} logits (DsaTopKOrder_v1)"))
+                                    f"settings route is the top-{TOPK} set of {n} logits in ascending index order (DsaTopKLongRow_v1)"))
                 self.topk[pos0 + i] = sw
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
         batch = [min(n, TOPK) for n in self.launch.keys(keys)]

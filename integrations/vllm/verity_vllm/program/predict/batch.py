@@ -30,10 +30,11 @@ request's Program is built at its launch context, which the advice fixes, and th
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a `prefix` behind no checked
   hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
-  request's partial on the other rank, which the cross-rank transfer must hold request by request. Its `run` (the top-k order of
-  each row past INDEX_TOPK, `dsa.run_field`) is its own too: each field routes the request's own key indices, and its checks
-  (`DsaTopKOrder`) hold the routed indices to the top-INDEX_TOPK set of the request's own logits, so the run picks only their
-  order, which the Program reads as served.
+  request's partial on the other rank, which the cross-rank transfer must hold request by request. Its `run` (the Waksman
+  settings of each row past INDEX_TOPK, `dsa.run_field`) is its own too: each field routes the request's own key indices, and its
+  checks (`DsaTopKLongRow`) hold the routed order to the top-INDEX_TOPK set of the request's own logits in ascending index order,
+  the one order those logits fix, so each field is a function of the request's own inputs. No order a kernel or a prover picks
+  passes: a row past INDEX_TOPK is served under `VERITY_DSA_TOPK=canonical` (`dsa.Net` refuses an engine without it).
 """
 
 from __future__ import annotations
