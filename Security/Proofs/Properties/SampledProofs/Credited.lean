@@ -227,12 +227,11 @@ theorem provedUnits_sorted {pubB : ByteArray} {record : String} {us : Array Nat}
     (h : OneStageZk.provedUnits pubB record = .ok us) : ∃ xs : Array Nat, us = xs.qsort (· < ·) := by
   unfold OneStageZk.provedUnits at h
   obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
+  obtain ⟨_, -, h⟩ := bind_ok h
   split at h
-  · obtain ⟨_, -, h⟩ := bind_ok h
-    split at h
-    · obtain ⟨xs, -, h⟩ := bind_ok h
-      exact ⟨xs, (Except.ok.inj h).symm⟩
-    · cases h
+  · obtain ⟨xs, -, h⟩ := bind_ok h
+    exact ⟨xs, (Except.ok.inj h).symm⟩
   · cases h
 
 /-- **v2 credits its one session with the coins' draw.** Where v2 accepts evidence it parsed at the coins `ξ`: the
@@ -469,7 +468,7 @@ theorem mapM_range {ε : Type} {f : Json → Except ε ℕ} (hf : ∀ j u, nat? 
       l.mapM f = .ok (List.range' k l.length)
   | [], _, _ => rfl
   | a :: l, k, h => by
-    have ha : f a = .ok k := hf a k (by simpa using h 0 (by simp))
+    have ha : f a = .ok k := hf a k (h 0 (by simp))
     have hl := mapM_range hf l (k + 1) fun i hi => by
       have := h (i + 1) (by simpa using hi)
       simpa [Nat.add_assoc, Nat.add_comm 1 i] using this
@@ -494,7 +493,9 @@ theorem indicesOf_of_indicesHeld {rec h : Json} (hi : OneStageZk.indicesHeld rec
       have := hall i (by simpa [← hsz] using hi)
       simpa [Array.getElem?_eq_getElem (by simpa using hi)] using this]
     simp only [Array.length_toList, hsz, ← List.range_eq_range']
-    rfl
+    show Except.ok (List.range n).toArray = Except.ok (Array.range n)
+    rw [← Array.toList_range]
+    all_goals rfl
   · cases hi
 
 /-- **v2 holds the public file's units to the record's population, in order.** Where v2 accepts at the coins `ξ`, at
