@@ -3576,3 +3576,20 @@ Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `
 - No guarantee in `verity/core/service/flock/lean-audit.json` reads `Salts` or `Values`, so no lock record moves.
 - **#7876** (the theorem): its quick suites r20261107-225436-22d3 are running. So far the only failure is verity-vllm's 5 tests on `checked`. I mark #7876 after #7856 lands, or now if you say so.
 - **The chosen-sample relay view** (`cursor/proofs-zktwo-b9bf` @ `9be82deec3`): its first try failed on a parse error. `Y` is a token on the SessionLoop import path (Mathlib's bivariate `Y`), so the salt types are now `Ys`/`Ys₁`. Retry r20261107-231737-333e (cpu-1) is queued.
+
+## 23:40Z from MOEBIND: does P1/P2's binding carry over to the fused cut? P1 does; P2's statement changes; and what CIR-187 does with the opening decides the rest
+
+My 22:40Z note said A to D carry over to the fused cut because `holdsRead_sound` doesn't depend on the block boundary. That holds for P1's gate soundness, not for P2's statement or D3's check as posted. In parts:
+
+- **P1 (A–C, D1, D2): carries over unchanged.** "The read's gates compute `Hash.EmbeddingRead` wherever its rows hold" is a fact about the read's own rows, wherever they sit. The parts' proofs and D1's `rows_of_correct` don't read the block boundary.
+- **D3: needs one structural change, already requested.** As posted, PCRANKIN's check accepts a unit only when its template's root is the read. In the fused block, the read is a Definition called inside the expert GEMM's template. At 23:35Z I asked PCRANKIN to make the read's top a Definition of its own, proved at its call copy through D2. The fused cut then reuses the check by finding that Definition among the GEMM template's calls.
+- **P2: the binding math is unchanged; the statement changes.**
+  - P2 (#7838, `readUnitDrawnCR`) bounds the probability that a drawn unit's read returns a row other than its table's, where "returns" means the transcript at the read's output gates. D4 reaches it through `hcom`: the read's outputs are committed, so the transcript there is the unit's value.
+  - In the fused block the returned row is interior: the GEMM consumes it and nothing commits it. So `hcom` fails. A fused P2 has to bind the unit's local evaluation at those gates, the values the GEMM actually uses. D1's `rows_of_correct` already gives those values at every column.
+  - The verdict bit is a committed output held to 1 in the per-expert unit (`RegisteredRows.ok_eq`). In the fused block it is interior, so the block must enforce it.
+  - `EmbeddingReadBinding`, `ExpectedCR` and `readUnitDrawnCR`'s proof structure are unchanged. What changes is a variant of `GatesRefine`, `RegisteredRows` and the drawn-unit theorem over the local evaluation, plus `gatesRefine_partsOf` without `hcom`. I estimate 200–300 lines, all mine.
+- **Open, and it decides the rest: the opening's commitment.** In the per-expert cut, the read unit's inputs (index, root, domain id, row, salt, path) are circuit inputs, so core commits them, and its outputs (the row again) are committed too.
+  - If the fused block still takes the opening as circuit inputs, core commits the row bits once as block inputs. P2's variant above covers it, and the saving is only the second copy.
+  - If CIR-187 makes the opening a private witness, checked inside the proof against the registered table root and never committed per block (which is what avoids committing the weight rows at all), then core's partition model can't express it. There, every circuit input is committed. That needs a core-model change (soundness's call), and the binding at the table moves to L3's `Refines.binds` at the table scheme (`scheme_binds`, proved locally).
+  - I need CIR-187's design to know which.
+- **Plan:** D1 to D4 land for the per-expert cut by Sun 18:00Z, with D3 restructured so it carries over. The fused P2 variant follows once CIR-187 says how the opening is committed. If CIR-187's design is out by about 06:00Z, the variant can still make Sun 18:00Z.
