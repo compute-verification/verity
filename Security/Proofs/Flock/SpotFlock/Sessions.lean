@@ -5,9 +5,9 @@ public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.Sampling.SessionSteps
 
 /-!
-# SPOT-Flock's sessions are Flock runs
+# SPOT[Flock]'s sessions are Flock runs
 
-`SpotFlock.steps h rel`: the deployed two-stage verifier (`SpotFlock.code h`) has the step structure
+`SpotFlock.steps h rel`: SPOT[Flock]'s two-stage verifier (`SpotFlock.code h`) has the step structure
 `Claims.Sampling.SessionSteps`. Rounds 0 to 2 answer with no `H` call: the two stages' coins, then the session
 statement's check (`stmtOk`), which answers `[]` or refuses. Rounds 3 on are Flock's masked verifier at the round-2
 statement, whose round count `stmtOk` holds to `k₀ h`. The session read off a transcript is that statement where it is in
@@ -15,7 +15,7 @@ scope (`sessionOk`), which `stmtOk` checks, so at every run that passed round 2 
 before its session shows `xS₀`'s refused run, at which Flock refuses the first message `[]` (`refuses_empty`); Flock's
 verifier has a round at every statement (`k₀_pos`).
 
-So `sessionRuns`: `SessionRuns` holds at the deployed code, for every relation and every `H`.
+So `sessionRuns`: `SessionRuns` holds at that code, for every relation and every `H`.
 -/
 
 @[expose] public section
@@ -57,7 +57,7 @@ theorem sessionOk_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (ho
     exact hok.1.2
   · exact absurd hok Bool.false_ne_true
 
-/-- **The deployed verifier's step structure**: a prefix of 3 rounds, then Flock's masked verifier at the round-2
+/-- **The two-stage verifier's step structure**: a prefix of 3 rounds, then Flock's masked verifier at the round-2
 statement for `k₀ h` rounds; a refused prefix shows `xS₀`'s refused run. -/
 noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :
     SessionSteps (deployOf (FlockDeploy.deployZk rel) (code h)) where
@@ -135,7 +135,7 @@ noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     · simp only [List.length_cons] at hlen
       omega
 
-/-- **SPOT-Flock's sessions are Flock runs** (`SessionRuns`), at every relation and every `H`. -/
+/-- **SPOT[Flock]'s sessions are Flock runs** (`SessionRuns`), at every relation and every `H`. -/
 theorem sessionRuns (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (H : Msg → Msg) :
     SessionRuns H (SamplingDeploy.deploy rel (code h)) :=
   sessionRuns_of_steps (steps h rel) H

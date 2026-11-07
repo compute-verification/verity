@@ -4,7 +4,7 @@ public import Proofs.Flock.SpotFlock.Code
 public import Proofs.Flock.Claims.Sampling.KS
 
 /-!
-# SPOT-Flock's deployed code: the facts its order gives
+# SPOT[Flock]'s two-stage code: the facts its order gives
 
 * `stepWith_fst_take`, `run_fst_take`: a run's prover messages through round `m` read only its coins before round `m`;
   the verifier's answer at round `m` may read round `m`'s coin, the prover's message there doesn't.
@@ -99,7 +99,7 @@ theorem iroots_fst (x : Msg) (v : Seen) (ρ : ℕ) :
   | [_] => rfl
   | _ :: _ :: _ => rfl
 
-/-- **Interior fixed** at SPOT-Flock's code (`Code.InteriorFixed`): fresh second-stage coins keep the interior roots a
+/-- **Interior fixed** at SPOT[Flock]'s code (`Code.InteriorFixed`): fresh second-stage coins keep the interior roots a
 run shows, since the prover states them at round 1, reading only round 0's coin. -/
 theorem interiorFixed (h : Held) (H : Msg → Msg) :
     ∀ x (Ω : Type) (P : Prover Ω) ω r d v,
@@ -335,7 +335,7 @@ theorem stmtOk_scope {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stm
     cases hlb'
     exact ⟨s, _, d, by simp [hs], hPt, hd, scopeOk_sound hsc s (parse_prog h hs)⟩
 
-/-- **Refuses at two stages** at SPOT-Flock's code (`Code.RefusesTwo`): an accepting run passed round 2, whose check
+/-- **Refuses at two stages** at SPOT[Flock]'s code (`Code.RefusesTwo`): an accepting run passed round 2, whose check
 (`stmtOk`) puts its statement in the two-stage scope. -/
 theorem refusesTwo (H : Msg → Msg) :
     ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P (code h).V x ω r).out = .acc →
@@ -352,7 +352,7 @@ theorem refusesTwo (H : Msg → Msg) :
     simp [OC.eval, hok] at hne
   | true => exact stmtOk_scope h hok
 
-/-- **The registration is the statement's two-stage design** at SPOT-Flock's code (`RegMatchesTwo`): the design
+/-- **The registration is the statement's two-stage design** at SPOT[Flock]'s code (`RegMatchesTwo`): the design
 evaluates only where the replay layout's slots are its cells. -/
 theorem regMatchesTwo :
     ∀ x s Pt d, (code h).parse x = some s → (code h).partition s = some Pt → two h s = some d → InScopeTwo Pt d s →
@@ -380,7 +380,7 @@ theorem regMatchesTwo :
 
 /-! ## The sessions are in scope -/
 
-/-- **Every session is in Flock's masked scope** at SPOT-Flock's code (`SessionsIn`'s clauses, `FlockDeploy.ZkIn`
+/-- **Every session is in Flock's masked scope** at SPOT[Flock]'s code (`SessionsIn`'s clauses, `FlockDeploy.ZkIn`
 unfolded): with at most the code's tables and the reference statement's shapes, the reference statement being in
 scope (`Held.xS₀_ok`). -/
 theorem sessionsIn :

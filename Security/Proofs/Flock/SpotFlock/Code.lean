@@ -6,13 +6,14 @@ public import Proofs.Flock.Claims.ZkDecodeFlock
 public import Definitions.Claims.SamplingTwo
 
 /-!
-# SPOT-Flock's deployed two-stage verifier
+# SPOT[Flock]'s two-stage verifier
 
 `SpotFlock.code h`: the sampled verifier's code (`SamplingDeploy.Code`) for a two-stage registration whose copies the
-auditor holds (`h`, a `Held`), its sessions run by Flock's deployed masked verifier (`FlockDeploy.V true`); and what the
+auditor holds (`h`, a `Held`), its sessions run by Flock's masked verifier (`FlockDeploy.V true`); and what the
 two-stage compiler reads beside it: the design (`two h`), the replay sample of record (`rs h`) and the interior
-registration's roots (`iroots`). This is the deployment's layer: the compiler's theorem (`ksTwo_atOrder`) holds at
-these definitions from the premises it names, and nothing here imports a proof.
+registration's roots (`iroots`). This is the deployment layer: the compiler's theorem (`ksTwo_atOrder`) holds at
+these definitions from the premises it names, and nothing here imports a proof. A running verifier is this one only
+where it makes every check below.
 
 **The auditor's copies** (`Held`), fixed before the run and never the prover's: the registration's program (its
 descriptor's bytes and gates), the statement's partition query, the two-stage registration the samples read (`RegTwo`)
@@ -21,8 +22,8 @@ a run's roots and interior roots (`registered`), a reference session statement (
 table shapes are every session's, and the commitment's layout and the reference prover's framing (`frame`, a code whose verifier and samples
 are unread).
 
-**The run's statement** (`Stmt`): the roots the boundary values are committed under, as canonical bytes (`Stmt.encode`,
-read back by `decode`, which keeps only bytes that encode back to themselves).
+**The run's statement** (`Roots`): the roots the boundary values are committed under, as canonical bytes
+(`Roots.encode`, read back by `decode`, which keeps only bytes that encode back to themselves).
 
 **The run**, `3 + k₀` rounds, `k₀` Flock's at `xS₀`:
 
@@ -82,23 +83,23 @@ structure Held where
   frame : Code
 
 /-- **The run's statement**: the roots the boundary values are committed under. -/
-structure Stmt where
+structure Roots where
   roots : List Msg
 
 /-- The run's statement's format string, its first field. -/
 def FORMAT : String := "spot-flock-statement/v1"
 
-def Stmt.encode (st : Stmt) : Msg :=
+def Roots.encode (st : Roots) : Msg :=
   FlockDeploy.encStr FORMAT ++ FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩) st.roots
 
-def Stmt.read : FlockDeploy.Rd Stmt := do
+def Roots.read : FlockDeploy.Rd Roots := do
   if (← FlockDeploy.rdStr) ≠ FORMAT then failure
   let roots ← FlockDeploy.rdList FlockDeploy.rdBytes
   pure ⟨roots.map fun b => b.data.toList⟩
 
-/-- **The run's statement's decoder**: `Stmt.read` on all of `x`, kept only when its encoding is `x`. -/
-def decode (x : Msg) : Option Stmt :=
-  match Stmt.read.run x with
+/-- **The run's statement's decoder**: `Roots.read` on all of `x`, kept only when its encoding is `x`. -/
+def decode (x : Msg) : Option Roots :=
+  match Roots.read.run x with
   | some (st, []) => if st.encode = x then some st else none
   | _ => none
 
@@ -307,7 +308,7 @@ noncomputable def base : Code :=
 /-- The registration the samples read, at a statement that decodes. -/
 def reg (x : Msg) : Option RegTwo := (decode x).map fun _ => h.reg
 
-/-- **SPOT-Flock's deployed two-stage code**: the code at its round order, its checked units the two stages' on the
+/-- **SPOT[Flock]'s two-stage code**: the code at its round order, its checked units the two stages' on the
 auditor's registration, each stage's bytes its own coin's. -/
 noncomputable abbrev code : Code := codeTwoAt (base h) (reg h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte) (fun _ => coinByte)
 
