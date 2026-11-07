@@ -337,7 +337,7 @@ class _Model:
         w = lambda f: self.w[(L, f)]  # noqa: E731
         logits = self.router(x, w("gate_w"))
         shared = self.fp8_linear(self.silu(self.fp8_linear(x, w("sh_gate_up_w"), w("sh_gate_up_ws"))), w("sh_down_w"), w("sh_down_ws"))
-        kernel = router_kernel(E, M, TOPK)
+        kernel = router_kernel(E, self.launch.tokens(M), TOPK)
         if kernel is None:
             _refuse(f"the grouped top-k launch at E={E}, top {TOPK} (registry.moe.router_kernel pins no kernel)")
         rt = self.k("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=float(C["ROUTED_SCALING_FACTOR"]), KERNEL=kernel)
