@@ -6,6 +6,7 @@ public import Proofs.Properties.Verity.Recursive.Numbers
 public import Proofs.Flock.Claims.Sampling.Select.Size
 public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
 import all Lean.Data.Json.Basic
+import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 
 /-!
 # The session's numbers at a draw file
