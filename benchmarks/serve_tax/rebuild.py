@@ -2,6 +2,8 @@
 request's replay block, replay to a far edge, and say how close the replay came.
 
     rebuild.py --arm-dir OUT/restore [--from-edge 1] [--to-edge 2] --kv-dir DIR [--checkpoint DIR] [--tail copy] --out DIR
+    rebuild.py ... --tail nan --at-step S --mirror-out MDIR --out DIR    # then
+    rebuild.py ... --tail nan --from-mirror MDIR --out DIR
 
 A restore (`restore.py`) puts the served engine's whole state back: the block pool, the scheduler and the model runner's
 rows. Lifetime replay has less: a host copy of each K/V page, written when the page was, and the step record. So here a
@@ -23,6 +25,17 @@ fresh cache lacks is loaded from the edge's K/V, the block the served pool cache
 rebuild.json compares, from edge to edge: the schedule step by step (at the first step the re-added requests are new to
 the fresh engine, so they are left out of its ``new`` and ``cache_hit``), every sampled token and its logprob's bits, and
 at both edges each request's K/V over its computed tokens, a SHA-512 root per request against the served edge's K/V file.
+
+A real replay starts at a sampled request's first step, inside the replay block, with its batch-mates mid-request and
+their last pages partly filled. ``--at-step S --mirror-out MDIR`` replays from the edge as above, keeping lifetime
+replay's host copy as it goes (`Mirror`: each step's written slots, copied once the GPU has finished the step), and right
+before the engine schedules step S writes what a replay starts from (`start_state`: the scheduler's queues and each
+request's counters, the mirror's rows, and each request's K/V root on the GPU), then stops; mirror.json says whether that
+replay matched serving up to S. ``--from-mirror MDIR`` starts a fresh engine at S from that alone (`readd_mirror`):
+outputs through S-1 are those processed by then and the record's for S-1, still in flight under async scheduling, and
+nothing past a computed prefix is filled in. It refuses a step whose rows run a request the step before finished (async
+scheduling's extra row, which the record doesn't keep), and compares from S to the far edge as rebuild.json does, with
+the roots at S against the GPU's.
 """
 from __future__ import annotations
 

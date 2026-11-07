@@ -32,6 +32,8 @@ less, only what a host copy of the K/V pages and the step record hold: it adds e
 engine as a new request with its outputs so far, copies its computed prefix's pages from the edge's KV file into blocks
 the fresh engine allocates, as a KV connector's load does, and compares the replay the same way, with each request's K/V
 over its computed tokens as a SHA-512 root at both edges (``--tail`` sets what a partial block holds past its prefix).
+With `--at-step S --mirror-out DIR`, then `--from-mirror DIR`, it starts at an arbitrary step inside the replay block
+instead, from per-step copies of the slots each step wrote (its docstring says how).
 
 The workload is the trace corpus's (`benchmarks/network_e2e/traces`: C4 prompts of 16 to 1,024 tokens, about 60% behind
 one of eight shared prefixes, caps of 64 or 256 tokens) under Poisson arrivals, every request decoding to its cap
