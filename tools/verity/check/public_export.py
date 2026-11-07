@@ -8,8 +8,10 @@
 DEST gets the files `public_boundary.py` judges public (`public_boundary.toml`), in a new repository with one commit. A
 manifest's entry that names what the export doesn't copy is dropped: a lakefile's roots, executables, input files and path
 `require`s (with their `lake-manifest.json` entries), and each pyproject's members, sources, conflicts, extras, dependency
-groups and test paths. A `[project] dependencies` entry stays, and so does the source of a distribution one still needs. Each
-rewrite must read, as TOML or JSON, as the old manifest less exactly those entries. A path `require`, an extra's entry and a
+groups and test paths. A `[project] dependencies` entry stays, and so does the source of a distribution one still needs. A
+data file that lists paths (`public_boundary.toml`'s `[[listing]]`: a lint's allowlist, a census's roots) loses each entry
+naming a file the export doesn't copy, so the exported tree's own checks find none stale. Each rewrite must read, as TOML or
+JSON, as the old file less exactly those entries. A path `require`, an extra's entry and a
 dependency group's are the edges the check counts closed by the export (`EXPORT_CUTS`), and the export fails if its rewrite
 kept one; every other edge it copies as it stands, so a build of DEST fails where a file imports, runs or reads one the
 export doesn't copy.
@@ -341,6 +343,59 @@ def rewrite_pyproject(text: str, here: str, copied: set[str], dists: set[str], w
     return _checked("".join(out), expect, _norm(here, "pyproject.toml")), dropped
 
 
+def _entry_line(line: str, drop: list) -> bool:
+    s = line.strip().removesuffix(",")
+    try:
+        return s.startswith("{") and json.loads(s) in drop
+    except json.JSONDecodeError:
+        return False
+
+
+def rewrite_listing(text: str, listing: PB.Listing, where: str, copied: set[str],
+                    tracked: set[str]) -> tuple[str, list[tuple[str, str]]]:
+    """A data file that lists paths (``listing``, `public_boundary.toml`'s `[[listing]]`) without each entry naming a file
+    or directory of ``tracked`` that the export doesn't copy, and ("entry", that path) of each it dropped. A path is from
+    the listing's base, else from the root; an entry naming nothing tracked (a glob, a module, a stale entry the tree's own
+    check reports) stays. A JSON listing's rewrite must read as the old one less exactly those entries."""
+    held = {d for c in copied for d in _parents(c)}
+
+    def gone(p: str) -> str | None:
+        for q in (_norm(listing.base, p), _norm(p)):
+            if q in tracked:
+                return None if q in copied or q in held else q
+        return None
+
+    if listing.entry == "line":
+        out, dropped = [], []
+        for line in text.splitlines(keepends=True):
+            words = line.partition("#")[0].split()
+            if words and (q := gone(words[0])):
+                dropped.append(("entry", q))
+            else:
+                out.append(line)
+        return "".join(out), dropped
+    key = listing.entry.removeprefix("entries.")
+    doc = json.loads(text)
+    entries = doc.get("entries") if isinstance(doc, dict) else None
+    if not isinstance(entries, list):
+        raise ValueError(f"public_export: {where} lists its paths under `entries`, but holds no `entries` list")
+    drop = [e for e in entries if isinstance(e, dict) and isinstance(e.get(key), str) and gone(e[key])]
+    if not drop:
+        return text, []
+    lines = [line for line in text.splitlines(keepends=True) if not _entry_line(line, drop)]
+    for i in range(len(lines) - 1):
+        if (body := lines[i].rstrip()).endswith(",") and lines[i + 1].lstrip().startswith("]"):
+            lines[i] = body[:-1] + lines[i][len(body):]
+    try:
+        got = json.loads("".join(lines))
+    except json.JSONDecodeError:
+        got = None
+    if got != doc | {"entries": [e for e in entries if e not in drop]}:
+        raise ValueError(f"public_export: the rewrite of {where} reads as more than the old one less the entries it drops; "
+                         "lay its entries out one a line")
+    return "".join(lines), [("entry", gone(e[key])) for e in drop]
+
+
 def export(tree, boundary, judgment, dest: Path) -> dict:
     """Copy ``judgment``'s public set into ``dest``, rewrite its manifests, and commit it as a new repository's one commit."""
     copied = set(judgment.public)
@@ -354,12 +409,15 @@ def export(tree, boundary, judgment, dest: Path) -> dict:
                 if (n := PB._norm_dist(PB._requirement_name(r))) in dists and n not in exported}
     rewrites: dict[str, list[tuple[str, str]]] = {}
     targets: dict[str, dict] = {}
+    tracked = tree.files | tree.dirs
     for f in sorted(copied):
         name, here = f.rpartition("/")[2], os.path.dirname(f)
-        if name not in ("lakefile.toml", "lake-manifest.json", "pyproject.toml"):
+        listing = boundary.listing(f)
+        if listing is None and name not in ("lakefile.toml", "lake-manifest.json", "pyproject.toml"):
             continue
         old = (dest / f).read_text(encoding="utf-8")
-        new, dropped = (rewrite_lakefile(old, here, copied) if name == "lakefile.toml"
+        new, dropped = (rewrite_listing(old, listing, f, copied, tracked) if listing is not None
+                        else rewrite_lakefile(old, here, copied) if name == "lakefile.toml"
                         else rewrite_manifest(old, here, copied) if name == "lake-manifest.json"
                         else rewrite_pyproject(old, here, copied, exported, set(dists), required))
         if dropped:
