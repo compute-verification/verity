@@ -11,9 +11,7 @@
 set -uo pipefail
 O=${OUT:?}; IN=${RESEARCH_RUN_DIR:?}/inputs
 D=benchmarks/torch_gpu/p2_stage
-for v in ${VERITY_BENCH_VENV:-} /workspace/jobs/venv312 /workspace/cp/venv312; do
-  [ -z "${PY:-}" ] && [ -x "$v/bin/python3" ] && PY=$v/bin/python3
-done
+PY=${PY:-$(. benchmarks/harness/env.sh && echo "$VENV/bin/python3")}
 PY=${PY:-python3}
 "$PY" -c 'import torch' 2>/dev/null || { PATH=$HOME/.local/bin:$PATH uv sync -q --all-packages --extra torch > "$O/sync.log" 2>&1; PY=$PWD/.venv/bin/python; }
 TV=$($PY -c 'import torch; print(torch.version.cuda or "")' 2>/dev/null)
