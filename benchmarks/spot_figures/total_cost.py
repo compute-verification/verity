@@ -741,22 +741,23 @@ def _solve(job: tuple) -> float | None:
 
 #: the spans a break-even searches: the marginal overhead's multiple, and β
 SPANS = {"h": (1e-12, 1e2), "beta": (1e-6, 1e6)}
-#: the most steps of 1 + `rel` outward from a solved break-even that Lean's certificate takes
-STEPS = 4
+#: the most steps outward from a solved break-even that Lean's certificate takes, the i-th of (1 + `rel`)^(2^i)
+STEPS = 6
 
 
 def certify(at, x: float, target: float, rising: bool, rel: float) -> dict:
     """Lean's certificate that a line's exfiltration bound at a break-even's point is at most `target` bits.  `at(x)` is
     the line's point at `x` with Lean's check of its design (`_point`'s exfiltration with `lean`): its count is the
     bits Lean certifies for the design the planner picks there (`lean_two`), rounded up to a float, so `y`, that count
-    or the served bits if fewer, at most the target is the certificate.  Where it is above the target (Lean's bits a
-    hair above the planner's, at a point the planner puts within a hair of the target), `x` steps outward by 1 + `rel`
-    (down for a bound rising in it, up for one falling) at most `STEPS` times; `at` None says no step reached it."""
+    or the served bits if fewer, at most the target is the certificate.  Where it is above the target (Lean's bits
+    above the planner's, at a point the planner puts near the target), `x` steps outward (down for a bound rising in
+    it, up for one falling), the i-th step by (1 + `rel`)^(2^i), at most `STEPS` times; `at` None says no step reached
+    it."""
     for step in range(STEPS + 1):
         pt = at(x)
         if pt["y"] <= target:
             return _certificate(x, step, pt)
-        x = x / (1 + rel) if rising else x * (1 + rel)
+        x = x / (1 + rel) ** 2 ** step if rising else x * (1 + rel) ** 2 ** step
     return _certificate(None, STEPS, pt)
 
 
