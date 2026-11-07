@@ -34,7 +34,7 @@ import hashlib
 import json
 import os
 import traceback
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -115,6 +115,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
     of record (`rank_replay.load`: refused unless of record and this rank's), from the worker's commit state."""
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import driver as SR
+    from verity_vllm.pipeline import expert_tables as ET
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
 
@@ -128,7 +129,8 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
                            committed=OC.OpenedReader(st["com"], rc), weights=SR.model_weights_provider(st["weights"], p.index.prefix),
                            manifest=RR.manifest_of_rank(st.get("manifest_doc"), rank), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
                            run=request.get("run"), row=request.get("row"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
-                           committer=request.get("committer"), workers=1,   # vLLM's TP workers are daemonic: no process pool under them
+                           committer=request.get("committer"), tables=ET.of_request(request.get("tables"), rank),
+                           workers=1,   # vLLM's TP workers are daemonic: no process pool under them
                            tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
                            index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
@@ -137,7 +139,8 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
 def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, *, pair: int = 0,
                 build_root: str | os.PathLike | None = None, checkpoint: Any = None, weights: Any = None,
                 required_manifest: str | None = None, workers: int | None = None, programs: Any = None,
-                binding: dict[str, Any] | None = None, transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
+                binding: dict[str, Any] | None = None, transfer_gates: Sequence[str] = (),
+                tables: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Rank ``rank``'s ``stand-in`` window into ``out_dir`` from its sealed replay bundle of pair ``pair`` (module docstring): the
     bundle opened against the record (`commit_replay._of_record`), the required manifest, the rank's Programs of record
     (`rank_replay.load`; ``build_root``'s ``rank<r>/`` instead of the record's dirs, its digests held either way; ``programs``, the
@@ -145,8 +148,11 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
     ``transfer_gates`` proved whole, `pipeline.advice_windows`), its weight shards
     opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a `weights_of_record.CheckpointIndex`;
     without one, only the tensors the bundle carries; ``weights``, tests, replaces them), each on the window's first read of it
-    (`cpu_replay.OnRead`), and every value read through an opening verified against the rank's root."""
+    (`cpu_replay.OnRead`), and every value read through an opening verified against the rank's root.  ``tables``: the per-expert
+    cut's tables committed under the committer's key and registration (`expert_tables.of_request`)."""
     from types import SimpleNamespace
+
+    from verity_vllm.pipeline import expert_tables as ET
 
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.pipeline import cpu_replay as CPU
@@ -191,7 +197,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
                            row=ctx.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": pair, "source": ctx.get("code")}, workers=workers, tp=tp,
                            index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp, b["manifest_sha256"]),
-                           binding=binding, transfer_gates=transfer_gates)
+                           binding=binding, transfer_gates=transfer_gates, tables=ET.of_request(tables, rank))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -314,6 +320,9 @@ class Options:
                                     help="skip the shard sha256 (each tensor read is still held to the committed weights root)")
     required_manifest: str | None = option("--required-manifest", default=None, help="the Commit's required manifest (default: its recorded path)")
     workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")
+    tables_key: str | None = option("--tables-key", default=None, help="the committer's key file its per-expert tables are registered under")
+    tables: str | None = option("--tables", default=None,
+                                help="the per-expert tables' registration (tp-register-tables --out), {rank} its rank's")
 
 
 def main(o: Options) -> int:
@@ -328,7 +337,8 @@ def main(o: Options) -> int:
         world = int(record(o.commit_out)["world"])
         for r in [int(x) for x in o.ranks.split(",")] if o.ranks else range(world):
             got = from_bundle(o.commit_out, r, o.partition, Path(o.out) / f"rank{r}", build_root=o.build_root, checkpoint=ck,
-                              required_manifest=o.required_manifest, workers=o.workers)
+                              required_manifest=o.required_manifest, workers=o.workers,
+                              tables={"key": o.tables_key, "registration": o.tables} if o.tables else None)
             print(f"[tp-serving-rows] rank {r}: stand-in window of {got['population']} units, run {got['run'][:16]} rank {r}, registration "
                   f"{str(got['registration_digest'])[:16]}", flush=True)
     except (CR.Refused, LookupError, ValueError, RuntimeError) as e:
