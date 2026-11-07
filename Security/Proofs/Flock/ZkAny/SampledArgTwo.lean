@@ -31,7 +31,7 @@ open scoped ENNReal
 `Q` of `A`'s prover, and the bounds `εS` and `δ`: the stack reads no key at any first-stage sample (`own`); every
 session's statement and witness are in `A`'s relation (`rel`); its verifier runs `A`'s rounds (`rounds`); `A`'s error
 there is at most `εS j` at each outcome (`err`); and at every first-stage sample an ideal stream of the values is within
-`δ` of one of the dummy values there (`hiding`). -/
+`δ` of one of the dummy values there (`hides`). -/
 structure AuditZkTwo {Coin K S Ys V O T R X₁ X₂ Θ : Type} [Fintype S] [Fintype Ys] [Fintype T] [Fintype R]
     (A : ZkArg Coin) (sv : Service K S Ys V O T R) {r : ℕ} (m : Fin r → ℕ) (v v₀ : X₁ → Fin r → V)
     (st : X₁ → StreamStack K V S O T R r m)
@@ -42,7 +42,7 @@ structure AuditZkTwo {Coin K S Ys V O T R X₁ X₂ Θ : Type} [Fintype S] [Fint
   rounds : ∀ j ρ χ b, (Q.Vs j ρ χ b).k (Q.x j ρ χ b) = A.kz (Q.x j ρ χ b)
   err : ∀ j p χ π b o, ENNReal.ofReal (A.εzk (Q.x j (recTwoOf sv v st p) χ b) (Q.w j p χ π b) Θ
     (Q.Vs j (recTwoOf sv v st p) χ b) (Q.θ j (recTwoOf sv v st p) χ b) o) ≤ εS j o
-  hiding : ∀ χ₁ P Ev, sv.streamIdeal m (v χ₁) P Ev ≤ sv.streamIdeal m (v₀ χ₁) P Ev + δ
+  hides : ∀ χ₁ P Ev, sv.streamIdeal m (v χ₁) P Ev ≤ sv.streamIdeal m (v₀ χ₁) P Ev + δ
 
 end FlockSoundness.ZK
 
@@ -87,6 +87,6 @@ theorem SampledAuditTwoZkArg : Flock.Guarantees.SampledAuditTwoZkArg := by
   intro Coin K S Ys V O T R X₁ X₂ Θ _ _ _ _ _ _ _ CB _ _ A H hA sv r m b v v₀ st k₀ ℓ Q eC εS δ hc s E
   exact sampledAuditTwo_zkOut (N₀ := A.Nonce) (Ω₀ := A.Rest) (k := A.kz) (Pv := fun _ w _ => A.P w) (Rl := A.R)
     (out := A.out) (Sm := A.S) (ε := fun _ => A.εzk) (ok := fun _ => True) (fun _ _ => hA) sv r m b v v₀ st k₀ ℓ Q
-    eC εS δ hc.own (fun _ _ _ _ _ => trivial) hc.rel hc.rounds hc.err hc.hiding s E
+    eC εS δ hc.own (fun _ _ _ _ _ => trivial) hc.rel hc.rounds hc.err hc.hides s E
 
 end Flock.SecurityProofs
