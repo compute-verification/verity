@@ -28,7 +28,9 @@ import sys
 import time
 from pathlib import Path
 
-INBOX = Path(os.environ.get("AGENT_INBOX", "/tmp/agent-inbox"))
+import settings
+
+INBOX = Path(settings.INBOX)
 STAMP = re.compile(r"^\[(\d{4}-\d\d-\d\dT\d\d:\d\dZ)\](?: [0-9a-f]{12})?$", re.M)
 HEAD = re.compile(r"^\[\d{4}-\d\d-\d\dT\d\d:\d\dZ\] ([0-9a-f]{12})$", re.M)
 FILE = "inbox.md"

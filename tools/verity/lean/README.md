@@ -339,6 +339,25 @@ are is decided by code, not by text: every failure carries one (`check.py`'s `Fa
 `RECORD_DIFFERENCE`, so rewording a message changes nothing drive commits. The Lean check of a commit of `next` runs with
 `--regenerate`, and drive commits the records it regenerated when it lands that commit (drive.toml's `regenerate_locks`);
 drive's after-landing run passes `--no-regenerate`, so a record difference that reaches `checked` fails there.
+
+**Bookkeeping warns after a landing.** Drive's lock run (`train.sh --deferred lean-audit --bookkeeping-warn`, reaching
+`check.py` as `--bookkeeping warn`) passes a package that fails only on bookkeeping (`BOOKKEEPING`) on the lock `repaired`
+writes:
+- an unlisted premise, an `assumptions` entry declared outside the assumptions module, or an uncovered `domain` entry is
+  listed under `open`, owned by its guarantees' owner (the first, of several), on the lock's `open_default_issue` (else
+  `BOOKKEEPING_ISSUE`), due seven days from the run;
+- a guarantee the witnesses rule now holds to witnesses it lacks is listed under `unwitnessed` at its current hashes;
+- a stale entry is dropped, and a missing owner is set to the guarantees' owner, else `BOOKKEEPING_OWNER`.
+
+The run then judges the policy's checks again on that lock, so whatever else fails still fails: the build, the replay,
+an axiom beyond the standard three, `sorry`, `native_decide`, a kernel bypass and a malformed lock. `lean_audit.py` also
+repairs the caps, in copies that audit.json's `repaired` names (`raised_unread`, `held_caps`): an unread area over its cap,
+and a lock count over its cap in `tests/test_lean_packages.py` (UNWITNESSED, INLINE), are raised to the count, and such a
+cap more than its `ROOM` above its count is lowered to the count and its room. Elsewhere a loose cap only warns (`_held`), so lowering a count never fails a check. Each repair is one
+warning naming the entry and its owner, in audit.json's `bookkeeping`. Drive commits the repaired files with the locks
+(`research.merge.REPAIRED`, held byte for byte to the run's copies), lists the warnings in the lock commit, and tells the
+Lean lane and each owner they name; the next PR fixes them. No other check takes the flag.
+
 When the change lands on `main` (`research merge --push`, or drive's landing), the landing DM lists each new, removed
 or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
 statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
@@ -428,12 +447,17 @@ or a policy entry applies. Within a module both sides changed, the definitions m
 recomputed; an older lock's readers and `pins` are read as today's. A guarantee's `owner` merges apart from the rest of
 its entry, so one side's new owner and the other side's restatement both apply.
 
-What the build determines never refuses: a guarantee's record (restated on both sides, the merged statement decides it),
-`reads` and assumption digests merge as the union or ours' value, named on stderr, and drive's lock run regenerates them
-once the merge lands. It refuses where both sides changed what a person writes: an owner, a `shape` entry, a dependency. A refusal is a
-conflict in git, with the entries named; take either side and run `check.py --update` on the merged tree. Git runs the driver
-from the worktree you merge into, and one whose rules are older than `origin/main`'s runs `origin/main`'s (`deferred`), so
-fetch `main` before you merge.
+The merge never refuses and never leaves a conflict. What the build determines (a guarantee's record,
+restated on both sides, which the merged statement decides; `reads`; assumption digests) merges as the union or theirs'
+value, and the lock run after landing regenerates it. What a person writes (an owner, an open premise's `issue` or `due`,
+a domain hypothesis's `why`, a reason in `unwitnessed`, `frozen`, `shape.inline` or `except`, the roots, an exemption, a
+dependency) merges as the union of both sides' entries: one both sides changed differently is theirs', and one a side
+removed while the other changed it is the changed one. An entry both sides moved to different sections of an exclusive
+group (a claim's `witnesses`, `not`, `generic`; a premise's `assumptions`, `domain`, `open`) is where theirs put it, and
+`check.py --update` classifies it. Each entry taken from one side where the sides disagree is one warning line on
+stderr naming its key. A side that isn't a record (bad JSON) is the other side's record, with a warning; only when both
+sides are bad does git's text conflict stand. Git runs the driver from the worktree you merge into, and one whose rules
+are older than `origin/main`'s runs `origin/main`'s (`deferred`), so fetch `main` before you merge.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the

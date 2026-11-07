@@ -76,9 +76,10 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                            stale_days=3, stale_close_days=7, close_unlandable="log")
     assert DriveFlags.parse("") == DriveFlags() == DriveFlags(None, None, False, "review", None, False)
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
+    assert DriveFlags.parse('warn_steps = ["ratchet-gate"]\n').warn_steps == ("ratchet-gate",)
     assert [DriveFlags.parse(f'after_landing_shards = "{v}"\n').after_landing_shards for v in ("auto", "auto:4")] == ["auto", "auto:4"]
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
-                        "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= verdict_first=False "
+                        "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
                         "stale_days=3 stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
                         "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= signed_verdicts=False")
     assert [DriveFlags.parse(f'executor = "{v}"\n').executor for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
@@ -111,6 +112,9 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('landing_gates = ["g.sh"]', "landing_gates = ['g.sh']: a list of Python scripts"),
                       ('warn_gates = "g.py"', "warn_gates = 'g.py': a list of Python scripts by their path"),
                       ('warn_gates = ["../g.py"]', "warn_gates = ['../g.py']: a list of Python scripts"),
+                      ('warn_steps = "ratchet-gate"', "warn_steps = 'ratchet-gate': a list of the check's steps, of "
+                                                      "preflight-lock, "),
+                      ('warn_steps = ["ratchet"]', "warn_steps = ['ratchet']: a list of the check's steps"),
                       ("stale_days = -1", "stale_days = -1: a whole number of days, 0 for off"),
                       ("stale_days = 3.5", "stale_days = 3.5: a whole number of days"),
                       ("stale_close_days = 7", "stale_close_days = 7: 0, or at least stale_days, which must be on"),
@@ -131,7 +135,7 @@ def test_drive_refuses_an_unknown_key_naming_the_keys_it_reads_and_the_one_it_li
         DriveFlags.parse("stale_day = 4\n", "d.toml", strict=True)
     assert str(e.value) == ("d.toml: unknown key 'stale_day' (did you mean 'stale_days'?): drive reads only on, "
                             "marked_after, regenerate_locks, land, land_into, after_landing_no_cache, landing_gates, "
-                            "warn_gates, verdict_first, stale_days, stale_close_days, stale_keep, close_unlandable, "
+                            "warn_gates, warn_steps, verdict_first, stale_days, stale_close_days, stale_keep, close_unlandable, "
                             "after_landing_shards, command_line, lowrisk_lane, "
                             "lowrisk_per_tick, lowrisk_excludes, executor, executor_enqueue, signed_verdicts; "
                             "rename or remove it, or update this research")
@@ -156,7 +160,8 @@ def test_drive_ignores_a_key_whose_code_was_deleted_so_it_runs_on_a_main_that_st
 #: what `driven` records of a Driver built from `FLAGS`
 FROM_FLAGS = {"verdict_first": False, "on": "m1,m2", "regenerate_locks": True, "after_landing_no_cache": True,
               "stale_days": 3, "stale_close_days": 7, "stale_keep": (), "close_unlandable": "log", "after_landing_shards": 1,
-              "lowrisk_lane": True, "lowrisk_per_tick": 20, "lowrisk_excludes": (), "executor": "off", "executor_enqueue": ()}
+              "lowrisk_lane": True, "lowrisk_per_tick": 20, "lowrisk_excludes": (), "executor": "off", "executor_enqueue": (),
+              "warn_steps": ()}
 
 
 def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_takes_a_new_main_without_a_restart(world, driven, monkeypatch, capsys):
@@ -170,7 +175,7 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
     lines = [x for x in capsys.readouterr().out.splitlines() if "flags from" in x]
     assert lines == [f"research queue drive: flags from {DRIVE_FLAGS} at main {sha[:12]}: on=m1,m2 "
                      "marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
-                     "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= verdict_first=False "
+                     "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= warn_steps= verdict_first=False "
                      "stale_days=3 stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
                      "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= signed_verdicts=False"]
     assert drive(world, "--config", DRIVE_FLAGS) == 0 and driven[-1] == FROM_FLAGS
@@ -178,6 +183,8 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
     on_main(world, FLAGS.replace("stale_days = 3", "stale_days = 6"))
     assert drive(world, "--config", DRIVE_FLAGS) == 0
     assert driven[-1]["stale_days"] == 6
+    on_main(world, FLAGS + 'warn_steps = ["ratchet-gate"]\n')
+    assert drive(world) == 0 and driven[-1] == {**FROM_FLAGS, "warn_steps": ("ratchet-gate",)}
 
 
 def test_a_pod_config_whose_keys_all_have_mains_values_is_accepted_and_changes_nothing(world, driven, monkeypatch):
@@ -238,7 +245,8 @@ def test_without_drive_toml_at_main_drive_takes_the_defaults_and_its_on(world, d
     assert driven[-1] == {"verdict_first": True, "on": "m1", "regenerate_locks": False,
                           "after_landing_no_cache": False, "stale_days": 0, "stale_close_days": 0,
                           "stale_keep": (), "close_unlandable": "off", "after_landing_shards": 1, "lowrisk_lane": True,
-                          "lowrisk_per_tick": 20, "lowrisk_excludes": (), "executor": "off", "executor_enqueue": ()}
+                              "lowrisk_per_tick": 20, "lowrisk_excludes": (), "executor": "off", "executor_enqueue": (),
+                              "warn_steps": ()}
     assert f"flags from the defaults ({DRIVE_FLAGS} isn't at main " in capsys.readouterr().out
     assert drive(world, "--on", "m1", "--rules", str(rules), "--regenerate-locks") == 1
     assert "--regenerate-locks: the defaults" in capsys.readouterr().err

@@ -28,7 +28,8 @@ def test_boot_installs_the_hook_on_an_old_branch_and_steps_aside_for_a_tracked_o
     git("add", "a")
     git("commit", "-q", "-m", "old")
     git("push", "-q", "origin", "HEAD:old")
-    shutil.copytree(ROOT / "tools/agent-guard", tmp_path / "ws/tools/agent-guard")
+    shutil.copytree(ROOT / "tools/agent-guard", tmp_path / "ws/tools/agent-guard",
+                    ignore=shutil.ignore_patterns("__pycache__"))
     shutil.copytree(ROOT / ".cursor", tmp_path / "ws/.cursor")
     git("add", "tools", ".cursor")
     git("commit", "-q", "-m", "guard")

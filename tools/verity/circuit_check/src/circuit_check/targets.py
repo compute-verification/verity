@@ -279,7 +279,7 @@ def definition(spec: str) -> Any:
 
 def subcircuit(spec: str) -> tuple[Any, list[dict]]:
     """The subcircuit ``spec`` names and the instance-statics bindings it is checked at."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     load_registries()
     tid, _, rest = spec.partition(":")
@@ -306,7 +306,7 @@ def instance_statics(sub: Any, params: dict | None = None) -> list[dict]:
 def kind_of(spec: str) -> str:
     from pathlib import Path
 
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     try:
         if Path(spec).exists():
@@ -400,7 +400,7 @@ def _produce(units: tuple[str, ...], make: Callable[[], list[Any]], by_unit: lis
 def templates() -> list[tuple[str, Any, list[dict]]]:
     """(label, subcircuit, instance statics) for every template in the catalogue: its ``TEMPLATE_PARAMS`` (`template_params`),
     else its example."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     load_registries()
     params_of = template_params()
@@ -451,6 +451,37 @@ def table_probe(fn: Any) -> Any:
     """The `vectors.TableProbe` of the registered table ``fn`` reads (`TABLE_PROBES`), or None."""
     make = TABLE_PROBES.get(fn.id)
     return None if make is None else make()
+
+
+#: the parameters over `checks.Options.input_budget` leaves that are operands, not a registered table, by the id of their
+#: Definition without statics: each takes the vectors' edge and random words like any other parameter, drawn one vector at a
+#: time and read lazily (`checks._wide_correspondence`, `vectors.wide_words`); a wide parameter in neither this nor
+#: `TABLE_PROBES` fails ``correspondence/unprobed-table``
+LAZY_OPERANDS: dict[str, tuple[str, ...]] = {
+    # weights: a linear's or a GEMM's [N][K], an MoE launch's every expert's (with Marlin's per-32 group scales), and the
+    # vocabulary's rows
+    "CublasSplitKGemmF32Out_v1": ("w",),
+    "DeepGemmFp8Linear_v1": ("w",),
+    "Embedding_v1": ("table",),
+    "EmbeddingShard_v1": ("table",),
+    "FlashInferFp8Linear_v1": ("w",),
+    "GemmF32Out_v1": ("w",),
+    "Gemm_v2": ("w",),
+    "MarlinMoeExpertGemm_v1": ("wq", "ws"),
+    "MarlinMoeExpertGemmW_v1": ("wq", "ws"),
+    "MoeExpertFp8Gemm_v1": ("w",),
+    "MoeExpertFp8GemmW_v1": ("w",),
+    "ScaledMmFp8BlockGrouped_v1": ("w",),
+    # activations: every rank's partial sums
+    "AllReduceMultimem_v1": ("parts",),
+}
+
+
+def lazy_operands(fn: Any) -> tuple[str, ...]:
+    """The names of ``fn``'s parameters `LAZY_OPERANDS` lists."""
+    from verity.ml.circuits.evaluation.reference import key_of
+
+    return LAZY_OPERANDS.get(key_of(fn), ())
 
 
 #: roots the catalog could not build: (label, error); the suite requires none
@@ -936,7 +967,7 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
     subcircuit, instance statics) of each template its ``TEMPLATE_PARAMS`` binds, as `templates` makes them.  A family whose
     members here are all over `MAX_GATES` keeps its smallest here, which ``--all`` may not check when another binding reaches a
     smaller one and it has no pin."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     from . import sidecars as SC
 

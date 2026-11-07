@@ -146,6 +146,10 @@ wait on the event or inject the clock; `tests/test_no_wall_clock.py`, its except
 deleted, not rerun. A test that adds more than about a minute to `check` says in its docstring what it catches that a
 cheaper test can't.
 
+Bookkeeping warns and a later PR fixes it: what can be put right after landing without any claim being false meanwhile. The root suite's bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc
+paths, naming, stale allowlists, Markdown caps) and ruff's style findings warn. Ruff's errors, a crashed scan and
+everything that can make a claim false or can't be undone still fail.
+
 ## Circuits
 
 A change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) passes
@@ -176,10 +180,12 @@ a Lean declaration it names, else the failed suite's or step's declared inputs),
 forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
 rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
 is the only check before it joins, and a body naming no live goal draws a warning, never a refusal. A change a `warn_gates`
-gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A
-Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s tip (its lock
-run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit whose records
-are the regenerated ones and whose gated steps all passed on it.
+gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
+ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
+next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s
+tip (its lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit
+whose records are the regenerated ones and whose gated steps all passed on it. The lock run never fails on a lock's
+bookkeeping: it repairs it in that commit, with a warning for each repair (The lock, under Lean).
 
 ## Lean
 
@@ -213,11 +219,16 @@ are the regenerated ones and whose gated steps all passed on it.
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
   premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
   named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
-  open (`open`, with the Linear issue that discharges it and its due date), a list `--update` never adds to, unless it
-  is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it).
+  open (`open`, with the Linear issue that discharges it and its due date), a list a PR's `--update` never adds to, unless
+  it is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it).
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
-  A guarantee that only moved keeps its record (`--update --moved MOVES.json`).
+  A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
+  after a landing. A PR's own check still fails on it. Drive's lock run repairs it in its lock commit and
+  warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
+  the witnesses rule holds to missing witnesses, a stale entry, a missing owner, or a cap of `unread-caps.json` or
+  `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
+  malformed lock always fail. Lock files never conflict on merge.
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
   lean-proofs skill.
 
@@ -234,7 +245,7 @@ are the regenerated ones and whose gated steps all passed on it.
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
-  skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` fails on a doc
+  skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
   naming a dead path.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
   `show-environment`.
