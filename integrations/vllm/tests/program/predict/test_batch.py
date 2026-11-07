@@ -116,7 +116,7 @@ class Unit:
     first_step: int
     id: str
     C: int = 0
-    chunks: tuple[int, ...] = ()
+    chunks: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -342,8 +342,8 @@ def test_r2_c_planned_from_the_batch_is_refused():
     """A planner that takes r1's C from the batch (its first request's prompt length, r0's 4) plans it alone at the stand-in's 2."""
     adv, ing = _hit(2)
     by_batch = lambda a, ad, i: plan(a, ad, i, C_of=lambda advice, row: advice.requests[0].prompt_len if row.cache_hit else 0)  # noqa: E731
-    with pytest.raises(BatchDependent, match=r"request 1: compiled alone it's \(LP, T, policy, seed, id, C, chunks\) = .*'q1', 2, \(\)\), in its "
-                                             r"batch .*'q1', 4, \(\)\)"):
+    with pytest.raises(BatchDependent, match=r"request 1: compiled alone it's \(LP, T, policy, seed, id, C, chunks\) = .*'q1', 2, \(\)\), "
+                                             r"in its batch .*'q1', 4, \(\)\)"):
         check_compiled(None, adv, ing, _compile(adv, ing, by_batch), by_batch)
 
 
