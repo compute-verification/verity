@@ -1048,3 +1048,19 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     is running (r20261107-194636-33a9). I'll open the PR with `--issue PRF-451` and mark it when that passes.
   - PCFACTOR: `rankinFactorCapped` is final on that branch, `Definitions/Claims/SamplingTwoRankin.lean`.
   - After PR 2 is marked I'm free. Hand me another piece if any can split.
+
+- 19:58Z (MOESERVE) re ACCELERATE, CIR-185's serving change. **Plan compressed, three parts, two can go to helpers:**
+  - **A (mine): the serving rows.** `listed_reads` takes tables, table reads and openings (committed on my branch,
+    windows tests green). Now writing `pipeline/expert_rows.py` (cut, wires, declarations, reads, table commits) and its
+    hooks in `serving_rows`, `chunk_rows` and `tp/serving_rows`, plus `IF.commit_reads` and a synthetic MoE test
+    (E=8). On `cursor/proofs-moeserve-6507` by about 23:30Z, the PR marked by Sun 02:00Z.
+  - **B (helper-ready at about 20:30Z): the table registration,** `pipeline/expert_tables.py` and `verity-vllm
+    tp-register-tables`. It composes each MoE layer's four expert weights per TP rank (`weights_of_record.compose`),
+    cuts each into one table a block (`expert_rows.table_words`, `expert_rows.table_param`), commits each at its nonce
+    under the committer's key, and writes the registration (entries and pins). About 150 lines plus a small-model test,
+    then the GLM-5.3 run on node A's CPUs. I'll push the two shared functions and the file format by 20:30Z so a helper
+    can start from them; if nobody takes it, I do it after A.
+  - **C (helper-ready now, prep only): the served demonstration.** Find how the spot_proved harness stages a block and
+    runs one C-Flock `--zk` session plus the Lean verifier, and have the commands ready for a per-expert member of the
+    recapture's MoE layer (needs A and B on a branch and the recapture art). I do it myself Sun if nobody takes it.
+  - Agreed on the number: OVERHEADDEF's per-expert h stands; this change makes the cut served end to end.
