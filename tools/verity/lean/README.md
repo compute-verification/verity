@@ -225,7 +225,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   test unrun, and `--update` records it. Generated data stays out of Git and out of the key of `check`'s audit step, so
   a test of the package's own (PoUW's `verity/core/protocols/pouw/tests/test_lean_package.py`) checks that the generator still writes the recorded
   data. `--no-runs` skips them.
-- `assumptions_module`: the one module a named assumption is declared in. `assumptions`: the named assumptions (with
+- `assumptions_module`: the module (or a submodule) with named assumptions. `assumptions`: the named assumptions (with
   `owner`), the premises declared there. `domain`: a premise that is part of what its guarantee says (a scope, the layer
   below's guarantee), with `owner` and a one-line `why`; `--update` adds one that is another listed guarantee's
   statement, citing it (`cites`), and an honest witness must conclude each. `open`: every other premise, with `owner`,
@@ -346,9 +346,9 @@ drive's after-landing run passes `--no-regenerate`, so a record difference that 
 writes:
 - an unlisted premise, an `assumptions` entry declared outside the assumptions module, or an uncovered `domain` entry is
   listed under `open`, owned by its guarantees' owner (the first, of several), on the lock's `open_default_issue` (else
-  `BOOKKEEPING_ISSUE`), due seven days from the run;
+  none, which its warning asks the next PR for), due seven days from the run;
 - a guarantee the witnesses rule now holds to witnesses it lacks is listed under `unwitnessed` at its current hashes;
-- a stale entry is dropped, and a missing owner is set to the guarantees' owner, else `BOOKKEEPING_OWNER`.
+- a stale entry is dropped, and a missing owner is set to the guarantees' owner, else the lock's `default_owner`.
 
 The run then judges the policy's checks again on that lock, so whatever else fails still fails: the build, the replay,
 an axiom beyond the standard three, `sorry`, `native_decide`, a kernel bypass and a malformed lock. `lean_audit.py` also
@@ -442,23 +442,25 @@ The proofs package's own audit replays its declarations through the kernel, so `
 ## Merging records: `merge.py`
 
 Two branches that each add guarantees both change `lean-audit.json`, usually in the same `reads` module, so git's text merge
-conflicts. `.gitattributes` gives the file to `merge.py` instead, once `python tools/verity/lean/merge.py --install` has registered
-it in the clone's git config. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency
-or a policy entry applies. Within a module both sides changed, the definitions merge the same way, and the digest is
-recomputed; an older lock's readers and `pins` are read as today's. A guarantee's `owner` merges apart from the rest of
-its entry, so one side's new owner and the other side's restatement both apply.
+conflicts. `.gitattributes` gives the file to `merge.py` instead, registered by `merge.py --install`. It merges entry by entry: each side's change to a guarantee, a module under `reads`, a dependency or a policy entry applies.
+Within a module both sides changed, the definitions merge the same way, and the digest is recomputed; an older lock's
+readers and `pins` are read as today's. A guarantee's `owner` merges apart from the rest of its entry, so one side's new
+owner and the other side's restatement both apply.
 
-The merge never refuses and never leaves a conflict. What the build determines (a guarantee's record,
-restated on both sides, which the merged statement decides; `reads`; assumption digests) merges as the union or theirs'
-value, and the lock run after landing regenerates it. What a person writes (an owner, an open premise's `issue` or `due`,
-a domain hypothesis's `why`, a reason in `unwitnessed`, `frozen`, `shape.inline` or `except`, the roots, an exemption, a
-dependency) merges as the union of both sides' entries: one both sides changed differently is theirs', and one a side
-removed while the other changed it is the changed one. An entry both sides moved to different sections of an exclusive
-group (a claim's `witnesses`, `not`, `generic`; a premise's `assumptions`, `domain`, `open`) is where theirs put it, and
-`check.py --update` classifies it. Each entry taken from one side where the sides disagree is one warning line on
-stderr naming its key. A side that isn't a record (bad JSON) is the other side's record, with a warning; only when both
-sides are bad does git's text conflict stand. Git runs the driver from the worktree you merge into, and one whose rules
-are older than `origin/main`'s runs `origin/main`'s (`deferred`), so fetch `main` before you merge.
+Apart from the guards below, the merge never conflicts. What the build determines (a guarantee's record, `reads`,
+assumption digests) merges as the union or theirs' value, and the lock run regenerates it. What a person
+writes (an owner, an `issue` or `due`, a `why`, a reason, the roots, an exemption, a dependency) merges as the union of
+both sides' entries: one both sides changed differently is theirs', and one a side removed while the other changed it is
+the changed one. An entry the sides moved to different sections of an exclusive group (`witnesses`, `not`, `generic`;
+`assumptions`, `domain`, `open`) is where theirs put it, for `check.py --update` to classify. Each entry taken from one
+side is one warning line. A side that isn't a record (bad JSON) yields to the other, with a warning; two bad sides leave
+git's conflict.
+
+Git runs a driver from the worktree you merge into, so the registered command (`research.clone.RECORD_DRIVER`) runs
+`origin/main`'s copy of this directory when that ref exists, else the worktree's: fetch `main` first. Three guards leave
+git's conflict, where it beats a silent loss: a lock `format` above `FORMAT` (bumped in both files with the lock's
+schema), the worktree's copy merging a side with newer `merge.py` changes (`stale`), and a merge that drops most of a
+side's section (`losses`).
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the

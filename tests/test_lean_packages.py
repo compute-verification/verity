@@ -76,7 +76,7 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-UNWITNESSED = {"Security": 311, "Security/Properties": 191, "verity/core/service/flock": 7}
+UNWITNESSED = {"Security": 305, "Security/Properties": 191, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -174,7 +174,7 @@ def _requires(pkg: Path) -> list[dict]:
 
 
 def test_security_package_requires_only_mathlib():
-    """The security analysis's trusted text (`Security`: Definitions and Models) is what every guarantee is stated
+    """The security analysis's trusted text (`Security`: the spec, Definitions) is what every guarantee is stated
     in, so it requires nothing of the repository and no ArkLib: a path dependency here would put a component or a proof
     under every guarantee."""
     assert SECURITY in lake_packages()
@@ -282,10 +282,10 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
     fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
     change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
     the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
-    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as counters."""
+    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as the larger of the two sides' caps."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
-    assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each lowered the cap for the same entry, "
-                      f"raise it to the count)")
+    assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each added entries, the merge kept the "
+                      f"larger of their caps while the count took both: raise it to the count)")
     loose = {k: got.get(k, 0) + ROOM.get(f"{name} {k}", 0) for k in caps
              if caps[k] > got.get(k, 0) + ROOM.get(f"{name} {k}", 0)}
     for k, n in loose.items():
@@ -554,9 +554,9 @@ def _load(name: str, path: Path):
     return mod
 
 
-def test_every_cap_merges_as_a_counter():
+def test_every_cap_merges_as_the_larger_of_its_sides():
     """Each cap here is one line the `lean-caps` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
-    as counters instead of conflicting."""
+    as the larger of the two sides' caps instead of conflicting."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     caps = [s for s in Path(__file__).read_text().splitlines() if re.match(r"[A-Z][A-Z_]* = \{", s)
             and isinstance(v := globals()[s.split(" = ")[0]], dict) and all(isinstance(n, int) for n in v.values())]

@@ -7,11 +7,12 @@ threshold of at most 256 rows, so each prefill chunk stays on DSA's decode route
 The step compiler admits such a registration (`predict.steps.launch_class`), compiles a long prompt as its prefill chunks, each at
 the launch it ran in, and a prefix-cache hit or a request a Commit window carries as the request's Program after its history, and
 refuses by name, request by request, a launch `predict.dsa` doesn't write: a step past the 2,048 tokens its captured all-reduce and
-cuBLAS routes cover, or a row past the 2,048 keys where DSA's top-k is the identity.  `verity_vllm.LLM(engine_class="G")` serves
-it at `CLASS_G_SERVED`, the limits within which every launch is written, and up to its 256 sequences a step, with `options`, the
-prefix cache off; its admission (`engine.class_admission`) refuses as it serves a prompt over the served `max_model_len`, and a
-request in flight when a Commit window closes, since the served Commit doesn't commit the boundary state a carried request's
-history is opened from.
+cuBLAS routes cover.  A row past INDEX_TOPK (2,048) keys compiles, its top-k order a field of the Program's `run` input, checked to
+be the canonical row an engine under `DSA_TOPK_ENV` serves; no committed value binds that input yet, so the served
+`max_model_len` keeps every row within INDEX_TOPK.  `verity_vllm.LLM(engine_class="G")` serves it at `CLASS_G_SERVED`, the
+limits within which every launch is written, and up to its 256 sequences a step, with `options`, the prefix cache off; its
+admission (`engine.class_admission`) refuses as it serves a prompt over the served `max_model_len`, and a request in flight when a
+Commit window closes, since the served Commit doesn't commit the boundary state a carried request's history is opened from.
 """
 from __future__ import annotations
 
@@ -35,6 +36,10 @@ CLASS_G_SERVED = {"max_num_batched_tokens": 2048, "max_model_len": 2048, "long_p
 #: the experts class G's decoder writes (`predict.dsa` refuses another): vLLM's own selection for GLM-5.3's block-FP8 experts on
 #: the H200, given to the served engine so it applies it and its target declares it
 CLASS_G_MOE_BACKEND = "triton"
+#: the environment an engine serves a row past INDEX_TOPK keys under: the DSA top-k plugin's canonical row (the top-INDEX_TOPK
+#: set in ascending index order), the one order `DsaTopKLongRow` passes; `predict.dsa` refuses such a row under an engine whose
+#: stated environment lacks it
+DSA_TOPK_ENV = {"VERITY_DSA_TOPK": "canonical"}
 
 CLASSES: dict[str, tuple[dict[str, Any], dict[str, int], dict[str, int], str]] = {
     "G": (CLASS_G, CLASS_G_LIMITS, CLASS_G_SERVED, CLASS_G_MOE_BACKEND)}
@@ -105,5 +110,5 @@ def check_model(name: str, model: str, revision: str) -> None:
         raise Refused(f"{model}@{revision} is a {got!r} checkpoint, not the class's {want!r}", what=f"engine class {name}")
 
 
-__all__ = ["CLASSES", "CLASS_G", "CLASS_G_EXECUTIONS", "CLASS_G_LIMITS", "CLASS_G_MOE_BACKEND", "CLASS_G_SERVED", "EXECUTIONS",
+__all__ = ["CLASSES", "CLASS_G", "CLASS_G_EXECUTIONS", "CLASS_G_LIMITS", "CLASS_G_MOE_BACKEND", "CLASS_G_SERVED", "DSA_TOPK_ENV", "EXECUTIONS",
            "check_model", "compilation", "effective_refusals", "max_num_seqs", "of", "options", "prompt_limit"]
