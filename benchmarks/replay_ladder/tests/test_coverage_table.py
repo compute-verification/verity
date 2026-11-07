@@ -48,19 +48,28 @@ def test_shares_and_sizes():
 def test_rows_are_grouped_by_architecture_then_sorted_by_size():
     md = C.markdown(COV).splitlines()
     assert [ln.split(" | ")[0][2:] for ln in md[2:6]] == ["Tiny", "Small", "Mid", "Big"]
-    assert "| Big | MoE, DSA | 753B (42B) | BF16 | 1x H200 | ○ | ○ | ○ |" in md
+    assert md[0].endswith("| Circuit | Replay | Replay, unpinned | Proved |")
+    assert "| Big | MoE, DSA | 753B (42B) | BF16 | 1x H200 | ○ | ○ | ○ | ○ |" in md
 
 
-def test_the_ladder_fills_its_rows_replay_cell():
-    summary = {"models": [{"model": "mid", "serve_run_id": "r0", "alone": {"requests": 2, "requests_tokens_differing": 1},
-                           "replays": [
-                               {"run_id": "r0", "bit_exact": True, "rows_exact_share": 1.0, "requests": 4, "tokens_served": 40,
-                                "requests_tokens_differing": 0, "compile": "load"},
-                               {"run_id": "r0", "bit_exact": False, "rows_exact_share": 0.9, "requests": 4,
-                                "tokens_served": 40, "requests_tokens_differing": 1, "compile": "compile"},
-                               {"index": 3, "error": "no replay.json"}]}]}
+def ladder_model(pin: bool, run: str, shares: list[float]) -> dict:
+    return {"model": "mid", "pin": pin, "serve_run_id": run, "alone": {"requests": 2, "requests_tokens_differing": 1},
+            "replays": [{"run_id": run, "bit_exact": s == 1, "rows_exact_share": s, "requests": 4, "tokens_served": 40,
+                         "requests_tokens_differing": int(s < 1), "compile": "compile" if i else "load"}
+                        for i, s in enumerate(shares)] + [{"index": len(shares) + 1, "error": "no replay.json"}]}
+
+
+def test_the_ladder_fills_each_replay_column_from_its_arm():
+    summary = {"models": [ladder_model(True, "r1", [1.0, 1.0]), ladder_model(False, "r0", [1.0, 0.9])]}
     cov = C.merge(copy.deepcopy(COV), [summary])
-    c = cov["rows"][1]["cells"]["replay"]
-    assert (c["status"], c["evidence"], c["replays_exact"], c["fresh_compile"]) == ("measured", ["r0"], "1 of 2", [False, True])
-    assert "| Mid | MoE | 30.5B (3.3B) | BF16 | 1x H200 | ○ | ● 90% | ○ |" in C.markdown(cov)
+    pinned, unpinned = cov["rows"][1]["cells"]["replay"], cov["rows"][1]["cells"]["replay_unpinned"]
+    assert (pinned["status"], pinned["evidence"], pinned["replays_exact"]) == ("measured", ["r1"], "2 of 2")
+    assert (unpinned["evidence"], unpinned["replays_exact"], unpinned["fresh_compile"]) == (["r0"], "1 of 2", [False, True])
+    assert "| Mid | MoE | 30.5B (3.3B) | BF16 | 1x H200 | ○ | ● 100% | ● 90% | ○ |" in C.markdown(cov)
     assert cov["rows"][2]["cells"]["replay"]["status"] == "representable"
+
+
+def test_an_arm_the_ladder_did_not_run_keeps_its_sidecar_cell():
+    cov = C.merge(copy.deepcopy(COV), [{"models": [ladder_model(False, "r0", [1.0])]}])
+    assert cov["rows"][1]["cells"]["replay"]["status"] == "representable"
+    assert cov["rows"][1]["cells"]["replay_unpinned"]["status"] == "measured"

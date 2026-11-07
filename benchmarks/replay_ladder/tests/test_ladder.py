@@ -77,11 +77,19 @@ def replay_json(d: Path, differing: int, against: int | None = None) -> None:
     (d / "replay.json").write_text(json.dumps(r))
 
 
+def test_the_pin_is_read_from_the_environment(monkeypatch):
+    monkeypatch.delenv("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", raising=False)
+    assert not L.pinned()
+    monkeypatch.setenv("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK", "0")
+    assert L.pinned()
+
+
 def test_summary_reads_a_model_directory(tmp_path):
-    d = tmp_path / "out" / "qwen3-8b"
+    d = tmp_path / "out" / "pinned" / "qwen3-8b"
     d.mkdir(parents=True)
-    (d / "serve.json").write_text(json.dumps({"checkpoint": "Qwen/Qwen3-8B@b", "tp": 1, "run_id": "r1", "rate": 87.0,
-                                              "capacity": {"req_per_s": 60.0}, "window": {"sent": 4, "ok": 4}}))
+    (d / "serve.json").write_text(json.dumps({"model": "qwen3-8b", "checkpoint": "Qwen/Qwen3-8B@b", "tp": 1, "run_id": "r1",
+                                              "rate": 87.0, "inductor_pin": True, "capacity": {"req_per_s": 60.0},
+                                              "window": {"sent": 4, "ok": 4}}))
     replay_json(d / "replay-1", 0)
     replay_json(d / "replay-2", 4, against=1)
     (d / "replay-2.log").write_text("Compiling a graph for compile range\n")
@@ -90,9 +98,10 @@ def test_summary_reads_a_model_directory(tmp_path):
                                                         "requests_tokens_differing": 1, "token_positions_differing": 5,
                                                         "against_replay": {"requests_tokens_differing": 1}}))
     row = L.model_row(d)
+    assert (row["model"], row["pin"]) == ("qwen3-8b", True)
     assert [r["bit_exact"] for r in row["replays"]] == [True, False]
     assert row["replays"][1]["rows_exact_share"] == pytest.approx(0.9)
     assert row["replays"][1]["compile"] == "compile"
     assert row["alone"]["requests_tokens_differing"] == 1
     md = L.markdown([row])
-    assert "| qwen3-8b | 1 | 4, 10, 40 | 1 of 2 | 90.000000% | 0, 1 (fresh compile) | 1 | 1 of 2 |" in md
+    assert "| qwen3-8b | 1 | yes | 4, 10, 40 | 1 of 2 | 90.000000% | 0, 1 (fresh compile) | 1 | 1 of 2 |" in md

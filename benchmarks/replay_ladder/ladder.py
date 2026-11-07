@@ -21,8 +21,9 @@ engine: vLLM's own OpenAI server, compiled with CUDA graphs, chunked prefill, pr
 - ``alone`` serves an evenly spaced sample of the window's requests one at a time, each on an empty prefix cache, in the
   same compiled engine, and compares their tokens with serving's: how far a request's tokens depend on its batch, which
   is why the replay needs the recorded schedule.
-- ``summary`` reads each model's directory into summary.json and summary.md. A row of output is one request's token at
-  one position; its share exact is the window's output tokens less those that differ, over the window's output tokens.
+- ``summary`` reads each model's directory into summary.json and summary.md, one row per model and arm (with or without
+  Inductor's reduction tiling pinned, `pinned`). A row of output is one request's token at one position; its share exact
+  is the window's output tokens less those that differ, over the window's output tokens.
 """
 from __future__ import annotations
 
@@ -109,6 +110,13 @@ def tp_engine(tp: int) -> Any:
 
 # ------------------------------------------------------------------------------------------------------------ serve
 
+def pinned() -> bool:
+    """Whether Inductor's reduction tiling is pinned (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`). Unpinned, a fused
+    add + RMSNorm kernel benchmarks two tilings on its first launch in each process and keeps the faster, so two
+    processes can sum in different orders."""
+    return os.environ.get("TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK") == "0"
+
+
 def native_tokens(tok: Any) -> tuple[int, int]:
     """The tokenizer's document start (its BOS, else its EOS) and blank line, which the traffic plan, written for Llama 3's
     ids, puts at the head of every prompt."""
@@ -142,7 +150,7 @@ def serve(a: argparse.Namespace) -> int:
     (out / "serve.json").write_text(json.dumps({
         "schema": SCHEMA + "/serve", "model": a.model, "checkpoint": f"{S.MODELS[a.model].repo}@{S.MODELS[a.model].revision}",
         "tp": LADDER[a.model].tp, "bos": traffic.BOS, "blank_line": traffic.BLANK_LINE, "capacity": burst, "over": a.over,
-        "rate": rate, "span_s": a.span_s, "docs": a.docs,
+        "rate": rate, "span_s": a.span_s, "docs": a.docs, "inductor_pin": pinned(),
         "window": (rec["loads"].get(LOAD) or [None])[0], "error": rec.get("error"), "run_id": S.SHARED.RESEARCH_RUN_ID,
     }, indent=1))
     return rc
@@ -231,7 +239,8 @@ def compile_mode(log: Path) -> str | None:
 def model_row(d: Path) -> dict:
     """One model's directory: its window, its replays and its alone sample."""
     serve_meta = json.loads((d / "serve.json").read_text()) if (d / "serve.json").exists() else {}
-    row: dict[str, Any] = {"model": d.name, "checkpoint": serve_meta.get("checkpoint"), "tp": serve_meta.get("tp"),
+    row: dict[str, Any] = {"model": serve_meta.get("model") or d.name, "pin": bool(serve_meta.get("inductor_pin")),
+                           "checkpoint": serve_meta.get("checkpoint"), "tp": serve_meta.get("tp"),
                            "serve_run_id": serve_meta.get("run_id"), "capacity_req_s": (serve_meta.get("capacity") or {}).get("req_per_s"),
                            "rate_req_s": serve_meta.get("rate"), "replays": [], "alone": None, "error": serve_meta.get("error"),
                            "serve_compile": compile_mode(d / "record" / "server" / "server.log")}
@@ -264,9 +273,9 @@ def model_row(d: Path) -> dict:
 
 
 def markdown(rows: list[dict]) -> str:
-    head = ("| model | TP | window: requests, steps, output tokens | replays exact | rows exact (worst replay) | "
+    head = ("| model | TP | Inductor pin | window: requests, steps, output tokens | replays exact | rows exact (worst replay) | "
             "requests differing from serving, per replay | requests differing from replay 1 | alone: requests differing |")
-    lines = [head, "|" + "---|" * 8]
+    lines = [head, "|" + "---|" * 9]
     for r in rows:
         reps = [x for x in r["replays"] if "bit_exact" in x]
         w = reps[0] if reps else {}
@@ -278,7 +287,8 @@ def markdown(rows: list[dict]) -> str:
         al = r["alone"]
         alone_s = f"{al['requests_tokens_differing']} of {al['requests']}" if al else "—"
         win = (f"{w.get('requests', '—')}, {w.get('steps', '—')}, {w.get('tokens_served', '—')}" if w else "—")
-        lines.append(f"| {r['model']} | {r['tp'] or '—'} | {win} | {exact} | {worst} | {per} | {first} | {alone_s} |")
+        lines.append(f"| {r['model']} | {r['tp'] or '—'} | {'yes' if r['pin'] else 'no'} | {win} | {exact} | {worst} | {per} | "
+                     f"{first} | {alone_s} |")
     return "\n".join(lines) + "\n"
 
 

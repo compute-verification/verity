@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 # The replay ladder on one node (README.md), under research run, with the C4 shard sent (--send):
-#   run.sh MODEL...   for each model (ladder.LADDER): serve its saturated window (a capacity burst, then the record arm),
-#                     REPLAYS compiled replays from vLLM's compile cache, FRESH more each compiled from empty caches, and
-#                     ALONE of its requests served alone; then summary.json and summary.md over every model.
+#   run.sh MODEL...   for each model (ladder.LADDER) and each arm of ARMS: serve its saturated window (a capacity burst,
+#                     then the record arm), replays of it compiled, and some of its requests served alone; then
+#                     summary.json and summary.md over every model and arm.
+# The arms: `pinned` serves and replays with Inductor's reduction tiling pinned (TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0):
+# REPLAYS replays from vLLM's compile cache, FRESH more each compiled from empty caches, and ALONE requests alone.
+# `unpinned` serves and replays without it: UNPINNED_REPLAYS replays, which say whether the model needs the pin. Each
+# arm compiles into caches of its own: a graph compiled unpinned and loaded pinned would keep both tilings.
 # VENV's vLLM must be d9105ea80, the integration's pin; the checkpoints are the ones checkpoints.json pins, under HF_HOME
 # (pod_bootstrap.sh --cases ROLE,... fetches and checks them).  SPAN_S, OVER and BURST set the window (ladder.py serve).
 set -uo pipefail
@@ -20,43 +24,54 @@ export CUDA_HOME
 unset NCCL_P2P_DISABLE
 if [ -n "${DEEP_GEMM:-}" ]; then export VLLM_USE_DEEP_GEMM=$DEEP_GEMM; else unset VLLM_USE_DEEP_GEMM; fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
-REPLAYS=${REPLAYS:-3}; FRESH=${FRESH:-1}; ALONE=${ALONE:-64}
+ARMS=${ARMS:-pinned unpinned}
+REPLAYS=${REPLAYS:-3}; FRESH=${FRESH:-1}; ALONE=${ALONE:-64}; UNPINNED_REPLAYS=${UNPINNED_REPLAYS:-3}
 [ $# -gt 0 ] || { echo "replay-ladder: name the models (ladder.py's LADDER)"; exit 2; }
 [ -f "$C4" ] || { echo "replay-ladder: no C4 shard (--send it, or C4=PATH)"; exit 2; }
+for arm in $ARMS; do case $arm in pinned|unpinned) ;; *) echo "replay-ladder: ARMS takes pinned and unpinned, not $arm"; exit 2 ;; esac; done
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "replay-ladder: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
 mkdir -p "$OUT"
-for k in VLLM_USE_DEEP_GEMM VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME; do echo "$k=${!k-unset}"; done > "$OUT/engine_env.txt"
+for k in VLLM_USE_DEEP_GEMM VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME CUDA_VISIBLE_DEVICES; do echo "$k=${!k-unset}"; done > "$OUT/engine_env.txt"
 "$CUDA_HOME/bin/nvcc" --version 2>/dev/null | tail -1 >> "$OUT/engine_env.txt"
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,clocks.max.sm,driver_version --format=csv | tee "$OUT/gpus.csv"
 rc=0
 for m in "$@"; do
-  d=$OUT/$m; mkdir -p "$d"
-  echo "== $m serve $(date -u +%FT%TZ)"
-  if ! "$PY" "$here/ladder.py" serve --model "$m" --c4 "$C4" --out "$d" ${SPAN_S:+--span-s "$SPAN_S"} ${OVER:+--over "$OVER"} \
-      ${BURST:+--burst "$BURST"} > "$d/serve.log" 2>&1; then
-    tail -n 40 "$d/serve.log"; rc=1; continue
-  fi
-  grep '^\[ladder\]' "$d/serve.log"
-  n=$((REPLAYS + FRESH))
-  for i in $(seq 1 "$n"); do
-    echo "== $m replay $i $(date -u +%FT%TZ)"
-    if [ "$i" -gt "$REPLAYS" ]; then
-      fresh=$(mktemp -d)
-      env VLLM_DISABLE_COMPILE_CACHE=1 TORCHINDUCTOR_CACHE_DIR="$fresh/inductor" TRITON_CACHE_DIR="$fresh/triton" \
-        "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
-      rm -rf "$fresh"
+  for arm in $ARMS; do
+    d=$OUT/$arm/$m; mkdir -p "$d"
+    cache=$(mktemp -d)
+    export VLLM_CACHE_ROOT=$cache/vllm TORCHINDUCTOR_CACHE_DIR=$cache/inductor TRITON_CACHE_DIR=$cache/triton
+    if [ "$arm" = pinned ]; then
+      export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0; replays=$REPLAYS; fresh=$FRESH; alone=$ALONE
     else
-      "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
+      unset TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK; replays=$UNPINNED_REPLAYS; fresh=0; alone=0
     fi
-    grep '^{"mode"' "$d/replay-$i.log" | tail -n 1
+    echo "== $m $arm serve $(date -u +%FT%TZ)"
+    if ! "$PY" "$here/ladder.py" serve --model "$m" --c4 "$C4" --out "$d" ${SPAN_S:+--span-s "$SPAN_S"} ${OVER:+--over "$OVER"} \
+        ${BURST:+--burst "$BURST"} > "$d/serve.log" 2>&1; then
+      tail -n 40 "$d/serve.log"; rc=1; rm -rf "$cache"; continue
+    fi
+    grep '^\[ladder\]' "$d/serve.log"
+    for i in $(seq 1 $((replays + fresh))); do
+      echo "== $m $arm replay $i $(date -u +%FT%TZ)"
+      if [ "$i" -gt "$replays" ]; then
+        f=$(mktemp -d)
+        env VLLM_DISABLE_COMPILE_CACHE=1 TORCHINDUCTOR_CACHE_DIR="$f/inductor" TRITON_CACHE_DIR="$f/triton" \
+          "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
+        rm -rf "$f"
+      else
+        "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
+      fi
+      grep '^{"mode"' "$d/replay-$i.log" | tail -n 1
+    done
+    if [ "$alone" -gt 0 ]; then
+      echo "== $m $arm alone $(date -u +%FT%TZ)"
+      "$PY" "$here/ladder.py" alone --model "$m" --out "$d" --requests "$alone" > "$d/alone.log" 2>&1 || { tail -n 40 "$d/alone.log"; rc=1; }
+      grep '^{"model"' "$d/alone.log" | tail -n 1
+    fi
+    gzip -f "$d"/*/server/step_trace.*.jsonl 2>/dev/null
+    rm -rf "$cache"
   done
-  if [ "$ALONE" -gt 0 ]; then
-    echo "== $m alone $(date -u +%FT%TZ)"
-    "$PY" "$here/ladder.py" alone --model "$m" --out "$d" --requests "$ALONE" > "$d/alone.log" 2>&1 || { tail -n 40 "$d/alone.log"; rc=1; }
-    grep '^{"model"' "$d/alone.log" | tail -n 1
-  fi
-  gzip -f "$d"/*/server/step_trace.*.jsonl 2>/dev/null
 done
-"$PY" "$here/ladder.py" summary "$OUT"/*/ --out "$OUT"
+"$PY" "$here/ladder.py" summary "$OUT"/*/*/ --out "$OUT"
 exit $rc

@@ -1,17 +1,20 @@
-"""The coverage table: one row per model, grouped by architecture and sorted by size, with three status columns, each
+"""The coverage table: one row per model, grouped by architecture and sorted by size, with four status columns, each
 cell one glyph that its sidecar (COVERAGE.json) backs with the run or art ids behind it.
 
     coverage_table.py render COVERAGE.json [--ladder SUMMARY.json]... --out DIR
 
 - Circuit: the served computation compiles to a Program whose Definitions pass circuit-check and that equals its traced
   Build, with `predict.batch.check_compiled`'s R1-R3 holding.
-- Replay: replaying the recorded schedule on compiled vLLM at the pin reproduces every output row; the cell gives the
-  share of rows exact in the worst replay.
+- Replay: replaying the recorded schedule on compiled vLLM at the pin, serving and replays alike with Inductor's
+  reduction tiling pinned (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`), reproduces every output row; the cell gives the share
+  of rows exact in the worst replay.
+- Replay, unpinned: the same without the tiling pinned, which says whether the model needs the pin.
 - Proved: at least one sampled statement of each block type proved and accepted by the Lean verifier.
 
 A cell's status is `measured` (filled), `representable` (hollow: representable, not run) or `unrepresentable` (a dash:
 can't represent yet), and every cell names its evidence. `--ladder` takes `ladder.py summary`'s summary.json and fills the
-Replay cell of each row whose `ladder` names one of its models. DIR gets coverage.md and the merged coverage.json.
+Replay cells of each row whose `ladder` names one of its models, from its pinned and unpinned arms. DIR gets coverage.md
+and the merged coverage.json.
 """
 from __future__ import annotations
 
@@ -23,7 +26,10 @@ from typing import Any
 
 SCHEMA = "verity-bench/coverage/v0"
 GLYPH = {"measured": "●", "representable": "○", "unrepresentable": "—"}
-COLUMNS = ("circuit", "replay", "proved")
+COLUMNS = ("circuit", "replay", "replay_unpinned", "proved")
+HEADS = {"circuit": "Circuit", "replay": "Replay", "replay_unpinned": "Replay, unpinned", "proved": "Proved"}
+#: each Replay column and the ladder arm that fills it
+ARMS = {"replay": True, "replay_unpinned": False}
 #: the architecture groups, in table order: a row's `arch` tags, joined
 GROUPS = ("Dense", "MoE", "MoE, MLA", "MoE, DSA")
 
@@ -77,18 +83,19 @@ def ladder_cell(m: dict) -> dict | None:
 
 
 def merge(cov: dict, summaries: list[dict]) -> dict:
-    by = {m["model"]: m for s in summaries for m in s["models"]}
+    by = {(m["model"], bool(m.get("pin"))): m for s in summaries for m in s["models"]}
     for row in cov["rows"]:
-        m = by.get(row.get("ladder") or "")
-        cell = ladder_cell(m) if m else None
-        if cell:
-            row["cells"]["replay"] = cell
+        for col, pin in ARMS.items():
+            m = by.get((row.get("ladder") or "", pin))
+            cell = ladder_cell(m) if m else None
+            if cell:
+                row["cells"][col] = cell
     return cov
 
 
 def markdown(cov: dict) -> str:
-    lines = ["| Model | Architecture | Params, total (active) | Precision | GPUs | Circuit | Replay | Proved |",
-             "|---|---|---|---|---|:---:|:---:|:---:|"]
+    lines = ["| Model | Architecture | Params, total (active) | Precision | GPUs | " + " | ".join(HEADS[c] for c in COLUMNS)
+             + " |", "|---|---|---|---|---|" + ":---:|" * len(COLUMNS)]
     order = {g: i for i, g in enumerate(GROUPS)}
     for row in sorted(cov["rows"], key=lambda r: (order[", ".join(r["arch"])], r["params_b"], r["model"])):
         params = size(row["params_b"]) + (f" ({size(row['active_b'])})" if row.get("active_b") else "")
@@ -96,14 +103,15 @@ def markdown(cov: dict) -> str:
         for col in COLUMNS:
             c = row["cells"][col]
             g = GLYPH[c["status"]]
-            if col == "replay" and c["status"] == "measured" and c.get("rows_exact") is not None:
+            if col in ARMS and c["status"] == "measured" and c.get("rows_exact") is not None:
                 g += " " + pct(c["rows_exact"])
             cells.append(g)
         lines.append(f"| {row['model']} | {', '.join(row['arch'])} | {params} | {' / '.join(row['precision'])} | "
                      f"{row['gpus']} | " + " | ".join(cells) + " |")
     return ("\n".join(lines) + "\n\n" + f"● measured, ○ representable but not run, — can't represent yet. Replay: share of "
-            f"output rows exact in the worst replay. vLLM {cov['pin']}, {cov['date']}; each cell's run and art ids are in "
-            "coverage.json.\n")
+            "output rows exact in the worst replay, serving and replaying with Inductor's reduction tiling pinned "
+            "(`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`); unpinned, a fused add + RMSNorm kernel picks one of two tilings "
+            f"per process. vLLM {cov['pin']}, {cov['date']}; each cell's run and art ids are in coverage.json.\n")
 
 
 def render(a: argparse.Namespace) -> int:
