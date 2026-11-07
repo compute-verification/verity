@@ -620,9 +620,9 @@ def test_the_selftest_swaps_the_tail_that_circuit_stage_forged(monkeypatch, tmp_
     at N = 64, whose tail's eps forges to another circuit (about 30 s to stage). When ``FLOCK_CIRCUIT`` names a selftest
     build (sha512, glue), its `tail_swapped` runs on that statement and passes."""
     pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     s = InputSet.open(generate(TM.subcircuit("rmsnorm-fused-cuda", N=64, EPS=1e-5), 2, 3, tmp_path / "set")["path"])
     low = FC.lowering_for_set(s)
