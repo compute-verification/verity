@@ -442,19 +442,28 @@ def launch_sequences(step: int, launch: dict[str, Any] | None) -> list[tuple[int
     return seqs
 
 
-def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sampled: bool = False) -> int:
+def graph_tokens(n: int, capture_sizes: tuple[int, ...] = ()) -> int:
+    """The token count a step of `n` tokens runs its captured kernels at under CUDA graphs captured at `capture_sizes`: the least
+    capture size of at least n, or n past the largest (vLLM's dispatcher runs that step uncaptured); n without graphs."""
+    fits = [s for s in capture_sizes if s >= n]
+    return min(fits) if fits else int(n)
+
+
+def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sampled: bool = False,
+                  capture_sizes: tuple[int, ...] = ()) -> int:
     """The rows of the batched launch that a request's `own_rows` run in at its request `step`: the step's token count (every scheduled
     sequence's query rows), or, for the rows after the logits selection (`sampled`), its sequence count (one logits row per scheduled
     sequence: without chunked prefill every one samples).  Without a declared batch, `own_rows` (a batch of one).  A count below
-    `own_rows` is refused: the launch contains the request."""
+    `own_rows` is refused: the launch contains the request.  Under breakable CUDA graphs captured at `capture_sizes` the forward's
+    kernels run at the step's `graph_tokens`; the logits are computed outside the graphs, at the sequences."""
     own, seqs = int(own_rows), launch_sequences(step, launch)
     if seqs is None:
-        return own
+        return own if sampled else graph_tokens(own, capture_sizes)
     n = len(seqs) if sampled else sum(r for r, _ in seqs)
     if n < own:
         raise LaunchContextInvalid(f"the declared launch batch has {n} {'sequences' if sampled else 'rows'} at step {int(step)} but this request "
                                    f"alone has {own} there: the declaration is another request's context")
-    return n
+    return n if sampled else graph_tokens(n, capture_sizes)
 
 
 def launch_keys(step: int, launch: dict[str, Any] | None) -> list[int] | None:
