@@ -103,6 +103,19 @@ def test_server_env_names_the_changes(tmp_path: Path):
         S.server_env(S.ARMS["tick"], tmp_path, tmp_path, None, 600.0, 600.0)
 
 
+def test_only_the_restore_arms_take_edges_and_only_restore_dumps_there(tmp_path: Path):
+    edges = {"edges_s": [180.0, 360.0], "save_kv": [1], "dump": False}
+    cfg = {a: json.loads(S.server_env(S.ARMS[a], tmp_path, tmp_path, None, 600.0, 600.0, edges)[S.PLUGIN_ENV])
+           for a in ("restore-base", "restore-pause", "restore")}
+    assert "edges_s" not in cfg["restore-base"] and cfg["restore-pause"]["edges_s"] == [180.0, 360.0]
+    assert [S.ARMS[a].edge_dump for a in ("restore-pause", "restore")] == [False, True]
+    assert {S.ARMS[a].parent for a in ("restore-pause", "restore")} == {"restore-base"}
+    m = S.MODELS["moonlight"]
+    argv = S.server_argv(S.ARMS["restore"], m, Path("/ck"), 8000, 65536)
+    assert argv[argv.index("--num-gpu-blocks-override") + 1] == "65536"
+    assert argv == S.server_argv(S.ARMS["restore-base"], m, Path("/ck"), 8000, 65536)
+
+
 def test_every_engine_runs_with_inductors_rblock_pinned(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     lines = (S.HERE / "run.sh").read_text().splitlines()
     # unindented and before the leased branch: both the served arms and the replays inherit it

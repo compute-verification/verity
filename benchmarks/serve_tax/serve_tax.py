@@ -84,8 +84,10 @@ class Arm:
     #: the corpus's sampling (`corpus.SAMPLING`) and whether each request asks for its sampled tokens' logprobs
     sampling: str = "greedy"
     logprobs: bool = False
-    #: a replay block's boundary state taken at each of ``--edges-s`` (`servetax_plugin.edges_of`)
+    #: a replay block's boundary state taken at each of ``--edges-s`` (`servetax_plugin.edges_of`), and whether each edge
+    #: also dumps every leaf of the engine core's state for the restore's check (`boundary.dump_core`)
     edges: bool = False
+    edge_dump: bool = True
 
 
 ARMS = {
@@ -99,7 +101,10 @@ ARMS = {
               tick=True),
     "restore-base": Arm("record", "+ seeded sampling, each sampled token's logprob returned", plugin=("record",),
                         sampling="seeded", logprobs=True),
-    "restore": Arm("restore-base", "+ a replay block's boundary state taken at each edge (drained, copied, hashed)",
+    "restore-pause": Arm("restore-base", "+ a replay block's boundary state taken at each edge (drained, copied, hashed, "
+                         "kept)", plugin=("record",), sampling="seeded", logprobs=True, edges=True, edge_dump=False),
+    "restore": Arm("restore-base", "+ a replay block's boundary state taken at each edge (drained, copied, hashed, kept) "
+                   "and every leaf of the engine core's state dumped there for the restore's check",
                    plugin=("record",), sampling="seeded", logprobs=True, edges=True),
 }
 #: what every request's body adds to the corpus's (`corpus`), set by `run` from its arm
@@ -338,7 +343,8 @@ def run(a: argparse.Namespace) -> int:
         if not a.edges_s:
             raise SystemExit(f"arm {a.arm} takes the boundary state at --edges-s S,S,...")
         edges = {"edges_s": [float(x) for x in a.edges_s.split(",")], "edge_tag": f"-{next(iter(rates))}1-",
-                 "save_kv": [int(x) for x in a.save_kv.split(",")], "kv_dir": a.kv_dir}
+                 "save_kv": [int(x) for x in a.save_kv.split(",")], "kv_dir": str(Path(a.kv_dir) / a.arm) if a.kv_dir else None,
+                 "dump": arm.edge_dump}
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "plugin": list(arm.plugin), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
@@ -626,9 +632,9 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--tick-from", metavar="STEP_TRACE|RECORD_DIR", help="τ for the tick arms (ignored by the others)")
     r.add_argument("--tick-ms", metavar="SAT,FREE")
     r.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override)")
-    r.add_argument("--edges-s", metavar="S,S,...", help="the restore arm's edges, seconds after the first load's first request")
-    r.add_argument("--save-kv", default="0", metavar="K,...", help="the edges whose KV bytes and state the restore arm keeps")
-    r.add_argument("--kv-dir", help="where the restore arm keeps them (default: its server/edges)")
+    r.add_argument("--edges-s", metavar="S,S,...", help="the restore arms' edges, seconds after the first load's first request")
+    r.add_argument("--save-kv", default="0", metavar="K,...", help="the edges whose KV bytes and state a restore arm keeps")
+    r.add_argument("--kv-dir", help="where a restore arm keeps them, in a directory named for the arm (default: its server/edges)")
     r.add_argument("--out", required=True)
     pl = sub.add_parser("plan", help="make the plan a job's arms share, before any GPU is held")
     for flag in ("--model-id", "--checkpoint", "--c4", "--rates", "--out"):

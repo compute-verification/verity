@@ -7,11 +7,11 @@
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
 #   REPLAY=LOAD REPLAY_FROM=RECORD_ARM_DIR [REPLAY_MODES=...] bash benchmarks/serve_tax/run.sh   # only replay an earlier window
-#   ARMS="restore-base restore" RATES=medium=R REPS=1 SPAN_S=720 EDGES_S=180,360,540 [SAVE_KV=1] [RESTORE=1:2]
-#     [NUM_GPU_BLOCKS=N] [KV_DIR=DIR] bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
-# The restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR (default: a fresh directory under the node's
-# scratch, removed at the end); RESTORE=FROM:TO then restores edge FROM into a fresh engine and replays to edge TO
-# (restore.py) into OUT/restore-replay.
+#   ARMS="restore-base restore-pause restore" RATES=medium=R REPS=1 SPAN_S=720 EDGES_S=180,360,540 [SAVE_KV=1]
+#     [RESTORE=1:2] [NUM_GPU_BLOCKS=N] [KV_DIR=DIR] bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
+# Each restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR/<arm> (KV_DIR by default a fresh directory
+# under the node's scratch, removed at the end); RESTORE=FROM:TO then restores the restore arm's edge FROM into a fresh
+# engine and replays to edge TO (restore.py) into OUT/restore-replay.
 # One plan (OUT/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
 # server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease; the tick arms
 # take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
@@ -74,7 +74,7 @@ if [ "${1:-}" = leased ]; then
   if [ -n "${RESTORE:-}" ]; then
     echo "== restore ${RESTORE} $(date -u +%FT%TZ)"
     "$PY" "$here/restore.py" --arm-dir "$OUT/restore" --from-edge "${RESTORE%%:*}" --to-edge "${RESTORE##*:}" \
-      --kv-dir "$KV_DIR" --checkpoint "$CK" --out "$OUT/restore-replay" > "$OUT/restore-replay.log" 2>&1 \
+      --kv-dir "$KV_DIR/restore" --checkpoint "$CK" --out "$OUT/restore-replay" > "$OUT/restore-replay.log" 2>&1 \
       || { tail -n 60 "$OUT/restore-replay.log"; rc=1; }
     tail -n 1 "$OUT/restore-replay.log"
   fi

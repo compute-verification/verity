@@ -389,7 +389,7 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
         st = B.capture(core)
         st["next_step"], st["kv_layout"] = trace.scheduled, kv.layout()
         t2 = clock()
-        dumped = B.dump_core(core)
+        dumped = B.dump_core(core) if cfg.get("dump", True) else None
         t3 = clock()
         if writer[0] is not None:
             writer[0].join()
@@ -418,7 +418,8 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
             t = time.monotonic()
             with open(kv_dir / f"edge-{k}.state.pkl", "wb") as f:
                 pickle.dump(st, f, protocol=pickle.HIGHEST_PROTOCOL)
-            (d / f"edge-{k}.dump.json").write_text(json.dumps(dumped))
+            if dumped is not None:
+                (d / f"edge-{k}.dump.json").write_text(json.dumps(dumped))
             if fp is not None:
                 np.save(d / f"edge-{k}.fp.npy", fp)
             got = {"edge": k, "state_write_s": time.monotonic() - t}
