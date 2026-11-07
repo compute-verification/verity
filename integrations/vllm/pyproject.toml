@@ -217,6 +217,7 @@ tests = [
     "tests/observe/test_gen_batch_engine_arg.py",
     "tests/pipeline/test_replay_plan.py",
     "tests/pipeline/test_tp_build_width.py",
+    "tests/pipeline/test_workload_fetch.py",
     "tests/pipeline/test_workload_file.py",
 ]
 paths = ["integrations/vllm/verity_vllm/pipeline"]
