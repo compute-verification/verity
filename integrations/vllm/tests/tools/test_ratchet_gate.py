@@ -15,6 +15,7 @@ the silent-except check beside that (a new swallowing handler, typed or broad, r
 re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
 counted lints counting one change), a repository list (ruff's, a counted lint's) catching up to what its base holds and no
 further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
+counted lint's violations in a lint module the gate runs as the base has it counted on the change's own copy, a
 public command P16's list gains (passing when the file it names runs it, refused when that file doesn't or isn't
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
@@ -1397,3 +1398,29 @@ def test_a_site_a_lint_below_on_next_counts_is_refused_at_the_pr_that_adds_it_an
     assert (c["name"], c["verdict"]) == ("#4", "failed") and "finds 3 violation(s) on its tree" in c["why"], c["why"]
     assert c["fix"] == ["repo_lane_text: docs/b.md: 2 found, 0 allowed", "repo_lane_text: docs/b.md:3 toy: TOY1",
                         "repo_lane_text: docs/b.md:3 toy: TOY2"], "the violation the tree below holds is #2's, not #4's"
+
+
+def test_a_lint_module_whose_own_prose_a_change_cleans_is_counted_on_its_own_copy(lane_linted):
+    """The gate runs the base's copy of a lint module the change edits, and the lane-text lint reads that copy's prose too:
+    a change that rewrites the module's docstring and drops its entry passes, counted on its own copy, and one that edits
+    the module's code, keeps its site and drops its entry fails, naming the site where the change's copy holds it."""
+    toy = {"file": LINT, "count": 1}
+    lane_linted.git("checkout", "-q", "main")
+    lane_linted.commit("a lint whose docstring names its issue", {LINT: '"""P1, after VLLM-136."""\n' + TOY_LINT,
+                                                                  REPO_LANE_JSON: _allowlist(DOCS_A, toy)})
+    lane_linted.git("checkout", "-q", "-B", "pr")
+    lane_linted.commit("the docstring says what is true now", {LINT: '"""P1."""\n' + TOY_LINT, REPO_LANE_JSON: _allowlist(DOCS_A)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core", "repo_lane_text"]), c["why"]
+    assert (f"the base's lint code (p01_core, repo_lane_text) finds 2 violation(s) in the base's copy of {LINT}, which it "
+            "runs in place of the change's, and the change's own copy is within its list") in c["why"], c["why"]
+    assert _lane_lint(lane_linted) is None
+    lane_linted.git("checkout", "-q", "-B", "pr", "main")
+    wider = TOY_LINT.replace('WORD = re.compile(r"BAD")', 'WORD = re.compile(r"BAD|WORSE")')
+    assert wider != TOY_LINT
+    lane_linted.commit("counts WORSE, and drops the entry", {LINT: '"""P1.\n\nAfter VLLM-136."""\n' + wider,
+                                                             REPO_LANE_JSON: _allowlist(DOCS_A)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [f"repo_lane_text: {LINT}: 1 found, 0 allowed",
+                                                   f"repo_lane_text: {LINT}:3 linear: VLLM-136"]), c["why"]
+    assert f"{LINT}: 1 found, 0 allowed" in (_lane_lint(lane_linted) or "")
