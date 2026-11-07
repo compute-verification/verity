@@ -2744,3 +2744,26 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
   - It doesn't cover recursion or templates, and it stops at one table under a stratified draw.
 - **Lifetime replay** is lever 4 in PRF-456 v3 (`20261107T2157Z-report-hillclimb-prf456`), marked required. My priced replay commit sits beside it: 5.7× serving on the registered cut, and 443× on today's per-expert cut, 99% of it weight rows the fused cut removes.
 - Weights-stationary is off my critical list, per STATIONARY's numbers.
+
+## 22:02Z from TSVERIFY: items 1 and 2 in try; the listing is blocked on the honest witness, and the definitions tree can't hold the statement
+
+- **Items 1 and 2** are on `cursor/proofs-twocode-0c04` @ `2351bcd5b8`, from `2bf681521b`:
+  - TWOSESS's `SessionSteps`, `Sessions` and `Numbers` are copied by path, with the imports in `Proofs/Flock.lean`;
+  - `Held` carries `xS₀_ok`;
+  - `ksTwo_spot` takes only A3 (`CallsUniform`) and `SessionOpensTwo`;
+  - `innerNumbers_code` and `sessionsIn_code` take no `h₀`.
+
+  Try r20261107-215437-1122 is on cpu-13, ETA 22:20Z. I'll open the PR (PRF-454) once it passes.
+- **Listing, blocker 1: the honest witness.** Any honest instance needs a concrete `Held`, so a concrete reference statement `xS₀` with `setupOf true xS₀ = some _` in Flock's masked scope. The same holds with `zkOk xS₀` as a premise instead of a field, since the honest lemma must then conclude it.
+  - `Proofs/Flock/Claims/Witnesses/Meets.lean` says why that is out of reach: "That some bytes parse to it is beyond Lean: the verifier's parser reads the circuit file's rows with `HmRow.parse`, which regenerates the `hm96` nets, beyond what the kernel evaluates." Flock's own `scope_meets_zk` witnesses only the readable `Claims.Flock.InScope`, never the bytes.
+  - The need isn't an artifact of `Code`: `SessionRuns` needs a session at every run, refused ones included, and `SessionsIn` needs that session's statement in `ZkIn`, which is a parse of bytes. So every listed guarantee at this code needs a parsed in-scope statement to be witnessed.
+  - **Smell, for the post:** `ksTwo_spot` is `∀ h : Held, …`, and Lean can't exhibit a `Held`. The theorem is proved, but Lean doesn't show it non-vacuous. The parse is the Python and Rust verifiers', checked empirically.
+- **Listing, blocker 2: the definitions tree.** The statement must name `SpotFlock.code h`, `two`, `rs`, `iroots` and `Held`. Those build on `FlockDeploy.V`/`setupOf`/`deployZk`, `SamplingDeploy.Code`/`deploy` and `compiledTwo`. All of these are in the proofs package, under the `Proofs.Flock.Claims` and `Proofs.Flock.SamplingGeneric` exceptions ("C-Flock is excepted until its spec is extracted"). The `security` package is Mathlib-only and can't import them, so putting the statement in `Security/Definitions` means extracting C-Flock's deployment spec. That isn't a 10:00Z job.
+  - Within the cap, I can instead move `SpotFlock/Code.lean` (definitions only) to `Proofs/Flock/Claims/SpotFlock/Code.lean`, beside `Claims.Sampling.Code`. Its reads then fall under the existing `Proofs.Flock.Claims` entry, so there's no 41st exception, and the statement `def` goes next to it.
+- **Options for the witness. I need your call, and maybe Daniel's, since it is what a listed guarantee rests on:**
+  - (a) List it with a witness that takes one new assumption: some bytes set up a masked in-scope statement (`∃ x s spec sts, ZkIn x s spec sts`), under `witnesses_assumed`, as `ExpectedCR` is. It's a witness-only premise, never a guarantee's.
+  - (b) Re-state the compiler's `SessionsIn` on the readable scope (`Claims.Flock.InScope`, which `scope_meets_zk` decides) rather than on parsed bytes. That changes L2/L3's interface and `InnerNumbers`, and touches TWOSESS's and #7821's records.
+  - (c) Don't list tonight. Report `ksTwo_spot` as proved on the branch with the vacuity caveat, and list once (a) or (b) is decided.
+
+  My recommendation is (a) for Sunday, with (b) as the follow-up that removes it.
+- Item 2 stays as TWOSESS proposed: it removes a premise and doesn't change the witness question.
