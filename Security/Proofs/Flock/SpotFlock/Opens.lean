@@ -101,8 +101,8 @@ theorem run_seenAt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω :
     (r : Fin ((V h).k x) → FlockDeploy.Coin) (hacc : (run H P (V h) x ω r).out = .acc) :
     ∃ m₀ m₁ xS rest, (run H P (V h) x ω r).seen = seenAt m₀ m₁ xS (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest ∧
       stmtOk h x m₁ xS (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) = true := by
-  have e0 : coinSeq r 0 = r ⟨0, k_pos h x⟩ := dif_pos (k_pos h x)
-  have e1 : coinSeq r 1 = r ⟨1, one_lt_k h x⟩ := dif_pos (one_lt_k h x)
+  have e0 : coinSeq r 0 = r ⟨0, k_pos h x⟩ := dite_eq_left (k_pos h x)
+  have e1 : coinSeq r 1 = r ⟨1, one_lt_k h x⟩ := dite_eq_left (one_lt_k h x)
   obtain ⟨m₀, m₁, xS, rest, hm, hok⟩ := stepWith_three H P x ω
     (fun as => (V h).next x as ((List.range as.length).map (coinSeq r)))
     (r ⟨0, k_pos h x⟩).bytes (r ⟨1, one_lt_k h x⟩).bytes
@@ -142,21 +142,22 @@ def StmtOpens : Prop :=
         (∀ q ∈ (code h).reveal s u (seenAt m₀ m₁ xS c₀ c₁ rest) wF,
           (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 q.1 q.2 = true →
           (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
-          (q.1 = iroots h x (seenAt m₀ m₁ xS c₀ c₁ rest) ρ → ι q.2.pos = q.2.val)) →
+          (q.1 = iroots x (seenAt m₀ m₁ xS c₀ c₁ rest) ρ → ι q.2.pos = q.2.val)) →
         s.prog.Correct (s.prog.refIn rb val ι) b
 
 /-- **SPOT-Flock's session opens each checked proof block at its replay block**: `SessionOpensTwo` at the deployed
 two-stage code, from `StmtOpens`. -/
 theorem sessionOpensTwo (hs : StmtOpens h) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
-      (two h) (iroots h) := by
+      (two h) iroots := by
   intro x s Pt d Ω P ω r u xS vS wF hx hP hd hin hacc hu hsess hck
   obtain ⟨m₀, m₁, xS', rest, hseen, hok⟩ := run_seenAt h FlockDeploy.sha512 P x ω r hacc
   have hseen' : (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x ω r).seen =
       seenAt m₀ m₁ xS' (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest := hseen
   rw [hseen'] at hsess ⊢
   have hxS : some (xS', (⟨rest, .acc⟩ : Seen)) = some (xS, vS) := hsess
-  obtain ⟨rfl, -⟩ := Prod.mk.inj_iff.1 (Option.some.inj hxS)
+  obtain ⟨hxx, -⟩ := Prod.mk.inj (Option.some.inj hxS)
+  rw [← hxx] at hck
   have hx' : parse h x = some s := hx
   obtain ⟨st, hst⟩ : ∃ st, decode x = some st := by
     cases hdx : decode x with
@@ -206,7 +207,7 @@ def WitOpens : Prop :=
         (g ∈ rb ∧ s.prog.Boundary rb g = false →
           ∃ q ∈ (code h).reveal s u (seenAt m₀ m₁ xS c₀ c₁ rest) wF,
             (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 q.1 q.2 = true ∧
-              q.1 = iroots h x (seenAt m₀ m₁ xS c₀ c₁ rest) ρ ∧ q.2.pos = g ∧ q.2.val = I g) ∧
+              q.1 = iroots x (seenAt m₀ m₁ xS c₀ c₁ rest) ρ ∧ q.2.pos = g ∧ q.2.val = I g) ∧
         (¬(g ∈ rb ∧ s.prog.Boundary rb g = false) →
           ∃ q ∈ (code h).reveal s u (seenAt m₀ m₁ xS c₀ c₁ rest) wF,
             (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 q.1 q.2 = true ∧
@@ -235,7 +236,7 @@ theorem stmtOpens (hw : WitOpens h) : StmtOpens h := by
 /-- **`SessionOpensTwo` at the deployed two-stage code from the witness's values.** -/
 theorem sessionOpensTwo_of_wit (hw : WitOpens h) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
-      (two h) (iroots h) :=
+      (two h) iroots :=
   sessionOpensTwo h (stmtOpens h hw)
 
 end SpotFlock
