@@ -707,6 +707,25 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
     for (step, mod), rows in sorted(ids_rows.items()):
         add("input_token_ids", step, 0, impl(mod), "in", 0, rows, rows=rows, width=1, dtype="i32")
 
+    # --- the values the served run decides (`fmt.RUN_PARAM`): one request-owned identity per `<op_path>/<member>` field, at its readers' step
+    run = {ValueRef(p.id, port.name): port for p in P.params if p.name == fmt.RUN_PARAM for port in p.port_table if "/" in port.name}
+    if run:
+        read_at: dict[ValueRef, set[int]] = defaultdict(set)
+        reader: dict[ValueRef, CallView] = {}
+        for c in P.calls:
+            for r in param_reads(c):
+                if r in run:
+                    read_at[r].add(step_of(c.id))
+                    reader.setdefault(r, c)
+        for v, port in run.items():
+            steps = sorted(read_at.get(v, ()))
+            if len(steps) != 1:
+                unmodelled[f"run value {port.name}: read at steps {steps} (one step's forward reads it)"] += 1
+                continue
+            op, member = port.name.rsplit("/", 1)
+            add(fmt.RUN_FAMILY, steps[0], 0, impl(op), member, 0, port.elems, dtype="u8", spec=reader[v].family, leaves=[port.lo, port.hi],
+                attention_module=impl(corr.module_of(reader[v].id)), statics=dict(reader[v].statics))
+
     # --- MoE block planes (kernel geometry, v1's): per (MoE body, step) ----------------------------------------------------------------
     moe_layers: set[int] = set()
     lo = 0
@@ -740,6 +759,10 @@ def request_manifest(P: ProgramView, corr: Correspondence, res: Mapping[str, Any
         q["moe_layers"] = sorted(moe_layers)
     if any(f[:8] == "sampler_" for f in fam_counts):
         q["required_families"] += sorted(f for f in fam_counts if f[:8] == "sampler_")
+    if fam_counts.get(fmt.RUN_FAMILY):
+        q["required_families"].append(fmt.RUN_FAMILY)
+        q["policy"]["protocol_required"].append(f"every `{fmt.RUN_PARAM}` field `<op_path>/<member>`: the request's value of the step "
+                                                f"whose forward reads it (leaves = its leaf range in `{fmt.RUN_PARAM}`)")
     alias_out = {impl(m): [impl(canon), k] for m, (canon, k) in aliases.items() if m != canon}
     man = {"schema": fmt.SCHEMA, "identity_key": list(fmt.IDENTITY_KEY), "program_digest": pdig,
            "program": {"dir": program_dir, "function": res["program"].get("function"), "wrapper": res.get("wrapper"), "LP": res.get("LP"), "T": res.get("T"),

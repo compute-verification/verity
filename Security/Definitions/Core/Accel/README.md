@@ -80,7 +80,7 @@ and firmware.
   - MATCH, which compares a word across 32 lanes in one instruction, and REDUX, which shares its unit;
   - VOTE, which spends 16 `alu` lanes;
   - MMAs with f16 accumulators;
-  - FP6 and block-scaled FP8 and FP6 MMAs, since `Fmt` lacks `e3m2`, `e2m3`, `mxf8` and `mxf6`;
+  - FP6 MMAs, and FP8 and FP6 MMAs with scale groups, since `Fmt` lacks `e3m2`, `e2m3`, `mxf8` and `mxf6`;
   - clock reads, which make time data;
   - IADD3 at sm_120's 128 lanes a SM-clock, twice `alu`'s 64;
   - the uniform datapath's 4 results a SM-clock beside `alu`'s lanes;

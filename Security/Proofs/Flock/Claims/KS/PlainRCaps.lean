@@ -49,7 +49,7 @@ import Proofs.Flock.Soundness.Refine.Seam
 `CapHitAt W lc` (`Pr_rdAt_le_capHit`'s form) follows at any verifier `W` with `V false`'s cap positions from two facts
 about the level columns `lc` (`capHitAt_of`, `Pr_rdAt_le_capHitK`'s proof):
 
-* `QueriedAt W lc`: an accepted run has a level-`ℓ` column at `q` exactly where the level's query coin draws `q`
+* `QueriedAt W lc`: an accepted run has a level-`ℓ` column at `q` exactly where the level's query coin samples `q`
   (`plain_levelCols_queriedK`'s form);
 * `TieAt W lc`: two accepted runs sharing the coins before the plain fork round, reading two rows at one later-level
   position, tie a collision among their calls (`plain_levelTieK`'s form).
@@ -84,7 +84,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-- **Which positions an accepted run's level columns read at `W`** (`plain_levelCols_queriedK`'s form): at an
 accepted run of `W`, a level-`ℓ ≥ 1` column of table 0's rep `r < 2` at `q` exists iff `q` is among the positions the
-level's query coin draws. -/
+level's query coin samples. -/
 def QueriedAt (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽)) : Prop :=
   ∀ {Ω : Type} (P : Claims.Prover Ω) (x : Claims.Msg) (ω : Ω) (c : Fin (W.k x) → Coin),
     (Claims.run sha512 P W x ω c).out = .acc →
@@ -110,7 +110,7 @@ def TieAt (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → ℕ �
 
 /-- **`CapHitAt` from which positions the level columns read and their ties** (`Pr_rdAt_le_capHitK`'s proof at `W`):
 `Pr_rdOff_le_capHit` at `CpDep`'s position `i` and `rdAtW W lc`. A run reads something at the position exactly where it
-accepts and its coins draw the position (`QueriedAt`), and two runs sharing the coins before the plain fork round
+accepts and its coins sample the position (`QueriedAt`), and two runs sharing the coins before the plain fork round
 reading two rows there tie a collision (`TieAt`). -/
 theorem capHitAt_of (W : Claims.Verifier Coin) (lc : Claims.Msg → Claims.Seen → ℕ → ℕ → List (ℕ × List 𝔽))
     (hq : QueriedAt W lc) (ht : TieAt W lc) : CapHitAt W lc := by
@@ -192,7 +192,7 @@ theorem runOfRV_run {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.
     simp only [List.length_map, List.length_range]
     exact hk
 
-/-- **Each plain rep stream of an accepted parsed record draws its table's `plainRepNs`** (`streams_ns_plainK`'s
+/-- **Each plain rep stream of an accepted parsed record samples its table's `plainRepNs`** (`streams_ns_plainK`'s
 proof, at `verifyJWithMK` and `liveOfJ`). -/
 theorem streams_ns_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {sts : Array Stmt}
     {j : Json} {proofs : Array ByteArray} {lv : Live}
@@ -238,9 +238,9 @@ theorem streams_ns_plainJ (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : S
 
 /-! ## Which positions an accepted run of `VR rd` opens -/
 
-/-- **An accepted run of `VR rd` opens a later-level position exactly where its query coin draws it**
+/-- **An accepted run of `VR rd` opens a later-level position exactly where its query coin samples it**
 (`plain_levelCols_queriedK`'s proof, at `nextR`'s verdict at the parsed value): at table 0's rep `r < 2` and level
-`1 ≤ ℓ`, a column at `q` exists iff `q` is among the positions the run's coin `plainQRound` draws at count `plainQN`.
+`1 ≤ ℓ`, a column at `q` exists iff `q` is among the positions the run's coin `plainQRound` samples at count `plainQN`.
 The stream round's coins are the decision's mid coin there (`custody_ok`), which is the run's (`decR_some`). -/
 theorem plainR_levelCols_queried {rd : Claims.Msg → Option FinalP} {Ω : Type} {P : Claims.Prover Ω}
     {x : Claims.Msg} {ω : Ω} {c : Fin ((VR rd).k x) → Coin} (h : (Claims.run sha512 P (VR rd) x ω c).out = .acc)

@@ -294,8 +294,8 @@ def target_mismatches(engine: Engine) -> list[str]:
     if fav != tp.effective_flash_attn_version() and (fav is not None or flash_attn_versions(engine.model)):
         bad.append(f"flash_attn_version declared {tp.flash_attn_version!r} (effective {tp.effective_flash_attn_version()}), layers report {fav!r}")
     # the engine must realise the declared EXECUTION: eager profile -> enforce_eager True; `piecewise` -> torch.compile
-    # (VLLM_COMPILE) + CUDAGraphMode PIECEWISE read back from the built vllm_config (an eager engine labelled compiled, or a compiled one
-    # labelled eager, is refused here before anything is recorded)
+    # (VLLM_COMPILE) + CUDAGraphMode PIECEWISE read back from the built vllm_config; `breakable` -> mode NONE, breakable CUDA graphs at the
+    # declared capture sizes (an eager engine labelled compiled, or a compiled one labelled eager, is refused here before anything is recorded)
     comp = compilation_facts(engine.llm)
     if comp:
         want = tp.COMPILATIONS.get(tp.compilation) if tp.compilation else None
@@ -306,8 +306,14 @@ def target_mismatches(engine: Engine) -> list[str]:
                 bad.append(f"profile declares compilation {tp.compilation!r}, engine built with enforce_eager={comp.get('enforce_eager')!r}")
             if comp.get("cudagraph_mode") != want["cudagraph_mode"]:
                 bad.append(f"profile declares cudagraph_mode {want['cudagraph_mode']!r}, engine runs {comp.get('cudagraph_mode')!r}")
-            if comp.get("mode") not in (want["mode"], "3"):
+            if comp.get("mode") not in ((want["mode"], "3") if want["mode"] == "VLLM_COMPILE" else (want["mode"],)):
                 bad.append(f"profile declares CompilationMode {want['mode']!r}, engine runs {comp.get('mode')!r}")
+            if bool(comp.get("breakable_cudagraph")) != bool(want.get("breakable")):
+                bad.append(f"profile declares breakable CUDA graphs {bool(want.get('breakable'))}, engine runs "
+                           f"VLLM_USE_BREAKABLE_CUDAGRAPH={comp.get('breakable_cudagraph')!r} (vLLM turns it on for the architectures in "
+                           f"DEFAULT_BREAKABLE_CUDAGRAPH_ARCHITECTURES: their compiled target is 'breakable')")
+            if "capture_sizes" in want and comp.get("capture_sizes") != list(want["capture_sizes"]):
+                bad.append(f"profile declares capture sizes {want['capture_sizes']}, engine captures {comp.get('capture_sizes')!r}")
             if bool(comp.get("emulate_precision_casts", False)) != bool(want.get("emulate_precision_casts", False)):
                 bad.append(f"profile declares Inductor emulate_precision_casts={want.get('emulate_precision_casts')!r}, engine compiled with "
                            f"{comp.get('emulate_precision_casts')!r} (inductor_compile_config {comp.get('inductor_compile_config')!r})")
@@ -347,6 +353,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
     (name; the pinned vLLM's IntEnum str() is the number, recorded too), CUDAGraphMode, capture sizes, inductor graph partition, enforce_eager,
     compile-cache switch.  Written into the run header's `compilation` block beside the profile's `effective_compilation` (the global match's G1
     compares a compiled Program's declared facts against it) and into commit_delta's versions.json (control and treatment must agree)."""
+    from verity_vllm.engine import engine_profile as prof
     out: dict[str, Any] = {}
     try:
         vc = llm.llm_engine.vllm_config
@@ -362,6 +369,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
         out["use_inductor_graph_partition"] = bool(getattr(cc, "use_inductor_graph_partition", False))
         out["backend"] = str(getattr(cc, "backend", None) or ("inductor" if out["mode_value"] == 3 else None))
         out["enforce_eager"] = bool(vc.model_config.enforce_eager)
+        out["breakable_cudagraph"] = prof.breakable_cudagraph()
         out["compile_cache"] = "disabled" if os.environ.get("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
         # the Inductor config the pieces were compiled with: emulate_precision_casts makes the compiled kernels
         # perform the bf16 roundings the Program specifies at every module/op boundary (Inductor otherwise carries fp32 through fused

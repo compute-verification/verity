@@ -35,8 +35,9 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
   archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). New infra components go to
-  compute-verification/infra, and `INFRA_PATHS` (`tests/test_infra_paths.py`) lists what is still here and only shrinks.
+  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
+  exported to the public repository (Daniel, 4 Nov); new infra goes here too. compute-verification/infra holds only the
+  website.
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
@@ -75,7 +76,14 @@ The rules in force, each stated as itself; the friction skill has the standing r
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
-  model's size is public.
+  model's size is public. These core protocols wrap SPOT[Flock], the sampled proof system, in the recursion layer and the
+  ZK server. SPOT[Flock] on its own (the research release and its post) has none of that: an inference server serves and
+  commits its values, a proof server replays the sampled requests and proves them, and the verifier (the challenger and
+  the Lean verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not
+  exfiltration. The demonstration adds the network certifier as a separate layer: it stamps each request's release order
+  and bucket at ingress, which the certified tick admits by, so the scheduler's choice of batch is no longer advice.
+  SPOT[Flock] reads that stamp as a certified input and never imports the certifier, which has its own code, guarantee
+  and proof; the two compose only above both.
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows, or keyed
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
@@ -86,7 +94,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the execution
   phase's live salt (`pouw.salt`) and the operands' committed roots, which a sampled proof block's proof derives. Grinding is a term
   of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
-  retries: a failed proof is a visible failure, and nothing resamples. Outer proofs go through the ZK server as independent
+  retries: a failed proof is a visible failure, and nothing resamples. In the core protocols, outer proofs go through the ZK server as independent
   sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
   coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
@@ -179,7 +187,7 @@ team skill). A red's culprit is the one landing whose change touches what its fa
 a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
 forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
 rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
-is the only check before it joins, and a body naming no live goal draws a warning, never a refusal. A change a `warn_gates`
+is the only check before it joins, and a body naming no live goal samples a warning, never a refusal. A change a `warn_gates`
 gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
 ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
 next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s
@@ -233,7 +241,9 @@ bookkeeping: it repairs it in that commit, with a warning for each repair (The l
   the witnesses rule holds to missing witnesses, a stale entry, a premise a `trust_gap` entry lists that its guarantee
   no longer rests on, a missing owner, or a cap of `unread-caps.json` or
   `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
-  malformed lock always fail. Lock files never conflict on merge.
+  malformed lock always fail. Lock files conflict on merge only where `tools/verity/lean/merge.py` can't vouch for the
+  merge: a lock in a `format` newer than it knows, the worktree's copy merging in newer merge rules, or a merge that would
+  drop most of a section. The registered driver runs `origin/main`'s copy wherever the repository has that ref.
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
   lean-proofs skill.
 

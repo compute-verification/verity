@@ -375,7 +375,7 @@ def _same(committed: dict | None, info: dict | None) -> bool | None:
 
 
 def per_unit(rank: dict) -> dict[str, dict]:
-    """A rank's timing per sampled proof block, by member, as the prove path's `per_unit` reads it: each drawn
+    """A rank's timing per sampled proof block, by member, as the prove path's `per_unit` reads it: each sampled
     member's prover and Lean verify seconds over the units its one statement proves (``draw_counts``; Flock's own
     ``units`` count its virtual units), and its proof's bytes over its reps."""
     out = {}
@@ -499,7 +499,7 @@ def served_commit(s: dict, bits: dict, commits: dict[int, dict], registered: dic
     report's advice directory ``adv_dir``, each window's close ``closed``), whether registered by the report's own run
     or apart. ``registered`` is, by window, who registered its advice (``by``, ``ref``), the registration's directory
     when it isn't the report's (``registration``), the serving run's own record (``record``, its run directory,
-    `serve_record`) and the arm's first draw (``first_draw``), as the job states them (``--prove-path-registered``);
+    `serve_record`) and the arm's first sample (``first_draw``), as the job states them (``--prove-path-registered``);
     whether it was at serve time is never the job's to say: its sample followed the registration when every rank's
     `advice_before_draw` (the verifier's receipt of it before any coin) says so. A window with no next close in the
     endpoint's records is bounded by the session's end only when the record says the session ended with this window
@@ -878,7 +878,7 @@ def stubs(r: dict, varied_client: bool) -> list[str]:
                    f"sampled ids from {t['from']} under fake salts in place of the Commit's port), not the endpoint's "
                    "Commit and the warden's cells in an IoTieWindow unit.")
     where = str(r.get("where") or "")
-    if where.startswith("off the prover's node"):
+    if where.startswith("off the developer's node"):
         out.append("Auditor host: the certifier ran on another node than the endpoint's, through an ssh forward, not on "
                    "the auditor host (--from takes a gate run's fetch).")
     elif not where.startswith("gate: "):

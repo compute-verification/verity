@@ -22,16 +22,16 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import VCVio.Prelude.Core
 
 /-!
-# The frame takes the firewall's own rounds of the inner proof
+# The frame takes the ZK server's own rounds of the inner proof
 
 At the inner proof's rounds the frame fixes every frame and
-every value it can compute from its draws and the coins (`innerOwn`): only `final_c'` and `τ`'s commitment are free. Were
-the frame to refuse one of the firewall's own rounds, the rep's next coins would be refused ("coins for no round"), a
-stop that reads the draws. So:
+every value it can compute from its samples and the coins (`innerOwn`): only `final_c'` and `τ`'s commitment are free. Were
+the frame to refuse one of the ZK server's own rounds, the rep's next coins would be refused ("coins for no round"), a
+stop that reads the samples. So:
 
-* `ownRound` (the frame's `Frame.ownRound`): the firewall's own round `k` of the inner proof at a configuration and
+* `ownRound` (the frame's `Frame.ownRound`): the ZK server's own round `k` of the inner proof at a configuration and
   state, as `innerOwn` fixes it, which the session loop's frames schedule (`Frame.innerSched`).
-* **`innerOwn_ownRound`**: at every configuration and state, so at the rep's draws and at any other draws alike, the
+* **`innerOwn_ownRound`**: at every configuration and state, so at the rep's samples and at any other samples alike, the
   frame's check of the inner proof takes it.
 -/
 
@@ -65,7 +65,7 @@ theorem fixedBut_of (pre w post : ByteArray) :
   rw [e1, e2, byteArray_beq_self, byteArray_beq_self, ByteArray.size_append, ByteArray.size_append]
   simp
 
-/-- **The frame takes the firewall's own rounds of the inner proof** (R3): at any configuration and state, round
+/-- **The frame takes the ZK server's own rounds of the inner proof** (R3): at any configuration and state, round
 `k < 4` as `ownRound` builds it, from a 16-byte `final_c'` and a 64-byte `τ` commitment, is the round `innerOwn` fixes. -/
 theorem innerOwn_ownRound (c : Cfg) (s : Masker) (w t : ByteArray) (hw : w.size = 16) (ht : t.size = 64) (n : ℕ) :
     ∀ k, k < 4 → innerOwn c s k (ownRound c s w t n k) n = .ok ()

@@ -2,8 +2,81 @@
 
 The Lean statement and proof of what an accepted run of Verity guarantees: for each subprotocol, and then for the composed
 protocol, a bound on the probability that the verifier accepts while a claim about the run fails. The terms are the
-[Glossary](../GLOSSARY.md)'s. The first section is the whole security argument, from what makes training hard to the
-slowdown a secret training run suffers, with its symbols and where each step stands in Lean.
+[Glossary](../GLOSSARY.md)'s. The first section gives the four statements to read first; the next is the whole security
+argument, from what makes training hard to the slowdown a secret training run suffers, with its symbols and where each
+step stands in Lean.
+
+## Start here
+
+Four statements carry what an accepted run guarantees. Each entry gives its file (under `Security/`), Lean name and
+one-line statement, and its premises by kind: **domain**, what the statement is about; **real**, a named cryptographic
+or trust assumption; **folds into**, a second form of another premise; and **open**, a premise about our own code or
+protocol that a proof has yet to discharge.
+
+SPOT, the Sample-and-PrOve Transform, takes a proof system Π for one proof block to SPOT[Π], which proves a partitioned
+computation by committing to every proof block and proving only the sampled ones; the deployed one is SPOT[Flock]. A
+set B of proof blocks is accepted with probability P_a(B), the chance that the sample misses all of it, and the
+**tolerated family** is M_δ = {B : P_a(B) > δ} (`Claims.Sampling.Design.M`, the Lean's "confidence set"). F is the
+incorrect set of the trace the extractor recovers.
+
+1. **SPOT.** `Claims.SamplingGeneric.CompilerKS` (`Definitions/Claims/SamplingGeneric.lean`, proved in
+   `Proofs/Flock/SamplingGeneric.lean`): for every knowledge-sound Π and every compiled verifier meeting SPOT's contract
+   with a binding commitment, at every δ ≥ 0, Pr[accept ∧ F ∉ M_δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ_δ − δ + √(γ·Pr[B])
+   from Π's errors at the sampled proof blocks' sessions and ε_bind = Pr[B_ext]; `CompilerZK` carries Π's zero
+   knowledge to SPOT[Π]. Their premises (`Arg.KS`, the binding, the scope, the contract) are their domain. At Flock,
+   `Flock.Guarantees.SampledKSLiveV3` (stated in `Proofs/Flock/Bridge/Refused.lean`, proved in
+   `Proofs/Flock/Bridge/KSLive.lean`) proves the bound at the deployed sessions:
+   Pr[`verify --zk` accepts ∧ the run's population is the registration's ∧ F ∉ M_δ] ≤ δ + ε̄_ks + ε_link, at
+   δ = C(n−K₀, k)/C(n, k) for k of n proof blocks sampled uniformly, with ε̄_ks Flock's error averaged over the sessions
+   and ε_link the link's term:
+   - Domain: the circuit and public files parse, the statement is in scope, and k ≤ n splits evenly over the tables.
+   - Real: SHA-512 collision resistance, through its folds.
+   - Folds into: `TableCRZAt` and `LinkCRZCAt` into `Claims.ExpectedCR`; `UniformRandomBytes` (the verifier's bytes,
+     exactly uniform) and `RecordCustodyZKJ` (the record is the live session's) into Core's challenger premises.
+   - Open: `TagsOkZHJ` and `Built`, hypotheses on the statement's form.
+2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Claims/RecursionGeneric.lean`, proved in
+   `Proofs/Flock/RecGeneric/OuterProof.lean`): for every Π_in its repetition extractor shows knowledge sound, binding
+   ZK server and knowledge-sound Π_out, the compiled verifier is knowledge sound wherever the compiler's contract holds;
+   its premises are its domain. Deployed, `Flock.Guarantees.RecursiveKS` (`Proofs/Flock/Recursive/KSStatement.lean`):
+   for every decoder within Flock's list-decoding radius and every dense statement, Pr[the recursive verifier accepts ∧
+   the extractor recovers no witness] ≤ κ + √(γ·Pr[B]) plus the inner verifier's bad-abort, forked-coin and first-coin
+   terms. `Flock.Guarantees.RecursiveKSDeployed` (`Proofs/Flock/Recursive/KSCoinTreeStatement.lean`) is that bound plus
+   2·k(x)·δ₁ at the coins the challenger commits at Hello, in an hm96 tree whose leaves hide within δ₁.
+   - Domain: the dense statements (`RecDeploy.DenseAt`); the decoders within the radius (`Claims.Flock.ListWithin`; the
+     deployed ones meet it).
+   - Real: SHA-512 collision resistance bounds Pr[B], and `Claims.Hm96Hiding` bounds δ₁.
+   - Open: none.
+3. **Zero knowledge of the deployed system.** `Flock.Guarantees.SessionLoopZKDeployed`
+   (`Proofs/Flock/SessionLoop/Statement.lean`): at the ZK server's session loop on the deployed tables, for every t > 0,
+   every V* with one more round than the verifier and every event E, Pr[E(real)] ≤ 2·(Pr[E(sim)] + 8(t+1)·n_L(x)·δ₁ +
+   2·3^(−t) + 4t·3^t·Pr[fork collision]), with δ₁ hm96's hiding gap at the pinned key. For the recursive audit,
+   `Flock.Guarantees.RecursiveZK` (`Proofs/Flock/Recursive/Statements.lean`): if the outer session is
+   ε_o-zero-knowledge, every event of the view released at a stop from a public family St is at most |St| times as
+   likely as at the simulator's, plus ε_o + n_h·δ_{K*}.
+   - Domain: a witness in the relation, at a statement the loop serves, in Flock's scope.
+   - Real: `Claims.Hm96Hiding` bounds δ₁ and δ_{K*}, and SHA-512 collision resistance the fork term; at the operating
+     system's bytes, `UniformRandomBytesTest` (`recursiveZK_os_gap`).
+   - Folds into: `Loop.Src` (the loop's inputs from its host are the tape's) into `trusted-host` and
+     `UniformRandomBytesTest`.
+   - Open: `SwCausalOn`, the tables' side's one unproved premise; per worker, `LoopInnerRound0`, `LiveRoundEq` and
+     `FillRoundEq`; and `OuterViewZK`.
+4. **Composed soundness.** `Verity.Soundness` and `Verity.RemoteSoundness` (`Properties/Verity/Soundness.lean`),
+   proved as `Verity.soundness_of_subprotocols` and `Verity.remote_soundness_of_subprotocols`
+   (`Proofs/Properties/Verity/Soundness.lean`): if each of the composite's subprotocols meets its target, then
+   Pr[the composite's verifier accepts files that passed the commit phase's check ∧ some subprotocol's claim fails]
+   ≤ Σ_a error_a, where error_a is a's δ plus ε_forge plus its loss at the probability that a's finder outputs a
+   SHA-512 collision, and ∞ where the finder or the forger breaks its premise.
+   - Real: SHA-512 collision resistance (`Vocab.FinderCR`) and LMS unforgeability (`Hash.Assumptions.LmsUnforgeable`),
+     read in the error.
+   - Open: the targets (`SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
+     `NetworkCertifierSound`, `WipeSound`; remote's are the first three), each a hypothesis until its subprotocol's
+     proof discharges it.
+
+**The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
+declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes
+fold into), `Claims.Hm96Hiding` (hm96 leaves hide at the pinned key) and `UniformRandomBytesTest` (the operating
+system's bytes are uniform up to η on each test). Beside them the statements read `trusted-host`, Core's challenger
+premises (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`) and `Hash.Assumptions.LmsUnforgeable`.
 
 ## The security argument
 
@@ -97,7 +170,7 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
   Since E_j's structure is a function of a_j, the advice is fresh information: an inference block whose structure
   depends on k_a bits of a_j reads them as fresh input.
 - **Derived quantities**, none assumed:
-  - F, the faulty proof blocks (committed outputs that differ from their gates applied to their committed inputs), and
+  - F, the incorrect proof blocks (committed outputs that differ from their gates applied to their committed inputs), and
     the **faulty share** φ, the share of credited work that lies in F;
   - Φ_cred, the rate PoUW credits as registered work, and the **credited utilization** u = Φ_cred/Φ_R;
   - Φ_gap, credited work a cheaper route could produce; Φ_bk, bookkeeping (certificate slack and verdict lag);
@@ -123,7 +196,7 @@ Remote, for each execution block E_j, in five steps:
 3. **Proof.** The developer proves each sampled proof block in zero knowledge and answers PoUW's challenges in time.
 4. **Validation.** The verifier checks the proofs, the partitions' public rules, 𝓘_j's budgets (c, k) and PoUW's
    credit.
-5. **Accounting.** Each subprotocol's account for E_j is tallied: the bound on faulty proof blocks, the credited work,
+5. **Accounting.** Each subprotocol's account for E_j is tallied: the bound on incorrect proof blocks, the credited work,
    the inference blocks. The policies read the accounts.
 
 The monitoring period is accepted when every subprotocol accepts every E_j, under one commitment that binds them all.
@@ -289,7 +362,7 @@ hardware.
 acceptance, the run lies in 𝒜 = 𝓕 ∩ ⋂_p 𝒜_p (`Verity.Soundness`; the subprotocols' guarantees are the table under "The
 guarantees to read first"):
 
-- **sampled proofs:** F lies in the confidence set M_δ, which bounds the faulty proof blocks in each size class, and
+- **sampled proofs:** F lies in the confidence set M_δ, which bounds the incorrect proof blocks in each size class, and
   with each class's block size the faulty share φ;
 - **PoUW:** Φ_D ≥ (1 − φ)·Φ_cred − Φ_gap − Φ_bk, with each credited gate a distinct gate of A;
 - **the inference-only policy:** every 𝓘_j is a (c, k)-partition;
@@ -301,9 +374,9 @@ guarantees to read first"):
 one of two parts:
 
 - an inference block I of correct credited registered computation whose effective fresh input k_I + k_{F,I} + k_{a,I}
-  (its own fresh input, the bits faulty proof blocks inject into it, and the advice bits its structure depends on) is
+  (its own fresh input, the bits incorrect proof blocks inject into it, and the advice bits its structure depends on) is
   within the range of part 2's assembly, contributing q_I;
-- the remainder: unregistered hardware, registered hardware not running credited registered work, the faulty proof
+- the remainder: unregistered hardware, registered hardware not running credited registered work, the incorrect proof
   blocks, the credit gap, the bookkeeping, blocks out of range, and multiplications split between a block and the rest.
 
 Credit isn't counted twice, and padding isn't evidence that hardware ran anything. The remainder does at most ζ̄
@@ -399,10 +472,11 @@ None of these is assumed silently; each would restate the conclusion:
 
 ## Three trees
 
-- `Definitions/` (package `security`, with `Models.lean`): the spec, the part a reader reads. Each area (`Core`, `Pouw`,
-  `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its premises (`Assumptions`) and its guarantee
-  statements (`Guarantees`), each a `def G : Prop`. The real assumptions, the few the guarantees rest on without proof,
-  are declared in one module, `Definitions/Assumptions.lean`; a premise declared anywhere else is open (The lock).
+- `Definitions/` (package `security`, its root `Definitions.lean`): the spec, the part a reader reads. Each area
+  (`Core`, `Pouw`, `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its premises (`Assumptions`) and
+  its guarantee statements (`Guarantees`), each a `def G : Prop`. The real assumptions, the few the guarantees rest on
+  without proof, are declared in one module, `Definitions/Assumptions.lean`; a premise declared anywhere else is open
+  (The lock).
 - `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
   runs, one `Properties.<Protocol>` module per protocol.
 - `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each
@@ -458,10 +532,10 @@ and after and each changed definition with its source; nothing waits on it, and 
 
 ## The guarantees to read first
 
-**Protocol soundness** is one theorem, the union bound over a composite's subprotocols at its compiled verifier:
-`Verity.soundness_of_subprotocols` at onsite's seven and `Verity.remote_soundness_of_subprotocols` at remote's three, each
-subprotocol's target a hypothesis until its own proof discharges it. Start at `Properties/Verity/README.md`: the
-statement, the subprotocols each composes, how to read it and what it rests on.
+**Protocol soundness** is one theorem (Start here, item 4), the union bound over a composite's subprotocols at its
+compiled verifier: `Verity.soundness_of_subprotocols` at onsite's seven and `Verity.remote_soundness_of_subprotocols` at
+remote's three, each subprotocol's target a hypothesis until its own proof discharges it. Start at
+`Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it and what it rests on.
 
 The table lists the subprotocols' own guarantees, each in its own form; each is proved under `Proofs/`. A status names the statement's named assumptions; the
 conditions it places on its inputs and setup, which the lock also lists, are left out.
@@ -472,9 +546,9 @@ conditions it places on its inputs and setup, which the lock also lists, are lef
 | PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
-| Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.Commitment.Binds`; each window is bounded alone, with no union over the period yet |
+| Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
 | Memory wipes | `Pous.Guarantees.StreamedWipe`, `Definitions/Pous/Guarantees/StreamedWipe.lean` | Proved; the PRF enters as its advantage term |
-| PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/RemoteAudit/Line.lean` | Inside protocol soundness: its P2 audit (`RemoteAudit.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. This guarantee, in its own form, is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
+| PoUB | `Properties.RemoteAudit.Line.LineHeld`, `Properties/Accounting/Remote/Line.lean` | Inside protocol soundness: its P2 audit (`RemoteAudit.P2Protocol`, on PoUS's store) is one of onsite's seven subprotocols, so `Verity.soundness_of_subprotocols` at `.onsite` covers it through its target, `BandwidthAuditSound`. This guarantee, in its own form, is proved under named assumptions: `Accounting.Remote.Held.Assumptions`, `Accounting.Remote.Draw.Assumptions` |
 
 PoUW has other guarantees, outside protocol soundness.
 
@@ -506,11 +580,11 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   Remote's coin path is three named premises over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
   `Definitions/Core/Assumptions/Challenger.lean` and listed in the lock: the challenger logs every coin it releases
   (`ChallengerLogsCoins`), flips each only after what it samples is recorded (`FlipsAfterRecorded`), and the verifier
-  reads coins only from that log (`VerifierReadsLog`). Under them a sample drawn with a logged coin misses a set fixed
-  before it at most as often as the draw law allows (`Verity.Guarantees.SampleAfterRecorded`, proved); none of
+  reads coins only from that log (`VerifierReadsLog`). Under them a sample sampled with a logged coin misses a set fixed
+  before it at most as often as the sampling design allows (`Verity.Guarantees.SampleAfterRecorded`, proved); none of
   remote's guarantees reads `CoinsConfidential`, and no `.lean` file defines `OneClock`. Network certifiers and memory
   challengers are onsite's.
-- **Not the remote composite.** `Accounting.Remote` and `Properties.RemoteAudit` are PoUB
+- **Not the remote composite.** `Accounting.Remote` and `Properties.Accounting.Remote` are PoUB
   (`verity/core/protocols/remote_bandwidth`), which proves the bits a node read from its registered store. It is a
   different protocol from the remote composite, and a subprotocol of onsite only.
 

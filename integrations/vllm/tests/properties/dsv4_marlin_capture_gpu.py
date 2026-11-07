@@ -81,7 +81,7 @@ NT * KT mod iters per block), so a reshuffle shows exactly where an expert spans
 is block-invariant (672 a multiple of iters 21 and iters 112) and only a thin w2 tail differs, and their runs drew equal
 placements.  So v3 checks what the record claims: each run against the twin at its own recorded assignment, the runs against each
 other on the pairs they agree on, and the launch replayed at run1's call, bit for bit.  A served step's sorted_token_ids are part
-of its committed inputs, so the Programs bind at whatever placement the align kernel draws; nothing here needs a Definition change.
+of its committed inputs, so the Programs bind at whatever placement the align kernel samples; nothing here needs a Definition change.
 
 What the JIT decides.  At a given config (TK, TN, GRID) the served kernels' arithmetic is fixed by their PTX, and the JIT chooses no
 rounding in it.  In each of the three instantiations served at a moe block of 8 (256 threads at 8 x 8 n x k blocks, 128 at 8 x 4
@@ -685,7 +685,7 @@ def same_words(a, b) -> bool:
 
 
 def unmoved_rows_equal(a, b, moved: np.ndarray) -> bool:
-    """The rows of two runs' outputs outside ``moved`` hold the same words, as bits per row: a pair the two align draws placed in
+    """The rows of two runs' outputs outside ``moved`` hold the same words, as bits per row: a pair the two align samples placed in
     different moe blocks of its expert reads a different k-slice schedule (module docstring, Replay determinism), so only the pairs
     both runs placed alike are held to each other; the moved ones are checked against the twin at their own run's assignment."""
     import torch
@@ -716,7 +716,7 @@ def replay(L: dict[str, Any]) -> bool:
 def case_launches(work: Path, name: str, M: int, pool_kind: str, ids, launches: list[dict], W: dict[str, Any], sms: int,
                   types: list[int] | None) -> tuple[list[dict], list[dict], list[dict]]:
     """One case's records from its two runs' launches (labels `<name>/run1`, `<name>/run2`), each with its kernel; returns (launch
-    records, launch specs for the jobs — run1's whole, and run2's moved pairs at run2's own assignment where the two align draws
+    records, launch specs for the jobs — run1's whole, and run2's moved pairs at run2's own assignment where the two align samples
     differ — and the captured run1 launches for the replay and forced phases)."""
     by = {(L["label"].split("/")[1], kind_of(L)): L for L in launches if L["label"].startswith(f"{name}/")}
     ids_flat = ids.cpu().numpy().astype(np.int64).reshape(-1)

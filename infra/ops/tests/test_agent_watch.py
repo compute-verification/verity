@@ -283,6 +283,30 @@ def test_an_error_run_is_restarted_once_an_hour_and_three_times_in_a_row_at_most
     assert len(api.posts) == 3, "an IDLE agent not changed in 6 h isn't read"
 
 
+def test_an_idle_agent_whose_message_never_became_a_run_is_recorded_dropped_once_for_its_owner(tmp_path):
+    """A message reached a reviewer after its last run FINISHED and never became a run: Cursor shows it in ERROR, the API's
+    latest run reads FINISHED, so no restart sees it. An agent idle since its run ended, or changed within `DROPPED_S`, isn't
+    dropped."""
+    clock = Clock(W.epoch("2026-11-06T05:30:00Z"))
+    api = FakeApi([{"id": "bc-r", "name": "Reviewer review-2", "status": "IDLE", "latestRunId": "run-r",
+                    "updatedAt": "2026-11-06T01:45:11Z"},
+                   {"id": "bc-q", "name": "quiet", "status": "IDLE", "latestRunId": "run-q",
+                    "updatedAt": "2026-11-06T01:33:00Z"}],
+                  {"run-r": {"status": "FINISHED", "updatedAt": "2026-11-06T01:32:53Z"},
+                   "run-q": {"status": "FINISHED", "updatedAt": "2026-11-06T01:32:00Z"}})
+    w, started = W.Watch(api, tmp_path / "events.jsonl", clock), []
+    w.workers["bc-r"] = {"lane": "ci", "handle": "ci"}
+    w.sweep(started.append)
+    clock.t += 60
+    w.sweep(started.append)
+    assert [(r["kind"], r["agent"], r["since"], r["ended"], r.get("owner")) for r in records(tmp_path)] == [
+        ("dropped", "bc-r", "2026-11-06T01:45:11Z", "2026-11-06T01:32:53Z", "ci")]
+    assert api.posts == [], "nothing is restarted: its owner resumes it or relaunches it"
+    api._agents[0]["updatedAt"] = "2026-11-06T05:20:00Z"
+    w.sweep(started.append)
+    assert [r["kind"] for r in records(tmp_path)] == ["dropped", "dropped"], "another dropped message is recorded again"
+
+
 def test_a_restart_seen_running_before_it_errors_still_counts_toward_the_limit(tmp_path):
     """A restarted run reads CREATING, then RUNNING for a minute before it ends in ERROR again; a sweep that saw it running
     reset the count, so a crashing agent was restarted every hour for good."""
@@ -1293,7 +1317,7 @@ def test_the_terminal_run_cache_and_the_runs_already_judged_are_kept_apart(tmp_p
     """W1-6. W1's watch cached terminal run records in `done`, which here is the runs judged once (state.json: run -> when). One
     dict for both: an ERROR run read is never restarted, state.json fills with records, and a cached record that dropped
     `updatedAt` reads as never active."""
-    agents = [{"id": CO, "status": "IDLE", "latestRunId": "run-f", "updatedAt": W.iso(T0)},
+    agents = [{"id": CO, "status": "IDLE", "latestRunId": "run-f", "updatedAt": FINISHED["updatedAt"]},
               {"id": "bc-e", "status": "IDLE", "latestRunId": "run-e", "updatedAt": W.iso(T0)}]
     api, clock, w = coordinators(tmp_path, agents, {"run-f": dict(FINISHED), "run-e": {"status": "ERROR"}}, wake=True)
     w.sweep(lambda r: None)
@@ -1354,6 +1378,32 @@ def test_workers_are_found_in_recent_notes_and_workers_d_minus_the_coordinators(
         "proofs isn't a handle of this registry; hash's worker goes to the coordinator that started it; W5 to its launcher's; " \
         "a note with no lane: its directory's"
     assert found[W1_]["heard"] == T0 - 60
+
+
+def test_a_worker_whose_message_never_became_a_run_is_recorded_dropped_for_its_lane(tmp_path):
+    """A pool reviewer is a worker the list doesn't show: read by id, it is IDLE and moved 12 min after its latest run
+    FINISHED, which Cursor shows as ERROR. Its lane's handle is rung, once per `updatedAt`."""
+    notes = tmp_path / "notes"
+    note(notes, "circuits", "a.md", f"circuits reviewer ({W1_})")
+    idle = {**worker("IDLE", "2026-10-18T19:45:00Z", name="Reviewer review-2"), "latestRunId": "run-w"}
+    api, clock, w = coordinators(tmp_path, [], {"run-w": {"status": "FINISHED", "updatedAt": "2026-10-18T19:32:53Z"}},
+                                 workers={W1_: idle}, notes=notes)
+    w.sweep(lambda r: None)
+    clock.t += 60
+    w.sweep(lambda r: None)
+    assert [(r["kind"], r["agent"], r["run"], r["since"], r["ended"], r.get("owner"), r.get("role")) for r in records(tmp_path)
+            if r["kind"] == "dropped"] == [
+        ("dropped", W1_, "run-w", "2026-10-18T19:45:00Z", "2026-10-18T19:32:53Z", "circuits", "worker")]
+
+
+def test_the_workers_heard_most_recently_are_read_first_when_more_are_new_than_a_sweep_reads(tmp_path, monkeypatch):
+    """A backlog of workers heard days ago, sorted ahead by id, kept a reviewer heard today from being read for hours."""
+    monkeypatch.setattr(W, "WORKERS_NEW", 1)
+    api, clock, w = coordinators(tmp_path, [], {}, workers={W1_: worker("IDLE", "2026-10-18T19:00:00Z"),
+                                                           W2_: worker("IDLE", "2026-10-18T19:00:00Z")})
+    w.workers = {W1_: {"heard": T0 - 5 * 86400 + 60, "lane": "x"}, W2_: {"heard": T0 - 60, "lane": "x"}}
+    w.sweep(lambda r: None)
+    assert f"/v1/agents/{W2_}" in api.gets and f"/v1/agents/{W1_}" not in api.gets
 
 
 def test_a_worker_that_goes_idle_is_recorded_once_per_transition(tmp_path):
