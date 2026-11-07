@@ -21,8 +21,17 @@ table in the boundary, wall-clock, retired-term, seed and verifier-cost tests).
 `lint/` holds four kinds of finding to a list in `lint/allowlists/`, counted per file: environment reads
 (`test_repo_env_reads.py`), lane text in prose (`test_repo_lane_text.py`), ruff's findings (`test_repo_ruff.py`) and except
 handlers that swallow what they catch (`test_repo_silent_excepts.py`). A file with more findings than its entry allows, or
-with findings and no entry, fails. An entry that allows more than is found doesn't, so the list can run ahead of the tree;
-the ratchet landing gate refuses a change that grows a list or adds a finding to a file it touches.
+with findings and no entry, fails, except that lane text and ruff's style findings are bookkeeping: they warn, and a later
+PR fixes them (ruff's errors, `ERRORS` in its lint, still fail). An entry that allows more than is found doesn't, so the
+list can run ahead of the tree; the ratchet gate, which holds nothing (`off_gate` in `tools/verity/check/policy.toml`),
+reports a change that grows a list or adds a finding to a file it touches.
+
+## Bookkeeping
+
+`conftest.py`'s `BOOKKEEPING` names the tests whose findings warn (a `Bookkeeping` warning in pytest's summary) and pass:
+lane text, retired terms, doc paths, Lean and CLI naming, provider names, stale allowlist entries and Markdown caps
+(Daniel, 6 Nov). A scan's own tests, and a listed test that raises anything but a failed check, still fail.
+`test_bookkeeping.py` holds the list to the tree.
 
 ~~~sh
 python3 tests/lint/test_repo_ruff.py --move OLD NEW   # a file or directory moved: its entries follow it, in the same change

@@ -146,6 +146,11 @@ wait on the event or inject the clock; `tests/test_no_wall_clock.py`, its except
 deleted, not rerun. A test that adds more than about a minute to `check` says in its docstring what it catches that a
 cheaper test can't.
 
+Bookkeeping warns and a later PR fixes it (Daniel, 6 Nov): what can be put right after landing without any claim being
+false meanwhile. The root suite's bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc
+paths, naming, stale allowlists, Markdown caps) and ruff's style findings warn. Ruff's errors, a crashed scan and
+everything that can make a claim false or can't be undone still fail.
+
 ## Circuits
 
 A change that adds or modifies a circuit (a Definition, a subcircuit template, a Boolean lowering) passes
@@ -230,7 +235,7 @@ to a commit whose records are the regenerated ones and whose gated steps all pas
   delete dead and superseded code, and move data and logs to the evidence store.
 - **A decision rolls out in the change that records it.** A PR that records a ruling, or retires a term, a path or a
   procedure, rewrites every place that states the old way: `git grep` this file, ARCHITECTURE.md, GLOSSARY.md, the
-  skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` fails on a doc
+  skills, READMEs, docstrings and CLI help. Fix a stale statement on sight. `tests/test_doc_paths.py` warns on a doc
   naming a dead path.
 - Never print a secret's value. List environment variable names with `compgen -e`, never `env`, `printenv` or tmux's
   `show-environment`.
