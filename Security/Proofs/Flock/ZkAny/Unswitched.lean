@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.Refine
 public import Proofs.Flock.Claims.ZK.FrameRounds
+public import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # The release before the `Finish` is the unswitched cut

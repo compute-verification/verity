@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Assumptions.RateAudit
 public import Definitions.Accounting.Assumptions.RemoteHeld
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The remote audit over PoUS's P2 store: its codec's work and the squaring ceiling at P2 (trusted; drafted)

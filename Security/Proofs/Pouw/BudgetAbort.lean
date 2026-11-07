@@ -5,7 +5,7 @@ public import Definitions.Pouw.Game.Defs
 /-!
 # Cost models that truncate
 
-The per-run form of PoUW's bound takes `BudgetAbort CM` (`Accounting.BudgetAbort`, ra-per-run): costs are nonnegative,
+The per-run form of PoUW's bound takes `Accounting.BudgetAbort` over its cost model: costs are nonnegative,
 and for every program and budget `b ≥ 0` one program, fixed before the oracle, the state and the salt, costs at most `b`,
 makes at most the original's calls, and commits the original's transcript wherever the original costs at most `b`.
 `BudgetAbortG` is that property, word for word, over the game's `CostModel`.

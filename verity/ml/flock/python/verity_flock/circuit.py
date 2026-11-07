@@ -65,6 +65,8 @@ from typing import BinaryIO
 
 import numpy as np
 
+from verity.ml.windows.interface import K_MAX, K_MIN, MASK_LOG, PER_SLOT, SLOT_LOG
+
 from . import ir_lower as IL
 
 FORMAT = "flock-circuit"
@@ -101,10 +103,8 @@ LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_by
 #: ZK off only: ``flock-circuit --zk`` refuses it (``live/src/circuit.rs``'s ``leaf_scheme_plain`` is the same object).
 LEAF_SCHEME_PLAIN = {"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
                      "use": "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"}
-SHA_NET, HM_NET, PER_SLOT = "sha512x3", "hm96", 3
-SHA_LOG = HM_LOG = 18
-MASK_LOG = 14
-K_MAX = 27
+SHA_NET, HM_NET = "sha512x3", "hm96"
+SHA_LOG = HM_LOG = SLOT_LOG
 #: The partition is a named query of the program, P = Q(C): its digest is SHA-512 over the tag and
 #: canon({program, query, version, params}). Without a verity/partition/v1 object, the query here is this lowering's
 #: own split of a VU into slots (its unit circuit, leaf and output maps, wires), under a provisional tag.
@@ -403,7 +403,7 @@ def _ranges(items: list[tuple[str, int, int, dict]]) -> tuple[list[dict], int]:
         at = -(-at // (1 << sl)) << sl
         out[i] = {"type": typ, "slot_log": sl, "pos0": at >> sl, "count": n, **extra}
         at += n << sl
-    return out, max(20, (at - 1).bit_length())
+    return out, max(K_MIN, (at - 1).bit_length())
 
 
 #: MUFU lookup slots: low decoder bits per table (``lookup.rs``); the high decoder takes the rest
@@ -532,7 +532,7 @@ def aligned_blocks(words: list[int]) -> list[tuple[int, int]]:
 
 
 def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> list[tuple[int, int]]:
-    """The ``in`` regions' words in a unit slot (PROTOCOL.md §16.10): the 128-bit words holding a public leaf in some unit, as
+    """The ``in`` regions' words in a unit slot (`Flock.HmRow`): the 128-bit words holding a public leaf in some unit, as
     :func:`aligned_blocks`, inside the leaf group, every leaf in them a public or a zero leaf in every unit."""
     col, words, bits = group
     if any(b != 16 for b in bits):
@@ -614,11 +614,11 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ``S[j] XOR y``); bit rows only, and the all-zero instance's must be zero.
 
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
-    recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from ``in``
+    recomputes from public data, each naming its seed and derivation (`Flock.HmRow`). The units read them from ``in``
     regions (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_blocks`).
     The data guard counts a port whose derivation it does not list as data (``verity.ml.circuits.operations.public_data``).
 
-    ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, PROTOCOL.md §16.13): input rows that hold template parameter
+    ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, `HmOut`): input rows that hold template parameter
     leaves ``[lo, hi)`` as an output row holds outputs (a word per leaf), so that a reader whose leaves are another unit's outputs
     commits its writer's output row; the verifiers compare the two rows' ``b || c``. ``definition``: META ``definition``, the
     descriptor id of the Definition the unit lowers, which a template query may list (a unit class's own template id is
@@ -934,10 +934,16 @@ def _dummy(low: IL.Lowering, in_ports: list[tuple[str, int]], ins: list[Port], o
 
 def coins(live: list[dict]) -> str | None:
     """The coins M0's sessions ran on, as their LIVE records name them: ``os-seed-prf`` when the verdict opens the step-0 seed (the
-    binary's default), ``live-os`` when the identity names per-round OS coins (``FC_COINS=os``); None for anything else (a
-    ``--zk`` session's committed coin tree) and for sessions that differ."""
-    modes = {"os-seed-prf" if (x.get("verdict") or {}).get("coin_seed") else
-             "live-os" if str((x.get("identity") or {}).get("coins", "")).startswith("live-os") else None for x in live}
+    binary's default), ``coin-tree`` for a plain session that doesn't (``FC_COINS=tree``: the keyed coin tree, the challenger's
+    under `serve --tree-from`, whose identity is the default's); None for anything else (a ``--zk`` session's committed coin
+    tree, a record without an identity) and for sessions that differ."""
+    def mode(x: dict) -> str | None:
+        ident = x.get("identity") or {}
+        if (x.get("verdict") or {}).get("coin_seed"):
+            return "os-seed-prf"
+        return "coin-tree" if ident and (ident.get("hooks") or {}).get("zk") is not True else None
+
+    modes = {mode(x) for x in live}
     return modes.pop() if len(modes) == 1 else None
 
 
@@ -1066,7 +1072,7 @@ def _public_bytes(pins: list[dict], words: dict, n: int) -> bytes:
 
 
 def write_public_inputs(text: str, words: dict, n: int, path) -> None:
-    """The verifier's own ``--public-inputs`` file (PROTOCOL.md §16.10): a header line ``{format, instances, ports}``, its ports
+    """The verifier's own ``--public-inputs`` file (`Flock.HmRow`): a header line ``{format, instances, ports}``, its ports
     META's ``public_inputs`` (each with its seed and derivation), then ``words`` (``{port: (n, words)}``, the verifier's own
     recomputation of the population's public words) as the public file holds them."""
     pins = meta_of(text).get("public_inputs", [])
@@ -1114,11 +1120,11 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
     ``i``'s output is the registered row at ``positions[i]``, under that row's registered salt ``salts[port][i]``). A padding
     instance's rows keep their zero salts and pinned ``dummy`` either way: the verifier opens only the instances' rows.
 
-    A circuit with public inputs (META ``public_inputs``, PROTOCOL.md §16.10): the header names them as META does, and both files
+    A circuit with public inputs (META ``public_inputs``, `Flock.HmRow`): the header names them as META does, and both files
     end with every instance's public words (u16 LE, instance-major, the ports in order): ``public_words``
     (``{port: (n, words)}``), else the set's.
 
-    ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object Flock does not read, on which canonical JSON
+    ``identifier``: the header's ``identifier`` (``Flock.HmRow``), a JSON object Flock does not read, on which canonical JSON
     is RFC 8785 (``verity.ml.circuits.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
     (``--identifier F``).
 
@@ -1285,7 +1291,7 @@ def main(argv=None) -> int:
     ap.add_argument("--share-rows", action="store_true", help="each input port's distinct rows as one committed table, refs per instance")
     ap.add_argument("--typed", action="store_true", help="the typed statement (verity_flock.typed_statement.stage)")
     ap.add_argument("--public-input", nargs=3, action="append", default=[], metavar=("PORT", "SEED", "DERIVATION"),
-                    help="an input port the verifier recomputes from public data, naming its seed and derivation (PROTOCOL.md §16.10)")
+                    help="an input port the verifier recomputes from public data, naming its seed and derivation (the Lean verifier's Flock.HmRow)")
     a = ap.parse_args(argv)
     public_inputs = {p: {"seed": sd, "derivation": d} for p, sd, d in a.public_input} or None
     if public_inputs and a.typed:

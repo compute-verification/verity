@@ -47,7 +47,7 @@ theorem deadline_rounds : DEADLINE_ROUNDS = 8243 := by
 /-- **`RING_D` is one round short of a root**: `rootProg` at P2's exponent takes `16,447` multiplication rounds on
 every primitive (`PousP2Ring.rootProg_cost`), so no root finishes within `RING_D`. -/
 theorem rootProg_not_ringBounded (e : ℕ) (a : Bits 16448) (Q L : ℕ) :
-    ¬ (PousP2Ring.rootProg 16446 e a : Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) _).RingBounded RING_D Q L := by
+    ¬ (PousP2Ring.rootProg 16446 e a : OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) _).RingBounded RING_D Q L := by
   intro h
   obtain ⟨ω⟩ := (inferInstance : Nonempty (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω)
   have h1 := (h ω).1
@@ -100,16 +100,16 @@ theorem held_periodRun (m : ℕ) (hm : m ≤ FULL)
 /-- A strategy that keeps its state and answers from it with no query: every round starts from the first state and runs
 a `ret`, and its answers are the lookups. -/
 theorem seqRounds_ret {M : IdealModel} {σ α ι : Type} (f : M.Qry → M.Ans) (g : σ → ι → α)
-    (step : ℕ → σ → ι → Prog M (α × σ)) (hstep : ∀ j s i, step j s i = .ret (g s i, s)) :
+    (step : ℕ → σ → ι → OracleAlgorithm M (α × σ)) (hstep : ∀ j s i, step j s i = .ret (g s i, s)) :
     ∀ (j : ℕ) (is : List ι) (s : σ),
       (seqRounds f step j is s).map (fun e => (e.2.run f).1) = is.map (g s) ∧
         ∀ e ∈ seqRounds f step j is s, e.1 = s ∧ ∃ i, e.2 = .ret (g s i, s)
   | _, [], _ => ⟨rfl, fun _ he => by simp [seqRounds] at he⟩
   | j, i :: is, s => by
     have ih := seqRounds_ret f g step hstep (j + 1) is s
-    have hs : ((step j s i).run f).2 = s := by simp [hstep, Prog.run]
+    have hs : ((step j s i).run f).2 = s := by simp [hstep, OracleAlgorithm.run]
     refine ⟨?_, fun e he => ?_⟩
-    · simp only [seqRounds, List.map_cons, ih.1, hstep, Prog.run]
+    · simp only [seqRounds, List.map_cons, ih.1, hstep, OracleAlgorithm.run]
     · simp only [seqRounds, List.mem_cons, hs] at he
       rcases he with rfl | he
       · exact ⟨rfl, i, hstep j s i⟩

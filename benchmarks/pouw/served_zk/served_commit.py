@@ -131,13 +131,13 @@ from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import verifier as PV
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import pc8
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import pc8
 from verity.core.protocols.pouw.coins import Challenger as Coins
 from verity.core.protocols.pouw.coins import CoinCommitment, CoinOpening, coin_reason
 from verity.core.protocols.pouw.protocol import Context, DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as D
@@ -763,7 +763,7 @@ def _all(units: list[dict], name: str) -> dict[str, Any]:
 Sampler = Callable[[Mapping[str, Any], int, bytes], list[int]]
 
 
-def draw_key(coin: bytes, stream: S.Stream, reg: S.Registration) -> Key:
+def draw_key(coin: bytes, stream: S.Stream, reg: S.WindowCommitmentRecord) -> Key:
     """The window draw's key: the epoch's draw coin, under the stream and the registration and receipt it was opened after."""
     return derive(coin, DRAW_DOMAIN, CC.draw_key_context(stream.digest, reg.digest, dict(reg.receipt)))
 
@@ -901,7 +901,7 @@ class Challenger:
         ticks = itertools.count()
         self.clock = clock or (lambda: float(next(ticks)))
         self.streams: dict[tuple[str, int], S.Stream] = {}
-        self.regs: dict[str, tuple[S.Stream, S.Registration]] = {}
+        self.regs: dict[str, tuple[S.Stream, S.WindowCommitmentRecord]] = {}
         self.replays: dict[str, str] = {}
         self.passes: dict[str, str] = {}
         self.manifests: dict[str, Any] = {}   # each registered window's pass manifest, read (`_distinct`)
@@ -1011,7 +1011,7 @@ class Challenger:
                                                clock=self.clock, sampler=sampler)
         return self.streams[name, ell]
 
-    def _held(self, name: str) -> tuple[S.Stream, S.Registration]:
+    def _held(self, name: str) -> tuple[S.Stream, S.WindowCommitmentRecord]:
         if name not in self.regs:
             raise _refused("unknown", name)
         return self.regs[name]
@@ -1022,7 +1022,7 @@ class Challenger:
         return self.draws[name]
 
     def register(self, name: str, rec: Mapping[str, Any], stream: str = "window", replay: str | None = None,
-                 manifest: bytes | None = None, recorded: bool = False) -> S.Registration:
+                 manifest: bytes | None = None, recorded: bool = False) -> S.WindowCommitmentRecord:
         """Receive window `rec` from the pass whose manifest is `manifest` (`pass_epoch`), or a control's (`replay`).  A
         window received after the epoch's sampling coin was released is refused (`late-registration`)."""
         self.witness[name] = []
@@ -1055,7 +1055,7 @@ class Challenger:
         return reg
 
     def _certified(self, name: str, rec: Mapping[str, Any], stream: str, replay: str | None, manifest: bytes | None,
-                   recorded: bool) -> S.Registration:
+                   recorded: bool) -> S.WindowCommitmentRecord:
         """A certified window's registration (`register`).  First the window's drawn unit must read its salt
         (`salt.unit_reason`, ``unsalted``), which this window's `Pc8TileSide` doesn't, so today every certified window is
         refused here, before its stream receives it and before the certifier is asked for anything.  Past that, the
@@ -1268,7 +1268,7 @@ def _pass(pass_dir: Path):
     PD = _pd()
     raw = (pass_dir / "manifest.json").read_bytes()
     man = json.loads(raw)
-    if man.get("schema") not in PD.MANIFEST_SCHEMAS:
+    if man.get("schema") not in (CC.MANIFEST_SCHEMA, CC.MANIFEST_RECORDED):
         raise SystemExit(f"{pass_dir}: not a retained pass ({man.get('schema')!r})")
     calls = [u for u in man["matmuls"] if u["k"] == K and u["n"] == K]
     if not calls:
@@ -1541,7 +1541,7 @@ def coin_variant(man: dict, coins: CoinCommitment, opening: CoinOpening, case: s
     elif case != "resalted":
         raise ValueError(f"a coin variant is one of {', '.join(CASES)}")
     out = {k: v for k, v in man.items() if k != "beacon"}
-    return {**out, "schema": _pd().MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
+    return {**out, "schema": CC.MANIFEST_SCHEMA, "coins": coins.to_json(), "salt_opening": o.to_json()}
 
 
 def cmd_coin_variant(a) -> int:

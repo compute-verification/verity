@@ -2,11 +2,12 @@ module
 
 public import Proofs.Accounting.ComposePeriod
 public import Proofs.Accounting.Compose.SplitRateClosed
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
-# An honest period meets `CircuitWorkPeriod`'s premises
+# An honest period meets `CircuitWorkMonitoringPeriod`'s premises
 
-The positive twin of `Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod` and `CircuitCreditPeriod` (brief rule I,
+The positive twin of `Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod` and `CircuitCreditPeriod` (brief rule I,
 as I8-COIN's `Keyed.lean` twins are of their layers), whose premises are the same at `a, b > 0`: a period of `n ≥ 1`
 windows of a circuit of one gate, one credited word, one tile and one
 live round, every tile live in every window, every stage paid with its words right and its checked values honest, and
@@ -229,7 +230,7 @@ theorem sum_div_le_one {n : ℕ} (hn : 0 < n) (f : Fin n → Fin 1 → ℝ) (hf 
 
 /-! ## Every premise -/
 
-/-- **An honest period meets every premise of `CircuitWorkPeriod`**, in its order, at `K_d = 1`, `ρ = 1`, `w_max = 1`,
+/-- **An honest period meets every premise of `CircuitWorkMonitoringPeriod`**, in its order, at `K_d = 1`, `ρ = 1`, `w_max = 1`,
 `p = p0 = ½`, `a = b = 1`, `Λ = 4`, any `δ_s > 0`, `δ_bind = δ_ks = 0`, one fixed and one folded word a window; and
 it is accepted on every path, with the whole period its accepted prefix and `n` credited live words. -/
 theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
@@ -293,7 +294,7 @@ theorem honest_meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
       ∑ t : Fin 1, (liveWords scheme circuit 1 ((period n).liveAt x w) t : ℝ) else 0) = n
     simp [hx, hl, liveWords, tileWords_eq]
 
-/-- **`CircuitWorkPeriod`'s conclusion at the honest period**: `honest_meets` gives `CircuitWorkPeriod` every premise
+/-- **`CircuitWorkMonitoringPeriod`'s conclusion at the honest period**: `honest_meets` gives `CircuitWorkMonitoringPeriod` every premise
 in its own form. -/
 theorem honest_conclusion (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (play n).accepts x ∧
@@ -302,7 +303,7 @@ theorem honest_conclusion (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
       δs + n * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -, -, -⟩ :=
     honest_meets n hn hδs
-  exact Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
+  exact Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
     (play n) (run n) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk zero_le_one zero_le_one
     (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
@@ -426,7 +427,7 @@ theorem creditedLive_true (n : ℕ) :
   have h0 : (periodR n).liveAt (constPath true (n + 1)) 0 = fun _ => false := rfl
   simp [hc, h0, hs, liveWords, tileWords_eq]
 
-/-- **A period with a dead tile and a refused window meets every premise of `CircuitWorkPeriod`**, at
+/-- **A period with a dead tile and a refused window meets every premise of `CircuitWorkMonitoringPeriod`**, at
 `honest_meets`' numbers: its first window's tile is dead (`liveAt … 0`), each window's proof is refused when its
 round's coin is `false`, so its accepted prefix is `0`, `1` or all `n + 1` windows as its coins say, and on the coins
 that accept every window its credited live words are `n`, the dead window's counting none. -/
@@ -477,7 +478,7 @@ theorem real_meets (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
   · split_ifs <;> simp [tileWords_eq]
   · split_ifs <;> simp [tileWords_eq]
 
-/-- **`CircuitWorkPeriod`'s conclusion at the period with a dead tile and a refused window**: `real_meets` gives it
+/-- **`CircuitWorkMonitoringPeriod`'s conclusion at the period with a dead tile and a refused window**: `real_meets` gives it
 every premise. -/
 theorem real_conclusion (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
     prob (fun x => (playR n).accepts x ∧
@@ -487,7 +488,7 @@ theorem real_conclusion (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
       δs + ((n + 1 : ℕ) : ℝ) * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -⟩ :=
     real_meets n hδs
-  exact Accounting.SecurityProofs.ComposePeriod.CircuitWorkPeriod scheme circuit (Nat.succ_pos n) hN Nat.one_pos
+  exact Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod scheme circuit (Nat.succ_pos n) hN Nat.one_pos
     le_rfl (periodR n) (playR n) (runR (n + 1)) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax
     hlk zero_le_one zero_le_one (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 

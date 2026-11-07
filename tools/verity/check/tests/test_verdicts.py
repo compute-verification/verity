@@ -282,10 +282,10 @@ def test_check_imports_a_pack_from_the_runs_inputs_and_names_it_in_the_result(tm
 
 def test_the_agreement_key_leaves_out_what_names_the_machine(monkeypatch):
     check = _load("check")
-    base = {"PATH": f"{check.ROOT}/.venv/bin:/usr/bin", "LEAN_NUM_THREADS": "8"}
+    base = {"PATH": f"{check.ROOT}/.venv/bin:/usr/bin", "VERITY_SLOW": "1"}
     one = check._env_key({**base, "HOSTNAME": "a1b2", "RUNPOD_POD_ID": "abc", "RUNPOD_PUBLIC_IP": "1.2.3.4", "PUBLIC_KEY": "ssh-ed25519 A"})
     other = check._env_key({**base, "HOSTNAME": "c3d4", "RUNPOD_POD_ID": "xyz", "RUNPOD_PUBLIC_IP": "5.6.7.8", "PUBLIC_KEY": "ssh-ed25519 B"})
-    assert one == other == {"LEAN_NUM_THREADS": "8", "PATH": "<tree>/.venv/bin:/usr/bin"}
+    assert one == other == {"VERITY_SLOW": "1"}
 
 
 class _Store:

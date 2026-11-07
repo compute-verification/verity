@@ -188,6 +188,8 @@ def test_a_stop_at_finish_holds_the_proofs_and_cuts_the_auditor(exe, tmp_path):
     c.close()
     lp.close()
     assert auditor.got == [[REGISTER]]
+    (times,) = [json.loads(ln.split(" ", 1)[1]) for ln in lp.p.stderr.read().decode().splitlines() if ln.startswith("FIREWALL-TIMES ")]
+    assert (times.pop("ready_ms") > 0, times) == (True, {"session": s, "part": "L0", "release_ms": None, "outcome": "stop"})
     py = FW.Firewall(tmp_path / "py")
     py.finish(py.open("s", ["L0", "L1"]))
     with py.slot(s, "L0"):

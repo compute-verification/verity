@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.Session
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Ligerito with C-Flock ZK's padded level 0, in the clear
@@ -89,7 +91,7 @@ def queryAndBatchV (A : Arith F K) (lv : Level) (v : ℕ → K) (start : ℕ) (s
 /-- Rep `r`'s extra lanes: `2^k₀ + e·r + i`. -/
 def extraLane (k0 e r : ℕ) (i : Fin e) : ℕ := 2 ^ k0 + e * r + i.val
 
-/-- **Ligerito with the padded level 0** (§13.3 with M1's §7), for rep `r` of `e` extra lanes
+/-- **Ligerito with the padded level 0** (`Flock.Ligerito` with M1's §7), for rep `r` of `e` extra lanes
 each, padding `t` and constant `c₀`: decides `Σ_y f(y)·b(y) = T` for the committed table `C₀`. -/
 def ligeritoPad (A : Arith F K) (sch : Schedule) (t : ℕ) (c₀ : F) (e r : ℕ) (T : F) (b : ℕ → F)
     (C₀ : Oracle F) : Game Bool := do

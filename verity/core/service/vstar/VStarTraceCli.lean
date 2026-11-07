@@ -1,7 +1,7 @@
 module
 
 public import VStar.Trace
-public import Flock.ProvedScope
+public import Lean.Data.Json.Parser
 
 /-!
 # `vstar-trace`'s command: the trace assigner's side of its difftest

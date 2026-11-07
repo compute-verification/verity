@@ -1,7 +1,13 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
-public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Aesop.BuiltinRules
+public import Flock.HmRow
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The link points' count of a `setupH` statement
@@ -111,7 +117,7 @@ theorem setupH_facts (h : Stmt.setupH tags cf pf coins tables draw partition pro
   exact ⟨hc, fun d hd => ⟨pop, hpub d hd⟩, rfl⟩
 
 set_option maxHeartbeats 4000000 in
-/-- **A drawn public file has the draw's proved units** (§16.1): its units are `UnitDraw.proved`, the drawn units and
+/-- **A drawn public file has the draw's proved units** (`Flock.Statement`): its units are `UnitDraw.proved`, the drawn units and
 their closure. -/
 theorem drawn_n {c : Circuit} {pop pub : Public} {d : Json} (h : HmRow.drawn c pop d = .ok pub) :
     ∃ ud, Draw.UnitDraw.ofJson d = .ok ud ∧ pub.n = ud.proved.size := by

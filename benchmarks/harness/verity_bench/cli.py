@@ -224,7 +224,7 @@ def _overhead_parser(commands: Any) -> None:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="verity-bench")
-    commands = parser.add_subparsers(dest="command", required=True, metavar="BACKEND")
+    commands = parser.add_subparsers(dest="command", required=True, metavar="COMMAND")
 
     vllm = commands.add_parser("vllm", help="measure serving overhead through the vLLM integration")
     vllm_cli.add_arguments(vllm)

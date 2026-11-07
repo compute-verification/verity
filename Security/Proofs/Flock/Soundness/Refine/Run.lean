@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Basic
 public import Flock.Transcript
+public import Definitions.Flock.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A run of a game, and the rounds a run of the executable consumes
@@ -16,8 +18,7 @@ is one: `g`, played with the prover's messages `ms` and the verifier's coins `cs
   an array of one word. So a run's coin step is determined by its array: one word is always the scalar. The refinement
   fixes `ι` to the executable's field embedding, so the coins are the record's.
 
-On the executable's side, `consumed rs k k'` is the coins of rounds `k, …, k' − 1` of a replay transcript (PROTOCOL.md
-§6), and `RoundsWF` says every round's coin array has the round's coin count, as the record's check S12 ensures.
+On the executable's side, `consumed rs k k'` is the coins of rounds `k, …, k' − 1` of a replay transcript (`Flock.Transcript`), and `RoundsWF` says every round's coin array has the round's coin count, as the record's check S12 ensures.
 -/
 
 @[expose] public section

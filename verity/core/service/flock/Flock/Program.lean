@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.7: the program format `verity-ir/descriptor/v1` (core's `verity/ir/PROTOCOL.md`), as the verifier
+`Flock.Partition`: the program format `verity-ir/descriptor/v1` (core's `verity/ir/PROTOCOL.md`), as the verifier
 reads its own copy of a Program: the canonical JSON domain and the program's SHA-512 (§1), types and leaves (§2), reference
 sequences (§3), the descriptor and what the decoder refuses (§4), input nodes (§5), the canonical layout (§6) and scope
 resolution (§7).
@@ -12,13 +12,13 @@ gets a smaller index than its callers.
 -/
 module
 
-public import Lean.Data.Json
-public import Std.Data.HashMap
 public import Flock.Canon
 public import Flock.Hash
+public import Flock.JsonParse
 public import Flock.Sizes
 public import Flock.Steps
-public import Flock.JsonParse
+public import Lean.Data.Json.FromToJson.Basic
+public import Std.Data.HashMap
 
 @[expose] public section
 set_option backward.privateInPublic true

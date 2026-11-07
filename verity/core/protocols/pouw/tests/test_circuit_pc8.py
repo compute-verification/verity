@@ -1,4 +1,4 @@
-"""Pearl-C's tile check as a Program (`verity.core.protocols.pouw.circuit.pc8`): its primitives are the scheme's operations on the domain
+"""Pearl-C's tile check as a Program (`verity.ml.protocols.pouw.circuit.pc8`): its primitives are the scheme's operations on the domain
 the row's admission bit admits, its units evaluate to `schemes.pearl_c`'s forming v1, clean-up and checked words (the pinned
 ``test-16-v1`` vector on the H100, the scheme itself on both sm_120 records), its admission bit is the scheme's on every row
 (finiteness, the noise floor and `live_row`, each at its boundary), and its partition computes every value in exactly one
@@ -29,13 +29,13 @@ from verity.ml.circuits.ops.scalar import I32Le
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest
 from verity.ml.randomness import derive
-from verity.core.protocols.pouw.circuit import pc8, plan
-from verity.core.protocols.pouw.circuit.anchors import TileAnchors
-from verity.core.protocols.pouw.circuit import words as W
+from verity.ml.protocols.pouw.circuit import pc8, plan
+from verity.ml.protocols.pouw.circuit.anchors import TileAnchors
+from verity.ml.protocols.pouw.circuit import words as W
 from verity.core.protocols.pouw.protocol import DomainError, Tile
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES, SM120_UNPROMOTED
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES, SM120_UNPROMOTED
 
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-v1")
@@ -285,7 +285,7 @@ def test_the_partition_computes_every_value_in_exactly_one_unit(side, hidden):
     full = {"row_b": shape.n, "row_a": shape.m, "tile": 2 * 2}
     assert Counter(u.role for u in us) == {r: full[r] for r in pc8.ROLES[side]}
     part = PO.evaluate(prog, q)
-    tp = pc8.templates(shape.k, shape.tile, shape.dev, hidden)
+    tp = pc8.templates(shape.k, shape.tile, shape.dev, hidden, "h0")
     assert [t for _k, t, _a, n in part.ranges for _ in range(n)] == [PO.template_id(tp[u.role]) for u in us]
     assert [u.template for u in us] == [PO.template_id(tp[u.role]) for u in us]
     assert PO.verify(PO.build(prog, q), prog).ok
@@ -320,7 +320,7 @@ def test_the_ports_are_each_hiding_units_committed_rows(role):
     """`PORTS` lists every parameter and output of each hiding unit once: fp32 input rows, fp8-p rows, ok rows and the tile
     digest, and the anchored inputs as public input regions."""
     tm, tn = HIDDEN.tile
-    CF.check_ports(pc8.templates(K, HIDDEN.tile, HIDDEN.dev, True)[role], pc8.PORTS[role], pc8.DERIVATIONS, K,
+    CF.check_ports(pc8.templates(K, HIDDEN.tile, HIDDEN.dev, True, "h0")[role], pc8.PORTS[role], pc8.DERIVATIONS, K,
                    {"ac": tm, "pa": tm, "bc": tn, "pb": tn})
 
 
@@ -328,7 +328,7 @@ def test_the_port_check_holds_advice_to_unread_parameters():
     """Advice is a port's third class (`PORTS`): a row's port also named advice is listed twice, and an output named
     advice in place of its row is no parameter, so the port check fails on both."""
     tm, tn = HIDDEN.tile
-    tile, ports = pc8.templates(K, HIDDEN.tile, HIDDEN.dev, True)["tile"], pc8.PORTS["tile"]
+    tile, ports = pc8.templates(K, HIDDEN.tile, HIDDEN.dev, True, "h0")["tile"], pc8.PORTS["tile"]
     reads = {"ac": tm, "pa": tm, "bc": tn, "pb": tn}
     for bad in ({**ports, "advice": ("pa",)}, {**ports, "rows": ports["rows"][:-1], "advice": (0,)}):
         with pytest.raises(AssertionError):
@@ -374,8 +374,9 @@ def test_the_h3_hiding_tile_returns_the_row_its_leaf_hashes(shape, tile):
 
 def test_the_h3_tile_is_hiding_only_and_leaves_h0_as_it_is():
     """-h3 changes only the hiding tile: the row units and the plain tile are h0's Definitions, h0's hiding tile is
-    `Pc8TileHidden` (its Programs are pinned in `WHOLE`), and a plain tile under -h3 or an unknown hashing is refused."""
-    h0, h3 = pc8.templates(K, (2, 3), "sm120", True), pc8.templates(K, (2, 3), "sm120", True, "h3")
+    `Pc8TileHidden` (its Programs are pinned in `WHOLE`), the hiding tile is h3's unless h0 is named, and a plain tile under
+    -h3 or an unknown hashing is refused."""
+    h0, h3 = pc8.templates(K, (2, 3), "sm120", True, "h0"), pc8.templates(K, (2, 3), "sm120", True)
     assert h0["row_a"] == h3["row_a"] and h0["row_b"] == h3["row_b"]
     assert h0["tile"].defn is pc8.Pc8TileHiddenDef and h3["tile"].defn is pc8.Pc8TileHiddenH3Def
     for bad in ((False, "h3"), (True, "h1")):
@@ -388,10 +389,10 @@ def test_the_window_tile_reads_its_side_rows_index_fields():
     hiding tile's whatever the indices, and the rows its ports make (`SIDE_PORTS`: codes, P, then the index field, each
     leaf's bits in order) are the window's side rows (`window.side_row`), A's row-seg and B's v2, k/2 + 72 words each."""
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.pouw.circuit import leaves as L
+    from verity.ml.protocols.pouw.circuit import leaves as L
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
     tm, tn = 2, 3
-    fn, hidden = pc8.side_tile(K, (tm, tn)), pc8.templates(K, (tm, tn), "sm120", True)["tile"]
+    fn, hidden = pc8.side_tile(K, (tm, tn)), pc8.templates(K, (tm, tn), "sm120", True, "h0")["tile"]
     assert fn.id == f"Pc8TileSide_v1{{K={K},TM={tm},TN={tn},DEV='sm120'}}" and fn.defn is pc8.Pc8TileSideDef
     assert fn.signature()[0] == hidden.signature()[0] + (("ia", pc8.Array(tm, L.INDEX)), ("jb", pc8.Array(tn, L.INDEX)))
     assert fn.signature()[1] == hidden.signature()[1]
@@ -504,8 +505,8 @@ def test_a_short_tile_row_is_its_own_template_instance(side, hidden):
     value in exactly one unit."""
     shape = replace(SHORT, hidden=hidden)
     whole, short = pc8.tile_templates(shape)
-    tp = pc8.templates(K, (16, 1), shape.dev, hidden)
-    assert whole == pc8.templates(K, shape.tile, shape.dev, hidden)["tile"] and short == tp["tile"]
+    tp = pc8.templates(K, (16, 1), shape.dev, hidden, "h0")
+    assert whole == pc8.templates(K, shape.tile, shape.dev, hidden, "h0")["tile"] and short == tp["tile"]
     assert whole.defn is short.defn and shape.tile_rows() == (64, 16)
     fn = {"check": pc8.check, "call": pc8.call}[side](shape)
     prog, q = Program(fn), pc8.query(shape, side)

@@ -3,10 +3,13 @@ control package (`tools/verity/lean/tests/fixtures/control`), a package under th
 axiom and `native_decide` in private proofs and a private theorem that skipped the kernel, one that doesn't compile, and
 one whose env fetches a package with a `sorry` in a private proof. The toolchain's env passes, every module of it replayed
 and recorded, the executables that can't be imported together in rounds; the fetched package's `sorry` fails its env, and
-its missing private part is an error. Each module compiles from its reads alone to Lake's bytes and gets its replay and
+its missing private part is an error; that env, layered on the toolchain's, replays its own module alone and records the
+toolchain's as their record has them, and a base record of other bytes than the worker's is an error. Each module compiles from its reads alone to Lake's bytes and gets its replay and
 its declarations' axiom sets, an importer's taken through its import's record and the env's through the env's; a record
 of another env or of other bytes than the worker's, and an `import all` without its import's private part, are errors; a
-lock passes, is stale with the command that regenerates it, or names a root no task builds. Skipped where the fixture's
+lock passes, is stale with the command that regenerates it, or names a root no task builds, and a spec whose `proved_in`
+package requires it by path and a package with a fetched package's premise pass on the records a Lake build gives them,
+as `check.py` audits them. Skipped where the fixture's
 toolchain isn't installed. Slow (`lean` for each module, the toolchain's every module through the kernel once for the
 file, `Facts.lean` compiled for each `check.py`): only real Lean shows that the setup file, the import artifacts and a
 build made of the reads are what the toolchain and the audit take, and that the env's replay covers what its modules
@@ -107,7 +110,7 @@ class Envs:
     def run(self, task: dict, doc: dict) -> tuple[dict, Path]:
         if task["key"] not in self.got:
             work = self.store / f"{len(self.got)}"
-            self.got[task["key"]] = (runners.execute(task, doc, work), work / env_family.AXIOMS)
+            self.got[task["key"]] = (runners.execute(task, doc, work), work / env_family.record(task["vars"]["package"]))
         return self.got[task["key"]]
 
     def launch(self, doc: dict):
@@ -116,7 +119,7 @@ class Envs:
                 return runners.execute(t, doc, w)
             res, record = self.run(t, doc)
             if record.is_file():
-                stage(record, w)
+                stage(record, w, env_family.record(t["vars"]["package"]))
             return res
         return go
 
@@ -124,13 +127,14 @@ class Envs:
         """``work`` holding the record of the env ``doc``'s module tasks read."""
         res, record = self.run(next(t for t in doc["tasks"] if t["id"] == ENV), doc)
         assert res["status"] == "pass", res["detail"]
-        return stage(record, work)
+        return stage(record, work, env_family.record("ax"))
 
 
-def stage(record: Path, work: Path) -> Path:
-    (work / env_family.AXIOMS).parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(record, work / env_family.AXIOMS)
-    return work / env_family.AXIOMS
+def stage(record: Path, work: Path, at: str) -> Path:
+    """``work`` holding ``record`` at ``at``."""
+    (work / at).parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(record, work / at)
+    return work / at
 
 
 @pytest.fixture(scope="module")
@@ -178,12 +182,16 @@ def artifact(work: Path, res: dict, name: str) -> bytes:
     return (work / "artifacts" / res["outputs"][name].partition(":")[2]).read_bytes()
 
 
-def lake(root: Path, pkg: str, tmp_path: Path) -> Path:
-    """A copy of ``pkg`` that `lake build` built."""
+def lake(root: Path, pkg: str, tmp_path: Path, *nested: str, fetched: dict[str, Path] | None = None) -> Path:
+    """A copy of ``pkg`` that `lake build` built, and each of its ``nested`` packages, with ``fetched`` ({name: checkout})
+    copied into its `.lake/packages`."""
     d = tmp_path / "lake" / pkg
     shutil.copytree(root / pkg, d)
-    p = subprocess.run([str(BIN / "lake"), "build"], cwd=d, capture_output=True, text=True)
-    assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
+    for n, src in (fetched or {}).items():
+        shutil.copytree(src, d / ".lake" / "packages" / n, symlinks=True)
+    for at in (d, *(d / n for n in nested)):
+        p = subprocess.run([str(BIN / "lake"), "build"], cwd=at, capture_output=True, text=True)
+        assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
     return d
 
 
@@ -291,22 +299,31 @@ def test_a_module_that_does_not_compile_fails_with_lean_s_errors(tree, tmp_path,
     assert res["detail"]["messages"][0].startswith("bad/Bad.lean:1: "), res["detail"]
 
 
-def lock(tree: Path, tmp_path: Path, policy: dict, name: str, envs: Envs) -> dict:
-    """The lean-lock task of the control package with ``policy`` committed as its lock, run with what it reads."""
-    (tree / "ctl" / "lean-audit.json").write_text(json.dumps(policy, indent=1) + "\n")
-    git(tree, "commit", "-q", "-am", name)
-    doc = graph.task_graph(tree, "lean-lock:ctl", listers=LISTERS)
+def lock(tree: Path, tmp_path: Path, policy: dict, name: str, envs: Envs, pkg: str = "ctl") -> dict:
+    """The lean-lock task of ``pkg`` (the control package) with ``policy`` committed as its lock, run with what it reads."""
+    (tree / pkg / "lean-audit.json").write_text(json.dumps(policy, indent=1) + "\n")
+    git(tree, "add", "-A")
+    git(tree, "commit", "-q", "-m", name)
+    doc = graph.task_graph(tree, f"lean-lock:{pkg}", listers=LISTERS)
     out = local.check(tree, None, tmp_path / name, envs.launch(doc), 0, None, io.StringIO(), doc)
     assert not out["errors"], {k: v["detail"] for k, v in out["errors"].items()}
-    return out["results"]["lean-lock:ctl"]
+    return out["results"][f"lean-lock:{pkg}"]
+
+
+def updated(tree: Path, built: Path, tmp_path: Path, *nested: str) -> dict:
+    """The lock `check.py --update` records for the Lake build at ``built``, after those of its ``nested`` packages (the
+    ones its `proved_in` names, whose audit its own runs), which go back into ``tree``'s copy."""
+    for at in (*(built / n for n in nested), built):
+        p = subprocess.run([sys.executable, str(tree / "tools/verity/lean/check.py"), "--update", "--no-replay",
+                            "--no-runs", "--out", str(tmp_path / "update" / at.name), str(at)], capture_output=True, text=True)
+        assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
+    for n in nested:
+        (tree / built.name / n / "lean-audit.json").write_text((built / n / "lean-audit.json").read_text())
+    return json.loads((built / "lean-audit.json").read_text())
 
 
 def test_a_lock_passes_on_its_records_and_is_stale_with_the_command_that_regenerates_them(tree, tmp_path, envs):
-    built = lake(tree, "ctl", tmp_path)
-    p = subprocess.run([sys.executable, str(tree / "tools/verity/lean/check.py"), "--update", "--no-replay", "--no-runs",
-                        "--out", str(tmp_path / "update"), str(built)], capture_output=True, text=True)
-    assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
-    recorded = json.loads((built / "lean-audit.json").read_text())
+    recorded = updated(tree, lake(tree, "ctl", tmp_path), tmp_path)
     res = lock(tree, tmp_path, recorded, "recorded", envs)
     assert res["status"] == "pass", res["detail"]
     assert json.loads(artifact(tmp_path / "recorded", res, "records")) == recorded
@@ -324,6 +341,76 @@ def test_a_lock_naming_a_root_no_task_builds_fails(tree, tmp_path, envs):
     assert res["status"] == "fail" and "Control.Missing" in res["detail"]["error"], res["detail"]
 
 
+def write(root: Path, files: dict[str, str]) -> None:
+    for f, text in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+
+
+#: what each toy package below holds beside its sources
+TOY = {"lean-toolchain": TOOLCHAIN + "\n"}
+#: a spec, `sp`, and the package its `proved_in` names, `sp/pf`, which requires it by path, as Security and Security/Proofs
+SP = {**TOY, "Sp.lean": "import Sp.Defs\n", "Sp/Defs.lean": "def Sp.Claim (n : Nat) : Prop := n = n\n",
+      "lakefile.toml": 'name = "sp"\ndefaultTargets = ["Sp"]\n\n[[lean_lib]]\nname = "Sp"\n',
+      "lake-manifest.json": manifest("sp"), **{f"pf/{f}": t for f, t in TOY.items()},
+      "pf/Pf.lean": "import Sp.Defs\n\ntheorem Pf.claim (n : Nat) : Sp.Claim n := rfl\n",
+      "pf/lakefile.toml": 'name = "pf"\ndefaultTargets = ["Pf"]\n\n[[require]]\nname = "sp"\npath = ".."\n\n'
+                          '[[lean_lib]]\nname = "Pf"\n',
+      "pf/lake-manifest.json": json.dumps({"version": "1.1.0", "packagesDir": ".lake/packages", "name": "pf",
+                                           "lakeDir": ".lake",
+                                           "packages": [{"type": "path", "scope": "", "name": "sp", "inherited": False,
+                                                         "manifestFile": "lake-manifest.json", "dir": "..",
+                                                         "configFile": "lakefile.toml"}]}),
+      "pf/lean-audit.json": json.dumps({"roots": ["Pf"]}),
+      "lean-audit.json": json.dumps({"roots": ["Sp"], "proved_in": ["pf"], "guarantees": {"Pf.claim": {"owner": "@lean"}},
+                                     "layers": {"Sp.Defs": {"imports": [], "why": "the spec imports nothing"}},
+                                     "shape": {"frozen": {"Pf.claim": "lemma: a toy guarantee"}}})}
+#: `ext`, a fetched package, and `fx`, which fetches it: its guarantee's premise is headed by `ext`'s `Q`, which its lock
+#: lists as inline, as Security's lists premises Mathlib heads
+EXT = {**TOY, "Ext.lean": "prelude\nimport Init.Prelude\n\ndef Ext.Q (n : Nat) : Prop := Eq n n\n",
+       "lakefile.toml": 'name = "ext"\ndefaultTargets = ["Ext"]\n\n[[lean_lib]]\nname = "Ext"\n',
+       "lake-manifest.json": manifest("ext")}
+FX = {**TOY, "Fx.lean": "prelude\nimport Ext\n\ntheorem Fx.g (n : Nat) (h : Ext.Q n) : Ext.Q n := h\n",
+      "lakefile.toml": 'name = "fx"\ndefaultTargets = ["Fx"]\n\n[[require]]\nname = "ext"\n'
+                       'git = "https://example.invalid/ext"\nrev = "main"\n\n[[lean_lib]]\nname = "Fx"\n',
+      "lean-audit.json": json.dumps({"roots": ["Fx"], "guarantees": {"Fx.g": {"owner": "@lean"}},
+                                     "shape": {"frozen": {"Fx.g": "lemma: a toy guarantee"},
+                                               "inline": {"Fx.g": {"Ext.Q n": "a toy premise a fetched package heads."}}}})}
+
+
+def test_a_spec_whose_proved_in_package_requires_it_by_path_passes_on_a_lake_build_s_records(tree, tmp_path, envs):
+    """Each package's build holds its own modules alone, as Lake's does: `pf`'s audit counts what it loads from its build
+    as its own modules (`proved_in.unaudited`), and `sp`'s, which `pf` imports, aren't among them."""
+    write(tree, {f"sp/{f}": t for f, t in SP.items()})
+    recorded = updated(tree, lake(tree, "sp", tmp_path, "pf"), tmp_path, "pf")
+    res = lock(tree, tmp_path, recorded, "proved-in", envs, "sp")
+    assert res["status"] == "pass", res["detail"]
+
+
+def test_a_premise_a_fetched_package_heads_passes_on_a_lake_build_s_records(tree, tmp_path, envs, monkeypatch):
+    """The worker's env is a `.lake/packages`, as a checkout's: Lake resolves a fetched package's directory through the
+    task's symlink to it, and the audit takes an `.olean` outside `.lake/packages` for one this repository builds, whose
+    constant heading a premise (as Mathlib's `Nat.Prime` does Security's) would be an assumption the lock must list."""
+    monkeypatch.setattr(env_family, "SCOPE", "imports")
+    ext = tmp_path / "ext"
+    write(ext, EXT)
+    git(ext, "init", "-q", "-b", "main")
+    git(ext, "add", "-A")
+    git(ext, "commit", "-q", "-m", "ext")
+    p = subprocess.run([str(BIN / "lake"), "build"], cwd=ext, capture_output=True, text=True)
+    assert p.returncode == 0, p.stdout[-3000:] + p.stderr[-3000:]
+    m = json.loads(manifest("fx", "ext"))
+    m["packages"][0]["rev"] = git(ext, "rev-parse", "HEAD")
+    write(tree, {f"fx/{f}": t for f, t in FX.items()} | {"fx/lake-manifest.json": json.dumps(m)})
+    home = module_runner.fetched_dir(la.deps_key(tree / "fx"))
+    shutil.rmtree(home, ignore_errors=True)
+    shutil.copytree(ext, home / "ext", symlinks=True)
+    (home / module_runner.READY).write_text(la.deps_key(tree / "fx") + "\n")
+    recorded = updated(tree, lake(tree, "fx", tmp_path, fetched={"ext": ext}), tmp_path)
+    res = lock(tree, tmp_path, recorded, "fetched", envs, "fx")
+    assert res["status"] == "pass", res["detail"]
+
+
 def test_the_toolchain_s_env_passes_with_every_module_recorded_and_its_executables_in_rounds(tree, envs):
     doc = graph.task_graph(tree, ENV, listers=LISTERS)
     task = doc["tasks"][0]
@@ -334,6 +421,7 @@ def test_the_toolchain_s_env_passes_with_every_module_recorded_and_its_executabl
     tc = module_runner.toolchain_dir(TOOLCHAIN) / "lib" / "lean"
     want = {".".join(o.relative_to(tc).with_suffix("").parts) for o in tc.rglob("*.olean")}
     assert head["env"] == head["toolchain"] == TOOLCHAIN and head["schema"] == env_runner.SCHEMA and head["scope"] == "whole"
+    assert head["base"] is None and "base" not in res["detail"]
     assert set(head["files"]) == set(body["axioms"]) == want and res["detail"]["modules"] == len(want)
     assert head["files"]["Init.Prelude"] == module_runner.module_digest(tc / "Init" / "Prelude.olean")
     assert {"LeanChecker", "LeanIR", "Leanc"} <= set(res["detail"]["deferred"]) and len(res["detail"]["rounds"]) > 1, \
@@ -348,7 +436,7 @@ def test_the_toolchain_s_env_passes_with_every_module_recorded_and_its_executabl
 def fetched_env(tree: Path, private: bool = True, sources: dict[str, str] | None = None) -> Path:
     """`dep`'s fetched packages on this worker, as `lean_module.packages` finds them made: `evil` built by `lean` from
     ``sources`` (`Evil` from `EVIL` by default), a module at a time, with their private parts or without them."""
-    home = module_runner.env_dir() / la.deps_key(tree / "dep")
+    home = module_runner.fetched_dir(la.deps_key(tree / "dep"))
     lib = home / "evil" / ".lake" / "build" / "lib" / "lean"
     shutil.rmtree(home, ignore_errors=True)
     lib.mkdir(parents=True)
@@ -360,7 +448,7 @@ def fetched_env(tree: Path, private: bool = True, sources: dict[str, str] | None
     if not private:
         for f in lib.glob("*.olean.private"):
             f.unlink()
-    (home / module_runner.READY).write_text(home.name + "\n")
+    (home / module_runner.READY).write_text(la.deps_key(tree / "dep") + "\n")
     return home
 
 
@@ -372,14 +460,14 @@ def test_an_env_module_whose_private_proof_holds_a_sorry_fails_its_env(tree, tmp
     fetched_env(tree)
     res = runners.execute(task, doc, tmp_path / "env")
     assert res["status"] == "fail" and res["detail"]["axioms"] == {"sorryAx": ["q"]}, res["detail"]
-    body = json.loads((tmp_path / "env" / env_family.AXIOMS).read_text())
+    body = json.loads((tmp_path / "env" / env_family.record("dep")).read_text())
     assert set(body["axioms"]) == {"Evil", "Init.Prelude"}
     assert body["sets"][body["axioms"]["Evil"]["q"]] == ["sorryAx"], "an importer of `q` takes its `sorry` from the record"
 
     monkeypatch.setattr(env_runner, "UNPROVED", {"Evil": ("q",)})
     res = runners.execute(task, doc, tmp_path / "unproved")
     assert res["status"] == "pass" and res["detail"]["unproved"] == ["q"], res["detail"]
-    body = json.loads((tmp_path / "unproved" / env_family.AXIOMS).read_text())
+    body = json.loads((tmp_path / "unproved" / env_family.record("dep")).read_text())
     assert body["sets"][body["axioms"]["Evil"]["q"]] == ["sorryAx"], "listed, `q` still carries its `sorry` to importers"
     monkeypatch.setattr(env_runner, "UNPROVED", {"Evil": ("q", "p")})
     res = runners.execute(task, doc, tmp_path / "stale")
@@ -414,12 +502,62 @@ def test_a_declaration_the_kernel_stops_on_passes_on_the_imports_lean_checked_it
     assert res["status"] == "fail" and res["detail"]["rejected"] == ["Evil"], res["detail"]
 
 
-def test_an_env_with_no_build_of_its_fetched_packages_beyond_mathlib_s_cache_is_an_error(tree, tmp_path):
+def test_an_env_with_no_build_of_its_fetched_packages_beyond_mathlib_s_cache_is_an_error(tree, tmp_path, envs):
     doc = graph.task_graph(tree, "lean-env:dep", listers=LISTERS)
     shutil.rmtree(fetched_env(tree) / "evil" / ".lake" / "build")
-    res = runners.execute(doc["tasks"][0], doc, tmp_path / "env")
+    envs.stage(doc, tmp_path / "env")
+    res = runners.execute(next(t for t in doc["tasks"] if t["id"] == "lean-env:dep"), doc, tmp_path / "env")
     assert res["status"] == "error" and "no build of evil" in res["detail"]["error"], \
         "a worker without warm dependencies or the bundle would record an env without them"
+
+
+def test_an_env_layered_on_the_toolchain_s_replays_its_own_modules_alone_and_records_the_toolchain_s_as_its_base_did(
+        tree, tmp_path, envs, monkeypatch):
+    doc = graph.task_graph(tree, "lean-env:dep", listers=LISTERS)
+    task = next(t for t in doc["tasks"] if t["id"] == "lean-env:dep")
+    assert task["reads"] == [{"task": ENV, "output": "axioms"}], "dep fetches evil, on the toolchain ax's env is alone"
+    evil = fetched_env(tree) / "evil" / ".lake" / "build" / "lib" / "lean" / "Evil.olean"
+    monkeypatch.setattr(env_runner, "UNPROVED", {"Evil": ("q",)})
+    base = envs.stage(doc, tmp_path / "base")
+    given = json.loads(base.read_text())
+
+    def layered(name: str, edit=lambda line: line) -> tuple[dict, Path]:
+        record = stage(base, tmp_path / name, env_family.record("ax"))
+        record.write_text("".join(edit(line) for line in record.read_text().splitlines(keepends=True)))
+        return runners.execute(task, doc, tmp_path / name), tmp_path / name / env_family.record("dep")
+
+    res, record = layered("layered")
+    assert res["status"] == "pass", res["detail"]
+    assert res["detail"]["base"] == ENV and res["detail"]["base_modules"] == len(given["files"])
+    assert [r["modules"] for r in res["detail"]["rounds"]] == [1], \
+        "Evil alone goes to the kernel, importing the toolchain's modules with their sets from ax's record"
+    head, body = module_runner.env_header(record), json.loads(record.read_text())
+    assert head["base"] == ENV and head["env"] == env_family.env_key(tree / "dep") != TOOLCHAIN
+    assert set(body["axioms"]) == {*given["axioms"], "Evil"} and head["files"] == given["files"] | {
+        "Evil": module_runner.module_digest(evil)}
+    for m, cs in given["axioms"].items():
+        assert {c: given["sets"][i] for c, i in cs.items()} == {c: body["sets"][i] for c, i in body["axioms"][m].items()}, m
+    assert body["sets"][body["axioms"]["Evil"]["q"]] == ["sorryAx"]
+
+    mod = graph.task_graph(tree, "lean-module:dep/Dep.lean", listers=LISTERS)
+    dep = next(t for t in mod["tasks"] if t["id"] == "lean-module:dep/Dep.lean")
+    assert dep["reads"] == [{"task": "lean-env:dep", "output": "axioms"}]
+    stage(record, tmp_path / "dep", env_family.record("dep"))
+    res = runners.execute(dep, mod, tmp_path / "dep")
+    assert res["status"] == "pass" and res["detail"]["env_modules"] == 2, \
+        ("a module of the layered env takes Evil's sets and Init.Prelude's from its record", res["detail"])
+
+    def files(f):
+        return lambda line: f'"files":{json.dumps(f(json.loads(line[8:-2])))},\n' if line.startswith('"files":') else line
+
+    res, _ = layered("bytes", files(lambda d: d | {"Init.Prelude": "sha512:" + "0" * 128}))
+    assert res["status"] == "error" and res["detail"]["differ"] == ["Init.Prelude"], res["detail"]
+    res, _ = layered("unhashed", files(lambda d: {k: v for k, v in d.items() if k != "Init.Core"}))
+    assert res["status"] == "error" and "a line and a digest for each" in res["detail"]["error"], \
+        ("a base module without its digest would go unchecked", res["detail"])
+    res, _ = layered("absent", lambda line: files(lambda d: d | {"Nowhere": "sha512:" + "0" * 128})(line)
+                     + ('"Nowhere":{},\n' if line == '"axioms":{\n' else ""))
+    assert res["status"] == "error" and res["detail"]["absent"] == ["Nowhere"], res["detail"]
 
 
 def test_a_fetched_declaration_may_use_lake_s_family_axioms_and_no_axiom_a_fetched_package_or_init_declares():
