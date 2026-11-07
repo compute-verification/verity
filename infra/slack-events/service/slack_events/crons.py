@@ -2,9 +2,10 @@
 what they find next time); both stamp last_success_at in the cache.
 
 - `watchdog` (every 5 minutes): a person's chat post that rang someone and has no 👀 and no lane reply after REMIND_S rings
-  again; after ESCALATE_S with no lane reply it rings @top and says so in the thread; in the run that falls in DAILY_AT, a
-  list of the chat threads still open goes to @top's inbox.  And `stall`: an event published STALL_S ago or more with no
-  message done by the consumer since rings @comms (at most hourly), since health's other numbers can't show it; and
+  again; after ESCALATE_S with no lane reply it rings the admin and says so in the thread; in the run that falls in
+  DAILY_AT, a list of the chat threads still open goes to the admin's inbox.  And `stall`: an event published STALL_S ago
+  or more with no message done by the consumer since rings STALL_TO (at most hourly), since health's other numbers can't
+  show it; and
   `canary`, each hour, publishes a synthetic event that only the consumer can stamp done, so `stall` has one to judge.
 - `reconcile` (every 10 minutes): each chat and ask channel's last hour.  A person's post that should ring someone and has
   neither a routing line nor a doorbell in any inbox is enqueued again, keyed on its channel and ts, so a second pass
@@ -136,7 +137,7 @@ def canary(deps: Deps, now: float) -> bool:
 
 
 def stall(deps: Deps, now: float) -> bool:
-    """Ring @comms when the last event published is STALL_S old and the consumer has finished no message since (health
+    """Ring STALL_TO when the last event published is STALL_S old and the consumer has finished no message since (health
     looks clean while nothing is consumed).  At most every STALL_EVERY_S; an unknown time rings nothing."""
     enq, done, rung = (deps.read(k) for k in (LAST_ENQUEUED, LAST_DONE, STALL_RUNG))
     if not isinstance(enq, (int, float)) or now - enq < STALL_S or (isinstance(done, (int, float)) and done >= enq):
@@ -166,7 +167,7 @@ def _daily_due(now: float) -> bool:
 
 
 def daily(deps: Deps, reg: dict, still_open: list[tuple[str, str, float]], now: float) -> int:
-    """The open threads, one line to @top's inbox, as `ring_decision` posts a decision there; once a day (a second run in
+    """The open threads, one line to the admin's inbox, as `ring_decision` posts a decision there; once a day (a second run in
     the same window finds it)."""
     rs, api = deps.rs, deps.slack
     if not still_open:

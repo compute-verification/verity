@@ -62,12 +62,13 @@ def pack(codes: np.ndarray) -> np.ndarray:
 def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dict[str, bytes]]:
     m, n, k = shape
     fmt = F.FORMATS[fmt_name]
-    s = F.PearlC4(fmt_name)
+    s = F.PearlC4(fmt_name, hashing="h0")
     salt = hashlib.sha256(b"salt/pearl-c4-fixture").digest()
     xa, xb = rows("A", m, k), rows("B", n, k)
     matmul = Matmul(0, Shape(m, k, n), WEIGHT)
-    tree_a = AU.commit_rows(AU.activation_binding(salt, matmul.index), matmul.index, [r.astype("<u2").tobytes() for r in xa])
-    tree_b = AU.commit_rows(AU.weight_binding(WEIGHT), -2, [r.astype("<u2").tobytes() for r in xb])
+    tree_a = AU.commit_rows(AU.activation_binding(salt, matmul.index), matmul.index, [r.astype("<u2").tobytes() for r in xa],
+                             s.commitment_hash)
+    tree_b = AU.commit_rows(AU.weight_binding(WEIGHT), -2, [r.astype("<u2").tobytes() for r in xb], s.commitment_hash)
     ctx = Context(salt, matmul, tree_a.commitment.root, tree_b.commitment.root)
     s.check(ctx.matmul)
     noise = s.noise(ctx)
@@ -122,7 +123,7 @@ def build(fmt_name: str, shape: tuple[int, int, int] = SHAPE) -> tuple[dict, dic
     for ti_ in range(m // F.TILE):
         for tj_ in range(n // F.TILE):
             rs, cs = slice(F.TILE * ti_, F.TILE * (ti_ + 1)), slice(F.TILE * tj_, F.TILE * (tj_ + 1))
-            leaves[ti_, tj_] = np.frombuffer(C.leaf(C.Checked(c[rs, cs].tolist(), u[rs, cs].tolist())), np.uint8)
+            leaves[ti_, tj_] = np.frombuffer(C.leaf(C.Checked(c[rs, cs].tolist(), u[rs, cs].tolist()), s.hashing), np.uint8)
 
     le = lambda arr, dt: np.ascontiguousarray(arr, dt).tobytes()  # noqa: E731
     # pearl_c4.cu's scales are k-tile major: k/128 x rows x 128/block

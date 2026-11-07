@@ -64,8 +64,8 @@ EVALUATORS = {
                     "-- HopperBF16WgmmaDot16_v1 + Fa3InvSum_v1 = FA3 on sm_90 (== verity.ml.definitions.numerics.fa3_model.fa3_rows); "
                     "AmpereBF16TcDot16_v2 + Fa2InvSum_v1 = FA2 under the lifted name); "
                     # the silicon envelope of the FA3 relation, stated with the evaluator
-                    "FA3 envelope MEASURED exact on the H100 production capture at hdim 128 / kBlockN 128, T = 1..527 (39 leaves, "
-                    "hopper-profile.md s1b); rows beyond it (1024/128, hdim 64 / kBlockN 192) are measured BY THE COMMIT -- a chain "
+                    "FA3 envelope MEASURED exact on the H100 production capture at hdim 128 / kBlockN 128, T = 1..527 (39 leaves); "
+                    "rows beyond it (1024/128, hdim 64 / kBlockN 192) are measured BY THE COMMIT -- a chain "
                     "mismatch FAILs by name, never a silent word; "
                     "k16 steps = registry.tc_total hopper_bf16_wgmma_k16 family v1 / ampere_bf16_m16n8k16 total family v3",
     "Attention_v4": "verity.ml.definitions.numerics.derived_rows.attention_rows (Attention_v4{T,NH,KVH,D,BN,DOT,INV,MASKED_FROM}: Attention_v2's evaluator "
@@ -100,10 +100,10 @@ EVALUATORS = {
     # the block-scaled FP8 linear (Qwen3-4B-FP8, CutlassFp8BlockScaledMMKernel): the quant is INTERIOR (members [], composed
     # from the committed bf16 row), the GEMM row is the proof block -- registered e4m3 weight + f32 `weight_scale_inv` slices (8- and 32-bit fields)
     "Fp8GroupQuant_v1": "verity.ml.definitions.numerics.derived_rows.fp8_group_quant_row (per-token-group(128) e4m3 quant: exact fmaxf fold from eps, div.rn, cvt.rn.satfinite.e4m3)",
-    "ScaledMmFp8Block_v1": "verity.ml.definitions.numerics.derived_rows.scaled_mm_fp8_block_row (ascending k: G/32 HopperE4m3QgmmaDot32 steps from +0 per 128-block, "
-                           "FFMA(temp, FMUL(sx, sw), acc), cvt.rn.bf16.f32) on the composed Fp8GroupQuant output + the registered e4m3 / f32 weight slices",
-    "ScaledMmFp8BlockSharedScale_v1": "verity.ml.definitions.numerics.derived_rows.scaled_mm_fp8_block_row (ScaledMmFp8Block_v1's function and signature: "
-                                      "each weight block's scale products once, registry.fp8.ScaledMmFp8BlockSharedScale)",
+    "ScaledMmFp8BlockSharedScale_v1": "verity.ml.definitions.numerics.derived_rows.scaled_mm_fp8_block_row (ascending k: G/32 HopperE4m3QgmmaDot32 steps "
+                                      "from +0 per 128-block, FFMA(temp, FMUL(sx, sw), acc), cvt.rn.bf16.f32; ScaledMmFp8Block_v1's function and "
+                                      "signature with each weight block's scale products once, registry.fp8.ScaledMmFp8BlockSharedScale) on the composed "
+                                      "Fp8GroupQuant output + the registered e4m3 / f32 weight slices",
     # the fused-MoE block relations (verity.ml.definitions.registry.moe bodies, checked against
     # the real kernels): every plane word is PRODUCED by an evaluated relation over committed plane words + registered expert weights
     "MoeRouterTopK_v1": "verity.ml.definitions.registry.moe.MoeRouterTopK evaluated per token with the registry's scalar primitives (f32 softmax in the kernel's "
@@ -164,8 +164,7 @@ _FP8_TWIN_PROVENANCE = {
     "definitions": "verity/ml/definitions/registry/fp8.py: Fp8GroupQuant_v1{K,G}, ScaledMmFp8Block_v1{K,N,G}, HopperE4m3QgmmaDot32_v1 (the reference; the twins are checked against them, never the other way round)",
 }
 #: family -> provenance of its evaluator when it is a fitted twin (a family absent here is evaluated by the registry's own derived rows)
-EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8Block_v1": _FP8_TWIN_PROVENANCE,
-                                          "ScaledMmFp8BlockSharedScale_v1": _FP8_TWIN_PROVENANCE}
+EVALUATOR_PROVENANCE: dict[str, dict] = {"Fp8GroupQuant_v1": _FP8_TWIN_PROVENANCE, "ScaledMmFp8BlockSharedScale_v1": _FP8_TWIN_PROVENANCE}
 
 GEMM_CHUNK = 4096                       # Gemm coordinates evaluated per vectorised k16 chain (bounds the int64 temporaries to ~0.5 GB)
 SAMPLED_MEMBER = "sampled_token_ids"
@@ -705,7 +704,6 @@ def _check_targets() -> dict[str, list]:
         "GumbelTopPTokenSelectSharedGreedy_v1": [bind(sampling.GumbelTopPTokenSelectSharedGreedy, V=16)],
         **{f: [bind(fn, V=16, S=4)] for f, fn in (("GumbelTopPTokenSelect_v2", topp_words.GumbelTopPTokenSelectV2), ("GumbelTopPTokenSelect_v3", dead_free.GumbelTopPTokenSelectV3))},
         "Fp8GroupQuant_v1": [bind(fp8.Fp8GroupQuant, K=256, G=128)],
-        "ScaledMmFp8Block_v1": [bind(fp8.ScaledMmFp8Block, K=128, N=n, G=128) for n in (128, 192)],
         "ScaledMmFp8BlockSharedScale_v1": [bind(fp8.ScaledMmFp8BlockSharedScale, K=128, N=n, G=128) for n in (128, 192)],
         "MoeRouterTopK_v1": [bind(moe.MoeRouterTopK, **router)],
         "MoeRouterTopKNorm_v1": [bind(moe.MoeRouterTopKNorm, **router)],
@@ -752,7 +750,6 @@ _row("GumbelTopPTokenSelectSharedGreedy_v1", gumbel_topp, (SAMPLED_MEMBER,), _sa
 for _family in ("GumbelTopPTokenSelect_v2", "GumbelTopPTokenSelect_v3"):
     _row(_family, gumbel_topp_split, (SAMPLED_MEMBER,), _sample_gumbel_split)
 _row("Fp8GroupQuant_v1", fp8_group_quant, ("0", "1"))
-_row("ScaledMmFp8Block_v1", scaled_mm_fp8_block, ("0",))
 _row("ScaledMmFp8BlockSharedScale_v1", scaled_mm_fp8_block, ("0",))
 _row("MoeRouterTopK_v1", partial(moe_router, renormalize=False), ("router_w", "router_ids"))
 _row("MoeRouterTopKNorm_v1", partial(moe_router, renormalize=True), ("router_w", "router_ids"))

@@ -19,6 +19,9 @@ public import Proofs.Core.Game.Batch
 public import Proofs.Core.Game.BatchInduced
 public import Proofs.Core.Game.Rewinding
 public import Proofs.Core.Game.Unambiguous
+public import Proofs.Core.Game.Tape
+public import Proofs.Core.Game.TwoRun
+public import Proofs.Core.Game.InterleaveBridge
 public import Proofs.Core.Challenger
 public import Proofs.Core.ValueSalts
 public import Proofs.Core.UnionBound
@@ -39,8 +42,10 @@ public import Proofs.Core.NaiveStrassen
 public import Proofs.Core.Bilinear
 public import Proofs.Core.HongKung
 public import Proofs.Core.Blocks
+public import Proofs.Core.Structure
 public import Proofs.Core.DeviceFigures
 public import Proofs.Core.Site
+public import Proofs.Core.QSort
 
 /-!
 # Proofs of core's guarantees
