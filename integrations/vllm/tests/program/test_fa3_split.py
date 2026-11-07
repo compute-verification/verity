@@ -1,7 +1,8 @@
 """`registry.fa3_split` (FA3's dense causal prefill with the key range split and merged by FlashAttnFwdCombine), its Boolean versions
 `boolean_fa3_split` and the twin `kernels.fa3_split_twins`: the per-tile split boundaries and GLM-5.3's served counts; one split is
 `AttentionHead_v4` before the end and combine; the twin is the Definition word for word; a split head is softmax attention within
-bf16 rounding; the vocabulary's `PER` binds it; the Boolean versions agree with their word views."""
+bf16 rounding; the lse heads are the heads' words beside their twins' lse, the row's logsumexp within rounding; the vocabulary's
+`PER` binds it; the Boolean versions agree with their word views."""
 from __future__ import annotations
 
 import numpy as np
@@ -142,6 +143,82 @@ def test_a_split_row_is_softmax_attention_within_bf16_rounding(T, ns) -> None:
     p = np.exp(s - s.max())
     ref = (p / p.sum()) @ _val(v)
     assert not nf.any() and np.max(np.abs(_val(got[0]) - ref)) <= 2 ** -7 * np.max(np.abs(_val(v)))
+
+
+# --- the lse heads --------------------------------------------------------------------------------------------------------------
+
+def _lse_head(T, D, BN, MF):
+    return bind(F.AttentionHeadLse, T=T, D=D, BN=BN, MASKED_FROM=MF, **FA3)
+
+
+def _split_lse_head(T, D, BN, MF, PER):
+    return bind(F.AttentionHeadSplitLse, T=T, D=D, BN=BN, MASKED_FROM=MF, PER=PER, **FA3)
+
+
+@pytest.mark.parametrize("T,MF", [(40, 2), (40, 0), (17, 1), (16, 0), (5, 0)])
+def test_the_lse_head_is_attention_head_v4_and_its_twin(T, MF) -> None:
+    """`AttentionHeadLse_v1`'s output is `AttentionHead_v4`'s word, and its (output, lse) is the twin's, whose lse is
+    `split_end_rows`' at the chain's last (m, l): every block guarded or only the masked ones, the last block partial or full."""
+    D, BN, R = 16, 16, 3
+    rng = np.random.default_rng(T * 5 + MF)
+    q, k, v = _bf16(rng, (R, D)), _bf16(rng, (T, D)), _bf16(rng, (T, D))
+    out, lse, nf = TW.head_lse_rows(q, k, v, T=T, BN=BN, masked_from=MF, **TWIN)
+    v4 = bind(F3.AttentionHeadV4, T=T, D=D, BN=BN, MASKED_FROM=MF, **FA3)
+    assert not nf.any()
+    for r in range(R):
+        got = _run(_lse_head(T, D, BN, MF), q[r], k, v)
+        assert got[:D] == _run(v4, q[r], k, v)
+        assert got == [*map(int, out[r]), int(lse[r])]
+
+
+@pytest.mark.parametrize("T,MF,PER", [(40, 1, 1), (40, 2, 2), (40, 0, 3), (33, 0, 1), (17, 1, 1), (5, 0, 1)])
+def test_the_split_lse_head_is_the_split_head_and_its_twin(T, MF, PER) -> None:
+    """`AttentionHeadSplitLse_v1`'s output is `AttentionHeadSplit_v1`'s word, and its (output, lse) is the twin's."""
+    D, BN, R = 16, 16, 3
+    rng = np.random.default_rng(T * 11 + MF * 3 + PER)
+    q, k, v = _bf16(rng, (R, D)), _bf16(rng, (T, D)), _bf16(rng, (T, D))
+    out, lse, nf = TW.head_split_lse_rows(q, k, v, T=T, BN=BN, PER=PER, masked_from=MF, **TWIN)
+    assert not nf.any()
+    for r in range(R):
+        got = _run(_split_lse_head(T, D, BN, MF, PER), q[r], k, v)
+        assert got[:D] == _run(_head(T, D, BN, MF, PER), q[r], k, v)
+        assert got == [*map(int, out[r]), int(lse[r])]
+
+
+def test_one_split_gives_the_unsplit_lse() -> None:
+    """PER at least the row's blocks: one split, whose one-lane combine stores the split end's lse as it is, the unsplit head's."""
+    T, MF, D, BN = 40, 2, 16, 16
+    rng = np.random.default_rng(41)
+    q, k, v = _bf16(rng, D), _bf16(rng, (T, D)), _bf16(rng, (T, D))
+    assert _run(_split_lse_head(T, D, BN, MF, 3), q, k, v) == _run(_lse_head(T, D, BN, MF), q, k, v)
+
+
+@pytest.mark.parametrize("T,ns", [(1024, 2), (321, 5), (300, 1), (1791, 1)])
+def test_the_lse_is_the_rows_logsumexp_within_rounding(T, ns) -> None:
+    """At GLM-5.3's head 256 and tile (BM 128, BN 80), the sequence's last row through the twins: the lse is log sum exp(q . k / 16)
+    within the f32 and MUFU roundings, and the output is the head's without the lse."""
+    D, BN = 256, 80
+    rng = np.random.default_rng(T + 7)
+    q, k, v = _bf16(rng, (1, D)), _bf16(rng, (T, D), 0.5), _bf16(rng, (T, D))
+    mf = TG.fa3_masked_from(H200, T, 8, 8, 256, T, T - 1)
+    if ns == 1:
+        out, lse, nf = TW.head_lse_rows(q, k, v, T=T, BN=BN, masked_from=mf, **TWIN)
+        assert np.array_equal(out, TW.head_split_rows(q, k, v, T=T, BN=BN, PER=-(-T // BN), masked_from=mf, **TWIN)[0])
+    else:
+        per = F.split_per(T, T - 1, 128, BN, ns)
+        assert len(F.row_splits(T, BN, per)) == ns
+        out, lse, nf = TW.head_split_lse_rows(q, k, v, T=T, BN=BN, PER=per, masked_from=mf, **TWIN)
+        assert np.array_equal(out, TW.head_split_rows(q, k, v, T=T, BN=BN, PER=per, masked_from=mf, **TWIN)[0])
+    ref = np.logaddexp.reduce(_val(k) @ _val(q[0]) * D ** -0.5)
+    assert not nf.any() and abs(float(lse.view(np.float32)[0]) - ref) <= 2 ** -14 * max(1.0, abs(ref))
+
+
+def test_the_lse_heads_refuse_as_the_heads_do() -> None:
+    with pytest.raises(ValueError, match="AttentionHeadLse: MASKED_FROM 3 outside blocks"):
+        bind(F.AttentionHeadLse, T=40, D=16, BN=16, MASKED_FROM=3, **FA3).body
+    T = 16 * W.LANES + 1
+    with pytest.raises(ValueError, match="AttentionHeadSplitLse: 33 splits, the combine's warp holds 32"):
+        bind(F.AttentionHeadSplitLse, T=T, D=16, BN=16, MASKED_FROM=0, PER=1, **FA3).body
 
 
 # --- the vocabulary -------------------------------------------------------------------------------------------------------------
