@@ -8,12 +8,12 @@ import Proofs.Flock.Soundness.Game.Prob
 /-!
 # Recursion: the model
 
-A developer's circuit `P` stays hidden behind a registered hiding commitment `c_P`. The verifier draws `P`'s units to
+A developer's circuit `P` stays hidden behind a registered hiding commitment `c_P`. The verifier samples `P`'s units to
 prove, and the prover proves them with an **inner protocol** that the verifier never runs itself: in round `k` the prover
 sends a hiding commitment `c_k` to its inner message `m_k`, and the verifier answers with a live coin `ρ_k`. No
-Fiat–Shamir: each coin is drawn after its round's commitment is fixed. Then an ordinary `--zk` session of a fixed public
+Fiat–Shamir: each coin is flipped after its round's commitment is fixed. Then an ordinary `--zk` session of a fixed public
 verifier circuit `V*` proves that openings of `c_P, c_1, …, c_r` exist on which the inner verifier, run on `P`'s statement
-for the drawn units and the public coins, accepts.
+for the sampled proof blocks and the public coins, accepts.
 
 * `rounds M C r f`: `r` rounds, each a message `m : M` and then a live coin `ρ : C`, continued by `f` on the transcript,
   first round first.
@@ -21,7 +21,7 @@ for the drawn units and the public coins, accepts.
   and the transcript, and the statement's truth `holds`. Rounds of different message or coin types embed by taking sums
   of the messages and products of the coins.
 * `InnerSound I ε`: on a false statement no prover strategy of `I.game` makes the inner verifier accept with probability
-  above `ε`. A strategy of `I.game` fixes its round-`k` message before the coin `ρ_k` is drawn.
+  above `ε`. A strategy of `I.game` fixes its round-`k` message before the coin `ρ_k` is sampled.
 * `InnerSoundFork H I pick ε`, its fork form: on a false statement every prover strategy either has a fork (`Inner.Fork`:
   two continuations of its own after some round's message, whose transcripts `pick` reads as a collision of `H` at an
   outcome the fork reaches), or makes the inner verifier accept with probability at most `ε`. `InnerSoundForkOn` is the
@@ -32,7 +32,7 @@ for the drawn units and the public coins, accepts.
   collision of `H` at one; `Outcome.of_bind`, `Outcome.of_map`: an outcome of a sequenced game, decomposed;
   `prob_mono_outcome`: `prob_mono` with the implication needed only at outcomes the strategy reaches; `contF` and
   `forkG`: the rest of a run of `rounds` from a node, and two of them from the node where round `k`'s message is sent.
-* `recGame`: the recursive audit: the registration, the draw, the `r` committed rounds, and the outer session, whose game
+* `recGame`: the recursive audit: the registration, the sample, the `r` committed rounds, and the outer session, whose game
   is a parameter (`V*`'s live session in the Flock instance).
 * `leafAvg`, `expAt`, `probAt`: averages over the round coins of quantities at the outer session's start, which may read
   the prover's strategy there (its state when the outer session begins).
@@ -111,14 +111,14 @@ namespace FlockSoundness.Discharge.Recursion
 open Game Audit
 open scoped ENNReal
 
-/-- **`r` committed rounds**: in each, the prover sends a message of type `M`, and then the verifier draws a live coin from
+/-- **`r` committed rounds**: in each, the prover sends a message of type `M`, and then the verifier flips a live coin from
 `C`, independently of everything before. The continuation reads the transcript, first round first. -/
 def rounds (M C : Type) [Fintype C] [Nonempty C] {β : Type} : ℕ → (List (M × C) → Game β) → Game β
   | 0, f => f []
   | r + 1, f => .send M fun m => .coin C fun ρ => rounds M C r fun t => f ((m, ρ) :: t)
 
 /-- **An inner protocol**: an interactive verifier with `r` rounds of public coins, messages committed before coins. In
-each round the prover sends a message of type `Msg` and the verifier draws a uniform coin from `Coin`; after the last
+each round the prover sends a message of type `Msg` and the verifier flips a uniform coin from `Coin`; after the last
 round it decides `accepts x t` from the statement `x` and the transcript `t`, first round first. `holds x` is the
 statement's truth. -/
 structure Inner : Type 1 where
@@ -164,7 +164,7 @@ noncomputable def forkG (pick : γ → γ → StrictCR.Pair) : (k r : ℕ) → (
 end Fork
 
 /-- **`InnerSound I ε`**: on a false statement, every prover strategy makes the inner verifier accept with probability at
-most `ε`. A strategy of `I.game` fixes each round's message before the round's coin is drawn, as a function of the
+most `ε`. A strategy of `I.game` fixes each round's message before the round's coin is flipped, as a function of the
 statement and the transcript before it; a randomized prover is a mixture of these. -/
 def InnerSound (I : Inner) (ε : ℝ≥0∞) : Prop :=
   ∀ x, ¬ I.holds x → ∀ s : Strategy I.game, prob (I.accepts x) I.game s ≤ ε
@@ -208,9 +208,9 @@ theorem InnerSoundForkOn.plain {D : Type} {H : List UInt8 → D} {I : Inner}
     rwa [hpick] at hf
   · exact Or.inr ((prob_mono (fun _ h => ⟨h, trivial⟩) _ s).trans hp)
 
-/-- **The recursive audit**: the prover registers `R` (the hiding commitment `c_P` among it), the verifier draws `ω` (the
+/-- **The recursive audit**: the prover registers `R` (the hiding commitment `c_P` among it), the verifier samples `ω` (the
 units of `P` to prove), then `I.r` rounds in which the prover sends a commitment `c_k : Cm` to its inner message and the
-verifier draws the inner coin `ρ_k` live, and then the outer session `outer R ω t`, `t` the transcript of commitments and
+verifier flips the inner coin `ρ_k` live, and then the outer session `outer R ω t`, `t` the transcript of commitments and
 coins. The output records all four. -/
 def recGame {n : ℕ} (L : Law n) (Reg : Type) (I : Inner) (Cm : Type) {β : Type}
     (outer : Reg → L.Ω → List (Cm × I.Coin) → Game β) : Game (Reg × L.Ω × List (Cm × I.Coin) × β) :=
@@ -374,14 +374,14 @@ section Outer
 variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
 
-/-- **The average of a quantity at the outer session's start** over the draw and the round coins: `F ω t s` reads the
-prover's strategy `s` for the outer session after the draw `ω` and the transcript `t`. -/
+/-- **The average of a quantity at the outer session's start** over the sample and the round coins: `F ω t s` reads the
+prover's strategy `s` for the outer session after the sample `ω` and the transcript `t`. -/
 noncomputable def expAt (σ : Strategy (recGame L Reg I Cm outer))
     (F : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → ℝ≥0∞) : ℝ≥0∞ :=
   avg fun ω => leafAvg I.r (fun t => (outer σ.1 ω t).map fun b => (σ.1, ω, t, b))
     (fun t s => F ω t (Strategy.ofMap (fun b => (σ.1, ω, t, b)) (outer σ.1 ω t) s)) (σ.2 ω)
 
-/-- **A property of the prover's strategy at the start of every outer session it reaches**, after each draw `ω` and
+/-- **A property of the prover's strategy at the start of every outer session it reaches**, after each sample `ω` and
 transcript `t`. -/
 def AllAt (σ : Strategy (recGame L Reg I Cm outer))
     (P : (ω : L.Ω) → (t : List (Cm × I.Coin)) → Strategy (outer σ.1 ω t) → Prop) : Prop :=

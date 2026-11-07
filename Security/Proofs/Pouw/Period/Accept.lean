@@ -15,14 +15,14 @@ import all Lean.Data.Json.Basic
 The all-protocols PoUW leg (`benchmarks/all_protocols/legs/pouw.py`) checks its H1 window at `h1_params`: the
 pinned H1 tile's check item with the entries bound 1024 and no coin mode, ε = 1/2, δ = 10⁻⁶, the 3-bit grid, the range
 `[1, 2^16]` and the loop's fixed length, 4 requests of 2 decode steps (`h1Params`). A window registering the loop's
-128 real tiles is at level 39, which pads to `N = 144`, and its draw is `K′ = 24` (`kPrime_h1`:
+128 real tiles is at level 39, which pads to `N = 144`, and its sample is `K′ = 24` (`kPrime_h1`:
 `q = 1 − (1/2)·128/144 = 5/9`, `q^23 > 10⁻⁶ ≥ q^24`).
 
 `check_h1`: `protocol.check` accepts the honest registration of that window (`h1Reg`: its items the verifier's own,
-`N = 144` drawn `subset:24`) with any service answer citing it that accepted 24 ascending distinct units below 144 at
+`N = 144` sampled `subset:24`) with any service answer citing it that accepted 24 ascending distinct units below 144 at
 the profile the rule fixes (`h1Evidence`), and publishes level 39's work, `K′ = 24` and those units. `numbers_h1`: every
 window the check accepts at those parameters, registered at level 39, publishes `N = 144` and `K′ = 24`, the population
-and draw size `SampleIsCoin` reads at H1's instance.
+and sample size `SampleIsCoin` reads at H1's instance.
 -/
 
 @[expose] public section
@@ -66,7 +66,7 @@ def h1ItemList : List (String × Json) :=
 def h1Items : Json := Json.mkObj h1ItemList
 
 /-- The loop's honest registration in context `context`, for any record bytes, format, Program and partition: a served
-window registering `h1Items`, the population 144 drawn `subset:24`, the check's query and scheme, and no roots. -/
+window registering `h1Items`, the population 144 sampled `subset:24`, the check's query and scheme, and no roots. -/
 def h1Reg (context format program partition : String) (bytes : ByteArray) : Registration where
   bytes := bytes
   format := format
@@ -79,8 +79,8 @@ def h1Reg (context format program partition : String) (bytes : ByteArray) : Regi
   roots := #[]
   window := ⟨"served", context, h1Items, none, none⟩
 
-/-- The profile the rule fixes for it: the registered Program over one level, the partition's 144 units drawn
-`subset:24`, at δ = 10⁻⁶, 24 drawn. -/
+/-- The profile the rule fixes for it: the registered Program over one level, the partition's 144 units sampled
+`subset:24`, at δ = 10⁻⁶, 24 sampled. -/
 def h1Profile (program partition : String) : Core.Integrity where
   programs := #[program]
   prescribed := #[]
@@ -90,7 +90,7 @@ def h1Profile (program partition : String) : Core.Integrity where
   delta := ⟨1, 1000000⟩
   drawn := #[(unitLevel, 24)]
 
-/-- One-stage's answer accepting registration `c` with the rule's profile and a `subset:24` draw of `units` over 144. -/
+/-- One-stage's answer accepting registration `c` with the rule's profile and a `subset:24` sample of `units` over 144. -/
 def h1Evidence (c : Registration) (units : Array Nat) : Evidence where
   protocol := oneStage
   commitment := some (Flock.hexOf c.digest)
@@ -144,7 +144,7 @@ theorem grid_h1 : 39 + 1 ≤ PouwWindow.level PouwWindow.gridBits (PouwWindow.fl
 
 theorem work_h1 : Work.at 3 39 = ⟨39, 128, 144⟩ := by decide
 
-/-! ## The draw: `K′ = 24` -/
+/-! ## The sample: `K′ = 24` -/
 
 /-- **`K′ = 24` at the leg's ε, δ and level**: `p = (1/2)·(128·2048)/(144·2048) = 4/9`, so `q = 5/9`, and
 `q^23 ≈ 1.34·10⁻⁶ > 10⁻⁶ ≥ q^24 ≈ 7.45·10⁻⁷`. -/
@@ -204,7 +204,7 @@ theorem check_h1 (context format program partition : String) (bytes : ByteArray)
     ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl, hu.1, hu.2.1, hu.2.2⟩ (saltKept_h1 _ _ _ _)
 
 /-- **`SampleIsCoin`'s numbers at the leg's parameters**: every window the check accepts at them, registered at level 39
-(the loop's 128 real tiles), publishes the population `N = 144` and the draw size `K′ = 24`. -/
+(the loop's 128 real tiles), publishes the population `N = 144` and the sample size `K′ = 24`. -/
 theorem numbers_h1 (context : String) (c : Registration) (e : Evidence) (pub : Public) (prof : Core.Integrity)
     (hc : protocol.check (h1Params context) c e = .accept pub prof) (hl : levelOf c.window.items = some 39) :
     pub.work.n = 144 ∧ pub.sampling.k = 24 := by

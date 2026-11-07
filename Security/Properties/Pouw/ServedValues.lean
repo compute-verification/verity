@@ -39,7 +39,7 @@ which adds SAK to H1.
 * `RightValues`: except with H1's probability, an accepted period's right blocks have total size at least
   `(1 − ε_skip)₊·S`.
 
-*No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileSampleIsCoin` (the draw),
+*No algorithmic premise.* Being about values, it takes no SAK and no premise beyond H1's: `TileSampleIsCoin` (the sample),
 `TileServiceSound` (the proof system's soundness, open), `RegisteredBeforeDraw`, `SaltIsLiveCoin` and
 `SharedNoiseLucks`, with the structure H1 reads (`Scope`, the live share `ρ`, the game and its prefix, the binding at
 `δ_bind`). `SharedNoiseLucks` is its one computational premise: the fold receipts' detection, which is to be
@@ -133,7 +133,7 @@ E1(c) (`accounting-ts-unit-fixed`) reads that as its words being its own right v
 
 It is a statement about values, not a compute claim: right values aren't work. It needs no
 algorithmic premise, only H1's. `TileSampleIsCoin`, `TileServiceSound`, `RegisteredBeforeDraw` and `SaltIsLiveCoin` are
-about the draw, the service and the salt. `SharedNoiseLucks` is the one computational premise: the fold receipts'
+about the sample, the service and the salt. `SharedNoiseLucks` is the one computational premise: the fold receipts'
 detection, which is to be proved or designed away by the no-fold receipt. -/
 def RightValues : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]

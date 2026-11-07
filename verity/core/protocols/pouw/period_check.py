@@ -1,5 +1,5 @@
 """A PoUW period as a core protocol, ``verity/pouw/period/v1``: the Python the Lean `PouwCheck.Period` (``pouw-period``,
-PoUW's verifier of record for a period and onsite's work component) is held to by ``lean/check/tests/test_period_difftest.py``.
+PoUW's verifier for a period and onsite's work component) is held to by ``lean/check/tests/test_period_difftest.py``.
 
 Its parameters are the verifier's own, ``{key, main, name}``: the challenger key it pins, its copy of main's
 first-parent history and the period it credits. Its commitment is the auditor's ledger (the lines the challenger signed),
@@ -8,8 +8,8 @@ and each window's evidence in the close's order (`credit.PROVED_KEYS`). The chec
 every window in a form the period's proved guarantee (`GUARANTEE`) doesn't cover: a Pearl-C pass, a circuit that is not
 an H1 window, a template over per-unit noise (``PouwH1Tile`` v1, v3 or v4), a J10-R unit over a tile other than
 ``PouwH1Tile_v5`` (v6), or units at more than one K. Then it is `credit._period_outcomes`, all or nothing: it accepts with the period's credit (``{windows, work, k, delta, eps}``) and the profile ``{period, windows}``,
-or rejects with the first refusal, ``code: why``. Each drawn unit's and each round's proof outcome is the verifier of
-record's verdict, which the evidence carries."""
+or rejects with the first refusal, ``code: why``. Each sampled proof block's and each round's proof outcome is the
+verifier's verdict, which the evidence carries."""
 from __future__ import annotations
 
 import hashlib
@@ -53,7 +53,7 @@ def evidence(b: bytes) -> dict:
 #: the guarantee a credited period is proved under
 GUARANTEE = "Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod"
 TILE_ID = "PouwH1Tile_v"
-#: the one tile the guarantee covers: a drawn per-call unit over it is proved as its 32 lanes and their combine
+#: the one tile the guarantee covers: a sampled per-call unit over it is proved as its 32 lanes and their combine
 COVERED_TILE = "PouwH1Tile_v5{"
 
 

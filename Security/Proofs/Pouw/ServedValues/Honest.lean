@@ -12,7 +12,7 @@ period. Its declared circuit has `N = N_p` committed words of no operands, one a
 declaration (`andDecl N`) is a Boolean circuit of two input gates and `N` output gates, each the AND of the two
 (`andCircuit N`), and its lowering is itself (`Verity.RegisteredCircuit.D`). The honest map (`blocks N`) has block `t` AND
 gate `t + 2` and word `t` its one bit. No other protocol credits a gate (the ledger is empty), so each block's credit
-size is `1` (`Verity.SecurityProofs.ToCircuitAnd`: C-Flock's `and a b` of two distinct gates is an AND gate).
+size is `1` (`Verity.SecurityProofs.ToCircuitAnd`: Flock's `and a b` of two distinct gates is an AND gate).
 
 * `right_values_honest`: the honest period meets every premise of `RightValues`, `j10r_meets`' without
   `UnitFixed`, so the guarantee's bound holds there. The premises are conditional on `Credit.window`'s verdict on the

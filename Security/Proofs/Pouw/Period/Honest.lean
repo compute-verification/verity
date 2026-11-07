@@ -51,7 +51,7 @@ parameters `Accept.h1Params`, and which meets every premise of the instance
 (`h1_meets`).
 
 The check takes these numbers at `h1Params`: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
-all 24 drawn tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `SampleIsCoin` and this
+all 24 sampled tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `SampleIsCoin` and this
 witness use are the deployed check's own.
 
 * The circuit (`circuit`): 128 committed words, one a unit (H1's 128 real tiles a window), no operands, so no unit
@@ -61,7 +61,7 @@ witness use are the deployed check's own.
 * The scheme is the ComposeMonitoringPeriod twin's (operand luck pinned, `r_B = ½`, guess `½`), so the lucks are `½ ≤ 7/8` and
   `½ ≤ ½`.
 * The windows (`windows`): every window registers the loop's honest registration (`Accept.h1Reg`) and the service
-  answers it with the units of the model's draw at the window's draw coin, ascending (`unitsOf`), so the check accepts
+  answers it with the units of the model's sample at the window's sampling coin, ascending (`unitsOf`), so the check accepts
   every window on every path (`accepted_all`, from `Accept.check_h1`), publishes `N = 144`, `K′ = 24` and exactly
   those units (`sampleIsCoin`), and its registration doesn't read the coins (`RegisteredBeforeDraw`).
 * The salt is the window's round coin (`SaltIsLiveCoin` by definition), every tile is live and paid with its words
@@ -198,7 +198,7 @@ theorem scope {δs : ℝ} (hδs : 0 < δs) : Scope Honest.scheme circuit δs :=
 
 /-! ## The period, its windows and its proofs -/
 
-/-- A window's coins: its round's coin, the draw's permutation and the proofs' (none). -/
+/-- A window's coins: its round's coin, the sample's permutation and the proofs' (none). -/
 abbrev Ω1 : Type := Paths Bool circuit.rounds × (Equiv.Perm (Fin 144) × Unit)
 
 /-- A window's honest stages: every tile paid, its words right and its checked values honest. -/
@@ -216,12 +216,12 @@ def prm : Params := h1Params ""
 /-- Every window's registration: the loop's honest one. -/
 def reg : PouwCheck.Registration := h1Reg "" "" "" "" ByteArray.empty
 
-/-- The units of the model's draw at permutation coin `β`, ascending. -/
+/-- The units of the model's sample at permutation coin `β`, ascending. -/
 noncomputable def unitsOf (β : Equiv.Perm (Fin 144) × Unit) : Array ℕ :=
   (Finset.sort (Finset.univ.image fun i : Fin 24 => (drawOf hK24 β i).val) (· ≤ ·)).toArray
 
 /-- The period's windows as the check reads them: the honest registration, and the service's answer accepting the
-units of the window's draw. -/
+units of the window's sample. -/
 noncomputable def windows (n : ℕ) : Executions Ω1 n where
   reg := fun _ _ => reg
   ev := fun x w => h1Evidence reg (unitsOf (coinAt x w).2)
@@ -257,7 +257,7 @@ noncomputable def play (n : ℕ) : Play Ω1 n Unit Unit Unit Unit where
   accepts := fun _ => True
   run := fun _ => anatomy
 
-/-! ## The check accepts every window, and its draw is the coin's -/
+/-! ## The check accepts every window, and its sample is the coin's -/
 
 theorem ascending_of_pairwise : ∀ (l : List ℕ), l.Pairwise (· < ·) → Ascending l
   | [], _ => trivial
@@ -267,7 +267,7 @@ theorem ascending_of_pairwise : ∀ (l : List ℕ), l.Pairwise (· < ·) → Asc
 theorem draw_inj (β : Equiv.Perm (Fin 144) × Unit) : Function.Injective fun i : Fin 24 => (drawOf hK24 β i).val :=
   fun _ _ h => Fin.castLE_injective hK24 (β.1.injective (Fin.ext h))
 
-/-- **The draw's units are 24 ascending distinct units below 144.** -/
+/-- **The sample's units are 24 ascending distinct units below 144.** -/
 theorem unitsOk (β : Equiv.Perm (Fin 144) × Unit) : UnitsOk (unitsOf β) 24 144 := by
   refine ⟨?_, ?_, fun u hu => ?_⟩
   · simp only [unitsOf, List.size_toArray, Finset.length_sort]
@@ -289,7 +289,7 @@ theorem accepted_all (n : ℕ) (x : Paths Ω1 n) (w : Fin n) :
 theorem acceptedUpTo_all (n : ℕ) (x : Paths Ω1 n) (w : Fin n) : (windows n).AcceptedUpTo prm x w :=
   fun w' _ => accepted_all n x w'
 
-/-- **The check's draw is the period's draw coin**: it publishes `N = 144`, `K′ = 24` and the draw's units. -/
+/-- **The check's sample is the period's sampling coin**: it publishes `N = 144`, `K′ = 24` and the sample's units. -/
 theorem sampleIsCoin (n : ℕ) : SampleIsCoin hK24 prm (windows n) := by
   intro x w pub prof hc
   have he := hc.symm.trans (check_h1 "" "" "" "" ByteArray.empty (unitsOf (coinAt x w).2) (unitsOk _))

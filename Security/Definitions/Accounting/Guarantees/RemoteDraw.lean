@@ -66,7 +66,7 @@ first blocks `prf t` gives its uniform coin, the sampler exact on each draw's fi
   at the record's `audit.pooled` is the one stated.
 
 The advantages are C3's terms (claim `prf/sha-512`, `verity.ml.randomness`'s keyed streams). Each is against one
-distinguisher a window, which the session fixes: it draws the other coins and the earlier windows' coins, runs the
+distinguisher a window, which the session fixes: it flips the other coins and the earlier windows' coins, runs the
 session's prover and verifier through window `t`, computing the earlier windows' streams itself, and reads
 `s'_t ≤ s_t` first blocks of the stream it is given, so a PRF distinguisher with `s_t` queries whose time is the
 session's. A session whose prover is efficient has an efficient distinguisher, and one whose prover isn't gets no bound

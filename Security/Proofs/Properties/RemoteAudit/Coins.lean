@@ -9,15 +9,15 @@ public import Properties.RemoteAudit.Coins
 /-!
 # When the verifier reads a window's openings coin (`AcceptDrawsOpenable`, `OpeningsUnreadUntilDrawn`)
 
-`AcceptDrawsOpenable` is `acceptChecksOpenings` read through `drawIsSubset`: each drawn receipt is the sampler's value
+`AcceptDrawsOpenable` is `acceptChecksOpenings` read through `drawIsSubset`: each sampled receipt is the sampler's value
 at its index, and its opening passes `checkOpening`.
 
 `OpeningsUnreadUntilDrawn`: every event commutes with replacing the session's coins (`C c s`), as long as the coins it
 reads agree: `start` reads `coins[0]`, `boundary` window `t + 1`'s challenge (`t + 1 < W`), and `close t` the openings
 coin `coins[W + t]`, only when it draws window `t` (`*_coins`, `step_coins`); the rest read none. No event changes
 the coins (`step_coins_eq`). Each event keeps every window's draw, and only `close t` draws one, window `t`, with
-every window before it drawn (`Adv`, `adv_step`): so the windows drawn are a prefix (`Prefix`), and a run that ends
-with window `t` undrawn never drew a window from `t` on, so it read only coins below `W + t` (`fold_coins`).
+every window before it sampled (`Adv`, `adv_step`): so the windows sampled are a prefix (`Prefix`), and a run that ends
+with window `t` unsampled never drew a window from `t` on, so it read only coins below `W + t` (`fold_coins`).
 -/
 
 @[expose] public section
@@ -182,7 +182,7 @@ theorem close_coins {s : State} {c : Array ByteArray} {t : Int} {now : Nat} {r :
 /-- Window `t`'s draws in `ws`. -/
 def dr (ws : Array Win) (t : Nat) : Option (Array (Nat × Nat)) := ws[t]?.bind (·.drawn)
 
-/-- Each window of `ws'` has the draw it had in `ws`, or is new and undrawn. -/
+/-- Each window of `ws'` has the draw it had in `ws`, or is new and unsampled. -/
 
 def Keep (ws ws' : Array Win) : Prop := ws.size ≤ ws'.size ∧ ∀ t, dr ws' t = dr ws t ∨ (ws.size ≤ t ∧ dr ws' t = none)
 
@@ -323,8 +323,8 @@ theorem keep_receive {s : State} {t i : Int} {root : ByteArray} {runs : Option (
     · cases he; exact keep_fail _ _ _ _
     · exact key s₀ (keep_refl _) he
 
-/-- Each window drawn in `ws` keeps its draw in `ws'`, and a window drawn in `ws'` but not in `ws` has every window
-before it drawn in `ws`. -/
+/-- Each window sampled in `ws` keeps its draw in `ws'`, and a window sampled in `ws'` but not in `ws` has every window
+before it sampled in `ws`. -/
 def Adv (ws ws' : Array Win) : Prop :=
   ws.size ≤ ws'.size ∧ (∀ t d, dr ws t = some d → dr ws' t = some d) ∧
     ∀ t, (dr ws' t).isSome → (dr ws t).isNone → ∀ j, j < t → (dr ws j).isSome

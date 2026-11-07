@@ -6,19 +6,19 @@ public import Proofs.Flock.Claims.ZK.SimLig
 /-!
 # Level 0's opening at the switched source
 
-`FinishSrc`'s `repCut_fw` asks of its source, at the firewall's PIOP, level 0's opening (`hlig`, `LigLock.LigHyp`):
+`FinishSrc`'s `repCut_fw` asks of its source, at the ZK server's PIOP, level 0's opening (`hlig`, `LigLock.LigHyp`):
 masked values from `zp 64` to `h_ab` (the out-of-domain value, each lane message and the pair's sums) that are what the
-session's opening computes at the coins plus the pads, and the restart's `y₁'`, `ȳ` and levels ≥ 1's salts. The firewall
+session's opening computes at the coins plus the pads, and the restart's `y₁'`, `ȳ` and levels ≥ 1's salts. The ZK server
 receives only the PIOP's `zp 64` words; it computes level 0's opening itself. So the switched prover's clear values
-are the firewall's (`valsFw`), with level 0's opening's clear values `l0Clear` from `zp 64` on.
+are the ZK server's (`valsFw`), with level 0's opening's clear values `l0Clear` from `zp 64` on.
 
 * `LigLock.l0Clear`: level 0's opening's clear value at each pad index, as the session computes it at the coins. It
   reads the extra lanes only below the folded table's `2^cols` entries (`LigLock.l0Clear_congr`,
   `Masked.tabS_ligTab_size`, `Masked.l0Clear_ligTab`).
 * **`LigLock.ligHyp_of_l0`**: `LigHyp` from a source whose masked values from `zp 64` to `h_ab` are `l0Clear` plus the
   pads, and its `y₁'`, `ȳ` and salts.
-* **`Masked.swSrcE_ligHyp_frame`**: so at the switched source at the firewall's clear values, with `B = l0Clear` and
-  the firewall's request's pads (`swSrcE_l0_frame`), `LigHyp` holds at its `y₁'`, `ȳ` and salts.
+* **`Masked.swSrcE_ligHyp_frame`**: so at the switched source at the ZK server's clear values, with `B = l0Clear` and
+  the ZK server's request's pads (`swSrcE_l0_frame`), `LigHyp` holds at its `y₁'`, `ȳ` and salts.
 -/
 
 @[expose] public section
@@ -213,8 +213,8 @@ theorem l0Clear_ligTab (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (x 
   FlockComplete.LigLock.l0Clear_congr _ _ _ _ _ _
     (fun e c hc => he e c (by rw [← tabS_ligTab_size coin p0 x w τ j]; exact hc)) rep k
 
-/-- **`repCut_fw`'s `hlig` at the switched source, at the firewall's request `q`**, but for the restart: at the
-firewall's clear values `valsFw x c A B` whose level 0 part `B j r` is `l0Clear` at the coins from round `p₀`, the
+/-- **`repCut_fw`'s `hlig` at the switched source, at the ZK server's request `q`**, but for the restart: at the
+ZK server's clear values `valsFw x c A B` whose level 0 part `B j r` is `l0Clear` at the coins from round `p₀`, the
 packed table `t` and the basis `b`, at `pads_frame`'s premises, where table `j`'s rows hold at its base, rep `r`'s source
 holds level 0's opening at the request's pads (`Finish.padsOf q.draws`), given the schedule's facts and the source's
 `y₁'`, `ȳ` and salts. -/

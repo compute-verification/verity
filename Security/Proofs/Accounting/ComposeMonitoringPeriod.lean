@@ -30,7 +30,7 @@ prefix's live tiles:
   its `LuckAt` from `PerLiveTile` (`luckAt_of_perLiveTile`: luck `1` on a dead tile, of weight `0`); then
   `PeriodBudget` (`budget_period`);
 * `PeriodTailMax` once at `t = ln(1/δ_s)`, read at the prefix `j = prefixLen` (the credited windows are the first
-  `prefixLen`, `credited_iff`); `DrawnRightOff` at `n` rounds (its event `n·(δ_bind + δ_ks)`), off which every drawn
+  `prefixLen`, `credited_iff`); `DrawnRightOff` at `n` rounds (its event `n·(δ_bind + δ_ks)`), off which every sampled
   tile of a credited window is right at its committed values, so `PrefixOf` passes the play's first `j` rounds, and the
   budget game's, whose checks are the play's (`acceptsUpTo_periodGame`);
 * per credited window, the covers, `UnitFixed`'s sums (a good tile is live in a credited window, `periodMode`'s
@@ -128,7 +128,7 @@ theorem PeriodTailMax : Accounting.Guarantees.ComposeMonitoringPeriod.PeriodTail
 /-! ## The live weights -/
 
 /-- **A tile's detected live weight**: its `liveCone` when it carries live words, and `0` for a tile of none, whose
-skip no draw detects. The period's budget is taken at these weights. -/
+skip no sample detects. The period's budget is taken at these weights. -/
 noncomputable def liveShare {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live : Fin Np → Bool)
     (t : Fin Np) : ℝ :=
   if liveWords Sc Cd Np live t = 0 then 0 else liveCone Sc Cd Np live t

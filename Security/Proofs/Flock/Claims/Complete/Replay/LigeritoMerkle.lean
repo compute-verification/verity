@@ -60,7 +60,7 @@ Merkle check passes at its query coins (`MerkleOk`), given that the table's sche
   verifier's check (`merkleCheckWith`) against its cap: each query's siblings climb from its leaf to its cap entry
   (`climb_ok`).
 * **The honest openings** (`ligeritoP_opens`, `Opens`): the honest prover's Ligerito, run from round `k`, opens level
-  `j`'s commitment at the positions of round `k + qOff sch j`'s coins, which is where the verifier draws them; the
+  `j`'s commitment at the positions of round `k + qOff sch j`'s coins, which is where the verifier samples them; the
   rounds are counted by `KRuns`, every run of a step from round `k` ending `d` rounds on.
 -/
 
@@ -601,7 +601,7 @@ theorem KRuns.absorbAll {L : ℕ} (ws : Array F128) (k : ℕ) :
 
 /-! ## The honest openings -/
 
-/-- Level `j`'s query positions, drawn at round `k + qOff sch j`. -/
+/-- Level `j`'s query positions, sampled at round `k + qOff sch j`. -/
 def posAt (sch : Schedule) (cf : ℕ → ℕ → F128) (k j : ℕ) : Array ℕ :=
   positions (sch.levels.getD j default) ((Array.range (sch.levels.getD j default).q).map (cf (k + qOff sch j)))
 

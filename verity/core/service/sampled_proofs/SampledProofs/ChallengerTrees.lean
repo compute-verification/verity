@@ -1,6 +1,6 @@
 /-
 A `--zk` session's coins as the challenger's release log shows it sampled and opened them (`challenger.py`'s "A --zk
-session's coins", which `tests/test_challenger_difftest.py` holds to this, the verifier of record).
+session's coins", which `tests/test_challenger_difftest.py` holds to this, the verifier).
 
 The challenger samples each session's keyed coin tree (`coin-tree/hm96-sha512/v2`) in the window's session and opens
 each round itself, after what the round follows, logging a line for each before what it records leaves its host, so the
