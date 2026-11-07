@@ -4300,6 +4300,22 @@
   "Pouw.SecurityProofs.PeriodBindingPerProver": {
    "honest": ["Pouw.SecurityProofs.PeriodBindingPerProver_honest"],
    "nontrivial": "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial"
+  },
+  "Accounting.SecurityProofs.ComputeOfPouw": {
+   "honest": ["Accounting.SecurityProofs.ComputeOfPouw_honest"],
+   "nontrivial": "Accounting.SecurityProofs.ComputeOfPouw_nontrivial"
+  },
+  "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
+   "honest": ["Accounting.SecurityProofs.ComputeOfPouwPerRun_honest"],
+   "nontrivial": "Accounting.SecurityProofs.ComputeOfPouwPerRun_nontrivial"
+  },
+  "Pouw.SecurityProofs.SpareCapacityAtDeadline": {
+   "honest": ["Pouw.SecurityProofs.SpareCapacityAtDeadline_honest"],
+   "nontrivial": "Pouw.SecurityProofs.SpareCapacityAtDeadline_nontrivial"
+  },
+  "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": {
+   "honest": ["Pouw.SecurityProofs.WorkBetweenSaltAndDeadline_honest"],
+   "nontrivial": "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline_nontrivial"
   }
  },
  "unwitnessed": {
@@ -4424,14 +4440,6 @@
   "Accounting.SecurityProofs.ComputeOfPearlCStopPerRunPriced": {
    "type_hash": "fabaf877067f5e46ea4a935870364484d98d0b161f650b5a356673fae8dfd82a",
    "unfolded_hash": "98cf84d41b263280e1430d285501c9fdd191e61b2cbaa7c173ec451c758d40a8"
-  },
-  "Accounting.SecurityProofs.ComputeOfPouw": {
-   "type_hash": "dde82660e7599ddb7892eb0d5eac586a06536c297c7fdc330aa5c545e0fefd27",
-   "unfolded_hash": "65454f8240c0fe0693196211b04353f0124a0ea09b7d84b21636463b1b23e4e0"
-  },
-  "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
-   "type_hash": "c0bae848d5eca780c94a102c38a296194575afc01d1470ad366d262ecc166b42",
-   "unfolded_hash": "0cf1965755ceac9ceda41753d672bce71eaa7d8f9628894bb69297368dd1ec20"
   },
   "Accounting.SecurityProofs.CovertResidual": {
    "type_hash": "89a050fbdfa6a718cc71e69413c2ea03e70e9cb47076c42b6531b9acf5047a64",
@@ -5390,14 +5398,6 @@
   "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize": {
    "type_hash": "6cf84ec33aad45716ced5eb802b2006e2e6e85c755b136bc7fa565fe97a8513e",
    "unfolded_hash": "7ca9d74ab26582d2bd596ff4a36e4c611e513080bc47c9aa72ed41f85cebae78"
-  },
-  "Pouw.SecurityProofs.SpareCapacityAtDeadline": {
-   "type_hash": "3594d8805abf1f58d5952a6080b16acb0ce96995d0d67a7d5c820e099b09dc45",
-   "unfolded_hash": "4b9fc6537f07ce0d10b29f4cfdb69cec39971d90737b8a94b2f5f4425624e2a6"
-  },
-  "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": {
-   "type_hash": "91340f91f97e76024fe99b6313f85175f771c69ba355cd042cf23d1d01d660cf",
-   "unfolded_hash": "64bdbf88a52fc3b25acdcae4ae6c14fa0c086be9ace1f6016393ba09b77b603d"
   },
   "Verity.SecurityProofs.BlockDescription": {
    "type_hash": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
@@ -24534,6 +24534,30 @@
    },
    "type_hash": "8e5244a0e2b442ec2d7f535eb5774ec55c7f866c873684cdbd9e4a6342420620",
    "unfolded_hash": "12187ab64b5baaa5cfccda4088790402e0e8a6c614379af8cbe8d5adb9e4fc61"
+  },
+  "Accounting.SecurityProofs.ComputeOfPouw_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.ComputeOfPouw_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.ComputeOfPouwPerRun_honest": {
+   "owner": "@memory-accounting"
+  },
+  "Accounting.SecurityProofs.ComputeOfPouwPerRun_nontrivial": {
+   "owner": "@memory-accounting"
+  },
+  "Pouw.SecurityProofs.SpareCapacityAtDeadline_honest": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.SpareCapacityAtDeadline_nontrivial": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline_honest": {
+   "owner": "@compute-accounting"
+  },
+  "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline_nontrivial": {
+   "owner": "@compute-accounting"
   }
  },
  "shape": {
