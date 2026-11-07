@@ -38,5 +38,6 @@ public import SampledProofs.WiresSound
 public import SampledProofs.WiresComplete
 public import SampledProofs.WiresDrawn
 public import SampledProofs.SiteDifftest
+public import SampledProofs.Interval
 
 @[expose] public section
