@@ -643,7 +643,7 @@ def c2' (tag : Bits 256) (G : Labelling.TopoDAG n) (Hf : KQ' n wc → Lab n wc) 
   termination_by v => v.val
   decreasing_by exact G.par_lt v u _h
 
-/-- The top label of node `v` under the salt, as a function of the drawn primitive. -/
+/-- The top label of node `v` under the salt, as a function of the sampled primitive. -/
 def topLabel' (tag : Bits 256) (G : Labelling.TopoDAG n) (W : Fin n → Lab n wc) (ω : Omega' n wc) (v : Fin n) :
     Lab n wc := c2' tag G ω.1 ω.2 W v
 

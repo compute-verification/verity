@@ -44,7 +44,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 /-!
 # The causal bound over the monitoring period: the proof
 
-Rounds `0, …, n − 1` each draw a sample of `s_i` items, uniform over `M`, after a set of good items `G_i` is fixed.
+Rounds `0, …, n − 1` each sample a sample of `s_i` items, uniform over `M`, after a set of good items `G_i` is fixed.
 `G_i` may be any function of the earlier rounds' coins, their samples among them, and of round `i`'s own other coins,
 but not of round `i`'s sample (`Rate.Causal`). Then every sample lands in its round's good set while the good sets,
 weighted by the sample counts, hold at most `K` items in all, with probability at most `(K / (M·∑ s_i))^(∑ s_i)`

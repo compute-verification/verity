@@ -29,7 +29,7 @@ import Proofs.Pous.TrackA.A3Prime
 # The abstract model `m1p` on `[0, p)`: `Meets` for `Pous.m1p`, at any payload width `b`
 
 P2 permutes `Z_p` with `p = 2^w − c₀`, not `Bits w`. The abstract model `Pous.m1p B w p b`
-(`Security/Definitions/Pous/Model/M1p.lean`) draws `B` independent uniform permutations of `Fin p`; they act on
+(`Security/Definitions/Pous/Model/M1p.lean`) samples `B` independent uniform permutations of `Fin p`; they act on
 `w`-bit strings through the numeric value and fix the tail `[p, 2^w)`. Each block carries `b` payload bits,
 zero-extended to `w` bits. These are theorems about `m1p` at P2's parameters, not about the concrete P2's
 square–mask–square maps. This file proves, with no hypothesis beyond what the rows discharge:

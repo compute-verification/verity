@@ -113,8 +113,8 @@ namespace Compiled
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
-/-- The contract's `fixed` and `runs`, which are all the sessions' bound reads of it, so a contract with another draw
-law (`CompiledTwo.Sessions`) gives the bound too. -/
+/-- The contract's `fixed` and `runs`, which are all the sessions' bound reads of it, so a contract with another sampling
+design (`CompiledTwo.Sessions`) gives the bound too. -/
 structure RunsFixed (H : Msg → Msg) (L : Compiled Coin A) : Prop where
   fixed : ∀ x r u, u ∈ L.checked x r →
     L.rounds x u ⊆ L.stage2 x ∧ ∀ d, L.checked x (forkOn (L.rounds x u) r d) = L.checked x r

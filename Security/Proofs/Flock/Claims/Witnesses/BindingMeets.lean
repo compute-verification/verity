@@ -43,7 +43,7 @@ passes depends on the code: the commitment's addressing of a position (`at_`), i
 an opening's data carries (`π`) are fields of `SamplingDeploy.Code`, which the tree has no concrete instance of, and a
 code that addresses nothing opens nothing (`Binding_dead`). So the antecedent is met at the code's executable check:
 
-* `Binding_meets`: **at every code, at SHA-512, an opening passes exactly when C-Flock's own registered check
+* `Binding_meets`: **at every code, at SHA-512, an opening passes exactly when Flock's own registered check
   (`Flock.Registered.opensLeaf`) accepts** its hm96 leaf at the port whose root the code addresses, at the leaf index it
   names, through the path the opening carries. The antecedent is the executable verifier's own opening check, no
   weaker or stronger.
@@ -67,7 +67,7 @@ theorem find?_bs_root (own : Array _root_.Flock.Registered.Port) (root : Msg) :
   funext p
   exact decide_eq_decide.2 ⟨fun h => by rw [← h, bytes_bs], fun h => by rw [h, bs_bytes]⟩
 
-/-- **Binding's antecedent at the deployed record**: at every code, at SHA-512, an opening passes exactly when C-Flock's
+/-- **Binding's antecedent at the deployed record**: at every code, at SHA-512, an opening passes exactly when Flock's
 registered check accepts its hm96 leaf at the port whose root the code addresses, at the leaf index it names, through
 the path the opening carries. -/
 theorem Binding_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (c : SamplingDeploy.Code)
@@ -94,7 +94,7 @@ theorem Binding_meets (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
       cases h0
       exact ⟨reg, h1, h2⟩
 
-/-- C-Flock's registered check accepts a row at the one leaf of a port registered at the root that row's leaf climbs to
+/-- Flock's registered check accepts a row at the one leaf of a port registered at the root that row's leaf climbs to
 with no siblings. -/
 theorem opensLeaf_one (dom payload : ByteArray) :
     _root_.Flock.Registered.opensLeaf

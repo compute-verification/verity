@@ -49,7 +49,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 table, on the masked level-0 commitment, the extra claims at the link's points (which return, the table's regions
 fitting by `readyZk`) and the tape's pads committed, rep `0` returns from the link's send and rep `1` from where rep `0`
 stopped (`repRunZk`), so
-each draws the case's coins at the session's rounds, where `¬ BadZk` passes the masked prover's coin checks. The table's
+each samples the case's coins at the session's rounds, where `¬ BadZk` passes the masked prover's coin checks. The table's
 `--zk` schedule returns (`zkSchedule_ok`), and through `Hashes.ofSha512` so do the masked level-0 commitment
 (`commitPZk_ok`) and the pads' commitment (`innerCommitP_ok`); the session walks its two rep streams in order
 (`Runs.forIn_idx`).

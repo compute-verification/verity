@@ -1,6 +1,6 @@
 """The served engine's public default seed: a request that sends no ``seed`` is sampled under `DEFAULT_SEED`.
 
-Model Runner V2 draws each sampled token's Gumbel noise from Philox keyed by the request's seed and the token's position
+Model Runner V2 samples each sampled token's Gumbel noise from Philox keyed by the request's seed and the token's position
 (`vllm/v1/worker/gpu/sample/gumbel.py`), and gives a request without a seed one from ``np.random`` (`SamplingStates.add_request`):
 a seed nobody certified, which would make every token sampled at temperature > 0 a channel of the prover's choosing. A seed is
 an ordinary request input: the client's, certified in the ingress frames like the prompt, or this
