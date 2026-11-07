@@ -5,10 +5,10 @@ public import Definitions.Claims.SamplingTwo
 /-!
 # Claims: what a request of the two-stage influence set reads
 
-The vocabulary the served-output cap and the patterns' count are stated in, on `Claims.Sampling`'s program and partition.
-Split the served outputs into requests by any map `req`; request `r` serves `|r|` bits (`servedBits`), and `T_r` is the
-proof blocks of `T` with a committed value one of `r`'s served outputs reads (`blocksTo`), through the wires a gate reads
-(`Prog.Reads`). A request's class of `T_r` under the patterns' count is `lightOf`, and its bits `lightBits`.
+The vocabulary the served-output cap and the patterns' count are stated in, on `Claims.Sampling`'s program and
+partition. Split the served outputs into requests by any map `req`; request `r` serves `|r|` bits (`servedBits`), and
+`T_r` is the proof blocks of `T` with a committed value one of `r`'s served outputs reads (`blocksTo`), through the wires
+a gate reads (`Prog.Reads`). A request's class of `T_r` under the patterns' count is `lightOf`, and its bits `lightBits`.
 
 Statements only: definitions, no proofs.
 -/
