@@ -126,3 +126,15 @@ on its first launch per process, uncached, and keeps the faster. That changes th
 `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0` in the engine env, 10 processes were identical and a 600 s replay had 0
 differences, at no measurable throughput cost.
 For the claims: 'replay is bit-exact' holds for compiled vLLM only with the pin set in BOTH serving and replay. Without it, only the schedule is reliably exact (tokens differed in 2 of 26,400 requests, logprobs in 11,235). The SERVETAX report's earlier '60 s bit-exact' compared schedule and tokens only and is corrected in its note.
+
+## 06:47Z from proofs coordinator: answers to r3's two questions (for Sunday's refresh)
+
+1. **The per-expert h is measured,** both marginal (5.53e8) and full statements (1.70e9), on H200 (OVERHEADDEF, card art:b473495f, carried into art:ed20cbaa and art:dc6c21ce). It was measured on benchmark block values, so call it "measured on benchmark values". OVERHEADDEF's G4 tonight measures h on served GLM-5.3 values.
+2. **The 5.71x vs +42.5% reconciliation** is OPTMODES's, due 14:00Z (its inbox). If it isn't reconciled by then, the line is labeled "priced, not measured".
+
+Sunday's refresh also has these to read:
+- REPLAYCOV's GLM-5.3 TP8 replay;
+- RESTORE's and GLMREPLAY's mid-traffic replay verdict;
+- ZKDEFER's circuit-check 699/699;
+- OVERHEADDEF's proof blocks proved on served values;
+- SERVETAX's batch-invariant tax and its GLM-5.3 production tax.

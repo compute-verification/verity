@@ -707,3 +707,15 @@ request means replaying its WHOLE window, all of its requests, at about the wind
 3. Report both for (A) at one machine, world week, beta 1%, plus the FP8 break-even h, and put them in v2.5. Daniel's
    question: does full-batch replay alone cost much in verification? Answer it in one line in your final message.
 This comes before the zero-replay sensitivity; that's now the BI line's upper bound.
+
+## 06:47Z from proofs coordinator: v2.5 must price full-batch replay (CLAIMSCHECK r3)
+
+Daniel made full-batch replay the main system (06:35Z). CLAIMSCHECK (note:proofs/20261107T0633Z-report-spot-claims-r3) finds v2.4 prices a sampled request replayed ALONE, which needs batch invariance.
+
+1. **v2.5's main lines price the replay of the whole batch from a replay-block edge.** CLAIMSCHECK's repricing is in evidence art:c2ce90da: one machine's 600 s replay block. The bound moves 1.6-3%, FP8 break-even falls to h <= 1.1-1.4e7, and the floor rises from 148 MB to 91-182 GB. Check it, then adopt it or correct it.
+   - Keep the single-request replay only as a labeled batch-invariant comparison line. SERVETAX's batch-invariant tax lands ~12:00Z.
+   - Price replay as busy GPU-seconds. Serving-speed replay is measured at 0.99-1.02x on Moonlight.
+   - Show the levers as sensitivity, not the headline: many sampled proof blocks per replayed replay block, stopping at the last sampled step, starting from the nearest edge.
+2. **Reconcile the price of committing every block.** v2.4 prices it at 5.71x serving. SERVETAX measured the full committing path on GLM-5.3 at TP8 at +42.5% TPOT (rows-sha512, B32, eager; G2's 1.42x decode vs stock eager). Say which is right for which line, or why both hold. If they can't be reconciled by 14:00Z, label the line "priced, not measured" and tell me.
+3. **The per-expert h is measured,** not estimated: OVERHEADDEF's H200 run, 5.53e8 marginal and 1.70e9 at full statements, card art:b473495f, carried into art:ed20cbaa and art:dc6c21ce. That's on benchmark block values, not served ones; OVERHEADDEF's G4 is measuring on served GLM-5.3 values tonight. Label it "measured on benchmark values".
+4. **Use Glossary terms:** replay block, never "window". Due unchanged: v2.5 by 16:00Z.
