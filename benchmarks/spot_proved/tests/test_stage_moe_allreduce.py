@@ -1,14 +1,17 @@
 """`stage.py`'s MoE and plain all-reduce populations, and the step's op coverage, on an in-memory capture: the w13 launch is
 staged beside the routed w2 one, each pair reading its own A row (the w13 launch its token's); a plain all-reduce with no
-multimem op inside it is FlashInfer's MNNVL one within 0.5 MiB, at its shot, and NCCL's past it; an op inside an ungated op
-is listed as not gated, and one inside a gated op is not."""
+multimem op inside it is FlashInfer's MNNVL one within 0.5 MiB, at its shot, and NCCL's past it; a multimem one binds the
+node's reduction tree, which capture.py's settings carry; an op inside an ungated op is listed as not gated, and one inside a
+gated op is not."""
 from __future__ import annotations
 
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 HERE = Path(__file__).resolve().parents[1]
 E, H, I, TOPK, M = 2, 256, 128, 2, 3
@@ -117,6 +120,35 @@ def test_a_plain_allreduce_without_multimem_is_mnnvl_within_half_a_mib_and_nccl_
     assert parts.shape == (8, 3072) and np.array_equal(want, cap.t[(0, "out0")][0, 3072:])
     mm = _allreduce_cap([1], multimem=True)
     assert stage.allreduce_route(mm, mm.events[0][0]) == "symm_mem_comm"
+
+
+def test_a_multimem_call_binds_the_nodes_tree_and_the_registrys_only_without_one(monkeypatch) -> None:
+    stage = _stage(monkeypatch)
+    from verity.ml.definitions.registry import tp_allreduce as AR
+    node = stage.parse_tree("(((((((0,2),3),1),5),6),4),7)", 8)
+    assert node == AR.chain(8, (0, 2, 3, 1, 5, 6, 4, 7)) != AR.multimem_tree(AR.GLM53_H200_TREE, 8)
+    cap = _allreduce_cap([1], multimem=True)
+    cap.tree = None
+    assert f"TREES={stage.multimem_trees(8, AR.GLM53_H200_TREE)}," in next(stage.allreduce_instances(cap))[1]
+    cap.tree = {"tree": [[[[[[[0, 2], 3], 1], 5], 6], 4], 7], "source": "the probe"}
+    trees = json.loads(next(stage.allreduce_instances(cap))[1].split("TREES=")[1].split(",FTZ")[0])
+    assert [AR.multimem_tree(t, 8) for t in trees] == [node] * 8
+    for bad in ("((0,1),1)", "((0,1,2),3)"):
+        with pytest.raises(ValueError):
+            stage.parse_tree(bad, 4)
+
+
+def test_capture_site_writes_the_nodes_tree_into_its_settings(tmp_path, monkeypatch) -> None:
+    spec = importlib.util.spec_from_file_location("spot_capture_t", HERE / "capture.py")
+    cap = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cap)
+    base = ["site", str(tmp_path / "site"), "--capture", str(tmp_path / "cap"), "--steps", "3"]
+    assert cap.main(base + ["--allreduce-tree", "(((0,2),3),1)", "--allreduce-tree-source", "art:probe"]) == 0
+    cfg = json.loads((tmp_path / "site" / cap.CONFIG).read_text())
+    assert cfg["allreduce_tree"] == {"tree": [[[0, 2], 3], 1], "source": "art:probe"}
+    assert cap.main(base) == 0 and json.loads((tmp_path / "site" / cap.CONFIG).read_text())["allreduce_tree"] is None
+    with pytest.raises(ValueError, match="each once"):
+        cap.reduction_tree("((0,2),2)")
 
 
 def test_op_coverage_lists_ops_inside_an_ungated_op_and_not_inside_a_gated_one(monkeypatch) -> None:

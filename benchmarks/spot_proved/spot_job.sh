@@ -3,7 +3,7 @@
 # benchmarks/serve_tax/replay.py at its root (--cwd source), with capture.py, stage.py and this file sent (--send):
 #   ARM=RECORD_ARM_DIR LOAD=NAME [OPEN=dense:1,moe:1] [PER_TYPE=8] [SMALL=1,31] [BIG=256,384] [LONG=1] [STEPS=s,...]
 #     [KEEP_TENSORS=opened|all] [KEEP_STEPS=s,...] [KEEP_MAX_MIB=64] [MLA_TOKENS=8] [SAMPLER=1] [GATE_EVERY=N] [STAGE=1]
-#     [DEADLINE=UNIX_TIME] [REPLAY_ARGS=...] [VENV=...]
+#     [DEADLINE=UNIX_TIME] [REPLAY_ARGS=...] [VENV=...] [ALLREDUCE_TREE=TREE ALLREDUCE_TREE_SOURCE=WHERE]
 #     bash "$RESEARCH_RUN_DIR/inputs/spot_job.sh"
 #   ARM=... LOAD=... CAPTURE=DIR STEPS=s,... bash .../spot_job.sh   # only stage an earlier run's capture again (CPU only)
 # The engine's environment is the served one's: ENGINE_ENV=FILE (KEY=VALUE lines, a server's engine_env.txt) is exported,
@@ -20,7 +20,8 @@
 # 2. replay.py replays the replay block from an empty engine, served as recorded, with capture.py loaded in every worker
 #    (REPLAY_ARGS are added to its arguments): those steps' interiors are recorded and committed, the coins flipped after the
 #    root open layers, and the opened layers' tensors are written, or every recorded tensor with KEEP_TENSORS=all at the
-#    KEEP_STEPS (default: the sampled steps, long first, while they fit the disk at GB_PER_TOKEN)
+#    KEEP_STEPS (default: the sampled steps, long first, while they fit the disk at GB_PER_TOKEN); ALLREDUCE_TREE, the node's
+#    multimem reduction tree as its probe read it, goes beside each step's params.json and the gate binds it
 #    (/workspace/spot-capture/<run>, outside OUT, which custody uploads; MIN_FREE_G=40 is the free space it wants). The
 #    graph-off forward holds the step's tensors in host memory until the coins: about 10 GB a rank at 384 tokens.
 # 3. GATE_EVERY=N runs stage.py's match gate on N instances of every call of every type at each step, the long step first,
@@ -139,7 +140,8 @@ fi
 if [ $restage = 0 ]; then
 "$PY" "$IN/capture.py" site "$CAP/site" --capture "$CAP" --steps "$STEPS" --open "${OPEN:-dense:1,moe:1}" \
   --keep "${KEEP_TENSORS:-opened}" ${KEEP_STEPS:+--keep-steps "$KEEP_STEPS"} --keep-max-mib "${KEEP_MAX_MIB:-64}" \
-  --min-free-gib "${MIN_FREE_G:-40}" --mla-tokens "${MLA_TOKENS:-8}" ${SAMPLER:+--sampler} >/dev/null || exit 2
+  --min-free-gib "${MIN_FREE_G:-40}" --mla-tokens "${MLA_TOKENS:-8}" ${SAMPLER:+--sampler} \
+  ${ALLREDUCE_TREE:+--allreduce-tree "$ALLREDUCE_TREE" --allreduce-tree-source "${ALLREDUCE_TREE_SOURCE:-}"} >/dev/null || exit 2
 export PYTHONPATH="$CAP/site${PYTHONPATH:+:$PYTHONPATH}"
 export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600 VLLM_ENGINE_ITERATION_TIMEOUT_S=3600
 echo "== replay with capture of steps $STEPS $(date -u +%FT%TZ)"
@@ -173,7 +175,8 @@ for s in ${STEPS//,/ }; do
   for r in "$CAP"/rank*; do
     [ -d "$r/step$s" ] || continue
     mkdir -p "$OUT/commit/$(basename "$r")/step$s"
-    cp "$r/step$s/meta.json" "$r/step$s/commit.json" "$r/step$s/params.json" "$OUT/commit/$(basename "$r")/step$s/" 2>/dev/null
+    cp "$r/step$s/meta.json" "$r/step$s/commit.json" "$r/step$s/params.json" "$r/step$s/allreduce_tree.json" \
+      "$OUT/commit/$(basename "$r")/step$s/" 2>/dev/null
     gzip -c "$r/step$s/ops.jsonl" > "$OUT/commit/$(basename "$r")/step$s/ops.jsonl.gz"
     cp "$r/params.json" "$OUT/commit/$(basename "$r")/" 2>/dev/null
   done
