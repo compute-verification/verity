@@ -64,7 +64,8 @@ theorem testBit_bitsVal : ∀ (bs : List Bool) (i : ℕ), (Hash.RowSeg.bitsVal b
       rw [Nat.testBit_succ, List.getD_cons_succ, ← testBit_bitsVal bs i]
       congr 1
       simp only [Hash.RowSeg.bitsVal]
-      cases b <;> (simp; omega)
+      cases b <;> simp
+      omega
 
 /-- Bit `q` of a row's bytes is the row's bit `q`, zero past its end. -/
 theorem bitL_packBits {bs : List Bool} {q : ℕ} (hq : q < 8 * ((bs.length + 7) / 8)) :
