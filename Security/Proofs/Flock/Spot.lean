@@ -247,15 +247,20 @@ theorem exfilTwo (p : Flock.Spot.Server) : (deployedTwo p).Exfil FlockDeploy.sha
 `Arg.ofFlock D`, whose knowledge soundness `ofFlock_KS` is proved. The KS side then takes no refusal outside `arg p`'s
 relation; only zero knowledge reads it. -/
 
-/-- **The deployed sampled verifier is knowledge sound at Flock's relation**, at L3's knowledge-soundness contract. -/
-theorem ksOfFlock (h : (SamplingDeploy.compiled Flock.Spot.D code iroots).Sessions FlockDeploy.sha512) :
-    (SamplingDeploy.compiled Flock.Spot.D code iroots).KS FlockDeploy.sha512 :=
-  compilerKS _ _ _ _ Flock.Spot.ofFlock_KS (SamplingDeploy.commit_binds code _) h
+/-- **A sampled verifier over Flock's sessions is knowledge sound at Flock's relation**, at any `Code`, from L3's
+knowledge-soundness contract; at the deployed one, `c = code`. -/
+theorem ksOfFlock (c : SamplingDeploy.Code) (ir : Msg → Claims.Seen → ℕ → List Msg)
+    (h : (SamplingDeploy.compiled Flock.Spot.D c ir).Sessions FlockDeploy.sha512) :
+    (SamplingDeploy.compiled Flock.Spot.D c ir).KS FlockDeploy.sha512 :=
+  compilerKS _ _ _ _ Flock.Spot.ofFlock_KS (SamplingDeploy.commit_binds c _) h
 
-/-- **The deployed two-stage sampled verifier is knowledge sound at Flock's relation**, at L3's two-stage contract. -/
-theorem ksTwoOfFlock
-    (h : (SamplingDeploy.compiledTwo Flock.Spot.D code iroots two rs).Sessions FlockDeploy.sha512) :
-    (SamplingDeploy.compiledTwo Flock.Spot.D code iroots two rs).KS FlockDeploy.sha512 :=
-  compilerKSTwo _ _ _ _ Flock.Spot.ofFlock_KS (SamplingDeploy.commit_binds code _) h
+/-- **A two-stage sampled verifier over Flock's sessions is knowledge sound at Flock's relation**, at any `Code`, from
+L3's two-stage contract; at the deployed one, `c = code`. -/
+theorem ksTwoOfFlock (c : SamplingDeploy.Code) (ir : Msg → Claims.Seen → ℕ → List Msg)
+    (tw : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two)
+    (r : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ)
+    (h : (SamplingDeploy.compiledTwo Flock.Spot.D c ir tw r).Sessions FlockDeploy.sha512) :
+    (SamplingDeploy.compiledTwo Flock.Spot.D c ir tw r).KS FlockDeploy.sha512 :=
+  compilerKSTwo _ _ _ _ Flock.Spot.ofFlock_KS (SamplingDeploy.commit_binds c _) h
 
 end SpotFlock
