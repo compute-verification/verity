@@ -1,5 +1,5 @@
 """`pooled.py`'s pooled bound held to its Lean (`RemoteAudit.Pooled`, served by `remote-audit-difftest`'s `pooled`),
-refusals as outputs so that both sides' reasons are compared word for word: drawn records (one to many windows, ties
+refusals as outputs so that both sides' reasons are compared word for word: sampled records (one to many windows, ties
 in receipts a sample, windows opened whole, small and large S, δ as a float's exact value or a rational), gate runs
 5–7's records, and each refusal, with malformed inputs rejected by both. The line of record's W is the Lean's (the
 verifier process's `line` computes it, held exactly to `line.py`'s, which reads this), so the Lean is of record here;
