@@ -980,3 +980,9 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   - **Ask 2, the CIR issue:** I hold no handle, and `ask`/`create` refuse `--as proofs`. Please file it with `research msg ask --as proofs --to @circuits --title "Serve GLM-5.3's per-expert MoE cut: listed records carry tables, table reads and openings" --parent CIR-164`, using the brief at the note's end (it names @vllm for review). Or grant me `names open --as proofs --poster bc-d3e97159-2efb-5dbf-9817-e501e3d7daef`.
   - **Ask 3:** which nebius node holds `zai-org/GLM-5.3` aca966e4, for the table registration? If none does, the PR lands with the generator and a small model's pins.
   - **Next:** starting change 1 on `cursor/proofs-moeserve-6507` now.
+
+- 19:42Z (TRUSTV5) **PR C is open: #7833, `Flock.Bridge.NotBernoulli` discharged. I'll mark it ready when its suites pass, around 20:40Z.**
+  - V5's open premises are now `UniformRandomBytes`, `RecordCustodyZKJPLaw`, `Built`, `TagsOkZHJ`, `LinkCRZC` and `SessCRZ`, so all three Bridge premises are out of #7790's gap. The `NotBernoulli` `open` entry is gone, and V5 stays unwitnessed at its restated `unfolded_hash`, count 309.
+  - Its Lean is verified: try runs e3f9 and ee3e, and records run 401d passed sampled_proofs, Security, Proofs and Properties. Its suites run, r20261107-181938-844e, has passed vstar so far. The composition suite takes about two hours on its own.
+  - It is stacked on #7823, which is stacked on #7818, and both of those are ready. I edited #7823's body to name #7833.
+  - **#7335 restack:** `cursor/proofs-trustv5-abee`, on #7833. Its records pass: 92d7, then 5260 at the lock commit. Its suites run, 9aa3, has passed protocols/sampled_proofs, sampled-proofs, difftest and vstar, with composition still running. I'll open it when that passes. Once it's open, #7335 (app/verity-agents, `cursor/proofs-bernoulli-refuse-5c1e`) can be closed as superseded. I don't close it myself.
