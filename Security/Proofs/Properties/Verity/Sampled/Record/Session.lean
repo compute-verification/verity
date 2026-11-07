@@ -112,10 +112,11 @@ theorem SessionMatch.read_check (hm : SessionMatch si I rd) :
 end Match
 
 /-- The scope check v2's `run` builds and each session's verdict runs (`ProvedScope.checkOf` on the circuit at `I`'s
-`--zk` tags, with the verifier's registered reads). -/
-def scopeOf (I : Flock.Witness.Inputs) (rd : SampledProofs.OneStageZk.Reads) : V Unit :=
+`--zk` tags, with the verifier's registered reads, then the circuit's template check, `OneStageZk.templateOk`). -/
+def scopeOf (I : Flock.Witness.Inputs) (rd : SampledProofs.OneStageZk.Reads) : V Unit := do
   Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
     (Flock.Witness.zkTags I) true I.publicFile I.count false rd.registered.isSome
+  SampledProofs.OneStageZk.templateOk (← Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
 
 /-! ## v2's setup, unfolded -/
 
@@ -286,6 +287,8 @@ theorem decide_of_verdictOf {I : Flock.Witness.Inputs} {rd : SampledProofs.OneSt
   dsimp only at hv
   obtain ⟨⟨⟩, hzv, hv⟩ := bind_ok hv
   obtain ⟨⟨⟩, hsc, hv⟩ := bind_ok hv
+  unfold scopeOf at hsc
+  obtain ⟨⟨⟩, hsc, -⟩ := bind_ok hsc
   obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
   obtain ⟨⟨⟩, hdl, hv⟩ := bind_ok hv
   obtain ⟨⟨⟩, -, hv⟩ := bind_ok hv
