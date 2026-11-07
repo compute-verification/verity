@@ -67,7 +67,8 @@ noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
       exact ⟨_, rfl, nofun⟩
     · rcases cs with _ | ⟨c₀, _ | ⟨c₁, _ | ⟨c₂, _ | ⟨c₃, cs⟩⟩⟩⟩ <;> simp at hcs
       exact ⟨_, rfl, by split <;> nofun⟩
-    · simp at hle
+    · simp only [List.length_cons] at hle
+      omega
   next_post x as cs hlt hcs := by
     rcases as with _ | ⟨a₀, _ | ⟨a₁, _ | ⟨a₂, _ | ⟨a₃, as⟩⟩⟩⟩ <;> simp at hlt
     rcases cs with _ | ⟨c₀, _ | ⟨c₁, _ | ⟨c₂, _ | ⟨c₃, cs⟩⟩⟩⟩ <;> simp at hcs
@@ -81,10 +82,16 @@ noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     · exact k_of_stmtOk h ‹_›
     · cases hm
   rounds_iff x u t := by
-    change t ∈ ((univ.filter fun t : Fin (3 + k₀ h) => 2 < t.val).filter fun t => (order h x).second < t) ↔
-      3 ≤ t.val
-    simp only [Finset.mem_filter, Finset.mem_univ, true_and, order, Fin.lt_def]
-    omega
+    have e : ∀ t : Fin (3 + k₀ h), t ∈ ((univ.filter fun t : Fin (3 + k₀ h) => 2 < t.val).filter
+        fun t => (order h x).second < t) ↔ 3 ≤ t.val := fun t => by
+      rw [Finset.mem_filter, Finset.mem_filter]
+      show (t ∈ univ ∧ 2 < t.val) ∧ 1 < t.val ↔ 3 ≤ t.val
+      constructor
+      · rintro ⟨⟨_, h2⟩, _⟩
+        omega
+      · intro h3
+        exact ⟨⟨mem_univ t, by omega⟩, by omega⟩
+    exact e t
   k_xR _ := rfl
   kS_pos _ := k₀_pos h
   refuses _ c := refuses_empty h.xS₀ c
@@ -108,7 +115,8 @@ noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
       dsimp only at h₀ h₁
       subst h₀ h₁
       rfl
-    · simp at hlen
+    · simp only [List.length_cons] at hlen
+      omega
 
 /-- **SPOT-Flock's sessions are Flock runs** (`SessionRuns`), at every relation and every `H`. -/
 theorem sessionRuns (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (H : Msg → Msg) :
