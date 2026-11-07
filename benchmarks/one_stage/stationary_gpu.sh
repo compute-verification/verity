@@ -15,7 +15,7 @@
 #      ST_OVERLAP=1,2,4,8 (K prover processes at once on the one GPU against one verifier, zk_cost.py prove --provers K, on
 #      the points of full/K and full/(2K) blocks; give the type counts down to full/(2 max K), e.g. pe-w13@2048,1024,512,256,128;
 #      unset: one)  ST_CACHE=1 (then FC_STMT_CACHE=1 on each type's largest point at one prover and its best point and K;
-#      only: every point and K with it on, none with it off)
+#      only: every point and K with it on, none with it off; both: every point and K off, then on)
 #      ST_KEEP_BIN (a path the built prover is copied to)  ST_BIN (a prover built so: no build)
 #      ST_CPU=1 (no CUDA: the CPU prover, `prove --zk` without --gpu, for checking the runner on a CPU node)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
@@ -105,15 +105,21 @@ zk() {
 # 16.5 x 2^(m-3) bytes, held for its process (66 GiB at m = 35), so K provers of full/K blocks fill one device as one of full
 # does, and every K gets two sizes
 prove() {
-  local p=$1 k c full rcs=0 on=()
-  [ "${ST_CACHE:-0}" = only ] && on=(--stmt-cache)
-  [ -n "${ST_OVERLAP:-}" ] || { zk "$p" "${on[@]}" || rcs=1; return $rcs; }
+  local p=$1 k c full rcs=0 on ons=("")
+  [ "${ST_CACHE:-0}" = only ] && ons=(--stmt-cache)
+  [ "${ST_CACHE:-0}" = both ] && ons=("" --stmt-cache)
+  if [ -z "${ST_OVERLAP:-}" ]; then
+    for on in "${ons[@]}"; do zk "$p" $on || rcs=1; done
+    return $rcs
+  fi
   read -r c full < <("$PY" -c 'import json, sys; pl = json.load(open(sys.argv[1])); q = pl[int(sys.argv[2])]
 print(q["c"], max(x["c"] for x in pl if x["tag"] == q["tag"]))' "$Z/plan.json" "$p")
   for k in ${ST_OVERLAP//,/ }; do
     [ $((c * k)) = "$full" ] || [ $((2 * c * k)) = "$full" ] || continue
-    if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "point $p, $k at once: past the deadline"; continue; fi
-    zk "$p" --provers "$k" "${on[@]}" || rcs=1
+    for on in "${ons[@]}"; do
+      if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "point $p, $k at once $on: past the deadline"; continue; fi
+      zk "$p" --provers "$k" $on || rcs=1
+    done
   done
   return $rcs
 }

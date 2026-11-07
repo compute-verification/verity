@@ -46,7 +46,8 @@ sessions.
   prove a block's sample. Each session record carries `peak_rss_kb`, the sampled peak of the prover's, its live verifier's
   and the ZK server's Lean's resident memory summed, which is what a node holds for one session.
 * **Overlap** (`--provers K`): the warm process is K prover processes at once on the one device, each proving `--warm` +
-  `--runs` sessions against one `serve --zk --concurrency K`. Each live line keeps its prover and the host clock it ended
+  `--runs` sessions against one `serve --zk --concurrency K` (K (1 + N) under `FC_VERIFY_AHEAD=N`, each prover's N
+  sessions awaiting their verdicts beside the one it proves). Each live line keeps its prover and the host clock it ended
   at, and on a GPU the record carries the device's busy fraction (`nvidia-smi`'s utilization.gpu, every 0.5 s, its
   samples in the point's busy.csv) over the span every prover was in its timed sessions.
 """
@@ -335,6 +336,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     sd, d, c, k = Path(pt["dir"]), Path(pt["stage_dir"]), pt["c"], pt["k"]
     warm, runs = (0, 1) if mode == "cold" else (a.warm, a.runs)
     n = a.provers if mode == "warm" else 1
+    ahead = int(os.environ.get("FC_VERIFY_AHEAD") or 0)
     o = out / (f"{pt['tag']}-c{c}-k{k}" if "unit" in pt else f"k{pt['K']}-c{c}-k{k}") / \
         f"{arm}-{mode}{rep}{f'-p{n}' * (n > 1)}{'-sc' * a.stmt_cache}"
     o.mkdir(parents=True, exist_ok=True)
@@ -352,7 +354,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
     serve = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{port}", "--out", str(o / "sessions"),
                               "--instances", pub, "--circuit", str(d / "circuit.txt"), *tables,
                               "--pin", pt["pin"], "--operator", "zk-cost", "--draw-file", str(sd / f"draw-k{k}.json"),
-                              "--concurrency", str(n), "--sessions", str(n * (warm + runs))], stdout=serve_log,
+                              "--concurrency", str(n * (1 + ahead)), "--sessions", str(n * (warm + runs))], stdout=serve_log,
                              stderr=subprocess.STDOUT, text=True, env=environ(env))
     peak = Peak()
     peak.roots.append(serve.pid)
@@ -432,7 +434,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
            "c": c, "k": k, "arm": arm, "mode": mode, "rep": rep, "warm": warm, "runs": runs, "rc": rc,
            "gpu_uuid": os.environ.get("GPU_LEASE_UUID"), "cpu": bool(a.cpu), "threads": os.environ.get("RAYON_NUM_THREADS"),
            **{x: round(y, 3) for x, y in {**usage, **(serve_usage or {})}.items()}, "peak_rss_kb": peak_kb,
-           "built_s": built, "lives": lives, "dir": str(o), "provers": n, "stmt_cache": a.stmt_cache, **over,
+           "built_s": built, "lives": lives, "dir": str(o), "provers": n, "stmt_cache": a.stmt_cache, "verify_ahead": ahead, **over,
            **({"built_all_s": builts} if n > 1 else {}),
            "sessions": [str(f.parent) for f in sessions],
            "serve_verify_s": [((r or {}).get("verdict") or {}).get("verify_s") for r in served],
