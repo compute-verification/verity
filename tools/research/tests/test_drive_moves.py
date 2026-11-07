@@ -6,9 +6,11 @@ to `new_proto/`; a restack job runs only when a test runs it (`jobs`)."""
 from __future__ import annotations
 
 import dataclasses
+import fcntl
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -27,6 +29,8 @@ MAP, BAD = "tools/move/demo_map.toml", "tools/move/bad_map.toml"
 EXCLUDE = '[rewrite]\nexclude = ["tools/move/**", "tools/research/src/research/store/moves.json"]\n\n'
 B = "import old_proto.a\n\nX = old_proto.a.f()\n"
 REGISTRY = ".agents/skills/using-slack/registry.json"
+#: a job's command held until the test lets go of its lock on the file named first, then run (the rest)
+HOLD = "import fcntl, os, sys; fcntl.flock(open(sys.argv[1]), fcntl.LOCK_SH); os.execvp(sys.argv[2], sys.argv[2:])"
 
 
 @pytest.fixture
@@ -58,9 +62,17 @@ class Job:
     def head(self) -> str:
         return self.argv[self.argv.index("--move-commit") - 1]
 
+    def start(self, gate: Path | None = None) -> subprocess.Popen:
+        """Start it as `drive.detach` does, in a session of its own, its output into `log` and its exit into `rc`; with
+        ``gate``, its command waits until the test lets go of the gate's lock (`HOLD`)."""
+        argv = self.argv if gate is None else [sys.executable, "-c", HOLD, str(gate), *self.argv]
+        return subprocess.Popen(["sh", "-c", D.DETACH_JOB, "sh", str(self.dir), *argv], cwd=self.cwd, env=self.env,
+                                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                                start_new_session=True)
+
     def run(self) -> None:
-        """Run it to its end as `drive.detach`'s job does: its output into `log`, its exit into `rc`."""
-        subprocess.run(["sh", "-c", D.DETACH_JOB, "sh", str(self.dir), *self.argv], cwd=self.cwd, env=self.env, check=True)
+        """Run it to its end as `drive.detach`'s job does."""
+        assert self.start().wait() == 0
 
     def end(self, rc: int, log: str) -> None:
         """End it with exit ``rc`` and output ``log`` and no results, as a `restack.py` killed or crashed leaves it."""
@@ -208,6 +220,49 @@ def test_restacks_run_side_by_side_up_to_restack_jobs_and_another_starts_once_on
     jobs[0].run()
     h.tick()
     assert world.on_next(h.q) == [1, 2] and [j.head for j in jobs] == [heads[2], heads[3], heads[4]], world.logs
+
+
+def test_three_restack_jobs_at_once_in_one_clone_end_clean_with_their_results_there_and_no_worktree_left(world, monkeypatch,
+                                                                                                        jobs, tmp_path):
+    """Three real `restack.py` jobs in the queue's clone at once, through drive's job scripts as the sync starts them, let go
+    together from a gate once all three are out, beside the next sync's own git: each ends clean with its result commit in
+    the clone, and neither the clone nor the scratch directory keeps a worktree."""
+    h = Review(world, monkeypatch, land_into="checked")
+    scratch = tmp_path / "scratch"
+    scratch.mkdir()
+    monkeypatch.setenv("TMPDIR", str(scratch))                    # where each restack.py makes its scratch worktrees
+    gate = tmp_path / "gate"
+    gate.touch()
+    procs, fake = [], D.detach
+
+    def detach(repo: Path, argv: list[str], env: dict[str, str], script: str | None = None) -> dict:
+        rec = fake(repo, argv, env, script)
+        procs.append(jobs[-1].start(gate))
+        return rec
+
+    monkeypatch.setattr(D, "detach", detach)
+    _move_pr(world, 1)
+    heads = {n: world.change({f"old_proto/x{n}.py": f"X = {n}\n"}) for n in (2, 3, 4)}
+    for n, head in heads.items():
+        world.gh.put(n, head)
+    with gate.open() as held:                                     # the jobs wait until it closes
+        fcntl.flock(held, fcntl.LOCK_EX)
+        h.tick()
+        assert [j.head for j in jobs] == list(heads.values()) and world.on_next(h.q) == [1], world.logs
+    h.tick()
+    assert [p.wait() for p in procs] == [0, 0, 0]
+    h.tick()
+    move = _member(world, 1)
+    assert sorted(world.on_next(h.q)) == [1, 2, 3, 4], world.logs
+    restacks = h.q.load_state()["restacks"]
+    for n, head in heads.items():
+        result = restacks[f"{head}:{move}"]["result"]
+        _git(h.q.workdir, "cat-file", "-e", f"{result}^{{commit}}")
+        _git(h.q.workdir, "merge-base", "--is-ancestor", move, result)
+        assert result != head and _show(world, _member(world, n), f"new_proto/x{n}.py") == f"X = {n}"
+    listed = _git(h.q.workdir, "worktree", "list", "--porcelain").splitlines()
+    assert [x for x in listed if x.startswith(("worktree ", "prunable"))] == [f"worktree {Path(h.q.workdir).resolve()}"], listed
+    assert not list(scratch.iterdir())
 
 
 def test_a_restack_job_that_ends_with_no_result_runs_once_more_and_then_its_failure_refuses_the_pr(world, monkeypatch, jobs):
