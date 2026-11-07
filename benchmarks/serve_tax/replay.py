@@ -38,7 +38,11 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     step indices from the window's first."""
     meta = json.loads((arm_dir / load / f"rep-{rep}" / "meta.json").read_text())
     tag = meta["tag"]
-    plan_file = Path(json.loads((arm_dir / "meta.json").read_text()).get("plan") or arm_dir / "plan.jsonl")
+    named = json.loads((arm_dir / "meta.json").read_text()).get("plan")
+    tried = [p for p in (Path(named) if named else None, arm_dir / "plan.jsonl", arm_dir.parent / "plan.jsonl") if p]
+    plan_file = next((p for p in tried if p.is_file()), None)
+    if plan_file is None:
+        raise SystemExit(f"no plan at {', '.join(map(str, tried))} (an evicted run's: `research data fetch` puts it back)")
     plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
     client = {r["id"]: r for r in (json.loads(x) for x in (arm_dir / load / f"rep-{rep}" / "client.jsonl").read_text().splitlines()
                                    if x.strip())}
@@ -82,15 +86,16 @@ def engine(checkpoint: Path, header: dict, eager: bool) -> Any:
     return LLMEngine.from_engine_args(args)
 
 
-def params(r: dict) -> Any:
+def params(r: dict, logprobs: bool = False) -> Any:
     from vllm import SamplingParams
 
     s = r["sampling"]
     return SamplingParams(n=1, temperature=s.get("temperature", 0.0), top_p=s.get("top_p", 1.0), top_k=s.get("top_k", 0),
-                          seed=s.get("seed"), max_tokens=r["max_tokens"], ignore_eos=bool(s.get("ignore_eos")), detokenize=False)
+                          seed=s.get("seed"), max_tokens=r["max_tokens"], ignore_eos=bool(s.get("ignore_eos")), detokenize=False,
+                          logprobs=0 if logprobs else None)
 
 
-def replay(w: dict, checkpoint: Path, eager: bool) -> dict:
+def replay(w: dict, checkpoint: Path, eager: bool, logprobs: bool = False) -> dict:
     sys.path.insert(0, str(ROOT / "integrations/vllm"))
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
@@ -101,11 +106,12 @@ def replay(w: dict, checkpoint: Path, eager: bool) -> dict:
     trace = StepTrace().install(eng)
     pending = sorted(w["requests"], key=lambda r: r["before_step"])
     tokens: dict[str, list[int]] = {}
+    lps: dict[str, list[float]] = {}
 
     def add_due() -> None:
         while pending and pending[0]["before_step"] == trace.scheduled:
             r = pending.pop(0)
-            eng.add_request(r["engine_id"], {"prompt_token_ids": r["prompt_ids"]}, params(r))
+            eng.add_request(r["engine_id"], {"prompt_token_ids": r["prompt_ids"]}, params(r, logprobs))
         if pending and pending[0]["before_step"] < trace.scheduled:
             raise SystemExit(f"the replay passed step {pending[0]['before_step']} before {pending[0]['engine_id']} arrived")
 
@@ -126,11 +132,56 @@ def replay(w: dict, checkpoint: Path, eager: bool) -> dict:
                                  f"step {pending[0]['before_step']}")
         for o in eng.step():
             if o.finished:
-                tokens[o.request_id] = [int(t) for t in o.outputs[0].token_ids]
+                c = o.outputs[0]
+                tokens[o.request_id] = [int(t) for t in c.token_ids]
+                if logprobs:
+                    lps[o.request_id] = [float(c.logprobs[i][t].logprob) for i, t in enumerate(c.token_ids)]
     wall = time.monotonic() - start
     hooks.uninstall()
     trace.uninstall()
-    return {"ready_s": ready, "wall_s": wall, "steps": [r for r in trace.records if r["kind"] == "step"], "tokens": tokens}
+    return {"ready_s": ready, "wall_s": wall, "steps": [r for r in trace.records if r["kind"] == "step"], "tokens": tokens,
+            "logprobs": lps}
+
+
+def emitted_at(steps: list[dict]) -> dict[str, list[int]]:
+    """Each request's step of each output position, from the steps' emitted counts."""
+    at: dict[str, list[int]] = {}
+    for s in steps:
+        for rid, n in (s.get("emitted") or {}).items():
+            at.setdefault(rid, []).extend([s["step"]] * int(n))
+    return at
+
+
+def logprob_diff(want: dict[str, list[float]], got: dict[str, list[float]], steps: list[dict]) -> dict:
+    """Where two replays' sampled-token logprobs first differ, bit for bit: per request its first position and that
+    position's step, and the earliest step over all requests. A logprob is the sampled token's logit less the row's
+    log-sum-exp, so a difference in any logit of the row almost surely shows."""
+    at = emitted_at(steps)
+    out = []
+    for rid, a in want.items():
+        b = got.get(rid, [])
+        i = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), None)
+        if i is None and len(a) == len(b):
+            continue
+        i = min(len(a), len(b)) if i is None else i
+        pos = at.get(rid, [])
+        out.append({"request": rid, "first_position": i, "step": pos[i] if i < len(pos) else None,
+                    "positions": sum(x != y for x, y in zip(a, b)) + abs(len(a) - len(b)),
+                    "want": a[i] if i < len(a) else None, "got": b[i] if i < len(b) else None})
+    out.sort(key=lambda d: (d["step"] is None, d["step"]))
+    return {"requests_logprobs_differing": len(out), "first_step": out[0]["step"] if out else None,
+            "requests_differing": out[:DIFFERING_MAX]}
+
+
+def read_logprobs(replay_dir: Path) -> dict[str, list[float]]:
+    with gzip.open(replay_dir / "replay_logprobs.jsonl.gz", "rt") as f:
+        return {r["request"]: r["logprobs"] for r in map(json.loads, f) if r}
+
+
+def write_logprobs(replay_dir: Path, lps: dict[str, list[float]]) -> None:
+    with gzip.open(replay_dir / "replay_logprobs.jsonl.gz", "wt") as f:
+        for rid in sorted(lps):
+            f.write(json.dumps({"request": rid, "logprobs": lps[rid]}, separators=(",", ":")) + "\n")
 
 
 #: the differing requests replay.json lists, each with its lengths and first differing position
@@ -184,6 +235,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--checkpoint", type=Path)
     ap.add_argument("--eager", action="store_true")
     ap.add_argument("--against", type=Path, help="an earlier replay's --out, whose tokens this one's are compared with too")
+    ap.add_argument("--logprobs", action="store_true",
+                    help="record each sampled token's logprob too, and compare them with --against's, step by step")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if sys.flags.hash_randomization:
@@ -192,7 +245,7 @@ def main(argv: list[str] | None = None) -> int:
     meta = json.loads((a.arm_dir / "meta.json").read_text())
     checkpoint = a.checkpoint or Path(meta["checkpoint"])
     w = window(a.arm_dir, a.load, a.rep)
-    got = replay(w, checkpoint, a.eager)
+    got = replay(w, checkpoint, a.eager, a.logprobs)
     out = {"schema": "verity-bench/serve-tax/replay/v0", "arm_dir": str(a.arm_dir), "served_run_id": meta.get("run_id"),
            "run_id": SHARED.RESEARCH_RUN_ID, "load": a.load, "rep": a.rep, "mode": "eager" if a.eager else "compiled",
            "served_mode": "eager" if "--enforce-eager" in meta["server_argv"] else "compiled", "requests": len(w["requests"]),
@@ -201,9 +254,13 @@ def main(argv: list[str] | None = None) -> int:
     if a.against:
         d = token_diff(read_tokens(a.against), got["tokens"])
         out["against"] = {"replay": str(a.against), "requests_tokens_differing": len(d), "requests_differing": d[:DIFFERING_MAX]}
+        if a.logprobs and (a.against / "replay_logprobs.jsonl.gz").is_file():
+            out["against"]["logprobs"] = logprob_diff(read_logprobs(a.against), got["logprobs"], got["steps"])
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "replay.json").write_text(json.dumps(out, indent=1))
     write_tokens(a.out, got["tokens"])
+    if a.logprobs:
+        write_logprobs(a.out, got["logprobs"])
     with open(a.out / "replay_steps.jsonl", "w") as f:
         for s in got["steps"]:
             f.write(json.dumps(s, separators=(",", ":")) + "\n")

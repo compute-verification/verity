@@ -59,7 +59,14 @@ its wall time beside the served window's, and `replay_tokens.jsonl.gz` its token
 schedule doesn't depend on the tokens: a replay with no differing step can still sample other tokens. A mode listed twice
 in `REPLAY_MODES` replays again and compares its tokens with the first replay's too, which tells a replay that differs from
 serving from one that differs from itself; `REPLAY_FROM` with no `ARMS` replays an earlier job's window alone, reading
-that job's run directory where it lies on the node. A finished run's large files (`plan.jsonl`, `client.jsonl`) are
+that job's run directory where it lies on the node. `REPLAY_LOGPROBS=1` records each sampled token's logprob too
+(`replay_logprobs.jsonl.gz`), and a repeated mode compares them with the first replay's bit for bit, naming each request's
+first differing step: a one-ulp change anywhere in a logits row shows there even when no token flips. Every engine
+`run.sh` starts, served or replayed, runs with `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`. Without it, each process times a
+halved `R0_BLOCK` beside the static one for every looped reduction whose register use limits its occupancy (on
+Moonlight, the residual add and RMSNorm fused into a decoder piece's output) and keeps the faster, which changes the reduction's order, so a
+replay matches serving's values only when both picked the same; a window served without the pin isn't reproduced by a
+replay with it. A finished run's large files (`plan.jsonl`, `client.jsonl`) are
 evicted to its files artifact (`run-files.evicted.json` names it) after custody; `research data fetch ART --path GLOB
 --to RUN_DIR` puts them back first.
 

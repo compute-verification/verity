@@ -3,7 +3,7 @@
 # --send (or C4=PATH):
 #   ARMS="compiled eager ..." RATES=light=R,medium=R,saturated=R [MODEL_ID=moonlight] [REPS=3] [SPAN_S=60]
 #     [REQUESTS=N] [WINDOW_S=600] [KV_WINDOW_S=WINDOW_S] [TICK_MS=SAT,FREE | TICK_FROM=RECORD_ARM_DIR]
-#     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"]] [MAX_MIN=240]
+#     [REPLAY=LOAD [REPLAY_FROM=RECORD_ARM_DIR] [REPLAY_MODES="compiled eager"] [REPLAY_LOGPROBS=1]] [MAX_MIN=240]
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
 #   REPLAY=LOAD REPLAY_FROM=RECORD_ARM_DIR [REPLAY_MODES=...] bash benchmarks/serve_tax/run.sh   # only replay an earlier window
@@ -38,6 +38,8 @@ REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-450
 WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=$OUT/plan.jsonl
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
+# Inductor's runtime R0_BLOCK choice (each process times a halved candidate) changes the reduction order: pin it
+export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0
 replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY_FROM:-}" ] && replay_only=1
 [ -f "$C4" ] || [ $replay_only = 1 ] || { echo "serve-tax: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 [ -d "$CK" ] || { echo "serve-tax: no checkpoint at $CK"; exit 2; }
@@ -66,6 +68,7 @@ if [ "${1:-}" = leased ]; then
     declare -A times=()
     for mode in ${REPLAY_MODES:-compiled eager}; do
       flag=(); [ "$mode" = eager ] && flag=(--eager)
+      [ "${REPLAY_LOGPROBS:-0}" = 1 ] && flag+=(--logprobs)
       n=$(( ${times[$mode]:-0} + 1 )); times[$mode]=$n
       dir="replay-$mode"; [ "$n" -gt 1 ] && { dir="replay-$mode-$n"; flag+=(--against "$OUT/replay-$mode"); }
       echo "== replay $REPLAY $mode #$n $(date -u +%FT%TZ)"
