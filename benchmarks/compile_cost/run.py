@@ -43,7 +43,10 @@ WINDOWS = {
     "one-600": [(0, 600, 3)],
 }
 #: each window's request Program digests at rank 0, in request order
-PINS: dict[str, list[str]] = {}
+PINS: dict[str, list[str]] = {
+    "long-w0": ["53dbceb7fdcadca9e289160b52cc3b0f4610f5435d33697abac5d6b41ae8a2b5119ab046efec0a4765a640cc0b71fa407e3ada296a62cb2dedf899402d3708b0",
+                "fa52b5244af71b9506882692b34538ed4d5673dd091f149018c6d3877e66ae46a8fbf74fb347d148cfbc71bfce60c3eb946778ebc96c65c78056c1099f1daba4"],
+}
 
 
 def scheduled(reqs: list[tuple[int, int, int]], budget: int, threshold: int, seqs: int = 256) -> list[list[tuple[int, int, int]]]:
@@ -225,14 +228,14 @@ def main() -> int:
         if prof:
             prof.disable()
     with m.phase("transfer_gates"):
-        compiled.transfer_gates
+        transfer = compiled.transfer_gates
     wall = time.perf_counter() - t0
     m.stop.set()
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
     digests = [u.digest for u in compiled.requests]
     nodes = {d: len(p.fn.body.nodes) for d, p in compiled.programs.items()}
     rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers,
-           "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "wall_s": round(wall, 3),
+           "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "transfer_gates": list(transfer), "wall_s": round(wall, 3),
            "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3), "profiled": a.profile, "phases": m.by_phase(),
            "timeline": [d for d in m.done if d["phase"] != "Builder.finish"]}
     (out / "compile_cost.json").write_text(json.dumps(rec, indent=1) + "\n")
