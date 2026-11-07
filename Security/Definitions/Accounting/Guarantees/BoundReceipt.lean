@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.BoundReceipt
+public import Definitions.Assumptions
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
 public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
@@ -105,7 +106,7 @@ random oracle on the whole of `E_j` and `z_j`, so a location makes a receipt onl
 hashes an inner-product sketch of `E_j` against a matrix expanded from `z_j`, for which `BoundSketchRelay` gives
 `½·min(|z|, |E|)` bits per relayed block, by Lindsey's lemma: the deployed bound is up to `2×` weaker than this game's.
 The rest's tile work stands for every way it gets a tile output without the link, the activations' route among them:
-its information is free here and only its work counts. The node is fixed before the mix is drawn: its state and memory
+its information is free here and only its work counts. The node is fixed before the mix is sampled: its state and memory
 are functions of the store and the tile outputs, never of the mix. Over a window's passes that is a mix derived afresh
 each pass from the chained seed; a mix (or a sketch matrix) fixed for the window lets a location keep, from one pass,
 a digest of each block that makes the next pass's receipts without it, which this game doesn't cover.
@@ -129,7 +130,7 @@ def BoundReceiptLink : Prop :=
 every `InteractiveNode` whose answers between the locations reach the mix only through the node's queries
 (`QueryDetermined`), with `BoundReceiptLink`'s parameters and its hypothesis on `m`: the probability that the verifier
 accepts, the GPU's compute is within `F`, the rest's tile work within `F_z`, and the GPU's HBM footprint short of
-`RateAudit`'s floor at `k − m` blocks, each under the node at the drawn mix, is at most
+`RateAudit`'s floor at `k − m` blocks, each under the node at the sampled mix, is at most
 
   `((k − 1)/N)^s + 2s/2^h + C(q, k − m)/2^λ + C(q_z, m + 1)/2^λ`.
 
@@ -211,9 +212,10 @@ def TileUnpredictable {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fi
     A.Bounded U T q → ∀ u : ℕ, T / (1 - γ₀) < credit (U.layout.shape u) →
       Pouw.pr (fun x : (Q → R) × S => u ∈ Pouw.checkedSet P U x.1 x.2 (A.transcript U x.1 x.2)) ≤ ε q U.layout.N
 
-/-- **PoUW's `TT` gives `TileUnpredictable` at the unit's work `m·k·n`.** For every cost model, protocol, domain,
-target and error: `Pouw.Assumptions.TT CM P D γ₀ ε` implies `TileUnpredictable CM P Wmm D γ₀ ε`. A checked unit whose
-work is above `T/(1 − γ₀)` puts the checked units' total work above it.
+/-- **PoUW's `TT` gives `TileUnpredictable` at the unit's work `m·k·n`.** For every cost model that hashes nothing
+(`Pouw.CostModel.Hashless`, so that TT's event, which excludes a run that breaks SHA-512, is the tile game's), protocol,
+domain, target and error: `Pouw.Assumptions.TT CM P D γ₀ ε` implies `TileUnpredictable CM P Wmm D γ₀ ε`. A checked
+unit whose work is above `T/(1 − γ₀)` puts the checked units' total work above it.
 
 Proof: `Accounting.SecurityProofs.TileUnpredictableOfTT`.
 
@@ -222,10 +224,10 @@ to one unit, about no Lean function of the protocol's code. -/
 def TileUnpredictableOfTT : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
     (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
-    Pouw.Assumptions.TT CM P D γ₀ ε → TileUnpredictable CM P (fun sh => (sh.Wmm : ℝ)) D γ₀ ε
+    CM.Hashless → Pouw.Assumptions.TT CM P D γ₀ ε → TileUnpredictable CM P (fun sh => (sh.Wmm : ℝ)) D γ₀ ε
 
 /-- **NCP's `TT_NCP_U` gives `TileUnpredictable` on route U at the stacked product's work `3·m·k·n`.** For every bias
-`β`, cost model, NCP parameters, domain on which `γ₀ ≥ P.d/(3k)`, target and error:
+`β`, cost model that hashes nothing, NCP parameters, domain on which `γ₀ ≥ P.d/(3k)`, target and error:
 `Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε` implies `TileUnpredictable CM (P.toProtocolU β) (3·Wmm) D γ₀ ε`.
 
 Proof: `Accounting.SecurityProofs.TileUnpredictableOfNCPU`.
@@ -234,6 +236,7 @@ Frozen (conjecture, no-function, hash): as `TileUnpredictableOfTT`, for NCP's na
 def TileUnpredictableOfNCPU : Prop :=
   ∀ (β : ℤ) (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : Pouw.CostModel Q R S)
     (P : Pouw.NCP.Params Q R S) (D : Pouw.Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ),
+    CM.Hashless →
     (∀ U : Pouw.Workload, U.InDomain D → ∀ u < U.layout.N, (P.d : ℝ) ≤ γ₀ * (3 * (U.layout.shape u).k)) →
     Pouw.NCP.Assumptions.TTNCP_U β CM P D γ₀ ε →
       TileUnpredictable CM (P.toProtocolU β) (fun sh => 3 * (sh.Wmm : ℝ)) D γ₀ ε

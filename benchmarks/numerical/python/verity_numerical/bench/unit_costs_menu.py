@@ -20,13 +20,13 @@ for each (bucket, B), its templates by proofs' ``buckets.template`` at the cap a
 log2 D, from proofs' ``vstar_c3.py`` and ``buckets.py`` in VSTAR_DIR (art:4e9ff89a).
 
 **The choice** (:func:`pick`): of the B whose inner session is in range (k_log ≤ 27), fits one node (peak ≤
-:data:`~unit_costs_prover.NODE_GIB`), has D within the law's fitted range (≤ 2^:data:`D_FIT_LOG`) and whose outer proof
+:data:`~unit_costs_prover.NODE_GIB`), has D within the sampling design's fitted range (≤ 2^:data:`D_FIT_LOG`) and whose outer proof
 fits one node, the least public inner + outer hours (ties to the smaller B). Without ``--outer`` it chooses on the public
 inner hours alone, and the output says so. Openings are not batched across sessions.
 
 **One session per shape** (:func:`one_session_per_shape`): a model's
 entries that share a shape, (slots, bound), all take the largest inner session among them (a smaller entry's units are
-costed in it by the law) and the largest outer proof, and are priced at them. V*'s statements are public, so a shape
+costed in it by the sampling design) and the largest outer proof, and are priced at them. V*'s statements are public, so a shape
 whose entries had different sessions would tell which entry a session holds. B is still chosen per bucket, before the
 shapes are merged.
 
@@ -56,7 +56,7 @@ from . import unit_costs_padding as P
 from . import unit_costs_prover as U
 
 B_MENU = (1, 4, 16, 64, 256, 1024)
-#: the law's largest fitted D: 2^35 (a 4096-instance session, r20261003-073948-0e7d)
+#: the sampling design's largest fitted D: 2^35 (a 4096-instance session, r20261003-073948-0e7d)
 D_FIT_LOG = 35
 
 

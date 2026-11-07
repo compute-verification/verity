@@ -86,10 +86,14 @@ def engine_options(a: argparse.Namespace) -> dict:
 
 def target_of(device: dict, record: dict, device_name: str) -> dict:
     """The run's target: the device's profile (``device``, `TargetProfile.to_json`) with the batch invariance the built engine
-    reports, the experts its engine arguments name and the name the device reports, as a registration's target states them."""
+    reports, its breakable CUDA graphs (the compilation "breakable"), the experts its engine arguments name and the name the device
+    reports, as a registration's target states them."""
     out = {**device, "device_name": device_name}
-    if (record.get("effective") or {}).get("batch_invariant") is not None:
-        out["batch_invariant"] = bool(record["effective"]["batch_invariant"])
+    eff = record.get("effective") or {}
+    if eff.get("batch_invariant") is not None:
+        out["batch_invariant"] = bool(eff["batch_invariant"])
+    if eff.get("enforce_eager") is False and eff.get("breakable_cudagraph"):
+        out["compilation"] = "breakable"
     if (record.get("engine_kwargs") or {}).get("moe_backend") is not None:
         out["moe_backend"] = record["engine_kwargs"]["moe_backend"]
     return out

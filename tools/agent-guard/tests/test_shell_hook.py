@@ -219,6 +219,9 @@ def test_builds_and_tests_are_refused_on_an_agent_vm_and_light_ones_only_while_i
         assert "1.9 GiB of 15.3 GiB available" in out["agent_message"] and "research run --on auto" in out["agent_message"]
     for command in passes:
         assert verdict(command, **gate) == "allow", command
+    (tmp_path / "vmstat").write_text(f"balloon_inflate {3 * 2**20}\nballoon_deflate {2**20}\n")     # 8 GiB in the balloon
+    assert verdict("uv run pytest -q tests/test_x.py", **gate) == "allow", \
+        "memory the balloon holds is available: the VM gets it back as it asks"
 
 
 def cgroup_gate(tmp_path: Path, stat: str | None) -> dict[str, str]:
@@ -510,4 +513,32 @@ def test_a_merge_on_a_vm_that_never_ran_boot_sh_first_gets_the_record_merge_driv
     assert ask("git merge-tree --write-tree --name-only origin/next FETCH_HEAD") == "allow"
     assert driver() == "python3 m.py %O %A %B %P"
     subprocess.run(["git", "-C", str(ws), "config", "merge.lean-audit.driver", "mine"], check=True, env={**os.environ, **GIT_ENV})
-    assert ask("git merge origin/main") == "allow" and driver() == "mine", "a driver already set is left as it is"
+    assert ask("git merge origin/main") == "allow" and driver() == "mine", "without origin/main, one already set stays"
+
+
+def test_a_merge_sets_origin_main_s_merge_drivers_over_an_older_command(tmp_path):
+    """Git runs a driver from the worktree of the side merged into, and a VM keeps the command it was given: one whose
+    command ran that worktree's merge.py merged main's lock into an old branch by the branch's older copy, which collapsed
+    Security's lock to one `reads` group.  So where the repository has origin/main, each record driver whose value differs
+    from origin/main's RECORD_DRIVER is set to it, whatever the checkout's own clone.py says."""
+    ws = tmp_path / "ws"
+    clone_py = ws / "tools/research/src/research/clone.py"
+    clone_py.parent.mkdir(parents=True)
+    env = {**os.environ, **GIT_ENV}
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(ws), *args], capture_output=True, text=True, env=env, check=True).stdout.strip()
+    git("init", "-q")
+    clone_py.write_text('RECORD_DRIVER = {"merge.lean-audit.name": "n", "merge.lean-audit.driver": "python3 main.py %O %A %B %P"}\n')
+    git("add", "-A")
+    git("-c", "user.name=t", "-c", "user.email=t@example.com", "commit", "-q", "-m", "main")
+    git("update-ref", "refs/remotes/origin/main", "HEAD")
+    clone_py.write_text('RECORD_DRIVER = {"merge.lean-audit.driver": "python3 worktree.py %O %A %B %P"}\n')
+    git("config", "merge.lean-audit.driver", "python3 old.py %O %A %B %P")
+    git("config", "merge.lean-audit.name", "n")
+    out = subprocess.run([sys.executable, HOOK], input=json.dumps({"hook_event_name": "beforeShellExecution",
+                                                                     "command": "git merge --no-edit origin/main",
+                                                                     "cwd": str(ws)}),
+                         capture_output=True, text=True, env={**env, "AGENT_GUARD_MIN_AVAIL": "0"}, check=True)
+    assert json.loads(out.stdout)["permission"] == "allow", out.stderr
+    assert git("config", "--get", "merge.lean-audit.driver") == "python3 main.py %O %A %B %P"

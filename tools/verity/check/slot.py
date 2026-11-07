@@ -288,7 +288,7 @@ def reserved_gb(proc: Path = Path("/proc"), priority: bool = False) -> int:
 def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:
     """A slot with mem=GB holds a research.mem reservation of that size while its check runs: `check-NAME.json` in RAMLOCK, in
     research.mem's format and under its admission lock, naming this process (CMD, after the exec) and its run, and marked
-    "priority" for a `--priority` waiter's check (a train's, or drive's post-landing run), which other train checks' gates count in
+    "priority" for a `--priority` waiter's check (a train's, or drive's after-landing run), which other train checks' gates count in
     full (`reserved_gb`). research.mem counts
     the GB less what the check's process tree holds, and stops counting it when that pid is gone or the run ended. Without it,
     research.mem would admit work beside two full checks until the machine ran out of memory. The line to print, or None

@@ -16,7 +16,7 @@ its own salts, so a period's weights' root is never the prover's choice.
     signs is the function the model computes; or, for a role whose manifest entry declares ``linears`` (an MLP's,
     ``model.layers.0.mlp.up_proj`` then ``model.layers.1.mlp.down_proj``), exactly those in that order
     (`declared_linears`). Only the pinned tree declares them, never the prover.
-  It then draws a fresh 32-byte salt key; commits each K's ``<prefix>b/<K>`` from the int8 codes and s_w of the pinned
+  It then samples a fresh 32-byte salt key; commits each K's ``<prefix>b/<K>`` from the int8 codes and s_w of the pinned
   shards alone, a tensor in two shards refused (`Checkpoint`), vLLM's fused ``qkv_proj`` and ``gate_up_proj`` their
   parts' rows in turn (`FUSED`, `weights.weights_roots`); keeps the key (`key_path`, auditor's, 0600); and appends one
   line to the registry (`Host.models`, append-only, root's seal): ``{model, circuit, prefix, checkpoint: {file:

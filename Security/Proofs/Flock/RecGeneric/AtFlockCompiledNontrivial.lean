@@ -296,7 +296,7 @@ open FlockDeploy (Coin FinalP)
 `RecursiveKSCompiledAtRec` at the deployed values, is false at the verifier that accepts everything
 (`RecAt.acceptAll` of the deployment's compiled record), at every brings, from the named assumption
 `RecDeploy.KSFixture` (`recursiveKSEvery_nontrivial`'s): some bytes the deployed readers read as a dense compiled
-statement with a V\* session whose inner statement is in the plain scope, with a coin-server record at whose transcript
+statement with a V\* session whose inner statement is in the plain scope, with a live-coin record at whose transcript
 its V\* parts are in scope. The silent prover is accepted on every run and `E*` extracts nothing, so
 `Pr[accept ∧ ¬extract] = 1`; every finder term, the gated link's included, is `0`; the tails are below `1/4` each; and
 `λ₂ ≥ 100` at the deployed decoders gives `κ < 1/2`. -/

@@ -390,7 +390,7 @@ theorem sim_opnSeq [Add B] [Fintype Coin] [Inhabited Coin] [Fintype Y] [Nonempty
   rw [T.sim_opn dec σ _ j hne (by simp), hlast, hdec]
 
 /-- **The hm96 coin tree hides at distance `2 k δ₁`** against its simulator, where each leaf hides at `δ₁`
-(`Hm96Hiding`) and the answers determine their coins. The hybrid runs over the leaves: draw the simulator's tape
+(`Hm96Hiding`) and the answers determine their coins. The hybrid runs over the leaves: sample the simulator's tape
 `(r', y', t)`; the tree's salts `y_j = rematch j (r' j) (r j) (y' j)` are uniform for every `r'`, and round `j`'s leaf
 at `(r j, y_j)` is the simulator's at `(r' j, y' j)` but with probability `2 δ₁` (`rematch_le`: `Hm96Hiding` one way,
 its complement the other), so the two root-and-openings differ with probability at most `2 k δ₁`. -/

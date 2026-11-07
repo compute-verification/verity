@@ -5,12 +5,12 @@ import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.FreeCompute
 
 /-!
-# Exfiltration: a law that certifies the target
+# Exfiltration: a sampling design that certifies the target
 
-Independent draws with probability `q = num/N` (`Law.bernoulli`) give a set of `K + 1` or more units the escape
+Independent samples with probability `q = num/N` (`Law.bernoulli`) give a set of `K + 1` or more units the escape
 `(1 − q)^(K+1)` at most. When that is below `δ`, the harm bound `b·K` and the count `K` certify `b·K + locBits n K`
 (`bern_certifies`). Taking `q` just above `Λ/(K+1)`, or `1` when that is at least `1`, makes `1 − q < e^{−Λ/(K+1)}`, so the
-law certifies at `n·q ≤ n·Λ/(K+1) + ε` draws (`exists_certifying_law`). At `δ = 1` this still draws every unit with a small
+sampling design certifies at `n·q ≤ n·Λ/(K+1) + ε` samples (`exists_certifying_law`). At `δ = 1` this still samples every unit with a small
 positive probability, so only the empty set escapes with probability `1`.
 -/
 
@@ -49,7 +49,7 @@ theorem bern_meanDraws {n num N : ℕ} [NeZero N] (h : num ≤ N) :
   unfold meanDraws
   simp only [bern_incl_toReal h, Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- **Independent draws certify `b·K + locBits n K`** once a set of `K + 1` escapes with less than `δ`. -/
+/-- **Independent samples certify `b·K + locBits n K`** once a set of `K + 1` escapes with less than `δ`. -/
 theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : ℝ}
     (hesc : (1 - (num : ℝ) / N) ^ (K + 1) < δ) (hℓ : (b : ℝ) * K + locBits n K ≤ ℓ) :
     CertifiesLeak (Law.bernoulli n num N) (fun _ => b) δ ℓ := by
@@ -82,7 +82,7 @@ theorem bern_certifies {n num N b K : ℕ} [NeZero N] (h : num ≤ N) {δ ℓ : 
   push_cast
   nlinarith [Nat.cast_nonneg (α := ℝ) b]
 
-/-- **A law certifying `ℓ` that draws at most `n·Λ/(K+1) + ε` units.** -/
+/-- **A sampling design certifying `ℓ` that samples at most `n·Λ/(K+1) + ε` units.** -/
 theorem exists_certifying_law (n b K : ℕ) {δ ℓ ε : ℝ} (hδ0 : 0 < δ) (hδ1 : δ ≤ 1)
     (hℓ : (b : ℝ) * K + locBits n K ≤ ℓ) (hε : 0 < ε) :
     ∃ L : Law n, CertifiesLeak L (fun _ => b) δ ℓ ∧ meanDraws L ≤ n * Real.log δ⁻¹ / (K + 1) + ε := by
