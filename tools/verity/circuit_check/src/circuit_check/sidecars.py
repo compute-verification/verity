@@ -4,7 +4,7 @@
     fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
                               `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
                               root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`);
-                              a family registered over a range of statics, ``RANGES``, checked at the spots it binds (`ranges`)
+                              a family registered over a range of statics, ``RANGES``: each rule and its spots (`ranges`)
     fp8.circuit-check.json    its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
                               ``pieces``, ``units``; and a gated Definition's circuit digest, ``digests``)
 

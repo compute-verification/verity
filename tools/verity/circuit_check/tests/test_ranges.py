@@ -1,12 +1,13 @@
-"""`circuit_check.ranges`: a sidecar's ``RANGES`` rules, which ids each covers, the report's ``ranges`` and how a report registers
-an id; and that each rule in the tree has its ends bound in its own module's sidecar, so ``--all`` checks them."""
+"""`circuit_check.ranges`: a sidecar's ``RANGES`` rules and their spots, which ids a rule covers, ``--ranges``' targets, the report's
+``ranges`` and how a report registers an id; and that each rule in the tree names spots that bind, in its own module."""
 from __future__ import annotations
 
 import pytest
 
 from circuit_check import ranges as RG
 
-RULE = RG.parse("Fam_v1{T=1..64,NS=1..4,D=16,DOT=Dot_v1,SCALE=0.0625}", "m.circuit-check.py")
+TEXT = "Fam_v1{T=1..64,NS=1..4,D=16,DOT=Dot_v1,SCALE=0.0625}"
+RULE = RG.parse(TEXT, ["T=1,NS=1", "T=64,NS=4", "T=30,NS=2"], "m.circuit-check.py")
 
 
 def _id(t: int, ns: int, d: int = 16, scale: str = "0.0625") -> str:
@@ -16,28 +17,37 @@ def _id(t: int, ns: int, d: int = 16, scale: str = "0.0625") -> str:
 def test_a_rule_spans_the_statics_written_as_ranges_and_fixes_the_rest_by_their_spelling():
     assert RULE.family == "Fam_v1" and RULE.over == (("T", 1, 64), ("NS", 1, 4))
     assert RULE.fixed == (("D", "16"), ("DOT", "Dot_v1"), ("SCALE", "0.0625"))
+    assert RULE.spots == (_id(1, 1), _id(64, 4), _id(30, 2))
     assert RULE.at(_id(64, 1)) == {"T": 64, "NS": 1}
     assert [RULE.covers(i) for i in (_id(1, 4), _id(65, 1), _id(0, 1), _id(8, 5), _id(8, 1, d=32), _id(8, 1, scale="0.125"),
                                      "Fam_v2{T=8,NS=1,D=16,DOT=Dot_v1,SCALE=0.0625}", "Fam_v1{T=8,NS=1,D=16,DOT=Dot_v1}",
-                                     "Fam_v1{T=8,NS=1,D=16,DOT=Dot_v1,SCALE=0.0625,X=1}", "Fam_v1")] == [True] + [False] * 9
+                                     "Fam_v1{T=8,NS=1,D=16,DOT=Dot_v1,SCALE=0.0625,X=1}",
+                                     "Fam_v1{NS=1,T=8,D=16,DOT=Dot_v1,SCALE=0.0625}", "Fam_v1")] == [True] + [False] * 10
 
 
-@pytest.mark.parametrize("text, match", [("Fam_v1", "is no id"), ("Fam_v1{T=4,D=16}", "spans no static"),
-                                         ("Fam_v1{T=9..2}", "is empty")])
-def test_a_malformed_rule_is_refused_with_how_to_write_it(text, match):
+@pytest.mark.parametrize("text, spots, match", [
+    ("Fam_v1", [], "is no id"),
+    ("Fam_v1{T=4,D=16}", [], "spans no static"),
+    ("Fam_v1{T=9..2}", [], "is empty"),
+    (TEXT, ["T=1,NS=1", "T=64,NS=4", "T=65,NS=1"], "outside its ranges"),
+    (TEXT, ["T=1,NS=1", "T=64,NS=4", "T=8"], "not an integer for each of"),
+    (TEXT, ["T=1,NS=1", "T=64,NS=4", "T=1,NS=1"], "listed twice"),
+    (TEXT, ["T=1,NS=1", "T=30,NS=4"], "no spot at T=64: add one at each end of each range"),
+])
+def test_a_malformed_rule_or_spot_is_refused_with_how_to_write_it(text, spots, match):
     with pytest.raises(ValueError, match=match):
-        RG.parse(text, "m.circuit-check.py")
+        RG.parse(text, spots, "m.circuit-check.py")
 
 
-def test_a_rule_holds_with_a_passing_spot_at_both_ends_of_each_range():
+def test_a_rule_holds_where_the_run_checked_each_of_its_spots_and_each_passed():
     ok = {"failures": []}
-    targets = [{"target": _id(1, 1), **ok}, {"target": _id(64, 4), **ok}, {"target": _id(30, 2), **ok},
+    targets = [*({"target": s, **ok} for s in RULE.spots), {"target": _id(9, 3), **ok},
                {"target": "Other_v1{N=4}", "failures": [{"name": "x"}]}]
     (got,) = RG.section(targets, [RULE])
-    assert got == {"rule": RULE.text, "sidecar": "m.circuit-check.py", "spots": [_id(1, 1), _id(64, 4), _id(30, 2)],
-                   "failed": [], "unreached": {}, "holds": True}
+    assert got == {"rule": TEXT, "sidecar": "m.circuit-check.py", "spots": list(RULE.spots), "missing": [], "failed": [],
+                   "holds": True}
     (short,) = RG.section(targets[1:], [RULE])
-    assert short["unreached"] == {"T": [1], "NS": [1]} and not short["holds"]
+    assert short["missing"] == [_id(1, 1)] and not short["holds"]
     (bad,) = RG.section([*targets[:2], {"target": _id(30, 2), "failures": [{"name": "y"}]}], [RULE])
     assert bad["failed"] == [_id(30, 2)] and not bad["holds"]
     assert RG.section(targets[3:], [RULE]) == []
@@ -46,25 +56,31 @@ def test_a_rule_holds_with_a_passing_spot_at_both_ends_of_each_range():
 def test_a_report_registers_an_id_by_its_own_target_else_by_a_holding_rule():
     report = {"targets": [{"target": _id(1, 1), "failures": []}, {"target": _id(64, 4), "failures": []},
                           {"target": _id(2, 1), "failures": [{"name": "z"}]}],
-              "ranges": [{"rule": RULE.text, "holds": True}, {"rule": "Gam_v1{N=1..8}", "holds": False}]}
+              "ranges": [{"rule": TEXT, "holds": True}, {"rule": "Gam_v1{N=1..8}", "holds": False}]}
     ids = [_id(1, 1), _id(2, 1), _id(33, 3), "Gam_v1{N=4}", "Gam_v1{N=9}"]
     assert RG.statuses(report, ids) == {_id(1, 1): "checked", _id(2, 1): "failed", _id(33, 3): "by range",
                                         "Gam_v1{N=4}": "range fails", "Gam_v1{N=9}": "unregistered"}
 
 
-def test_each_rule_in_the_tree_binds_its_ends_in_its_own_modules_sidecar():
-    """A rule holds only in a run that checks a spot at each end of each range, so the sidecar declaring it binds those spots
-    (`_model_roots` entries, made here, never built), and its family is that module's."""
+def test_ranges_targets_are_the_named_families_spots_and_an_unknown_family_is_refused(monkeypatch):
+    other = RG.parse("Gam_v1{N=1..8}", ["N=1", "N=8"])
+    monkeypatch.setattr(RG, "declared", lambda: (RULE, other))
+    assert RG.spots() == [*RULE.spots, "Gam_v1{N=1}", "Gam_v1{N=8}"]
+    assert RG.spots(["Gam_v1"]) == ["Gam_v1{N=1}", "Gam_v1{N=8}"]
+    with pytest.raises(LookupError, match="no RANGES rule for Hum_v1"):
+        RG.spots(["Hum_v1"])
+
+
+def test_each_rule_in_the_tree_names_spots_that_bind_to_its_own_modules_definitions():
+    """A spot is a named target, so it must bind as the id the rule spells (a report's target is that string, and a reader looks
+    served ids up by it); and the family is the module's whose sidecar holds the rule.  Bound, never built."""
     from circuit_check import sidecars as SC
     from circuit_check import targets as TG
 
     TG.load_registries()
-    loaded = {SC.rel(SC.discover()[mod]["py"]): (mod, m) for mod, m in SC.binding_modules()}
+    by_file = {SC.rel(files["py"]): mod for mod, files in SC.discover().items() if "py" in files}
     for rule in RG.declared():
-        mod, m = loaded[rule.sidecar]
-        made = [make() for _label, make in (getattr(m, "_model_roots", None) or list)()]
-        spots = [f for f in made if rule.covers(f.id)]
-        assert spots and rule.unreached(f.id for f in spots) == {}, (
-            f"{rule.sidecar}: RANGES' {rule.text} has no _model_roots spot at {rule.unreached(f.id for f in spots)}: bind one "
-            f"at each end of each range")
-        assert {SC.owner(f) for f in spots} == {mod}, f"{rule.text} is no Definition of {mod}: its own module's sidecar holds it"
+        for spot in rule.spots:
+            fn = TG.definition(spot)
+            assert fn.id == spot, f"{rule.sidecar}: spot {spot} binds as {fn.id}: write the rule in the id's own spelling"
+            assert SC.owner(fn) == by_file[rule.sidecar], f"{rule.text} is no Definition of {by_file[rule.sidecar]}"

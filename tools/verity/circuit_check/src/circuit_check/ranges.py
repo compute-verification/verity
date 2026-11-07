@@ -1,12 +1,13 @@
-"""A Definition registered over a range of its statics: a sidecar's ``RANGES``, a tuple of rules, each the family's id with
+"""A Definition registered over a range of its statics: a sidecar's ``RANGES``, {rule: its spots}.  A rule is the family's id with
 ``lo..hi`` in place of each static it spans and the rest at the values the id spells
-(``SparseMlaSplit_v1{T=1..2048,NS=1..28,NH=8,...}``).
+(``SparseMlaSplit_v1{T=1..2048,NS=1..28,NH=8,...}``); a spot gives each spanned static a value (``"T=2048,NS=28"``), and the
+spots reach both ends of each range (`parse` refuses a rule whose spots don't).
 
-circuit-check never checks a rule itself.  It checks the rule's spots, the targets of a run that the rule covers, which the
-sidecar binds (`_model_roots` entries) so that ``--all`` and the sidecar's own run check them.  The report's ``ranges``
-(`section`) gives, for each rule a target of the run falls in, its spots, the ones that failed, the ends of its ranges that no
-spot reaches, and whether it holds: a spot at both ends of each range, and every spot passing.  An id a holding rule covers is
-registered by range (`statuses`), which a reader keeps apart from one checked at its own statics.
+circuit-check never checks a rule itself.  ``--ranges`` adds the rules' spots to a run's targets (`spots`), as named targets,
+so a spot past `targets.MAX_GATES` is checked too (``--all`` keeps only its families' smaller bindings).  The report's ``ranges``
+(`section`) gives, for each rule a spot of which the run checked, the spots it didn't check and those that failed: the rule
+holds when the run checked every spot and each passed.  An id a holding rule covers is registered by range (`statuses`), which
+a reader keeps apart from one checked at its own statics.
 """
 from __future__ import annotations
 
@@ -28,19 +29,19 @@ _SPAN = re.compile(r"(-?\d+)\.\.(-?\d+)")
 class Rule:
     text: str
     family: str
+    order: tuple[str, ...]
     fixed: tuple[tuple[str, str], ...]
     over: tuple[tuple[str, int, int], ...]
+    spots: tuple[str, ...]
     sidecar: str
 
     def at(self, did: str) -> dict[str, int] | None:
-        """The ranged statics of Definition id ``did``, if this rule covers it; else None."""
+        """The spanned statics of Definition id ``did``, if this rule covers it; else None."""
         m = _ID.fullmatch(did.strip())
         if m is None or m[1] != self.family:
             return None
         got = _split(m[2])
-        if got.keys() != {k for k, _ in self.fixed} | {k for k, _, _ in self.over}:
-            return None
-        if any(got[k] != v for k, v in self.fixed):
+        if tuple(got) != self.order or any(got[k] != v for k, v in self.fixed):
             return None
         try:
             vals = {k: int(got[k]) for k, _, _ in self.over}
@@ -52,36 +53,60 @@ class Rule:
         return self.at(did) is not None
 
     def unreached(self, ids: Iterable[str]) -> dict[str, list[int]]:
-        """{static: its range's ends that no id of ``ids`` this rule covers takes}, for each ranged static missing one."""
+        """{static: its range's ends that no id of ``ids`` this rule covers takes}, for each spanned static missing one."""
         seen = [v for v in map(self.at, ids) if v is not None]
         out = {k: [e for e in sorted({lo, hi}) if all(v[k] != e for v in seen)] for k, lo, hi in self.over}
         return {k: ends for k, ends in out.items() if ends}
 
 
-def parse(text: str, sidecar: str = "") -> Rule:
-    where = f"{sidecar}: " if sidecar else ""
+def _rule(text: str, where: str = "") -> Rule:
     m = _ID.fullmatch(text.strip())
     if m is None:
-        raise ValueError(f"{where}RANGES entry {text!r} is no id: write FAMILY_vN{{S=lo..hi,...}}")
+        raise ValueError(f"{where}RANGES rule {text!r} is no id: write FAMILY_vN{{S=lo..hi,...}}")
+    statics = _split(m[2])
     fixed, over = [], []
-    for k, v in _split(m[2]).items():
+    for k, v in statics.items():
         if s := _SPAN.fullmatch(v):
             lo, hi = int(s[1]), int(s[2])
             if lo > hi:
-                raise ValueError(f"{where}RANGES entry {text!r}: {k}={v} is empty (write lo..hi with lo <= hi)")
+                raise ValueError(f"{where}RANGES rule {text!r}: {k}={v} is empty (write lo..hi with lo <= hi)")
             over.append((k, lo, hi))
         else:
             fixed.append((k, v))
     if not over:
-        raise ValueError(f"{where}RANGES entry {text!r} spans no static: write a range as lo..hi, or bind the one id as a "
+        raise ValueError(f"{where}RANGES rule {text!r} spans no static: write a range as lo..hi, or bind the one id as a "
                          f"_model_roots entry")
-    return Rule(text.strip(), m[1], tuple(fixed), tuple(over), sidecar)
+    return Rule(text.strip(), m[1], tuple(statics), tuple(fixed), tuple(over), (), where.rstrip(": "))
+
+
+def parse(text: str, spots: Iterable[str], sidecar: str = "") -> Rule:
+    """Rule ``text`` with ``spots``, each made the family's id at the rule's fixed statics."""
+    where = f"{sidecar}: " if sidecar else ""
+    rule = _rule(text, where)
+    spanned = [k for k, _, _ in rule.over]
+    ids = []
+    for spot in spots:
+        got = _split(spot)
+        if set(got) != set(spanned) or not all(re.fullmatch(r"-?\d+", got[k]) for k in spanned):
+            raise ValueError(f"{where}RANGES rule {rule.text}: spot {spot!r} is not an integer for each of {spanned}")
+        fixed = dict(rule.fixed)
+        did = f"{rule.family}{{{','.join(f'{k}={int(got[k])}' if k in got else f'{k}={fixed[k]}' for k in rule.order)}}}"
+        if not rule.covers(did):
+            raise ValueError(f"{where}RANGES rule {rule.text}: spot {spot!r} is outside its ranges")
+        if did in ids:
+            raise ValueError(f"{where}RANGES rule {rule.text}: spot {spot!r} is listed twice")
+        ids.append(did)
+    rule = Rule(rule.text, rule.family, rule.order, rule.fixed, rule.over, tuple(ids), sidecar)
+    if miss := rule.unreached(ids):
+        raise ValueError(f"{where}RANGES rule {rule.text}: no spot at "
+                         + ", ".join(f"{k}={e}" for k, ends in miss.items() for e in ends) + ": add one at each end of each range")
+    return rule
 
 
 @cache
 def declared() -> tuple[Rule, ...]:
-    """Every sidecar's ``RANGES``, read from its source as a literal tuple of strings, never by importing it; a family under two
-    rules of different sidecars is an error."""
+    """Every sidecar's ``RANGES``, read from its source as a literal dict, never by importing it; a family under two rules is an
+    error."""
     out: list[Rule] = []
     with CC.internal():
         for files in SC.discover().values():
@@ -89,27 +114,37 @@ def declared() -> tuple[Rule, ...]:
                 continue
             for node in ast.parse(src).body:
                 if isinstance(node, ast.Assign) and [getattr(t, "id", None) for t in node.targets] == ["RANGES"]:
-                    out += [parse(text, SC.rel(p)) for text in ast.literal_eval(node.value)]
-    owners: dict[str, str] = {}
+                    out += [parse(text, spots, SC.rel(p)) for text, spots in ast.literal_eval(node.value).items()]
+    seen: dict[str, str] = {}
     for r in out:
-        if owners.setdefault(r.family, r.sidecar) != r.sidecar:
-            raise ValueError(f"{r.family} has RANGES in both {owners[r.family]} and {r.sidecar}: its own module's sidecar holds them")
+        if (other := seen.setdefault(r.family, r.text)) != r.text:
+            raise ValueError(f"{r.family} has two RANGES rules, {other} and {r.text} ({r.sidecar}): make them one")
     return tuple(out)
 
 
+def spots(families: Iterable[str] = ()) -> list[str]:
+    """``--ranges``' targets: the spots of each declared rule of ``families`` (every rule's when empty)."""
+    rules, want = declared(), list(families)
+    if unknown := sorted(set(want) - {r.family for r in rules}):
+        raise LookupError(f"no RANGES rule for {', '.join(unknown)} (the rules: {', '.join(r.family for r in rules) or 'none'})")
+    return [s for r in rules if not want or r.family in want for s in r.spots]
+
+
 def section(targets: list[dict], rules: Iterable[Rule] | None = None) -> list[dict]:
-    """The report's ``ranges``: each rule some target falls in, with its spots (by id), those that failed, the ends of its ranges no
-    spot reaches (``unreached``), and whether it holds."""
+    """The report's ``ranges``: each rule a spot of which is among ``targets``, with its spots, those not among them
+    (``missing``), those that failed, and whether it holds."""
     out = []
     for rule in declared() if rules is None else rules:
-        spots = [t for t in targets if rule.covers(str(t.get("target", "")))]
-        if not spots:
+        seen: dict[str, bool] = {}
+        for t in targets:
+            if (did := t.get("target")) in rule.spots:
+                seen[did] = seen.get(did, False) or bool(t.get("failures"))
+        if not seen:
             continue
-        ids = [t["target"] for t in spots]
-        failed = [t["target"] for t in spots if t.get("failures")]
-        unreached = rule.unreached(ids)
-        out.append({"rule": rule.text, "sidecar": rule.sidecar, "spots": ids, "failed": failed, "unreached": unreached,
-                    "holds": not failed and not unreached})
+        missing = [s for s in rule.spots if s not in seen]
+        failed = [s for s in rule.spots if seen.get(s)]
+        out.append({"rule": rule.text, "sidecar": rule.sidecar, "spots": list(rule.spots), "missing": missing, "failed": failed,
+                    "holds": not missing and not failed})
     return out
 
 
@@ -120,7 +155,7 @@ def statuses(report: dict, ids: Iterable[str]) -> dict[str, str]:
     own: dict[str, bool] = {}
     for t in report.get("targets", []):
         own[t.get("target")] = own.get(t.get("target"), False) or bool(t.get("failures"))
-    rules = [(parse(r["rule"]), r["holds"]) for r in report.get("ranges", [])]
+    rules = [(_rule(r["rule"]), r["holds"]) for r in report.get("ranges", [])]
     out = {}
     for did in ids:
         if did in own:
@@ -131,4 +166,4 @@ def statuses(report: dict, ids: Iterable[str]) -> dict[str, str]:
     return out
 
 
-__all__ = ["Rule", "declared", "parse", "section", "statuses"]
+__all__ = ["Rule", "declared", "parse", "section", "spots", "statuses"]
