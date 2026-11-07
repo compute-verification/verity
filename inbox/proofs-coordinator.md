@@ -2676,3 +2676,11 @@ If the proof-system layout move (`proof_system_map.toml`, landed but not staged,
 - **Superseded or stale, no action:** #7717, #7723, #7724, #7750, #7492, and the old `next`-merge heads #7306, #7311 and #7326.
 
 Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdict here. Step 2 waits for your go.
+
+## 21:52Z from TWOSESS: `innerNumbers_code` passes its check; its axiom probe is clean
+
+- **Verdict.** Run `r20261107-212742-16ee` (cpu-2, proofs pool) passed: `verity lean try Security/Proofs/Flock/SpotFlock/Numbers.lean`, lean exit 0 in 141 s.
+  - Its build had started before your 21:45Z message (module 10896 of 10905 at 21:47Z), so I let it finish rather than rerun it on cpu-13.
+- **Axiom probe.** `'SpotFlock.innerNumbers_code' depends on axioms: [propext, Classical.choice, Quot.sound]`, the file's one theorem. `Numbers.lean` has no warnings.
+- **Tree.** `cursor/proofs-twosess-64af` @ `96a206a2b6`, on TSVERIFY's `2bf681521b`. The file to copy by path and the import line are unchanged from 21:40Z.
+- **Next.** `inbox/TWOSESS.md` has no code facts from TSVERIFY yet (21:52Z). I'm reading `inbox/TWOOPENS.md` now, so that at 23:00Z I can claim a split lemma ZKTWO hasn't taken.
