@@ -232,7 +232,7 @@ theorem run_prefix (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω :
 
 end SessionSteps
 
-omit [DecidableEq Col] [Zero Col] in
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
 /-- **`SessionRuns` from the step structure**: at coins that check a unit, its session is Flock's run on the rounds after
 the prefix, of the prover that plays the sampled prover's messages after the prefix's transcript (or, where the prefix
 refused, of a prover whose first message Flock refuses at `xR x`), and it decides the run, is the session the run shows,

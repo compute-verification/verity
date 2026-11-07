@@ -118,7 +118,7 @@ noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     · rename_i hok
       show (if sessionOk h a₂ then some (a₂, (⟨rest, out⟩ : Seen)) else some (h.xS₀, refusedSeen)) =
         some (a₂, ⟨rest, out⟩)
-      rw [if_pos (sessionOk_of_stmtOk h hok)]
+      rw [ite_eq_left (sessionOk_of_stmtOk h hok)]
     · cases hm
   session_refused x u ms a hlen hms := by
     rcases ms with _ | ⟨⟨a₀, o₀⟩, _ | ⟨⟨a₁, o₁⟩, _ | ⟨e, ms⟩⟩⟩
