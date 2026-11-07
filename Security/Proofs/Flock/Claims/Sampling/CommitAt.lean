@@ -104,6 +104,28 @@ theorem depth_rooted (shapes : Array _root_.Flock.Registered.Port) (roots : List
     rfl
   rw [h, h, leaves_rooted]
 
+/-- **An opening at port `k` passes at the code's ports with the list's roots** where `at_` checks it under the list's
+`k`th root, no earlier entry of the list is that root, and its leaf passes port `k`'s path check there. -/
+theorem opens_rooted {c : Code} {H : Msg → Msg} {roots : List Msg} {o : Opening Bool} {k idx : ℕ} {r l : Msg}
+    (hat : c.at_ roots o.pos = some (r, idx)) (hk : k < c.own.size) (hr : roots[k]? = some r)
+    (hfirst : ∀ j < k, roots[j]? ≠ some r)
+    (hleaf : ((hm96Leaf (row c.place c.bits) c.salt o).eval H).1 = some l)
+    (hpath : ((regPathAt c.own[k] r idx l (c.π o)).eval H).1 = true) :
+    (commitAt c (rooted c.own)).Opens H roots o = true := by
+  have hkl : k < roots.length := (List.getElem?_eq_some_iff.1 hr).1
+  have hfind : (rooted c.own roots).find? (fun p => decide (bs p.root = r)) =
+      some { c.own[k] with root := bytes r } := by
+    rw [Array.find?_eq_some_iff_getElem]
+    refine ⟨decide_eq_true (bs_bytes r), k, by simpa [rooted] using hk, by simp [rooted, hr], fun j hj => ?_⟩
+    have hjl : j < roots.length := hj.trans hkl
+    have hne : roots[j] ≠ r := fun h => hfirst j hj (List.getElem?_eq_some_iff.2 ⟨hjl, h⟩)
+    simp [rooted, List.getElem?_eq_some_iff.2 ⟨hjl, rfl⟩, bs_bytes, hne]
+  unfold CommitmentScheme.Opens commitAt
+  simp only [pathCommit, hat, ocBind_eval, hleaf]
+  unfold regPath
+  rw [hfind]
+  exact hpath
+
 /-- **One opening's calls at the code's ports with the list's roots** are bounded as `commit`'s are, by the code's
 deepest port. -/
 theorem commitAt_rooted_calls_le (H : Msg → Msg) (c : Code) (roots : List Msg) (o : Opening Bool) :
