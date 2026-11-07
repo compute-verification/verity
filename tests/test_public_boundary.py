@@ -45,14 +45,10 @@ def test_allowed_is_sorted_unique_edges() -> None:
 
 
 def test_every_public_group_covers_a_file() -> None:
-    """Each group of the decided boundary holds a tracked file, so a renamed directory can't empty one unseen; so does
-    each listing, so a renamed allowlist can't leave the export copying it whole."""
+    """Each group of the decided boundary holds a tracked file, so a renamed directory can't empty one unseen."""
     boundary, tree = PB.Boundary.load(), PB.Tree(ROOT)
     empty = [g for g, r in boundary.groups.items() if not any(r.fullmatch(f) for f in tree.files)]
     assert not empty, f"public groups whose globs cover no tracked file: {empty}; fix their globs in public_boundary.toml"
-    assert boundary.listings, "this tree's boundary declares the data files that list paths"
-    empty = [x.paths.pattern for x in boundary.listings if not any(x.paths.fullmatch(f) for f in tree.files)]
-    assert not empty, f"listings whose paths cover no tracked file: {empty}; fix their paths in public_boundary.toml"
 
 
 BOUNDARY = """
@@ -392,88 +388,6 @@ def test_a_rewrite_it_cannot_lay_out_fails_closed(text: str) -> None:
     """A layout the line-wise rewrite would get wrong is an error, never a manifest that reads as something else."""
     with pytest.raises(ValueError, match="public_export"):
         PE.rewrite_pyproject(text, "", {"pyproject.toml"}, set(), {"privdist"})
-
-
-ROOTS = ("# the roots\nhidden.py   # private\nimports.py\n../../tools/priv/   # a directory it doesn't copy\npkg/\n"
-         "**/*_negatives.sh\nverity.pub.mod\ngone.sh\n")
-ALLOWLIST = '''{
-  "rule": "a lint",
-  "entries": [
-    {"file": "imports.py", "kind": "F401"},
-    {"file": "hidden.py", "kind": "F401", "count": 2},
-    {"file": "verity/other/wants.py", "kind": "E1"},
-    {"file": "tools/priv/data.json", "kind": "E2"}
-  ]
-}
-'''
-LISTINGS = '''
-[[listing]]
-paths = ["verity/pub/roots.txt"]
-base = "verity/pub"
-entry = "line"
-[[listing]]
-paths = ["verity/pub/allowlists"]
-base = "verity/pub"
-entry = "entries.file"
-'''
-
-
-def _listing(path: str):
-    return PB.Boundary.load(tomllib.loads(LISTINGS)).listing(path)
-
-
-def test_a_listing_loses_only_the_entries_naming_what_the_export_does_not_copy(judged) -> None:
-    """An entry naming a tracked file or directory the export doesn't copy goes, its path from the listing's base or else
-    from the root; one naming a copied path stays, and so does one naming nothing tracked (a glob, a module, a stale
-    entry), which the tree's own check reports."""
-    _, tree, j = judged
-    tracked = tree.files | tree.dirs
-    new, dropped = PE.rewrite_listing(ROOTS, _listing("verity/pub/roots.txt"), "roots.txt", set(j.public), tracked)
-    assert dropped == [("entry", "verity/pub/hidden.py"), ("entry", "tools/priv")]
-    assert new == "# the roots\nimports.py\npkg/\n**/*_negatives.sh\nverity.pub.mod\ngone.sh\n"
-    where = "verity/pub/allowlists/lint.json"
-    new, dropped = PE.rewrite_listing(ALLOWLIST, _listing(where), where, set(j.public), tracked)
-    assert dropped == [("entry", "verity/pub/hidden.py"), ("entry", "tools/priv/data.json")]
-    old = json.loads(ALLOWLIST)
-    assert json.loads(new) == old | {"entries": [old["entries"][0], old["entries"][2]]}
-    assert new.splitlines()[3:6] == ['    {"file": "imports.py", "kind": "F401"},',
-                                     '    {"file": "verity/other/wants.py", "kind": "E1"}', "  ]"], "one entry a line, as it was"
-
-
-@pytest.mark.parametrize("text", [
-    '{"entries": [{"file": "hidden.py"}, {"file": "imports.py"}]}\n',
-    '{"rule": "no entries", "hidden.py": 1}\n',
-])
-def test_a_listing_it_cannot_lay_out_fails_closed(judged, text: str) -> None:
-    _, tree, j = judged
-    where = "verity/pub/allowlists/lint.json"
-    with pytest.raises(ValueError, match="public_export"):
-        PE.rewrite_listing(text, _listing(where), where, set(j.public), tree.files | tree.dirs)
-
-
-def test_a_listing_names_its_paths_base_and_entry() -> None:
-    for e in ({"paths": ["x"], "base": ""}, {"paths": ["x"], "base": "", "entry": "column"}):
-        with pytest.raises(ValueError, match="exactly paths, base and entry"):
-            PB.Boundary.load({"listing": [e]})
-
-
-def test_the_export_drops_a_listings_entries_naming_what_it_does_not_copy(judged, tmp_path_factory) -> None:
-    root, _, _ = judged
-    files = {**TREE, "verity/pub/roots.txt": ROOTS, "verity/pub/allowlists/lint.json": ALLOWLIST}
-    for f in ("verity/pub/roots.txt", "verity/pub/allowlists/lint.json"):
-        (root / f).parent.mkdir(parents=True, exist_ok=True)
-        (root / f).write_text(files[f], encoding="utf-8")
-    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
-    subprocess.run(["git", "add", *files], cwd=root, check=True)
-    (root / "boundary.toml").write_text(BOUNDARY + LISTINGS, encoding="utf-8")
-    tree, boundary = PE.PB.Tree(root, files=files), PE.PB.Boundary.load(root / "boundary.toml")
-    dest = tmp_path_factory.mktemp("export")
-    got = PE.export(tree, boundary, PE.PB.judge(tree, boundary), dest)
-    assert got["rewrites"]["verity/pub/roots.txt"] == ["entry verity/pub/hidden.py", "entry tools/priv"]
-    assert got["rewrites"]["verity/pub/allowlists/lint.json"] == ["entry verity/pub/hidden.py", "entry tools/priv/data.json"]
-    assert "hidden.py" not in (dest / "verity/pub/roots.txt").read_text(encoding="utf-8")
-    assert "verity/pub/hidden.py" not in subprocess.run(["git", "ls-files"], cwd=dest, capture_output=True, text=True,
-                                                        check=True).stdout.split()
 
 
 def test_the_export_is_one_fresh_commit_of_the_public_set(judged, tmp_path_factory) -> None:

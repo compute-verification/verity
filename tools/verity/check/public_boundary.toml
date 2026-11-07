@@ -130,17 +130,3 @@ paths = [
     "benchmarks/one_stage",
 ]
 until = "PRF-285: the v3 ledger names a period's prover `prover`"
-
-# Data files that list paths: the export drops each entry naming a file or directory it doesn't copy, so the exported tree's
-# own checks (a lint's stale entries, a census's unmatched roots) find none. `entry` is where an entry names its path:
-# `line`, a line's first word (`#` starts a comment); `entries.KEY`, the KEY of each of a JSON object's `entries`, one a line.
-# A path is from `base`, else from the root.
-[[listing]]
-paths = ["integrations/vllm/tests/census_roots.txt"]
-base = "integrations/vllm"
-entry = "line"
-
-[[listing]]
-paths = ["integrations/vllm/tests/lint/allowlists"]
-base = "integrations/vllm"
-entry = "entries.file"
