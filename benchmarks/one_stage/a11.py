@@ -642,7 +642,7 @@ def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_
     FC.write(st.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
              rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in st.in_rows}, outs=outs, salts=salts, public_words={},
              digests=(st.pin, st.class_sha512), indices=[int(u) for u in indices])
-    return {"meta": json.loads(st._meta), "tampered": "o0", "word": 0, "bit": 0}
+    return {"meta": st.meta, "tampered": "o0", "word": 0, "bit": 0}
 
 
 def session_port(base: int, j: int) -> int:
