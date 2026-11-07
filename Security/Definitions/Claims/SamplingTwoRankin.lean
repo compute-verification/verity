@@ -6,8 +6,9 @@ public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 /-!
 # Claims: Rankin's bound on the two-stage count
 
-`CompiledTwo.Exfil` bounds the influence set by `Σ_{T ∈ admissibleTwo} 2^{b(T)}`, and its patterns' form by the sum over
-the admissible sets' patterns. Both are exact sums over the admissible sets, which no one evaluates directly.
+`CompiledTwo.Exfil` bounds the influence set by `Σ_{T ∈ admissibleTwo} 2^{b(T)}`, its patterns' form by the sum over the
+admissible sets' patterns, and its served-output form by `Σ_T 2^{min(b(T), Σ_r min(b(T_r), |r|))}`. All three are exact
+sums over the admissible sets, which no one evaluates directly.
 
 Take a first stage that misses each set `T` of replay blocks with probability at most `∏_{ρ∈T} (1 − q_ρ)`, as
 independent catches at rates `q_ρ ≤ 1` would: a Bernoulli first stage (`bernoulli:NUM/DEN`) at `q_ρ = NUM/DEN`, or the
@@ -23,6 +24,10 @@ the admissible sets into a sum over every set, which factors over the replay blo
   pattern `c`.
 * `AdmissibleTwoRankinPatterns`: the patterns' sum is at most `δ^{−θ} ∏_ρ` of the patterns' factors, when each request
   reads the proof blocks of one replay block, so that a set's pattern is its replay blocks' patterns.
+* `rankinFactorCapped`: `G_ρ(θ)` with each set's bits capped at `S_ρ`, `Σ_{U ⊆ ρ} 2^{min(b(U), S_ρ)} (…)^θ`.
+* `AdmissibleTwoRankinServed`: the served-output cap's sum, `Σ_{T admissible} 2^{min(b(T), Σ_r min(b(T_r), |r|))}`, is
+  at most `δ^{−θ} ∏_ρ` of the capped factors, when distinct requests read disjoint proof blocks and `S_ρ` bounds the
+  served bits of the requests that read in `ρ`.
 
 Statements only: definitions, no proofs.
 -/
@@ -81,5 +86,31 @@ def AdmissibleTwoRankinPatterns : Prop :=
             (fun T r => lightOf s Pt (servedBits req r) (blocksTo s.prog Pt req T r)),
           2 ^ ∑ r, lightBits s Pt (servedBits req r) (p r) : ℕ) : ℝ) ≤
         δ ^ (-θ) * ∏ ρ ∈ Finset.range d.part.blocks.length, rankinFactorPatterns s Pt d req (q ρ) θ ρ
+
+/-- **Rankin's capped factor of replay block `ρ`** at cap `S`, rate `q` and `θ`:
+`Σ_{U ⊆ ρ} 2^{min(b(U), S)} (1 − q(1 − e_ρ(U)))^θ`, each set's bits capped at `S`. -/
+noncomputable def rankinFactorCapped (s : AuditStatement) (Pt : Partition) (d : Design.Two) (S : ℕ) (q θ : ℝ)
+    (ρ : ℕ) : ℝ :=
+  ∑ U ∈ (blocksIn Pt d.part ρ).powerset, (2 : ℝ) ^ min (bitsOf s Pt U) S * d.passes Pt q (counts Pt d.part U) ρ ^ θ
+
+/-- **Rankin's bound on the served-output cap's sum**: on a statement in scope whose first stage misses each set `T` of
+replay blocks with probability at most `∏_{ρ∈T} (1 − q_ρ)`, at rates `q_ρ ≤ 1`, at every `δ > 0`, `θ ≥ 0`, split `req`
+of the served outputs into requests whose proof blocks are pairwise disjoint, and caps `S_ρ` at least the served bits
+`Σ |r|` of the requests that read in replay block `ρ`,
+`Σ_{T admissible} 2^{min(b(T), Σ_{r : T_r ≠ ∅} min(b(T_r), |r|))}` is at most `δ^{−θ}` times the product of the replay
+blocks' capped factors. -/
+def AdmissibleTwoRankinServed : Prop :=
+  ∀ (s : AuditStatement) (Pt : Partition) (d : Design.Two) (q : ℕ → ℝ) (δ θ : ℝ) (R : Type) [Fintype R]
+    [DecidableEq R] (req : Fin s.prog.outs.length → R) (S : ℕ → ℕ), InScopeTwo Pt d s →
+    (∀ T ⊆ Finset.range d.part.blocks.length, d.replay.Pa d.part T ≤ ∏ ρ ∈ T, (1 - q ρ)) → (∀ ρ, q ρ ≤ 1) →
+    0 < δ → 0 ≤ θ →
+    (∀ r r', r ≠ r' → Disjoint (blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r)
+      (blocksTo s.prog Pt req (Finset.range Pt.blocks.length) r')) →
+    (∀ ρ, ∑ r ∈ Finset.univ.filter (fun r => (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty),
+      servedBits req r ≤ S ρ) →
+      ((∑ T ∈ admissibleTwo Pt d δ, 2 ^ min (bitsOf s Pt T)
+          (∑ r ∈ Finset.univ.filter (fun r => (blocksTo s.prog Pt req T r).Nonempty),
+            min (bitsOf s Pt (blocksTo s.prog Pt req T r)) (servedBits req r)) : ℕ) : ℝ) ≤
+        δ ^ (-θ) * ∏ ρ ∈ Finset.range d.part.blocks.length, rankinFactorCapped s Pt d (S ρ) (q ρ) θ ρ
 
 end Claims.Sampling
