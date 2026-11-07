@@ -312,8 +312,11 @@ def program_component(root: SpecializedDefinition, digest: str, program_fn: str,
     # request-relative steps = segments ending at a sampling-event instance (inclusive) — X-09's segmentation, on the Program side;
     # the sampling-event vocabulary is `verity_vllm.program.sampling_event`'s (greedy and seeded Gumbel selects alike), read nowhere else
     bounds, lo = [], 0
+    events: dict[int, bool] = {}   # by callee object: a descriptor id serializes the callee's statics
     for i, n in enumerate(nodes):
-        if is_sampling_event(_spec_id(n.fn)):
+        if (e := events.get(id(n.fn))) is None:
+            e = events[id(n.fn)] = is_sampling_event(_spec_id(n.fn))
+        if e:
             bounds.append((lo, i + 1))
             lo = i + 1
     if lo != len(nodes):

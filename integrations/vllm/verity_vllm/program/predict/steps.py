@@ -208,7 +208,8 @@ class Compiled:
         (`RequestUnit.parse`) and its Program's token selects, whose sampled ids are the egress until an in-circuit renderer takes
         their place. No model-step template is among them."""
         ids = {u.parse.id for u in self.requests if u is not None and u.parse is not None}
-        ids |= {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes if n.fn.id.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
+        callees = {n.fn.id for p in self.programs.values() for n in p.fn.body.nodes}
+        ids |= {i for i in callees if i.split("{")[0].rsplit("_v", 1)[0] in EGRESS}
         return tuple(sorted(ids))
 
     def summary(self) -> dict:
