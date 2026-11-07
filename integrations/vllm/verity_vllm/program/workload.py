@@ -327,7 +327,8 @@ class WorkloadRequest:
     component: RequestComponent
     T: int | None = None  # decode steps derived (cap - 1); checked against the component's program_fn when it names T
     # a prefix-cache hit (`program.prefix_plan`): {"rows": C, "producers": [the request that computed each cached block]}; the
-    # component reads rows 0..C-1 of every layer's KV cache as its `prefix` input, which Match binds to the producers' rows
+    # component reads rows 0..C-1 of every layer's KV cache as its `prefix` input, which Match binds to the producers' rows; or a
+    # request a Commit window carries in (`predict.steps`, class G): {"rows": C, "carried": True}, rows 0..C-1 its own at the open
     prefix: dict | None = None
 
     def static(self) -> dict:
@@ -337,10 +338,16 @@ class WorkloadRequest:
 
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
-# wrapper's `seed` and `splits` are its request's own, like the prompt, and so are a warm request's cached `prefix` and a TP rank
-# Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`)
-_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", "prefix", "schedule")
+# wrapper's `seed` and `splits` are its request's own, like the prompt, and so are a warm request's cached `prefix` (on the
+# sparse-attention decoder with its index-K slots `prefix_ik` and scales `prefix_iks`), a resumed request's `last_token` and a TP
+# rank Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`)
+_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", "prefix", "prefix_ik", "prefix_iks", "last_token", "schedule")
 _REQUEST_LOCAL_PREFIXES = ("peers",)
+
+
+def _resumed(r: WorkloadRequest) -> bool:
+    """Whether the request's history reaches its prompt's end, so its first step decodes (a request resumed mid-decode)."""
+    return bool(r.prefix) and r.prefix["rows"] >= r.prompt_len
 
 
 def _is_request_local(group: str) -> bool:
@@ -572,16 +579,19 @@ class WorkloadProgram:
         time / observed step indices are NOT here: they are the execution's, and the checker compares them to this."""
         rows = []
         for r in self.requests:
-            T = r.cap - 1
+            T, d0 = r.cap - 1, r.arrive_step + (not _resumed(r))
             rows.append({"request_id": r.request_id, "index": r.index, "arrive_step": r.arrive_step, "prompt_len": r.prompt_len, "cap": r.cap,
-                         "programmed_steps": {"prefill": r.arrive_step, "decode": [r.arrive_step + 1, r.arrive_step + T] if T > 0 else None,
-                                              "count": T + 1},
+                         "programmed_steps": {"prefill": None if _resumed(r) else r.arrive_step,
+                                              "decode": [d0, r.arrive_step + T] if r.arrive_step + T >= d0 else None, "count": T + 1},
                          "output_interface": {"kind": "bounded", "tokens_max": r.cap, "event": "(request_id, s) -> programmed engine step arrive_step + s"},
                          # the two lengths, bounded from the declaration alone: served <= cap; executed <= cap (the lag step fits)
                          "lengths": {"served_output_len_max": r.cap, "executed_prefix_len_max": r.cap,
                                      "eos_stop_executed_prefix_max": min(r.cap, max(r.cap - 1, 0) + self.lag), "lag": self.lag, "capacity_events": r.cap},
                          "input_interface": {"prompt_tokens": r.prompt_len, "available_at": r.arrive_step},
-                         **({"prefix": {**r.prefix, "rule": "rows 0..rows-1 of every layer's KV cache are the producers' rows (served from the "
+                         **({"prefix": {**r.prefix, "rule": "rows 0..rows-1 of every layer's KV cache are the request's own at the window's "
+                                                            "open (carried in, never recomputed); its steps compute rows rows.."}}
+                            if r.prefix and r.prefix.get("carried") else
+                            {"prefix": {**r.prefix, "rule": "rows 0..rows-1 of every layer's KV cache are the producers' rows (served from the "
                                                             "prefix cache, never recomputed); the prefill computes rows..prompt_len-1"}}
                             if r.prefix else {})})
         last = max(r.arrive_step + r.cap - 1 for r in self.requests)
@@ -597,7 +607,7 @@ class WorkloadProgram:
                     c = r.component
                     G = body.offsets[self._K + r_i]
                     seg = c.step_nodes[s] if s < len(c.step_nodes) else None
-                    members.append({"request_id": r.request_id, "s": s, "phase": "prefill" if s == 0 else "decode",
+                    members.append({"request_id": r.request_id, "s": s, "phase": "prefill" if s == 0 and not _resumed(r) else "decode",
                                     "nodes": list(seg) if seg else None,
                                     "gates": [G + c.step_gates[s][0], G + c.step_gates[s][1]] if seg else None})
             engine_steps.append({"e": e, "members": members, "co_scheduled": len(members) > 1,
