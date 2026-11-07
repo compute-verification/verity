@@ -257,7 +257,7 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
 
 
 def program_component(root: SpecializedDefinition, digest: str, program_fn: str,
-                 wrapper_params: list[tuple[str, str]] | None = None) -> RequestComponent:
+                      wrapper_params: list[tuple[str, str]] | None = None) -> RequestComponent:
     """`request_component` of a request Program's root: a decoded descriptor's (`DecodedProgram.root`), or a `Program`'s own
     (`Program.root`, whose definitions are this process's, so nothing is decoded or re-pointed), its `program_digest` and its
     program function's descriptor id."""
