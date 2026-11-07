@@ -66,8 +66,7 @@ from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FA
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
 from verity.ml.definitions import word as word_query
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
-from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls,
-                                           module_body_boundary)
+from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "collective_kind",
@@ -248,9 +247,6 @@ class Population:
                  query: str = QUERY_OF_RECORD) -> None:
         if query not in QUERIES:
             raise ValueError(f"unknown query {query!r}: one of {QUERIES}")
-        if P.checks:
-            # an output, not a required Value: nothing commits a check, and the replay evaluates it from the Values that are required
-            P = replace(P, outputs=tuple(v for v in P.outputs if v not in frozenset(P.checks)))
         self.P, self.corr, self.return_slots, self.query = P, corr, return_slots, query
         self.events = [c.id for c in P.calls if c.family in SAMPLING_EVENTS]
         if not self.events:
@@ -292,10 +288,12 @@ class Population:
         if self.world > 1:
             self._rank_partials()
         self.literals = literals = literal_calls(P)
-        self.B_module = B_module = module_body_boundary(P, corr, literals)
+        # a check is an output, not a required Value: nothing commits it, and the replay evaluates it from the Values that are required
+        returned = replace(P, outputs=tuple(v for v in P.outputs if v not in frozenset(P.checks))) if P.checks else P
+        self.B_module = B_module = boundary_without_literals(returned, Q_module_body_v1(P, corr), literals)
         if query == Q_WORD_ID:
             self.Q = partition_by(lambda c: c.id)
-            self.B = B = boundary_without_literals(P, self.Q, literals)
+            self.B = B = boundary_without_literals(returned, self.Q, literals)
         else:
             self.Q = Q_module_body_v1(P, corr)
             self.B = B = B_module
@@ -303,7 +301,7 @@ class Population:
         #: UNRETURNED: Calls whose Values no Call reads, the Program does not return and no policy below requires: nothing depends on
         #: them, so the word check skips them and the manifest lists their outputs (`unreturned_rows`).  A Call lowered to no runtime tensor
         #: (the DSA indexer's MQA logits and top-k while every key is selected) is neither return slot nor returned tensor either.
-        word_B = B if query == Q_WORD_ID else boundary_without_literals(P, partition_by(lambda c: c.id), literals)
+        word_B = B if query == Q_WORD_ID else boundary_without_literals(returned, partition_by(lambda c: c.id), literals)
         dead = [c.id for c in P.calls if c.id not in literals and not any(ValueRef(c.id, p.name) in word_B.values for p in c.port_table)]
         self.unreturned: frozenset[int] = frozenset(dead) & corr.tensorless
         protocol: set[ValueRef] = set()
