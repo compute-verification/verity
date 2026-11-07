@@ -48435,6 +48435,12 @@
     "Flock.Guarantees.SampledKSTwo": "b2e77b5ff15af3a7d04cc922923581fed00a6caeefa7215686649e00a82fce36"
    }
   },
+  "Proofs.Flock.SamplingGeneric.OpensTwo": {
+   "digest": "a2d6dff89b6131c6f3a2bd7146c44cb177929c9527e6472cbd5a4d501ac0107a",
+   "definitions": {
+    "Claims.SamplingGeneric.SessionOpensTwo": "263e3dfd4fd01607915fffa3bcca2c83a048402ee3f204bbef86828f9a66063a"
+   }
+  },
   "Proofs.Flock.SamplingGeneric.TwoAt": {
    "digest": "6ef7b0c333df9fc929173613e4a30ad2b782241d7cd7275aa72361895c2745d1",
    "definitions": {
@@ -48452,9 +48458,8 @@
    }
   },
   "Proofs.Flock.SamplingGeneric.TwoDeployed": {
-   "digest": "b3b93ca81b008d48bc7d7e34c7def3c507e651cb6db528860bd8ef1e1f943eb3",
+   "digest": "dfbe25af23794c9cc895d2270ffbf44a686ad302969107da0845dff9ce220624",
    "definitions": {
-    "Claims.SamplingGeneric.SessionOpensTwo": "263e3dfd4fd01607915fffa3bcca2c83a048402ee3f204bbef86828f9a66063a",
     "SamplingDeploy.Code.RefusesTwo": "fb71a8bd7bbb835f632eb5b01629891c333db5c4e9c99ff5ea953210a834d47c",
     "SamplingDeploy.compiledTwo": "12c69bc4b2d997011f74a7f032d15de03c4f7a009d9a0a97d3d4b96102c18b9e"
    }
