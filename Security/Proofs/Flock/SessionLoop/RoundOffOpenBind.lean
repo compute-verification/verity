@@ -16,7 +16,7 @@ sends the same binding: both targets are `Σ_k γ_k·dot (eq r''_k) (t(s_k))` at
 and the switched vectors agree at every claim (`Loop.switch_sv`).
 
 * `FlockComplete.rsTarget`: that target at the coins `coin` from `L`; `piopCut_T`: a returned cut PIOP's target.
-* `Bind.sched_open`: the loop schedules the binding at the target of its zerocheck's and lincheck's claims.
+* `Bind.sched_openBind`: the loop schedules the binding at the target of its zerocheck's and lincheck's claims.
 * `LeanRelease.unrefused_open`: the coins show no refusal by the round.
 * `Masked.runCut_openBody`, `Loop.enc_openBind`: the switched session sends the binding there, tagged `0`.
 * `Loop.rsTarget_raw`: the target at the schedule's coins past the algebraic phase is the one at the opened coins.
@@ -100,7 +100,7 @@ open Loop
 /-- **The loop schedules the opening's binding at its own target** (`sched_binding`): the target is `rsTarget` at the
 schedule's coins past the algebraic phase, over the table's switched vectors of its zerocheck's and lincheck's claims,
 which are at the points of the algebraic phase's coins (`repPiop_rec`), and the extra claims. -/
-theorem sched_open {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
+theorem sched_openBind {t : _root_.Flock.Firewall.Finish.Tab} {rep : ℕ} {dom : ByteArray} {xs : Array (Array F128)}
     {hi : Array ByteArray} {cr : Array (Array F128)} {alg sched : Array (ByteArray × ℕ)}
     (hal : _root_.Flock.Firewall.Skeleton.rounds t.st t.sch.k0 (_root_.Flock.Firewall.Finish.flat t.cm0.cap) dom =
       .ok alg)
@@ -548,7 +548,7 @@ the loop's table there is of the rep's setup and the rep's schedule, its zeroche
 points of the openings' words from the rep's start, and the release is the opening's binding at the target `rsTarget`
 of the openings' words from `rankSlot` over the table's switched vectors of those claims and the extra claims, and the
 table's cap. The frame is past the algebraic phase there (`Bind.repState_opened`); the loop scheduled the binding
-(`Bind.sched_open`) and asks for `z`'s coins (`Loop.loopNr_l0`), and the check passes it as it came
+(`Bind.sched_openBind`) and asks for `z`'s coins (`Loop.loopNr_l0`), and the check passes it as it came
 (`roundFree_openBind`). -/
 theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
@@ -764,7 +764,7 @@ theorem openBind_frame (L₁ : LeanRelease Flock.Wit Loop.Tp)
     have := (Count.sched_rho htp).1
     omega
   have hn64 : tr.sch.n < 2 ^ 64 := by rw [hT2]; exact lt_trans hnn (by norm_num)
-  obtain ⟨hssz, zc, lc, hptsR, T, hTe, hbody, -⟩ := Bind.sched_open hal' hs'' hdom' (by rw [hT1]; exact hdg) hcapR
+  obtain ⟨hssz, zc, lc, hptsR, T, hTe, hbody, -⟩ := Bind.sched_openBind hal' hs'' hdom' (by rw [hT1]; exact hdg) hcapR
     hmT' (by rw [hT1]; exact hmkt) hXb (by rw [hT2]; exact hk0) (by rw [hT2]; exact hnn) (by rw [hT2]; exact hq)
     hn0r (by rw [Array.size_map, Array.size_range, hAA', hXS]; omega) hmT (p := a + 1) (by rw [hAA', hXS]; omega)
   have hlt' : (ZKMal.CoinLayer.locate (roundsOf spec (Masked.stsOf x)) 0 (i + 1)).2 < sched'.size := by
