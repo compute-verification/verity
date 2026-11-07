@@ -85,8 +85,8 @@ ALLOWED = {
     "core.protocols.profile": {"ml.circuits"},
     # The verifier's coins sample its own bytes as the Lean verifier does (`coins`), and the proof system's challenger
     # samples with them (`service.Stream.select`); every coin source is named by a claim instance (`challenger.coin_claim`).
-    # Its challenger, ZK server, workers and verifier are
-    # parties of the deployment layer (`parties`), their messages the wire's.
+    # SPOT[Flock]'s inference server, proof server and verifier, the core deployment's ZK server and workers, and the
+    # challenger both run are parties of the deployment layer (`parties`), their messages the wire's.
     "core.protocols.sampled_proofs": {"core.claims", "core.wire", "core.deploy", "ml.circuits", "ml.commitments",
                                       "ml.randomness", "core.protocols.profile", "core.protocols.record"},
     # The wipe's memory challenger and prover are parties of the
