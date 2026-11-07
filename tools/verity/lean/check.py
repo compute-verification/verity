@@ -4294,6 +4294,12 @@ class Pipeline:
         s = time.monotonic()
         try:
             facts, search = self.copied(mods, work)
+            keys = replay_keys(facts, self.toolchain, self.digest)
+            def passed(m):
+                return (self.replay_cache / f"{keys[m]}.json").is_file()
+            if all(map(passed, mods)) and not (self.closure and closure_plan(facts, passed)[0]):
+                rec["checked"] = 0                              # `Replay.lean` would only load what it reuses
+                return
             with self.cond:
                 if self.ended:
                     return

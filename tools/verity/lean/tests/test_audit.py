@@ -4825,6 +4825,32 @@ def test_a_pipeline_runs_one_batch_at_a_time_in_the_heavy_slot_and_none_after_th
     A._HEAVY_REPLAY.release()
 
 
+def test_a_batch_whose_modules_and_their_closure_all_passed_runs_no_replay(tmp_path, monkeypatch):
+    """A cold build reports every module built, most of them with the bytes an earlier replay passed: a batch whose modules,
+    and with `--closure` every module they import, are in the cache under its copies' keys starts no `Replay.lean`, which
+    would only load them. One left to check, and it replays."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean", "P/B.lean"])
+    p.closure = True
+    imports = {"D": [], "P.A": ["D"], "P.B": ["P.A"]}
+    for m in imports:
+        (tmp_path / f"{m}.olean").write_text(m)
+    facts = {"graph": {m: {"olean": str(tmp_path / f"{m}.olean"), "imports": i} for m, i in imports.items()},
+             "modules": ["P.A", "P.B"], "axioms": []}
+    monkeypatch.setattr(A.Pipeline, "copied", lambda self, mods, work: (facts, []))
+    calls = []
+    monkeypatch.setattr(A, "replay_step", lambda *a, **k: calls.append(a[2]["modules"]) or
+                        ([], {"checked": 2, "phases": {}, "peak_gib": 0}))
+    keys = A.replay_keys(facts, "t")
+    p.replay_cache.mkdir()
+    for m in ("P.A", "P.B"):
+        A.store_replay(p.replay_cache, keys[m], m)
+    p._replay(["P.A", "P.B"])
+    assert calls == [["P.A", "P.B"]], "D is not stored"
+    A.store_replay(p.replay_cache, keys["D"], "D")
+    p._replay(["P.A", "P.B"])
+    assert calls == [["P.A", "P.B"]] and p.batches[-1]["checked"] == 0 and "error" not in p.batches[-1]
+
+
 def test_a_batch_reads_copies_of_the_files_the_build_can_write_keyed_as_those_bytes_in_place(tmp_path, monkeypatch):
     """A batch's `.olean` files under a `.lake` the build writes (the package's, a fetched package's) are copied once into
     the snapshot, every part, and named there, the search path too; the toolchain's stay where they are. Their keys are
