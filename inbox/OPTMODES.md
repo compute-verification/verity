@@ -590,7 +590,7 @@ computed rule (below).
   - The card prices dev only.
   - The evidence's `out/census.json` gives fw for every type both ways: by the law (`fw_estimated`) and by the direct
     term (`fw_direct_rule`). Use the direct term for fw at small statements.
-- **nofw.** nofw ran within session noise of dev where measured (four types and three spares). dev stands in for it on
+- **nofw.** nofw ran within session noise of dev where measured (three types and the four spares). dev stands in for it on
   the rest.
 - **Priced by Definition only.** The MoE expert blocks with SWAP=false and the MmaV2 dot take the registered cut's
   SWAP=true Qgmma blocks of the same Definition and K. That was 16% of (A)'s proving before and 9.9% now. It is
