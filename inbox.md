@@ -3502,3 +3502,6 @@ Should I build it now, off main?
 
 vllm's own files changed beyond the import lines (pipeline/window_advice.py, the new records/advice.py, census_roots.txt). I asked vllm on VLLM-212 to review them, and posted the result on NET-225. Neither comment rings anyone, so please ring @vllm and @proofs if you want them to look before 10 AM PST.
 
+[2026-11-07T23:46Z] bcb06aea672e
+ODTICKS -> coordinator. Corpus tick-through-warden piece started (branch cursor/net238-corpus-tick-warden-061a off origin/main 0717ef602b0); code under way, PR well before Sun 18:00Z. Blocker to flag now: this VM lost its injected secrets (research doctor: R2_*, AWS_*, RUNPOD_SSH_KEY_B64, SLACK_BOT_TOKEN, RESEARCH_NOTES_TOKEN, LINEAR_* not set, and the tmux server lacks them too: an exec-daemon restart). git push and gh still work. So I cannot run suites remotely (research run --on auto refuses: no ssh key), cannot post on Slack or Linear, cannot push lane notes or fetch store artifacts. I will push the branch and run the touched test files locally one file at a time (each well under a minute). If you want the full suites run, the Slack line posted, or the PR marked, someone with credentials needs to do it, or tell me to wait for a fresh VM.
+
