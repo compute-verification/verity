@@ -119,8 +119,8 @@ open NoiseSha512
 variable {Q R S : Type}
 
 /-- **Pearl-C's semantics with SHA-512's noise**: `base` with its noise replaced by `unitNoise` at the salt's bytes
-`salt s` and the root `rootB (wid u)` of the unit's weight. The oracle is unused. -/
+`salt s` and the root `rootB (fixedId u)` of the unit's weight. The oracle is unused. -/
 def sha512Sem (base : PearlCSem Q R S) (salt : S → List ℕ) (rootB : ℕ → List ℕ) : PearlCSem Q R S :=
-  { base with noise := fun _ s U u act => unitNoise (salt s) (rootB (U.layout.wid u)) (U.layout.shape u) u act }
+  { base with noise := fun _ s U u act => unitNoise (salt s) (rootB (U.layout.fixedId u)) (U.layout.shape u) u act }
 
 end Pouw.PearlC

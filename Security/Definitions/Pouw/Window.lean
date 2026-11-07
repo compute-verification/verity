@@ -365,9 +365,9 @@ the words that unit reads from the `-h3` leaf at its position. -/
 def Served {Tr : Type} (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos) (X : Tr) : Prop :=
   P.rootOf X = P.rootH3 ∧ ∀ v, P.outputs X v = P.tileRead (P.leaf (U.pos X v)) v
 
-/-- **The tie to what's served** (premise `δ_in`, PoUW's reading of `WindowEps`; open on main): every prover's window
+/-- **The tie to what's served** (premise `δ_in`, PoUW's reading of `WindowDelta`; open on main): every prover's window
 accepts while its committed transcript isn't anchored and served (`Anchored`, `Served`, against the served pass `P`)
-with probability at most `δin(R, τ)`, a function of the window's state. `WindowEps` bounds the wrong units of whatever
+with probability at most `δin(R, τ)`, a function of the window's state. `WindowDelta` bounds the wrong units of whatever
 transcript the analysis commits; this is what makes that transcript the served computation's, not a self-consistent copy
 the prover chose. The units' statements `U` and the served pass `P` are fixed before the window, so the prover picks
 neither.
@@ -449,7 +449,7 @@ def UnitStmts.copies {Tr : Type} {N : ℕ} (V : UnitStmts Tr fun _ : Fin 1 => N)
   rootB X v := V.rootB X ⟨0, v.2⟩
   computes v si X := V.computes ⟨0, v.2⟩ si X
 
-/-- **The deployed wrong sets are copy-closed** (PoUW's reading of `WindowEps`, which it reads at
+/-- **The deployed wrong sets are copy-closed** (PoUW's reading of `WindowDelta`, which it reads at
 `𝓑 = harmSets W_ref ε ∧ CopyClosed`, and `ServiceEscapes`'s family): at every transcript, the wrong units hold a tile
 in every session or in none. It holds for the service's statements (`Pouw.Window.wrongCopyClosed_copies`), and there
 `𝓑`'s copy-closed conjunct is automatic (`Pouw.Window.harmSets_copyClosed_iff`). -/

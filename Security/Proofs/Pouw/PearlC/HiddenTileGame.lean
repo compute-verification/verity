@@ -1,14 +1,14 @@
 module
 
 public import Definitions.Pouw.PearlC.HiddenTileGame
-public import Proofs.Pouw.PearlC.HiddenGamma
+public import Proofs.Pouw.PearlC.HiddenGap
 public import Proofs.Core.Game
 
 /-!
 # The hidden audit's open obligation from what a proof system gives per tile
 
 `tileProofSoundAll_of_tileGame`: a hidden audit whose class is `BoundedByInduced Cls`, with a `TileGame` for every tile
-of every in-domain workload, meets `TileProofSoundAll` at `ηzk`. Per draw `i`, a tile that is neither good nor blank has
+of every in-domain workload, meets `TileProofSoundAll` at `δzk`. Per draw `i`, a tile that is neither good nor blank has
 its verdict accept only on a run in `Bad` (`TileGame.prob_le`); and the batch prover, read at position `i`, does no
 better than some strategy it induces on that tile's game, which is in `Cls` (core's `ProbBatchInduced`).
 -/
@@ -44,16 +44,16 @@ theorem prob_getD_le_of_boundedByInduced {O : Type}
   exact Verity.SecurityProofs.ProbBatchInduced pre post g false p (fun s => Cls τ o g s q) ε hg σ
     (fun s hs => hσ pre g post rfl s hs)
 
-/-- On a tile neither good nor blank, the verdict is accept with probability at most `ηzk q` for every strategy in
+/-- On a tile neither good nor blank, the verdict is accept with probability at most `δzk q` for every strategy in
 `Cls` at `q`. -/
 theorem TileGame.prob_le [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {P : Protocol Q R S}
     {TR : TileRules Q R S} {HA : HiddenAudit Q R S}
-    {Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop} {ηzk : ℕ → ℝ}
+    {Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop} {δzk : ℕ → ℝ}
     {U : Workload} {τ : Transcript} {o : HA.Opening} {H : Q → R} {s : S} {g : ℕ}
-    (T : TileGame P TR HA Cls ηzk U τ o H s g) (h0 : ∀ q, 0 ≤ ηzk q)
+    (T : TileGame P TR HA Cls δzk U τ o H s g) (h0 : ∀ q, 0 ≤ δzk q)
     (hbad : g ∉ goodTiles P TR U H s τ ∪ blankTiles TR U τ) (q : ℕ)
     (s' : Verity.Game.Strategy (HA.game H s U (HA.root U τ o) g)) (hs : Cls τ o _ s' q) :
-    Verity.Game.prob (fun b => b = true) (HA.game H s U (HA.root U τ o) g) s' ≤ ENNReal.ofReal (ηzk q) := by
+    Verity.Game.prob (fun b => b = true) (HA.game H s U (HA.root U τ o) g) s' ≤ ENNReal.ofReal (δzk q) := by
   let σ' := Verity.Game.Strategy.ofMap T.verdict T.G (cast (congrArg Verity.Game.Strategy T.game_eq) s')
   have h1 : Verity.Game.prob (fun b => b = true) (HA.game H s U (HA.root U τ o) g) s' =
       Verity.Game.prob (fun x => T.verdict x = true) T.G σ' := by
@@ -80,14 +80,14 @@ theorem ex_const_le {α : Type} [Fintype α] {c : ℝ} (hc : 0 ≤ c) : ex (fun 
 
 /-- **The hidden audit's open obligation from what a proof system gives per tile.** A hidden audit whose class at `q`
 is within `BoundedByInduced Cls`, with a `TileGame` for every tile of every in-domain workload, transcript and opening,
-meets `TileProofSoundAll` at `ηzk`, given `0 ≤ ηzk`. -/
+meets `TileProofSoundAll` at `δzk`, given `0 ≤ δzk`. -/
 theorem tileProofSoundAll_of_tileGame [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S)
     (TR : TileRules Q R S) (D : Layout → Prop) (HA : HiddenAudit Q R S)
-    (Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (ηzk : ℕ → ℝ)
-    (h0 : ∀ q, 0 ≤ ηzk q) (hB : ∀ τ o G σ q, HA.Bounded τ o G σ q → BoundedByInduced Cls τ o G σ q)
+    (Cls : Transcript → HA.Opening → (g : Verity.Game Bool) → Verity.Game.Strategy g → ℕ → Prop) (δzk : ℕ → ℝ)
+    (h0 : ∀ q, 0 ≤ δzk q) (hB : ∀ τ o G σ q, HA.Bounded τ o G σ q → BoundedByInduced Cls τ o G σ q)
     (tg : ∀ U : Workload, U.InDomain P D → ∀ (τ : Transcript) (o : HA.Opening) (H : Q → R) (s : S) (g : ℕ),
-      TileGame P TR HA Cls ηzk U τ o H s g) :
-    TileProofSoundAll P TR D HA ηzk := by
+      TileGame P TR HA Cls δzk U τ o H s g) :
+    TileProofSoundAll P TR D HA δzk := by
   intro U hU τ op w t q σ hσ i
   refine (ex_mono fun x => ?_).trans (ex_const_le (h0 q))
   split_ifs with hgood
@@ -102,9 +102,9 @@ theorem tileProofSoundAll_of_tileGame [Fintype Q] [DecidableEq Q] [Fintype R] [F
       show _ = Verity.Game.batch (List.ofFn f)
       rw [← hl, List.take_append_drop]
     have hle := prob_getD_le_of_boundedByInduced Cls _ _ _ (σ x) q (hB _ _ _ _ q (hσ x)) _ (f i) _ e i
-      (by simp) (fun b => b = true) (ENNReal.ofReal (ηzk q))
+      (by simp) (fun b => b = true) (ENNReal.ofReal (δzk q))
       (fun s hs => (tg U hU (τ x.1 x.2.1) (op x.1 x.2.1) x.1 x.2.1 (x.2.2 i).1).prob_le h0 hgood q s hs)
-    calc _ ≤ (ENNReal.ofReal (ηzk q)).toReal := ENNReal.toReal_mono ENNReal.ofReal_ne_top hle
-      _ = ηzk q := ENNReal.toReal_ofReal (h0 q)
+    calc _ ≤ (ENNReal.ofReal (δzk q)).toReal := ENNReal.toReal_mono ENNReal.ofReal_ne_top hle
+      _ = δzk q := ENNReal.toReal_ofReal (h0 q)
 
 end Pouw.PearlC

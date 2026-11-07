@@ -11,7 +11,7 @@ public import Proofs.Pouw.Copy
 
 * **The honest words are proved.** `honestWords_devRev1K` gives every reference value an FP32 word, so the honest
   prover's committed words are the reference's (`wordOf_spec`). The workload's weights pass the rules (completeness's
-  hypothesis `Workload.WeightsOK`), so a drawn tile of a committed unit is good exactly when its replayed debit is
+  hypothesis `Workload.FixedOK`), so a drawn tile of a committed unit is good exactly when its replayed debit is
   within the cap.
 * **The cap is assumed at its measured rate.** `HonestTileCapRate` bounds one draw's failure by `ε`, an upper confidence
   limit on the measured rate; the union bound over the `t` draws gives `t·ε`.
@@ -54,7 +54,7 @@ theorem mem_goodTiles_honest (P : Protocol Q R S) (TR : TileRules Q R S) (U : Wo
     (hW : ∀ i j : ℕ, (∃ wd, wordQ wd = P.ticket H s U ((TR.tiling U.layout).unit g) (act ((TR.tiling U.layout).unit g)) i j) ∧
       ∃ wd, wordQ wd = P.useful H s U ((TR.tiling U.layout).unit g) (act ((TR.tiling U.layout).unit g)) i j)
     (hB : ∀ j ∈ (TR.tiling U.layout).cols g,
-      P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g)) (U.weight (U.layout.wid ((TR.tiling U.layout).unit g)))
+      P.fixedOK (U.layout.shape ((TR.tiling U.layout).unit g)) (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g)))
         j)
     (hcap : TR.capOK H s U g (act ((TR.tiling U.layout).unit g))) :
     g ∈ goodTiles P TR U H s (honestTranscript P H s U act) := by

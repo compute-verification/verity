@@ -5,7 +5,7 @@ public import Definitions.Pouw.Basic.Prob
 public import Definitions.Pouw.Basic.QTree
 
 /-!
-# Pearl-C's γ-gap game and accounting (trusted)
+# Pearl-C's gap-gap game and accounting (trusted)
 
 The game of the integer statement (§3.3, `Pouw.Game.Defs`), for a protocol whose bound words are output words: per unit,
 the ticket words (Pearl-C's pre-peel accumulator `C̃`) and the useful output words (`U`, after the checked clean-up and
@@ -15,12 +15,12 @@ peel) are `Pouw.PearlC.Defs`'; here the protocol's reference functions are field
 
 ~~~text
 0. Oracle.      H : Q → R uniform (Q, R finite).
-1. Workload.    U = (layout, weight codes): N ≤ 2^64 units, quantified outside the probability.
+1. Workload.    U = (layout, fixed-operand codes): N ≤ 2^64 units, quantified outside the probability.
 2. Preprocess.  σ = A.pre.eval H, never a function of the salt; its queries count in q.
 3. Salt.        s : S uniform, independent of H.
 4. Online.      τ = CM.run A.online H U A.act σ s, cost ≤ T and calls ≤ q for every H and s.
 5. Score.       K = correctSet, the units whose committed words are correct and whose replayed debit is within the
-                cap (units above the cap are rejected, so they enter neither sum); A wins if T / (1 − γ) < ∑_{u ∈ K} W_ref(u).
+                cap (units above the cap are rejected, so they enter neither sum); A wins if T / (1 − g) < ∑_{u ∈ K} W_ref(u).
 ~~~
 -/
 
@@ -32,19 +32,23 @@ open Finset Pouw.Fp8Atom
 
 /-! ## Workloads, transcripts, cost models -/
 
-/-- The declared layout: `N` units `0, …, N − 1` (unit `u`'s index is `u`), their shapes and weight ids. -/
+/-- The declared layout: `N` units `0, …, N − 1` (unit `u`'s index is `u`), their shapes and the id of each unit's
+fixed operand. -/
 structure Layout where
   N : ℕ
   shape : ℕ → Shape
-  wid : ℕ → ℕ
+  /-- The id of unit `u`'s fixed operand `B`: units with one id share it. -/
+  fixedId : ℕ → ℕ
 
 /-- A matrix of bit patterns: operand codes, or output FP32 words. -/
 abbrev Codes : Type := ℕ → ℕ → ℕ
 
-/-- A declared workload: its layout and its weight codes, fixed before the salt. -/
+/-- A declared workload: its layout and its fixed operands' codes. -/
 structure Workload where
   layout : Layout
-  weight : ℕ → Codes
+  /-- The codes of fixed operand `w`: declared before the salt and reusable across units; model weights are the usual
+  case. -/
+  fixed : ℕ → Codes
 
 /-- The preprocessed state: any finite data. -/
 abbrev State : Type := List ℤ
@@ -72,45 +76,45 @@ def CostModel.Queries {Q R S : Type} (CM : CostModel Q R S) : Prop :=
     ∀ H : Q → R, CM.run prog H U act σ s = t.eval H ∧ CM.calls prog H U act σ s = t.calls H
 
 /-- An output-ticket protocol: the FP32 values of its reference ticket and useful words (`none` for a non-finite word),
-its domain rules on committed activations and on each weight row, and its costs.
-- `weightOK sh w j`: row `j` of the weight `w` of a unit of shape `sh` passes the rules. A correct unit and a good tile
-  have every weight row they read passing (`Correct`, `TileGood`); a tile's check asks it of the tile's columns, on the
-  weight rows it opens (`TileCheck.Accepts`).
+its domain rules on committed activations and on each fixed-operand row, and its costs.
+- `fixedOK sh w j`: row `j` of the fixed operand `w` of a unit of shape `sh` passes the rules. A correct unit and a good
+  tile have every fixed-operand row they read passing (`Correct`, `TileGood`); a tile's check asks it of the tile's
+  columns, on the fixed-operand rows it opens (`TileCheck.Accepts`).
 - `credit H s U u act`: what the named assumption credits for unit `u`. The reference computes it from the committed
-  activations `act`, the weights and the realized noise `(H, s)`, by the same replay that checks the unit; it never reads
+  activations `act`, the fixed operands and the realized noise `(H, s)`, by the same replay that checks the unit; it never reads
   the transcript's claimed ticket or useful words.
 - `capOK H s U u act`: the unit's replayed debit is within the cap. It is part of `Correct`: a unit above the cap is
-  rejected, so it is in neither TT_OUT's credit sum nor `Gγ`'s win sum. `Correct` is the game's idealized check of every
-  unit; a verifier that checks drawn tiles decides the cap per tile (`Tile.lean`: `TileGood`, `GγSampled`).
+  rejected, so it is in neither TT_OUT's credit sum nor `GGap`'s win sum. `Correct` is the game's idealized check of every
+  unit; a verifier that checks drawn tiles decides the cap per tile (`Tile.lean`: `TileGood`, `GGapSampled`).
 - `Wref`: the honest reference's cost of the unit, read from the layout (excluding hash calls; the model's own clean
   quantizer is outside the unit, so neither program is charged for it). -/
 structure Protocol (Q R S : Type) where
   ticket : (Q → R) → S → Workload → ℕ → Codes → ℕ → ℕ → Option ℚ
   useful : (Q → R) → S → Workload → ℕ → Codes → ℕ → ℕ → Option ℚ
   actOK : Shape → Codes → Prop
-  weightOK : Shape → Codes → ℕ → Prop
+  fixedOK : Shape → Codes → ℕ → Prop
   credit : (Q → R) → S → Workload → ℕ → Codes → ℝ
   capOK : (Q → R) → S → Workload → ℕ → Codes → Prop
   Wref : Layout → ℕ → ℝ
 
 variable {Q R S : Type}
 
-/-- A workload is in the domain `D`: at most `2^64` units, and `D` holds of its layout. Its weights may fail the rules:
-a unit or tile that reads a failing weight row is neither correct nor good, so it earns nothing. -/
+/-- A workload is in the domain `D`: at most `2^64` units, and `D` holds of its layout. Its fixed operands may fail the
+rules: a unit or tile that reads a failing fixed-operand row is neither correct nor good, so it earns nothing. -/
 def Workload.InDomain (_P : Protocol Q R S) (D : Layout → Prop) (U : Workload) : Prop :=
   U.layout.N ≤ 2 ^ 64 ∧ D U.layout
 
-/-- Every row of the workload's weights passes the rules: the honest workload's admission, which completeness and
+/-- Every row of the workload's fixed operands passes the rules: the honest workload's admission, which completeness and
 `AdmitsRef` take beside admissible activations. -/
-def Workload.WeightsOK (P : Protocol Q R S) (U : Workload) : Prop :=
-  ∀ u < U.layout.N, ∀ j < (U.layout.shape u).n, P.weightOK (U.layout.shape u) (U.weight (U.layout.wid u)) j
+def Workload.FixedOK (P : Protocol Q R S) (U : Workload) : Prop :=
+  ∀ u < U.layout.N, ∀ j < (U.layout.shape u).n, P.fixedOK (U.layout.shape u) (U.fixed (U.layout.fixedId u)) j
 
-/-- A correct unit: admissible activations, its replayed debit within the cap, every row of its weight passing the
-rules, and every ticket and useful word on its `m × n` entries has the reference FP32 value (bit for bit up to the sign
+/-- A correct unit: admissible activations, its replayed debit within the cap, every row of its fixed operand passing
+the rules, and every ticket and useful word on its `m × n` entries has the reference FP32 value (bit for bit up to the sign
 of zero). -/
 def Correct (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (u : ℕ) (c : Commit) : Prop :=
   P.actOK (U.layout.shape u) c.act ∧ P.capOK H s U u c.act ∧
-    (∀ j < (U.layout.shape u).n, P.weightOK (U.layout.shape u) (U.weight (U.layout.wid u)) j) ∧
+    (∀ j < (U.layout.shape u).n, P.fixedOK (U.layout.shape u) (U.fixed (U.layout.fixedId u)) j) ∧
     ∀ i < (U.layout.shape u).m, ∀ j < (U.layout.shape u).n,
       wordQ (c.ticket i j) = P.ticket H s U u c.act i j ∧ wordQ (c.useful i j) = P.useful H s U u c.act i j
 
@@ -140,7 +144,7 @@ noncomputable def honestTranscript (P : Protocol Q R S) (H : Q → R) (s : S) (U
 whose weights pass the rules and admissible activations, with no preprocessing, at cost at most `∑_u W_ref(u)` and at
 most `qref U` calls. -/
 def AdmitsRef (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (qref : Workload → ℕ) : Prop :=
-  ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.WeightsOK P → ∀ act : ℕ → Codes,
+  ∃ prog : CM.Prog, ∀ U : Workload, U.InDomain P D → U.FixedOK P → ∀ act : ℕ → Codes,
     (∀ u < U.layout.N, P.actOK (U.layout.shape u) (act u)) → ∀ (H : Q → R) (s : S),
       CM.run prog H U act [] s = honestTranscript P H s U act ∧
       CM.cost prog H U act [] s ≤ ∑ u ∈ range U.layout.N, P.Wref U.layout u ∧
@@ -161,15 +165,16 @@ def Adversary.Bounded {CM : CostModel Q R S} (A : Adversary CM) (U : Workload) (
   ∀ (H : Q → R) (s : S), CM.cost A.online H U A.act (A.pre.eval H) s ≤ T ∧
     A.pre.calls H + CM.calls A.online H U A.act (A.pre.eval H) s ≤ q
 
-/-- The adversary wins: the honest work of its correct units exceeds `T / (1 − γ)`. -/
-def Wins (P : Protocol Q R S) (U : Workload) (γ T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
-  T / (1 - γ) < ∑ u ∈ correctSet P U H s τ, P.Wref U.layout u
+/-- The adversary wins: the honest work of its correct units exceeds `T / (1 − g)`. -/
+def Wins (P : Protocol Q R S) (U : Workload) (g T : ℝ) (τ : Transcript) (H : Q → R) (s : S) : Prop :=
+  T / (1 - g) < ∑ u ∈ correctSet P U H s τ, P.Wref U.layout u
 
-/-- **The γ-gap property** `G_γ` with error `η(q, N)`. -/
-def Gγ [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (D : Layout → Prop) (γ : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+/-- **The gap property** `G_g` at the gap `g` (an adversary's advantage `ε = g/(1 − g)`) with failure probability
+`δ(q, N)`. -/
+def GGap [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
+    (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    pr (fun x : (Q → R) × S => Wins P U γ T (A.transcript U x.1 x.2) x.1 x.2) ≤ η q U.layout.N
+    pr (fun x : (Q → R) × S => Wins P U g T (A.transcript U x.1 x.2) x.1 x.2) ≤ δ q U.layout.N
 
 /-! ## Pearl-C's accounting and domain (H100 units) -/
 
@@ -195,7 +200,7 @@ def Costs.current : Costs := ⟨64, 36⟩
 
 /-- The credited work of one unit: the ticket chain `m·k·n`, its promotion adds `m·k·n/G`, the fused `A′·F_B` (`m·k·r`),
 the peel combine (BF16, depth `2r`, 2 units per MAC: `4·r·m·n`), and the forming that depends on the salt (`fs·m·k`). The
-per-job share of `B̃·F_A` would enter credit and reference alike, and leaving it out only raises γ. -/
+per-job share of `B̃·F_A` would enter credit and reference alike, and leaving it out only raises g. -/
 def creditOf (p : Params) (c : Costs) (s : Shape) : ℚ :=
   let mkn : ℚ := (s.m : ℚ) * s.k * s.n
   mkn + (if p.G = 0 then 0 else mkn / p.G) + (s.m : ℚ) * s.k * p.r + 4 * (p.r : ℚ) * s.m * s.n + (c.fs : ℚ) * s.m * s.k
@@ -222,8 +227,8 @@ def wrefOf (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s + (c.qa 
 /-- The credited work when forming is not credited at all. -/
 def creditChainOnly (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s - (c.fs : ℚ) * s.m * s.k
 
-/-- The reduction's gap: `γ = 1 − (1 − γ₀)/Ω`. -/
-def gammaOf (γ₀ Ω : ℚ) : ℚ := 1 - (1 - γ₀) / Ω
+/-- The reduction's gap: `g = 1 − (1 − g₀)/Ω`. -/
+def gapOf (g₀ Ω : ℚ) : ℚ := 1 - (1 - g₀) / Ω
 
 /-- `Π`'s costs are Pearl-C's accounting at `(p, c)` with cap `ρ`: `W_ref` is `wrefOf`, and a unit within the cap is
 credited at least `(1 − ρ)·creditOf`. -/
@@ -254,7 +259,7 @@ noise law, the seeds and the chain live in the protocol's reference functions.
 - **Rows that still fail.** An activation row that fails Π's rules with the fixed `S_ℓ` (a token-specific massive
   activation, which no fixed set covers: Qwen2.5-7B's early `down_proj` layers) stays in its unit: its words are computed
   and bound, it earns no credit, and the verifier checks that it fails. Excluding a
-  row only lowers the prover's credit, so γ needs no check that the exclusion was forced. The per-tile statement
+  row only lowers the prover's credit, so g needs no check that the exclusion was forced. The per-tile statement
   (`Tile.lean`) credits a tile's passing rows; this unit-level game, whose `actOK` reads the whole unit, credits nothing of
   a unit with such a row. -/
 def pearlCDomain (p : Params) (L : Layout) : Prop :=

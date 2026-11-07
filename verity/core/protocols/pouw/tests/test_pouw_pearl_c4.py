@@ -84,7 +84,7 @@ def test_block_scales():
 
 def test_nvfp4_blocks_keep_the_sign_of_minus_zero():
     """`fp32.mul(−0, r)` is −0, so a −0 word's code is 0x8 and a +0 word's 0x0. The Lean's `nvf4Block` pins the same
-    block (`DeviceFp4Gamma.nvf4Block_signedZero`)."""
+    block (`DeviceFp4Gap.nvf4Block_signedZero`)."""
     d = [0x80000000, P.f32_bits(1.0)] + [0] * 13 + [0x80000000]
     assert F.quantize(F.NVFP4, d) == ([8, 7] + [0] * 13 + [8], [0x23])
 
@@ -304,7 +304,7 @@ def tolerant_kernel(scheme, ctx, noise, a, b, tiles):
 @pytest.mark.parametrize("clause", [None, "finite", "admit"])
 def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
     """`check_tile` refuses a tile one of whose weight rows fails a clause of `OperandOK`, as Lean's `TileCheck.Accepts`
-    asks each of the tile's weight rows to pass the protocol's `weightOK` (`Fp4Sem.RowOK`). One row per clause: a
+    asks each of the tile's weight rows to pass the protocol's `fixedOK` (`Fp4Sem.RowOK`). One row per clause: a
     non-finite word (Lean's `rowOK4_nonFinite`), and every 8th word `2¹²⁶`, which `RowAdmit4` refuses since β is not
     finite (`pc4Sem_squaresOverflow`). The word clause's widened-BF16 half holds of every opened row, which is BF16 words
     (`parse_row`); `test_row_passes_asks_finite_widened_bf16_words` checks it on `row_passes`. The tile beside it, whose

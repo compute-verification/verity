@@ -12,27 +12,27 @@ C1, a draw that depends on the registration, is already expressed on main: `Floc
 is M2: what the window's `κ`, `coll(R, τ)` and `δ_link(R, τ)` are in terms of its calls', for a window of `C` calls,
 registered at once, drawn at once by a law that depends on the registration, and proved call by call (`Pouw.Window`).
 Stated, not proved: the order is statement, review, card, then proof, so `lean-audit.json` lists
-`WindowEps` and `ServiceEscapes` under `shape.frozen` as `unstated`.
+`WindowDelta` and `ServiceEscapes` under `shape.frozen` as `unstated`.
 
-* `WindowEps`: `Pr[accept ∧ wrong(X) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} escape_{∏ L_c(R)}(B) + η + max_c κ_c + coll(R, τ) +
+* `WindowDelta`: `Pr[accept ∧ wrong(X) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} escape_{∏ L_c(R)}(B) + η + max_c κ_c + coll(R, τ) +
   ∑_c δlink_c(R, τ)`, where `X` is the committed transcript (fixed at registration), `∏ L_c(R)` the calls' laws at the
   prover's registration drawn independently, `η` the draw's distance from that product on `𝓑`, `κ_c + g_c(state)`
   call `c`'s knowledge bound in a compiled table's shape, `coll(R, τ)` the calls' `g_c` summed along the window's run
   (`Pouw.Window.coll`), and `δlink_c(R, τ)` call `c`'s link term in the window at the window's state.
 * `ServiceEscapes`: the deployed draw, sampled proofs' service, is within `η = 0` of its sessions' own laws on the
-  copy-closed sets, so `WindowEps` reads it with each session a call.
+  copy-closed sets, so `WindowDelta` reads it with each session a call.
 
 Knowledge soundness enters at its largest call's constant: whatever the draw, the rule picks one unit, of one call,
 and that call's extraction fails from the state the window brings with probability at most `κ_c + g_c(state)`. The
 state terms are one window-level collision term, in expectation over the window's run. The link terms add: each bounds
 the picked unit's disagreement with the window's committed transcript on the draws where the unit is its call's. So
-`WindowEps` gives gap (4)'s premises (`WindowBoundOfService` on `cursor/pouw-work-bound-stmt2-c7a9`, `KnowledgeSound εks`
+`WindowDelta` gives gap (4)'s premises (`WindowBoundOfService` on `cursor/pouw-work-bound-stmt2-c7a9`, `KnowledgeSound εks`
 and `LinkSound δlink`) at `εks R τ := max_c κ_c + coll R τ` with `coll := Pouw.Window.coll`, and `δlink := ∑_c δlink_c`.
 
 **The deployed draw** (decision 102, `verity/core/protocols/pouw/window.py`). The window's calls are the service's
 sessions and its units the `N` tiles in each (`serviceLaw`): after the receipt the verifier draws one uniform
 `K′`-subset, and session `σ` proves the drawn tiles of rank `σ·cap` to `σ·cap + cap − 1`. The sessions' laws `L σ` are
-uniform `share σ`-subsets on coins of their own (`sessionLaw`), so `η = 0` (`ServiceEscapes`). PoUW reads `WindowEps` at
+uniform `share σ`-subsets on coins of their own (`sessionLaw`), so `η = 0` (`ServiceEscapes`). PoUW reads `WindowDelta` at
 `𝓑 = harmSets Wref ε ∧ CopyClosed`, where `Wref ⟨σ, t⟩` is tile `t`'s work: a copy-closed set holding the share `ε` of
 the work is every session's copy of a tile set holding the share `ε` of the window's, at least `ε·W/w_max` tiles, so
 the first term is at most `∏_σ (1 − ε·W/(N·w_max))^{share σ} = (1 − ε·W/(N·w_max))^{K′}`, which is at most `δ` where
@@ -55,7 +55,7 @@ decision 101's keyed draw) is retired.
   `ksJoint_le` (`κ = 2^logLen/(e·Kr)`) is the non-ZK plain-leaf table's, which main's window doesn't run.
 * `LinkSoundIn … σ (δlink σ)`: C-Flock's link finder at the window's state, over the window's run.
 * `coll`: the random-oracle claim's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
-  average over the oracle; `WindowEps`'s bound at each oracle reads it through `Pouw.Window.avg_counted_le` (proved).
+  average over the oracle; `WindowDelta`'s bound at each oracle reads it through `Pouw.Window.avg_counted_le` (proved).
   It holds only where the plays are one oracle program's run at each oracle, counted by that program's calls. As
   stated, over a separate play at each oracle with a free count, it is false at a true count (a play holding a
   hardcoded collision of each oracle makes 0 calls and has `coll` about 1) and vacuous at a made-up one. Gap (4)'s
@@ -68,7 +68,7 @@ decision 101's keyed draw) is retired.
   misses nothing. PoUW's reading there takes the service's own escape (gap (4)'s `WindowBoundOfService`, the subset
   law's miss, `0` at `K′ = N`).
 
-**PoUW's reading: three links.** `WindowEps` bounds the committed transcript's wrong units. PoUW's reading of it needs
+**PoUW's reading: three links.** `WindowDelta` bounds the committed transcript's wrong units. PoUW's reading of it needs
 three more links, each stated:
 * **The deployed wrong sets are copy-closed** (`WrongCopyClosed`), so `ServiceEscapes`'s `η = 0` applies to them. The
   service's units' statements are the tiles' read in every session (`UnitStmts.copies`: an instance's public inputs are
@@ -85,7 +85,7 @@ three more links, each stated:
   `δ_in = 1`. It is discharged when the window's Program reads the `-h3` leaf in gates and `window_problem` is a
   Program: the outputs' half is that Program's opening of the `-h3` root, the inputs' half C-Flock's `AnchorsSound`
   (`Proofs/Flock/Soundness/Audit/OneStage.lean`). PoUW's event, the window accepting while its committed transcript
-  isn't anchored, served and outside `𝓑`, is then at most `WindowEps`'s bound plus `δ_in`
+  isn't anchored, served and outside `𝓑`, is then at most `WindowDelta`'s bound plus `δ_in`
   (`Pouw.Window.window_served_le`, proved).
 * **The bridge to C-Flock** (`Proofs/Pouw/Window/FlockBridge.lean`): C-Flock's sessions read in core's game
   (`Pouw.PearlC.FlockTile.toVerity`) win with the same probabilities (`prob_ofVerity`, proved), a C-Flock
@@ -105,7 +105,7 @@ unit.
 Two things are outside this statement by design:
 * **Luck.** Wrong means committed outputs that aren't the unit's function of its inputs (`UnitStmts.wrong`), so a
   deficient unit whose receipt came out right by luck isn't wrong. PoUW adds luck through gap (4), TT or the TS model's
-  `ε_luck`, composed with the window audit, which reads `WindowEps`'s bound.
+  `ε_luck`, composed with the window audit, which reads `WindowDelta`'s bound.
 * **Fiat–Shamir grinding** of the per-matmul seeds (decision 103) enters PoUW's `δ` through the seeded pair
   (`Accounting.Guarantees.Compose.CircuitWorkSeeded`, `CircuitCreditSeeded`: GRIND's premium), not here.
 -/
@@ -133,7 +133,7 @@ the largest `κ c`, plus the window's collision term at the prover's state (`col
 A unit is wrong when its committed outputs aren't its function of its inputs, so luck is not in the event: a deficient
 unit whose receipt came out right isn't wrong, and gap (4) adds it. Fiat–Shamir grinding of the per-matmul seeds enters
 PoUW's `δ` through the seeded pair (`CircuitWorkSeeded`, `CircuitCreditSeeded`). -/
-def WindowEps : Prop :=
+def WindowDelta : Prop :=
   ∀ {Reg Tr : Type} {C : ℕ} {n : Fin C → ℕ} (L : Reg → (c : Fin C) → Law (Fin (n c))) (Lw : Reg → Law (WUnit n))
     (η : ℝ≥0∞) (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool) (U : UnitStmts Tr n)
     (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
@@ -152,7 +152,7 @@ def WindowEps : Prop :=
 the service's draw (`serviceLaw`, one uniform `K`-subset in rank-ordered sessions) with probability at most its escape
 under the sessions' own uniform `share σ`-subsets drawn independently (`sessionLaw`). Both are hypergeometric: the
 service's is `∏_{i<K} (N − |B₀| − i)/(N − i)`, and the product's is the same factors with `i` restarting at `0` in every
-session, each at least the service's. So `WindowEps` reads the service with each session a call at `η = 0` on every
+session, each at least the service's. So `WindowDelta` reads the service with each session a call at `η = 0` on every
 family of copy-closed sets. -/
 def ServiceEscapes : Prop :=
   ∀ {Reg : Type} (N K cap : ℕ), 0 < cap → K ≤ N →

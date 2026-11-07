@@ -113,21 +113,21 @@ theorem tt_not_perRun :
       (1 - 1 / 2 : ℝ) ^ 2 + 0 <
         pr (fun x : (Unit → Unit) × Bool × (Fin 2 → Ticket (P.Wref U.layout) U.layout.N) =>
           AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          onlineCost A U x.1 x.2.1 < (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref P U.layout) := by
+          onlineCost A U x.1 x.2.1 < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout) := by
   refine ⟨tt, wref_le, inDomain, callsWithin, ?_⟩
-  have hW : (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref P U.layout = 1 / 2 := by
-    norm_num [reductionGamma, totalWref, P, U, layout]
+  have hW : (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout = 1 / 2 := by
+    norm_num [reductionGap, totalWref, P, U, layout]
   have : Nonempty (Ticket (P.Wref U.layout) U.layout.N) := ⟨⟨⟨0, by simp [U, layout]⟩, ⟨0, by simp [P]⟩⟩⟩
   have hev : ∀ x : (Unit → Unit) × Bool × (Fin 2 → Ticket (P.Wref U.layout) U.layout.N),
       (AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-        onlineCost A U x.1 x.2.1 < (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref P U.layout) ↔
+        onlineCost A U x.1 x.2.1 < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout) ↔
         x.2.1 = true := by
     rintro ⟨H, s, c⟩
     rw [hW, onlineCost_eq]
     cases s <;> norm_num [accepts]
   rw [show (fun x : (Unit → Unit) × Bool × (Fin 2 → Ticket (P.Wref U.layout) U.layout.N) =>
       AuditAccepts (correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-        onlineCost A U x.1 x.2.1 < (1 - reductionGamma 0 1) * (1 - 1 / 2) * totalWref P U.layout) =
+        onlineCost A U x.1 x.2.1 < (1 - reductionGap 0 1) * (1 - 1 / 2) * totalWref P U.layout) =
       fun x => x.2.1 = true from funext fun x => propext (hev x), pr_mid_true]
   norm_num
 

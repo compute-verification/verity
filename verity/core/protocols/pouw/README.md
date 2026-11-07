@@ -93,14 +93,15 @@ Guarantees are stated in `Security/Definitions/Pouw` and proved in `Security/Pro
 `Pouw.SecurityProofs.G : Pouw.Guarantees.G`; `Security/lean-audit.json` lists each proved one with what its statement
 reads. Proved:
 
-- **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GammaFromTT`, through two lemmas in
-  `Security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's γ holds with error η and the sample misses more
-  than a share ε_s of the reference work with probability at most δ_s, then the verifier accepts while the work done is
-  below (1 − γ)(1 − ε_s)·W with probability at most δ_s + η) and work-weighted sampling.
+- **The audit game:** `Pouw.SecurityProofs.EndToEnd` and `Pouw.SecurityProofs.GapFromTT`, through two lemmas in
+  `Security/Proofs/Pouw/Lemmas/Game.lean`: Theorem 1 (if a scheme's gap g holds with failure probability δ, an
+  adversary's advantage ε = g/(1 − g), and the sample misses more than a share ε_s of the reference work with probability
+  at most δ_s, then the verifier accepts while the work done is below (1 − g)(1 − ε_s)·W with probability at most
+  δ_s + δ) and work-weighted sampling.
 - **The deadline:** `Pouw.SecurityProofs.WorkBetweenSaltAndDeadline`, `Pouw.SecurityProofs.SpareCapacityAtDeadline` and
   `Pouw.SecurityProofs.PearlCSampledByDeadline`.
-- **The schemes' γ:** NCP's `Pouw.SecurityProofs.NCP.GammaFromTTNCP_U_v1`; Pearl-C's at the served point,
-  `Pouw.SecurityProofs.PearlC.GammaSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin
+- **The schemes' gaps:** NCP's `Pouw.SecurityProofs.NCP.GapFromTTNCP_U_v1`; Pearl-C's at the served point,
+  `Pouw.SecurityProofs.PearlC.GapSm120v1LoopCast8p72Rev1Cap1000_8192` and its sampled twin
   `Pouw.SecurityProofs.PearlC.SampledSm120v1LoopCast8p72Rev1Cap1000_8192`. The row seed's reduction and the barrier
   are lemmas, in `Security/Proofs/Pouw/Lemmas/PearlC.lean` and `Security/Proofs/Pouw/Lemmas/Barrier.lean`.
 - **The served credit's relative security:** `Pouw.SecurityProofs.RelativeSecurity.TheoremSStaged` and
@@ -109,7 +110,7 @@ reads. Proved:
   `Accounting.SecurityProofs.ComputeOfPouwPerRun`, `Accounting.SecurityProofs.PouwEndToEndPerRun` and
   `Accounting.SecurityProofs.PouwLocalOff`.
 
-Stated, open: an execution phase's ε from its calls' (`Pouw.Guarantees.Window.WindowEps`, and
+Stated, open: an execution phase's failure probability δ from its calls' (`Pouw.Guarantees.Window.WindowDelta`, and
 `Pouw.Guarantees.Window.ServiceEscapes` for the deployed sample, `Security/Definitions/Pouw/Guarantees/Window.lean`);
 Dither's guarantees (`Security/Definitions/Pouw/Guarantees/DitherInstance.lean`); and several of Pearl-C's per-shape and
 per-model instances (`Security/Definitions/Pouw/Guarantees/PearlC.lean`). No guarantee over the remote protocol as a whole
