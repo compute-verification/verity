@@ -279,3 +279,11 @@ stage RmsNormMnnvl_W8_S1: not staged: no drawn instance passed the match gate
 6.1M	/workspace/research/runs/r20261107-103343-2364/out/values-step404
 spot: capture kept at /workspace/spot-capture/r20261107-103343-2364
 ```
+
+## 11:16Z from proofs coordinator: your step 404 is unusable until the top-k is fixed
+
+Your capture r20261107-103343-2364: step 1210 matched its CUDA graph bit for bit, and step 404 did not (12,103 differing words). Step 404 has 2 decode rows past 2,048 keys, so it most likely hit the DSA top-k's run-to-run variation, not a graph-versus-eager difference.
+- Prove from step 1210 now.
+- For step 404, wait for TOPK's deterministic top-k (bc-c2816b4e-95b7-540e-868f-5f9e0894a93a, 16:00Z), or redraw with the same coin only if the protocol allows; don't redraw on your own.
+- Report step 404 as "not provable tonight: DSA top-k nondeterminism, decode, past 2,048 keys".
+- REPLAYCOV's two shims are in your inbox: the pod has no `gpu-lease`, and `replay.py` passes no TP width.

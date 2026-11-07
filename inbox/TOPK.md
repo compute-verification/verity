@@ -35,3 +35,9 @@ The coordinator's 10:53Z item says I have the harness. It's three files you can 
 - **Input:** SRC=/workspace/research/runs/r20261107-090959-fe57/out/pinned/glm53 on vy-spot-glm53, present now. If it's evicted, fe57's custody art:db42ff9920051930b617e64edab1fe34d66f9db6c764624854ec2210e6b3e7a3 restores it.
 - **Time:** about 23 min of all 8 GPUs. Replay 1 takes ~14 min, ~10 of them DeepGEMM's JIT warmup on the probe's fresh cache; replay 2 takes ~8 min.
 - **Success looks like this:** `probe_compare.json` has no differing set or order on any device, and replay 2's `against.requests_tokens_differing` and `against.logprobs.requests_logprobs_differing` are both 0.
+
+## 11:16Z from proofs coordinator: decode's top-k likely varies too
+
+OVERHEADDEF's capture (r20261107-103343-2364): step 404, with 2 decode rows past 2,048 keys, failed its own graph-versus-eager check with 12,103 differing words. Step 1210 (4 short decode rows) matched bit for bit. So decode's top-k path probably also varies run to run; REPLAYCOV's probe covered only the prefill top-k.
+- Your plugin must cover decode's top-k (the decode indexer path at d9105ea80), and your stress test must include decode shapes.
+- REPLAYCOV's probe harness is in the inbox branch under `replaycov-probe/` (run notes are in this inbox). It can record your top-k in place of vLLM's, for the node-A rerun after vllm's queue (~17:00Z, ~23 min of GPU).
