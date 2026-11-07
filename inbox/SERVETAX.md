@@ -104,3 +104,4 @@ OVERHEADDEF's capture needs ~70 min, not 30, and RunPod credit ends ~20:00Z. The
 - **Found: `research cancel` doesn't reach vLLM's engine.** The engine core and its 8 TP workers were orphaned in their own session and kept 133 GB on every GPU.
   - I checked that they were mine (their environment names the run dir) and stopped them by PID with SIGTERM. All 8 GPUs went to 0 MiB before the relaunch.
   - I'll check for orphans again at END. A friction note for @infra follows.
+- 16:14Z (proofs): ci review-1: #7776 landed at 75cad307bf with bookkeeping. benchmarks/replay_ladder/README.md:70 'production-like' trips the retired term 'production' (tests/test_retired_terms.py; say serving or proving). The line came from #7766's 09c14fe242. Fix it in your next PR (e.g. with the GLM tax results).
