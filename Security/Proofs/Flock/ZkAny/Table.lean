@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.ZkAny.Generic
 public import Proofs.Flock.Claims.ZK.Worker
+public import Proofs.Flock.Soundness.ZK.SHVZK
+public import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # One table's release behind the ZK server's check, at any values
@@ -12,7 +14,7 @@ server's check neither is needed:
 
 * `derived_sim`: the derived view `psi (realCore w ω)` and `S_shvzk(x, e)` have the same distribution at any witness:
   `table_shvzk`'s counting reads no constraint, only its last step (`psi_realCore`) does.
-* `release_any`: where the check passes, the constraint holds at the drawn pads, so the view is the derived view there
+* `release_any`: where the check passes, the constraint holds at the sampled pads, so the view is the derived view there
   (`psi_realCore_at`); where it fails, the pre-final view leaves, which Lemma A (`table_prefinal_indep`) bounds at any
   witness carrying the public region data. `gate_perOutcome` makes the released bytes simulated per outcome.
 * `worker_release_any`: `release_any` at a worker's clear values (`onVals`), with no premise on them or on the honest

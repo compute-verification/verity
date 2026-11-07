@@ -506,7 +506,7 @@ def disk_gaps(store: Mapping[str, Any] | None) -> list[str]:
 
 def uncertified(where: Mapping[str, Any], signed: sw.SignedWipe | None) -> list[str]:
     """What an accepted wipe's bound doesn't cover, from its placement (`wipe_party.placement`) and signed session: the
-    memory challenger off its own host (its key on the prover's node), an egress signed `UNCOUNTED`, each undeclared
+    memory challenger off its own host (its key on the developer's node), an egress signed `UNCOUNTED`, each undeclared
     tier, a GPU's driver reserve when NVML gave no total (`wipe_store.Cuda.info`; a joint store's GPU part too), what
     the prover's disks leave outside the boundary (`disk_gaps`) and each link leaving the node that no network
     certifier counts."""
@@ -530,8 +530,8 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     `wipe` says (`CONFIG`; by default `SEGMENTS` 32 MiB segments kept by `streamed_wipe.Prover`), the memory challenger a
     party of its own on `period.json`'s `challenger_host` (`wipe_party.side_of`; on this node by default, a process
     whose key and session log are in `wipe-challenger` beside the periods) and the prover here. A `wipe_store` prover
-    gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the verifier of
-    record) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
+    gates its store before the session. With `wipe-protocol` among the period's tools, the Lean answers (the
+    verifier) and must agree with the Python; it writes `out/wipe.case.json` (onsite's wipe case) and `out/wipe.json`.
     Which host ran each party, whether `trusted-host`'s premise holds, the memory the prover kept the fill in,
     the links leaving the node (`wipe.links`, and the challenger's on its own host as the prover connected to it) and
     the node's memory outside the declared tier (`undeclared`) go in `wipe.json` and in an accepted answer's profile
@@ -635,7 +635,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m verity.core.protocols.pous.wipe_period", description=main.__doc__)
     ap.add_argument("--period", type=Path, required=True, help="the period's directory, holding period.json")
     ap.add_argument("--out", type=Path, required=True, help="where wipe.json and wipe.case.json go")
-    ap.add_argument("--node", default=socket.gethostname(), help="the prover's node: the wiped server's id")
+    ap.add_argument("--node", default=socket.gethostname(), help="the developer's node: the wiped server's id")
     ap.add_argument("--expect", choices=("accept", "reject"), default="accept",
                     help="the verdict that exits 0 (reject: a cheat's run)")
     a = ap.parse_args(argv)

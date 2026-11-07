@@ -2,18 +2,20 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.Pins
 public import Proofs.Flock.Soundness.Audit.FlockPublic
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # Readers of rows and single gates
 
 The commit strings of `Readers.ofRows` are each unit's row ports `(u, q)` and single gates. `rowOf g` says which wires
-are bits of a row (unit, port, bit); every other wire is a commit string of one bit, read where the drawn unit's place
+are bits of a row (unit, port, bit); every other wire is a commit string of one bit, read where the sampled proof block's place
 holds the gate (`gateAt`: the address of a column of the place on it). So:
 
 * `ofRows_copies`: Δ's copies (`Readers.Copies`) reduce to the row bits: each column on a row bit holds the witness's
   bit at `rowAddr`. At a single gate they hold by the place alone (`block_gateAt`: the columns an instance puts on one
   gate are one column, or input columns its aliasing makes equal);
-* `ofRows_bcPinned`: the `b ‖ c` at `bcAddr` of each row a drawn unit reads is the registration's;
+* `ofRows_bcPinned`: the `b ‖ c` at `bcAddr` of each row a sampled proof block reads is the registration's;
 * `ofRows_valPinned`: each single gate holds the registration's bit (`regGate`). On the constant's gates it is 1
   (`gateAt_one`, from `ConstCols`) and on the zero's 0 (`gateAt_zero`, from `ZeroCols`).
 -/
@@ -30,8 +32,8 @@ variable {C : Circuit} {n : ℕ} {P : Audit.Partition C n} {Reg : Type} {mPts : 
   (place : ∀ S R u, u ∈ S → UnitPlace P (Partition.tabOf plan tab S R u).S u)
 
 open Classical in
-/-- **Where a drawn unit's table holds gate `g`**: the address of a column of the unit's place on `g`, in the place's
-block (address 0 when no column is on `g`, or `u` is not drawn). -/
+/-- **Where a sampled proof block's table holds gate `g`**: the address of a column of the unit's place on `g`, in the place's
+block (address 0 when no column is on `g`, or `u` is not sampled). -/
 noncomputable def gateAt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (g : Fin C.N) :
     Fin (2 ^ (Partition.tabOf plan tab S R u).S.m) :=
   if hu : u ∈ S then
@@ -54,7 +56,7 @@ theorem block_gateAt {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S)
   · rw [he]
   · exact ((place S R u hu).aliased _ _ (Classical.choose_spec hc) h1 h2 z hz).symm
 
-/-- **A constant's gate holds 1**: at a committed wire of a drawn unit on a gate of `ones`, where only the constant's
+/-- **A constant's gate holds 1**: at a committed wire of a sampled proof block on a gate of `ones`, where only the constant's
 column sits (`ConstCols`), in a satisfying witness. -/
 theorem gateAt_one {ones : Finset (Fin C.N)} (hc : P.ConstCols plan tab place ones) {S : Finset (Fin n)} {R : Reg}
     {u : Fin n} (hu : u ∈ S) {z : Witness (Partition.tabOf plan tab S R u).S.m}
@@ -64,7 +66,7 @@ theorem gateAt_one {ones : Finset (Fin C.N)} (hc : P.ConstCols plan tab place on
   rw [← block_gateAt place hu hz c, hc S R u hu c h1]
   exact (place S R u hu).placed.one_eq hz _
 
-/-- **The zero's gate holds 0**: at a committed wire of a drawn unit on a gate of `zeros` (`ZeroCols`), in a satisfying
+/-- **The zero's gate holds 0**: at a committed wire of a sampled proof block on a gate of `zeros` (`ZeroCols`), in a satisfying
 witness. -/
 theorem gateAt_zero {zeros : Finset (Fin C.N)} (hZ : P.ZeroCols plan tab place zeros) {S : Finset (Fin n)} {R : Reg}
     {u : Fin n} (hu : u ∈ S) {z : Witness (Partition.tabOf plan tab S R u).S.m}
@@ -138,8 +140,8 @@ theorem ofRows_pos_none {g : Fin C.N} (h : rowOf g = none) :
   show (match rowOf g with | some (u, ⟨q, _⟩) => _ | none => _) = _
   rw [h]
 
-/-- **Δ's copies of rows and single gates**: from the row bits alone. In a satisfying witness, each column of a drawn
-unit on a committed wire that is bit `k` of a row port `q` holds the witness's bit at `rowAddr S R u q k`. -/
+/-- **Δ's copies of rows and single gates**: from the row bits alone. In a satisfying witness, each column of a sampled
+proof block on a committed wire that is bit `k` of a row port `q` holds the witness's bit at `rowAddr S R u q k`. -/
 theorem ofRows_copies
     (hrow : ∀ S R u (hu : u ∈ S) M, Binding.Sat plan tab S R u M → ∀ c, (place S R u hu).inst.wire c ∈ P.io u →
       ∀ u' q k, rowOf ((place S R u hu).inst.wire c) = some (u', ⟨q, k⟩) →
@@ -153,7 +155,7 @@ theorem ofRows_copies
   · rw [ofRows_pos_some place hr, ofRows_idx_some place hr]
     exact hrow S R u hu M hM c hc u' q k hr
 
-/-- **The rows' `b ‖ c` is pinned**: in a satisfying witness, at each row port `q` of unit `u'` a drawn unit reads, the
+/-- **The rows' `b ‖ c` is pinned**: in a satisfying witness, at each row port `q` of unit `u'` a sampled proof block reads, the
 bytes at `bcAddr S R u q` are the registration's `regBc R u' q`. -/
 theorem ofRows_bcPinned
     (hbc : ∀ S R u, u ∈ S → ∀ M, Binding.Sat plan tab S R u M → ∀ g ∈ P.io u, ∀ u' q k,
@@ -166,7 +168,7 @@ theorem ofRows_bcPinned
   · rw [ofRows_pos_some place hr]
     exact hbc S R u hu M hM g hg u' q k hr
 
-/-- **The single gates hold the registration's bits**: in a satisfying witness, at each committed wire of a drawn unit
+/-- **The single gates hold the registration's bits**: in a satisfying witness, at each committed wire of a sampled proof block
 that is no row's bit, the witness's bit at `gateAt` is the registration's `regGate R g`. -/
 theorem ofRows_valPinned
     (hgate : ∀ S R u, u ∈ S → ∀ M, Binding.Sat plan tab S R u M → ∀ g ∈ P.io u, rowOf g = none →
@@ -182,7 +184,7 @@ theorem ofRows_valPinned
   · rw [ofRows_pos_some place hr] at hrow
     exact absurd rfl hrow
 
-/-- **`hgate` on the constant's and the zero's gates**: a single gate a drawn unit commits holds 1 on a gate of `ones`
+/-- **`hgate` on the constant's and the zero's gates**: a single gate a sampled proof block commits holds 1 on a gate of `ones`
 (`ConstCols`) and 0 on a gate of `zeros` (`ZeroCols`), so `hgate` holds there for `regGate` true on `ones` and false on
 `zeros`. -/
 theorem gate_pub {ones zeros : Finset (Fin C.N)} (hc : P.ConstCols plan tab place ones)

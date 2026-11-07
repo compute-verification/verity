@@ -1,14 +1,14 @@
 /-
-# The firewall's contract (`verity/firewall-transcript/v0`)
+# The ZK server's contract (`verity/firewall-transcript/v0`)
 
-The firewall is the developer's only path from the workers to the auditor; the inner phase's is the program
-`Flock.Firewall.run` (`Flock/Firewall.lean`). This file is the property every firewall's sessions must have, stated over
+The ZK server is the developer's only path from the workers to the auditor; the inner phase's is the program
+`Flock.Firewall.run` (`Flock/Firewall.lean`). This file is the property every ZK server's sessions must have, stated over
 what it sends. Its contract: before release, every outbound value is one
 of three things.
 
-* (a) A commitment under a salt the workers never see, drawn from the tape and used for no other commitment:
+* (a) A commitment under a salt the workers never see, sampled from the tape and used for no other commitment:
   `Item.commit`, the hm96-sha512 commit string `b ‖ c` of SHA-512 of the message (`commitBC`), whose tree leaf is
-  `commitLeaf`. That leaf is meant to be the firewall's commitment the recursive guarantee states
+  `commitLeaf`. That leaf is meant to be the ZK server's commitment the recursive guarantee states
   (`Flock.Guarantees.firewallLeaf`, on the rec-thm branch, not in this package); that is not proved here. The
   commitments come exactly where and as many as the schedule says: each node of the Commit's level-0 tops, and each node
   of a round's fresh tops (`tops`) and its one message row (`commits`), right after the schedule item that carries them
@@ -18,7 +18,7 @@ of three things.
   before anything that depends on its pad leaves (an `Item.fixed` naming the pad) and before the session ends.
 * (c) A value uniquely fixed by what is already committed or public (`Item.fixed`): by the public schedule (the contract
   derives the value itself, and holds the items to the schedule's order), by the public statement (the value the public
-  input names), or by the firewall's own values (its level-0 recheck, its opening, the values it computes from its pads,
+  input names), or by the ZK server's own values (its level-0 recheck, its opening, the values it computes from its pads,
   under names the public input lists). Under D8 (a) the last three are the current Rust, which the transcript reports and
   this contract does not recompute.
 
@@ -27,21 +27,21 @@ copy of it. The tape's salts are pairwise distinct as bytes, and so are its pads
 salt or pad the workers saw under one number is not used under another.
 
 Coins go to the workers exactly as the challenger sent them (`Item.coins`), and only after every commitment the schedule
-owes (`State.owed`): in the inner phase each round's coins are live, drawn after its commitments, as `RecursiveKS`'s game
-and `RecursiveZK` draw them. A public input may also declare the challenger's commitments to its coins
+owes (`State.owed`): in the inner phase each round's coins are live, sampled after its commitments, as `RecursiveKS`'s game
+and `RecursiveZK` sample them. A public input may also declare the challenger's commitments to its coins
 (`PublicInput.coins`): for each stream, one per round, the hm96-sha512 commit string `b ‖ c` (`commitBC`, the commit items'
 commitment) of the round's coin message (`coinMsg`: the stream, the round and the coins) under a salt of the challenger's.
 A coins item then carries that salt as its opening, and it leaves only if the opening opens the round's commitment to its
 coins, once a round: a session whose public input declares commitments is refused coins without an opening, coins that
 don't open, and coins of a round it holds no commitment for. A session that declares none (the inner phase, and the outer
-phase, whose coins are C-Flock's coin tree, checked by its prover before the release log is written) relays coins without
+phase, whose coins are Flock's coin tree, checked by its prover before the release log is written) relays coins without
 an opening, and it refuses coins that carry one.
 
-A release log is the firewall's candidate outbound items in order: the values it would release, each tagged with its case,
-with its tape (the salts and pads it drew, by id) and the tape entries it handed the workers. The firewall's send check
+A release log is the ZK server's candidate outbound items in order: the values it would release, each tagged with its case,
+with its tape (the salts and pads it drew, by id) and the tape entries it handed the workers. The ZK server's send check
 decides each candidate as it comes; so does `run`. The first item that breaks the contract is the cut: a refused item
 stops the session, nothing of the session's own after it leaves, and the auditor sees a stop (in the outer phase at the
-session's `Finish`: the firewall releases the statement's schedule in the refused item's place, live PROTOCOL.md §10.1, and
+session's `Finish`: the ZK server releases the statement's schedule in the refused item's place, live PROTOCOL.md §10.1, and
 the release log ends at the cut). A session is accepted when every item may leave
 and the last one is `finish`; one that ends without `finish` is a stop at its end.
 
@@ -55,6 +55,7 @@ module
 public import Flock.Canon
 public import Flock.Hm96
 public import Flock.JsonParse
+public import Lean.Data.Json.Printer
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -78,13 +79,13 @@ def SALT_BYTES : Nat := 192
 inductive By where
   /-- the session's public schedule: the contract derives the value from it (`scheduled`) -/
   | schedule
-  /-- the public statement: the value the public input names (the outer firewall's skeleton, `firewall::skeleton`) -/
+  /-- the public statement: the value the public input names (the outer ZK server's skeleton, `firewall::skeleton`) -/
   | statement
-  /-- the firewall's own commitment of its own witness (the outer firewall's level-0 recheck) -/
+  /-- the ZK server's own commitment of its own witness (the outer ZK server's level-0 recheck) -/
   | recheck
-  /-- the firewall's own opening of that commitment (the session's Lean finish's, `Finish.openLive`) -/
+  /-- the ZK server's own opening of that commitment (the session's Lean finish's, `Finish.openLive`) -/
   | shadow
-  /-- a value the firewall computes from its own tape and the values it passed (`final_c'`, the inner proof) -/
+  /-- a value the ZK server computes from its own tape and the values it passed (`final_c'`, the inner proof) -/
   | own
   deriving BEq, DecidableEq, Repr, Inhabited
 
@@ -95,16 +96,16 @@ def By.name : By → String
   | .shadow => "the firewall's opening"
   | .own => "the firewall's own values"
 
-/-- One step of a firewall release log, in the order the firewall takes it. Every step but `check` is an outbound item. -/
+/-- One step of a ZK server release log, in the order the ZK server takes it. Every step but `check` is an outbound item. -/
 inductive Item where
-  /-- (a): a commitment to `msg` under the firewall's salt number `salt`; `sent` leaves -/
+  /-- (a): a commitment to `msg` under the ZK server's salt number `salt`; `sent` leaves -/
   | commit (msg : ByteArray) (salt : Nat) (sent : ByteArray)
-  /-- (b): `value` masked with the firewall's pad number `pad`; `sent` leaves -/
+  /-- (b): `value` masked with the ZK server's pad number `pad`; `sent` leaves -/
   | masked (value : F128) (pad : Nat) (sent : F128)
   /-- (c): the value `what`, fixed by `src` to `want` (for `By.schedule` and `By.statement` the contract takes the value
   from the public input and ignores `want`); `sent` leaves, and depends on the values masked under `pads` -/
   | fixed (what : String) (src : By) (want sent : ByteArray) (pads : Array Nat)
-  /-- the firewall's check of `relation` on the values masked under `pads`, and its outcome (nothing leaves) -/
+  /-- the ZK server's check of `relation` on the values masked under `pads`, and its outcome (nothing leaves) -/
   | check (relation : String) (pads : Array Nat) (ok : Bool)
   /-- round `round` of `stream`'s coins from the challenger, `relayed` to the workers, with the challenger's `opening` of its
   commitment to them (its salt), empty when it made none -/
@@ -115,10 +116,10 @@ inductive Item where
 
 structure ReleaseLog where
   phase : String
-  /-- the firewall's tape: salt number `i` is `salts[i]`, pad number `i` is `pads[i]` -/
+  /-- the ZK server's tape: salt number `i` is `salts[i]`, pad number `i` is `pads[i]` -/
   salts : Array ByteArray
   pads : Array F128
-  /-- the tape entries the firewall handed the workers -/
+  /-- the tape entries the ZK server handed the workers -/
   exposedSalts : Array Nat
   exposedPads : Array Nat
   items : Array Item
@@ -126,7 +127,7 @@ structure ReleaseLog where
 
 /-- The verifier's public input, which the contract holds a release log to and never reads from it: the session's public
 schedule (the inner phase's `SCHEDULE_FORMAT`), every relation the verifier checks on the masked values,
-the values the public statement fixes by name, the names of the values the firewall fixes by its own computation, and the
+the values the public statement fixes by name, the names of the values the ZK server fixes by its own computation, and the
 challenger's commitments to its coins, if it made any before the session: per stream, round `k`'s at `k`. -/
 structure PublicInput where
   schedule : Option Json := none
@@ -300,7 +301,7 @@ def owes (sched : Json) (o : Order) (what : String) : V Nat := do
       return tops + (← J.nat r "commits" s!"the schedule's {what}")
     | _ => return 0
 
-/-- What `src` fixes `what` to (`want` for the firewall's own values), the schedule's order after it, and the commitments
+/-- What `src` fixes `what` to (`want` for the ZK server's own values), the schedule's order after it, and the commitments
 that must follow it. -/
 def fixes (pub : PublicInput) (o : Order) (what : String) (src : By) (want : ByteArray) : V (ByteArray × Order × Nat) :=
   match src with
@@ -444,7 +445,7 @@ private theorem bind_ok {α β : Type} {m : V α} {k : α → V β} {x : β}
     (h : (m >>= k) = .ok x) : ∃ a, m = .ok a ∧ k a = .ok x := by
   cases m <;> simp_all [bind, Except.bind]
 
-/-- (a) item by item: a commitment leaves only as `b ‖ c` of its message under a drawn salt of 192 bytes, unused and
+/-- (a) item by item: a commitment leaves only as `b ‖ c` of its message under a sampled salt of 192 bytes, unused and
 unseen by the workers. -/
 theorem step_commit {pub : PublicInput} {t : ReleaseLog} {s s' : State} {msg : ByteArray} {i : Nat} {sent : ByteArray}
     (h : step pub t s (.commit msg i sent) = .ok s') :
@@ -454,7 +455,7 @@ theorem step_commit {pub : PublicInput} {t : ReleaseLog} {s s' : State} {msg : B
   repeat' (split at h <;> try simp_all [pure, Except.pure, throw, throwThe, MonadExceptOf.throw])
   all_goals simp_all [bytesEq]
 
-/-- (b) item by item: a masked value leaves only under a drawn pad, unused and unseen by the workers. -/
+/-- (b) item by item: a masked value leaves only under a sampled pad, unused and unseen by the workers. -/
 theorem step_masked {pub : PublicInput} {t : ReleaseLog} {s s' : State} {v : F128} {p : Nat} {sent : F128}
     (h : step pub t s (.masked v p sent) = .ok s') :
     p < t.pads.size ∧ s.usedPad[p]! = false ∧ p ∉ t.exposedPads ∧ sent = v + t.pads[p]! := by
@@ -487,7 +488,7 @@ theorem step_coins {pub : PublicInput} {t : ReleaseLog} {s s' : State} {stream :
     exact .inr ⟨hc, h3, by simpa using h4⟩
 
 /-- What `fixes` fixes a value to: the schedule's own value, the public statement's, or, for a name the public input lists
-as the firewall's own computation, the value the release log reports. -/
+as the ZK server's own computation, the value the release log reports. -/
 theorem fixes_spec {pub : PublicInput} {o : Order} {what : String} {src : By} {want : ByteArray}
     {r : ByteArray × Order × Nat} (h : fixes pub o what src want = .ok r) :
     (src = .schedule → ∃ sched o', pub.schedule = some sched ∧ scheduled sched o what = .ok (r.1, o')) ∧
@@ -594,7 +595,7 @@ theorem holds_finish {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) : t.
   go_last (holds_go h).2 rfl
 
 /-- (a) on an accepted session: every commitment that left is hm96-sha512's `b ‖ c` of its message under a salt the
-firewall drew, of 192 bytes, that the workers never saw and that no other salt number of the tape names (`commitLeaf`
+ZK server drew, of 192 bytes, that the workers never saw and that no other salt number of the tape names (`commitLeaf`
 is its tree leaf). That no two commitments share a salt number is `step`'s check, not stated here. -/
 theorem holds_commit {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {msg : ByteArray} {i : Nat}
     {sent : ByteArray} (hm : Item.commit msg i sent ∈ t.items.toList) :
@@ -608,7 +609,7 @@ theorem holds_commit {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {msg
   have := pairwiseDistinct_ne (tapeError_none ht).1 hj a hne
   simpa [bytesEq] using this
 
-/-- (b) on an accepted session: every masked value that left is its value plus a pad the firewall drew that the workers
+/-- (b) on an accepted session: every masked value that left is its value plus a pad the ZK server drew that the workers
 never saw and that no other pad number of the tape names. -/
 theorem holds_masked {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {v : F128} {p : Nat} {sent : F128}
     (hm : Item.masked v p sent ∈ t.items.toList) :
@@ -733,8 +734,8 @@ theorem holds_coins_binding {pub : PublicInput} {t t' : ReleaseLog} (h : Holds p
   exact commitBC_binding hne (b.symm.trans b')
 
 /-- (c) on an accepted session: every fixed value that left is the public schedule's own (`scheduled`), the public
-statement's, or, under a name the public input lists as the firewall's own computation, the value the release log reports
-the firewall computing, which the contract does not recompute (`FirewallComputes` names that assumption). -/
+statement's, or, under a name the public input lists as the ZK server's own computation, the value the release log reports
+the ZK server computing, which the contract does not recompute (`FirewallComputes` names that assumption). -/
 theorem holds_fixed {pub : PublicInput} {t : ReleaseLog} (h : Holds pub t) {what : String} {src : By}
     {want sent : ByteArray} {ps : Array Nat} (hm : Item.fixed what src want sent ps ∈ t.items.toList) :
     (src = .schedule → ∃ sched o w o', pub.schedule = some sched ∧ scheduled sched o what = .ok (w, o') ∧
@@ -850,7 +851,7 @@ def Verdict.toJson (v : Verdict) : Json :=
 
 /-- `flock-firewall contract [--public FILE] FILE…` (`args` after `contract`): each release log's verdict under the public
 input in `--public`'s file, one JSON line each; without `--public` the public input is empty, so every release log that
-leans on a schedule, a statement, a relation or the firewall's own values is refused. Exit 2 when a file is not a
+leans on a schedule, a statement, a relation or the ZK server's own values is refused. Exit 2 when a file is not a
 release log or the public input is not one. -/
 def cmd (args : List String) : IO UInt32 := do
   let (pubFile, files) := match args with

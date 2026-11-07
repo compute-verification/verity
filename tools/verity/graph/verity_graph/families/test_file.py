@@ -1,7 +1,9 @@
 """The test-file family: one task per test file of every suite, which `runners/test_file.py` runs alone under the suites' read guard.
 
 Suites are what `tools/verity/check/suites.py` finds (`discover`): each directory whose `pyproject.toml` configures pytest, the
-repository's own at the root. A suite's test files are its `test_*.py` under its `testpaths`, outside a data directory
+repository's own at the root, but those check runs after its Lean steps (`build.lean_suites`, `suites.AFTER_LEAN`), which the
+build family's lean-suites tasks run whole once lean-build has built what they need. A suite's test files are its `test_*.py`
+under its `testpaths`, outside a data directory
 (`DATA_DIRS`) and the suites nested in it (`suites.test_files`). A task's inputs are what running its one file reads, found from
 the commit's files alone:
 
@@ -1083,12 +1085,17 @@ def fetched(tree: Tree) -> list[str]:
 
 
 def tasks(root: Path, files: list[str]) -> list[dict]:
+    from .build import lean_suites  # build imports this module's
+
     tree = Tree(root, files)
     imports = Imports(tree, Layout(tree))
     suites = discover(tree)
     fixtures = fetched(tree)
+    after = set(lean_suites(root, files))
     out = []
     for s in suites:
+        if not after.isdisjoint((s.name, s.path)):
+            continue
         data = declared(tree, s, suites, fixtures)
         tests = suite_tests(tree, s, suites)
         walked = walks(tree, s, tests)

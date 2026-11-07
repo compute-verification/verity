@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.Tag.Prob
+public import Definitions.Core.Prob
 public import Definitions.Accounting.Tag.PolyHash
 public import Definitions.Accounting.Tag.Sketch
 

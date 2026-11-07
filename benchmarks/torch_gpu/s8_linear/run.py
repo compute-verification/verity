@@ -40,17 +40,24 @@ import sys
 import tempfile
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from triton.compiler import CompiledKernel
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+from verity_vllm.engine import int8_fused as X  # noqa: E402
+
 import fixture as FX  # noqa: E402
 import int_mm as IM  # noqa: E402
 import wgmma as W  # noqa: E402
 from configs import CONFIGS  # noqa: E402
-from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 POISON = 0xA5
 TRITON_EXTRA = ("16x32x256:w4:s4:k1", "32x64x128:w4:s4:k1", "64x64x128:w4:s3:k2", "128x64x128:w4:s4:k1",
@@ -59,7 +66,7 @@ EDGE_N, EDGE_MS = 64, (16, 64)
 SAMPLE_ROWS, SAMPLE_COLS = 8, 64
 
 
-def table_cfg(kern, m: int, n: int, k: int):
+def table_cfg(kern: Kernel, m: int, n: int, k: int) -> KernelCfg | None:
     rows = CONFIGS.get(f"{kern.name}:{X.arch()}", {}).get((n, k))
     if not rows:
         return None
@@ -69,7 +76,7 @@ def table_cfg(kern, m: int, n: int, k: int):
     return kern.Cfg.parse(rows[-1][1])
 
 
-def load_configs(path: str, kern) -> None:
+def load_configs(path: str, kern: Kernel) -> None:
     """A tune.py best.json's winners into CONFIGS for `kern` on this arch, each M its m_max."""
     table = json.loads(Path(path).read_text())["table"]
     CONFIGS[f"{kern.name}:{X.arch()}"] = {tuple(map(int, nk.split(","))): [(r[0], r[1]) for r in rows if r[1]]
@@ -80,7 +87,7 @@ class Wgmma:
     """s8_wgmma.cubin through wgmma.py (sm_90a)."""
     name, Cfg, extra = "wgmma", W.Cfg, W.EXTRA_CFGS
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.lib = W.lib()
         self.ident = self.lib.identity()
 
@@ -90,13 +97,14 @@ class Wgmma:
     def baseline(self, m: int, n: int, k: int) -> W.Cfg:
         return W.default_cfg(m, n, k, self.lib.sms)
 
-    def skip(self, cfg, m: int, n: int) -> str | None:
+    def skip(self, cfg: W.Cfg, m: int, n: int) -> str | None:
         return None
 
-    def call(self, x, sa, w, sw, y, cfg):
+    def call(self, x: torch.Tensor, sa: torch.Tensor, w: torch.Tensor, sw: torch.Tensor, y: torch.Tensor,
+             cfg: W.Cfg) -> dict:
         return W.scaled_mm(x, sa, w, sw, y, cfg)
 
-    def checks(self, handle) -> dict:
+    def checks(self, handle: dict) -> dict:
         return {"launch": handle, "cubin_sha256": self.ident["sha256"][:16], "ok": self.ident["ok"]}
 
     def residue(self) -> int:
@@ -110,7 +118,7 @@ class Triton:
     """verity_vllm's int8_fused: sm_120's exact kernel, and on sm_90 a second one beside wgmma."""
     name, Cfg, extra = "triton", X.Cfg, TRITON_EXTRA
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.work = X.Workspace("cuda")
 
     def pick(self, m: int, n: int, k: int) -> X.Cfg:
@@ -119,13 +127,14 @@ class Triton:
     def baseline(self, m: int, n: int, k: int) -> X.Cfg:
         return X.default_cfg(m, n, k)
 
-    def skip(self, cfg, m: int, n: int) -> str | None:
+    def skip(self, cfg: X.Cfg, m: int, n: int) -> str | None:
         return "split-K workspace too small for M x N" if cfg[5] > 1 and m * n > self.work.ws.numel() else None
 
-    def call(self, x, sa, w, sw, y, cfg):
+    def call(self, x: torch.Tensor, sa: torch.Tensor, w: torch.Tensor, sw: torch.Tensor, y: torch.Tensor,
+             cfg: X.Cfg) -> CompiledKernel:
         return X.scaled_mm(x, sa, w, sw, y, cfg, self.work)
 
-    def checks(self, km) -> dict:
+    def checks(self, km: CompiledKernel) -> dict:
         ptx, sass = X.ptx_check(km), sass_counts(km)
         return {"ptx": ptx, "sass": sass, "ok": ptx["ok"] and sass["ok"]}
 
@@ -156,14 +165,15 @@ class IntMm:
     def baseline(self, m: int, n: int, k: int) -> Epilogue:
         return Epilogue("fused")
 
-    def skip(self, cfg, m: int, n: int) -> str | None:
+    def skip(self, cfg: Epilogue, m: int, n: int) -> str | None:
         return None
 
-    def call(self, x, sa, w, sw, y, cfg):
+    def call(self, x: torch.Tensor, sa: torch.Tensor, w: torch.Tensor, sw: torch.Tensor, y: torch.Tensor,
+             cfg: Epilogue) -> tuple[Epilogue, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         IM.linear(x, sa, w, sw, epilogue=cfg, out=y)
         return cfg, x, sa, w, sw
 
-    def checks(self, handle) -> dict:
+    def checks(self, handle: tuple[Epilogue, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]) -> dict:
         cfg, x, sa, w, sw = handle
         if cfg != "fused":
             return {"epilogue": cfg, "ok": True}
@@ -178,9 +188,12 @@ class IntMm:
 
 
 KERNELS = {"wgmma": Wgmma, "triton": Triton, "int_mm": IntMm}
+if TYPE_CHECKING:
+    Kernel = Wgmma | Triton | IntMm
+    KernelCfg = W.Cfg | X.Cfg | Epilogue
 
 
-def kernel(name: str | None = None):
+def kernel(name: str | None = None) -> Kernel:
     return KERNELS[name or ("wgmma" if X.arch() == "sm_90" else "triton")]()
 
 
@@ -216,7 +229,7 @@ def reference(z: torch.Tensor, sa: torch.Tensor, sw: torch.Tensor) -> torch.Tens
 _SASS: dict[str, dict] = {}
 
 
-def sass_counts(km) -> dict:
+def sass_counts(km: CompiledKernel) -> dict:
     """A Triton kernel's SASS: the s8 tensor-core step (IMMA, or IGMMA on sm_90), FFMA (a fused multiply-add would round
     once), .FTZ."""
     cubin = km.asm["cubin"]
@@ -240,7 +253,7 @@ def sass_counts(km) -> dict:
 
 
 class Weights:
-    def __init__(self, n: int, k: int, seed: int, special: bool = True):
+    def __init__(self, n: int, k: int, seed: int, special: bool = True) -> None:
         self.n, self.k = n, k
         self.w = codes(n, k, seed, FX.STRUCT_COLS)
         self.sw_np = FX.weight_scales(n, seed, special)
@@ -260,7 +273,7 @@ class Weights:
 class Case:
     """One (N, K, M): the activations, the s32 sums, the twin's words and the reference's, on the GPU."""
 
-    def __init__(self, wt: Weights, m: int, seed: int, special: bool = True, twin: bool = True):
+    def __init__(self, wt: Weights, m: int, seed: int, special: bool = True, twin: bool = True) -> None:
         self.wt, self.m = wt, m
         n, k = wt.n, wt.k
         self.x = codes(m, k, seed, FX.STRUCT_ROWS)
@@ -292,7 +305,7 @@ class Case:
                 "max_abs": int(np.abs(want.astype(np.int64)).max(initial=0))}
 
 
-def run_cfg(case: Case, cfg, kern) -> dict:
+def run_cfg(case: Case, cfg: KernelCfg, kern: Kernel) -> dict:
     wt, y = case.wt, case.y
     rec: dict = {"cfg": str(cfg)}
     why = kern.skip(cfg, case.m, wt.n)
@@ -346,7 +359,8 @@ def swap(case: Case) -> dict:
         return {"error": f"{type(ex).__name__}: {str(ex)[:300]}"}
 
 
-def gate_shape(name: str, wt: Weights, ms: tuple[int, ...], extra: tuple, kern, do_swap: bool, log) -> list[dict]:
+def gate_shape(name: str, wt: Weights, ms: tuple[int, ...], extra: tuple, kern: Kernel, do_swap: bool,
+               log: Callable[[dict], None]) -> list[dict]:
     out, n, k = [], wt.n, wt.k
     for m in ms:
         t0 = time.time()
@@ -370,8 +384,8 @@ def gate_shape(name: str, wt: Weights, ms: tuple[int, ...], extra: tuple, kern, 
     return out
 
 
-def logger(path: Path):
-    def log(rec):
+def logger(path: Path) -> Callable[[dict], None]:
+    def log(rec: dict) -> None:
         with open(path, "a") as f:
             f.write(json.dumps(rec) + "\n")
         print(json.dumps({key: rec[key] for key in ("name", "m", "ok", "s")} | {
@@ -381,7 +395,7 @@ def logger(path: Path):
     return log
 
 
-def summary(recs: list[dict], kern, ms: tuple[int, ...]) -> dict:
+def summary(recs: list[dict], kern: Kernel, ms: tuple[int, ...]) -> dict:
     cases = [r["picked"] for r in recs] + [e for r in recs for e in r["extra"] if "skipped" not in e]
     table = CONFIGS.get(f"{kern.name}:{X.arch()}", {})
     return {"device": torch.cuda.get_device_name(), "arch": X.arch(), "torch": torch.__version__, **kern.meta(), "ms": ms,

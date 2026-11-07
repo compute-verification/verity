@@ -1,0 +1,22 @@
+# The serve tax (README.md). Not a package: its runs use a node's pinned vLLM venv; the suite tests the metrics and the
+# table on synthetic client records, the plugin's changes on a stand-in scheduler, the replay's window and comparison
+# and the restore's on a synthetic arm, and the boundary state's capture and restore on stand-ins for vLLM's engine
+# core, stdlib only but for the tests of arrays, which skip without numpy.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `servetax_plugin` on a stand-in scheduler (tests/test_plugin.py): the integration's step trace and release order, and
+# the modules they import; the driver and the replay read the run's id and paths through verity_config's SHARED settings
+inputs = [
+    "tools/config/verity_config",
+    "verity/__init__.py",
+    "verity/settings.py",
+    "integrations/vllm/verity_vllm/__init__.py",
+    "integrations/vllm/verity_vllm/engine/__init__.py",
+    "integrations/vllm/verity_vllm/engine/hooks.py",
+    "integrations/vllm/verity_vllm/engine/step_trace.py",
+    "integrations/vllm/verity_vllm/pipeline/__init__.py",
+    "integrations/vllm/verity_vllm/pipeline/serve_admit.py",
+]

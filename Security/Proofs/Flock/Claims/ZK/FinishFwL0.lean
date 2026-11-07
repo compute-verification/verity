@@ -1,11 +1,46 @@
 module
 
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
 public import Proofs.Flock.Claims.ZK.FinishFwRep
+public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.FinishSwLig
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
 
 /-!
-# Level 0's values from the firewall's run
+# Level 0's values from the ZK server's run
 
-The firewall computes level 0's opening itself: where `repFwC` returns, its Ligerito proof's out-of-domain value,
+The ZK server computes level 0's opening itself: where `repFwC` returns, its Ligerito proof's out-of-domain value,
 lane messages and pair's sums are `ligeritoPZk_lanes`' closed forms at the coins from the round the opening begins, on
 its packed table and the basis of its PIOP's switched vectors, plus the pads. Those closed forms are `l0Clear`'s at the
 same coins, table and basis (`LigLock.tabS_foldKs`, `LigLock.wS_foldKs`, and the lane coins, point and weights at the
@@ -82,8 +117,9 @@ theorem take_range_map {α : Type} (f : ℕ → α) {j k : ℕ} (hj : j ≤ k) :
     ((List.range k).map f).take j = (List.range j).map f := by
   rw [← List.map_take, List.take_range, Nat.min_eq_left hj]
 
+-- one proof of over a hundred lines down `piopFw`'s unfolded run at level 0, `rw`, `dsimp` and `norm_num` on each step
 set_option maxHeartbeats 1000000 in
-/-- **Level 0's values from the firewall's run**: where `repFwC`, answered by `asksCut coin n` at replies `resp` whose
+/-- **Level 0's values from the ZK server's run**: where `repFwC`, answered by `asksCut coin n` at replies `resp` whose
 coins are `coin`'s, returns, and its PIOP ends at round `p₀` having switched to the basis `b`, its proof's
 out-of-domain value, lane messages and pair's sums are level 0's clear values at the coins from `p₀` on the packed
 table `g` and `b` (`l0Clear`), plus the pads, at each value's layout position. -/

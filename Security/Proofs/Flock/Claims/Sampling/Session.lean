@@ -1,6 +1,47 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.KS
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Aggregate
+import Proofs.Flock.Claims.ERep
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Sampling.Binding
+import Proofs.Flock.Claims.Sampling.Cost
 
 /-!
 # Flock's KS at a checked unit's session
@@ -25,7 +66,7 @@ rounds costs, is at most `γ_F` (`γFlock_mul_le`).
 
 * `SessionKS_of`: **`SessionKS` from Flock's KS**, `DrawFixed`, `SessionRuns`, `InnerNumbers` and `ε_table ≥ 0`.
 
-A session may cover several checked units, as the one-stage audit's one session proves every drawn unit:
+A session may cover several checked units, as the one-stage audit's one session proves every sampled proof block:
 `SessionRunsSlots` asks `SessionRuns` only of the units at the slots whose sessions cover the rest (`SlotsCover`,
 `Sampling.KS`), and gives it (`sessionRuns_of_slots`); one session per unit is `SessionRuns` itself
 (`sessionRunsSlots_units_iff`). `InnerNumbers` at one session over every unit is one statement about it
@@ -266,7 +307,7 @@ section Session
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **The draw precedes the sessions**: a unit checked at `r` has its session's rounds in the second stage, and fresh
+/-- **The sample precedes the sessions**: a unit checked at `r` has its session's rounds in the second stage, and fresh
 coins on them keep the checked units. -/
 def DrawFixed (D : Deploy Coin Col T) : Prop :=
   ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
@@ -296,7 +337,7 @@ def InnerNumbers (D : Deploy Coin Col T) : Prop :=
       D.flock.εtable xS ≤ D.εtable x ∧ D.flock.weight xS ≤ D.weight x
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-/-- **`DrawFixed` from the draw's place in the run**: where each checked unit's session is in the second stage and the
+/-- **`DrawFixed` from the sample's place in the run**: where each checked unit's session is in the second stage and the
 checked units read only the coins off the second stage, fresh coins on a session keep them. -/
 theorem drawFixed_of_first (D : Deploy Coin Col T)
     (hrounds : ∀ x r u, (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) → D.rounds x u ⊆ D.stage2 x)

@@ -28,6 +28,7 @@ public import Definitions.Flock.Compiled
 public import Definitions.Flock.HoloCompiled
 public import Definitions.Flock.Game.Lock
 public import Definitions.Flock.Game.Seq
+public import Definitions.Flock.Game.Tape
 public import Definitions.Flock.Game.Prob
 public import Definitions.Flock.Game.Batch
 public import Definitions.Flock.ZK.Table
@@ -37,9 +38,9 @@ public import Definitions.Flock.ZK.SHVZK
 public import Definitions.Flock.ZK.AnyValues
 
 /-!
-# C-Flock's definitions
+# Flock's definitions
 
-The vocabulary C-Flock's guarantees are stated in, extracted from `Proofs/Flock` without its proofs, bottom-up: each
+The vocabulary Flock's guarantees are stated in, extracted from `Proofs/Flock` without its proofs, bottom-up: each
 module above says what it holds, and the definitions keep their names. A proof that a definition carries as a field
 moves with it; every other lemma stays in `Proofs/Flock` and imports the definitions it is about.
 -/

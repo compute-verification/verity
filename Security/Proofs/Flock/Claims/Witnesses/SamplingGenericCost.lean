@@ -2,8 +2,42 @@ module
 
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Efficient
-public import Proofs.Flock.Claims.Sampling.Wait
-public import Proofs.Flock.Claims.Sampling.Cost
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Sampling.Cost
+import Proofs.Flock.Claims.Sampling.Wait
+import Proofs.Flock.SamplingGeneric.Bits
 
 /-!
 # Refutation witnesses: the generic sampled compiler's cost claims
@@ -166,7 +200,7 @@ theorem ownLog_flatMapRP_head {R β γ : Type} (H : Msg → Msg) (run : R → Tr
   rw [Claims.Sampling.ownLog_flatMapRP, List.map_cons, List.sum_cons]
   exact Nat.le_add_right _ _
 
-/-- A wait whose first draw is accepted keeps it first. -/
+/-- A wait whose first sample is accepted keeps it first. -/
 theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Trace) {k : ℕ} (hk : 0 < k) (r : R) (rs : List R)
     (hr : (run r).out = .acc) : ∃ l, ((waitAccC k (r :: rs) []).eval H run).1 = (r, (run r).seen) :: l := by
   rw [Claims.Sampling.waitAccC_eval_nil, Claims.Sampling.accList,
@@ -175,7 +209,7 @@ theorem waitAccC_head {R : Type} (H : Msg → Msg) (run : R → Trace) {k : ℕ}
   exact ⟨_, rfl⟩
 
 /-- **The compiled extractor makes a SHA-512 call of its own** wherever every run is accepted and each accepted run's
-extractions make one: its waits keep their first draws, so the first inner run's extractions are made. -/
+extractions make one: its waits keep their first samples, so the first inner run's extractions are made. -/
 theorem ownLog_E_pos (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (r₀ : Fin (L.V.k x) → Coin) (c : L.E.C x) {s : AuditStatement} (hs : L.parse x = some s)
     (hacc : ∀ r, (run H P L.V x ω r).out = .acc) (hk : 0 < L.k x) (hcap : 0 < L.cap x)

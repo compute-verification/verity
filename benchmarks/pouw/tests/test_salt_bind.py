@@ -1,4 +1,4 @@
-"""On the certified served window (`served_commit.Challenger(certifier=…)`), a drawn unit's proof is
+"""On the certified served window (`served_commit.Challenger(certifier=…)`), a sampled proof block's proof is
 held to the window's certified salt at its opening of record (`core_check.opening`'s ``salt``, Lean `PouwCheck.opening`'s).
 
 A witness that lifted `salt.unit_reason` and passed rows formed before any certifier salt through every certified
@@ -31,8 +31,8 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 from verity.core.protocols.sampled_proofs import challenger as Ch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
@@ -106,7 +106,7 @@ def _sid(stream: str = "window") -> bytes:
 def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
                reveals) -> tuple[active.CertifierClient, dict[int, bytes]]:
     """The certifier's run `RUN_ID` on `LINK` with PoUW windows 0 and 1, the prover's record taken for both before their
-    salts are drawn, both published, served on localhost (`reveals`): the challenger's client of it, and the salts it
+    salts are sampled, both published, served on localhost (`reveals`): the challenger's client of it, and the salts it
     drew."""
     drawn: dict[int, bytes] = {}
     signers = []
@@ -156,9 +156,9 @@ def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
 
 
 def _pub(priv, advice, t: int) -> bytes:
-    """The drawn unit's proof's public file as `verity_flock.circuit.write` lays it out: the header over the circuit the
+    """The sampled proof block's proof's public file as `verity_flock.circuit.write` lays it out: the header over the circuit the
     verifier pins, then the unit's A row's and B row's b ‖ c."""
-    from verity.core.protocols.pouw.circuit import leaves as L
+    from verity.ml.protocols.pouw.circuit import leaves as L
     e, i, j = Wd.tile_at(SC.entries_of(advice), t)
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}
@@ -169,8 +169,8 @@ def _pub(priv, advice, t: int) -> bytes:
 def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(tmp_path, monkeypatch, reveals):
     """The served path. The witness: lift `unit_reason` and the prover's rows, formed once under a salt
     that is neither window's and committed in PoUW windows 0 and 1, pass the certifier's record and reveal (through its
-    client, `CertifierClient`), `pass_epoch` of record, the registration ledger and the live draw. They now stop at the
-    opening of record: the window is certified and `Pc8TileSide` reads no salt, so every drawn unit is refused, through
+    client, `CertifierClient`), `pass_epoch` of record, the registration ledger and the live sample. They now stop at the
+    opening of record: the window is certified and `Pc8TileSide` reads no salt, so every sampled proof block is refused, through
     `Challenger.check` (under the certified salt its pass was checked against, `certified_salt`) and through
     `core_check.opening` under that salt and under none."""
     monkeypatch.setattr(PS, "unit_reason", lambda unit: None)

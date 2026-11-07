@@ -3,7 +3,7 @@ unit's circuit: the window's public Program and template-instance partition deri
 rows each reads, its registered values (each call's A table and z table, its tiles' z/y records, `scaled_mm_zy`'s, and
 the weights' b/<K>) are read where the window's own reads say, every per-window value's domain binds the window's open
 root and b/<K>'s none, window credit's registration step takes the window's evidence and refuses it without
-that root, one call's units a statement, a window's drawn units open
+that root, one call's units a statement, a window's sampled proof blocks open
 to those rows of its registered roots and to nothing else (a tampered window's, another window's, a tampered A row), each
 in-proof negative's window changes the one value it names and makes
 the unit's word reference compute ok = 0 exactly where its record moved, a registration of z alone is refused, the public
@@ -29,9 +29,10 @@ H1 = Path(__file__).resolve().parents[1] / "h1_prove"
 sys.path.insert(0, str(H1))
 import h1unit as U  # noqa: E402
 
+from verity.core.protocols.pouw import core_check as CC  # noqa: E402
 from verity.core.protocols.pouw import salt as PS  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
-from verity.core.protocols.pouw.circuit import seeds as SD  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
 
 
 def _module(name: str, file: str):
@@ -481,7 +482,7 @@ def test_ks_statement_rows_are_the_h1_tiles_rows_under_either_ports():
     """`h1window.statement_rows`, the rows the auditor's lowering writes K's circuit file on: under h1_prove's ports
     (`h1unit.ports`) the stager's rows as `Shape` sizes them (an A or B row K / 2 + 2 words, the record 3 R C, the public
     row 100), and by default `window_ports`' A and B ports, which credit's registered file reads, with the rest unchanged."""
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     for shape in (U.Shape(64), U.Shape(128)):
         t = shape.definition()
         bits = {p.name: p.bits for p in shape.ports()}
@@ -730,8 +731,9 @@ def test_the_seeds_derive_from_the_window_salt():
 
 
 def test_the_public_and_ok_rows_are_their_parameters_bits():
-    """The public row is the salt's, position's and roots' leaves in order; the ok row is the one word 1, under a salt
-    anyone derives from the window and the position."""
+    """The public row is the salt's, position's and roots' leaves in order; the ok row is the one word 1; each under a salt
+    anyone derives from the window and the position, core's (`core_check.public_row_salt`, `ok_salt`), which credit and
+    its Lean derive."""
     salt, roots = bytes(range(64)), (bytes(64 * [7]), bytes(range(64, 128)))
     w = U.pub_words(salt, 0x0123456789, roots)
     bits = np.unpackbits(w.astype("<u2").view(np.uint8), bitorder="little")
@@ -739,6 +741,7 @@ def test_the_public_and_ok_rows_are_their_parameters_bits():
         SD.leaves(roots[1], True)
     assert U.OK.tolist() == [1] and len(U.ok_salt("w", 3)) == U.SALT_BYTES
     assert len({U.ok_salt("w", 3), U.ok_salt("w", 4), U.ok_salt("v", 3), U.pub_salt("w", 3)}) == 4
+    assert (U.pub_salt("w", 3), U.ok_salt("w", 3)) == (CC.public_row_salt("w", 3), CC.ok_salt("w", 3))
 
 
 def test_the_window_open_root_is_pouws_of_the_weights_and_a_stand_in_request_table():

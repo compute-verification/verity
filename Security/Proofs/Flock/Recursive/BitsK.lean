@@ -1,7 +1,39 @@
 module
 
-public import Proofs.Flock.Recursive.KSProved
 public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+public import Proofs.Flock.Recursive.KSStatement
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Recursive.KSProved
 
 /-!
 # `Pr[acc ∧ ¬R] ≤ κ + t·ε` at the deployed reader
@@ -25,7 +57,7 @@ namespace RecDeploy
 
 open Claims (Msg Out)
 
-/-- **`Pr[acc ∧ ¬R] ≤ κ + t·ε` at the deployed reader**, at the brings `b` and the coin server's record (`aux`, `nOf`,
+/-- **`Pr[acc ∧ ¬R] ≤ κ + t·ε` at the deployed reader**, at the brings `b` and the challenger's live-coin part's record (`aux`, `nOf`,
 `hd`, `recRest`): `BitsLin2KOn` where `Flock.Guarantees.RecursiveKSAt` states `KSLin2On`, at the dense statements. -/
 def RecursiveBitsKAt (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) : Prop :=
@@ -37,10 +69,10 @@ def RecursiveBitsKAt (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.
       FlockDeploy.joinR rowInDeployed DeployedR.finalR DeployedR.wR)
     (deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep DenseAt
 
-/-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at the deployed reader**, at the brings `b` and the coin server's
+/-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at the deployed reader**, at the brings `b` and the challenger's live-coin part's
 record: `BitsKAt` at `RecursiveBitsKAt`'s records, at every dense statement at the deployment's sizes and call bounds
 `n ≤ 2^32` and `v ≤ 2^32`. `SizesAt` reads the stage at the session's brings `{ b with tr := recTr … }`, the parts the
-verifier stages from the coin server's transcript, since `Brings.st` is `Stage.ofMsg` of the brings' `tr`. -/
+verifier stages from the challenger's live-coin part's transcript, since `Brings.st` is `Stage.ofMsg` of the brings' `tr`. -/
 def RecursiveBitsKBoundAt (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) : Prop :=
   Claims.Recursion.BitsKAt FlockDeploy.sha512

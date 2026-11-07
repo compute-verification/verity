@@ -1,6 +1,14 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.OneStage
+import Mathlib.Algebra.BigOperators.GroupWithZero.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Two-stage audits, and their relation to one-stage
@@ -8,27 +16,27 @@ public import Proofs.Flock.Soundness.Audit.OneStage
 A coarse partition `Pc` is refined by a fine partition `Pf` (`Partition.Refines`). Coarse units are
 the ones the prover replays, and fine units are the ones proved.
 
-**Variant (a): every intermediate committed before a single draw.** This is the one-stage audit over
+**Variant (a): every intermediate committed before a single sample.** This is the one-stage audit over
 the fine partition, with the registration carrying both the coarse and the fine roots. A wrong
 coarse unit contains a wrong fine unit, so the fine count curve bounds coarse counts too
 (`two_stage_a_coarse`).
 
 **Variant (b): nested sampling** (`twoStage`). Serving registers the coarse roots. The verifier
-draws coarse units by `L₁`. The prover commits the interiors of the drawn units (`Int`). Then the
-verifier draws, independently inside each drawn coarse unit `u`, fine units by `L₂ u`, and the
+samples coarse units by `L₁`. The prover commits the interiors of the sampled proof blocks (`Int`). Then the
+verifier samples, independently inside each sampled coarse unit `u`, fine units by `L₂ u`, and the
 session proves them. The profile is over the coarse partition, the only one committed everywhere,
-with the effective escape (`effEscape`)
+with the effective escape (`effAcceptProb`)
 $$e_{\text{eff}}(B) = \mathbb E_{S_1}\Big[\prod_{u \in B \cap S_1} \max_{v \subseteq u}
   \big(1 - \pi_{L_2 u}(v)\big)\Big].$$
-Why: a drawn wrong coarse unit has a wrong fine unit under every interior the prover commits
-(`Analysis₂.compose`, from `Refines.exists_wrong_fine`), and the second draw is fresh after the
+Why: a sampled wrong coarse unit has a wrong fine unit under every interior the prover commits
+(`Analysis₂.compose`, from `Refines.exists_wrong_fine`), and the second sample is fresh after the
 interior and independent across coarse units.
 
 * `twoStage_profile`: $\Pr[\text{accept} \wedge \text{wrong}_c(X) \in \mathcal B] \le \sup_{B \in
   \mathcal B} e_{\text{eff}}(B) + \varepsilon_{ks} + \delta_{link}$, with the two per-unit terms
   named at the fine level, as in one-stage;
-* `effEscape_full`: **(b1) is one-stage over the coarse partition**: when the second stage proves
-  every fine unit of each drawn coarse unit, `effEscape = L₁.escape`, with no dilution.
+* `effAcceptProb_full`: **(b1) is one-stage over the coarse partition**: when the second stage proves
+  every fine unit of each sampled coarse unit, `effAcceptProb = L₁.escape`, with no dilution.
 -/
 
 @[expose] public section
@@ -47,14 +55,14 @@ theorem prCoin_eq_one_of {C : Type} [Fintype C] [Nonempty C] {p : C → Prop} (h
   simp only [h, ite_true]
   exact avg_const 1
 
-/-- The fine draw: inside each drawn coarse unit `u`, the second-stage draw of `L₂ u`. -/
+/-- The fine sample: inside each sampled coarse unit `u`, the second-stage sample of `L₂ u`. -/
 def fineDraw (L₁ : Law nc) (L₂ : Fin nc → Law nf) (ω₁ : L₁.Ω) (ω₂ : ∀ u, (L₂ u).Ω) :
     Finset (Fin nf) :=
   (L₁.draw ω₁).biUnion fun u => (L₂ u).draw (ω₂ u)
 
-/-- **The two-stage audit, variant (b).** The prover registers `R`; the verifier draws coarse
-units; the prover commits the drawn units' interiors `I`; the verifier draws fine units inside each
-drawn coarse unit, fresh; the session proves them. Output: the verdict and both draws. -/
+/-- **The two-stage audit, variant (b).** The prover registers `R`; the verifier samples coarse
+units; the prover commits the sampled proof blocks' interiors `I`; the verifier samples fine units inside each
+sampled coarse unit, fresh; the session proves them. Output: the verdict and both samples. -/
 def twoStage (L₁ : Law nc) (L₂ : Fin nc → Law nf) (Reg : Type) (Int : Finset (Fin nc) → Type)
     (session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool) :
     Game (Bool × Finset (Fin nc) × Finset (Fin nf)) :=
@@ -67,13 +75,13 @@ variable {L₁ : Law nc} {L₂ : Fin nc → Law nf} {Reg : Type} {Int : Finset (
   {session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool}
 
 /-- The prover's state after committing the interior `I`: its session strategy for every second
-draw. -/
+sample. -/
 abbrev Cont₂ (L₁ : Law nc) (L₂ : Fin nc → Law nf) (Reg : Type) (Int : Finset (Fin nc) → Type)
     (session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool) (R : Reg)
     (ω₁ : L₁.Ω) (I : Int (L₁.draw ω₁)) :=
   ∀ ω₂ : ∀ u, (L₂ u).Ω, Strategy (session (fineDraw L₁ L₂ ω₁ ω₂) R (L₁.draw ω₁) I)
 
-/-- The prover's state after registering `R`: for every coarse draw, its interior and what follows. -/
+/-- The prover's state after registering `R`: for every coarse sample, its interior and what follows. -/
 abbrev Cont₁ (L₁ : Law nc) (L₂ : Fin nc → Law nf) (Reg : Type) (Int : Finset (Fin nc) → Type)
     (session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool) (R : Reg) :=
   ∀ ω₁ : L₁.Ω, Σ I : Int (L₁.draw ω₁), Cont₂ L₁ L₂ Reg Int session R ω₁ I
@@ -91,7 +99,7 @@ def cont₁ (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
 * `committedC`: the coarse committed transcript, from the prover's state at registration;
 * `committedF`: the fine committed transcript, from the coarse one and the prover's state after
   committing the interior;
-* `compose`: a drawn wrong coarse unit has a wrong fine unit inside it, under every interior;
+* `compose`: a sampled wrong coarse unit has a wrong fine unit inside it, under every interior;
 * `ksFail`, `linkFail`, `cover`: as in one-stage, at the fine level. -/
 structure Analysis₂ (L₁ : Law nc) (L₂ : Fin nc → Law nf) (Reg : Type) (Int : Finset (Fin nc) → Type)
     (session : Finset (Fin nf) → Reg → (S₁ : Finset (Fin nc)) → Int S₁ → Game Bool) where
@@ -121,7 +129,7 @@ def committedCOf (σ : Strategy (twoStage L₁ L₂ Reg Int session)) : A.TrC :=
   A.committedC (reg₂ σ) (cont₁ σ)
 
 /-- **Knowledge soundness at the fine level** (named hypothesis `ε_ks`), for every prover and every
-rule that picks a drawn fine unit before the session's first coin. -/
+rule that picks a sampled fine unit before the session's first coin. -/
 def KnowledgeSound (εks : ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (c : Cont₁ L₁ L₂ Reg Int session R) (tgt : L₁.Ω → (∀ u, (L₂ u).Ω) → Option (Fin nf)),
     avg (fun ω₁ => avg fun ω₂ => prob (fun ok => ok = true ∧ ∃ v, tgt ω₁ ω₂ = some v ∧
@@ -129,7 +137,7 @@ def KnowledgeSound (εks : ℝ≥0∞) : Prop :=
       A.ksFail (fineDraw L₁ L₂ ω₁ ω₂) R (L₁.draw ω₁) (c ω₁).1 ((c ω₁).2 ω₂) v)
       (session (fineDraw L₁ L₂ ω₁ ω₂) R (L₁.draw ω₁) (c ω₁).1) ((c ω₁).2 ω₂)) ≤ εks
 
-/-- **The link term at the fine level** (named hypothesis `δ_link`): extraction of the picked fine
+/-- **The binding error at the fine level** (named hypothesis `δ_link`): extraction of the picked fine
 unit disagrees with the fine committed transcript. -/
 def LinkSound (δlink : ℝ≥0∞) : Prop :=
   ∀ (R : Reg) (c : Cont₁ L₁ L₂ Reg Int session R) (tgt : L₁.Ω → (∀ u, (L₂ u).Ω) → Option (Fin nf)),
@@ -141,9 +149,9 @@ def LinkSound (δlink : ℝ≥0∞) : Prop :=
 
 end Analysis₂
 
-/-- **The effective escape** of a coarse set `B` under nested sampling: each drawn unit of `B`
+/-- **The effective escape** of a coarse set `B` under nested sampling: each sampled proof block of `B`
 escapes the second stage with the largest miss probability of a fine unit inside it. -/
-noncomputable def effEscape (L₁ : Law nc) (L₂ : Fin nc → Law nf) (parent : Fin nf → Fin nc)
+noncomputable def effAcceptProb (L₁ : Law nc) (L₂ : Fin nc → Law nf) (parent : Fin nf → Fin nc)
     (B : Finset (Fin nc)) : ℝ≥0∞ :=
   avg fun ω₁ => ∏ u ∈ B ∩ L₁.draw ω₁, ⨆ (v : Fin nf) (_ : parent v = u), (1 - (L₂ u).incl v)
 
@@ -152,16 +160,16 @@ theorem twoStage_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlin
     (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin nc) → Prop)
     (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
     prob (fun o => o.1 = true ∧ 𝓑 (A.wrongC (A.committedCOf σ))) (twoStage L₁ L₂ Reg Int session) σ ≤
-      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), effEscape L₁ L₂ A.parent B) + εks + δlink := by
+      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), effAcceptProb L₁ L₂ A.parent B) + εks + δlink := by
   classical
   obtain ⟨R, c'⟩ := σ
   set c : Cont₁ L₁ L₂ Reg Int session R := cont₁ ⟨R, c'⟩
   set X := A.committedC R c
   show prob _ (twoStage L₁ L₂ Reg Int session) ⟨R, c'⟩ ≤ _
-  -- the fine committed transcript after each coarse draw
+  -- the fine committed transcript after each coarse sample
   let Z : L₁.Ω → A.TrF := fun ω₁ => A.committedF X R ω₁ (c ω₁).1 (c ω₁).2
   let D : L₁.Ω → Finset (Fin nc) := fun ω₁ => A.wrongC X ∩ L₁.draw ω₁
-  -- the second draw misses every wrong fine unit inside every drawn wrong coarse unit
+  -- the second sample misses every wrong fine unit inside every sampled wrong coarse unit
   let Pm : L₁.Ω → ∀ u, (L₂ u).Ω → Prop := fun ω₁ u ω =>
     ∀ v, A.parent v = u → v ∈ A.wrongF (Z ω₁) → v ∉ (L₂ u).draw ω
   let tgt : L₁.Ω → (∀ u, (L₂ u).Ω) → Option (Fin nf) := fun ω₁ ω₂ =>
@@ -203,7 +211,7 @@ theorem twoStage_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlin
               · exact Or.inr ⟨hok.1, _, ht, hmem, hl⟩) _ _
         _ ≤ prob (ksE ω₁ ω₂) _ _ + prob (lkE ω₁ ω₂) _ _ := prob_or_le _ _ _ _
         _ ≤ _ := by rw [add_assoc]; exact le_add_left le_rfl
-  -- the second draw's miss probability, inside one coarse draw
+  -- the second sample's miss probability, inside one coarse sample
   have hmiss : ∀ ω₁, prCoin (fun ω₂ : ∀ u, (L₂ u).Ω => 𝓑 (A.wrongC X) ∧ ∀ u ∈ D ω₁, Pm ω₁ u (ω₂ u)) ≤
       if 𝓑 (A.wrongC X) then
         ∏ u ∈ A.wrongC X ∩ L₁.draw ω₁, ⨆ (v : Fin nf) (_ : A.parent v = u), (1 - (L₂ u).incl v)
@@ -240,7 +248,7 @@ theorem twoStage_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlin
         refine (avg_mono hmiss).trans ?_
         by_cases hB : 𝓑 (A.wrongC X)
         · simp only [hB, ite_true]
-          exact le_iSup₂_of_le (f := fun B (_ : 𝓑 B) => effEscape L₁ L₂ A.parent B) _ hB le_rfl
+          exact le_iSup₂_of_le (f := fun B (_ : 𝓑 B) => effAcceptProb L₁ L₂ A.parent B) _ hB le_rfl
         · simp only [hB, ite_false]
           exact (avg_const 0).le.trans (zero_le)
 
@@ -249,15 +257,15 @@ theorem twoStage_count (A : Analysis₂ L₁ L₂ Reg Int session) {εks δlink 
     (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (K : ℕ)
     (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
     prob (fun o => o.1 = true ∧ K ≤ (A.wrongC (A.committedCOf σ)).card) (twoStage L₁ L₂ Reg Int session) σ ≤
-      (⨆ (B : Finset (Fin nc)) (_ : K ≤ B.card), effEscape L₁ L₂ A.parent B) + εks + δlink :=
+      (⨆ (B : Finset (Fin nc)) (_ : K ≤ B.card), effAcceptProb L₁ L₂ A.parent B) + εks + δlink :=
   twoStage_profile A hks hlink (fun B => K ≤ B.card) σ
 
-/-- **(b1) is one-stage over the coarse partition.** When the second stage draws every fine unit of
+/-- **(b1) is one-stage over the coarse partition.** When the second stage samples every fine unit of
 each coarse unit, the effective escape is the first stage's escape. -/
-theorem effEscape_full (parent : Fin nf → Fin nc) (hfull : ∀ u ω v, parent v = u → v ∈ (L₂ u).draw ω)
-    (B : Finset (Fin nc)) : effEscape L₁ L₂ parent B = L₁.escape B := by
+theorem effAcceptProb_full (parent : Fin nf → Fin nc) (hfull : ∀ u ω v, parent v = u → v ∈ (L₂ u).draw ω)
+    (B : Finset (Fin nc)) : effAcceptProb L₁ L₂ parent B = L₁.escape B := by
   classical
-  unfold effEscape Verity.Law.escape
+  unfold effAcceptProb Verity.Law.escape
   rw [← avg_ite_eq_prCoin]
   refine congrArg avg (funext fun ω₁ => ?_)
   have hzero : ∀ u, (⨆ (v : Fin nf) (_ : parent v = u), (1 - (L₂ u).incl v)) = 0 := fun u =>
@@ -279,15 +287,15 @@ theorem twoStage_full_profile (A : Analysis₂ L₁ L₂ Reg Int session) {εks 
     prob (fun o => o.1 = true ∧ 𝓑 (A.wrongC (A.committedCOf σ))) (twoStage L₁ L₂ Reg Int session) σ ≤
       (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), L₁.escape B) + εks + δlink := by
   have := twoStage_profile A hks hlink 𝓑 σ
-  simp only [effEscape_full A.parent hfull] at this
+  simp only [effAcceptProb_full A.parent hfull] at this
   exact this
 
 /-- **(b2) with a Bernoulli first stage, in general**: each coarse unit of `B` contributes its
 Bernoulli factor at its largest second-stage miss probability, so the nested law is a one-stage
 Bernoulli law thinned unit by unit. -/
-theorem effEscape_bernoulli_prod {num den : ℕ} [NeZero den] (hnum : num ≤ den)
+theorem effAcceptProb_bernoulli_prod {num den : ℕ} [NeZero den] (hnum : num ≤ den)
     (L₂ : Fin nc → Law nf) (parent : Fin nf → Fin nc) (B : Finset (Fin nc)) :
-    effEscape (Law.bernoulli nc num den) L₂ parent B =
+    effAcceptProb (Law.bernoulli nc num den) L₂ parent B =
       ∏ u ∈ B, Law.bernFactor num den (⨆ (v : Fin nf) (_ : parent v = u), (1 - (L₂ u).incl v)) :=
   Law.bernoulli_avg_prod hnum _ B
 
@@ -365,9 +373,9 @@ def AnchorsSound₂ {L₁ : Law nc} {L₂ : Fin nc → Law nf} {Reg : Type} {Int
 /-! ### The oracle layer
 
 The prover sends the coarse transcript, then the interior, as tables are sent at the oracle layer.
-The fine transcript is `extend R I`, extraction returns it, and the link term is zero. -/
+The fine transcript is `extend R I`, extraction returns it, and the binding error is zero. -/
 
-/-- **Any per-unit proof system at the fine level** (named hypothesis): if a drawn fine unit is
+/-- **Any per-unit proof system at the fine level** (named hypothesis): if a sampled fine unit is
 wrong in the fine transcript, the session accepts with probability at most `ε`. -/
 def SessionSound₂ (Pf : Partition C nf) (Pc : Partition C nc) {Int : Finset (Fin nc) → Type}
     (ext : ∀ S₁, Int S₁ → (Fin C.N → Bool))
@@ -421,7 +429,7 @@ theorem Refines.oracle₂_profile (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : Fi
     {ε : ℝ≥0∞} (hs : SessionSound₂ Pf Pc ext session ε) (𝓑 : Finset (Fin nc) → Prop)
     (σ : Strategy (twoStage L₁ L₂ (Fin C.N → Bool) Int session)) :
     prob (fun o => o.1 = true ∧ 𝓑 (Pc.wrong (reg₂ σ))) (twoStage L₁ L₂ _ Int session) σ ≤
-      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), effEscape L₁ L₂ r.parent B) + ε := by
+      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), effAcceptProb L₁ L₂ r.parent B) + ε := by
   have := twoStage_profile (r.oracle₂ ext session) (r.oracle₂_knowledgeSound hs) r.oracle₂_linkSound
     𝓑 σ
   rwa [add_zero] at this
@@ -437,7 +445,7 @@ theorem Refines.oracle₂_full_profile (r : Refines Pf Pc) {L₁ : Law nc} {L₂
     prob (fun o => o.1 = true ∧ 𝓑 (Pc.wrong (reg₂ σ))) (twoStage L₁ L₂ _ Int session) σ ≤
       (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), L₁.escape B) + ε := by
   have := r.oracle₂_profile hs 𝓑 σ
-  simp only [effEscape_full r.parent hfull] at this
+  simp only [effAcceptProb_full r.parent hfull] at this
   exact this
 
 end Partition

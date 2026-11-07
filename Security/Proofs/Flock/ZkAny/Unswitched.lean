@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.ZK.Refine
 public import Proofs.Flock.Claims.ZK.FrameRounds
+public import Proofs.Flock.Soundness.ZK.Session
 
 /-!
 # The release before the `Finish` is the unswitched cut
@@ -10,7 +11,7 @@ The ZK server masks each worker round with the pads its frame drew, whatever the
 (`RefSession.swP`) commits its pads tree over moved pads where a table's rows fail at the worker's values
 (`Table.swPre`), so the transport premises at it (`LeanRelease.LinkRoundEq`, `LiveRoundEq`, `FillRoundEq`) are false
 at exactly the witnesses zero knowledge at any values is about. Here the release before the `Finish` is held to the
-**unswitched** prover instead: the worker's values on the drawn pads, rows or not.
+**unswitched** prover instead: the worker's values on the sampled pads, rows or not.
 
 * `Table.unPre`: a table's unswitched pre-final view, the table at clear values (`Table.onVals`) at the worker's values,
   as one of the table's. Where the rows hold it is the switched one (`Table.swPre_of_rows`); at the honest values it is
@@ -49,7 +50,7 @@ namespace FlockSoundness.ZK.Table
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **The unswitched prover's pre-final view**: the worker's clear values `v` on the drawn pads, whether or not its rows
+/-- **The unswitched prover's pre-final view**: the worker's clear values `v` on the sampled pads, whether or not its rows
 hold (`swPre` without its switch). -/
 noncomputable def unPre {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
     (T : Table F K W Salt Seed D Hi VL) (w : W) (v : T.Vals) (ω : T.Rand) : T.PreView :=
@@ -124,7 +125,7 @@ theorem _root_.FlockSoundness.Discharge.ZkView.Coined.unPreWith_vals {K W Hi VL 
   unfold ZkView.Coined.unPreWith ZkView.Coined.preWith
   rw [T.tab.unPre_vals]
 
-/-- **What each of the unswitched prover's pre-final leaves commits**: `v`'s columns and `τ` on the drawn pads. -/
+/-- **What each of the unswitched prover's pre-final leaves commits**: `v`'s columns and `τ` on the sampled pads. -/
 noncomputable def _root_.FlockSoundness.Discharge.ZkView.Coined.unContent {K W Hi VL : Type} [Field K]
     {z : ZkView.Sizes} (T : ZkView.Coined K W Hi VL z) (w : W) (v : T.tab.Vals) (b : ZkView.Base z Hi) :
     ZkView.LeafPos z → ByteArray :=
@@ -331,7 +332,7 @@ theorem enc_unCutOf (S : RefSession) (vs : S.SwVals) (x : Msg) (w : Flock.Wit) (
   rw [unExeOf_eq, unExeOf_eq]
   convert e using 4
 
-/-- **The rows hold at the tape** at the coins `c`: `RowsAtAll` at the tables' bases the tape `t` draws, at the values
+/-- **The rows hold at the tape** at the coins `c`: `RowsAtAll` at the tables' bases the tape `t` samples, at the values
 read from what the workers see there. -/
 def RowsAtTape (S : RefSession) (x : Msg) (c : Fin (refK x) → S.Coin)
     (wt : ∀ j, FlockSoundness.Model.Witness (S.C x j).S.m)
@@ -599,7 +600,7 @@ theorem frameD_of_refusesCoins {W R : Type} (L : LeanRelease W R)
       exact L.release_of_refusesCoins x ρ h _ _ hr
 
 /-- **The link is the session's unswitched link**: after `Hello`'s answer, where the protocol has coins and the frame
-takes the answer's, the firewall's own link is the session's unswitched message at the tape, the roots over the drawn
+takes the answer's, the ZK server's own link is the session's unswitched message at the tape, the roots over the sampled
 pads and the workers' values whatever they are. `LinkRoundEq` with the unswitched prover. -/
 def LinkRoundEqStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (x : Msg) (w : Flock.Wit) : Prop :=
@@ -624,7 +625,7 @@ def LiveRoundEqStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit 
 
 /-- **The stand-in frame rounds' bytes at the unswitched prover**: after every history of `0 < ops.length < refK x`
 openings on which a round failed, whose openings pass, whose last coins the frame takes and whose messages are the
-deferred release's own, the frame's release of the scheduled round, at the values the firewall's transcript reports and
+deferred release's own, the frame's release of the scheduled round, at the values the ZK server's transcript reports and
 as a stopped rep's, is the session's unswitched message at the coins the openings open without its leading domain frame.
 `FillRoundEq` with the unswitched prover, asked at the release's own histories alone. -/
 def FillRoundEqStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
@@ -684,7 +685,7 @@ theorem liveRoundEqStop_of_frames (S : RefSession) (vs : S.SwVals)
 
 /-- **The live frame rounds of a device at the unswitched prover**: at every live frame round `LiveRoundEqStop` reads,
 the worker's round is the session's unswitched message with each masked value's pad added back (`RoundHonest`): the
-worker's values `vs` on the drawn pads, whether or not its rows hold. `LiveHonest` with the unswitched prover, at the
+worker's values `vs` on the sampled pads, whether or not its rows hold. `LiveHonest` with the unswitched prover, at the
 release's own histories. -/
 def LiveHonestStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
@@ -704,7 +705,7 @@ theorem liveRoundEqStop_of_honest (S : RefSession) (vs : S.SwVals)
     L.roundFrames_of_honest x _ _ v _ (hF ν t κ m₀ ρ₀ ops v h0 hlt hl hok hr ho hv)
 
 /-- **The stand-in frame rounds in frames at the unswitched prover**: at every stand-in frame round `FillRoundEqStop`
-reads, the firewall's scheduled round, at the values its transcript reports, and the session's unswitched message are
+reads, the ZK server's scheduled round, at the values its transcript reports, and the session's unswitched message are
 a frame round in frames of a stopped rep (`RoundFrames`). `FillFrames` with the unswitched prover, at the release's own
 histories. -/
 def FillFramesStop (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
@@ -811,7 +812,7 @@ theorem refDBelow_unP (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.C
 /-- **The release before the `Finish` is the unswitched cut.** At the session with the frame's stops, for every
 worker `wk` and any values `vs`, valid or not, the deferred release's messages and answers before the `Finish` (its
 first `n x - 1`, `n x` one past the `Finish`) are the unswitched prover's run, against every verifier `ask`, at every
-tape and check coins: the `Hello`, the link and every frame round, worker's or stand-in, committed over the drawn pads
+tape and check coins: the `Hello`, the link and every frame round, worker's or stand-in, committed over the sampled pads
 (`refDBelow_unP`, `ZkServer.take_deferred`). -/
 theorem release_preFinish (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (n : Msg → ℕ) (wk : L.toSrv.Worker)
@@ -826,7 +827,7 @@ theorem release_preFinish (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) →
     (L.refDBelow_unP S Rf vs H n wk x w hn hlast hR (openingsRefused_of_checkIs S L H x hC) hH hLk hE hEf) ask ρ κ
 
 /-- **On the stop branch the release is the unswitched cut, then the stop.** Where the session stops at its
-`Finish` (the run is not live there: a round failed, or the firewall's own `Finish` stops), the deferred release is
+`Finish` (the run is not live there: a round failed, or the ZK server's own `Finish` stops), the deferred release is
 the unswitched prover's run with its last message the stop (`ZkServer.stop_deferred`). -/
 theorem release_stop (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (n : Msg → ℕ) (wk : L.toSrv.Worker)

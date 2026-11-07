@@ -1,8 +1,14 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
+public import ArkLib.Data.CodingTheory.InterleavedCode
 public import ArkLib.Data.CodingTheory.ProximityGap.BCIKS20.AffineLines.UniqueDecoding
-public import VCVio.OracleComp.Constructions.SampleableType.NativeMeasure
+public import ArkLib.Data.CodingTheory.ReedSolomon
+public import Definitions.Core.Game
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.LigeritoQueries
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
 
 /-!
 # The `--zk` inner proof is sound: the code lemmas and `inner_sound`

@@ -1,10 +1,48 @@
 module
 
 public import Proofs.Flock.Claims.ZkCols
-public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
-public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
-public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-public import Flock.With.ZkEq
+public import Flock.With.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Statements
+import Flock.With.ZkEq
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Level 0's query round in the masked verifier over the hash oracle
@@ -18,7 +56,7 @@ when every table's Merkle scheme is the registry's, `Zk.verify_eq_verifyWith`):
   oracle only answers a round's digest, so the round accounting is the compiled verifier's under every oracle;
 * the masked replay consumes `m + (kLog − 6)` rounds (`replayWith_moves`), the ring switch `claims + 1`
   (`ringSwitchWith_moves`);
-* Ligerito draws level 0's query coins after `k0 + 8` rounds of its own (`ligeritoWith_query`): the non-ZK
+* Ligerito flips level 0's query coins after `k0 + 8` rounds of its own (`ligeritoWith_query`): the non-ZK
   verifier's `2 + k0 + 4` (the OOD point and its coin, the `k0` lane challenges, level 1's two OOD intros; the
   accounting `Refine.ligerito_refines` proves) and the pair's two `ρ` coins after the last lane challenge;
 * so an accepted rep passed level 0's Merkle check on its proof's rows at the positions of round `zkQueryRound` of its

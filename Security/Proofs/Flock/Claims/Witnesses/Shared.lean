@@ -224,7 +224,7 @@ prover's transcript against any `V*` is `quietSim`'s. -/
 theorem ZKmalR_vacuous {N Ω : Type} [Fintype N] [Nonempty N] [Fintype Ω] [Nonempty Ω] (H : Msg → Msg)
     (k : Msg → ℕ) (R : Rel W) : ZKmalR H k (fun _ => ZKMal.quietP N Ω []) R (quietSim k) 0 0 := by
   intro x w _ Θ Vs θ hk Ev
-  let τ := ZKMal.interact (fun as => ((Vs.next x as θ).eval H).1) (fun _ => []) (k x) []
+  let τ := Claims.interact (fun as => ((Vs.next x as θ).eval H).1) (fun _ => []) (k x) []
   have hτ : ∀ ω, (runStar H (ZKMal.quietP N Ω []) Vs x ω θ).msgs = τ := fun ω => by
     rw [ZKMal.runStar_msgs, hk]
     rfl
