@@ -28,12 +28,12 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   `partition` card `per-expert` (the MoE cut per expert: the router's slots, table reads at each slot's expert and
   per-expert GEMMs), labelled with the card's `label`; lines only for a model with that card.
 * `every_block` (C): serving commits every proof block's outputs, and the audit samples them one-stage; its tax is a
-  lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits by
-  the same count, which Lean states for two-stage only; infiltration is its write form (the K incorrect blocks the plan
-  detects, each the widest block's bits) and skipped work the work target's plan.  Lean checks each of its designs
-  (`figure1.lean_check`, unless `run`'s `lean` is off): a point's `lean` says it did, its exfiltration plots the bits
-  Lean certifies (at least the planner's), and a refused design is an error.  A point without a design (the trivial
-  bound, or a count of every proof block, which samples none) has `lean` None.
+  lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits
+  (`audit_exfiltration_delivered`); infiltration is its write form (the K incorrect blocks the plan detects, each the
+  widest block's bits) and skipped work the work target's plan.  Lean checks each of its designs (`figure1.lean_check`,
+  unless `run`'s `lean` is off): a point's `lean` says it did, its exfiltration's count is the bits Lean certifies
+  (`plancheck`), and a refused design is an error.  A point without a design (the trivial bound, or a count of every
+  proof block, which samples none) has `lean` None.
 
 Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
@@ -481,8 +481,9 @@ def captions(out: dict, scope: str) -> dict[str, str]:
               f"charged at most its request's served bits, at least the lemma's charge:{binds('layer_of_token')}"
               f" {c.label} (dashed): serving commits {c.commits}, sampled one-stage, a statement a sampled proof "
               f"block, {priced('every_block')}; consumers.exfiltration_bound's form, which bits are incorrect and "
-              "where, at most the served bits by the same count (an influence set is a set of served outputs; Lean "
-              f"states it for two-stage only): {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
+              "where, at most the served bits (an influence set is a set of served outputs)"
+              + (", each design checked by Lean" if out.get("lean") else "")
+              + f": {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
     infil = (f" The write form: the bits the incorrect proof blocks write, each replay block charged at most its "
              f"footprint, at the design its exfiltration line plans. {a.label} (solid, dark to light: its "
              f"registrations): a footprint of a request's {served:,.0f} served bits, the cheapest explanation of what "

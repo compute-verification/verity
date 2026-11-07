@@ -47,8 +47,8 @@ block's outputs under one-stage, outside the budget, and the token ids under two
 * `request`: request-level sampling, each sampled request replayed and proved whole, its output the session's cap.
 
 Lean checks every one-stage and request-level point's design (`lean_check`, unless `run`'s `lean` is off): a series'
-`lean` says which points it checked, an exfiltration point is the bits Lean certifies (at least the planner's), and a
-design Lean refuses is an error.  A two-stage point is the planner's alone.
+`lean` says which points it checked, an exfiltration point is the bits Lean certifies (`plancheck`), and a design Lean
+refuses is an error.  A two-stage point is the planner's alone.
 
 Exfiltration is in bits: the main figure plots the width-stratified two-stage design, uncapped and in the capped
 sets' form, and request-level sampling (`MAIN`), and an appendix figure every design with the reference lines the
