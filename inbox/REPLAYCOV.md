@@ -447,3 +447,18 @@ research run --on vy-spot-glm53 --project verity --cwd source --timeout 9000 --l
   - `out/values-step<s>`: a few MB each.
   - The capture itself, kept for a restage, at `/workspace/spot-capture/<run>` (~40 GB).
 - **Risk.** If the big step's graph-off check still differs, the cause isn't the top-k.
+
+## 15:31Z SERVETAX: START r20261107-152819-1122 on vy-spot-glm53 (GLM-5.3 TP8 serving tax)
+
+- It launched at 15:28Z; the GPUs were held at 15:29Z. It runs #7776's head 767ead1fea with fe57's plan (sha256 7cb8c2f3…, checked on the node), FlashInfer on (CUDA 12.9, `LDCONFIG=1`).
+  - fi_smoke passed: 279 cases on all 8 ranks.
+  - The `compiled` engine is loading.
+- **Arms:** `compiled`, `record`, `tokens-only`, `boundary`.
+  - The boundary arm takes an edge each 30 s of a load's serving. Each rank hashes its KV pool with the `sm_90` row-table kernels, and rank 0 copies its pool.
+- **Loads:** light 1.4, medium 3.3, saturated 8.4 req/s, 60 s of arrivals each.
+- **Cut: reps, 3 to 2 for every arm, so it ends by 18:00Z.**
+  - `BUDGET_MIN` alone would have cut only the last arm, `boundary`.
+  - `BUDGET_MIN=135` stays as a safety net; it bounds the arms to ~17:44Z.
+  - `--timeout 8700` is a hard stop at ~17:53Z.
+- **ETA ~17:30Z to 17:45Z.** The node is free for OVERHEADDEF from my END.
+- **Partial results** go in note:proofs/20261107T1300Z-checkpoint-servetax-glm as each arm ends.
