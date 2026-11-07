@@ -289,9 +289,9 @@ class _Store:
         return [[host[s * n + v].tobytes() for v in range(n)] for s in range(self.params.segments)]
 
     def held(self) -> Any:
-        """`period.EncodedStore` of what this setup left: the setup case is built from ``C*`` as held now."""
+        """`period.Store` of what this setup left: the setup case is built from ``C*`` as held now."""
         from verity.core.protocols.pous import period
-        return period.EncodedStore(self.point, self.published(), _Blocks(self), self.digests,
+        return period.Store(self.point, self.published(), _Blocks(self), self.digests,
                                    period.setup_case(self.params, self.commitment, self.salt, self.segments()))
 
     def decode_cpu(self, offset: int, size: int) -> bytes:
@@ -315,7 +315,7 @@ class _Store:
 
 
 class _Blocks:
-    """``C*``'s blocks as `period.EncodedStore` reads them, from where they are held."""
+    """``C*``'s blocks as `period.Store` reads them, from where they are held."""
 
     def __init__(self, store: _Store) -> None:
         self.store = store

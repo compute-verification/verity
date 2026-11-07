@@ -52,12 +52,12 @@ def _committed(T) -> p2.Store:
     return p2.Store(p2.register(T.SOURCE, T.NODE, commitment, vk), blocks)
 
 
-def _held(store: p2.Store) -> pous.EncodedStore:
+def _held(store: p2.Store) -> pous.Store:
     """PoUS's store for the `C*` that P2's `store` registers: its setup published at that `C*`'s commitment, salt and
     root."""
     reg, q = store.registration, store.registration.params
     n = q.blocks_per_segment
-    return pous.EncodedStore(RUN.Point(q, POUS_K, pous.LIMIT_NS),
+    return pous.Store(RUN.Point(q, POUS_K, pous.LIMIT_NS),
                              RUN.Setup(q.blocks, reg.commitment, reg.root, reg.salt),
                              store.blocks, b"".join(mc.block_digest(b) for b in store.blocks),
                              pous.setup_case(q, reg.commitment, reg.salt,
