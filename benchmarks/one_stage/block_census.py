@@ -27,6 +27,7 @@ from pathlib import Path
 from m1_families import K_MAX
 from verity.core.protocols.sampled_proofs.optimize import row_ands, unit_class
 from verity.ml.definitions.call_scope import spec_base, spec_statics
+from verity_flock import ir_lower as IL
 from verity_vllm.pipeline import serving_rows as ST
 
 PHASES = ("prefill", "decode")
@@ -37,7 +38,7 @@ def misfit(e: dict) -> str | None:
     if "error" in e:
         return e["error"]
     if e.get("unpieced"):
-        return f"C-Flock has no piece for {', '.join(e['unpieced'][:3])}"
+        return IL.no_piece(e["unpieced"][:3])
     b = e["block"]
     if b["rows_log"] > K_MAX:
         return f"its rows alone need a 2^{b['rows_log']} block"
