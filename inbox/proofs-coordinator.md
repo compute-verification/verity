@@ -1,5 +1,84 @@
 # To the proofs coordinator
 
+## 17:15Z from GLMCENSUS: production GLM-5.3 at checked + #7770: 68.3% of calls covered, 96.3% with the MoE check
+
+Rerun on fe57's two captures, at `cursor/proofs-glmgap-stack-ce9f` fa0df9d4af (pushed). That head is three merges, all clean:
+- `checked` 4e724154a3;
+- #7770 at 1852dc81f7, the newest clean head of the stack (#7745 and #7786 conflict with it in `engine_classes.py`,
+  `batch.py`, `build.py` and `workload.py`, plus `steps.py` for #7786);
+- my gap branch, plus two commits:
+  - `step_needs` follows #7770's long rows;
+  - `gap.py` takes several reports and reads class G's registered and served limits.
+
+**Covered share of Definition calls,** capacity [record]:
+- at 11:27Z: 59.8% [59.2%];
+- now, against #7741's 699/699: **68.3% [66.6%]**. The 8.5 points of failing class G Definitions are closed;
+- counting the MoE check at the served SWAP=False QGMMA statics: **96.3% [96.1%]**. It adds 28.0 points: the two expert
+  GEMMs at 13.2 each and the warp router at 1.6.
+
+The MoE check, r20261107-150036-8384, has passed the router and the W GEMM. The W GEMM has one unchecked partition check, as
+#7741 counted its 31. It is still running `MoeExpertFp8Gemm_v1{K=6144,N=512}`, expected about 17:40Z, so the 96.3% assumes
+that one passes. I'll send a line when it lands.
+
+**What remains, by owner,** with the MoE check counted. Shares are of all calls, capacity [record]:
+- **kernels, 1.59 [1.75].** No captured cuBLAS route for the router GEMM (1.57) or the wk GEMM, and no all-reduce
+  capture, at launches of 2,111–8,192 tokens.
+- **kernels + vllm, 1.47 [1.63].** Sparse-MQA prefill: chunks of up to 8,166 rows past 2,048 keys.
+- **circuits, 0.50 [0.43].** Definitions not yet checked at production statics. `SparseMlaSplit` at T up to 2,048 and NS up
+  to 28 is 0.28. The router's f32-out GEMMs are 0.10, `DsaMqaLogits` at N up to 32,533 is 0.07, and `DsaWaksmanRows` is
+  0.02. Without the MoE check, circuits is 28.5 [29.9].
+- **circuits + vllm, 0.16 [0.10].** Dense-MHA prefill: chunks of 257–1,581 rows within 2,048 keys.
+- **vllm, 0.01 [0.01].** Rows past 2,048 keys served with the kernel's own top-k order, not `VERITY_DSA_TOPK=canonical`.
+
+**Engine-class limits against production,** as a share of scheduled tokens, capacity [record]:
+- Against class G's registered limits after #7736 (8,192 tokens, 32,768 positions, 256 sequences):
+  - max_model_len, max_num_seqs and max_num_batched_tokens: 0 [0] each;
+  - the chunk threshold of 256: 81.2% [82.6%].
+- Against what class G serves today:
+  - max_model_len 2,048: 99.3% [95.7%];
+  - max_num_batched_tokens 2,048: 74.9% [81.4%].
+- Outside class G altogether:
+  - CUDA graphs: 18.7% [17.6%];
+  - padded launches: 15.4% [14.8%];
+  - prefix hits: 12.9% [14.9%];
+  - rows past 2,048 keys without the canonical top-k: 99.3% [95.7%].
+
+**Served MACs outside proof blocks: 24.5% [27.1%],** the same as at 11:27Z.
+- Prefill attention is 21.5% [24.3%], refused because the chunks pass 256 rows.
+- Where no cut fits: the router's f32-out GEMM is 1.7% [1.8%] (it needs a \(2^{32}\) block) and `SparseMlaSplit` at large T
+  is 1.3% [1.0%].
+
+**Per year,** proof blocks without a passing Definition, without and then with the MoE check. The node is measured at 2,277
+client tokens/s; the datacenter (12,500 nodes) and the world are scaled from it:
+- node: \(6.4\times10^{14}\) → \(7.6\times10^{13}\);
+- datacenter: \(8.1\times10^{18}\) → \(9.5\times10^{17}\);
+- world: \(8.6\times10^{23}\) → \(1.0\times10^{23}\).
+
+The week and month figures are in the note.
+
+**For Daniel:** not yet. Even with the MoE check, ahead-of-time compilation of production still needs these:
+- production serving at the 256-row chunk threshold;
+- captures for launches past 2,048 tokens;
+- CUDA graphs and padded launches;
+- prefix hits (#7745/#7786);
+- the canonical top-k, with its `run` input committed so that served max_model_len can pass 2,048;
+- the remaining 0.5 points of circuit-checks.
+
+**Runs:**
+- capacity: r20261107-164444-a155 (art:051ddcd6215c7898c67e553feb61f77b048339d3a83ea96b3964d247a44a0da0);
+- record: r20261107-170203-7bec (art:611e35c459737e8441e3d74959c773addd6d9472cc518e3a1689c245ecb7eb16);
+- both cards pass `cards.py check`;
+- suites: r20261107-162819-c537. route_capture's 14 and repository's 257 pass. `test_step_needs.py` and
+  `test_dsa_long_rows.py`, slow tests included, pass 14. verity-vllm quick passes 12,969 and fails 3.
+
+**For circuits:** all three verity-vllm failures come from #7770 merged onto `checked`, none from my files:
+- `VERITY_DSA_TOPK` is not declared in `settings.py`;
+- `export_compat.py` is at 801 lines;
+- `pipeline/launch_context.py` adds one `.get(k) or {}`.
+
+**PR:** `gap.py` changed, but the branch carries #7770, so I haven't opened it. I'll open it stacked on #7769 once #7770
+lands, unless you want it now. Note: note:proofs/20261107T0725Z-report-glmgap (RESULT 17:15Z).
+
 ## 17:12Z from PCRANKIN: piece 1's statements (G_ρ), pushed at `373df51918`
 
 Branch `cursor/proofs-pcrankin-c327`, commit `373df519187c5cd6c86de87661f41ce68c94f9d5`. Please relay to PLANCHECK
