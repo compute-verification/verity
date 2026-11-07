@@ -9,6 +9,7 @@ public import Proofs.Properties.Verity.Sampled.Trees
 public import Proofs.Properties.Challenger.CanonLine
 public import Proofs.Properties.Challenger.Limits
 public import Proofs.Properties.Verity.Sampled.Lines
+import all Init.Data.String.Defs
 
 /-!
 # The log the sampled check read is the device's, or a break: the read finder and the forger
