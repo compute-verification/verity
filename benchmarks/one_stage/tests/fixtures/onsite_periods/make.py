@@ -1,12 +1,16 @@
 """Writes this directory's stand-in onsite records from the onsite record's writer: its record of its own tests'
-accepted run (``test_onsite_record.accepted``, toy inputs), each cut to the fields `onsite_periods.py` reads, their
-values as the writer wrote them. The suite reads the JSON and never runs this; it runs by hand, against a tree that
-holds the writer (``benchmarks/one_stage/onsite_record.py`` and its test), with that tree's packages on the path:
+accepted run (``test_onsite_record.accepted``, toy inputs, with the auditor's inputs beside it, ``record``, and the
+writer tree's own lock), each cut to the fields `onsite_periods.py` reads, their values as the writer wrote them. The
+suite reads the JSON and never runs this; it runs by hand, against a tree that holds the writer
+(``benchmarks/one_stage/onsite_record.py`` and its test), with that tree's packages on the path:
 
     PYTHONPATH=WRITER_TREE:... python benchmarks/one_stage/tests/fixtures/onsite_periods/make.py WRITER_TREE
 
 ``m1.json``: one execution phase, a short run, so every node cell is scaled. ``m2.json``: two phases, so K/m is
-scaled. ``m1-week.json``: one phase whose run covers a week, so the week's node cell is proved.
+scaled. ``m1-week.json``: one phase whose run covers a week, so the week's node cell is proved. ``m1-key-open.json``:
+m1 without the auditor's record of its network certifier's key, so certifier-key is open, the network certifier's
+verdict is not established and every cell is conditional on it, as on a run whose composite of record states no
+certifier case.
 """
 from __future__ import annotations
 
@@ -17,11 +21,12 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
-CELL = ("bits", "share", "delta_net", "vacuous", "how", "rule", "statement", "seconds", "phases")
-KEEP = {"format": True, "run": True, "of_record": ("holds", "missing", "not_accepting"),
-        "verdicts": {"the network certifier": ("verdict",)},
+CELL = ("bits", "share", "share_served", "delta_net", "vacuous", "how", "rule", "statement", "seconds", "phases")
+KEEP = {"format": True, "run": True, "of_record": ("holds", "missing", "not_accepting", "not_established"),
+        "verdicts": {"the network certifier": ("verdict", "answer", "open")},
         "bound": {"K": True, "phases": True, "period_s": True, "notes": True, "statement": True,
-                  "of_record": {"K": True, "open": True, "advice": ("bits_per_phase",)}},
+                  "of_record": {"K": True, "open": True, "tight": True, "conditional_on": True,
+                                "advice": ("bits_per_phase",)}},
         "advice_charge": {"cap": ("ell_a",), "charged": ("bits_per_phase", "share")}}
 
 
@@ -45,8 +50,7 @@ def grid(g):
 
 
 def stand_in(rec):
-    out = {k: cut(rec[k], v) for k, v in KEEP.items()}
-    return out | {k: grid(rec[k]) for k in ("periods", "periods_tight") if k in rec}
+    return {k: cut(rec[k], v) for k, v in KEEP.items()} | {"periods": grid(rec["periods"])}
 
 
 def main(tree: Path) -> None:
@@ -54,11 +58,12 @@ def main(tree: Path) -> None:
     import test_onsite_record as T
     two = dict(T.PUBLIC, K=T.PUBLIC["K"] + 9088 + 63 + 1, eps="1/524288", windows=2,
                scans=[T.SCAN, dict(T.SCAN, faulty_sets=1)])
-    cases = {"m1": {}, "m2": {"public": two, "windows": 2},
-             "m1-week": {"schedule": dict(T.SCHEDULE, bucket_ms=10_000_000)}}
-    for name, kw in cases.items():
+    cases = {"m1": ({}, {}), "m2": ({"public": two, "windows": 2}, {}),
+             "m1-week": ({"schedule": dict(T.SCHEDULE, bucket_ms=10_000_000)}, {}),
+             "m1-key-open": ({}, {"certifier_key": None})}
+    for name, (kw, given) in cases.items():
         with tempfile.TemporaryDirectory() as tmp:
-            rec = T.OR.record(T.accepted(Path(tmp), **kw))
+            rec = T.record(T.accepted(Path(tmp), **kw), **given)
         (HERE / f"{name}.json").write_text(json.dumps(stand_in(rec), indent=1, sort_keys=True, ensure_ascii=False) + "\n")
 
 
