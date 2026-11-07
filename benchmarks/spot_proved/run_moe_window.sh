@@ -31,7 +31,8 @@ export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 [ -x "$FC_FIREWALL_LEAN" ] || { log "missing: $FC_FIREWALL_LEAN"; exit 7; }
 [ "${MW_MODE:-run}" = build ] && { log "moe-window: builds done"; exit 0; }
 uv sync -q --all-packages --extra torch-cpu > "$OUT/uv-sync.log" 2>&1 || { tail -20 "$OUT/uv-sync.log"; exit 7; }
-UPY="uv run -q --extra torch-cpu python"
+UPY="uv run -q --extra torch-cpu python" VPY=$SRC/.venv/bin/python   # records_audit's catalog and a5's composes: the workspace's
+export RUST_MIN_STACK=$((64 << 20))
 
 if [ "${MW_MODE:-run}" = synth ]; then
   got=$($UPY - "$W/capture" <<'EOF'
@@ -96,14 +97,14 @@ arm() {   # arm NAME [moe_window flags]: stage NAME's window, then audit it; -> 
     *) flags=(--skip-negatives) ;;
   esac
   if [ "${MW_WARM:-2}" -gt 0 ]; then
-    "$PY" "$RA" warm --window "$d/stage/window" --law "$LAW" --compose-cache "$HZ_CACHE/moe-compose" --jobs "${MW_WARM:-2}" \
+    "$VPY" "$RA" warm --window "$d/stage/window" --law "$LAW" --compose-cache "$HZ_CACHE/moe-compose" --jobs "${MW_WARM:-2}" \
       > "$o/warm.log" 2>&1 || log "$name: warm FAILED: $(tail -1 "$o/warm.log")"
     log "moe-window $name: $(grep '^WARM ' "$o/warm.log")"
     flags+=(--compose-cache "$HZ_CACHE/moe-compose")
   fi
   log "moe-window $name: audit ${flags[*]}"
-  "$PY" "$RA" audit --window "$d/stage/window" --law "$LAW" --circuit "${held% *}" --run "${held#* }" \
-    --registered "$d/stage/tables.json" --m0-pythonpath "$SRC" --bin "$BIN" --lean "$LEAN" --firewall "$FC_FIREWALL_LEAN" \
+  "$VPY" "$RA" audit --window "$d/stage/window" --law "$LAW" --circuit "${held% *}" --run "${held#* }" \
+    --registered "$d/stage/tables.json" --m0-pythonpath "$PYTHONPATH" --bin "$BIN" --lean "$LEAN" --firewall "$FC_FIREWALL_LEAN" \
     --out "$d/audit" "${flags[@]}" > "$o/audit.log" 2>&1
   rc=$?
   for f in summary.json window/audit.json; do [ -e "$d/audit/$f" ] && cp "$d/audit/$f" "$o/$(basename "$f")"; done
