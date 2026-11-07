@@ -207,10 +207,6 @@
   "Proofs.Flock.Soundness.Refine.Walk": {
    "why": "walk_step and ret_walk, the tactics that step through a computation of the executable by its head (Refine/Setup.lean's proofs of the setups' well-formedness), and kernel_rfl, which leaves an equation to the kernel (Composed/TagsJ.lean). They run only inside the elaborator and do no IO, and the kernel replays every proof they build.",
    "digest": "8c25658ddef81ef4560f6184b4272ec7f4ab7e2c4b0567e8a13410d46c83c52e"
-  },
-  "Proofs.Flock.Soundness.Refine.WalkZeta": {
-   "why": "ret_walk_zeta, the tactic (an elab) that walks a Ret goal to every return by the computation's head, substituting each let of a value and applying the module's ret_jp at each join point (Sampled/Record/Reg.lean's paramsParsed_program). It runs only inside the elaborator and does no IO, and the kernel replays every proof it builds.",
-   "digest": "93e65a96758019e1e81dfd1d400ba6c7b1e83fdfacb4bf1bba8b3100c83e7abf"
   }
  },
  "layers": {

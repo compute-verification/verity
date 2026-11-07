@@ -12,13 +12,13 @@ import all Lean.Data.Json.Basic
 
 One-stage v2 credits a session the public file's unit indices of the instances its record draws
 (`SampledProofs.OneStageZk.provedUnits`): it reads the record's `unit_draw` as `Flock.JsonParse.parse` built it, and the
-public file's header as its own `headerOf` reads the file's first line. The session keeps both rebuilt (`Flock.norm`):
+public file's header as `SampledProofs.FilePart.header` reads the file's first line. The session keeps both rebuilt (`Flock.norm`):
 the draw as `Flock.Witness.recordDraw` keeps it, and the header as `Flock.HmIn.loadPublic` keeps it. The two readings
 agree:
 
 * `getD_norm`, `nat?_norm`: a field of a rebuilt well-formed value is the field rebuilt, and a number reads the same
   rebuilt; `wf_getD`: a field of a well-formed value is well formed;
-* `headerOf_of`: v2's `headerOf` reads the header `RecDeploy.SetupValues.headerOf` reads, its first line up to the
+* `headerOf_of`: v2's `FilePart.header` reads the header `RecDeploy.SetupValues.headerOf` reads, its first line up to the
   first newline (`headerLine_of_findByte`), so it reads the header the session's public file load keeps
   (`headerOf_loadPublic`, through `RecDeploy.SetupValues.loadPublic_counts`);
 * `provedUnits_eq`: at a record whose draw the verifier keeps as `D` and a public file whose header v2 reads as `h`,
@@ -33,7 +33,6 @@ set_option backward.privateInPublic.warn false
 open Lean (Json)
 open SampledProofs (getD field? nat?)
 
-open private SampledProofs.OneStageZk.headerOf SampledProofs.OneStageZk.headerLine from SampledProofs.OneStageZk
 
 namespace Properties.SampledProofs.Units
 
@@ -142,9 +141,9 @@ theorem findByte_eq (b : ByteArray) (x : UInt8) :
   cases List.find? _ _ <;> rfl
 
 theorem headerLine_eq (b : ByteArray) :
-    SampledProofs.OneStageZk.headerLine b =
+    SampledProofs.FilePart.headerLine b =
       ((List.range' 0 b.size).find? (fun i => b[i]! == 10)).elim b (b.extract 0) := by
-  unfold SampledProofs.OneStageZk.headerLine
+  unfold SampledProofs.FilePart.headerLine
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   rw [forIn_find]
   have hs : ([:b.size] : Std.Legacy.Range).size = b.size := by simp [Std.Legacy.Range.size]
@@ -153,7 +152,7 @@ theorem headerLine_eq (b : ByteArray) :
 
 /-- v2's header line is the file up to its first newline. -/
 theorem headerLine_of_findByte {b : ByteArray} {nl : Nat} (h : Flock.findByte b 10 = some nl) :
-    SampledProofs.OneStageZk.headerLine b = b.extract 0 nl := by
+    SampledProofs.FilePart.headerLine b = b.extract 0 nl := by
   rw [headerLine_eq]
   rw [findByte_eq] at h
   simp only [getElem!_eq_get!]
@@ -162,7 +161,7 @@ theorem headerLine_of_findByte {b : ByteArray} {nl : Nat} (h : Flock.findByte b 
 
 /-- **v2 reads the public file's header as the bridge reads it.** -/
 theorem headerOf_of {f : ByteArray} {hd : Json} (h : RecDeploy.SetupValues.headerOf f = some hd) :
-    SampledProofs.OneStageZk.headerOf f = .ok hd := by
+    SampledProofs.FilePart.header f = .ok hd := by
   unfold RecDeploy.SetupValues.headerOf at h
   cases hnl : Flock.findByte f 10 with
   | none => simp only [hnl] at h; cases h
@@ -177,7 +176,7 @@ theorem headerOf_of {f : ByteArray} {hd : Json} (h : RecDeploy.SetupValues.heade
       | ok j =>
         simp only [hj] at h
         cases h
-        unfold SampledProofs.OneStageZk.headerOf
+        unfold SampledProofs.FilePart.header
         rw [headerLine_of_findByte hnl, ht]
         simp only [hj]
         rfl
@@ -185,7 +184,7 @@ theorem headerOf_of {f : ByteArray} {hd : Json} (h : RecDeploy.SetupValues.heade
 /-- **v2 reads the header the session's public file load keeps** (`HmIn.loadPublic`, as `Flock.Witness` loads it). -/
 theorem headerOf_loadPublic {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.HmIn.Ports} {f : ByteArray}
     {P : Flock.Public} (hp : Flock.HmIn.loadPublic tags c pi f = .ok P) :
-    SampledProofs.OneStageZk.headerOf f = .ok P.header := by
+    SampledProofs.FilePart.header f = .ok P.header := by
   rw [← Flock.With.inLoadPublicWith_std] at hp
   obtain ⟨hd, he, -, hh⟩ :=
     RecDeploy.SetupValues.loadPublic_counts _ tags _ f P (RecDeploy.SetupValues.hmInLoad_row _ tags c pi f P hp)
@@ -194,18 +193,18 @@ theorem headerOf_loadPublic {tags : Flock.Tags} {c : Flock.Circuit} {pi : Flock.
 
 /-! ## The units -/
 
-/-- **The units a draw proves, at a public header**: the header's `units.indices` of the instances the draw `D`
-names, ascending, as v2 credits a session's (`SampledProofs.OneStageZk.provedUnits`). -/
+/-- **The units a draw proves, at a public header**: the header's `units.indices` (`FilePart.indicesOf`) at the
+instances the draw `D` names, ascending, as v2 credits a session's (`SampledProofs.OneStageZk.provedUnits`). -/
 def unitsAt (h D : Json) : Option (Array Nat) := do
-  let .arr is := getD (getD h "units") "indices" | none
+  let is ← (SampledProofs.FilePart.indicesOf h).toOption
   let .arr ds := getD D "units" | none
-  let units ← ds.mapM fun e => nat? e >>= fun i => is[i]? >>= nat?
+  let units ← ds.mapM fun e => nat? e >>= (is[·]?)
   pure (units.qsort (· < ·))
 
 /-- **v2's units are the units read off the draw the verifier keeps**: at a record whose draw the verifier keeps as `D`
 (`Flock.Witness.recordDraw`) and a public file whose header v2 reads as `h`. -/
 theorem provedUnits_eq {pubB : ByteArray} {record : String} {h D : Json}
-    (hh : SampledProofs.OneStageZk.headerOf pubB = .ok h) (hD : Flock.Witness.recordDraw record = some D) :
+    (hh : SampledProofs.FilePart.header pubB = .ok h) (hD : Flock.Witness.recordDraw record = some D) :
     (SampledProofs.OneStageZk.provedUnits pubB record).toOption = unitsAt h D := by
   unfold Flock.Witness.recordDraw at hD
   split at hD
@@ -220,21 +219,21 @@ theorem provedUnits_eq {pubB : ByteArray} {record : String} {h D : Json}
         have hwu := hv _ _ hg
         have hdraw : getD (Json.obj m) "unit_draw" = u := by simp only [getD, field?_obj, hg]; rfl
         unfold SampledProofs.OneStageZk.provedUnits unitsAt
-        simp only [getD_norm hwu, hh, hr, ok_bind, hdraw]
-        generalize getD (getD h "units") "indices" = I
-        generalize getD u "units" = X
-        cases I with
-        | arr is =>
+        simp only [hh, ok_bind]
+        cases hI : SampledProofs.FilePart.indicesOf h with
+        | error e => rfl
+        | ok is =>
+          simp only [getD_norm hwu, hr, ok_bind, hdraw]
+          generalize getD u "units" = X
           cases X with
           | arr ds =>
             simp only [FlockDeploy.norm_arr, Array.mapM_map, Function.comp_def, nat?_norm]
-            rw [toOption_bind_pure, mapM_toOption _ (fun e => (nat? e).bind fun i => is[i]?.bind nat?)]
-            · cases Array.mapM (fun e => (nat? e).bind fun i => is[i]?.bind nat?) ds <;> rfl
+            rw [toOption_bind_pure, mapM_toOption _ (fun e => (nat? e).bind fun i => is[i]?)]
+            · cases Array.mapM (fun e => (nat? e).bind fun i => is[i]?) ds <;> rfl
             · intro x
               split <;> (rename_i heq; exact heq.symm)
           | obj m' => simp only [FlockDeploy.norm_obj]; rfl
           | _ => rfl
-        | _ => rfl
       | _ => simp [Json.getObjVal?] at hu
     · cases hD
   · cases hD

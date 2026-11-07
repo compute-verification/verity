@@ -116,6 +116,8 @@ theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
   obtain ⟨⟨a, ha, hm⟩, -, -⟩ := FlockSoundness.Discharge.Composed.ofJson_shape hD
   have hga := getD_of_arr ha
   unfold _root_.Properties.SampledProofs.Units.unitsAt at hu
+  obtain ⟨_, -, hu⟩ := Option.bind_eq_some_iff.1 hu
+  try dsimp only at hu
   split at hu
   · rw [hga] at hu
     try dsimp only at hu

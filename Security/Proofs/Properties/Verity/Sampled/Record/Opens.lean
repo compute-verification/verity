@@ -29,7 +29,7 @@ make the unit's proof block correct wherever the values carry those that open (`
   * `ProvedIn`: every unit the coins draw is one the kept draw file proves, below the population. v2 credits the
     public file's `units.indices` of the instances the draw names (`provedOf`), and refuses a public file whose
     `units.indices` are not the population's units in order, so the indices are the instances themselves
-    (`provedIn_of_exactly`);
+    (`provedIn_of_range`);
   * one table: `SetsUp`'s, as `SampledProofs.OneStageZk.inputsOf` hands v2's inputs;
   * the record's commitment the deployed one (`A.Cd`), which `record_commit` gives at a circuit of `sha512/row/v2`
     rows: the record's commitment hashes each row as a `sha512/row/v2` row.
@@ -134,114 +134,29 @@ def ProvedIn (o : Own) : Prop :=
   ∀ d cs (J : Json) (D : Flock.Draw.UnitDraw), drawOk A o d cs → FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J →
     Flock.Draw.UnitDraw.ofJson (Flock.norm J) = .ok D → ∀ u ∈ drawn A (drawBytes cs), u < A.n ∧ u ∈ D.proved
 
-/-! ## v2's units refusal gives `ProvedIn`
+/-! ## v2's units check gives `ProvedIn`
 
 v2 refuses a public file whose `units.indices` are not the population's units `0, …, n − 1` in order
-(`SampledProofs.OneStageZk.unitsHeld`, `PublicUnits.exactly #[(0, n)]`), and its acceptance gives that match at the
-loaded header (`Properties.SampledProofs.Credited.units_of_checkBlobsAt`). There the entry at each slot is the slot, so
-the unit `unitsAt` reads at each instance a draw names is the instance itself. -/
-
-theorem qsort_one {α : Type} (lt : α → α → Bool) (a : α) : #[a].qsort lt = #[a] := by
-  have hs : (#[a].qsort lt).size = 1 := by
-    unfold Array.qsort
-    split
-    · rfl
-    · simp
-  refine Array.ext (by rw [hs]; rfl) fun i h1 _ => ?_
-  obtain rfl : i = 0 := by omega
-  simpa using (FlockSoundness.Audit.DrawExec.mem_qsort #[a] lt _).1 (Array.getElem_mem h1)
-
-/-- `PublicUnits.exactly`'s loop over the range `[k, k + m)` from slot `k`: where it runs through, slots
-`k, …, k + m − 1` hold their own index and it stops at slot `k + m`; it never stops early answering `true`. -/
-theorem exactly_loop (is : Array ℕ) (m : ℕ) : ∀ k,
-    let x := forIn (m := Id) (List.range' k m) ((none : Option Bool), k) fun u (s : Option Bool × ℕ) =>
-      if is[s.2]? = some u then pure (ForInStep.yield (none, s.2 + 1)) else pure (ForInStep.done (some false, s.2))
-    (x.1 = none → (∀ j, j < m → is[k + j]? = some (k + j)) ∧ x.2 = k + m) ∧ x.1 ≠ some true := by
-  induction m with
-  | zero => intro k; exact ⟨fun _ => ⟨fun j hj => absurd hj (Nat.not_lt_zero _), rfl⟩, fun h => by cases h⟩
-  | succ m ih =>
-    intro k
-    simp only [List.range'_succ, List.forIn_cons]
-    by_cases hk : is[k]? = some k
-    · simp only [hk, ↓reduceIte, pure_bind]
-      obtain ⟨h1, h2⟩ := ih (k + 1)
-      refine ⟨fun hn => ?_, h2⟩
-      obtain ⟨hall, hlen⟩ := h1 hn
-      refine ⟨fun j hj => ?_, by rw [hlen]; omega⟩
-      rcases j with _ | j
-      · exact hk
-      · rw [show k + (j + 1) = k + 1 + j by omega]
-        exact hall j (by omega)
-    · simp only [hk, ↓reduceIte, pure_bind]
-      exact ⟨fun h => (by cases h), fun h => (by cases h)⟩
-
-/-- **Units exactly one range from `0` are that range**: `exactly #[(0, n)] is` holds only at
-`is = [0, …, n − 1]`. -/
-theorem exactly_range {n : ℕ} {is : Array ℕ} (h : _root_.SampledProofs.PublicUnits.exactly #[(0, n)] is = true) :
-    is = Array.range n := by
-  unfold _root_.SampledProofs.PublicUnits.exactly at h
-  rw [qsort_one] at h
-  simp only [Std.Legacy.Range.forIn_eq_forIn_range'] at h
-  simp only [Std.Legacy.Range.size, Nat.add_one_sub_one, Nat.div_one, bne_iff_ne, ne_eq, ite_not,
-    List.forIn_toArray, List.forIn_cons, Nat.sub_zero, List.forIn_nil, bind_assoc, Id.run_bind] at h
-  obtain ⟨h1, h2⟩ := exactly_loop is n 0
-  generalize forIn (m := Id) (List.range' 0 n) ((none : Option Bool), 0) (fun u (s : Option Bool × ℕ) =>
-      if is[s.2]? = some u then pure (ForInStep.yield (none, s.2 + 1))
-      else pure (ForInStep.done (some false, s.2))) = x at h h1 h2
-  obtain ⟨b, i⟩ := x
-  cases b with
-  | none =>
-    obtain ⟨hall, hlen⟩ := h1 rfl
-    have hs : i = is.size := beq_iff_eq.1 (h : (i == is.size) = true)
-    simp only [Nat.zero_add] at hlen hall
-    subst hlen
-    apply Array.ext_getElem?
-    intro j
-    rw [Array.getElem?_range]
-    split
-    · rename_i hj
-      exact hall j hj
-    · exact Array.getElem?_eq_none (by omega)
-  | some r =>
-    cases r
-    · exact absurd (h : false = true) Bool.false_ne_true
-    · exact absurd rfl h2
-
-/-- At a header whose `units.indices` are exactly `0, …, n − 1`, the entry at each of its `n` slots reads as the
-slot. -/
-theorem indices_range {h : Json} {n : ℕ} {is : Array ℕ}
-    (his : _root_.SampledProofs.PublicUnits.indicesOf h = .ok is)
-    (hex : _root_.SampledProofs.PublicUnits.exactly #[(0, n)] is = true) :
-    ∃ js, _root_.SampledProofs.getD (_root_.SampledProofs.getD h "units") "indices" = .arr js ∧ js.size = n ∧
-      ∀ i (hi : i < js.size), _root_.SampledProofs.nat? js[i] = some i := by
-  obtain rfl := exactly_range hex
-  unfold _root_.SampledProofs.PublicUnits.indicesOf at his
-  split at his
-  · rename_i js hjs
-    obtain ⟨hsz, hall⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem his
-    refine ⟨js, hjs, by simpa using hsz.symm, fun i hi => ?_⟩
-    have hf := hall i hi (by rw [hsz]; exact hi)
-    split at hf
-    · rename_i u hu
-      cases hf
-      rw [hu, Array.getElem_range]
-    · cases hf
-  · cases his
+(`SampledProofs.OneStageZk.publicHeld`, `indicesHeld`), and its acceptance gives that match at the loaded header
+(`Properties.SampledProofs.Credited.units_of_checkBlobsAt`): `FilePart.indicesOf` reads `Array.range n`. There the
+entry at each slot is the slot, so the unit `unitsAt` reads at each instance a draw names is the instance itself. -/
 
 theorem nat?_num (m : ℕ) : _root_.SampledProofs.nat? (.num ⟨Int.ofNat m, 0⟩) = some m := by
   simp [_root_.SampledProofs.nat?, _root_.SampledProofs.int?]
 
 /-- **At such a header every unit a draw proves is a drawn unit, below the population**: `unitsAt` reads the draw's
 instance `i` as the header's entry at slot `i`, which is `i`. -/
-theorem units_of_exactly {h D : Json} {n : ℕ} {is us : Array ℕ} {Dd : Flock.Draw.UnitDraw}
-    (his : _root_.SampledProofs.PublicUnits.indicesOf h = .ok is)
-    (hex : _root_.SampledProofs.PublicUnits.exactly #[(0, n)] is = true)
+theorem units_of_range {h D : Json} {n : ℕ} {us : Array ℕ} {Dd : Flock.Draw.UnitDraw}
+    (hidx : _root_.SampledProofs.FilePart.indicesOf h = .ok (Array.range n))
     (hu : _root_.Properties.SampledProofs.Units.unitsAt h D = some us)
     (hD : Flock.Draw.UnitDraw.ofJson D = .ok Dd) : ∀ u ∈ us, u < n ∧ u ∈ Dd.units := by
-  obtain ⟨js, hjs, hsz, hnat⟩ := indices_range his hex
   obtain ⟨⟨a, ha, hm⟩, -, -⟩ := FlockSoundness.Discharge.Composed.ofJson_shape hD
   unfold _root_.Properties.SampledProofs.Units.unitsAt at hu
-  rw [hjs, getD_of_arr ha] at hu
+  obtain ⟨is, his, hu⟩ := Option.bind_eq_some_iff.1 hu
+  rw [hidx] at his
+  obtain rfl := Option.some.inj his
+  try dsimp only at hu
+  rw [getD_of_arr ha] at hu
   simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.pure_def, Option.some.injEq] at hu
   obtain ⟨xs, hxs, rfl⟩ := hu
   intro u hu
@@ -253,17 +168,20 @@ theorem units_of_exactly {h D : Json} {n : ℕ} {is us : Array ℕ} {Dd : Flock.
   have hk' : k < a.size := by simpa [hlen] using hk
   have hf := hall k (by simpa using hk) (by simpa using hk')
   simp only [Option.bind_eq_some_iff, Array.getElem_toList] at hf
-  obtain ⟨i, hi, x, hx, hxu⟩ := hf
-  obtain ⟨hi', rfl⟩ := Array.getElem?_eq_some_iff.1 hx
-  rw [hnat i hi', Option.some.injEq] at hxu
-  obtain ⟨hDs, hDall⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hm
-  have hak := FlockComplete.JsonRT.asNat_ok (hDall k hk' (by rw [hDs]; exact hk'))
-  rw [hak, nat?_num, Option.some.injEq] at hi
-  simp only [List.getElem_toArray]
-  rw [← hxu]
-  refine ⟨hsz ▸ hi', ?_⟩
-  rw [← hi]
-  exact Array.getElem_mem _
+  obtain ⟨i, hi, hx⟩ := hf
+  rw [Array.getElem?_range] at hx
+  split at hx
+  · rename_i hin
+    rw [Option.some.injEq] at hx
+    obtain ⟨hDs, hDall⟩ := FlockSoundness.Discharge.Exec.array_mapM_ok_getElem hm
+    have hak := FlockComplete.JsonRT.asNat_ok (hDall k hk' (by rw [hDs]; exact hk'))
+    rw [hak, nat?_num, Option.some.injEq] at hi
+    simp only [List.getElem_toArray]
+    rw [← hx]
+    refine ⟨hin, ?_⟩
+    rw [← hi]
+    exact Array.getElem_mem _
+  · cases hx
 
 theorem mem_proved {D : Flock.Draw.UnitDraw} {u : ℕ} (h : u ∈ D.units) : u ∈ D.proved := by
   unfold Flock.Draw.UnitDraw.proved
@@ -271,11 +189,10 @@ theorem mem_proved {D : Flock.Draw.UnitDraw} {u : ℕ} (h : u ∈ D.units) : u �
   · exact h
   · exact (FlockSoundness.Audit.DrawExec.mem_qsort _ _ _).2 (Array.mem_append_left _ h)
 
-/-- **v2's units refusal gives `ProvedIn`**: at a public file whose header's `units.indices` are exactly the
-population's units `0, …, A.n − 1`. -/
-theorem provedIn_of_exactly (o : Own) {is : Array ℕ}
-    (his : _root_.SampledProofs.PublicUnits.indicesOf A.pub.header = .ok is)
-    (hex : _root_.SampledProofs.PublicUnits.exactly #[(0, A.n)] is = true) : ProvedIn A o := by
+/-- **v2's units check gives `ProvedIn`**: at a public file whose header's `units.indices` are the population's units
+`0, …, A.n − 1`. -/
+theorem provedIn_of_range (o : Own)
+    (hidx : _root_.SampledProofs.FilePart.indicesOf A.pub.header = .ok (Array.range A.n)) : ProvedIn A o := by
   intro d cs J D hdOk hJ hD u hu
   have hp : _root_.Properties.SampledProofs.Units.unitsAt A.pub.header (Flock.norm J) =
       some ((drawn A (drawBytes cs)).toArray.qsort (· < ·)) := by
@@ -283,7 +200,7 @@ theorem provedIn_of_exactly (o : Own) {is : Array ℕ}
     unfold provedOf at h
     rw [hJ] at h
     exact h
-  obtain ⟨hn, hm⟩ := units_of_exactly his hex hp hD u
+  obtain ⟨hn, hm⟩ := units_of_range hidx hp hD u
     ((FlockSoundness.Audit.DrawExec.mem_qsort _ _ _).2 (List.mem_toArray.2 hu))
   exact ⟨hn, mem_proved hm⟩
 
@@ -517,7 +434,7 @@ theorem correct_revealAt (hc1 : A.I.count ≤ 1) {u : Fin A.n} {J : Json} {kd : 
 correct, whatever its interior values. At a session v2 sets up (`SetsUp`, one table among its inputs): where v2 reads
 `A`'s and `o`'s inputs (`Names`, with v2's reads and partition object), flock-verify reads the session as `A`'s
 (`sessionIns_of`); where the public file's `units.indices` are the population's units in order, as v2 holds them
-(`units_of_checkBlobsAt`), the kept draw file proves every drawn unit (`provedIn_of_exactly`); and where the record's
+(`units_of_checkBlobsAt`), the kept draw file proves every drawn unit (`provedIn_of_range`); and where the record's
 commitment is the deployed one (`hcd`; `record_commit` at a circuit of `sha512/row/v2` rows), an opening under it is
 one under `A`'s. -/
 theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
@@ -525,13 +442,13 @@ theorem sessionOpens (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι}
     {p : _root_.SampledProofs.OneStageZk.Params} {bs : Core.Blobs}
     (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false) {rd : _root_.SampledProofs.OneStageZk.Reads}
     (hrd : _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd)
-    (hpart : A.I.partition = some p.own.partition) {is : Array ℕ}
-    (his : _root_.SampledProofs.PublicUnits.indicesOf A.pub.header = .ok is)
-    (hex : _root_.SampledProofs.PublicUnits.exactly #[(0, A.n)] is = true) (hcd : (record A o e).commit = A.Cd)
+    (hpart : A.I.partition = some p.own.partition)
+    (hidx : _root_.SampledProofs.FilePart.indicesOf A.pub.header = .ok (Array.range A.n))
+    (hcd : (record A o e).commit = A.Cd)
     (he : e.reveal = revealRec A)
     (iroots : Msg → Seen → ℕ → List Msg) : SessionOpens FlockDeploy.sha512 (record A o e) iroots := by
   have hc1 := hsu.count
-  have hpr := provedIn_of_exactly A o his hex
+  have hpr := provedIn_of_range A o hidx
   intro x s Pt Ω P ω r u xS vS wF hs hPt _ hacc hu hsess hchk
   obtain ⟨⟨i, hi⟩, hq⟩ := hu
   have hx := eq_xOf_of_nPU A o e (Nat.lt_of_le_of_lt (Nat.zero_le i) hi)

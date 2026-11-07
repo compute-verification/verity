@@ -51,15 +51,14 @@ theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.De
     {p : _root_.SampledProofs.OneStageZk.Params} {bs : Core.Blobs}
     (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false) {rd : _root_.SampledProofs.OneStageZk.Reads}
     (hrd : _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd)
-    (hpart : A.I.partition = some p.own.partition) {is : Array ℕ}
-    (his : _root_.SampledProofs.PublicUnits.indicesOf A.pub.header = .ok is)
-    (hex : _root_.SampledProofs.PublicUnits.exactly #[(0, A.n)] is = true)
+    (hpart : A.I.partition = some p.own.partition)
+    (hidx : _root_.SampledProofs.FilePart.indicesOf A.pub.header = .ok (Array.range A.n))
     (he : e.reveal = revealRec A) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hscope : ScopeOk A)
     (href : ∃ d, RefOk A o d) : Claims.Sampling.KS sha512Msg (record A o e) :=
   Claims.Sampling.KS_of (fun _ _ _ => A.roots) (record_binds A o e hv2)
     (Claims.Sampling.SessionKS_of FlockDeploy.KS.zk_KS_untrim (drawFixed A o e) (sessionRuns A o e)
       (innerNumbers e href) (SamplingDeploy.deployOf_εtable_nonneg _ (code A o e)))
-    (sessionOpens A o e hsu hn hpl hrd hpart his hex (record_commit A o e hv2) he _)
+    (sessionOpens A o e hsu hn hpl hrd hpart hidx (record_commit A o e hv2) he _)
     (interiorFixed A o e) (drawLaw A o e) (refuses_of_scopeOk A o e sha512Msg hscope)
     (SamplingDeploy.deployOf_εtable_nonneg _ (code A o e))
 

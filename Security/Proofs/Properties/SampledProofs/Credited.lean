@@ -29,7 +29,7 @@ The population `n` is the public file's (`population_of_checkBlobsAt`): v2 holds
 (`publicHeld`), whose last check is the registration's `population` against the header's `instances`
 (`population_of_matchesPublic`), and the file's load keeps `instances` as its count of instances (`instances_of_loadPublic`).
 Its units are that population's in order (`units_of_checkBlobsAt`): v2 holds the `units.indices` of the header the load
-keeps to `0, …, n − 1`, ascending (`unitsHeld`).
+keeps to `0, …, n − 1` (`publicHeld`'s `indicesHeld`).
 -/
 
 @[expose] public section
@@ -433,6 +433,7 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
+  obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, hpop, hR⟩ := bind_ok hR
   obtain ⟨pB, hpB', hR⟩ := bind_ok hR
   obtain ⟨_, hph, -⟩ := bind_ok hR
@@ -451,7 +452,9 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
     obtain rfl := Except.ok.inj hhd
     try dsimp only at hph
     split at hph
-    · cases hph
+    · first
+        | (cases hph; done)
+        | simp [bind, Except.bind, throw, throwThe, MonadExceptOf.throw] at hph
     · rename_i hne
       exact population_of_matchesPublic (Array.isEmpty_iff.1 (bool_of_not_not hne))
   have hi : getD P.header "instances" = .num ⟨Int.ofNat P.n, 0⟩ := by
@@ -461,16 +464,50 @@ theorem population_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitm
   rw [hi, eq_of_nat? hn] at hj
   rw [hn, eq_of_jeq hj]
 
+theorem mapM_range {ε : Type} {f : Json → Except ε ℕ} (hf : ∀ j u, nat? j = some u → f j = .ok u) :
+    ∀ (l : List Json) (k : ℕ), (∀ i (hi : i < l.length), nat? l[i] = some (k + i)) →
+      l.mapM f = .ok (List.range' k l.length)
+  | [], _, _ => rfl
+  | a :: l, k, h => by
+    have ha : f a = .ok k := hf a k (by simpa using h 0 (by simp))
+    have hl := mapM_range hf l (k + 1) fun i hi => by
+      have := h (i + 1) (by simpa using hi)
+      simpa [Nat.add_assoc, Nat.add_comm 1 i] using this
+    simp only [List.mapM_cons, ha, hl, List.length_cons, List.range'_succ]
+    rfl
+
+/-- **`indicesHeld` is `FilePart.indicesOf` at the population's units in order**: where the header `h`'s
+`units.indices` are the record `rec`'s population units in order, the record names a population `n` and
+`FilePart.indicesOf` reads `0, …, n − 1`. -/
+theorem indicesOf_of_indicesHeld {rec h : Json} (hi : OneStageZk.indicesHeld rec h = true) :
+    ∃ n, nat? (getD rec "population") = some n ∧
+      _root_.SampledProofs.FilePart.indicesOf h = .ok (Array.range n) := by
+  unfold OneStageZk.indicesHeld at hi
+  split at hi
+  · rename_i n is hn his
+    refine ⟨n, hn, ?_⟩
+    simp only [Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at hi
+    obtain ⟨hsz, hall⟩ := hi
+    unfold _root_.SampledProofs.FilePart.indicesOf
+    simp only [his]
+    rw [Array.mapM_eq_mapM_toList, mapM_range (fun j u hj => by simp only [hj]; rfl) is.toList 0 fun i hi => by
+      have := hall i (by simpa [← hsz] using hi)
+      simpa [Array.getElem?_eq_getElem (by simpa using hi)] using this]
+    simp only [Array.length_toList, hsz, ← List.range_eq_range']
+    rfl
+  · cases hi
+
 /-- **v2 holds the public file's units to the record's population, in order.** Where v2 accepts at the coins `ξ`, at
 the parameters' public file on the blobs (`pubB`) and any load of it (`P`), the record names a population `n` and the
-`units.indices` of the header the load keeps are exactly `0, …, n − 1`, ascending (`PublicUnits.exactly #[(0, n)]`). -/
+`units.indices` of the header the load keeps are `0, …, n − 1` (`FilePart.indicesOf`, through `publicHeld`'s
+`indicesHeld`). -/
 theorem units_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitment} {ξ : ByteArray}
     {e : OneStageZk.Evidence} {bs : Core.Blobs} {pub : OneStage.Public} {prof : Core.Integrity}
     (h : OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) {pubB : ByteArray}
     (hpB : bs.get p.own.pub "public file" = .ok pubB) {tags : Flock.Tags} {cc : Flock.Circuit}
     {pi : Flock.HmIn.Ports} {P : Flock.Public} (hl : Flock.HmIn.loadPublic tags cc pi pubB = .ok P) :
-    ∃ n is, nat? (getD c.record "population") = some n ∧ PublicUnits.indicesOf P.header = .ok is ∧
-      PublicUnits.exactly #[(0, n)] is = true := by
+    ∃ n, nat? (getD c.record "population") = some n ∧
+      _root_.SampledProofs.FilePart.indicesOf P.header = .ok (Array.range n) := by
   unfold OneStageZk.checkBlobsAt at h
   dsimp only at h
   split at h
@@ -480,21 +517,13 @@ theorem units_of_checkBlobsAt {p : OneStageZk.Params} {c : OneStage.Commitment} 
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
-  obtain ⟨pB, hpB', hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
-  obtain ⟨_, hu, -⟩ := bind_ok hR
+  obtain ⟨pB, hpB', hR⟩ := bind_ok hR
+  obtain ⟨⟨⟩, hu, -⟩ := bind_ok hR
   obtain rfl : pB = pubB := Except.ok.inj (hpB'.symm.trans hpB)
-  unfold OneStageZk.unitsHeld at hu
-  obtain ⟨hd, hhd, hu⟩ := bind_ok hu
+  obtain ⟨hd, hhd, hi⟩ := OneStageZk.indicesHeld_of_publicHeld hu
   rw [Units.headerOf_loadPublic hl] at hhd
   obtain rfl := Except.ok.inj hhd
-  obtain ⟨is, his, hu⟩ := bind_ok hu
-  try dsimp only at hu
-  split at hu
-  · cases hu
-  · rename_i n hn
-    split at hu
-    · exact ⟨n, is, hn, his, by assumption⟩
-    · cases hu
+  exact indicesOf_of_indicesHeld hi
 
 end Properties.SampledProofs.Credited
