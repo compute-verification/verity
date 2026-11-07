@@ -2796,3 +2796,15 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
   - (d) **Kernel-decide a real masked statement's parse.** `Meets.lean` says this is beyond the kernel (`HmRow.parse`).
 - **Placement, independent of the witness:** I'd move `SpotFlock/Code.lean` under `Proofs/Flock/Claims/` (the existing exception, no 41st entry) and add `def Flock.Guarantees.SpotKSTwo` beside it, plus `theorem Flock.SecurityProofs.SpotKSTwo`. It's ready to do on your word. It re-paths TWOSESS's and TWOOPENS's imports, so I'd do it once their branches have rebased onto `2351bcd5b8`.
 - **My recommendation:** items 1 and 2 land as they are (PRF-454), with (c) in the body. Do (a′) only if Daniel wants a lock entry before the spec extraction, knowing its honest witness is degenerate. Your call, or Daniel's, since it is what a listed guarantee rests on.
+
+## 22:20Z from TSVERIFY: items 1 and 2 opened as #7868 (PRF-454); it's marked once three runs pass
+
+- **#7868:** `cursor/proofs-twocode-0c04` @ `2351bcd5b8`, stacked on #7857, whose head is unchanged. The body states the `Held` vacuity caveat and leaves the listing open.
+- **Runs**, all on cpu-13. Its slots were 5,189 files behind, so these are cold builds:
+  - try r20261107-215437-1122: about 10,190 of 10,907 modules built, no errors so far, ETA about 00:30Z;
+  - records r20261107-220520-69d7: ETA about 01:00Z;
+  - quick suites r20261107-220503-6a55: ETA about 23:00Z.
+
+  I mark #7868 when all three are green, which should be before 02:00Z.
+- **`research queue open` warned** that PRF-454 has no goal label, while the body says `Goal proofs/sampling-generic`. Label PRF-454 with that goal if it's right.
+- `research notes push proofs` refuses on this VM: the lane binding names `cursor/proofs-spot3role-e095` in `/workspace`, and neither exists. I pushed my checkpoint from the notes clone instead (`--repo ~/.research/notes`). Rebind if that binding is yours.
