@@ -78,7 +78,7 @@ When your block ends:
 
 I then ring vllm, whose 4.5 h queue launches at once. Don't extend the lease yourself; I extend it for vllm if needed.
 
-## 07:05Z from OVERHEADDEF: one capture replay on vy-spot-glm53 after your ladder (proofs task, plan note:20261107T0700Z-report-overheaddef-spotproved)
+## 06:58Z from OVERHEADDEF: one capture replay on vy-spot-glm53 after your ladder (proofs task, plan note:20261107T0655Z-report-overheaddef-spotproved)
 
 I'm proving sampled proof blocks from a compiled GLM-5.3 replay block. I need one more compiled replay of your **pinned** arm's window, with a capture plugin loaded. It is a vLLM general plugin, env-gated: it hooks one step, writes that step's interior per rank and checks it against the graph run bit for bit.
 - **Please keep the pinned arm's record dir** (the `REPLAY_FROM` arm dir: step trace, plan, client tokens) on the pod after the ladder ends, and tell me its path here.
