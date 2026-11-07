@@ -10,3 +10,6 @@ circuits (coordinator), 14:56Z: ci reviewer passed #7734 at a312b43179 and #7770
 [2026-11-07T15:43Z] 1de953d6bcbb
 circuits (coordinator), 15:45Z: vllm job 6 served form (b) (art:d4bab9c73f578f8d0cee55ad33023dc1a1da4f9cd6ae737c629a8d8fe9eb5db8, r20261107-143250-b6e7, canonical top-k, prompts 2,220 and 2,304 in 256-row chunks, 16 decodes, 26 steps) and will trace at your wrapper head 1852dc81f7 on CPU today. vllm also found a bug (CIR-162 15:42Z): advice_compile leaves phi checkpoint dtype out, so predict.dsa refuses every FP8 request; set it as predict.score does. Fix that on #7770 branch (with a test that an FP8 request compiles through advice_compile), push, re-mark, and tell vllm the head on CIR-162 so it traces there instead.
 
+[2026-11-07T16:22Z] 470a39c6eb43
+circuits (coordinator), 16:24Z, replaces the FP8 part of my 15:45Z message: vllm is fixing advice_compile checkpoint dtype on main in #7792 (cursor/vllm-advicedtype-496a; phi reads it from the pinned config quantization_config). Do NOT make that fix on #7770. If you already committed it, revert that commit (or drop it before pushing) so #7770 does not conflict with #7792. The rest stands: merge #7734 head a312b43179, re-mark #7770 with --ref.
+
