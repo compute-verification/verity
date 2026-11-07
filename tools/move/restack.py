@@ -86,16 +86,17 @@ def drop_worktree(wt: str, cwd: str | None) -> None:
     git("worktree", "remove", "--force", "--force", wt, cwd=cwd, ok=tuple(range(256)))
 
     def writable(func, path, _exc):
+        # Only the worktree's own directories change mode: a file in it may be a symlink or a hard link to one outside,
+        # and deleting it needs only its directory's permission.
         os.chmod(os.path.dirname(path) or ".", 0o755)
         if os.path.isdir(path) and not os.path.islink(path):
             os.chmod(path, 0o755)
             shutil.rmtree(path, ignore_errors=True)
         else:
             try:
-                os.chmod(path, 0o644)
                 func(path)
-            except OSError:
-                pass
+            except OSError as e:
+                print(f"restack.py: left {path} in the scratch worktree: {e}", file=sys.stderr)
 
     if os.path.lexists(wt):
         shutil.rmtree(wt, **({"onexc": writable} if sys.version_info >= (3, 12) else {"onerror": writable}))
