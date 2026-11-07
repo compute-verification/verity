@@ -6,7 +6,7 @@
 # CPUPHASE, 60-circuit.sh's flock-ptime patch). prove_split.py reads them back into hashing and arithmetic.
 # Run from the verity tree in a proofs slot:
 #   bash benchmarks/one_stage/prove_split_cpu.sh SPLIT_UNITS="gq-k1536 fi-linear-k2048" SPLIT_N=16
-# env: SPLIT_UNITS (stage.py's type names)  SPLIT_N=16  SPLIT_RUNS=2
+# env: SPLIT_UNITS (stage.py's type names)  SPLIT_N=16  SPLIT_RUNS=2  SPLIT_ARMS=nofw (zk_cost.py's --arms; plain: no --zk)
 # Kept in $OUT: per type its stage.json and the sessions' prove.out, prove.err and serve.log, the records, and split.json;
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -55,7 +55,7 @@ print(len(plan) - 1)
 EOF
 )
   log "$u: staged ($("$PY" -c 'import json, sys; s = json.load(open(sys.argv[1])); print({k: s.get(k) for k in ("n", "k_log", "vus_per_block", "ands", "maxrss_gb")}, s["seconds"]["total"], "s")' "$sd/stage/stage.json")); prove"
-  "$PY" benchmarks/one_stage/zk_cost.py prove --cpu --bin "$BIN" --arms nofw --cold 0 --warm 1 --runs "${SPLIT_RUNS:-2}" \
+  "$PY" benchmarks/one_stage/zk_cost.py prove --cpu --bin "$BIN" --arms "${SPLIT_ARMS:-nofw}" --cold 0 --warm 1 --runs "${SPLIT_RUNS:-2}" \
     --points "$i" --out "$Z" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST | tee -a "$O/job.log"
   [ "${PIPESTATUS[0]}" = 0 ] || rc=1
   keep

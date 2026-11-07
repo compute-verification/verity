@@ -7,7 +7,7 @@ stages and the lookups), beside the ZK extras and the session.
 The witness's laps are measured by circuit (CONVERGE, WITNESSCPU); a phase over the whole witness (commit, zerocheck,
 lincheck, opening: CPUPHASE, summed over a session's reps) is measured whole and split by each role's share of the
 statement's cells (LAYOUT), which is how those phases scale. Every second is a timed session's (the warm one dropped), the
-median over them.
+median over them. A type's `nofw` arm is keyed by its name, any other arm by `TYPE@ARM`.
 """
 
 from __future__ import annotations
@@ -143,10 +143,11 @@ def main() -> int:
     for st in sorted(o.glob("*-c*/stage/stage.json")):
         u = st.parent.parent.name.rsplit("-c", 1)[0]
         stage = json.loads(st.read_text())
-        for point in sorted(o.glob(f"points/{u}-c*-k*/nofw-warm0")):
+        for point in sorted(o.glob(f"points/{u}-c*-k*/*-warm0")):
+            arm = point.name.rsplit("-warm", 1)[0]
             r = one(point, stage)
             if r is not None:
-                res[u] = r
+                res[u if arm == "nofw" else f"{u}@{arm}"] = r
     (o / "split.json").write_text(json.dumps(res, indent=1))
     print("| type | k | blocks | hash share of cells (alloc / used) | witness hash / arith s | PIOP hash / arith s | "
           "mask+unused s | ZK extras s | hash / arith / prove s | hash share of prove | setup / rounds / e2e s |")

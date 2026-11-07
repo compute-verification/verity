@@ -28,7 +28,9 @@ sessions.
   design's path: the ZK server's send check on every session (`FC_FIREWALL=1`), which rechecks the host's witness; `nofw`
   is the same with the check off. Both take the host's witness (`FC_HOST_WITNESS=1`), as proof_throughput's ZK point does,
   so their difference is the ZK server's. Arm `dev` leaves both unset: the device builds the witness, which the ZK server
-  can't recheck (flock-circuit refuses `FC_FIREWALL=1` without the host's witness).
+  can't recheck (flock-circuit refuses `FC_FIREWALL=1` without the host's witness). Arm `plain` is `nofw` without
+  `--zk` (Flock's plain path, on the challenger's coin tree, `FC_COINS=tree`), so `nofw` less `plain` is zero
+  knowledge's increment.
 * **Overhead** (`overhead`): per served type and arm, the timed sessions' end-to-end seconds at k = c fitted as
   `fixed + marginal c` over its sizes, and a dot product's proof overhead: its GPU-seconds a proof block over the
   GPU-seconds the same card's datasheet dense peak needs for the block's K MACs in its operand format (`verity.hardware.rate`).
@@ -294,9 +296,11 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
         inst, pub, tables = str(d / f"inst-{c}.bin"), str(d / f"pub-{c}.bin"), ["--tables", str(d / "tables")]
         fw_files = {"partition_file": sd / "partition.json", "program_file": sd / "program.json"}
     env = {"FC_HOST_WITNESS": None if arm == "dev" else "1", "FC_FIREWALL": "1" if arm == "fw" else "0",
+           **({"FC_COINS": "tree"} if arm == "plain" else {}),
            **(a0.firewall_env(fw_files) if arm == "fw" else {})}
+    zk = [] if arm == "plain" else ["--zk"]
     serve_log = open(o / "serve.log", "w")
-    serve = subprocess.Popen([a.bin, "serve", "--zk", "--listen", f"127.0.0.1:{port}", "--out", str(o / "sessions"),
+    serve = subprocess.Popen([a.bin, "serve", *zk, "--listen", f"127.0.0.1:{port}", "--out", str(o / "sessions"),
                               "--instances", pub, "--circuit", str(d / "circuit.txt"), *tables,
                               "--pin", pt["pin"], "--operator", "zk-cost", "--draw-file", str(sd / f"draw-k{k}.json"),
                               "--sessions", str(warm + runs)], stdout=serve_log, stderr=subprocess.STDOUT, text=True,
@@ -308,7 +312,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
         while "SERVING" not in (o / "serve.log").read_text() and serve.poll() is None:
             time.sleep(0.2)
         with open(o / "prove.out", "w") as fo, open(o / "prove.err", "w") as fe:
-            rc, usage, lines = timed([a.bin, "prove", "--zk", *([] if a.cpu else ["--gpu"]), "--verifier", f"127.0.0.1:{port}",
+            rc, usage, lines = timed([a.bin, "prove", *zk, *([] if a.cpu else ["--gpu"]), "--verifier", f"127.0.0.1:{port}",
                                       "--instances", inst, "--circuit", str(d / "circuit.txt"),
                                       *tables, "--runs", str(runs), "--warm", str(warm)], fo, fe, env, peak)
         deadline = time.monotonic() + 900
@@ -704,7 +708,7 @@ def main() -> int:
     ap.add_argument("--draws", default="1,8,64,c", help="stage: the sample sizes a statement is proved at, c meaning all its units")
     ap.add_argument("--points", default=None, help="prove: only these indices of plan.json (one GPU lease a point)")
     ap.add_argument("--arms", default="fw,nofw", help="fw: the ZK server's send check on (the design's path); nofw: off; "
-                                                      "dev: off, the device's witness")
+                                                      "dev: off, the device's witness; plain: nofw without --zk")
     ap.add_argument("--cold", type=int, default=2, help="one-session prover processes a point and arm")
     ap.add_argument("--warm", type=int, default=1)
     ap.add_argument("--runs", type=int, default=3, help="the warm process's timed sessions; 0: no warm process")
