@@ -11316,7 +11316,17 @@
    "unfolded_hash": "6315393c49acb737231a9b83b1aa947168f66f52bbe394c270841c274b481bcd"
   },
   "Claims.Sampling.admissibleTwo_rankin_served": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["Claims.Sampling.admissibleTwo_rankin_served : Claims.Sampling.AdmissibleTwoRankinServed"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.Sampling.InScopeTwo"],
+    "reads": []
+   },
+   "type_hash": "21d90f6be697db34b3e46214bdcd0669fdd9536d0e5ac471794d601fadd6ddb8",
+   "unfolded_hash": "f6da6e92ed299e791d7cd34b9da47ee775f1e71ab9187bb95648022ba401fd04"
   },
   "Claims.Sampling.decoder_meets_plain": {
    "owner": "@proofs",
@@ -12968,10 +12978,85 @@
    "type_hash": "aa786fb3b173acba0bfa0faf7c22fa8e979ccaa5c13b533c6ed312e26af03202"
   },
   "Claims.Witness.SamplingGeneric.rankinTwoServed_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.SamplingGeneric.rankinTwoServed_honest :",
+    "  And",
+    "    (Claims.Sampling.InScopeTwo Claims.Witness.SamplingGeneric.twoPart Claims.Witness.SamplingGeneric.rankinTwo",
+    "      Claims.Witness.SamplingGeneric.twoStmt)",
+    "    (And",
+    "      (∀ (T : Finset Nat),",
+    "        Finset.instPartialOrder.le T (Finset.range Claims.Witness.SamplingGeneric.rankinTwo.part.blocks.length) →",
+    "          Real.instLE.le",
+    "            (Claims.Witness.SamplingGeneric.rankinTwo.replay.Pa Claims.Witness.SamplingGeneric.rankinTwo.part T)",
+    "            (T.prod fun _ρ => instHSub.hSub 1 (1 / 2)))",
+    "      (And",
+    "        (∀ (r r' : Fin Claims.Witness.SamplingGeneric.twoStmt.prog.outs.length),",
+    "          Ne r r' →",
+    "            Disjoint",
+    "              (Claims.Sampling.blocksTo Claims.Witness.SamplingGeneric.twoStmt.prog",
+    "                Claims.Witness.SamplingGeneric.twoPart Claims.Witness.SamplingGeneric.twoReq",
+    "                (Finset.range Claims.Witness.SamplingGeneric.twoPart.blocks.length) r)",
+    "              (Claims.Sampling.blocksTo Claims.Witness.SamplingGeneric.twoStmt.prog",
+    "                Claims.Witness.SamplingGeneric.twoPart Claims.Witness.SamplingGeneric.twoReq",
+    "                (Finset.range Claims.Witness.SamplingGeneric.twoPart.blocks.length) r'))",
+    "        (∀ (ρ : Nat),",
+    "          instLENat.le",
+    "            ((Finset.filter",
+    "                  (fun r =>",
+    "                    (Claims.Sampling.blocksTo Claims.Witness.SamplingGeneric.twoStmt.prog",
+    "                        Claims.Witness.SamplingGeneric.twoPart Claims.Witness.SamplingGeneric.twoReq",
+    "                        (Claims.Sampling.blocksIn Claims.Witness.SamplingGeneric.twoPart",
+    "                          Claims.Witness.SamplingGeneric.rankinTwo.part ρ)",
+    "                        r).Nonempty)",
+    "                  Finset.univ).sum",
+    "              fun r => Claims.Sampling.servedBits Claims.Witness.SamplingGeneric.twoReq r)",
+    "            2)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "f647281b411dd0e73a8876bfe3bc2de3a2b3e8c08bc51936167ca97d037e2504"
   },
   "Claims.Witness.SamplingGeneric.rankinTwoServed_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Claims.Witness.SamplingGeneric.rankinTwoServed_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      ((Claims.Sampling.admissibleTwo Claims.Witness.Sampling.toyPart Claims.Witness.SamplingGeneric.nothingTwo",
+    "              (9 / 10)).sum",
+    "          fun T =>",
+    "          instHPow.hPow 2",
+    "            (instMinNat.min (Claims.Sampling.bitsOf Claims.Witness.Sampling.toyStmt Claims.Witness.Sampling.toyPart T)",
+    "              ((Finset.filter",
+    "                    (fun r =>",
+    "                      (Claims.Sampling.blocksTo Claims.Witness.Sampling.toyStmt.prog Claims.Witness.Sampling.toyPart",
+    "                          Claims.Witness.SamplingGeneric.toyReq T r).Nonempty)",
+    "                    Finset.univ).sum",
+    "                fun r =>",
+    "                instMinNat.min",
+    "                  (Claims.Sampling.bitsOf Claims.Witness.Sampling.toyStmt Claims.Witness.Sampling.toyPart",
+    "                    (Claims.Sampling.blocksTo Claims.Witness.Sampling.toyStmt.prog Claims.Witness.Sampling.toyPart",
+    "                      Claims.Witness.SamplingGeneric.toyReq T r))",
+    "                  (Claims.Sampling.servedBits Claims.Witness.SamplingGeneric.toyReq r)))).cast",
+    "      (instHMul.hMul (instHPow.hPow (9 / 10) (-1))",
+    "        ((Finset.range Claims.Witness.SamplingGeneric.nothingTwo.part.blocks.length).prod fun ρ =>",
+    "          Claims.Sampling.rankinFactorCapped Claims.Witness.Sampling.toyStmt Claims.Witness.Sampling.toyPart",
+    "            Claims.Witness.SamplingGeneric.nothingTwo 1 (1 / 2) 1 ρ)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "3ea93cefa3098b0e926c2cd536de0fece9dca5992d2963fda2c036469f44e4b1"
   },
   "Claims.Witness.SamplingGeneric.rankinTwo_honest": {
    "owner": "@proofs",
@@ -31029,13 +31114,15 @@
    }
   },
   "Definitions.Claims.SamplingTwoRankin": {
-   "digest": "613cd810af92d35cfd20f99cc3dc4ed2c7d33c5733a0d153303cfd4fcb40959f",
+   "digest": "8124476a845d0ed2a147923eb7ccb3a10ebfb90d9ed29be52dbfffc126fb0104",
    "definitions": {
     "Claims.Sampling.AdmissibleTwoRankin": "d06ff22bf7093c794b1dacf88c676ca2ce3ea54275e56001b3835bee7d68f10f",
     "Claims.Sampling.AdmissibleTwoRankinPatterns": "30cd8d4d500e8f4b07c4e4c2c760452f4893278bcab2b3a2d50ab5181bbdebcd",
+    "Claims.Sampling.AdmissibleTwoRankinServed": "130911eb3f91a745397d2f45f091162dbf835b339c512ad1b3527bbb74f691ba",
     "Claims.Sampling.Design.Two.passes": "b1a8d94eaca0500eba283bd61246fab415eb1d427d2095f91a094082e56bef19",
     "Claims.Sampling.blocksIn": "72daacf89ce7fad980a9a3c7608922a8f992a403c67b357208dd1889968306ed",
     "Claims.Sampling.rankinFactor": "e287aa04eef2610430b6677637f6eca7097ad7ceb517f5372ad301f4bc83d79e",
+    "Claims.Sampling.rankinFactorCapped": "02c0b0b035f1c0434ff27e513d8882f449e38ef430b534ad97da6080fef403e8",
     "Claims.Sampling.rankinFactorPatterns": "0063b26a0c3809fe529fa6ebc2c4294db168cf62ca737bd170c1e1fbc8efa676"
    }
   },
@@ -46132,12 +46219,13 @@
    }
   },
   "Proofs.Flock.Claims.Witnesses.SamplingTwoRankin": {
-   "digest": "c438e883a5575ad0493bbebeadb8e28a00359f030101eac224fa11083a028b3f",
+   "digest": "e75a9c55ca46fc293f797a76b6593cd04fc10e02121a4ccc515616ec3170adb5",
    "definitions": {
     "Claims.Witness.SamplingGeneric.nothingTwo": "b686578478941be7ee65dcc38b7b2252fdb77db6617786dfe90beefaeb25256e",
     "Claims.Witness.SamplingGeneric.onePart": "12a6062119e64cb83b294972a48a47287ba47db9175e9bdc275d3bf8b584ba17",
     "Claims.Witness.SamplingGeneric.rankinTwo": "354d0a67ff5c2ce4aba853f8dd630b976b5ab6861887cb4b745181033f584eb8",
-    "Claims.Witness.SamplingGeneric.toyReq": "b0b87194e3d321eaa1af450ebc5465398a99a323a4343c5983c70173072e6747"
+    "Claims.Witness.SamplingGeneric.toyReq": "b0b87194e3d321eaa1af450ebc5465398a99a323a4343c5983c70173072e6747",
+    "Claims.Witness.SamplingGeneric.twoReq": "e8ea8ed4b72f458580a90fd212dc05a23cd8644bfb4592517767ab2ce5e09711"
    }
   },
   "Proofs.Flock.Claims.Witnesses.Shared": {
