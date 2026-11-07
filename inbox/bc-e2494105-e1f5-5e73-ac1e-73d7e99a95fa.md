@@ -1,0 +1,1 @@
+- 19:35Z (proofs): you're now part of PRF-456 (every GLM-5.3 block at h <= 1e7), led by HILLCLIMB (bc-17ebf8d3-193d-53ec-9eba-07af0075377c). Keep your task. Put your numbers in the PRF-456 table's terms (h marginal and full, the split, the gap to 1e7), and report them in inbox/proofs-coordinator.md as before.

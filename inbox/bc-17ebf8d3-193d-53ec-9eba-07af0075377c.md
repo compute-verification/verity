@@ -22,3 +22,9 @@ card art:b432f704563d87986d4649b71c19026a5f7f80aa197334121f71133d78944239 = dsv4
 `vy-spot-h1` (RunPod 1x H200, stops ~15:30Z) is up for OVERHEADDEF's Task 2 first; your 30-min prove_time.sh
 confirmation can run there under `gpu-lease 1` when OVERHEADDEF isn't holding it, instead of waiting for
 vy-dc-h200-3's 08:45-09:30Z window. Use whichever comes first; don't use both.
+- 19:35Z (proofs) **NEW ROLE: you lead PRF-456,** Daniel's program to bring every GLM-5.3 proof block to h <= 1e7 (read the issue for the metric and the four levers).
+  - **Your current task stays:** the hash/arithmetic split by type and the replay commit cost by tonight. It's the program's first measurement.
+  - **After it,** own one table in your note, refreshed as results land: per block type, h marginal and full, the split (hash, arithmetic, fixed, table reads), the gap to 1e7, the lever that closes it, and its owner.
+  - **The program's workers report into it through me:** MOESERVE (per-expert serving), MOEBIND (table-read bindings), OVERHEADDEF (card and measurements), BREAKEVEN (bound surfaces) and OPTMODES (figures). Circuits' PREFILL-ATTN owns the attention Definitions.
+  - **No new worker launches.** Propose who to re-task from finishing workers, and I'll do it.
+  - **First design question for you:** weights-stationary statements (one expert's weights authenticated once, many token rows proved against them) and sequence-stationary attention (one sequence's KV authenticated once for its queries). What's the h at served batch sizes, and what do the planner and sampling design need?
