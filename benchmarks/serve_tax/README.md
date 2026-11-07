@@ -1,6 +1,6 @@
 # The serve tax
 
-What each change Verity makes to the production server costs on every token served, measured against stock compiled
+What each change Verity makes to the serving engine costs on every token served, measured against stock compiled
 vLLM at the integration's pin (d9105ea80) on the same node, workload and SLO. Each arm is one engine configuration of
 vLLM's own OpenAI server (`vllm.entrypoints.openai.api_server`), its change installed as a vLLM general plugin, and adds
 its change to the arm it names as its parent (`serve_tax.ARMS`):
@@ -16,9 +16,20 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.tick_plugin`), τ calibrated on `record` | `record` |
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
+| `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
+| `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
+| `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
+| `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
+| `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
+| `restore-unseeded` | `restore` with requests that carry no seed, as clients send them in serving | `restore` |
 
 `replay.py` replays one load of a `record` arm in this process under its recorded schedule (each request added before
 the step it arrived before), compiled or eager, and counts the step rows and tokens that differ from the served ones.
+It starts from an empty engine. `restore.py` starts mid-traffic instead: it puts a restore arm's boundary state at one
+edge into a fresh engine (the KV bytes into the same block ids, then the state, `boundary.restore`), replays to a later
+edge, adding each request that arrived in between before the step it arrived before, and compares every step's
+schedule, every sampled token and its logprob's bits, and at the far edge the KV pool's root, each block's fingerprint,
+the block pool and every dumped leaf (`boundary.py`'s docstring says what an edge takes and how).
 
 The workload is the trace corpus's (`benchmarks/network_e2e/traces`: C4 prompts of 16 to 1,024 tokens, about 60% behind
 one of eight shared prefixes, caps of 64 or 256 tokens) under Poisson arrivals, every request decoding to its cap
@@ -48,6 +59,24 @@ client raises its open-file limit to the hard limit first.
 
 On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b`, the last two read from their pinned
 snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
+
+Under a deployment's traffic, the job serves the replay ladder's plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
+multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at
+its end of text or its cap), sent as `plan.jsonl` or named by `PLAN_FILE` (then no C4 shard is needed), with FlashInfer on:
+
+~~~text
+research run --on NODE --source . --cwd source --send plan.jsonl [--send fi_smoke.py] \
+  --env MODEL_ID=glm53 --env 'ARMS=compiled record tokens-only boundary' --env RATES=light=R1,medium=R2,saturated=R3 \
+  --env EDGES_EVERY_S=30 --env KV_COPY=first --env MAX_MODEL_LEN=40960 --env FLASHINFER=1 --env CUDA_HOME=DIR \
+  --env BUDGET_MIN=M -- bash benchmarks/serve_tax/run.sh
+~~~
+
+At TP > 1 the boundary arm's engine core drains and takes its own state, and each rank takes its part where it lies
+through `collective_rpc` (`boundary.rank_pool` once, `boundary.rank_take` at each edge): its KV pool hashed and, on the
+ranks `KV_COPY` names, copied to pinned host memory, then its runner rows and generators, all kept in the rank's process
+until the next edge. Every rank hashes under the edge's one key, so ranks that hold the same bytes give the same root, and
+the edge's record says whether all did. Each load's `meta.json` has the GPUs' busy seconds over it (`gpu`: NVML's
+utilization integrated), and `table.md` lays them out per thousand output tokens beside each arm's edges.
 
 ## What it writes
 
@@ -79,3 +108,19 @@ evicted to its files artifact (`run-files.evicted.json` names it) after custody;
 The `kv` arm hashes the whole pool, free blocks too, at each edge: an upper bound on hashing the blocks live there, and a
 measurement of the cost, not a commitment of the state (a block written after the edge before the side stream reads it
 is hashed as written). With a KV window shorter than the Commit's, its tax scales down with the window's length.
+
+A restore arm (`EDGES_S`, `SAVE_KV`, `RESTORE`, `NUM_GPU_BLOCKS` in `run.sh`'s header) takes its edges at fixed seconds
+after its load's first request. Each edge first drains: the engine core schedules nothing until both batches in flight
+are done and their outputs processed, so nothing is on the GPU and nothing is a placeholder; the pool is then consistent,
+and its root commits it. `server/edges.<pid>.jsonl` has each edge's step, its pause split into the drain, the state's
+capture, the dump, the KV copy and hash, its parts' sizes, the pool's root and the GPU's busy seconds since the previous
+edge; `server/edges/` each edge's dump and block fingerprints and the served steps' outputs; `KV_DIR/<arm>/` the KV bytes
+and state of the `SAVE_KV` edges, which `restore.py` reads (`run.sh` keeps `KV_DIR` only when it is given). The restore
+engine runs in the job's process with the served header's configuration and stats setting, `PYTHONHASHSEED=0` and
+`VLLM_DISABLE_REQUEST_ID_RANDOMIZATION=1`, as the served one did. `<arm>-replay/restore.json` has the comparison, the
+restore's times and the replay's busy GPU-seconds beside serving's over the same steps. A few dumped leaves differ by
+construction and are counted apart (`restore.by_construction`): the served engine core's process wrapper's own
+attributes, and each request's `detokenize`, which the replay leaves off. A host without FlashInfer's sampler JIT runs
+with `VLLM_USE_FLASHINFER_SAMPLER=0`, which leaves a seeded request's sampling as it was (it never takes FlashInfer's
+path) but moves an unseeded one's to the seeded path's Gumbel noise under the seed vLLM took from numpy's generator
+for it.
