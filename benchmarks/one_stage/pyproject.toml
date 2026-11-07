@@ -47,7 +47,7 @@ untraced = [
 # fixtures; `benchmarks/prove_path/records_audit.py`: prove_bundle's verifier window. `examples/vllm/serve_load.py`:
 # served_verdicts' load, whose timings file its tests read and whose fixed window `test_serve_load` runs against
 # serve-openai's endpoint (`integrations/vllm/verity_vllm`) over a stand-in engine; `examples/vllm/serve.sh`: the
-# demo's endpoint (`test_vllm_example`). `benchmarks/spot_proved/stage.py`: its allreduce staging on a fake 8-rank capture.
+# demo's endpoint (`test_vllm_example`). `benchmarks/spot_proved/stage.py`: its allreduce and cuBLAS GEMM staging on fake captures.
 inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml", "benchmarks/live_challenger",
           "benchmarks/spot_proved/stage.py",
           "examples/h200/interfaces/verity_e2e_demo", "benchmarks/torch_gpu/commit_slots/slots.py",
