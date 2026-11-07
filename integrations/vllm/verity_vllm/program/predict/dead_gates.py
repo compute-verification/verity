@@ -1,13 +1,10 @@
-"""Each compiled request Program's dead gates as circuit-check counts them, for `steps.compile_steps`' callers."""
+"""Each compiled request Program's dead gates as circuit-check counts them, over a `steps.Compiled`."""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .steps import Compiled
+from typing import Any
 
 
-def dead_gates_of(compiled: Compiled) -> dict:
+def dead_gates_of(compiled: Any) -> dict:
     """Each compiled Program's dead gates as circuit-check counts them (`liveness.dead_gates`, transitive: gates no output depends
     on), with the unread inputs apart, and the dead gates under each of the root's nodes by definition (its id up to `{`)."""
     from verity.ml.circuits.defs import PrimitiveDefinition
