@@ -4176,6 +4176,10 @@
   "Flock.SecurityProofs.SampledKSTwo": {
    "honest": ["SamplingDeploy.sampledKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
+  },
+  "Claims.SecurityProofs.InfluenceTwoPatterns": {
+   "honest": ["Claims.Witness.SamplingGeneric.influenceTwoPatterns_honest"],
+   "nontrivial": "Claims.Witness.SamplingGeneric.influenceTwoPatterns_nontrivial"
   }
  },
  "unwitnessed": {
@@ -11936,6 +11940,9 @@
    },
    "type_hash": "1934be0f6ae46d344ff607936771e0bf1e3973703001f050761fb7bf78083c1c"
   },
+  "Claims.SecurityProofs.InfluenceTwoPatterns": {
+   "owner": "@proofs"
+  },
   "Claims.Witness.Flock.ZK_meets": {
    "owner": "@proofs",
    "signature": [
@@ -12792,6 +12799,12 @@
     "reads": []
    },
    "type_hash": "6deaa2f679a24c3e983314b73278ba6b91df81a6813529f8e2bba55a970830e1"
+  },
+  "Claims.Witness.SamplingGeneric.influenceTwoPatterns_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.influenceTwoPatterns_nontrivial": {
+   "owner": "@proofs"
   },
   "Claims.Witness.SamplingGeneric.twoComplete_meets": {
    "owner": "@proofs",
