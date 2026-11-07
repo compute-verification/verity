@@ -249,7 +249,7 @@ def _install() -> None:
 
 def _install_sampler() -> None:
     """Rank 0's sampler at each recorded step (``--sampler``), read only: the logits it takes, the logits entering top-k/top-p
-    (after penalties and temperature) and leaving it, the Gumbel draw's per-row seed, position and temperature, and the chosen
+    (after penalties and temperature) and leaving it, the Gumbel sample's per-row seed, position and temperature, and the chosen
     tokens, under ``step<s>/sampler/`` with their SHA-512s in ``sampler.json``, outside the step's root."""
     import torch
     from vllm.v1.worker.gpu.sample import sampler as smp

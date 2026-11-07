@@ -17,13 +17,13 @@ disagreements, errors and first failures, and the recorded ops no type reads.
   token for its residual half-rows and its norm, a plain allreduce's (token, half-row) on symm-mem's multimem route (its
   received row the same on every rank; a call on NCCL's route is counted, not staged), an unbiased bf16 cuBLAS GEMM's token
   row (``aten::mm`` against a bf16 weight's transposed view) at the route its call's M rows take (a call past
-  ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), and FA3's split combine per (token, head). Instances are drawn from it
+  ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), and FA3's split combine per (token, head). Instances are sampled from it
   by the capture's coins, ``--per-type`` of each type.
-* **Match gate.** Each drawn instance's Definition is evaluated on the captured inputs and must return the captured outputs
+* **Match gate.** Each sampled instance's Definition is evaluated on the captured inputs and must return the captured outputs
   bit for bit (completeness, not soundness: an instance that disagrees is reported and not staged).
 * **Out.** ``values.json``, ``units.json``, ``<label>.npz`` (a11's saved-values format), ``kinds.json`` (a11's table of the
-  staged labels), ``window.json`` (what the window is and how its values link to serving) and ``stage.json`` (populations,
-  draws, the gate's results and every type not staged, with its reason).
+  staged labels), ``window.json`` (what the replay block is and how its values link to serving) and ``stage.json`` (populations,
+  samples, the gate's results and every type not staged, with its reason).
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ NP = {"torch.bfloat16": np.uint16, "torch.float16": np.uint16, "torch.float32": 
       "torch.uint8": np.uint8, "torch.int8": np.int8, "torch.int32": np.int32, "torch.int64": np.int64, "torch.bool": np.uint8}
 NUM_SM = 132  # the H200's SMs, FA3's split count reads it
 #: labels of one family that differ only in a size: one is staged, the census's type when the step has it, else the
-#: smallest (SplitPart past T=64 needs more than C-Flock's 2^27-bit block)
+#: smallest (SplitPart past T=64 needs more than Flock's 2^27-bit block)
 FAMILIES = {"SparseMlaSplitPart_T": "SparseMlaSplitPart_T64", "SparseMlaCombine_N": "SparseMlaCombine_N5"}
 
 
@@ -190,7 +190,7 @@ class Capture:
         return e.get("layer") in self.layers or (self.every and (not weights or self.checkpoint is not None))
 
     def cells(self, label: str, call: tuple, *dims: int):
-        """A call's instance indices over ``dims``: every one, or with `per_call` set (``--every-call``) that many drawn by
+        """A call's instance indices over ``dims``: every one, or with `per_call` set (``--every-call``) that many sampled by
         the coins, so a gate over every call never enumerates a call's rows times its columns."""
         n = int(np.prod(dims, dtype=np.int64)) if dims else 1
         for i in (draw(self.coins, f"cells/{label}/{call}", n, self.per_call) if self.per_call else range(n)):
@@ -556,11 +556,11 @@ def mla_split_part_instances(cap: Capture):
                                                         cap.tensor(r, e["out"]["ret3"])[s, h, t:t + 1]])
 
 
-# ---- draw, gate, stage ---------------------------------------------------------------------------------------------------
+# ---- sample, gate, stage ---------------------------------------------------------------------------------------------------
 
 def draw(coins: bytes, label: str, n: int, k: int) -> list[int]:
-    """``k`` distinct indices of ``n`` from the capture's coins (all of them when ``n`` <= ``k``), in the order drawn, so that
-    any prefix is itself a uniform draw (a11's ``--per-kind`` takes one)."""
+    """``k`` distinct indices of ``n`` from the capture's coins (all of them when ``n`` <= ``k``), in the order sampled, so that
+    any prefix is itself a uniform sample (a11's ``--per-kind`` takes one)."""
     if n <= k:
         return list(range(n))
     out: list[int] = []
@@ -610,7 +610,7 @@ def _gate_task(task: tuple[str, int]) -> tuple[str, dict]:
 
 
 def preload(cap: Capture, pops: dict, tasks: list[tuple[str, int]], jobs: int) -> dict:
-    """Compose from ``--checkpoint``, before the fork, each unkept weight a drawn call reads, so the workers share it; a weight
+    """Compose from ``--checkpoint``, before the fork, each unkept weight a sampled call reads, so the workers share it; a weight
     whose composition is not the committed bytes is left to fail its instances."""
     if cap.checkpoint is None:
         return {}
@@ -634,7 +634,7 @@ def preload(cap: Capture, pops: dict, tasks: list[tuple[str, int]], jobs: int) -
 
 
 def every_call(cap: Capture, pops: dict, a) -> dict:
-    """The match gate on ``--every-call`` instances of every recorded call of every type (drawn by the coins within the call),
+    """The match gate on ``--every-call`` instances of every recorded call of every type (sampled by the coins within the call),
     over every layer when the step was kept whole (weight-reading types over the opened layers only), in ``--jobs``
     processes, stopping at ``--deadline``."""
     import multiprocessing as mp
@@ -701,7 +701,7 @@ def main() -> int:
     ap.add_argument("--types", default=None, help="comma-separated labels (default: every type found)")
     ap.add_argument("--cc", default="9.0", help="the serving GPUs' compute capability (the MoE launches' e4m3 step)")
     ap.add_argument("--full-gates", type=int, default=4_000_000)
-    ap.add_argument("--of", default="", help="what the window is (window.json)")
+    ap.add_argument("--of", default="", help="what the replay block is (window.json)")
     ap.add_argument("--link", default="", help="how its values link to serving (window.json)")
     ap.add_argument("--row", default="spot-glm53")
     ap.add_argument("--every-call", type=int, default=0, metavar="N",

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The capture of sampled proof blocks' values from a replay of a served GLM-5.3 window, under research run from a tree with
+# The capture of sampled proof blocks' values from a replay of a served GLM-5.3 replay block, under research run from a tree with
 # benchmarks/serve_tax/replay.py at its root (--cwd source), with capture.py, stage.py and this file sent (--send):
 #   ARM=RECORD_ARM_DIR LOAD=NAME [OPEN=dense:1,moe:1] [PER_TYPE=8] [SMALL=1,31] [BIG=256,384] [LONG=1] [STEPS=s,...]
 #     [KEEP_TENSORS=opened|all] [KEEP_STEPS=s,...] [KEEP_MAX_MIB=64] [MLA_TOKENS=8] [SAMPLER=1] [GATE_EVERY=N] [STAGE=1]
@@ -9,18 +9,18 @@
 # The engine's environment is the served one's: ENGINE_ENV=FILE (KEY=VALUE lines, a server's engine_env.txt) is exported,
 # and FLASHINFER=1 (the default, as production) puts $CUDA_HOME/bin (default /usr/local/cuda-12.9) on PATH for FlashInfer's
 # JIT; OUT/engine_env.txt.
-# 1. The first-stage coin: one step of the window's with SMALL tokens (the FP8 linears' FlashInfer branch, the fused MNNVL
+# 1. The first-stage coin: one step of the replay block's with SMALL tokens (the FP8 linears' FlashInfer branch, the fused MNNVL
 #    all-reduce + norm) and one with BIG (DeepGEMM and its group quants, the multimem all-reduce, the fused add + RMSNorm at
-#    its 256-thread block, FA3 still split), each uniform over those steps, drawn here before the replay starts
-#    (OUT/first_stage.json; a class with no step takes the window's nearest one above it up to BIG_MAX=1024 tokens, else
+#    its 256-thread block, FA3 still split), each uniform over those steps, sampled here before the replay starts
+#    (OUT/first_stage.json; a class with no step takes the replay block's nearest one above it up to BIG_MAX=1024 tokens, else
 #    the big class its largest one over 42 tokens); LONG=1 (the default) adds one uniform over the steps with a prefill row
 #    and a row past LONG_KEYS=2048 keys, of LONG_TOKENS=256,384 tokens (else the largest such step under them), other
 #    than the big class's step when another qualifies (LONG_PREFILL=0: with or without a prefill row, for decode at long
 #    N); STEPS overrides it.
-# 2. replay.py replays the window from an empty engine, served as recorded, with capture.py loaded in every worker
-#    (REPLAY_ARGS are added to its arguments): those steps' interiors are recorded and committed, the coins drawn after the
+# 2. replay.py replays the replay block from an empty engine, served as recorded, with capture.py loaded in every worker
+#    (REPLAY_ARGS are added to its arguments): those steps' interiors are recorded and committed, the coins flipped after the
 #    root open layers, and the opened layers' tensors are written, or every recorded tensor with KEEP_TENSORS=all at the
-#    KEEP_STEPS (default: the drawn steps, long first, while they fit the disk at GB_PER_TOKEN)
+#    KEEP_STEPS (default: the sampled steps, long first, while they fit the disk at GB_PER_TOKEN)
 #    (/workspace/spot-capture/<run>, outside OUT, which custody uploads; MIN_FREE_G=40 is the free space it wants). The
 #    graph-off forward holds the step's tensors in host memory until the coins: about 10 GB a rank at 384 tokens.
 # 3. GATE_EVERY=N runs stage.py's match gate on N instances of every call of every type at each step, the long step first,
@@ -118,7 +118,7 @@ EOF
 fi
 [ -n "$STEPS" ] || { echo "spot: no step drawn"; exit 2; }
 if [ "${KEEP_TENSORS:-opened}" = all ] && [ -z "${KEEP_STEPS:-}" ] && [ -f "$OUT/first_stage.json" ]; then
-  # whole steps in the order drawn (long, big, small) while about GB_PER_TOKEN (0.5: about 64 MB a token on each of 8
+  # whole steps in the order sampled (long, big, small) while about GB_PER_TOKEN (0.5: about 64 MB a token on each of 8
   # ranks, the tensors up to capture.py's keep cap)
   # a token fits the free space less 40 GB; the others keep the opened layers'
   KEEP_STEPS=$("$PY" - "$OUT/first_stage.json" "$free" "$STEPS" <<'EOF'
