@@ -169,7 +169,7 @@ for s in ${STEPS//,/ }; do
   for r in "$CAP"/rank*; do
     [ -d "$r/step$s" ] || continue
     mkdir -p "$OUT/commit/$(basename "$r")/step$s"
-    cp "$r/step$s/meta.json" "$r/step$s/commit.json" "$OUT/commit/$(basename "$r")/step$s/" 2>/dev/null
+    cp "$r/step$s/meta.json" "$r/step$s/commit.json" "$r/step$s/params.json" "$OUT/commit/$(basename "$r")/step$s/" 2>/dev/null
     gzip -c "$r/step$s/ops.jsonl" > "$OUT/commit/$(basename "$r")/step$s/ops.jsonl.gz"
     cp "$r/params.json" "$OUT/commit/$(basename "$r")/" 2>/dev/null
   done

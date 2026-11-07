@@ -178,6 +178,7 @@ def _install() -> None:
                         S.pending.clear()
                         S.seen.clear()
                         S.floor_hit = False
+                        S.used_params.clear()
                 S.active = False
         return run
 
@@ -591,8 +592,8 @@ def _finish(runner: Any) -> None:
         return name, {"shape": list(t.shape), "dtype": str(t.dtype), "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
     with ThreadPoolExecutor(8) as pool:
         params = dict(pool.map(digest, sorted(S.used_params)))
-    (S.root() / "params.json").write_text(json.dumps(params, indent=0, sort_keys=True))
-    ops_sha, params_sha = hashlib.sha512(lines).hexdigest(), hashlib.sha512((S.root() / "params.json").read_bytes()).hexdigest()
+    (d / "params.json").write_text(json.dumps(params, indent=0, sort_keys=True))
+    ops_sha, params_sha = hashlib.sha512(lines).hexdigest(), hashlib.sha512((d / "params.json").read_bytes()).hexdigest()
     meta = {"rank": S.rank, "step": S.step, "check": S.check, "scheduled": reqs, "events": len(S.events),
             "blob_bytes": S.bytes, "errors": S.errors, "seconds": round(time.time() - S.t0, 1),
             "ops_sha512": ops_sha, "params_sha512": params_sha,
@@ -681,6 +682,7 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
               # every layer's calls can be gated: a withheld tensor is one over the keep cap, never one lost to the floor
               "whole": S.keep_all and not S.floor_hit, "keep_max": S.keep_max if S.keep_all else None}
     S.floor_hit = False
+    S.used_params.clear()
     (d / "commit.json").write_text(json.dumps(commit, indent=1, sort_keys=True))
     return commit
 

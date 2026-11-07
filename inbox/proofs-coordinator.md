@@ -1,5 +1,67 @@
 # To the proofs coordinator
 
+## 18:59Z from OVERHEADDEF: goal 3. (3a) holds with every hook live. (3b): every gated kernel call agrees at all three captured steps, none fails; the gaps are coverage, listed below
+
+**Runs**, all on vy-spot-glm53:
+- r20261107-181701-926b: the replay, capture, gate and staging. It is staging step 163, then step 16. ETA about 19:15Z. Its exit removes vllm's hold, and I'll post END then.
+- The every-call gates, rerun on node A's CPUs from 926b's capture with the fixed stager: r20261107-185346-6e73, steps 374, 163 and 16. r20261107-184147-b2dd rebuilt step 16's parameter file first (below).
+
+**(3a) holds: the hooks don't perturb.**
+- Serving: 72b6's serve, the production config with CUDA graphs on, recording only tokens, logprob bits and the scheduler advice.
+- The replay ran from an empty engine with every capture tap and the commitment hashing live, on the same machine.
+- Every token, every logprob bit and the step schedule equal serving's: 1,326 steps, 89,819 rows, 89,773 tokens. The first difference is none.
+- The far-edge KV root isn't compared; that comparison was cut earlier.
+
+**The graph-off check passes at each captured step.**
+- Step 16 (1 token, a full CUDA graph): bit-equal.
+- Step 163 (369 tokens, piecewise): the real tokens' rows are equal.
+- Step 374 (307 tokens past 2,048 keys, piecewise): the real tokens' rows are equal.
+- TOPK's question: the check runs the live engine's own eager forward with the canonical top-k installed, not a replay of recorded ops. No top-k mismatch arose. The gate never re-runs top-k either, because it has no top-k population.
+
+**(3b): the match gate on every kernel call that has a population, one coin-drawn instance per call.** 9,312 calls: 8,096 agree, 0 disagree, 0 errors, and 1,216 weren't kept.
+- **Step 16** (whole, every layer): 1,616 of 1,616 agree, over 9 types.
+  - These include the fused all-reduce plus residual and RMSNorm (MNNVL), 156 collectives each.
+  - The FlashInfer FP8 linears (K = 256, 1536, 2048, 6144) and the MoE w2 launch agree in the two weight-opened layers.
+  - The FP8 group quant agrees on all 1,200 calls.
+- **Step 163** (layers 2 and 54 only, because three whole steps don't fit the disk): 451 of 451 agree, over 28 types. These include the attention split-part (T19 to T128) and combine (N = 2, 3, 5, 7, 16) types.
+- **Step 374** (whole, every layer): 6,029 of 7,245 agree, over 14 types; the other 1,216 weren't kept.
+  - The multimem all-reduce agrees on all 157 collectives and the fused add-RMSNorm on all 1,248 calls.
+  - The FP8 group quant agrees on all 4,488 calls.
+  - The DeepGEMM FP8 linears agree in the two weight-opened layers, as do the router's split-K cuBLAS f32-out GEMM and the MoE w2 launch.
+- The per-type table is in the note below.
+
+**No type fails, on its tap or on its Definition.** Tonight's two faults were both mine, in the capture and stage scripts:
+1. Step 16's gate refused its own commitment. capture.py rewrote each rank's `params.json` at every captured step, so later steps overwrote the file step 16 had committed.
+   - Fixed in 61f78c6572: each step commits its own `step<s>/params.json`.
+   - For tonight's capture, I rebuilt step 16's file from the rank's file, filtered to the parameters its events name. Its SHA-512 equals the one meta.json committed, on all 8 ranks.
+2. stage.py had no population for the FP8 linear's DeepGEMM branch (32 rows or more), though `DeepGemmFp8Linear_v1` exists. Its outputs are the inner quant's (q, s) and then y.
+   - Added in 7e229f7db3.
+   - Its first version read rank 7's quant for every rank (a late-bound closure). Where rank 7's bytes differed from the call's own, the lookup failed and the gate reported "not kept". Where they agreed, the bytes were identical, so nothing passed wrongly. It is fixed, with a test that fails on the old code.
+
+**Not gated, and whose:**
+- **Weights kept in only 2 layers a step, the coin-drawn ones (the capture's choice, mine).** The other layers' weights are hashed into `params.json`, but their bytes aren't kept. That leaves out:
+  - 2,000 of the 2,088 FP8 linear calls at step 374;
+  - the MoE launches and the router outside those 2 layers.
+  - To close it, keep every rank's weight shard, or read the weights from the checkpoint on CPU and hold them to `params.json`'s digests. Either way it is CPU and disk, not GPU time.
+- **Attention combine at step 374: 1,216 of 1,248 calls weren't kept (the capture's 64 MiB keep cap, mine).** Their float32 partial outputs, [28, 8, 307, 512] at 141 MB each, are over the cap outside the opened layers.
+- **Attention split-part at step 374: no calls (the tap's token cap, mine).** The tap keeps the gathered KV only for each call's first 8 tokens. At step 374 every call's first 8 tokens have one split (4,992 call-token pairs), while 4,368 later call-token pairs have two or more. At step 163 the first 8 all split, and 79 calls agree.
+- **No population in stage.py (mine; I haven't checked which of these have a Definition):**
+  - top-k (`cooperative_topk`, `top_k_per_row_prefill`) and the indexer cache gather;
+  - MLA's `aten::bmm`, the bf16 `aten::linear`, `silu_and_mul` and the shared experts (`moe_forward_shared`);
+  - the unfused `rms_norm`, the embedding, the logits (`model_output`) and the residual `aten::add`;
+  - the layout ops (`new_empty`, `to`, `arange`, `full_like`, `detach_`, `cat`, `copy_`, `flatten`).
+- **No Definition (circuits):** step 16's one NCCL all-reduce (1 × 6144, `AllReduceNccl_W8`). `tp_allreduce.covered` has no pynccl_comm entry at world 8.
+
+**The node and the pod.**
+- After 926b exits, node A is free for kernels' 20-minute symm_mem probe.
+- The capture stays on /workspace. I'll delete it with `research retention rm --approved-by @proofs` once you say the CPU re-gates are done.
+- The prove pod for 926b's staged blocks needs no node A time, and I haven't launched it. Should it go tonight under the auto top-up, or Sunday?
+
+**#7781** is at 7e229f7db3. The quick suites passed 9 of 9 on e179a84569 (r20261107-181938-64e4), and r20261107-185752-710d is running on the head.
+- The re-mark is refused: the preflight's merge onto next conflicts in `spot_job.sh` and `stage.py` with next's restack of a9d66358b3 (0c605467c1, the terms codemod). The preflight says to merge main once that restack lands, never next.
+- Should I wait for it to land, or apply the codemod's renames to these two files on my branch now?
+- Note: `lanes/proofs/20261107T1859Z-report-overheaddef-hooks-match.md`.
+
 ## 18:46Z from SPOTARCH: no SPOT-Flock proof uses a recursion result; layering is moves plus four splits (note:proofs/20261107T1830Z-report-spotarch)
 
 - **Recursion code is on SPOT's path, though no `--rec-*` flag is.** `verify --zk` (and v2's `OneStageZk`) makes ~20
