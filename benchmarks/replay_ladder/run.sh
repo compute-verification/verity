@@ -11,6 +11,9 @@
 # it was written, so a graph compiled in one arm and loaded in another would keep the first arm's.
 # VENV's vLLM must be d9105ea80, the integration's pin; the checkpoints are the ones checkpoints.json pins, under HF_HOME
 # (pod_bootstrap.sh --cases ROLE,... fetches and checks them).  SPAN_S, OVER and BURST set the window (ladder.py serve).
+# SERVED=DIR (an earlier run's ARM/MODEL directory) replays that run's window instead of serving one: one model, and the
+# arm it was served in. LADDER_TOPK_PROBE=record|sort probes each replay's DSA prefill top-k (topk_probe.py, into
+# replay-I/topk), and each replay after the first is compared with the first call by call (topk-I.json).
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -35,7 +38,7 @@ ARMS=${ARMS:-pinned unpinned}
 RBLOCK0_ARMS=${RBLOCK0_ARMS:-rblock}
 REPLAYS=${REPLAYS:-3}; FRESH=${FRESH:-1}; ALONE=${ALONE:-64}; UNPINNED_REPLAYS=${UNPINNED_REPLAYS:-3}
 [ $# -gt 0 ] || { echo "replay-ladder: name the models (ladder.py's LADDER)"; exit 2; }
-[ -f "$C4" ] || { echo "replay-ladder: no C4 shard (--send it, or C4=PATH)"; exit 2; }
+[ -n "${SERVED:-}" ] || [ -f "$C4" ] || { echo "replay-ladder: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 for arm in $ARMS; do case $arm in pinned|rblock|unpinned) ;; *) echo "replay-ladder: ARMS takes pinned, rblock and unpinned, not $arm"; exit 2 ;; esac; done
 for arm in $RBLOCK0_ARMS; do case $arm in pinned|rblock) ;; *) echo "replay-ladder: RBLOCK0_ARMS takes pinned and rblock, not $arm"; exit 2 ;; esac; done
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
@@ -59,12 +62,19 @@ for m in "$@"; do
     [ "$arm" = pinned ] && { replays=$REPLAYS; fresh=$FRESH; alone=$ALONE; }
     case " $RBLOCK0_ARMS rblock " in *" $arm "*) export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 ;; esac
     echo "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=${TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK-unset}" > "$d/arm_env.txt"
-    echo "== $m $arm serve $(date -u +%FT%TZ) $(cat "$d/arm_env.txt")"
-    if ! "$PY" "$here/ladder.py" serve --model "$m" --c4 "$C4" --out "$d" ${SPAN_S:+--span-s "$SPAN_S"} ${OVER:+--over "$OVER"} \
-        ${BURST:+--burst "$BURST"} ${PLAN:+--plan "$PLAN"} ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} > "$d/serve.log" 2>&1; then
-      tail -n 40 "$d/serve.log"; rc=1; rm -rf "$cache"; continue
+    if [ -n "${SERVED:-}" ]; then
+      echo "== $m $arm replays of $SERVED's window $(date -u +%FT%TZ) $(cat "$d/arm_env.txt")"
+      if ! cp -a "$SERVED/record" "$d/record"; then echo "replay-ladder: SERVED=$SERVED has no record/"; rc=1; rm -rf "$cache"; continue; fi
+      for f in serve.json plan.jsonl serving; do [ -e "$SERVED/$f" ] && cp -a "$SERVED/$f" "$d/"; done
+      rm -rf "$d/record/route_capture"
+    else
+      echo "== $m $arm serve $(date -u +%FT%TZ) $(cat "$d/arm_env.txt")"
+      if ! "$PY" "$here/ladder.py" serve --model "$m" --c4 "$C4" --out "$d" ${SPAN_S:+--span-s "$SPAN_S"} ${OVER:+--over "$OVER"} \
+          ${BURST:+--burst "$BURST"} ${PLAN:+--plan "$PLAN"} ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} > "$d/serve.log" 2>&1; then
+        tail -n 40 "$d/serve.log"; rc=1; rm -rf "$cache"; continue
+      fi
+      grep '^\[ladder\]' "$d/serve.log"
     fi
-    grep '^\[ladder\]' "$d/serve.log"
     autotune serve
     for i in $(seq 1 $((replays + fresh))); do
       echo "== $m $arm replay $i $(date -u +%FT%TZ)"
@@ -78,6 +88,9 @@ for m in "$@"; do
       fi
       grep '^{"mode"' "$d/replay-$i.log" | tail -n 1
       autotune "replay-$i"
+      if [ -n "${LADDER_TOPK_PROBE:-}" ] && [ "$i" -gt 1 ]; then
+        "$PY" "$here/topk_probe.py" compare "$d/replay-1/topk" "$d/replay-$i/topk" > "$d/topk-$i.json" || rc=1
+      fi
     done
     if [ "$alone" -gt 0 ]; then
       echo "== $m $arm alone $(date -u +%FT%TZ)"

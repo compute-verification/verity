@@ -79,3 +79,13 @@ the route capture's plugin module and the settings registry beside it, both serv
 `/usr/local` (12.8 or newer; a RunPod image's 12.4 can't, so install `cuda-nvcc-12-9 cuda-cudart-dev-12-9 cuda-cccl-12-9`
 first, and `libcurand-dev-12-9 libcublas-dev-12-9 cuda-nvrtc-dev-12-9` for `FLASHINFER=1`), unless `DEEP_GEMM=0`;
 `engine_env.txt` records the choice.
+
+`SERVED=DIR`, an earlier run's `ARM/MODEL` directory, has `run.sh` replay that run's window instead of serving one (one
+model, with `ARMS` the arm it was served in). Where a DSA model's replays part, `LADDER_TOPK_PROBE` (`topk_probe.py`)
+says: each replay's engine processes wrap vLLM's prefill top-k (`top_k_per_row_prefill`) and record, per call and
+device, checksums of the indexer logits it read, the set of indices it selected and their order (`replay-I/topk`);
+`sort` also sorts each row's indices before attention reads them, and `record` only records. `run.sh` compares each
+replay after the first with the first, call by call (`topk-I.json`: per device, the first call each checksum differs at).
+The first call whose logits agree while its set differs is a selection that varies on the same input.
+`LADDER_TOPK_PROBE_REAL=module:function` names a replacement top-k for the probe to call and record instead of vLLM's.
+Decode's top-k isn't probed.

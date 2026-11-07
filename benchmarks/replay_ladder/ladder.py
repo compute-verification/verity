@@ -51,6 +51,7 @@ sys.path.insert(0, str(SERVE_TAX))
 import inductor_pin as P  # noqa: E402 (beside this file, on sys.path when it runs and when its tests import it)
 import replay as R  # noqa: E402 (serve_tax's, put on sys.path above)
 import serve_tax as S  # noqa: E402
+import topk_probe as T  # noqa: E402 (beside this file, as inductor_pin)
 from verity_config.settings import of  # noqa: E402 (put on sys.path by serve_tax)
 
 ENV = of(__file__)
@@ -282,6 +283,9 @@ def replay(a: argparse.Namespace) -> int:
     out = Path(a.out)
     os.environ["LADDER_TILINGS"] = str(out / f"replay-{a.index}")
     P.apply(pin=pin() == "pinned", tilings=ENV.LADDER_TILINGS)
+    if ENV.LADDER_TOPK_PROBE:
+        os.environ["LADDER_TOPK_PROBE_OUT"] = str(out / f"replay-{a.index}" / "topk")
+        probe_topk()
     argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}"),
             *(["--logprobs"] if a.logprobs else [])]
     if a.index > 1:
@@ -471,8 +475,14 @@ def main(argv: list[str] | None = None) -> int:
     return {"serve": serve, "replay": replay, "alone": alone, "summary": summary}[a.cmd](a)
 
 
+def probe_topk() -> None:
+    """This process's DSA prefill top-k, probed as the ladder's settings say (topk_probe)."""
+    T.apply(mode=ENV.LADDER_TOPK_PROBE, out=ENV.LADDER_TOPK_PROBE_OUT, real=ENV.LADDER_TOPK_PROBE_REAL)
+
+
 # a spawned engine process imports this module as __mp_main__ and inherits the environment
 P.apply(pin=pin() == "pinned", tilings=ENV.LADDER_TILINGS)
+probe_topk()
 
 if __name__ == "__main__":
     sys.exit(main())
