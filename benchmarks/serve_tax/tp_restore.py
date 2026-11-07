@@ -290,6 +290,20 @@ def edge_difference(served: Mapping[str, Any], replayed: Mapping[str, Any], serv
                                      (replayed_dir / "digests.rank0.bin").read_bytes(), served["layers"], served["ids"])
 
 
+def generators(rng: Mapping[str, Any]) -> dict[str, Any]:
+    """An `tp_state.rng_state` without V2's per-request seeds, which the runner's rows hold (the loader's to restore)."""
+    return {k: v for k, v in rng.items() if k != "seeds"}
+
+
+def restored_exact(served: Sequence[Mapping[str, Any]], restored: Sequence[Mapping[str, Any]], seeds: bool) -> dict[str, bool]:
+    """Whether every rank's blocks and generators, and with ``seeds`` its requests' seeds, equal the served edge's."""
+    out = {"kv": [g["layer_digests"] for g in restored] == [r["layer_digests"] for r in served],
+           "generators": [generators(g["rng"]) for g in restored] == [generators(r["rng"]) for r in served]}
+    if seeds:
+        out["seeds"] = [g["rng"].get("seeds") for g in restored] == [r["rng"].get("seeds") for r in served]
+    return out
+
+
 def resolve(name: str) -> Callable[..., Any]:
     return E.resolve(name)
 
@@ -342,8 +356,7 @@ def restore(a: argparse.Namespace) -> int:
     got = rpc(tp_state.digest, args=(rec1["ids"], str(check_dir)))
     res["restore_s"] = round(time.monotonic() - t0, 1)
     mine = sorted(got, key=lambda r: r["rank"]["rank"])
-    res["restored_exact"] = {"kv": [g["layer_digests"] for g in mine] == [r["layer_digests"] for r in rec1["ranks"]],
-                             "rng": [g["rng_digest"] for g in mine] == [r["rng_digest"] for r in rec1["ranks"]]}
+    res["restored_exact"] = restored_exact(rec1["ranks"], mine, seeds=bool(a.loader))
     res["rank_map"] = E.check_rank_map(rec1["rank_map"], E.rank_map(got))
     if not res["restored_exact"]["kv"]:
         res["verdict"] = "the restore is not exact at the edge"
@@ -356,10 +369,12 @@ def restore(a: argparse.Namespace) -> int:
         verdict.write_text(json.dumps(res, indent=1))
         return 1
     if not a.loader:
-        res["verdict"] = ("the edge's blocks and RNG restored exactly; no --loader, so the scheduler's and runner's "
-                          "state wasn't and nothing is replayed")
+        ok = all(res["restored_exact"].values())
+        res["verdict"] = (("the edge's blocks and generators restored exactly" if ok else
+                           "the edge's blocks restored exactly, its generators not") +
+                          "; no --loader, so the scheduler's and runner's state wasn't and nothing is replayed")
         verdict.write_text(json.dumps(res, indent=1))
-        return 0
+        return 0 if ok else 1
 
     trace = StepTrace().install(core.scheduler)
     trace.scheduled = s1

@@ -96,6 +96,16 @@ def test_a_restored_engines_settings_that_differ_are_named_with_both_values():
         "max_num_batched_tokens": [8192, 16384], "policy": [None, "fcfs"]}
 
 
+def test_a_restore_is_exact_on_blocks_and_generators_and_on_seeds_only_when_rows_were_restored():
+    rng = {"runner": "v2", "numpy": [1], "cuda": "ab", "seeds": {"r1": [7, False]}}
+    served = [{"layer_digests": ["a", "b"], "rng": rng}, {"layer_digests": ["a", "b"], "rng": rng}]
+    no_rows = [{"layer_digests": ["a", "b"], "rng": rng | {"seeds": {}}}] * 2
+    assert T.restored_exact(served, no_rows, seeds=False) == {"kv": True, "generators": True}
+    assert T.restored_exact(served, no_rows, seeds=True) == {"kv": True, "generators": True, "seeds": False}
+    moved = [served[0], {"layer_digests": ["a", "c"], "rng": rng | {"cuda": "ac"}}]
+    assert T.restored_exact(served, moved, seeds=True) == {"kv": False, "generators": False, "seeds": True}
+
+
 def test_the_plugin_site_declares_the_edges_beside_the_step_trace(tmp_path):
     T.edge_site(tmp_path)
     eps = sorted(p.read_text() for p in tmp_path.glob("*.dist-info/entry_points.txt"))
