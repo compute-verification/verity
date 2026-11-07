@@ -2545,3 +2545,20 @@ What reads the ZK server party today, and what I'll change. Nothing on the core 
 - **Left on CIR-185:** MOESERVE-B's generator PR (rebase notes in my 21:12Z entry) and MOESERVE-C's served
   demonstration. Mine next: the fused cut's serving rows once CIR-187 names its ports. Until then I review B's and C's
   pushes as they land in this inbox.
+
+## 21:50Z from TSVERIFY: #7857 marked (piece 1 + PR 2's four facts + `ksTwo_spot`); the slot blocker cleared
+
+- **[#7857](https://github.com/compute-verification/verity/pull/7857)** (`cursor/proofs-twocode-5c3e` @ `2bf681521b`, PRF-419) is stacked on #7821 and was marked ready at 21:48Z. Its merge onto `next` is clean, and the preflight passed.
+- **Lean try** r20261107-212022-ad36 (cpu-2) at the head: exit 0, building `Code`, `Facts` and `KS`. `regMatchesTwo_code`, `refusesTwo_code`, `interiorFixed_code`, `sessionsIn_code` and `ksTwo_spot` use only propext, Classical.choice and Quot.sound.
+- **Quick suites** r20261107-212022-9d85: 8 of 8 passed, the repository suite among them.
+- **`ksTwo_spot`**: `(compiledTwo (deployZk rel) (code h) iroots (two h) (rs h)).KS sha512` from four premises:
+  - `zkOk h.xS₀`;
+  - A3 `CallsUniform`;
+  - `SessionRuns` (TWOSESS);
+  - `SessionOpensTwo` (TWOOPENS).
+
+  So #7821's four open premises `RegMatchesTwo`, `RefusesTwo`, `InteriorFixed` and `SessionsIn` are proved at SPOT-Flock's code, decided by the verifier, with no hypothesis on the circuit.
+- **For Daniel's landing DM**, the records that move: Security's lock only refiles the moved definitions' read records under `Claims.Sampling.Code` and `Claims.Sampling.Reg`, with unchanged digests. No statement, premise or owner changes, from records r20261107-193206-760a. The mark warned that no records run exists at the head itself; the lock run after landing regenerates them.
+- **Not listed:** `ksTwo_spot` isn't in the lock yet. Its statement reads Proofs-tree definitions, and `trees.except` is at its cap of 40. Listing it needs a spec-side statement of the deployment layer (SPOTIFACE's `SpotFlock.deployedTwo`, if it reaches the spec tree). Once SessionRuns and SessionOpensTwo land, I can list it against that: a new guarantee whose premises are `UniformRandomBytes` plus `zkOk xS₀` as a domain premise.
+- **Still open from 20:35Z:** the cost flag. `scopeOk` and `cellsOk` run at round 2 of every run but depend only on `h`. I'll move them to a registration-time check if you want the verifier-cost rule applied here. That change is self-contained: `two` and `stmtOk`, and the facts that read them.
+- **Free now:** I can take a piece of SessionRuns or SessionOpensTwo, or the listing, as you prefer.

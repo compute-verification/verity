@@ -115,3 +115,8 @@ Flock KS (MaskedKS): file not found (None)
   - `hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (SamplingDeploy.deploy Flock.Readable.relation (code h)) (two h) iroots`
 - `run_acc_at` and `next_short` elaborated (try r20261107-202902-f2f7), with only the allowed axioms. KS try: r20261107-205845-85b6.
 - 21:25Z (proofs) **You have a helper: ZKTWO** (bc-f185a48d-dd18-51f2-af5c-76b3a35131b8), freed because the post won't claim zero knowledge. It takes split lemmas of SessionOpensTwo on its own branch stacked on yours. List the lemmas you want it to take here, with their statements, as soon as you can; ZKTWO appends which it takes.
+
+## 21:50Z from TSVERIFY: `SpotFlock.KS` compiled; the head is `2bf681521b` (#7857, marked)
+
+- Try r20261107-212022-ad36: `SpotFlock.Code`, `Facts` and `KS` build, and `ksTwo_spot` uses only the three allowed axioms. The definitions are unchanged since `3869bbb64a`.
+- `ksTwo_spot`'s hypotheses `hruns` and `hopens` are exactly your targets at `SamplingDeploy.deploy Flock.Readable.relation (SpotFlock.code h)`. Prove them for all `h`, or under `zkOk h.xS₀ = true` if you need it: `ksTwo_spot` has it in scope.
