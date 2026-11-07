@@ -14,7 +14,7 @@ ahead of a tree, holding the findings of PRs queued below it on ``next`` that a 
 stale ``# noqa``).
 
 A file that moves takes its entries with it, in the same change (``--move``): this lint reads no history, so a renamed file's
-findings count under its new path.  The ratchet gate (``integrations/vllm/tools/ratchet_gate.py``) refuses a rename that
+findings count under its new path.  The ratchet gate (``integrations/vllm/tools/ratchet_gate.py``) fails a rename that
 leaves its entries behind, and a change that grows the list or the findings of the Python it changes, and judges a change to
 this module, to ``ruff.toml`` or to the ruff pin by running this lint as the change's base has it on the change's tree.  So
 it imports only the standard library, ``test_no_new_findings`` takes no fixture, and the gate reads ``LEFT_OUT`` from the

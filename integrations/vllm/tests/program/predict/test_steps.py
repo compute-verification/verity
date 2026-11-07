@@ -942,7 +942,7 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
 @pytest.mark.slow
 @pytest.mark.skipif(os.environ.get("VERITY_VLLM_CLASS_G_WINDOW") != "1",
                     reason="VERITY_VLLM_CLASS_G_WINDOW=1: GLM-5.3's B8 requests as one window in prefill chunks, its eight request "
-                           "Programs built at rank 0 (about half an hour and 25 GB on one core)")
+                           "Programs built at rank 0 (about twenty minutes and 35 GB on one core)")
 def test_a_class_g_window_of_long_prompts_compiles_in_chunks(tmp_path):
     """The B8 row's requests scheduled under a long-prefill threshold of 64 and a step budget of 160 (`_chunked_b8`: five of the eight
     prefill in two to five chunks) compile as one window, each request at its chunks and launches, with the batch rules passing
