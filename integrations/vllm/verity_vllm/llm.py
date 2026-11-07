@@ -106,7 +106,8 @@ def class_options(options: dict[str, Any]) -> dict[str, Any]:
     from verity_vllm.engine.profiles import engine_classes as EC
     from verity_vllm.errors import Refused
 
-    fixed, most = EC.options(name), EC.max_num_seqs(name)
+    execution = options.get("execution") if options.get("execution") in EC.EXECUTIONS.get(name, {}) else None
+    fixed, most = EC.options(name, execution), EC.max_num_seqs(name)
     bad = [f"{k}={options[k]!r}, where the class serves {v!r}" for k, v in fixed.items() if k in options and options[k] != v]
     bad += [f"{k}={options[k]!r}: the class serves the engine profile's" for k in KERNEL_PROFILE_OVERRIDES
             if k not in fixed and options.get(k) is not None]
@@ -198,7 +199,8 @@ class LLM:
       its batch invariance and ``enforce_eager`` (``"compiled"`` is vLLM's serving defaults); default ``"bi-eager"``, or
       ``"bi-compiled"`` with ``enforce_eager=False``.  An ``enforce_eager`` the label contradicts raises ``ValueError``.
     * ``engine_class`` (str): a registered engine class (`engine.profiles.engine_classes`), such as ``"G"``: the engine runs at
-      the class's ``tensor_parallel_size``, ``execution``, served engine limits, ``moe_backend`` and prefix cache off, with
+      the class's ``tensor_parallel_size``, an ``execution`` it serves (default its own; class G's ``"compiled"`` at its CUDA
+      graphs' ``compilation_config``), served engine limits, ``moe_backend`` and prefix cache off, with
       ``max_num_seqs`` at most the class's (its default).  An option that contradicts the class, another
       kernel override, or a checkpoint of another model type raises `errors.Refused` before the engine is built, and so does a
       built engine whose vLLM config doesn't carry the class's settings after it.  The built engine's admission
