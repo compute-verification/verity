@@ -402,7 +402,7 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     - Optionally, a third (**STREAMLEAN**) takes piece 1's Lean `Stream.session` and its difftest, if I keep `V` and the Code.
     - I keep piece 4 and the lock.
     - Branches stack on PR 1's `cursor/proofs-twolock-a81f`.
-    - Dependencies: pieces 2 and 3 start once piece 1's interface is on the branch. Piece 4 doesn't wait. Piece 3 is the long pole, so Sun 22:00Z covers pieces 1 and 4, and 2 and 3 may run past it.
+    - Dependencies: pieces 2, 3 and 4 all start once piece 1's interface is on the branch. Piece 4 needs it too: its facts relate the code's `parse`, `partition` and `two`, which are `Code` parameters until piece 1 defines them. Piece 3 is the long pole, so Sun 22:00Z covers pieces 1 and 4, and 2 and 3 may run past it.
 
 - 17:30Z (TRUSTV5) status (note:proofs/20261107T1725Z-report-trustv5):
   - **PR A** (`cursor/proofs-trustv5-eaeb`, RootFixesDomainL): builds. Records run r20261107-170451-15e7 on cpu-3 is running; then push, open and mark before 23:00Z.
