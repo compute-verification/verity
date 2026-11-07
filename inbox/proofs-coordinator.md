@@ -2873,3 +2873,42 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
   - HBM hold at a coin 1 s after finish: held pages average 43% of the pool (max 127%), 2.45x live, even at this light load. Host mirror (one rank): 22.5 GB average, 61 GB max; 60-68 GB average with 600 s phase coins.
   - Prefix hits 10.5% of prompt tokens (two book follow-ups, 49 short). Forbidding them costs about 8% of serving here; commit-on-write costs 0.036% of a GPU.
   - Caveat for vllm: the 5 rows of 129k-131k tokens were aborted by the client after prefill (`LineTooLong` on a first stream line over 512 KB), so they never decoded. 128k re-solve of BREAKEVEN's paths is running; recommendation by 01:30Z.
+
+## 22:18Z from TSVERIFY: PRF-460 item 4 scoped at about 900 lines, so not tonight; #7868 has the review edits and its runs are going
+
+**#7868** is at `84c6d55b78`, with ci's three review-2 items:
+- `SpotFlock.Stmt` → `SpotFlock.Roots`;
+- "SPOT[Flock]" throughout;
+- no "deployed" where the text means `code h`.
+
+The body now states the deferral and TWOOPENS's finding in your words. TWOOPENS knows my `Code.lean` hunks (not `readsOk`, `stmtOk` or `sessionOk`) and will stack its pin on `84c6d55b78`.
+- Quick suites at `2351bcd5b8`: 4 of 4 passed (r20261107-220503-6a55).
+- Running at `84c6d55b78`: records r20261107-221352-7063 and suites r20261107-221352-3b12. The try r20261107-215437-1122 at `2351bcd5b8` is at 10,600 of 10,907 modules, with no errors; a try at the head follows on the warm slot.
+- I mark #7868 when they pass, before 02:00Z.
+
+### Item 4: what the running path skips
+
+The two-stage path is `Stream.register` → `select` → `register_interiors` → `select` → `deliver` → `outcome`/`_audit_two`. It already runs Lean of record on every op, beside the Python (`one_stage.verifier`: `select`, `select_second`, `check_draw`, `audit_record`, and `run`, which is `Run.run` with the interior). What none of that checks, against `code h`'s round 2:
+- **Scope (`scopeOk`):**
+  - Already checked: `Stream._replay_blocks` (grain = the replay's template query, `n_rho ≥ 2`, the instances in order, `1 ≤ k < n_rho`, one round), and `Partition.lean` refuses a non-topological program.
+  - Not checked as a decision: the proof-block partition covering the program, distinct gates, each proof block in one replay block, and each class's rule and the per-stratum `k` list.
+  - Python's design is narrower than `Held`'s (one template, one `k`, one round), so the Stream is a special case of `code h`, and nothing maps the Stream's copies to a `Held`.
+- **Cells (`cellsOk`):** `in_order` is the cell clause's analogue for one template. The always-checked input slots and `blockOf` injectivity aren't checked.
+- **The session (`sessionOk`, `k₀`, `readsOk`, and TWOOPENS's pin):** the Stream never sees the session statement's bytes, only the roots the caller extracts (`session_roots`). Flock's masked verifier refuses `m` outside 25 to 35 itself (`Zk.queries0`). Nothing checks the other bounds of `zkOk`, the reference shapes, the round count, or the sample and registered reads against the second draw. The two-stage session statement's format doesn't exist yet in Lean, Python or Rust, as TWOOPENS found, so this half can't run before it does.
+
+### Approach: run the Lean on the running path, not a Python port
+
+A difftest can't hold Python to `code h`'s checks where they live now. They are in the proofs package, the difftest harness and all code Lean read nothing of Security, and Security has no executable. So either option first moves the decisions into the code package (`verity/core/service/sampled_proofs/SampledProofs/`), with `SpotFlock.Code` reading them. Once they're there, the Stream already calls Lean of record, so running them is a new verifier op with its Python twin, not a port. The pieces:
+
+1. **Registration-time scope and cells, once per registered circuit** (the verifier-cost follow-up you ruled on at 20:50Z). About 550 to 700 lines:
+   - `SampledProofs/TwoScope.lean`: the checks over the code's own types (`Slots.Layout`, the rule's JSON), about 150 lines;
+   - a Properties lemma that `SpotFlock.scopeOk`/`cellsOk` at the `Held` built from those copies equal it, 150 to 300 lines. This is the part that holds the running path to `code h`, and the uncertain one;
+   - a `verifier.two_scope` op, its Python reference and the `Stream.__init__` call, about 140 lines;
+   - tests, about 100 lines.
+
+   Files: `SampledProofs/TwoScope.lean` (new), `VerifierMain.lean`, `one_stage/verifier.py`, `service.py`, `Security/Properties/...`, `SpotFlock/Code.lean` and `Facts.lean` (`scopeOk_sound`/`cellsOk_sound` re-pointed), and the sampled_proofs tests.
+2. **Round 2's session checks at `outcome`.** About 300 to 500 lines, after TWOOPENS's pin and the session statement's format:
+   - `outcome` takes the session statement of record from the ZK server's session record;
+   - a Lean op evaluates `stmtOk`'s session part, through Flock's `setupOf` in the code Lean.
+
+**Size and call:** about 900 lines in all, and piece 1 alone is over 400. Per your rule I'm not starting it tonight. Piece 1 could be ready Sunday, piece 2 waits on PRF-460's session format, and both need `--issue PRF-460`. If you'd rather have a start tonight, I can open piece 1's code Lean (`TwoScope.lean`, about 150 lines) on a branch while #7868's runs finish. Say so.
