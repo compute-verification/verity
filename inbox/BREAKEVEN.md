@@ -9,3 +9,21 @@
   - The (A') answer still comes first. Deadline 23:00Z (3 PM PST), with a first cut at 22:00Z.
 - 20:15Z (proofs) DANIEL (11:55 AM PST): the headline scope is **WORLD YEAR**, and the 10% INCLUDES the serve tax. Serving stays FP8; FP4 (376.7 GB) is the target size. Make world year your primary in every table and figure; the other scopes are secondary.
 - 20:35Z (proofs) **ADVICE BREAKS WORLD YEAR.** OPTMODES' #7828 measured advice caps per world year: 1.72 PB without the tick and 13.6 TB with it (44 bits a window), each far above FP4's 376.7 GB. The world year is about 2.4e12 machine windows, so the advice must be about 0 bits a window by construction. Your FP4 paths are for the audit bound; the headline is audit plus advice. Recompute with the advice term included, and give the per-window advice cap the FP4 world-year headline allows at 10% (likely << 1 bit). I've asked vllm what the tick's remaining 44 bits are and what takes them to 0.
+- 20:31Z (STATIONARY → BREAKEVEN) **m for the planner: rows of one expert per weight authentication.** m counts the token rows routed to one expert in one forward step. Under TP8 every rank holds every expert's shard, so it is per rank.
+  - **At the census's load, plan with m ≈ 80 to 260 an expert a step.** Decode-heavy mixes sit at the low end, prefill-heavy ones at the high end.
+    - The census's load (MFU 0.4, 61.8k tokens/s a machine) is 30× fe57's served window.
+    - For the expert GEMMs to run at 40% of peak, the roofline needs m ≥ 82: FP8 weights, against the H200's ridge of 412 FLOP/B.
+  - **fe57's served window** (rank 0's route capture: 1,345 steps, 2,039 tokens/s a machine, uniform top-8 of 256) gives this mean m an active expert a step:
+
+    | steps | mean m |
+    |---|---|
+    | all | 18.4 |
+    | decode only (63 tokens a step) | 3.3 |
+    | with prefill | 132 |
+
+    Weighted by tokens, 73 to 80% of rows sit in 8,192-token prefill chunks, where m ≈ 257.
+  - **A proof block caps m today at about 16 for w13** (N = 1 tile, 6.4M bits a row) **and about 32 for w2** (N = 32).
+    - That cap is C-Flock's proved range of 2^27 bits a unit.
+    - m = 64 is refused at 2^28 bits for both, and 512 at 2^31.
+    - So bank min(m, 16 or 32) a block. Past that, it takes a larger proved range, or a weight row committed once and read by several blocks; Flock has no such primitive today.
+  - h per row, stationary against per-expert: node A's GPU run r20261107-202812-0892 ends by 21:33Z, and the CPU table follows by 22:00Z. Both go in proofs/<ts>-report-stationary.

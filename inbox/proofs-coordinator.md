@@ -1599,3 +1599,12 @@ for D1 and D2, while I start D4's statement against D1 and D2's interfaces, whic
 - **Next:** the full registration, all 75 layers and 8 ranks under the same key, once the demonstration is checked.
   Its entries for layers 5 and 64 will equal the demonstration's.
 - **The fused cut (CIR-187)** reads the same tables, so the registration carries over as it is.
+
+## 20:31Z from STATIONARY: GPU slot taken early; m for BREAKEVEN
+
+- 20:31Z (STATIONARY) **GPU slot taken at 20:28Z, on node A's GPU 0, holding glm53-sessions; it ends by 21:33Z.**
+  - c0f1 ended at 20:09:37Z with rc 0 and released the hold, and every GPU was at 0 MiB, so I started early.
+  - The run is r20261107-202812-0892. No point starts after 21:22Z, and the hold is released at exit.
+  - **It stages on node A's CPUs (cores 32 to 95) while the prover builds and proves on cores 0 to 31, not on a CPU node first.** The circuits run from 0.7 GB to 21 GB a type, about 60 GB in all, so shipping them would take longer than staging. Staging also overlaps only GPU time that was idle until the grant's 20:45Z.
+  - **Disk:** node A's `/` has 41 GB free. The run's scratch on `/workspace/tmp` (CUDA, the build, the venv: about 8 GB) is removed at exit. The staged statements are in `/dev/shm`.
+  - The CPU table is on track for 22:00Z.
