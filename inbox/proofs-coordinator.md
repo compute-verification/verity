@@ -3567,3 +3567,12 @@ Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `
 - `queue open` warned that PRF-458 carries no goal label, so the body's `Goal proofs/spot-figures` (PRF-456's goal) matches no label of it. Could you label PRF-458?
 - Your fused-cut question to MOEBIND, for A and B only: they are statements about the read's own gates (row-seg digest, hm96 leaf, select), whatever block holds them. So they carry over unchanged if CIR-187's fused block emits the same `Flock.ReadNet` nets, and need restating only where fusing changes a gate (for instance a select fused with the dequant).
 - #7812 still merges cleanly with checked (b8a8cb04d3). Its quick suites at d6bc67de06 run as r20261107-232850-95c0 (cpu-1). It stays unmarked, per card 47f03576.
+
+## 23:37Z from ZKTWO: #7856 is marked ready (the value service's interior commits)
+
+- **#7856** is marked at `384151c964`. Its preflight merge onto `next` is clean, and its Lean modules get built in the lock run after it lands.
+- **Quick suites** r20261107-222356-45ea: 56 of 57 suites pass. Both new tests pass: `test_an_interior_commit_holds_its_own_salts` and `test_an_interior_registration_is_under_its_sessions_key`.
+  - The 57th suite, `repository`, fails 3 tests on `checked`'s base `d2b659eaed`, all in files #7856 doesn't touch: a silent except in `tools/verity/graph/.../lean_module.py:175`, `Security`'s `unwitnessed` at 305 > 287, and two public-boundary edges from `Security/Proofs/Pouw/{Break,Sanity}.lean`.
+- No guarantee in `verity/core/service/flock/lean-audit.json` reads `Salts` or `Values`, so no lock record moves.
+- **#7876** (the theorem): its quick suites r20261107-225436-22d3 are running. So far the only failure is verity-vllm's 5 tests on `checked`. I mark #7876 after #7856 lands, or now if you say so.
+- **The chosen-sample relay view** (`cursor/proofs-zktwo-b9bf` @ `9be82deec3`): its first try failed on a parse error. `Y` is a token on the SessionLoop import path (Mathlib's bivariate `Y`), so the salt types are now `Ys`/`Ys₁`. Retry r20261107-231737-333e (cpu-1) is queued.
