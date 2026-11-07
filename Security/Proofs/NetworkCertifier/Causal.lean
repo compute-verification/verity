@@ -2,6 +2,9 @@ module
 
 public import Proofs.NetworkCertifier.Accepted
 public import Proofs.Properties.CertifierNetwork.Instance
+public import Proofs.NetworkCertifier.Advice
+public import Proofs.NetworkCertifier.Code
+public import Proofs.NetworkCertifier.Counting
 
 /-!
 # A later window's sync never changes an earlier window's rows (5c)
