@@ -44,7 +44,7 @@ public import Proofs.Flock.SessionLoop.Phase
 public import Proofs.Flock.SessionLoop.ZkAny
 
 /-!
-# Proof of C-Flock's zero knowledge at the session loop's own frames
+# Proof of Flock's zero knowledge at the session loop's own frames
 
 `Flock.SecurityProofs.SessionLoopZK : Flock.Guarantees.SessionLoopZK` is `Claims.ZKServer.Flock.zk_server_lean_ofLoop`
 at the deployed relation and at the hiding gap of hm96-sha512's pinned key (`CROnly.hm96Hiding_gap`, finite as a real),
@@ -53,7 +53,7 @@ from `FinishIs`, the loop's frames refusing every coin fault (`LeanRelease.frame
 admitting unrefused coins (`LeanRelease.finalRoundEq_ofLoop`). `SessionLoopZKDeployed` is it at the deployed tables,
 which admit unrefused coins (`LeanRelease.tablesAdmitUnrefused_dataE`), at the loop's own link and `Finish`
 (`LeanRelease.ofLoopLink`),
-whose `LinkRoundEq` holds in the masked scope where the loop draws the tape's level 0
+whose `LinkRoundEq` holds in the masked scope where the loop samples the tape's level 0
 (`LeanRelease.linkRoundEq_ofLoopLink`, from `Loop.Src`'s level-0 half, `Loop.Level0Src.linkLevel0`), and whose `FinishIs`
 holds there at `LoopInnerRound0`, `Loop.Src`, `LiveRoundEq` and `SwCausalOn` (`Loop.finishIsOn`). That level-0 half is
 satisfiable at every statement (`Loop.level0Src_tapeSrc`, `Proofs.Flock.SessionLoop.Level0SrcSat`). The switched
@@ -109,7 +109,7 @@ namespace Flock.SecurityProofs
 
 open FlockSoundness.Discharge
 
-/-- **C-Flock's zero knowledge at the session loop's own frames**, at every statement the loop serves, at tables that
+/-- **Flock's zero knowledge at the session loop's own frames**, at every statement the loop serves, at tables that
 admit unrefused coins. -/
 theorem SessionLoopZK : Flock.Guarantees.SessionLoopZK := by
   intro T hA vs t ht hS hV hD hc hsc hT L₀ src real hreal wk x w hR hServe hL0 hLk hFin hE hEf Θ Vs θ hk Ev
@@ -121,7 +121,7 @@ theorem SessionLoopZK : Flock.Guarantees.SessionLoopZK := by
       (Claims.ZKServer.LeanRelease.frameUnrefused_ofLoop T L₀ real _ wk x w hServe) hFin) hE hEf Vs θ hk Ev
   rwa [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at h
 
-/-- **C-Flock's zero knowledge at the session loop's own frames and link, at the deployed tables**: `SessionLoopZK` at
+/-- **Flock's zero knowledge at the session loop's own frames and link, at the deployed tables**: `SessionLoopZK` at
 `Masked.dataE`, whose tables admit unrefused coins and hold the tables' side but `SwCausalOn` (`Loop.tables_dataE`,
 `complete_dataE`, `dummyReg_dataE`, `causal_dataE`, `tapeOK_dataE`), and the release `withFiles (withLink L₀ src) src`,
 whose `LinkRoundEq` is `linkRoundEq_ofLoopLink` and whose `FinishIs` is `Loop.finishIsOn`. -/

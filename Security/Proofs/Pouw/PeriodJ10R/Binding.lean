@@ -9,7 +9,7 @@ public import Proofs.Accounting.TS.FixedMeets
 public import Definitions.Accounting.Guarantees.PeriodBinding
 
 /-!
-# A drawn layer's binding from its hashed openings
+# A sampled layer's binding from its hashed openings
 
 The reduction behind binding's premise at a sampled window's proofs whose openings are frame-v3-sha512 paths
 (`Accounting.TS.HashedOpenings`), for any `DrawnLayer`, at J10-R's (`tileLayer`), and at every period's

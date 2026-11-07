@@ -48,7 +48,7 @@ This is `Zk/Skeleton.lean`'s at a good case whose readiness is `ready` (any numb
 and whose run is the masked session on each table's share of the witness (`sessionS`): each goal is `GoalsZk`'s of the
 same name, at `Run`, and already stated per table (`∀ i < |tables|, ∀ r < 2`).
 
-* **Proved here**: the last message's statement, the scope check (`Case.scope_ok`), a drawn session, the link and last
+* **Proved here**: the last message's statement, the scope check (`Case.scope_ok`), a sampled session, the link and last
   messages read back given their lengths, S18 from S16, and the keyed coin tree (`coinTree_goal`, from `ready`).
 * **The composition**: `Run.rep_ok` (`zk_verifyRepWith_ok`), `Run.verdict_ok` (`zk_verifyWith_ok`), `Run.checks_ok'`
   (`checks_ok`), `Run.acc` (`run_acc_of`), and `complete_of_goals` (`complete_of`).
@@ -202,7 +202,7 @@ def LinkFirstZk : Prop :=
 def FinalFitsZk : Prop :=
   ∀ o : Run H rel, o.record.toUTF8.size < 2 ^ 64 ∧ o.proofs.size < 2 ^ 64 ∧ ∀ b ∈ o.proofs, b.size < 2 ^ 64
 
-/-- **The record's draw is the statement's**, whatever its key order (`drawEq`). -/
+/-- **The record's sample is the statement's**, whatever its key order (`drawEq`). -/
 def DrawMatchesZk : Prop :=
   ∀ o : Run H rel, drawEq (FlockSoundness.Discharge.Exec.recordDraw o.record) o.s.read.draw = true
 
@@ -358,7 +358,7 @@ section Proved
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- `ready` at the case's setup: the session draws a unit, the statement is under `2^64` bytes, every table's regions
+/-- `ready` at the case's setup: the session samples a unit, the statement is under `2^64` bytes, every table's regions
 fit, the setup against `H` is the case's, the session's coins are the keyed coin tree, and the honest record fits. -/
 theorem Case.ready_all (c : Case H rel) :
     c.s.read.draw.isSome = true ∧ c.x.length < 2 ^ 64 ∧ (∀ st ∈ c.sts, RegionsFit st) ∧
@@ -392,7 +392,7 @@ theorem coinTree_goal : CoinTree H rel := fun o => by
   · rw [h] at this; cases this
   · rfl
 
-/-- **A drawn session**: `checks` never reaches `drawLaw zk tags false none`. -/
+/-- **A sampled session**: `checks` never reaches `drawLaw zk tags false none`. -/
 theorem Case.drawn (c : Case H rel) : c.s.read.draw.isNone = false := by
   have := c.ready_parts.1
   cases h : c.s.read.draw

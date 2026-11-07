@@ -50,15 +50,15 @@ accepting (`SessionAccepts`, a fact of the record's reader; `RecDeploy.sessionAc
 `recBound` builds with `deployRec`); `bitsLin2On_of_ksLin2On` is the same at the statements a predicate `G` admits. The
 proof reads `KSLin2` at `M = 2^256` and `R = 2^257` and bounds its six terms:
 
-* one draw (the compiled run and `E_O`) costs at most `t·c_Be/2` SHA-512 calls in expectation (`Ex_drawCost_le`): the
+* one sample (the compiled run and `E_O`) costs at most `t·c_Be/2` SHA-512 calls in expectation (`Ex_drawCost_le`): the
   run at most `t`, and `E_O`, which makes no call of its own (`noHash_EO`), at most `t` per rerun
   (`Claims.Sampling.calls_le_of_noHash`) over at most `1 + Σ_s m′_s·k_s` reruns (`EO_runs_exp`);
-* `B_I` costs two draws (`Ex_Binner_cost_le`), `FCI` and `Fdev` at most two in expectation (`Ex_FCI_cost_le`, Wald's
-  bound on the gated loop over forked draws `Ex_gate_loop_fork_le`; `Ex_Fdev_cost_le`), and `F0I` at most `k_I + 1`
+* `B_I` costs two samples (`Ex_Binner_cost_le`), `FCI` and `Fdev` at most two in expectation (`Ex_FCI_cost_le`, Wald's
+  bound on the gated loop over forked samples `Ex_gate_loop_fork_le`; `Ex_Fdev_cost_le`), and `F0I` at most `k_I + 1`
   (`Ex_F0I_cost_le`), each searching the inner verifier's own calls too (`Deploy.callsAt`: its setup's `|S(x_I)|`
-  and at most `n` on each draw's inner messages at its coins), `B_I` and `Fdev` the compiled verifier's own at each draw's V\*
+  and at most `n` on each sample's inner messages at its coins), `B_I` and `Fdev` the compiled verifier's own at each sample's V\*
   statements (`BinnerV`, `FdevV`: at most `v`, check 5's row commitments among them; `Ex_BinnerV_cost_le`), and charged
-  them (`Finder.charge`, `Ex_charge`: `|S(x_I)|` once and `n + v` per draw it reads), so under `ExpectedCR` each finds a
+  them (`Finder.charge`, `Ex_charge`: `|S(x_I)|` once and `n + v` per sample it reads), so under `ExpectedCR` each finds a
   collision with probability at most its cost over `2^256`, and `c_Be` becomes `c_S = c_Be + |S(x_I)| + 2(n + v)` in
   their terms;
 * `B` costs at most `2t` (`B_cost_le`), so under `StrictBirthday` its term is `t·√γ·2^{-255.5}`
@@ -146,8 +146,8 @@ end NoHash
 /-! ## The finders' expected costs -/
 
 open Classical in
-/-- **Wald's bound on a gated loop over forked draws, in expectation**: the loop's draws, forked at `j` from the first,
-cost at most one draw in expectation. -/
+/-- **Wald's bound on a gated loop over forked samples, in expectation**: the loop's samples, forked at `j` from the first,
+cost at most one sample in expectation. -/
 theorem Ex_gate_loop_fork_le {Coin A : Type} [Fintype Coin] [Nonempty Coin] [Fintype A] [Nonempty A] {n : ℕ}
     (j : ℕ) (g : (Fin n → Coin) × A → Prop) (c : (Fin n → Coin) × A → ℕ) (M : ℕ) :
     Ex (fun p : ((Fin n → Coin) × A) × (Fin M → (Fin n → Coin) × A) =>
@@ -194,7 +194,7 @@ section Costs
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **One draw costs at most `t·c_Be/2` in expectation**: the run at most `t`, and `E_O` at most `t` per rerun over at
+/-- **One sample costs at most `t·c_Be/2` in expectation**: the run at most `t`, and `E_O` at most `t` per rerun over at
 most `1 + Σ_s m′_s·k_s` reruns in expectation. -/
 theorem Ex_drawCost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (hS : SessionAccepts D) (x : Msg) {Ω : Type}
@@ -228,7 +228,7 @@ theorem Ex_drawCost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I 
         add_le_add le_rfl (mul_le_mul_of_nonneg_left hr ht0)
     _ = t * cBe D x / 2 := by rw [hc]; ring
 
-/-- A draw at a uniform tape costs at most what it costs at every tape. -/
+/-- A sample at a uniform tape costs at most what it costs at every tape. -/
 theorem Ex_draws_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) {e : ℝ}
     (hd : ∀ ω, Ex (fun d : (Fin (D.V.k x) → Coin) × (EO D I DO decO).C x =>
@@ -237,7 +237,7 @@ theorem Ex_draws_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO :
       e :=
   (Ex_prod _).trans_le ((Ex_mono hd).trans_eq (Ex_const _))
 
-/-- **`B_I` costs two draws**: the judged draw and one forked at the guessed inner round, each uniform. -/
+/-- **`B_I` costs two samples**: the judged sample and one forked at the guessed inner round, each uniform. -/
 theorem Ex_Binner_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω)
     (hk : 0 < I.V.k (xI D x)) {e : ℝ}
@@ -282,8 +282,8 @@ theorem Ex_Binner_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     _ = 2 * e := by rw [Ex_const, Ex_const]
 
 open Classical in
-/-- **`FCI` costs at most two draws in expectation**: the first draw, and the loop over draws forked at the position's
-inner round, which Wald's bound holds to one draw (`Ex_gate_loop_fork_le`). -/
+/-- **`FCI` costs at most two samples in expectation**: the first sample, and the loop over samples forked at the position's
+inner round, which Wald's bound holds to one sample (`Ex_gate_loop_fork_le`). -/
 theorem Ex_FCI_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (M : ℕ) (hW : 0 < Cp.width (xI D x)) {e : ℝ}
@@ -330,8 +330,8 @@ theorem Ex_FCI_cost_le (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (D
     _ = 2 * e := by rw [Ex_const, Ex_const]
 
 open Classical in
-/-- **`F0I` costs at most `k_I + 1` draws in expectation**: the first draw, and each of the `k_I` waits, which Wald's
-bound holds to one draw (`Ex_gate_loopCost_le`). -/
+/-- **`F0I` costs at most `k_I + 1` samples in expectation**: the first sample, and each of the `k_I` waits, which Wald's
+bound holds to one sample (`Ex_gate_loopCost_le`). -/
 theorem Ex_F0I_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (R : ℕ) {e : ℝ}
@@ -449,7 +449,7 @@ theorem ecr_charge_le {H : Msg → Msg} {F : Finder} {n : ℕ} {b : ℝ} (h : Ex
     (hb : Ex (fun s => (F.cost s : ℝ)) + n ≤ b) : F.Pr H ≤ b / 2 ^ (256 : ℝ) :=
   ecr_le (F := F.charge n) h (by rw [Ex_charge]; exact hb)
 
-/-- **`B_I` over the draws' evaluations costs what `B_I` does**: only its output differs. -/
+/-- **`B_I` over the samples' evaluations costs what `B_I` does**: only its output differs. -/
 theorem Ex_BinnerV_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (hk : 0 < I.V.k (xI D x)) {e : ℝ}
@@ -458,7 +458,7 @@ theorem Ex_BinnerV_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin)
     Ex (fun s : (BinnerV H D I DO decO P x hk).S => ((BinnerV H D I DO decO P x hk).cost s : ℝ)) ≤ 2 * e :=
   Ex_Binner_cost_le H D I DO decO x P hk hd
 
-/-- **`Fdev` over the draws' evaluations costs what `Fdev` does**: only its output differs. -/
+/-- **`Fdev` over the samples' evaluations costs what `Fdev` does**: only its output differs. -/
 theorem Ex_FdevV_cost_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) (M : ℕ) (hk : 0 < I.V.k (xI D x)) :
@@ -481,11 +481,11 @@ noncomputable def epsLin2 (D : Deploy Coin) (I : Inner Coin W) (Cp : Caps Coin) 
 
 /-- **`KSLin2`'s five terms after `κ`, at `M = 2^256` and `R = 2^257`, are each at most `t·2^{-T}`**, `T` the term's
 bits in `lamLin2`, at a compiled record where an accepted run shows each V* session accepting, under `StrictBirthday` at
-`B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, each searching the inner verifier's own calls at each draw's
+`B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, each searching the inner verifier's own calls at each sample's
 coins (`Deploy.callsAt`) and charged their evaluations (`Finder.charge`): `|S(x_I)|` once (`setupLen`) and `n + v` per
-draw it reads, for a prover making at most `t ≥ 1` calls per run. Each finder's expected cost is its draws' cost (`B_I`
-and `Fdev` over the draws' evaluations, `BinnerV` and `FdevV`, differ from `Binner` and `Fdev` only in their output)
-plus its charge, at most `t·(c_Be + |S(x_I)| + 2(n + v))` times its draws' count. -/
+sample it reads, for a prover making at most `t ≥ 1` calls per run. Each finder's expected cost is its samples' cost (`B_I`
+and `Fdev` over the samples' evaluations, `BinnerV` and `FdevV`, differ from `Binner` and `Fdev` only in their output)
+plus its charge, at most `t·(c_Be + |S(x_I)| + 2(n + v))` times its samples' count. -/
 theorem lin2_calls_le [DecidableEq Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W)
     (DO : Flock.Deploy Coin Col T) (decO : List (ℕ × Col) → List T) (Cp : Caps Coin) (hS : SessionAccepts D)
     (x : Msg) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (t : ℕ) (ht1 : 1 ≤ t)

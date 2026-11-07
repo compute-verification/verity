@@ -8,8 +8,8 @@ public import Proofs.Flock.Claims.ZK.FrameRun
 /-!
 # A rep's masking state in the loop's frames is the model's, but for `stopped`
 
-The loop runs each rep's frame on the device's rounds at the rep's own draws; the model's release reads the frame's
-state the loop's own frames leave (`Loop.progOf`, at placeholder draws on the scheduled rounds). The two agree but for
+The loop runs each rep's frame on the device's rounds at the rep's own samples; the model's release reads the frame's
+state the loop's own frames leave (`Loop.progOf`, at placeholder samples on the scheduled rounds). The two agree but for
 `stopped` (`unstop`) from one round to the next:
 
 * `answer_stopped`, `answer_unstop`: `Masker.answer` neither reads nor writes `stopped`, and reads only the

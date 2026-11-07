@@ -26,7 +26,7 @@ most `2^{−205}` per table, at every statement in scope:
 * without `--zk`, at every `fast100` schedule (`22 ≤ m ≤ 35`) and every shape in `Stmt.InRangeWide`, the shapes of every
   table flock-verify plans (`εtable_plain`, `tableError_le_205_wide`); the rational bound's worst case is `2^{−205.011}`,
   at `m = 34`;
-* with `--zk`, at C-Flock ZK's parameters (`TabZK.M1`: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, and the
+* with `--zk`, at Flock ZK's parameters (`TabZK.M1`: the padded level 0 of `m1Schedule m`, `25 ≤ m ≤ 35`, and the
   inner proof with 168 queries, `N ≤ 2^13` and `δ ≥ 7/16`), `padLinkError + (padRepError + εInner)² ≤ 2^{−205}`
   (`εtable_zk`). `TabZK.bound_le_m1` gave `2^{−203}`, from `(a + b)² ≤ 2a² + 2b²`; here the square is kept, with
   `εInner ≤ (2^13 + 3)/2^128 + (9/16)^168 ≈ 2^{−115}` (`innerUp`, `εInner_le_innerUp`) next to
@@ -50,7 +50,7 @@ theorem εtable_plain {m : ℕ} {s : Schedule} (hs : fast100 m = some s) (st : S
 
 /-! ## With `--zk` -/
 
-/-- The inner proof's error at C-Flock ZK's parameters, rationally: `(2^13 + 3)/2^128 + (9/16)^168`. -/
+/-- The inner proof's error at Flock ZK's parameters, rationally: `(2^13 + 3)/2^128 + (9/16)^168`. -/
 def innerUp : ℚ := (2 ^ 13 + 3) / 2 ^ 128 + (9 / 16) ^ 168
 
 theorem innerUp_nonneg : (0 : ℝ) ≤ (innerUp : ℝ) := by
@@ -116,7 +116,7 @@ theorem padRepError_le_of (s : Schedule) (st : Stmt) (hst : st.InRange) (t e : �
   · simp at h2
   · exact padRepError_le m k0 l₀ l₁ rest ext t e sbar hp (fun l hl => hok l (List.mem_cons_of_mem _ hl)) st hst
 
-/-- **`ε_table ≤ 2^{−205}` with `--zk`**: a `--zk` table's bound at C-Flock ZK's parameters. -/
+/-- **`ε_table ≤ 2^{−205}` with `--zk`**: a `--zk` table's bound at Flock ZK's parameters. -/
 theorem εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] {mPts : ℕ} (hF : Fintype.card F = 2 ^ 128)
     (T : TabZK F mPts) (hT : T.M1) : T.bound ≤ ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) := by
   obtain ⟨m, h1, h2, hsch, ht, he, hst, hN, hq, hδ⟩ := hT

@@ -40,7 +40,7 @@ import Proofs.Flock.Soundness.ZK.Hiding
 /-!
 # `RecursiveZK` at the session loop, released at a stop
 
-`Flock.Guarantees.RecursiveZKLoop` is `RecursiveZK` where the firewall's code (`Flock.Firewall.run`) sends the
+`Flock.Guarantees.RecursiveZKLoop` is `RecursiveZK` where the ZK server's code (`Flock.Firewall.run`) sends the
 commitments, the inner coins live, and the outer session is V*'s statements run by the session loop's switched prover
 (`OuterZK.LoopSessions.atWorker` at `OuterZK.loopRef`). The auditor is released its whole view cut at a stop of a public
 family, the stop any function of everything.
@@ -48,7 +48,7 @@ family, the stop any function of everything.
 * `loopReal`, `loopIdeal`: the auditor's whole view, and the simulated one, which reads the tape, the schedule's
   transcript and V*'s public statements (`OuterZK.LoopSessions.pubStmts`), and nothing of the worker's requests,
   messages, witnesses, values or randomness.
-* `OuterZK.loopSent`, `OuterZK.loopReal_eq_sent`: the whole view where the firewall sends the schedule's transcript with
+* `OuterZK.loopSent`, `OuterZK.loopReal_eq_sent`: the whole view where the ZK server sends the schedule's transcript with
   the salted commit strings in its holes and finishes, which `loopReal` is under `FirewallSends`.
 * `OuterZK.loopSent_le`: that view's bound. V*'s statements are zero knowledge at the worker's context
   (`LoopSessions.view_le` at `OuterZK.loop_zkmalR`, the simulator reading no witness: `prCoin_simAt_pubStmts`), then T1
@@ -69,9 +69,9 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **The auditor's whole view of the recursive audit at the session loop** at `u = (((a, p), b), q)`: its tape `a`;
-what the firewall sends (`Flock.Firewall.run s`) on the worker's requests `reqs a p l`, `l` the salted commit strings it
+what the ZK server sends (`Flock.Firewall.run s`) on the worker's requests `reqs a p l`, `l` the salted commit strings it
 sends of the messages `msgs a p` at the salt bytes `b` (`firewallStrings`, message `i` reading the strings before it),
-and whether the inner session finished; and the view of V*'s `m` statements at the tape and the firewall's commitments
+and whether the inner session finished; and the view of V*'s `m` statements at the tape and the ZK server's commitments
 (`OuterZK.LoopSessions.atWorker`), each run in turn by the loop's switched prover at the workers' values `vs` on its own
 tape in `q`, statement `j` on the witness `wit j` of the worker's context (`OuterZK.wctxAt`), against `V*` at its tape
 `θ` of the tape and the commitments. -/
@@ -116,28 +116,28 @@ noncomputable def loopIdeal {Ωa Θ : Type} {nh : ℕ} (t : ℕ)
       (θ c.1.1 fun i => idealLeaf (c.1.2 i)) c.2)
 
 /-- **The recursive audit at the session loop is zero knowledge, released at a stop.** `RecursiveZK` where the
-commitments are what the firewall's code sends and the outer session is V*'s statements run by the session loop. The
-auditor's tape is `Ωa` and the worker's randomness `Ωp`. The worker sends the firewall (`Flock.Firewall.run` at the
-pinned schedule `s`) its requests `reqs a p l`; the firewall salts the `nh` messages and tree tops they commit,
+commitments are what the ZK server's code sends and the outer session is V*'s statements run by the session loop. The
+auditor's tape is `Ωa` and the worker's randomness `Ωp`. The worker sends the ZK server (`Flock.Firewall.run` at the
+pinned schedule `s`) its requests `reqs a p l`; the ZK server salts the `nh` messages and tree tops they commit,
 `msgs a p`, each with its own 192 uniform bytes, and sends the auditor the salted commit strings `l`
 (`firewallStrings`). The inner coins are live: message `i` and the requests after it read the strings before it. V*'s
-`m` statements `stmt j (a, h)` at the tape and the firewall's commitments `h` (`OuterZK.LoopSessions.atWorker`) are each
+`m` statements `stmt j (a, h)` at the tape and the ZK server's commitments `h` (`OuterZK.LoopSessions.atWorker`) are each
 one `--zk` session of the loop (`OuterZK.loopRef`), run in turn by its switched prover at the workers' values `vs`, on
 the witness `wit j` of the worker's context (`OuterZK.wctxAt`), against the auditor `V*` at its tape `θ a h`. The
-auditor's whole view (`loopReal`) is its tape, what the firewall sends and whether the inner session finished, and V*'s
-statements' view. The salt bytes are drawn uniformly here; the firewall reads them from the operating system (A3,
+auditor's whole view (`loopReal`) is its tape, what the ZK server sends and whether the inner session finished, and V*'s
+statements' view. The salt bytes are sampled uniformly here; the ZK server reads them from the operating system (A3,
 `uniform/io-getrandombytes`).
 
 It takes, each an obligation:
 * `SessionLoopZKDeployed`'s premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK` of
   the loop's session, and `SwCausalOn` at `Loop.SwOk`'s coins), which take `SessionsCoined`'s role;
-* the worker's requests run through the firewall to the schedule's transcript `T` with the salted commit strings of
+* the worker's requests run through the ZK server to the schedule's transcript `T` with the salted commit strings of
   `msgs` in its holes, and finish (`FirewallSends`);
 * the worker's values satisfy V*'s circuits: at every tape, randomness and salts, each statement parses and its witness
   satisfies its circuit (`OuterZK.LoopSessions.Honest` at `Claims.Flock.R`);
 * V*'s statements fix each one's simulator randomness, `CB j` (`OuterZK.LoopSessions.Sized`).
 
-The simulator (`loopIdeal`) draws the tape, fills `T` with `nh` ideal commit strings, which read no message, and runs
+The simulator (`loopIdeal`) samples the tape, fills `T` with `nh` ideal commit strings, which read no message, and runs
 the simulator of V*'s public statements at the tape and the ideal commitments: it reads no request, message, witness,
 value or randomness of the worker.
 
@@ -160,7 +160,7 @@ def RecursiveZKLoop : Prop :=
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
     (src : Claims.Msg → Claims.Flock.Wit → Claims.ZKServer.Loop.Tp → ℕ →
       _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
-    -- the firewall: the pinned schedule, the worker's requests and the messages they commit, each reading the commit
+    -- the ZK server: the pinned schedule, the worker's requests and the messages they commit, each reading the commit
     -- strings sent before it, and the schedule's transcript
     (s : Flock.Firewall.Schedule) (nh : ℕ) (reqs : Ωa → Ωp → (Fin nh → ByteArray) → List ByteArray)
     (msgs : Ωa → Ωp → (i : Fin nh) → (Fin i → ByteArray) → ByteArray)
@@ -205,7 +205,7 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
-/-- **The auditor's whole view where the firewall sends the schedule's transcript** `T`, the salted commit strings of
+/-- **The auditor's whole view where the ZK server sends the schedule's transcript** `T`, the salted commit strings of
 `msgs` in its holes, and finishes: `loopReal` under `FirewallSends` (`loopReal_eq_sent`). -/
 noncomputable def loopSent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Loop.finS.SwVals)
     (L₀ : Claims.ZKServer.LeanRelease Claims.Flock.Wit Claims.ZKServer.Loop.Tp)
@@ -245,7 +245,7 @@ theorem loopReal_eq_sent {Ωa Ωp Θ : Type} {nh : ℕ} (vs : Claims.ZKServer.Lo
   unfold _root_.Flock.Guarantees.loopReal loopSent
   rw [hF () () () u.1.1.1 u.1.1.2 fun i => FlockSoundness.Audit.Law.streamOf (u.1.2 i)]
 
-/-- **The whole view at the session loop is close to the simulated one**, where the firewall sends the schedule's
+/-- **The whole view at the session loop is close to the simulated one**, where the ZK server sends the schedule's
 transcript (`loopSent`): V*'s statements at the worker's context are within their error of their public statements'
 simulator (`LoopSessions.view_le` at `loop_zkmalR`, `prCoin_simAt_pubStmts`), and then T1 once per commitment over the
 adaptive leaves, at the commit strings' bytes (`FirewallZK.recursiveZK_enc` at `commitBytes`). -/
