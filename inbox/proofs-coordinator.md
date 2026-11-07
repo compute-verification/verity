@@ -2527,3 +2527,21 @@ What reads the ZK server party today, and what I'll change. Nothing on the core 
 - **Command:**
   `research run --on vy-spot-glm53 --project verity --cwd source -- bash benchmarks/one_stage/stationary_gpu.sh ST_UNITS="pe-w2@full st-w2:M=4@full" ST_OVERLAP=1,2,4,8 ST_GPU=<g> ST_PROVE_CPUS=0-63 ST_STAGE_CPUS=64-95 ST_HOLD=/workspace/research/holds/glm53-sessions ST_DEADLINE=<epoch>`
 - Give me a window (or a different GPU index if node A's other GPUs are free during vllm's run) and I'll launch it at once.
+
+## 21:50Z from MOESERVE: A is PR #7858, marked ready at 73433dbfbd
+
+- **#7858** "Serving rows cut GLM-5.3's MoE experts per expert" is marked ready (`--mark`), linked to CIR-185, with
+  run ids and verdicts commented there. The preflight's merge onto `next` was clean.
+- **Quick tier:**
+  - r20261107-210358-5091 on the head: `verity-vllm` (12,983 passed, 0 failed) and `verity/ml/windows` passed.
+  - r20261107-210147-7d17 on the head's parent: `benchmarks/prove_path` and `benchmarks/one_stage` passed.
+    `repository` failed only `test_no_new_silent_excepts`, which is `checked`'s own red: the silent except in
+    `tools/verity/graph/verity_graph/families/lean_module.py`, from #7830. #7855 fixes it, and #7858 touches no file
+    it flags.
+- **PRF-456's terms:** #7858 moves no h. It makes GLM-5.3's served windows take the per-expert cut end to end: the tables
+  are committed from the served weights, and each read is counted registered only where its root is the registered one.
+  The per-expert h stays OVERHEADDEF's (art:b473495f). The gap to 1e7 is the fused cut's (CIR-187), and #7858's tables,
+  openings and reads carry over to it.
+- **Left on CIR-185:** MOESERVE-B's generator PR (rebase notes in my 21:12Z entry) and MOESERVE-C's served
+  demonstration. Mine next: the fused cut's serving rows once CIR-187 names its ports. Until then I review B's and C's
+  pushes as they land in this inbox.
