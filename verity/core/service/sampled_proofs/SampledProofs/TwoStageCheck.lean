@@ -8,10 +8,10 @@ public import SampledProofs.FactorUpper
 A two-stage design's exfiltration count (`Claims.Sampling.CompiledTwo.Exfil`'s sum over the admissible sets, in its
 sets' or patterns' form) is at most `δ^{−θ} ∏_ρ G_ρ(θ)` at every `θ ≥ 0` (`Claims.Sampling.AdmissibleTwoRankin` and its
 patterns' form), and each replay block's factor is at most `e^v` for `v` from its cells (`SampledProofs.FactorUpper`).
-A point states its replay blocks as classes (`Class`): `count` replay blocks, each covered by the class's cells, so the
-count is at most `e^L`, `L = θ ln(1/δ) + Σ_c count_c max(v_c, 0)`, and `checkTwoStage` returns `L/ln 2` from above, the
-bits the point certifies (`Properties.SampledProofs.TwoStageCheckSound`, `TwoStageCheckPatternsSound`). A class that
-holds fewer replay blocks than its `count` only raises the bound, since each term is at least `0`.
+A point states its replay blocks as classes (`ReplayClass`): `count` replay blocks, each covered by the class's cells,
+so the count is at most `e^L`, `L = θ ln(1/δ) + Σ_c count_c max(v_c, 0)`, and `checkTwoStage` returns `L/ln 2` from
+above, the bits the point certifies (`Properties.SampledProofs.TwoStageCheckSound`, `TwoStageCheckPatternsSound`). A
+class that holds fewer replay blocks than its `count` only raises the bound, since each term is at least `0`.
 
 Every number is exact: `ln` and `ln 2` are `SampledProofs.Interval`'s bounds at precision `p`, and `θ` is the caller's.
 `searchTheta` picks `θ` for the bound itself, by a Fibonacci search over a grid around a hint; the bound holds at every
@@ -33,7 +33,7 @@ inductive Form where
 
 /-- **A class of replay blocks**: `count` of them, each covered by `cells` (one per stratum), and in the patterns' form
 each read by at most `N` requests, each reading at most `reads[t]`'s `(count, bits)` in stratum `t`. -/
-structure Class where
+structure ReplayClass where
   count : Nat
   cells : List Cell
   reads : List (List (Nat × Nat))
@@ -48,7 +48,7 @@ structure Point where
   θ : Rat
   δ : Rat
   S : Nat
-  classes : List Class
+  classes : List ReplayClass
   p : Nat
   deriving Repr, Inhabited
 
@@ -56,13 +56,13 @@ structure Point where
 def Point.params (D : Point) : Params := ⟨D.q, D.θ, chords, D.p⟩
 
 /-- At least `ln` of a replay block's factor in class `c`. -/
-def classFactor (D : Point) (c : Class) : Option Rat :=
+def classFactor (D : Point) (c : ReplayClass) : Option Rat :=
   match D.form with
   | .sets => lnFactorUpper c.cells D.params
   | .patterns => lnFactorUpperPatterns c.cells c.reads c.N D.S D.params
 
 /-- `Σ_c count_c max(v_c, 0)` over the classes, `v_c = f c`; `none` when some `f c` is. -/
-def classSum (f : Class → Option Rat) : List Class → Option Rat
+def classSum (f : ReplayClass → Option Rat) : List ReplayClass → Option Rat
   | [] => some 0
   | c :: cs =>
     match f c, classSum f cs with

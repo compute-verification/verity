@@ -61,7 +61,7 @@ def parts (j : Json) : Except String (List (Nat × Nat)) := do
     | [c, b] => return (← nat c, ← nat b)
     | _ => throw "a part is [count, bits]"
 
-def twoClass (j : Json) : Except String TwoStageCheck.Class := do
+def twoClass (j : Json) : Except String TwoStageCheck.ReplayClass := do
   let cells ← (← j.getObjValAs? (Array Json) "cells").toList.mapM fun c => do
     return ({ k := ← nat (← str c "k"), parts := ← parts (← c.getObjVal? "parts") } : FactorUpper.Cell)
   let reads ← (← j.getObjValAs? (Array Json) "reads").toList.mapM parts

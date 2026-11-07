@@ -36,8 +36,8 @@ namespace TwoStageCheckProof
 
 /-- **`classSum` is a sum over the classes**: each class's factor bound returns `v i`, and the sum is
 `Σ_i count_i max(v_i, 0)`. -/
-theorem classSum_spec (f : Class → Option ℚ) :
-    ∀ (l : List Class) (x : ℚ), classSum f l = some x →
+theorem classSum_spec (f : ReplayClass → Option ℚ) :
+    ∀ (l : List ReplayClass) (x : ℚ), classSum f l = some x →
       ∃ v : ℕ → ℚ, (∀ i c, l[i]? = some c → f c = some (v i)) ∧
         x = ∑ i ∈ range l.length, ((l.getD i default).count : ℚ) * max (v i) 0
   | [], x, h => by
@@ -64,11 +64,12 @@ theorem classSum_spec (f : Class → Option ℚ) :
         simp only [List.getElem?_cons_succ] at hi
         simpa using hv i c' hi
     · rw [← h, List.length_cons, sum_range_succ']
-      simp only [List.getD_cons_succ, List.getD_cons_zero, eq_self_iff_true, if_true, Nat.add_one_ne_zero, if_false,
+      simp only [List.getD_cons_succ, List.getD_cons_zero, eq_self_iff_true, ite_true, Nat.add_one_ne_zero, ite_false,
         Nat.add_sub_cancel]
       ring
 
-theorem getElem?_getD {l : List Class} {i : ℕ} (hi : i < l.length) : l[i]? = some (l.getD i default) := by
+theorem getElem?_getD {l : List ReplayClass} {i : ℕ} (hi : i < l.length) :
+    l[i]? = some (l.getD i default) := by
   simp [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem hi]
 
 /-- The product of the replay blocks' factors, each at most `e^{m_c}` at its class `c`, is at most
@@ -78,7 +79,7 @@ theorem prod_le_exp_classes {n K : ℕ} {G m : ℕ → ℝ} {cnt : ℕ → ℕ} 
     (hcls : ∀ ρ < n, cls ρ < K) (hcount : ∀ i < K, ((range n).filter (cls · = i)).card ≤ cnt i) :
     ∏ ρ ∈ range n, G ρ ≤ Real.exp (∑ i ∈ range K, (cnt i : ℝ) * m i) := by
   calc ∏ ρ ∈ range n, G ρ ≤ ∏ ρ ∈ range n, Real.exp (m (cls ρ)) :=
-        prod_le_prod (fun ρ hρ => hG0 ρ (mem_range.1 hρ)) fun ρ hρ => hG ρ (mem_range.1 hρ)
+        prod_le_prod₀ (fun ρ hρ => hG0 ρ (mem_range.1 hρ)) fun ρ hρ => hG ρ (mem_range.1 hρ)
     _ = Real.exp (∑ ρ ∈ range n, m (cls ρ)) := (Real.exp_sum _ _).symm
     _ ≤ Real.exp (∑ i ∈ range K, (cnt i : ℝ) * m i) := by
         refine Real.exp_le_exp.2 ?_
@@ -183,9 +184,9 @@ theorem firstStage_le {s : AuditStatement} {Pt : Partition} {d : Design.Two} (hs
   intro T hT
   rcases h with ⟨num, den, hr, hle⟩ | ⟨Q, c, ic, hr, hP, hQ, hqQ⟩
   · obtain ⟨hpa, hle1⟩ := bernoulli_Pa_le hs hr
-    exact (hpa T hT).trans (prod_le_prod (fun _ _ => by linarith) fun _ _ => by linarith)
+    exact (hpa T hT).trans (prod_le_prod₀ (fun _ _ => by linarith) fun _ _ => by linarith)
   · refine (Design.Two.subsetInputs_Pa_le d (Q := Q) hr hP hQ T hT).trans
-      (prod_le_prod (fun ρ _ => ?_) fun ρ _ => ?_)
+      (prod_le_prod₀ (fun ρ _ => ?_) fun ρ _ => ?_)
     · split_ifs with hρ
       · have hN : (0 : ℝ) < c.flatten.length := by exact_mod_cast (Nat.zero_le ρ).trans_lt hρ
         rw [sub_nonneg, div_le_one hN]
