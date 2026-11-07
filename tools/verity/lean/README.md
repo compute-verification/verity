@@ -344,10 +344,11 @@ drive's after-landing run passes `--no-regenerate`, so a record difference that 
 `check.py` as `--bookkeeping warn`) passes a package that fails only on bookkeeping (`BOOKKEEPING`) on the lock `repaired`
 writes:
 - an unlisted premise, an `assumptions` entry declared outside the assumptions module, or an uncovered `domain` entry is
-  listed under `open`, owned by its guarantees' owner (the first, of several), on the lock's `open_default_issue` (else
-  `BOOKKEEPING_ISSUE`), due seven days from the run;
+  listed under `open`, owned by its guarantees' owner (the first, of several), on the lock's `open_default_issue`, due
+  seven days from the run. A lock without `open_default_issue` gets the premise listed without an issue, and the warning
+  asks the next PR to give it one;
 - a guarantee the witnesses rule now holds to witnesses it lacks is listed under `unwitnessed` at its current hashes;
-- a stale entry is dropped, and a missing owner is set to the guarantees' owner, else `BOOKKEEPING_OWNER`.
+- a stale entry is dropped, and a missing owner is set to the guarantees' owner, else the lock's `default_owner`.
 
 The run then judges the policy's checks again on that lock, so whatever else fails still fails: the build, the replay,
 an axiom beyond the standard three, `sorry`, `native_decide`, a kernel bypass and a malformed lock. `lean_audit.py` also
