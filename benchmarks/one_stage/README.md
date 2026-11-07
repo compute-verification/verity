@@ -133,9 +133,10 @@ negatives.
 - `v2_case.py`: sampled proofs v2's `--cases` directory from a served window's kept files (`case_v2` of its v1 case,
   partition, public file, sessions and circuit file, and the challenger's release of the draw's coins, `release.json`),
   naming the challenger v2 requires by the auditor's own key record (`--challenger-key`), never by the key the release
-  names: a release naming another key is refused. Its params name the public file by the SHA-512 a5 pinned at staging,
-  before the draw (`public-pin.json`), never one read after it: a window with no pin, or whose kept public file isn't
-  the pinned one, is refused. It reads the drawn member's files, the one member whose sessions the window kept (none
+  names: a release naming another key is refused. Its params name the public file by the SHA-512 a5 pinned
+  (`public-pin.json`): as completed once the tie held, the file the drawn member's session proved, else as staged
+  before the draw; never one read after it: a window with no pin, or whose kept public file isn't the pinned one, is
+  refused. It reads the drawn member's files, the one member whose sessions the window kept (none
   or several refused), its `compose.log` its own or its template's first member's. With its own Lean answer with
   `--exe`. A circuit file the run didn't keep is rebuilt by the command its `compose.log` records and used only at the
   log's pin.
@@ -246,9 +247,9 @@ negatives.
   period lists is, by SHA-512, the one its audit's sessions were verified against, and the remote theorem's
   registered-files condition: each file remote's sampled proofs case registers, the circuit file and the public file, is
   by SHA-512 the one its params θ name (`proofs.circuit`, `proofs.public`), θ held to the params each composite that
-  reads the case states, the files hashed and never read off the evidence, and the public file the one a5 pinned at
-  staging, before the draw (`--public-pin`), whose bodies' leaf layer is the one the registration the coins committed
-  to holds; and `scan-state-pinned`, that where an audit's window commits the scan's state in its activations (the
+  reads the case states, the files hashed and never read off the evidence, and the public file one a5 pinned
+  (`--public-pin`): as staged before the draw, the staged bodies' leaf layer the one the registration the coins
+  committed to holds, or as a5 completed it from the staged file once the tie held; and `scan-state-pinned`, that where an audit's window commits the scan's state in its activations (the
   entry `NetworkCheck.Period` holds to the scan's), V3c's audit opened its registered reads of it at that entry's
   value, root and domain (its published summary's `registered.own`), accepted, and reported each sampled member's
   registered reads: one-stage's registration checks read nothing of the window, so the audit's driver pins it there,

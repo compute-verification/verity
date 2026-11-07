@@ -96,9 +96,10 @@ def test_case_v2_with_the_release_names_the_challenger_v2_requires(tmp_path, RP)
     assert "challenger" not in none["params"] and "coins" not in json.loads(bytes.fromhex(none["evidence"]))
 
 
-def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
-    """The case's public digest is the one a5 took when it staged the member, before the draw, never the file's digest
-    read after it: a public file changed since names another file, which v2 finds in no blob."""
+def test_v2_names_the_public_file_as_the_audit_pinned_it(tmp_path):
+    """The case's public digest is the member's pin (``st["public"]``: the staged file's, then the completed file's once
+    the tie holds, `pin_completed`), never the file's digest read when the case is written: a public file changed since
+    names another file, which v2 finds in no blob."""
     (tmp_path / "pub-4.bin").write_bytes(b"public, changed after the draw")
     s = tmp_path / "sessions" / "a"
     s.mkdir(parents=True)
@@ -108,6 +109,40 @@ def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
     got = a5.v2_proof([{"mm": mm, "sdir": tmp_path}], zk=True, drawn=drawn)
     assert got["public"] == "ee" * 64 and got["proof"].public == tmp_path / "pub-4.bin" and got["proof"].sessions == (s,)
     assert got["drawn"] == drawn
+
+
+@pytest.mark.parametrize("completed_body", [b"body 1", b"body 1, re-laid port-major"])
+def test_a_drawn_members_completed_public_file_is_pinned_once_the_tie_holds_and_is_the_one_v2_names(tmp_path,
+                                                                                                    completed_body):
+    """`complete_drawn` rewrites a drawn member's public file after the draw under the completed header, an
+    instance-major member's body re-laid too, and the member's session proves that file. Once the tie holds,
+    `pin_completed` pins it as the member's ``completed`` entry, and v2's case names it: by SHA-512 the blob the case
+    carries, not the staged file, which no blob holds (OneStageZk's ``public file: no blob has the SHA-512``). The
+    staged entries and their leaf layer, which R4 holds to the registration, are as written before the draw."""
+    staged = {"m0-key": b'{"header": "staged"}\nbody 0', "m1-key": b'{"header": "staged"}\nbody 1'}
+    members = []
+    for k, (key, data) in enumerate(staged.items()):
+        (tmp_path / f"m{k}").mkdir()
+        (tmp_path / f"m{k}" / "pub-4.bin").write_bytes(data)
+        members.append({"k": k, "m": types.SimpleNamespace(key=key, n=4), "pin": "cc" * 64,
+                        "st": {"dir": tmp_path / f"m{k}", "public": hashlib.sha512(data).hexdigest()}})
+    pin = a5.public_pin(members, {key: data.partition(b"\n")[2] for key, data in staged.items()})
+    (tmp_path / a5.PIN).write_text(json.dumps(pin))
+    mm, completed = members[1], b'{"header": "completed"}\n' + completed_body
+    (mm["st"]["dir"] / "pub-4.bin").write_bytes(completed)
+    a5.pin_completed(tmp_path, [(mm, [0])])
+    after = json.loads((tmp_path / a5.PIN).read_text())
+    assert after["leaf_layer"] == pin["leaf_layer"]
+    assert {k: {x: m[x] for x in ("k", "file", "body")} for k, m in after["members"].items()} == pin["members"]
+    assert "completed" not in after["members"]["m0-key"]
+    assert after["members"]["m1-key"]["completed"] == {"file": hashlib.sha512(completed).hexdigest(),
+                                                      "body": hashlib.sha512(completed_body).hexdigest()}
+    s = tmp_path / "sessions" / "a"
+    s.mkdir(parents=True)
+    (s / "session.json").write_bytes(b"{}")
+    got = a5.v2_proof([{"mm": mm, "sdir": tmp_path}], zk=True, drawn=a5.drawn_by(EV, "ab" * 64))
+    assert got["public"] == PF.file_sha512(got["proof"].public) == after["members"]["m1-key"]["completed"]["file"]
+    assert got["public"] != pin["members"]["m1-key"]["file"]
 
 
 def test_v2_says_why_an_audit_has_no_case():

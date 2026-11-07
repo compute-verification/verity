@@ -60,8 +60,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   `flock_inputs.flock_circuit`), bound to its partition and program. It holds every public file to that circuit, its unit indices and classes, and
   the registered roots and served domains. Then R1-R7 run over the registration with the leaf layer over the public bodies it holds
   (`serving_rows.leaf_layer`), read from ``out/public-pin.json`` (`PIN`, `public_pin`): each public file's SHA-512 and its
-  body's as staged, written before any check and the sample, which v2's case names (`case_v2`) and onsite's record holds
-  the kept file to. And the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
+  body's as staged, written before any check and the sample, and, once the tie holds, each drawn member's as completed
+  (`pin_completed`), which v2's case names (`case_v2`) and onsite's record holds the kept file to. And the window is held to its own source (`source`). A deferred Commit's is `deferred_rows.source`:
   either kind names the record's commitment, and it is a stand-in whose run, `of` and `link` are `deferred_rows.stand_in` over the
   run root of record, the digest of the bundle's manifest it opened and that commitment, or a served window whose run is the run
   root of record, a SHA-512 root, with no stand-in link. A TP rank's is `tp.serving_rows.source`: `served`, or a stand-in whose
@@ -170,7 +170,8 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   the audit by name (`refuse_after_sessions`): no audit record, nothing accepted in part, nothing retried. Until the tie
   holds, nothing built from the completed files leaves the auditor but what the prover holds already: its staged file,
   under its own registration's roots, and its session's frames, the challenger's coin tree and coins and the verdict on
-  its own statement; the audit record, its cases, the release and the negatives are written only once the tie holds. A
+  its own statement; the audit record, its cases, the release, the negatives and the completed files' pin
+  (`pin_completed`, which v2's case names) are written only once the tie holds. A
   completed file is a shared-row file, so an instance-major member's bodies are re-laid port-major under identity refs. A
   member that can't be completed (a port with no registered tree, a root its rows don't fold to) refuses the audit by
   name before any session. Negatives: each refused before any session (`complete_negatives`), the member's trees under
@@ -250,16 +251,18 @@ def body(path: Path) -> bytes:
         return f.read()
 
 
-#: the public files as staged, before the sample (`public_pin`), in the audit's ``out``
+#: the public files as staged, before the sample (`public_pin`), and each drawn member's as completed, once the tie holds
+#: (`pin_completed`), in the audit's ``out``
 PIN = "public-pin.json"
 PIN_FORMAT = "verity/public-pin/v1"
 
 
 def public_pin(members: Sequence[dict], publics: Mapping[str, bytes]) -> dict:
     """``members``' public files as staged (``publics``, their bodies by member key), before any check and the sample:
-    by member key, its index ``k``, the whole file's SHA-512 (``file``, v2's ``proofs.public``) and its body's
-    (``body``), and ``leaf_layer``, the leaf layer over the bodies, which R4 holds to the registration the coins commit
-    to, so a body changed after the sample isn't the pin's."""
+    by member key, its index ``k``, the whole file's SHA-512 (``file``) and its body's (``body``), and ``leaf_layer``,
+    the leaf layer over the bodies, which R4 holds to the registration the coins commit to, so a body changed after the
+    sample isn't the pin's. A drawn member's file as its session proved it, completed from the staged one, is its
+    ``completed`` entry, added once the tie holds (`pin_completed`): v2's ``proofs.public``."""
     return {"format": PIN_FORMAT, "leaf_layer": CS.leaf_layer(publics),
             "members": {mm["m"].key: {"k": mm["k"], "file": mm["st"]["public"],
                                       "body": hashlib.sha512(publics[mm["m"].key]).hexdigest()} for mm in members}}
@@ -592,9 +595,10 @@ def complete_drawn(rec: dict, mine: CS.Binding, files: tuple[dict, dict], public
     (`tie_after_sessions`): each parameter port at the root the verifier's own reads give it (``reads``: a row table's or an
     outside registered value's, the set the registration makes, never the member's), every other port at its window tree,
     which its served rows must fold to again under the domain bound to the window's run. Each drawn member's public file is
-    then rewritten under the completed header, its ``--registered`` file is the completed reads, and so is ``reads[key]``.
-    -> (the check after the draw, ``ok`` only when every drawn member's files are complete, naming each member refused and
-    why; the negatives, each refused before any session, on the drawn member of fewest rows)."""
+    then rewritten under the completed header, its ``--registered`` file is the completed reads, and so is ``reads[key]``;
+    the rewritten file is pinned only once the tie holds (`pin_completed`). -> (the check after the draw, ``ok`` only when
+    every drawn member's files are complete, naming each member refused and why; the negatives, each refused before any
+    session, on the drawn member of fewest rows)."""
     roots = {r["port"]: r for r in rec["roots"]}
 
     def complete(mm: dict, **kw: Any) -> FI.Complete:
@@ -682,6 +686,22 @@ def refuse_after_sessions(out: Path, summary: dict, checks: dict) -> tuple[dict,
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     print("A5 " + json.dumps({"refused_after_sessions": {c: v for c, v in checks.items() if not v["ok"]}}, default=str))
     return summary, False
+
+
+def pin_completed(out: Path, drawn: Sequence[tuple[dict, list[int]]]) -> None:
+    """Once the tie holds (`tie_after_sessions`), each drawn member's public file as `complete_drawn` rewrote it, the file
+    its session proved and v2 verifies (`v2_proof`), pinned in ``out``'s `PIN` as the member's ``completed`` entry: its
+    whole file's SHA-512 (``file``, the member's ``st["public"]``, v2's ``proofs.public``) and its body's (``body``). The
+    staged entries and their leaf layer stay as written before the draw, so R4 still holds them to the registration. A
+    completed file is a function of the staged one, the registration's roots and the verifier's reads: its header
+    completed, its body the staged one's, or an instance-major member's re-laid port-major (`flock_inputs.complete`)."""
+    pin = json.loads((out / PIN).read_text())
+    for mm, _ in drawn:
+        pub = mm["st"]["dir"] / f"pub-{mm['m'].n}.bin"
+        mm["st"]["public"] = a0.sha512_file(pub)
+        pin["members"][mm["m"].key]["completed"] = {"file": mm["st"]["public"],
+                                                    "body": hashlib.sha512(body(pub)).hexdigest()}
+    (out / PIN).write_text(json.dumps(pin, indent=1, sort_keys=True))
 
 
 def record_negatives(a: argparse.Namespace, rec: dict, mine: CS.Binding, ev: dict | None, read: bytes,
@@ -1068,6 +1088,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         if not after["record"]["ok"]:
             return refuse_after_sessions(out, summary, {**checks, **after})
         complete_neg.update(record_negatives(a, rec, mine, ev, read, rank))
+        pin_completed(out, drawn)
     for got in done:
         mm = got["mm"]
         summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + got["staged_s"], 1)
@@ -1242,7 +1263,8 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
 def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public: str, registered: dict | None,
             tables: Sequence[Path], drawn: dict | None = None) -> dict:
     """v1's ``case`` as `SampledProofs.OneStageZk` reads it: the params with ``proofs`` (the auditor's circuit digest, the
-    public file's as `public_pin` pinned it at staging, before the draw, and the verifier's registered file), the evidence with its
+    public file's as the audit pinned it, completed from the one staged before the draw, once the tie held (`PIN`'s
+    ``completed``, `pin_completed`), and the verifier's registered file), the evidence with its
     ``verdicts`` replaced by the proofs' files (`proofs.evidence_v2`, under the evidence's ``sessions``), and ``blobs``,
     the paths of the files those name and of the pinned lookup tables, which onsite reads after the evidence
     (`compose.onsite_check`). v2 holds the public file's header to the registration (`registration.matches_public`, and

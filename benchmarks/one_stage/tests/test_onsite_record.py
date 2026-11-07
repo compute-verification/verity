@@ -2039,7 +2039,12 @@ CHANGED = b"toy public header\nanother public body"
     ("no case", f"the run's composites read {SAMPLED_V1}'s case, and the run gave no --sampled-proofs-case"),
     ("a file gone", "the case's circuit file (its blob 0) can't be read: FileNotFoundError"),
     ("a public file changed after the draw",
-     "the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw"),
+     "the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw or "
+     "completed once the tie held"),
+    ("a public file completed once the tie held, the pin's completed entry with it", None),
+    ("a public file completed once the tie held, the pin's completed entry another file's",
+     "the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw or "
+     "completed once the tie held"),
     ("a public file changed after the draw, the pin with it",
      "--public-pin's bodies aren't, by their leaf layer, those the registration the case commits to holds (R4)"),
     ("no pin", "the run gave no --public-pin, the public file's SHA-512 pinned at staging before the draw"),
@@ -2052,10 +2057,11 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     Where θ names both files and both are its, every verdict stands and the run is of record. Where θ names no public
     file, the public file isn't bound: sampled proofs' verdict is not established, its accept beside it, crediting no
     member, so the run isn't of record, the circuit file still compared, and the evidence's digest of the public file
-    never stands in for θ's. Where θ names the public file, it is also the one V3c's audit pinned at staging, before the draw
-    (``--public-pin``): a public file changed after the draw, θ naming the changed one, isn't the pin's, and a pin
-    rewritten to it isn't, by its bodies' leaf layer, the registration's the case commits to, which the coins committed
-    to. Where a file isn't θ's (the circuit file or the public file), θ isn't the one the composite states, the run
+    never stands in for θ's. Where θ names the public file, it is also one V3c's audit pinned (``--public-pin``): as
+    staged before the draw, or as a5 completed it once the tie held, its completed entry (here with its body changed, as
+    an instance-major member's is re-laid). A public file changed after the draw, θ naming the changed one, isn't the
+    pin's, nor is one beside a completed entry of another file, and a pin rewritten to it isn't, by its bodies' leaf
+    layer, the registration's the case commits to, which the coins committed to. Where a file isn't θ's (the circuit file or the public file), θ isn't the one the composite states, the run
     gave no case or a file it registers is gone, the public file isn't the pinned one, or the run gave no pin or its
     case commits to a registration the composite doesn't state, auditor-listing doesn't hold: the network certifier's
     verdict, the composite of record's and sampled proofs', its leg there, are not established, each its Lean accept
@@ -2064,9 +2070,10 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     circuit, public = (sha512_hex(b) for b in FILES_REGISTERED)
     unbound = how.startswith("public unbound")
     changed = how.startswith("a public file changed after the draw")
+    completed = how.startswith("a public file completed once the tie held")
     if unbound:
         sampled_case(out, {"circuit": circuit, "registered": None}, evidence={"proofs": {"public": public}})
-    elif changed:
+    elif changed or completed:
         sampled_case(out, {"circuit": circuit, "public": sha512_hex(CHANGED), "registered": None})
     with_composite(out, "remote-network-no-pouw", WITHOUT, WITHOUT_IDS)
     with_onsite(out)
@@ -2084,6 +2091,12 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
         Path(blobs[1]).write_bytes(CHANGED)
         if how.endswith("the pin with it"):
             auditor_args(out)["public_pin"].write_text(json.dumps(pin_of(CHANGED)))
+    elif completed:
+        Path(blobs[1]).write_bytes(CHANGED)
+        entry = CHANGED if how.endswith("with it") else b"toy public header\nanother file's body"
+        pin = pin_of(FILES_REGISTERED[1])
+        pin["members"]["m0"]["completed"] = {"file": sha512_hex(entry), "body": sha512_hex(entry.partition(b"\n")[2])}
+        auditor_args(out)["public_pin"].write_text(json.dumps(pin))
     elif how == "another commitment":
         case.write_text(json.dumps(json.loads(case.read_text()) | {"commitment": registration_of(pin_of(CHANGED))}))
     rec = record(out, **({"sampled_case": None} if how == "no case" else {"public_pin": None} if how == "no pin"
@@ -2093,7 +2106,7 @@ def test_the_registered_files_condition_establishes_the_verdicts_it_bears_on_onl
     assert (files["holds"], files["read_by"], files.get("why"), files.get("unbound")) == (
         why is None, [WITHOUT, OR.ONSITE], why, OR.PUBLIC_UNBOUND if unbound else None)
     assert (listing["holds"], listing.get("why"), listing["listed"]) == (why is None, why, 0)
-    if why is None or how in ("another public file", "a file gone", "no pin", "another commitment") or changed:
+    if why is None or how in ("another public file", "a file gone", "no pin", "another commitment") or changed or completed:
         assert files["compared"] == (["circuit"] if unbound else ["circuit", "public"])
     withheld = (["sampled proofs"] if unbound or why else []) + ([] if why is None else ["the network certifier",
                                                                                         "onsite"])
