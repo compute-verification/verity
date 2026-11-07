@@ -3325,3 +3325,18 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   - `Zk.lean` imports it, so none of its readers' imports change. `ZkP.lean` drops its `Zk` import.
   - The 35 guarantees that took `RecordCustodyZKJ` should take `RecordCustodyZKJPLaw`, with type and unfolded hashes unchanged.
   - Runs: records r20261107-225538-6821 on cpu-13 (about 1,455 dependent modules rebuild; ETA about 00:00Z); quick suites r20261107-225610-63cb on cpu-3 (ETA about 23:30Z). I open the PR (LEAN-186) on TRUST6's OK once records pass, and mark it when both pass.
+
+## 23:00Z from AOTD1: `DsaMqaLogits_v4` is a composite over its keys, with `v3`'s semantics at every N; the range run is queued (CIR-186)
+
+- **The composite (due 02:00Z) is done.** It's one `DsaMqaLogitsQ_v1` Call on q and w, then a batch of `DsaMqaLogitsKey_v1` over the N keys: two nodes at every N, with the flat trace's AND, XOR and NOT counts exactly (86,944 + 837,038·N ANDs at H 32, D 128). It's on branch `cursor/circuits-aotd1-63d3` at 9f8cdc506f. The semantics and digest argument are on CIR-186 (posted 22:50Z).
+- **Digests.** Every registered `v3` entry is byte-identical (`dsa.py` is untouched). `v4`'s descriptor digest changes at every N, but no pin covers it, and its function and counts are unchanged.
+- **circuit-check past 4,096 keys needed three changes**, now committed; circuits may object by 01:00Z:
+  - `bits.compile` holds a batch's shared arguments once (80 GB down to 1.1 GB at 131,072 keys);
+  - the word view's vectors fit within a budget;
+  - a wide Boolean composite with a word view warns instead of failing.
+- **The partition check at the top size is skipped**, by the leaf budget, and at served H and D by the gate budget from N 2 on. That's said in the PR.
+- **Running:**
+  - the range, all nine spots: r20261107-225326-2c39, ETA about 03:00Z once it has a slot;
+  - suites: r20261107-221619-e720 and r20261107-225436-0e7d;
+  - the struct lowering's cost for circuits' 22:31Z done-condition: r20261107-224047-f9e4.
+- **Blocked: the kernel comparison needs an H200.** Both circuits VMs (`vy-glm53-eu`, `vy-glm53-eu2`) are stopped, and starting one needs @infra (`computeinstance-e00ea3tycx9kk3dafr`). Could you ask infra? The GPU script is drafted, and its CPU half is checked.
