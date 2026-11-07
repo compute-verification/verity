@@ -34,7 +34,7 @@ theorem frameReadSpec {D : ℕ} (hD : D ≤ 32) :
     Sound.bind' (sound_leafHash _ _ domain leaf _) fun cur =>
       Sound.bind' (sound_climb D domain pos path 0 pad.1 cur) fun cur' =>
         Sound.mono (sound_eqDigest cur' root) fun z r heq hcl hlf hpad hr hd hl hpos hpath hps hev => ?_
-  obtain ⟨hc1, hpe, hpl⟩ := hpad ⟨fun _ h => by cases h, fun _ h => by cases h⟩
+  obtain ⟨hc1, hpe, hpl⟩ := hpad ⟨fun _ h => (by cases h), fun _ h => (by cases h)⟩
   have hn1 : 1 ≤ indexBytes D := le_max_left _ _
   have hn4 : indexBytes D ≤ 4 := by
     unfold indexBytes
