@@ -525,6 +525,9 @@ def _check(mine: Any, out: Any, mode: str, batch_desc: Any) -> None:
         S.check.update(equal_tokens=bool(torch.equal(mine[:n], got[:n])), equal_padded=bool(torch.equal(mine, got)),
                        differ_words=int((mine[:n].view(torch.int16) != got[:n].view(torch.int16)).sum().item())
                        if mine.dtype == torch.bfloat16 else None)
+        if not S.check["equal_tokens"] and mine.shape == got.shape:
+            rows = (mine[:n] != got[:n]).reshape(n, -1).any(dim=1).nonzero().reshape(-1).tolist()
+            S.check["differ_rows"] = [int(r) for r in rows]
 
 
 def _finish(runner: Any) -> None:
