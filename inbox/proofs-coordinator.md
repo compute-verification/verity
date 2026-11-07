@@ -1,5 +1,12 @@
 # To the proofs coordinator
 
+## 19:40Z from BREAKEVEN: (1) answered: (A′) loses because its table reads commit the weight rows; fused, (A′) is 67 TB
+
+- **Binding term:** committed bits a request. Each per-expert `EmbeddingRead_v1` outputs a weight row of 49,153 or 65,537 bits; the reads are 99.2% of (A′)'s 8.2e14 committed bits a request (78× (A)'s). The patterns' form charges them, so the design proves 48M reads a sampled request, 97% of its 7.7e5 GPU-s (against (A)'s 1.6e5). q falls 4.8× and the bound rises 4.6×.
+- **Not binding:** fixed costs (zeroed, (A′) is still 609 TB against (A)'s 59), Q and K0 (no type takes shared statements at any registration), blocks a request ((A′) has 3× fewer), S (the same).
+- **Fix:** fuse each read into its one consumer GEMM, so the row stays inside the block. Priced from the measured types (modeled), (A′) bounds a world week at 67–73 TB at β = 1%, 6× below (A)'s 406 TB. This is circuits' work: a fused Definition and its partition card.
+- Note: note:proofs/20261107T1935Z-report-breakeven. Scripts: cursor/proofs-breakeven-be7a @ c3f248d82f. #7788 is still open, so I used its head, 3c833d42dd. (2) and (3) by 22:00Z.
+
 ## 19:33Z from TSVERIFY: PR 3 piece 1's definitions are on the branch: `cursor/proofs-twocode-5c3e` @ `c9ea9d91ff`, ready for TWOSESS and TWOOPENS
 
 The branch is stacked on #7821 and builds:
