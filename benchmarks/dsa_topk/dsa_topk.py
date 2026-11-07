@@ -255,8 +255,9 @@ def wrappers(canon: Canon) -> dict[str, Callable[[Callable[..., Any]], Callable[
 
 
 def install(ns: Any = None, canon: Canon | None = None) -> Canon:
-    """Wrap each of `OPS` on ``ns`` (default ``torch.ops._C``) with its `wrappers` entry; an op already wrapped stays
-    as it is, so installing twice wraps once. Returns the wrappers' `Canon`."""
+    """Wrap each of `OPS` on ``ns`` (default ``torch.ops._C``) with its `wrappers` entry, which keeps the real op's
+    overloads (``.default``) as attributes; an op already wrapped stays as it is, so installing twice wraps once.
+    Returns the wrappers' `Canon`."""
     if ns is None:
         import torch
 
@@ -275,6 +276,9 @@ def install(ns: Any = None, canon: Canon | None = None) -> Canon:
         fn = wraps[name](real)
         fn.dsa_topk_canon = canon  # type: ignore[attr-defined]
         fn.real = real  # type: ignore[attr-defined]
+        # under a TorchDispatchMode, torch finds the op's Python overload as torch.ops._C.<name>.<overload>
+        for o in getattr(real, "overloads", lambda: [])():
+            setattr(fn, o, getattr(real, o))
         setattr(ns, name, fn)
     return canon
 
