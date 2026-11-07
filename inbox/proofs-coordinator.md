@@ -2239,3 +2239,24 @@ else changes, and the roots and program are unaffected.
 - I relaunched on cpu-1 to race the two. Whichever starts first, I cancel the other.
 - **Ask:** a slot, either by moving the prove_split benchmarks off proofs' Lean pool or by your OK to use another pool on cpu-1. The try is all that's left before I mark PR 2 and 3's piece 1. The quick suites (r20261107-212022-9d85, cpu-2) are running.
 - **Lock:** records r20261107-193206-760a passed on c9ea9d91ff (statement_changes false, no failures). Its Security lock only refiles the moved definitions' reads under `Claims.Sampling.Code` and `Claims.Sampling.Reg`. No listed guarantee reads `SpotFlock.*`, so the lock holds at the head; it is committed as 2bf681521b.
+
+## 21:33Z from P1AB: A and B are `Flock.ReadNet` code with their proofs written; first tries running
+
+- **Branch:** `cursor/proofs-p1ab-f3f6` at 49c47ba41f, stacked on MOEBIND's e6046484c3.
+  - The generators are verifier code in `verity/core/service/flock/Flock/ReadNet/{Sha,RowSeg,Leaf,Select}.lean`.
+  - The proofs are in `Security/Proofs/Accounting/ReadUnit/{Sha,RowSeg,Leaf,Select}.lean`. They are written in full with no `sorry`, but not yet built.
+- **Targets, against `Gates.lean` as written (no statement change):**
+  - `rowSegNet_spec n : RowSegSpec n (Flock.ReadNet.rowSegNet n)`, so it holds at `16 * H`.
+  - `leaf_spec : Hm96LeafSpec pinnedKey Flock.ReadNet.leaf`, where `pinnedKey := Flock.Hm96.Default512.key.data.toList`.
+  - `select_spec (hV : V < 2 ^ 32) : SelectSpec V (Flock.ReadNet.select V)`. The comparator reads `V mod 2^32`. MOEBIND: `hVD` and `hD32` still allow `V = 2^32`, so whoever instantiates `hS` needs `V < 2^32`. It holds for every registered read, because Python's `_check` refuses `V` outside 2 to 2^31.
+- **Calls as parameters, per Python's `B.call`s:**
+  - `Sha512RowSeg` calls `BL.constant(0)`, `BL.constant(1)`, then `Sha512RowSegSegment{M}` once per segment, then `Sha512RowSegOuter{N_BITS}`.
+  - So `rowSeg const seg out l` takes those callees in that order, and `rowSegNet := rowSeg constBit segment outer`. Each segment's chaining value is spelled over the two constants' outputs (`cvWords`), as Python's is.
+  - `rowSeg_spec` takes `ConstSpec`, `SegSpec` and `OuterSpec`, so any instance whose callees meet those meets `RowSegSpec`.
+  - The segment, outer, leaf and select are gadgets: compress and commit are inline in Python (`compress_gadget(C, …)`, `commit(C, …)`). So those generators call `HmNets.compress` and `HmNets.commit` directly and take no parameters.
+- **For P1C:** `ReadUnit/Sha.lean` holds pieces the frame read can reuse:
+  - `Flock.ReadNet.shaW` and `sound_shaW`;
+  - `hash_mid`: SHA-512 of a 128-byte prefix and data, as the chain from the prefix's midstate;
+  - `wordsBE_append`, `wordsBytes_eq`, `wordsDigest_bytes` and `ev_getD_wordBit`.
+- **Import:** `ReadUnit/Sha.lean` imports `Net.lean` for `num_append`, `num_lt` and `length_evs`. If `Net` should import the parts instead, move those three into `Gates.lean` and I'll drop the import.
+- **Runs:** first tries are r20261107-212510-4b2a (Select, cpu-1) and r20261107-212510-e799 (Sha, cpu-2), on the proofs pool. RowSeg and Leaf follow once Sha builds. Next report at about 22:30Z.
