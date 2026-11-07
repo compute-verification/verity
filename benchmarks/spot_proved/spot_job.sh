@@ -13,8 +13,8 @@
 #    its 256-thread block, FA3 still split), each uniform over those steps, drawn here before the replay starts
 #    (OUT/first_stage.json; a class with no step takes the window's nearest one above it up to BIG_MAX=1024 tokens, else
 #    the big class its largest one over 42 tokens); LONG=1 (the default) adds one uniform over the steps with a prefill row
-#    and a row past LONG_KEYS=2048 keys, of LONG_TOKENS=256,384 tokens (else the largest such step under them); STEPS
-#    overrides it.
+#    and a row past LONG_KEYS=2048 keys, of LONG_TOKENS=256,384 tokens (else the largest such step under them), other
+#    than the big class's step when another qualifies; STEPS overrides it.
 # 2. replay.py replays the window from an empty engine, served as recorded, with capture.py loaded in every worker
 #    (REPLAY_ARGS are added to its arguments): those steps' interiors are recorded and committed, the coins drawn after the
 #    root open layers, and the opened layers' tensors are written, or every recorded tensor with KEEP_TENSORS=all at the
@@ -103,6 +103,7 @@ if os.environ.get("LONG", "1") == "1":
         steps = [s for n, s in near if n == near[0][0]] if near else []
         if steps:
             classes["long"]["nearest"] = {"tokens": -near[0][0], "steps": len(steps)}
+    steps = [s for s in steps if s != pick.get("big")] or steps
     if steps:
         pick["long"] = steps[int.from_bytes(hashlib.sha512(coins + b"long").digest(), "big") % len(steps)]
 json.dump({"window_steps": len(tokens), "classes": classes, "coins": coins.hex(), "drawn_at": time.time(), "steps": pick,
