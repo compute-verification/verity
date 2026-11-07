@@ -358,7 +358,8 @@ theorem gatesRefine_of_run (key : Hash.Msg) {V H : ℕ} {C : FlockSoundness.Audi
     (hcom : ∀ j < 16 * H + 1, I.wire (hr.out j) ∈ P.committed) :
     ReadUnit.GatesRefine Verity.sha512 Verity.sha512 key consts (Verity.Partition.ofAudit P) u
       (readPorts I.wire hr V H) := by
-  refine gatesRefine_of_vals key _ u I.wire hr hsound consts fun tr hcorrect hconsts => ?_
+  refine gatesRefine_of_vals key (Verity.Partition.ofAudit P) u I.wire hr hsound consts
+    fun tr hcorrect hconsts => ?_
   have hc := correct_bits P hcorrect
   let xs : Fin C.N → Bool := fun g => ReadUnit.bit tr g
   let z : Fin R.w → Bool := fun c => P.localEval xs u (I.wire c)
