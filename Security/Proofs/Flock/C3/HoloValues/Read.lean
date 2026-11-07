@@ -191,7 +191,7 @@ structure RepUnit (S : Model.Statement) (sch₀ : Accounting.Schedule) (extra : 
 
 /-- **A rep's unit plays `holoRepC` to an output** on its steps, whose result accepts the openings and whose level-0
 paths verify against `cap₀` at any salts; the output's zerocheck `z` and `ρ` and lincheck `alpha` and `ts` are the
-coins of the rounds of the unit's record that draw them (`holoRep_refines_coins`). -/
+coins of the rounds of the unit's record that sample them (`holoRep_refines_coins`). -/
 theorem rep_of_unit_coins {S : Model.Statement} {sch₀ : Accounting.Schedule} {extra : List (Model.Claim 𝔽 S.m)}
     {cap₀ : Model.Cap Dig} {os : Model.Opens 𝔽 Dig} {r : ℕ} {ts : List Game.Step} (hm : 13 ≤ S.m)
     (U : RepUnit S sch₀ extra cap₀ os r ts) :

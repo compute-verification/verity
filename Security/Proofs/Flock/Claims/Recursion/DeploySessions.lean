@@ -546,7 +546,7 @@ theorem range_map_drop {α : Type} (f : ℕ → α) (a b : ℕ) :
   rw [List.range_add, List.map_append, List.drop_left' (by simp), List.map_map]
   rfl
 
-/-- **The coins from round `off` on of a fork at `off`** are the session's coins (`sessCoins`) at the second draw. -/
+/-- **The coins from round `off` on of a fork at `off`** are the session's coins (`sessCoins`) at the second sample. -/
 theorem fork_drop_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {b n : ℕ} (hb : b ≤ n) :
     ((List.range (off + b)).map (coinSeq (Claims.Recursion.fork off r d))).drop off =
       (List.range b).map (coinSeq (sessCoins off d n)) := by
@@ -555,7 +555,7 @@ theorem fork_drop_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {b n : ℕ}
   rw [List.mem_range] at hi
   rw [coinSeq_fork_ge off r d (Nat.le_add_right _ _), coinSeq_sessCoins off d n (by omega)]
 
-/-- **The coins before round `off` of a fork at `off`** are the first draw's. -/
+/-- **The coins before round `off` of a fork at `off`** are the first sample's. -/
 theorem fork_take_coins {k : ℕ} (off : ℕ) (r d : Fin k → Coin) {m : ℕ} (hm : m ≤ off) :
     (List.range m).map (coinSeq (Claims.Recursion.fork off r d)) = (List.range m).map (coinSeq r) :=
   List.map_congr_left fun i hi => coinSeq_fork_lt off r d (by rw [List.mem_range] at hi; omega)
@@ -812,7 +812,7 @@ theorem outerAtEnd_sha512 : OuterAtEnd FlockDeploy.sha512 := fun _ _ _ hcs h => 
 open Classical in
 /-- **Session `s` of an accepted run, run alone**: at its first round `off` and its V* statement `xO`, read off the
 judged run's inner rounds, the outer verifier's run against `P` after the judged run's first `off` messages, at the
-second draw's coins from `off` on, is `session`'s view of the fork at `off`, and its oracle calls are the fork's. -/
+second sample's coins from `off` on, is `session`'s view of the fork at `off`, and its oracle calls are the fork's. -/
 theorem session_core (H : Msg → Msg) (hO : OuterAtEnd H) (IV : Claims.Verifier Coin) (st : Stage) (x : Msg) {s : ℕ}
     (hs : s < nS x) {Ω : Type} (P : Prover Ω) (ω : Ω) (r d : Fin ((V IV st).k x) → Coin)
     (hacc : (run H P (V IV st) x ω r).out = .acc) {off : ℕ} {xs : List Msg} {xO : Msg}

@@ -16,10 +16,10 @@ right and more are wrong:
 * `RightRegZc`, `wrongRegZc`, `mem_wrongRegZc`;
 * `rightRegZ_of_rightRegZc`, `wrongRegZ_subset_wrongRegZc`: a unit wrong on the registration is wrong with canonical
   openings too;
-* `OpeningsCanon canon`: in every satisfying witness of a drawn unit, the opening of each of its committed wires'
+* `OpeningsCanon canon`: in every satisfying witness of a sampled proof block, the opening of each of its committed wires'
   commit strings (`ValueBindingZ.opening`) is canonical at the wire;
 * `analysisZCRegC`, `zk_flock_countC_regC`: `analysisZCReg` and its count curve with "wrong" `wrongRegZc`, under
-  `OpeningsCanon`. Its knowledge and link terms are `analysisZCReg`'s, and its `cover` is the same argument: the
+  `OpeningsCanon`. Its knowledge and binding errors are `analysisZCReg`'s, and its `cover` is the same argument: the
   unit's openings from the satisfying message are canonical (`OpeningsCanon`), so the unit is right with them.
 * `zk_flock_escapeC_regC`: the same bound at a set `W` of units, `Pr[accept ∧ W ⊆ wrong] ≤ escape W + ε_ks + δ_link`.
 -/
@@ -69,7 +69,7 @@ theorem wrongRegZ_subset_wrongRegZc (R : Reg) (Xv : Fin C.N → Bool) :
   fun _ hu => (mem_wrongRegZc A P planZ tab vb canon).2 fun h =>
     (mem_wrongRegZ A P planZ tab vb).1 hu (rightRegZ_of_rightRegZc A P planZ tab vb canon h)
 
-/-- **A drawn unit's openings are canonical**: in every satisfying witness of drawn unit `u`, the opening of each of its
+/-- **A sampled proof block's openings are canonical**: in every satisfying witness of sampled proof block `u`, the opening of each of its
 committed wires' commit strings is canonical at the wire. -/
 def OpeningsCanon : Prop :=
   ∀ S R u, u ∈ S → ∀ M, (tabOfZ planZ tab S R u).S.Satisfies
@@ -79,7 +79,7 @@ def OpeningsCanon : Prop :=
 variable {L : Law n}
 
 open Classical in
-/-- **`analysisZCReg` with "wrong" `wrongRegZc`**, under `OpeningsCanon`: its knowledge and link terms are
+/-- **`analysisZCReg` with "wrong" `wrongRegZc`**, under `OpeningsCanon`: its knowledge and binding errors are
 `analysisZCReg`'s, and its `cover` takes the unit's canonical openings from the satisfying message. -/
 noncomputable def analysisZCRegC
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)
@@ -147,7 +147,7 @@ theorem zc_knowledgeSound_regC
     ENNReal.ofReal (a (L.draw ω) R (zcStrat A Hs planZ (τ ω)) j / (1 - rateZ (planZ (L.draw ω) R) j k)))
     (tab (L.draw ω) R u)
 
-/-- `analysisZCRegC`'s link term is `analysisZC`'s at the committed registration, so the link theorem
+/-- `analysisZCRegC`'s binding error is `analysisZC`'s at the committed registration, so the link theorem
 (`zk_linkSoundC`) bounds it. -/
 theorem zk_linkSoundC_regC
     (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) (hcan : OpeningsCanon A P planZ tab vb canon)
@@ -163,7 +163,7 @@ theorem zk_linkSoundC_regC
   simp only [analysisZCRegC, analysisZC, ↓reduceIte]
 
 /-- **The compiled `--zk` count curve, "wrong" with canonical openings**: `zk_flock_countC_reg`'s bound, with the units
-wrong on the registration with canonical openings (`wrongRegZc`), when a drawn unit's openings are canonical
+wrong on the registration with canonical openings (`wrongRegZc`), when a sampled proof block's openings are canonical
 (`OpeningsCanon`). -/
 theorem zk_flock_countC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
     (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
