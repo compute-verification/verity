@@ -42,7 +42,7 @@ from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.prune import dead_free as dead_free_form
 
 from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, drive, kind, launch_batch, launch_rows, launch_seqlen_q,
-                     select_token, served_class)
+                     request_passes, select_token, served_class)
 from .domain import check_phi
 from .phi import Phi
 
@@ -55,10 +55,7 @@ WRAPPERS = {("step", "greedy"): ("verity-vllm/engine-step/v1", "vLLMStep"),
             ("request", "greedy"): ("verity-vllm/greedy-request/v1", "vLLMRequest"),
             ("step", "stochastic"): ("verity-vllm/stochastic-engine-step/v1", "vLLMStep"),
             ("request", "stochastic"): ("verity-vllm/stochastic-request/v1", "vLLMRequest")}
-#: a request wrapper's source after a history of C rows: C < LP, a cached prefix (`vllm_meta.CachedGreedyRequest.DERIVE_SOURCE`,
-#: `CachedStochasticRequest`'s); C >= LP, a request resumed at decode C, which no Build wrapper traces yet
-CACHED_SRC = {"greedy": "verity-vllm/cached-greedy-request/v1", "stochastic": "verity-vllm/cached-stochastic-request/v1"}
-RESUMED_SRC = {"greedy": "verity-vllm/resumed-greedy-request/v1", "stochastic": "verity-vllm/resumed-stochastic-request/v1"}
+CACHED_SRC = "verity-vllm/cached-greedy-request/v1"  # `vllm_meta.CachedGreedyRequest.DERIVE_SOURCE`, with a cached prefix
 I64 = Value(64)
 
 
@@ -689,11 +686,11 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
-    (`prefix_params`): C < LP, a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`), whose prefill computes
-    rows C..LP-1; on the sparse-attention decoder also C >= LP, a request resumed at decode C (a Commit window carrying it in), its
-    first decode fed the `last_token` Input, its samples the LP + T - C of decodes C..LP+T-1, each of its steps one launch of
-    `batch`. On that decoder the Build traces neither yet (its rules seed no history). A request on one rank drops its dead
-    units (`program.prune`, as the Build's derive does): the last layer's rows before the prefill's last, which no sample reads.
+    (`prefix_params`): a prefix-cache hit (`vllm_meta.CachedGreedyRequest`, the Build's `--cached C`) whose prefill computes rows
+    C..LP-1, or on the sparse-attention decoder also a request a Commit window carries in at decode C >= LP, its first decode fed
+    the `last_token` Input (`common.request_passes`); on that decoder either's SRC config holds `{"history": C}`, and no Build
+    traces it yet. A request on one rank drops its dead units (`program.prune`, as the Build's derive does): the last layer's rows
+    before the prefill's last, which no sample reads.
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
     `BuildResult.named`), as `naming.named_program` names a request Program. `batch`: the request's launch batch (`common._Launch`,
@@ -712,19 +709,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if C and (wrapper != "request" or not hasattr(net, "prefix_params") or (dense and (kind, world) != ("greedy", 1))):
         raise Unexpressible(f"vocabulary cannot express: a cached prefix on a {kind} {wrapper} at TP{world} of the {net.model_class} decoder "
                             f"(a request's, greedy on one rank of the dense or fused-MoE decoder, or on the sparse-attention decoder)")
-    if C and not 0 < C < (int(LP) if dense else int(LP) + int(T)):
-        raise Unexpressible(f"vocabulary cannot express: a history of {C} rows for a prompt of {LP}" +
-                            (" (0 < C < LP)" if dense else f" and {T} decodes (0 < C < LP + T)"))
-    resumed = wrapper == "request" and C >= int(LP)
-    chunks = tuple(int(c) for c in chunks or ())
-    if chunks and (wrapper != "request" or resumed or min(chunks) < 1 or sum(chunks) != int(LP) - C):
-        raise Unexpressible(f"vocabulary cannot express: prefill chunks {list(chunks)} of a {wrapper} (a request's chunks are its "
-                            f"{max(int(LP or 0) - C, 0)} prefill rows in turn, each at least one)")
-    chunks = chunks if len(chunks) > 1 else ()
+    resumed, chunks, passes, sampled = request_passes(wrapper, LP, T, M, C, chunks, dense)
     wrec = RecordType(*net.leaves())
     n = M if wrapper == "step" else int(LP)
-    passes = [M] if wrapper == "step" else [1] * (int(LP) + int(T) - C) if resumed else [*(chunks or [int(LP) - C]), *[1] * int(T)]
-    sampled = [False] * max(len(chunks) - 1, 0) + [True] * (len(passes) - max(len(chunks) - 1, 0))
     events = sum(sampled)
     params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
@@ -786,12 +773,13 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     elif wrapper == "request" and (world == 1 or dead_free):
         body = dead_free_form(body)[0]
     t_body = time.time()
-    src_class, derive_name = ((RESUMED_SRC if resumed else CACHED_SRC)[kind], WRAPPERS[(wrapper, kind)][1]) if C else WRAPPERS[(wrapper, kind)]
+    src_class, derive_name = (CACHED_SRC, WRAPPERS[(wrapper, kind)][1]) if C and dense else WRAPPERS[(wrapper, kind)]
     if world > 1:
         src_class = f"verity-vllm/{'scheduled-with-peers' if words else 'with-peers'}/v1[{src_class}]"
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile, "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
-                  "config_sha256": hashlib.sha256(canonical_json({"chunks": list(chunks)} if chunks else {})).hexdigest()[:16]}
+                  "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}),
+                                                                  **({"history": C} if C and not dense else {})})).hexdigest()[:16]}
     from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",

@@ -68,6 +68,24 @@ class _Stochastic:
     top_p_bits: int
 
 
+def request_passes(wrapper: str, LP: int | None, T: int | None, M: int, C: int, chunks: tuple[int, ...] | None,
+                   dense: bool) -> tuple[bool, tuple[int, ...], list[int], list[bool]]:
+    """A wrapper's forward passes, as `drive` runs them -> (resumed, its prefill chunks, each pass's rows, whether each samples): a
+    `step`'s M rows; a `request`'s prefill of rows C..LP-1 after a history of C (in its `chunks` when it ran in several launches,
+    only the last sampling) and its T decodes; or, off the `dense` decoder, one resumed at decode C >= LP, its decodes C..LP+T-1."""
+    if C and not 0 < C < (int(LP) if dense else int(LP) + int(T)):
+        raise Unexpressible(f"vocabulary cannot express: a history of {C} rows for a prompt of {LP}" +
+                            (" (0 < C < LP)" if dense else f" and {T} decodes (0 < C < LP + T)"))
+    resumed = wrapper == "request" and C >= int(LP)
+    chunks = tuple(int(c) for c in chunks or ())
+    if chunks and (wrapper != "request" or resumed or min(chunks) < 1 or sum(chunks) != int(LP) - C):
+        raise Unexpressible(f"vocabulary cannot express: prefill chunks {list(chunks)} of a {wrapper} (a request's chunks are its "
+                            f"{max(int(LP or 0) - C, 0)} prefill rows in turn, each at least one)")
+    chunks = chunks if len(chunks) > 1 else ()
+    passes = [M] if wrapper == "step" else [1] * (int(LP) + int(T) - C) if resumed else [*(chunks or [int(LP) - C]), *[1] * int(T)]
+    return resumed, chunks, passes, [False] * max(len(chunks) - 1, 0) + [True] * (len(passes) - max(len(chunks) - 1, 0))
+
+
 def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
           batch: list | None, C: int = 0, chunks: tuple[int, ...] = (), last: Coll | None = None) -> list[Coll]:
     """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
