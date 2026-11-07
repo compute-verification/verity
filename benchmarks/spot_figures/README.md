@@ -101,6 +101,14 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     bound at the budget (`optimize.two_stage_design`).
   - Each design's serve-time hashing is in its caption and in the table at the vertical line: every proof block's
     outputs under one-stage, outside the budget; the token ids under two-stage and request-level, inside it.
+  - Every caption says who the deployment's parties are and what its bounds rest on (`ROLES`, `TRUST`). Its parties
+    are SPOT[Flock]'s three roles: the inference server serves and commits its values; the proof server replays each
+    sampled replay block and proves it with `flock-circuit prove --zk`, with no ZK server and no recursion (the
+    `proof_overhead` card's `dev` arm); and the verifier draws on the challenger's live coins and decides with the Lean
+    verifier. The network certifier, which stamps each request's release order and bucket at ingress, is a layer of
+    its own. The bounds are soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and
+    an honest verifier, and, where a bound reads the certifier's stamp, on the certifier's own assumptions, stated in its
+    layer (`verity/core/protocols/sampled_proofs/README.md`).
   - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
     its headline design solid and its comparisons thin, dash-dotted, dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public

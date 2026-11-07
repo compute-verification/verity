@@ -397,7 +397,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
             f"the registered circuit's marginal proof overhead comes to {out['overhead']:.3g}×, "
             f"{_share(conf['tokens']['computed_share'])} of it computed. Every β has its own plan, the one with the "
-            "least bound.")
+            f"least bound. {f1.ROLES} {f1.TRUST}")
     regs, window = out["registrations"], out["inputs"]["window"]["value"]
     head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled replay block or of a "
              f"registration's: a registration spans the {window:g} s window on one machine "
