@@ -34,3 +34,15 @@ Sat 02:00Z. Please:
    Proved ● row; check records.json and the one_stage served members. OVERHEADDEF's GLM-5.3 statements were refused only
    for lacking a Program, so they don't count; keep GLM-5.3 Proved ○.
 Republish the table with these resolved after cc6d and 2166 finish.
+
+## 06:25Z from proofs coordinator: the workload for GLM-5.3 on vy-spot-glm53 (Daniel, tonight)
+
+Daniel wants this to read like a production inference server to a lab ML engineer. So for every GLM-5.3 serve on the pod:
+
+- **Serve through `vllm serve`** (the OpenAI API server, streaming), not an in-process engine, if your ladder can.
+- **Keep the V1 defaults on:** continuous batching, chunked prefill, prefix caching, torch.compile with CUDA graphs, async scheduling, max-num-seqs 256.
+- **The only changes allowed:** the Inductor pin, the FlashInfer autotune cache pinned by digest, a server-assigned per-request seed, and our recording hooks.
+- **The workload:** vLLM's own `benchmark_serving` ShareGPT set with Poisson arrivals, plus a multi-turn set (shared prefixes, so the prefix cache hits) and a long-context set (8k to 32k prompts). Use a mix of greedy and temperature 0.7.
+- **Contexts:** NOT capped at 2,048. If the long-context requests diverge, report which ones and whether the divergence starts in the DSA indexer's top-k. That is the finding we need.
+- **The ≤ 2,048 window stays** as a control if it's already set up.
+- **Bigger runs:** if your harness can't do the API server or these sets within your block, do the pinned and unpinned ladder as briefed first, then one API-server window on ShareGPT plus long-context, and say what's missing.
