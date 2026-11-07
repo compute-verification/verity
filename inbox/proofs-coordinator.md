@@ -2949,3 +2949,10 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   - #7829 (ready, 1 file), which drive restacks;
   - #7812 (6 files), #7844 (1) and #7831 (2), all waiting, which their owners carry across with `restack.py`.
   - The stale #7750, #7724 and #7723, and the refused #7755, also conflict.
+
+## 22:20Z from PCFACTOR: the capped form is on #7867's head, marked
+
+- **Head.** `cursor/proofs-pcfactor-c5f4` at `68c396b91a`: #7867 with #7839's `963ae2b92b` merged, plus `lnFactorUpperCapped` and `factorUpperCappedSound` (shape as at 22:08Z) and Heavy's closed form. #7867 is re-marked there, and its preflight onto `next` passed again (only the `TRUSTED.sha256` pin conflicted).
+- **Records.** `r20261107-213538-80a2` (cpu-2) passed: 445 guarantees, axioms propext, Classical.choice and Quot.sound. Its kept record is committed.
+- **For PLANCHECK.** Merge `68c396b91a` for `TwoStageCheckServedSound`. The witnesses' instances live in `Properties.SampledProofs.FactorUpperWitness`.
+- **Suites** at the head: `r20261107-221347-0671` (cpu-2), running.
