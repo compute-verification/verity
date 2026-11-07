@@ -17,12 +17,16 @@ here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"
 export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
-# FlashInfer's sampler JIT needs a newer nvcc than some images carry; greedy rows never reach it
-export VLLM_USE_FLASHINFER_SAMPLER=${VLLM_USE_FLASHINFER_SAMPLER:-0}
 # DeepGEMM, vLLM's FP8 block GEMM, JIT-compiles its kernels with CUDA_HOME's nvcc, which CUDA 12.4's can't do: the newest
 # toolkit under /usr/local unless CUDA_HOME names one. DEEP_GEMM=0 serves FP8 without DeepGEMM.
 CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
 export CUDA_HOME
+# vLLM uses FlashInfer only with flashinfer-cubin installed or nvcc on PATH, and the pin requires neither. By default
+# FlashInfer stays off and so does its sampler (whose JIT needs a newer nvcc than some images carry). FLASHINFER=1 puts
+# CUDA_HOME's nvcc on PATH and leaves the sampler at vLLM's default, as in a stock install with a CUDA toolkit: FlashInfer's
+# sampler, autotune and (TP > 1 on Hopper or Blackwell) fused all-reduce + RMSNorm.
+if [ "${FLASHINFER:-0}" = 1 ]; then export PATH="$CUDA_HOME/bin:$PATH"
+else export VLLM_USE_FLASHINFER_SAMPLER=${VLLM_USE_FLASHINFER_SAMPLER:-0}; fi
 unset NCCL_P2P_DISABLE
 if [ -n "${DEEP_GEMM:-}" ]; then export VLLM_USE_DEEP_GEMM=$DEEP_GEMM; else unset VLLM_USE_DEEP_GEMM; fi
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
@@ -39,6 +43,7 @@ case $v in *+gd9105ea8*) ;; *) echo "replay-ladder: vLLM $v is not d9105ea80, th
 mkdir -p "$OUT"
 for k in VLLM_USE_DEEP_GEMM VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME CUDA_VISIBLE_DEVICES; do echo "$k=${!k-unset}"; done > "$OUT/engine_env.txt"
 "$CUDA_HOME/bin/nvcc" --version 2>/dev/null | tail -1 >> "$OUT/engine_env.txt"
+"$PY" -c 'from vllm.utils.flashinfer import has_flashinfer; print(f"has_flashinfer={has_flashinfer()}")' >> "$OUT/engine_env.txt" 2>/dev/null
 nvidia-smi --query-gpu=index,name,memory.used,memory.total,clocks.max.sm,driver_version --format=csv | tee "$OUT/gpus.csv"
 rc=0
 # the FlashInfer autotune caches a process left (tactics its warmup chose by timing), by digest, after each process

@@ -58,17 +58,20 @@ python benchmarks/replay_ladder/coverage_table.py render COVERAGE.json --ladder 
 `UNPINNED_REPLAYS` (3) for each other arm, `RBLOCK0_ARMS` (`pinned` to run the pinned arm at
 `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0` too, as the integration's engines do; each arm's `arm_env.txt` records it),
 `LOGPROBS` (`1`: each replay records its sampled tokens' logprobs, and from the second on compares them with the
-first's bit for bit, `replay.py --logprobs`), and
+first's bit for bit, `replay.py --logprobs`), `FLASHINFER` (`1`: CUDA_HOME's nvcc on PATH and FlashInfer's sampler at
+vLLM's default, so vLLM uses FlashInfer as a stock install with a CUDA toolkit does, its autotune and, at TP > 1 on Hopper
+or Blackwell, its fused all-reduce + RMSNorm included; otherwise FlashInfer is off, since the pin installs neither
+flashinfer-cubin nor nvcc), and
 `SPAN_S`, `OVER` and `BURST` for the window (`ladder.py serve --docs` caps the shard's documents a plan takes prompts
-from). Each arm's `autotune.sha256` holds the digest of every FlashInfer autotune cache after serving and after each
-replay. A TP2, TP4 or TP8 model needs a node with that many GPUs. GLM-5.3's window stays inside 2,048 tokens of
+from). `engine_env.txt` records `has_flashinfer`, and each arm's `autotune.sha256` the digest of every FlashInfer
+autotune cache after serving and after each replay. A TP2, TP4 or TP8 model needs a node with that many GPUs. GLM-5.3's window stays inside 2,048 tokens of
 context (the plan's longest request is 1,024 + 256), where its sparse attention's top-k keeps every key.
 
 `prod.sh MODEL` runs the same serve and replays on a production-like window instead (`prod_plan.py`): vLLM's
 benchmark_serving ShareGPT set (its file fetched at a pinned revision and checked by sha256), multi-turn ShareGPT
 conversations whose turns share their prefixes, and C4 prompts of 8,192 to 32,768 tokens, each through the model's chat
 template, half greedy and half at temperature 0.7 with a per-request seed, every request stopping at its end of text or
-its cap; the servers' context limit is `MAX_MODEL_LEN` (40,960). Each arm's `kinds.json` breaks every replay's differing
+its cap; the servers' context limit is `MAX_MODEL_LEN` (40,960), and `FLASHINFER` is 1 unless set. Each arm's `kinds.json` breaks every replay's differing
 requests down by kind, with each one's context at its first difference. FP8 models run DeepGEMM, which JIT-compiles with the newest CUDA toolkit under
 `/usr/local` (12.8 or newer; a RunPod image's 12.4 can't, so install `cuda-nvcc-12-9 cuda-cudart-dev-12-9 cuda-cccl-12-9`
 first), unless `DEEP_GEMM=0`; `engine_env.txt` records the choice.
