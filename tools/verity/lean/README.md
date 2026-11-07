@@ -447,7 +447,7 @@ or a policy entry applies. Within a module both sides changed, the definitions m
 recomputed; an older lock's readers and `pins` are read as today's. A guarantee's `owner` merges apart from the rest of
 its entry, so one side's new owner and the other side's restatement both apply.
 
-The merge never refuses and never leaves a conflict. What the build determines (a guarantee's record,
+The merge leaves a conflict only where it can't vouch for itself (below). What the build determines (a guarantee's record,
 restated on both sides, which the merged statement decides; `reads`; assumption digests) merges as the union or theirs'
 value, and the lock run after landing regenerates it. What a person writes (an owner, an open premise's `issue` or `due`,
 a domain hypothesis's `why`, a reason in `unwitnessed`, `frozen`, `shape.inline` or `except`, the roots, an exemption, a
@@ -456,8 +456,17 @@ removed while the other changed it is the changed one. An entry both sides moved
 group (a claim's `witnesses`, `not`, `generic`; a premise's `assumptions`, `domain`, `open`) is where theirs put it, and
 `check.py --update` classifies it. Each entry taken from one side where the sides disagree is one warning line on
 stderr naming its key. A side that isn't a record (bad JSON) is the other side's record, with a warning; only when both
-sides are bad does git's text conflict stand. Git runs the driver from the worktree you merge into, and one whose rules
-are older than `origin/main`'s runs `origin/main`'s (`deferred`), so fetch `main` before you merge.
+sides are bad does git's text conflict stand.
+
+Git runs a driver from the worktree you merge into, so an old branch that merged `main` merged its lock by the branch's
+own older `merge.py`, and one such copy collapsed `Security`'s 1,316 `reads` groups to one. The registered command
+(`merge.py --install`, `research.clone.RECORD_DRIVER`, which boot.sh and the shell hook set from `origin/main`) runs
+`origin/main`'s copy of this directory wherever the repository has that ref, and the worktree's otherwise, so fetch
+`main` before you merge. Three guards leave git's conflict, saying why, where a conflict beats a silent loss: a side's
+lock in a `format` newer than the driver's `FORMAT` (`check.py --update` writes its own, which a test holds equal), the
+worktree's copy merging in a side whose `merge.py` has changes it lacks (`stale`, which reads what `git merge` names the
+side merged in), and a merged record that drops more than half of a side's entries in a section beyond what the base
+accounts for (`losses`). Bump `FORMAT` in both files with any change to what a lock holds.
 
 A merged record is a candidate. `check`'s Lean audit rebuilds every record of the merged tree and fails on any difference,
 so a merge that is clean but wrong (a definition that changed on one side without a guarantee there reading it, while the

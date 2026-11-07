@@ -222,6 +222,10 @@ HERE = Path(__file__).resolve().parent
 TOOL = HERE
 ROOT = HERE.parents[2]
 POLICY = "lean-audit.json"
+#: the lock's schema version, which every lock this file writes carries as `format`: bump it with any change to what a lock
+#: holds or how its sections read, and `merge.py`'s `FORMAT` with it, so an older driver leaves a newer lock to git's
+#: conflict rather than merge what it can't read
+FORMAT = 1
 #: the facts document `facts_of` keeps beside a package's reports, gzipped with no timestamp: equal facts are equal bytes
 FACTS = "facts.json.gz"
 STANDARD = ["Classical.choice", "Quot.sound", "propext"]
@@ -257,7 +261,7 @@ CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
 #: name components of the declarations Lean generates for a definition (listed under `reads` with it, not by name)
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
-ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions_module", "assumptions", "domain", "open", "open_seed",
+ORDER = ("format", "roots", "proved_in", "exempt", "runs", "axioms", "assumptions_module", "assumptions", "domain", "open", "open_seed",
          "open_default_issue", "meaning", "escapes", "verifier", "claims", "witnesses", "unwitnessed", "witnesses_assumed",
          "compile_time", "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@lane`)
@@ -578,7 +582,8 @@ def text(policy: dict) -> str:
 
 
 def dump(pkg: Path, policy: dict) -> None:
-    (pkg / POLICY).write_text(text(policy))
+    """Write ``policy`` as ``pkg``'s lock, in this file's `FORMAT`."""
+    (pkg / POLICY).write_text(text(policy | {"format": FORMAT}))
 
 
 def under(prefixes, name: str) -> bool:
