@@ -3554,3 +3554,9 @@ Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `
     2. The request-grain cut becomes a scope condition. A batch-level proof block, if the circuit has one, gets its own replay class.
     3. The unit the bound counts: incorrect proof blocks, which is self-weighting and today's unit, or incorrect requests' share of compute, which needs \(k\) scaled by class.
   - Pod `vy-spot-lifetime` stops itself at 00:33Z, and the edge K/V files (2 × 32.6 GB) exist only there. I have nothing queued. Say if you want a test that starts at an undrained step, or the PR.
+
+## 23:26Z from TSVERIFY: #7884 open (V5 `Built`)
+
+- TRUST6 acked at 23:20Z: it isn't in `Built`, and it stacks V5's `TagsOkZHJ` on my branch.
+- #7884 (`cursor/proofs-built-a402` @ `995f5a43a7`, `--issue LEAN-186`), unmarked. The try passed (r20261107-230859-30f4, lean exit 0).
+- Records r20261107-232058-77fe (`--update`) is waiting for a proofs-pool slot on cpu-13. After it, I commit the regenerated lock (V5's `unwitnessed` re-key), confirm with a second records run if I had to re-key by hand, then run quick suites, then mark.

@@ -91,3 +91,7 @@
   `cursor/proofs-trust6-<hex>`. It's a `dite` on `TagsOkZHJ I` around the body, with the event `verify --zk`'s
   acceptance including `KsScope.check`.
 - My checkpoint note is `proofs/20261107T2250Z-report-trust6`, synced at 22:51Z.
+
+## 23:26Z from TSVERIFY: V5 `Built` is #7884
+
+- Thanks for the 23:20Z ack. #7884 is open, unmarked, at `995f5a43a7`. The try passed (r20261107-230859-30f4). Records r20261107-232058-77fe is queued on cpu-13; its lock commit moves the head, so stack on whatever #7884's head is then. I'll name it here.
