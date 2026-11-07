@@ -233,7 +233,8 @@ noncomputable def revealV5 {n mPts : ℕ} {Reg : Type} {I : Inputs} {own : Optio
     (M : Model.Message FlockLevel3.GF128 (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).sch.k0
       (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).sch.level₀.logCols) :
     List (List Claims.Msg × Opening Bool) :=
-  let vb := vbP dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub (Reg := Reg)
+  let vb := vbP dj y₀ ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) hscope hU hpi hpub
+    (Reg := Reg)
   revealOf ((keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi))
     (fun g => constsOfP D.unroll hU n pi pub g) (rootsOfL D.unroll (LeafMap.ofPublic D.unroll pub n)) u
     (fun g => vb.bit (vb.val (vb.opening S R u M (vb.pos g))) g)
@@ -285,20 +286,23 @@ theorem correct_of_revealV5
           q.1 = roots → val q.2.pos = some q.2.val) →
         (progOf Cc κ).Correct ((progOf Cc κ).refIn (blockOf P κ u) val ι) (blockOf P κ u) := by
   intro P Cc Lm κ roots Cd S R u hu M hM val ι hval
-  let vb := vbP dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub (Reg := Reg)
+  let vb := vbP dj y₀ ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) hscope hU hpi hpub
+    (Reg := Reg)
   have hlow := loweringSoundZK_of_place execArith P (planZHJP dj y₀) (tabZHJP dj y₀)
-    (placeZHJP dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi) S R u hu M hM
+    (placeZHJP dj y₀ ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) hscope hU hpi) S R u hu M hM
   refine correct_of_revealOf P κ roots u (fun g => vb.bit (vb.val (vb.opening S R u M (vb.pos g))) g)
     (fun g => dataOfRow D.unroll Lm (rowsOfLP D.unroll hU n pi Lm) g (vb.opening S R u M (vb.pos g)).2.1
       (vb.opening S R u M (vb.pos g)).2.2) sha512Msg Cd
     (fun g b h => constsOfP_isInput (Discharge.Layout.outsOfP D.unroll hU n pi) h) ?_ ?_ ?_ val ι hval
   · exact P.correct_congr (fun g hg => (vb.opening_spec S R u hu M hM g hg).2) hlow
   · exact fun g hg b hb =>
-      openingsCanonV5_const n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀ S R u hu M hM g hg b hb
+      openingsCanonV5_const n Reg I own ht D (Flock.Desc.parseStmt_of_parse hD) hU pi hpi pub hpub hscope kd dj S₀ d₀
+        y₀ S R u hu M hM g hg b hb
   · intro g hg hk
     obtain ⟨hcom, -⟩ := vb.opening_spec S R u hu M hM g hg
     obtain ⟨⟨r, hr, hv, hvw⟩, hy⟩ :=
-      (openingsCanonV5 n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀ S R u hu M hM g hg).2 hk
+      (openingsCanonV5 n Reg I own ht D (Flock.Desc.parseStmt_of_parse hD) hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀
+        S R u hu M hM g hg).2 hk
     have hr' : rowsOfLP D.unroll hU n pi Lm g = some r := hr
     have hv' : FlockSoundness.Discharge.Layout.RowShaped (vb.opening S R u M (vb.pos g)).2.1 := hv
     have hvw' : (vb.opening S R u M (vb.pos g)).2.1.1.val = r.width := hvw
@@ -306,7 +310,8 @@ theorem correct_of_revealV5
     have hcom' : vb.com ((vb.opening S R u M (vb.pos g)).1, (vb.opening S R u M (vb.pos g)).2.1,
         (vb.opening S R u M (vb.pos g)).2.2) = vb.cs R (vb.pos g) := hcom
     exact opens_dataOfRow hr' (transports_shapedP_at (dj := dj) (y₀ := y₀) (ht := ht)
-      (hc := Flock.Desc.parse_flat hD) (hscope := hscope) (hU := hU) (hpi := hpi) (hpub := hpub) R
+      (hc := Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) (hscope := hscope) (hU := hU) (hpi := hpi)
+      (hpub := hpub) R
       (rowsOk_of_scopeOkH hscope) (rootsDistinctL_of_fixes hdup hroots)
       (fun u q => ref_lt_cntP hpub u.isLt q.isLt) hr' (vb.opening S R u M (vb.pos g)).1
       (vb.opening S R u M (vb.pos g)).2.1 (vb.opening S R u M (vb.pos g)).2.2 hv' hvw' hy' hcom')
