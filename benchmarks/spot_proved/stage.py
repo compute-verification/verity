@@ -38,7 +38,16 @@ sys.setrecursionlimit(100000)
 
 NP = {"torch.bfloat16": np.uint16, "torch.float16": np.uint16, "torch.float32": np.uint32, "torch.float8_e4m3fn": np.uint8,
       "torch.uint8": np.uint8, "torch.int8": np.int8, "torch.int32": np.int32, "torch.int64": np.int64, "torch.bool": np.uint8}
-MULTIMEM_TREES = "[[[[[[[0,[1,2]],3],5],6],4],7]"
+NUM_SM = 132  # the H200's SMs, FA3's split count reads it
+#: labels of one family that differ only in a size: one is staged, the census's type when the step has it, else the most common
+FAMILIES = {"SparseMlaSplitPart_T": "SparseMlaSplitPart_T64", "SparseMlaCombine_N": "SparseMlaCombine_N5"}
+
+
+def multimem_trees(world: int) -> str:
+    """TREES of `AllReduceMultimem_v1` at WORLD ranks, one per owner: the tree read off the H200 switch at 8, else a chain."""
+    from verity.ml.definitions.registry import tp_allreduce as AR
+    tree = AR.GLM53_H200_TREE if world == 8 else AR.chain(world)
+    return json.dumps([tree] * world, separators=(",", ":"))
 
 
 class Capture:
@@ -255,31 +264,104 @@ def allreduce_instances(cap: Capture):
             continue
         T, H = shape
         half = H // 2
-        trees = ",".join([MULTIMEM_TREES] * half)
+        trees = multimem_trees(W)
         for t in range(cap.real_rows(cap.ranks[0], T)):
             for c in range(2):
                 sl = slice(c * half, (c + 1) * half)
-                yield (f"AllReduceMultimem_W{W}", f"AllReduceMultimem_v1{{WORLD={W},SIZE={half},TREES=[{trees}]}}", (e0["seq"], t, c),
+                yield (f"AllReduceMultimem_W{W}", f"AllReduceMultimem_v1{{WORLD={W},SIZE={half},TREES={trees},FTZ=false}}", (e0["seq"], t, c),
                        lambda calls=calls, t=t, sl=sl: [np.stack([cap.tensor(r, calls[r]["in"]["tensor"])[t, sl] for r in cap.ranks])],
                        lambda calls=calls, t=t, sl=sl: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["ret0"])[t, sl]])
 
 
-def mla_combine_instances(cap: Capture):
+def fused_add_rms_norm_instances(cap: Capture):
+    from verity.ml.definitions.registry.cuda_rmsnorm import launch_block
     for r in cap.ranks:
-        n = cap.tokens(r)
         for e in cap.events[r]:
-            if e["op"] != "_vllm_fa3_C::fwd" or not cap.opened(e) or e["in"].get("q_v") is None:
+            if e["op"] != "_C::fused_add_rms_norm" or not cap.opened(e):
                 continue
-            o = e["out"]
-            if "sha512" not in (o.get("ret2") or {}) or "sha512" not in (o.get("ret3") or {}):
+            a = e["in"]
+            T, N = a["input"]["shape"]
+            eps = float(a["epsilon"]).hex()
+            block = f'RMSNormFusedCudaVector8_v1{{N={N},EPS={{"f64":"{eps}"}},BLOCK={launch_block(T, N, fused=True)}}}'
+            for t in range(cap.real_rows(r, T)):
+                yield (f"RMSNormFusedCudaVector8_N{N}", block, (r, e["seq"], t),
+                       lambda r=r, e=e, t=t: [cap.tensor(r, e["in"]["input"])[t], cap.tensor(r, e["in"]["residual"])[t],
+                                              cap.tensor(r, e["in"]["weight"])],
+                       lambda r=r, e=e, t=t: [cap.tensor(r, e["out"]["input"])[t], cap.tensor(r, e["out"]["residual"])[t]])
+
+
+def fa3_calls(cap: Capture):
+    """FA3's sparse MLA calls in the opened layers: (rank, the op's event, the tap's event or None, each token's valid keys and
+    split count)."""
+    from verity.ml.definitions.registry import sparse_mla_split as SP
+    for r in cap.ranks:
+        last = None
+        for e in cap.events[r]:
+            if e["op"] == "_vllm_fa3_C::fwd" and e["in"].get("q_v") is not None:
+                last = e
+                if not cap.opened(e):
+                    continue
+                o = e["out"]
+                if "sha512" not in (o.get("ret2") or {}) or "sha512" not in (o.get("ret3") or {}):
+                    continue
+                tap = None
+                for x in cap.events[r][cap.events[r].index(e) + 1:]:
+                    if x["op"] == "fa3_sparse_mla":
+                        tap = x
+                        break
+                    if x["op"] == "_vllm_fa3_C::fwd":
+                        break
+                T = e["in"]["q"]["shape"][0]
+                cu = cap.tensor(r, e["in"]["cu_seqlens_q"]).astype(np.int64)
+                if list(cu) != list(range(T + 1)):
+                    raise LookupError(f"rank {r} seq {e['seq']}: cu_seqlens_q is not one query per sequence")
+                valid = [int(x) for x in cap.tensor(r, e["in"]["seqused_k"])]
+                bound = o["ret2"]["shape"][0]
+                yield r, e, tap, valid, SP.dynamic_num_splits(valid, NUM_SM, bound)
+
+
+def mla_combine_instances(cap: Capture):
+    for r, e, _, valid, nss in fa3_calls(cap):
+        bound, H, T, DV = e["out"]["ret2"]["shape"]
+        for t in range(min(cap.tokens(r), T)):
+            from verity.ml.definitions.registry import sparse_mla_split as SP
+            ns = len(SP.split_blocks(valid[t], nss[t]))
+            if ns < 2:
                 continue
-            ns, H, T, DV = o["ret2"]["shape"]
-            for t in range(min(n, T)):
+            for h in range(H):
+                yield (f"SparseMlaCombine_N{ns}", f'SparseMlaCombine_v1{{NSPLIT={ns},DV={DV},INV={{"fn":"Fa3InvSum_v1"}}}}',
+                       (r, e["seq"], t, h),
+                       lambda r=r, e=e, t=t, h=h, ns=ns: [cap.tensor(r, e["out"]["ret3"])[:ns, h, t],
+                                                          cap.tensor(r, e["out"]["ret2"])[:ns, h, t, :]],
+                       lambda r=r, e=e, t=t, h=h: [cap.tensor(r, e["out"]["ret0"])[t, h, :]])
+
+
+def mla_split_part_instances(cap: Capture):
+    """Each split of a token whose KV rows the tap kept (its first ``kv_gathered_tokens``), per head: its keys' rows in, FA3's
+    (o_partial, lse) for that split out."""
+    from verity.ml.definitions.registry import sparse_mla_split as SP
+    for r, e, tap, valid, nss in fa3_calls(cap):
+        if tap is None or "sha512" not in (tap["in"].get("kv_gathered") or {}):
+            continue
+        bound, H, T, DV = e["out"]["ret2"]["shape"]
+        DR = e["in"]["q"]["shape"][-1]
+        BN = SP.BLOCK_N
+        scale = float(tap["in"]["softmax_scale"]).hex()
+        for t in range(min(cap.tokens(r), T, int(tap["in"]["kv_gathered_tokens"]))):
+            splits = SP.split_blocks(valid[t], nss[t])
+            if len(splits) < 2:
+                continue
+            for s, (b0, b1) in enumerate(splits):
+                lo, hi = b0 * BN, min(b1 * BN, valid[t])
+                block = (f'SparseMlaSplitPart_v1{{T={hi - lo},DR={DR},DV={DV},BN={BN},DOT={{"fn":"HopperBF16WgmmaDot16_v1"}},'
+                         f'INV={{"fn":"Fa3InvSum_v1"}},SCALE={{"f64":"{scale}"}}}}')
                 for h in range(H):
-                    yield (f"SparseMlaCombine_N{ns}", f'SparseMlaCombine_v1{{NSPLIT={ns},DV={DV},INV={{"fn":"Fa3InvSum_v1"}}}}',
-                           (r, e["seq"], t, h),
-                           lambda r=r, e=e, t=t, h=h: [cap.tensor(r, e["out"]["ret3"])[:, h, t], cap.tensor(r, e["out"]["ret2"])[:, h, t, :]],
-                           lambda r=r, e=e, t=t, h=h: [cap.tensor(r, e["out"]["ret0"])[t, h, :]])
+                    yield (f"SparseMlaSplitPart_T{hi - lo}", block, (r, e["seq"], t, h, s),
+                           lambda r=r, e=e, tap=tap, t=t, h=h, lo=lo, hi=hi: [
+                               cap.tensor(r, tap["in"]["q_v"])[t, h], cap.tensor(r, tap["in"]["q"])[t, h],
+                               cap.tensor(r, tap["in"]["kv_gathered"])[t, lo:hi]],
+                           lambda r=r, e=e, t=t, h=h, s=s: [cap.tensor(r, e["out"]["ret2"])[s, h, t, :],
+                                                            cap.tensor(r, e["out"]["ret3"])[s, h, t:t + 1]])
 
 
 # ---- draw, gate, stage ---------------------------------------------------------------------------------------------------
@@ -326,13 +408,19 @@ def main() -> int:
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {}}
     pops: dict[str, list] = {}
     sources = [quant_instances(cap), flashinfer_linear_instances(cap), moe_w2_instances(cap, profile),
-               fused_ar_norm_instances(cap), allreduce_instances(cap), mla_combine_instances(cap)]
+               fused_ar_norm_instances(cap), allreduce_instances(cap), fused_add_rms_norm_instances(cap),
+               mla_combine_instances(cap), mla_split_part_instances(cap)]
     for src in sources:
         try:
             for inst in src:
                 pops.setdefault(inst[0], []).append(inst)
         except Exception as ex:  # noqa: BLE001
             report.setdefault("population_errors", []).append(f"{type(ex).__name__}: {ex}"[:400])
+    for family, prefer in FAMILIES.items():
+        members = sorted((k for k in pops if k.startswith(family)), key=lambda k: (k != prefer, -len(pops[k]), k))
+        for k in members[1:]:
+            report["types"][k] = {"population": len(pops.pop(k)), "staged": False,
+                                  "why": f"one Definition of the family {family} is staged: {members[0]}"}
     wanted = set(a.types.split(",")) if a.types else None
     staged, rows_of_kind, kinds = {}, {}, {}
     for label, insts in sorted(pops.items()):

@@ -1,6 +1,6 @@
 """A vLLM general plugin that records one replayed step's interior, per TP rank, in an engine that serves with CUDA graphs.
 
-    VERITY_SPOT_CAPTURE=DIR VERITY_SPOT_STEPS=s[,s2] [VERITY_SPOT_MLA_TOKENS=4] <a vLLM engine with this plugin registered>
+    VERITY_SPOT_CAPTURE=DIR VERITY_SPOT_STEPS=s[,s2] [VERITY_SPOT_MLA_TOKENS=8] [VERITY_SPOT_KEEP=all] <a vLLM engine with this plugin registered>
 
 Registered as a ``vllm.general_plugins`` entry point (`site` writes the dist-info), so it loads in every worker. It runs on
 the V2 model runner, vLLM's default at the integration's pin. A step is counted when a worker's ``execute_model`` has
@@ -24,7 +24,9 @@ recorded. A step the engine runs without a graph is recorded as it runs. What is
 Then the graph call runs as served, and its hidden states must equal the recorded forward's bit for bit (``check``). The
 extra forward writes the same KV values to the same slots, so the step and every later one are unchanged.
 
-Each recorded tensor's bytes are written once under ``DIR/rank<r>/blobs/<sha512>``. ``DIR/rank<r>/step<s>/ops.jsonl`` lists
+Each recorded tensor is hashed when recorded; its bytes are held in memory until the coins have opened layers, and only the
+opened layers' tensors are written, once each, under ``DIR/rank<r>/blobs/<sha512>`` (``VERITY_SPOT_KEEP=all`` writes every
+one as it is recorded). ``DIR/rank<r>/step<s>/ops.jsonl`` lists
 the events in order. ``step<s>/meta.json`` holds the step (tokens, padding, graph mode, the scheduled requests and their
 token counts), the check, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
 ``params.json``, which gives each parameter a recorded op read (its shape, dtype and SHA-512 over its bytes). Every
@@ -43,7 +45,7 @@ import traceback
 from pathlib import Path
 from typing import Any
 
-BIG = 128 << 20
+BIG = 1 << 30
 #: aten ops that only allocate, view or restride: their outputs alias or are uninitialized, never a value of the step
 SKIP = {"empty", "empty_strided", "empty_like", "as_strided", "view", "_unsafe_view", "reshape", "alias", "detach", "t",
         "permute", "transpose", "expand", "unsqueeze", "squeeze", "select", "slice", "_reinterpret_tensor", "lift_fresh",
@@ -54,7 +56,7 @@ class _State:
     def __init__(self) -> None:
         self.dir = Path(os.environ["VERITY_SPOT_CAPTURE"])
         self.targets = {int(s) for s in os.environ.get("VERITY_SPOT_STEPS", "").split(",") if s.strip()}
-        self.mla_tokens = int(os.environ.get("VERITY_SPOT_MLA_TOKENS", "4"))
+        self.mla_tokens = int(os.environ.get("VERITY_SPOT_MLA_TOKENS", "8"))
         self.step = -1
         self.active = False
         self.recording = False
@@ -68,6 +70,8 @@ class _State:
         self.param_of: dict[str, Any] = {}
         self.used_params: set[str] = set()
         self.seen: set[str] = set()
+        self.pending: dict[str, bytes] = {}
+        self.keep_all = os.environ.get("VERITY_SPOT_KEEP", "opened") == "all"
         self.events: list[dict] = []
         self.piece = -1
         self.parents: list[int] = []
@@ -130,6 +134,8 @@ def _install() -> None:
                         print(f"[spot-capture] rank {S.rank} step {S.step}: the capture failed, serving goes on\n"
                               f"{traceback.format_exc()}", flush=True)
                         S.events, S.errors, S.check = [], [], None
+                        S.pending.clear()
+                        S.seen.clear()
                 S.active = False
         return run
 
@@ -397,6 +403,24 @@ def _ref(v: Any) -> Any:
         return _ref_quiet(v)
 
 
+def _write_blob(h: str, raw: bytes) -> None:
+    p = S.root() / "blobs" / h[:2] / h
+    if not p.exists():
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(raw)
+
+
+def _blobs(v: Any):
+    if isinstance(v, dict):
+        if isinstance(v.get("sha512"), str) and "shape" in v:
+            yield v["sha512"]
+        for x in v.values():
+            yield from _blobs(x)
+    elif isinstance(v, list):
+        for x in v:
+            yield from _blobs(x)
+
+
 def _ref_quiet(v: Any) -> Any:
     import torch
     if isinstance(v, torch.Tensor):
@@ -412,10 +436,11 @@ def _ref_quiet(v: Any) -> Any:
         h = hashlib.sha512(raw).hexdigest()
         if h not in S.seen:
             S.seen.add(h)
-            p = S.root() / "blobs" / h[:2] / h
-            p.parent.mkdir(parents=True, exist_ok=True)
-            p.write_bytes(raw)
             S.bytes += len(raw)
+            if S.keep_all:
+                _write_blob(h, raw)
+            else:
+                S.pending[h] = raw
         return {**d, "sha512": h}
     if isinstance(v, (list, tuple)):
         return [_ref(x) for x in v]
@@ -569,6 +594,13 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
             layers[kind].append(pool.pop(j))
     opened = sorted(x for v in layers.values() for x in v)
     marks = tuple(f"layers.{x}." for x in opened)
+    kept = {h for e in S.events if e.get("layer") in opened for h in _blobs([e.get("in"), e.get("out")])}
+    for h in sorted(kept):
+        if h in S.pending:
+            _write_blob(h, S.pending[h])
+    kept_bytes = sum(len(S.pending[h]) for h in kept if h in S.pending)
+    S.pending.clear()
+    S.seen.clear()
     od = d / "open"
     od.mkdir(exist_ok=True)
     files = {}
@@ -581,7 +613,8 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
                        "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
     commit = {"rank": S.rank, "step": S.step, "rank_roots": roots, "root": root, "t_root": t_root, "coins": coins_hex,
               "t_coins_received": time.time(), "coins_by": "rank 0's os.urandom(64), drawn after every rank's root was gathered",
-              "layers": layers, "opened": files}
+              "layers": layers, "opened": files,
+              "kept": "every recorded tensor" if S.keep_all else f"the opened layers' {len(kept)} tensors, {kept_bytes} bytes"}
     (d / "commit.json").write_text(json.dumps(commit, indent=1, sort_keys=True))
     return commit
 
