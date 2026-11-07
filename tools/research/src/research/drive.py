@@ -1929,9 +1929,10 @@ class Driver:
         whole tree, stands for suite ``key`` by its report row, as a run's suite does (`_name`): its failed test files, else,
         touching none, the suite's declared inputs (`suite_inputs`).  The ring (`_ring`), the record, the several (`_several`),
         the expired allowances and the revert after `FIX_FORWARD_S` with no fix marked (`_revert_reds`) are a run's red's
-        (`_name`); a key already named for this tip, or whose culprit is still on `checked` unreverted, is left as it is."""
+        (`_name`); a key already named for this tip, or whose culprit is still on `checked` unreverted, is left as it is, but a
+        warn step's at a newer tip is named afresh (`_warns`)."""
         red, tip = pl.setdefault("red", {}), run["tip"]
-        if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted")
+        if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted") and not self._warns(key)
                                                             and not self._undone(old["culprit"][3]))):
             if old["tip"] != tip:
                 old["seen"] = tip
