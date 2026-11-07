@@ -23,7 +23,7 @@ only (`LeanRelease.LiveRoundEqOwn`), as `FinalRoundEq` asks its own:
   (`withInner` at `Loop.finOf`), at `SessionLoopZKDeployed`'s premises on the session, the statement and the loop's
   inputs, `LiveRoundEqOwn` holds at every worker taking some admissible `vs`'s values at its own histories
   (`Loop.TakesValsOwn`), `vs` being admissible when it is causal on the coins `Loop.SwOk` admits (`SwCausalOn`), its
-  round-1c values fix its `final_c` (`Loop.FinalCFixed`), its level-0 words are the firewall's (`Loop.L0Fixed`) and its
+  round-1c values fix its `final_c` (`Loop.FinalCFixed`), its level-0 words are the ZK server's (`Loop.L0Fixed`) and its
   rows hold (`Loop.RowsOK`). It takes neither `Loop.TakesFinalC` nor `Loop.TakesTau`. A worker taking no admissible
   `vs`'s values is outside it. `liveRoundEqOwn_honestVals`: its premises on the worker and the values hold at the
   honest worker `Loop.valsWk honestVals`.
@@ -64,12 +64,12 @@ theorem liveRoundEqOwn_ofLoopLink (vs : Loop.finS.SwVals) (L₀ : LeanRelease Fl
   · exact hS ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href hown hv hsc
 
 /-- **`LiveRoundEq` for every worker, at its own histories**: at `SessionLoopZKDeployed`'s release with the inner
-proof's rounds the loop's finish's (`withInner` at `Loop.finOf`, at `L₁`'s frame draws), on the loop's own tables
+proof's rounds the loop's finish's (`withInner` at `Loop.finOf`, at `L₁`'s frame samples), on the loop's own tables
 (`Loop.realOf`) and inputs (`Loop.Src`), at a statement in the masked scope with a witness that the loop serves,
 `LiveRoundEqOwn` holds at every worker taking some admissible `vs`'s values at its own histories (`Loop.TakesValsOwn`):
 one causal on the coins `Loop.SwOk` admits (`SwCausalOn`), whose `final_c` its round-1c values fix
 (`Loop.FinalCFixed`), whose level-0 words are
-the firewall's (`Loop.L0Fixed`) and whose rows hold (`Loop.RowsOK`). `liveRoundEqOwn_ofLoopLink` at
+the ZK server's (`Loop.L0Fixed`) and whose rows hold (`Loop.RowsOK`). `liveRoundEqOwn_ofLoopLink` at
 `liveSchedOwn_ofLoopLink` and `liveInnerOwn_withInner`. -/
 theorem liveRoundEqOwn_withInner (vs : Loop.finS.SwVals) (L₁ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))

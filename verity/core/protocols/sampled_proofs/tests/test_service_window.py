@@ -1,6 +1,6 @@
 """The proof system over a window of templates (a TP rank's served window): one `Stream` whose check is each template's
 digest and `Q_template_instances` in the window's order, each registration's population the templates' mixed population
-at the challenger's own counts (`register(counts=)`), drawn once by `stratified:K`, a stratum per template each drawn at
+at the challenger's own counts (`register(counts=)`), sampled once by `stratified:K`, a stratum per template each sampled at
 least once, and its whole run held to the Lean verifier's (`Run.run`) as one template's is."""
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ TRIPLE = bind(CompositeDefinition("ServiceTestTriple", 0, (), lambda S_: ((("x",
                                   lambda B, S_, x: B.call(XOR8, B.call(XOR8, x[0], x[1]), x[2]), register=False))
 WINDOW = (PAIR, TRIPLE)
 QUERY = P.template_instances_query(WINDOW)
-#: PAIR's one instance is a stratum `stratified:3` draws round(3 / 10) = 0 of, so its floor draws it.
+#: PAIR's one instance is a stratum `stratified:3` samples round(3 / 10) = 0 of, so its floor samples it.
 COUNTS = {P.template_id(PAIR): 1, P.template_id(TRIPLE): 9}
 LAW = S.Law("stratified:3")
 PUBLIC = (*RECORD_ITEMS, *(S.Public(f"population:{P.template_id(t)}", "structure", "a template's stratum") for t in WINDOW))
@@ -82,7 +82,7 @@ def test_a_windows_stream_takes_its_templates_digests_and_query_in_its_order():
 
 def test_a_two_template_window_runs_to_an_accepted_outcome_by_the_lean_run():
     """A window of PAIR x 1 and TRIPLE x 9 under `stratified:3`: registered at the challenger's own counts, sampled once
-    from its coins with each stratum drawn its k (PAIR's by its floor of one), and run to an accepted outcome, the
+    from its coins with each stratum sampled its k (PAIR's by its floor of one), and run to an accepted outcome, the
     verifier's whole run (`Run.run`, over the window's mixed population) agreeing."""
     stream = _stream()
     rec = _record()
@@ -139,7 +139,7 @@ def test_a_stratum_short_of_its_floor_is_refused():
 
 def test_a_windows_draw_from_the_challengers_coins_is_held_to_its_evidence_by_the_lean_run(
         tmp_path, signer, monkeypatch):  # noqa: F811
-    """A window's stream on the auditor's challenger's coins: the honest draw's outcome is accepted by the Lean run,
+    """A window's stream on the auditor's challenger's coins: the honest sample's outcome is accepted by the Lean run,
     and each of `coin_outcomes`' negatives is a reject the Lean run refused at its select (`coins`)."""
     def register(coins, i, window_root):
         stream = _stream(coins=coins)

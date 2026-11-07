@@ -157,7 +157,7 @@ LINES = [
 def test_a_published_line_names_no_window_and_counts_none_of_a_windows_own(tmp_path, monkeypatch, capsys):
     """Each verdict line's published form (`public_line`) names no window and counts no window closed, sealed or refused, and
     none of a window's steps or requests, in its text or its JSON, and replaces a JSON object cut short that names one; the
-    class, the scan class, the draw, a refusal's reason and the protocol's rounds stay. `public-lines` prints that form and
+    class, the scan class, the sample, a refusal's reason and the protocol's rounds stay. `public-lines` prints that form and
     keeps each line whole in the serve dir's private/verdicts.txt, 0700, where that serve dir exists."""
     for line, public in LINES:
         assert S.public_line(line) == public and S.public_line(public) == public
@@ -529,7 +529,7 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
 
 
 def test_an_accepted_certifier_answer_says_what_its_trusted_host_premise_rests_on(tmp_path):
-    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, draws
+    """The network certifier's answer as its piece writes it when the warden ran on the gate's host and its checks, samples
     and coins on the served node: its accept's clause says the premise is assumed and why, so the ``RECORD`` line's
     accept isn't read as the auditor's devices having placed it."""
     premise = ("assumed, the auditor's devices not placed: the network certifier ran on 204.12.178.84, not the prover's "
@@ -809,7 +809,7 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
 
 def test_the_pouw_piece_gives_credit_the_declared_program_the_period_and_the_proofs_it_has(tmp_path, monkeypatch):
     """With the serve dir's declared Program (``h1/window-program.json.gz``) and its period (``period.json``), and the
-    drawn statements and live evidence given, the challenger check gets each as its ``--check-challenger`` flag, and the
+    sampled statements and live evidence given, the challenger check gets each as its ``--check-challenger`` flag, and the
     piece's document carries them and credit's calls."""
     monkeypatch.setattr(S, "_gate_out", _gate([]))
     d = _h1_serve_dir(tmp_path)
@@ -1278,7 +1278,7 @@ def _declared(tmp_path: Path, files: dict | None = None, live=(32, 2)) -> tuple[
 
 def test_the_period_opens_on_the_served_programs_digest_and_files_as_cores_credit_reads_them(tmp_path, monkeypatch):
     """``period open``, through infra's own gate (`auditor.gate` and `auditor.period`, as lane vllm's key): its open
-    commits the Program digest serve-openai wrote, its T, the draw K, the fixed length and the circuit files, each read
+    commits the Program digest serve-openai wrote, its T, the sample K, the fixed length and the circuit files, each read
     back by core's credit as the window's period commits it; a stratum with no ``k<K>`` file yet is named and left out.
     It names no weights without ``--model`` (the gate refuses a root its registry lacks). ``period close`` closes it."""
     from verity.core.protocols.pouw import credit as CR

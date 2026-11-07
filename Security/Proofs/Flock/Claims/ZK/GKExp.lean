@@ -74,9 +74,9 @@ empty transcript.
 one. The cap costs `t/M` in `ε_zk` and nothing in the expected cost, which is uniform in `M`; at `M = t·3^t` its term is
 the rewinds' `3^{-t}`, and only the worst case grows with it.
 
-**The coins.** `gk` draws its coins as it goes (a `Rand` program); the simulator reads them from tapes fixed in advance,
+**The coins.** `gk` flips its coins as it goes (a `Rand` program); the simulator reads them from tapes fixed in advance,
 the nonce and the first run's tape, `M` dummy-witness tapes and `4M` SHVZK tapes, each read at most once (`gkT`). The
-two have one law (`ev_gkT`, from `ev_estimateT` and `ev_rewindsT`).
+two have one sampling design (`ev_gkT`, from `ev_estimateT` and `ev_rewindsT`).
 -/
 
 @[expose] public section
@@ -182,7 +182,7 @@ def gkT {V Cd Cr : Type} (dummy : Cd → V) (rw : V → Cr → V) (comp : V → 
     afterT (dummy ω₀) (rw (dummy ω₀)) comp (bad (dummy ω₀)) (4 * M) (estimateT (fun ω => comp (dummy ω)) M t ωs) σs
   else (.view (dummy ω₀), 1)
 
-/-- **`gk` and `gkT` have one law.** -/
+/-- **`gk` and `gkT` have one sampling design.** -/
 theorem ev_gkT {V Cd Cr : Type} [Fintype Cd] [Nonempty Cd] [Fintype Cr] [Nonempty Cr] (dummy : Cd → V)
     (rw : V → Cr → V) (comp : V → Bool) (bad : V → V → Bool) (t M : ℕ) (f : GOut V × ℕ → ℝ) :
     Ex (fun q : Cd × (Fin M → Cd) × (Fin (4 * M) → Cr) => f (gkT dummy rw comp bad t M q.1 q.2.1 q.2.2)) =

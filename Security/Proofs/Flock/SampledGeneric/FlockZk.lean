@@ -68,7 +68,7 @@ theorem avg_const_mul {C : Type} [Fintype C] (x : ℝ≥0∞) (f : C → ℝ≥0
   exact Finset.sum_congr rfl fun _ _ => by ring
 
 /-- **One-sided closeness under a uniform coin**: if each coin's experiment is `α`-below the other's at `ε r`, so is
-the experiment that draws the coin first and relabels each view by the coin, at `ε` averaged (`Close.coin`'s one-sided
+the experiment that flips the coin first and relabels each view by the coin, at `ε` averaged (`Close.coin`'s one-sided
 form). -/
 theorem Below.coin {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → Exp V) (f : Rnd → V → W)
     {α : ℝ≥0∞} (ε : Rnd → ℝ≥0∞) (h : ∀ r, Below (a r) (b r) α (ε r)) :
@@ -113,7 +113,7 @@ theorem audit_below {n : ℕ} {Tr Rnd Com Wit VS View : Type} [Fintype Rnd] [Non
     exact hH _ Xt X₀ (auditSimAfter Zs samp v)
   exact h1.trans_close h2
 
-/-- **A uniform coin's experiment, in the claims' terms**: the probability of an event of a view drawn from uniform
+/-- **A uniform coin's experiment, in the claims' terms**: the probability of an event of a view sampled from uniform
 coins is the claims' `Pr` of it. -/
 theorem pr_uniform {C V : Type} [Fintype C] [Nonempty C] (f : C → V) (E : V → Prop) :
     Exp.pr (⟨.coin C fun c => .ret (f c), fun _ => PUnit.unit⟩ : Exp V) E =

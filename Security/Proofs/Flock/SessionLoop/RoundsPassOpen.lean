@@ -45,7 +45,7 @@ open Loop in
 set_option maxHeartbeats 4000000 in
 /-- **The frame takes the opening's binding where it takes its coins**: at a history whose next round is rep stream
 `2j + r`'s round after its PIOP (`Masked.repSlot` `0`), whose coins the loop's frame takes, on the loop's own tables
-where `src` draws the tape's level 0. The frame is past the algebraic phase there (`Bind.repState_opened`), the
+where `src` samples the tape's level 0. The frame is past the algebraic phase there (`Bind.repState_opened`), the
 scheduled round is the opening's binding and `z`'s squeeze on the rep's own table (`ofLoop_sched_unrefused`,
 `Bind.sched_open`, `Loop.loopNr_l0`), and the frame takes it (`roundFree_openBind`). -/
 theorem schedTaken_openBind (L₁ : LeanRelease Flock.Wit Loop.Tp)

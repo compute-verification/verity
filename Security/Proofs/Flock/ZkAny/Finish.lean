@@ -9,7 +9,7 @@ The deferred release's verdict at its `Finish` (`goesOnAt` at its last round) is
 the unswitched prover's run cut there (`LeanRelease.refDBelow_unP`, `ZkServer.release_stopped`), and that prover is zero
 knowledge at any values (`RefSession.withStops_unP_zk`). Where it goes on, it is the run of the go prover
 `RefSession.goP`: the unswitched prover before the `Finish`, and at the `Finish` the switched prover's last message where
-the workers' rows hold at the drawn pads, else `abort`. The go prover is simulated where its run goes on (`gkE_go_pow`)
+the workers' rows hold at the sampled pads, else `abort`. The go prover is simulated where its run goes on (`gkE_go_pow`)
 through protocols whose messages are the switched prover's at one coin vector, so nothing asks the switched round
 encoding to read the coins before its round only.
 
@@ -27,8 +27,8 @@ encoding to read the coins before its round only.
 * **`RefSession.goP_go`**: `gkE_go_pow` at `goP`: where its run goes on at its last round, the honest prover's
   Goldreich–Kahan simulator simulates it within `8·|L|·δ₁ + 24t·|L|·δ₁ + 2·3^{-t}` plus `4t·3^t` times its collision
   finder's success. `withStops_goP_go` is it at the session with the frame's stops.
-* `LeanRelease.FinishRows`: the named premise that the firewall's own `Finish` takes a session only where the workers'
-  rows hold at the drawn pads.
+* `LeanRelease.FinishRows`: the named premise that the ZK server's own `Finish` takes a session only where the workers'
+  rows hold at the sampled pads.
 * **`LeanRelease.release_go`**: where the deferred release goes on at its `Finish`, it is `goP`'s run at the session
   with the frame's stops, from the transport premises at the unswitched prover, `FinalRoundEq` and `FinishRows`.
 * **`LeanRelease.zk_finish_out`**: the deferred release at the model server meets `Claims.ZKOut` at its `Finish`
@@ -640,11 +640,11 @@ open FlockSoundness.Discharge
 namespace LeanRelease
 
 /-- **The `Finish` goes on only where the rows hold**: after every history of `refK x` openings whose rounds all passed
-and whose `Finish` the firewall's own `Finish` takes (`live`), whose openings pass, whose last coins the frame takes and
+and whose `Finish` the ZK server's own `Finish` takes (`live`), whose openings pass, whose last coins the frame takes and
 whose messages are the deferred release's own (`ZkServer.OwnHist`), the workers' values `vs` satisfy every table's rows
-at the pads the tape draws at the coins the openings open (`RefSession.RowsAtTape`). A named hypothesis, one of the
-transport's trusts, beside `FinalRoundEq`: the firewall's own `Finish` stops where the workers' values fail a constraint
-at the drawn pads (`refusesFinish`), since `Flock.Firewall.Finish.repFw` releases a rep's inner proof only where none
+at the pads the tape samples at the coins the openings open (`RefSession.RowsAtTape`). A named hypothesis, one of the
+transport's trusts, beside `FinalRoundEq`: the ZK server's own `Finish` stops where the workers' values fail a constraint
+at the sampled pads (`refusesFinish`), since `Flock.Firewall.Finish.repFw` releases a rep's inner proof only where none
 fails on its pads, and where that check passes at both reps the rows hold (`Composed.gated_of_cons`). -/
 def FinishRows (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
     (H : Msg → Msg) (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) : Prop :=
@@ -660,7 +660,7 @@ def FinishRows (S : RefSession) (vs : S.SwVals) (L : LeanRelease Flock.Wit (S.re
 stops, a last round `n x` one past the `Finish` and the `Finish` one past the last coin, for every worker and any values
 `vs`: a release whose message at the `Finish` is not the stop took the `Finish` (`live`), so the rows hold at its coins
 (`FinishRows`); below the `Finish` it is the unswitched prover's run (`refDBelow_unP`), which is the go prover's there
-(`goP_next_lt`), and at the `Finish` it is `Final.encode` of the firewall's files (`FinalRoundEq`), the switched
+(`goP_next_lt`), and at the `Finish` it is `Final.encode` of the ZK server's files (`FinalRoundEq`), the switched
 prover's last message, which the go prover sends where the rows hold (`goP_next_rows`). -/
 theorem release_go (S : RefSession) (Rf : (x : Msg) → (Fin (refK x) → S.Coin) → ℕ → Bool) (vs : S.SwVals)
     (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand)) (H : Msg → Msg) (n : Msg → ℕ) (wk : L.toSrv.Worker)

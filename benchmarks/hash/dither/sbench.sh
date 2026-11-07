@@ -161,13 +161,13 @@ if [ "${SBENCH_SHIP_OUT:-}" = 1 ]; then
   exit 0
 fi
 [ -n "${BUILD_ONLY:-}" ] && { echo "sbench: built (BUILD_ONLY)"; exit 0; }
-# the dither windows' coins are the Lean verifier of record's (pouw.verifier.coins): built before the lease, not inside it,
+# the dither execution phases' coins are the Lean verifier's (pouw.verifier.coins): built before the lease, not inside it,
 # under a lock, since runs of one commit share its source tree and concurrent lake builds there corrupt each other's .c/.o
 command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 (cd verity/core/protocols/pouw/lean/check && mkdir -p .lake && flock .lake/build.lock lake build pouw-check-difftest) \
   > "$OUT/lean-coins-build.log" 2>&1 \
   || { echo "sbench: LEAN_BUILD_FAIL"; tail -20 "$OUT/lean-coins-build.log"; exit 13; }
-# and with --bw-passes PoUB's verifier of record, under the lock lean_verifier.build takes (BW_LEAN_EXE);
+# and with --bw-passes PoUB's verifier, under the lock lean_verifier.build takes (BW_LEAN_EXE);
 # BW_PY runs the audit's side (verifier and prover), by default remote_session/run.sh's torch venv
 if [ -n "${BW_LIB:-}" ]; then
   (mkdir -p verity/core/difftest/lean/.lake && cd verity/core/protocols/remote_bandwidth/lean \
@@ -177,8 +177,8 @@ if [ -n "${BW_LIB:-}" ]; then
   export BW_PY=${BW_PY:-/workspace/pouw/fill-out/pous/work/pous-bench/gpu312-torch2.14.0-cu130/bin/python}
   [ -x "$BW_PY" ] || { echo "sbench: no BW_PY at $BW_PY"; exit 3; }
 fi
-# coins off the node (sbench.py's "Coins"): every port the arms' windows connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
-# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own session
+# coins off the node (sbench.py's "Coins"): every port the arms' execution phases connect to (POUW_CHALLENGER, DITHER_CHALLENGERS'
+# {arm: {"session": ID, "address": HOST:PORT, "secret_file": F, "commitment": HEX, "rounds": R}}), each its own challenge phase
 # from the challenger's gate first (`coins.py open`: reserved in a dev period, opened on its stand-in root, its secret in F on
 # this node, HEX the root of the coin commitment its challenger signed, which its hello must answer, R its --rounds when
 # not 16384), waited for with ss -ltn

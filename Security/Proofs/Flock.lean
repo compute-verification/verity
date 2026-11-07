@@ -51,6 +51,6 @@ public import Proofs.Flock.SamplingBoundary
 public import Proofs.Flock.SamplingScope
 public import Proofs.Flock.ZkAny
 
-/-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
+/-! Flock's proofs: the verifier's, level3's and soundness's. -/
 
 @[expose] public section

@@ -32,7 +32,7 @@ open Loop in
 set_option maxHeartbeats 2000000 in
 /-- **The frame takes a rep's PIOP round past its first where it takes its coins**: at a history whose next round is
 rep stream `2j + r`'s PIOP round `jj ≥ 1`, whose coins the loop's frame takes, on the loop's own tables where `src`
-draws the tape's level 0. The frame is in the masked phase at the values before round `jj` (`repState_piop`), the
+samples the tape's level 0. The frame is in the masked phase at the values before round `jj` (`repState_piop`), the
 scheduled round is the PIOP's frames and squeeze on the rep's own table (`ofLoop_sched_unrefused`,
 `Sched.rounds_piop`), and the frame takes it (`roundFree_on`). -/
 theorem schedTaken_piop (L₁ : LeanRelease Flock.Wit Loop.Tp)

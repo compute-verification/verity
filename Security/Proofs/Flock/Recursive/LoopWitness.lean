@@ -27,8 +27,8 @@ Each guarantee's honest lemma concludes its premises at one instance, and its no
 fails at another.
 
 The instance:
-* the firewall's schedule `sched`: one root table `t` of one node, no rounds, a Hello that links nothing. It is
-  canonical (`sched_canonical`), and the honest worker at it, `hon`, fits it (`hon_fits`), so the firewall sends its
+* the ZK server's schedule `sched`: one root table `t` of one node, no rounds, a Hello that links nothing. It is
+  canonical (`sched_canonical`), and the honest worker at it, `hon`, fits it (`hon_fits`), so the ZK server sends its
   transcript on the worker's requests and finishes (`sends`: `FirewallSends`, from `honestReqs_accepts`);
 * the same requests as a worker of the adaptive firewall (`wAny`): it finishes at every salt (`wAny_finishes`), by
   one kernel evaluation at the zero salt (`hon_finishes0`) and `liveFinished_chopReqs`;
@@ -39,7 +39,7 @@ The instance:
   (`LoopAny.releaseReadsNoStop_loopRelease`).
 
 The nontrivial lemmas take no request and no statement of V* (`m = 0`, so the error terms are `0`), so the real view
-never finishes, and a release that reads whether the inner session finished. The bound fails where the firewall never
+never finishes, and a release that reads whether the inner session finished. The bound fails where the ZK server never
 finishes (`RecursiveZKLoop`: the simulated view always finishes), and where the release reads the stop of a session
 that didn't finish (`RecursiveZKLoopAnySum`, at no holes: the real view is released unfinished at the stop `true`, and
 the simulated view is unfinished only at the stop `false`).
@@ -125,7 +125,7 @@ theorem plain_hello : plain sched.hello = true := by
   rw [hs]
   decide +kernel
 
-/-- **The firewall holds a session to `sched`**: `Schedule.canonical`, by evaluation once Hello is plain. -/
+/-- **The ZK server holds a session to `sched`**: `Schedule.canonical`, by evaluation once Hello is plain. -/
 theorem sched_canonical : FirewallHonest.Canonical sched := by
   unfold FirewallHonest.Canonical Schedule.canonical
   rw [plain_hello]
@@ -138,7 +138,7 @@ abbrev nhS : ℕ := FirewallHonest.rowCount sched
 def honD : Unit → Unit → Unit → Unit → Unit → (Fin nhS → ByteArray) → Flock.Firewall.Honest :=
   fun _ _ _ _ _ _ => hon
 
-/-- **The firewall sends `sched`'s transcript on the honest worker's requests, and finishes.** -/
+/-- **The ZK server sends `sched`'s transcript on the honest worker's requests, and finishes.** -/
 theorem sends : Flock.Guarantees.FirewallSends (Prog := Unit) (Wit := Unit) (Rr := Unit) sched
     (fun _ _ _ => fun (_ : Unit) (_ : Unit) (_ : Fin nhS → ByteArray) => Flock.Firewall.honestReqs sched hon)
     (fun _ _ _ => FirewallHonest.honestMsgs sched honD () () ())
@@ -157,7 +157,7 @@ theorem hon_finishes0 :
   decide +kernel
 
 /-- **The honest worker as a worker of the adaptive firewall**: its `i`-th request is the `i`-th honest one, whatever
-the firewall answered. -/
+the ZK server answered. -/
 def wAny : Unit → Unit → Worker := fun _ _ h => (Flock.Firewall.honestReqs sched hon)[h.length]?
 
 /-- Its request count. -/
@@ -236,7 +236,7 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **`RecursiveZKLoop`'s premises hold at one instance**: the deployed tables (with `SwCausalOn` at the honest
-values), the firewall sending `sched`'s transcript on the honest worker's requests, and one statement of V*, the honest
+values), the ZK server sending `sched`'s transcript on the honest worker's requests, and one statement of V*, the honest
 fixture's, in the claims' relation at the deployed masked parser at every context, its simulator's coins its own. -/
 theorem RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :
     ∃ (y : Claims.Msg) (w : Claims.Flock.Wit),
@@ -267,7 +267,7 @@ theorem RecursiveZKLoop_honest (h : RecDeploy.HonestFixture) :
     Claims.ZKServer.Loop.swCausalOn_honestVals_dataE, Claims.ZKServer.Loop.tapeOK_dataE, sends,
     fun _ _ _ => hR, fun _ _ _ _ _ _ => ⟨Equiv.refl _⟩⟩
 
-/-- **`RecursiveZKLoop`'s bound fails where the firewall never finishes**: with no request and no statement of V*, the
+/-- **`RecursiveZKLoop`'s bound fails where the ZK server never finishes**: with no request and no statement of V*, the
 real view never finishes and the simulated one always does, so an event of not finishing has probability `1` against a
 bound of `0`. -/
 theorem RecursiveZKLoop_nontrivial :

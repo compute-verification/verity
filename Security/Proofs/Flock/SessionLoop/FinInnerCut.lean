@@ -11,7 +11,7 @@ public import Proofs.Flock.Claims.ZK.FinishTrunc
 (`Loop.asksPad`). Its `τ` commitment is read here, in parts:
 
 * **`Finish.repConsC`**: `repCons` in the analysis's terms, `repFwC` up to its inner proof (`repCons_eqC`, at the
-  firewall's commitment and `hm96-sha512/v1`). **`Finish.repCons_cut`**: where `repCons` answered by the rep's coins
+  ZK server's commitment and `hm96-sha512/v1`). **`Finish.repCons_cut`**: where `repCons` answered by the rep's coins
   (`asksOf`) returns from round `0`, `repConsC` answered by the session's cut from the rep's base returns the same, at
   any coins that agree with the rep's below each round's count (`repConsC_br`, on `FinishTrunc`'s bridge).
 * **`Loop.repCons_ofPad`**: `repCons` answered by `asksPad C` returns as answered by `asksOf C`, where it takes no more
@@ -61,7 +61,7 @@ def repConsC (io : FlockComplete.Asks M) (st : Setup) (sch : Flock.Schedule) (tP
   return (p, zl, rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++
     lgc)
 
-/-- **The firewall's `repCons` is `repConsC`** at its own commitment and `hm96-sha512/v1`. -/
+/-- **The ZK server's `repCons` is `repConsC`** at its own commitment and `hm96-sha512/v1`. -/
 theorem repCons_eqC (io : Asks M) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512) (sch : Flock.Schedule)
     (tPad rep : ℕ) (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk)
     (ic : InnerCommit) (vals : Array F128) (extra lanePad : ℕ → ℕ → F128) (salt : ℕ → ℕ → ByteArray) :
@@ -107,7 +107,7 @@ theorem repConsC_br (st : Setup) (sch : Flock.Schedule) (tPad rep : ℕ) (dom : 
   refine bridgeT_liftV_bind _ fun lgc _ => ?_
   exact With.Sim.pure _ _
 
-/-- **The firewall's `repCons` is the session's rounds from `base`**: where `repCons` at `commitFw`, answered by the
+/-- **The ZK server's `repCons` is the session's rounds from `base`**: where `repCons` at `commitFw`, answered by the
 rep's coins from round `0`, returns the proof, messages and constraints `r` and the transcript `t` at round `k'`,
 `repConsC` answered by `asksCut` at any coins that agree with the rep's below each round's count, from a log of `base`
 sends, returns the same with a log of `base + k'`, wherever the cut is past the rep's last round. -/
@@ -326,7 +326,7 @@ open FlockSoundness.Refine (fOf gOf)
 
 namespace Masked
 
-/-- **A deployed rep's constraints from the firewall's run**: where `repConsC` on table `j`'s rep `r`, answered by the
+/-- **A deployed rep's constraints from the ZK server's run**: where `repConsC` on table `j`'s rep `r`, answered by the
 opened coins from the rep's base at the packed table of the witness's trace (`hg`) with an extra claim per link point
 and region (`hxs`), returns, and below `zp 64` the passed
 values plus the pads are the switched source's masked values (`hmk`), its constraints are the worker's view's first seven
@@ -454,7 +454,7 @@ theorem repConsC_rows (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (hw : RZk x
       unfold rankSlot
       rw [hstj]
       omega
-    -- the switched source's switched vectors are the firewall's
+    -- the switched source's switched vectors are the ZK server's
     have hsv : ∀ k < 2,
         ((swSrcE x c w v τ j.val).rep r.val).sv k =
           _root_.Flock.Firewall.Finish.switchVec (ligTab x w τ j)

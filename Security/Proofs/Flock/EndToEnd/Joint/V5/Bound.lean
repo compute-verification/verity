@@ -14,7 +14,7 @@ The proofs of `JointSampledV5`, `JointShareV5` and `JointHorizonV5` (`Joint/V5/S
   sample, and an accepted run accepted the session of member `m`, which has that proof block in its part
   (`forall₂_getElem?`), so a union over the members (`ZkSession.prob_exists_le`) of
   `JointAuditV5.member_accepted_drawnWrong_le` bounds it;
-* `JointAuditV5.drawMiss_le`: the sample misses a set `B` with probability at most the law's own miss `P_a(B)`, under
+* `JointAuditV5.drawMiss_le`: the sample misses a set `B` with probability at most the sampling design's own miss `P_a(B)`, under
   A3 (`Bridge.execSel_escape_le`);
 * `Flock.SecurityProofs.JointSampledV5`: an accepted run with every proof block of `W` incorrect either has a sampled
   proof block incorrect or its sample misses `W`;
@@ -81,7 +81,7 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
   · simp only [hQ, ite_false]
     exact prob_false g s
 
-/-- **The window's sample misses a set `B`** with the escape probability of its live sampling design. -/
+/-- **The window's sample misses a set `B`** with the acceptance probability of its live sampling design. -/
 theorem prob_drawMiss (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.escape B := by
   show avg (fun ω => prob _ ((w.sessions (w.L.draw ω) τ.1).map fun ts => (τ.1, w.L.draw ω, ts)) (τ.2 ω)) =
@@ -95,7 +95,7 @@ theorem prob_drawMiss (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
   · rw [ite_eq_left (hiff.2 hd), ite_eq_left hd]
   · rw [ite_eq_right (mt hiff.1 hd), ite_eq_right hd]
 
-/-- **The window's sample misses a set `B`** with probability at most the law's own miss `P_a(B)`, under A3. -/
+/-- **The window's sample misses a set `B`** with probability at most the sampling design's own miss `P_a(B)`, under A3. -/
 theorem drawMiss_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.nJ)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ ENNReal.ofReal (w.pa B) := by
   rw [prob_drawMiss]

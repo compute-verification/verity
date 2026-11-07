@@ -53,7 +53,7 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, 
 
 namespace Loop
 
-/-- **The session loop's release at its finish's inner rounds**: `withInner` on `finOf` at `L₁`'s frame draws, with the
+/-- **The session loop's release at its finish's inner rounds**: `withInner` on `finOf` at `L₁`'s frame samples, with the
 loop's own link and `Finish` (`ofLoopLink`). -/
 noncomputable abbrev relIn (L₁ : LeanRelease Flock.Wit Tp)
     (src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))

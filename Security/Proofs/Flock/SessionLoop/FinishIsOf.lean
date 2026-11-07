@@ -13,7 +13,7 @@ public import Proofs.Flock.SessionLoop.FinRepTau
 `FinRepRows`'s four consumed facts (`finRepRows`) and `FinRepL0`:
 
 * **`Loop.finFc_of_rows`**: `FinFc` where every table's rows hold at its base: `swSrcE_hmk_fw` at `final_c`'s pad, its
-  `hxs` from `finRepXs`, its `hl0` from `swSrcE_l0_views`, the firewall's level-0 commitment from `cms_cm0` at the
+  `hxs` from `finRepXs`, its `hl0` from `swSrcE_l0_views`, the ZK server's level-0 commitment from `cms_cm0` at the
   switched cut's (`cmsCut_ok`), its pads commitment from `padsView_ic` at the switched cut's (`icCut_ok`), and its rep
   from `proofFile_ok` and `finRepCut`.
 * **`Loop.finRepRounds_of_erased`**: (d) from `FinRepErased` alone, by strong induction on the stream
@@ -39,7 +39,7 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (wk : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
 set_option maxHeartbeats 4000000 in
-/-- **`FinFc` where the rows hold**: at `FinFc`'s premises, `swSrcE_hmk_fw` at `final_c`'s pad, with the firewall's
+/-- **`FinFc` where the rows hold**: at `FinFc`'s premises, `swSrcE_hmk_fw` at `final_c`'s pad, with the ZK server's
 level-0 and pads commitments matched to the switched cut's through the views' (`cms_cm0` and `cmsCut_ok`;
 `padsView_ic`, which reads the rows, and `icCut_ok`). -/
 theorem finFc_of_rows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -72,7 +72,7 @@ theorem finFc_of_rows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     finCommits_of vs L₀ src (realOf src) wk x w hsc hR hS0 ν t κ m₀ ρ₀ ops hF s0 spec hsx
   have e0 : schsV = schs := Except.ok.inj (hsV.symm.trans hs)
   rw [e0] at hcmsV hpads
-  -- level 0's commitment: the firewall's is the views', which is the switched cut's
+  -- level 0's commitment: the ZK server's is the views', which is the switched cut's
   obtain ⟨cmsC, hcmsC, -, -, -, hcm⟩ := cmsCut_ok vs w ν t hA schs hcmsV
   have hCe : cmsC = cms := Except.ok.inj (Prod.mk.inj ((hcmsC #[]).symm.trans (hcms #[]))).1
   obtain ⟨hcap0, hlay0⟩ := cms_cm0 vs src x w hsc hR hS0 hsx hs hcmsV hk hRep
@@ -81,11 +81,11 @@ theorem finFc_of_rows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
       (FlockComplete.eraseC tb.cm0.toC).layers = cms[j.val]!.layers := by
     rw [← hCe]
     exact ⟨hcap0.symm.trans (hcm j.val).1.symm, hlay0.symm.trans (hcm j.val).2.symm⟩
-  -- the firewall's rep at the opened coins
+  -- the ZK server's rep at the opened coins
   obtain ⟨ic', p, tr, hic', hfw, -⟩ := _root_.Flock.Firewall.Finish.proofFile_ok hRep.2.2
   have hrun := finRepCut L₀ src (realOf src) wk x w hsc ν t κ m₀ ρ₀ ops hF s0 spec hsx _ hk tb hi q _ hRep ic' p tr
     hic' hfw l hl
-  -- the pads commitment: the firewall's is the views', which is the switched cut's
+  -- the pads commitment: the ZK server's is the views', which is the switched cut's
   obtain ⟨icV, hicV⟩ := hpads (2 * j.val + r.val) hk l
   obtain ⟨hn₁, hroot₁, hlay₁⟩ :=
     padsView_ic vs L₀ src x w hsc hR hS (hRows ν t κ m₀ ρ₀ ops hF) hsx hs hk hicV hRep hic'
@@ -122,8 +122,8 @@ theorem finFc_of_rows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     hcm0 hicE hrun _ hlt
 
 set_option maxHeartbeats 1000000 in
-/-- **(d) from `FinRepErased`**: where the run from the views is the firewall's up to `eraseZ` at every rep stream, by
-strong induction on the stream each returns with the auditor's rounds (`viewRep_rounds`, the firewall's rep from
+/-- **(d) from `FinRepErased`**: where the run from the views is the ZK server's up to `eraseZ` at every rep stream, by
+strong induction on the stream each returns with the auditor's rounds (`viewRep_rounds`, the ZK server's rep from
 `proofsOf_at`, `proofFile_ok` and `finRepCut`), so every run from the views has them (`viewRep_rounds`) and ends at the
 next rep's first round (`viewRep_size`). -/
 theorem finRepRounds_of_erased (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)

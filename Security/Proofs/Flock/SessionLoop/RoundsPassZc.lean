@@ -48,7 +48,7 @@ namespace LeanRelease
 open Loop in
 set_option maxHeartbeats 2000000 in
 /-- **The frame takes a rep's first round where it takes its coins**: at a history whose next round is rep stream
-`2j + r`'s first (`Masked.repBase`), whose coins the loop's frame takes, on the loop's own tables where `src` draws the
+`2j + r`'s first (`Masked.repBase`), whose coins the loop's frame takes, on the loop's own tables where `src` samples the
 tape's level 0. The frame starts the rep fresh (`ofLoop_answered_at`, `freshOf_ok`, `step_prior_fresh`), the scheduled
 round is the binding behind the stream's domain frame on the rep's own table (`ofLoop_sched_unrefused`,
 `Sched.rounds_two`, `head_encs`), and the frame takes it (`roundFree_zcHead_out`). -/

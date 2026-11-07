@@ -24,7 +24,7 @@ and gives a verdict on every well-formed instance, are completeness, in `Proofs.
 
 * `RejectsExactly`: if `evaluate j` doesn't refuse with code `k`, then not `Malformed j k` (the first condition `j`
   fails, in the order the check reads them, is `k`'s): so a malformed instance is refused, with that condition's code.
-  The conditions are written over `j`'s JSON and what C-Flock's decoder returns for the program (`Flock.Program.decode`,
+  The conditions are written over `j`'s JSON and what Flock's decoder returns for the program (`Flock.Program.decode`,
   then `Prog.gate` per gate), never over the check's own state.
 * `AcceptsExactly`: `evaluate j` gives a verdict only when `WellFormed j`.
 * `CheckRefuses`, `CheckAccepts`: the same of `NciCheck.check`, whose `error` field is the refusal's code and which has

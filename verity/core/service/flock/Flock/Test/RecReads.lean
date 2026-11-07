@@ -1,5 +1,5 @@
 /-
-`RecSetup.checkReads`: the inner transcript read in the coin server's own format (`RecRecord.readFull`) holds what
+`RecSetup.checkReads`: the inner transcript read in the challenger's live-coin part's own format (`RecRecord.readFull`) holds what
 its JSON readers took of it. At the plain session's inner shape (m 27, k_log 22, 8 claims), a record on the schedule
 that `recordFullW` writes passes. The same record as compact JSON is refused as not in its own format, and bytes that
 differ from what the JSON readers read in a `c_k`, a salted top, a node of `root_B`, a link point, a round's coin count
@@ -50,7 +50,7 @@ def text (r : Record) : String := (String.fromUTF8? ⟨(recordFullW r rest).toAr
 
 def tr : Json := (JsonParse.parse (text honest)).toOption.getD Json.null
 
-/-- The inner session's record, holding the coin server's link points. -/
+/-- The inner session's record, holding the challenger's live-coin part's link points. -/
 def record : String :=
   let c := "\"" ++ String.ofList (List.replicate 32 '0') ++ "\""
   "{\"link\": {\"points\": [[" ++ c ++ ", " ++ c ++ "]]}}"

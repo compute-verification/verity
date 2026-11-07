@@ -47,7 +47,7 @@ open Loop in
 set_option maxHeartbeats 1000000 in
 /-- **The frame takes a rep's round before its inner proof where it takes its coins**: at a history whose next round
 is rep stream `2j + r`'s, from its first (`Masked.repBase`) to the last before its inner proof (`Masked.innerOff 0`),
-whose coins the loop's frame takes, on the loop's own tables where `src` draws the tape's level 0: the round is the
+whose coins the loop's frame takes, on the loop's own tables where `src` samples the tape's level 0: the round is the
 rep's first, in its PIOP, in the ring switch from its rank check's, the opening's binding, level 0's or from level 0's
 close on, and the frame takes it in each. -/
 theorem schedTaken_slot (L₁ : LeanRelease Flock.Wit Loop.Tp)
@@ -105,7 +105,7 @@ theorem schedTaken_slot (L₁ : LeanRelease Flock.Wit Loop.Tp)
 open Loop in
 set_option maxHeartbeats 1000000 in
 /-- **Every round of `withInner`'s session loop on `finHonest` passes the frame's checks at `valsDev honestVals`**,
-wherever `cross` passes the device's rounds: at a `Live` statement the loop serves, where `src` draws the tape's
+wherever `cross` passes the device's rounds: at a `Live` statement the loop serves, where `src` samples the tape's
 level 0, after every history of `2 ≤ g.length ≤ refK x` whose coins the frame takes. The rep's schedule on its own
 table is not refused there (`ofLoop_sched_unrefused`); a round before the end of it is the rep's own, which the frame
 takes (`schedTaken_slot`), the round at its end is the inner proof's round 0 (`roundOk_inner0`), and one past it is
