@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.NumbersDeploy
 
 /-!
-# SPOT-Flock's deployed two-stage verifier: the compiler's premises at its code
+# SPOT[Flock]'s two-stage verifier: the compiler's premises at its code
 
 `SpotFlock.Facts`'s facts as the premises the two-stage compiler's theorem (`ksTwo_atOrder`) names, at
 `SpotFlock.code h`:
@@ -47,7 +47,7 @@ theorem sessionsIn_code : SamplingDeploy.SessionsIn (code h) := by
     rw [FlockDeploy.tables_eq hset, hset]
     simp [FlockDeploy.tableLen, List.map_map, Function.comp_def]
 
-/-- **SPOT-Flock's two-stage knowledge soundness at its deployed code**: `ksTwo_atOrder` at `SpotFlock.code h`, its
+/-- **SPOT[Flock]'s two-stage knowledge soundness at its code**: `ksTwo_atOrder` at `SpotFlock.code h`, its
 code's facts and its sessions' runs proved, from A3 at the coins' bytes and the sessions' openings. -/
 theorem ksTwo_spot (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
