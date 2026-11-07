@@ -18,9 +18,7 @@ from verity.ml.circuits.codec import canonical_json, descriptor_chunks, encode_p
 from verity.ml.circuits.program import Program
 
 from verity_vllm.protocols.pouw import h1 as PH
-
-#: the window Program's parameter prefix, the same for every window of a period
-PREFIX = "h1/"
+from verity_vllm.protocols.pouw.h1.names import PREFIX
 
 
 def layout(shapes: Sequence[tuple[int, int]], calls: Sequence[tuple[int, int]],
