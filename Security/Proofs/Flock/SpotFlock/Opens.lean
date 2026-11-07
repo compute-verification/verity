@@ -28,6 +28,13 @@ values `W` and interior values `I` that make `b` correct on `ρ`'s values, each 
 (`Prog.Needs`) revealed by an opening that passes, an interior one of `ρ` under the interior roots, every other under the
 run's roots. Values that agree with those openings agree with `W` and `I` wherever `b`'s correctness reads them
 (`Prog.correct_of_needs`).
+
+**The witness's values, decoded** (`Decodes`, `Reveals`, `witOpens`). `WitOpens` splits in two at a decoder `dec` of
+the session witness, each gate's value: the decoded values make each checked unit correct (`Decodes`, what the session
+statement's relation says of its circuit), and the reveal opens each decoded value the unit's correctness reads, under
+the roots its gate is committed under (`Reveals`, what the commitment's layout and the reveal say of the witness).
+Neither holds of every `h`: both need the session statement's composition and its witness's encoding, which `h.frame`
+and `stmtOk` leave open.
 -/
 
 @[expose] public section
@@ -237,5 +244,55 @@ theorem sessionOpensTwo_of_wit (hw : WitOpens h) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots :=
   sessionOpensTwo h (stmtOpens h hw)
+
+/-! ## The witness's values, decoded -/
+
+/-- **A decoder of the session witness**: `dec x m₁ xS wF g`, the value at the statement's gate `g` that the session
+statement `xS` and its Flock witness `wF` hold, at the run's statement `x` and interior registration `m₁`. -/
+abbrev Dec : Type := Msg → Msg → Msg → Claims.Flock.Wit → ℕ → Bool
+
+/-- **The decoded values make each checked unit correct**: at a session statement the verifier's check passes and a
+Flock witness in its relation, each unit the two stages check is correct on its replay block's values with the decoded
+values for both the committed and the interior ones. -/
+def Decodes (dec : Dec) : Prop :=
+  ∀ x s Pt d (m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) wF u b ρ rb,
+    parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
+    stmtOk h x m₁ xS c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS wF = true →
+    Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
+    s.prog.Correct (s.prog.refIn rb (fun g => some (dec x m₁ xS wF g)) (dec x m₁ xS wF)) b
+
+/-- **The reveal opens each decoded value a checked unit's correctness reads**: at the same statements, for each gate
+`Prog.Needs` names, the reveal holds an opening of the decoded value at that gate that passes, under the interior roots
+`m₁` states for the replay block where the gate is one of its interior gates, and under the run's roots otherwise. -/
+def Reveals (dec : Dec) : Prop :=
+  ∀ x s Pt d (m₀ m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb,
+    parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
+    stmtOk h x m₁ xS c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS wF = true →
+    Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
+    ∀ g, s.prog.Needs b g →
+      ∃ q ∈ (code h).reveal s u (seenAt m₀ m₁ xS c₀ c₁ rest) wF,
+        (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 q.1 q.2 = true ∧ q.2.pos = g ∧
+          q.2.val = dec x m₁ xS wF g ∧
+          q.1 = if g ∈ rb ∧ s.prog.Boundary rb g = false then iroots x (seenAt m₀ m₁ xS c₀ c₁ rest) ρ else s.roots
+
+/-- **`WitOpens` from a decoder**: the decoded values are the witness's values, committed and interior. -/
+theorem witOpens (dec : Dec) (hd : Decodes h dec) (hr : Reveals h dec) : WitOpens h := by
+  intro x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb
+  refine ⟨fun g => some (dec x m₁ xS wF g), dec x m₁ xS wF,
+    hd x s Pt d m₁ xS c₀ c₁ wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb, fun g hg => ⟨fun hi => ?_, fun hi => ?_⟩⟩
+  · obtain ⟨q, hq, hop, hpos, hval, hroot⟩ :=
+      hr x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb g hg
+    exact ⟨q, hq, hop, hroot.trans (ite_eq_left hi), hpos, hval⟩
+  · obtain ⟨q, hq, hop, hpos, hval, hroot⟩ :=
+      hr x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb g hg
+    exact ⟨q, hq, hop, hroot.trans (ite_eq_right hi), hpos, congrArg some hval.symm⟩
+
+/-- **`SessionOpensTwo` at the deployed two-stage code from a decoder** that `Decodes` and `Reveals`. -/
+theorem sessionOpensTwo_of_dec (dec : Dec) (hd : Decodes h dec) (hr : Reveals h dec) :
+    Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
+      (two h) iroots :=
+  sessionOpensTwo_of_wit h (witOpens h dec hd hr)
 
 end SpotFlock

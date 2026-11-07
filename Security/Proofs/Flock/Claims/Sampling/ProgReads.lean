@@ -7,7 +7,8 @@ public import Definitions.Claims.Sampling
 
 `Prog.Correct ref u` reads `ref` only at `u`'s gates and the gates they read (`Prog.correct_congr`), and more finely
 only where `Prog.Needs` says: at a gate of `u` whose value `u` commits, and at a gate outside `u`, other than a
-constant, that one of `u`'s gates reads (`Prog.correct_of_needs`). `Prog.runIn` reads the inputs and the outside reads
+constant, that one of `u`'s gates reads (`Prog.correct_of_needs`), which `Prog.needsList` lists (`Prog.needs_iff`).
+`Prog.runIn` reads the inputs and the outside reads
 at and before the gate it computes (`Prog.runIn_congr`). At a committed or outside gate `refIn` is the committed value
 (`Prog.refIn_of_boundary`, `Prog.refIn_of_not_mem`), and an input, a returned gate and a gate read from outside are on
 the boundary (`Prog.boundary_of_input`, `Prog.boundary_of_out`, `Prog.boundary_of_read`).
@@ -162,5 +163,29 @@ theorem Prog.correct_of_needs (C : Prog) {ref₁ ref₂ : ℕ → Option Bool} {
       (fun g' hg' _ hin => h g' (.inl ⟨hg', C.boundary_of_input u hin⟩))
       fun g' hg' _ x hx i hi hiu => C.read_congr_needs h hg' hx hi hiu]
     exact hb2
+
+theorem Prog.mem_reads_getD (C : Prog) {g i : ℕ} :
+    i ∈ (C.gates[g]?.map BGate.reads).getD [] ↔ ∃ x : BGate, C.gates[g]? = some x ∧ i ∈ x.reads := by
+  cases C.gates[g]? with
+  | none => simp
+  | some x => simp
+
+/-- **What a proof block's correctness reads, as a list**: its boundary gates, then each wire one of its gates reads
+outside it that is no constant, so a reveal that opens these opens all of `Prog.Needs` (`needs_iff`). -/
+def Prog.needsList (C : Prog) (u : List ℕ) : List ℕ :=
+  u.filter (C.Boundary u) ++
+    u.flatMap fun g => ((C.gates[g]?.map BGate.reads).getD []).filter fun i =>
+      decide (i ∉ u) && decide (∀ b, C.gates[i]? ≠ some (.const b))
+
+theorem Prog.needs_iff (C : Prog) (u : List ℕ) (g : ℕ) : C.Needs u g ↔ g ∈ C.needsList u := by
+  unfold Prog.Needs Prog.needsList
+  rw [List.mem_append, List.mem_filter, List.mem_flatMap]
+  refine or_congr Iff.rfl ⟨fun ⟨⟨g', hg', hr⟩, hgu, hc⟩ => ⟨g', hg', ?_⟩, fun ⟨g', hg', hm⟩ => ?_⟩
+  · rw [List.mem_filter, C.mem_reads_getD]
+    simp only [Bool.and_eq_true, decide_eq_true_eq]
+    exact ⟨hr, hgu, hc⟩
+  · rw [List.mem_filter, C.mem_reads_getD] at hm
+    simp only [Bool.and_eq_true, decide_eq_true_eq] at hm
+    exact ⟨⟨g', hg', hm.1⟩, hm.2⟩
 
 end Claims.Sampling
