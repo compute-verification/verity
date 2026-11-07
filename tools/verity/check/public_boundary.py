@@ -33,9 +33,9 @@ public module instead, move the lemma, or ask to move a file across), then `--pr
 not refused: one list serves every checkout the landing queue holds, and an edge one of them cut another may still have.
 Lists of files a manifest builds (a lakefile's `roots`, the workspace's `members`) are not edges: the export keeps the
 public entries. Neither are the paths a data file lists (`public_boundary.toml`'s `[[listing]]`: a lint's allowlist, a
-census's roots): the export drops each entry naming a file it doesn't copy. A path `require`, an extra's entry and a dependency group's (`EXPORT_CUTS`) are edges the export's
-manifest rewrite drops: closed by the export, not open, so the list holds none of them, while `public_export.py --build`
-still builds what it copies without them.
+census's roots): the export drops each entry naming a file it doesn't copy. A path `require`, an extra's entry and a
+dependency group's (`EXPORT_CUTS`) are edges the export's manifest rewrite drops: closed by the export, not open, so the
+list holds none of them, while `public_export.py --build` still builds what it copies without them.
 """
 from __future__ import annotations
 

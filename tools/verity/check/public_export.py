@@ -386,13 +386,14 @@ def rewrite_listing(text: str, listing: PB.Listing, where: str, copied: set[str]
     for i in range(len(lines) - 1):
         if (body := lines[i].rstrip()).endswith(",") and lines[i + 1].lstrip().startswith("]"):
             lines[i] = body[:-1] + lines[i][len(body):]
+    lay = "lay its entries out one a line"
     try:
         got = json.loads("".join(lines))
-    except json.JSONDecodeError:
-        got = None
+    except json.JSONDecodeError as e:
+        raise ValueError(f"public_export: the rewrite of {where} isn't JSON ({e}); {lay}") from e
     if got != doc | {"entries": [e for e in entries if e not in drop]}:
         raise ValueError(f"public_export: the rewrite of {where} reads as more than the old one less the entries it drops; "
-                         "lay its entries out one a line")
+                         + lay)
     return "".join(lines), [("entry", gone(e[key])) for e in drop]
 
 
