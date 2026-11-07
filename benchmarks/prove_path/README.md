@@ -235,7 +235,10 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   gates the sample on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
   (`window`), a compiler whose digest carries no cap (`cap`) or isn't the verifier's (`compiler`), another advice root
   (`advice`), a published root that isn't 64 bytes of a `rows-sha512` store (`sha512`) or isn't the row dir's run root
-  (`run_root`), and a registration naming another Commit (`commit`). Its negatives run beside the audit's. `serve-standin`
+  (`run_root`), a registration naming another Commit (`commit`), and a carried request that doesn't follow from the close of
+  the window before (`follows`: the advice is read as `window_advice`'s, and its carried requests are held to that window's
+  close, opened under its registration, naming the request and what doesn't follow: its order, a request dropped with outputs
+  still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
   lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
   what an integration hands Verity (`verity.ml.windows.interface`): the window's `circuit.json`, which its registration binds

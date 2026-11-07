@@ -879,9 +879,9 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
 
 
 def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_records_a_divergence(tmp_path, monkeypatch):
-    """r20261027-131150-7678: set 16's honest session, which Lean refuses for completeness and upstream accepts
-    (`upstream_accepted`), failed the preflight because it was held to Lean's verdict. A case without the key expects its one
-    verdict of both."""
+    """A case that records a divergence (`upstream_accepted`: an honest session Lean refuses for completeness and upstream
+    accepts) is held to upstream's own verdict: held to Lean's, it would fail the preflight. A case without the key expects
+    its one verdict of both."""
     v = tmp_path / "verifier"
     v.mkdir()
     (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
