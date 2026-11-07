@@ -1,7 +1,7 @@
 module
 
 public import Batteries.Data.ByteArray
-public import Properties.CertifierNetwork.Runs
+public import Properties.NetworkCertifier.DeviceOutput.Runs
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -37,12 +37,12 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.NetworkCertifier.Code
 import Proofs.NetworkCertifier.Schedule
-import Proofs.Properties.CertifierNetwork.Runs
-import Proofs.Properties.NetworkCertifier.Bytes
-import Proofs.Properties.NetworkCertifier.Check
-import Proofs.Properties.NetworkCertifier.Grid
-import Proofs.Properties.NetworkCertifier.Outcomes
-import Proofs.Properties.NetworkCertifier.Run
+import Proofs.Properties.NetworkCertifier.DeviceOutput.Runs
+import Proofs.Properties.NetworkCertifier.Check.Bytes
+import Proofs.Properties.NetworkCertifier.Check.Check
+import Proofs.Properties.NetworkCertifier.Check.Grid
+import Proofs.Properties.NetworkCertifier.Check.Outcomes
+import Proofs.Properties.NetworkCertifier.Check.Run
 
 /-!
 # An accepted run is a run of the certifier program (5b)
