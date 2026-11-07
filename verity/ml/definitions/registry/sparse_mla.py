@@ -144,8 +144,8 @@ def SparseMlaBlock(B, S, q, kv, m_prev=None, l_prev=None, o_prev=None):
     return block(word_steps(B), S, bind(DotBf16V2, K=S.DR + S.DV, DOT=S.DOT), S.DOT, q, kv, m_prev, l_prev, o_prev)
 
 
-def head(st: Steps, S, block_of, INV, q_nope, q_rope, kv):
-    """`SparseMlaHead`'s body: ``block_of(nvis, first)`` the bound block, ``INV`` the epilogue's inverse."""
+def head(st: Steps, S, tile_of, INV, q_nope, q_rope, kv):
+    """`SparseMlaHead`'s body: ``tile_of(nvis, first)`` the bound block, ``INV`` the epilogue's inverse."""
     B, T, DR, DV, BN = st.B, S.T, S.DR, S.DV, S.BN
     if T < 1:
         raise ValueError(f"SparseMlaHead: T={T} selected keys")
@@ -161,9 +161,9 @@ def head(st: Steps, S, block_of, INV, q_nope, q_rope, kv):
             row = Coll(Array(KW, st.bf16), concat([st.zero16().refs] * KW))
             kvb = Coll(Array(BN, Array(KW, st.bf16)), concat([kvb.refs] + [row.refs] * (BN - nvis)))
         if b == nb - 1:
-            r = B.call(block_of(nvis, True), q, kvb)
+            r = B.call(tile_of(nvis, True), q, kvb)
         else:
-            r = B.call(block_of(nvis, False), q, kvb, m, l, o)
+            r = B.call(tile_of(nvis, False), q, kvb, m, l, o)
         m, l, o = r[0], r[1], r[2]
     inv = B.call(INV, st.add(st.add(l[0], l[2]), st.add(l[1], l[3])))
     return B.batch(st._defs["cvt"], B.batch(st._defs["mul"], o, inv, axes=(0, None)), axes=(0,))
@@ -178,9 +178,9 @@ def _head_type(S, bf16=BF16):
 def SparseMlaHead(B, S, q_nope, q_rope, kv):
     """One query head over its row's T selected KV rows: ceil(T / BN) `SparseMlaBlock_v1`s visited last to first (the first, partial
     when BN does not divide T, zero-padded), then `bf16(o * INV((l0 + l2) + (l1 + l3)))` (`AttentionHead_v4`'s epilogue)."""
-    def block_of(nvis, first):
+    def tile_of(nvis, first):
         return bind(SparseMlaBlock, DR=S.DR, DV=S.DV, NVIS=nvis, FIRST=first, BN=S.BN, DOT=S.DOT, SCALE=S.SCALE)
-    return head(word_steps(B), S, block_of, S.INV, q_nope, q_rope, kv)
+    return head(word_steps(B), S, tile_of, S.INV, q_nope, q_rope, kv)
 
 
 def _mla_type(S, bf16=BF16):

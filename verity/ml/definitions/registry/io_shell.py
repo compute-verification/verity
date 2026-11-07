@@ -57,7 +57,9 @@ A collector's rows and an entry's are a few i32s at a small KO, under the 112 by
 of a proof block, so a window proves them inside its token select's combine: `SelectCollect_v1{V, C, KO, FIRST}` is
 `dead_free.TokenSelectCombine_v2{V, C}`'s select, then `OutCollect_v1{KO, FIRST}` over it, (the select, the state), and
 `SelectEntry_v1{V, C, KO, FIRST, IDB, NP, STOP}` the last position's: the select, its collector, then `SlotEntry_v1` over
-that state, the entry alone. Each is Calls of those Definitions, no gate of its own.
+that state, the entry alone. Each is Calls of those Definitions, no gate of its own. `SelectCollect_v2{V, C, KO, FIRST,
+ROUND}` is v1 at a round no gate reads: where a window holds a position's select to a row of a round's input-ids table, each
+round's collectors are a template of their own, so a sample stratified by template has a reader of every round's table.
 
 Registered functions:
   IngressPrompt{MODEL,LP,V}  (body: N u8) -> (ok: bit, LP i32, max_tokens: i32)
@@ -68,6 +70,8 @@ Registered functions:
   SlotEntry{KO,IDB,NP,STOP}  (occ: i32, state: KO + 2 i32) -> ⌈(33 + KO·IDB) / 16⌉ u16 bits
   SelectCollect{V,C,KO,FIRST}
                              (x0: bf16, best: n bf16, idx: n i32, head | state) -> (tok: i32, state: KO + 2 i32)
+  SelectCollect{V,C,KO,FIRST,ROUND}
+                             v2: v1's, ROUND read by no gate
   SelectEntry{V,C,KO,FIRST,IDB,NP,STOP}
                              (x0: bf16, best: n bf16, idx: n i32, head | state, occ: i32) -> SlotEntry's entry
 """
@@ -488,6 +492,22 @@ def SelectCollect(B, S, x0, best, idx, a):
     return tuple_of(tok, B.call(bind(OutCollect, KO=S.KO, FIRST=S.FIRST), a, tok))
 
 
+def round_refuse(S: dict) -> str | None:
+    """`SelectCollect_v2`'s refusal: v1's, or a ROUND that isn't a natural number."""
+    r = S.get("ROUND", 0)
+    return select_refuse(S) or (None if type(r) is int and r >= 0 else f"ROUND={r!r}: a round is a natural number")
+
+
+@composite("SelectCollect", 2, ["V", "C", "KO", "FIRST", "ROUND"], select_collect_sig, refuse=round_refuse,
+           conformance="not-yet-established: vLLM's sample at a position and its output ids so far: SelectCollect_v1, "
+                       "at a round")
+def SelectCollectV2(B, S, x0, best, idx, a):
+    """`SelectCollect_v1{V, C, KO, FIRST}`'s body; ``ROUND``, the round of the input-ids table its select is held to, is read
+    by no gate."""
+    tok = B.call(_select(S), x0, best, idx)
+    return tuple_of(tok, B.call(bind(OutCollect, KO=S.KO, FIRST=S.FIRST), a, tok))
+
+
 @composite("SelectEntry", 1, ["V", "C", "KO", "FIRST", "IDB", "NP", "STOP"], select_entry_sig, refuse=select_refuse,
            conformance="not-yet-established: vLLM's last sample, its request's outputs and their count, "
                        "TokenSelectCombine_v2, OutCollect_v1, then SlotEntry_v1")
@@ -499,4 +519,4 @@ def SelectEntry(B, S, x0, best, idx, a, occ):
     return B.call(bind(SlotEntry, KO=S.KO, IDB=S.IDB, NP=S.NP, STOP=S.STOP), occ, state)
 
 
-IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry]
+IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry, SelectCollectV2]

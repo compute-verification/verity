@@ -77,6 +77,7 @@ def _engine_main(args) -> None:
     if instrumented:
         kw["worker_extension_cls"] = EXTENSION
     print(f"[tp2match:{args.arm}] tp={args.tp} case={case} kwargs={ {k: v for k, v in kw.items() if k not in ('model', 'tokenizer')} }", flush=True)
+    engine_env.require_inductor(kw)
     t0 = time.perf_counter()
     llm = LLM(**kw)
     build_s = time.perf_counter() - t0

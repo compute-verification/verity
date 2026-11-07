@@ -1,4 +1,4 @@
-"""The proof's identifier v1 (`verity.core.protocols.pouw.identifier`, PROTOCOL.md "The proof's identifier (v1)"): every pinned case
+"""The proof's identifier v1 (`verity.core.protocols.pouw.identifier`): every pinned case
 recomputed from its inputs byte for byte, the vectors cover every named scheme, one field changed changes the bytes, the
 bytes are RFC 8785 (restated here and checked against it, and written out literally once), and bad input is refused by
 name."""
@@ -14,7 +14,7 @@ import identifier_vectors as V
 from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw.audit import Epoch, Workload
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import SCHEMES, get
+from verity.ml.protocols.pouw.schemes import SCHEMES, get
 
 PINNED = json.loads(V.OUT.read_text())
 BY_CASE = {c["case"]: c for c in PINNED["cases"]}
@@ -79,6 +79,10 @@ def test_every_case_recomputes_from_its_inputs_byte_for_byte(case):
 
 def test_the_vectors_cover_every_named_scheme():
     assert {c["scheme"] for c in PINNED["cases"]} == set(SCHEMES)
+
+
+def test_the_identifier_names_exactly_the_registered_schemes():
+    assert I.SCHEMES == tuple(SCHEMES)
 
 
 def test_the_64_bit_fields_are_exact_decimal_strings():

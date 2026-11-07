@@ -2,6 +2,8 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
 public import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 @[expose] public section
 

@@ -3,6 +3,7 @@ module
 public import Properties.Pouw
 public import Proofs.Properties.Pouw.Grid
 public import Proofs.Properties.Pouw.Draw
+import Std.Data.DTreeMap.Internal.Operations
 
 /-!
 # Proofs of PoUW's window properties (`Properties.Pouw`)

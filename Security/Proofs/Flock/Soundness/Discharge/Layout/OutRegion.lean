@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Layout.Region
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The returned outputs that the statement pins at the unit slots' output columns
@@ -24,6 +27,7 @@ open Flock FlockLevel3 Model
 
 /-! ### Region "out" -/
 
+-- `split` at every branch of `HmRow.regions`' unfolded do-block, a bind step per region
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.regions` ends with region "out"** in an untyped circuit whose unit returns the outputs. -/
 theorem regions_out {c : Circuit} {pub : Public} {regs : Array Region} (h : HmRow.regions c pub = .ok regs)

@@ -1,12 +1,12 @@
 module
 
-public import CoreProtocol.Protocol
 public import CoreProtocol.Profile
+public import CoreProtocol.Protocol
 public import Flock.WindowRecord
+public import Identity.Domains
 public import PouwCheck.Json
 public import PouwCheck.Tile
 public import PouwWindow.Length
-public import Identity.Domains
 
 /-!
 # The check's three inputs (`core_check.py`, "the three inputs")

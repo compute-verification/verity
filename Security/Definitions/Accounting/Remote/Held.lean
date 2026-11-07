@@ -1,9 +1,9 @@
 module
 
 public import Definitions.Pouw.Basic.Prob
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 public import Mathlib.Algebra.Order.Archimedean.Real.Basic
 public import Mathlib.Order.Interval.Finset.Nat
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
 /-!
 # What a remote audit shows held: the node's memory as a trace (trusted)

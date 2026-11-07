@@ -1,9 +1,40 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.PartsVStar
-public import Proofs.Flock.Claims.Recursion.OpensReads
 public import Proofs.Properties.Verity.Recursive.Names
-public import VStarRecursive
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.PartsVStar
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The compiled part's setup is the model's recursive setup
@@ -335,8 +366,7 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
     · simp only [hrec] at hv
       first | (simp [throw, throwThe, MonadExceptOf.throw] at hv; done) | cases hv
     simp only [hrec] at hv
-    generalize hT : Zk.tags (tags0.withCoins (Coins.tree (Zk.coinSpec (tags0.tableNames 1))))
-      (Zk.maskLogOf circuitB) 1 = T at hv
+    generalize hT : Zk.tags tags0 (Zk.maskLogOf circuitB) 1 = T at hv
     generalize hD : (if T.hm96Rows = true then Witness.recordDraw record else none) = D at hv
     have hv := Except.ok.inj hv
     obtain ⟨proofs, -, hv⟩ := bind_ok hv

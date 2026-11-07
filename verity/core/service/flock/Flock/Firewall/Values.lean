@@ -1,5 +1,5 @@
 /-
-# The ZK server's value service (live PROTOCOL.md §10.2): `flock-firewall values`
+# The ZK server's value service (live PROTOCOL.md §10.2): `core-firewall values`, `flock-firewall values`
 
 The serving stack commits every value whose `b ‖ c` or root goes public through this service, which holds the ZK server's
 salt key (`Salts.loadKey`), and the prover asks it for the salts its witness takes. Each connection is one request, its
@@ -9,15 +9,21 @@ line and then its body up to the end of what the client sends (it shuts its side
   (`Salts.parseCommit`, `Salts.commitBody`). Only once it holds the whole request does the service draw the session `s`
   from the operating system, and the session joins the epoch (`Salts.Epoch`). It answers `ok S`, then each table's
   `ok ROOT TAG N` followed by its `N` leaves' `b ‖ c` (`Salts.commitAnswer`). A body of any other length, a salt beside
-  each digest among them, is refused, and nothing is drawn for it.
+  each digest among them, is refused, and nothing is drawn for it. Where the service numbers registrations
+  (`core-firewall values`), an epoch opens one session: a commit while the current epoch's session is not yet registered
+  is refused, nothing of it answered, so every record counts one session and the stack chooses none to register.
 * `salts`, the body a refs file (`Salts.parseRefs`): `ok LEN` and the `LEN` bytes of its rows' salts, every table ref's
   tag checked (`Salts.saltsAnswer`).
-* `register S`, no body: the registration of the epoch's session `S`, whole. It answers `ok M LEN` and the `LEN` bytes of
-  its record (`Salts.recordOf`), `M` the number of sessions the epoch opened, and opens a new epoch, so no session of the
-  closed one registers. A session the current epoch did not open is refused.
+* `register S`, no body: the registration of the epoch's session `S`, whole. It closes the epoch, so no session of it
+  registers after, takes the next number on the ZK server's record (`Numbering`: `core-firewall values` appends the
+  registration there, its record whole), and answers `ok M LEN` and the `LEN` bytes of its record (`Salts.recordOf`),
+  `be64 n` first, `M` the number of sessions the epoch opened, 1. A session the current epoch did not open is refused,
+  and so is every registration where the service has no record to number it on (`flock-firewall values`), or where its
+  record can't take it (its epoch is closed all the same).
 
 Anything else is answered `err WHY`. `answer` is the whole of it but the socket. The epoch lives only in the process:
-one started again opens a new epoch, in which no earlier session registers.
+one started again opens a new epoch, in which no earlier session registers. Only the ZK server, under its own OS user,
+starts the service (`zk-server-own-user`).
 -/
 module
 
@@ -33,10 +39,17 @@ open Std.Net
 open Std.Async
 open Std.Async.TCP
 
+/-- **How a registration is numbered** on the ZK server's record: given its record at each number, the record at the
+number it took, appended to the ZK server's record in the same step, or why the record took none. -/
+abbrev Numbering := (Nat → ByteArray) → IO (Except String ByteArray)
+
 /-- **The answer to one request** `req` (its line, then its body) under the key `k` and the epoch `epoch`, `draw` the
-operating system's bytes, read for a commit's session only once the request is whole and well formed. Each request
-changes the epoch in one step (`IO.Ref.modify`, `IO.Ref.modifyGet`), whatever other requests run beside it. -/
-def answer (k : ByteArray) (draw : Nat → IO ByteArray) (epoch : IO.Ref Salts.Epoch) (req : ByteArray) : IO ByteArray := do
+operating system's bytes, read for a commit's session only once the request is whole and well formed, and `number` the
+ZK server's record, if the service has one: then an epoch opens one session. Each request changes the epoch in one step
+(`IO.Ref.modifyGet`), whatever other requests run beside it, so of commits that run together into an epoch with no
+session, one opens it. -/
+def answer (k : ByteArray) (draw : Nat → IO ByteArray) (epoch : IO.Ref Salts.Epoch) (number : Option Numbering)
+    (req : ByteArray) : IO ByteArray := do
   let line : String → ByteArray := fun s => (s ++ "\n").toUTF8
   let (head, body) := match findByte req 10 with
     | some nl => ((String.fromUTF8? (req.extract 0 nl)).getD "?", req.extract (nl + 1) req.size)
@@ -51,7 +64,10 @@ def answer (k : ByteArray) (draw : Nat → IO ByteArray) (epoch : IO.Ref Salts.E
       let s ← draw Salts.SESSION_BYTES
       let ans := Salts.commitAnswer k s ts body
       let opened : Salts.Opened := { s, tables := (Array.range ts.size).map fun j => (ts[j]!, ans[j]!.1) }
-      epoch.modify fun e => { e with opened := e.opened.push opened }
+      let took ← epoch.modifyGet fun e =>
+        if number.isSome && !e.opened.isEmpty then (false, e) else (true, { e with opened := e.opened.push opened })
+      if !took then
+        return line "err the current epoch's session is not yet registered: an epoch opens one commit session (`register S` registers it, and the next commit opens the next epoch's)"
       return ans.foldl
         (fun acc (root, tag, bcs) => acc ++ line s!"ok {hexOf root} {hexOf tag} {bcs.size / Salts.BC_BYTES}" ++ bcs)
         (line s!"ok {hexOf s}")
@@ -63,6 +79,8 @@ def answer (k : ByteArray) (draw : Nat → IO ByteArray) (epoch : IO.Ref Salts.E
     if !body.isEmpty then return line s!"err a register request with a body of {body.size} bytes, where it takes none"
     if sh.length != 2 * Salts.SESSION_BYTES then
       return line s!"err a session `{String.ofList (sh.toList.take 200)}` that is not {2 * Salts.SESSION_BYTES} hex digits"
+    let some number := number
+      | return line "err a registration is numbered on the ZK server's record: `core-firewall values --state DIR`"
     match unhex sh with
     | .error e => return line s!"err {e}"
     | .ok s =>
@@ -71,8 +89,9 @@ def answer (k : ByteArray) (draw : Nat → IO ByteArray) (epoch : IO.Ref Salts.E
         | none => (none, e)
       match got with
       | some (m, o) =>
-        let r := Salts.recordOf k m o
-        return line s!"ok {m} {r.size}" ++ r
+        match ← number fun n => Salts.recordOf k n m o with
+        | .ok r => return line s!"ok {m} {r.size}" ++ r
+        | .error e => return line s!"err the ZK server's record took no registration: {e}"
       | none => return line s!"err the session {sh} is none the current epoch opened: a session registers once, in the epoch that opened it"
   | _ => return line s!"err a request `{String.ofList (head.toList.take 200)}`"
 
@@ -87,12 +106,11 @@ def recvAll (c : Socket.Client) : IO ByteArray := do
       acc := acc ++ b
   return acc
 
-/-- `flock-firewall values --salt-key FILE [--listen PORT]`: the ZK server's value service. It reads its salt key from
-`FILE`, creating it where it does not exist (`Salts.loadKey`), listens on `127.0.0.1:PORT` (by default a port the system
-picks), prints `VALUES 127.0.0.1:PORT` once it does, and serves each connection as one request (`answer`) on its own
-thread until its standard input closes. -/
-def cmd (args : List String) : IO UInt32 := do
-  let usage := "usage: flock-firewall values --salt-key FILE [--listen PORT]"
+/-- The value service: it reads its salt key from `--salt-key FILE`, creating it where it does not exist
+(`Salts.loadKey`), listens on `127.0.0.1:PORT` (`--listen`, by default a port the system picks), prints
+`VALUES 127.0.0.1:PORT` once it does, and serves each connection as one request (`answer`, its registrations numbered by
+`number`) on its own thread until its standard input closes. -/
+def serve (usage : String) (args : List String) (number : Option Numbering) : IO UInt32 := do
   let some kf := Witness.argOf args "--salt-key" | IO.eprintln usage; return 2
   let some listen := ((Witness.argOf args "--listen").getD "0").toNat? | IO.eprintln usage; return 2
   let k ← match ← Salts.loadKey kf true with
@@ -109,7 +127,7 @@ def cmd (args : List String) : IO UInt32 := do
       let c ← srv.accept.block
       let _ ← IO.asTask (prio := .dedicated) do
         try
-          let a ← answer k (fun n => IO.getRandomBytes n.toUSize) epoch (← recvAll c)
+          let a ← answer k (fun n => IO.getRandomBytes n.toUSize) epoch number (← recvAll c)
           (c.sendAll #[a]).block
         catch e => IO.eprintln s!"values: {e}"
         try (c.shutdown).block catch _ => pure ()
@@ -117,5 +135,10 @@ def cmd (args : List String) : IO UInt32 := do
   repeat
     if (← stdin.getLine).isEmpty then break
   IO.Process.exit 0
+
+/-- `flock-firewall values --salt-key FILE [--listen PORT]`: the value service with no record of the ZK server's, so it
+commits and answers salts but registers nothing (`core-firewall values --state DIR` registers). -/
+def cmd (args : List String) : IO UInt32 :=
+  serve "usage: flock-firewall values --salt-key FILE [--listen PORT]" args none
 
 end Flock.Firewall.Values

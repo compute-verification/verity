@@ -1,5 +1,5 @@
 """The highutil period on the CPU: the pick draw, ε, the operand openings, and whole periods at small shapes through v31.py's
-no-fold reference (`period.RefDriver`) with an in-process coin source: an honest period is accepted, and a skipping
+no-fold reference (`period.RefDriver`) with an in-process challenger: an honest period is accepted, and a skipping
 prover's, a tampered root's and a swapped operand's are refused."""
 from __future__ import annotations
 
@@ -266,7 +266,7 @@ class _Client:
 
 
 class _Coins:
-    """An in-process coin source: each coin opens once, after what it was asked after."""
+    """An in-process challenger: each coin opens once, after what it was asked after."""
 
     class _Session:
         session = "in-process"
@@ -465,7 +465,7 @@ def test_each_block_is_issued_before_the_last_is_waited_for_and_seeds_open_two_b
 class _FirstBlockOnly(P.RefDriver):
     """A prover that runs every step on block 0's operands, never the registered block 1's."""
 
-    def block_of(self, step: int) -> int:
+    def layer_of(self, step: int) -> int:
         return 0
 
 

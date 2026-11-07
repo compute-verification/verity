@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+public import Proofs.Pouw.PearlC.PeelFp4Proofs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
 
 /-! # `test-16-mxfp4`: selected cells' `C̃` chains (`ch4`) (`PeelFp4Checks`, which joins them) -/
 

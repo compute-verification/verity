@@ -6,12 +6,12 @@ from __future__ import annotations
 import pytest
 
 from research import merge
-from research.drive import Driver
+from research.drive import AFTER_LANDING, Driver
 from test_queue import World, _git
 
 
 class Harness:
-    """A drive on ``world`` whose Lean-check launches are recorded (`launched`) and whose after-landing launches are recorded
+    """A drive on ``world`` whose lock-run launches are recorded (`launched`) and whose after-landing launches are recorded
     (`posted`) as `r-post-N`, each running until a test sets its state in `run_state`."""
 
     def __init__(self, world: World, monkeypatch, **kw):
@@ -28,7 +28,6 @@ class Harness:
                         cancel=lambda repo, ids, reason: self.cancelled.extend(ids), evidence=lambda repo, ids: self.evidence)
         self.evidence: list = []
         self.d.launch_postland = self.launch_post
-        self.d.lean_runs = lambda commits, since: {}
 
     def launch(self, repo, commit, machine, agreement):
         rid = f"r20261012-0000{len(self.launched):02d}-abcd"
@@ -44,6 +43,17 @@ class Harness:
 
     def tick(self, **kw) -> str:
         return self.d.tick(**kw)
+
+    def baseline(self) -> None:
+        """Drive's state with `main` verified on every after-landing step, as a passed after-landing run of it leaves it, so a
+        tick lands without first running one."""
+        self.q._clone()
+        self.q.fetch()
+        state = self.q.load_state()
+        state.setdefault("drive", {})["postland"] = {
+            "verified": _git(self.world.origin, "rev-parse", "main"), "pending": [], "run": None,
+            "verified_as": {"steps": list(AFTER_LANDING), "no_cache": None}}
+        self.q.save_state(state)
 
 
 def _tip(world: World) -> str:
@@ -107,15 +117,15 @@ def _killed_run(tmp_path, name: str):
 
 LINT_LOG = """..........F........                                                      [100%]
 =================================== FAILURES ===================================
-___________________________ test_markdown_size_caps ____________________________
+________________________ test_no_report_genre_basenames ________________________
 
->       assert not offenders, "maintained documents are small:\\n" + "\\n".join(offenders)
-E       AssertionError: maintained documents are small:
-E         tools/research/src/research/store/README.md: 48 KB > 48 KB, 17 bytes over; move detail to the notes store
+>       assert not offenders, "report-genre files belong in ~/.research/notes/lanes/<lane>/:\\n" + "\\n".join(offenders)
+E       AssertionError: report-genre files belong in ~/.research/notes/lanes/<lane>/:
+E         tools/research/src/research/store/status.md
 
-tests/test_repository.py:180: AssertionError
+tests/test_repository.py:110: AssertionError
 =========================== short test summary info ============================
-FAILED tests/test_repository.py::test_markdown_size_caps - AssertionError: ma...
+FAILED tests/test_repository.py::test_no_report_genre_basenames - AssertionError: re...
 1 failed, 18 passed in 17.49s
 """
 
@@ -132,7 +142,7 @@ def _lint_run(tmp_path, log: str = LINT_LOG):
 def test_a_failed_pytest_step_points_at_its_tests_and_the_paths_its_failures_name(tmp_path):
     from research.drive import implicated
 
-    assert implicated(_lint_run(tmp_path)) == {"tests/test_repository.py", "tools/research/src/research/store/README.md"}
+    assert implicated(_lint_run(tmp_path)) == {"tests/test_repository.py", "tools/research/src/research/store/status.md"}
     assert implicated(_lint_run(tmp_path / "b", "error: lock is stale\n")) is None
 
 
@@ -411,9 +421,9 @@ def test_lean_errors_reads_lakes_list_of_failed_modules(tmp_path):
     assert lean_errors(log) == {"Security/Proofs/Flock/Claims/NumbersRadius.lean", "Security/Definitions/Claims/Sampling.lean"}
 
 
-def test_a_lean_check_whose_replay_was_killed_is_a_machines_fault(tmp_path):
+def test_a_lean_audit_whose_replay_was_killed_is_a_machines_fault(tmp_path):
     """A Security/Proofs replay OOM-killed (exit 137) fails lean-audit with rc 1; that is the machine's fault, and the fallback
-    on Lean sources mustn't eject PRs whose heads passed."""
+    on Lean sources mustn't revert landings that broke nothing."""
     from research.drive import killed
 
     d = tmp_path / "run"
@@ -542,11 +552,11 @@ def test_the_after_landing_launch_gives_train_sh_no_cache_with_circuit_checks_ca
     assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
 
 
-def test_the_after_landing_run_takes_a_check_slot_ahead_of_the_lean_checks(tmp_path, monkeypatch):
-    """Each part of the after-landing run (a shard, circuit-check's records step) asks for its check slot at
-    `POSTLAND_SLOT_RANK` (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), and a Lean check asks unranked,
-    whatever drive's own environment says: a ranked priority waiter takes the next free slot ahead of the unranked, so `main`
-    never waits on a slot for a Lean check of `next`."""
+def test_the_after_landing_run_and_the_lock_run_take_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):
+    """Each part of the after-landing run (a shard, circuit-check's records step) and the lock run ask for their check slot at
+    `POSTLAND_SLOT_RANK` (CHECK_SLOT_RANK, which check.py passes on as `slot.py --rank`), whatever drive's own environment
+    says: a ranked priority waiter takes the next free slot ahead of the unranked, so `main` never waits on a slot for a
+    `train.sh` launched by hand."""
     import contextlib
     import os
     import tempfile
@@ -570,7 +580,7 @@ def test_the_after_landing_run_takes_a_check_slot_ahead_of_the_lean_checks(tmp_p
     ranked = f"rank=[{POSTLAND_SLOT_RANK}]"
     assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "pytest", shard="1/3"))
     assert ranked in tail(d.launch_postland(repo, "c" * 40, "m1", "circuit-check", cc_records=True))
-    assert "rank=[]" in tail(d.launch_lean(repo, "c" * 40, "m1"))
+    assert ranked in tail(d.launch_locks(repo, "c" * 40, "m1"))
 
 
 def test_a_tick_sets_the_record_drivers_its_clone_lacks_and_plain_git_then_merges_two_records_with_merge_py(world, monkeypatch):
