@@ -10,9 +10,10 @@ public import Proofs.Flock.Claims.Sampling.SessionSteps
 `SpotFlock.steps h rel`: the deployed two-stage verifier (`SpotFlock.code h`) has the step structure
 `Claims.Sampling.SessionSteps`. Rounds 0 to 2 answer with no `H` call: the two stages' coins, then the session
 statement's check (`stmtOk`), which answers `[]` or refuses. Rounds 3 on are Flock's masked verifier at the round-2
-statement, whose round count `stmtOk` holds to `k₀ h`. A run refused before its session shows `xS₀`'s refused run, at
-which Flock refuses the first message `[]` (`refuses_empty`); Flock's verifier has a round at every statement
-(`k₀_pos`).
+statement, whose round count `stmtOk` holds to `k₀ h`. The session read off a transcript is that statement where it is in
+scope (`sessionOk`), which `stmtOk` checks, so at every run that passed round 2 (`sessionOk_of_stmtOk`). A run refused
+before its session shows `xS₀`'s refused run, at which Flock refuses the first message `[]` (`refuses_empty`); Flock's
+verifier has a round at every statement (`k₀_pos`).
 
 So `sessionRuns`: `SessionRuns` holds at the deployed code, for every relation and every `H`.
 -/
@@ -45,6 +46,15 @@ theorem k_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmt
   split at hok
   · simp only [Bool.and_eq_true, beq_iff_eq] at hok
     exact hok.1.1.2
+  · exact absurd hok Bool.false_ne_true
+
+/-- **A session statement the run checks is in scope** (`sessionOk`). -/
+theorem sessionOk_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ xS c₀ c₁ = true) :
+    sessionOk h xS = true := by
+  unfold stmtOk at hok
+  split at hok
+  · simp only [Bool.and_eq_true] at hok
+    exact hok.1.2
   · exact absurd hok Bool.false_ne_true
 
 /-- **The deployed verifier's step structure**: a prefix of 3 rounds, then Flock's masked verifier at the round-2
@@ -95,14 +105,21 @@ noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
   k_xR _ := rfl
   kS_pos _ := k₀_pos h
   refuses _ c := refuses_empty h.xS₀ c
-  session_pass x u ms rest out _ _ hlen _ hms _ := by
+  session_pass x u ms rest out cs m hlen hcs hms hm := by
     rcases ms with _ | ⟨⟨a₀, o₀⟩, _ | ⟨⟨a₁, o₁⟩, _ | ⟨⟨a₂, o₂⟩, _ | ⟨e, ms⟩⟩⟩⟩ <;> simp at hlen
     obtain ⟨m₀, h₀⟩ := hms (a₀, o₀) (by simp)
     obtain ⟨m₁, h₁⟩ := hms (a₁, o₁) (by simp)
     obtain ⟨m₂, h₂⟩ := hms (a₂, o₂) (by simp)
     dsimp only at h₀ h₁ h₂
     subst h₀ h₁ h₂
-    rfl
+    rcases cs with _ | ⟨c₀, _ | ⟨c₁, _ | ⟨c₂, _ | ⟨c₃, cs⟩⟩⟩⟩ <;> simp at hcs
+    change OC.ret (if stmtOk h x a₁ a₂ c₀ c₁ then Out.msg [] else Out.rej) = OC.ret (Out.msg m) at hm
+    split at hm
+    · rename_i hok
+      show (if sessionOk h a₂ then some (a₂, (⟨rest, out⟩ : Seen)) else some (h.xS₀, refusedSeen)) =
+        some (a₂, ⟨rest, out⟩)
+      rw [if_pos (sessionOk_of_stmtOk h hok)]
+    · cases hm
   session_refused x u ms a hlen hms := by
     rcases ms with _ | ⟨⟨a₀, o₀⟩, _ | ⟨⟨a₁, o₁⟩, _ | ⟨e, ms⟩⟩⟩
     · rfl
@@ -120,7 +137,7 @@ noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
 
 /-- **SPOT-Flock's sessions are Flock runs** (`SessionRuns`), at every relation and every `H`. -/
 theorem sessionRuns (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (H : Msg → Msg) :
-    SessionRuns H (deployOf (FlockDeploy.deployZk rel) (code h)) :=
+    SessionRuns H (SamplingDeploy.deploy rel (code h)) :=
   sessionRuns_of_steps (steps h rel) H
 
 end SpotFlock
