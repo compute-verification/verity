@@ -167,7 +167,7 @@ class Hits:
             src = src if isinstance(src, int) else next(iter(src.values()))
             (blk,) = self.pool.get_new_blocks(1)
             for f, dst in zip(self.layers, self.rows, strict=True):
-                dst[blk.block_id].copy_(torch.from_numpy(np.asarray(f[src])).to(dst.device))
+                dst[blk.block_id].copy_(torch.from_numpy(np.array(f[src])).to(dst.device))
             self.pool._insert_block_hash(key, blk, self.served["hash_tokens"][src])
             self.held.append(blk)
 
