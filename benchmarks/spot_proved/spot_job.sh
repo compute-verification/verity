@@ -15,7 +15,8 @@
 #    (OUT/first_stage.json; a class with no step takes the window's nearest one above it up to BIG_MAX=1024 tokens, else
 #    the big class its largest one over 42 tokens); LONG=1 (the default) adds one uniform over the steps with a prefill row
 #    and a row past LONG_KEYS=2048 keys, of LONG_TOKENS=256,384 tokens (else the largest such step under them), other
-#    than the big class's step when another qualifies; STEPS overrides it.
+#    than the big class's step when another qualifies (LONG_PREFILL=0: with or without a prefill row, for decode at long
+#    N); STEPS overrides it.
 # 2. replay.py replays the window from an empty engine, served as recorded, with capture.py loaded in every worker
 #    (REPLAY_ARGS are added to its arguments): those steps' interiors are recorded and committed, the coins drawn after the
 #    root open layers, and the opened layers' tensors are written, or every recorded tensor with KEEP_TENSORS=all at the
@@ -96,7 +97,8 @@ if os.environ.get("LONG", "1") == "1":
     keys = int(os.environ.get("LONG_KEYS", "2048"))
     lo, hi = map(int, os.environ.get("LONG_TOKENS", "256,384").split(","))
     longs = {s["step"]: tokens[s["step"]] for s in w["steps"]
-             if any(int(r[2]) > 1 for r in s["rows"]) and any(int(r[1]) + int(r[2]) > keys for r in s["rows"])}
+             if (os.environ.get("LONG_PREFILL", "1") == "0" or any(int(r[2]) > 1 for r in s["rows"]))
+             and any(int(r[1]) + int(r[2]) > keys for r in s["rows"])}
     steps = sorted(s for s, n in longs.items() if lo <= n <= hi)
     classes["long"] = {"prefill_and_keys_over": keys, "tokens": [lo, hi], "steps": len(steps), "any_tokens": len(longs)}
     if not steps:
