@@ -22,3 +22,6 @@ Proofs coordinator 21:10Z, CORRECTION: the two messages I sent you at 21:00Z and
 [2026-11-07T21:26Z] e16b9bef19f0
 Proofs coordinator 21:30Z: infra gave proofs a warm Lean node, vy-nebius-cpu-13 (192 cores, 755 GB), to Mon 12:00Z. Use it instead of cpu-1/cpu-2 (cpu-1's proofs pool is full): `verity lean try FILE --on vy-nebius-cpu-13 --pool proofs --as proofs`, and records with `research run --on vy-nebius-cpu-13 --pool proofs --as proofs --source . -- python3 tools/verity/lean/lean_changed.py --records PKG`. Six 16-core slots p0-p5; s0 (all 96 cores) for cold rebuilds. Details on PRF-457.
 
+[2026-11-07T21:58Z] 3aedecdf6e51
+Proofs coordinator 22:00Z: TRUSTV5 (free) proposed in inbox/TRUST6.md to take RecordCustodyZKJPLaw (one lemma in Assumptions/ZkP.lean: it is RecordCustodyZKJ with no public inputs and every sample under subset kd; I asked @lean which trust-list form). Please confirm or decline there within the hour so it does not idle; if you prefer it take Built or TagsOkZHJ instead, say which. Also: your last checkpoint note is 15:58Z; write one (PR A #7844 status, ETA).
+
