@@ -111,7 +111,8 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
 
     `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the requests of that step
     (the scheduler's row order, recorded by the engine wrapper; a `padded` member, the step-input port's, has rows past the step's tokens); else the whole member binds `request_id`.
-    A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason.
+    A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason.  A
+    request-owned value (a `run` field, `Binder.owner`) is its one request's whole, whatever its shape.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
     `binder` (`query.manifest.bind.Binder`, from the required manifest): each tensor's identity, a call boundary's under each request's
@@ -130,6 +131,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
             for m in metas:
                 bound.append((*split_name(m.name), seen[m.name], "label"))
                 seen[m.name] += 1
+        occurrence: Counter = Counter()
         for m, (op, member, k, how) in zip(metas, bound):
             numel = _numel(m.shape)
             if chunk is not None and int(chunk) != int(m.chunk):
@@ -138,7 +140,11 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
             rr = (request_rows or {}).get(step)
             splits: list[tuple[str, int, int, int]] = []            # (request, request-local lo, request-local hi, global element offset)
             refused = None
-            if rr and m.shape and numel > 0 and not op.startswith(HIDDEN_FAMILIES):
+            owner = binder.owner(step, (op, member, k), occurrence[m.name], [rid for rid, _lo, _hi in rr]) if rr and binder is not None else None
+            occurrence[m.name] += 1
+            if owner is not None:                                                     # a request-owned value (`Binder.owner`): whole, its own
+                splits = [(owner, 0, numel, 0)]
+            elif rr and m.shape and numel > 0 and not op.startswith(HIDDEN_FAMILIES):
                 rows = int(m.shape[0])
                 per_row = numel // max(rows, 1)
                 tokens = max(hi for _r, _lo, hi in rr)
