@@ -51,9 +51,9 @@ names, one goal each.
 * **The verdict** (`verifyWith_ok`, §3, §16): one statement per table, the record decodes (S1–S14), each table's public
   words, each table's fast100 schedule (`schedsOf`), one proof file per rep stream, the record's proof digests list
   exactly the rep streams and each is its file's (S17), and each table's two reps accept with one cap (S18).
-* **B's checks** (`custody_ok`, `checks_ok`): the last message's statement, the record's draw, the record's live session
+* **B's checks** (`custody_ok`, `checks_ok`): the last message's statement, the record's sample, the record's live session
   (`liveOf`) and its custody (`root_B`, the public words, the link points, the rounds' count and each round's bytes and
-  coins), the scope, and a drawn session.
+  coins), the scope, and a sampled session.
 -/
 
 @[expose] public section
@@ -213,7 +213,7 @@ theorem custody_ok {spec : SessionSpec} {lv : Live} {link : List ByteArray × Li
   unfold custody
   simp only [hB, hP, hX, hN, hR, check_true, ok_bind]
 
-/-- **B's checks pass** when each does: the statement, the draw, the live session's custody, the scope, a drawn
+/-- **B's checks pass** when each does: the statement, the sample, the live session's custody, the scope, a sampled
 session, and the record's canonical text (S0). -/
 theorem checks_ok {zk : Bool} {s : Ins} {spec : SessionSpec} {x : Claims.Msg} {link : List ByteArray × List ByteArray}
     {c₁ : Coin} {mids : List (Claims.Msg × Coin)} {f : Final} {lv : Live}

@@ -9,12 +9,12 @@
   over the step's real tokens: a group quant's token row, a FlashInfer FP8 linear's (token, output column) when the call has
   fewer than 32 rows (the op's FlashInfer branch), a routed MoE w2 launch's (slot, output column), a fused allreduce + RMSNorm's
   token for its residual half-rows and its norm, a plain allreduce's (token, half-row), and FA3's split combine per
-  (token, head). Instances are drawn from it by the capture's coins, ``--per-type`` of each type.
-* **Match gate.** Each drawn instance's Definition is evaluated on the captured inputs and must return the captured outputs
+  (token, head). Instances are sampled from it by the capture's coins, ``--per-type`` of each type.
+* **Match gate.** Each sampled instance's Definition is evaluated on the captured inputs and must return the captured outputs
   bit for bit (completeness, not soundness: an instance that disagrees is reported and not staged).
 * **Out.** ``values.json``, ``units.json``, ``<label>.npz`` (a11's saved-values format), ``kinds.json`` (a11's table of the
   staged labels), ``window.json`` (what the window is and how its values link to serving) and ``stage.json`` (populations,
-  draws, the gate's results and every type not staged, with its reason).
+  samples, the gate's results and every type not staged, with its reason).
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ NP = {"torch.bfloat16": np.uint16, "torch.float16": np.uint16, "torch.float32": 
       "torch.uint8": np.uint8, "torch.int8": np.int8, "torch.int32": np.int32, "torch.int64": np.int64, "torch.bool": np.uint8}
 NUM_SM = 132  # the H200's SMs, FA3's split count reads it
 #: labels of one family that differ only in a size: one is staged, the census's type when the step has it, else the
-#: smallest (SplitPart past T=64 needs more than C-Flock's 2^27-bit block)
+#: smallest (SplitPart past T=64 needs more than Flock's 2^27-bit block)
 FAMILIES = {"SparseMlaSplitPart_T": "SparseMlaSplitPart_T64", "SparseMlaCombine_N": "SparseMlaCombine_N5"}
 
 
@@ -372,11 +372,11 @@ def mla_split_part_instances(cap: Capture):
                                                             cap.tensor(r, e["out"]["ret3"])[s, h, t:t + 1]])
 
 
-# ---- draw, gate, stage ---------------------------------------------------------------------------------------------------
+# ---- sample, gate, stage ---------------------------------------------------------------------------------------------------
 
 def draw(coins: bytes, label: str, n: int, k: int) -> list[int]:
-    """``k`` distinct indices of ``n`` from the capture's coins (all of them when ``n`` <= ``k``), in the order drawn, so that
-    any prefix is itself a uniform draw (a11's ``--per-kind`` takes one)."""
+    """``k`` distinct indices of ``n`` from the capture's coins (all of them when ``n`` <= ``k``), in the order sampled, so that
+    any prefix is itself a uniform sample (a11's ``--per-kind`` takes one)."""
     if n <= k:
         return list(range(n))
     out: list[int] = []

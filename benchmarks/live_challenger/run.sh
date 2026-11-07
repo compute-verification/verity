@@ -18,7 +18,7 @@
 # machine (default ~/.local/state/live-challenger/key, made on first use over KEYGEN_WORKERS cores, never under out/);
 # PARAMS=W,H an LMS width and height other than lms.DEPLOYED's; HOST_NAME the host the record names (default this
 # machine's name in /etc/vy/peers, by its address); PY the Python (default python3: the challenger reads only the
-# standard library and this tree). Its coins are the Lean verifier of record's (`one_stage.verifier.coins`), built with
+# standard library and this tree). Its coins are the Lean verifier's (`one_stage.verifier.coins`), built with
 # this machine's lake (~/.elan/bin) on first use. The verifier reads out/record.json, out/releases.jsonl and
 # out/challenger.json (the release log's signed close) from this run's out/ (then `remote.trusted_session` with the
 # auditor's signed ledger, its windows.jsonl), never from the prover's.

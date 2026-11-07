@@ -18,7 +18,7 @@ integers a schedule holds (`requests`), so no model is loaded.
              installed Triton is the 3.7.1 whose PTX was read, and the installed SOURCES are the files read, since the launches
              call the two functions directly rather than through the attention layer.
   c128a      per ratio-128 case, `build_c128a_topk_metadata` as `_build_c128a_metadata` calls it with no decode token
-             (sparse_mla.py:222-286, 295-358): the int64 positions of the case's served requests, SPECIAL_POSITIONS and draws,
+             (sparse_mla.py:222-286, 295-358): the int64 positions of the case's served requests, SPECIAL_POSITIONS and samples,
              into a prefill buffer of the case's width filled with a sentinel.  Each row's first K words against `short_rows`
              (slot i is i when i < (position + 1) // 128, truncating, else -1) and the reference `Dsv4ShortContextTopK_v1{K,128}`
              on every row (every 16th served one under --quick); every other word of the buffers untouched, the returned rows
@@ -194,7 +194,7 @@ def requests(case: str, kind: str, seed: int) -> dict[str, Any]:
 
 
 def c128a_positions(case: str, served_pos: np.ndarray, seed: int) -> np.ndarray:
-    """The c128a builder's int64 positions: the served chunk's, then SPECIAL_POSITIONS, those around K * 128, and 64 draws."""
+    """The c128a builder's int64 positions: the served chunk's, then SPECIAL_POSITIONS, those around K * 128, and 64 samples."""
     c = CASES_L[case]
     s = c.topk * c.ratio
     rng = np.random.default_rng(seed + 1)

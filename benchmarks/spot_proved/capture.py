@@ -33,7 +33,7 @@ the events in order. ``step<s>/meta.json`` holds the step (tokens, padding, grap
 token counts), the check, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
 ``params.json``, which gives each parameter a recorded op read (its shape, dtype and SHA-512 over its bytes). Every
 recorded event names its blobs by SHA-512 and its decoder layer, so the root binds every recorded byte. Then
-`_commit_and_open`: the step's root over the ranks' roots, the coins rank 0 draws only after that, and the layers they
+`_commit_and_open`: the step's root over the ranks' roots, the coins rank 0 samples only after that, and the layers they
 open, whose parameters each rank writes beside the step (``commit.json``, ``open/``).
 """
 from __future__ import annotations
@@ -581,7 +581,7 @@ def _finish(runner: Any) -> None:
 
 
 def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
-    """The step's interior root over every rank's, then the coins, drawn by rank 0 only after every rank's root is fixed, and
+    """The step's interior root over every rank's, then the coins, flipped by rank 0 only after every rank's root is fixed, and
     the layers they open: ``--open`` (default ``dense:1,moe:1``) layers of each kind, whose parameters each rank
     writes under ``open/`` (the bytes its sampled proof blocks read). Written to ``commit.json``."""
     import torch

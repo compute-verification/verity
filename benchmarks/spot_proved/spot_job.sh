@@ -9,11 +9,11 @@
 # JIT; OUT/engine_env.txt.
 # 1. The first-stage coin: one step of the window's with SMALL tokens (the FP8 linears' FlashInfer branch, the fused MNNVL
 #    all-reduce + norm) and one with BIG (DeepGEMM and its group quants, the multimem all-reduce, the fused add + RMSNorm at
-#    its 256-thread block, FA3 still split), each uniform over those steps, drawn here before the replay starts
+#    its 256-thread block, FA3 still split), each uniform over those steps, sampled here before the replay starts
 #    (OUT/first_stage.json; a class with no step takes the window's nearest one above it up to BIG_MAX=1024 tokens, else
 #    the big class its largest one over 42 tokens); STEPS overrides it.
 # 2. replay.py replays the window from an empty engine, served as recorded, with capture.py loaded in every worker: those
-#    steps' interiors are recorded and committed, the coins drawn after the root open layers, and only the opened layers'
+#    steps' interiors are recorded and committed, the coins flipped after the root open layers, and only the opened layers'
 #    tensors are written (/workspace/spot-capture/<run>, outside OUT, which custody uploads). The graph-off forward holds the
 #    step's tensors in host memory until the coins: about 10 GB a rank at 384 tokens.
 # 3. stage.py stages each step's sampled proof blocks into OUT/values-step<s> (a11's saved values: a few MB) and the

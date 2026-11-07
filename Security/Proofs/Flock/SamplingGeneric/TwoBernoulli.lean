@@ -7,7 +7,7 @@ import Proofs.Flock.Claims.Sampling.Draws
 /-!
 # The deployed first stage is below Bernoulli(Q/N)
 
-The deployed two-stage design's first stage draws a uniform `Q`-subset of the population's `N` replay blocks and every
+The deployed two-stage design's first stage samples a uniform `Q`-subset of the population's `N` replay blocks and every
 input replay block (`slotDesign`'s `⟨[subset Q, all]⟩` on `Slots.layout`'s two classes). The integrity profile reads
 that level as `Bernoulli(Q/N)`: it reports `∏_ρ (1 − Q/N + (Q/N)·e_ρ)`, each replay block caught independently. That
 bounds `P̄_a` (`Design.Two.Pa`), so `M̄_δ` is inside the profile's confidence set and the guarantee at `M̄_δ` is one at
@@ -46,7 +46,7 @@ theorem Design.Two.Pa_le_prod (d : Design.Two) (Pt : Partition) (fp : ℕ → �
     (mul_nonneg (prod_nonneg fun ρ _ => sub_nonneg.2 (d.esc_le_one Pt fp ρ))
       (prod_nonneg fun ρ _ => d.esc_nonneg Pt fp ρ))
 
-/-- **The deployed first stage is below Bernoulli(Q/N)**: at a first stage drawing a uniform `Q`-subset of the
+/-- **The deployed first stage is below Bernoulli(Q/N)**: at a first stage sampling a uniform `Q`-subset of the
 population's `N` replay blocks and every input replay block, `P̄_a ≤ ∏_{ρ<N} (1 − Q/N + (Q/N)·e_ρ) · ∏_{ρ≥N} e_ρ`. -/
 theorem Design.Two.Pa_le_bernoulli (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) {Q : ℕ}
     (hd : SubsetInputsDesign d.replay Q) {c ic : List (List (List ℕ))} (hP : d.part.classes = [c, ic])

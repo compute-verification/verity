@@ -164,7 +164,7 @@ def _ref_bernoulli(a, b, n, stream):
     return out
 
 
-#: the challenger's coins for a draw that names none: the verifier has no coins of its own
+#: the challenger's coins for a sample that names none: the verifier has no coins of its own
 _COINS = random.Random(20261029)
 
 
@@ -205,8 +205,8 @@ def test_unit_draw_samplers_are_the_exact_reduction():
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_draw_given_no_coins_is_refused_unless_it_samples_every_unit():
-    """`draw` without `--stream` or `--stream-file`: the verifier has no coins of its own, so a draw that reads coins is
-    refused before any is read, whatever its law, and only a draw of every unit, which reads none, is drawn."""
+    """`draw` without `--stream` or `--stream-file`: the verifier has no coins of its own, so a sample that reads coins is
+    refused before any is read, whatever its sampling design, and only a sample of every unit, which reads none, is sampled."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
     def draw(*args):
@@ -253,7 +253,7 @@ def test_unit_draw_check(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_draw_is_held_to_its_registered_law(tmp_path):
-    """`draw --registration F` and `draw-test --registration F`: the law is the one the window registered before any coin,
+    """`draw --registration F` and `draw-test --registration F`: the sampling design is the one the window registered before any coin,
     so a sample at another k (subset:8 against a registered subset:2, and the reverse) or over another population is refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     regs = {}
@@ -290,7 +290,7 @@ def test_a_draw_is_held_to_its_registered_law(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_draw_over_several_tables_has_a_count_they_split():
-    """`draw --tables J` refuses a law whose unit count the J tables can't split evenly: a Bernoulli sample (its count is random),
+    """`draw --tables J` refuses a sampling design whose unit count the J tables can't split evenly: a Bernoulli sample (its count is random),
     a subset whose k isn't a multiple of J, and J outside 1..MAX_TABLES; a subset of k = 4 over 2 tables is one sample of 4 units."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
 
@@ -338,7 +338,7 @@ def _stratified_agree():
 def test_stratified_draw_from_the_verifiers_own_program(tmp_path):
     """`draw --program --partition --stratified K`: the strata derived from the program (one per template, ranges merged,
     in order of first unit), `k_s = max(1, round(K n_s / N))`, each stratum's `subset` on its own segment of the stream,
-    and U2 on stratified samples, held to the verifier's own law."""
+    and U2 on stratified samples, held to the verifier's own sampling design."""
     import hashlib
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     ref = _stratified_agree()
@@ -406,9 +406,9 @@ def _work_program(tmp_path):
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_work_draw_from_the_verifiers_own_program(tmp_path):
-    """`draw --program --partition --work K --work-table F`: the stratified law's strata, `k_s = min(n_s, max(f_s,
+    """`draw --program --partition --work K --work-table F`: the stratified sampling design's strata, `k_s = min(n_s, max(f_s,
     ⌈K w_s n_s / W⌉))` with each stratum's floor `f_s` from the table (one by default, so a stratum that does no work samples
-    one), each stratum's `subset` on its own segment of the stream, and U2 on work samples, held to the verifier's own law."""
+    one), each stratum's `subset` on its own segment of the stream, and U2 on work samples, held to the verifier's own sampling design."""
     import random
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     ref = _stratified_agree()
@@ -447,12 +447,12 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
     got = check([d, *bad], *flags, "--work", "2")
     assert [g["ok"] for g in got] == [True] + [False] * len(bad), got
     assert [g["ok"] for g in check([d, bad[-1]])] == [True, True]
-    # another table's law, or the stratified law, is not this verifier's
+    # another table's law, or the stratified sampling design, is not this verifier's
     other = _lean_draw_obj([*table("w2.json", {"T0_v0": 1, "T1_v0": 1, "T2_v0": 0}), "--work", "2"])
     strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
     assert [g["ok"] for g in check([other, strat])] == [True, True]
     assert [g["ok"] for g in check([other, strat], *flags, "--work", "2")] == [False, False]
-    # floors per stratum from the table: T2 (no work, 4 of 10 units) at floor 2 draws what stratified:4 draws from it,
+    # floors per stratum from the table: T2 (no work, 4 of 10 units) at floor 2 samples what stratified:4 samples from it,
     # at floor 9 all four; a floor on a working stratum lifts it too
     cases = [({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 2}}, [1, 1, 2], [2, 1, 2]),
              ({"T0_v0": 3, "T1_v0": 1, "T2_v0": {"work": 0, "floor": 9}}, [1, 1, 9], [2, 1, 4]),
@@ -484,7 +484,7 @@ def test_work_draw_from_the_verifiers_own_program(tmp_path):
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     """`verify` refuses a session whose record carries a work sample unless it holds its own K, work table, program and
-    partition, since the sample's K, works and floors set every k_s; with all four, the law must be its own derivation, so a
+    partition, since the sample's K, works and floors set every k_s; with all four, the sampling design must be its own derivation, so a
     sample made at another K (k = 1, say, which U2 alone accepts) or under other floors is refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     table = _work_program(tmp_path)
@@ -520,7 +520,7 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
     assert why(at2, *other, "--work", "2").startswith("setup: U2: the draw's work law is not the verifier's own")
     assert why(at2, *flags, "--work", "3").startswith("setup: U2: the draw's K is 2, not the verifier's 3")
     assert why(at1, *flags, "--work", "2").startswith("setup: U2: the draw's K is 1, not the verifier's 2")
-    # at its own K and table the law is its own derivation, and setup goes on to the circuit, which this file is not
+    # at its own K and table the sampling design is its own derivation, and setup goes on to the circuit, which this file is not
     assert not why(at2, *flags, "--work", "2").startswith("setup: U2:")
     assert not why(at1, *flags, "--work", "1").startswith("setup: U2:")
     # the floors are the verifier's too: a sample made under a table with T2's floor at 3 is refused under the verifier's
@@ -536,7 +536,7 @@ def test_verify_takes_a_work_draw_only_from_its_own_table(tmp_path):
 def test_verify_takes_a_stratified_draw_only_at_its_own_k(tmp_path):
     """`verify` refuses a session whose record carries a stratified sample unless it holds its own K (`--stratified K`),
     program and partition, since the sample's K and strata set every k_s (U2 alone accepts a sample at k = 1, and strata it
-    cannot check); with all three, the law must be its own derivation, so a sample at another K or over other strata is
+    cannot check); with all three, the sampling design must be its own derivation, so a sample at another K or over other strata is
     refused."""
     subprocess.run(["lake", "build"], cwd=LEAN, check=True, capture_output=True)
     flags = _work_program(tmp_path)("w.json", {})[:4]
@@ -626,7 +626,7 @@ def test_closure_draw_proves_the_verifiers_closure(tmp_path):
     assert [g["ok"] for g in check([(x, len(x["units"]) + len(x["closure"])) for x in bad])] == [False] * len(bad)
     strat = _lean_draw_obj([*flags[:4], "--stratified", "2"])
     assert not check([({**strat, "closure": [9]}, len(strat["units"]) + 1)])[0]["ok"]
-    # the verifier's own map: its closure is accepted, a smaller one refused, and a plain draw lacks its closure
+    # the verifier's own map: its closure is accepted, a smaller one refused, and a plain sample lacks its closure
     smaller = {**d, "closure": c[:-1]} if len(c) > 1 else {k: v for k, v in d.items() if k != "closure"}
     assert [g["ok"] for g in check([(d, n), (smaller, n - 1)], *flags, "--work", "2", *cl)] == [True, False]
     (tmp_path / "circuit.txt").write_text("not a circuit\n")
@@ -798,7 +798,7 @@ def _tile_window(bits: bool) -> str:
 def test_width_refusals_agree_with_the_codec(tmp_path):
     """The NCI difftest's 335 descriptors whose references name leaves of other widths than their types give them, and
     their well-typed neighbours (`desc_difftest_vectors.mistyped`), and a PoUW window's shape reading a word as a
-    template's bits and its bits as them (`_tile_window`): the Lean decoder, which C-Flock's verifier, `NciCheck` and
+    template's bits and its bits as them (`_tile_window`): the Lean decoder, which Flock's verifier, `NciCheck` and
     PoUW's `Credit.programOf` share, refuses as `E_REINTERPRET` exactly those the codec does, with the codec's message
     (`verity/ml/flock/verifier/README.md`'s D22; `qword_program_agree.py --widths`)."""
     spec = importlib.util.spec_from_file_location("desc_difftest_vectors", NCI_SCRIPTS / "desc_difftest_vectors.py")

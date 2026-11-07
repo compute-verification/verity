@@ -1,4 +1,4 @@
-"""P14: one way to do each thing: build a vLLM engine, reach into it, refuse, encode canonical JSON and draw ChaCha20.
+"""P14: one way to do each thing: build a vLLM engine, reach into it, refuse, encode canonical JSON and sample ChaCha20.
 
 Checked against ``allowlists/p14_one_way.json``, keyed ``(file, kind, symbol, detail)``:
 

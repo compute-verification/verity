@@ -59,9 +59,9 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
 | `spot_proved/` | a served step's own values proved: one replayed step of a recorded replay block captured per TP rank under CUDA graphs, staged as each sampled type's proof blocks, and audited one stage end to end by the Lean verifier | maintained |
 | `multi_unit/` | an FP8 GEMM's proof blocks staged as Flock statements in several layouts: prover and verifier time, peak memory and proof bytes | maintained |
-| `flock_s8_block/` | C-Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
-| `unit_block/` | a word primitive's Boolean version built as one C-Flock proof block: the select's slot alone and with its rows' openings, against the 2^27 block | maintained |
-| `proof_throughput/` | the proof blocks a second C-Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
+| `flock_s8_block/` | Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
+| `unit_block/` | a word primitive's Boolean version built as one Flock proof block: the select's slot alone and with its rows' openings, against the 2^27 block | maintained |
+| `proof_throughput/` | the proof blocks a second Flock proves and the Lean verifier accepts on GLM-5.3's dot products, over the batch size | maintained |
 | `commitments/` | the commitment schemes' cost: hashing leaves and building the tree, hiding leaves per row, and serving's per-step row tables | maintained |
 | `sampling_plan/` | the sampling plan for one served workload: a cost model fitted to proving measurements, and ε at δ over the verification overhead (a model, not a measurement) | maintained |
 | `spot_figures/` | the SPOT post's Figures 1-3 for a model from its cards (`spot-card/v1`) and the sampled-proofs planner: what an adversary serving it on all of a scope's compute can exfiltrate, infiltrate or skip against total cost (each server configuration's serve tax plus the share of compute for verification) and against proof overhead, proof overhead per proof-block type, and the serve-time commitment's cost over fast serving (a model, not a measurement) | maintained |
@@ -109,7 +109,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | --- | --- | --- |
 | `ppl/` | the perplexity an intervention on a served model's matmuls or attention costs, against bf16 and plain int8 | maintained |
 | `f32_exhaustive/` | a correctly rounded reference primitive (`F32LogRn_v1`, `F32ExpRn_v1`) against MPFR, or a Boolean version (`F32Sqrt_v2`) against its word, on all 2^32 binary32 words | maintained |
-| `numerical/` | the bench spine (`verity_numerical.bench`) that C-Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
+| `numerical/` | the bench spine (`verity_numerical.bench`) that Flock and `circuit-check` import, and the per-unit-type cost inventory; the archived proof systems' tables are in the evidence store | frozen |
 
 ## Census data
 
