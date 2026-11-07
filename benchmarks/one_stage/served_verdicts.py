@@ -25,10 +25,10 @@ count its blocks. ``public-lines`` prints each line of stdin in its published fo
 appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publish`` holds each file of OUT, once the run
 is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
 its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
-verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
+verifier's coins and samples are public. ``public-registration`` prints what the run publishes of a window's advice
 registration (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
-(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
+(`sampled_line`: the partition the sample was over, the members it drew, and no length of the advice or count of the
 scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
@@ -63,8 +63,8 @@ reserves (a window opens at its first engine step): its circuit is the Program d
 (serve.json's ``protocols.program``, ``h1/window-program.meta.json``), its rows and rounds the server's T and S, and its
 circuit files those of ``--circuits`` (``pouw_h1_circuits --program SERVE_DIR/h1 --out DIR --live T,S``'s manifest),
 held to that digest, T and S (`period_open_argv`). The live template's file is required. A stratum whose ``k<K>`` file
-isn't built yet is left out and named: core's credit refuses a drawn statement at that K (``circuit``), nothing else.
-Its fixed length is ``--slots`` requests of ``--max-tokens`` (`credit.LENGTH_FIELD`); its draw K ``--draw-k``, else
+isn't built yet is left out and named: core's credit refuses a sampled statement at that K (``circuit``), nothing else.
+Its fixed length is ``--slots`` requests of ``--max-tokens`` (`credit.LENGTH_FIELD`); its sample K ``--draw-k``, else
 `pouw_h1_challenger.draw_k` over the declared layout; its weights the auditor's registration of ``--model`` under the
 digest, else none (the gate refuses a root its registry lacks, and serve-openai's own is a local key's, so core's credit
 then refuses the window at its weights). The open's answer goes
@@ -84,7 +84,7 @@ checked by `pouw_h1_gpu.check_challenger` under the key the deployment pins (``-
 H1's tables are tied to the window's Commit, its coins are the session the ledger opened and ended for it, and its record
 is one manifest under them; core's credit refuses the window and is shown beside it (`DEV_WHY`). Credit reads the
 declared Program serve-openai wrote (``h1/window-program.json.gz``), the period ``period open`` opened, and, when given,
-the drawn calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
+the sampled calls' statements (``--statements``) and the window's live evidence (``--live-evidence``,
 ``h1_prove/live.py evidence``'s), so it reaches each check those reach (`credit_inputs`). The verdict says whether the
 window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
@@ -459,7 +459,7 @@ def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
-    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
+    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the sample was over (the partition's
     templates, its scope's op path and law), which members it drew, and the row with no length of the advice
     (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
     scope's ``steps``, the window's engine steps, stay on the node too."""
@@ -704,7 +704,7 @@ def period_close(serve_dir: Path, gate: str) -> dict[str, Any]:
 def credit_inputs(serve_dir: Path, statements: Path | None = None, live: Path | None = None) -> dict[str, str]:
     """What core's credit reads of the window beyond its record and session, as ``--check-challenger``'s flags: the
     declared Program serve-openai wrote (``--descriptor``, `pouw_h1.PROGRAM`), the period ``period open`` opened
-    (``--period``, `PERIOD`), the drawn calls' statements (``--statements``) and the live evidence (``--live-evidence``,
+    (``--period``, `PERIOD`), the sampled calls' statements (``--statements``) and the live evidence (``--live-evidence``,
     ``h1_prove/live.py evidence``'s), each where it exists."""
     got: dict[str, str] = {}
     if (p := serve_dir / "h1" / "window-program.json.gz").is_file():
@@ -778,7 +778,7 @@ def premises(doc: Mapping[str, Any]) -> dict[str, dict[str, Any]]:
 def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str | None, main: Path | None,
          check: Check, statements: Path | None = None, live: Path | None = None) -> dict[str, Any]:
     """PoUW's development piece on window `window` (module docstring), its document written to ``out/development.json``;
-    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the drawn
+    `check` is `check_challenger` with its Python bound, given credit's inputs (`credit_inputs` of `serve_dir`, the sampled
     calls' `statements` and the `live` evidence), its document's ``credit_inputs``."""
     out.mkdir(parents=True, exist_ok=True)
     inputs = credit_inputs(serve_dir, statements, live)
@@ -837,7 +837,7 @@ def check_answer(a: Any) -> dict[str, Any]:
 
 
 def epsilon(a: Mapping[str, Any]) -> str | None:
-    """A sampled protocol's bound on wrong units (``public.bound``) over its checked level's size (`Core.Integrity`), or
+    """A sampled protocol's bound on incorrect proof blocks (``public.bound``) over its checked level's size (`Core.Integrity`), or
     None for an answer that has no such bound."""
     public, profile = a.get("public"), a.get("profile")
     levels = profile.get("levels") if isinstance(profile, Mapping) else None

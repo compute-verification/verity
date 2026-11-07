@@ -13,19 +13,19 @@ import Proofs.Flock.Soundness.Discharge.Layout.QSort
 /-!
 # The tables and sites of a one-table session
 
-`Prog.flock_headline_live` takes a table `T S R` at every draw `S` and each drawn unit's site in it (`Placed.Sites`).
+`Prog.flock_headline_live` takes a table `T S R` at every sample `S` and each sampled proof block's site in it (`Placed.Sites`).
 This file builds both from the session's inputs `I : Inputs` (the verify command's flags: one circuit file, one public
-file, one table), at the draw the challenger writes for `S` (`dj S`, the draw's JSON):
+file, one table), at the sample the challenger writes for `S` (`dj S`, the sample's JSON):
 
-* `DrawSetup I mPts S d`: `Stmt.setupH` on `I` accepts the draw `d`, which decodes to a draw `D` proving every unit of
+* `DrawSetup I mPts S d`: `Stmt.setupH` on `I` accepts the sample `d`, which decodes to a sample `D` proving every unit of
   `S`; the statement's blocks hold `D`'s proved units, its `fast100` schedule has two levels or more, and its link
   points are `mPts`.
 * `DrawSetup.table`: its table, the statement `(setupH_layout ht h).model (regionsOf st)` (what `Placed.Accepted` reads,
   so `Accepted.hT` is `rfl`), and each unit `u`'s site: its rank `r` among `D.proved`, block `r / c.g` and template
   instance `r % c.g`. Distinct units have distinct ranks and so distinct sites (`table_site_inj`).
-* `DrawSetup.refused`: at a draw with no `DrawSetup`, a table no witness satisfies (`refused_unsat`): a reference
+* `DrawSetup.refused`: at a sample with no `DrawSetup`, a table no witness satisfies (`refused_unsat`): a reference
   setup's statement with two regions pinning the same bit to 0 and to 1.
-* `tableAt`: the draw's table, `table` when the draw has a `DrawSetup` and `refused` otherwise; `tableAt_stmt` says it
+* `tableAt`: the sample's table, `table` when the sample has a `DrawSetup` and `refused` otherwise; `tableAt_stmt` says it
   is setupH's statement wherever setupH accepts.
 * `sitesAt`, `sitesAt_parse`: the `Sites` of the plan `fun S R => [tableAt … S]`, and `hparse` from the session's one
   circuit file.
@@ -42,8 +42,8 @@ open FlockSoundness.Discharge.Exec (Inputs)
 
 variable {n : ℕ} (I : Inputs) (mPts : ℕ)
 
-/-- **A draw flock-verify sets up**: on the session's inputs `I`, `Stmt.setupH` accepts the draw's JSON `d`, which
-decodes to a draw `D` whose proved units include `S`'s; the statement's `c.g · 2^nbl` template instance slots hold `D`'s
+/-- **A sample flock-verify sets up**: on the session's inputs `I`, `Stmt.setupH` accepts the sample's JSON `d`, which
+decodes to a sample `D` whose proved units include `S`'s; the statement's `c.g · 2^nbl` template instance slots hold `D`'s
 proved units, its `fast100` schedule has at least two levels (`hsch`, `hm`, as `TabSpec` asks), and its link points are
 `mPts`. -/
 structure DrawSetup (S : Finset (Fin n)) (d : Lean.Json) where
@@ -64,7 +64,7 @@ structure DrawSetup (S : Finset (Fin n)) (d : Lean.Json) where
   hm : 13 ≤ st.m
   hmPts : st.mPts = mPts
 
-/-- **A draw's table with its sites**: the table, an acceptance whose statement is the table's, and each drawn unit's
+/-- **A sample's table with its sites**: the table, an acceptance whose statement is the table's, and each sampled proof block's
 template instance and block there. -/
 structure Table (S : Finset (Fin n)) where
   T : TabSpec mPts
@@ -103,7 +103,7 @@ noncomputable def specAt (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c
     have h3 := x.hmPts
     omega⟩
 
-/-- A drawn unit's rank among the draw's proved units. -/
+/-- A sampled proof block's rank among the sample's proved units. -/
 def rank (u : Fin n) : ℕ := x.D.proved.toList.idxOf u.val
 
 theorem rank_lt {u : Fin n} (h : u ∈ S) : x.rank u < x.D.proved.size := by
@@ -126,7 +126,7 @@ theorem rank_div_lt {u : Fin n} (h : u ∈ S) : x.rank u / x.st.c.g < 2 ^ (x.st.
   rw [Nat.div_lt_iff_lt_mul x.hg, hr.hm, Nat.add_sub_cancel_left, Nat.mul_comm]
   exact lt_of_lt_of_le (x.rank_lt h) x.hblk
 
-/-- **The draw's table**: setupH's statement at its regions, and each drawn unit at its rank `r`: block `r / c.g`,
+/-- **The sample's table**: setupH's statement at its regions, and each sampled proof block at its rank `r`: block `r / c.g`,
 template instance `r % c.g`. -/
 noncomputable def table : Table mPts S where
   T := x.specAt ht (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
@@ -136,7 +136,7 @@ noncomputable def table : Table mPts S where
   hvu _ _ := Nat.mod_lt _ x.hg
   o u h := ⟨x.rank u / x.st.c.g, x.rank_div_lt h⟩
 
-/-- **Distinct drawn units have distinct sites** in the draw's table. -/
+/-- **Distinct sampled proof blocks have distinct sites** in the sample's table. -/
 theorem table_site_inj {u u' : Fin n} (h : u ∈ S) (h' : u' ∈ S)
     (e : ((x.table ht).o u h).val = ((x.table ht).o u' h').val ∧ (x.table ht).vu u h = (x.table ht).vu u' h') :
     u = u' := by
@@ -174,7 +174,7 @@ theorem contra_unsat {S : Model.Statement} (hS : contra S.kLog S.nbl ⊆ S.regio
   rw [a, b] at e
   exact zero_ne_one (α := ZMod 2) e
 
-/-- The regions of a refused draw's table: the reference setup's, and `contra`'s. -/
+/-- The regions of a refused sample's table: the reference setup's, and `contra`'s. -/
 theorem refused_wf : ∀ R ∈ regionsOf x.st ++ contra x.st.c.kLog (x.st.m - x.st.c.kLog),
     R.free.Nodup ∧ R.free.length ≤ PT_LOCAL := by
   intro R hR
@@ -182,7 +182,7 @@ theorem refused_wf : ∀ R ∈ regionsOf x.st ++ contra x.st.c.kLog (x.st.m - x.
   · exact (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1 R hR
   · exact contra_wf R hR
 
-/-- **The table of a refused draw `S'`**: a reference setup `x`'s statement with `contra`'s regions, which no witness
+/-- **The table of a refused sample `S'`**: a reference setup `x`'s statement with `contra`'s regions, which no witness
 satisfies (`refused_unsat`), every unit at block 0, template instance 0. -/
 noncomputable def refused (S' : Finset (Fin n)) : Table mPts S' where
   T := x.specAt ht (regionsOf x.st ++ contra x.st.c.kLog (x.st.m - x.st.c.kLog)) x.refused_wf
@@ -196,7 +196,7 @@ theorem refused_unsat (S' : Finset (Fin n)) (z : Witness (x.refused ht S').T.S.m
     ¬ (x.refused ht S').T.S.Satisfies z :=
   contra_unsat (S := (x.refused ht S').T.S) (fun _ hR => List.mem_append_right _ hR) z
 
-/-- **The contra-only table of a refused draw `S'`**: `refused` with `contra`'s two regions alone, so its region count
+/-- **The contra-only table of a refused sample `S'`**: `refused` with `contra`'s two regions alone, so its region count
 is 2 whatever the reference setup's; no witness satisfies it (`refusedC_unsat`). -/
 noncomputable def refusedC (S' : Finset (Fin n)) : Table mPts S' where
   T := x.specAt ht (contra x.st.c.kLog (x.st.m - x.st.c.kLog)) contra_wf
@@ -215,13 +215,13 @@ end DrawSetup
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀))
 
 open Classical in
-/-- **The table at draw `S`**: the draw's table (`DrawSetup.table`) when flock-verify sets up the draw's JSON `dj S`,
+/-- **The table at sample `S`**: the sample's table (`DrawSetup.table`) when flock-verify sets up the sample's JSON `dj S`,
 and otherwise the reference setup `x₀`'s refused table. -/
 noncomputable def tableAt (S : Finset (Fin n)) : Table mPts S :=
   if h : Nonempty (DrawSetup I mPts S (dj S)) then (Classical.choice h).table ht else x₀.refused ht S
 
-/-- **The table is setupH's statement wherever setupH accepts**: at a draw with a `DrawSetup` at `dj S`, the table's
-statement is `Layout.model` of setupH's statement at its regions, and its acceptance's draw is `dj S`. -/
+/-- **The table is setupH's statement wherever setupH accepts**: at a sample with a `DrawSetup` at `dj S`, the table's
+statement is `Layout.model` of setupH's statement at its regions, and its acceptance's sample is `dj S`. -/
 theorem tableAt_stmt {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) :
     ∃ y : DrawSetup I mPts S (dj S), y.st = x.st ∧ tableAt ht dj x₀ S = y.table ht := by
   refine ⟨Classical.choice ⟨x⟩, ?_, by unfold tableAt; rw [dite_eq_left_of_eq_true (eq_true ⟨x⟩)]⟩
@@ -235,7 +235,7 @@ theorem tableAt_cases (S : Finset (Fin n)) :
   · exact .inl ⟨_, rfl⟩
   · exact .inr rfl
 
-/-- **A refused draw's table is unsatisfiable**: at a draw with no `DrawSetup`, no witness satisfies the table. -/
+/-- **A refused sample's table is unsatisfiable**: at a sample with no `DrawSetup`, no witness satisfies the table. -/
 theorem tableAt_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (DrawSetup I mPts S (dj S)))
     (z : Witness (tableAt ht dj x₀ S).T.S.m) : ¬ (tableAt ht dj x₀ S).T.S.Satisfies z := by
   revert z
@@ -250,14 +250,14 @@ theorem tableAt_inputs (S : Finset (Fin n)) :
 
 variable {Reg : Type}
 
-/-- The one-table plan: at draw `S`, the table `tableAt … S`, for every registration. -/
+/-- The one-table plan: at sample `S`, the table `tableAt … S`, for every registration. -/
 noncomputable abbrev planAt : Finset (Fin n) → Reg → List (TabSpec mPts) := fun S _ => [(tableAt ht dj x₀ S).T]
 
-/-- Every drawn unit is in the plan's one table. -/
+/-- Every sampled proof block is in the plan's one table. -/
 abbrev tabAt : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planAt (Reg := Reg) ht dj x₀ S R).length :=
   fun _ _ _ => ⟨0, Nat.zero_lt_one⟩
 
-/-- **The sites of the one-table plan**: each drawn unit's acceptance, template instance and block are its draw's
+/-- **The sites of the one-table plan**: each sampled proof block's acceptance, template instance and block are its sample's
 table's. -/
 noncomputable def sitesAt : Placed.Sites (planAt (Reg := Reg) ht dj x₀) (tabAt ht dj x₀) where
   acc S _ _ _ := (tableAt ht dj x₀ S).acc
@@ -278,7 +278,7 @@ theorem sitesAt_parse (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) :
   rw [e1, e2, e3]
   exact hc
 
-/-- **Distinct drawn units have distinct sites** wherever flock-verify sets up the draw (the count judges each site
+/-- **Distinct sampled proof blocks have distinct sites** wherever flock-verify sets up the sample (the count judges each site
 once). -/
 theorem sitesAt_inj {S : Finset (Fin n)} (hS : Nonempty (DrawSetup I mPts S (dj S))) (R : Reg) {u u' : Fin n}
     (h : u ∈ S) (h' : u' ∈ S)
@@ -293,8 +293,8 @@ theorem sitesAt_inj {S : Finset (Fin n)} (hS : Nonempty (DrawSetup I mPts S (dj 
 
 variable {pop : Public}
 
-/-- **The site fact at the draw's table**, with or without shared rows: at a draw flock-verify sets up, each drawn
-unit's site is `BcSite`: the acceptance's draw is `dj S`, which decodes to `D`, and the unit's block and template
+/-- **The site fact at the sample's table**, with or without shared rows: at a sample flock-verify sets up, each sampled
+proof block's site is `BcSite`: the acceptance's sample is `dj S`, which decodes to `D`, and the unit's block and template
 instance index its rank in `D.proved`. -/
 theorem table_bcSiteS (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop)
@@ -313,15 +313,15 @@ theorem table_bcSiteS (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (
     exact x.proved_rank h
 
 set_option linter.unusedVariables false in
-/-- **The site fact at the draw's table** (`table_bcSiteS`). -/
+/-- **The site fact at the sample's table** (`table_bcSiteS`). -/
 theorem table_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop) (hpt : pop.tables = none)
     {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
     Layout.BcSite (x.table ht).acc pop ((x.table ht).o u h) ((x.table ht).vu u h) u.val :=
   table_bcSiteS ht dj hc ho hpop x h
 
-/-- **`BcSite` at every satisfiable site** of the one-table plan: at a draw flock-verify sets up by `table_bcSite`; at a
-refused draw no message satisfies the table (`refused_unsat`). -/
+/-- **`BcSite` at every satisfiable site** of the one-table plan: at a sample flock-verify sets up by `table_bcSite`; at a
+refused sample no message satisfies the table (`refused_unsat`). -/
 theorem sitesAt_bcSite (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hpop : HmRow.loadPublic I.tags c I.publicFile = .ok pop) (hpt : pop.tables = none) :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) (M : Binding.Msg (planAt ht dj x₀) (tabAt ht dj x₀) S R u),

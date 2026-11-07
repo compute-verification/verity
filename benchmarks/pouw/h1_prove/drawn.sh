@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# PoUW's piece of a served H1 window with its drawn units proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
+# PoUW's piece of a served H1 window with its sampled proof blocks proved (served_verdicts.sh's POUW_CMD): drawn.py (the CLI of
 # verity_vllm.protocols.pouw.h1.drawn, reading --checkpoint with the live challenger's model registry) stages each
-# drawn call's J10-R units on the window's own registered values, and each drawn unit of a lanes-form K as its lanes and
-# combine; each staged statement is proved by one loopback C-Flock --zk session drawing all its instances
+# sampled call's J10-R units on the window's own registered values, and each sampled proof block of a lanes-form K as its lanes and
+# combine; each staged statement is proved by one loopback Flock --zk session sampling all its instances
 # (hidden_zk/job.sh's `session`, at the slot its circuit file's META names), drawn.py writes the statements file and
 # checks it as credit does, and then `served_verdicts.py pouw` judges the window with it as --statements (the Lean verdict
 # of record refuses the lanes form until its mirror: H1_DRAWN_ONLY=1 stops at drawn.py's check).
 #   POUW_CMD='bash benchmarks/pouw/h1_prove/drawn.sh "$1" "$2" "$3"'      (served_verdicts.sh runs it in the tree)
 #   bash benchmarks/pouw/h1_prove/drawn.sh SERVE_DIR WINDOW PIECE_DIR
-# env: H1_CIRCUITS (pouw_h1_circuits' --out, with the drawn K's k<K> file, --strata K, or its lane<K> and combine<K>
+# env: H1_CIRCUITS (pouw_h1_circuits' --out, with the sampled K's k<K> file, --strata K, or its lane<K> and combine<K>
 #      files, --lanes K)  H1_CHECKPOINT (the served model's
 #      safetensors dir, b/<K>'s rows) or H1_WEIGHTS (an npz of w<i>, s<i>)  H1_GATE and H1_MODEL (the auditor's model-key
 #      for b/<K>, the server's --h1-model; or H1_WEIGHTS_KEY, a key file)  H1_DRAW_K (else period.json's)

@@ -1,7 +1,7 @@
 """The ZK server's contract (`Flock/Firewall/Contract.lean`, `flock-firewall contract`) against the inner phase's ZK server
 (`verity_flock.rec_live.Proxy`), on the transcripts `verity_flock.firewall_transcript` records (`firewall_agree.py`):
-honest sessions accepted by both, the red team's six sessions against the firewall refused by both or sent as the schedule has them,
-tamper controls (firewalls that let out what the contract forbids) refused by the contract, the firewall review's leaks
+honest sessions accepted by both, the red team's six sessions against the ZK server refused by both or sent as the schedule has them,
+tamper controls (firewalls that let out what the contract forbids) refused by the contract, the ZK server review's leaks
 each cut at its item, every session `test_firewall_agreement` holds the proxy to `Flock.Firewall.run` on, the inner
 session's live coins, coins that do not open a challenger's commitment refused by both, and no salt used twice."""
 from __future__ import annotations
@@ -100,8 +100,8 @@ def test_the_contract_holds_on_every_session_of_the_agreement_test(lean, tmp_pat
     requests after Finish, forgeries, byte flips; and every placement of the Opens) through the proxy: the contract accepts
     each session the proxy
     finishes, and of each one it stops releases every item, save where the proxy hands the challenger a call the challenger
-    refuses (a Commit before Hello or a second one, a Link before Commit or a second one). Such a call reaches the coin
-    server, so the contract's cut is that call; `Flock.Firewall.run` refuses it before it sends anything, and
+    refuses (a Commit before Hello or a second one, a Link before Commit or a second one). Such a call reaches the challenger's
+    live-coin part, so the contract's cut is that call; `Flock.Firewall.run` refuses it before it sends anything, and
     `test_firewall_agreement` compares the calls the challenger takes."""
     from test_firewall_agreement import SALTS, _coins, cases, placements
 
@@ -139,7 +139,7 @@ def test_a_firewall_that_lets_out_what_the_contract_forbids_fails_the_check(lean
 
 
 def test_the_contract_cuts_every_leak_of_review_r6_at_its_item(lean, tmp_path):
-    """The firewall review's leaks (`firewall_agree.leaks`), each a bit the firewall could choose and each accepted before:
+    """The ZK server review's leaks (`firewall_agree.leaks`), each a bit the ZK server could choose and each accepted before:
     the commitments' count and place (B1), a tape number naming another's value (B2), the public input taken from the
     transcript (B3) and a value of the ZK server's own under a name it chose (N1). Each is cut at its item for its reason;
     the honest transcript and a masked value checked against the verifier's relation are accepted."""

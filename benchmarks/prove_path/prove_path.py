@@ -7,7 +7,7 @@ window over the compiler's Programs from its sealed bundle. The verifier, handed
 advice is opened to the verifier until the compile unit exists, README.md), compiles the advice with its own copy of the
 compiler, derives its own window and audits it through the one-stage audit's `service.Stream` (`benchmarks/one_stage/a5.py`'s
 `audit`): register, select on the auditor's challenger's coins (committed to the registration before any is read), Flock `--zk` behind the Lean
-ZK server on the sampled proof blocks, Lean's verdicts, and the outcome, which the Lean verifier of record's `Run.run` must agree with. It
+ZK server on the sampled proof blocks, Lean's verdicts, and the outcome, which the Lean verifier's `Run.run` must agree with. It
 then checks that the advice was fixed before the sample (`advice_before_draw`).
 
 Two kinds of committed run:
@@ -132,7 +132,7 @@ every byte string: the requests, or a `ValueError` naming why, the same one on e
 
 **Transfer gates** (``--transfer-gate T``, repeatable, the same on both sides): the templates the registered compiler lists as
 holding transfer gates (`advice_windows`: the I/O shell's units, proved with selection All, never sampled), which its digest
-covers (`I2Compiler`, `advice_windows.Traced`). The window's ``work:K`` law then draws every unit of theirs beside K of the rest
+covers (`I2Compiler`, `advice_windows.Traced`). The window's ``work:K`` law then samples every unit of theirs beside K of the rest
 (`serving_rows.work_table_of`), and the stream registers with that work table. A served window's I2 lists them beside the
 server's code and ``serve.json`` (`I2Compiler.digest`), and its advice is registered under that compiler (``compiler``).
 A served window's list is its model's compiler of record's (`GATES_OF_RECORD`, by ``serve.json``'s ``model``) on both sides,
@@ -141,12 +141,12 @@ registration to that list and no other. Until COMPILER lists the I/O shell's uni
 ``RoPEHead_v1{D=64}`` (``llama32_1b_tg_*.json``). Their negatives are a5's `transfer_gate_negatives` and the registrations under
 the compiler listing none and under it less each one gate (`more_negatives`).
 
-**Coins**: each window's `service.Stream` draws on the auditor's challenger's coins, ``--challenger local|gate:USER@HOST --main
+**Coins**: each window's `service.Stream` samples on the auditor's challenger's coins, ``--challenger local|gate:USER@HOST --main
 FILE`` (`a5_coins`: the run root's one session, committed to each registration before any coin is
 read; ``local`` is a development session on this machine, pinned on ``--main``, the verifier's copy of main's first-parent
 history; ``gate:USER@HOST`` is the auditor host through its SSH gate with the lane's gate key ``--gate-key``, its challenger on
 ``--peer``'s 127.0.0.1, so the audit runs on that peer, under the deployment's key record ``--challenger-key``). The gate opens
-a root once, ever, and a window's honest and forged commits share the run root, so only one of them draws there.
+a root once, ever, and a window's honest and forged commits share the run root, so only one of them samples there.
 `advice_before_draw` holds the advice to the receipt of the stream that sampled.
 """
 from __future__ import annotations
@@ -203,7 +203,7 @@ PLAIN_INTERIM: str = json.loads((HERE / "sources.json").read_text())["plain_inte
 @dataclass(frozen=True)
 class Capped:
     """A registered compiler with ℓ, the public cap on the advice's length in bits. Its digest names the inner compiler's and ℓ,
-    so the registration's ``compiler`` fixes ℓ before the draw as it fixes the code; `load` and ``transfer_gates`` are the inner
+    so the registration's ``compiler`` fixes ℓ before the sample as it fixes the code; `load` and ``transfer_gates`` are the inner
     compiler's."""
 
     inner: Any
@@ -243,7 +243,7 @@ class I2Compiler:
     `code_identity`, ``verity`` and ``verity_vllm`` as git lists them, so a node's ignored build outputs don't move it; a
     served window's, the server's registered compiler, `served_identity`), everything ``registered`` holds that I2 reads (φ:
     the model, its revision and config, the target and the execution; the default seed; ℓ; the served model name, where it
-    names one) and that list. So a served window's ``serve.json`` is bound before the draw with the code: one that differs
+    names one) and that list. So a served window's ``serve.json`` is bound before the sample with the code: one that differs
     from the one its advice was registered under names another compiler."""
 
     registered: Any
@@ -936,7 +936,7 @@ def commit(a: argparse.Namespace) -> int:
 
 def more_negatives(a: argparse.Namespace, r: int, world: int, compiler: Capped, mine: Any, held: dict, served: Path,
                    opening: dict) -> dict[str, dict]:
-    """What the verifier refuses before any draw about the advice: a registration naming another compiler or another advice root,
+    """What the verifier refuses before any sample about the advice: a registration naming another compiler or another advice root,
     the advice's opening under another salt (which opens no registered root), a registration binding no compiler or advice (a
     window over Programs of record passed off as the advice's), one whose compiler names another cap ℓ, one under the compiler
     listing no transfer gates and one under it less each one gate (where it lists some: a window sampling them, as another
@@ -1005,7 +1005,7 @@ def advice_after_draw(compiler: Capped, receipt: Mapping[str, Any], rec: Mapping
 
 def forged_row(s: dict, forged: dict | None) -> dict:
     """A forged window's verdict: its registration passed every check before the sample, the forged unit was sampled, and the outcome
-    is a reject with Lean's verifier refusing a drawn member."""
+    is a reject with Lean's verifier refusing a sampled member."""
     verdicts = (s.get("audit") or {}).get("verdicts") or {}
     lean = {k: v for k, v in verdicts.items() if k.startswith("lean-verify/")}
     unit = None
@@ -1019,7 +1019,7 @@ def forged_row(s: dict, forged: dict | None) -> dict:
 
 
 def per_unit(s: dict) -> dict[str, dict]:
-    """Each drawn member's session timing per sampled proof block (the units its one statement proves, ``draw_counts``; Flock's own
+    """Each sampled member's session timing per sampled proof block (the units its one statement proves, ``draw_counts``; Flock's own
     ``units`` count its virtual units): proving (Flock's ``prove_total_s`` and the session's wall), M0's and Lean's verify,
     and the proof's bytes over its reps."""
     out = {}
@@ -1044,7 +1044,7 @@ def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits
     """The terms of the leak bound an accepted audit gives (README, "What an accepted audit means"): c, the advice's bits
     (``advice_bits``); δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are incorrect
     (``location_bits``, `consumers.location_bits`); β_δ, the incorrect proof blocks' committed bits (``harm_bound``: the profile's
-    `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the law's strata aren't the
+    `harm_bound`, each template's units weighing its committed ``bits``, the most of them where the sampling design's strata aren't the
     templates); and ``exfiltration_bound`` = β_δ + λ_δ (`consumers.exfiltration_bound`). ``record`` is the audit record
     (a5's ``audit.json``); None where it isn't accepted, which bounds nothing."""
     if not record.get("accepted"):
@@ -1060,7 +1060,7 @@ def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits
 
 def audit_rank(job: tuple[argparse.Namespace, int, int]) -> dict:
     """Rank ``r``'s audit (`rank_audit`). A rank that ends without its sample says so, so the run root's one challenger session
-    closes once every other rank has drawn."""
+    closes once every other rank has sampled."""
     a, world, r = job
     try:
         return rank_audit(a, world, r)
@@ -1111,7 +1111,7 @@ def rank_audit(a: argparse.Namespace, world: int, r: int) -> dict:
 
 
 def coins_of(a: argparse.Namespace) -> dict[str, Any]:
-    """The summary's account of the coins every window's stream draws on (module docstring)."""
+    """The summary's account of the coins every window's stream samples on (module docstring)."""
     return {"source": "challenger", "challenger": a.challenger,
             "what": "each window's service.Stream on the auditor's challenger's coins (a5_coins: the run root's one session, "
                     f"{a.challenger}), committed to the window's registration before any is read"}
@@ -1199,7 +1199,7 @@ def compiler_doc(serve_run: str, hf_config: str | None, target: str | None, cap_
 
 
 def committer_key(path: Path) -> bytes:
-    """The committer's 32-byte salt key at ``path``, which never leaves the committer: drawn fresh (mode 0600) the first
+    """The committer's 32-byte salt key at ``path``, which never leaves the committer: sampled fresh (mode 0600) the first
     time, read thereafter. Refused (ValueError) unless 32 bytes."""
     if not path.exists():
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -1213,7 +1213,7 @@ def committer_key(path: Path) -> bytes:
 
 def weights_registration_of_serve(a: argparse.Namespace) -> dict[str, Any]:
     """A served run's weights registration, the committer's (`window_weights.weights_registration` under the φ its window
-    circuit lowers under, `registered_of_serve`): each weight committed under the committer's salts, drawn under ``--key``
+    circuit lowers under, `registered_of_serve`): each weight committed under the committer's salts, sampled under ``--key``
     (`committer_key`, never sent), once the committer has checked ``--checkpoint-dir``'s shards against ``--checkpoints``
     (default the tree's ``manifests/checkpoints.json``), and the rotary table at the words the engine serves
     (``--tables``' ``cos_sin_cache.npy``, serve-openai's, default under ``--serve-run``'s ``private/``) once they are

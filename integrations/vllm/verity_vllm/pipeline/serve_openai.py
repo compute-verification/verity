@@ -72,8 +72,8 @@ writes (``verity-vllm predict row``; `serve_row.row_refusal` refuses any other, 
 `serve_seal.scheme_refusal`). ``--seal`` seals each closed
 window as a deferred Commit's row dir (`serve_seal`), each seal a line of ``seals.jsonl``. ``--retain-exclude hidden_m1``
 commits the attention interiors without retaining them, and each seal's manifest names them (`serve_seal.RetentionOptions`). ``--retain device --release-after P,Q`` holds each window's values in a
-device pool until every subprotocol named has drawn the window, then keeps on host, and seals, only the leaves their drawn
-blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's draw coin is open,
+device pool until every subprotocol named has sampled the window, then keeps on host, and seals, only the leaves their sampled
+blocks open (`serve_release`; PoUW H1's, ``pouw``, from its arm in process once each window's sampling coin is open,
 `serve_h1.H1Windows.drawn`, any other's through ``--draws-dir``). Each
 window's finalize, its readback and records, then its seal run on a thread of their own (`serve_seal.Sealer`), in window
 order, while the engine serves the next window: the engine loop's part of a close only detaches the window from the
@@ -681,7 +681,7 @@ def main(opts: Options) -> int:
             stopped(False)
             print(f"SERVE-OPENAI stopping: {sealer.summary()['held'] / SS.GB:.1f} GB of windows still to seal", flush=True)
             sealer.close()
-        if draws_dir is not None:                        # the pending seals have had their windows' draws
+        if draws_dir is not None:                        # the pending seals have had their windows' samples
             draws_dir.stop()
         if arm is not None:                              # each H1 window's release (off the loop) ends before ``final``
             arm.drain()

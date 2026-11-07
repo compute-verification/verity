@@ -276,10 +276,10 @@ class _GateAuditor(_Auditor):
 
 def test_each_window_draws_its_coins_from_a_gate_session_of_its_own(tmp_path, monkeypatch):
     """``--challenger-gate`` and ``--challenger-peer``: each window reserves a session of its own (H1's scheme and
-    families for S rounds, as this peer) and a draw session (the draw coin's family alone), round 0 opens the session on
-    the window's open root once its port listens, the draw opens the draw session withheld on the window's draw root,
+    families for S rounds, as this peer) and a sample session (the sampling coin's family alone), round 0 opens the session on
+    the window's open root once its port listens, the sample opens the sample session withheld on the window's sample root,
     and the window's close waits for both end entries, closed and complete. The window's salt and round coins are its
-    session's and its draw coin its draw session's, its record carries the sessions without their secrets, and the
+    session's and its sampling coin its sample session's, its record carries the sessions without their secrets, and the
     verifier's check of the record against the auditor's ledger (`pouw_h1_challenger.session_reason`) passes. No file
     the windows wrote holds the weight trees' salt key (`pouw_h1.WEIGHT_KEY`), raw or in hex."""
     srv, auditor = _Server(monkeypatch), _GateAuditor(tmp_path, monkeypatch)
@@ -389,7 +389,7 @@ class _InOrderAuditor(_GateAuditor):
 
 def test_reserves_and_releases_run_off_the_loop_while_the_next_window_serves(tmp_path, monkeypatch):
     """With ``ahead`` and ``closer``: window 0's session is reserved at its open when none was made ahead (`arm_of` makes
-    one) and window k+1's while window k serves, and window k's release (its manifest, draw coin, session close and the
+    one) and window k+1's while window k serves, and window k's release (its manifest, sampling coin, session close and the
     wait for its end entry) runs after window k+1 has opened and served on a session of its own. The loop's gate calls
     are window 0's reserve and each window's open; each window keeps its own session, coins and transcript, and the
     outcomes are recorded in window order."""
@@ -594,10 +594,10 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
                                                                                                     coins):
     """``--retain device --seal --release-after pouw``: a window served on the server's Commit, its values held on the
     device (here a CPU pool) as the Commit acquired them, waits on the sealer's thread until its H1 release, off the loop,
-    has opened its draw coin and put H1's draw; the release then keeps exactly the leaves of the Commit's values the drawn
-    proof blocks open (core's draw from the window's own record: each drawn unit's call's x_q and s_a rows of its row tile,
+    has opened its sampling coin and put H1's sample; the release then keeps exactly the leaves of the Commit's values the sampled
+    proof blocks open (core's sample from the window's own record: each sampled proof block's call's x_q and s_a rows of its row tile,
     at the engine step its step maps to, under the names the Commit acquired them by), byte-equal to what was committed,
-    and drops every other value: the other calls' rows and the step's input ids. In process the draw is at the proof
+    and drops every other value: the other calls' rows and the step's input ids. In process the sample is at the proof
     system's K on the window's calls_root; on a gate session at its period-open's K on its open root."""
     from tests.commit.test_device_pool import committed
     from tests.pipeline.test_serve_release import _Waits
@@ -678,7 +678,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
 
 
 def test_a_window_with_no_draw_refuses_its_release_by_name(tmp_path, monkeypatch):
-    """Under ``--release-after pouw`` a window's seal never waits on a draw that isn't coming: a window whose H1 never
+    """Under ``--release-after pouw`` a window's seal never waits on a sample that isn't coming: a window whose H1 never
     opened, and a gate window whose session joined no period (so no period-open committed its K), each refuse their
     release by name, and the outcome says why."""
     from verity_vllm.pipeline import serve_release as SL

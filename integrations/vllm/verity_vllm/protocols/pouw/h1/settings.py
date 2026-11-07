@@ -102,7 +102,7 @@ def fills(scheme: str, settings: Mapping[str, Any]) -> tuple[str, ...]:
 def from_engine(scheme: str, settings: Mapping[str, Any], llm: Any, epoch: int = 0) -> dict[str, Any]:
     """`fills`' settings from the built ``vllm.LLM`` ``llm``: its in-process model runner, where the scheduler's admissions
     arrive (`engine.handle.model_runner`; RuntimeError on an engine without one), and epoch ``epoch``'s coins held in
-    this process, the Lean verifier of record's entropy (`verifier.coins`): its salt coin and ``steps`` round coins.
+    this process, the Lean verifier's entropy (`verifier.coins`): its salt coin and ``steps`` round coins.
     Coins held in the serving process credit nothing (`pouw_h1.IN_PROCESS`)."""
     keys = fills(scheme, settings)
     out: dict[str, Any] = {}

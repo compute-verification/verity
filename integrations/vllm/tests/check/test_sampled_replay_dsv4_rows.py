@@ -69,7 +69,7 @@ CASES = [
     (HEAD_SPEC, bind(dsv4_indexer.Dsv4InvRopeQuantHead, CHUNKS=4, QG=128, ROPE=64)),
 ]
 
-#: the families whose operands are sampled with their twin's sampler (indices, lengths, e4m3 / e8m0 bytes and edge words a uniform draw
+#: the families whose operands are sampled with their twin's sampler (indices, lengths, e4m3 / e8m0 bytes and edge words a uniform sample
 #: rarely makes)
 DRAWN = ("FlashMlaDecode_v1", "FlashMlaPrefill_v1", "FlashMlaGatherRow_v1", "Dsv4QNormRopeKvInsert_v1", "MoeRouterSqrtSoftplus_v1",
          "MoeRouterHash_v1", "SiluMulClamp_v1", "Dsv4CompressorScore_v1", "Dsv4InvRopeQuantHead_v1")
@@ -131,7 +131,7 @@ def test_a_flashmla_row_at_another_dot_step_is_declined(family):
 
 def test_the_block_norm_row_is_the_definitions_reduction_tree():
     """A served q row (1536 of a 2048 block on 8 warps) rarely shows its reduction tree through the bf16 output, so the rows here are
-    ones of a seeded draw whose output differs between 8, 4 and 2 warps: the row kernel is the Definition on each, and the other trees
+    ones of a seeded sample whose output differs between 8, 4 and 2 warps: the row kernel is the Definition on each, and the other trees
     are not (which keeps the rows discriminating)."""
     N, BLOCK, R, pick = 1536, 2048, 400, [166, 287, 347]
     rng = np.random.default_rng(11)
