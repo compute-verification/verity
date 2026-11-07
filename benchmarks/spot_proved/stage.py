@@ -8,7 +8,8 @@
 * **Population.** A proof block type's instances are the recorded calls of its kernel in the opened layers, on every rank,
   over the step's real tokens: a group quant's token row, a FlashInfer FP8 linear's (token, output column) when the call has
   fewer than 32 rows (the op's FlashInfer branch), a routed MoE w2 launch's (slot, output column), a fused allreduce + RMSNorm's
-  token for its residual half-rows and its norm, a plain allreduce's (token, half-row), and FA3's split combine per
+  token for its residual half-rows and its norm, a plain allreduce's (token, half-row) on symm-mem's multimem route (its
+  received row the same on every rank; a call on NCCL's route is counted, not staged), and FA3's split combine per
   (token, head). Instances are drawn from it by the capture's coins, ``--per-type`` of each type.
 * **Match gate.** Each drawn instance's Definition is evaluated on the captured inputs and must return the captured outputs
   bit for bit (completeness, not soundness: an instance that disagrees is reported and not staged).
@@ -262,8 +263,29 @@ def fused_ar_norm_instances(cap: Capture):
                    lambda calls=calls, t=t: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["norm_out"])[t]])
 
 
-def allreduce_instances(cap: Capture):
+def allreduce_route(cap: Capture, e0: dict) -> str:
+    """The communicator a plain allreduce ran on, from what the recorder saw inside it: symm-mem's multimem op, else one no
+    dispatcher sees (pynccl's NCCL call, past `tp_allreduce.SYMM_MEM_MAX_BYTES`)."""
+    kids = {x["op"] for x in cap.events[cap.ranks[0]] if x.get("parent") == e0["seq"]}
+    return "symm_mem_comm" if any("multimem" in k for k in kids) else "pynccl_comm"
+
+
+def same_on_every_rank(cap: Capture, calls: dict, t: int, sl: slice) -> np.ndarray:
+    """Rank 0's received row, once every rank's equals it: each rank's view of the allreduce is its own output."""
+    want = cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["ret0"])[t, sl]
+    for r in cap.ranks[1:]:
+        got = cap.tensor(r, calls[r]["out"]["ret0"])[t, sl]
+        if not np.array_equal(got, want):
+            raise LookupError(f"rank {r} received other words than rank {cap.ranks[0]} (seq {calls[r]['seq']}, token {t})")
+    return want
+
+
+def allreduce_instances(cap: Capture, unstaged: dict | None = None):
+    """A plain allreduce's (token, half-row) on symm-mem's multimem route. A call on another route is counted in
+    ``unstaged`` under its label, with why, and the step's other calls are still staged."""
+    from verity.ml.definitions.registry import tp_allreduce as AR
     W = len(cap.ranks)
+    unstaged = {} if unstaged is None else unstaged
     for calls in aligned(cap, "vllm::all_reduce"):
         e0 = calls[cap.ranks[0]]
         shape = e0["in"]["tensor"]["shape"]
@@ -271,16 +293,24 @@ def allreduce_instances(cap: Capture):
             continue
         T, H = shape
         half = H // 2
-        kids = sorted({x["op"] for x in cap.events[cap.ranks[0]] if x.get("parent") == e0["seq"]})
-        if not any("multimem" in k for k in kids):
-            raise LookupError(f"vllm::all_reduce (seq {e0['seq']}, {T}x{H}) ran {kids}, not symm-mem's multimem all-reduce")
+        route, rows = allreduce_route(cap, e0), cap.real_rows(cap.ranks[0], T)
+        if route != "symm_mem_comm":
+            rec = unstaged.setdefault(f"AllReduceNccl_W{W}", {"population": 0, "calls": [], "why": (
+                f"vllm::all_reduce on {route}: no Definition models NCCL's all-reduce at world {W} on this GPU "
+                f"(`tp_allreduce.covered` names no {route} entry at world {W})")})
+            rec["population"] += 2 * rows
+            rec["calls"].append({"seq": e0["seq"], "rows": T, "cols": H, "bytes": T * H * 2})
+            continue
+        if AR.covered("defaults", H, route, T) is None:
+            past = unstaged.setdefault(f"AllReduceMultimem_W{W}", {"past_captured": []})
+            past["past_captured"].append({"seq": e0["seq"], "rows": T})
         trees = multimem_trees(W)
-        for t in range(cap.real_rows(cap.ranks[0], T)):
+        for t in range(rows):
             for c in range(2):
                 sl = slice(c * half, (c + 1) * half)
                 yield (f"AllReduceMultimem_W{W}", f"AllReduceMultimem_v1{{WORLD={W},SIZE={half},TREES={trees},FTZ=false}}", (e0["seq"], t, c),
                        lambda calls=calls, t=t, sl=sl: [np.stack([cap.tensor(r, calls[r]["in"]["tensor"])[t, sl] for r in cap.ranks])],
-                       lambda calls=calls, t=t, sl=sl: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["ret0"])[t, sl]])
+                       lambda calls=calls, t=t, sl=sl: [same_on_every_rank(cap, calls, t, sl)])
 
 
 def fused_add_rms_norm_instances(cap: Capture):
@@ -416,8 +446,9 @@ def main() -> int:
     report: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "coins": cap.coins.hex(),
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {}}
     pops: dict[str, list] = {}
+    unstaged: dict[str, dict] = {}
     sources = [quant_instances(cap), flashinfer_linear_instances(cap), moe_w2_instances(cap, profile),
-               fused_ar_norm_instances(cap), allreduce_instances(cap), fused_add_rms_norm_instances(cap),
+               fused_ar_norm_instances(cap), allreduce_instances(cap, unstaged), fused_add_rms_norm_instances(cap),
                mla_combine_instances(cap), mla_split_part_instances(cap)]
     for src in sources:
         try:
@@ -425,6 +456,9 @@ def main() -> int:
                 pops.setdefault(inst[0], []).append(inst)
         except Exception as ex:  # noqa: BLE001
             report.setdefault("population_errors", []).append(f"{type(ex).__name__}: {ex}"[:400])
+    for label, rec in unstaged.items():
+        if "why" in rec:
+            report["types"][label] = {**rec, "staged": False}
     for family, prefer in FAMILIES.items():
         members = sorted((k for k in pops if k.startswith(family)), key=lambda k: (k != prefer, int(k[len(family):]), k))
         for k in members[1:]:
@@ -435,7 +469,7 @@ def main() -> int:
     for label, insts in sorted(pops.items()):
         if wanted and label not in wanted:
             continue
-        rec: dict = {"population": len(insts)}
+        rec: dict = {"population": len(insts), **unstaged.get(label, {})}
         report["types"][label] = rec
         try:
             spec = insts[0][1] if not isinstance(insts[0][1], str) else block_fn(insts[0][1])
