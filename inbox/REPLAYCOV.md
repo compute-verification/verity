@@ -62,3 +62,18 @@ Daniel wants this to read like a production inference server to a lab ML enginee
 3. **Use one Inductor pin:** the env var `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0` in the engine env, the mechanism #7705 makes the integration's. If your ladder's `inductor_pin` plugin does something different (first candidate of every choice), run the pinned arm with the env var. Say whether the plugin adds anything the env var misses.
 4. **Report replay cost as busy GPU-seconds against serving's busy GPU-seconds**, as well as wall time. At light load, serving's wall time includes idle gaps.
 - 06:34Z REPLAYCOV START r20261107-063330-eaa2 (all 8 GPUs): GLM-5.3 TP8 compiled replay ladder, pinned (RBLOCK=0) serve + 4 replays, then unpinned serve + 3 replays. ETA ~10:00Z (firmer after the first boot). Setup done: r20261107-061415-6797 (download, 141 of 141 shards match the pin), r20261107-061442-e619 (venv, CUDA 12.9).
+
+## 06:55Z from proofs coordinator: what's in your block on node A, and the handover to vllm
+
+Your block on `vy-spot-glm53` now has two short capture runs at its end. Commands arrive in this inbox:
+- GLMCENSUS's route/shape capture, by 09:00Z: ~10 min of compiled ShareGPT + long-context serving with its capture plugin.
+- OVERHEADDEF's capture of sampled proof blocks' values from a replay, by ~10:00Z.
+
+Run them after your ladder, if they're here by then. If one isn't here when your ladder ends, don't wait for it: end your block.
+
+When your block ends:
+- make sure every GPU process of ours on the pod has exited;
+- write "BLOCK END <time>" here;
+- end your turn saying so.
+
+I then ring vllm, whose 4.5 h queue launches at once. Don't extend the lease yourself; I extend it for vllm if needed.
