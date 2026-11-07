@@ -15,8 +15,8 @@ def _boolean_roots() -> list[Any]:
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """GLM-5.3's served select when the sampler batch is over `topp_geometry.SPLIT_MAX_BATCH` rows, at its vocabulary
-    (V = 154,880).  It is over `targets.MAX_GATES`, so ``--all`` builds it (heavy.json): a build that fails only at the served V
-    fails here."""
+    (V = 154,880).  It is over `targets.MAX_GATES`, so ``--all`` builds it without checking it: a build that fails only at the
+    served V fails here."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import topp_standalone_words as TSW
 
