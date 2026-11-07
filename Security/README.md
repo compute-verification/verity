@@ -510,7 +510,22 @@ when:
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;
-- a record no longer matches the build.
+- a record no longer matches the build;
+- a deployed guarantee rests, outside the trust base, on a premise its `trust_gap` entry doesn't list, or the entry
+  lists one it no longer rests on.
+
+The trust base (`trust`) is what the deployed guarantees may rest on: SHA-512's collision resistance
+(`SHA512CRStrict`, `SHA512CRExpected`, `Claims.StrictBirthday`, `Claims.ExpectedCR`), uniform random bytes
+(`UniformRandomBytes`, `UniformRandomBytesTest`) and an honest verifier's coin log (`ChallengerLogsCoins`,
+`FlipsAfterRecorded`, `VerifierReadsLog`), with Lean's kernel under all of them (`trust.base`, each premise with the
+assumption it states). A deployed guarantee
+may also rest on premises of its own that a ruling's rule names, each with that reason (`trust.extra`): the remote
+audit's verifier never talks to the onsite devices and gets their LMS signatures only as witness inside the proof, so
+`Verity.remote_soundness_of_subprotocols` trusts `LmsUnforgeable`. `deployed` lists the guarantees that
+state the deployed system, and `trust_gap` what each rests on beyond its trust: the named assumptions and open
+premises its record lists, and those of each listed guarantee whose statement it takes as a domain hypothesis. A
+premise enters the gap only by hand, and leaves it when a proof discharges it; the Lean check prints each deployed
+guarantee's gap, and the total is to reach zero.
 
 A changed record means a guarantee now says something else. When one lands, the change is shown, the statement before
 and after and each changed definition with its source; nothing waits on it, and a guarantee that only moved shows none.

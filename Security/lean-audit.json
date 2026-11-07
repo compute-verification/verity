@@ -8905,7 +8905,7 @@
    "unfolded_hash": "a467a79bf0f9b8aaf729731f5acb2904c06d190ff22c10fcff357bff2e009ea7"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
-   "owner": "@memory-accounting",
+   "owner": "@lean",
    "signature": [
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed : Accounting.Guarantees.Remote.SketchBoundDeployed"
    ],
@@ -9452,7 +9452,7 @@
    "unfolded_hash": "409d79481699848021cab81f36ada6a63dfbb6bfc315522c28f581164d18bd05"
   },
   "Accounting.SecurityProofs.StackedRequirementSketchDeployed": {
-   "owner": "@memory-accounting",
+   "owner": "@lean",
    "signature": [
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed"
    ],
@@ -9496,7 +9496,7 @@
    "unfolded_hash": "1519fc9eb505b38dfdf9a187c51ddf60317baf5f7784ad9d9984345a3ae68f4c"
   },
   "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": {
-   "owner": "@memory-accounting",
+   "owner": "@lean",
    "signature": [
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed :",
     "  Accounting.Guarantees.StackedSessionConservationSketchDeployed"
@@ -54045,5 +54045,96 @@
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; @proofs lifts it with `check.py --lift`",
   "Pouw.Salt.keyed_leaf_binds": "proves `Pouw.Guarantees.KeyedLeaf.Binds` under another name; @compute-research renames it `Pouw.SecurityProofs.KeyedLeaf.Binds` with `--moved`",
   "Pouw.Salt.keyed_leaf_hides": "proves `Pouw.Guarantees.KeyedLeaf.Hides` under another name; @compute-research renames it `Pouw.SecurityProofs.KeyedLeaf.Hides` with `--moved`"
+ },
+ "trust": {
+  "base": {
+   "Claims.ExpectedCR": "SHA-512 collision resistance: the linear expected-time bound at one finder (ecr/sha-512), as the spec states it",
+   "Claims.StrictBirthday": "SHA-512 collision resistance: the strict birthday bound q^2 / 2^513 at one finder (cr/sha-512), as the spec states it",
+   "FlockSoundness.Assumptions.SHA512CRExpected": "SHA-512 collision resistance: a finder of expected cost T finds a collision with probability at most T / 2^256 (ecr/sha-512)",
+   "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
+   "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
+   "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
+   "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
+   "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
+   "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order"
+  }
+ },
+ "deployed": [
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
+  "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+  "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
+  "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed",
+  "Bandwidth.SecurityProofs.AuditRO",
+  "Flock.SecurityProofs.DeltaPubDeployed",
+  "Flock.SecurityProofs.RecursiveKSDeployed",
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed",
+  "Flock.SecurityProofs.SampledKSLiveV3",
+  "Flock.SecurityProofs.SampledKSLiveV5",
+  "Flock.SecurityProofs.SessionLoopZKDeployed",
+  "NetTiming.SecurityProofs.PeriodLeakAccepted",
+  "Pous.SecurityProofs.StreamedWipe"
+ ],
+ "trust_gap": {
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed": [
+   "Accounting.Assumptions.SketchHashRandom",
+   "Accounting.Assumptions.SketchRank",
+   "Accounting.Remote.Sketch.Assumptions.KeyBudget",
+   "Accounting.Remote.Sketch.Assumptions.Present",
+   "Accounting.Remote.Sketch.Assumptions.Receipted"
+  ],
+  "Accounting.SecurityProofs.RemoteSessionConservationDeployed": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+  "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": ["Accounting.Assumptions.SketchHashBudget", "Accounting.Assumptions.SketchRank"],
+  "Accounting.SecurityProofs.StackedRequirementSketchDeployed": [
+   "Accounting.Assumptions.ChainSum",
+   "Accounting.Assumptions.KeyBinding",
+   "Accounting.Assumptions.SketchHashBudget",
+   "Accounting.Assumptions.SketchRank",
+   "Accounting.Assumptions.SquaringFloor",
+   "Accounting.Requirement.PlanMatches",
+   "Accounting.Requirement.StoreMatches"
+  ],
+  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": [
+   "Accounting.Assumptions.ChainSum",
+   "Accounting.Assumptions.KeyBinding",
+   "Accounting.Assumptions.SketchHashBudget",
+   "Accounting.Assumptions.SketchRank",
+   "Accounting.Assumptions.SquaringFloor"
+  ],
+  "Flock.SecurityProofs.RecursiveKSDeployed": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt"],
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": [
+   "Claims.ZKMal.RefSession.SwCausalOn",
+   "Flock.Guarantees.ReleaseReadsNoStop",
+   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
+   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
+  ],
+  "Flock.SecurityProofs.SampledKSLiveV3": [
+   "FlockSoundness.Assumptions.LinkCRZCAt",
+   "FlockSoundness.Assumptions.TableCRZAt",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
+   "FlockSoundness.Built",
+   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
+  ],
+  "Flock.SecurityProofs.SampledKSLiveV5": [
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+   "FlockSoundness.Built",
+   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+   "FlockSoundness.Discharge.ZkLink.LinkCRZC",
+   "FlockSoundness.Discharge.ZkLink.SessCRZ"
+  ],
+  "Flock.SecurityProofs.SessionLoopZKDeployed": [
+   "Claims.ZKMal.RefSession.SwCausalOn",
+   "Claims.ZKServer.LeanRelease.FillRoundEq",
+   "Claims.ZKServer.LeanRelease.LiveRoundEq",
+   "Claims.ZKServer.Loop.Src",
+   "Flock.Guarantees.LoopInnerRound0"
+  ],
+  "NetTiming.SecurityProofs.PeriodLeakAccepted": [
+   "Claims.Flock.ListWithin",
+   "Claims.Sampling.KS",
+   "NetTiming.ScopeAcc",
+   "NetTiming.TapOpens",
+   "Verity.Assumptions.TrustedHost"
+  ]
  }
 }
