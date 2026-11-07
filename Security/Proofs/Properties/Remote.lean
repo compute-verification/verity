@@ -20,14 +20,14 @@ import all Lean.Data.Json.Basic
 Remote's check is `Core.Composition.holdTies` of its tie over `Core.Composition.checkSame` over its components on the
 caller's blobs (`remote_check`), so an acceptance is `checkSame`'s with the tie held (`Properties.Composition.acceptTied`),
 and `checkSame`'s is `Core.Composition.check`'s (`checkSame_accept`), which `Properties.Composition.acceptMeans` reduces
-to each component accepting its own case, with sampled proofs' record the policy's (`strays_two`) and every
+to each component accepting its own case, with SPOT's record the policy's (`strays_two`) and every
 Commit record the period's windows name the policy's record too (`windows_tied`). The policy's
 acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit (`policy_accept`), which is
 `NciCheck.Desc.evaluate`'s and θ's provenance (`BaselineSteps.evaluate_ok`), whose verdict `DescReports`,
 `DescWitnesses` and `BaselineProvenance` read; `Nci.SecurityProofs.CompliesCK`, `ExpandComplies` and
 `Verity.Circuit.expand_boolean` give the `(c, k)`-partitions. The parse, declaration and division an acceptance
 exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
-verdicts are about a parse, a layout, a baseline and a division). Sampled proofs' acceptance is one-stage v1's check
+verdicts are about a parse, a layout, a baseline and a division). SPOT's acceptance is one-stage v1's check
 at the coins it read (`OneStage.checkAt`) at its params' form: in the one-stage form v2's, on the verdicts its own run of
 the verifier computed (`stage_zk_registered`), in the recursive form v1's live check on the inner statement's params
 after V*'s compiled check (`recursive_live`), so its record keeps R2 in either (`stage_registered_at`).
@@ -159,7 +159,7 @@ theorem id_policy : NciCheck.Protocol.protocol.id = "verity/inference-only/v0" :
 theorem id_period : PouwCheck.Period.protocol.id = "verity/pouw/period/v1" := rfl
 theorem id_sampled (bs : Blobs) : (VStar.Recursive.Sampled.protocol.onBlobs bs).id = "verity/sampled-proofs/v1" := rfl
 
-/-- Sampled proofs' commitment and digest are the one-stage registration record's, on any blobs. -/
+/-- SPOT's commitment and digest are the one-stage registration record's, on any blobs. -/
 theorem digestOf_sampled (bs : Blobs) (b : ByteArray) :
     Properties.Composition.digestOf (VStar.Recursive.Sampled.protocol.onBlobs bs) b =
       Properties.Composition.digestOf SampledProofs.OneStage.protocol b := rfl
@@ -444,7 +444,7 @@ theorem windows_tied {kI kW kS : Case} {cI : NciCheck.Protocol.Commitment}
     cases hy
     rw [hyr d hd, ← hxr _ (List.mem_singleton_self _)]
 
-/-- What sampled proofs' accepted case gives, on any blobs: `StageHeld`, at the form its params name. -/
+/-- What SPOT's accepted case gives, on any blobs: `StageHeld`, at the form its params name. -/
 theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params)
     (h : Properties.Composition.DecodedAccepted (VStar.Recursive.Sampled.protocol.onBlobs bs) n.params.toUTF8
       k.commitment k.evidence) : StageHeld k := by
@@ -463,7 +463,7 @@ theorem stage_held {k : Case} {n : Named} {bs : Blobs} (hp : k.params = n.params
       (show VStar.Recursive.checkBlobs q c e bs = .accept pub prof from hchk')
     exact Or.inr ⟨q, c, hp'', hc', stage_registered he₀⟩
 
-/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and sampled proofs'
+/-- What remote's acceptance gives: the three cases in order, one digest for the policy's and SPOT's
 records, which every Commit record the period's windows name has, and the policy's case decoding to what the policy's
 check accepts. -/
 theorem remote_accept {blobs : Array ByteArray} {ps : List Named} {c : ByteArray} {ev : List Case} {pub prof : Keyed}

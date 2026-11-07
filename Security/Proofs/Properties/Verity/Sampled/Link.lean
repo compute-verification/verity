@@ -7,7 +7,7 @@ import all Lean.Data.Json.Basic
 import Mathlib.Data.String.Basic
 
 /-!
-# Sampled proofs' link: the message the challenger opened the link points after
+# SPOT's link: the message the challenger opened the link points after
 
 The challenger opens a `--zk` session's link points, its coin tree's `session` stream at round 0, after the SHA-512 of
 the link's `root_F` and every `link.root_b` entry (`SampledProofs.Challenger.linkAfter`), and v2 holds the session's

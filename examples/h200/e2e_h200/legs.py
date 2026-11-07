@@ -1,7 +1,7 @@
 """Each leg against the skeleton's step, as ``{"status": "real" | "fixture" | "not-run", "owner", "issue", ...}``. A leg's
 owner makes its real piece run here; until then the entry says what stood in for it, or that nothing did.
 
-Demo A (M1-M3) is PoUW, sampled proofs and network; PoUS, bandwidth and the wipe run in M4 on its P2 store
+Demo A (M1-M3) is PoUW, SPOT and network; PoUS, bandwidth and the wipe run in M4 on its P2 store
 (``run.py --weights staged``). FIXTURES run here:
 * ``pous``: the challenger's spot reads, as reads of random blocks of the store decoded by the P2 reference and compared with
   the registered weights' bytes (no timing, no challenger, no verification root);

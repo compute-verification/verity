@@ -88,7 +88,7 @@ section
 
 variable {k : Verity.Registration.Composite}
 
-/-- **Sampled proofs' target from its component-level bound** -/
+/-- **SPOT's target from its component-level bound** -/
 theorem sampledProofsSound_of (h : V.ComponentBound k .sampled) : V.SampledProofsSound k := V.sound_of k .sampled h
 
 /-- **PoUW's target from its component-level bound** -/
@@ -98,7 +98,7 @@ theorem pouwSound_of (h : V.ComponentBound k .pouw) : V.PouwSound k := V.sound_o
 theorem inferenceOnlySound_of (h : V.ComponentBound k .inferenceOnly) : V.InferenceOnlySound k :=
   V.sound_of k .inferenceOnly h
 
-/-- **At the honest deployment, sampled proofs**: `sound_of_honest` at `.sampled`. -/
+/-- **At the honest deployment, SPOT**: `sound_of_honest` at `.sampled`. -/
 theorem sampledProofsSound_of_honest (h : V.HonestHolds k .sampled) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (hreg : V.Registered θ F) :
     Game.prob (fun o => ComponentAccepts k .sampled o.sent ∧ ¬ V.Holds k θ F c (V.honest θ F c) .sampled o)
@@ -126,7 +126,7 @@ theorem inferenceOnlySound_of_honest (h : V.HonestHolds k .inferenceOnly) (θ : 
         (V.game θ F c) (V.honest θ F c) = 0 :=
   V.sound_of_honest k .inferenceOnly h θ F c hreg
 
-/-- **Sampled proofs' target fails for a verifier that accepts everything**: `sound_of_nontrivial` at `.sampled`. -/
+/-- **SPOT's target fails for a verifier that accepts everything**: `sound_of_nontrivial` at `.sampled`. -/
 theorem sampledProofsSound_of_nontrivial (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)
     (σ : Game.Strategy (V.game θ F c))
     (hfail : ∀ o, ¬ V.Holds k θ F c σ .sampled o) (hlt : V.error .sampled θ F c σ < 1) :
@@ -171,7 +171,7 @@ theorem componentBound_unbounded (k : Verity.Registration.Composite) (a : Subpro
 end Idle
 
 /-- **`SoundnessOfComponents`' honest lemma**: its hypotheses hold at the idle deployment's compiled remote composite,
-sampled proofs, PoUW and the inference-only policy each meeting its bound at its component. -/
+SPOT, PoUW and the inference-only policy each meeting its bound at its component. -/
 theorem soundness_at_of_componentBounds_honest :
     Idle.unbounded.ComponentBound .remote .sampled ∧ Idle.unbounded.ComponentBound .remote .pouw ∧
       Idle.unbounded.ComponentBound .remote .inferenceOnly :=

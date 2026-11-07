@@ -1,4 +1,4 @@
-"""Sampled proofs' parties on the deployment layer (`verity.core.deploy`): the challenger, the ZK server, the workers and the
+"""SPOT's parties on the deployment layer (`verity.core.deploy`): the challenger, the ZK server, the workers and the
 verifier, as roles and channels a deployment configuration declares (`MANIFEST`), and their table (`PROTOCOL`;
 `PROTOCOLS` by id), which the deployment layer's runtime runs (`verity.core.deploy.runtime.run`).
 
@@ -67,7 +67,7 @@ from verity.core.wire import Body, Hex, Int, Message, Schema, Str
 from .one_stage import registration as R
 
 ID = R.PROTOCOL
-#: sampled proofs as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
+#: SPOT as both composites compose it (`VStar.Recursive.Sampled`): one-stage v2's audit (`ID`'s record, the
 #: verdicts the verifier's own run of the proof check) or the recursive audit, as its params' and evidence's ``form``
 #: names it; `ID`'s own audit, whose verdicts are the evidence's, is refused
 COMPOSED = "verity/sampled-proofs/v1"
@@ -75,7 +75,7 @@ VERSION = 1
 CHALLENGER, FIREWALL, WORKERS, VERIFIER = "challenger", "firewall", "workers", "verifier"
 #: each composite's subprotocols, by a configuration's names, and their protocol ids (`Core.Onsite.components`,
 #: `Core.Remote.components`): each one's PoUW is its period check, onsite's bandwidth the P2 session on PoUS's store,
-#: and both compose sampled proofs as `COMPOSED`
+#: and both compose SPOT as `COMPOSED`
 SUBPROTOCOLS = {
     "verity/onsite/v0": {"bandwidth": "verity/remote-bandwidth/p2/v0", "certifier": "verity/certifier/v0",
                          "inference-only": "verity/inference-only/v0", "pous": "verity/pous/p2/v4/run",

@@ -229,7 +229,7 @@ def _serve(cfg, params, bound):
             "WINDOW_STEPS": str(w["window-steps"]), "LOAD": w["load"], "V3C_LAW": cfg["service"]["law"]}
 
 
-#: served_verdicts.sh's variable for each optional binding of sampled proofs' live challenger
+#: served_verdicts.sh's variable for each optional binding of SPOT's live challenger
 _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "gate-key": "PP_GATE_KEY"}
 
 

@@ -21,7 +21,7 @@ repository.
 
 The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name that carries one of the Glossary's older
 names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``). SPOT's older name,
-sampled proofs, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
+SPOT, is held by count in every scanned file's whole text (``SPOT_NAMES``): its words until the prose move
 (`tools/move/spot_term_map.toml`) and the strings' owners rename them, and the code's names until SPOT's code move does.
 
 The maintained docs (every tracked Markdown file but a CHANGELOG) retire more (``DOC_TERMS``:

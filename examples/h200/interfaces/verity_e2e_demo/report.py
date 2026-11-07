@@ -15,7 +15,7 @@ table saying what fills it; a report is refused while any number is unfilled, na
 for a number that is not the demo block's own; ``--record-label`` labels every number read from the block records,
 once at the top and in the sources table.
 
-**Demo A** composes sampled proofs, PoUW and the network certifier (`DEMO_A`): accept when all three accepted on the
+**Demo A** composes SPOT, PoUW and the network certifier (`DEMO_A`): accept when all three accepted on the
 block's server, reject when one rejected, pending otherwise, with their errors summed as
 ``Accounting.Guarantees.JointHorizonLive`` states it. PoUS, the bandwidth audit and the wipe compose at M4 (Demo B).
 
@@ -44,7 +44,7 @@ every sampled proof block was proved.
 
 **Gathers** are wire references, not proof blocks: a measured subcircuit named for one is refused.
 
-**Words.** Each of the six subprotocols by its name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network
+**Words.** Each of the six subprotocols by its name (SPOT, PoUW, PoUS, the bandwidth audit, the network
 certifier, the wipe), "proof block", "sampling block", "server-time block" and "subcircuit": `render` refuses a report
 that says "leg", "window", "template", "integrity", "work", "space" or "communication" (`BANNED`) outside a code span,
 measurement text included.

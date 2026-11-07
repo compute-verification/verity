@@ -90,7 +90,7 @@ Credit and all reporting are in circuit size (tentative).
 - **Size** is a circuit's or a region's AND-gate count, what Flock pays for, in place of work, FLOPs, MAC-times and
   pricing.
   U/s_× (above) replaces κ/2.
-- **Credit** is of two kinds (ASK-166 A). Sampled proofs' is declared size, values certified: an accepted run credits
+- **Credit** is of two kinds (ASK-166 A). SPOT's is declared size, values certified: an accepted run credits
   S, and Pr[accept ∧ the AND gates whose values in the committed trace are right number fewer than (1 − ε_skip)·S] ≤
   δ_coin + δ_crypto, with no algorithmic premise. Dither's compute credit also needs values that read live noise and SAK
   (`SAKResidual`), over noised operands only; an un-noised call earns none. PoUW's bar is T1–T3
@@ -129,7 +129,7 @@ Older names stay where they are baked into a digest, a frozen fixture, a recorde
 | "Candidate A", "Candidate B"; the `candidate` feature and label keys | the archived proof systems A-GKR, B-Ligero |
 | the `candidate` label values `SP1` and `C` (`research.store.vocab.CANDIDATES`) | D-SP1, and the VOLE candidate (not Flock) |
 | "C-Flock"; the stored candidate label `C-Flock`, backend ids `C-interactive`, `C-fs` | Flock (Succinct's is "upstream Flock") |
-| "sampled proofs", the sampled proof system's name; `sampled_proofs`, `SampledProofs`, `sampled-proofs`, the Lake package `core_sampled_proofs` and the ids under `verity/sampled-proofs/`, until renamed | SPOT (`spot` in paths and Python names, `Spot` in Lean); a sampled proof block's proof keeps its words |
+| "SPOT", the sampled proof system's name; `sampled_proofs`, `SampledProofs`, `sampled-proofs`, the Lake package `core_sampled_proofs` and the ids under `verity/sampled-proofs/`, until renamed | SPOT (`spot` in paths and Python names, `Spot` in Lean); a sampled proof block's proof keeps its words |
 | `verity.ml.circuits.targets.target.Target`, `TARGETS`, `FIRST`; the result fingerprint's `profile` | subcircuit (a `GemmCoordinate<K>` at one semantics) |
 | `Target.family`, `FAMILY_DIGEST`, a gate family such as `veritor.tc-ampere-bf16@1` | the semantics parameter's gate set |
 | "backend", "backend family", "configured backend" for Flock; `backends/` (Flock's old directory), `verity_flock.backend`, `BACKENDS` | the proof system |
@@ -297,7 +297,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   `sliding_window`).
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (its README's vocabulary).
 - Six words still carry two senses in the code:
-  - **Footprint**: a replay block's is where sampled proofs read harm (Two-stage design, below). An HBM footprint
+  - **Footprint**: a replay block's is where SPOT reads harm (Two-stage design, below). An HBM footprint
     (`Accounting.BoundReceipt.footprint`) and a theorem's (its hypotheses, in Flock's `ASSUMPTIONS.md`) keep the word.
   - **Row**: a commitment row, the bits one leaf hashes (`hm96` rows, the `*/row/*` leaf schemes, the row-form
     statements). A matrix's row stays plain English. A workload or a server block is never a row (Older names).

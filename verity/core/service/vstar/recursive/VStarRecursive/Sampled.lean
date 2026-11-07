@@ -1,9 +1,9 @@
 /-
-Sampled proofs (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit on the proofs themselves
+SPOT (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit on the proofs themselves
 (`SampledProofs.OneStageZk`) or the recursive audit (`VStar.Recursive`), whichever the auditor's params name. One-stage
 v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's are its own run of the verifier.
 
-`Core.Composition.product` reads every component's case, so sampled proofs is one component and the form is the params':
+`Core.Composition.product` reads every component's case, so SPOT is one component and the form is the params':
 
 * **params**: `{"form": "one-stage" | "recursive", ...}`, the rest that form's params. The auditor fixes the form with the
   rest of its params, before any coin. One-stage params naming no `proofs` are v1's, and refused;

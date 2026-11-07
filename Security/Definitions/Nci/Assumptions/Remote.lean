@@ -7,7 +7,7 @@ public import Definitions.Nci.Remote
 
 The remote dampener's three derived terms each rest on one: the certificate slack on PoUW's soundness per window
 (`PouwSound`, [POUW-SOUND]), the verdict lag on detection being terminal (`TerminalDetection`, [TERMINAL-DETECTION]),
-and the escape slack on sampled proofs catching each faulty block whatever came before (`SampledDetection`,
+and the escape slack on SPOT catching each faulty block whatever came before (`SampledDetection`,
 [SAMPLED-DETECTION]), from which `Nci.SecurityProofs.sampled_escape` bounds what each identity's escaped blocks skip.
 -/
 
@@ -37,14 +37,14 @@ use, with the verdict at most `Δ` after the detected block. Of the incorrect pr
 `ident b` at time `τ b`, those `detected` (sampled, and failing their proof): no faulty block of a detected block's
 identity runs at or after it by more than `Δ`, the identity having halted.
 
-It holds under sampled proofs (T5) too: a faulty block that isn't sampled is accepted and isn't `detected`, so it
+It holds under SPOT (T5) too: a faulty block that isn't sampled is accepted and isn't `detected`, so it
 constrains nothing, and the faulty blocks an identity runs before its first detection (`escaped`) are charged under
 `SampledDetection`. When every proof block is proved (tiers T1–T4) every faulty block fails its own proof, `detected`
 holds them all, and it says that any two faulty blocks of one identity run within `Δ` of each other. -/
 def TerminalDetection {β ι : Type} (bad detected : Finset β) (ident : β → ι) (τ : β → ℝ) (Δ : ℝ) : Prop :=
   ∀ b ∈ bad, b ∈ detected → ∀ b' ∈ bad, ident b = ident b' → τ b ≤ τ b' → τ b' ≤ τ b + Δ
 
-/-- **Sampled proofs catch each faulty block with probability at least `q`, whatever came before**
+/-- **SPOT catches each faulty block with probability at least `q`, whatever came before**
 ([SAMPLED-DETECTION]): over the outcomes `Ω`, sampled from `μ`, a block `b` that is faulty (`bad`) with no other faulty
 block of its identity detected at or before it (`noDetectionBefore`) is not detected itself with probability at most
 `(1 − q)` times that of the condition: `P(b faulty, none earlier detected, b undetected) ≤ (1 − q) P(b faulty, none
@@ -72,7 +72,7 @@ def PouwPerWindow {T : ℕ} {Ω : Fin T → Type} [∀ t, Fintype (Ω t)] [∀ t
     (wrong : Fin T → ((t : Fin T) → Ω t) → Prop) (p : ℝ) : Prop :=
   ∀ t (ξ : (t : Fin T) → Ω t), prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p
 
-/-- **Sampled proofs' per-window bounds** (in place of `SampledDetection`): a window's faulty blocks `bad` (block `b` in
+/-- **SPOT's per-window bounds** (in place of `SampledDetection`): a window's faulty blocks `bad` (block `b` in
 window `win b`) are fixed before its coins, and the units it samples (`drawn`) and the faulty blocks it detects
 (`detected`) read only its coins and the earlier windows'; its sample misses its `m` faulty blocks with probability at most
 `(1 − q)^m` (`Flock.Guarantees.HiddenWindow.drawMiss_le`, under A3), and it detects none of them while sampling one with

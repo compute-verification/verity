@@ -27,7 +27,7 @@ the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAud
 
 | subprotocol | `Audit` | onsite's compiled check | remote's compiled check |
 | --- | --- | --- | --- |
-| sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | the same |
+| SPOT | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | the same |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
 | the inference-only policy | | `NciCheck.Protocol.protocol` (`verity/inference-only/v0`) | the same |
 | PoUS | `.pous` | `PousCheck.RunProtocol.protocol` | |
@@ -59,7 +59,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
   `unitsOfFile`, `partsOfFile` at v2's reading of the files, `read`), so the units are the public file's population,
   and the positions are the files' and the commitment's (`place`), never the prover's world. Committed files without a
   file of each digest are refused (`Registered`, conjoined beside the composite's acceptance).
-* **Sampled proofs' claim reads one fixed extractor's transcript.** The extractor (`extract`, the one
+* **SPOT's claim reads one fixed extractor's transcript.** The extractor (`extract`, the one
   `SampledKSLive*` is stated with, `XplurZC`) is a construction applied to the strategy, never chosen per strategy.
   The claim is that at most an `ε` share of the file's units are unbound in its transcript (`Accounting.unbound`): wrong
   in it, or with a committed input or output the commitment doesn't open to its value there (`Opens`: a registered
@@ -118,7 +118,7 @@ open scoped ENNReal
 
 /-- The subprotocols a composite is made of. -/
 inductive Subprotocol
-  /-- sampled proofs: the integrity of the circuit's committed transcript -/
+  /-- SPOT: the integrity of the circuit's committed transcript -/
   | sampled
   /-- PoUW: work -/
   | pouw
@@ -794,7 +794,7 @@ noncomputable def live (k : Verity.Registration.Composite) (θ : ByteArray) (F :
   accepts a := V.Verdict k (.ofAudit a)
 
 /-- **The claim subprotocol `a` certifies** in the play of `σ` that ended with `o`. The five period claims are
-`Accounting.PeriodLive.Holds` at the period and the published certificates: sampled proofs' on the extractor's
+`Accounting.PeriodLive.Holds` at the period and the published certificates: SPOT's on the extractor's
 transcript at `σ` (at most an `ε` share of the units unbound in it under the commitment's openings), PoUW's in gates (at
 least `W` gates of the committed circuit computed after their window's coin), and the others' on the world the play
 realized (at least `S` bits of device memory held on average, at least `Q` bits read, at most `K` bits through the
@@ -883,7 +883,7 @@ def Target (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)),
     Game.prob (fun o => V.Verdict k a o ∧ ¬ V.Holds k θ F c σ a o) (V.game θ F c) σ ≤ V.error a θ F c σ
 
-/-- **Sampled proofs' target**: at most an `ε` share of the units unbound in the extractor's transcript. -/
+/-- **SPOT's target**: at most an `ε` share of the units unbound in the extractor's transcript. -/
 def SampledProofsSound (k : Verity.Registration.Composite) : Prop := V.Target k .sampled
 
 /-- **PoUW's target**: at least `W` gates of the committed circuit computed after their window's coin. -/

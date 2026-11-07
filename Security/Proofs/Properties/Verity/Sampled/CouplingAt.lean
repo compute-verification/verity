@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Charge
 public import Proofs.Properties.Verity.Sampled.MovesReachAt
 
 /-!
-# Sampled proofs' coupling off the empty classes at their counts
+# SPOT's coupling off the empty classes at their counts
 
 The coupling holds the joint law off each stop's empty class, and pays the class's probability in the stops' term. Off
 the empty classes themselves (`linkEmpty`, `roundEmpty`), that term is within the hiding term only where each stop's

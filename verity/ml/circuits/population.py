@@ -4,7 +4,7 @@ whose binding records name the templates by descriptor id. A mixed population ma
 parameters no node reads (`TemplatePopulations_v1{templates, values, counts}`). v0 of each, which names only the counts, is
 kept for the records made with it (`POPULATION_VERSIONS`).
 
-Sampled proofs' one-stage protocol applies its template queries to them (`one_stage.partition`, which names them too), and an
+SPOT's one-stage protocol applies its template queries to them (`one_stage.partition`, which names them too), and an
 integration builds its window's program with them: both sides build the same program from the same templates and counts.
 """
 from __future__ import annotations

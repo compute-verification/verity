@@ -153,7 +153,7 @@ Protocols and claims:
 
 - Credit and every report of computation are in AND gates (tentative). 𝓜's resources appear only inside
   exclusion, which reports in AND gates. Whoever finds a reason this is wrong floats it at once.
-- Credit of declared size, values certified, is a statement about values (sampled proofs'). Compute credit (Dither's;
+- Credit of declared size, values certified, is a statement about values (SPOT's). Compute credit (Dither's;
   PoUW's bar is now T1–T3) also needs values that read live noise and SAK's lower bound, so SAK is a premise of compute
   credit as well as of exclusion (ASK-166). SAK is over noised operands only, never prover-chosen ones (pinned weights,
   served activations, un-noised outputs), and an un-noised call earns no compute credit (ASK-174).
@@ -199,7 +199,7 @@ Protocols and claims:
   replay blocks, the prover commits their interiors, and the second stage samples k proof blocks in each on fresh coins.
   Harm is read at a replay block's footprint, the fewest incorrect proof blocks of any interior its boundary allows
   (compute credit charges it whole). One-stage is the case where each replay block is one proof block.
-- The end goal is sampled proofs through recursion with hidden unit circuits and a hidden partition; the auditor
+- The end goal is SPOT through recursion with hidden unit circuits and a hidden partition; the auditor
   checks only padded counts. One key per protecting party, sampled once at setup from the OS before anything else, public
   and a constant in V\*; hm96's pinned key stays only where a key is wired into a circuit, as a named exception. Salts
   are sampled from the OS, not expanded by a PRG, but the lead keys its instances under one window key (`Hash.Keyed`).

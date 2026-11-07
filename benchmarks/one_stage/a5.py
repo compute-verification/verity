@@ -991,10 +991,9 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
     in ``out/case.json``, and the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2``
     (`v2_proof`), the case of the audit on the proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in
-    ``out/case-v2.json``, and that case in sampled proofs' one-stage form (`case_with_form`), which onsite's and remote's
-    evidence carries for sampled proofs, in ``out/case-sampled.json``; or why there is neither in
-    ``out/case-v2-error.txt``. Sampled proofs refuses one-stage v1's case, so an audit with no v2 case has no sampled
-    proofs case."""
+    ``out/case-v2.json``, and that case in SPOT's one-stage form (`case_with_form`), which onsite's and remote's
+    evidence carries for SPOT, in ``out/case-sampled.json``; or why there is neither in
+    ``out/case-v2-error.txt``. SPOT refuses one-stage v1's case, so an audit with no v2 case has no SPOT case."""
     try:
         import replay as RP
 
@@ -1039,13 +1038,13 @@ def case_v2(case: dict, sessions: Sequence[str], *, proof, circuit: str, public:
             "params": {**case["params"], "proofs": {"circuit": circuit, "public": public, "registered": registered}}}
 
 
-#: onsite's and remote's sampled proofs component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
+#: onsite's and remote's SPOT component (`VStar.Recursive.Sampled`): one-stage v2's audit or the recursive audit,
 #: whichever form its params and evidence name; it refuses one-stage v1's
 SAMPLED_PROOFS = "verity/sampled-proofs/v1"
 
 
 def case_with_form(case: dict, form: str = "one-stage") -> dict:
-    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as sampled proofs' (`SAMPLED_PROOFS`): its params and
+    """`case`, one-stage v2's (`case_v2`) or the recursive audit's, as SPOT's (`SAMPLED_PROOFS`): its params and
     its evidence each with ``form``, which `VStar.Recursive.Sampled` splits off before that form's decoders read the
     rest."""
     import replay as RP

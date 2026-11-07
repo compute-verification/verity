@@ -8,7 +8,7 @@ public import Definitions.Accounting.JointPeriod
 A server's life is cut into server-time blocks, each opened by a certified wipe of its device memory. Over a horizon of
 `B` blocks on one device, one circuit and one coin space (`BlocksRun`):
 
-* **Block `b`** is a period of the node's run (`Accounting.PeriodRun`) decided by the five audits, sampled proofs, PoUW,
+* **Block `b`** is a period of the node's run (`Accounting.PeriodRun`) decided by the five audits, SPOT, PoUW,
   PoUS, PoUB and the network certifier, each on its own coordinate of the coins. Every block's schedule and committed
   transcript are functions of all the coins, so a block may adapt to the coins of the blocks before it.
 * **The memory term of block `b` at share `σ`** (`BlocksRun.MemoryTerm`), what PoUS certifies: at each of the block's

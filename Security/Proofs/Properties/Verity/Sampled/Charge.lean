@@ -5,7 +5,7 @@ public import Proofs.Properties.Verity.Sampled.Stops
 public import Proofs.Properties.Verity.Sampled.Walk
 
 /-!
-# Sampled proofs' coupling: the stops' term within the hiding term
+# SPOT's coupling: the stops' term within the hiding term
 
 The coupling's stops' term (`couplesErr`) charges each stop's opening its gap and empty class: the link's at the
 first stop, at each later one the round's whose submission the stop decodes. Each is within the class error of the

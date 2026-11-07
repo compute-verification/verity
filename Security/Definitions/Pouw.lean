@@ -210,7 +210,7 @@ roots are read at their place in the committed transcript, decision 106) and PoU
 call's analysis, the premises of the window's composition in the compiled tables' shape (a constant plus a term of the
 prover's state) and the window's collision term (`coll`, bounded at the sessions' counted queries by `CollCounted`),
 what the served pass committed (`ServedPass`) and the transcripts that are its (`Anchored`, `Served`), the tie to what's
-served (`ServedTie`, open on main), and the deployed sample, sampled proofs' service's uniform subset in rank-ordered
+served (`ServedTie`, open on main), and the deployed sample, SPOT's service's uniform subset in rank-ordered
 sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`) with its units' statements, the tiles' read in every session
 (`UnitStmts.copies`, `WrongCopyClosed`).
 The window's ε from its calls' (M2) and the service's sample at `η = 0` are `Definitions.Pouw.Guarantees.Window`, stated and

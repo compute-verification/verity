@@ -5,11 +5,11 @@
 Each ``--cases`` is a private directory (0700, its files 0600, as the pieces write it) holding one subprotocol's case,
 or a directory whose subdirectories each hold one. A case is the subprotocol's case as its own `serve` reads it,
 ``case.json``: ``{"params", "commitment", "evidence"}`` with the commitment and evidence hex, and ``blobs``, the paths
-of the files it reads (sampled proofs' is a5's ``case-sampled.json``, one-stage v2's case in its one-stage form);
+of the files it reads (SPOT's is a5's ``case-sampled.json``, one-stage v2's case in its one-stage form);
 beside its own Lean answer on that case, ``answer.json``, whose ``protocol`` is its id and ``commitment`` its digest
 (null when its commitment didn't decode, and then the case's own commitment stands in, which a rejection never binds).
 The inference-only policy's case (`verity/inference-only/v0`) is one subprotocol's like any other; its record's digest
-must be the one sampled proofs' case commits to (and PoUW's, at remote), which the product checks.
+must be the one SPOT's case commits to (and PoUW's, at remote), which the product checks.
 
 A case's evidence is witness, and so are its params' bodies, so the output is split. ``--private-out`` (created 0700,
 its files 0600) gets the product's params (``params.json``), commitment (``commitment.bin``: `bind` of the digests in

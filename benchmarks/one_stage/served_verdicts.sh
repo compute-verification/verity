@@ -43,7 +43,7 @@
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
 #     them.
-#  3. sampled proofs, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
+#  3. SPOT, on the window `served_verdicts.py window` picks (the most requests, none carried across windows; the
 #     pick stays in the serve dir's private/window.json, the WINDOW line saying only the class's SLOTS slots, and CLASSES
 #     the window circuit's classes beside the certifier's scan class, CERTIFIER_SCAN, default W63, the one the gate serves): every
 #     closed window's advice under the prove path's registered compiler and the weights registration (`--weights-of-record`),
@@ -85,7 +85,7 @@
 #     unless COMPOSITE is set empty,
 #     remote's and onsite's Lean verdicts on the run's cases (`served_composite.sh`'s docstring). Their verdicts gate
 #     nothing, but a composite that didn't run (a tree without composite.py) or whose Lean didn't answer fails the run.
-#     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote sampled proofs and PoUW
+#     PRODUCT (default onsite) is the product the run composes: onsite every subprotocol; remote SPOT and PoUW
 #     alone, its other pieces dropped (not run, no default command, the wipe's and the certifier's included; the
 #     preflight refuses any onsite command set), its record composing their verdicts alone and its composite remote's.
 #  6. V3c, after the record since V2 doesn't read it: it proves the window circuit's own units at V3C_CLASS (default 4,32,4,
@@ -115,7 +115,7 @@
 #     and the period check, which the run's --timeout holds beside the other steps. The period check writes the
 #     certifier's answer.json in DIR, which step 4's certifier piece reads; `served_verdicts.sh v3c`, which writes no
 #     record, moves the steps' logs (CERTIFIER_PRIVATE) to the serve dir's private/pieces/certifier before it exits.
-# Coins: sampled proofs' sample is on a local development challenger session's coins on the served node (run.sh's
+# Coins: SPOT's sample is on a local development challenger session's coins on the served node (run.sh's
 # PP_CHALLENGER default, local, pinned on PP_MAIN's line, else MAIN_FILE's, else origin's main's) unless PP_CHALLENGER
 # names the live challenger (run.sh's gate:USER@HOST with PP_PEER, PP_CHALLENGER_KEY and PP_GATE_KEY); V3c's audit's is on
 # a local development session of its own where it runs (step 6). With H1_GATE (the

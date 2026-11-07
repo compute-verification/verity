@@ -161,7 +161,7 @@ def _integrity() -> dict:
 
 
 def _record(monkeypatch, capsys, serve: Path, pieces: Path) -> tuple[dict | None, dict]:
-    """`served_verdicts.py record` over the pieces `pieces` ran, sampled proofs' row an accept: the block record (None
+    """`served_verdicts.py record` over the pieces `pieces` ran, SPOT's row an accept: the block record (None
     where none was written) and the ``RECORD`` line."""
     monkeypatch.setattr(S, "sampled_proofs_row", lambda d, run=None: _integrity())
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")

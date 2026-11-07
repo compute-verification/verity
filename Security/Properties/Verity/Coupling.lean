@@ -43,7 +43,7 @@ own coins. This module states the coupling between the two and the bounds it car
 * **Soundness** (`SoundnessOfUpFront`): at every composite, each subprotocol's bound at its component, over the coins
   flipped up front, or as its target (`Vocab.SubprotocolBound`), gives `Vocab.SoundnessAt`.
 
-A subprotocol whose claim reads the coin trees' coins (sampled proofs) is bounded at every resolution of them only if a
+A subprotocol whose claim reads the coin trees' coins (SPOT) is bounded at every resolution of them only if a
 prover choosing them can't break it, so its bound stays at its component (`Vocab.ComponentBound`) or its target
 (`Vocab.Target`), proved in the play itself. The inference-only policy's claim reads no coin, so its bound is its own.
 -/

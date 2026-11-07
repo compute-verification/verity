@@ -2,7 +2,7 @@
 
 Each port's domain binds the program, the partition, the port, its schema, its leaf count and the run, so the roots can't be
 read as anything else: ``binding = identity_digest_sha512(WINDOW_DOMAIN, {program, partition, port, schema, leaves, run})``,
-under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``.  Sampled proofs' registration recomputes every registered
+under ``CommitmentDomain(binding, -1, [0, leaves), "sha512")``.  SPOT's registration recomputes every registered
 root's domain with it (``one_stage.registration``, which names it too), and an integration commits each port under it.
 The tag's bytes predate the name and stay as they are: changing them changes every root.
 """

@@ -1,6 +1,6 @@
 # PoUW (`verity.core.protocols.pouw`)
 
-Proof of useful work: certifies that a served model's registered matrix products were computed, by sampled proofs over
+Proof of useful work: certifies that a served model's registered matrix products were computed, by SPOT over
 committed, noised checked values. An accepted run establishes a credited size S of noised matrix products, at least
 (1 − ε)·S of their AND gates computed right, except with probability δ. One protocol carries several named schemes
 behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof system registers each execution phase, samples
@@ -12,7 +12,7 @@ every product, is a reference, not an answer.
 
 ## PoUW in the remote protocol
 
-The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
+The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: SPOT's
 one-stage audit, PoUW's credit period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
 inference-only policy's check (`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id
 `verity/remote/v0`). It accepts only when every subprotocol accepts its own case, its commitment binds the
@@ -63,7 +63,7 @@ execution phase:
 
 How it is run: the difftests run the Lean against the Python on generated cases
 (`uv run tools/verity/check/suites.py verity/core/protocols/pouw/lean/check`, and likewise `lean/window` and
-`lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside sampled proofs'
+`lean/commit`); the composition's difftest runs `remote serve` on PoUW's cases beside SPOT's
 (`verity/core/protocols/composition/tests/test_composition_difftest.py`); `benchmarks/pouw/served_zk/of_record.py` runs
 each check of a served execution phase through the Lean and its Python reference and records the Lean's verdict.
 

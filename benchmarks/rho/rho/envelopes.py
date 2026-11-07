@@ -12,7 +12,7 @@ cryptography's advantage:
   certificate slack `ε'`).
   Its δ is `p / ε'` with `p = δ_s + δ_bind + δ_ks` per window, by Markov over every window at once: `ε'` is the share
   whose certificates may be wrong, and `δ` the chance more are.
-* `Detection`, sampled proofs with terminal detection: their slack is `break` (the verdict lag `JΔ/H` and, sampled,
+* `Detection`, SPOT with terminal detection: their slack is `break` (the verdict lag `JΔ/H` and, sampled,
   the incorrect blocks accepted before detection `θ`) and `exfil.incorrect`, Lean's `χ` (the compute that bits injected by
   accepted incorrect blocks buy, at `chord` products a bit; not double counting, §8 "Channels"). Its δ is the escape
   bound's.
@@ -149,14 +149,14 @@ SAMPLING = ("proof_share", "overhead", "replay", "step_flop", "p_evade", "luck",
 
 @dataclass(frozen=True)
 class Detection:
-    """Terminal detection, the verdict lag and (with `sampled`) sampled proofs (tiers T5); off, every unit is proved
+    """Terminal detection, the verdict lag and (with `sampled`) SPOT (tiers T5); off, every unit is proved
     (`q = 1`, `χ = θ = 0`). Each field is `tiers.py`'s parameter of the same name (`proof_share` is its `share`)."""
 
     #: `J`: identities a detection doesn't end; `Δ`: the verdict lag in seconds
     identities: float
     lag_s: float
     sampled: bool = False
-    #: the sampled proofs' compute share, proving cost per unit of step work, replay cost per sampled step, work and
+    #: SPOT's compute share, proving cost per unit of step work, replay cost per sampled step, work and
     #: output bits per step, failure probability `δ`, luck factor, and steps sampled at a floor of one
     proof_share: float = math.nan
     overhead: float = math.nan
@@ -170,7 +170,7 @@ class Detection:
     #: FLOP: what turns `χ`'s products into the uncertified gates a cut carries
     chord: float = math.nan
     chord_kappa: float = math.nan
-    #: `χ` given directly, in place of the sampled proofs' closed form (None: the closed form)
+    #: `χ` given directly, in place of SPOT's closed form (None: the closed form)
     cheat: float | None = None
 
     CITES = ("Nci.Assumptions.TerminalDetection", "Nci.Assumptions.SampledDetection", "Nci.Guarantees.VerdictLag")

@@ -1,7 +1,6 @@
 """The block record: the fixture records (built by `from-runs` from two all-protocols runs and a wipe run) fit their schema
 and check clean, every derived field is refused when it is not its legs' or its answer's, the verdict is the Lean
-onsite or remote check's answer, undecided when none ran, whatever the legs say, and remote's product composes sampled
-proofs and PoUW alone."""
+onsite or remote check's answer, undecided when none ran, whatever the legs say, and remote's product composes SPOT and PoUW alone."""
 from __future__ import annotations
 
 import copy
@@ -157,7 +156,7 @@ def test_six_accepting_legs_on_one_server_are_undecided_until_the_lean_check_ans
 
 
 def test_remote_composes_sampled_proofs_and_pouw_alone_its_other_legs_dropped() -> None:
-    """Remote's product: sampled proofs and PoUW accepted on the block's server, no onsite leg run, compose with the onsite
+    """Remote's product: SPOT and PoUW accepted on the block's server, no onsite leg run, compose with the onsite
     legs named dropped, neither missing nor in the error sum, and are undecided until the remote check answers; as
     onsite's the same legs miss four. The remote check's answer decides it, and an onsite answer is refused. A record of
     remote's that ran a leg remote drops, that names no product, or that names an unknown one is refused."""

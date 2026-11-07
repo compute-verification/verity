@@ -7,7 +7,7 @@ public import Definitions.Core.Hash
 # Interaction: the live-coin model every proof system's claims are stated in
 
 The vocabulary the claims of every proof system read, inner or outer: Flock's (`Definitions/Claims.lean`), the
-recursion's (`Definitions/Claims/Recursion.lean`), the sampled proofs' (`Definitions/Claims/Sampling.lean`) and the
+recursion's (`Definitions/Claims/Recursion.lean`), SPOT's (`Definitions/Claims/Sampling.lean`) and the
 composition of zero knowledge through a recursion (`Definitions/Core/Rec.lean`). It is
 Core's, and keeps the namespace `Claims` its records were written under. Its forms:
 

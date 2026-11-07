@@ -22,7 +22,7 @@ public import Proofs.SampledProofs.JointPressure
 public import Proofs.SampledProofs.ChiPool
 
 /-!
-# Populations: which object each policy needs of sampled proofs' guarantee
+# Populations: which object each policy needs of SPOT's guarantee
 
 `Determinacy`: robust determinacy and the downstream cone from single assignment and acyclicity, and the honest
 evaluation. `Necessity`: determinacy for every choice of unit functions holds exactly when the checker's two checks do.

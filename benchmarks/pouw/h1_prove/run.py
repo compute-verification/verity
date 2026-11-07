@@ -1,4 +1,4 @@
-"""run.py: one recorded H1 execution phase's sampled tile units through sampled proofs, the challenger's and the verifier's side.
+"""run.py: one recorded H1 execution phase's sampled tile units through SPOT, the challenger's and the verifier's side.
 
     python run.py prepare --work W --stage SW --lean FLOCK_VERIFY --layer L1.npz --layer2 L2.npz [--draw 8] [--k K] [--cols N]
     python run.py summarize --work W --out OUT

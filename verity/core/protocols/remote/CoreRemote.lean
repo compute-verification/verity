@@ -4,12 +4,12 @@ subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verit
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the registered circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
-subprotocol, and integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the
+subprotocol, and integrity by SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the
 form its params name: one-stage v2's audit on the proofs themselves, or the recursive audit, V*'s compiled check run on
 the recursive session's parts, each on the blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, is
 refused). `Core.Composition.tiedSameB` composes them on the caller's blobs: every
 subprotocol accepts or remote doesn't, and any one's rejection rejects remote whatever the others answer. The policy's
-commitment and sampled proofs' are the run's record, and both must commit to the same one; every window of the period
+commitment and SPOT's are the run's record, and both must commit to the same one; every window of the period
 must name that record as its Commit record (`windows`). Two records reject remote whatever the subprotocols answer.
 The tie is by the record alone: nothing here holds PoUW's committed weights to the weights the record registers, so
 remote doesn't establish that PoUW's credited work and the audited inference read the same weights.
@@ -48,7 +48,7 @@ open Composition
 def components : List BlobProtocol :=
   [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]
 
-/-- The subprotocols that must commit to one record: the policy and sampled proofs. -/
+/-- The subprotocols that must commit to one record: the policy and SPOT. -/
 def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
 /-- The record the policy's case commits to: its commitment's digest, as the policy decodes it. -/
@@ -117,11 +117,11 @@ private def recordsOf (policy period sampled : String) : Answer :=
   answer [committing NciCheck.Protocol.protocol policy, committing PouwCheck.Period.protocol period,
     committing VStar.Recursive.Sampled.protocol sampled]
 
--- the policy and sampled proofs on one record: the tie holds, and the verdict is the subprotocols' (each refuses its
+-- the policy and SPOT on one record: the tie holds, and the verdict is the subprotocols' (each refuses its
 -- params)
 #guard (recordsOf (record 0) "[]" (record 0)).reason.map
   (·.startsWith "verity/inference-only/v0 reject: params: ") == some true
--- the policy's record is not sampled proofs': remote rejects on the tie, whatever the subprotocols answer
+-- the policy's record is not SPOT's: remote rejects on the tie, whatever the subprotocols answer
 #guard (recordsOf (record 1) "[]" (record 0)).verdict == .reject
 #guard (recordsOf (record 1) "[]" (record 0)).published.isNone
 #guard (recordsOf (record 1) "[]" (record 0)).reason.map
@@ -130,7 +130,7 @@ private def recordsOf (policy period sampled : String) : Answer :=
   (contains · ", verity/sampled-proofs/v1 committed ") == some true
 #guard !((recordsOf (record 1) "[]" (record 0)).reason.map (contains · "reject: params")).getD true
 
--- a period's windows name records by their Commit records' digests, which are the policy's and sampled proofs' digests
+-- a period's windows name records by their Commit records' digests, which are the policy's and SPOT's digests
 -- of one record; a window on another record is a stray
 private def windowOn (r : String) : String := s!"\{\"commit\":\"{Flock.hexOf r.toUTF8}\"}"
 private def periodOn (rs : List String) : Case :=
@@ -158,7 +158,7 @@ private def strayOf (policy : String) (rs : List String) : Option String :=
 `W` is the serving process's registration of a window's tables, the log's first record, in the form a served window
 writes it. `R`, the run's registration record, is chained after it (`previous`) and registers those tables under the
 names PoUW's Commit gives them (`PouwCheck.Credit.commitRows`, `commitIds`) as output values that reuse `W`'s entries
-(`outputs`). The policy's case, sampled proofs' (one-stage v2's, `SampledProofs.OneStageZk`) and the period's one window
+(`outputs`). The policy's case, SPOT's (one-stage v2's, `SampledProofs.OneStageZk`) and the period's one window
 all name `R`. `R` registers one window's tables, so a period credits at most one window on it: every window must name
 `R` (`windows`), and PoUW's ROOTS1 holds each window's tables to `R`'s (`Internal.arow`). -/
 
@@ -282,7 +282,7 @@ private def noBlobs (P : BlobProtocol) : Core.Protocol := P.onBlobs (Core.Blobs.
 private def boundOn (cs : List Core.Protocol) (xs : List Case) : ByteArray :=
   (binding "verity/remote/v0" (answersOf cs (xs.map fun x => ⟨x.id, x.params⟩) xs)).getD ByteArray.empty
 
--- every reader of remote reads one record, `R`: the policy's, sampled proofs' and the window's Commit record
+-- every reader of remote reads one record, `R`: the policy's, SPOT's and the window's Commit record
 #guard (policyRecord (policyOn #[recW] recR)).map (·.map Flock.hexOf) == some [digestOf recR]
 #guard committedBy VStar.Recursive.Sampled.protocol.id (components.map noBlobs)
   [policyOn #[recW] recR, periodNaming [recR], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR] ==
@@ -306,7 +306,7 @@ private def grantedOf (rec : Json) (e : SampledProofs.OneStageZk.Evidence) : Arr
   e.sessions.map fun s => (s!"flock-verify/{s.name}", Json.mkObj [("accepted", true), ("of_record", true),
     ("registered", Json.mkObj reads), ("session", s.name)])
 
-/-- Sampled proofs with its sample's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
+/-- SPOT with its sample's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
 and digest, and in the one-stage form the check `OneStageZk.checkBlobsAt` ends in, v1's `check` on the verdicts the
 sessions' run gives (`grantedOf`); the recursive form refused. -/
 private def proved : Core.Protocol where
@@ -334,7 +334,7 @@ private def provedOn (log : Array Json) (outputs : Option Json) : Answer := answ
 #guard (policy #[]).verdict == .reject
 #guard (policy #[]).reason.map (·.startsWith "trusted: ") == some true
 
--- sampled proofs' one-stage form is v2's: with no blob and coins no challenger signed, it refuses `R` before any session is
+-- SPOT's one-stage form is v2's: with no blob and coins no challenger signed, it refuses `R` before any session is
 -- verified; v1's form of the audit, its verdicts the evidence's, is refused by name
 #guard (sampled #[recW] (some (outputsOf (digestOf recW)))).verdict == .reject
 #guard (sampled #[recW] (some (outputsOf (digestOf recW)))).reason.map (·.startsWith "coins: ") == some true
@@ -371,7 +371,7 @@ private def arowOn (rec : Json) : Option (Except (String × String) Unit) :=
   some s!"record: {NciCheck.Protocol.protocolId} committed {digestOf recR}, {PouwCheck.Period.protocolId} committed {digestOf recW}"
 
 -- remote on the three cases: the policy accepts `R` and the window names it, so remote's refusals are the period's own,
--- whose credit reads an auditor's ledger, here empty, and sampled proofs', whose coins no challenger signed
+-- whose credit reads an auditor's ledger, here empty, and SPOT's, whose coins no challenger signed
 private def remoteOn (window : Json) : Answer :=
   let xs := [policyOn #[recW] recR, periodNaming [window], sampledOn #[recW] (some (outputsOf (digestOf recW))) recR]
   Cases.answerCases (protocol.on #[]) xs (boundOn (components.map noBlobs) xs)
@@ -397,7 +397,7 @@ private def credited : Core.Protocol where
   publicJson := PouwCheck.Credit.PeriodCredit.toJson
   profileJson := PouwCheck.Period.profileJson
 
-/-- Remote's composition (`tiedSame` over its records and its tie) with the period's credit and sampled proofs' coins and
+/-- Remote's composition (`tiedSame` over its records and its tie) with the period's credit and SPOT's coins and
 proofs granted. -/
 private def crediting : Core.Protocol :=
   tiedSame "verity/remote/v0" tied [windows] [NciCheck.Protocol.protocol, credited, proved]

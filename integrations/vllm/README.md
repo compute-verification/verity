@@ -116,11 +116,11 @@ flight (`errors.Refused`, `engine/class_admission.py`).
 
 ## Protocol hooks
 
-Each subprotocol that runs on the engine has one adapter in `verity_vllm/protocols/`: sampled proofs (`sampled_proofs.py`),
+Each subprotocol that runs on the engine has one adapter in `verity_vllm/protocols/`: SPOT (`sampled_proofs.py`),
 PoUW (`pouw/`) and PoUS (`pous.py`), enabled on their own or together (`config.parse_protocols`, off by default, refused at
 TP > 1). An adapter states `NAME`, `schemes()`, `refusals(scheme, ctx)` and `install(scheme, target)` (the contract is
 `verity_vllm/protocols/interface.py`); the protocol logic stays in its `verity.core.protocols` package. At a linear layer's `quant_method.apply` PoUS wraps PoUW,
-which executes the GEMM (`protocols.SITES`), and sampled proofs commits outside every site. Every option first commits to the
+which executes the GEMM (`protocols.SITES`), and SPOT commits outside every site. Every option first commits to the
 plaintext weights, then installs innermost first. `verity_vllm/protocols/remote_bandwidth/` is the node's registered store
 for PoUB, with the hooks that keep it current while vLLM serves. The network certifier is on the
 node's uplink.

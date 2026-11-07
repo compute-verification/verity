@@ -11,7 +11,7 @@ opened by replaying their requests and sampled proof blocks replayed bit for bit
 step or named, and a replay bundle and block record written. `verity demo h200 --out OUT [...]` runs it
 (`run.py --help`): on the CPU at the small shapes, or on an H200 at the frozen one (`--shape h200 --device cuda`).
 
-Around sampled proofs, `e2e_h200/legs.py` runs the other subprotocols as a skeleton on fixture coins, not as runs, and
+Around SPOT, `e2e_h200/legs.py` runs the other subprotocols as a skeleton on fixture coins, not as runs, and
 nothing claims them: PoUW is per-call noise's tiles as a `--subcircuit`, PoUS is spot reads and the memory wipe and reload
 on the staged path's store, network certification's digests are a fixture, and the bandwidth audit isn't run. `interfaces/` holds the
 interfaces between its subprotocols, the drawn-unit replay bundle and the block record, a suite of its own (its README).
@@ -61,7 +61,7 @@ full-batch tables, which go to the commit call as the layer ends and are dropped
 | PoUW | `--subcircuit e2e_h200.percall:kraqwxsc` (`percall.py`, a `units.Subcircuit` whose ``call`` the driver runs on each served linear call): f = 1, every unit of every call through J10-R's `PouwH1Tile_v6` on kernels' sm_90a kraqwxsc build (`percall:kraq` is the earlier build), z the call's served s32 sums, the receipts and the sums committed under the step's salt key, sampled proof blocks held to the exact fallback (`j10r_ref.so`); `percall:python` is its host twin. Credit is not computed: its two blockers are named in the record (`percall.CREDIT`) | J10-R's lane Definitions and Credit.window over the tile stratum; window_salt's live salt and the real roots (`percall.STANDS_IN`) |
 | Network | `e2e_h200/engine.py`: the loop as network's demo endpoint's engine (`demo_endpoint.py --engine e2e_h200.engine:frozen`): each sequence its own slot and positions, no EOS (8 prompt ids, 24 generated) | — |
 | Bundle and record | `record.py`: provisional v0 schemas | `verity/drawn-unit-bundle/v1` and `verity/block-record/v2` (`examples/h200/interfaces`) |
-| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; sampled proofs are the replay and the opening | PoUS's and the memory wipe's runs, the bandwidth audit, network certification's signed records, Flock `--zk` and the Lean verifier |
+| Subprotocols | `legs.py`: certifier digests as a fixture; PoUS spot reads and wipe and reload on the staged path's P2 store; bandwidth not run; SPOT is the replay and the opening | PoUS's and the memory wipe's runs, the bandwidth audit, network certification's signed records, Flock `--zk` and the Lean verifier |
 
 `e2e_h200/served_weights.py` is the demo's seeded weights and their registration root, for any decoder
 shape (`H200`, Phase 1's CPU model, `TINY`): a SHA-512 counter generator from (seed, tensor, row) to every tensor, the weights

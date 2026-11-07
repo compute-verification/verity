@@ -48,7 +48,7 @@ for one server block and the Lean check's answer for it. It extends the all-prot
 (`verity/all-protocols-period/v1` and `-window/v1`) with:
 
 - the block's server and steps, `server_time: [{server, steps: [lo, hi)}]`;
-- the subprotocols, keyed `integrity` (sampled proofs), `pouw`, `pous`, `bandwidth`, `certifier` and `wipe`. Each is
+- the subprotocols, keyed `integrity` (SPOT), `pouw`, `pous`, `bandwidth`, `certifier` and `wipe`. Each is
   `null` when the block ran no such audit, else its protocol, the core answer, its certificate (integrity's count bound,
   `profile.Stratified.count_bound` over its sample, W_cert,
   S_cert, Q_cert, K, the wipe's foreign_bits at its reads `k` and ratio `r`), its error and the certificate at δ = 1/100
@@ -58,7 +58,7 @@ for one server block and the Lean check's answer for it. It extends the all-prot
   `undecided` with no answer. Nothing in Python combines the subprotocols' verdicts;
 - what the product's subprotocols say (`compose`) and the error of `Accounting.Guarantees.JointHorizonLive` over the
   block: the accepted subprotocols' errors summed. The product (`PRODUCTS`) is onsite's, every subprotocol, unless
-  `composed.product` names remote's, sampled proofs and PoUW, whose other subprotocols are `dropped`: not run and not
+  `composed.product` names remote's, SPOT and PoUW, whose other subprotocols are `dropped`: not run and not
   composed;
 - the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizonLive's
   union bound over that many blocks and the per-block error each δ needs.
@@ -70,9 +70,9 @@ for one server block and the Lean check's answer for it. It extends the all-prot
 
 The fixtures are records of real runs. `block-record-r2-period0` is one period of an all-protocols run: five
 subprotocols accept, and a wipe is carried but not composed, since it ran on another server. It has no Lean answer, so the
-verdict is undecided, and the error sum is at least sampled proofs' 1/2 from its 2-unit sample. `block-record-b71a-w30`
+verdict is undecided, and the error sum is at least SPOT's 1/2 from its 2-unit sample. `block-record-b71a-w30`
 carries its window's Lean `onsite check` answer, which accepts. `block-record-r1-window10` is one window with
-sampled proofs at δ = 1/100 and the wipe on the same server, the other subprotocols absent.
+SPOT at δ = 1/100 and the wipe on the same server, the other subprotocols absent.
 
 ## Demo A's report
 

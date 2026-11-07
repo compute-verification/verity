@@ -646,7 +646,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
     step's input ids, u32be, in the forward's token order (the advice step's rows in batch order, row r's n_r tokens
     at offset Σ_{r' < r} n_{r'}), zero past to a fixed width P (the engine's `max_num_batched_tokens`), in a dense
     `frame-v3-sha512` tree of the session's steps. Its root and domain are registered before the sample and bound to
-    the run root and to the compiled circuits' `c00.input/ids` values, which the sampled proofs prove from, as the
+    the run root and to the compiled circuits' `c00.input/ids` values, which SPOT proves from, as the
     port's sampled rows are (one tree may hold both). The prover keeps each step's salt and path until the tie's
     outcome of record. The verifier also needs each prefix-cache hit's source (the derived fields' `sources`), which advice
     v0's `cache_hit` count doesn't name.
@@ -985,7 +985,7 @@ The goal is network accounting for arbitrary vLLM usage: no FIXLEN, no fixed req
 real EOS. The registered thing is a precommitted ahead-of-time compiler. After serving, the prover hands it an
 **advice** string that encodes everything serving made unpredictable: in advice v0, each request's lengths and finish,
 each step's batch rows, and each step's release bucket. The compiler turns the advice into each step's circuit, and the
-certifier certifies the I/O. Sampled proofs check two things: that the committed values pass the compiled circuits (the
+certifier certifies the I/O. SPOT checks two things: that the committed values pass the compiled circuits (the
 step units), and that they agree with the certified I/O (the tie units). N2 is to hold each window's egress counts to
 the ingress counts and the advice; no N2 unit does yet. The advice's length is the leak, charged as `A_c` in the
 accepted-runs bound.
@@ -1036,7 +1036,7 @@ of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ
    - A wrong tie proof block lets through the frame it was to hold, not its one-bit verdict. That is 8·B bits, or about
      log2 V for the token alone if an exhaustive check holds every frame to the canonical form (attack 8).
 4. **Count.** `SecurityProofs.EncardAccSeqsLeConstantRate` with this Ac gives `#Ac · #Σ_sync^W · D^n`, so no new
-   counting guarantee is needed. What is new is the bridge from steps 1 to 3: that an audit accepted by sampled proofs
+   counting guarantee is needed. What is new is the bridge from steps 1 to 3: that an audit accepted by SPOT
    is, except with probability δ_audit, `Accepted` for some (a, φ). `Accepted` is the exact binding, in which every
    recorded row is the Program's. An audit that recomputes the grid gets it, and a sampled audit does not.
    For the circuit's Program, `SampledAuditAccepted` (proved) is that bridge with φ the incorrect proof blocks' committed

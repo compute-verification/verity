@@ -121,8 +121,7 @@ class Placed:
                query: Mapping[str, Any] | None = None) -> Profile:
         """The placement's public properties for the epoch `plan` audits. `ticks` is PoUW's proved bound per block
         (`benchmarks/pouw/proved_ticks.py`): (1 − ε) of the block-ticks the floor program ♭ takes for the block's census
-        at the data sheet's rates, which outside δ no accepted window undercuts over any route. `record` is the sampled
-        proofs' one-stage registration of the Program and `query` the verifier's copy of its partition query: each
+        at the data sheet's rates, which outside δ no accepted window undercuts over any route. `record` is SPOT's one-stage registration of the Program and `query` the verifier's copy of its partition query: each
         block's proof blocks are the units of that partition whose gates run there, and the record must name that query,
         its partition and its population (proofs, review 4). Without a record they are the served query's
         (`partition_object.query()`, Q_word v1 at X = 16), which the profile marks as assumed (`Profile.partition`), and

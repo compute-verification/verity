@@ -7,7 +7,7 @@ certifier's period check's difftest's `reference` (`verity/certifier/v0`, its Py
 certificates and one-stage's answers, `verity/core/protocols/network/tests/test_network_period_protocol.py`), the
 inference-only policy's difftest's `reference` (`verity/inference-only/v0`, the policy's Python check,
 `nci_reference.check_baseline`, behind the protocol's decoders,
-`verity/core/protocols/network/tests/test_inference_only_protocol.py`), for sampled proofs (`verity/sampled-proofs/v1`)
+`verity/core/protocols/network/tests/test_inference_only_protocol.py`), for SPOT (`verity/sampled-proofs/v1`)
 `sampled_proofs`: its form's split over one-stage v2's audit (`verity/sampled-proofs/one-stage/v2`, one-stage v1
 refused by name, `V1_REFUSED`), its decoders `OneStageZk` reads (behind the decoders `OneStage` reads, v1's difftest's,
 `verity/core/service/sampled_proofs/tests/test_difftest.py`) and its check up to its one session's coin tree, and the
@@ -71,7 +71,7 @@ def module(name: str, path: Path) -> ModuleType:
     return m
 
 
-#: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `decode_params_v2`
+#: SPOT's one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `decode_params_v2`
 #: and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
 ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/sampled_proofs/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
@@ -291,7 +291,7 @@ def _period_answer(case: str) -> str:
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each
 #: subprotocol's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
-#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`SampledProofs.OneStageZk`) or the
+#: Integrity: SPOT (`VStar.Recursive.Sampled`), one-stage v2's audit (`SampledProofs.OneStageZk`) or the
 #: recursive audit, as the params' form names it; one-stage v1 refused.
 SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.

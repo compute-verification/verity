@@ -1,4 +1,4 @@
-"""PoUW's `ncp-v2` under sampled proofs: each weight's side as its own `NcpWeight_v1` Program call, once per run, and each
+"""PoUW's `ncp-v2` under SPOT: each weight's side as its own `NcpWeight_v1` Program call, once per run, and each
 executed linear call as its own `NcpLinear_v1` Program call reading it.
 
 `verity.ml.protocols.pouw.circuit` gives the circuit (`traced_as`: both Definitions, their `Q_template_instances` queries, the served

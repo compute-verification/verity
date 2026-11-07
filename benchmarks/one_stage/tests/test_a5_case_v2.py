@@ -109,7 +109,7 @@ def test_a_v2_refusal_is_written_beside_the_v1_case_and_leaves_sampled_proofs_no
 
 
 def test_sampled_proofs_case_is_the_v2_case_in_its_one_stage_form(tmp_path, monkeypatch, stub_case):
-    """Sampled proofs refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
+    """SPOT refuses one-stage v1's case, so its case is v2's with the form, never v1's."""
     zk = {"blobs": ["b"], "commitment": "ab", "evidence": stub_case.DT.canonical({"proofs": {}}).encode().hex(),
           "params": {"proofs": {"circuit": "cc" * 64, "registered": None}}}
     monkeypatch.setattr(a5, "case_v2", lambda case, sessions, **k: zk)

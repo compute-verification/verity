@@ -136,7 +136,7 @@ namespace PeriodLive
 variable {ι : Type} {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit} {O : Type} {G : Verity.Game O}
   (r : PeriodLive d α C G)
 
-/-- **The claim a subprotocol certifies** at certificates `c`, on the run `o` of the strategy `s`: sampled proofs' on
+/-- **The claim a subprotocol certifies** at certificates `c`, on the run `o` of the strategy `s`: SPOT's on
 the extractor's values (at most an `ε` share of the units unbound), PoUW's in gates (at least `W` gates computed after
 their coin), and the others' on the world the run realized (at least `S` bits of device memory held on average, at
 least `Q` bits read, at most `K` bits through the network certifiers). -/

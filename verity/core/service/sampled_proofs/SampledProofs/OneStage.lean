@@ -1,5 +1,5 @@
 /-
-Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, with `registration.check` before it):
+SPOT's one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_record`, with `registration.check` before it):
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
   (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",

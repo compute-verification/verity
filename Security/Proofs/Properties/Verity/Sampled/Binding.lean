@@ -24,9 +24,9 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   where the evidence doesn't. v2's read (`readsV2`) is `Verity.Sampled.coinsRead`'s, each release's coins where v2
   read any, and `Vocab.Logged` at it gives `Logged readsV2` (`logged_v2_of_vocab`); the reduction takes any `reads`.
 * **v2's records in what the prover sent** (`records`): the components' parameters and cases the composition decodes
-  that decode as sampled proofs' one-stage form, v2's, under parameters naming a challenger and a window, each with what
+  that decode as SPOT's one-stage form, v2's, under parameters naming a challenger and a window, each with what
   its coins are read under (`Properties.Challenger.oneStageZkSource`) and the record its evidence carries. The
-  parameters' challenger key (`keyOf`) is that of their first component of sampled proofs' id that names one.
+  parameters' challenger key (`keyOf`) is that of their first component of SPOT's id that names one.
 * **An accepted v2 case is one of them** (`accepted_case`): a composite names each component's id once (`ids_nodup`), so
   on parameters naming the one-stage form, the case the sampled component accepts is v2's (`caseOf`), its record is one
   of `records` under `keyOf`'s key, `drawCoins` reads from it the coins v2's check read, and v2 held the sessions'
@@ -158,7 +158,7 @@ theorem logged_v2_of_vocab {ι : Type} {d : Accounting.Device ι} {α : Type} [F
 
 /-! ## v2's records in what the prover sent -/
 
-/-- **A component's parameters and case as a v2 record**: where they decode as sampled proofs' one-stage form, v2's,
+/-- **A component's parameters and case as a v2 record**: where they decode as SPOT's one-stage form, v2's,
 under parameters naming a challenger and a window, what its coins are read under (`oneStageZkSource`) and the record its
 evidence carries. -/
 def record? (n : Core.Composition.Named) (x : Core.Composition.Case) : Option (Draws × Json) :=
@@ -174,7 +174,7 @@ def records (s : Sent) : List (Draws × Json) :=
   | .ok ps, .ok ev => (ps.zip ev).filterMap fun x => record? x.1 x.2
   | _, _ => []
 
-/-- A component's challenger key: where it is sampled proofs' and its parameters name the one-stage form and a
+/-- A component's challenger key: where it is SPOT's and its parameters name the one-stage form and a
 challenger, that challenger's key. -/
 def keyAt (n : Core.Composition.Named) : Option ChallengerKey :=
   if n.id = VStar.Recursive.Sampled.PROTOCOL then
@@ -183,7 +183,7 @@ def keyAt (n : Core.Composition.Named) : Option ChallengerKey :=
     | _ => none
   else none
 
-/-- **The parameters' challenger key**: that of their first component of sampled proofs' id whose parameters name the
+/-- **The parameters' challenger key**: that of their first component of SPOT's id whose parameters name the
 one-stage form and a challenger (`keyAt`). -/
 def keyOf (θ : ByteArray) : Option ChallengerKey :=
   match Core.canonicalJson θ >>= Core.Composition.decodeParams with
@@ -251,8 +251,7 @@ theorem key_of_source {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.O
     simp only [hch, hw] at h <;> cases h
   simp
 
-/-- **An accepted v2 case is one of the records, under the parameters' key** (P1): at a composite that reads sampled
-proofs at v2 (`ReadsV2`), on parameters that name its one-stage form (`ParamsAt`), a run accepted as a `same`
+/-- **An accepted v2 case is one of the records, under the parameters' key** (P1): at a composite that reads SPOT at v2 (`ReadsV2`), on parameters that name its one-stage form (`ParamsAt`), a run accepted as a `same`
 composition whose sampled component accepts its own case has that case as v2's (`caseOf`), read under a challenger
 and a window its parameters name (`oneStageZkSource`); its record is one of the run's v2 records (`records`) under
 the parameters' challenger key (`keyOf`), v2's coins are what `drawCoins` reads from it, and v2 read the challenger's
@@ -469,7 +468,7 @@ theorem records_of {s : Sent} {p : SampledProofs.OneStageZk.Own} {e : SampledPro
   obtain ⟨str, hs, hp⟩ := obind_some hf
   exact Verity.Sampled.Trees.records_held h (Array.mem_def.2 hr') hb hs (Option.some.inj hp)
 
-/-- **An accepted read is `readLog` over a run of the device**: at a composite that reads sampled proofs at v2, on a
+/-- **An accepted read is `readLog` over a run of the device**: at a composite that reads SPOT at v2, on a
 run accepted as a `same` composition whose sampled component accepts its own case, where v2's check reads a log
 (`Verity.Sampled.coinsRead`), that log is what `readLog` reads from the lines of a run of the device under the
 challenger's key, a run the device's own ledger opens withheld on the sample's window, whose release log reads as its

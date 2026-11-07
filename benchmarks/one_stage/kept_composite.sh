@@ -10,7 +10,7 @@
 #    components) from the serve dir, each MISSING with why where the run holds no case of it. With pieces/pouw/ kept,
 #    the period is built from it, H1_KEY_SHA512, main.txt (or MAIN_FILE) and the sampled calls' statements and live
 #    evidence (POUW_STATEMENTS, POUW_LIVE, files on this node), its REFERENCE line credit's own verdict;
-#  - sampled proofs v2's: v2_case.py on the kept window, with its own Lean answer;
+#  - SPOT v2's: v2_case.py on the kept window, with its own Lean answer;
 #  - every kept piece directory pieces/NAME/ holding a case (case.json, or NAME.case.json as the wipe writes it) beside its
 #    own answer.json (the wipe's, PoUS's once served_case.sh has written its case), entered as kept, onsite only.
 # composite.py then composes and checks each product; $OUT/remote and $OUT/onsite get only its public output (verdict

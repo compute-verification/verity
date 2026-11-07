@@ -70,7 +70,7 @@ A bound is argued in three parts, as the Notation states it, and each module's d
   period (core's `wipe_monitoring.PERIODS`, through `params.py`). `Units`
   is the one place a FLOP-model input becomes gates (`units.gates_per_flop`, with its `units.basis`).
 - **Protocol soundness**, the envelopes (`envelopes.py`, `data/envelopes.toml`): each subprotocol (PoUW, detection and
-  sampled proofs, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the uncertified gates
+  SPOT, the wipe, the certifier) is one envelope `𝒜_a` with its parameters, its slack (the uncertified gates
   by route: `undecl.*`, `skip.*`, `break.*`, `exfil.incorrect`) and its `δ_a`, split into `δ_coin` and `δ_crypto`. The
   inference-only policy's check is the registration (`Policy`). A regime is the envelopes that run, and builds the serving blocks with their
   cuts.

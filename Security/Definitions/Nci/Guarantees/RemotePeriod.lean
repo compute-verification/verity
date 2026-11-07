@@ -18,7 +18,7 @@ coins, over window `t`'s own (`∀ ξ, P_a[E_t(ξ[t ↦ a])] ≤ p`).
   play, for a run whose window `t` at each value of the other windows' coins is a play meeting `CircuitCredit`'s
   premises; that bridge is not stated. `ComposePeriod.CircuitCreditPeriod` credits live words over a period's
   accepted prefix, not time, so it does not give `wrong`'s form.
-* **Sampled proofs** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
+* **SPOT** (in place of `SampledDetection`): a window's faulty blocks are fixed before its coins (its incorrect
   proof blocks at registration, `wrongRegZ`), and its sample and verdict read its coins and the past. Two per-window bounds,
   each of which a window of `Flock.Guarantees.IntegrityPeriod` has at the strategy that plays it: the sample misses all
   `m` of the window's faulty blocks with probability at most `(1 − q)^m` (`Flock.Guarantees.HiddenWindow.drawMiss_le`,
@@ -76,7 +76,7 @@ window holds at any value `ξ` of the other windows' coins, over its own (`ξ[t 
 
 * PoUW certifies window `t` at capacity `cap_t ≥ 0`, `∑ cap_t ≤ C`, its certificate wrong (`wrong t`) with probability
   at most `p ≥ 0`: `CircuitCredit`'s conclusion at window `t`'s play.
-* Sampled proofs: the developer's incorrect proof blocks `bad ξ` (block `b` in window `win b`, skipping `0 ≤ w_b ≤ B` of
+* SPOT: the developer's incorrect proof blocks `bad ξ` (block `b` in window `win b`, skipping `0 ≤ w_b ≤ B` of
   declared work) are fixed before their window's coins; the units the window samples (`drawn`) and the faulty blocks it
   detects (`detected`, those of a window flock-verify rejects) read only its coins and the earlier windows'. The sample
   misses the window's `m` faulty blocks with probability at most `(1 − q)^m`, `0 ≤ q ≤ 1` (A3, `q ≤ kd/n`), and the
@@ -112,7 +112,7 @@ def DampenerRemotePeriod : Prop :=
     (dd e : ℕ),
     -- PoUW, per window
     0 ≤ p → 0 < ε → (∀ t, 0 ≤ cap t) → Assumptions.WithinCompute cap C → Assumptions.PouwPerWindow wrong p →
-    -- sampled proofs, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
+    -- SPOT, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
     Assumptions.SampledPerWindow bad drawn detected win q ks → 0 ≤ q → q ≤ 1 →
     -- the identities and the halt
     Assumptions.IdentitySchedule bad win I idW τw w Φ Δ H C B → 0 < H → 0 ≤ Δ →
@@ -159,7 +159,7 @@ def DampenerRemotePeriod_honest : Prop :=
     0 ≤ p ∧ 0 < ε ∧ (∀ t, 0 ≤ cap t) ∧ ∑ t, cap t ≤ C ∧
     (∀ t (ξ : (t : Fin T) → Ω t),
       prob (PMF.uniformOfFintype (Ω t)) (fun a => wrong t (Function.update ξ t a)) ≤ p) ∧
-    -- sampled proofs, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
+    -- SPOT, per window: faulty blocks fixed before the window's coins, its sample and verdict read them
     (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s < t → ξ s = ξ' s) → ∀ b, win b = t → (b ∈ bad ξ ↔ b ∈ bad ξ')) ∧
     (∀ t (ξ ξ' : (t : Fin T) → Ω t), (∀ s, s ≤ t → ξ s = ξ' s) → ∀ b, win b = t →
       (b ∈ drawn ξ ↔ b ∈ drawn ξ') ∧ (b ∈ detected ξ ↔ b ∈ detected ξ')) ∧
@@ -247,7 +247,7 @@ every run. -/
 def DampenerRemotePeriod_nontrivial : Prop :=
   -- every other premise: PoUW's capacities
   (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 / 2 ∧ (∀ t, 0 ≤ AcceptAll.cap t) ∧ Assumptions.WithinCompute AcceptAll.cap 1 ∧
-  -- sampled proofs, per window
+  -- SPOT, per window
   Assumptions.SampledPerWindow (Ω := fun _ => Bool) AcceptAll.bad AcceptAll.drawn AcceptAll.detected AcceptAll.win 1
     AcceptAll.ks ∧
   (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧

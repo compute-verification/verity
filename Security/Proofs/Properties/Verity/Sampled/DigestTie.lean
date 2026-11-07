@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.AcceptsP
 
 /-!
-# Sampled proofs' digest tie: the record's round digest is the live session's
+# SPOT's digest tie: the record's round digest is the live session's
 
 At the session v2 sets up on the parameters and the committed files (`SetsUp`), the session `flock-verify --zk` sets up
 at its inputs for any record (`Exec.setupOfP` at `ZkExec.zkInputs`) digests a round's bytes as the live session does,

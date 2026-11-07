@@ -1,6 +1,6 @@
 """The step-0 table `verity run`'s tests run (`verity_cli.run.Registry`, read with `verity_cli.run.registry`): the seven
 subprotocols' declarations to a configuration (`MANIFESTS`), the ``toy`` workload's declaration (`TOY`), each party's
-entry or `LIVE` (`PARTIES`), and the live run of sampled proofs' core parties (`live`,
+entry or `LIVE` (`PARTIES`), and the live run of SPOT's core parties (`live`,
 `verity.core.protocols.sampled_proofs.parties`) on a machine (`Machine`).
 
 No workload serves here: `Machine`'s ``serve``, ``pin``, ``host`` and ``audit`` are `SP.Unavailable` until a test's
@@ -136,7 +136,7 @@ def unserved(what: str) -> Check:
     return check
 
 
-#: each listed subprotocol's period check on sampled proofs' verifier (its ``component``), sampled proofs' own aside
+#: each listed subprotocol's period check on SPOT's verifier (its ``component``), SPOT's own aside
 CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw": unserved("PoUW window check"),
                             "inference-only": unserved("inference-only policy check"),
                             "pous": unserved("PoUS run check"), "bandwidth": unserved("remote bandwidth session"),
@@ -144,7 +144,7 @@ CHECKS: dict[str, Check] = {"certifier": unserved("network-period check"), "pouw
 
 
 class Machine:
-    """This machine's capabilities for sampled proofs' parties over ``state`` (module docstring)."""
+    """This machine's capabilities for SPOT's parties over ``state`` (module docstring)."""
 
     def __init__(self, config: Mapping[str, Any], state: Path, checks: Mapping[str, Check] = CHECKS) -> None:
         self.config, self.state, self.checks = config, state, checks
@@ -231,7 +231,7 @@ def deployment(config: Mapping[str, Any], local: bool, at: Mapping[str, str]) ->
 
 
 def listening(cfg: Mapping[str, Any]) -> dict[str, str]:
-    """Where each of sampled proofs' listening parties listens for the verifier: its ``address`` (default loopback) and
+    """Where each of SPOT's listening parties listens for the verifier: its ``address`` (default loopback) and
     its ``listen`` port, for those the configuration gives one."""
     return {p["name"]: f"{p.get('address', '127.0.0.1')}:{p['listen']}" for p in cfg["party"]
             if p["name"] in SPOKES and "listen" in p}
@@ -239,7 +239,7 @@ def listening(cfg: Mapping[str, Any]) -> dict[str, str]:
 
 def live(cfg: Mapping[str, Any], state: Path, here: Sequence[str],
          machine: Callable[[Mapping[str, Any], Path], Machine] = Machine) -> runtime.RunResult:
-    """The live run of sampled proofs' parties ``here`` (`verity.core.deploy.runtime.run`) on ``machine``: every one
+    """The live run of SPOT's parties ``here`` (`verity.core.deploy.runtime.run`) on ``machine``: every one
     of them in this process when all four are here, else each listening one at its configured address (`listening`)
     and the verifier dialing those that run elsewhere; refused by name (``listen``) when one the verifier needs has
     none. Its transcripts and record are under ``STATE/runs/<local|here joined by +>/``."""

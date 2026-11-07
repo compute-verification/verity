@@ -1,4 +1,4 @@
-"""Sampled proofs v2's case (`verity/sampled-proofs/one-stage/v2`) of a served window from the files its run kept, for
+"""SPOT v2's case (`verity/sampled-proofs/one-stage/v2`) of a served window from the files its run kept, for
 `composite.py --cases`, and with ``--exe`` its own Lean answer on it.
 
     v2_case.py --window DIR --out DIR --scratch DIR [--exe PATH]

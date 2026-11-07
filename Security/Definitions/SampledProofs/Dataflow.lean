@@ -6,7 +6,7 @@ public import Mathlib.Data.Finset.Prod
 /-!
 # Populations: units over committed value slots, with public dataflow
 
-Sampled proofs certify one thing: with high probability at most `m` units are wrong. This file is the vocabulary for
+SPOT certifies one thing: with high probability at most `m` units are wrong. This file is the vocabulary for
 asking which object that statement must be about for a policy (integrity, non-exfiltration, skippable work) to follow
 from it.
 

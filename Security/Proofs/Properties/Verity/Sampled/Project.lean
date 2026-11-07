@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Coupling
 public import Proofs.Core.Game.InterleaveBridge
 
 /-!
-# Sampled proofs' coupling: the projection
+# SPOT's coupling: the projection
 
 `Constructions.project`, the strategy of the live audit a strategy `σ` of the period's game is read as: it simulates
 `σ` (`Verity.Game.Pos`, in `Proofs.Core.Game.InterleaveBridge`). It registers the decoding of the record's most likely

@@ -145,8 +145,8 @@ class TargetProfile:
                            `ScaledMmFp8BlockSharedScale_v1`: each weight block's K/G products once, read by its G coordinates.  Omitted
                            from `to_json()` when None.
     protocols           -> the protocol set the run executes (`verity_vllm.protocols`; grammar `config.parse_protocols`).  None =
-                           sampled proofs alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
-                           whole set in its one spelling, sampled proofs included (a profile is the target of SPOT's Program);
+                           SPOT alone (`config.DEFAULT_ROW_PROTOCOLS`), the Commit as it has always run.  Declared, it is the
+                           whole set in its one spelling, SPOT included (a profile is the target of SPOT's Program);
                            the default spelled out is refused (declare None).  The Commit installs the other protocols beside its
                            committer (`protocol_options.at_commit`) and refuses any it cannot trace (an executor needs the Definition
                            of what it computes).  Omitted from `to_json()` when None.
@@ -194,7 +194,7 @@ class TargetProfile:
 
     #: the blockwise FP8 GEMM's scale-product construction (None = "shared-per-block"; see the doc); never attested
     fp8_scale_construction: str | None = None
-    #: the protocol set the run executes (None = sampled proofs alone; see the doc); declared, never attested
+    #: the protocol set the run executes (None = SPOT alone; see the doc); declared, never attested
     protocols: tuple[str, ...] | None = None
     #: the circuit profile the Program is written in (None = word; see the doc); declared, never attested
     ir: str | None = None
@@ -490,7 +490,7 @@ class TargetProfile:
         if d.get("fp8_scale_construction") is None:
             d.pop("fp8_scale_construction", None)  # absent = shared-per-block; every earlier profile digest unchanged
         if d.get("protocols") is None:
-            d.pop("protocols", None)               # absent = sampled proofs alone; every earlier profile digest unchanged
+            d.pop("protocols", None)               # absent = SPOT alone; every earlier profile digest unchanged
         else:
             d["protocols"] = list(d["protocols"])
         if d.get("ir") is None:
