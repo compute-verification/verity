@@ -22,7 +22,8 @@ case $MODEL_ID in
     CK=${CHECKPOINT:-$CK}; GPUS=8 ;;
   *) echo "tp-restore: MODEL_ID is moonlight or glm53, not $MODEL_ID"; exit 2 ;;
 esac
-VENV=${VENV:-/workspace/cp/venv312}; PY=$VENV/bin/python
+[ -d /workspace/cp/venv312 ] && venv=/workspace/cp/venv312 || venv=/workspace/venv312   # a dc node's, else pod_bootstrap.sh's
+VENV=${VENV:-$venv}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 RATE=${RATE:-10}; SPAN_S=${SPAN_S:-240}; EDGES_AT=${EDGES_AT:-150,210}; SAMPLING=${SAMPLING:-production}
