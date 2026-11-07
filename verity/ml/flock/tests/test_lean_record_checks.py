@@ -1,6 +1,6 @@
 """The session record's checks (`Record.decode`), each with its control: a seeded loopback session of a proving build of
 main (`record.sh`, accepted by its server), edited one field at a time, is refused by the check that names it, so deleting
-any one of them fails a test. The session has no draw, which `verify` refuses after every check has passed
+any one of them fails a test. The session has no sample, which `verify` refuses after every check has passed
 (`Flock.ProvedScope`, D12), so passing is that refusal (`DRAWLESS`); on seed coins it would be refused after that too
 (`ProvedScope.servedForm`), and verified as a session on the challenger's coin tree (`--coins tree`) it is refused at its
 `Hello` (S2/R7)."""

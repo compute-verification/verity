@@ -7,8 +7,8 @@ public import Proofs.Flock.Recursive.FirewallAny
 
 `FirewallAny.liveOut_any` fixes the inner worker's requests, and how many salts are read for each, before any salt. The
 inner worker sends each request after reading what `flock-firewall live` answered it (`Flock.Firewall.liveWith`): what
-it sent the coin server for each request and the salts it drew for them, `{"sent", "salts"}`. Here the worker's next
-request is any function of those answers, its tape, its randomness and the coin server's being its parameters, so the
+it sent the challenger's live-coin part for each request and the salts it drew for them, `{"sent", "salts"}`. Here the worker's next
+request is any function of those answers, its tape, its randomness and the challenger's live-coin part's being its parameters, so the
 live coins it reads are too. Whatever it is, the live firewall sends the schedule's transcript filled with commit
 strings `strs dg ys`, the `i`-th that of a 64-byte digest `dg i (ys.take i)` under salt `i`, cut after one of its
 messages: digest `i` reads the salts before it, never salt `i` or a later one.
@@ -17,7 +17,7 @@ messages: digest `i` reads the salts before it, never salt `i` or a later one.
 * `liveOut_prefix`, `adaptOut_prefix`: the sends on a prefix of the requests are a prefix of the sends.
 * `adaptOut_liveOut`: each such session is a live session (`FirewallAny.liveOut`) on the requests it took.
 * `adaptOut_rel`: two sessions whose salts agree before `i` send the commit strings of the same digests up to salt
-  `i`: they take the same requests and draw the same salts until one draws salt `i`.
+  `i`: they take the same requests and sample the same salts until one samples salt `i`.
 * `Flock.SecurityProofs.adaptOut_any`: the theorem.
 
 The model reads the salts from a list, and a session that reads more salts than the list holds is given those left;
@@ -32,18 +32,18 @@ namespace FlockSoundness.Discharge.Recursion.FirewallAdaptive
 
 open Flock Flock.Firewall FirewallRun FirewallTemplate FirewallLive FirewallAny
 
-/-- **What the live firewall answered so far**: per request, what it sent the coin server and the salts it drew. -/
+/-- **What the live firewall answered so far**: per request, what it sent the challenger's live-coin part and the salts it drew. -/
 abbrev History := List (List Sent × List ByteArray)
 
 /-- **An inner worker**: its next request, read from the answers so far, or `none` when it closes the session. Its
-tape and randomness, and the coin server's, are its parameters. -/
+tape and randomness, and the challenger's live-coin part's, are its parameters. -/
 abbrev Worker := History → Option ByteArray
 
 /-- How many fresh salts `liveWith` reads before a request runs. -/
 def reads (b : ByteArray) : Nat := b.size / NODE_BYTES + 1
 
 /-- **A live session at the worker `W`**, for at most `N` requests: from the state `st` and the answers `h`, the salts
-read in turn from `ys`, what the firewall sends the coin server, in order, up to the first refusal, and how the session
+read in turn from `ys`, what the ZK server sends the challenger's live-coin part, in order, up to the first refusal, and how the session
 ends, as `FirewallAny.liveOut`. -/
 def adaptOut (s : Schedule) (W : Worker) : Nat → State → History → List ByteArray → List Sent × Option State
   | 0, st, _, _ => ([], some st)
@@ -182,10 +182,10 @@ theorem holes_append {ds E p q L R : List ByteArray} {m r : List Sent} (hL : L =
   subst hL hR
   rw [List.flatMap_append, hm, hr, zipWith_append_left, zipWith_append_of_le _ _ _ _ hd]
 
-/-- **Two sessions whose salts agree before `i`**, from states equal but for undrawn salts of one length and the same
+/-- **Two sessions whose salts agree before `i`**, from states equal but for unsampled salts of one length and the same
 answers: their commit strings are those of digests `D₁ ++ D₂` and `D₁ ++ D₂'` under each session's salts, the state's
-then those of `ys`, with `D₁` past salt `i` or nothing after it. Until a request draws salt `i`, the two take the same
-requests, draw the same salts and send the same; that request draws the same digests in both
+then those of `ys`, with `D₁` past salt `i` or nothing after it. Until a request samples salt `i`, the two take the same
+requests, sample the same salts and send the same; that request samples the same digests in both
 (`FirewallRun.stepOf_rel`). -/
 theorem adaptOut_rel (s : Schedule) (W : Worker) : ∀ (N : Nat) (st : State) (z' : List ByteArray) (h : History)
     (ys ys' : List ByteArray) (i : Nat), st.salts.length = z'.length → ys.length = ys'.length →
@@ -382,9 +382,9 @@ open FirewallRun FirewallTemplate FirewallAny FirewallAdaptive
 
 /-- **The live firewall at any worker that reads its answers sends the schedule's transcript, filled at commit strings
 whose digests read only the salts before them, or stops at a public place.** For any inner worker `W` whose next request
-reads the answers so far, the sends and the salts drawn, for at most `N` requests, and any number `n` of salts, there are
+reads the answers so far, the sends and the salts sampled, for at most `N` requests, and any number `n` of salts, there are
 digests `dg`, `dg i pre` 64 bytes, and a stop `σ` such that at every salt list `ys` of length `n`, the live session
-(`adaptOut`, `flock-firewall live`'s loop) sends the coin server the schedule's transcript (`tmpl s s.tables`, Commit
+(`adaptOut`, `flock-firewall live`'s loop) sends the challenger's live-coin part the schedule's transcript (`tmpl s s.tables`, Commit
 naming the schedule's tables in its order, the only order `step` takes), filled with `strs dg ys`, string `i` the commit
 string of `dg i (ys.take i)` under salt `i`, cut after its first `(σ ys).1` messages, and finishes exactly when
 `(σ ys).2`. The stop lies in `Fin ((tmpl s s.tables).length + 1) × Bool`, and a session that finishes sends the whole

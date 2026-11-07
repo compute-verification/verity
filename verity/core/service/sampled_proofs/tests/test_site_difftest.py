@@ -176,13 +176,13 @@ TICKS = [str(TICK), str(TICK / 2), str(Fraction(3, 7) * TICK), "1", "0"]
 
 
 def _mostly(draw, usual, *others):
-    """`usual` three times in four or more: Hypothesis draws an index near 0 more often than uniformly."""
+    """`usual` three times in four or more: Hypothesis samples an index near 0 more often than uniformly."""
     return draw(st.sampled_from([usual, usual, usual, *others]))
 
 
 @st.composite
 def changed(draw, e: Entry) -> Entry:
-    """`e` with one change: a field of one of its locations, links or sheets drawn anew, an element dropped or repeated,
+    """`e` with one change: a field of one of its locations, links or sheets sampled anew, an element dropped or repeated,
     or a location, link or sheet added."""
     parts = {"locs": list(e.locs), "links": list(e.links), "sheets": list(e.sheets)}
     what = draw(st.sampled_from(["field", "field", "drop", "repeat", "add"]))
@@ -317,7 +317,7 @@ def test_the_site_agrees(server, port):
 @pytest.mark.parametrize("composite", COMPOSITES)
 @pytest.mark.parametrize("name", ENTRIES)
 def test_the_lifecycle_cases(server, composite: str, name: str):
-    """Each of the 15 later entries draws the same refusal from both sides, and the log it ends is refused at it or
+    """Each of the 15 later entries samples the same refusal from both sides, and the log it ends is refused at it or
     accepted alike."""
     log, e = case(composite, name)
     want = None if composite == "remote" and name in REMOTE_ACCEPTS else ENTRIES[name][0]

@@ -112,7 +112,7 @@ def test_the_warmups_come_first_and_are_neither_timed_nor_judged() -> None:
 
 
 class GivenCoins:
-    """A coins source that answers its first draw with the period's coins, as `serve` is given them, and the rest
+    """A coins source that answers its first sample with the period's coins, as `serve` is given them, and the rest
     from `draw`."""
 
     def __init__(self, draw) -> None:
@@ -128,7 +128,7 @@ class GivenCoins:
 
 def test_the_runtime_runs_the_same_parties_to_the_same_session() -> None:
     """`Challenger` and `Prover` in the deployment layer's runtime, on `serve`'s coins and a clock that reads what
-    `Clock` does, its hiding key and salts drawn from one seeded stream, sign the session `serve` signs over the stream,
+    `Clock` does, its hiding key and salts sampled from one seeded stream, sign the session `serve` signs over the stream,
     and the prover answers the same frames."""
     _, point, published, blocks, _ = _in_process()
     sid, old, rounds = _split(point, published.root, lambda i: blocks[i], ts.TestSigner(b"same key", 2),
@@ -242,7 +242,7 @@ def _refused(request, salts: mc.SaltLog, log: mc.SessionLog) -> str:
 
 
 def test_an_audits_session_runs_under_the_id_its_salt_fixes(tmp_path) -> None:
-    """The challenger draws the setup's salt after the commitment and logs it under the audit's binding; the setup salted
+    """The challenger samples the setup's salt after the commitment and logs it under the audit's binding; the setup salted
     from that source publishes it, the session runs under `session_id(audit, commitment, salt)`, which the verifier
     computes itself, and the run is accepted. The same session under the id its report could have named (the period's,
     from the coins) is refused."""
@@ -266,8 +266,8 @@ def test_an_audits_session_runs_under_the_id_its_salt_fixes(tmp_path) -> None:
 
 
 def test_a_second_session_for_an_audit_is_refused_never_redrawn(tmp_path) -> None:
-    """Once an audit's session has run, the challenger refuses another for it, before any frame: no retry redraws the
-    coins, and the session log holds the one id."""
+    """Once an audit's session has run, the challenger refuses another for it, before any frame: no retry flips the
+    coins again, and the session log holds the one id."""
     _, point, published, blocks, _ = _in_process()
     salts, log = _salt_log(tmp_path), ts.session_log(tmp_path)
     CP.give_salt(salts, {"audit": AUDIT.hex(), "commitment": published.commitment.hex()}, draw=lambda n: COINS)
