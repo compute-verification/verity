@@ -39,4 +39,4 @@ paths = ["verity/core/protocols/certifier", "verity/core/protocols/pous", "verit
 
 [[tool.verity.tests.reads]]
 tests = ["tests/test_workloads.py"]
-paths = ["benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py"]
+paths = ["verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py"]

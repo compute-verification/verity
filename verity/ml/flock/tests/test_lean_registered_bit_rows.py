@@ -40,9 +40,9 @@ pytestmark = [pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean t
 def staged(tmp_path_factory):
     """The bit-row circuit bound to the program and its partition, x and cs_table registered in their ports' formats, the
     verifier's own reads file and the honest statement."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-bit-rows")
@@ -81,9 +81,9 @@ def one_value(tmp_path_factory):
     cs both `row/v2` rows, and one value `ROWS` of N + TABLE_ROWS rows whose row u unit u reads at x and row
     N + POSITIONS[u] at cs, each port its own registered port of the value; the verifier's reads file and the honest
     statement."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     subprocess.run(["lake", "build", "flock-verify"], cwd=LEAN, check=True, capture_output=True)
     d = tmp_path_factory.mktemp("registered-rows-of-one-value")
