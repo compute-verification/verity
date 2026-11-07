@@ -1572,7 +1572,7 @@ def main(argv: list[str] | None = None) -> int:
                                                    "origin/main`, a commit a line; none refuses every session")
     ap.add_argument("--lean-answers", metavar="DIR", help="with --check-challenger: the verifier's memo of its verifier "
                                                           "runs' answers (answers.Answers), shared by key with the "
-                                                          "period's check and drawn.py fill")
+                                                          "period's check")
     ap.add_argument("--served", action="store_true", help="fill: commit each call's tables and the weights' B as its "
                                                           "Program's registered values (pouw_h1_served.Served) and register them")
     ap.add_argument("--skip-register", action="store_true", help="fill with --served: record the window's entries but "

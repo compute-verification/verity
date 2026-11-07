@@ -76,9 +76,8 @@ PUBLIC = {
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
     "verity_vllm.protocols.pouw.h1.answers": "I1: the verifier of record's answers on a window's statements, each run once "
-                                             "and shared by key by the steps that judge them (Answers), the drawn runs "
-                                             "filled J at a time (window_runs, fill, jobs), which drawn.py fill and "
-                                             "pouw_piece.py period read",
+                                             "as credit asks for it and shared by key by the steps that judge them "
+                                             "(Answers), which drawn.py check and pouw_piece.py period read",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "
                                               "--h1-receipts registers (Receipts) and its noise kernel, which PoUW's "
                                               "benchmarks time and gate",

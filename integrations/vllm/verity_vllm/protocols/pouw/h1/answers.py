@@ -1,88 +1,42 @@
 """answers: the verifier of record's answers (`proofs.verify`) on a window's statements, each run once and shared by
-every step that judges them, the drawn ones J at a time.
+every step that judges them.
 
 Credit's window check and the period's (`credit.window`, `credit.period_credit`, through `credit._verified` or
 `credit._lean_verified`) each run `proofs.verify` on every statement they ask for: the same runs on the same files.
-`Answers` is that ``run``. It answers a run whose inputs it has answered before by its key, from its memo, and otherwise
-runs the verifier and keeps the answer; each step still judges every answer itself, in its own order, and refuses where
-it refuses. `fill` runs a window's drawn statements (`window_runs`: the runs `credit._verified` makes, in its order)
-into the memo first, `jobs` at a time, one ``LEAN`` line a verdict as each ends, so a run cut short says how far it got.
+`Answers` is that ``run``, handed each run as credit asks for it. It answers a run whose inputs it has answered before
+by its key, from its memo, and otherwise runs the verifier and keeps the answer, one ``LEAN-ANSWER`` line a run; each
+step still judges every answer itself, in its own order, and refuses where it refuses.
 
 A run's key is the SHA-512 of all of its inputs (`key`): the verifier's executable, the circuit file, the public file,
 every file of each session directory (its name and SHA-512), the paths the verifier is handed, the committed circuit
 digest, the program's bytes, and the partition object and the ``--registered`` file as canonical JSON. Those are the
 statement's proof files and what credit builds from the window's entries, root, rounds, salt and draw, so a changed
 input is another key. The memo is the verifier's own: in memory, or a directory in the verifier's scratch (0700, each
-answer a 0600 file), never the serve dir or anywhere the prover writes. ``drawn.py fill`` (benchmarks/pouw/h1_prove) is
-`fill`'s command line, and ``--lean-answers DIR`` hands a memo directory to credit's window check
-(``pouw_h1_gpu --check-challenger``) and to the period's (``pouw_piece.py period``).
+answer a 0600 file), never the serve dir or anywhere the prover writes. ``--lean-answers DIR`` hands a memo directory
+to credit's window check (``pouw_h1_gpu --check-challenger``) and to the period's (``pouw_piece.py period``), so the
+period takes the window check's answers by key; ``drawn.py check`` (benchmarks/pouw/h1_prove) keeps its memo in memory.
 """
 from __future__ import annotations
 
-import concurrent.futures as cf
 import dataclasses
 import functools
 import hashlib
 import json
-import math
 import os
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any, Callable, Mapping
 
-from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.ml.circuits.codec import canonical_json
 
-__all__ = ["Answers", "HEADROOM_GB", "RUN_GB", "fill", "jobs", "key", "memory_gb", "verdict", "window_runs"]
+__all__ = ["Answers", "key", "verdict"]
 
-#: the peak resident memory of one lane statement's ``flock-verify verify --zk`` at K = 2048, which `jobs` sizes J by (GiB)
-RUN_GB = 47.5
-#: the available memory `jobs` leaves beside the runs: the Python verifier holding the window's statements and asks (a
-#: few GiB in the lanes form) and slack for the kernel (GiB)
-HEADROOM_GB = 16.0
 #: the errors credit reads as a verifier that can't run (`credit._verified`'s), kept in the memo as they were raised
 ERRORS: dict[str, type[Exception]] = {"LeanError": PF.LeanError, "OSError": OSError, "ValueError": ValueError,
                                       "KeyError": KeyError, "TypeError": TypeError}
 SAY = functools.partial(print, flush=True)
-
-
-def memory_gb() -> float:
-    """The memory free for the runs now (GiB): the host's ``MemAvailable``, or less where this process's cgroup v2 or an
-    ancestor of it has a ``memory.max``, that limit less its ``memory.current``."""
-    with open("/proc/meminfo") as f:
-        free = next(int(x.split()[1]) * 1024 for x in f if x.startswith("MemAvailable:"))
-    try:
-        rel = next(x.split("::", 1)[1].strip() for x in Path("/proc/self/cgroup").read_text().splitlines()
-                   if x.startswith("0::"))
-    except (OSError, StopIteration):
-        rel = None
-    if rel is not None:
-        d = Path("/sys/fs/cgroup") / rel.lstrip("/")
-        for p in (d, *d.parents):
-            try:
-                cap, used = (p / "memory.max").read_text().strip(), (p / "memory.current").read_text().strip()
-            except OSError:
-                cap, used = "max", "0"
-            if cap.isdigit() and used.isdigit():
-                free = min(free, max(0, int(cap) - int(used)))
-            if p == Path("/sys/fs/cgroup"):
-                break
-    return free / 2**30
-
-
-def jobs(setting: int | str | None = None, memory: float | None = None, headroom: float | None = None
-         ) -> tuple[int, str]:
-    """J, the runs `fill` keeps going at once, and how it was sized: `setting` when given, else
-    floor((memory − headroom) / `RUN_GB`), at least 1, with `memory` `memory_gb`'s (what is available as the fill starts)
-    and `headroom` `HEADROOM_GB` unless given."""
-    if setting is not None:
-        return max(1, int(setting)), "set (--jobs)"
-    memory = memory_gb() if memory is None else memory
-    headroom = HEADROOM_GB if headroom is None else headroom
-    return (max(1, math.floor((memory - headroom) / RUN_GB)),
-            f"floor(({memory:.1f} GiB available - {headroom:g} GiB headroom) / {RUN_GB:g} GiB a run)")
 
 
 #: the size from which `file_digest` hashes a file once per process (a circuit file); a smaller one it hashes each time
@@ -237,61 +191,4 @@ class Answers:
         froms = ", ".join(f"{n} from {by}" for by, n in sorted(self.taken.items()))
         return (f"{taken} of {taken + self.ran + self.unkeyed} runs by key{f' ({froms})' if froms else ''}, "
                 f"{self.ran} ran" + (f", {self.unkeyed} unkeyed" if self.unkeyed else ""))
-
-
-def window_runs(statements: Any, files: Any, raw: bytes, layout: dict, entries: list, window: str, units: list[int],
-                steps: int, salt: str, draw: Any = None) -> tuple[list[tuple[str, PF.Proof, dict[str, Any]]],
-                                                               tuple[str, str] | None]:
-    """The runs `credit._verified` makes over a window's drawn statements, in its order (`credit._asks`): each its label,
-    its proof files and `proofs.verify`'s keywords; and the refusal `_asks` stops at, or None."""
-    asks, refused = CR._asks(statements, files, raw, layout, entries, window, units, steps, salt, draw)
-    lanes = statements if isinstance(statements, dict) and sorted(statements) == list(CR.LANES_KEYS) else None
-    listed = lanes["statements"] if lanes is not None else statements
-    out = []
-    for a in asks:
-        s = listed[a["statement"]]
-        if "leaf" in a:
-            name = " ".join(str(x) for x in s["statement"] if x is not None)
-            label = f"statement {a['statement']}: unit {a['unit']}'s {name}"
-            program = bytes.fromhex(lanes["leaf_programs"][a["leaf"]])
-        else:
-            label, program = f"statement {a['statement']}: call {s['call']}", raw
-        out.append((label, PF.Proof(Path(s["circuit"]), Path(s["public"]), tuple(map(Path, s["sessions"]))),
-                    {"circuit_sha512": a["circuit_sha512"], "program": program, "partition": a["partition"],
-                     "registered": a["registered"]}))
-    return out, refused
-
-
-def fill(answers: Answers, runs: Sequence[tuple[str, PF.Proof, dict[str, Any]]], j: int | None = None,
-         say: Callable[[str], Any] = SAY, headroom: float | None = None) -> dict[str, int]:
-    """Each of `runs` (`window_runs`') answered into `answers`' memo, J at a time (`jobs` of the setting `j` and the
-    `headroom`), a run the memo holds not run again: one ``LEAN`` line a verdict as each ends (how many have ended, the
-    run's place among `runs`, its label, the verdict and its seconds). The counts of runs ``ran``, ``held`` (already in
-    the memo) and ``unkeyed`` (a file missing: credit's own run meets it)."""
-    answers.exe()
-    j, sized = jobs(j, headroom=headroom)
-    todo, held, unkeyed = [], 0, 0
-    for i, (label, proof, kw) in enumerate(runs):
-        try:
-            k = answers.key(proof, **kw)
-        except OSError:
-            unkeyed += 1
-            continue
-        if answers.lookup(k) is not None:
-            held += 1
-        else:
-            todo.append((i, label, k, proof, kw))
-    say(f"LEAN {len(runs)} runs: {len(todo)} to run, {j} at a time, J {sized} ({held} already answered, "
-        f"{unkeyed} unkeyed)")
-    with cf.ThreadPoolExecutor(max_workers=j) as ex:
-        futures = {ex.submit(answers.run, k, proof, **kw): (i, label) for i, label, k, proof, kw in todo}
-        for n, f in enumerate(cf.as_completed(futures), 1):
-            i, label = futures[f]
-            try:
-                entry = f.result()
-            except Exception as e:  # noqa: BLE001 - not an answer credit reads: kept out, so credit's own run meets it
-                say(f"LEAN {n}/{len(todo)} run {i + 1} of {len(runs)} ({label}): not kept, {type(e).__name__}: {e}"[:400])
-                continue
-            say(f"LEAN {n}/{len(todo)} run {i + 1} of {len(runs)} ({label}): {verdict(entry)} in {entry['seconds']} s")
-    return {"ran": len(todo), "held": held, "unkeyed": unkeyed}
 

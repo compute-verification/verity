@@ -7,9 +7,7 @@ is its CLI, which reads ``--checkpoint`` with the live challenger's model regist
     drawn stage SERVE_DIR WINDOW --circuits DIR --work W [--prover P] [--k K] [--recompose]
                 [--weights-key FILE | --gate CMD --model ROLE] [--checkpoint DIR | --weights NPZ]
     drawn statements --work W --out FILE
-    drawn check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY [--jobs J] [--headroom-gb GB]
-    drawn fill SERVE_DIR WINDOW --circuits DIR --statements FILE --answers DIR [--lean FLOCK_VERIFY] [--jobs J]
-               [--headroom-gb GB]
+    drawn check SERVE_DIR WINDOW --circuits DIR --statements FILE --lean FLOCK_VERIFY
 
 SERVE_DIR is serve-openai's ``--out`` (`served_verdicts.sh`'s D): the window's record ``h1/w<WINDOW>/pouw-h1-calls.json``,
 the declared Program ``h1/window-program.json.gz`` and the period ``period.json`` (its ``draw_k``, else ``--k``); the
@@ -67,12 +65,8 @@ with each leaf statement's ``unit`` and ``statement``).
 ``check``: credit's own verification of those statements over the window's drawn units under its draw (``verified``:
 the CLI's is `credit._verified` with the Lean ``flock-verify`` at FLOCK_VERIFY, then `credit._proved`), the prover's look
 before it hands them over: ``PROVED`` or ``REFUSED``. Credit's verdict of record (`verifier.RECORD_VERDICT` ``lean``,
-`PouwCheck.Verified`, the lanes form among it) is the Lean's; this is the Python reference's. Its verifier runs are
-answered first, ``--jobs`` at a time (`answers.fill`), then judged in credit's order.
-
-``fill``: the verifier runs ``check`` makes (`answers.window_runs`), answered into the memo directory --answers J at a
-time (`answers.fill`), one ``LEAN`` line a verdict, for steps that judge the same statements to take by key
-(`answers.Answers`: credit's window check and the period's, `served_pouw.sh`).
+`PouwCheck.Verified`, the lanes form among it) is the Lean's; this is the Python reference's. Each verifier run is
+answered as credit asks for it (`answers.Answers`), one ``LEAN-ANSWER`` line a verdict, and judged in credit's order.
 """
 from __future__ import annotations
 
@@ -101,7 +95,6 @@ from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity_vllm.errors import Refused
-from verity_vllm.protocols.pouw.h1 import answers as A
 from verity_vllm.protocols.pouw.h1.drawn_rows import (LEAF_NAMES, LEAF_OUT_ROWS, LEAF_PROGRAM, complete, held,
                                                      leaf_rows, leaf_statement, operands, outputs_held, partials,
                                                      receipt_value, receipt_words, split_record, split_row)
@@ -729,48 +722,26 @@ def statements(a: Any) -> int:
     return 0
 
 
-def _checked(a: Any) -> tuple[dict, list[int], dict, Any]:
-    """What ``check`` and ``fill`` read: the window (`window_of`), its drawn units under the period's K, --circuits'
-    committed files and the --statements."""
+def check(a: Any) -> int:
+    if a.verified is None:
+        raise Refused("check is credit's own verification, which benchmarks/pouw/h1_prove/drawn.py binds: run that CLI")
     serve_dir = Path(a.serve_dir)
     win = window_of(serve_dir, a.window)
     drawn = drawn_calls(win, draw_k(serve_dir, a.k))
     units = sorted(u for us in drawn.values() for u in us)
     files = json.loads((Path(a.circuits) / MANIFEST).read_text())["files"]
-    return win, units, files, json.loads(Path(a.statements).read_text())
-
-
-def check(a: Any) -> int:
-    if a.verified is None:
-        raise Refused("check is credit's own verification, which benchmarks/pouw/h1_prove/drawn.py binds: run that CLI")
-    win, units, files, sts = _checked(a)
+    sts = json.loads(Path(a.statements).read_text())
     proofs, why = a.verified(sts, files, win, units, Path(a.lean))
     print(("PROVED " + json.dumps({"units": units, "outcomes": len(proofs)})) if why is None else
           f"REFUSED {why[0]}: {why[1]}", flush=True)
     return 0 if why is None else 1
 
 
-def fill(a: Any) -> int:
-    """``fill``: every verifier run ``check`` makes (`answers.window_runs`) answered into the memo directory --answers,
-    --jobs at a time (`answers.fill`; J by `answers.jobs` of --headroom-gb without it), with `proofs.executable`'s
-    ``flock-verify`` (the CLI's is --lean's when given): one ``LEAN`` line a verdict, then the counts."""
-    win, units, files, sts = _checked(a)
-    runs, refused = A.window_runs(sts, files, win["raw"], win["layout"], win["entries"], win["root"], units,
-                                  win["steps"], win["salt"], win["draw"])
-    if refused is not None:
-        print(f"LEAN the runs stop where a check before the verifier refuses: {refused[0]}: {refused[1]}"[:600],
-              flush=True)
-    got = A.fill(A.Answers(Path(a.answers), by="the fill"), runs, a.jobs, headroom=getattr(a, "headroom_gb", None))
-    print(f"LEAN filled: {got['ran']} ran, {got['held']} already answered, {got['unkeyed']} unkeyed", flush=True)
-    return 0
-
-
 def run(cmd: str, a: Any) -> int:
-    """``stage``, ``statements``, ``check`` or ``fill`` on `a` (the CLI's arguments, with ``checkpoint_weights``
-    ``--checkpoint``'s reader and ``verified`` ``check``'s verifier, each None when not given): 0, or 1 with the refusal
-    on stderr."""
+    """``stage``, ``statements`` or ``check`` on `a` (the CLI's arguments, with ``checkpoint_weights`` ``--checkpoint``'s
+    reader and ``verified`` ``check``'s verifier, each None when not given): 0, or 1 with the refusal on stderr."""
     try:
-        return {"stage": stage, "statements": statements, "check": check, "fill": fill}[cmd](a)
+        return {"stage": stage, "statements": statements, "check": check}[cmd](a)
     except Refused as e:
         print(f"REFUSED: {e}", file=sys.stderr, flush=True)
         return 1

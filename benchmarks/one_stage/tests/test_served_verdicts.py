@@ -1770,7 +1770,7 @@ def test_the_pouw_piece_hands_the_verifiers_memo_to_the_check_and_records_what_i
     monkeypatch.setattr(S, "_gate_out", _gate([]))
     d = _h1_serve_dir(tmp_path)
     memo, got = tmp_path / "verifier" / "answers", []
-    counts = {"ran": 1, "taken": {"the fill": 33}, "unkeyed": 0}
+    counts = {"ran": 33, "taken": {}, "unkeyed": 0}
 
     def check(*a):
         got.append(a[-1])
