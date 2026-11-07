@@ -5,11 +5,11 @@ cell one glyph that its sidecar (COVERAGE.json) backs with the run or art ids be
 
 - Circuit: the served computation compiles to a Program whose Definitions pass circuit-check and that equals its traced
   Build, with `predict.batch.check_compiled`'s R1-R3 holding.
-- Replay: replaying the recorded schedule on compiled vLLM at the pin, serving and replays alike with one config per
-  Inductor reduction (`TORCHINDUCTOR_DETERMINISTIC=1`, ladder.py's `pinned` arm), reproduces every output row; the cell
-  gives the share of rows exact in the worst replay.
-- Replay, unpinned: the same with Inductor benchmarking its reduction configs in each process, which says whether the
-  model needs the pin.
+- Replay: replaying the recorded schedule on compiled vLLM at the pin, serving and replays alike with each of Inductor's
+  on-device choices pinned to its first candidate (ladder.py's `pinned` arm, inductor_pin.py), reproduces every output
+  row; the cell gives the share of rows exact in the worst replay.
+- Replay, unpinned: the same with Inductor timing its candidates in each process, which says whether the model needs the
+  pin.
 - Proved: at least one sampled statement of each block type proved and accepted by the Lean verifier.
 
 A cell's status is `measured` (filled), `representable` (hollow: representable, not run) or `unrepresentable` (a dash:
@@ -130,10 +130,10 @@ def markdown(cov: dict) -> str:
         verdict = (f" Unpinned, the replays differed from serving or kept different tilings: {', '.join(need) or 'none'}; "
                    f"every replay matched serving: {', '.join(fine) or 'none'}.")
     return ("\n".join(lines) + "\n\n" + f"● measured, ○ representable but not run, — can't represent yet. Replay: share of "
-            "output rows exact in the worst replay, serving and replaying with one config per Inductor reduction "
-            "(`TORCHINDUCTOR_DETERMINISTIC=1`); unpinned, a reduction with several candidate configs (a norm's tiling) "
-            "benchmarks them on its first launch in each process and keeps the faster, which can change the order of "
-            f"its sums.{verdict} vLLM {cov['pin']}, {cov['date']}; each cell's run and art ids are in coverage.json.\n")
+            "output rows exact in the worst replay, serving and replaying with each of Inductor's on-device choices "
+            "pinned to its first candidate; unpinned, a kernel with several candidate configs (a norm's tiling) times "
+            "them on its first launch in each process and keeps the fastest, which can change the order of its sums."
+            f"{verdict} vLLM {cov['pin']}, {cov['date']}; each cell's run and art ids are in coverage.json.\n")
 
 
 def render(a: argparse.Namespace) -> int:

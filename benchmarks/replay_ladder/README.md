@@ -18,15 +18,18 @@ For each model:
   vLLM's compile cache (the first fills it: the server's entries don't match an offline engine's, so it compiles) and
   one that compiles from empty caches (`VLLM_DISABLE_COMPILE_CACHE=1`, fresh Inductor and Triton directories); each
   replay's summary says which. Replays differing from each other at the same schedule are run-to-run variation.
-- The arms: `run.sh` serves and replays each model twice. `pinned` gives every Inductor reduction one config
-  (`TORCHINDUCTOR_DETERMINISTIC=1`, with `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`). Unpinned, a reduction with several
-  candidate configs, such as a norm's tilings, benchmarks them on its first launch in each process and keeps the faster,
-  which can change the order of its sums. `unpinned` runs three replays without the pin, which say whether the model
-  needs it. `rblock` (on request) sets only `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`, which drops the halved-R0_BLOCK
-  candidate but leaves a reduction's static candidates to the benchmark. Each arm compiles into its own caches, since
-  the pin is baked into the generated code and a graph compiled in one arm keeps its candidates when another loads it.
-  Each replay process logs the configs its reductions kept (`tilings.PID.jsonl`); the summary counts the distinct sets
-  over replays.
+- The arms (`LADDER_ARM`, declared in `settings.py`): `run.sh` serves and replays each model twice. Unpinned, Inductor
+  times candidates on the device and keeps the fastest: a kernel's configs on its first launch in each process, such as
+  a norm's tilings, and at compile time whether to fuse kernels. Two processes can choose differently, and a
+  reduction's config sets the order of its sums. `pinned` makes every one of those timings the same in every process of
+  the server and of each replay (`inductor_pin.py`, a vLLM general plugin in the server's processes), so each choice
+  keeps Inductor's first candidate. Inductor's own deterministic mode can't do this at the integration's torch: Dynamo
+  turns it off after a process's first compile, and while it holds it refuses the combo-kernel timing vLLM's compile
+  runs. `unpinned` runs three replays without the pin, which say whether the model needs it. `rblock` (on request) sets
+  `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`, which drops the halved-R0_BLOCK candidate but leaves a reduction's other
+  candidates to the timing. Each arm compiles into its own caches, since a compile cache keeps the choices made where it
+  was written. The capacity server's processes and each replay's log the configs their reductions kept at run time
+  (`tilings.PID.jsonl`); the summary counts the distinct sets over serving and the replays.
 - `alone`: 64 of the window's requests, evenly spaced in arrival order, each served by itself on an empty prefix cache in
   one compiled engine, compared with serving and with the first replay: how far a request's tokens depend on its batch,
   which is why a replay needs the recorded schedule.
