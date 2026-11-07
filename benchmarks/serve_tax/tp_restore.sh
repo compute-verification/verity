@@ -29,7 +29,7 @@ C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 RATE=${RATE:-10}; SPAN_S=${SPAN_S:-240}; EDGES_AT=${EDGES_AT:-150,210}; SAMPLING=${SAMPLING:-production}
 DOCS=${DOCS:-45000}; MAX_MIN=${MAX_MIN:-150}; PLAN=$OUT/plan.jsonl
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
-export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false
+export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 [ -f "$C4" ] || { echo "tp-restore: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 [ -d "$CK" ] || { echo "tp-restore: no checkpoint at $CK"; exit 2; }
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
