@@ -41,3 +41,33 @@
   - **Scope** is larger than 300–500 lines: about 250 of verifier code (written), 500–700 of proof (the root re-derives `rowSeg_spec`'s, `frameReadSpec`'s and `readNet_sound`'s composition at the root's columns), and about 100 of Python. Target unchanged: Sun 14:00Z.
 - 23:23Z (P1C): taking D1's three layout facts on `cursor/proofs-p1c-d1-e824` (off 02916c7468). Draft 3d23a2dbd2, first try running. One placement change: `constsOfP_constGate` goes beside `constsOfP_empty` in `Proofs/Properties/Verity/Sampled/Unbound.lean`, because importing `V5.Statement` into `UnitRows` would pull 13 modules into its closure. `UnitRows` gets `constWiresOf_constGate` and `constsOf_constGate`. SHA and try to follow.
 - 23:25Z (proofs) check, please: the headline lever is the FUSED per-expert cut (CIR-187: the expert table read fused into the GEMM), not the per-expert read as a separate block. Does P1/P2's binding (A-D) apply unchanged to the fused block's read, or does fusing change what must be bound? Answer in inbox/proofs-coordinator.md; I've asked circuits for CIR-187's design.
+- 23:55Z (PCRANKIN): **Answers to your 23:10Z, 23:25Z (both) and 23:35Z.** The new statement, on `cursor/proofs-moebind-d3-54c9` once it elaborates (try r20261107-235020-7a9a running; the edits below go in the next try):
+    ```lean
+    theorem read_of_check {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
+        (hsz : ct.unitNet < ct.nets.size) (hcheck : Flock.ReadNet.check V H tu.t = true)
+        (hB : Built (Flock.HmOut.unrolled ct).unit) :
+        ∃ (run : (List Lin × Lin) × St)
+          (hr : HoldsRead (Rows.ofNet hB) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2])),
+          ReadSound pinnedKey V H hr ∧ (∀ x < readIn H (Hash.Tree.depth V), (hr.φ x).val = x) ∧
+            ∀ j < 16 * H + 1, (hr.out j).val = Discharge.Layout.outCol (Flock.HmOut.unrolled ct) (j / 16) (j % 16)
+    ```
+  - **Where the outputs sit (23:10Z):** given by the last conjunct. Per your 23:35Z, no range conjunct.
+  - **Pinned inputs:** the middle conjunct, `(hr.φ x).val = x` for every input variable.
+  - **`hu` is gone.** The unrolled unit's `useful` is its root Definition's columns (`Tmpl.unroll`), so `check` now also requires `log2ceil (t.defs.getD t.root default).cols ≤ 32`, and `unrolled_unitLog` derives `hu` from it.
+  - **Also in `check`:** `16 * H < 2^64`, the row-length bound `EmbeddingRead.ok` reads.
+  - **One composition: (ii).** My proof reads none of the flat composites. It reads only these per-part lemmas:
+    - P1AB's `segment_spec`, `outer_spec` and `leaf_spec`;
+    - `Gates.select_spec`;
+    - P1C's `FrameRead.sound_nodeHash`, `sound_leafHash` and `sound_eqDigest`.
+
+    So these needn't land: `rowSegNet_spec`, `frameReadSpec` and C's climb, and your `readNet_sound`, `holdsRead_sound` and `gatesRefine_of_run`. Please tell P1AB and P1C.
+  - **`verifier.stop`:** I added `Flock.ReadNet.cvWords` and `Flock.ReadNet.midstate` to Flock's `lean-audit.json`. The lock check doesn't test stop entries for staleness, so they cause no failure before D4 puts `check` on the path from `verifier.entries`.
+  - **The read's top as Definition 11 (23:35Z): not cheap now.** The composition runs at the root's valuation and reads the read's inputs as the unit's input columns. At a call copy, they are the Definition's inputs instead (`refV`'s `inp`). The move needs three changes:
+    - reparameterize `Check/Compose` and `Check/Parts` (about 750 lines) over a copy's valuation and inputs;
+    - add a `Steps` case for Definition 11 that composes its calls;
+    - change the template (a root wrapper).
+
+    I'll get D3 green as it stands. If there's time before Sun 14:00Z, I'll do it as a follow-up commit on the same branch. Tell me if CIR-187 needs it in the D PR itself.
+  - **Branch state:**
+    - Merged P1AB c6dcef422f and P1C fa935e37f3. Try 5 built every upstream module, theirs included; the only errors were in my `Check/Copies`, now fixed.
+    - Importing both lanes' modules together made four names ambiguous, so I qualified them in P1C's `Frame/` files: `Frame.constBits`, `Frame.padTail`, `Frame.select`, `Discharge.Hm.hash_eq`. I've told P1C.
