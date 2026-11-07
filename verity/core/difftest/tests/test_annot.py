@@ -4,7 +4,7 @@
   terms both evaluate, `table`, `group` (every key part) and `label` (affine or by a table) among them, with the same
   tables, and `annot.term` writes `query_codec`'s document back as `query_codec` does;
 * `annot.check`, at the size of the description, gives `annot.reference`'s result, the meaning decided gate by gate, on
-  drawn tables, label maps and meanings, and accepts only what the reference accepts;
+  sampled tables, label maps and meanings, and accepts only what the reference accepts;
 * refusals carry their codes.
 
 The Programs: `gemm` (`TGemm{K=32,N=6}`: Input batches, a composite batch, nested calls), `synth` (two zip-able batches, a

@@ -18,7 +18,7 @@ sampled verdict accepts, the device's log as v2's check read it is the play's, o
 collision, or the forger outputs a forgery of the device's LMS signature.
 
 * **The log a check read** (`Read`, `Logged`): each release's frame and the bytes it answered, and its coins where the
-  check's evidence shows them. v2's evidence shows the draw's segment's coins and each coin tree's root and key, and of
+  check's evidence shows them. v2's evidence shows the sample's segment's coins and each coin tree's root and key, and of
   a tree opening only its coins' SHA-512. `Logged reads` is `Vocab.Logged` at reads that show every release's coins
   (`vocab_logged_iff`), so it binds as much wherever the evidence shows the coins, and it can hold on an honest play
   where the evidence doesn't. v2's read (`readsV2`) is `Verity.Sampled.coinsRead`'s, each release's coins where v2
@@ -32,8 +32,8 @@ collision, or the forger outputs a forgery of the device's LMS signature.
   of `records` under `keyOf`'s key, `drawCoins` reads from it the coins v2's check read, and v2 held the sessions'
   records to the coin trees it read from it (`Verity.Sampled.Trees.accepted_trees`).
 * **An accepted read is a run's log** (`accepted_run`): where v2's check reads a log, it is what `readLog` reads
-  from the lines of a run of the device that the device's ledger opens withheld on the draw's window, whose release
-  log reads as its coin commitment's, with the run's released coins as the draw's (`Challenger.Drawn.drawn_log`), or
+  from the lines of a run of the device that the device's ledger opens withheld on the sample's window, whose release
+  log reads as its coin commitment's, with the run's released coins as the sample's (`Challenger.Drawn.drawn_log`), or
   one of the records under `keyOf`'s key carries a break. The records the evidence names each pass the coin trees
   `coinTreesOf` reads from that run's log (`trees_of`, `records_of`).
 * **The constructions** at a strategy, on a uniform tape of its play (`Verity.Game.Tape`), at the device's history at
@@ -243,7 +243,7 @@ theorem find_eq {β : Type} {q : β → Bool} : ∀ {l : List β} {a : β}, a �
       · exact absurd hq hq'
       · exact h
 
-/-- The challenger's key is the key of the draws v2's coins are read under. -/
+/-- The challenger's key is the key of the samples v2's coins are read under. -/
 theorem key_of_source {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment} {d : Draws}
     (h : oneStageZkSource p c = some d) : p.base.challenger.map (·.1) = some d.key := by
   unfold oneStageZkSource oneStageSource at h
@@ -472,8 +472,8 @@ theorem records_of {s : Sent} {p : SampledProofs.OneStageZk.Own} {e : SampledPro
 /-- **An accepted read is `readLog` over a run of the device**: at a composite that reads sampled proofs at v2, on a
 run accepted as a `same` composition whose sampled component accepts its own case, where v2's check reads a log
 (`Verity.Sampled.coinsRead`), that log is what `readLog` reads from the lines of a run of the device under the
-challenger's key, a run the device's own ledger opens withheld on the draw's window, whose release log reads as its
-coin commitment's (`releasedRootsOf`), with that run's released coins as the draw's, on the records the evidence
+challenger's key, a run the device's own ledger opens withheld on the sample's window, whose release log reads as its
+coin commitment's (`releasedRootsOf`), with that run's released coins as the sample's, on the records the evidence
 names, each of which passes the coin trees the run's log holds (`coinTreesOf`, `sessionTreeReason`); or one of the
 run's v2 records under the parameters' key carries a break. -/
 theorem accepted_run {k : Verity.Registration.Composite} (hk : ReadsV2 k) (dev : History) {s : Sent}
@@ -670,7 +670,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **The read finder at a strategy**, at the device's history at each play `dev`: on a uniform tape of the play, the
 first collision `findBreak` finds in one of the play's records, else the first round opened whose coins v2's read,
-without the draw's coins, shows other than the device released (`Lines.opensRead`, `Lines.openCollision`). The read
+without the sample's coins, shows other than the device released (`Lines.opensRead`, `Lines.openCollision`). The read
 hashes each blob sent once (`Core.Blobs.ofArray`). -/
 noncomputable def readFinder (V : Vocab d α) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) : Claims.Finder where
@@ -810,7 +810,7 @@ theorem play_reaches {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} {
   exact ⟨rfl, rfl, rfl⟩
 
 /-- A run of the play under the signer `D` ends with `D`'s signatures on what it fixed: its request, its log, the
-bytes its close left to the device and the device's draw. -/
+bytes its close left to the device and the device's sample. -/
 theorem play_signed {fs : List (String × ℕ)} {D : Signer} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {o : Exchange} (h : Verity.Game.Reaches (play fs D θ F c) o) :
     o.signed = D.signatures o.request o.log o.close o.drawn := by
@@ -838,7 +838,7 @@ def SignsPlay (V : Vocab d α) (dev : Exchange → History) (θ : ByteArray) (F 
 /-- **The binding at the parameters `θ`, pointwise**: on every run of the period's game after `θ` whose sampled
 verdict at `k` accepts and whose log, as `reads` reads it, isn't the device's, one of its v2 records under the
 parameters' key carries a break at the device's history at the run (`Properties.Challenger.Break`), or v2's read
-without the draw's coins shows a round opened's coins other than the device's, of one SHA-512 with them
+without the sample's coins shows a round opened's coins other than the device's, of one SHA-512 with them
 (`Lines.openCollision`). -/
 def Binds (V : Vocab d α) (k : Verity.Registration.Composite) (reads : Sent → Option (List Read))
     (dev : Exchange → History) (θ : ByteArray) : Prop :=
@@ -900,7 +900,7 @@ theorem finders_of_break (V : Vocab d α) (dev : Exchange → History) (θ : Byt
       rw [hk]
       exact hv
 
-/-- **A run whose read without the draw's coins shows a round opened's coins other than the device's, of one SHA-512
+/-- **A run whose read without the sample's coins shows a round opened's coins other than the device's, of one SHA-512
 with them, is one where the read finder succeeds.** -/
 theorem finder_of_open (V : Vocab d α) (dev : Exchange → History) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Verity.Game.Strategy (V.game θ F c)) (t : Verity.Game.Tape (V.game θ F c) σ)
@@ -982,7 +982,7 @@ theorem logged_of_reads {l log : List Release} (h : List.Forall₂ Lines.ReadOf 
 /-- **`Binds` at v2's read where the device printed each play's log** (`Lines.PrintsLog`): an accepted run whose log
 v2 read isn't the device's carries a break under the parameters' key in one of its records (`accepted_run`), or v2
 read its log from the lines of a run that printed the play's log (`Lines.read_run`), so the first round opened whose
-coins v2's read without the draw's coins shows other than the device's is a SHA-512 collision (`Lines.opens_read`,
+coins v2's read without the sample's coins shows other than the device's is a SHA-512 collision (`Lines.opens_read`,
 `Lines.open_collision`). -/
 theorem binds_of_prints (V : Vocab d α) (k : Verity.Registration.Composite) (dev : Exchange → History)
     (θ : ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log) :

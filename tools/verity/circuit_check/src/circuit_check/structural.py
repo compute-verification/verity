@@ -12,7 +12,7 @@ template adds past a call's support), constants folded or carried as inputs, dea
 AND's operands, each of which leaves every bit's value as it was: so it proves, by construction, that the template computes
 what the lowering computes on every input. It is not complete: one function written as two AND structures is not matched.
 
-A form is held as its fingerprint, the XOR of its nodes' labels, each node's label 512 bits the check draws from the OS's
+A form is held as its fingerprint, the XOR of its nodes' labels, each node's label 512 bits the check samples from the OS's
 random source when it makes the node, since a hash proof block's bits are forms of about half its nodes, which no exact
 table of them fits. Which forms a check builds does not depend on the labels (a triple's node is its first writer's pair),
 and two distinct forms share a fingerprint with probability 2^-512 over labels sampled after both are fixed, so among the M

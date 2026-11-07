@@ -20,7 +20,7 @@ guarantees of their own:
   pre-final messages, the real prover's, and one table's release behind the check with real leaves.
 * `Session.releaseR`, `Session.simR`, `Session.unopened`: a session's release at an outcome, its simulator, and how many
   leaves the release at an outcome leaves unopened; `Session.WitnessesFirst`: the witnesses read none of the server's
-  draws for the session.
+  samples for the session.
 * `SameDist.prCoin_prod_eq`: equal distributions stay equal beside an independent coin.
 * `Hm96.derived_close`, where the check passes: the view is the derived view with real hidden leaves (`viewR_derived`).
   Its hidden leaves go ideal, at each fixed vector of ideal leaves the derived view is distributed as `S_shvzk(x, e)`
@@ -31,7 +31,7 @@ guarantees of their own:
   the leaves go real again there: `2·|PreLeaves|·δ₁` at any witness carrying the public region data.
 * `Hm96.release_hm96`: one table, per outcome of the check, by `gate_perOutcome`.
 * `Session.release_hm96`: a session at fixed witnesses, per outcome, by `prCoin_pi_close` and `perOutcome_of_split`;
-  `Session.release_hm96_first`: the same at witnesses fixed before the server's draws.
+  `Session.release_hm96_first`: the same at witnesses fixed before the server's samples.
 -/
 
 @[expose] public section
@@ -103,7 +103,7 @@ def unopened (full : St → Fin J → Bool) (s : St) : ℕ :=
   ∑ j, if full s j then Fintype.card (T j).Hid else Fintype.card (T j).PreLeaves
 
 /-- **The witnesses are fixed before the server's randomness**: the session's witnesses, as a function `wit` of every
-draw the server makes for it (each table's level-0 randomness, pads and salts), read none of those draws. A server that
+sample the server makes for it (each table's level-0 randomness, pads and salts), read none of those samples. A server that
 answers `level0` only once every table's witness is in gives it. At `Table.onVals` the witness carries the worker's
 values, so it fixes them too. -/
 def WitnessesFirst {Ω : Type} (wit : Ω → Fin J → W) : Prop :=
@@ -329,7 +329,7 @@ theorem release_hm96 (T : Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : T
   exact h
 
 /-- **A session's release behind the ZK server's checks, at any values, with real leaves, at witnesses fixed before the
-server's draws** (`WitnessesFirst`): `release_hm96` at the one witness they take. At each outcome `s` the release is
+server's samples** (`WitnessesFirst`): `release_hm96` at the one witness they take. At each outcome `s` the release is
 within `2·δ₁` a leaf it leaves unopened of the simulator given `s`, which reads the dummies `w₀` and not the
 witnesses. -/
 theorem release_hm96_first (T : Fin J → Table F K W Salt (B × Salt) D Hi VL) {C : Type} (M : ∀ j, (T j).Hm96 C)

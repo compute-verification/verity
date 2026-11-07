@@ -16,7 +16,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.UnrolledP
   `L.model regs` `T`. Its rows and public input ports are its statement circuit's (`HmOut.unrolled`; `rows_eqU`,
   `pi_eqU`), and its aliasing comes from the keys with public inputs (`AcceptedHP.aliased_of_key`, through
   `aliased_of_keyP`).
-* `SitesHP plan tab`: each drawn unit's acceptance, template instance and block, as `SitesH`.
+* `SitesHP plan tab`: each sampled proof block's acceptance, template instance and block, as `SitesH`.
 * `SitesHP.progPlaces_keyProgP`: `ProgPlaces` for the circuit's program on the keys with public inputs
   (`Placed.keyProgP`) at the session's statement circuit `c`, from the sites alone, each site's committed circuit
   unrolling to `c` (`Hidden.srcKeyP_eq_commit`); `constCols_keyProgHP` and `zeroCols_keyProgHP` are its
@@ -165,15 +165,15 @@ theorem zero_block {g : ℕ} (hg : g < a.st.c.g) (x : Fin a.rows.w) (hx : x.val 
 
 end AcceptedHP
 
-/-! ## Each drawn unit's place -/
+/-! ## Each sampled proof block's place -/
 
 section SitesP
 
 variable {N n : ℕ} {Reg : Type} {mPts : ℕ} (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **Each drawn unit's site at public inputs**, as `SitesH`: the acceptance at public inputs of the statement of the
-table unit `u` is drawn into (`acc`), and the unit's template instance (`vu`) and block (`o`) there. -/
+/-- **Each sampled proof block's site at public inputs**, as `SitesH`: the acceptance at public inputs of the statement of the
+table unit `u` is sampled into (`acc`), and the unit's template instance (`vu`) and block (`o`) there. -/
 structure SitesHP where
   acc : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n), u ∈ S → AcceptedHP (Partition.tabOf plan tab S R u).S
   vu : ∀ (S : Finset (Fin n)) (_ : Reg) (u : Fin n), u ∈ S → ℕ
@@ -182,14 +182,14 @@ structure SitesHP where
 
 variable {plan tab}
 
-/-- **W6 at the sites**: each drawn unit's rows in the program are the template instance rows its table's acceptance
+/-- **W6 at the sites**: each sampled proof block's rows in the program are the template instance rows its table's acceptance
 placed. -/
 def SitesHP.RowsOf (si : SitesHP plan tab) (p : Prog N n) : Prop :=
   ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), p.rows u = (si.acc S R u h).rows
 
 variable {p : Prog N n} (si : SitesHP plan tab) (hrows : si.RowsOf p)
 
-/-- A drawn unit's columns in its table's block: its template instance's (`AcceptedHP.col`). -/
+/-- A sampled proof block's columns in its table's block: its template instance's (`AcceptedHP.col`). -/
 noncomputable def SitesHP.col (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Fin (p.rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog) :=
   fun c => (si.acc S R u h).col (si.hvu S R u h) (Fin.cast (congrArg Rows.w (hrows S R u h)) c)
@@ -199,8 +199,8 @@ theorem SitesHP.placed (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) 
     Placement (Partition.tabOf plan tab S R u).S (p.rows u) (si.col hrows S R u h) :=
   Placed.placement_rows (hrows S R u h) ((si.acc S R u h).placement (si.hvu S R u h))
 
-/-- **`ProgPlaces` from setupHidden's accept at public inputs**, its aliasing from `Layout.Aliased` at each drawn
-unit's template instance and block. -/
+/-- **`ProgPlaces` from setupHidden's accept at public inputs**, its aliasing from `Layout.Aliased` at each sampled
+proof block's template instance and block. -/
 noncomputable def SitesHP.progPlaces_of_layout (outs : Finset (Fin N))
     (inst : ∀ u, (p.partition outs).IsRowsUnit u (p.rows u))
     (hal : ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S), (si.acc S R u h).L.Aliased (si.acc S R u h).regs
@@ -240,7 +240,7 @@ theorem SitesHP.rowsOf_keyProgP : si.RowsOf (Placed.keyProgP c pi hU n) :=
 variable (outs : Finset (Fin (Placed.gates (Placed.inGates n (Placed.circuitRows c hU).nIn) (Placed.circuitRows c hU) n)))
 
 include hpi in
-/-- **`aliased` at each drawn unit's site at public inputs**: in the layout of the table the unit is drawn into, the
+/-- **`aliased` at each sampled proof block's site at public inputs**: in the layout of the table the unit is sampled into, the
 program's own instance of the unit puts on one gate only inputs with one key with public inputs at the statement
 circuit, so at the committed one (`Placed.keyProgP_wire_key`, `Hidden.srcKeyP_eq_commit`, `AcceptedHP.aliased_of_key`). -/
 theorem SitesHP.aliased_keyProgP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
@@ -262,7 +262,7 @@ theorem SitesHP.aliased_keyProgP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h :
   exact hk
 
 /-- **`ProgPlaces` for the circuit's program on the keys with public inputs at hidden-output sites**, from the sites
-alone: each drawn unit placed at its template instance in its table's accepted statement, its instance the
+alone: each sampled proof block placed at its template instance in its table's accepted statement, its instance the
 program's own (`Const.Prog.instC`), aliased (`SitesHP.aliased_keyProgP`). -/
 noncomputable def SitesHP.progPlaces_keyProgP : ProgPlaces (Placed.keyProgP c pi hU n) outs plan tab :=
   si.progPlaces_of_layout (SitesHP.rowsOf_keyProgP (pi := pi) hU hparse) outs (Const.Prog.instC _ outs)

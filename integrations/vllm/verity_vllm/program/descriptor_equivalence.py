@@ -257,7 +257,7 @@ def _call_view(c: FunctionCall, depth: int, rng: random.Random, samples: int = 2
             picks = []
             for pi, (_, t) in enumerate(params):
                 picks.append((pi, sorted({rng.randrange(t.leaves) for _ in range(min(samples, t.leaves))})))
-            rng.setstate(state)  # the other side draws the same positions
+            rng.setstate(state)  # the other side samples the same positions
             d["args_sampled"] = tuple((pi, j, param_leaf(sc, pi, j)) for pi, js in picks for j in js)
             ret = sc.spec.body.ret
             d["returns"] = tuple(resolve(sc, ret[j]) for j in range(ret.count)) if ret.count <= INTERFACE_LEAF_LIMIT else None

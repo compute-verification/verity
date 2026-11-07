@@ -45,7 +45,7 @@ core, which the OpenAI server does not have: Model Runner V2 and, but for GLM-5.
 (``VLLM_BATCH_INVARIANT=1``, the ``bi-eager`` execution, `verity_vllm.engine.served`). A corpus's
 `VARIANTS` entry sets its sampling and whether async scheduling is on (the profile has it off). Seeded sampling seeds each
 request by `request_seed` from its id, which is the same in every trace, as `engine.served_seed` fixes a public seed at
-``add_request``. Model Runner V2 draws a sampled token's Gumbel noise from Philox keyed by that seed and the token's
+``add_request``. Model Runner V2 samples a sampled token's Gumbel noise from Philox keyed by that seed and the token's
 position. `MODELS`:
 
 * ``llama32_1b``: unsloth/Llama-3.2-1B in bf16, vLLM's own attention.

@@ -348,7 +348,7 @@ def _write_session(d: Path, record: dict, proofs: list[bytes]) -> None:
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_lean_verifier_rejects_exactly_the_mutations_with_a_nonzero_residual(session, tmp_path):
     """Each entry of MUTATIONS as a session (the proof's bytes and the round that retained them, with their digests), judged
-    by the Lean verifier of record: exactly the sessions whose residuals are all zero (the honest one, and a changed last
+    by the Lean verifier: exactly the sessions whose residuals are all zero (the honest one, and a changed last
     Ligerito message) pass every check, so their verdict is the sample-less refusal (`PASSED`), and it rejects each other one at
     the check of its first nonzero residual. It catches a
     reference that is zero where the inner verifier rejects, or that sees a check fail where the inner verifier sees none,
