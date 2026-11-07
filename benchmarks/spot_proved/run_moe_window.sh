@@ -8,11 +8,12 @@
 #   bench   the same shapes, tiles and draw with benchmark values (--bench MW_SEED), its tables self-registered
 # then h.json: by template, the served and benchmark sessions' seconds, their ratio, and the card's h (MW_CARD, a spot-card/v1
 # file) times that ratio. Every arm's stage.json and audit summary go to $OUT/<arm>/. A relative MW_TABLES, MW_CARD or MW_CAPTURE
-# that is not here is a --send file, under $RESEARCH_RUN_DIR/inputs/.
+# that is not here is a --send file, under $RESEARCH_RUN_DIR/inputs/. An art: capture is fetched as MW_CAPTURE_PATHS's globs
+# (default the rank's step and blobs: its commit.json holds every rank's root, so the step root checks without the others).
 #   MW_CAPTURE=DIR|TAR.GZ MW_STEP=S MW_LAYER=L (MW_TABLES=FILE MW_KEY=FILE | MW_SELF=1) [MW_RANK=0] [MW_TOKENS=1]
 #   [MW_LAW=stratified:1] [MW_CAP=2048] [MW_BLOCKS="--block w13=1 --block w2=32"] [MW_ARMS="served forged bench"] [MW_SEED=1]
 #   [MW_FLIPS=4] [MW_CARD=FILE] [MW_WARM=2] [MW_CHECKPOINT=DIR] bash benchmarks/spot_proved/run_moe_window.sh
-#   MW_MODE=build ...  # the builds only
+#   MW_MODE=build ...  # the builds only; MW_STAGE_ONLY=1 ...: each arm staged, none audited
 #   MW_MODE=synth ...  # tests/test_moe_window.write_capture's synthetic capture in place of MW_CAPTURE (its step, layer and
 #                      # blocks, two tokens, members of 4): the smoke run
 set -uo pipefail
@@ -55,7 +56,8 @@ sent() { [ -z "$1" ] || [ -e "$1" ] && echo "$1" || echo "$RESEARCH_RUN_DIR/inpu
 MW_TABLES=$(sent "${MW_TABLES:-}") MW_CARD=$(sent "${MW_CARD:-}")
 CAP=${MW_CAPTURE:?}
 case $CAP in
-  art:*) mkdir -p "$W/cap" && research data fetch "$CAP" --to "$W/cap" > "$OUT/fetch.log" 2>&1 \
+  art:*) read -ra PATHS <<< "${MW_CAPTURE_PATHS:-rank${MW_RANK:-0}/step${MW_STEP:?}/* rank${MW_RANK:-0}/blobs/*}"
+         mkdir -p "$W/cap" && uv run -q research data fetch "$CAP" --to "$W/cap" "${PATHS[@]/#/--path=}" > "$OUT/fetch.log" 2>&1 \
            || { log "moe-window: fetching $CAP FAILED: $(tail -1 "$OUT/fetch.log")"; exit 2; } ;;
   *) CAP=$(sent "$CAP") ;;
 esac
@@ -87,8 +89,10 @@ arm() {   # arm NAME [moe_window flags]: stage NAME's window, then audit it; -> 
   $UPY "$MW" "${args[@]}" --out "$d/stage" > "$o/stage.log" 2>&1
   rc=$?
   cp "$d/stage/stage.json" "$o/" 2>/dev/null; cp "$d/stage/tables.json" "$o/" 2>/dev/null
+  log "moe-window $name: $(grep '^GATE ' "$o/stage.log" | cut -c1-900)"
   [ $rc = 0 ] || { log "$name: staging FAILED: $(tail -1 "$o/stage.log")"; return 2; }
   log "moe-window $name: $(grep '^STAGED ' "$o/stage.log" | cut -c1-600)"
+  [ "${MW_STAGE_ONLY:-0}" = 1 ] && return 0
   held=$("$PY" -c "import json, sys; c = json.load(open(sys.argv[1])); print(c['circuit'], c['run'])" "$o/circuit.json")
   local flags=()
   case $name in
