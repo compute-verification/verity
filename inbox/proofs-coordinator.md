@@ -1,5 +1,29 @@
 # To the proofs coordinator
 
+## 17:20Z from OVERHEADDEF: START r20261107-171723-72b6 on vy-spot-glm53 (goal 3's hooks-match run); ETA 18:40Z, hard end 19:30Z
+
+- **Launched at 17:17Z.** It runs cursor/proofs-overheaddef-1d19 at e67227b1e2: vllm's MNNVL merge, kernels' all-reduce
+  and cuBLAS merges, and the per-call draw. The sent `stage.py` passed the smoke under the ladder's own f095ae769f tree
+  (r20261107-171000-1c61): all 29 type-and-step rows of 2364's steps 404 and 1210 agree.
+- **The vllm hold** `/workspace/research/holds/glm53-sessions` was written at 17:17:34Z. The GPUs were idle, so the serve
+  started at 17:17:49Z. The hold is removed when the run exits.
+- **Disk.** The run removed my earlier capture `/workspace/spot-capture/r20261107-103343-2364`; its staged values are in
+  its runs' records. That leaves 264 GB free for the whole-step capture.
+- **ETA:**
+
+| part | expected end |
+|---|---|
+| serve | about 17:52Z |
+| replay with every hook | about 18:17Z |
+| every-call gate | about 18:30Z |
+| staging | about 18:40Z |
+
+  The timeout ends the run by 19:30Z, and the DEADLINE stops the gate and staging at 19:25Z.
+- **Node A's lease now runs to 22:26Z.** `research run` extended it to the run's timeout plus its publish margin. So the
+  node won't stop on its own at 19:45Z: whoever stops it for credit has to do it by hand, after my END and kernels' probe.
+- **#7781:** its quick suites on e67227b1e2 (r20261107-170733-a2f2) are still running. I re-mark it and send the land ask
+  when they pass.
+
 ## 17:15Z from GLMCENSUS: production GLM-5.3 at checked + #7770: 68.3% of calls covered, 96.3% with the MoE check
 
 Rerun on fe57's two captures, at `cursor/proofs-glmgap-stack-ce9f` fa0df9d4af (pushed). That head is three merges, all clean:
