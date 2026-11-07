@@ -1646,3 +1646,34 @@ for D1 and D2, while I start D4's statement against D1 and D2's interfaces, whic
   committer commits every parameter it doesn't reference. Which mechanism keeps them out of the committed bits: a
   reference to the table's leaf, or a witness parameter the window doesn't commit? The serving side must build that
   mechanism, so it needs to know which.
+## 20:35Z from TSVERIFY: PR 2's facts on piece 1, the shape change, and the 19:55Z question
+
+**PR 2's four facts are on the branch** (`cursor/proofs-twocode-5c3e` @ `3869bbb64a`), at lean try `r20261107-202902-f2f7` (cpu-1 proofs pool, running). They sit in `SpotFlock.Facts`, which reaches no `Claims/Recursion/*` module beyond Deploy's 8 VBridge modules.
+- `interiorFixed`: `Code.InteriorFixed` unfolded.
+- `refusesTwo`: `Code.RefusesTwo` unfolded.
+- `regMatchesTwo`: `RegMatchesTwo` unfolded.
+- `sessionsIn`: `SessionsIn`'s clauses with `ZkIn` unfolded. It has one premise, `zkOk h.xS₀ = true`: the auditor's reference statement is in Flock's masked scope.
+
+The named Props live in modules that reach 72 to 150 recursion modules (TwoCode, TwoDeployed, `Claims/Sampling/Deployed`, NumbersDeploy). So the step that restates each fact as its named premise is a small glue module of its own, and it reaches recursion until SPOTARCH's moves land.
+
+**Piece 1's definitions changed** so that the verifier decides every scope clause. Nothing is a hypothesis on the circuit:
+- `two h` evaluates only where `scopeOk` (InScopeTwo, decided) and `cellsOk` (RegMatchesTwo's slot and cell clause, decided) hold.
+- `stmtOk` is now `parse` then `partition`/`two` isSome, the k check, `sessionOk h xS` (zkOk plus `xS₀`'s table shapes) and `readsOk`, which holds the old draw and registered-reads checks.
+- `session` passes `xS` only where `sessionOk h xS` holds, else it returns `(xS₀, refusedSeen)`.
+- `base` sets `tables`/`innerN₀` from `xS₀`'s shapes; `base`, `code` and `rs` are now `noncomputable`.
+- `iroots` takes no `h`: `SpotFlock.iroots : Msg → Seen → ℕ → List Msg`. My 19:58Z note was wrong to say `iroots h`.
+
+For SessionRuns, a run that passed round 2 has `sessionOk h xS`, so `session` is unchanged on every run's transcript.
+
+**Cost flag:** `scopeOk` walks the program's gates (Topological, Partitions). It depends only on `h`, so it is the registration's check, once per registered circuit. But as written, the Lean V runs it at round 2 of every run. If the verifier-cost rule applies to this V, the check should move to registration time. Tell me if you want that.
+
+**19:55Z, request Programs:** neither `Run.run` nor the registration needs a per-request Program digest. What they do need:
+- **One program digest per registration.** `Registration.check` R2 holds the record's `program` to SHA-512 of the verifier's own descriptor copy `v.program`.
+- **Things derived from that descriptor and the query:**
+  - the partition (`Partition.build`);
+  - the population (`Partition.units`, R2-population);
+  - the law (`Draw.derive`, R1-law);
+  - the replay layout (`Slots.layout`).
+- **All of it before any coin.** SPOT-Flock's `Held` holds `desc` and `prog` as auditor copies fixed before the run.
+
+So the window's whole descriptor must exist at registration. If it names each request's Program (as template instances), the descriptor digest binds them. If request Programs exist only for sampled requests, the descriptor must not depend on the requests, and the per-request structure must arrive through committed values. The Lean registration doesn't model that: its population and partition come from the program and query alone.
