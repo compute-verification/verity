@@ -77,10 +77,10 @@ def test_a_line_lean_cant_read_is_an_error():
 
 
 def _admissible_count(cells: list[Cell], k: dict[int, int], replay_blocks: int, q: float, delta: float,
-                      served: int | None = None) -> int:
+                      served: int | None = None, union: bool = True) -> int:
     """`CompiledTwo.Exfil`'s count by enumeration: Σ 2^{b(T)} over the sets T of proof blocks whose acceptance
-    ∏_ρ (1 − q(1 − e_ρ)) is above δ, or under `served` the sum over their patterns, each replay block read by one
-    request serving `served` bits."""
+    ∏_ρ (1 − q(1 − e_ρ)) is above δ, or under `served`, each replay block read by one request serving `served` bits,
+    the sum over their patterns (`union`) or Σ 2^{Σ_ρ min(b(T_ρ), served)}, the capped sets' count."""
     blocks = [(c.stratum, int(c.bits)) for c in cells for _ in range(int(c.n))]
     n = {t: sum(1 for s, _ in blocks if s == t) for t in k}
 
@@ -100,6 +100,8 @@ def _admissible_count(cells: list[Cell], k: dict[int, int], replay_blocks: int, 
             continue
         if served is None:
             total += 2 ** sum(bits(sub) for sub in T)
+        elif not union:
+            total += 2 ** sum(min(bits(sub), served) for sub in T)
         elif (p := tuple(light(sub) for sub in T)) not in seen:
             seen.add(p)
             total += 2 ** sum(0 if not x else served if x == ("all",) else bits(x) for x in p)
@@ -110,23 +112,22 @@ SMALL = [([Cell(3, 2)], {0: 1}), ([Cell(2, 1), Cell(1, 4, stratum=1)], {0: 1, 1:
 
 
 @pytest.mark.parametrize("cells,k", SMALL)
-@pytest.mark.parametrize("served", [None, 3])
-def test_a_two_stage_points_bits_bound_its_count(cells, k, served):
+@pytest.mark.parametrize("served,union", [(None, False), (3, True), (3, False)])
+def test_a_two_stage_points_bits_bound_its_count(cells, k, served, union):
     """Two replay blocks of a few proof blocks, sampled at q = 0.9 with δ = 0.3, which leaves fewer sets admissible
     than there are: the bits Lean certifies, at the θ it finds from the planner's, are at least log2 of the count by
-    enumeration, in the sets' and the patterns' form; and no more than at θ = 0, which the search tries."""
-    union = served is not None
+    enumeration, in the sets', the patterns' and the capped sets' form; and no more than at θ = 0, which the search
+    tries."""
     _, theta = two_stage_rankin(cells, k, 2, .9, .3, served, union)
     found, zero = P.check([P.two(cells, k, 2, .9, .3, served, union, theta or 1.0),
                            P.two(cells, k, 2, .9, .3, served, union, 0.0, search=None)])
-    count = _admissible_count(cells, k, 2, .9, .3, served)
-    assert count < _admissible_count(cells, k, 2, 0.0, .3, served)
+    count = _admissible_count(cells, k, 2, .9, .3, served, union)
+    assert count < _admissible_count(cells, k, 2, 0.0, .3, served, union)
     assert found[0] is not None and zero[0] is not None and found[1] > 0
     assert math.log2(count) <= found[0] <= zero[0] * (1 + 1e-9), (count, found, zero)
 
 
-def test_a_two_stage_point_out_of_range_is_refused_and_the_capped_sets_form_waits():
+def test_a_two_stage_point_out_of_range_is_refused():
     d = P.two([Cell(3, 2)], {0: 1}, 2, .5, .1, theta=1.0, search=None)
     assert P.check([d | {"q": "3/2"}, d | {"delta": "0/1"}]) == [(None, 1), (None, 1)]
-    with pytest.raises(ValueError, match="capped sets' form"):
-        P.two([Cell(3, 2)], {0: 1}, 2, .5, .1, served=3.0)
+    assert P.check([d | {"form": "capped", "N": "1", "S": "3", "theta": "-1/1"}]) == [(None, -1)]

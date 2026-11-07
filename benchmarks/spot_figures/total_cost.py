@@ -35,10 +35,10 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   (`plancheck`), and a refused design is an error.  A point without a design (the trivial bound, or a count of every
   proof block, which samples none) has `lean` None.
 
-Lean checks each patterns'-form point too (`lean_two`, unless `lean` is off): its count is the bits Lean certifies
-(`TwoStageCheckPatternsSound`) at the θ Lean finds from the planner's, with the planner's bits (`planner`) and Lean's
-θ beside them, and a refused point is an error.  A capped sets'-form point has `lean` None until its factor bound is
-stated.
+Lean checks each two-stage point too (`lean_two`, unless `lean` is off): its count is the bits Lean certifies
+(`TwoStageCheckPatternsSound` in the patterns' form, `TwoStageCheckServedSound` in the capped sets') at the θ Lean
+finds from the planner's, with the planner's bits (`planner`) and Lean's θ beside them, and a refused point is an
+error.
 
 Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
@@ -327,13 +327,11 @@ def grain(m: f1.Model, name: str, layers: float, boundary_bits: float, tokens: f
 
 
 def lean_two(g: Grain, row: dict, delta: float, served: float, form: str) -> tuple[float, dict]:
-    """Lean's check of a two-stage line's point (`plancheck.two`, its replay blocks one class): the bits it certifies,
-    rounded up to a float, at the θ it finds from the planner's, with the planner's bits and that θ beside them.  The
-    capped sets' form waits on its factor bound (`lean` None); a point Lean refuses is an error."""
-    if form != "patterns":
-        return row["bound"], {"lean": None}
-    d = plancheck.two(_split(list(g.cells), row["merged"]), row["k"], g.replay_blocks, row["q"], delta, served, True,
-                      row["theta"])
+    """Lean's check of a two-stage line's point (`plancheck.two`, its replay blocks one class, in the patterns' form or
+    the capped sets'): the bits it certifies, rounded up to a float, at the θ it finds from the planner's, with the
+    planner's bits and that θ beside them; a point Lean refuses is an error."""
+    d = plancheck.two(_split(list(g.cells), row["merged"]), row["k"], g.replay_blocks, row["q"], delta, served,
+                      form == "patterns", row["theta"])
     ((bits, theta),) = plancheck.check([d])
     if bits is None:
         raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")

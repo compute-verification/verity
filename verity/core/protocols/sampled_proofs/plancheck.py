@@ -95,9 +95,8 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
     replay blocks, rounded up, as one class, whose cell in each stratum holds its types' blocks by width, each count
     summed and rounded up and each width rounded up to whole bits, sampling `k` of them rounded down; the first stage's
     rate at most `q`.  Under `union`, the patterns' form, each replay block is read by one request, reading all of it
-    and serving `served` bits rounded up.  Lean searches θ from `theta` unless `search` is None."""
-    if served is not None and not union:
-        raise ValueError("Lean checks the capped sets' form once its factor bound is stated")
+    and serving `served` bits rounded up; with `served` alone, the capped sets' form, the requests reading in each
+    replay block serve at most that many bits together.  Lean searches θ from `theta` unless `search` is None."""
     cells = list(cells)
     strata = sorted({c.stratum for c in cells})
     parts = []
@@ -109,10 +108,11 @@ def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: 
         parts.append([[str(math.ceil(n)), str(b)] for b, n in sorted(widths.items())])
     one = {"count": str(math.ceil(replay_blocks)),
            "cells": [{"k": str(math.floor(k[t])), "parts": ps} for t, ps in zip(strata, parts)],
-           "reads": parts if union else [], "N": "1" if union else "0"}
-    out = {"kind": "two", "form": "patterns" if union else "sets", "q": _q(min(exact(q), Fraction(q))),
-           "theta": _q(Fraction(f"{theta:.6g}")), "delta": _q(exact(delta)),
-           "S": str(math.ceil(served)) if union else "0", "p": str(p), "classes": [one]}
+           "reads": parts if union else [], "N": "0" if served is None else "1"}
+    form = "sets" if served is None else "patterns" if union else "capped"
+    out = {"kind": "two", "form": form, "q": _q(min(exact(q), Fraction(q))), "theta": _q(Fraction(f"{theta:.6g}")),
+           "delta": _q(exact(delta)), "S": "0" if served is None else str(math.ceil(served)), "p": str(p),
+           "classes": [one]}
     return out | ({"search": {x: str(v) for x, v in search.items()}} if search is not None else {})
 
 
