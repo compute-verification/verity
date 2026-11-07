@@ -4297,7 +4297,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
                 order.append(getattr(args[0], "__name__", str(args[0])))
             return super().submit(fn, *args, **kw)
 
-    def proved(pkg, policy, facts, work, moved, ready):
+    def proved(pkg, policy, facts, work, moved, ready, keep=True):
         order.append("proved")
         return [], facts | {"pins": {"P.g": {"kind": "theorem", "reads": []}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
 
@@ -4309,7 +4309,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
         return f
 
     monkeypatch.setattr(A, "ThreadPoolExecutor", Recording)
-    monkeypatch.setattr(A, "facts_of", lambda *a: own)
+    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True: own)
     monkeypatch.setattr(A, "proved", proved)
     monkeypatch.setattr(A, "replay_step", stub("replay_step", ([], {"checked": 1, "reused": 0})))
     monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", ([A.Failure("unchecked.dependency", None, "unchecked: a hit")], 7)))
