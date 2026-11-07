@@ -1,5 +1,8 @@
-import Mathlib.Data.Nat.Size
-import Definitions.Core.Digest
+module
+
+public import Definitions.Core.Digest
+public import Mathlib.Data.Nat.Bits
+public import Mathlib.Data.Nat.Size
 
 /-!
 # Messages, digests, collisions, and the byte encodings (trusted)
@@ -19,6 +22,8 @@ The encodings are the formats' own: `be k n`, `n` big-endian in `k` bytes (u32be
 the fewest bytes, one byte for 0 (`merkle.py`'s `uint`); `cstr s`, a tag's bytes and its terminating zero byte; and
 `padTo n m`, `m` zero-padded to `n` bytes (a tag block).
 -/
+
+@[expose] public section
 
 namespace Hash
 

@@ -1,7 +1,33 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
+public import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Binding
+import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Rows
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.V2
+import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
-import Proofs.Flock.Soundness.Discharge.Hidden.Unpin
-import Proofs.Flock.Soundness.Discharge.Hidden.SpecOf
 
 /-!
 # Shared rows (`OutputsCommittedWide`, `OutputsBindingWide`)
@@ -10,6 +36,8 @@ A shared-row population's drawn `b ‖ c` are its proved units' (`Layout.drawn_d
 `Layout.pop_digest_sizeW`, in `Layout/SharedRows.lean`). `bc_drawnW` is `bc_drawnH` without `pop.tables = none`, and
 `outputs_committed_wide'` is `outputs_committed_v2'`'s argument through it.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

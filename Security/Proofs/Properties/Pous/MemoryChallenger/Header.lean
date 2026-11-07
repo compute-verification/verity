@@ -1,6 +1,15 @@
-import MemoryChallenger.Records
-import Proofs.Properties.NetworkRecords.Bytes
-import Proofs.Properties.Pous.MemoryChallenger.Sort
+module
+
+public import Aesop.BuiltinRules
+public import Mathlib.Tactic.ToDual
+public import MemoryChallenger.Records
+public import Proofs.Properties.NetworkRecords.Bytes
+public import Proofs.Properties.Pous.MemoryChallenger.Sort
+import Mathlib.Algebra.Order.Group.Nat
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.Nat.Cast.Order.Basic
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.SetLike
 
 /-!
 # The signed header determines the commitment
@@ -10,6 +19,8 @@ no field by its value (`header_eq`, through `Sort.qsort_map`), each entry is fre
 the entries come back by splitting at commas (`vals_inj`), and each value is read back from its entry (`header_inj`):
 a hex string through `hexOf_inj`, a number through its decimal digits.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs.Header
 

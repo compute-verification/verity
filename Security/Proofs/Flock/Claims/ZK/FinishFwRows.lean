@@ -1,6 +1,49 @@
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.Claims.ZK.FinishLane
+public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.Worker
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FinishStop
 import Proofs.Flock.Claims.ZK.FinishStopAt
-import Proofs.Flock.Claims.ZK.FinishTau
 import Proofs.Flock.Claims.ZK.FinishSwRows
+import Proofs.Flock.Claims.ZK.FinishTau
+import Proofs.Flock.Claims.ZK.InnerTauLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # A worker's rows from the firewall's own run
@@ -17,6 +60,8 @@ values that are the worker's clear values plus `h`, the worker's rows hold (`row
 * **`rowsAt_of_fw`**: where, at each rep, constraints on the layout's length that are the first seven rows on the
   clear values plus pads `h` (`h_ab = h_a·h_b`, `h_w = h_x·h_y`) don't fail on `h`, the rows hold.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal.Masked
 
@@ -183,24 +228,24 @@ variable (P : LigProver) {mPts : ℕ}
 
 /-- **Where the firewall goes on at masked values that are a worker's, its rows hold**: where, at each rep, constraints
 on the layout's length are the first seven rows on the worker's clear values plus pads `h` of the layout's length (with
-`h_ab = h_a·h_b` and `h_w = h_x·h_y`), and none fails on `h`, the worker's rows hold at the mask slot `u` and the extra
-lanes `R` (`noFail_iff_rows`, `rowsAt_of_rows`). -/
+`h_ab = h_a·h_b` and `h_w = h_x·h_y`), and none fails on `h`, the worker's rows hold at the mask slot `u` and level 0's
+hiding `V` (`noFail_iff_rows`, `rowsAt_of_rows`). -/
 theorem rowsAt_of_fw (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
-    ∀ c p (u : (C.T c).tab.onVals.Mask) (R : (C.T c).tab.onVals.XLanes),
+    ∀ c p (u : (C.T c).tab.onVals.Mask) (V : (C.T c).tab.onVals.Vis),
       (∀ r : Fin 2, ∃ (h : Array Flock.F128) (cons : Array (String × Zk.Lin)),
         h.size = (layOf Tz st).len ∧
         h[(layOf Tz st).hab]! = h[(layOf Tz st).fa]! * h[(layOf Tz st).fb]! ∧
         h[(layOf Tz st).tw]! = h[(layOf Tz st).tx]! * h[(layOf Tz st).ty]! ∧
         cons.size = 7 ∧ (∀ q ∈ cons, q.2.a.size = (layOf Tz st).len) ∧
         (∀ k : Fin 7, (ofZk cons[k.val]!.2 : ZkSession.Lin 𝔽 ((C.T c).tab.onVals.nE + 4)) =
-          rowsOf Tz st c r (fun i => (C.T c).tab.onVals.vals r p u R i + fOf h[i.val]!)
+          rowsOf Tz st c r (fun i => (C.T c).tab.onVals.vals r p u V i + fOf h[i.val]!)
             ((C.T c).tab.onVals.nu p + (C.T c).tab.onVals.maskHom u)
-            (∑ col, (C.T c).tab.onVals.y1' p u R r col * bFold Tz st c r col.val) (0, 0) (Fin.castAdd 3 k)) ∧
+            (∑ col, (C.T c).tab.onVals.y1' p u V.2.1 r col * bFold Tz st c r col.val) (0, 0) (Fin.castAdd 3 k)) ∧
         Flock.Firewall.Finish.failingOn cons h = #[]) →
-      (C.T c).tab.onVals.RowsAt p u R := by
-  intro C c p u R hall
-  refine rowsAt_of_rows P Tz st c p u R fun r => ?_
+      (C.T c).tab.onVals.RowsAt p u V := by
+  intro C c p u V hall
+  refine rowsAt_of_rows P Tz st c p u V fun r => ?_
   obtain ⟨h, cons, hsz, hab, htw, hcs, hlen, hform, hf⟩ := hall r
   have hE : (layOf Tz st).hab = (C.T c).tab.onVals.nE := by
     show _ = padLenOf _ _ - 4

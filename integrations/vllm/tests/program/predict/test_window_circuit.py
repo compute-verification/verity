@@ -32,7 +32,7 @@ from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit, window_circuit
 from verity_vllm.records import weights_registration as WRG
 
-from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.pouw import audit as AU
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -166,7 +166,7 @@ def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeyp
     reg = S._registered()
     for window, placed in ((THREE, [(0, 1), (0, 2), (16, 31)]), (EIGHT, [(0, 1)] * 4 + [(16, 17)] * 4)):
         assert window_circuit(reg, S.compile_steps(reg, *S._session(*window)), CLASS_OF_RECORD, placed=placed) == "the class circuit"
-    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True)] * 2
+    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True, None)] * 2
 
 
 def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
@@ -180,7 +180,7 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
     compiled = S.compile_steps(reg, *S._session(*window))
     assert [(u.LP, u.T + 1) for u in compiled.requests if u is not None] == [(1, 64)]
     assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=[(16, 59)]) == "the class circuit"
-    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True)]
+    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True, None)]
 
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():
@@ -673,6 +673,33 @@ def test_the_engines_rotary_table_registers_within_its_bound_and_a_wrong_one_is_
     roots = {p: v.root.hex() for p, v in WW.weight_values(reg, {**served, field["field"]: other}, KEY, GRAIN).items()}
     assert sorted(p for p in pins if roots[p] != pins[p]) == [ROPE]
     assert IF.input_count(doc, pins=both, roots={**roots, **SCAN_PIN})["free"] == _alone(doc, ROPE) > 0
+
+
+def test_a_served_windows_weight_reads_register_at_their_widths_beside_the_grains(tmp_path):
+    """A served window's slice units read a GEMM's weight one row of K words a unit (`pipeline.weight_rows`): given those
+    parameters (``served_params``, the record's), the committer registers each weight at that width too, under nonces of
+    all its parameters, the verifier's record states their shapes, and the pins hold them; a window serving the
+    checkpoint's words commits the registered roots, rows held for its reads by reference. A registration without them
+    doesn't hold the record, and a served parameter of a table or of no field is refused by name."""
+    reg, (d, man) = S._registered(), _checkpoint(tmp_path)
+    served = [WB.weight_param("model.layers.0.mlp.gate_up_proj.weight", 64), WB.weight_param("model.layers.1.mlp.down_proj.weight", 128)]
+    base = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN)
+    registration = WW.weights_registration(reg, KEY, d, checkpoints_manifest=man, grain=GRAIN, served_params=served)
+    record = WW.weights_record(reg, d, man, grain=GRAIN, served_params=served)
+    pins = WW.registration_pins(registration, record)
+    assert not set(served) & set(base["values"]) and set(pins) == set(base["values"]) | set(served)
+    assert [{k: record["registered_entries"][p][k] for k in ("leaves", "words")} for p in served] == [
+        {"leaves": 256, "words": 64}, {"leaves": 64, "words": 128}]
+    values = WW.weight_values(reg, WW.record_words(reg, d, man), KEY, GRAIN, keep_rows=True, served_params=served)
+    assert {p: v.root.hex() for p, v in values.items()} == pins
+    ck = WR.CheckpointIndex(d, checkpoints_manifest=man, model="org/m", revision="r")
+    rows = np.concatenate([ck.array(f"model.layers.0.mlp.{n}_proj.weight") for n in ("gate", "up")]).view(np.uint16)
+    assert np.array_equal(np.asarray(values[served[0]].rows, dtype=np.uint16).reshape(256, 64), rows.reshape(256, 64))
+    with pytest.raises(ValueError, match=re.escape(f"registers {sorted(served)} unlike the record")):
+        WW.registration_pins(base, record)
+    for bad, why in [(WB.table_param("model.embed_tokens.weight", 64), "not a table"), ("weights/model.nope@64", "not another field")]:
+        with pytest.raises(ValueError, match=re.escape(f"{bad}: a served read is of rows of a weight of the record, {why}")):
+            WW.weights_record(reg, d, man, grain=GRAIN, served_params=[bad])
 
 
 def _checkpoint(tmp_path, seed: int = 3, flip: str | None = None, quant: dict | None = None) -> tuple[str, str]:

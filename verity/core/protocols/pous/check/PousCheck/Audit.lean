@@ -1,5 +1,6 @@
-import PousCheck.Wire
-import PousCheck.Certificate
+module
+
+public import PousCheck.Certificate
 
 /-!
 # The timed audit's check
@@ -25,6 +26,8 @@ and then gives the StorageProfile's fields (`Certificate.profileJson`). A sessio
 `FINAL`, and `check` gives the fault; inputs the verifier can't judge with (a private setup without its root, flag bit 1
 without `W`, an elapsed time outside u64) are refused (`Wire.Stop.refused`).
 -/
+
+@[expose] public section
 
 namespace PousCheck.Audit
 

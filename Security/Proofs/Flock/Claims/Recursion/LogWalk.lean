@@ -1,5 +1,56 @@
-import Proofs.Flock.Claims.KS.ConflictWithin
-import Proofs.Flock.Soundness.Refine.Walk
+module
+
+public import Aesop.BuiltinRules
+public import Batteries.Data.ByteArray
+public import Batteries.Data.List.Basic
+public import Flock.With.Log
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.Simps
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Claims.KS.ConflictWithin
+public import Proofs.Flock.Soundness.Refine.Walk
+public import Std.Do.Triple.SpecLemmas
+public meta import Aesop.BuiltinRules
+public meta import Mathlib.Tactic.Simps
+public meta import Mathlib.Tactic.ToAdditive
+public meta import Mathlib.Tactic.ToDual
+public meta import Std.Do.Triple.SpecLemmas
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Control.Lawful
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
+import VCVio.Prelude.Core
 
 /-!
 # Walking a logged run
@@ -12,6 +63,8 @@ the log (`retl_dg_bind`); a join point is inlined; a `let` keeps its value's equ
 `x.go l = (.ok a, l₁)`, so a loop (`mapM_log`, `mapIdxM_log`, `forIn_log`) is read off afterwards. A value takes its
 binder's name, its run or equation `h_` and its log `l_` that name.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -181,7 +234,7 @@ theorem retl_let {α γ : Type} (e : α) (b : α → LogV γ) (l : Array ByteArr
 
 open Lean Elab Tactic Meta in
 /-- One step of `retl_walk` on the goal `RetL m l Q`, by `m`'s head; `none` when the goal is not a `RetL`. -/
-def retlStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId)) := g.withContext do
+meta def retlStep (keep : Array Name) (g : MVarId) : TacticM (Option (List MVarId)) := g.withContext do
   let ty ← instantiateMVars (← g.getType)
   unless ty.isAppOfArity ``RetL 4 do return none
   let γ := ty.getArg! 0

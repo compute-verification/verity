@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.TmplPosMap
+module
+
+public import Proofs.Flock.Soundness.TmplPosMap
 
 /-!
 # `layoutsM`'s layouts are in order
@@ -10,6 +12,8 @@ loops: the runs it pushes are nonempty, ascending and apart from the calls, and 
 Each depends on what `parse` checks of each call: its copies inside its caller's columns, and its callee an earlier
 Definition.
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl
 

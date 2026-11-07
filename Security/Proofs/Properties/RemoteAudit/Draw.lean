@@ -1,6 +1,9 @@
-import Properties.RemoteAudit
+module
+
+public import Properties.RemoteAudit
 import Proofs.Properties.RemoteAudit.Bisect
 import Proofs.Properties.RemoteAudit.Sort
+import Std.Data.HashMap.Lemmas
 
 /-!
 # The window's draws (`DrawIsSubset`)
@@ -11,6 +14,8 @@ function that keeps `[0, n)` and is injective there, and swap `i` composes it wi
 (`subsetOn_spec`). Core randomness's `subsetExact` returns the subset at the first read length that succeeds
 (`subsetExact_some`), and `draws` maps each value to its receipt by the passes' running ends (`locate`).
 -/
+
+@[expose] public section
 
 open RemoteAudit
 

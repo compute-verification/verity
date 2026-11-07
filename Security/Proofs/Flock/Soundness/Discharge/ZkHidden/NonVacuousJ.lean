@@ -1,7 +1,31 @@
-import Proofs.Flock.Soundness.Discharge.Composed.NonVacuousJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
+module
+
+public import Proofs.Flock.Soundness.Assumptions.CustodyZk
+public import Proofs.Flock.Soundness.Discharge.Composed.NonVacuousJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
 
 /-!
 # The hidden-output `J`-table statements' draw hypotheses hold together
@@ -25,6 +49,8 @@ What none of this covers: that a session `verify --zk` accepts exists at a draw 
 (`avoidsMask`, which no check implies), and `zk_session_composedHJ`'s `hKey` (a named assumption); `zk_session_viewHJ`'s
 `hT1` holds at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

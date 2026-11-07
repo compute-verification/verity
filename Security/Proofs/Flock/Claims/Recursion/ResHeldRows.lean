@@ -1,8 +1,44 @@
-import Proofs.Flock.Claims.Recursion.OutTopRows
+module
+
+public import Proofs.Flock.Claims.Recursion.OpenSlots
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.BoundAccepts
 import Proofs.Flock.Claims.Recursion.OpensReads
-import Proofs.Flock.Claims.Recursion.CapLower
-import Proofs.Flock.Claims.Recursion.SlotsCalls
+import Proofs.Flock.Claims.Recursion.OutTopRows
 import Proofs.Flock.Claims.Recursion.RestLens
+import Proofs.Flock.Claims.Recursion.SlotsCalls
+import Proofs.Flock.Claims.Recursion.TopsOpens
 
 /-!
 # Every holder of a stream round's row holds the row its first holder opens
@@ -16,6 +52,8 @@ to a collision among the recorded calls every holder's row is the opened one.
 * `held_rows_tie`: two holders with one commit string hold one row (`rows_eq_of_calls'`, prefixes of one length).
 * `held_rowSlot`: at the joint witnesses, every holder's row is its round's `rowSlot`'s.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.ResHeld
 

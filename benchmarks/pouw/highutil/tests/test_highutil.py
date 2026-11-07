@@ -1,5 +1,5 @@
 """The highutil period on the CPU: the pick draw, ε, the operand openings, and whole periods at small shapes through v31.py's
-no-fold reference (`period.RefDriver`) with an in-process coin source: an honest period is accepted, and a skipping
+no-fold reference (`period.RefDriver`) with an in-process challenger: an honest period is accepted, and a skipping
 prover's, a tampered root's and a swapped operand's are refused."""
 from __future__ import annotations
 
@@ -266,7 +266,7 @@ class _Client:
 
 
 class _Coins:
-    """An in-process coin source: each coin opens once, after what it was asked after."""
+    """An in-process challenger: each coin opens once, after what it was asked after."""
 
     class _Session:
         session = "in-process"
@@ -299,7 +299,7 @@ def small(tmp_path_factory):
     trees = P.operand_trees(cfg, secret, _Serial())
     drv = P.RefDriver(cfg, prep["row"], secret)
     work = tmp_path_factory.mktemp("work")
-    return P.Period(drv, _Coins(), trees, cfg, prep["row"], prep["source"], secret, work, _Serial())
+    return P.ExecutionBlocks(drv, _Coins(), trees, cfg, prep["row"], prep["source"], secret, work, _Serial())
 
 
 def test_every_operand_row_opens_against_its_root_and_no_other(small):
@@ -363,7 +363,7 @@ def test_one_segment_a_call_when_L_exceeds_K(small, tmp_path, lp_max, layers, lp
         assert [P.shape(n, k, prep["row"]).lp for _, n, k in P.LAYERS] == lps
         assert [P.shape(n, k, prep["row"]).S for _, n, k in P.LAYERS] == [1] * len(layers)
         secret = b"\x07" * 64
-        per = P.Period(P.RefDriver(cfg, prep["row"], secret), _Coins(), P.operand_trees(cfg, secret, _Serial()), cfg,
+        per = P.ExecutionBlocks(P.RefDriver(cfg, prep["row"], secret), _Coins(), P.operand_trees(cfg, secret, _Serial()), cfg,
                        prep["row"], prep["source"], secret, tmp_path, _Serial())
         r = per.proto("t-s1", P.Plan(2, 2, 12))
         assert r["accepted"], r["verdict"]
@@ -386,7 +386,7 @@ def test_a_served_period_commits_o_and_is_accepted_and_a_skipping_prover_refused
         fs = [P.shape(n, k, prep["row"]) for _, n, k in P.LAYERS]
         assert [f.S for f in fs] == S and all(f.o and f.W == f.S - 1 and f.row_o for f in fs)
         secret = b"\x07" * 64
-        per = P.Period(P.RefDriver(cfg, prep["row"], secret), _Coins(), P.operand_trees(cfg, secret, _Serial()), cfg,
+        per = P.ExecutionBlocks(P.RefDriver(cfg, prep["row"], secret), _Coins(), P.operand_trees(cfg, secret, _Serial()), cfg,
                        prep["row"], prep["source"], secret, tmp_path, _Serial())
         r = per.proto("t-served", P.Plan(2, 2, 24))
         assert r["accepted"], r["verdict"]
@@ -465,7 +465,7 @@ def test_each_block_is_issued_before_the_last_is_waited_for_and_seeds_open_two_b
 class _FirstBlockOnly(P.RefDriver):
     """A prover that runs every step on block 0's operands, never the registered block 1's."""
 
-    def block_of(self, step: int) -> int:
+    def layer_of(self, step: int) -> int:
         return 0
 
 

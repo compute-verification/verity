@@ -46,7 +46,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 import numpy as np
 
-from verity.ml.circuits.codec import canonical_json, definition_entry
+from verity.ml.circuits.codec import canonical_json, definition_digest, definition_entry
 from verity.ml.circuits.cut import WIDE_FAN_IN, WIRING, QueryInapplicable, call_scope, cut_word, fits, separable, wide_operands
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.layout import resolve
@@ -174,8 +174,7 @@ class Graph:
             # an input's token is its operand (< 0), a gate's the first gate with its value (a structure gate: with its key)
             return (prim[j], *[o if o < 0 else tok[o] for o in mine])
 
-        for j in range(n):
-            g = c.gate(lo + j)
+        for j, g in enumerate(c.gates(lo, lo + n)):
             p = g.prim
             width[j] = p.ret.w
             prim[j] = self.prims.setdefault(p.id, len(self.prims))
@@ -392,12 +391,12 @@ def _code_version() -> str:
     return _CODE[0]
 
 
-def definition_digest(fn: Any) -> str:
-    """SHA-256 of `fn`'s descriptor entry and, sorted, its callees' digests: its whole content, whatever program it is in."""
+def closure_digest(fn: Any) -> str:
+    """SHA-512 of `fn`'s definition digest (`codec.definition_digest`) and, sorted, its callees' closure digests, in any program."""
     d = _DIGESTS.get(fn.id)
     if d is None:
-        callees = [] if isinstance(fn, PrimitiveDefinition) else sorted({definition_digest(n.fn) for n in fn.body.nodes})
-        d = _DIGESTS[fn.id] = hashlib.sha256(canonical_json({"definition": definition_entry(fn), "callees": callees})).hexdigest()
+        callees = [] if isinstance(fn, PrimitiveDefinition) else sorted({closure_digest(n.fn) for n in fn.body.nodes})
+        d = _DIGESTS[fn.id] = hashlib.sha512(canonical_json({"definition": definition_digest(definition_entry(fn)), "callees": callees})).hexdigest()
     return d
 
 
@@ -405,7 +404,7 @@ def _rule_entry(fn: Any, X: int, W: int, extras: int, limits: dict[str, int]) ->
     root = _RULE_CACHE[0]
     if not root or isinstance(fn, PrimitiveDefinition):
         return None
-    key = {"schema": _RULE_CACHE_SCHEMA, "definition": fn.id, "digest": definition_digest(fn), "query": [X, W, extras],
+    key = {"schema": _RULE_CACHE_SCHEMA, "definition": fn.id, "digest": closure_digest(fn), "query": [X, W, extras],
            "limits": [[k, v] for k, v in sorted(limits.items())], "code": _code_version()}
     k = hashlib.sha256(canonical_json(key)).hexdigest()
     return Path(root) / k[:2] / f"{k}.json", key
@@ -439,13 +438,14 @@ def _cache_rule(fn: Any, X: int, W: int, extras: int, limits: dict[str, int], ru
     os.replace(tmp, path)
 
 
-def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: Limits = None) -> dict[str, Any]:
+def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict | None = None, max_gates: Limits = None, graphs: dict | None = None) -> dict[str, Any]:
     """One Definition specialization under `Q_word_v1{X,W}`: {"definition", "query", "gates", "units_per_call", "by_kind",
     "committed_interior_words", "max_out_bits", "classes", "violations"}.  A class groups units by kind, the primitive and the
     activation of their first boundary gate, gates per unit and |out(S)|; `count` is units per Call, `nodes` the primitives of one
     unit.  `committed_interior` lists the committed interior values by (activation, primitive): what a tap must acquire.  A
     Definition over its gate limit (`gate_limit` of `max_gates`) is not cut: a `too-large` violation.  One `memo` per `max_gates`;
-    under `use_rule_cache` the rule is read from, or written to, the shared directory."""
+    under `use_rule_cache` the rule is read from, or written to, the shared directory.  ``graphs`` gets ``(Graph(fn), units(...))``
+    under ``fn.id`` when this call cut ``fn`` whole (not member by member, and not from ``memo`` or the cache)."""
     memo = {} if memo is None else memo
     key = (fn.id, X, W, extras)
     if key in memo:
@@ -477,8 +477,9 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
         rule = _finish(fn.id, fn.gates, [], [], X, W, extras)
         rule["violations"] = [{"definition": fn.id, "class": "too-large", "gates": fn.gates, "limit": limit}]
     else:
-        G = Graph(fn)
-        R = units(G, X, W, extras)
+        R = units(G := Graph(fn), X, W, extras)
+        if graphs is not None:
+            graphs[fn.id] = (G, R)
         cut = R["cut"]
         kinds = np.array([_KINDS.index(k) for k in R["kinds"]], np.int64)
         cols = np.stack([kinds, R["head_prim"], R["head_scope"], R["gates"], R["out_bits"], R["out_gates"]], 1)
@@ -502,8 +503,7 @@ def unit_rule(fn: Any, X: int = 16, W: int = 32, extras: int = 0, *, memo: dict 
                 ibits[(c["scope"], c["head"])] += c["out_bits"] * c["count"]
         rule = _finish(fn.id, G.total, classes, [{"scope": s, "head": p, "words": w, "bits": ibits[(s, p)]} for (s, p), w in interior.most_common()],
                        X, W, extras)
-        rule["free_gates"] = G.free
-        rule["free_by_prim"] = dict(G.free_by_prim.most_common(8))
+        rule["free_gates"], rule["free_by_prim"] = G.free, dict(G.free_by_prim.most_common(8))
         rule["redundant_gates"] = cut.detail["redundant_gates"]
         if not cut.ok:
             rule["violations"].append({"definition": fn.id, "class": "cut", "codes": list(cut.codes), "detail": cut.detail})
@@ -796,5 +796,5 @@ def check_query(P: Any, Q: Any, X: int = 16, W: int = 32, extras: int = 0, *, st
 
 
 __all__ = ["QUERY_ID", "WIRING", "RULE", "MAX_GATES", "MAX_GATES_ENV", "RULE_CACHE_ENV", "committed_today", "tap_kernel", "QueryRuleViolation",
-           "query_id", "parse", "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "definition_digest", "use_rule_cache", "unit_rule",
+           "query_id", "parse", "gate_limits", "gate_limit", "specialization", "Graph", "partition", "units", "closure_digest", "use_rule_cache", "unit_rule",
            "RULE_PEAK_PER_GATE", "RULE_PEAK_BASE", "prefetch", "check_calls", "call_groups", "check_query"]

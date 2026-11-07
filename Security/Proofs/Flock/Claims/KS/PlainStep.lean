@@ -1,5 +1,48 @@
-import Proofs.Flock.Claims.KS.PlainLock
-import Proofs.Flock.Claims.Recursion.PlainK
+module
+
+public import Proofs.Flock.Claims.KS.PlainLock
+public import Proofs.Flock.Claims.KS.PlainDraw
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.DeployTables
+import Proofs.Flock.Claims.KS.Width
+import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.VBridge.Family.Lig
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # The plain simulator's rounds are the record's
@@ -7,6 +50,8 @@ import Proofs.Flock.Claims.Recursion.PlainK
 Where `P`'s deployed run at `plainΦ`'s coins decides and accepts, the plain simulator's live outcome has the record's
 rep streams, round by round, and the last message's proof files (`plainSimReps`, `plainSimProofs`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -34,7 +79,7 @@ theorem check_true {b : Bool} {why : String} {u : Unit} (h : Record.check b why 
 
 /-- **The verifier's decoder reads only rounds of `1` to `65536` coins** (S12), at any `keep`. -/
 theorem decodeWithK_n (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {text : String}
-    {sess : Session} (h : Record.decodeWithK keep hs spec text = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeWithK keep hs spec text = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 := by
   unfold Record.decodeWithK at h
   dsimp only at h
@@ -73,7 +118,7 @@ theorem decodeWithK_n (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Sessi
       cases hr
       exact ⟨hb.1.1.1, hb.1.1.2⟩
 
-theorem decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : Session}
+theorem decodeWith_n (hs : Hashes Flock.V) {spec : SessionSpec} {text : String} {sess : RunRecord}
     (h : Record.decodeWith hs spec text = .ok sess) :
     ∀ x ∈ sess.streams.toList, ∀ rd ∈ x.rounds.toList, 1 ≤ rd.n ∧ rd.n ≤ 65536 :=
   decodeWithK_n id hs h

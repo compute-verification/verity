@@ -1,8 +1,48 @@
-import Proofs.Flock.Claims.KS.PlainLevels
-import Proofs.Flock.Claims.KS.ZkEvent
-import Proofs.Flock.Claims.KS.ZkTables
+module
+
+public import Proofs.Flock.Claims.KS.PlainLevels
+import Flock.With.SimVerify
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployRounds
 import Proofs.Flock.Claims.DeployRoundsZk
 import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.KS.Entries
+import Proofs.Flock.Claims.KS.ZkTables
+import Proofs.Flock.Claims.ZkQueryRound
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Every level's queries in the masked verifier over the hash oracle
@@ -23,6 +63,8 @@ that position against one root in the run's own log, a collision there (`zk_leve
 * `zkRawLevelRowsJ`, `zk_levelRowJ_raw`, `zk_levelClash_tiedJ`: the level-`ℓ` rows table `j`'s rep `k` opens in a masked
   record, each an `Opening` in an accepted run's log, and two of them at one position that differ collide there.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -231,7 +273,7 @@ schedule of its table, a rep that `Zk.verifyRepWith hs` accepts (in `V`, any ora
 for every level `1 ≤ ℓ`, against the proof's `ℓ − 1`-th recursive cap on its level-`ℓ` rows at the positions of round
 `zkLevelRound`'s coins, and the reader's level-`ℓ` rows (`zkLevelRowsOf`) are those positions with those rows. -/
 theorem zkLevels_verifyRepWith (hs : Hashes Flock.V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (tPad : ℕ)
-    (sess : Session) (i r : ℕ) (bytes cap : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad))
+    (sess : RunRecord) (i r : ℕ) (bytes cap : ByteArray) (hsch : Zk.schedule st.m = .ok (sch, tPad))
     (h : Zk.verifyRepWith hs spec st sch tPad sess i r bytes = .ok cap) :
     ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof),
       sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧
@@ -290,7 +332,7 @@ open FlockSoundness.Discharge.ZkExec (shapeZK) in
 `zkLevels_verifyRepWith` at every table `i` and rep `r < 2` (`verifyWithM_reps`). -/
 theorem zkLevels_verifyWithM (hs : Hashes Flock.V) (spec : SessionSpec) (tabs : Array Setup) (record : String)
     (proofs : Array ByteArray) (h : Zk.verifyWithM hs spec tabs record proofs = .ok ()) :
-    ∃ sess : Session, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
+    ∃ sess : RunRecord, Record.decodeWith hs spec record = .ok sess ∧ tabs.size = spec.tables.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (sch : Schedule) (tPad : ℕ), Zk.schedule tabs[i].m = .ok (sch, tPad) ∧
         ∀ r < 2, ∃ (stream : StreamRec) (extras : Array Claim) (zp : Zk.ZkProof),
           sess.streams.find? (fun x => x.name == s!"{spec.tables[i]!}/rep{r}") = some stream ∧

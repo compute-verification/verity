@@ -1,4 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Weights
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Weights
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Lazy sampling of committed rounds
@@ -8,6 +14,8 @@ are drawn from a product law with uniform blocks (`μ j`'s block marginal is uni
 better than the optimal prover against live coins, provided no path opens a round twice (`lazy`): each round's block
 is then drawn when it is opened.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkCoins
 

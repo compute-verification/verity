@@ -1,5 +1,11 @@
-import Proofs.Flock.Soundness.ComposeDag
-import Proofs.Flock.Soundness.ExecSetup
+module
+
+public import Proofs.Flock.Soundness.ComposeDag
+public import Proofs.Flock.Soundness.ExecPlacement
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.Data.Nat.Totient
 
 /-!
 # Composed rows, placed: what 1d and 1e hand to a table's class (`dp`)
@@ -11,7 +17,7 @@ those facts are one proposition, and they are discharged for a flat statement `S
   the pin. `Realizes.placement` is the `Placement` it gives, at `composePlace`.
 - **`Compose.BlockFacts`**: 1e's form of the same facts, over the unit's block rows (`blockRow`, Δ applied), for the
   verifier's own `deriveChecked` run. `BlockFacts.realizes` turns them into `Realizes` for the unit's composed rows
-  (`ofBlock`), and `BlockFacts.placement` is a table class's `placed` at a slot (the soundness lane's `TableClass`).
+  (`ofBlock`), and `BlockFacts.placement` is a table class's `placed` at a slot (the soundness model's `TableClass`).
 - **`Layout.realizes`**: in the model of a statement `setupH` accepted (`Layout`),
   at unit slot `s₀` with positions `slot s₀ + c`, `Realizes` holds for every `Logical` whose rows are the unit net's
   (`Compose.NetRows`). It reads Δ only as `Layout` does, for statements without a typed template.
@@ -20,6 +26,8 @@ those facts are one proposition, and they are discharged for a flat statement `S
 derives. For a typed flat class, whose unit net is built from those rows (`Typed.netOfD`), it is `netRows_flat`
 (`ExecFlatClass.lean`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

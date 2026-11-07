@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.KS.PlainLeafDec
+module
+
+public import Proofs.Flock.Claims.KS.PlainLeafDec
 
 /-!
 # The live self-clash at plain SHA-512 leaves
@@ -25,6 +27,8 @@ their `wrPD` forms are them at `keep := id`; `PlainLeafClashK` has them at `wrPD
 * `plainSimClashHU`: so a live self-clash at `leafPlain` gives `P`'s accepting runs a raw clash.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.AtDraw
 
 open Claims.Bridge.PlainDraw (setupAtD AcceptsAtD AcceptsAtDK named_of_setupAtD acceptsAtD_iff_acceptsAtDK_id)
@@ -39,7 +43,7 @@ each rep's caps its proof's recursive caps and its level-`ℓ` openings its `pla
 `accepts_opensLDLfK` at `leafPlain`. -/
 theorem accepts_opensLDUK (keep : Bool → Bool)
     {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtDK keep I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decodeWithK keep With.std spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
@@ -83,7 +87,7 @@ theorem accepts_opensLDUK (keep : Bool → Bool)
 /-- **At flock-verify's acceptance at `dr`, each table's recorded caps and level-`ℓ` openings are its reps' deployed
 ones**, at every level `ℓ ≥ 1`: `accepts_opensLDUK` at `keep := id`. -/
 theorem accepts_opensLDU {I : Exec.Inputs} {dr : Option Json} {t : Exec.Transcript} (h : AcceptsAtD I dr t) :
-    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session), setupAtD I dr = .ok (spec, sts) ∧
+    ∃ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord), setupAtD I dr = .ok (spec, sts) ∧
       Record.decode spec t.record = .ok sess ∧
       ∀ (j : ℕ) (hj : j < sts.size), ∃ sch : Flock.Schedule, Flock.fast100 sts[j].m = some sch ∧
         ∀ (hwf : StmtWF sts[j]) (hr : RegionsWF sts[j]) (hm : 13 ≤ sts[j].m) (p₀ p₁ : Proof) (s₀ s₁ : StreamRec)
@@ -137,11 +141,11 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A self-clash at level 0** at a table's output: `SelfClashL`'s first case at `leafPlain`. -/
-def Clash₀LU (sch : Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
+def Clash₀LU (sch : FlockSoundness.Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ClashL H512 enc512 leafPlain out.cap₀ (lvOf sch 0).lanes (Model.pathLen (lvOf sch 0)) (opens₀L sch out)
 
 /-- **A self-clash past level 0** at a table's output: `SelfClashL`'s second case at `leafPlain`. -/
-def LaterClashLU (sch : Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
+def LaterClashLU (sch : FlockSoundness.Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ∃ r < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap, (if r = 0 then out.pend.1 else out.pend.2).caps[ℓ - 1]? = some cap ∧
     ClashL H512 enc512 leafPlain cap (lvOf sch ℓ).lanes (Model.pathLen (lvOf sch ℓ))
       (slotOpensL out r ℓ (lvOf sch ℓ).queries)
@@ -160,14 +164,14 @@ local notation "𝔽" => FlockLevel3.GF128
 of one rep's level-`ℓ` entries**, through `keep`: `laterEntriesClashK_of`'s proof, which reads no leaf;
 `laterEntriesClashKLf_of` at `leafPlain`. -/
 theorem laterEntriesClashK_ofU (keep : Bool → Bool)
-    {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
+    {sch : FlockSoundness.Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
     {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAtK keep sch I d t out r)
     (hcl : FlockDeploy.KS.LaterClashLU sch out) : LaterEntriesClashK keep I d t :=
   laterEntriesClashKLf_of keep leafPlain he hcl
 
 /-- **A self-clash past level 0 at `leafPlain` in an output whose reps' later openings are the deployed reps' is a
 clash of one rep's level-`ℓ` entries**: `laterEntriesClashK_ofU` at `keep := id`. -/
-theorem laterEntriesClash_ofU {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
+theorem laterEntriesClash_ofU {sch : FlockSoundness.Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
     {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAt sch I d t out r)
     (hcl : FlockDeploy.KS.LaterClashLU sch out) : LaterEntriesClash I d t :=
   (laterEntriesClash_iff_K_id _ _ _).2 <|
@@ -426,7 +430,7 @@ raw columns (`rawCols_plain`), so the run has a raw clash at level 0 (`PlainClas
 theorem plainClashQ₀U {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
@@ -522,7 +526,7 @@ the run's log (`plain_levelClash`), so the run has a raw clash (`PlainClashQU` a
 theorem plainClashQLU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,

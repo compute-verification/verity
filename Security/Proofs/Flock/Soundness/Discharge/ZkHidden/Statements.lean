@@ -1,12 +1,27 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
-import Proofs.Flock.Soundness.Discharge.Hidden.Wide.FitS
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Placed
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The statements: flock-verify `--zk`'s acceptance and its tables under hidden outputs
 
 ZkExec's acceptance statements and ZkLink's `TablesAtZKLive` take `hh : I.tags.hiddenOutputs = false`: they are about
-`Stmt.setupH`'s statements, and under hidden outputs (the default `--statement`, PROTOCOL §16.13) `Stmt.setupTables`
+`Stmt.setupH`'s statements, and under hidden outputs (the default `--statement`, `HmOut`) `Stmt.setupTables`
 calls `Stmt.setupHidden`. Each statement here is one of them for the sessions production `--zk` writes, as HiddenExec's
 are for the public path. Where the original names `setupH`, this one names `setupOne` (without `hh`) or
 `setupHidden` (under `hh = true`); otherwise the conclusion is the original's.
@@ -25,6 +40,8 @@ are for the public path. Where the original names `setupH`, this one names `setu
 
 `zk_flock_countC_execOS_crH` (`Count.lean`) is `zk_flock_countC_execOS_cr` at the hidden-output plan.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

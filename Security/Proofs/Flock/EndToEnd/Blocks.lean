@@ -1,5 +1,25 @@
-import Proofs.Flock.EndToEnd.Blocks.Statement
-import Proofs.Flock.EndToEnd.Period
+module
+
+public import Proofs.Flock.EndToEnd.Blocks.Statement
+public import Proofs.Flock.EndToEnd.Period
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game.Union
 
 /-!
 # Proof of the integrity audit per server-time block, and pooled over a monitoring period's blocks
@@ -15,6 +35,8 @@ import Proofs.Flock.EndToEnd.Period
 * `IntegrityHorizonBlocks`: `IntegrityHorizon` over the monitoring period's `start B` sessions, whose terms regroup by
   block (`sum_range_start`).
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

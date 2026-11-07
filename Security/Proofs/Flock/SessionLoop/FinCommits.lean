@@ -1,7 +1,41 @@
-import Proofs.Flock.SessionLoop.FinishParts
-import Proofs.Flock.SessionLoop.Link
+module
+
+public import Proofs.Flock.SessionLoop.FinishParts
+public import Proofs.Flock.SessionLoop.Link
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
 import Proofs.Flock.Claims.ZK.CausalExe
-import Proofs.Flock.Claims.ZK.LinkRecheck
+import Proofs.Flock.Claims.ZK.FinExe
 
 /-!
 # (a) `FinCommits`: the commitments the session reads from the views
@@ -19,6 +53,8 @@ At a statement in the masked scope with a witness (so `Live`, `Masked.live_of`),
   nothing (`commit0Cut_quiet`) and carry the loop's roots (`rootsOf`), and each pads commitment sends nothing
   (`padsTreeCut_quiet`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -83,9 +119,9 @@ theorem finSrc_leaf0 (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Non
     (finSrc vs x w ν t ops i).leaf0 =
       Masked.leafAt Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
         (swCutAt (Masked.tabC Masked.PE x) (Masked.czExe Masked.PE x (finCoins x ops)) (Masked.wtOf Masked.PE x w)
-          (vs x w ν (finCoins x ops)) (Masked.UE.tape x t).1
+          (vs x w ν (finCoins x ops) (finS.seenOf x t)) (Masked.UE.tape x t).1
           (swExeOf (Masked.tabC Masked.PE x) (Masked.czExe Masked.PE x (finCoins x ops)) (Masked.wtOf Masked.PE x w)
-            (vs x w ν (finCoins x ops)) (Masked.UE.tape x t).1 (Masked.UE.tape x t).2.1)) ⟨i, hi⟩ := by
+            (vs x w ν (finCoins x ops) (finS.seenOf x t)) (Masked.UE.tape x t).1 (Masked.UE.tape x t).2.1)) ⟨i, hi⟩ := by
   have e1 : (finSrc vs x w ν t ops i).leaf0 =
       Masked.leafAt Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops))
         (fun j => Masked.viewCut (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t j))
@@ -97,9 +133,9 @@ theorem finSrc_leaf0 (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.Non
   have h : (Masked.viewCut (finS.swViewsAt x (finCoins x ops) (finS.wt x w) (vs x w ν (finCoins x ops)) t
       ⟨i, hi⟩)).leaves0 =
       (swCutAt (Masked.tabC Masked.PE x) (Masked.czExe Masked.PE x (finCoins x ops)) (Masked.wtOf Masked.PE x w)
-        (vs x w ν (finCoins x ops)) (Masked.UE.tape x t).1
+        (vs x w ν (finCoins x ops) (finS.seenOf x t)) (Masked.UE.tape x t).1
         (swExeOf (Masked.tabC Masked.PE x) (Masked.czExe Masked.PE x (finCoins x ops)) (Masked.wtOf Masked.PE x w)
-          (vs x w ν (finCoins x ops)) (Masked.UE.tape x t).1 (Masked.UE.tape x t).2.1) ⟨i, hi⟩).leaves0 := h0
+          (vs x w ν (finCoins x ops) (finS.seenOf x t)) (Masked.UE.tape x t).1 (Masked.UE.tape x t).2.1) ⟨i, hi⟩).leaves0 := h0
   have hc : ∀ c₁ c₂ : ∀ j, ((Masked.tabC Masked.PE x j).T (Masked.czExe Masked.PE x (finCoins x ops) j)).tab.Cut,
       (c₁ ⟨i, hi⟩).leaves0 = (c₂ ⟨i, hi⟩).leaves0 →
         Masked.leafAt Masked.PE x (Masked.czExe Masked.PE x (finCoins x ops)) c₁ ⟨i, hi⟩ =
@@ -168,7 +204,7 @@ theorem finCommits_of (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     rw [hl']
     show FlockComplete.flat (cmOf i).cap = l0.root
     rw [Loop.level0Of_root hl', hin, Masked.root_linkIn x w t (Masked.czExe Masked.PE x (finCoins x ops))
-      (vs x w ν (finCoins x ops)) ⟨i, hi'⟩, (hcm i).2, finSrc_leaf0 vs x w ν t ops hi']
+      (vs x w ν (finCoins x ops) (finS.seenOf x t)) ⟨i, hi'⟩, (hcm i).2, finSrc_leaf0 vs x w ν t ops hi']
     have e : lvAt i = Masked.lv0 x ⟨i, hi'⟩ := by
       show schs[i]!.1.levels.getD 0 default = _
       rw [hschs ⟨i, hi'⟩]

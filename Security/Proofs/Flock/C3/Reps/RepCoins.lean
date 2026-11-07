@@ -1,6 +1,20 @@
-import Proofs.Flock.C3.Reps.RepsRead
-import Proofs.Flock.C3.Reps.Vals
-import Proofs.Flock.Soundness.Assumptions.Inner
+module
+
+public import Proofs.Flock.C3.Reps.RepsRead
+public import Proofs.Flock.C3.Reps.Vals
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The reps' coins at `repsOfVals`, from the inner session's records
@@ -14,6 +28,8 @@ coins are the round's coordinate (`CoinsEncoded`).
 `repRoundsHeld_of_rounds`: `RepRoundsHeld` by definition at reps whose rounds are the record's (`heldRounds`).
 `capRead_vals`: `CapRead` at values whose cap is one constant.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

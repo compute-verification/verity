@@ -1,8 +1,42 @@
+module
+
+public import Proofs.Flock.Claims.ZK.FramePass
+public import Proofs.Flock.Claims.ZK.FrameProg
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.FrameOwn
-import Proofs.Flock.Claims.ZK.FramePass
-import Proofs.Flock.Claims.ZK.FrameLoop
-import Proofs.Flock.Claims.ZK.FrameProg
 import Proofs.Flock.Soundness.Refine.Arith
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # What the frame takes at the inner proof's rounds
@@ -27,6 +61,8 @@ At the inner proof's rounds the frame fixes every frame and value it computes fr
   but `hO`, the placeholder's pad row within a `u64`'s count (`hRow`) and `L₀`'s round at the inner proof's round 0
   the firewall's own at some `final_c'` (`hL0`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -321,6 +357,7 @@ theorem sqOk_of {c : Cfg} {xb : ByteArray} {n : ℕ} (p : ℕ) {o : ByteArray} {
   rw [innerOwn_owed]
   exact hi k hk'
 
+-- `split` and `cases` at every branch of `roundFree`'s unfolded body
 set_option maxHeartbeats 1000000 in
 /-- **A round the frame takes ends in its squeeze** (`SqOk`): `roundFree`'s loop returns only there. -/
 theorem roundFree_sq {c : Cfg} {s : Masker} {xb : ByteArray} {n : ℕ} {q : ByteArray × Masker × Array ℕ}
@@ -496,6 +533,7 @@ theorem label_inner_some (c : Cfg) (s : Masker) {j : ℕ} (hs : s.inner = some j
     exact (label_inner_twice c s hs h).elim
   · rw [Sched.label_inner c s b hb h, hs]
 
+-- `split` and `cases` at every branch of `roundFree`'s unfolded body
 set_option maxHeartbeats 1000000 in
 /-- **Inside the inner proof a round the frame takes keeps the inner proof's count.** -/
 theorem roundFree_inner_some {c : Cfg} {s : Masker} {xb : ByteArray} {n j : ℕ} {q : ByteArray × Masker × Array ℕ}
@@ -1481,6 +1519,7 @@ theorem ofLoop_progChecks_own (T : ZKMal.CoinLayer.TableData)
     · cases hA
   rw [ofLoop_frameAnswer_same T L₀ real x ρ (m0, r0) h1 hx (by rw [← hcs1, List.length_map] at hq1; exact hq1) hj,
     hcs1] at hF
+  replace hF := (bind_rankStop_ok hF).1
   have hsch : schedOf (real x w ρ) x cs = none :=
     schedOf_none (real x w ρ) x cs hx hq1 (by rw [hk1]; exact hreal) (by rw [hk1, hj]; exact hrs0)
       (by rw [hj]; exact hle)

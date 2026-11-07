@@ -1,4 +1,13 @@
-import Proofs.Flock.Soundness.TmplSplitOk
+module
+
+public import Proofs.Flock.Soundness.TmplSplitOk
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.TmplFoldDef
+import Proofs.Flock.Soundness.TmplFoldRef
+import Std.Data.HashMap.Lemmas
 
 /-!
 # Every walk means its class's
@@ -7,6 +16,8 @@ import Proofs.Flock.Soundness.TmplSplitOk
   copies' `refVal`s (`callVal`), for an explicit and a summed class.
 - `walk_ok`: by induction on the depth, every walk's table means its class's (`WalkOk`).
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl FlockLevel3 GF128 Std
 

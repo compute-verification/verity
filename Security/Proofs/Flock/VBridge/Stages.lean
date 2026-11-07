@@ -1,7 +1,22 @@
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.VBridge.InnerAccepts
-import Proofs.Flock.Soundness.Refine.RepConverse
-import Proofs.Flock.VBridge.Full
+module
+
+public import Proofs.Flock.Soundness.Refine.RepConverse
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.Full
+public import Proofs.Flock.VBridge.InnerAccepts
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # VBridge G item 5: `StagesAccept` from one table's files and both reps' runs
@@ -22,6 +37,8 @@ From them, `Refine.verifyRep_of_checks` makes both reps' checks accept with the 
 `InnerAccepts.inner_accepts_of_reps` makes `flockInnerCL` accept the inner transcript.
 -/
 
+@[expose] public section
+
 namespace FlockVBridge.Stages
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.Discharge.Exec
@@ -34,7 +51,7 @@ local notation "𝔽" => FlockLevel3.GF128
 structure TableFiles (cls : HClass) where
   spec : SessionSpec
   st : Setup
-  sess : Session
+  sess : RunRecord
   sch : Flock.Schedule
   pts : Fin 2 → Fin cls.mPts → 𝔽
   i : ℕ

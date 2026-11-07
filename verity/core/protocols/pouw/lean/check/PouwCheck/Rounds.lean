@@ -1,7 +1,6 @@
-import PouwWindow.Rounds
-import PouwCheck.Inputs
-import PouwCheck.Pass
-import SampledProofs.ChallengerSession
+module
+
+public import PouwCheck.Pass
 
 /-!
 # A live window's salt and round coins (`core_check.py`, "a live window's salt and round coins")
@@ -31,6 +30,8 @@ ones the session's log shows the challenger received, in order. A refusal is `co
 rule's, in the challenger's words) or `rounds` (the roots or the openings not lists of their kind, or roots the
 challenger didn't receive), with Python's words.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 

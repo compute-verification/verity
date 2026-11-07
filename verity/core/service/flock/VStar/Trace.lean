@@ -1,5 +1,6 @@
-import Flock.HmRow
-import VStar.In
+module
+
+public import VStar.In
 
 /-!
 # The trace assigner: the witness the deployed C-Flock prover assigns a part's circuit at its port inputs
@@ -25,6 +26,8 @@ import VStar.In
 slot other than a row's (a tail, which `converge` would iterate). `digests` is what the difftest compares
 (`flock-trace`, `vstar-trace`): each block's and each range's SHA-512 of its bits packed eight to a byte, low bit first.
 -/
+
+@[expose] public section
 
 namespace VStar.Trace
 

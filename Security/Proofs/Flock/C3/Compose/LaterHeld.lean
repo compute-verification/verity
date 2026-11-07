@@ -1,4 +1,20 @@
-import Proofs.Flock.C3.Compose.HoloStageCoins
+module
+
+public import Proofs.Flock.C3.Compose.HoloStageCoins
+public import Proofs.Flock.C3.Reps.RepCoins
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `LaterCoins` from the inner session's records
@@ -12,6 +28,8 @@ record's points are the map's at the first coin) where the map's points are the 
 `stageHeld_repsOfVals`: the reps' stages are `StageHeld` at `repsOfVals`, rep 0's from round 1 and rep 1's after it,
 from their rounds' custody (`RepRoundsHeld`) and draws (`RepsDrawn`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 
@@ -83,7 +101,7 @@ theorem linkPoints_of_custody {Cm P : Type} {t : List (Cm × ((k : Fin r) → CT
     {wr : List (Cm × ((k : Fin r) → CT k)) → Lean.Json × String}
     {held : Lean.Json × String → Except String Flock.RecVStar.InnerCommits} {sparse : Option Flock.RecSparse.Shape}
     {m : InnerRecordMap Cm ((k : Fin r) → CT k)} {pts : Array (Array Flock.F128) → P} {spec : Flock.SessionSpec}
-    {sess : Flock.Session} {u : P}
+    {sess : Flock.RunRecord} {u : P}
     (hcus : InnerRecordCustody wr held sparse m) (henc : PointsEncoded pts m.points)
     (hdec : Flock.Record.decode spec (wr t).2 = .ok sess) (hu : pts sess.points = u) (hr : 0 < r)
     (ht : 0 < t.length) : (coinSteps CT 0 (t.map Prod.snd)).head? = some ⟨P, u⟩ := by

@@ -1,6 +1,50 @@
-import Proofs.Flock.Claims.Recursion.InnerAtCoins
-import Proofs.Flock.Claims.Recursion.InnerSetupSame
-import Proofs.Flock.Claims.Bridge.Custody
+module
+
+public import Proofs.Flock.Claims.Recursion.InnerAtCoins
+public import Proofs.Flock.Claims.Recursion.InnerSetupSame
+import all Init.Data.Array.Basic
+import all Lean.Data.Json.Basic
+import all Lean.Data.Json.FromToJson.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.VStarList.Accepts
+import Proofs.Flock.Claims.Recursion.DeployHonest
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.InnerForm
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.RestLens
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
 /-!
 # Check 5's extra claims and comb are the deployed table's
@@ -17,6 +61,8 @@ points, which are `pointsOf` the first coin:
 * the record decodes at a spec of two points of the files' `m_pts`, whatever full draw it carries (`drawnSpec_shape`),
   as the deployed spec (`innerSetup_same`), so its points are `pointsOf` the first coin (`points_of_flat`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.InnerExtras
 
@@ -141,7 +187,7 @@ theorem getArr_ok {q : Lean.Json} {a : Array Lean.Json} (h : q.getArr? = .ok a) 
 /-- **The inner session's record's link points are the coin server's**: `RecVStar.innerLink` reads the record's
 `link.points` as hex coins and refuses them unless they are the transcript's (`lk.points`). -/
 theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.InnerLink} {j l : Lean.Json}
-    (hj : Lean.Json.parse record = .ok j) (hl : j.getObjVal? "link" = .ok l)
+    (hj : Flock.JsonParse.parse record = .ok j) (hl : j.getObjVal? "link" = .ok l)
     (h : RecVStar.innerLink tr record = .ok lk) :
     ∃ rp, l.getObjValAs? (Array (Array String)) "points" = .ok rp ∧
       List.Forall₂ (fun xs pt => List.Forall₂ (fun s y => f128OfHex s = .ok y) xs.toList pt.toList)
@@ -166,9 +212,9 @@ theorem innerLink_points {tr : Lean.Json} {record : String} {lk : RecVStar.Inner
   exact (Claims.Bridge.Custody.mapM_forall₂ hmap').imp fun _ _ hx => mapError_forall₂ hx
 
 /-- **The decoded link points are the record's `link.points`, read as `innerLink` reads them.** -/
-theorem held_eq {spec : SessionSpec} {text : String} {sess : Session} {j l : Lean.Json}
+theorem held_eq {spec : SessionSpec} {text : String} {sess : RunRecord} {j l : Lean.Json}
     {rp : Array (Array String)} {pts : Array (Array F128)}
-    (hdec : Record.decode spec text = .ok sess) (hj : Lean.Json.parse text = .ok j)
+    (hdec : Record.decode spec text = .ok sess) (hj : Flock.JsonParse.parse text = .ok j)
     (hl : j.getObjVal? "link" = .ok l) (hrp : l.getObjValAs? (Array (Array String)) "points" = .ok rp)
     (hh : List.Forall₂ (fun xs pt => List.Forall₂ (fun s y => f128OfHex s = .ok y) xs.toList pt.toList)
       rp.toList pts.toList) :
@@ -228,7 +274,8 @@ that proves every unit in order (the only one `drawnSpec` takes) at the drawn st
 (`drawn_same`). -/
 theorem drawnSpec_shape {f : RecCoins.Files} {spec' : SessionSpec} {st' : Stmt} {specD : SessionSpec}
     (h : f.drawnSpec spec' st' = .ok specD)
-    (hst' : Stmt.setupHidden RecCoins.innerTags f.circuit f.pub Coins.os [] none (some f.partition) none = .ok st')
+    (hst' : Stmt.setupHidden RecCoins.innerTags f.circuit f.pub RecVStar.innerTree [] none (some f.partition) f.program =
+      .ok st')
     (hspec : spec' = st'.spec) : specD.points = 2 ∧ specD.mPts = st'.mPts := by
   unfold RecCoins.Files.drawnSpec RecCoins.drawnSpec at h
   cases hr : RecCoins.recordDraw f.record with
@@ -336,13 +383,15 @@ theorem staged_extrasR {b : Brings} {Bk : Msg → ℕ} {s : ℕ} {x : Msg} {c : 
     load_extras (hload : RecCoins.Inner.load _ _ = .ok inn)
   -- the files' statement, the deployed one as the algebra reads it
   obtain ⟨f0, spec', st', s0, specS, stS, hfs0, hstm, hset', -, -, hex, -, hpts2, hmpts⟩ := innerSetup_same hr ha
-  have hf0 : f0 = ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw)⟩ := by
+  have hf0 : f0 = ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw),
+      r.innerRaw.program⟩ := by
     rw [filesOf, hpj] at hfs0
     simp only [Option.map_some, Option.some.injEq, RecCoins.Source.files.injEq] at hfs0
     exact hfs0.symm
   subst hf0
   have hstL' : RecCoins.Files.stmt "the inner session"
-      ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw)⟩ =
+      ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw),
+      r.innerRaw.program⟩ =
         .ok (specL, stL) :=
     stmt_unit (u' := "the inner session") hstL
   rw [hstm] at hstL'
@@ -409,13 +458,15 @@ theorem staged_comb {b : Brings} {s : ℕ} {x xO : Msg} {c : ℕ → Coin} {st0 
   have hload' : RecCoins.Inner.load unit f' = .ok inn := hload
   obtain ⟨specL, stL, hstL, -, -, hcomb⟩ := load_fields hload'
   obtain ⟨f0, spec', st', s', spec, st, hfs0, hstm, hset, -, -, -, hfold, -, -⟩ := innerSetup_same hr ha
-  have hf0 : f0 = ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw)⟩ := by
+  have hf0 : f0 = ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw),
+      r.innerRaw.program⟩ := by
     rw [filesOf, hpj] at hfs0
     simp only [Option.map_some, Option.some.injEq, RecCoins.Source.files.injEq] at hfs0
     exact hfs0.symm
   subst hf0
   have hstL' : RecCoins.Files.stmt "the inner session"
-      ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw)⟩ =
+      ⟨r.innerRaw.circuit, r.innerRaw.publicFile, pj, "", none, some (innerFormOf r.innerRaw),
+      r.innerRaw.program⟩ =
         .ok (specL, stL) :=
     stmt_unit (u := unit) (by rw [← hstL, hfs unit]; rfl)
   rw [hstm] at hstL'

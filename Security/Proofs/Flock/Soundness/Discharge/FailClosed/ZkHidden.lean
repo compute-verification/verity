@@ -1,6 +1,31 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.ZkHidden
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyStmt
+import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundStmt
 
 /-!
 # The hidden-output `--zk` headlines, over what flock-verify accepts
@@ -17,6 +42,8 @@ one table (`hn`); `zk_session_soundHJ` covers every number of tables. Zero knowl
 table's setup (`DrawSetupZHJ.avoidsMask`): `verify --zk` refuses a statement whose Δ or regions meet the mask slot
 (`Zk.maskFree`, D12). The `ZkHidden` headlines remain, as lemmas.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 
@@ -45,7 +72,7 @@ theorem ScopeZ.parseHG {I : Inputs} (h : ScopeZ I) (hh : I.tags.hiddenOutputs = 
   cases ht : (circC (zkTags I) I).tmpl with
   | none => rfl
   | some tu =>
-    obtain ⟨-, -, -, -, -, -, -, -, -, hw⟩ := Checks.templated h ht
+    obtain ⟨-, -, -, -, -, -, -, -, hw⟩ := Checks.templated h ht
     rw [hw] at hf
     cases hf
 

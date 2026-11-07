@@ -1,5 +1,8 @@
-import Definitions.Accounting.Guarantees.TS
-import Proofs.Pouw.RelativeSecurity
+module
+
+public import Definitions.Accounting.Guarantees.TS
+public import Proofs.Pouw.RelativeSecurity
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # Binding from the fork form
@@ -12,6 +15,8 @@ the reference opening has the most, `n_*`, so `x`'s moved continuations are `n â
 at most the forked mass. Sums over continuations are sums over paths because `(x, z) â†¦ (splice w x z, splice w z x)`
 is an involution (`splice_swap`, `sum_splice`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS
 

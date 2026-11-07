@@ -1,7 +1,7 @@
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Fintype.Sum
-import Mathlib.Data.Fintype.Prod
-import Definitions.Pouw.Fp8Atom.H1T
+module
+
+public import Mathlib.Data.Fintype.Pi
+public import Definitions.Pouw.Fp8Atom.H1T
 
 /-!
 # H-1T's named assumptions
@@ -19,6 +19,8 @@ import Definitions.Pouw.Fp8Atom.H1T
   flip separates them) and Simulated for `R` words (pair frequencies at most 0.375). `census` does not measure
   it.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 

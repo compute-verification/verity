@@ -1,18 +1,30 @@
-"""build.sh's gate on pearl_c_sm90.cubin: ptxas's report and cuobjdump's SASS.  Refuses (exit 1, the reasons on stderr) on a
-ptxas warning or serialized wgmma, a stack frame, a spill or local memory, and on any kernel whose tensor-core instructions
-aren't the intended ones: the FP8 atom as QGMMA.64xNx32.F32.E4M3.E4M3 at the kernel's N in the counts `WANT` states (and
-`WINDOW_ATOMS`' A'F_B atoms at N = 32), the peel as HGMMA.64xNx16.F32.BF16, no other MMA.  (The .FTZ and FP32 MUFU gate is the harness's, benchmarks/pouw/harness/sass_gate.py.)
+"""build.sh's gate on pearl_c_sm90.cubin: ptxas's report and cuobjdump's SASS, through the harness's `mma_gate`
+(benchmarks/pouw/harness/sass_gate.py, which also holds the .FTZ and FP32 MUFU gate).  Refuses (exit 1, the reasons on
+stderr) on a ptxas warning or serialized wgmma, a stack frame, a spill or local memory (but `LOCAL_OK`'s), and on any kernel
+whose tensor-core instructions aren't the intended ones: the FP8 atom as QGMMA.64xNx32.F32.E4M3.E4M3 at the kernel's N in
+the counts `WANT` states (and `WINDOW_ATOMS`' A'F_B atoms at N = 32), the peel as HGMMA.64xNx16.F32.BF16, no other MMA.
 
   python3 sass_gate.py PTXAS_TXT SASS_TXT OUT_JSON
 """
 
 from __future__ import annotations
 
-import json
-import re
+import importlib.util
 import sys
+from pathlib import Path
 
-MMA = re.compile(r"\b([QHOIU]MMA|[QH]GMMA|UTC\w*MMA)(\.[\w.]+)?")
+
+def _harness():
+    name = "pouw_harness_sass_gate"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(name, Path(__file__).resolve().parents[1] / "harness" / "sass_gate.py")
+        sys.modules[name] = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sys.modules[name])
+    return sys.modules[name]
+
+
+H = _harness()
+COUNTS = {op: rf"\b{op}\b" for op in ("LDL", "STL", "UTMALDG", "SYNCS", "F2FP")}
 
 
 def qgmma(n: int) -> str:
@@ -41,71 +53,40 @@ LOCAL_OK = {"s512_rows": (16, "hash_h3.cuh's reference row digest (PEARLC_SHA=re
                                "sm_90a, r20261023-065436-805b")}
 
 
+def _atom(name: str, form: str, r: dict) -> bool:
+    n = WANT.get(name, (0,))[0]
+    key = ("QGMMA" if n and form == qgmma(n) else "HGMMA" if n and form == hgmma(n)
+           else "QGMMA_window" if name in WINDOW_ATOMS and form == qgmma(32) else None)
+    if key:
+        r[key] += 1
+    return key is not None
+
+
+def _check(name: str, r: dict) -> list[str]:
+    n, q, h = WANT.get(name, (0, 0, 0))
+    got, out = r.get("QGMMA", 0), []
+    if (got < q or (q and got % q) or (not q and got)) or r.get("HGMMA", 0) != h:
+        out.append(f"{name}: {got} {qgmma(n)}, {r.get('HGMMA')} {hgmma(n)} (want a multiple of {q}, and {h})")
+    if r.get("QGMMA_window", 0) != WINDOW_ATOMS.get(name, 0):
+        out.append(f"{name}: {r.get('QGMMA_window', 0)} {qgmma(32)} for A'F_B's window (want {WINDOW_ATOMS.get(name, 0)})")
+    return out
+
+
 def gate(ptxas: str, sass: str) -> tuple[dict, list[str]]:
-    problems = [line for line in ptxas.splitlines() if re.search(r"warning|error|C751\d|serializ", line, re.I)]
-    funcs: dict[str, dict] = {}
-    for m in re.finditer(r"Compiling entry function '(\w+)' for 'sm_90a'(.*?)(?=Compiling entry function|\Z)", ptxas, re.S):
-        body = m.group(2)
-        frame = re.search(r"(\d+) bytes stack frame, (\d+) bytes spill stores, (\d+) bytes spill loads", body)
-        smem = re.search(r"(\d+) bytes smem", body)
-        funcs[m.group(1)] = {"regs": int(re.search(r"Used (\d+) registers", body).group(1)), "stack": int(frame.group(1)),
-                             "spill_stores": int(frame.group(2)), "spill_loads": int(frame.group(3)),
-                             "static_smem": int(smem.group(1)) if smem else 0}
-    cur, ops = None, ("LDL", "STL", "UTMALDG", "SYNCS", "F2FP")
-    for line in sass.splitlines():
-        fm = re.search(r"Function : (\w+)", line)
-        if fm:
-            cur = fm.group(1)
-            funcs.setdefault(cur, {}).update({op: 0 for op in ops} | {"QGMMA": 0, "HGMMA": 0, "QGMMA_window": 0, "other_mma": []})
-            continue
-        if not cur:
-            continue
-        for op in ops:
-            if re.search(r"\b" + op + r"\b", line):
-                funcs[cur][op] += 1
-        n = WANT.get(cur, (0,))[0]
-        for mm in MMA.finditer(line):
-            form = mm.group(0)
-            if n and form == qgmma(n):
-                funcs[cur]["QGMMA"] += 1
-            elif n and form == hgmma(n):
-                funcs[cur]["HGMMA"] += 1
-            elif cur in WINDOW_ATOMS and form == qgmma(32):
-                funcs[cur]["QGMMA_window"] += 1
-            else:
-                funcs[cur]["other_mma"].append(form)
-    for name, r in funcs.items():
-        bound = LOCAL_OK.get(name, (0,))[0]
-        if max(r.get("stack", 0), r.get("spill_stores", 0), r.get("spill_loads", 0)) > bound or \
-                (not bound and (r.get("LDL") or r.get("STL"))):
-            problems.append(f"{name}: local memory {r}")
-        n, q, h = WANT.get(name, (0, 0, 0))
-        if r.get("other_mma"):
-            problems.append(f"{name}: MMA forms other than {qgmma(n)} and {hgmma(n)}: {sorted(set(r['other_mma']))}")
-        got = r.get("QGMMA", 0)
-        if (got < q or (q and got % q) or (not q and got)) or r.get("HGMMA", 0) != h:
-            problems.append(f"{name}: {got} {qgmma(n)}, {r.get('HGMMA')} {hgmma(n)} (want a multiple of {q}, and {h})")
-        if r.get("QGMMA_window", 0) != WINDOW_ATOMS.get(name, 0):
-            problems.append(f"{name}: {r.get('QGMMA_window', 0)} {qgmma(32)} for A'F_B's window (want {WINDOW_ATOMS.get(name, 0)})")
-    missing = sorted(set(WANT) - set(funcs))
-    if missing:
-        problems.append(f"kernels missing from the cubin: {missing}")
-    return funcs, problems
+    n = lambda name: WANT.get(name, (0,))[0]  # noqa: E731
+    return H.mma_gate(ptxas, sass, WANT, arch="sm_90a", smem=True, local_ok={k: v[0] for k, v in LOCAL_OK.items()},
+                      record={**dict.fromkeys(COUNTS, 0), "QGMMA": 0, "HGMMA": 0, "QGMMA_window": 0, "other_mma": []},
+                      counts=COUNTS, atom=_atom, allowed=lambda name: f"{qgmma(n(name))} and {hgmma(n(name))}", check=_check)
 
 
 def main(argv: list[str]) -> int:
     ptxas, sass, out = argv[1:4]
-    funcs, problems = gate(open(ptxas).read(), open(sass).read())
-    json.dump({"want": {k: list(v) for k, v in WANT.items()}, "local_ok": LOCAL_OK, "kernels": funcs, "problems": problems},
-              open(out, "w"), indent=1)
-    if problems:
-        print("REFUSED: " + "; ".join(problems), file=sys.stderr)
-        return 1
-    print(f"pearl_c_sm90.cubin: {len(funcs)} kernels; " + ", ".join(
+    funcs, problems = gate(Path(ptxas).read_text(), Path(sass).read_text())
+    return H.write_verdict(out, {"want": {k: list(v) for k, v in WANT.items()}, "local_ok": LOCAL_OK, "kernels": funcs,
+                                 "problems": problems}, problems, lambda: f"pearl_c_sm90.cubin: {len(funcs)} kernels; " + ", ".join(
         f"{n} {funcs[n]['regs']} regs {funcs[n]['QGMMA']} QGMMA" + (f" {funcs[n]['HGMMA']} HGMMA" if funcs[n]["HGMMA"] else "")
         for n in ("gemm_plain", "gemm_ct", "gemm_pearlc", "gemm_pearlc_n64", "gemm_pearlc_d", "gemm_words", "form_s5"))
         + f"; no local memory but {sorted(LOCAL_OK)}'s")
-    return 0
 
 
 if __name__ == "__main__":

@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Recursion.LastBindsDeployed
-import Proofs.Flock.Claims.KS.ConflictTied
-import Proofs.Flock.Claims.KS.RoundsN
+module
+
+public import Proofs.Flock.Claims.Recursion.LastBindsDeployed
+public import Proofs.Flock.Claims.KS.ConflictTied
+public import Proofs.Flock.Claims.KS.RoundsN
 
 /-!
 # The deployed plain verifier binds its last message's columns
@@ -20,11 +22,13 @@ columns (`RecDeploy.PlainColsBind`), or in the decision's calls (`RecDeploy.Plai
 
 The calls half compares the two decisions' calls as sets: `Record.decodeWith` hashes the rounds in the
 record's own stream order, which only S11's count and names constrain, so two records that list the streams in two
-orders are accepted with permuted calls and no collision (`note:proofs/20261020T0132Z-finding-rec2-calls-as-lists`).
+orders are accepted with permuted calls and no collision.
 It holds at SHA-512 (`RecDeploy.plainCallsBindOrSlack_sha512`, in `CallsOfProofs`).
 `RecDeploy.plainLastBinds_sha512_of_calls` reduces `PlainLastBinds` to it and `CanonicalProofFiles`, and
 `RecDeploy.lastBindsEC_deployed_sha512` gives (P4) at the deployed bound record from the same two.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 

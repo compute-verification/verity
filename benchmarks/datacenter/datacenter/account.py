@@ -202,7 +202,7 @@ class Account:
 def _boundary_rate(dc: Datacenter, block: str) -> float:
     """Bits a second the block's certified boundary links carry, one direction (each link is full duplex)."""
     return sum(float(l.capacity) for l in dc.boundary if block in
-               {getattr(dc.block_of(l.a), "name", None), getattr(dc.block_of(l.b), "name", None)})
+               {getattr(dc.zone_of(l.a), "name", None), getattr(dc.zone_of(l.b), "name", None)})
 
 
 def _sample(profile: Profile, c: Held) -> float:
@@ -239,7 +239,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
             located[c.store] = [] if regen_time(dc, s, bits) <= deadline else [
                 d.name for d in dc.devices.values() if d.memory is not None and float(d.memory) >= c.bits
                 and answer_time(dc, c.by, s.device, d.name, bits) <= deadline]
-            rejoined = c.during.start >= back.get(getattr(dc.block_of(s.device), "name", None), epoch.start)
+            rejoined = c.during.start >= back.get(getattr(dc.zone_of(s.device), "name", None), epoch.start)
             if s.content == "labels" and located[c.store] == [s.device] and rejoined:
                 filled[s.device] = max(filled[s.device], min(s.bits, fill_rate(dc, s.device) * deadline))
 
@@ -247,7 +247,7 @@ def account(claims: list[Claim], profile: Profile, assume: tuple[Assumption, ...
     for c in claims:
         if isinstance(c, Read) and inside(c) and c.store not in refused_stores:
             device = profile.stores[c.store].device
-            if (b := dc.block_of(device)) is not None:
+            if (b := dc.zone_of(device)) is not None:
                 reads[b.name] += c.bits
                 reads_local[b.name] += max(c.bits - into(dc, device) * dc.cadence.seconds(c.during.length), 0.0)
 

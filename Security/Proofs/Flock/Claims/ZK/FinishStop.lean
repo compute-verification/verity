@@ -1,5 +1,45 @@
-import Proofs.Flock.Claims.ZK.PadFree
-import Proofs.Flock.Claims.ZK.FinishRep
+module
+
+public import Batteries.Data.ByteArray
+public import Flock.Firewall.Finish
+public import Proofs.Flock.Claims.ZK.FinishRep
+public import Proofs.Flock.Claims.ZK.PadFree
+public import Proofs.Flock.Claims.ZK.Worker
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FinishInner
+import Proofs.Flock.Soundness.Refine.Arith
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The firewall's stop at a worker's values
@@ -11,14 +51,16 @@ worker's rows hold (`Table.RowsAt`), so the switched view is the worker's own (`
 * `failingOn_eq_empty_iff`: no constraint fails on the pads exactly where each vanishes there (`linAt`).
 * `rowsOf_castAdd`: the first seven of rep `r`'s rows read no triple input `(ρ, σ)`.
 * **`rowsAt_of_rows`**: where the first seven rows vanish at a worker's clear values at zero pads, for both reps, at the
-  mask slot `u` and the extra lanes `R`, its rows hold there at every pad: the residual at every draw through `(u, R)`
+  mask slot `u` and level 0's hiding `V`, its rows hold there at every pad: the residual at every draw through `(u, V)`
   is the rows' batch at the clear values (`resid_padFree`), and the triple's rows vanish at zero pads (`triple_zero`).
 * **`noFail_iff_rows`**: at constraints whose forms are rep `r`'s first seven rows on the masked values `v' = v + h`,
   each on the layout's length, at pads with `h_ab = h_fa·h_fb` and `h_tw = h_tx·h_ty`, the firewall's stop does not
   fire on the pads exactly where those rows vanish at the clear values at zero pads (`rows_padFree`). The stop bit is
-  `1[some row fails at v]`, a function of the witness, the worker's values, the mask slot and the extra lanes, never of
+  `1[some row fails at v]`, a function of the witness, the worker's values, the mask slot and level 0's hiding, never of
   the pads.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 
@@ -87,18 +129,19 @@ theorem noFail_iff_rows {mPts : ℕ} (Tz : TabZK 𝔽 mPts) (st : Stmt) (c : Coi
 variable (P : LigProver) {mPts : ℕ}
 
 /-- **A worker's rows hold where they vanish at its clear values**: where the first seven of each rep's rows vanish on
-the worker's clear values at the mask slot `u` and the extra lanes `R`, at zero pads, the rows hold at `(u, R)` at every
-pad (`Table.RowsAt`). -/
+the worker's clear values at the mask slot `u` and level 0's hiding `V`, at zero pads, the rows hold at `(u, V)` at
+every pad (`Table.RowsAt`). -/
 theorem rowsAt_of_rows (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
-    ∀ c p (u : (C.T c).tab.onVals.Mask) (R : (C.T c).tab.onVals.XLanes),
-      (∀ (r : Fin 2) (k : Fin 7), (rowsOf Tz st c r ((C.T c).tab.onVals.vals r p u R)
+    ∀ c p (u : (C.T c).tab.onVals.Mask) (V : (C.T c).tab.onVals.Vis),
+      (∀ (r : Fin 2) (k : Fin 7), (rowsOf Tz st c r ((C.T c).tab.onVals.vals r p u V)
           ((C.T c).tab.onVals.nu p + (C.T c).tab.onVals.maskHom u)
-          (∑ col, (C.T c).tab.onVals.y1' p u R r col * bFold Tz st c r col.val) (0, 0) (Fin.castAdd 3 k)).eval 0 = 0) →
-      (C.T c).tab.onVals.RowsAt p u R := by
-  intro C c p u R h ω hu hR r
+          (∑ col, (C.T c).tab.onVals.y1' p u V.2.1 r col * bFold Tz st c r col.val) (0, 0) (Fin.castAdd 3 k)).eval 0 =
+          0) →
+      (C.T c).tab.onVals.RowsAt p u V := by
+  intro C c p u V h ω hu hV r
   have e := resid_padFree P Tz st c r p ω
-  rw [hu, hR] at e
+  rw [hu, hV] at e
   refine sub_eq_zero.mp (e.trans (Finset.sum_eq_zero fun k _ => ?_))
   refine Fin.addCases (fun k => ?_) (fun k => ?_) k
   · rw [h r k, mul_zero]

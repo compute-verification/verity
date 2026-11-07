@@ -1,21 +1,18 @@
-"""The FP8 vocabulary: which blockwise GEMM Definition a scale construction binds (`registry.fp8`'s v1 and v3 forms), the capture
+"""The FP8 vocabulary: which blockwise GEMM Definition a scale construction binds (`registry.fp8`'s shared-scale forms), the capture
 mapping's call names of the FP8 serving port, and the fused-MoE config under batch invariance (`registry.fp8_moe`)."""
 from __future__ import annotations
 
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import hopper as H
-from verity.ml.definitions.registry.fp8 import (
-    ScaledMmFp8Block, ScaledMmFp8BlockSharedScale, ScaledMmFp8BlockSharedScaleV3, ScaledMmFp8BlockV3,
-)
+from verity.ml.definitions.registry.fp8 import ScaledMmFp8BlockSharedScale, ScaledMmFp8BlockSharedScaleV3
 
 
-#: each restated GEMM by the Definition it restates (bound instead under `fp8_scale_construction = shared-per-block`)
+#: each restated GEMM by the Definition it restates (bound in its place under `fp8_scale_construction = shared-per-block`)
 SHARED_SCALE = {"ScaledMmFp8Block_v1": ScaledMmFp8BlockSharedScale}
 
 
 #: the blockwise GEMM's Definition by `fp8_scale_construction`: the v1 forms (Hopper's step as written) and the v3 forms over a step
-BLOCK_GEMMS = {None: {"per-coordinate": ScaledMmFp8Block, "shared-per-block": ScaledMmFp8BlockSharedScale},
-               "DOT": {"per-coordinate": ScaledMmFp8BlockV3, "shared-per-block": ScaledMmFp8BlockSharedScaleV3}}
+BLOCK_GEMMS = {None: {"shared-per-block": ScaledMmFp8BlockSharedScale}, "DOT": {"shared-per-block": ScaledMmFp8BlockSharedScaleV3}}
 
 
 def block_gemm(K: int, N: int, G: int, scale: str, dot=None):

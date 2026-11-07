@@ -7,28 +7,52 @@ sampled proofs, and the one record of every verdict (the block record).
                                  [--model M]
     served_verdicts.py period close SERVE_DIR [--gate CMD]
     served_verdicts.py program OUT [--model M] [--rows T] [--steps S] [--like SERVE_DIR]
-    served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME]
+    served_verdicts.py pieces --serve-run DIR --window K --out DIR [--node NAME] [--only COMPONENT]... [--skip COMPONENT]...
+                              [--product P]
     served_verdicts.py pouw SERVE_DIR WINDOW DIR [--gate CMD] [--key-sha512 HEX] [--main FILE] [--python PY]
                                 [--statements FILE] [--live-evidence FILE]
     served_verdicts.py record --serve-run DIR --window K --sampled-proofs DIR --pieces DIR --out DIR [--node NAME]
+                              [--product P]
+    served_verdicts.py public-registration REGISTRATION
+    served_verdicts.py sampled-line LOG [--partition FILE]
+    served_verdicts.py front-line SESSION
+    served_verdicts.py public-lines [--private FILE]
+    served_verdicts.py publish OUT --private DIR
+
+What leaves the node names no window and counts none of a window's own: no window's number, no count of the windows closed,
+sealed or refused, and no engine step, request count or user of one; nor a load's tokens or span (`OWN_AT`), whose tokens
+count its blocks. ``public-lines`` prints each line of stdin in its published form (`public_line`), the line in full
+appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publish`` holds each file of OUT, once the run
+is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
+its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
+verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
+registration (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
+SAMPLED-PROOFS line from the records audit's log
+(`sampled_line`: the partition the draw was over, the members it drew, and no length of the advice or count of the
+scope's members), and ``front-line`` the CERTIFIER-FRONT line from the front's session (`front_line`: `FRONT_PUBLIC`).
 
 ``window``: the sealed window to audit, from a serve-openai run's ``seals.jsonl``, ``windows.jsonl`` and ``requests.jsonl``
 (`pick`): sealed without error, its Commit passed, each of its requests checked and in no other window (V3b's window
 circuit refuses a request carried across windows), at most ``--slots`` of them (its class's); the most requests, then the
-earliest. ``--window K`` holds K to the same rules. Prints ``{window, requests, users, steps, refused}``, ``steps`` the
-window's ``[lo, hi)`` in the run's committed engine steps.
+earliest. ``--window K`` holds K to the same rules. Prints the pick (`pick`): ``{window, requests, users, steps,
+refused}``, which the run keeps in the serve dir's ``private/window.json``.
 
-``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, the bandwidth audit, PoUS, the network certifier) runs
-its piece where one is named (``POUW_CMD``, ``BANDWIDTH_CMD``, ``POUS_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
+``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, PoUS, the bandwidth audit, the network certifier) runs
+its piece where one is named (``POUW_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
 ``bash -c CMD _ SERVE_DIR WINDOW DIR``, which writes its core answer to ``DIR/answer.json``), one at a time, each within
 ``<COMPONENT>_TIMEOUT`` (else ``PIECE_TIMEOUT``, default `PIECE_TIMEOUT`), else prints a ``MISSING`` line naming it, the
-command it lacks and its owner. Each run leaves ``DIR/piece.json`` (`RAN`: the node it ran on, its exit, its limit). A piece
+command it lacks and its owner. PoUS's piece runs before the bandwidth audit's: the bandwidth session is over
+the store PoUS's piece holds, and that piece writes its answer to the bandwidth piece's ``DIR``, which ``BANDWIDTH_CMD``
+collects. Each run leaves ``DIR/piece.json`` (`RAN`: the node it ran on, its exit, its limit). A piece
 that ran but wrote no answer is its error, unless it refused to run (``DIR/refused.txt``, `REFUSED`, naming why), which
 leaves it missing; no verdict is made for a piece that didn't run. A development piece writes ``DIR/development.json``
 (`DEVELOPMENT`) in place of a core answer: its verdict is printed as a development run's, and it credits nothing. A piece
 that audited another server than the node it ran on says so in ``DIR/served.json`` (`SERVED`: ``{server, source}``,
 ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
-the node it ran on.
+the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run those pieces alone, or all but those.
+``--product`` (default onsite; served_verdicts.sh passes its PRODUCT) is the product the run composes (`block_record.PRODUCTS`): onsite's
+every subprotocol, remote's sampled proofs and PoUW alone. A piece the product drops isn't run, whatever its command,
+and prints a ``DROPPED`` line naming it.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
 (``--lane``) has a period open, which a reserve would join; prints one ``GATE`` line with the gate's latest pin and,
@@ -74,21 +98,29 @@ with each one's server) and from it the block record (``block-record.json``, `bl
 `block_record.check`), which composes only the answers about the record's node and carries the others as ``elsewhere``;
 an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
-where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
-``accept`` only when every subprotocol accepted here.
-The report's ``composed`` and the block record's ``composed.onsite`` give that verdict with its reason (`said`), one clause
+where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written. Otherwise
+the verdict is the block record's, which is the Lean ``onsite check`` or ``remote check``'s answer; no Lean check runs
+here, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line name ``pending``.
+The subprotocols are those of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
+product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and in no block record's
+``missing``, so remote's is ``pending`` with nothing missing when sampled proofs and PoUW accepted here, whatever the
+onsite pieces. The report's ``composed`` gives that verdict with its reason (`said`), one clause
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
 (`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
 record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
-with core's refusal of the window's credit. Prints one ``RECORD`` line, naming each subprotocol's verdict (the
-development piece's `DEV_VERDICT`), each missing one and why, each rejecting one, each one elsewhere, and the reason.
+with core's refusal of the window's credit. Prints one ``RECORD`` line, naming the product, each subprotocol's verdict
+(the development piece's `DEV_VERDICT`), each missing one and why, each dropped one, each rejecting one, each one
+elsewhere, and the reason.
 """
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
 import os
+import re
 import shlex
+import shutil
 import socket
 import subprocess
 import sys
@@ -105,6 +137,8 @@ for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interf
 
 #: the window report's format, kept from the all-protocols runner whose report it was
 REPORT_FORMAT = "verity/all-protocols-window/v1"
+#: the block record's verdict by the window report's name for it: ``-window/v1`` calls an undecided window pending
+WINDOW_VERDICT = {"undecided": "pending"}
 #: sampled proofs' owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
@@ -113,14 +147,13 @@ INTEGRITY_OWNER = "compute-accounting"
 PIECES: dict[str, tuple[str, str, str, str]] = {
     "work": ("PoUW", "pouw", "compute-accounting",
              "H1's credit on the served window, its coins from vy-challenger-1's gate (H1_GATE)"),
-    "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
-                  ("a remote bandwidth session over this node's registered store, against the auditor's verifier on "
-                   "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/one_stage/served_bandwidth.sh "
-                   "and this node the verifier's key and the store")),
     "space": ("PoUS", "pous", "memory-accounting",
               ("PoUS over the served model's int8 weights on the serving card, against the memory challenger on "
                "vy-auditor-2; served_verdicts.sh sets it where the tree has benchmarks/pous/served_piece.sh and this node "
                "the challenger's key")),
+    "bandwidth": ("the bandwidth audit", "bandwidth", "memory-accounting",
+                  ("PoUB-P2's session over the store the PoUS piece holds, which that piece runs (POUS_CMD, "
+                   "benchmarks/pous/served_piece.py) and BANDWIDTH_CMD collects (served_bandwidth.py collect)")),
     "communication": ("the network certifier", "certifier", "network-accounting",
                       "the network certifier in front of the serving endpoint"),
 }
@@ -214,18 +247,267 @@ def pick(serve_dir: Path, slots: int, want: int | None = None) -> dict[str, Any]
             "refused": {str(j): why for j, why in refused.items()}}
 
 
+#: A served window's own fields, never published: the windows (closed, sealed or joined), its users, its engine steps and
+#: whether its requests filled the slots, its unpadded population, its advice's length and its windows' advice by number.
+OWN = frozenset({"windows", "users", "engine_steps", "every_slot", "population", "advice_bits", "bits_by_window"})
+#: Fields that name a window or count its own where their value holds a number: the window's number, its steps, its
+#: requests' count, the windows refused. A window named ``all``, the bench Build's requests by name and a refusal's reason
+#: stay.
+NUMBERED = frozenset({"window", "steps", "requests", "refused"})
+#: A load's own fields, held by path as (parent, key), the parent the nearest key above the field through lists: the
+#: tokens of each load of `served_overhead.py metrics`' aggregate, which over a block's outputs are the exact block
+#: count, and its span. Held by path, not as bare keys, so the inference-only policy's ``n_inputs.span_s`` stays as
+#: written, and with it the policy digest its verdict cites.
+OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s")})
+#: A window's number, step range or count in text, each with what the published text says in its place
+WINDOW_TEXT = (
+    (re.compile(r'\\?"(?:%s)\\?": ?(?:-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^{}]*\}|true|false)(?:, ?)?'
+                % "|".join(sorted(OWN | NUMBERED))), ""),
+    (re.compile(r"(?<![A-Za-z0-9_])w\d+(?![A-Za-z0-9_])"), "wK"),
+    (re.compile(r"(?i)\b(windows?)([ :=#]+)\d+(?!\d|[,.]\d)"), r"\1\2K"),
+    (re.compile(r"\b\d+ ((?:sealed |closed )?window\(s\))"), r"\1"),
+    (re.compile(r"\b\d+ (sealed|closed)\b"), r"\1"),
+    (re.compile(r"(?i)\b(steps?) \[\d+, ?\d+[\])]"), r"\1"),
+    (re.compile(r"\b\d+/\d+ ok\b"), "ok"),
+)
+#: A window's number in a file's path under the published dir: the file is held whole
+NAMED = re.compile(r"(?<![A-Za-z0-9])w\d+(?![A-Za-z0-9])")
+_OPEN = re.compile(r'\{\s*"')
+_FIELD = re.compile(r'\\?"(?:%s)\\?":' % "|".join(sorted(OWN | NUMBERED)))
+_AT_KEYS = {p: "|".join(sorted(k for q, k in OWN_AT if q == p)) for p in sorted({p for p, _ in OWN_AT})}
+#: An `OWN_AT` field in text, by parent: the parent's list opening, and each of its keys holding a number inside that list
+AT_TEXT = tuple((re.compile(r'\\?"%s\\?": ?\[' % re.escape(p)),
+                 re.compile(r'\\?"(?:%s)\\?": ?-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?(?:, ?)?' % keys))
+                for p, keys in _AT_KEYS.items())
+_BRACKET = re.compile(r"[\[\]]")
+#: an `OWN_AT` field in a JSON object cut short: its parent's key, then one of its keys
+_AT_FIELD = re.compile("|".join(r'\\?"%s\\?":.*?\\?"(?:%s)\\?":' % (re.escape(p), keys) for p, keys in _AT_KEYS.items()))
+#: what a published line says in place of a JSON object cut short that names a window's or a load's own field
+CUT = "{…} (cut short; in full in the serve dir's private/verdicts.txt)"
+#: a file `publish` reads larger than this is held whole
+PUBLISH_MAX = 256 << 20
+#: The files under the published dir that `publish` leaves as they are, unread: the serve dir's declared Program, the
+#: window's class Program, which is public structure. Its JSON runs to hundreds of MB, beyond what `PUBLISH_MAX` lets
+#: `publish` read.
+PUBLIC_FILES = frozenset({"serve/h1/window-program.json.gz"})
+
+
+def _numbered(v: Any) -> bool:
+    if isinstance(v, bool):
+        return False
+    if isinstance(v, (int, float)):
+        return True
+    if isinstance(v, str):
+        return v.isdigit()
+    if isinstance(v, Mapping):
+        return any(_numbered(x) for x in (*v.keys(), *v.values()))
+    return isinstance(v, list) and any(_numbered(x) for x in v)
+
+
+def _held(key: Any, value: Any, parent: Any = None) -> bool:
+    if (parent, key) in OWN_AT:
+        return True
+    if key == "refused":
+        return not isinstance(value, str)
+    return key in OWN or (key in NUMBERED and _numbered(value))
+
+
+def _at_text(s: str) -> str:
+    """``s`` with no `OWN_AT` field in the list its parent's key opens (to the text's end where the list is cut short)."""
+    for opening, field in AT_TEXT:
+        out, i = [], 0
+        while m := opening.search(s, i):
+            end, depth = len(s), 1
+            for b in _BRACKET.finditer(s, m.end()):
+                depth += 1 if b.group() == "[" else -1
+                if not depth:
+                    end = b.end()
+                    break
+            out += [s[i:m.end()], field.sub("", s[m.end():end])]
+            i = end
+        s = "".join(out) + s[i:]
+    return s
+
+
+def public_text(s: str) -> str:
+    """``s`` with each window number, step range and window count `WINDOW_TEXT` finds in its published form, and no load's
+    own field (`OWN_AT`)."""
+    for pat, sub in WINDOW_TEXT:
+        s = pat.sub(sub, s)
+    return _at_text(s)
+
+
+def public_json(o: Any, parent: Any = None) -> Any:
+    """``o`` with no field of a window's own (`OWN`, `NUMBERED`) or of a load's (`OWN_AT`, by ``parent``, the key ``o``
+    is under) and each string in its `public_text` form."""
+    if isinstance(o, Mapping):
+        return {public_text(k) if isinstance(k, str) else k: public_json(v, k) for k, v in o.items() if not _held(k, v, parent)}
+    if isinstance(o, list):
+        return [public_json(v, parent) for v in o]
+    return public_text(o) if isinstance(o, str) else o
+
+
+def public_line(line: str) -> str:
+    """A verdict line as the run publishes it: each JSON object in it in its `public_json` form, one cut short that names a
+    window's or a load's own field replaced by `CUT` to the line's end, and the rest in its `public_text` form."""
+    dec, out, i = json.JSONDecoder(), [], 0
+    while (j := line.find("{", i)) >= 0:
+        out.append(public_text(line[i:j]))
+        try:
+            obj, end = dec.raw_decode(line, j)
+        except ValueError:
+            if _OPEN.match(line, j) and (_FIELD.search(line, j) or _AT_FIELD.search(line, j)):
+                out.append(CUT + ("\n" if line.endswith("\n") else ""))
+                return "".join(out)
+            out.append("{")
+            i = j + 1
+            continue
+        pub = public_json(obj)
+        out.append(line[j:end] if pub == obj else json.dumps(pub))
+        i = end
+    out.append(public_text(line[i:]))
+    return "".join(out)
+
+
+def public_lines(src: Any, dst: Any, private: Path | None) -> None:
+    """Each line of ``src`` in full to ``private`` (where the serve dir it's under exists) and in its `public_line` form to
+    ``dst``, line by line."""
+    keep = None
+    if private is not None and private.parent.parent.is_dir():
+        with contextlib.suppress(OSError):
+            private.parent.mkdir(mode=0o700, exist_ok=True)
+            keep = open(private, "a")
+    try:
+        for line in iter(src.readline, ""):
+            if keep is not None:
+                keep.write(line if line.endswith("\n") else line + "\n")
+                keep.flush()
+            dst.write(public_line(line))
+            dst.flush()
+    finally:
+        if keep is not None:
+            keep.close()
+
+
+def public_doc(text: str) -> str:
+    """A published file's text in its public form: a JSON document's `public_json`, else each line's `public_line`; ``text``
+    itself where nothing in it names or counts a window or holds a load's own field."""
+    try:
+        doc = json.loads(text)
+    except ValueError:
+        return "".join(public_line(x) for x in text.splitlines(keepends=True))
+    pub = public_json(doc)
+    return text if pub == doc else json.dumps(pub, indent=1) + "\n"
+
+
+def publish(out: Path, private: Path) -> list[str]:
+    """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
+    `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
+    field (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
+    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    held: list[str] = []
+    for p in sorted(out.rglob("*")):
+        if p.is_symlink() or not p.is_file():
+            continue
+        rel = p.relative_to(out).as_posix()
+        if rel in PUBLIC_FILES:
+            continue
+        dst = private / rel
+        private.mkdir(mode=0o700, parents=True, exist_ok=True)
+        dst.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        data = p.read_bytes() if p.stat().st_size <= PUBLISH_MAX else None
+        if data is None or NAMED.search(rel):
+            shutil.move(p, dst)
+            held.append(rel)
+            continue
+        text = data.decode(errors="replace")
+        if text.encode() != data:
+            shutil.move(p, dst)
+            held.append(rel)
+            continue
+        pub = public_doc(text)
+        if pub != text:
+            dst.write_bytes(data)
+            p.write_text(pub)
+            held.append(rel)
+    return held
+
+
+#: The advice registration's fields that state the advice's own length, which `public_registration` pads to the cap.
+PADDED = ("binding.advice.bits", "rows")
+
+
+def public_registration(reg: Mapping[str, Any]) -> dict[str, Any]:
+    """What the run publishes of a window's advice registration: the advice's length (`PADDED`) at its compiler's
+    ``cap_bits``, the one length the class declares (its rows at ``row_bits`` each), no count or refusal of its requests,
+    no window's number (`public_json`), and the rest as registered. ``padded`` names the fields padded."""
+    cap, row_bits = int(reg["compiler"]["cap_bits"]), int(reg["row_bits"])
+    out = {k: v for k, v in reg.items() if k not in ("requests", "compiled", "refused")}
+    out["binding"] = {**reg["binding"], "advice": {**reg["binding"]["advice"], "bits": cap}}
+    out["rows"] = -(-cap // row_bits)
+    return public_json({**out, "padded": list(PADDED)})
+
+
+def sampled_line(records: Mapping[str, Any], partition: Mapping[str, Any] | None) -> str:
+    """The SAMPLED-PROOFS line's account of the records audit's ``RECORDS`` row: what the draw was over (the partition's
+    templates, its scope's op path and law), which members it drew, and the row with no length of the advice
+    (``leak.advice_bits``) and no ``population``, the scope's unpadded member count, which counts the window's tokens. The
+    scope's ``steps``, the window's engine steps, stay on the node too."""
+    row = {k: v for k, v in records.items() if k != "population"}
+    if isinstance(row.get("leak"), Mapping):
+        row["leak"] = {k: v for k, v in row["leak"].items() if k != "advice_bits"}
+    part = partition or {}
+    scope = part.get("scope") or {}
+    over = (f"over {', '.join(part.get('templates') or ['?'])} at {scope.get('op_path_prefix', '?')} "
+            f"(law {part.get('law', '?')})")
+    drawn = f"drawn members {row.get('draw')}" if row.get("draw") is not None else "no draw"
+    return f"{over}, {drawn}: RECORDS {json.dumps(row, sort_keys=True)}"
+
+
+#: The certifier front's session fields the CERTIFIER-FRONT line says. The rest (its prompts, request, kept fetch, gate
+#: and verdict's cells) count or name the group's requests, and stay in the serve dir.
+FRONT_PUBLIC = ("rc", "run", "ended", "ended_utc", "session_s", "pinned", "leaked_removed")
+
+
+def front_line(session: Mapping[str, Any]) -> str:
+    """The CERTIFIER-FRONT line's account of the front's ``session.json``: `FRONT_PUBLIC` alone, or that it refused."""
+    if "refused" in session:
+        return "refused (its reason in the serve dir's private/certifier-front/session.json)"
+    return json.dumps({k: session[k] for k in FRONT_PUBLIC if k in session})
+
+
 def _unset(comp: str, what: str) -> str:
     return f"{comp.upper()}_CMD unset: {what}"
 
 
+def dropped_row(key: str, product: str) -> dict[str, Any]:
+    """The row of a subprotocol ``product`` drops (`block_record.PRODUCTS`, its legs being the components): not run."""
+    from verity_e2e_demo import block_record as BR
+
+    by_leg = {"integrity": NAMES["integrity"], **{v[1]: v[0] for v in PIECES.values()}, "wipe": WIPE[0]}
+    return {"verdict": "dropped", "owner": PIECES.get(key, WIPE)[2],
+            "why": f"not run: the {product} product composes {' and '.join(by_leg[x] for x in BR.PRODUCTS[product])} alone"}
+
+
 def pieces(serve_dir: Path, window: int, out: Path, env: Mapping[str, str] | None = None,
-           node: str | None = None) -> dict[str, dict[str, Any]]:
+           node: str | None = None, only: Sequence[str] | None = None, skip: Sequence[str] = (),
+           product: str = "onsite") -> dict[str, dict[str, Any]]:
     """Each piece of `PIECES` run where ``<COMPONENT>_CMD`` names it, under `timeout` at its limit, else named missing;
-    one line each on stdout, its verdict the one `piece` gives the record."""
+    one line each on stdout, its verdict the one `piece` gives the record. ``only`` and ``skip`` name components: those
+    alone, or all but those, so one piece can run beside the others (`served_verdicts.sh` starts the certifier's early).
+    A piece ``product`` drops isn't run, whatever its command (`dropped_row`)."""
+    from verity_e2e_demo import block_record as BR
+
     env = dict(os.environ if env is None else env)
     node = node or socket.gethostname()
     got: dict[str, dict[str, Any]] = {}
     for key, (name, comp, owner, what) in PIECES.items():
+        if (only is not None and comp not in only) or comp in skip:
+            continue
+        if comp not in BR.PRODUCTS[product]:
+            got[comp] = {k: v for k, v in dropped_row(key, product).items() if k != "owner"}
+            print(f"DROPPED {name} ({owner}): {got[comp]['why']}", flush=True)
+            continue
         cmd = env.get(f"{comp.upper()}_CMD")
         if not cmd:
             got[comp] = {"verdict": "missing", "why": _unset(comp, what)}
@@ -259,7 +541,7 @@ def development_line(doc: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _gate_out(gate: str, *words: str) -> bytes:
-    """The gate's answer to `words` through its command `gate`, the words one shell-quoted line as `commit_coins.Gate`
+    """The gate's answer to `words` through its command `gate`, the words one shell-quoted line as `commit_coins.ChallengerGate`
     sends them; RuntimeError naming what it said when it refuses."""
     p = subprocess.run([*shlex.split(gate), shlex.join(words)], capture_output=True, check=False)
     if p.returncode:
@@ -646,10 +928,13 @@ def _ratio(e: Fraction, deltas: Sequence[Fraction]) -> str:
 
 def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
     """What an accepted answer holds beyond its verdict: where its profile says when its weights were held and what share
-    of the checkpoint they are, those; and each δ of the block record's at which its leg's quantity is not established."""
+    of the checkpoint they are, those; where it says which host ran each party, what its `trusted-host` premise rests on
+    (the network certifier's ``placement``); and each δ of the block record's at which its leg's quantity is not
+    established."""
     profile = (r.get("answer") or {}).get("profile")
     w = profile.get("weights") if isinstance(profile, Mapping) else None
-    out = []
+    place = profile.get("placement") if isinstance(profile, Mapping) else None
+    out = [f"trusted-host {place['trusted-host']}"] if isinstance(place, Mapping) and place.get("trusted-host") else []
     if isinstance(w, Mapping) and w.get("held"):
         out.append(f"its weights {w['held']}, not concurrently with the block")
     if isinstance(w, Mapping) and w.get("share"):
@@ -674,6 +959,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
         v, server = r.get("verdict"), at[k][0]
         if v == "missing":
             s = r.get("why") if "development" in r else f"missing: {r.get('why')}"
+        elif v == "dropped":
+            s = f"dropped, {r.get('why')}"
         elif server not in (None, node):
             s = f"{v} about {server}, another server: carried, not composed"
         elif v == "accept":
@@ -686,16 +973,19 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
 
 
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
-           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None
+           run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite"
            ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
-    rejected, erred or was undecided), and the ``RECORD`` line's summary. ``servers``: each piece's `piece_server`, by
-    runner name; sampled proofs' answer is about ``node``, and a piece's that names no server isn't carried."""
+    rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
+    drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
+    answer is about ``node``, and a piece's that names no server isn't carried."""
     from verity_e2e_demo import block_record as BR
 
     legs = {v: k for k, v in BR.RUNNER_KEYS.items()} | {"wipe": "wipe"}
-    at = {k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
-    rows = {k: dict(r) for k, r in rows.items()}
+    drops = [k for k in rows if legs[k] not in BR.PRODUCTS[product]]
+    at = ({k: (None, "real") for k in rows} | dict(servers or {}) | {"integrity": (node, "real")}
+          | {k: (None, "real") for k in drops})
+    rows = {k: dropped_row(k, product) if k in drops else dict(r) for k, r in rows.items()}
     built: dict[str, dict[str, Any]] = {}
     for k, r in rows.items():
         if r.get("verdict") == "accept" and at[k][0] is not None:
@@ -710,13 +1000,15 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                 for k, r in rows.items()}
     missing = {NAMES[k]: r.get("why") for k, r in rows.items() if r.get("verdict") == "missing"}
     elsewhere = {NAMES[k]: at[k][0] for k in rows if at[k][0] not in (None, node)}
-    unserved = sorted(NAMES[k] for k, r in rows.items() if r.get("verdict") != "missing" and at[k][0] is None)
+    unserved = sorted(NAMES[k] for k, r in rows.items()
+                      if r.get("verdict") not in ("missing", "dropped") and at[k][0] is None)
     dev = {"development": {NAMES[k]: r["development"]["verdict"] for k, r in rows.items() if "development" in r}}
     dev = dev if dev["development"] else {}
-    named = {"verdicts": verdicts, "missing": missing, "elsewhere": elsewhere, **({"unserved": unserved} if unserved else {}),
-             **dev}
+    named = {"product": product, "verdicts": verdicts, "missing": missing, "elsewhere": elsewhere,
+             **({"dropped": {NAMES[k]: rows[k]["why"] for k in drops}} if drops else {}),
+             **({"unserved": unserved} if unserved else {}), **dev}
     bad = sorted(NAMES[k] for k, r in rows.items()
-                 if r.get("verdict") not in ("accept", "missing") and NAMES[k] not in elsewhere)
+                 if r.get("verdict") not in ("accept", "missing", "dropped") and NAMES[k] not in elsewhere)
     if bad:
         composed = "reject" if any(rows[k].get("verdict") in ("reject", "error") for k in rows
                                    if NAMES[k] in bad) else "pending"
@@ -727,10 +1019,10 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     extra = {legs[k]: {"row": r, "server": at[k][0], "runs": r.get("runs") or [run], "source": at[k][1]}
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
-    rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra)
-    report["composed"] = rec["composed"]["onsite"] = {"protocol": REPORT_FORMAT, "verdict": rec["composed"]["verdict"],
-                                                      "reason": said(rows, at, node, built)}
-    line = {"composed": rec["composed"]["verdict"], **named, "reason": report["composed"]["reason"],
+    rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra, product=product)
+    verdict = WINDOW_VERDICT.get(rec["composed"]["verdict"], rec["composed"]["verdict"])
+    report["composed"] = {"protocol": REPORT_FORMAT, "verdict": verdict, "reason": said(rows, at, node, built)}
+    line = {"composed": verdict, **named, "reason": report["composed"]["reason"],
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}
@@ -775,18 +1067,64 @@ def main(argv: Sequence[str] | None = None) -> int:
     o.add_argument("--python", default=os.environ.get("PY") or sys.executable)
     o.add_argument("--statements", type=Path)
     o.add_argument("--live-evidence", type=Path)
+    rg = sub.add_parser("public-registration")
+    rg.add_argument("registration", type=Path)
+    pl = sub.add_parser("public-lines")
+    pl.add_argument("--private", type=Path)
+    pb = sub.add_parser("publish")
+    pb.add_argument("out", type=Path)
+    pb.add_argument("--private", type=Path, required=True)
+    sl = sub.add_parser("sampled-line")
+    sl.add_argument("log", type=Path)
+    sl.add_argument("--partition", type=Path)
+    fl = sub.add_parser("front-line")
+    fl.add_argument("session", type=Path)
     p = sub.add_parser("pieces")
     r = sub.add_parser("record")
     for q in (p, r):
         q.add_argument("--serve-run", type=Path, required=True)
         q.add_argument("--window", type=int, required=True)
     p.add_argument("--out", type=Path, required=True)
+    p.add_argument("--only", action="append", choices=[v[1] for v in PIECES.values()])
+    p.add_argument("--skip", action="append", default=[], choices=[v[1] for v in PIECES.values()])
     r.add_argument("--sampled-proofs", type=Path, required=True)
     r.add_argument("--pieces", type=Path, required=True)
     r.add_argument("--out", type=Path, required=True)
     for q in (p, r):
         q.add_argument("--node", default=socket.gethostname())
+        q.add_argument("--product", default="onsite")
     a = ap.parse_args(argv)
+    if a.cmd in ("pieces", "record"):
+        from verity_e2e_demo import block_record as BR
+
+        if a.product not in BR.PRODUCTS:
+            ap.error(f"--product {a.product!r}: not one of {sorted(BR.PRODUCTS)}")
+    if a.cmd == "public-registration":
+        print(json.dumps(public_registration(json.loads(a.registration.read_text())), indent=1, sort_keys=True))
+        return 0
+    if a.cmd == "sampled-line":
+        rows = [x[len("RECORDS "):] for x in a.log.read_text().splitlines() if x.startswith("RECORDS ")]
+        if not rows:
+            print("no RECORDS line")
+            return 1
+        print(sampled_line(json.loads(rows[0]), json.loads(a.partition.read_text()) if a.partition else None))
+        return 0
+    if a.cmd == "front-line":
+        try:
+            print(front_line(json.loads(a.session.read_text())))
+        except (OSError, ValueError) as e:
+            print(f"no session ({type(e).__name__})")
+            return 1
+        return 0
+    if a.cmd == "public-lines":
+        public_lines(sys.stdin, sys.stdout, a.private)
+        return 0
+    if a.cmd == "publish":
+        held = publish(a.out, a.private)
+        if held:
+            print(f"PUBLISH: {a.out}'s files that name a window or count its own are held in full in {a.private}, "
+                  "their public form in their place", flush=True)
+        return 0
     if a.cmd == "window":
         try:
             print(json.dumps(pick(a.serve_dir, a.slots, a.window), sort_keys=True))
@@ -815,7 +1153,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise ValueError("no gate command (--gate)")
             if a.verb == "close":
                 doc = period_close(a.serve_dir, a.gate)
-                print(f"PERIOD closed {doc['name']}: {json.dumps(doc['close'], sort_keys=True)[:600]}", flush=True)
+                print(f"PERIOD closed {doc['name']}: {json.dumps(public_json(doc['close']), sort_keys=True)[:600]}",
+                      flush=True)
                 return 0
             if not (a.name and a.circuits and a.slots and a.max_tokens):
                 raise ValueError("period open needs --name, --circuits, --slots and --max-tokens")
@@ -846,15 +1185,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     if a.cmd == "pieces":
         a.out.mkdir(parents=True, exist_ok=True)
-        got = pieces(a.serve_run, a.window, a.out, node=a.node)
-        return 0 if all(g["verdict"] in ("accept", "missing") for g in got.values()) else 1
+        got = pieces(a.serve_run, a.window, a.out, node=a.node, only=a.only, skip=a.skip, product=a.product)
+        return 0 if all(g["verdict"] in ("accept", "missing", "dropped") for g in got.values()) else 1
     steps = pick(a.serve_run, 1 << 30, a.window)["steps"]
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
     got = {k: piece(k, a.pieces, run) for k in keys}
     rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
-                               servers={k: at for k, (_, at) in got.items()})
+                               servers={k: at for k, (_, at) in got.items()}, product=a.product)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "verdicts.json").write_text(json.dumps(report, indent=1, sort_keys=True, default=str) + "\n")
     if rec is not None:

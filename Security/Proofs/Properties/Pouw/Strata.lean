@@ -1,5 +1,7 @@
-import Properties.Pouw.Strata
-import Std.Data.String.ToNat
+module
+
+public import Properties.Pouw.Strata
+public import Std.Data.String.ToNat
 
 /-!
 # Proofs: a served window's work strata tile its units, and what `law`, `epsAt` and `established` answer
@@ -12,6 +14,8 @@ the calls' `(K, units)` items (`stepOf`, `itemOf`), and reads `callWork` as the 
 true call by call (`inv_step`): every range ends by the units so far, the strata's sizes and work add up, their
 templates are distinct and name their K, and each unit so far is held, only by strata of its call's work.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Strata
 
@@ -129,15 +133,6 @@ theorem unitWork_pos {ss : Array Flock.Draw.WorkStratum} {u : Nat} (hu : 0 < uni
   | some t =>
     obtain ⟨i, hi, rfl⟩ := Array.getElem_of_mem (Array.mem_of_find?_eq_some h)
     exact ⟨i, hi, (Array.find?_some h :), by simp⟩
-
-theorem unitWork_eq {ss : Array Flock.Draw.WorkStratum} {u w : Nat} (hex : ∃ s ∈ ss, holds s.toStratum u = true)
-    (hall : ∀ s ∈ ss, holds s.toStratum u = true → s.work = w) : unitWork ss u = w := by
-  unfold unitWork
-  cases h : ss.find? (fun s => holds s.toStratum u) with
-  | none =>
-    obtain ⟨s, hs, hh⟩ := hex
-    exact absurd hh (by simpa using Array.find?_eq_none.1 h s hs)
-  | some t => simpa using hall t (Array.mem_of_find?_eq_some h) (Array.find?_some h :)
 
 theorem foldl_add {α : Type} (φ : α → Nat) : ∀ (l : List α) (a : Nat),
     l.foldl (fun acc x => acc + φ x) a = a + (l.map φ).sum

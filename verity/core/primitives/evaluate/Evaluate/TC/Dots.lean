@@ -1,5 +1,7 @@
-import Evaluate.TC.Spec
-import Evaluate.TC.Fp4
+module
+
+public import Evaluate.TC.Spec
+public import Evaluate.TC.Fp4
 
 /-!
 # The tensor-core dot primitives
@@ -11,6 +13,8 @@ the accumulator word and the operand words in parameter order (the walk gives a 
 accumulator below `2^32`, each operand list of its length and every word below `2^w`); the FP4 steps add the rules the
 primitives state for what the block-scaled model leaves out.
 -/
+
+@[expose] public section
 
 namespace Evaluate.TC
 

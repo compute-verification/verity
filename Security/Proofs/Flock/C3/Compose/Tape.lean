@@ -1,5 +1,8 @@
-import Definitions.Flock.HoloCompiled
-import Proofs.Flock.VBridge.InnerAccepts
+module
+
+public import Definitions.Flock.HoloCompiled
+public import Proofs.Flock.VBridge.InnerAccepts
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Piece (b), the model's half: candidate 3's table accepts from its stages
@@ -10,6 +13,8 @@ R's Ligerito and the openings with their salts. `holoTableCL_plays`: when each s
 accepting output, the whole plays `holoTableCL` to an accepted output, `inner_accepts_of_reps`' last step at
 candidate 3.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

@@ -1,5 +1,7 @@
-import Definitions.Accounting.Device
-import Definitions.Pouw.Basic.Prob
+module
+
+public import Definitions.Accounting.Device
+public import Definitions.Pouw.Basic.Prob
 
 /-!
 # A joint audit's run, and what each audit's guarantee says about it (trusted)
@@ -24,9 +26,11 @@ the other audits' coins, an account is short when its charge is below the certif
 coins, so its worst case over them is below the certificate (`ComputeShort`, `BandwidthShort`, `CapacityShort`). The
 other accounts are covert when their charges are beyond the residual (the device's capacity over the window, less the
 certificate) on every one of the audit's own coins (`ComputeCovert`, `BandwidthCovert`, `CapacityCovert`). A device
-that does little charged work and a lot of covert work on a few of the compute coins is in neither event. A per-run
-reading, at the coins drawn, is not claimed yet; lane `ra-per-run` is proving it by truncation.
+that does little charged work and a lot of covert work on a few of the compute coins is in neither event. The per-run
+reading, at the coins flipped, is `Run.ComputeSoundPerRun` and the two beside it (`Definitions.Accounting.PerRun`).
 -/
+
+@[expose] public section
 
 namespace Accounting
 

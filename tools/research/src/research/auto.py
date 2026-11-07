@@ -1,5 +1,5 @@
-"""`research run --on auto`'s placement: a CPU node's pool (`SPILL`) first, node 2's Verity share (the queue, `AUTO_NODE`) only
-for a job no pool fits.
+"""`research run --on auto`'s placement: a free slot of a CPU node's pool (`SPILL`) first, then node 2's Verity share (the queue,
+`AUTO_NODE`) when it can start the job now, then the shortest pool line, and node 2's line for a job no pool fits.
 
 Node 2's share is 48 cores that queued runs claim whole (research.cores) in one first-come line; on 19 Oct two runs held all 48
 from 17:40Z for hours (a 16-job quick tier and a 32-core Lean check) while 56 runs waited, the oldest since 17:42Z, a 4-CPU suite
@@ -10,9 +10,13 @@ then takes, in order:
 
   - a pool where a slot that fits the job (not trains-only, at least its CPUs and its memory: the slot's mem= reserves the
     run, with no cgroup cap) is free and unblocked for every waiter ahead and this job;
+  - else node 2's share when it can start the job now, with no one waiting there (a run once queued 100 min behind cpu-6's 8
+    held slots and 9 waiters while node 2's 48 CPUs sat free);
   - else the pool with the shortest wait, as waiters ahead per fitting slot;
   - node 2 only when no pool fits the job or none can be read, and node 2 itself can be. Node 2 is the only GPU node, and on
-    24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top).
+    24 Oct 02:10Z its GPUs sat at 0% under a load of 235 on 120 cores from CPU work while cpu-5 ran at 8 of 192 (top). A node 2
+    that carries remote.RUNS_VIA_SLOT_FILE counts as unread: its launcher refuses a run that doesn't come through a check
+    slot.
 
 A GPU job, a run naming its own node, or one asking more than a pool slot gives stays on node 2's queue. A machine that can't
 be read is skipped; with node 2 unread and no pool fitting, the job is refused (`Unplaceable`) with where to run it. A pool
@@ -38,8 +42,9 @@ DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
 #: a machine whose DISK_PATH has fewer free inodes or GB than these takes no `--on auto` job: on 27 Oct cpu-5 and cpu-6 ran out of
-#: inodes with half their bytes free, and every job placed there failed shipping its source or mid-build with ENOSPC
-DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 400_000, 50
+#: inodes with half their bytes free, and every job placed there failed shipping its source or mid-build with ENOSPC. One run of
+#: a large suite (tools/research's) holds some 250k pytest temp files at once, so a floor below a few of those still fails jobs
+DISK_PATH, MIN_FREE_INODES, MIN_FREE_GB = "/workspace", 1_000_000, 50
 
 
 class Unplaceable(Exception):
@@ -61,6 +66,8 @@ def load(name, src, env):
 
 
 def share(cpus, d, root):
+    if os.path.exists(VIA_SLOT):
+        raise RuntimeError(f"{VIA_SLOT}: its launcher takes a run only through a check slot")
     c = load("auto_cores", CORES_SRC, {})
     want, d = c.parse(cpus), Path(d)
     if not d.is_dir():
@@ -121,12 +128,13 @@ def share_cpus(source: Path) -> str | None:
 
 
 def payload(source: Path, cpus: int, share: str | None, pools: list[str]) -> bytes:
-    from . import cores
+    from . import cores, remote
     from .pods.nebius import slot_only
 
     head = {"CORES_SRC": Path(cores.__file__).read_text(), "SLOT_SRC": (Path(source) / SLOT_PY).read_text() if pools else "",
             "JOB_CPUS": max(cpus, 1), "SHARE": share, "CLAIMS": str(cores.CLAIMS), "CPU_ROOT": str(cores.CPU_ROOT),
-            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB}
+            "POOLS": {p: slot_only.POOLS[p] for p in pools}, "DISK": DISK_PATH, "MIN_INODES": MIN_FREE_INODES, "MIN_GB": MIN_FREE_GB,
+            "VIA_SLOT": remote.RUNS_VIA_SLOT_FILE}
     return ("".join(f"{k} = {v!r}\n" for k, v in head.items()) + PROBE).encode()
 
 
@@ -209,6 +217,8 @@ def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple
         if free > waiting:
             return (machine, pool), "; ".join(notes) + ": a slot is free there now"
         ranked.append(((waiting + 1) / fit, i, (machine, pool)))
+    if ranked and share is not None and share.get("fits") and not share["waiters"]:
+        return None, "; ".join(notes) + f": no pool slot is free, and it starts on {AUTO_NODE} now"
     if ranked:
         (_, _, target) = min(ranked)
         return target, "; ".join(notes) + f": the shortest line per run that fits is {target[0]}'s {target[1]} pool"

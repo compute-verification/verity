@@ -1,4 +1,23 @@
-import Proofs.Flock.Soundness.Discharge.Hm.Slot
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Slot
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # V*'s SHA-512 after a known prefix
@@ -11,6 +30,8 @@ padding is constant forms, and each block is one `Flock.HmNets.compress` of its 
 `q / 8`), the output's bit `t` is bit `t` of `SHA-512(pre ‖ data)` (`Flock.Sha512.hash`), for a prefix `pre` of whole
 blocks whose chaining value is the constant (`preCv`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

@@ -1,5 +1,14 @@
-import Flock.Zk
-import Mathlib.Tactic.NormNum
+module
+
+public import Flock.Zk
+import all Init.Data.Nat.Power2.Basic
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Tactic.ToDual
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The pads' domain: the length of the `--zk` inner code, pinned to the code
@@ -15,6 +24,8 @@ pads message, `PadLayout.len` pads and `K_PAD = 192` padding symbols, rounded up
   (`padDomain_eq`): at every statement in `--zk` scope (`m ≤ 35`, `kLog ≤ 27`, `k₀ ≤ 6`) `N` is `2^12` or `2^13`, and
   which one depends on `kLog` as well as `m` (`padDomain_le`, `padDomain_ge`).
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 

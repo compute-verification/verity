@@ -1,7 +1,45 @@
-import Proofs.Flock.Bridge.Defs
-import Proofs.Flock.Claims.Bridge.WrongSet
+module
+
+public import Proofs.Flock.Bridge.Defs
+public import Proofs.Flock.Claims.Bridge.WrongSet
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.SamplingBoundary
 import Proofs.Flock.Soundness.Audit.Circuit
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The lowering is correct, unit by unit
@@ -9,7 +47,8 @@ import Proofs.Flock.Soundness.Audit.Circuit
 `lowers`: for every circuit `C`, partition `P` and unit `u`, `WrongSet.Lowers (progOf C κ) (unitGates P u) φ Xv`, at any
 `φ` that inverts `posOf` (`wireAt C d` does, `wireAt_posOf`), when every input the constants `κ` fix and the unit reads
 evaluates to its constant. So the claims program of a statement is `progOf C κ`, defined from the parsed circuit, and its unit `u` computes what `C` computes there; `faulty_card_le_wrongRegZ` reads
-it at `b u := unitGates P u`. Slot `u` of `partOf P κ` (`blocks_partOf_getElem?`) is that proof block followed by the
+it at `b u := unitGates P u`. Slot `u` of `partOf P κ ns`, at any strata `ns` that sum to `n`
+(`blocks_partOf_getElem?`), is that proof block followed by the
 position of each input `u` owns, which reads nothing and is on every boundary, so the slot's values are the unit's
 alone (`ref_blockOf`), and it is correct exactly when the unit's gates are and each owned input is opened
 (`correct_blockOf`).
@@ -24,6 +63,8 @@ alone (`ref_blockOf`), and it is correct exactly when the unit's gates are and e
   reading from outside the unit only positions of wires, whose committed values `Lowers` gives, or constants
   (`const_pos`), which `Prog.read` reads with no committed value.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -477,7 +518,7 @@ theorem posOf_injective : Function.Injective (posOf C) := by
   exact (block_inj (by omega) (by omega) h).1
 
 open FlockSoundness.Discharge.ZkLink in
-/-- **`Lowers` for every circuit**: unit `u`'s proof block of `partOf P`, `unitGates P u`, is
+/-- **`Lowers` for every circuit**: unit `u`'s proof block of `partOf P κ ns`, `unitGates P u`, is
 correct in `progOf C κ` on every committed values that carry `C`'s evaluation at the wires `φ` maps the positions it reads
 or computes to, for any `φ` that inverts `posOf`, when each input `κ` fixes that the unit reads evaluates to its
 constant. -/
@@ -533,13 +574,29 @@ theorem wireAt_posOf (d g : Fin C.N) : wireAt C d (posOf C g) = g := by
 
 /-! ## Unit `u`'s slot -/
 
-theorem blocks_partOf {n : ℕ} (P : Partition C n) : (partOf P κ).blocks = (List.finRange n).map (blockOf P κ) := by
-  simp [partOf, Claims.Sampling.Partition.blocks]
+/-- `partOf P κ ns`'s one class: its strata, the population's proof blocks cut into runs of lengths `ns`. -/
+theorem classes_partOf {n : ℕ} (P : Partition C n) (ns : List ℕ) :
+    (partOf P κ ns).classes = [ns.splitLengths ((List.finRange n).map (blockOf P κ))] := rfl
 
-/-- Slot `u` of `partOf P κ` is unit `u`'s proof block. -/
-theorem blocks_partOf_getElem? {n : ℕ} (P : Partition C n) (u : Fin n) :
-    (partOf P κ).blocks[u.val]? = some (blockOf P κ u) := by
-  simp [blocks_partOf]
+/-- At strata that sum to `n`, the strata hold the population's proof blocks in order. -/
+theorem flatten_strata_partOf {n : ℕ} (P : Partition C n) {ns : List ℕ} (hns : ns.sum = n) :
+    (ns.splitLengths ((List.finRange n).map (blockOf P κ))).flatten = (List.finRange n).map (blockOf P κ) :=
+  List.flatten_splitLengths _ _ (by simp [hns])
+
+/-- At strata that sum to `n`, the one class's strata have the sizes `ns`. -/
+theorem strataSizes_partOf {n : ℕ} (P : Partition C n) {ns : List ℕ} (hns : ns.sum = n) :
+    Claims.Sampling.strataSizes (ns.splitLengths ((List.finRange n).map (blockOf P κ))) = ns :=
+  List.map_splitLengths_length _ _ (by simp [hns])
+
+theorem blocks_partOf {n : ℕ} (P : Partition C n) {ns : List ℕ} (hns : ns.sum = n) :
+    (partOf P κ ns).blocks = (List.finRange n).map (blockOf P κ) := by
+  simp only [Claims.Sampling.Partition.blocks, classes_partOf, List.flatten_cons, List.flatten_nil, List.append_nil]
+  exact flatten_strata_partOf P hns
+
+/-- Slot `u` of `partOf P κ ns` is unit `u`'s proof block. -/
+theorem blocks_partOf_getElem? {n : ℕ} (P : Partition C n) {ns : List ℕ} (hns : ns.sum = n) (u : Fin n) :
+    (partOf P κ ns).blocks[u.val]? = some (blockOf P κ u) := by
+  simp [blocks_partOf P hns]
 
 theorem mem_insOf {n : ℕ} {P : Partition C n} {u : Fin n} {g : Fin C.N} :
     g ∈ insOf P κ u ↔ C.op g = .input ∧ κ g = none ∧ owner P g = some u := by

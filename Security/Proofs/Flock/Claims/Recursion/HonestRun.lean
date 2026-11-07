@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.Recursion.DeployHonest
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployHonest
 
 /-!
 # The honest compiled run's inner rounds are the inner prover's messages (`run_msg_inner`)
@@ -8,6 +10,8 @@ is the inner prover's (`b.ref.PI w`) at the inner statement, after the run's ear
 prover's tape `ω.1`: `refP` hands the inner rounds to the inner prover, and the compiled verifier answers each with its
 coin, so the run gets past them (`run_length_ge`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -39,16 +43,5 @@ theorem run_msg_inner (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings)
     omega
   rw [hh, ← refP_inner IV b w x (new.map histOf) ω (by omega), List.getD_eq_getElem?_getD, List.getElem?_map, hget]
   rfl
-
-/-- **The run lemma at the deployed record's verifier**: `run_msg_inner` at `(deployRec IV ivScope b).V`, which is
-`V IV b.st`. -/
-theorem run_msg_inner_deploy (H : Msg → Msg) (IV : Claims.Verifier Coin) (ivScope : Msg → Bool) (b : Brings)
-    (w : Claims.Flock.Wit) {x : Msg} {xr : XR} (hx : readX x = some xr) (ω : Tape b)
-    (r : Fin ((deployRec IV ivScope b).V.k x) → Coin) :
-    ∀ i < IV.k (xIOf x), ((run H (refP IV b w) (deployRec IV ivScope b).V x ω r).msgs.map Prod.fst).getD i [] =
-      (((b.ref.PI w).next (xIOf x)
-        ((((run H (refP IV b w) (deployRec IV ivScope b).V x ω r).msgs.take (IV.k (xIOf x))).map histOf).take i)
-          ω.1).eval H).1 :=
-  run_msg_inner H IV b w hx ω r
 
 end RecDeploy

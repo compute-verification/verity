@@ -25,8 +25,8 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import leaf_lanes as LL
 from verity.core.protocols.pouw import weights as W
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1zy as Z
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -180,7 +180,7 @@ def test_a_j10r_window_takes_each_units_call_and_blocks_and_its_public_row_holds
     ``blocks`` a unit, and each unit reads its own row of each; its statement's public row is `PUBLIC_J10R`, and
     `j10r_inputs` is each unit's call's first unit and `h1tile.j10r_blocks` of its tile (I, J) at the window's slot and
     its K. Every K's unit is in one form: a window mixing J10-R's and today's is refused."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import h1tile as H
     m = HW.slot(5, TILE)
     prog = HW.program(LINEARS, CALLS, m, TILE, unit=unit_j10r)
     tp = P.evaluate(prog, HW.query(prog))
@@ -628,7 +628,7 @@ def test_the_tile_is_a_parameter_and_each_k_binds_its_own_unit():
     assert [n for n, _t in smoke.signature()[0]] == list(HW.TILE_PARAMS)
     assert [n for n, _t in smoke.signature()[1].fields] == list(HW.OUTPUTS) and smoke.signature()[1].fields[1][1].leaves == 1
     assert HW.tile_unit(14336, (32, 32)).bindings["TILE"].bindings["EXACT"].bindings["K"] == 14336
-    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import h1tile as H
     for d in (H.PouwH1Tile5, H.PouwH1Tile6):
         j10r = HW.tile_unit(64, (4, 8), d)
         assert [n for n, _t in j10r.signature()[0]] == list(HW.TILE_PARAMS_J10R)
@@ -657,6 +657,20 @@ def test_the_real_tile_composes_at_mixed_k_and_at_the_served_32_by_32():
     want = _expected((("q_proj", 64, 64),), (("q_proj", 0),), 32, (32, 32))
     assert tp.population == len(want) == 2
     assert [HW.unit_reads(served, tp, u) for u in range(2)] == _reads(want, (32, 32))
+
+
+@pytest.mark.slow
+def test_the_catalogs_window_over_the_real_tile_passes_the_port_rules():
+    """The window `h1window.circuit-check.py` registers unbuilt (`window`) is a Program's root under the port rules: each
+    tile's salt a coin and its position a position, the window's result one sink. The catalog makes its roots unbuilt, so
+    this is where its Program is checked. About 35 s, the real tile's seed and noise circuits."""
+    linears = (("q_proj", 64, 16), ("k_proj", 64, 8))
+    calls = tuple((lin, s) for s in range(2) for lin in ("q_proj", "k_proj"))
+    prog = HW.program(linears, calls, 4, TILE)
+    assert prog.fn is HW.window(linears, calls, 4, TILE)
+    assert PT.check(prog.root) is not None
+    ret = PT.port_types(prog.fn).ret
+    assert [(lo, hi, o.sink) for lo, hi, o, _w in ret] == [(0, prog.fn.signature()[1].leaves, True)]
 
 
 @pytest.mark.parametrize("linears,calls,m,tile,why", [
@@ -753,8 +767,7 @@ def test_a_drawn_leafs_statements_read_its_tiles_rows_at_its_place():
 
 
 def test_a_drawn_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_windows_tables():
-    """`leaf_reads_file`: every port of a statement is the verifier's own (`leaf_lanes.own`), the file says so
-    (``complete``), each read one row; an A, B or partials read is marked `READ_IN_FULL`, the record and the receipt not;
+    """`leaf_reads_file`: every port of a statement is the verifier's own (`leaf_lanes.own`), each read one row; an A, B or partials read is marked `READ_IN_FULL`, the record and the receipt not;
     the call's A, z and receipt tables bind the window's open root and the weights' b/<K> none, each at its table's rows
     and width (`_shapes`: the receipts one row a unit of the call, a row the tile's receipt); the partials take the given
     entry. A value whose root the verifier doesn't hold, or a port both read and known, is refused."""
@@ -772,7 +785,7 @@ def test_a_drawn_leafs_file_marks_its_shared_rows_read_in_full_and_binds_its_win
         known = {p: {"value": v, "row": w} for p, (v, w) in rows.items()}
         file = HW.leaf_reads_file(prog, u, kind, ln, roots, partials, known, window=window, steps=steps)
         ports = file["ports"]
-        assert file["format"] == G.READS and file[LL.COMPLETE] is True and set(ports) == LL.own(r, c, kind, ln)
+        assert file["format"] == G.READS and set(ports) == LL.own(r, c, kind, ln)
         assert known[LL.OK]["value"] == f"ok{i}" and (kind == LL.COMBINE or rows[LL.ADMIT][1] == LL.bits_words([1] * r))
         for port, (value, row) in HW.leaf_reads(prog, u, kind, ln, steps=steps).items():
             e = ports[port]
@@ -998,7 +1011,7 @@ def test_a_j10r_windows_leaf_files_and_known_rows():
         ch = st[2] if st[0] == LL.CHUNK else None
         file = HW.leaf_reads_file(prog, u, st[0], st[1], roots, partials, known, window=window, steps=steps, ch=ch,
                                   produced=produced)
-        assert set(file["ports"]) == LL.own(r, c, *st, j10r=k) and file[LL.COMPLETE] is True
+        assert set(file["ports"]) == LL.own(r, c, *st, j10r=k)
         for port, (value, _row) in LL.reads(r, c, *st, j10r=k).items():
             e = file["ports"][port]
             assert e.get(HW.READ_IN_FULL, False) is (LL.read_in_full(value) and port != LL.OK), (st, port)
@@ -1014,7 +1027,7 @@ def test_a_j10r_leafs_statements_are_v5s_lane_chunks_and_combine_v2():
     """Over J10-R's PouwH1Tile_v5 at a chunked K, `leaf_unit` derives each lane chunk (`h1zy.lane_chunk` at
     `weights.chunks`(K)) and the combine (`PouwH1Combine_v2`), and refuses a whole lane there and a chunk past the
     lane's; at a whole K a lane and no chunk. v1's leaf stays refused at a chunked K."""
-    from verity.core.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import h1tile as H
 
     def fake(k, d):
         unit = HW._chunked(k, HW.tile_unit(k, (32, 32), d))

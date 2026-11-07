@@ -1,11 +1,13 @@
-import Proofs.Flock.Claims.KS.PlainRdRun
-import Proofs.Flock.Claims.KS.Rounds
-import Proofs.Flock.Claims.KS.PlainBound
-import Proofs.Flock.Claims.KS.OffSim
-import Proofs.Flock.Claims.Recursion.FlockKSLin
-import Proofs.Flock.Claims.Recursion.FlockKSAcc
-import Proofs.Flock.Claims.Recursion.FlockKSRecord
-import Proofs.Flock.Claims.KS.PlainRdRunK
+module
+
+public import Proofs.Flock.Claims.KS.PlainRdRun
+public import Proofs.Flock.Claims.KS.Rounds
+public import Proofs.Flock.Claims.KS.PlainBound
+public import Proofs.Flock.Claims.KS.OffSim
+public import Proofs.Flock.Claims.Recursion.FlockKSLin
+public import Proofs.Flock.Claims.Recursion.FlockKSAcc
+public import Proofs.Flock.Claims.Recursion.FlockKSRecord
+public import Proofs.Flock.Claims.KS.PlainRdRunK
 
 /-!
 # `KSFlockLin` at the deployed plain record
@@ -25,6 +27,8 @@ The plain record's KS chain with the cap terms linear: each cap slot's term is c
   `KSFlockLin_of_tableBoundAbortLin` with the record's code facts and numbers (`plain_KSAbort`'s).
 * `plain_tableBoundAbortLinK`: `plain_tableBoundAbortLin` at `deployPlainK keep`, from `plain_accPr_le_rdAllK`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -115,9 +119,9 @@ theorem plain_tableBoundAbortLin :
   obtain ⟨m₀, hm₀⟩ := refusable_V sha512 false x
   have hrun := Claims.Recursion.refuser_run sha512 P (V false) x decCoin (coinsShown_V sha512 false)
     (accLast_V_sha512 false) (decideFree_V sha512 false) keep m₀ hm₀
-  have hk0' : sch.k0 = k0 := congrArg Accounting.Schedule.k0 hF'
+  have hk0' : sch.k0 = k0 := congrArg FlockSoundness.Accounting.Schedule.k0 hF'
   have hlen : (l₀ :: l₁ :: rest).length = depL x + 1 := by
-    have h1 := congrArg (fun S : Accounting.Schedule => S.levels.length) hF'
+    have h1 := congrArg (fun S : FlockSoundness.Accounting.Schedule => S.levels.length) hF'
     simp only [schedOf, List.length_map, Array.length_toList] at h1
     rw [depL_eq hset hst hF]
     simp only [List.length_cons] at h1 ⊢
@@ -345,9 +349,9 @@ theorem plain_tableBoundAbortLinK (keepV : Bool → Bool) :
   obtain ⟨m₀, hm₀⟩ := refusable_VK keepV sha512 x
   have hrun := Claims.Recursion.refuser_run sha512 P (VK keepV) x decCoin (coinsShown_VK keepV sha512)
     (accLast_VK keepV) (decideFree_VK keepV sha512) keep m₀ hm₀
-  have hk0' : sch.k0 = k0 := congrArg Accounting.Schedule.k0 hF'
+  have hk0' : sch.k0 = k0 := congrArg FlockSoundness.Accounting.Schedule.k0 hF'
   have hlen : (l₀ :: l₁ :: rest).length = depL x + 1 := by
-    have h1 := congrArg (fun S : Accounting.Schedule => S.levels.length) hF'
+    have h1 := congrArg (fun S : FlockSoundness.Accounting.Schedule => S.levels.length) hF'
     simp only [schedOf, List.length_map, Array.length_toList] at h1
     rw [depL_eq hset hst hF]
     simp only [List.length_cons] at h1 ⊢

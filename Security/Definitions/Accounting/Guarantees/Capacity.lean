@@ -1,4 +1,7 @@
-import Definitions.Accounting.Capacity
+module
+
+public import Definitions.Accounting.Capacity
+public import Mathlib.Data.Fintype.Prod
 
 /-!
 # A state-bounded game's soundness as a joint run's capacity guarantee, and derived state's share of the residual
@@ -28,6 +31,8 @@ per-run reading is not claimed yet; a proof by truncation is in progress.
 
 Each `def G : Prop` is proved by `Accounting.SecurityProofs.G : Accounting.Guarantees.G` (`Proofs.Accounting.Capacity`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

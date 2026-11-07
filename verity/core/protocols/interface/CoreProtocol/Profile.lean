@@ -8,9 +8,14 @@ A protocol whose acceptance is not a sampling law over proof units (a timed stor
 its own profile type; this one is shared by the protocols that sample. `Integrity.ofJson` reads it back, for a protocol
 that consumes another's answer.
 -/
-import Lean.Data.Json
-import Flock.Canon
-import CoreProtocol.Ratio
+module
+
+public import Flock.Canon
+public import CoreProtocol.Ratio
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 

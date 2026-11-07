@@ -1,6 +1,21 @@
+module
+
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.VBridge.Sparse.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.Compose.HoloEncoded
-import Proofs.Flock.C3.Compose.HoloStreamSizes
-import Proofs.Flock.VBridge.Sparse.Defs
 
 /-!
 # The sparse phases' rounds at the map read
@@ -14,6 +29,8 @@ own before `q`; `roundAt_sparseRounds` at `sparseRounds`, phase 0's being `nc`.
 where each holds coins and they are as many, as `RecCoins.sparseCoins` reads a sparse stream (its `filter`);
 `coinRounds_held` at a schedule's coin rounds (`filter_range_sublist`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

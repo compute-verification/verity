@@ -1,5 +1,39 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
+public import Proofs.Flock.Bridge.Canon
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Bridge.KSLive
-import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 
 /-!
 # `SampledKSLiveV2` with a public error
@@ -18,12 +52,15 @@ off the public parameters:
 
 So `SampledKSLivePub` is `SampledKSLiveV2` with its error `Bridge.deltaPub`:
 $$\binom{n-K_0}{k_d}\Big/\binom{n}{k_d} + \frac{\mathrm{ksClosedM1}(k,q_F,q_S)}{1-\rho}
-  + \frac{W\,\big(2t'(1+k)/2^{256} + 1/(eM) + k/(eR_w)\big)}{1-\rho},$$
-at the knowledge finders' budgets `q_F = 2(t' + v)` and `q_S = t' + v` (`SampledKSLiveV2`'s: the prover's per-run time `t'`
-and one opening's verification `v`), a function of `n`, `k_d`, `K₀`, the analysis' `k`, `R_w`, `M`, `t'`, `v`, `ρ` and the
-circuit's partition. Its rate hypothesis reads only `k` (`rateM1 k ≤ ρ`) where `SampledKSLiveV2`'s reads the plan, and every other
-hypothesis, named assumption included, is `SampledKSLiveV2`'s.
+  + \frac{W\,\big(2(t'+v)(1+k)/2^{256} + 1/(eM) + k/(eR_w)\big)}{1-\rho},$$
+at the knowledge finders' budgets `q_F = 2(t' + v)` and `q_S = t' + v` and the link finders' per-run cost `t' + v`
+(`SampledKSLiveV2`'s: the prover's per-run time `t'` and one opening's verification `v`), a function of `n`, `k_d`,
+`K₀`, the analysis' `k`, `R_w`, `M`, `t'`, `v`, `ρ` and the circuit's partition. Its rate hypothesis reads only `k`
+(`rateM1 k ≤ ρ`) where `SampledKSLiveV2`'s reads the plan, and every other hypothesis, named assumption included, is
+`SampledKSLiveV2`'s.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -40,7 +77,8 @@ noncomputable def _root_.Flock.Bridge.ioSum {C : FlockSoundness.Audit.Circuit} {
   ∑ u, (P.io u).card
 
 /-- **The sampled audit's public error**: the draw's miss, the knowledge term at C-Flock ZK's parameters
-(`ksClosedM1`), and the link term at `W` commit strings, each over `1 − ρ` where `SampledKSLiveV2` has it. -/
+(`ksClosedM1`), and the link term at `W` commit strings with the link finders charged `t'` per run, each over `1 − ρ`
+where `SampledKSLiveV2` has it. -/
 noncomputable def _root_.Flock.Bridge.deltaPub (n kd K₀ k : ℕ) (qF qS t' : ℝ) (M Rw W : ℕ) (ρ : ℝ) : ℝ :=
   ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) + ksClosedM1 k qF qS / (1 - ρ) +
     (W : ℝ) * (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)
@@ -49,7 +87,7 @@ open Classical in
 /-- **The sampled audit's knowledge soundness, live, with a public error.** `SampledKSLiveV2`'s setting and named
 assumptions, at a rate cap `ρ < 1` with `2^23/(ek) ≤ ρ` (`rateM1`): for every live prover,
 $$\Pr[\text{flock-verify accepts} \wedge \neg\,\mathrm{RelS}_\delta(\mathrm{witDep}(X))] \le
-  \mathrm{deltaPub}(n, k_d, K_0, k, 2(t' + v), t' + v, t', M, R_w, W, \rho),$$
+  \mathrm{deltaPub}(n, k_d, K_0, k, 2(t' + v), t' + v, t' + v, M, R_w, W, \rho),$$
 `W = Σ_u |io u|` over the circuit's partition (`Bridge.ioSum`), `t'` the prover's per-run time and `v` one opening's
 verification. -/
 def SampledKSLivePub : Prop :=
@@ -78,7 +116,7 @@ def SampledKSLivePub : Prop :=
     (_hρk : rateM1 k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t') (K₀ : ℕ) (_hK₀ : K₀ ≤ n)
     (τ : Strategy (auditLive (Law.execOS (n := n) src (.subset kd) n) Reg (liveOfZJ dg (planZHJ dj y₀) N wr)))
     -- one opening's verification, in SHA-512 evaluations
-    (v : ℝ)
+    (v : ℝ) (_hv : 0 ≤ v)
     -- what the sampling statement carries and `RelS` doesn't read
     (q : Claims.Sampling.Query),
     let L := Law.execOS (n := n) src (.subset kd) n
@@ -107,27 +145,27 @@ def SampledKSLivePub : Prop :=
     -- prover and two verifications for a rewinding finder, one of each for the self-clash finder
     (∀ ω j, FlockSoundness.Assumptions.TableCRZAt execArith hs512 (planZHJ dj y₀ (L.draw ω) (reg σ)) j
       (zcStrat execArith hs512 (planZHJ dj y₀) (cont σ ω)) (2 * (t' + v)) (t' + v)) →
-    -- ecr/sha-512 for the prover's link finders
+    -- ecr/sha-512 for the prover's link finders, at a run of the prover and a verification per run
     FlockSoundness.Assumptions.LinkCRZCAt execArith hs512 P (planZHJ dj y₀) (tabZHJ dj y₀) vb (reg σ) (cont σ)
-      k Rw M t' →
+      k Rw M (t' + v) →
     prob (fun o => LiveAcceptsZK I o ∧
-        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ kd desc q roots) (Bridge.partOf P κ)
-          (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ (.subset kd) desc q roots)
+          (Bridge.partOf P κ (Bridge.nsOf desc qr)) (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
-      ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) t' M Rw (Bridge.ioSum P) ρ)
+      ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) (t' + v) M Rw (Bridge.ioSum P) ρ)
 
 /-- **`SampledKSLiveV2`'s error is at most `deltaPub`**: its draw term is `deltaPub`'s first, its knowledge term at most
 the second (`ksAvgStrictZ_planZHJ_le_closed`), and its link term at most the third (`qs_le_io`). -/
 theorem sampledKSLivePub_of (h : SampledKSLiveV2) : SampledKSLivePub := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src
-    hA3 hTags hCust k Rw M hk hRw hM ρ hρ hρk t' ht' K₀ hK₀ τ v q L P vb σ Xr δ Cc rows roots Cd κ hCR hLink
+    hA3 hTags hCust k Rw M hk hRw hM ρ hρ hρk t' ht' K₀ hK₀ τ v hv q L P vb σ Xr δ Cc rows roots Cd κ hCR hLink
   have hr : ∀ S R j, rateZ (planZHJ (Reg := Reg) dj y₀ S R) j k ≤ ρ := fun S R j =>
     (rateZ_le_m1w _ j (planZHJ_M1W dj y₀ S R j) k).trans hρk
   refine (h n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω Lb
-    src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ v q hCR hLink).trans ?_
+    src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' K₀ hK₀ τ v hv q hCR hLink).trans ?_
   have h1ρ : 0 < 1 - ρ := sub_pos.2 hρ
-  have hB : 0 ≤ 2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw) := by
-    have : 0 ≤ t' * (1 + k) := mul_nonneg ht' (by positivity)
+  have hB : 0 ≤ 2 * ((t' + v) * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw) := by
+    have : 0 ≤ (t' + v) * (1 + k) := mul_nonneg (add_nonneg ht' hv) (by positivity)
     positivity
   have hmiss : ((n - K₀).choose kd : ℝ≥0∞) / (n.choose kd : ℝ≥0∞) =
       ENNReal.ofReal (((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ)) := by
@@ -142,14 +180,14 @@ theorem sampledKSLivePub_of (h : SampledKSLiveV2) : SampledKSLivePub := by
       Finset.sum_le_sum_of_subset (Finset.subset_univ _)
   have hlink : ENNReal.ofReal ((∑ p : vb.Pos,
         (Fintype.card (ΩcZ execArith P (planZHJ dj y₀) (tabZHJ dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
-      (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) ≤
+      (2 * ((t' + v) * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) ≤
       ENNReal.ofReal ((Bridge.ioSum P : ℝ) *
-        (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) :=
+        (2 * ((t' + v) * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) :=
     ENNReal.ofReal_le_ofReal (div_le_div_of_nonneg_right (mul_le_mul_of_nonneg_right hQs hB) h1ρ.le)
   have hx : (0 : ℝ) ≤ ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) := by positivity
   have hy : 0 ≤ ksClosedM1 k (2 * (t' + v)) (t' + v) / (1 - ρ) := div_nonneg (ksClosedM1_nonneg k (2 * (t' + v)) (t' + v)) h1ρ.le
   have hz : 0 ≤ (Bridge.ioSum P : ℝ) *
-      (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ) :=
+      (2 * ((t' + v) * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ) :=
     div_nonneg (mul_nonneg (Nat.cast_nonneg _) hB) h1ρ.le
   rw [hmiss]
   refine (add_le_add (add_le_add le_rfl hks) hlink).trans (le_of_eq ?_)

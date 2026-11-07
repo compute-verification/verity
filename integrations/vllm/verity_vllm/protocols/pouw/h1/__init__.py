@@ -1,5 +1,5 @@
-"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.core.protocols.pouw.circuit.h1tile`) on the eager int8_exact row: each
-served int8 linear call as its own Program on bits, which `verity.core.protocols.pouw.circuit.compile` takes to H1 tile units.
+"""PoUW's H1 + fx1 (`eps1-sm120-h1fx1`, `verity.ml.protocols.pouw.circuit.h1tile`) on the eager int8_exact row: each
+served int8 linear call as its own Program on bits, which `verity.ml.protocols.pouw.circuit.compile` takes to H1 tile units.
 
 * **The Program** (`program(k, n, m)`): one call's linear. Its A is the call's A table (x [m, k] s8 rows, sx [m] f32 scales:
   the served rows as the Commit taps `Int8RowQuant_v1` /0 and /1, then empty rows), its B the layer's int8 weight rows and
@@ -78,7 +78,7 @@ from typing import Any, Callable, Mapping, Sequence
 
 import numpy as np
 from verity.core.protocols.pouw.audit import HM96_WEIGHTS, weight_binding
-from verity.core.protocols.pouw.circuit import compile as C, h1tile as H
+from verity.ml.protocols.pouw.circuit import compile as C, h1tile as H
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw.credit import CREDIT
 from verity.core.protocols.sampled_proofs.challenger import CoinError
@@ -288,8 +288,8 @@ class Call:
 #: and s_a [m], m = 0 for an empty step; `slots` makes the call's T-slot table); it returns None or what it bound for the
 #: call, as JSON (its roots and receipt root, hex)
 Listener = Callable[[Call, Any, Any, Any, Any], Mapping[str, Any] | None]
-#: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins and sampling coin
-#: coins (`LiveRecord`s) and what its commitment records of the opening (`H1Run.open_window`)
+#: ``opener(requests_root)``: given round 0's request table's root, the window's Program salt, its round coins (a
+#: `LiveRecord`), its draw coin (`pouw_h1_window.DrawSession`) and what its commitment records (`H1Run.open_window`)
 Opener = Callable[[bytes], tuple[bytes, Any, Any, Mapping[str, Any]]]
 
 
@@ -311,7 +311,7 @@ class H1Run:
     over the step's calls, its request table and its slot table, and with ``served`` the step's A table of each K
     ``a/<K>@<s>`` whole (`pouw_h1_served.Served.segments`), is recorded with
     ``rounds`` (a `LiveRecord` over a live challenger's round family), which opens round s's coin only after it, and
-    `finish` opens ``draw``'s coin (a `LiveRecord` of the same challenger's ``draw`` family) after the window's `draw_root`.
+    `finish` opens ``draw``'s coin (its own withheld session, `pouw_h1_window.DrawSession`) after the window's `draw_root`.
     ``key`` is the prover's hm96 salt key for the request, slot and call tables, drawn for the run (`os.urandom`) unless
     given. ``prover`` (else ``served``'s) is the prover's private directory (`pouw_h1_prover`): it keeps the key and each
     served call's A rows, scales and z/y records, so a sampled proof block opens after the close (DRAWN1); without it their leaves
@@ -459,6 +459,7 @@ class H1Run:
             self._commit_tables(call, a, s_a, records, zy)
             if self.served is not None:
                 self._roots[call.index]["registered"] = self.served.commit(self, call, a, s_a, weight, weight_scale, records)
+            TD.flush(self)
         for fn in self.listeners:
             out = fn(call, a, s_a, weight, weight_scale)
             if out is not None:
@@ -782,6 +783,7 @@ class H1Run:
                 self.commits["draw"]["refused"] = str(e)
             else:
                 self.commits["draw"]["coin"] = coin.to_json() if coin else None
+            self.commits.update({"draw_session": s} if (s := getattr(self.draw, "session", None)) is not None else {})
         if self.transcript_dir:
             d = Path(self.transcript_dir)
             d.mkdir(parents=True, exist_ok=True)

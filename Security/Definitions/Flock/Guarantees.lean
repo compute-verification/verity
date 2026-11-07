@@ -1,6 +1,9 @@
-import Definitions.Flock.Guarantees.Audit
-import Definitions.Flock.Guarantees.Claims
-import Definitions.Flock.Guarantees.RecursionClaims
-import Definitions.Flock.Guarantees.SamplingClaims
+module
+
+public import Definitions.Flock.Guarantees.Claims
+public import Definitions.Flock.Guarantees.RecursionClaims
+public import Definitions.Flock.Guarantees.SamplingClaims
 
 /-! C-Flock's guarantee statements. -/
+
+@[expose] public section

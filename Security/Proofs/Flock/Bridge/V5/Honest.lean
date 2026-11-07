@@ -1,9 +1,11 @@
-import Proofs.Flock.Bridge.Assumptions.ServedV5
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.Deployed
-import Proofs.Flock.C3.VStarList.Parse
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+module
+
+public import Proofs.Flock.Bridge.Assumptions.ServedV5
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.Deployed
+public import Proofs.Flock.C3.VStarList.Parse
+public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
 
 /-!
 # `SampledKSLiveV5`'s file hypotheses hold at the served registered session
@@ -14,10 +16,13 @@ inputs (`Flock.Bridge.Assumptions.ServedFilesParseV5`): inputs `I` whose files h
 `verity/flock-circuit`'s tags with one table and no session tables, at which the circuit file parses to `D`, the circuit of
 `D`'s proof block is built (`Built`), its public input ports `pi` parse and the public file loads over them, `D` is in `scopeOkH` and has
 the row layout it needs (`RowsOk`), no two of its ports share a name, every draw size divides into the session's tables,
-and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's roots (`RootFixesDomainL`) and its
-population (`PopMatches`) are statements about the registration, not the files, and are no conjunct here; the finders'
-collision resistance is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
+and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's roots (`RootFixesDomainL`), its
+population (`PopMatches`), the law the verifier draws under from it (`DrawsUnder`) and that it is no Bernoulli law
+(`NotBernoulli`) are statements about the registration, not the files, and are no conjunct here; the finders' collision
+resistance is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -52,7 +57,7 @@ def SampledKSLiveV5Honest : Prop :=
       Flock.hexOf (Flock.Sha512.hash I.publicFile) =
         "6bea4647565a87a873bc66670482ec0cdb86c4424d061ccb03354b81ec55cbe302564836f08c4a9757085746f6000b904657749c2f84b028fe56fde816c26dd1" ∧
       I.tags.typed = false ∧
-      Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D ∧ Built D.unroll.unit ∧
+      Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D ∧ Built D.unroll.unit ∧
       Flock.HmIn.parse D.unroll = .ok pi ∧
       Flock.HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub ∧
       Discharge.Layout.scopeOkH D.unroll = true ∧ Bridge.RowsOk D.unroll ∧
@@ -74,7 +79,7 @@ theorem Flock.SecurityProofs.SampledKSLiveV5Honest : Flock.Guarantees.SampledKSL
   have hsc' : Discharge.Layout.scopeOkH D.unroll = true := by
     rw [← FlockSoundness.Discharge.FailClosed.scopeOkH_eq]
     exact hsc
-  refine ⟨Flock.Bridge.servedIV5 cf pf, D, pi, pub, rfl, rfl, rfl, hcf, hpf, ht, hD', ?_, hpi, hpub', hsc',
+  refine ⟨Flock.Bridge.servedIV5 cf pf, D, pi, pub, rfl, rfl, rfl, hcf, hpf, ht, Flock.Desc.parseStmt_of_parse hD', ?_, hpi, hpub', hsc',
     Flock.Bridge.rowsOk_of_scopeOkH hsc', hdup, ?_, rfl, rfl, rfl⟩
   · exact FlockC3.VStarList.built_of_parse
       (FlockSoundness.Discharge.Hidden.parse_untyped ((zkTags_typed _).trans ht) (Flock.Desc.parse_flat hD')).1

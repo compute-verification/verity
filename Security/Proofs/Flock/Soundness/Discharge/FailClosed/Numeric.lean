@@ -1,7 +1,25 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.One
-import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.One
+public import Proofs.Flock.VBridge.Family.Lig
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
-import Proofs.Flock.VBridge.Family.Lig
+import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Soundness at `fast100`'s numbers, over everything flock-verify accepts without `--zk`
@@ -26,6 +44,8 @@ acceptance gives it.
 Under `--zk` the per-table term is each table's `bound`, at most `2^-203` at C-Flock ZK's parameters (`TabZK.M1`,
 `ksAvgStrictZ_le_m1`). Acceptance does not give `M1` here, so the `--zk` claims stay as `flock_verify_sound` states them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 

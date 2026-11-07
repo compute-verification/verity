@@ -1,4 +1,19 @@
-import Proofs.Flock.C3.Reps.SentKeys
+module
+
+public import Proofs.Flock.C3.Reps.SentKeys
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `rep₀`'s `w` read off the layers: `WDecodes`, and each part's `hres` at it
@@ -18,6 +33,8 @@ touch, and first-fit packing can leave elements of a touched port that none of t
 shape `m = 25, k = 22, c = 8`, part 1 reads no bit of `m76`'s first four elements), so `ResReadCol` asks only of the
 bits some part reads.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

@@ -1,4 +1,21 @@
-import Proofs.Flock.Recursive.ValueSource
+module
+
+public import Proofs.Flock.Recursive.ValueSource
+public import Proofs.Flock.Recursive.ValueSrc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.VBridge.PartS
 
 /-!
 # The verifier's rows at the inner session's units
@@ -13,6 +30,8 @@ import Proofs.Flock.Recursive.ValueSource
   `innerRows_sparseOut` give, under `zeroSalt` (`valueSrcAll_zero`, `value_tie_collR`'s `hsrc`; `zeroRows_get`);
 * `openCheck_of_check`, `residualsCheck_of_check`, `sparseCheck_of_check`: `RecCoins.check` runs those checks there.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

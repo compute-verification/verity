@@ -1,5 +1,14 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Event
-import Proofs.Flock.Soundness.Registered.Defs
+module
+
+public import Flock.Registered
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Proofs.Flock.Soundness.Registered.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import VCVio.Prelude.Core
 
 /-!
 # `verify --zk --registered F`, as an event of the audit
@@ -21,6 +30,8 @@ path per table row (`Registered.entry`). Instance `r` of the drawn statement is 
 * `regPaths c pub t port`: the path the drawn statement's header gives for that row, at the table row `u`'s ref names.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.ZkReg
 
 open Lean (Json)
@@ -31,10 +42,12 @@ open FlockSoundness.Discharge.ZkExec (zkInputs)
 export Flock (checkRegistered)
 
 /-- **flock-verify `--zk --registered F` accepts the transcript**, `own` F's ports: the session's statements set up from
-`zkInputs I` and the record's draw, each passes the registered check against `own`, each passes `Zk.shapeOk`, and
-`Flock.Zk.verify` accepts the record and the proof files. -/
+`zkInputs I` and the record's draw, each passes the registered check against `own`, every port of each one's circuit is
+a port of `own` (`Registered.checkComplete`, which flock-verify runs whenever `--registered` is given), each passes
+`Zk.shapeOk`, and `Flock.Zk.verify` accepts the record and the proof files. -/
 def AcceptsZKR (I : Inputs) (own : Array Registered.Port) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupOf (zkInputs I) t.record = .ok (spec, sts) ∧ sts.forM (checkRegistered · (some own)) = .ok () ∧
+    sts.forM (fun (st : Stmt) => Registered.checkComplete st.c own) = .ok () ∧
     sts.forM Flock.Zk.shapeOk = .ok () ∧ Flock.Zk.verify spec (sts.map Flock.Setup.ofCircuit) t.record t.proofs = .ok ()
 
 variable {n : ℕ} {Reg : Type}

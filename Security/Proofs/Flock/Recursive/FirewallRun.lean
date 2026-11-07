@@ -1,4 +1,6 @@
-import Flock.Firewall
+module
+
+public import Flock.Firewall
 import Flock.Firewall.Contract
 
 /-!
@@ -14,6 +16,8 @@ What a message says but its commit strings is `blank`; its commit strings, in th
 `holes`; `fillAll` puts commit strings back into blanked messages. The proof follows `run`'s loop, `step`'s cases and the
 salting `mapM`s at once at the two salt lists (`Rel`, a relational reading of the firewall's state monad).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallRun
 
@@ -450,7 +454,7 @@ theorem step_hello (s : Schedule) (text : String) :
   refine Rel.bind Rel.get fun a a' q q' h => ?_
   obtain ⟨rfl, rfl, _, _, rfl, _⟩ := h
   refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
-  rcases hj : Lean.Json.parse text with e | v
+  rcases hj : Flock.JsonParse.parse text with e | v
   · exact Rel.throw_bind
   refine Rel.pure_bind ?_
   refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
@@ -479,6 +483,8 @@ theorem step_commit (s : Schedule) (rootF : ByteArray) (roots publics : List (St
   obtain ⟨rfl, rfl, rfl⟩ := h
   refine Rel.bind Rel.lift fun _ _ q q' h => ?_
   obtain ⟨-, rfl, rfl⟩ := h
+  refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
+  refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
   refine Rel.bind (Rel.mapM _ (fun e => e.2) blankRoot (fun e r r' => ?_) _ _ _) fun t t' q q' h => ?_
   · obtain ⟨n, v⟩ := e
     refine Rel.bind (Rel.saltedTop v) fun l l' r₁ r₁' h => ?_
@@ -536,6 +542,7 @@ theorem step_finish (s : Schedule) : Rel ys ys' [] [] (step s .finish) (step s .
   refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
   refine Rel.bind Rel.lift fun _ _ q q' h => ?_
   obtain ⟨-, rfl, rfl⟩ := h
+  refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
   refine Rel.bind Rel.lift fun _ _ q q' h => ?_
   obtain ⟨-, rfl, rfl⟩ := h
   refine Rel.bind (Rel.set ?_) fun _ _ q q' h => ?_
@@ -562,11 +569,12 @@ theorem step_round (s : Schedule) (stream : String) (content : ByteArray) (n : N
   obtain ⟨rfl, rfl, z, x, rfl, _⟩ := h
   rw [show ({ c with salts := z, sent := x } : State).roots = c.roots from rfl]
   refine Rel.ite_jp Iff.rfl ?_ fun _ hJ => ?_
-  · refine Rel.bind (Rel.mapM Firewall.saltedTop (fun l => l) blankTop (fun t _ _ => Rel.saltedTop t) _ _ _)
+  · refine Rel.bind Rel.get fun d d' q q' h => ?_
+    obtain ⟨rfl, rfl, _, _, rfl, _⟩ := h
+    refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
+    refine Rel.bind (Rel.mapM Firewall.saltedTop (fun l => l) blankTop (fun t _ _ => Rel.saltedTop t) _ _ _)
       fun tops tops' q q' h => ?_
     obtain ⟨hT, rfl, rfl⟩ := h
-    refine Rel.bind Rel.get fun d d' q q' h => ?_
-    obtain ⟨rfl, rfl, _, _, rfl, _⟩ := h
     refine Rel.bind (Rel.mapM_same _ (fun e r r' => ?_) _ _ _) fun tn tn' q q' h => ?_
     · refine Rel.bind Rel.lift fun k k' r₁ r₁' h => ?_
       obtain ⟨rfl, rfl, rfl⟩ := h
@@ -574,6 +582,7 @@ theorem step_round (s : Schedule) (stream : String) (content : ByteArray) (n : N
     obtain ⟨rfl, rfl, rfl⟩ := h
     refine Rel.bind Rel.lift fun _ _ q q' h => ?_
     obtain ⟨-, rfl, rfl⟩ := h
+    refine Rel.ite Iff.rfl (fun _ => Rel.throw_bind) fun _ => ?_
     refine Rel.bind (Rel.mapM Firewall.salted (fun c => [c]) (fun _ => ByteArray.empty) (fun row _ _ => Rel.salted row)
       _ _ _)
       fun bcs bcs' q q' h => ?_
@@ -598,8 +607,7 @@ theorem step_round (s : Schedule) (stream : String) (content : ByteArray) (n : N
       refine Rel.bind (Rel.send_same rfl) fun u u' r r' h => ?_
       obtain ⟨rfl, rfl⟩ := h
       exact hJ'
-  · extract_lets (config := { underBinder := false }) parts table
-    generalize List.find? _ c.roots = o₁
+  · generalize List.find? _ c.roots = o₁ at hJ ⊢
     generalize sp.caps[0]? = o₂
     rcases o₁ with _ | ⟨w₁, rootB⟩ <;> rcases o₂ with _ | cap
     · exact Rel.throw_bind

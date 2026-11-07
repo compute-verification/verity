@@ -1,12 +1,15 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.ENNReal.BigOperators
-import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Order.CompleteLattice.Basic
-import Mathlib.Data.Fintype.Perm
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Fintype.Sigma
-import Definitions.Core.Draw
+module
+
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Basic.ENNReal.BigOperators
+public import Mathlib.Basic.ENNReal.Inv
+public import Mathlib.Order.CompleteLattice.Basic
+public import Mathlib.Data.Fintype.Perm
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Sigma
+public import Definitions.Core.Draw
+public import Definitions.Core.Game.Prob
 
 /-!
 # A window of calls: one draw that depends on the registration, then the calls' sessions in order (trusted)
@@ -19,9 +22,9 @@ session reading only its call's share of the draw and `R`. The window accepts wh
 This is the vocabulary of that game, in the form of C-Flock's one-stage audit (`FlockSoundness.Audit`, which the window
 guarantee `audit_window_split_of_record` is stated over), on its own so that a guarantee can be stated over it:
 
-* `Game`, `Strategy`, `prob`: a public-coin interaction with live coins, a deterministic prover strategy, and the exact
-  probability of an outcome over the verifier's coins; `avg` and `prCoin`, the uniform average and probability, core's
-  (`Verity.Game`);
+* `Game`, `Strategy`, `prob`, `avg` and `prCoin`, core's (`Verity.Game`): a public-coin interaction with live coins, a
+  deterministic prover strategy, the exact probability of an outcome over the verifier's coins, and the uniform average
+  and probability;
 * `Law`, a draw law over units, and its escape (`L.escape B`), the probability that its draw misses a set, both core's
   (`Verity.Law`, `Definitions.Core.Draw`); `Law.prod`, the calls' laws each drawn on its own coins, the product law that
   distinct contexts give (M1);
@@ -56,65 +59,19 @@ guarantee `audit_window_split_of_record` is stated over), on its own so that a g
   statements whose wrong sets are copy-closed.
 -/
 
+@[expose] public section
+
 namespace Pouw.Window
 
 open scoped ENNReal
+open Verity.Game
 
 /-! ## Live-coin interactions -/
 
-/-- The verifier's side of a public-coin interaction with live coins: the prover sends a message of its choice (`send`),
-the verifier draws a uniform coin after every earlier message is fixed (`coin`), or the interaction ends with the
-verifier's output (`ret`). -/
-inductive Game (α : Type) : Type 1 where
-  | ret : α → Game α
-  | send (M : Type) : (M → Game α) → Game α
-  | coin (C : Type) [Fintype C] [Nonempty C] : (C → Game α) → Game α
-
-namespace Game
+export Verity (Game)
+export Verity.Game (Strategy prob avg prCoin)
 
 variable {α β : Type}
-
-/-- Sequencing: run `g`, then continue with `f` applied to its output. -/
-def bind : Game α → (α → Game β) → Game β
-  | .ret a, f => f a
-  | .send M k, f => .send M fun m => bind (k m) f
-  | @Game.coin _ C iF iN k, f => @Game.coin _ C iF iN fun c => bind (k c) f
-
-/-- Relabel the output. -/
-def map (f : α → β) (g : Game α) : Game β := g.bind fun a => .ret (f a)
-
-end Game
-
-open Game
-
-variable {α β : Type}
-
-/-- A deterministic prover strategy: a message at every `send` node, for every history (the node's position in the tree);
-after a coin it may depend on that coin. -/
-def Strategy : Game α → Type
-  | .ret _ => PUnit
-  | .send _ k => (m : _) × Strategy (k m)
-  | @Game.coin _ C _ _ k => (c : C) → Strategy (k c)
-
-/-- A strategy for the relabelled game is a strategy for the game. -/
-def Strategy.ofMap (f : α → β) : (g : Game α) → Strategy (g.map f) → Strategy g
-  | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.ofMap f (k s.1) s.2⟩
-  | @Game.coin _ _ _ _ k, s => fun c => Strategy.ofMap f (k c) (s c)
-
-/-- The moves a strategy for `g.bind f` makes in `g`. -/
-def Strategy.head {f : α → Game β} : (g : Game α) → Strategy (g.bind f) → Strategy g
-  | .ret _, _ => PUnit.unit
-  | .send _ k, s => ⟨s.1, Strategy.head (k s.1) s.2⟩
-  | @Game.coin _ _ _ _ k, s => fun c => Strategy.head (k c) (s c)
-
-open Classical in
-/-- The exact probability, over the verifier's independent uniform coins, that the interaction between the verifier `g`
-and the prover strategy `s` ends with an output satisfying `p`. -/
-noncomputable def prob (p : α → Prop) : (g : Game α) → Strategy g → ℝ≥0∞
-  | .ret a, _ => if p a then 1 else 0
-  | .send _ k, s => prob p (k s.1) s.2
-  | @Game.coin _ C iF _ k, s => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * prob p (k c) (s c)
 
 /-- **The expectation over `g`'s run of a quantity of where it leaves the strategy**: run `g` against the moves `s` makes
 in it, and read `F` at `g`'s output `a` and the strategy `s` plays in `f a` from there. -/
@@ -122,9 +79,7 @@ noncomputable def thenExp {f : α → Game β} (F : (a : α) → Strategy (f a) 
     (g : Game α) → Strategy (g.bind f) → ℝ≥0∞
   | .ret a, s => F a s
   | .send _ k, s => thenExp F (k s.1) s.2
-  | @Game.coin _ C iF _ k, s => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * thenExp F (k c) (s c)
-
-export Verity.Game (avg prCoin)
+  | @Verity.Game.coin _ C iF _ k, s => ∑ c : C, (@Fintype.card C iF : ℝ≥0∞)⁻¹ * thenExp F (k c) (s c)
 
 /-! ## Draw laws and the audit whose draw depends on the registration -/
 
@@ -270,7 +225,7 @@ all accept, and summed over the calls. -/
 noncomputable def along (sess : Fin C → Game Bool) (F : (c : Fin C) → Strategy (sess c) → ℝ≥0∞) :
     (cs : List (Fin C)) → Strategy (seqCalls sess cs) → ℝ≥0∞
   | [], _ => 0
-  | c :: cs, s => F c (Strategy.head (f := onAccept (seqCalls sess cs)) (sess c) s) +
+  | c :: cs, s => F c (Strategy.ofBind (onAccept (seqCalls sess cs)) (sess c) s) +
       thenExp (f := onAccept (seqCalls sess cs)) (onAcceptExp (seqCalls sess cs) fun s' => along sess F cs s') (sess c) s
 
 /-- **What the analysis of one call fixes**, in the randomized-extraction form (`ExtractionAnalysis` in

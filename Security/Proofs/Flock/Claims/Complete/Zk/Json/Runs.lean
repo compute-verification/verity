@@ -1,10 +1,50 @@
-import Proofs.Flock.Claims.Complete.Zk.Json.Files
-import Proofs.Flock.Claims.Complete.Runs
+module
+
+public import Proofs.Flock.Claims.Complete.Runs
+import all Init.Data.Array.Basic
+public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Canon
+import Proofs.Flock.Claims.Complete.Json.Goals
+import Proofs.Flock.Claims.Complete.Zk.Discharge
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The honest masked session runs
 
-`Runs.lean` at the masked session: the goal `SessionRunsZk`, given `JsonSpec` and `StmtOkZk` (the masked record's
+`Runs.lean` at the masked session: the goal `SessionRunsZk`, given `StmtOkZk` (the masked record's
 `hello` prints) and one named hypothesis on the masked prover's pieces, `ProverRunsZk`: at every good masked case's
 table, on the masked level-0 commitment, the extra claims at the link's points (which return, the table's regions
 fitting by `readyZk`) and the tape's pads committed, rep `0` returns from the link's send and rep `1` from where rep `0`
@@ -14,6 +54,8 @@ each draws the case's coins at the session's rounds, where `¬ BadZk` passes the
 (`commitPZk_ok`) and the pads' commitment (`innerCommitP_ok`); the session walks its two rep streams in order
 (`Runs.forIn_idx`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 
@@ -96,12 +138,12 @@ theorem Runs.forIn_idx {α β : Type} (f : α → β → PS (ForInStep β)) (inv
     exact ih
 
 /-- **The masked session runs**: the goal `SessionRunsZk`. -/
-theorem sessionRunsZk_goal (S : Claims.JsonSpec printJ Flock.canon) (hS : StmtOkZk H rel)
+theorem sessionRunsZk_goal (hS : StmtOkZk H rel)
     (hR : ProverRunsZk H rel) : SessionRunsZk H rel := by
   intro c
   obtain ⟨st, hst, hsp, hm1, hm2⟩ := c.table
   obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS c
-  obtain ⟨hz, hc, -⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hc, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
   obtain ⟨ct, hct⟩ : ∃ ct, c.spec.coinTree = some ct := Option.isSome_iff_exists.1 c.ready_parts.2.2.2.2
   have ht : c.spec.tables = #[st.tags.table] := by rw [hsp]; rfl
   obtain ⟨v, hv⟩ := zkSchedule_ok (m := (Setup.ofCircuit st).m) hm1 hm2

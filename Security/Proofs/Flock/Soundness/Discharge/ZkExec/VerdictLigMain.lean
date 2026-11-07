@@ -1,4 +1,27 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsStatements
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigModel
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigPad
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigFinal
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigRun
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # The hiding Ligerito accepts
@@ -10,6 +33,8 @@ non-ZK session's (`LigeritoRun.lean`), with an invariant that drops the non-ZK s
 level 0's request is on `2^k₀ + 4` wide rows, which the non-ZK session's `ReqOK` does not describe, and the verdict
 reads neither.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -70,7 +95,7 @@ theorem padE_eq (lv : Flock.Level) (hl : LevelSeam lv) (hrate : lv.rate = 1) (k0
     (fun j hj => hR j (hsz ▸ hj)) (pos_le_alpha lv hl cw cα hcα) hrep hρ0 hρ1 hy ht
 
 set_option maxHeartbeats 8000000 in
-/-- **The hiding Ligerito accepts** (live PROTOCOL.md §7 with §13.3–§13.6). When `Zk.ligerito` accepts from `t` to
+/-- **The hiding Ligerito accepts** (live PROTOCOL.md §7 with `Flock.Ligerito`). When `Zk.ligerito` accepts from `t` to
 `t'` on well-formed rounds, at a schedule whose dimensions and levels are the model's, whose levels' consistency coins
 are not one word, with at least one lane round, level 0 of rate 1 and the padding no longer than level 0's message,
 and with `basisAt` the model's `bHat` of `b` (`hbasis`), then at any pads and batched value, the compiled masked phase's

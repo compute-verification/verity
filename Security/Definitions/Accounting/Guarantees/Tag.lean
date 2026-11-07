@@ -1,5 +1,7 @@
-import Mathlib.Probability.Distributions.Uniform
-import Definitions.Accounting.Tag.PolyHash
+module
+
+public import Mathlib.Probability.Distributions.Uniform
+public import Definitions.Accounting.Tag.PolyHash
 
 /-!
 # The block tags' statements (trusted)
@@ -26,6 +28,10 @@ these statements certifies bandwidth: the bandwidth audit's guarantee rests on a
 Each takes no hypothesis: a condition on its inputs (the blocks differ, the lists differ) is part of the event it
 bounds. The proofs are in `Security/Proofs/Accounting/Tag/`.
 -/
+
+@[expose] public section
+
+open Verity.Game renaming prPMF → prob
 
 namespace Accounting.Guarantees.Tag
 

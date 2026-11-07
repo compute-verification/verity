@@ -1,6 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Defs
-import Proofs.Flock.Soundness.Discharge.Composed.Base
-import Proofs.Flock.Soundness.Discharge.Composed.Inner
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner
+public import Definitions.Flock.ZK.SHVZK
+public import Proofs.Flock.Soundness.Discharge.ZkLink.TablesAt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # One `--zk` sampled session: the draw's tables as `Coined` tables
@@ -10,6 +25,8 @@ import Proofs.Flock.Soundness.Discharge.Composed.Inner
 * `ZkViewAt`: the view statement the composed headline proves at each draw; `ZkViewAtReg`, at the witnesses whose
   registered values are the public ones.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -204,7 +221,7 @@ noncomputable def coinedOf (Tz : TabZK 𝔽 mPts) (st : Stmt) : CoinedSetup :=
         ζ := fun r => fOf (c.rest.zeta r)
         rep := fun k => if k.val < 2 then 0 else 1
         lanes := I.lanes
-        vals := I.vals
+        vals := fun r w u V => I.vals r w u V.2.1
         lig := I.lig
         lam := I.lam
         theta := I.theta

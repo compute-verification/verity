@@ -1,6 +1,10 @@
-import Proofs.Flock.Soundness.ZK.GK.Sim
+module
+
+public import Proofs.Flock.Soundness.ZK.GK.Sim
+public import Proofs.Flock.Soundness.Assumptions
+import Proofs.Flock.Soundness.Game.Expect
 import Proofs.Flock.Soundness.ZK.Masking
-import Proofs.Flock.Soundness.Assumptions
+import VCVio.Prelude.Core
 
 /-!
 # Zero knowledge: Theorem GK, the simulator's output is close to `V*`'s real view
@@ -37,6 +41,8 @@ message (`pre`) with completion read from it (`compP`) and an incomplete view re
 `comp_eq`, `inc_real`, `inc_dummy` and `bind_real` are facts about the protocol's runs; `RewindClose` (Lemma B, one
 rewind) and `PrefinalClose` (Lemma C) are its two distances, taken as hypotheses at `δ_B` and `δ_C`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.GK
 

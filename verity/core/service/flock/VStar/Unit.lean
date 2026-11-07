@@ -1,5 +1,7 @@
-import VStar.PyJson
-import VStar.RecOpen
+module
+
+public import VStar.PyJson
+public import VStar.RecOpen
 
 /-!
 # Units and their `flock-ir-unit/v2` text
@@ -15,6 +17,8 @@ out differently.
 `|A| A.. |B| B..` per row, then (a lowering's text) `LEAVES` and the leaf maps as `json.dumps` writes them (`pyDumps`). A circuit file's sections
 are the same text without `LEAVES`.
 -/
+
+@[expose] public section
 
 namespace VStar
 

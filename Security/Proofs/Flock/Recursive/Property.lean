@@ -1,12 +1,22 @@
-import Proofs.Flock.Recursive.Compile
-import Proofs.Flock.Recursive.Statements
-import Proofs.Flock.Recursive.Premises
-import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.Recursive.Firewall
-import Proofs.Flock.Recursive.Description
-import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
-import Flock.RecResiduals
+module
+
+public import Proofs.Flock.Recursive.ExecClass
+public import Proofs.Flock.Recursive.Firewall
+public import Proofs.Flock.Recursive.Description
+public import Proofs.Flock.Recursive.VStarCheck
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The recursive audit's property (trusted)
@@ -50,6 +60,8 @@ case: at a statement Lean's verifier refuses, (i)'s event is empty.
 C-Flock's definitions and the recursion's model are still in the proofs package, so the statement is here rather than
 in `Security/Properties/`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -177,8 +189,7 @@ session that types, and at one that doesn't, a session of its index that types, 
 `transported zr _hCust h σ` is `σ` against them (`recT`). `stmt q ω` is the hidden statement at the draw `ω` of the
 private circuit whose `rt.leaves` rows the commit strings `q` commit to (`stmtAt` reads it at a list's first
 `rt.leaves`), and the run's hidden statement is `stmt` at `st`'s own description rows (`hiddenAt`: the commit strings
-`Flock.Registered.rowsOf st.c st.pub rt` that Lean's verifier opens against `rt`, `AcceptsDescription`, PROTOCOL.md
-§16.16), whichever rows V*'s sessions read. Taken: A3 (`_hA3`). Then for the registered commit strings `p`, each
+`Flock.Registered.rowsOf st.c st.pub rt` that Lean's verifier opens against `rt`, `AcceptsDescription`, `Tags.withPlainLeaves`), whichever rows V*'s sessions read. Taken: A3 (`_hA3`). Then for the registered commit strings `p`, each
 opening `rt` at its row `r < rt.leaves` through the developer's path `path₀ r`, for every count curve `(k, R_w, M, ρ)`
 that bounds every session's rate at each setup of its inputs, given V*'s bridge at the committed rounds (VBridgeC, which
 VBridge gives) at the typed sessions and that hidden statement: the event below is empty; or at some row `st`'s commit
@@ -206,10 +217,9 @@ it (`FirewallSends`), and V*'s staging (`SessionsPublic`, `SessionsCoined`, `Ses
 `hz`, `hR`, `hS`).
 
 (i) is in fork form and states no bits. The recursion's knowledge form, `Claims.Recursion.KS`, is at its level
-`Claims.Recursion.lam`: about 65 bits per SHA-512 call at the deployed shape, below the 100-bit floor and the `2^-128`
-target under every weight. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records
-(`RecDeploy.lamLin2_deployed_ge_dep`), but `KSLin2` at the deployment's dense statements (`KSLin2On` at
-`RecDeploy.DenseAt`) only follows from premises still open (`RecDeploy.ksLin2_deployed_open`), Holo statements being
+`Claims.Recursion.lam`, which no theorem evaluates at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at
+least 135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense
+statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being
 candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 def RecursiveAudit : Prop :=
   (∀ {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Inhabited (CT k)]

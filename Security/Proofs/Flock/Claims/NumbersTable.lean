@@ -1,5 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
-import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Numeric
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Accounting.Numbers
 
 /-!
 # Flock's table error at the deployed parameters: `ε_table ≤ 2^{−205}`, with and without `--zk`
@@ -17,6 +33,8 @@ most `2^{−205}` per table, at every statement in scope:
   `padRepError ≲ 2^{−102.5}`, and one kernel check per `m` (`m1_check_zk`). Its worst case is `2^{−205.008}`, at
   `m = 34`.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock.Numbers
 

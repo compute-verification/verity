@@ -1,7 +1,7 @@
 # `pouw_check`: PoUW's window check as a core protocol
 
 One `Core.Protocol` (`verity/core/protocols/interface`), `PouwCheck.protocol`, id `verity/pouw/v1`, Lean core only:
-PoUW's verifier of record (`verity/core/protocols/pouw/verifier.py`), with `verity/core/protocols/pouw/core_check.py` the
+PoUW's verifier (`verity/core/protocols/pouw/verifier.py`), with `verity/core/protocols/pouw/core_check.py` the
 Python reference held to it.
 
 | field | here |
@@ -14,6 +14,21 @@ Python reference held to it.
 | `Public` | `window.PUBLIC`: `verdict`, `work`, `check`, `sampling`, `length`, `drawn`, `root_W` |
 | `Profile` | the service's `Core.Integrity`, passed through once it is the registered partition's N units sampled subset:K′ at the window's δ, and the sample is subset:K′ over N |
 
+A second `Core.Protocol`, `PouwCheck.Period.protocol`, id `verity/pouw/period/v1` (`pouw-period`), is a period's credit
+and onsite's PoUW subprotocol (`Core.Onsite.components`), with `verity/core/protocols/pouw/period_check.py` its Python
+(`tests/test_period_difftest.py`). It credits a period all or nothing: `Credit.periodCredit` accepts only when every
+window of the period's close is credited.
+
+| field | here |
+| --- | --- |
+| `Params` | the verifier's own `{key, main, name}`: the challenger key it pins, its copy of main's first-parent history, the period's name |
+| `Commitment` | the auditor's ledger, the lines the challenger signed, as canonical JSON: its period's open commits the circuit, K, T, the weights and the fixed length before any coins are flipped |
+| `digest` | SHA-512(`verity/pouw/period/ledger/v1` ‖ 0 ‖ the ledger's bytes) |
+| `Evidence` | `{pins, windows}`: the challenger host's pins log, and each window's evidence in the close's order (`Credit.PERIOD_KEYS`, each sampled proof block's and each round's proof outcome the verifier of record's verdict) |
+| `check` | `Credit.periodCredit`; a refusal is `code: why`, and it never leaves a period undecided |
+| `Public` | `Credit.PeriodCredit.toJson`: each window's credited calls and credited served work, K, δ and each window's ε |
+| `Profile` | `{period, windows}`: the period's name and its number of windows |
+
 | module | `core_check.py` |
 | --- | --- |
 | `PouwCheck.Json` | `sorted(dict)`, `_nat`, `_canon` |
@@ -21,18 +36,21 @@ Python reference held to it.
 | `PouwCheck.Inputs` | `params`, `commitment`, `digest`, `unit_draw`, `evidence`, with their refusals (`answer_of` and `integrity` are the interface's decoders) |
 | `PouwCheck.Check` | `expected_items` and `check` |
 | `PouwCheck.Protocol` | the `Core.Protocol` value |
+| `PouwCheck.Period` | `period_check.py`: the period's `Core.Protocol` value over `Credit.periodCredit`, its decoders and its digest |
+| `PouwCheck.PeriodMain` | `pouw-period`'s entry point |
 | `PouwCheck.Opening` | `opening`, `window_domain`, `verify_path`, `public_bc`: one unit's opening beside the check (`served_commit.check`'s rule), a certified window's under its certified salt |
 | `PouwCheck.Pass` | `pass_epoch` and `draw`, with `coins_of`, `opening_of`, `coin_reason` and `weights_root` under `COIN_VERSIONS`: the window's pass and its sample (`served_commit.Challenger`'s rules); `live_salt`, a live Pearl-C pass's salt from the salt-only session the auditor's ledger reserved, opened on its salt epoch's root (`epochOpenRoot` of its weights' root and its `pass_index`) and ended complete |
 | `PouwCheck.Rounds` | `salt`, `rounds`: a live window's salt coin, opened once after its open root (`salt.window_open_root` of its record and the session the auditor's ledger reserved), and its round coins, each opened once after its recorded round root (`window.rounds_reason`'s rules, `PouwWindow.roundsReason`), both read through the challenger's session the ledger opens for the window (`SampledProofs.Challenger.auditedSession`, `sessionNamed`) |
 | `PouwCheck.Difftest` | the difftest's functions behind `pouw-check-difftest` (`opening`, `registered`, `pass`, `draw`, `salt`, `live-salt`, `rounds`, `chunks`) |
 | `PouwCheck.DifftestMain` | `pouw-check-difftest`'s server, and its `coins n`: `n` bytes of `IO.getRandomBytes` (A3), the challenger's entropy (`verifier.coins`; `tests/test_coins.py`) |
-| `PouwCheck.Credit` | `credit.py`'s `_window_outcomes` and `_period_outcomes` (its entries `window` and `period_credit` on each sampled proof block's proof outcome in place of the proof files they verify themselves, until this runs the verifier of record in-process), and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served window's credit bits fixed before its sampling coin, its round log the challenger's, its A trees tied to its round roots, its sampled proof blocks the sampling coin's over its committed circuit's layout, no partial credit over them, its entries and its sampled proof blocks' proofs its own registration's, its B rows the ones its period's open signed the weights' root of, its served rows the fixed length its period's open committed (`Internal.length`, `committedLength`), and a period counted only closed and complete |
+| `PouwCheck.Credit` | `credit.py`'s `_window_outcomes` and `_period_outcomes` (its entries `window` and `period_credit` on each sampled proof block's proof outcome in place of the proof files they verify themselves, until this runs the verifier in-process), and the steps they compose (`Credit.Internal`'s `credited`, `outcome`, `aLink`, `registration` and `weights`; `drawn`, `layoutOf`, `period`, `committedWeights`): a served window's credit bits fixed before its sampling coin, its round log the challenger's, its A trees tied to its round roots, its sampled proof blocks the sampling coin's over its committed circuit's layout, no partial credit over them, its entries and its sampled proof blocks' proofs its own registration's, its B rows the ones its period's open signed the weights' root of, its served rows the fixed length its period's open committed (`Internal.length`, `committedLength`), and a period counted only closed and complete |
 | `PouwCheck.CreditDifftest` | the difftest's `credit`, `drawn`, `outcome`, `window`, `period` and `a-link` behind `pouw-check-difftest` (`CreditDifftest.all`, the functions `DifftestMain` serves) |
 | `PouwCheck.LeafOwn` | not `credit.py`'s: a window unit's leaf statements' tile and the placement of the values they read in the window's tables (`placeOf`: its round's A table of K, the weights' B, its call's z and receipt tables, each from the unit's base row), from the window's committed descriptor and round log alone, and `pouw-leaf-own-window`, `PouwWindow.Lanes.leafOwn?` at that placement (`tests/test_leaf_own.py`) |
 | `PouwCheck.LeafOwnMain` | `pouw-leaf-own-window`'s entry point |
-| `PouwCheck.Verified` | `credit.py`'s `_asks` and `_verified`: a served window's statements verified, the verdict `credit.window` and `credit.period_credit` take each sampled proof block's outcome from (`credit._lean_verified`). The verifier of record runs outside, so `verified` is asked twice: it names each run (the statement, its K's committed circuit file, the call's `--registered` file and the partition object, up to the first statement a check before the verifier refuses), then judges the verifier's answers (a run that fails or refuses, a rejected session, a session that opened its call's public table or the ok rows elsewhere than the `--registered` file's value and root, or a unit of another call, refuses the window) |
+| `PouwCheck.Lanes` | `credit.py`'s lanes form: a sampled leaf at a K the circuit files commit as `lane<K>` and `combine<K>` (`lanesFiles`, `formOf`) verified as its lanes and combine statements (`leafAsks`), each against its own leaf Program (`leafOf`, a population of one) and the `--registered` file credit builds from the descriptor (`leafRegisteredFile`: the window's tables at the leaf's place, its partials at the produced record's root under the window's `draw_root`, its known rows the verifier's own), then the produced record's opened roots and shared openings (`outcomes`); a leaf outside `LeafLanesSound`'s reach is refused (`lanesShape`, `lanes-shape`) |
+| `PouwCheck.Verified` | `credit.py`'s `_asks` and `_verified`: a served window's statements verified, the verdict `credit.window` and `credit.period_credit` take each sampled proof block's outcome from (`credit._lean_verified`). The verifier of record runs outside, so `verified` is asked twice: it names each run (the statement, its K's committed circuit file, the call's `--registered` file and the partition object, up to the first statement a check before the verifier refuses), then judges the verifier's answers (a run that fails or refuses, a rejected session, a session that opened its call's public table or the ok rows elsewhere than the `--registered` file's value and root, or a unit of another call, refuses the window); a window's lanes evidence adds each sampled lanes-form leaf's runs after the call statements' (`PouwCheck.Lanes`) |
 | `PouwCheck.LiveVerified` | `credit.py`'s `_live_asks` and `_live_verified`: a served window's live@<s> statements verified, the verdict `credit.window` and `credit.period_credit` take each round's live outcome from (`credit._lean_live_verified`), asked twice as `verified` is: it names each run (the statement, the committed live circuit file, round s's `--registered` file, `live_reads.reads_file`'s, and the partition object, up to the first statement a check before the verifier refuses), then judges the verifier's answers (a run that fails or refuses, a rejected session, or a session that proved another unit than its round's, refuses the window) |
-| `PouwCheck.CommittedFiles` | `credit.py`'s `committed_files`: the circuit files a period's open committed (`circuit_files`, each K's template's and the live Program's), which `credit.period_credit` reads from here (`credit._lean_committed_files`) |
+| `PouwCheck.CommittedFiles` | `credit.py`'s `committed_files`: the circuit files a period's open committed (`circuit_files`, each K's template's and the live Program's, or a lanes-form K's `lane<K>` and `combine<K>` with `leaf_programs`), which `credit.period_credit` reads from here (`credit._lean_committed_files`) |
 | `PouwCheck.VerifiedDifftest` | the difftest's `credit-verified`, `credit-live-verified` and `credit-committed-files` behind `pouw-check-difftest` (`VerifiedDifftest.all`, `CreditDifftest.all`'s then it, the functions `DifftestMain` serves) |
 
 `opening` holds a tile proof's public file to the registered window: the unit sampled (or opened undrawn, the filler's),
@@ -118,7 +136,7 @@ the period. Every step that reads the challenger's session (`credited`, `roundsC
 of the serving process's own round root and that round's rows of every registered A value as aligned subtrees
 (`credit.cover`): round s's share of a window's `…/a/<K>`, or the whole of round s's A table of K `…/a/<K>@<s>` (the M rows
 of each of round s's calls of K, call after call, its calls the C/S calls from s·C/S) in round s; and each A value's registered root must be the frame-v3 SHA-512 tree over those
-subtrees and its domain's pads. `registration`: each sampled proof block's proof outcome is the verifier of record's verdict for its session
+subtrees and its domain's pads. `registration`: each sampled proof block's proof outcome is the verifier's verdict for its session
 (`PROOF_KEYS`: the SHA-512 of the descriptor it verified the session against and the session's registered finding,
 the Lean verifier's `registered`, each port's value and the root its reads were opened against); each A value's domain, and
 each other value's a proof opened, is the one one-stage's registration gives it under the committed descriptor's
@@ -152,8 +170,8 @@ end, a second session for the window, roots the challenger's log doesn't show,
 a coin opened twice, one opened before its round's root, a foreign epoch's, a seeded epoch's commitment or another
 layout's). `verity/core/protocols/pouw/tests/test_pouw_core_check.py` checks that every mutation reaches the refusal it
 aims at. Its `window` and `period` go against `credit._window_outcomes` and `credit._period_outcomes` (`credit.window`
-and `credit.period_credit` on proof outcomes, which they derive from a window's proof files by running the verifier of
-record; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
+and `credit.period_credit` on proof outcomes, which they derive from a window's proof files by running the
+verifier; `test_pouw_credit_statements.py` holds that step), and its `credit`, `drawn`,
 `outcome` and `a-link` against the steps they run, `credit._credited`, `credit.drawn`, `credit._outcome` and
 `credit._a_link`, over
 `tests/pouw_credit_cases.py` (a credit bit flipped after the sampling coin, units the prover chose, a sampled proof block failed or

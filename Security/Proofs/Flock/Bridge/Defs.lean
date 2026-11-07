@@ -1,5 +1,39 @@
-import Definitions.Claims.Sampling
-import Definitions.Flock.Circuit
+module
+
+public import Mathlib.Data.List.SplitLengths
+public import Definitions.Claims.Sampling
+public import Definitions.Flock.Circuit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # C-Flock's session as a sampling statement
@@ -11,19 +45,21 @@ The C-Flock session's units, read as the sampling claims' statement, partition, 
   `(⊕ a) ∧ (⊕ b)` is three gates (the two XORs, then their AND), every other gate one. An input gate the constants
   `κ` fix to `b` is the constant `.const b`, public circuit structure, which a proof unit reads with no opening. Wire
   `g` sits at `posOf C g`, its last gate.
-* `partOf P κ`: one class, the population: one stratum of a proof block per C-Flock unit. Slot `u` (`blockOf`) is
-  unit `u`'s lowered gates (`unitGates`), then the position of each input row `u` owns (`insOf`): an input gate the
-  constants `κ` don't fix, whose first reader is `u` (`owner`). **An input row is checked with the unit that owns
-  it**, as the deployed verifier opens it: its session (`HmRow.drawn`) opens only the rows its drawn units read, and
-  registration opens none. An input no unit reads is in no slot.
-* `designOf kd`: the population drawn `subset kd`.
-* `stmtOf P κ kd desc q roots`: the statement of the program at constants `κ`, the query `q`, that design and the
+* `partOf P κ ns`: one class, the population, in strata of sizes `ns`, each a run of consecutive slots
+  (`List.splitLengths`). Slot `u` (`blockOf`) is unit `u`'s lowered gates (`unitGates`), then the position of each
+  input row `u` owns (`insOf`): an input gate the constants `κ` don't fix, whose first reader is `u` (`owner`). **An
+  input row is checked with the unit that owns it**, as the deployed verifier opens it: its session (`HmRow.drawn`)
+  opens only the rows its drawn units read, and registration opens none. An input no unit reads is in no slot.
+* `designOf r`: the population drawn by the one-stage design `r`.
+* `stmtOf P κ r desc q roots`: the statement of the program at constants `κ`, the query `q`, that design and the
   roots.
 * `commitOf pos bit val com cs`: an opening at wire `g`'s position passes when some opening of the registered commit
   string at `g`'s position (`cs (pos g)`) carries its value on `g` (`bit (val op) g`), as `RightRegZ` reads the
   registration's commitments. It reads neither the roots nor `H`.
 * `witOf C X`: an opening of every wire at its position, of its value in `C`'s evaluation on `X`'s inputs.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -76,18 +112,20 @@ def insOf {C : Circuit} {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option B
 def blockOf {C : Circuit} {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) (u : Fin n) : List ℕ :=
   unitGates P u ++ (insOf P κ u).map (posOf C)
 
-/-- **The partition**: the population, one stratum with slot `u` unit `u`'s proof block `blockOf P κ u`. -/
-def partOf {C : Circuit} {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) : Claims.Sampling.Partition :=
-  ⟨[[(List.finRange n).map (blockOf P κ)]]⟩
+/-- **The partition**: the population, in strata of sizes `ns`, each a run of consecutive slots, with slot `u` unit
+`u`'s proof block `blockOf P κ u`. -/
+def partOf {C : Circuit} {n : ℕ} (P : Partition C n) (κ : Fin C.N → Option Bool) (ns : List ℕ) :
+    Claims.Sampling.Partition :=
+  ⟨[ns.splitLengths ((List.finRange n).map (blockOf P κ))]⟩
 
-/-- **The design**: the population drawn `subset kd`. -/
-def designOf (kd : ℕ) : Claims.Sampling.Design := ⟨[.subset kd]⟩
+/-- **The design**: the population drawn by the one-stage design `r`. -/
+def designOf (r : Claims.Sampling.OneStage) : Claims.Sampling.Design := ⟨[r]⟩
 
 /-- **The statement**: `progOf`'s program at constants `κ` under the query `q` and the descriptor bytes `desc`, the
-design `designOf kd`, and the roots. -/
-def stmtOf {C : Circuit} {n : ℕ} (_P : Partition C n) (κ : Fin C.N → Option Bool) (kd : ℕ) (desc : Claims.Msg)
-    (q : Claims.Sampling.Query) (roots : List Claims.Msg) : Claims.Sampling.AuditStatement :=
-  ⟨desc, progOf C κ, q, designOf kd, roots⟩
+design `designOf r`, and the roots. -/
+def stmtOf {C : Circuit} {n : ℕ} (_P : Partition C n) (κ : Fin C.N → Option Bool) (r : Claims.Sampling.OneStage)
+    (desc : Claims.Msg) (q : Claims.Sampling.Query) (roots : List Claims.Msg) : Claims.Sampling.AuditStatement :=
+  ⟨desc, progOf C κ, q, designOf r, roots⟩
 
 open Classical in
 /-- **The registration's commitment**: an opening at wire `g`'s position passes when some opening `op` of the

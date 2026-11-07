@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Reps
-import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Assemble
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Reps
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Assemble
 
 /-!
 # R11b at `J` tables: the one-table decoder on each table's streams
@@ -10,3 +12,5 @@ import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Assemble
 * `Reps.lean`: `accepts_reps_at`, flock-verify's acceptance at table `j`, rep by rep; `planJ_get`, `tableJ_of`.
 * `Assemble.lean`: `decodesOnJ_exec`.
 -/
+
+@[expose] public section

@@ -28,7 +28,7 @@ bound the fold, and the honest Dither GEMM with its duo fold on wgmma and on tcg
 | `probes/imad_forms.cuh`, `probes/sm90_imad.cu`, `probes/sm100_imad.cu` | The IMAD forms of duo's ALU work: IMAD.HI.U32 alone, beside duo against IMAD and LOP3, and duo with its LEA.HI as IMAD.HI + IMAD on every word (`f_duoi`) and on one in three (`f_duom`) |
 | `uni.sh`, `uniform.py` | Their job for one family and its analysis: UP (the uniform pipe), UNI's lines (UP; an issue slot on the issue rows; no other row, each row's limit recorded), every facet checked at every point, and the IMAD forms; `census --write` puts UNI's lines in the device directory, which census.py's `--write` keeps |
 | `probes/s8_mma.cu`, `s8_mma.py`, `s8_mma.sh` | The integer step's semantics on each card, one instruction a tile in eight forms (s8/u8 × s8/u8, with and without `.satfinite`): mma.sync m16n8k32 on both, wgmma m64n8k32 and m64nNk32 for N = 64, 128, 256 (the N an s8 GEMM's warpgroup tile issues: families `wg64`, `wg128`, `wg256`) on sm_90a, tcgen05.mma kind::i8 128×32×32 on sm_100a (idesc bit 3 saturates), each against `verity.ml.circuits.silicon.integer` on sm_120's IMMA probe's families at its tile, with the clamp tiles; `s8_mma.py evidence` writes an instruction's `tc-evidence/v1`, which pinned `sm90.*.s8` and `sm100.*.s8`. `s8_mma.sh build` compiles on a CPU node, and `S8_MMA_BIN` runs that binary on the card |
-| `probes/sm90_emp.cu`, `emp.sh`, `emp.py` | The machine model's combined routes on sm_90a, each beside a saturated wgmma: the uniform chain with the honest step and an FFMA filler (`emp_pack`, `emp_pack3` at 3 warps a SMSP), 2:4 sparse wgmma against its dense twin with A in shared memory or registers (`wgsp_`, `wgsprs_`), LDS.128 beside SS wgmma (`emp_smem`), setmaxnreg producer/consumer splits (`emp_reg*`); `emp.sh` builds and gates on a CPU node and times on the H200, `emp.py` prices every timed loop's whole SASS on DS-90's facets (issue, tensor, alu, imad, shfl; a facet above 1 is a rate above the sheet) and reads each probe's event clock beside NVML's |
+| `probes/sm90_emp.cu`, `emp.sh`, `emp.py` | The ACCEL model's combined routes on sm_90a, each beside a saturated wgmma: the uniform chain with the honest step and an FFMA filler (`emp_pack`, `emp_pack3` at 3 warps a SMSP), 2:4 sparse wgmma against its dense twin with A in shared memory or registers (`wgsp_`, `wgsprs_`), LDS.128 beside SS wgmma (`emp_smem`), setmaxnreg producer/consumer splits (`emp_reg*`); `emp.sh` builds and gates on a CPU node and times on the H200, `emp.py` prices every timed loop's whole SASS on DS-90's facets (issue, tensor, alu, imad, shfl; a facet above 1 is a rate above the sheet) and reads each probe's event clock beside NVML's |
 
 The tests are `../tests/test_dc.py` (wgmma.cuh current, the twin against a per-word loop at L = 32 and 64 and against
 dgemm.cu's host reference, analyze's arithmetic, census.py's facets on a synthetic run, the device directories' form,
@@ -41,25 +41,27 @@ control pass (`../opcode_probe/README.md`).
 ## Running
 
 ~~~text
-research run --on vy-dc-h200 --project verity --source /workspace --cwd source --custody-ttl 12h \
+research run --on H200 --project verity --source /workspace --cwd source --custody-ttl 12h \
   --timeout 60m --env GPU_LEASE_WHO=dc -- bash benchmarks/pouw/dc/run.sh sm90
-research run --on vy-dc-b200 ... -- bash benchmarks/pouw/dc/run.sh sm100
-research run --on vy-dc-b200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
+research run --on B200 ... -- bash benchmarks/pouw/dc/run.sh sm100
+research run --on B200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/pipe.sh
 python3 benchmarks/pouw/dc/analyze.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
 python3 benchmarks/pouw/dc/pipe.py analyze ~/.research/runs/RUN/out --census SM100_RUN_OUT...
 python3 benchmarks/pouw/dc/pipe.py agree ~/.research/runs/RUN_A/out ~/.research/runs/RUN_B/out
 python3 benchmarks/pouw/dc/census.py sm90 ~/.research/runs/RUN/out... --write benchmarks/pouw/machine_model/data/devices/sm_90
-research run --on vy-dc-b200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
-research run --on vy-dc-b200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
-research run --on vy-dc-b200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/pouw/dc/uni.sh sm100  # LDTM.x128's price
-research run --on vy-dc-b200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
-research run --on vy-dc-b200 ... --env UNI_TABLES=a2u ... -- bash benchmarks/pouw/dc/uni.sh sm100     # A2u with every SMSP's issue saturated
+research run --on B200 ... --timeout 30m ... -- bash benchmarks/pouw/dc/uni.sh sm100     # or sm90 on the H200
+research run --on B200 ... --env UNI_TABLES=sat ... -- bash benchmarks/pouw/dc/uni.sh sm100   # issue, sat
+research run --on B200 ... --env UNI_TABLES=ldtm ... -- bash benchmarks/pouw/dc/uni.sh sm100  # LDTM.x128's price
+research run --on B200 ... --env UNI_TABLES=async ... -- bash benchmarks/pouw/dc/uni.sh sm100   # uniform beside a saturated async tcgen05/wgmma
+research run --on B200 ... --env UNI_TABLES=a2u ... -- bash benchmarks/pouw/dc/uni.sh sm100     # A2u with every SMSP's issue saturated
 python3 benchmarks/pouw/dc/uniform.py census ~/.research/runs/RUN/out ~/.research/runs/SAT_RUN/out... --write
-research run --on vy-dc-h200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
-research run --on vy-dc-h200 ... -- bash benchmarks/pouw/dc/s8_mma.sh sm90     # sm100 on vy-dc-b200: the integer step
-research run --on vy-nebius-cpu-1 ... -- bash benchmarks/pouw/dc/s8_mma.sh build sm90   # CUDA 13.0 there (through slot.py); then on the card (--send):
-research run --on vy-dc-h200 ... --send BIN --send BIN.nvcc --env S8_MMA_BIN=inputs/s8_mma_90a -- bash benchmarks/pouw/dc/s8_mma.sh sm90 wg64 wg128 wg256
+research run --on H200 ... --timeout 40m ... -- bash benchmarks/pouw/dc/ffill.sh     # ffill's conformance and cost
+research run --on H200 ... -- bash benchmarks/pouw/dc/s8_mma.sh sm90     # sm100 on a B200: the integer step
+research run --on CPU_NODE ... -- bash benchmarks/pouw/dc/s8_mma.sh build sm90   # CUDA 13.0 there (through slot.py); then on the card (--send):
+research run --on H200 ... --send BIN --send BIN.nvcc --env S8_MMA_BIN=inputs/s8_mma_90a -- bash benchmarks/pouw/dc/s8_mma.sh sm90 wg64 wg128 wg256
 ~~~
+
+H200 and B200 name a node with that card, and CPU_NODE a CPU node.
 
 The node needs CUDA 13.0 (`/usr/local/cuda-13.0`, driver ≥ 580). Each run builds and SASS-gates everything before it
 touches the GPU (103 gates on sm_90a, 68 on sm_100a), then under one lease: the GEMM gate at three shapes (each dump
@@ -181,7 +183,7 @@ issue-loaded one. Repeats agree within 0.002 SMSP-cycles a uniform instruction.
 
 ## Combined routes beside wgmma (`emp.sh`, 1× H200)
 
-`probes/sm90_emp.cu` runs the routes the machine model's red team named beside
+`probes/sm90_emp.cu` runs the routes the ACCEL model's red team named beside
 a saturated wgmma, and `emp.py` prices each timed loop's whole SASS on DS-90's facets. Three rounds, 69 loops, none
 above a facet:
 
@@ -212,13 +214,13 @@ sm_103 has no tcgen05 kind::i8: ptxas refuses it (`Feature '.kind::i8' not suppo
 13.0), so `dg100` and the i8 probes don't build there (`scalar.cu` does). The honest kernel needs an exact route through
 an FP kind, which the protocol states as its own T1 table (an FP design or kind::ti16, sm_107f only):
 
-- **k3 on kind::f8f6f4 (E4M3)**, emu8's Karatsuba (`../emu8/`): balanced
+- **k3 on kind::f8f6f4 (E4M3)**, emu8's Karatsuba: balanced
   base-16 limbs, xy = 240hh′ + 16mm′ − 15ll′; three MMAs a k32 step into two accumulators started at binade constants
   (C1 ulp 1, C2 ulp 1/8), and the word grows by 15·bits(acc1) + 2·bits(acc2), two IMADs. k4 (four MMAs, one C0) is the
   fallback. Both are exact only if the tcgen05 FP32 adder keeps C + T exact in that binade. **On the B200 it does**:
   k3 and k4 on all five adversarial classes, 0 bad accumulators and 0 bad k32 words in two runs, so the E4M3 route
   holds for a k32 step.
-- **NVFP4** (kind::mxf4nvf4, K 64, twice the FP8 rate): emu8's `accounting.py` `fp4_route` writes U as two E2M1 terms
+- **NVFP4** (kind::mxf4nvf4, K 64, twice the FP8 rate): emu8's FP4 route writes U as two E2M1 terms
   under per-block scales; its adder matches the existing silicon model (SIL BLACKWELL_SM100_NVF4/MXF4).
 
 Cost against B200's kind::i8 kernel, at the rates the tensor table gives every 32-deep kind (256 slots a SM a clock):
@@ -238,7 +240,7 @@ for sm_103a (its guard and device check name sm_100a today) and extended from on
 then sm100_tcgen05.cu's f8f6f4, f16 and tcgen05.ld probes (its i8 forms removed) and `scalar.cu`: about 2 GPU-hours on
 a 1× B300.
 
-`../lowbit_dc/` has since run both routes end to end on the B200 in dgemm's kernel and receipts, bit-exact: k4s, k4 with
+Both routes have since run end to end on the B200 in dgemm's kernel and receipts, bit-exact: k4s, k4 with
 the accumulator restored to its binade by tcgen05.st after each word leaves, costs one IADD3 a word (no IMAD) and is
-1.24–1.45× native int8 in the same pipelined shape, while k3 from +0 (2 FFMA + IADD3) is 1.9–2.2×. Its `fpx` (every
-tcgen05 FP8 and FP4 kind to K = 2^17, and the adder's window) builds for sm_103a, and is the B300 exactness run.
+1.24–1.45× native int8 in the same pipelined shape, while k3 from +0 (2 FFMA + IADD3) is 1.9–2.2×. The probe that ran them
+(`fpx`: every tcgen05 FP8 and FP4 kind to K = 2^17, and the adder's window) also built for sm_103a.

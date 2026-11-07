@@ -1,10 +1,14 @@
-import Definitions.Pous.Game.Oracle
+module
+
+public import Definitions.Pous.Game.Oracle
 
 /-!
 # The index-tweaked hash chain of B3
 
 Moved verbatim from the targets file.
 -/
+
+@[expose] public section
 
 namespace Pous.HashChain
 

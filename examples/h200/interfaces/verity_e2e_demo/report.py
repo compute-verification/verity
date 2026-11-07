@@ -1,4 +1,4 @@
-"""Demo A's report: one or more block records (`block_record`, ``verity/block-record/v1``) and a measurements
+"""Demo A's report: one or more block records (`block_record`, ``verity/block-record/v2``) and a measurements
 file rendered as Markdown in three parts: 1. ran and proved, on one H200, one block;
 2. measured on the demo, the inputs to the scaling claim; 3. computed from the same theorem and the measured costs, not
 run; then what the demo didn't show, and every number's source.
@@ -42,7 +42,7 @@ its subcircuit, unit id, step, slot, why and run; part 1 lists them beside the v
 block counts them as failures, not skips. Left out, the list renders as ``⟨VISIBLE_FAILURES⟩``; an empty list says
 every drawn unit was proved.
 
-**Gathers** are wire references, not proof units: a measured subcircuit named for one is refused.
+**Gathers** are wire references, not proof blocks: a measured subcircuit named for one is refused.
 
 **Words.** Each of the six subprotocols by its name (sampled proofs, PoUW, PoUS, the bandwidth audit, the network
 certifier, the wipe), "proof block", "sampling block", "server-time block" and "subcircuit": `render` refuses a report
@@ -232,7 +232,7 @@ MEASURED: dict[str, str] = {
     "PLANNER": "proofs' planner (`benchmarks/sampling_plan/demo_a.py`) at its commit, and the recorded run of it "
                "at 1% of a one-week sampling block (`--spans week`)",
     "H_POOLED": "PLANNER's run: `for_budget` at 1% of a one-week sampling block, a unit's harm its own ANDs, the plan of "
-                "record's faulty ANDs at δ = 1% (`plan_of_record-week.json` › at › 0.01 › free_compute)",
+                "record's incorrect ANDs at δ = 1% (`plan_of_record-week.json` › at › 0.01 › free_compute)",
     "B_POOLED": "PLANNER's run: the same plan's leaked bits at δ = 1%, output bits plus which units are wrong "
                 "(`plan_of_record-week.json` › at › 0.01 › leak)",
 }
@@ -848,7 +848,7 @@ def _misses(rows: Sequence[Mapping[str, Any]], failures: Sequence[Mapping[str, A
 def main(argv: Sequence[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description="Demo A's report from block records and a measurements file.")
     ap.add_argument("records", nargs="*", type=Path,
-                    help="block records (verity/block-record/v1); the first is the block. None for a report whose "
+                    help="block records (verity/block-record/v2); the first is the block. None for a report whose "
                          "measurements carry sections or proved (M3's report)")
     ap.add_argument("--measurements", type=Path)
     ap.add_argument("--record-label", help="the label every number read from the block records carries")

@@ -26,41 +26,11 @@ standing = "supported"
 beyond = "contested"
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
 
-[premise.parameter-hard-priced-at]
-lean = "Nci.Assumptions.ParameterHardPricedAt"
-standing = "supported"
-beyond = "contested"
-credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
-
-[premise.conditional-parameter-hard-at]
-lean = "Nci.Cover.Assumptions.ConditionalParameterHardAt"
-standing = "assumed"
-beyond = "contested"
-credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
-
 [premise.weights-incompressible]
 lean = "Nci.Assumptions.WeightsIncompressible"
 standing = "assumed"
 beyond = "contested"
 credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: one step's data replays the step (E1 P0)", status = "derived" }
-
-[premise.columns-incompressible]
-lean = "Nci.Cover.Assumptions.ColumnsIncompressible"
-standing = "supported"
-beyond = "contested"
-credible_bits = { value = 1.1e9, unit = "bit", source = "as premise.update-hardness: the embedding's update replays with the step (E1 P0)", status = "derived" }
-
-[premise.value-read-hardness]
-lean = "Nci.Cover.Assumptions.ValueReadHardness"
-standing = "contested"
-beyond = "contested"
-credible_bits = { value = inf, unit = "bit", source = "contested at every k: an exact block codes an activation in 0.87-0.94 bits given theta (replay-consistent exact blocks on Qwen2.5-1.5B), below f = 4", status = "measured" }
-
-[premise.activation-reads]
-lean = "Nci.Cover.Assumptions.ActivationReads"
-standing = "contested"
-beyond = "refuted"
-credible_bits = { value = 4e9, unit = "bit", source = "a block holding Kimi K2's embedding and dense layer 0 updates computes their outputs from token ids (cheap inputs, measured); contested below at f = 4 (exact blocks on Qwen2.5-1.5B)", status = "derived" }
 
 [premise.activation-chained]
 lean = "Nci.Assumptions.ActivationChained"
@@ -79,12 +49,6 @@ lean = "Nci.Cover.MulBlocks.Upstream"
 standing = "supported"
 beyond = "supported"
 credible_bits = { value = inf, unit = "bit", source = "Nci.Cover.MulBlocks.Upstream docstring: a structural property of the training circuit; the depth D it needs at k is classes.upstream_share", status = "derived" }
-
-[premise.cube-wide]
-lean = "Nci.Cover.Cube.Wide"
-standing = "supported"
-beyond = "supported"
-credible_bits = { value = inf, unit = "bit", source = "Nci.Cover.Cube.Wide: the accumulation entries' width, a property of the recipe's shapes", status = "derived" }
 
 [premise.baseline-registered]
 lean = "Nci.Assumptions.ThetaRegistered"

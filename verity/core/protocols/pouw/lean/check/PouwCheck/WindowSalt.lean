@@ -1,5 +1,6 @@
-import PouwCheck.Pass
-import Identity.Domains
+module
+
+public import PouwCheck.Pass
 
 /-!
 # A live window's salt (`core_check.window_salt`)
@@ -14,6 +15,8 @@ opened after R, its salt that coin's round-0 unit salt after R (`h1tile.live_sal
 `SALT_BYTES`), and its session the gate's answer for the session without its secret (`carries`). A seeded window's
 answer carries no salt. Every refusal is `core_check.py`'s.
 -/
+
+@[expose] public section
 
 namespace PouwCheck
 

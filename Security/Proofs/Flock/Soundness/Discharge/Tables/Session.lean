@@ -1,12 +1,14 @@
-import Proofs.Flock.Soundness.Discharge.Tables.Sim
-import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
+module
+
+public import Proofs.Flock.Soundness.Discharge.Tables.Sim
+public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 
 /-!
-# R11 for sessions of `J` tables: the live audit simulated in the salted audit
+# The refinement for sessions of `J` tables: the live audit simulated in the salted audit
 
-`execRefines_on` (`Exec/LiveOn.lean`) is R11 for one-table plans. This file is R11 for any plan: at each draw the live
-session is `liveSession` over the plan's `J` tables, written out as a session directory by `wr`, and the audit's
-session is `batchedSessionL` on the plan.
+`execRefines_on` (`Exec/LiveOn.lean`) is the refinement for one-table plans. This file is the refinement for any plan:
+at each draw the live session is `liveSession` over the plan's `J` tables, written out as a session directory by `wr`,
+and the audit's session is `batchedSessionL` on the plan.
 
 * `sessionBL_eq_modelSession`: the salted session on the tables `ts` is `modelSession`'s, with table `j`'s reps
   `repsOf A (ts.get j)` and output `tableOutL`.
@@ -16,8 +18,10 @@ session is `batchedSessionL` on the plan.
   live outcome flock-verify accepts, table `j`'s reps run on the tapes decoded from its streams `(j, 0)`, `(j, 1)` and
   its proof files, and the salted table's verdict on those runs holds. One `DecodesTable` per draw, registration and
   table; at one table it is `DecodesOn`'s.
-* `simAuditJ`, `execRefines_tables`: the audit strategy built from a live one, and R11 at it with `bad = ⊥`.
+* `simAuditJ`, `execRefines_tables`: the audit strategy built from a live one, and the refinement at it with `bad = ⊥`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Tables
 
@@ -123,10 +127,10 @@ noncomputable def simAuditJ (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin 
       (Strategy.ofMap (wr (L.draw ω) τ.1) _
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
-/-- **R11 for sessions of `J` tables.** Against any live prover `τ` of the live audit whose session at each draw is
-`liveSession` over the plan's tables, written out by `wr`, flock-verify's acceptance is no likelier than the salted
-audit's acceptance against the simulated prover `simAuditJ … τ`, with no live event added (`bad = ⊥`), whenever the
-decoder is right on accepted sessions at the law's draws, table by table (`DecodesOnJ`). -/
+/-- **The refinement for sessions of `J` tables.** Against any live prover `τ` of the live audit whose session at each
+draw is `liveSession` over the plan's tables, written out by `wr`, flock-verify's acceptance is no likelier than the
+salted audit's acceptance against the simulated prover `simAuditJ … τ`, with no live event added (`bad = ⊥`), whenever
+the decoder is right on accepted sessions at the law's draws, table by table (`DecodesOnJ`). -/
 theorem execRefines_tables (hdec : DecodesOnJ H E Lf plan I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfJ dg plan N wr))) :
     ExecRefines (auditLive L Reg (liveOfJ dg plan N wr)) τ (LiveAccepts I) (fun _ => False)

@@ -8,7 +8,12 @@ nothing at its last column, the constant's. `rows_ok` proves that a well-formed 
 succeeds and writes only inside its rows' and calls' ranges (`place_ok`), so copies whose ranges are apart each find their
 columns unwritten (`foldlM_apart`).
 -/
-import Flock.TmplRows
+module
+
+public import Flock.Tmpl
+public import Flock.TmplRows
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

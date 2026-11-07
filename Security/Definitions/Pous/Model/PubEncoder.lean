@@ -1,4 +1,6 @@
-import Definitions.Pous.Model.Audit
+module
+
+public import Definitions.Pous.Model.Audit
 
 /-!
 # The public-encoder setup check and audit game
@@ -13,6 +15,8 @@ An untrusted server encodes: its encoder `E` outputs `(pp*, C*)` from `(W, ω, r
 `ξ` accepts or rejects it as the encoding of the committed `W`, and preprocessing and the audit run on `(pp*, C*)`.
 The commitment to `W` and the binding of `C*` are idealized, and the check's cost is not in any statement.
 -/
+
+@[expose] public section
 
 namespace Pous
 

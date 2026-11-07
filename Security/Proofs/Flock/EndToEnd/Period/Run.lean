@@ -1,4 +1,8 @@
-import Definitions.Flock.Game.Prob
+module
+
+public import Definitions.Flock.Game.Prob
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A period of audits, run one after another (trusted)
@@ -21,6 +25,8 @@ a per-session hypothesis about the prover (such as `cr/sha-512` for its knowledg
 strategies the period's prover plays. `PeriodPlays G i T s j τ` says `τ` is one of them, the strategy sampling block `j`
 is played with on some run, so a statement takes such a hypothesis flat, `∀ j τ, PeriodPlays G i T s j τ → good j τ`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

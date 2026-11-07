@@ -1,6 +1,43 @@
-import Proofs.Flock.Claims.KS.PlainDrawJMove
-import Proofs.Flock.Claims.Recursion.NextJ
-import Proofs.Flock.Claims.Recursion.CallsBridgeE
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawJ
+public import Proofs.Flock.Claims.KS.PlainDrawJMove
+public import Proofs.Flock.Claims.Recursion.CallsBridgeE
+public import Proofs.Flock.Claims.Recursion.NextJ
+import Flock.With.SimVerify
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
 
 /-!
 # The plain verdict at the draw from an accepting `nextJ` step
@@ -23,6 +60,8 @@ runs the plain verdict and custody's reading at the coin-substituted value `coin
   `⟨coinSubJ spec c₁ mids f.j, f.proofs⟩`), `plainVerdictAtJK id` holds at the step's live outcome and its link's root.
   The reader's premise moves to what `wrPDJK` writes by `txNoOffAtJK_of_records`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.Custody
 
@@ -152,7 +191,7 @@ open Claims.Bridge.Custody (RootField PointField RoundFields)
 /-- **What `Record.decodeJWithK` reads** of the parsed value, whatever the hashes and `keep` (`decodeWithK_ok` without
 the parse). -/
 theorem decodeJWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Lean.Json}
-    {sess : Session} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
+    {sess : RunRecord} (h : Record.decodeJWithK keep hs spec j = .ok sess) :
     ∃ l recs, Record.fld j "link" = .ok l ∧ Record.arr j "streams" = .ok recs ∧
       List.Forall₂ (RootField l) spec.tables.toList sess.rootB.toList ∧
       (∃ ps, Record.arr l "points" = .ok ps ∧ List.Forall₂ PointField ps.toList sess.points.toList) ∧
@@ -215,7 +254,7 @@ theorem decodeJWithK_ok (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : Ses
 (`decodeWithK_live` without the parse): the same `root_B` and link points, and at each rep stream the stream the
 decoder finds by its name, whose rounds are `liveOfJ`'s up to their recorded digests. -/
 theorem decodeJWithK_live (keep : Bool → Bool) (hs : Hashes Flock.V) {spec : SessionSpec} {j : Lean.Json}
-    {sess : Session} {lv : Live} (hd : Record.decodeJWithK keep hs spec j = .ok sess)
+    {sess : RunRecord} {lv : Live} (hd : Record.decodeJWithK keep hs spec j = .ok sess)
     (hl : FlockDeploy.liveOfJ spec j = .ok lv) :
     sess.rootB = lv.rootB ∧ sess.points = lv.points ∧ lv.streams.size = spec.repStreams.size ∧
       ∀ q (hq : q < spec.repStreams.size), ∃ y, sess.streams.find? (·.name == spec.repStreams[q].2.2) = some y ∧

@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Event
-import Proofs.Flock.Soundness.Discharge.Exec.Live
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Proofs.Flock.Soundness.Discharge.Exec.Live
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The live `--zk` audit, and the compiled `--zk` table it is simulated in
@@ -27,6 +30,8 @@ game runs on the tape decoded from its stream and its proof file, and the table'
 `root_B` decodes to and the openings the proof files decode to, holds. `simAuditZK` is the audit strategy the simulation
 builds from a live prover.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

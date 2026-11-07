@@ -1,4 +1,6 @@
-import Definitions.Claims.IndexedTapes
+module
+
+public import Definitions.Claims
 
 /-!
 # Claims: the ZK-recursion compiler (a draft, before it freezes)
@@ -79,6 +81,8 @@ eight items:
 Mathlib only, as `Definitions/` is. So every claim is parametric in the deployed verifier, its parser and its readers:
 binding them to the compiled verifier is the code side's, as Flock's is.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -1094,7 +1098,7 @@ the calls only by membership, so they are compared as sets: the record's stream 
 of a table's empty publics change the list of calls the deployed verifier makes, not the set. Two last messages the
 deployed record reads alike, such as the trailing-space pair the deployed verifier decided alike before S0, are one view
 to `E*` with the same calls, so they are no counterexample. That pair refuted (P4) as first stated, a collision wherever
-`final` reads two accepted last messages apart, which is retired (card ef47c02e, 19 Oct).
+`final` reads two accepted last messages apart, which is retired.
 
 The recursion's KS reads this with `LastCoinFree` (`RecDeploy.ksBoundRoute_of_bridge_cols`), not the bridge. At the
 deployed bound record it follows from `Binds` and the deployed plain verifier's binding of its own last message

@@ -1,7 +1,48 @@
-import Proofs.Flock.Bridge.LeafMap
-import Proofs.Flock.Bridge.Transports
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+module
+
+public import Proofs.Flock.Bridge.LeafMap
+public import Proofs.Flock.Bridge.Transports
+public import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.RegLevels.ValueTie
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.PlainReg.Checked
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Tactic.BVDecide.Normalize.BitVec
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -226,6 +267,7 @@ theorem sharedRows_spec {tags : Flock.Tags} {c : Flock.Circuit} {header : Lean.J
        subst h0
        exact ‹¬ _ = true› (Array.contains_eq_true_of_mem hx))
 
+-- `walk_step` down `Flock.HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A shared-row file's tables are one per port, none empty** (`HmRow.loadPublic`, `sharedRows_spec`). -/
 theorem loadPublic_counts {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteArray} {pop : Flock.Public}

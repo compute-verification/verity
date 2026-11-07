@@ -1,4 +1,20 @@
-import Proofs.Flock.EndToEndDrawn.Statement
+module
+
+public import Proofs.Flock.EndToEndDrawn.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 
 /-!
 # Proof of C-Flock's end-to-end guarantee at the drawn units
@@ -9,6 +25,8 @@ last term in closed form:
   units, `Pr[flock-verify accepts ∧ some drawn unit wrong on the public file] ≤ ε_ks + δ_link`;
 * `linkBoundZC`: at a prover whose link finders satisfy A2 (`LinkCRZC`), `δ_link` is its closed form.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

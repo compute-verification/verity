@@ -1,6 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Commit
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Defs
-import Proofs.Flock.Soundness.Discharge.Integrate
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Commit
+public import Proofs.Flock.Soundness.Discharge.Integrate
+public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The tables and sites of a one-table hidden-output session
@@ -25,6 +41,8 @@ read off its layout (`Refine.stmtOf`, which reads `Δ` and the regions `setupHid
 `drawSetupH_of_accepts` and `tableAtH_of_accepts` (`Accepted.lean`): at a draw flock-verify accepts under hidden
 outputs, the table is `stmtOf` of the statement it accepted.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.HiddenExec
 

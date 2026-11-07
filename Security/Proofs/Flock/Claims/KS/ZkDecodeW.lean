@@ -1,5 +1,42 @@
+module
+
+public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkOffSC
+public import Proofs.Flock.Claims.KS.ZkSessionW
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ZkDecJ
-import Proofs.Flock.Claims.KS.ZkOffSC
+import Proofs.Flock.Claims.KS.ZkPlanHJ
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
 
 /-!
 # The deployed `--zk` decoders, with no witness-lane opening off the table
@@ -28,6 +65,8 @@ it self-clashes:
   `decodesTable_deploy` are at `accepted`.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.Composed
 
 open Game Audit Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec
@@ -43,7 +82,7 @@ schedule is `Zk.schedule`'s, and the record decodes to a session with table `j`'
 reader looks up no column off `C` in the reps' `zkRepColsOf` entries at `2·|regions|` extra claims on the streams'
 rounds and table `j`'s proof files, below level 0's `2^d`. -/
 def ZkTxNoOff (I : Inputs) (d : Lean.Json) (j : ℕ) {N : ℕ} (C : Fin N → List 𝔽) (t : Exec.Transcript) : Prop :=
-  ∀ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : Session) (sch : Flock.Schedule) (tPad : ℕ)
+  ∀ (spec : SessionSpec) (sts : Array Flock.Stmt) (sess : RunRecord) (sch : Flock.Schedule) (tPad : ℕ)
     (s₀ s₁ : StreamRec) (h : j < sts.size),
     FlockDeploy.KS.setupAt (zkInputs I) (some d) = .ok (spec, sts) → Record.decode spec t.record = .ok sess →
     Zk.schedule sts[j].m = .ok (sch, tPad) →

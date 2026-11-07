@@ -1,4 +1,6 @@
-import Definitions.Population.Dataflow
+module
+
+public import Definitions.Population.Dataflow
 
 /-!
 # Obliviousness: when a program's trace is a population
@@ -24,6 +26,8 @@ trace is a population with public wiring, and the construction that makes it one
 * `downOver C B`, `coneEgressOver C O B`: the cone of `B` in the dataflow of some assignment of `C`, and the egress
   written in it. Over the honest runs, the cones the damage theorems need.
 -/
+
+@[expose] public section
 
 namespace Population
 

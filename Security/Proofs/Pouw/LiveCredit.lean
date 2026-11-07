@@ -1,5 +1,40 @@
-import Mathlib
-import Proofs.Accounting.TS.Session.Lanes.Layer
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Layer
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Dense credit counts the served rows (`PouwLiveSlots_v1`, rule A)
@@ -9,7 +44,7 @@ gate-signed request table under the window-open root. Round `s`'s request table 
 `s`'s root (round 0's under round-0-only admission): each round's session decodes its own, so a call's view is its round's
 tables, never round 0's by construction. Both tables are hiding leaves, so credit counts round `s`'s
 served rows `m_s` through one proof a round, every round, of `PouwLiveSlots_v1{T}`
-(`verity/core/protocols/pouw/circuit/live.py`) at the public `m_s`. `T` is the tables' leaf count, the pouw setting
+(`verity/ml/protocols/pouw/circuit/live.py`) at the public `m_s`. `T` is the tables' leaf count, the pouw setting
 `rows`; credit's tile grid is over the window's slot `M ≥ T` (`h1window.slot`, a power of two), and `m_s ≤ T`.
 
 * `liveOk`: **the unit on words** (`circuit.live.live_ok`) at round `s`. `m ≤ T`; the entries (prompt length ≠ 0) are a
@@ -50,6 +85,8 @@ statement decoded at another round proves nothing about this one. That the decod
 registered `slots@<s>` and its request table (`requests@0` under round-0-only admission) is the statement's registration
 (flock-verify's complete check and the served path's roots), outside this file.
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs.LiveCredit
 

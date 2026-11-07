@@ -1,7 +1,7 @@
-import Flock.Witness
-import Flock.ProvedScope
-import Flock.Desc
-import Flock.Registered
+module
+
+public import Flock.Witness
+public import Flock.Desc
 
 /-!
 # The served registered session's files parse at public inputs
@@ -12,6 +12,8 @@ served files do is a computation on a 56 MB circuit file, which the kernel can't
 with the verifier's own functions on the files `verify --zk` reads, each pinned by its SHA-512, and checked by running
 those functions on them.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge.Assumptions
 

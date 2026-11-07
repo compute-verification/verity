@@ -1,6 +1,12 @@
-import Definitions.Core.Circuit
-import Definitions.Accounting.Device
-import Definitions.Core.Game
+module
+
+public import Definitions.Core.Circuit
+public import Definitions.Accounting.Device
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Server-time blocks and the wipes between them (trusted)
@@ -47,6 +53,8 @@ and what the wipe there bounds. It states no guarantee; a joint guarantee over a
 partition's they are private: a statement over a schedule reads `Blocks` as the prover's value, never as a public
 parameter. Its properties (the number of blocks, the carried state's size) may be public.
 -/
+
+@[expose] public section
 
 namespace Verity
 

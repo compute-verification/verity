@@ -1,5 +1,8 @@
-import Definitions.NetworkCertifier.Tap
-import Definitions.NetworkCertifier.Run
+module
+
+public import Definitions.NetworkCertifier.Run
+public import Definitions.NetworkCertifier.Warden
+public import Mathlib.Algebra.GroupWithZero.Nat
 
 /-!
 # The network certifier's record as rows: a row a bucket, each frame naming its connection
@@ -25,6 +28,8 @@ ingress past its bound) fails at once, before `adm c + D` too; `wardenLane` fail
 end, so such a lane is not one `wardenCode` gives. A lane whose server sends past `egress_cells` cells fails at the last
 of them (limit): its arrivals are the ones whose cell there never arrives.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

@@ -12,7 +12,11 @@ The quantizer (`Int8QuantElement`, one code; `Int8RowQuant{K}`, one scale over K
     X_k  = s8(clamp(rint(RN32(x_k / s)), -127, 127))           F32Div, then F32Rint (ties to even), then the exact clamp and cast
 
 `Int8RowQuant_v3{K,R}` is `Int8RowQuant_v1{K}` with x as R rows of K/R values in the same leaf order, so a cut can read its port
-as R rows where v1's is one.
+as R rows where v1's is one. `Int8RowQuant_v5{K,R,ROUND}` is v3 with a third output, the row (codes, s) as one leaf: K/4
+words of four codes each (`U8x4ToU32`, code 4i its low byte), then s, so its bits are code t's at 8t .. 8t + 7 and then s's
+32: an A table row of PoUW's (`pouw.circuit.h1zy.ROW`), which a registered read of that table holds it to whole. ROUND,
+which no gate reads, is the round of the table: each round's quantizers are a template of their own, so a sample
+stratified by template has a reader of every round's table.
 
 The linear (`Int8Linear{K,N}` on one token row: `Int8RowQuant`, then `ScaledMmS8_v1{K,N,DOT=BlackwellS8ImmaDot32_v1}`, two Calls
 in a served Program), weights W [N, K] s8 with per-row scales s_w; per output, `ScaledMmS8Coordinate_v1`:
@@ -37,7 +41,7 @@ s_q s_k is exact in float64 (`F32MulWide`), and A is one 32-bit word: a value se
 every row of a KV group reads (K', V', s_v, f32(V'_0)) is computed once, by `Int8KvQuant`.
 
 The primitives here are the ones no registry had: `F32Rint`, `F32ToS8Rzi`, `S8ToF32`, `F32MulWide`, `F64Mul`, `F64ToU32RniSat`,
-`LutIndex`, `Exp2Lut127` (the LUT softmax's 256-entry gather, a u8 index to its 32-bit entry), `U8ToU16`.  Each is total on encodings; the docstrings say where the served path's domain is narrower.
+`LutIndex`, `Exp2Lut127` (the LUT softmax's 256-entry gather, a u8 index to its 32-bit entry), `U8ToU16`, `U8x4ToU32`.  Each is total on encodings; the docstrings say where the served path's domain is narrower.
 
 The table is a value the program brings (PROTOCOL.md §5.3): `Exp2Lut127_v2`, `Int8LutSoftmax_v2{S}` and
 `Int8LutAttentionRow_v2{D,S,SCALE}` are the v1 forms with LUT read from the registered `exp2_lut127` (`registry.tables`,
@@ -77,7 +81,7 @@ A_CAP = (1 << 32) - 1
 #: against V' in [-128, 127] keeps every product in [-16256, 16129], so 4,128 steps stay in s32 where 2^17 does not
 PV_KEY_LIMIT = 132_096
 
-_CONF = ("exact-model-tested; tests/program/test_int8_exact_defs.py: every Definition here against verity_vllm.engine.int8_exact / "
+_CONF = ("exact-model-tested; every Definition here against the torch of int8_exact and "
          "int8_attention (the torch the profile serves) on random inputs on the CPU, all words equal; that torch is bit-equal on the "
          f"RTX PRO 6000 to its CPU run and to fattn_ref.py ({EVIDENCE['int8_fattn_ref_check']['run_record']}: 5,087,232 linear words, "
          "884,736 attention words)")
@@ -166,6 +170,12 @@ def U8ToU16(t: int) -> int:
     return t & 0xFF
 
 
+@primitive("U8x4ToU32", 1, [("a", V8), ("b", V8), ("c", V8), ("d", V8)], I32, conformance="protocol-defined")
+def U8x4ToU32(a: int, b: int, c: int, d: int) -> int:
+    """Four bytes as one 32-bit word, a its low byte: the little-endian word of a, b, c, d, the same bits in the same order."""
+    return (a & 0xFF) | (b & 0xFF) << 8 | (c & 0xFF) << 16 | (d & 0xFF) << 24
+
+
 EXP2_LUT127_TABLE = T.table_type("exp2_lut127")
 
 
@@ -191,7 +201,7 @@ C_16 = CP.const(64, _f64_bits(16.0))
 C_2_32 = CP.const(64, _f64_bits(4294967296.0))
 ZERO8 = CP.const(8, 0)
 
-INT8_PRIMITIVES = [F32Rint, F32ToS8Rzi, S8ToF32, F32MulWide, F64Mul, F64ToU32RniSat, LutIndex, Exp2Lut127, U8ToU16]
+INT8_PRIMITIVES = [F32Rint, F32ToS8Rzi, S8ToF32, F32MulWide, F64Mul, F64ToU32RniSat, LutIndex, Exp2Lut127, U8ToU16, U8x4ToU32]
 
 
 def plain_arm(K: int, N: int, A: tuple[int, int] = (-TOP, TOP)) -> dict:
@@ -257,6 +267,30 @@ def Int8RowQuantV3(B, S, x):
     """`Int8RowQuant_v1{K}` with x as R rows of K/R values in v1's leaf order, so a cut can read the port as R rows: v1's body over
     x viewed as one array of K by reference, with no gate of its own."""
     return _row_quant(B, S.K, Coll(Array(S.K, BF16), x.refs))
+
+
+def row_leaf_refusal(b: dict) -> str | None:
+    """`bind`'s refusal for `Int8RowQuant_v5`: v3's, K a multiple of 4, so the codes are whole 32-bit words of the leaf, and
+    ROUND a natural number."""
+    why = row_parts_refusal(b)
+    if why is None and isinstance(b.get("K"), int) and b["K"] % 4:
+        return f"K={b['K']}: the leaf holds the codes as words of four, so K is a multiple of 4"
+    if why is None and "ROUND" in b and not (type(b["ROUND"]) is int and b["ROUND"] >= 0):
+        return f"ROUND={b['ROUND']!r}: a round is a natural number"
+    return why
+
+
+@composite("Int8RowQuant", 5, ["K", "R", "ROUND"],
+           lambda S: ((("x", Array(S.R, Array(S.K // S.R, BF16))),), Tuple(Array(S.K, V8), F32, Array(S.K // 4 + 1, I32))),
+           conformance="exact-model-tested: Int8RowQuant_v3{K,R} and the row as one leaf of its codes, then its scale",
+           refuse=row_leaf_refusal)
+def Int8RowQuantV5(B, S, x):
+    """`Int8RowQuant_v3{K,R}` and the row (codes, s) as one leaf: K/4 words of four codes (`U8x4ToU32`), then s itself.
+    ``ROUND``, the round of the A table the row is held to, is read by no gate."""
+    q = _row_quant(B, S.K, Coll(Array(S.K, BF16), x.refs))
+    codes = q[0]
+    words = [B.call(U8x4ToU32, *(codes[4 * i + j] for j in range(4))) for i in range(S.K // 4)]
+    return tuple_of(codes, q[1], Coll(Array(S.K // 4 + 1, I32), concat([w.refs for w in words] + [q[1].refs])))
 
 
 # ---- the linear ----------------------------------------------------------------------------------------------------------
@@ -416,4 +450,4 @@ def Int8KvQuant(B, S, k, v, sk):
 
 INT8_COMPOSITES = [Int8QuantElement, Int8RowScale, Int8StaticQuant, Int8RowQuant, Int8Linear, Int8AttnScale, Int8LutSoftmax,
                    Int8AttnOut, Int8LutAttentionRow, Int8ColumnQuant, Int8KvQuant, Exp2Lut127V2, Int8LutSoftmaxV2, Int8LutAttentionRowV2,
-                   Int8RowQuantV3]
+                   Int8RowQuantV3, Int8RowQuantV5]

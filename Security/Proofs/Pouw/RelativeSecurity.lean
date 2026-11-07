@@ -1,6 +1,8 @@
-import Mathlib
-import Definitions.Pouw.RelativeSecurity
-import Proofs.Pouw.SteinerRigidity
+module
+
+public import Mathlib
+public import Definitions.Pouw.RelativeSecurity
+public import Proofs.Pouw.SteinerRigidity
 
 /-!
 # Relative security for matmul PoUW: the definition, the masking algebra, the reduction's shape
@@ -155,9 +157,13 @@ proof workers' results land here as theorems or as named hypotheses. The definit
   `certifiedFraction120θ_reEncodedExact_40`).
 -/
 
+@[expose] public section
+
+open Claims renaming Ex → expect
+
 namespace Pouw.RelativeSecurity
 
-open Finset
+open Finset hiding expect
 
 section Probability
 
@@ -194,11 +200,8 @@ theorem prob_or_le {Ω : Type*} [Fintype Ω] (p q : Ω → Prop) : prob (fun ω 
   exact key _ _ _ fun ω hω => ((mem_filter_univ_iff _ ω).mp hω).imp ((mem_filter_univ_iff _ ω).mpr)
     ((mem_filter_univ_iff _ ω).mpr)
 
-/-- The expectation of a real function under the uniform distribution on a finite type. -/
-noncomputable def expect {Ω : Type*} [Fintype Ω] (f : Ω → ℝ) : ℝ := (∑ ω, f ω) / (Fintype.card Ω : ℝ)
-
 /-- Markov's inequality for a nonnegative function. -/
-theorem markov {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f ω) (X : ℝ) :
+theorem markov {Ω : Type} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f ω) (X : ℝ) :
     X * prob (fun ω => X ≤ f ω) ≤ expect f := by
   classical
   unfold prob expect
@@ -210,20 +213,20 @@ theorem markov {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f 
       _ ≤ ∑ ω, f ω := sum_le_sum_of_subset_of_nonneg (subset_univ _) fun ω _ _ => hf ω
   exact key _ fun ω hω => (mem_filter_univ_iff _ ω).mp hω
 
-theorem expect_mono {Ω : Type*} [Fintype Ω] {f g : Ω → ℝ} (h : ∀ ω, f ω ≤ g ω) : expect f ≤ expect g :=
+theorem expect_mono {Ω : Type} [Fintype Ω] {f g : Ω → ℝ} (h : ∀ ω, f ω ≤ g ω) : expect f ≤ expect g :=
   div_le_div_of_nonneg_right (sum_le_sum fun ω _ => h ω) (by positivity)
 
-theorem expect_mul_left {Ω : Type*} [Fintype Ω] (k : ℝ) (f : Ω → ℝ) :
+theorem expect_mul_left {Ω : Type} [Fintype Ω] (k : ℝ) (f : Ω → ℝ) :
     expect (fun ω => k * f ω) = k * expect f := by
   unfold expect
   rw [← mul_sum, mul_div_assoc]
 
-theorem expect_sum {Ω ι : Type*} [Fintype Ω] (s : Finset ι) (f : ι → Ω → ℝ) :
+theorem expect_sum {Ω ι : Type} [Fintype Ω] (s : Finset ι) (f : ι → Ω → ℝ) :
     expect (fun ω => ∑ l ∈ s, f l ω) = ∑ l ∈ s, expect (f l) := by
   unfold expect
   rw [Finset.sum_comm, Finset.sum_div]
 
-theorem expect_le_of_le {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} {k : ℝ} (hk : 0 ≤ k) (h : ∀ ω, f ω ≤ k) :
+theorem expect_le_of_le {Ω : Type} [Fintype Ω] {f : Ω → ℝ} {k : ℝ} (hk : 0 ≤ k) (h : ∀ ω, f ω ≤ k) :
     expect f ≤ k := by
   unfold expect
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | h0
@@ -233,18 +236,18 @@ theorem expect_le_of_le {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} {k : ℝ} (hk
       _ = k * (Fintype.card Ω : ℝ) := by rw [sum_const, card_univ, nsmul_eq_mul, mul_comm]
 
 /-- The expectation over a product is the iterated expectation (fresh coins). -/
-theorem expect_prod {α β : Type*} [Fintype α] [Fintype β] (f : α × β → ℝ) :
+theorem expect_prod {α β : Type} [Fintype α] [Fintype β] (f : α × β → ℝ) :
     expect f = expect fun a => expect fun b => f (a, b) := by
   unfold expect
   rw [Fintype.sum_prod_type, Fintype.card_prod, Nat.cast_mul, ← sum_div, div_div, mul_comm (Fintype.card β : ℝ)]
 
-theorem expect_prod_swap {α β : Type*} [Fintype α] [Fintype β] (f : α × β → ℝ) :
+theorem expect_prod_swap {α β : Type} [Fintype α] [Fintype β] (f : α × β → ℝ) :
     expect f = expect fun b => expect fun a => f (a, b) := by
   unfold expect
   rw [Fintype.sum_prod_type, Finset.sum_comm, Fintype.card_prod, Nat.cast_mul, ← sum_div, div_div]
 
 /-- A probability is the expectation of the event's indicator. -/
-theorem prob_eq_expect {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
+theorem prob_eq_expect {Ω : Type} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
     prob p = expect fun ω => if p ω then 1 else 0 := by
   classical
   unfold prob expect
@@ -255,14 +258,14 @@ theorem prob_eq_expect {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [DecidablePre
 
 /-- An event whose every slice at the second coordinate has probability at most `κ ≥ 0` has probability at most
 `κ`. -/
-theorem prob_le_of_slices {α β : Type*} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
+theorem prob_le_of_slices {α β : Type} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
     (h : ∀ b, prob (fun a => E (a, b)) ≤ κ) : prob E ≤ κ := by
   classical
   rw [prob_eq_expect, expect_prod_swap]
   exact expect_le_of_le hκ fun b => by rw [← prob_eq_expect (fun a => E (a, b))]; exact h b
 
 /-- A probability over a product is the mean of its slices at the second coordinate. -/
-theorem prob_prod_eq_sum {α β : Type*} [Fintype α] [Fintype β] (E : α × β → Prop) :
+theorem prob_prod_eq_sum {α β : Type} [Fintype α] [Fintype β] (E : α × β → Prop) :
     prob E = ∑ b, (Fintype.card β : ℝ)⁻¹ * prob (fun a => E (a, b)) := by
   classical
   rw [prob_eq_expect, expect_prod_swap, expect, div_eq_inv_mul, Finset.mul_sum]
@@ -320,7 +323,7 @@ theorem prob_add_not_le {Ω : Type*} [Fintype Ω] (q : Ω → Prop) : prob q + p
     norm_num
   · exact (prob_add_not q).le
 
-theorem expect_const_add_mul {Ω : Type*} [Fintype Ω] [Nonempty Ω] (A k : ℝ) (f : Ω → ℝ) :
+theorem expect_const_add_mul {Ω : Type} [Fintype Ω] [Nonempty Ω] (A k : ℝ) (f : Ω → ℝ) :
     expect (fun ω => A + k * f ω) = A + k * expect f := by
   unfold expect
   have hC : (0 : ℝ) < Fintype.card Ω := by exact_mod_cast Fintype.card_pos
@@ -4730,7 +4733,7 @@ theorem prob_zero_le_of_cubeQuad {f : (V → R) → R} (hf : CubeQuad f) (hne : 
 
 end Luck
 
-theorem expect_affine_le {Ω : Type*} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) (k : ℝ) (f : Ω → ℝ) :
+theorem expect_affine_le {Ω : Type} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) (k : ℝ) (f : Ω → ℝ) :
     expect (fun ω => c + k * f ω) ≤ c + k * expect f := by
   unfold expect
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | h0
@@ -5027,7 +5030,7 @@ theorem luck_dropped_reEncoded_zero {β V : Type} [Fintype β] [Fintype V] [Deci
 
 end LuckDesign
 
-theorem prob_eq_card {Ω : Type*} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
+theorem prob_eq_card {Ω : Type} [Fintype Ω] (p : Ω → Prop) [DecidablePred p] :
     prob p = ((univ.filter p).card : ℝ) / Fintype.card Ω := by
   rw [prob_eq_expect]
   unfold expect

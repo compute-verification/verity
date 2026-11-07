@@ -1,6 +1,40 @@
-import Definitions.Claims
-import Flock.ProvedScope
-import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+module
+
+public import Definitions.Claims
+public import Flock.ProvedScope
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
+public import Batteries.Data.ByteArray
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The verifier's statement, read as `Claims.Flock.Stmt`
@@ -22,12 +56,14 @@ relation's fields, and the `Form` the scope check reads, each field the value `P
   parsed statement; the scope reads none of them. The deployed one is `relation` (`Scope.Tables`).
 -/
 
+@[expose] public section
+
 namespace Flock.Readable
 
 open FlockSoundness.Discharge
 
 /-- What `flock-verify verify` reads of a statement besides the session directory: its flags' values (`I`, as
-`Exec.Inputs` holds them: `--statement`'s tags after `withCoins` and `--coins`, which `verify --zk` replaces by
+`Exec.Inputs` holds them: `--statement`'s tags and `--coins`, which `verify --zk` replaces by
 `zkTags I` and `zkCoins I`), whether it is the masked verifier (`--zk`), the record's draw (`Main.recordDraw`, none
 without one), its own public input words (`--public-inputs`) and whether it holds its own registered reads
 (`--registered`). -/

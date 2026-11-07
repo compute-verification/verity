@@ -1,7 +1,10 @@
-import Attest.Period
-import Properties.Pous.MemoryChallenger
-import Definitions.Claims
-import Definitions.Accounting.Assumptions.Parties
+module
+
+public import Attest.Period
+public import Definitions.Accounting.Assumptions.Parties
+public import Definitions.Claims
+public import Mathlib
+public import Properties.Pous.MemoryChallenger
 
 /-!
 # A party's signed period roots and liveness records: what a period's proof establishes, and what the auditor sees
@@ -39,6 +42,8 @@ the period's index, the positions read, and outputs of at most 16 bits) and whos
 records read, their paths)`: their zero knowledge is C-Flock's (`Claims.ZKmalR` at the period's circuit,
 `Claims.Flock.ZK`), which these statements don't restate.
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Attest.Properties
 

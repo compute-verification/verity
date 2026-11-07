@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.Live
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
-import Proofs.Flock.Soundness.Discharge.Exec.Retained
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.Live
+public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+public import Proofs.Flock.Soundness.Discharge.Exec.Retained
 
 /-!
 # The target statements of flock-verify `--zk`'s acceptance and its refinement
@@ -25,12 +27,14 @@ Each statement is a `Prop` here; its theorem (`theorem … : G`) is in the file 
 * `AcceptsZKRetained`: under tags that retain rounds, every stream of the accepted record retained every round's bytes.
 
 **Refinement** (one table, against the compiled `--zk` table `G, out, acc` named in `Live.lean`):
-* `ExecRefinesZKOne`: R11 at `--zk`: against any live prover, flock-verify `--zk`'s acceptance is no likelier than the
-  compiled table's acceptance against the simulated prover `simAuditZK … τ`, with `bad = ⊥`, given `DecodesZK`.
+* `ExecRefinesZKOne`: the refinement at `--zk`: against any live prover, flock-verify `--zk`'s acceptance is no likelier
+  than the compiled table's acceptance against the simulated prover `simAuditZK … τ`, with `bad = ⊥`, given `DecodesZK`.
 * `ZkHeadlineExecOne`: the `--zk` headline at flock-verify's acceptance, carried from any bound `B` on the compiled
   audit's `Pr[accept ∧ Q]` at the simulated prover, for any event `Q` of that prover (at least `K` wrong units of its
   committed values): `Pr[flock-verify --zk accepts ∧ Q] ≤ B`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 
@@ -48,7 +52,7 @@ checks accept with one cap, on the proof files `proofs[2i]` and `proofs[2i+1]`. 
 def ZkVerifyOk : Prop :=
   ∀ (spec : SessionSpec) (tabs : Array Setup) (record : String) (proofs : Array ByteArray),
     Flock.Zk.verify spec tabs record proofs = .ok () →
-    spec.coinTree.isSome = true ∧ ∃ (sess : Session) (schs : Array (Flock.Schedule × ℕ)),
+    spec.coinTree.isSome = true ∧ ∃ (sess : RunRecord) (schs : Array (Flock.Schedule × ℕ)),
       Record.decode spec record = .ok sess ∧ tabs.size = spec.tables.size ∧ 0 < tabs.size ∧
       proofs.size = spec.repStreams.size ∧ schs.size = tabs.size ∧
       ∀ (i : ℕ) (hi : i < tabs.size), ∃ (hs : i < schs.size) (c : ByteArray),
@@ -84,7 +88,7 @@ def repProg (st : Setup) (sch : Flock.Schedule) (tPad r : ℕ) (extras : Array F
 pinned ones and its pads' root has 64 bytes, `repProg` runs on the stream's rounds from the rep's domain and consumes
 every round, and the returned cap, the proof's flattened cap, is the table's `root_B`. -/
 def ZkRepOk : Prop :=
-  ∀ (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (sess : Session) (i r : ℕ)
+  ∀ (spec : SessionSpec) (st : Setup) (sch : Flock.Schedule) (tPad : ℕ) (sess : RunRecord) (i r : ℕ)
     (bytes cap : ByteArray),
     Flock.Zk.verifyRep spec st sch tPad sess i r bytes = .ok cap →
     ∃ (stream : StreamRec) (extras : Array Flock.Claim) (zp : Flock.Zk.ZkProof) (tr : Flock.Transcript),
@@ -165,8 +169,8 @@ variable {n : ℕ} {Reg : Type} {mPts : ℕ} {P Cp Op Out : Finset (Fin n) → R
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ S R, ByteArray → Cp S R) (N : ℕ) (L : Law n)
 
-/-- **R11 at `--zk`, one table**: against any live prover `τ` of the live audit (`liveTable` written out by `wr`),
-flock-verify `--zk`'s acceptance is no likelier than the compiled `--zk` table's acceptance against the simulated
+/-- **The refinement at `--zk`, one table**: against any live prover `τ` of the live audit (`liveTable` written out by
+`wr`), flock-verify `--zk`'s acceptance is no likelier than the compiled `--zk` table's acceptance against the simulated
 prover `simAuditZK … τ`, with no live event added, whenever every rep's game has a strategy (`hinh`) and the decoder is
 right on accepted sessions (`DecodesZK`). -/
 def ExecRefinesZKOne : Prop :=

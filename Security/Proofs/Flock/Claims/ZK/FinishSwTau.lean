@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.FinishSwInner
-import Proofs.Flock.Claims.ZK.InnerTauVal
-import Proofs.Flock.Claims.ZK.InnerLeaf
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwInner
+public import Proofs.Flock.Claims.ZK.InnerTauVal
+public import Proofs.Flock.Claims.ZK.InnerLeaf
 
 /-!
 # `τ`'s commitment at the switched source
@@ -18,6 +20,8 @@ against `μ` on the worker's view's rows, which is `InZ.tau` at any constraints 
 * **`swTau_of_rows`**: then `InZ.tau` over `cons` at the honest pads is the worker's view's `τ`.
 * **`swSrcE_tau_frame`**, **`swSrcE_innerSrc_rows`**: `swSrcE_innerSrc_frame`'s `τ` premise from `SwRows`.
 -/
+
+@[expose] public section
 
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
@@ -52,10 +56,10 @@ theorem swCutE_tauCom (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cla
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     (swCutE x c w v τ j).tauCom r = ZkView.leafT ((swViewE x c w v τ j).tau r) ((viewE x c w τ j).ytau r) := by
   have hb : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j) ((UE.tape x τ).1 j).1
-      ((UE.tape x τ).1 j).2.1.2.1 := hrows
+      ((UE.tape x τ).1 j).2.1 := hrows
   have e : (swCutE x c w v τ j).tauCom r = _root_.Flock.Hm96.Default512.leaf
       (((tabC PE x j).T (czExe PE x c j)).swContent (wtOf PE x w j) (v j) ((UE.tape x τ).1 j) (.inr (.inr r)))
       (ZkView.saltBytes ((UE.tape x τ).2.1 ⟨j, .inr (.inr r)⟩)) := rfl
@@ -68,7 +72,7 @@ theorem swSrcE_tauCom (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Cla
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) :
     ((swSrcE x c w v τ j.val).rep r.val).tauCom =
       FlockComplete.Replay.InZ.tcOf _root_.Flock.Sha512.hash (FlockLevel3.GF128.val ((swViewE x c w v τ j).tau r))
         (innerPadsE x τ j r).tauSalt := by
@@ -83,12 +87,6 @@ theorem swViewTau_eq (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
     fOf (FlockLevel3.GF128.val ((swViewE x c w v τ j).tau r)) =
       ∑ i, ZkSession.batchCoef (Composed.innerGamma (zkTab x j).table (stAt x j) (czExe PE x c j) r)
         (rowsSwE x c w v τ j r) (Composed.padEquiv _ i) * muE x τ j r i :=
-  rfl
-
-/-- The worker's view's `ρ_in`, `σ_in` are the honest view's: they read the pads alone. -/
-theorem swViewE_inner (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
-    (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) :
-    (swViewE x c w v τ j).pre.2.2.2.2.1 r = (viewE x c w τ j).pre.2.2.2.2.1 r :=
   rfl
 
 /-- The inner proof's three triple rows are the worker's view's rows' last three. -/
@@ -159,7 +157,7 @@ theorem swSrcE_tau_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ 
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (cons : Array (String × _root_.Flock.Zk.Lin)) (hcons : SwRows x c w v τ j r cons) {L₀ : ℕ}
     (hL : L₀ = repSlot x (2 * j.val + r.val) (innerOff 0)) :
     ((swSrcE x c w v τ j.val).rep r.val).tauCom =
@@ -186,7 +184,7 @@ theorem swSrcE_innerSrc_rows {W R : Type} (L : Claims.ZKServer.LeanRelease W R) 
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (cons : Array (String × _root_.Flock.Zk.Lin)) (hcons : SwRows x c w v τ j r cons) {L₀ : ℕ}
     (hL : L₀ = repSlot x (2 * j.val + r.val) (innerOff 0))
     (hbat : L₀ + 1 < n →

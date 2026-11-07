@@ -1,12 +1,62 @@
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.C3.VStarList.Accepts
+module
+
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+import all Init.Data.Repr
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.PubRows.Check
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.LayoutBTops
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # What a staged part's transcript shows is the record the verifier read in its own format
@@ -29,6 +79,8 @@ digest (`slotPub_table`). On the record's side, rep `x`'s `kc`-th `c_k` in the J
 schedule lists `kc`-th, and at a round with no salted tops it is the record's message `x · R + k + 1`
 (`cmt_of_rep`): the rounds open with the two reps' schedules (`scheduleOf_reps`), whose streams are apart (`rep_ne`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -68,7 +120,7 @@ theorem RecRaw.ins_commits {w : RecRaw} {s : RecIns} (h : w.ins = .ok s) :
 
 theorem commits_parse_error {sh : RecVStar.Inner} {tt : String} {e : String} {r : Except String (Option String)}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {record : String} {cs : RecVStar.InnerCommits}
-    (hp : Json.parse tt = .error e) : RecSetup.commits (some sh) (.ok tt) r bound record ≠ .ok cs := by
+    (hp : Flock.JsonParse.parse tt = .error e) : RecSetup.commits (some sh) (.ok tt) r bound record ≠ .ok cs := by
   intro h
   unfold RecSetup.commits at h
   simp only [bind, Except.bind, pure, Except.pure, hp] at h
@@ -90,7 +142,7 @@ theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {sh : RecVStar.Inner}
     {c : Option RecVStar.InnerCommits} {t : ByteArray} (ht : w.transcript = some t)
     (h : commitsOf w src bound (some sh) = .ok c) :
-    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Json.parse tt = .ok tr ∧
+    ∃ cs tt tr record, c = some cs ∧ String.fromUTF8? t = some tt ∧ Flock.JsonParse.parse tt = .ok tr ∧
       src.map (·.record) = some record ∧ RecSetup.checkReads sh tt tr record cs = .ok () := by
   unfold commitsOf at h
   rw [ht] at h
@@ -113,7 +165,7 @@ theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
         exact absurd hX commits_text_error
       | some tt =>
         rw [textOf, htx] at hX
-        cases hp : Json.parse tt with
+        cases hp : Flock.JsonParse.parse tt with
         | error e => exact absurd hX (commits_parse_error hp)
         | ok tr => exact ⟨cs, tt, tr, record, rfl, rfl, hp, rfl, FlockC3.VStarList.reads_of_commits hp hX⟩
 
@@ -625,7 +677,12 @@ theorem RecIns.setup_coins {s : RecIns} {spec : SessionSpec} {sts : Array Stmt} 
   unfold RecIns.setup at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
-  all_goals first | (cases h; done) | (cases h; assumption)
+  all_goals first | (cases h; done) | skip
+  all_goals
+    obtain ⟨-, h2⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst h2
+    -- reducibly: at default transparency each later check's `forM` is unfolded against this one's first
+    with_reducible assumption
 
 /-- `RecCoins.check` refuses a rec-residuals, rec-sparse or rec-opening unit without the verifier's own reads. -/
 theorem registered_of_coins {st : Stmt} {own : Option (Array Registered.Port)} {f : Option RecCoins.Source}
@@ -658,6 +715,7 @@ theorem params_of_own {tags : Tags} {pre : Array (String × Net)} {c : Circuit} 
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- With an inner shape and own reads, `RecVStar.checkStmt` runs `checkCircuit` and `checkOwn` at them. -/
 theorem checkStmt_own {i : RecVStar.Inner} {tags : Tags} {tables : List (String × ByteArray)} {st : Stmt}
@@ -838,6 +896,7 @@ theorem ownPorts_row {sv : VStar.Stmt} {q : String × String × Array (Option �
   | recOpen _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | recOpenStacked _ _ _ _ => simp [RecVStar.ownPorts] at hq
   | cap _ _ => simp [RecVStar.ownPorts] at hq
+  | link _ _ _ => simp [RecVStar.ownPorts] at hq
 
 /-- What `heldRows` holds, with its round: a row of a statement's own port under `rec-c<k>`, at the port's index,
 held at that rep's `k`-th message round. -/

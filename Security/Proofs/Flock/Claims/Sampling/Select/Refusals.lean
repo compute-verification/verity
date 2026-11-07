@@ -1,5 +1,39 @@
-import Proofs.Flock.Claims.Sampling.Select.Scope
-import Proofs.Flock.Claims.Sampling.Select.Layout
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Layout
+public import Proofs.Flock.Claims.Sampling.Select.Scope
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import VCVio.Prelude.Core
 
 /-!
 # The refusals the readable scope needs (`Claims.Sampling.ScopeMatches`, `Refuses`)
@@ -10,7 +44,8 @@ clause of it, each a named Prop over the statements the verifier evaluates:
 
 * `RefusesUnordered`: the program is topologically ordered.
 * `RefusesOverlap`: no gate is in two proof units.
-* `RefusesUncovered`: the proof units' gates are the program's, and every gate but a constant is among them.
+* `RefusesUncovered`: the proof units' gates are the program's, and every gate but a constant and an unread input is
+  among them.
 * `RefusesEmpty`: every proof unit has a gate.
 * `RefusesWide`: every proof unit's committed values (the claims' `committed`, on its own gates) fit its public size
   class (`unitClass`).
@@ -21,6 +56,8 @@ layouts (`DrawSlots`), `ScopeMatches` (`scopeMatches_of_refusals`) and, with `Ch
 (`refusals_of_scopeMatches`, `scopeMatches_iff_refusals`).
 -/
 
+@[expose] public section
+
 open SampledProofs
 
 namespace Claims.Sampling
@@ -29,12 +66,13 @@ open Properties.SampledProofs Properties.SampledProofs.SecurityProofs
 
 variable {Coin Col T : Type}
 
-/-- The proof units' gates are `C`'s, and every gate of `C` but a constant is among them. -/
+/-- The proof units' gates are `C`'s, and every gate of `C` but a constant and an unread input is among them. -/
 def Partition.Covers (P : Partition) (C : Prog) : Prop :=
-  (∀ g ∈ P.gates, g < C.gates.length) ∧ ∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → g ∈ P.gates
+  (∀ g ∈ P.gates, g < C.gates.length) ∧
+    ∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → ¬ C.Unread g → g ∈ P.gates
 
-/-- **A cut of `C` into proof units**: no gate in two of `P`'s proof units, which cover `C` but its constants, each with
-a gate, and each committing values that fit its public size class. -/
+/-- **A cut of `C` into proof units**: no gate in two of `P`'s proof units, which cover `C` but its constants and
+unread inputs, each with a gate, and each committing values that fit its public size class. -/
 def Partition.Cuts (P : Partition) (C : Prog) : Prop :=
   P.gates.Nodup ∧ P.Covers C ∧ (∀ u ∈ P.blocks, u ≠ []) ∧
     ∀ u ∈ P.blocks, ∃ w, unitClass C u = some w ∧ committed C u ≤ w
@@ -63,7 +101,8 @@ def RefusesUnordered (D : Deploy Coin Col T) : Prop := Evaluated D fun C _ => C.
 def RefusesOverlap (D : Deploy Coin Col T) : Prop := Evaluated D fun _ P => P.gates.Nodup
 
 /-- **The verifier refuses a partition that leaves a gate out**: the proof units' gates are the program's, and every
-gate but a constant is among them (a constant, public, may be left out). -/
+gate but a constant and an unread input is among them (a constant, public, may be left out, and so may an input that no
+gate reads and the program doesn't return). -/
 def RefusesUncovered (D : Deploy Coin Col T) : Prop := Evaluated D fun C P => P.Covers C
 
 /-- **The verifier refuses an empty proof unit**: every proof unit of a partition it evaluates has a gate. -/

@@ -1,6 +1,50 @@
-import Proofs.Flock.Claims.ZK.FinishSwRows
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.FinishSwMk
+public import Proofs.Flock.Claims.ZK.FinishSwRows
+public import Proofs.Flock.Claims.ZK.FinishSwTau
+public import Proofs.Flock.Claims.ZK.InnerTauRep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
+import Proofs.Flock.Claims.ZK.CausalExe
+import Proofs.Flock.Claims.ZK.FinishSwFrame
+import Proofs.Flock.Claims.ZK.FinishSwInner
 import Proofs.Flock.Claims.ZK.FinishSwSv
-import Proofs.Flock.Claims.ZK.InnerTauRep
+import Proofs.Flock.Claims.ZK.FinishTau
+import Proofs.Flock.Claims.ZK.SentE
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # `hinner` at the switched source
@@ -24,8 +68,10 @@ begins at `repSlot … (innerOff 0)`.
   firewall's runs is left.
 -/
 
+@[expose] public section
+
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 /-- A view at clear values, as the table's: its `ŝ` is `ν + maskHom` at its mask. -/
 theorem FlockSoundness.ZK.Table.toBase_onVals_sHat {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
@@ -100,7 +146,7 @@ theorem swViewMasked (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Clai
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, v j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1) (k : ℕ) :
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1) (k : ℕ) :
     (Composed.msgAt ((swViewE x c w v τ j).pre.2.1 r) k).val = ((swSrcE x c w v τ j.val).rep r.val).masked k := by
   unfold swSrcE tabSrcCut
   rw [dite_eq_left j.isLt]
@@ -138,7 +184,7 @@ theorem swSrcE_hinner {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ : 
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (cm0 : FlockComplete.Commit) (extras : Array _root_.Flock.Claim)
     (he : extras.size = spec.points * (stAt x j).regions.size) (ic : FlockComplete.InnerCommit)
@@ -416,7 +462,7 @@ theorem swSrcE_hinner_sv {W R : Type} (Lr : Claims.ZKServer.LeanRelease W R) (ρ
       FlockComplete.padsOf (Claims.ZKServer.tapeOfDraws tz (Lr.lay x) (Lr.draws ρ) frep) j.val r.val (layE x j))
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (st : _root_.Flock.Setup) (hst : st = _root_.Flock.Setup.ofCircuit (stAt x j)) (tPad : ℕ) (dom : ByteArray)
     (g : Array _root_.Flock.F128) (cm0 : FlockComplete.Commit) (extras : Array _root_.Flock.Claim)
     (he : extras.size = spec.points * (stAt x j).regions.size) (ic : FlockComplete.InnerCommit)

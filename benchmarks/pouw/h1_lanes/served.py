@@ -62,7 +62,7 @@ import run as L  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity.core.protocols.pouw import leaf_lanes as LL  # noqa: E402
-from verity.core.protocols.pouw.circuit import h1zy as Z  # noqa: E402
+from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
@@ -87,7 +87,7 @@ def _window(path: str):
     is parsed, never re-encoded), and its digest: the lane statement is `h1window.leaf_program`'s of it, which reads only
     the template at K, as a served window's verifier derives it."""
     from verity.core.protocols.pouw import credit as CR
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     from verity.ml.circuits.codec import descriptor_id
 
     raw = _descriptor(path)
@@ -312,7 +312,7 @@ def statement(ctx, ln: int, tag: str, sw: Served, ins: dict, entries: dict) -> d
     kr = L.known_rows(ctx, sw, LL.LANE, ln, ln)
     vk = {p: PR.known_port(ctx.prog, v, row, salt, sw.registration, schema=V2) for p, (v, row, salt) in kr.items()}
     reads = {"format": G.READS, "ports": {**{p: PR.port(v, e, e["root"], [row], V2) for p, (v, e, row) in entries.items()},
-                                          **{p: kp for p, (kp, _) in vk.items()}}, LL.COMPLETE: True}
+                                          **{p: kp for p, (kp, _) in vk.items()}}}
     want = expected(sw, ln, ins)
     v_ok, row_ok, salt_ok = kr[LL.OK]
     outs = {LL.OK: L.known_opening(ctx, sw, v_ok, row_ok, salt_ok)}

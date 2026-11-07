@@ -6,6 +6,8 @@
 testpaths = ["tests"]
 
 [tool.verity.tests]
+# test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
+untraced = ["tests/test_sketch.py"]
 # layout.py reads the registered scheme (verity.core.protocols.pous.schemes.p2) and the P2 spec's reference
 # (benchmarks/pous/p2_v1: reference.py, pinned by vectors.json; stage.py imports gpu.py); the toy test reads P2's toy
 # store (p2_v1/store-toy); gemm.py's check evaluates
@@ -17,6 +19,7 @@ testpaths = ["tests"]
 inputs = ["tools/config/verity_config",
           "verity/__init__.py", "verity/settings.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
+          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
           "verity/core/protocols/record.py",
           "verity/core/protocols/remote_bandwidth", "verity/core/protocols/sampled_proofs",
           "verity/core/protocols/profile.py",

@@ -1,10 +1,13 @@
-import Definitions.Pouw.PearlC.Defs
+module
+
+public import Definitions.Pouw.PearlC.Defs
 
 /-!
 # U's pinned order, bit-exact (trusted definitions)
 
-Pearl-C's clean-up as `protocols/pouw/verity_pouw/schemes/pearl_c_u.py` pins it (at commit `76134352`,
-SHA-256 `aef10195…2485514a`), transcribed op for op. FP32 words are natural numbers below `2^32`, BF16 words below `2^16`.
+Pearl-C's clean-up as `76134352:protocols/pouw/verity_pouw/schemes/pearl_c_u.py` pins it (git's `REV:PATH`,
+SHA-256 `aef10195…2485514a`; the file has moved to `verity/ml/protocols/pouw/schemes/pearl_c_u.py` and changed
+since), transcribed op for op. FP32 words are natural numbers below `2^32`, BF16 words below `2^16`.
 A function returns `none` where the pin raises `NonFinite`, that is, where a step leaves the finite range.
 
 * **The K16 step** (`bf16Product`, `bf16ProductTotal`, `hopperBf16K16`, `k16Step`): `HOPPER_BF16_WGMMA_K16`, the
@@ -22,10 +25,12 @@ A function returns `none` where the pin raises `NonFinite`, that is, where a ste
   `P_A,i = [be_A,i ‖ RN_bf16(A′·F_B)]`, `P_B,j = [RN_bf16(RN_f32(acc_q − BF_jq)) ‖ −be_B,j]` with `acc_q` the FMA chain
   from `+0` over `p = 0 … 31` ascending, and `U_ij` from `C̃_ij` by four `k16Step`s over the rows' 16-word slices.
 * **What a conformance vector asserts** (`K16Vec`, `ChainVec`, `PaVec`, `PbVec`, `CellVec`), for
-  `PeelExactVectors`, generated from the pin's vectors `protocols/pouw/tests/vectors/pearl_c_u.json`.
+  `PeelExactVectors`, generated from the pin's vectors `76134352:protocols/pouw/tests/vectors/pearl_c_u.json`.
 
 The model follows the pin at `76134352`; a change to the pin needs the vectors regenerated and rechecked.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.PeelExact
 

@@ -22,7 +22,7 @@ from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.sampled_proofs import challenger as Ch
 from verity.core.protocols.pouw.audit import Epoch, Workload, salt_of, weights_root
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import ncp
+from verity.ml.protocols.pouw.schemes import ncp
 
 # the clear audit is a reference tool (benchmarks/pouw/clear), imported by name
 sys.path.insert(0, str(Path(__file__).resolve().parents[5] / "benchmarks" / "pouw" / "clear"))
@@ -145,8 +145,9 @@ def test_a_served_challengers_coins_are_named_by_a_claim_instance():
 
 
 def test_a_served_window_draws_every_coin_from_its_entropy_and_none_from_the_os(monkeypatch):
-    """The epoch's salt and flip coins and a live window's salt, round and flip coins, and every hm96 salt beside them,
-    come from the challenger's named entropy alone: with the operating system's generators refusing, they are sampled,
+    """The epoch's salt and flip coins, a live window's salt and round coins and its sampling session's flip coin, and
+    every hm96 salt beside them, come from the challenger's named entropy alone: with the operating system's generators
+    refusing, they are sampled,
     opened and checked against their commitments."""
     def refuse(*_a, **_k):
         raise AssertionError("a served coin read the operating system's randomness")
@@ -157,20 +158,23 @@ def test_a_served_window_draws_every_coin_from_its_entropy_and_none_from_the_os(
     for label, after in (("salt", b"w" * 64), ("draw", b"t" * 64)):
         assert EC.coin_reason(epoch.commitment, epoch.open(label, after), label, after) is None
     live = Wd.live_challenger(0, 2, Ch.named(verifier.CLAIM, random.Random(4).randbytes))
-    for label, count in Wd.live_families(2):
-        rec = Ch.LiveRecord(live, label, clock=lambda: 0.0)
-        roots = [bytes([i]) * 64 for i in range(count)]
-        for root in roots:
-            rec.record(root)
-        assert Ch.order_reason(live.commitment, label, roots, rec.openings) is None
+    drawn = Wd.draw_challenger(0, Ch.named(verifier.CLAIM, random.Random(5).randbytes))
+    for ch in (live, drawn):
+        for label, count in ch.commitment.families:
+            rec = Ch.LiveRecord(ch, label, clock=lambda: 0.0)
+            roots = [bytes([i]) * 64 for i in range(count)]
+            for root in roots:
+                rec.record(root)
+            assert Ch.order_reason(ch.commitment, label, roots, rec.openings) is None
 
 
 #: The PoUW and proof-system modules that read the operating system's randomness, each with why it isn't a coin, or
 #: the claim instance that names it
 OS_RANDOMNESS = {
-    "pouw/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named by A5's "
-                               "uniform/python-secrets",
-    "sampled_proofs/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean (`_dumps`), no coin",
+    "ml/protocols/pouw/circuit/anchors.py": "ncp-v2's window secret (`Ledger.open`'s `_fresh_source`, `secrets`), named "
+                                            "by A5's uniform/python-secrets",
+    "core/protocols/sampled_proofs/one_stage/verifier.py": "a placeholder nonce in the JSON it writes to the Lean "
+                                                           "(`_dumps`), no coin",
 }
 
 
@@ -179,16 +183,17 @@ def test_the_served_path_takes_no_os_randomness_for_its_coins():
     `OS_RANDOMNESS` names: every coin comes from a challenger's named entropy, the Lean verifier of record's `coins` on
     the served path."""
     import ast
-    root = Path(EC.__file__).resolve().parents[1]
+    verity = Path(EC.__file__).resolve().parents[3]
     found = set()
-    for path in [*(root / "pouw").rglob("*.py"), *(root / "sampled_proofs").rglob("*.py")]:
-        rel = path.relative_to(root).as_posix()
-        if "/tests/" in f"/{rel}" or "/.lake/" in f"/{rel}":
-            continue
-        for node in ast.walk(ast.parse(path.read_text(), rel)):
-            if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
-                    and (node.value.id, node.attr) in {("os", "urandom"), ("os", "getrandom"), ("random", "SystemRandom")}
-                    or isinstance(node, ast.alias) and node.name.split(".")[0] == "secrets"
-                    or isinstance(node, ast.ImportFrom) and node.module == "secrets"):
-                found.add(rel)
+    for d in ("core/protocols/pouw", "core/protocols/sampled_proofs", "ml/protocols/pouw"):
+        for path in (verity / d).rglob("*.py"):
+            rel = path.relative_to(verity).as_posix()
+            if "/tests/" in f"/{rel}" or "/.lake/" in f"/{rel}":
+                continue
+            for node in ast.walk(ast.parse(path.read_text(), rel)):
+                if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
+                        and (node.value.id, node.attr) in {("os", "urandom"), ("os", "getrandom"), ("random", "SystemRandom")}
+                        or isinstance(node, ast.alias) and node.name.split(".")[0] == "secrets"
+                        or isinstance(node, ast.ImportFrom) and node.module == "secrets"):
+                    found.add(rel)
     assert found == set(OS_RANDOMNESS), sorted(found ^ set(OS_RANDOMNESS))

@@ -1,5 +1,42 @@
-import Definitions.NetworkCertifier.Guarantees.SampledAudit
+module
+
+public import Definitions.NetworkCertifier.Guarantees.SampledAudit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The sampled audit implies `Accepted`
@@ -19,6 +56,8 @@ the audit's scope (`rAcc_of_r`), `PrBad` monotone in the relation (`Claims.Pr_mo
   or another correct unit's boundary value, each the trace's. An input reads the ingress the trace carries (`inputOf_eq`): the layout fits the program, so no egress gate of a step depends on a
   later step's ingress (`Good`).
 -/
+
+@[expose] public section
 
 namespace NetTiming.SampledAuditProof
 
@@ -67,6 +106,12 @@ theorem boundary_of_input {C : Prog} {u : List ℕ} {g : ℕ} (h : C.gates[g]? =
 theorem boundary_of_out {C : Prog} {u : List ℕ} {g : ℕ} (h : g ∈ C.outs) : C.Boundary u g = true := by
   unfold Prog.Boundary
   simp [h]
+
+theorem not_unread_of_read {C : Prog} {g' i : ℕ} {x : BGate} (hx : C.gates[g']? = some x) (hi : i ∈ x.reads) :
+    ¬ C.Unread i :=
+  fun h => h.2.2 x (List.mem_of_getElem? hx) hi
+
+theorem not_unread_of_out {C : Prog} {g : ℕ} (h : g ∈ C.outs) : ¬ C.Unread g := fun hu => hu.2.1 h
 
 theorem read_const {C : Prog} {ref : ℕ → Option Bool} {i : ℕ} {b : Bool} (h : C.gates[i]? = some (.const b)) :
     C.read ref i = some b := by
@@ -249,7 +294,7 @@ theorem valOver_unit : ∀ g, Good g → ∀ v u, P.blocks[v]? = some u → v �
     exact Option.some.inj hc
   push Not at hconst
   have hilt : i < C.gates.length := hlt.trans hglt
-  obtain ⟨v', u', hu', hiu'⟩ := exists_of_mem_gates (hcover i hilt hconst)
+  obtain ⟨v', u', hu', hiu'⟩ := exists_of_mem_gates (hcover i hilt hconst (not_unread_of_read hx hi))
   rw [read_of_not_const hconst] at hc
   have hgu' : g ∉ u' := fun hgu => hiu (by
     obtain rfl := slot_unique hN hu' hu hgu hg
@@ -277,7 +322,7 @@ theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
     rw [valOver_const hfree hb, traceVal, read_const hb]
     rfl
   push Not at hconst
-  obtain ⟨v, u, hu, hg⟩ := exists_of_mem_gates (hP.2.2.1 g hglt hconst)
+  obtain ⟨v, u, hu, hg⟩ := exists_of_mem_gates (hP.2.2.1 g hglt hconst (not_unread_of_out hout))
   have hv : v ∉ F := fun hv => hfg ⟨v, hv, u, hu, hg, boundary_of_out hout⟩
   obtain ⟨b, hb, hrun⟩ := (hι v u hu hv g hg).2 (boundary_of_out hout)
   rw [valOver_unit hT hP ι hι Good hgood hinp g hgd v u hu hv hg, hrun, traceVal, read_of_not_const hconst,

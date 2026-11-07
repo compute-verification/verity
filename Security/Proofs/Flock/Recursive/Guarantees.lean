@@ -1,5 +1,25 @@
-import Proofs.Flock.Recursive.Statements
+module
+
+public import Proofs.Flock.Recursive.Statements
+public import Proofs.Flock.Recursive.StopLeak
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Recursive.Compose
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.ZK.Hiding
+import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Proofs of the recursive audit's guarantees
@@ -10,12 +30,16 @@ import Proofs.Flock.Soundness.ZK.Hiding
   (`Flock.Assumptions.VBridge`) taken apart, the inner verifier reading each round's message whole (`same` is equality,
   `Inner.accepts_of_rel_eq`). It reads no A3, so it proves `Flock.Guarantees.RecursiveSoundNoA3`
   (`Flock.SecurityProofs.RecursiveSoundNoA3`), and `RecursiveSound` from it.
-* `Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK` is two hybrids: the outer session's simulator at
-  the firewall's commitments (the premise, averaged over the auditor's tape, the developer's randomness and the salts),
-  then T1 once per commitment (`ZK.ideal_leaves_swap` at the pinned key's hiding gap, `CROnly.hm96Hiding_gap`), whose
-  salts the simulated outer session no longer reads. `recursiveZK_le` is the same at any hm96 hiding bound `δ`;
-  `Proofs.Flock.Recursive.OsSalts` takes it to the salts the operating system gives (A3).
+* `Flock.SecurityProofs.RecursiveZK : Flock.Guarantees.RecursiveZK` is, for the whole view, two hybrids: the outer
+  session's simulator at the firewall's commitments (the premise, averaged over the auditor's tape, the developer's
+  randomness and the salts), then T1 once per commitment (`ZK.ideal_leaves_swap` at the pinned key's hiding gap,
+  `CROnly.hm96Hiding_gap`), whose salts the simulated outer session no longer reads. `recursiveZK_le` is the same at any
+  hm96 hiding bound `δ`; `Proofs.Flock.Recursive.OsSalts` takes it to the salts the operating system gives (A3). A view
+  released cut at a stop is then `prCoin_cut_le` (`Proofs.Flock.Recursive.StopLeak`) over the whole view's bound, and
+  `recursiveZK_whole` is the guarantee at one stop, the whole view's bound.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 
@@ -131,11 +155,33 @@ theorem recursiveZK_le {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa] [
   refine h1.trans ((add_le_add h2 (le_refl εo)).trans (le_of_eq ?_))
   rw [h3, add_right_comm]
 
-/-- **The recursive audit is zero knowledge**, at the pinned key's hiding gap, where hm96 hiding holds with no
-premise (`CROnly.hm96Hiding_gap`). -/
+/-- **The recursive audit is zero knowledge, up to where it stops**, at the pinned key's hiding gap, where hm96 hiding
+holds with no premise (`CROnly.hm96Hiding_gap`): the whole view's bound (`recursiveZK_le`), then the stop's count
+(`prCoin_cut_le`), with the gaps added once. -/
 theorem RecursiveZK : Flock.Guarantees.RecursiveZK := by
-  intro Ωa Ωp Ωo Ωs V _ _ _ _ _ _ _ _ nh msgs view sim εo hOuter E
-  exact recursiveZK_le nh msgs view sim hOuter (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) E
+  intro Ωa Ωp Ωo Ωs V St Ωk W _ _ _ _ _ _ _ _ _ _ _ _ nh msgs view sim εo hOuter cut stop E
+  refine (prCoin_cut_le (Flock.Guarantees.recView nh msgs view) (Flock.Guarantees.recIdeal nh sim) cut stop
+    (fun E => (recursiveZK_le nh msgs view sim hOuter (CROnly.hm96Hiding_gap ZkView.My ZkView.saltHash) E).trans
+      (le_of_eq (add_assoc _ _ _))) E).trans (le_of_eq (add_assoc _ _ _).symm)
+
+/-- **`RecursiveZK` at one stop is the whole view's bound**: at `St = Ωk = Unit` and `cut` the identity,
+`Flock.Guarantees.RecursiveZK` gives `recursiveZK_le` at the pinned key's hiding gap. -/
+theorem recursiveZK_whole (h : Flock.Guarantees.RecursiveZK) {Ωa Ωp Ωo Ωs V : Type} [Fintype Ωa] [Nonempty Ωa]
+    [Fintype Ωp] [Nonempty Ωp] [Fintype Ωo] [Nonempty Ωo] [Fintype Ωs] [Nonempty Ωs] (nh : ℕ)
+    (msgs : Ωa → Ωp → Fin nh → ByteArray) (view : Ωa → (Fin nh → ByteArray) → Ωp → (Fin nh → ZkView.Salt) → Ωo → V)
+    (sim : Ωa → (Fin nh → ByteArray) → Ωs → V) {εo : ℝ≥0∞}
+    (hOuter : Flock.Guarantees.OuterViewZK nh msgs view sim εo) (E : Ωa × (Fin nh → ByteArray) × V → Prop) :
+    prCoin (fun w => E (Flock.Guarantees.recView nh msgs view w)) ≤
+      prCoin (fun w => E (Flock.Guarantees.recIdeal nh sim w)) + εo +
+        nh * ENNReal.ofReal (CROnly.hidingGap ZkView.My ZkView.saltHash) := by
+  have hu := h nh msgs view sim hOuter (fun (_ : Unit) (t : Ωa × (Fin nh → ByteArray) × V) => t)
+    (fun _ : (((Ωa × Ωp) × (Fin nh → ZkView.Salt)) × Ωo) × Unit => ()) E
+  have hsnd : prCoin (fun u : Unit × ((Ωa × (Fin nh → ZkView.Bits × ZkView.Salt)) × Ωs) =>
+      E (Flock.Guarantees.recIdeal nh sim u.2)) = prCoin (fun w => E (Flock.Guarantees.recIdeal nh sim w)) := by
+    rw [prCoin_prod_split fun (_ : Unit) w => E (Flock.Guarantees.recIdeal nh sim w)]
+    exact avg_const _
+  rwa [prCoin_fst (fun w => E (Flock.Guarantees.recView nh msgs view w)), Fintype.card_unit, Nat.cast_one, one_mul,
+    hsnd] at hu
 
 end ZK
 

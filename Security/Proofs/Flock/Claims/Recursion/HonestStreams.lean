@@ -1,11 +1,50 @@
-import Proofs.Flock.Claims.Recursion.HonestVerdictJson
-import Proofs.Flock.Claims.Recursion.HonestVerdictR
-import Proofs.Flock.Claims.Recursion.RepSqCounts
-import Proofs.Flock.Claims.KS.RoundsN
-import Proofs.Flock.Claims.Complete.Json.Goals
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Live
+public import Proofs.Flock.Claims.Recursion.HonestVerdictJson
+public import Proofs.Flock.Claims.Recursion.HonestVerdictR
+public import Proofs.Flock.Claims.Recursion.RepSqCounts
+import Flock.With.Returns
+import all Init.Data.Array.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Replay.ProverOk
+import Proofs.Flock.Claims.Complete.ZkTables.Decode
 import Proofs.Flock.Claims.Complete.ZkTables.Table
-import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
-import Flock.With.Deployed
+import Proofs.Flock.Claims.Recursion.NextRCoins
+import Proofs.Flock.Claims.Recursion.NextRRows
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # The reader's streams at the honest run are the honest record's
@@ -25,6 +64,8 @@ rounds as `liveOf` reads them (`recStreams_eq`), and the link the reader takes f
 * **Per rep** (`rep_facts`) and **the streams** (`recStreams_eq`): the three, at each rep's stream as the record
   decodes it.
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -241,7 +282,7 @@ theorem frames_emitted (g : Goals sha512 rel) (o : Run sha512 rel) {i r : ℕ} (
         (o.proof i r) (o.sw i r).1.1 := by
     simp [repFrames, FlockComplete.flat, List.append_assoc]
   rw [hfr] at e
-  obtain ⟨-, hk, hR, -⟩ := e
+  obtain ⟨-, hk, hR, -, -⟩ := e
   have hc' : (o.lg i r).2.k = (o.stream i r).rounds.size := by simpa using hc
   refine ⟨by rw [← hc', hk]; simp, fun j hj => ?_⟩
   have hj' : j < (chunks (repFrames o.tabs[i]! (o.sch i) (o.spec.domain o.spec.tables[i]! r).toUTF8

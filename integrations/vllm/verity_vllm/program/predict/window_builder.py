@@ -17,18 +17,11 @@ from typing import Any
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.windows import interface as IF
 from verity_vllm.check import weights_of_record as WR
+from verity_vllm.check.weights_of_record import weight_param
 
 from .build import Unexpressible
 
 WEIGHTS = WR.PARAM
-
-
-def weight_param(label: str, words: int) -> str:
-    """The registered parameter of weight ``label`` (its name in the weights record) read in rows of ``words`` u16 words:
-    one registration a weight and row width, so every read's base and steps are whole rows of it (`interface._reads_of`)
-    and its pin is a root over the weight's own rows (`interface.registered_reads`), the committer's hiding root for it
-    (`window_weights.weights_registration`); a pin of `WEIGHTS` pins none of them (`interface.input_count`)."""
-    return f"{WEIGHTS}/{label}@{words}"
 
 
 def table_param(label: str, words: int) -> str:
@@ -221,9 +214,9 @@ class _Builder:
 
     def value(self, tid: str, port: str, at: int, param: str, row: int, rows: int) -> None:
         """Unit ``at`` of ``tid`` reads ``port`` as row ``row`` of the registered parameter ``param``, ``rows`` rows of the
-        port's width (a per-window value, not the weights record)."""
+        port's width (a per-window value, not the weights record); an output row ``port`` is held to that row (`IF.Read`)."""
         lay = IF.layout(self.fns[tid])
-        words = dict(lay.rows)[port]
+        words = dict(lay.rows + lay.outs)[port]
         if self.params.setdefault(param, rows * words) != rows * words:
             raise Unexpressible(f"{param}: read as {rows} rows of {words} words and as {self.params[param]} leaves")
         self.reads.append(IF.Read(tid, port, param, at=at, radix=(1,), base=row * words, step=(0,)))

@@ -1,7 +1,13 @@
-import Mathlib.Algebra.BigOperators.Fin
-import Mathlib.Data.Matrix.Mul
-import Definitions.Pouw.Fp8Atom.Fp32
-import Definitions.Pouw.PearlC.Sm120
+module
+
+public import Definitions.Pouw.Fp8Atom.Fp32
+public import Definitions.Pouw.PearlC.Sm120
+public import Mathlib.Algebra.BigOperators.Fin
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Mathlib.Data.Fintype.Basic
+public import Mathlib.Data.Matrix.Mul
+public import Mathlib.LinearAlgebra.Matrix.Defs
+import Mathlib.Data.Rat.Floor
 
 /-!
 # Exact integer ±1 sketches (trusted definitions)
@@ -21,6 +27,8 @@ The down-projection tag: `k` rows of uniform signs, each row's inner product wit
   values `a_j ≠ b_j` (a bit, say) has inner product `c + Σ_j [ε_j] · v_j`, with `v_j = sgn (s j) · (b_j − a_j) ≠ 0` and
   `ε_j` whether element `j` took `b_j`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Tag
 

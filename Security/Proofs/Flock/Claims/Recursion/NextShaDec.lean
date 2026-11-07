@@ -1,6 +1,44 @@
-import Proofs.Flock.Claims.Recursion.NextShaS17
-import Proofs.Flock.Claims.Recursion.NextShaRep
-import Proofs.Flock.Claims.Recursion.CallsAgree
+module
+
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.NextShaRep
+public import Proofs.Flock.Claims.Recursion.NextShaS17
+import Flock.With.SimVerify
+import all Init.Data.Array.Basic
+import all Lean.Data.Json.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Decode
+import Proofs.Flock.Claims.DeployK
 
 /-!
 # The last step's decision with no proof file decoded (`decisionAtS_eval`)
@@ -33,6 +71,8 @@ substituted value, whose digests the decision computes from the files (`decision
 them by construction.
 -/
 
+@[expose] public section
+
 namespace FlockDeploy
 
 open Flock
@@ -47,7 +87,7 @@ variable {M : Type → Type} [Monad M] [MonadExceptOf String M] [MonadLiftT Floc
 
 /-- `Flock.verifyRepWith` with the proof read by `dec` at the rep's shape. -/
 def verifyRepDecWith (dec : Flock.Shape → M Flock.Proof) (hs : Flock.Hashes M) (spec : SessionSpec)
-    (st : Flock.Setup) (sch : Flock.Schedule) (sess : Session) (i r : ℕ) : M ByteArray := do
+    (st : Flock.Setup) (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ) : M ByteArray := do
   let name := s!"{spec.tables[i]!}/rep{r}"
   let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"
   let extras ← st.extra sess.points
@@ -57,7 +97,7 @@ def verifyRepDecWith (dec : Flock.Shape → M Flock.Proof) (hs : Flock.Hashes M)
 /-- **A rep's verdict on its decoded proof `p`**: the rep's stream (S11), the statement's extra claims, then
 `Flock.verifyRepPWith` at `p`. No proof file is decoded. -/
 def verifyRepDWith (hs : Flock.Hashes M) (spec : SessionSpec) (st : Flock.Setup) (sch : Flock.Schedule)
-    (sess : Session) (i r : ℕ) (p : Flock.Proof) : M ByteArray := do
+    (sess : RunRecord) (i r : ℕ) (p : Flock.Proof) : M ByteArray := do
   let name := s!"{spec.tables[i]!}/rep{r}"
   let some stream := sess.streams.find? (·.name == name) | throw s!"S11: no stream {name}"
   let extras ← st.extra sess.points
@@ -138,18 +178,18 @@ theorem range_forIn_congr {n : ℕ} {f g : ℕ → Unit → Flock.V (ForInStep U
 /-! ## The verdicts agree -/
 
 theorem verifyRepWith_eqDec (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (st : Flock.Setup)
-    (sch : Flock.Schedule) (sess : Session) (i r : ℕ) (bytes : ByteArray) :
+    (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ) (bytes : ByteArray) :
     verifyRepWith hs spec st sch sess i r bytes =
       verifyRepDecWith (fun sh => decodeProof sh bytes) hs spec st sch sess i r := by
   rw [verifyRepWith_split]
   rfl
 
 theorem verifyRepDWith_eqDec (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (st : Flock.Setup)
-    (sch : Flock.Schedule) (sess : Session) (i r : ℕ) (p : Flock.Proof) :
+    (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ) (p : Flock.Proof) :
     verifyRepDWith hs spec st sch sess i r p = verifyRepDecWith (fun _ => pure p) hs spec st sch sess i r := rfl
 
 theorem verifyRepDecWith_congr (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (st : Flock.Setup)
-    (sch : Flock.Schedule) (sess : Session) (i r : ℕ) {dec dec' : Flock.Shape → Flock.V Flock.Proof}
+    (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ) {dec dec' : Flock.Shape → Flock.V Flock.Proof}
     (h : ∀ extras, st.extra sess.points = .ok extras →
       dec (Flock.repFileShape st sch extras.size) = dec' (Flock.repFileShape st sch extras.size)) :
     verifyRepDecWith dec hs spec st sch sess i r = verifyRepDecWith dec' hs spec st sch sess i r := by
@@ -162,7 +202,7 @@ theorem verifyRepDecWith_congr (hs : Flock.Hashes Flock.V) (spec : SessionSpec) 
 /-- **A rep's verdict on a file that decodes to `p` is its verdict on `p`**, the file decoded at the verdict's shape
 (`Flock.repFileShape`) at the statement's extra claims. -/
 theorem verifyRepWith_dec (hs : Flock.Hashes Flock.V) (spec : SessionSpec) (st : Flock.Setup)
-    (sch : Flock.Schedule) (sess : Session) (i r : ℕ) {bytes : ByteArray} {p : Flock.Proof}
+    (sch : Flock.Schedule) (sess : RunRecord) (i r : ℕ) {bytes : ByteArray} {p : Flock.Proof}
     (hdec : ∀ extras, st.extra sess.points = .ok extras →
       decodeProof (Flock.repFileShape st sch extras.size) bytes = .ok p) :
     verifyRepWith hs spec st sch sess i r bytes = verifyRepDWith hs spec st sch sess i r p := by
@@ -238,7 +278,7 @@ theorem draw_ne_proofKey (spec : SessionSpec) : "unit_draw" ≠ s!"proof_{spec.d
   rcases dk_cases spec with e | e <;> simp [e, toString]
 
 /-- The decoder's reads of the link points and the proof digests. -/
-theorem decodeJWith_reads (hs : Flock.Hashes Flock.V) {spec : SessionSpec} {J : Json} {sess : Session}
+theorem decodeJWith_reads (hs : Flock.Hashes Flock.V) {spec : SessionSpec} {J : Json} {sess : RunRecord}
     (h : Record.decodeJWith hs spec J = .ok sess) :
     ∃ (l : Json) (pa a : Array Json), Record.fld J "link" = .ok l ∧ Record.arr l "points" = .ok pa ∧
       pa.mapM (m := Flock.V) (fun p => match p.getArr? with
@@ -289,7 +329,7 @@ theorem arr_coinSubJ_proof (spec : SessionSpec) (c₁ : Coin) (mids : List (Clai
 
 /-- **The decoder at the substituted value**: its link points are the first coin's, its proof digests `shaArr`'s. -/
 theorem decodeJWith_sub (hs : Flock.Hashes Flock.V) {spec : SessionSpec} {c₁ : Coin}
-    {mids : List (Claims.Msg × Coin)} {ds : Array ByteArray} {j : Json} {sess : Session}
+    {mids : List (Claims.Msg × Coin)} {ds : Array ByteArray} {j : Json} {sess : RunRecord}
     (h : Record.decodeJWith hs spec (coinSubJ spec c₁ mids (shaSubJ spec ds j)) = .ok sess) :
     sess.points = pointsOf spec c₁ ∧ sess.proofSha = (spec.repStreams.zip ds).map fun q => (q.1.2.2, hexOf q.2) := by
   obtain ⟨l, pa, a, hl, hpa, hpts, ha, hm⟩ := decodeJWith_reads hs h

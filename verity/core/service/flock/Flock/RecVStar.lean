@@ -7,7 +7,8 @@ session, `VStar.statementsHolo`, the parts `specHolo`'s and each part's file say
 session its RecSparse (`rec-sparse/n<NU>-e<ELL>-s<S_LOG>-t<T_LOG>` over the two reps), R's levels under names of their own
 (`rec-open-stacked/l<2^lanes>-h<d − cap>`, never the circuit table's) and the parts of R's opening
 (`rec-opening/m<m>-c<claims>-p<j>`, at META's `stacked`; `candidate3Statements`), then RecCap at each later level
-(`rec-cap/n<N>-l<l>`, `VStar.levelCapStatements`, the reps' schedule's tops: `checkTopsListed`) and RecCap at level 0
+(`rec-cap/n<N>-l<l>`, `VStar.levelCapStatements`, the reps' schedule's tops: `checkTopsListed`), the inner population's
+link table's RecLink when the statement carries one (`rec-link/u<UB>-p<PB>`, `linkStatements`), and RecCap at level 0
 (`rec-cap/n<N>`, last; `checkCapListed`). A circuit whose unit is one
 of V*'s is refused unless the verifier names which of these statements the session is (`--rec-part J`) and its unit is that
 statement's, its population is that statement's instance count, the verifier's own bindings (`--rec-bindings F`) are its
@@ -19,14 +20,21 @@ The inner shape is the verifier's own (`rec-inner`): `Stmt.setupTables` on the i
 up for V*'s native side, read once, since the inner circuit can be tens of GB; `verify --rec-inner F` reads the line it
 printed.
 -/
-import Flock.HmRow
-import Flock.ProvedScope
-import Flock.RecOpening
-import Flock.Registered
-import Flock.WindowRecord
-import VStar.Cli
-import VStar.Compose
-import VStar.Stage
+module
+
+public import Flock.HmRow
+public import Flock.ProvedScope
+public import Flock.RecOpening
+public import Flock.Registered
+public import Flock.WindowRecord
+public import VStar.Cli
+public import VStar.Compose
+public import VStar.Stage
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 namespace RecVStar
@@ -51,12 +59,21 @@ guarantees read. -/
 instance instBEqShape : BEq RecSparse.Shape := ⟨fun a b => a.nu == b.nu && a.ell == b.ell && a.sLog == b.sLog && a.tLog == b.tLog⟩
 instance instReprShape : Repr RecSparse.Shape := ⟨fun s _ => repr (s.nu, s.ell, s.sLog, s.tLog)⟩
 
+/-- The inner population's link table as the verifier's inner shape names it: its units' bits `UB`, its rows' bits `PB`
+(`RecLinkTree.checkShape`) and its row count `rows`, `grid(L)` (`linkStatements`). -/
+structure LinkShape where
+  UB : Nat
+  PB : Nat
+  rows : Nat
+  deriving Repr, BEq, Inhabited
+
 /-- The inner session's shape: its table's `m` and `k_log` (`Setup.ofCircuit`), its claims, two and one per region and
 link point (`Stmt.extraClaims`, `rec_vstage.verifier`'s `2 + len(extras)`), its table's regions (`Stmt.regions`), and
 whether its circuits are private (`holo`, `rec_algebra.Shape.holo`): the verifier's own `--hide`, never the prover's.
 Candidate 3's session (`rec_live.schedule_for` with `sparse`) also has its sparse phase's RecSparse shape (`sparse`, the
 bucket's, the verifier's own `--sparse`) and R's shape (`stacked`, the inner circuit's META's), which its V* list needs
-beside it (`candidate3Statements`). -/
+beside it (`candidate3Statements`). A statement carrying the inner population's link table has its shape (`links`), whose
+part V*'s list holds (`linkStatements`). -/
 structure Inner where
   m : Nat
   kLog : Nat
@@ -65,17 +82,39 @@ structure Inner where
   holo : Bool := false
   sparse : Option RecSparse.Shape := none
   stacked : Option StackedShape := none
+  links : Option LinkShape := none
   deriving Repr, BEq, Inhabited
 
-/-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
-def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
+/-- The inner session's keyed coin tree: the session's stream (the link points), the circuit table's two reps, each rep's
+sparse phase and candidate 3's stacked table R (`rec_live.INNER_COIN_STREAMS`), 512 rounds of at most 512 coins each, as
+`Zk.coinSpec` has them. A session that opens fewer streams leaves the rest unopened. -/
+def innerCoinSpec : CoinTree.Spec :=
+  ⟨#["session", "circuit/rep0", "circuit/rep1", "sparse/rep0", "sparse/rep1", "stacked/rep0"], 9, 512⟩
 
-/-- The inner statement's shape, from its circuit, public file and the verifier's own partition object and program. -/
-def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false) :
-    V Inner := do
-  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB Coins.os 1 (partition := partition) (program := program)
+/-- A recursive session's inner statement's coins: the challenger's keyed coin tree (`innerCoinSpec`). -/
+def innerTree : Coins := .tree innerCoinSpec
+
+/-- A recursive session's inner statement (`Tags.withPlainLeaves`), on the challenger's coin tree (`innerTree`), under the statement's own
+tags. -/
+def innerTags : Tags := Tags.circuitPlainLeaves
+
+/-- The fewest bits that number `n` things: `0` for at most one. -/
+def bitsFor (n : Nat) : Nat := if n ≤ 1 then 0 else Nat.log2 (n - 1) + 1
+
+/-- **The link table's shape at the inner statement** `st`, of `rows` rows: the fewest bits that number its units
+(`UB`) and the fewest that number its input rows and its output rows (`PB`, `HmOut.nIn` input rows, one output row a
+row port), the positions of the rows trees `RecLinkTree.rowsRoot` builds. -/
+def linkShapeOf (st : Stmt) (rows : Nat) : LinkShape :=
+  { UB := bitsFor st.pub.n, PB := bitsFor (max (HmOut.nIn st.c) st.c.outRowPorts.size), rows }
+
+/-- The inner statement's shape, from its circuit, public file and the verifier's own partition object and program;
+with `links`, the row count of the link table the statement carries, that table's shape (`linkShapeOf`). -/
+def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false)
+    (links : Option Nat := none) : V Inner := do
+  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB innerTree 1 (partition := partition) (program := program)
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
-  pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo }
+  pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo,
+         links := links.map (linkShapeOf st) }
 
 /-- The recursion's statement version: V*'s statements whose verifier-registered values are under SHA-512 salts
 (`RecCoins.saltOf`). -/
@@ -91,11 +130,16 @@ def HOLO_KEY : String := "holo"
 is under META's own key (`STACKED_SHAPE_KEY`), `{"m", "claims"}`, written only when present. -/
 def SPARSE_KEY : String := "sparse"
 
+/-- `verity/rec-inner/v2`'s key for `Inner.links`, `{"UB", "PB", "rows"}`, written only when present. -/
+def LINKS_KEY : String := "links"
+
 def Inner.toJson (i : Inner) : Json :=
   Json.mkObj ([("format", .str FORMAT), ("m", Lean.toJson i.m), ("k_log", Lean.toJson i.kLog),
     ("claims", Lean.toJson i.claims), ("regions", Lean.toJson i.regions)] ++ (if i.holo then [(HOLO_KEY, .bool true)] else []) ++
     (i.sparse.map fun sh => (SPARSE_KEY, Lean.toJson [sh.nu, sh.ell, sh.sLog, sh.tLog])).toList ++
-    (i.stacked.map fun r => (STACKED_SHAPE_KEY, Json.mkObj [("m", Lean.toJson r.m), ("claims", Lean.toJson r.claims)])).toList)
+    (i.stacked.map fun r => (STACKED_SHAPE_KEY, Json.mkObj [("m", Lean.toJson r.m), ("claims", Lean.toJson r.claims)])).toList ++
+    (i.links.map fun l => (LINKS_KEY,
+      Json.mkObj [("UB", Lean.toJson l.UB), ("PB", Lean.toJson l.PB), ("rows", Lean.toJson l.rows)])).toList)
 
 def Inner.ofJson (j : Json) : Except String Inner := do
   let fmt := (j.getObjValAs? String "format").toOption
@@ -116,8 +160,13 @@ def Inner.ofJson (j : Json) : Except String Inner := do
     | .ok v => match v.getObjValAs? Nat "m", v.getObjValAs? Nat "claims" with
       | .ok m, .ok claims => pure (some ({ m, claims } : StackedShape))
       | _, _ => throw s!"rec-inner: {STACKED_SHAPE_KEY} is not R's shape (m, claims)"
+  let links ← match j.getObjVal? LINKS_KEY with
+    | .error _ => pure none
+    | .ok v => match v.getObjValAs? Nat "UB", v.getObjValAs? Nat "PB", v.getObjValAs? Nat "rows" with
+      | .ok UB, .ok PB, .ok rows => pure (some ({ UB, PB, rows } : LinkShape))
+      | _, _, _ => throw s!"rec-inner: {LINKS_KEY} is not the link table's shape (UB, PB, rows)"
   pure { m := ← j.getObjValAs? Nat "m", kLog := ← j.getObjValAs? Nat "k_log", claims := ← j.getObjValAs? Nat "claims",
-         regions := ← j.getObjValAs? Nat "regions", holo, sparse, stacked }
+         regions := ← j.getObjValAs? Nat "regions", holo, sparse, stacked, links }
 
 /-- R's variables at the bucket's RecSparse shape (`rec_sparse.table_m`): its cells' `NU + P_LOG + T_LOG`, at least
 `PAD_TO` (`registered_claim`'s padded point). -/
@@ -335,6 +384,7 @@ def ownPorts : VStar.Stmt → List (String × String × Array (Option Nat))
   | .recOpen .. => []
   | .recOpenStacked .. => []
   | .cap .. => []
+  | .link .. => []
   | .sparse _ hr => [("h", s!"rec-c{hr}", #[some 0, some 1]), ("claim", CLAIM_VALUE, #[some 0, some 1])]
   | .opening _ _ _ _ ports _ => ports.filterMap fun (nm, _) => match mIndex nm, claimIndex nm with
     | some k, _ => some (nm, s!"rec-opening-c{k}", #[some 0])
@@ -390,6 +440,16 @@ def checkRoundsListed (i : Inner) (ss : Array VStar.Stmt) : Except String Unit :
   | some k => throw s!"V*'s list: a rep's message round {k} (rec-c{k}) is a message-round port of none of its statements"
   | none => checkRoundWords ss
 
+/-- **The link table's part**, when the inner shape names the table (`i.links`): `RecLink{UB, PB}` over its rows
+(`VStar.Stmt.link`), at a shape the link unit takes (`RecLinkTree.checkShape`) and a row count that is `grid(L)` for some
+`L ≥ 1`; none without a table. -/
+def linkStatements (i : Inner) : Except String (Array VStar.Stmt) := do
+  let some l := i.links | pure #[]
+  RecLinkTree.checkShape l.UB l.PB
+  unless 1 ≤ l.rows && RecLinks.grid l.rows == l.rows do
+    throw s!"V*'s list: the link table's {l.rows} rows are no table's grid(L)"
+  pure #[.link l.UB l.PB l.rows]
+
 /-- V*'s statements at the inner shape (`VStar.statementsOf`: `VStar.statements`, or `VStar.statementsHolo` when its
 circuits are private, `i.holo`), at a shape `RecResiduals.check` accepts a part's name at, whose claims are two and two
 per region of the inner statement (an extra claim per region at each of two link points), and where V*'s parts
@@ -399,7 +459,8 @@ shape one of whose groups holds h's round (`hRound`) as a row port. A part's
 circuit file, compared byte for byte (`checkFile`), carries `i.holo` as its META holo (`RecResiduals.HOLO_KEY`,
 `circuitFile`). Candidate 3's statements follow the table's (`candidate3Statements`), and the list must hold every one
 its session needs (`checkCandidate3`). It holds every level's committed tops (`checkCapListed`) and every message
-round a rep absorbs, each round's holders at one width (`checkRoundsListed`). -/
+round a rep absorbs, each round's holders at one width (`checkRoundsListed`). The link table's part (`linkStatements`)
+comes after the later levels' caps and before the level-0 cap, which stays last. -/
 def statements (i : Inner) : Except String (Array VStar.Stmt) := do
   let some sh0 := RecResiduals.shape? i.m i.kLog i.claims
     | throw (s!"the inner session's shape (m {i.m}, k_log {i.kLog}, claims {i.claims}) is not V*'s: a fast100 schedule, " ++
@@ -418,7 +479,8 @@ def statements (i : Inner) : Except String (Array VStar.Stmt) := do
       s!"verifier's algebra holds h's round m{hRound i.m i.kLog} as a row port")
   let caps ← VStar.levelCapStatements vsh
   checkTopsListed i caps
-  let ss := (← VStar.statementsOf vsh i.holo) ++ (← candidate3Statements i) ++ caps ++ #[← VStar.capStatement vsh]
+  let ss := (← VStar.statementsOf vsh i.holo) ++ (← candidate3Statements i) ++ caps ++ (← linkStatements i) ++
+    #[← VStar.capStatement vsh]
   checkCandidate3 i ss
   checkCapListed i ss
   checkRoundsListed i ss
@@ -426,7 +488,8 @@ def statements (i : Inner) : Except String (Array VStar.Stmt) := do
 
 def isVStar (name : String) : Bool :=
   name.startsWith "rec-open/" || name.startsWith "rec-residuals/" || name.startsWith "rec-open-stacked/" ||
-    name.startsWith "rec-sparse/" || name.startsWith "rec-opening/" || name.startsWith "rec-cap/"
+    name.startsWith "rec-sparse/" || name.startsWith "rec-opening/" || name.startsWith "rec-cap/" ||
+    name.startsWith "rec-link/"
 
 /-- When `name` is the circuit table's name (`rec-open/l<LANES>-h<H>`) of one of R's levels in `ss`, a sentence saying so: R's
 levels are named `rec-open-stacked/…`, never as the table's. -/
@@ -452,7 +515,10 @@ def unlisted (i : Inner) (name : String) (ss : Array VStar.Stmt) : String :=
   | none, some sh => match i.sparse with
     | some sp => if sh == sp then none_ else s!"{name}: a RecSparse unit, and the bucket's is {RecSparse.unitName sp} (rec-inner --sparse)"
     | none => s!"{name}: a RecSparse unit, and the verifier's inner shape names no sparse phase (rec-inner --sparse)"
-  | none, none => rLevelUnder name ss ++ none_
+  | none, none =>
+    if (VStar.linkParams name).isSome && i.links.isNone then
+      s!"{name}: the link table's part, and the verifier's inner shape names no link table ({LINKS_KEY})"
+    else rLevelUnder name ss ++ none_
 
 /-- A unit named `name` over a population of `n` instances is one of V*'s statements at the inner shape `i`: a part's name
 carries `i`'s `m`, `k_log` and claims, exactly one statement has the name, and `n` is its instance count. With `part = some
@@ -511,7 +577,7 @@ def vstarRows (sub : VStar.Sub) (u : VStar.UnitC) : List (String × Nat × Nat) 
 unit's input leaves its input words in order, V*'s row ports (`vstarRows`), each a `sha512/row/v1` row as V*'s META writes
 them (`row_schema`, no `row_schemas`), and the unit's output leaves its output words in order (`UnitC.leaves`' `out`),
 with no template (V*'s circuits are flat). `checkFile` holds the bytes to V*'s;
-this holds what the verifier parsed from them, which no proof reads through `Lean.Json.parse`, to what V* wrote. -/
+this holds what the verifier parsed from them, which no proof yet reads through `JsonParse.parse`, to what V* wrote. -/
 def checkParsed (s : VStar.Stmt) (c : Circuit) : V Unit := do
   if c.tmpl.isSome then
     throw s!"{s.name}: the parsed circuit is templated, and V*'s circuits are flat"
@@ -622,7 +688,8 @@ def openingRepS (S : RecOpen.GfS) (ports : List (String × Nat)) (nv : Nat) : VS
 (`codec.descriptor_id`), the key of its `program_digests` and its partition's template. A level's (of the table or of R)
 `RecOpen_v4{LANES=…,H=…}` (`rec_open.definition`), a part's (of the algebra or of R's opening)
 `InnerRepCheck_v2{S=…}` at the part's S (`rec_residuals.definition`), RecSparse's `RecSparse_v1{NU=…,ELL=…,S_LOG=…,T_LOG=…}`
-(`rec_sparse.definition`) and a cap's `RecCap_v1` (`rec_cap.definition`). -/
+(`rec_sparse.definition`), a cap's `RecCap_v1` (`rec_cap.definition`) and the link table's `RecLink_v1{UB=…,PB=…}`
+(`rec_link.definition`). -/
 def templateId : VStar.Stmt → Except String String
   | .recOpen _ L H _ | .recOpenStacked _ L H _ => pure ("RecOpen_v4{LANES=" ++ toString L ++ ",H=" ++ toString H ++ "}")
   | .inner _ _ p => do pure ("InnerRepCheck_v2{S=" ++ (← staticDumpsAt 64 p.S.toJson) ++ "}")
@@ -631,6 +698,7 @@ def templateId : VStar.Stmt → Except String String
   | .sparse sh _ => pure ("RecSparse_v1{NU=" ++ toString sh.nu ++ ",ELL=" ++ toString sh.ell ++ ",S_LOG=" ++
       toString sh.sLog ++ ",T_LOG=" ++ toString sh.tLog ++ "}")
   | .cap .. => pure "RecCap_v1"
+  | .link UB PB _ => pure ("RecLink_v1{UB=" ++ toString UB ++ ",PB=" ++ toString PB ++ "}")
 
 /-- A descriptor id as an error shows it: whole up to 160 characters, else its first 120 and its length (a part's S runs
 to tens of kB). -/
@@ -694,8 +762,8 @@ def partHolo (s : VStar.Stmt) (holo : Bool) : Bool := holo && s matches .inner .
 
 /-- **The parsed circuit's META `holo` is V*'s file's**: `RecResiduals.holoOf c` is `true` exactly at a part's statement
 over a holo inner session, where `circuitFile` writes META `holo` (`VStar.emitCircuitHolo`), and `false` elsewhere, where
-it writes none. `checkFile` holds the bytes to V*'s; this holds what `checkPart` reads of the parsed circuit, which no
-proof reads through `Lean.Json.parse`, to what V* wrote. -/
+it writes none. `checkFile` holds the bytes to V*'s; this holds what `checkPart` reads of the parsed circuit, which no proof
+yet reads through `JsonParse.parse`, to what V* wrote. -/
 def checkHolo (s : VStar.Stmt) (c : Circuit) (holo : Bool) : V Unit := do
   if (← RecResiduals.holoOf c) != partHolo s holo then
     throw s!"{s.name}: the circuit's META holo is not V*'s file's ({partHolo s holo}) at the inner session's holo flag {holo}"
@@ -747,7 +815,7 @@ def checkOwn (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit := d
 statements, which share no row with another session of the family. -/
 def rowPorts : VStar.Stmt → List String
   | .inner _ _ p => p.S.ports.map (·.1)
-  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. | .cap .. => []
+  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. | .cap .. | .link .. => []
 
 /-- The first port of a circuit named as a message round's (`m<k>`) that is none of a statement's message-round ports
 (`ownPorts`). -/
@@ -829,16 +897,11 @@ def checkRows (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Opti
 
 def ACC_VALUE : String := "rec-acc"
 
-/-- The first name two of the verifier's registered ports share. -/
-def dupName? (registered : Array Registered.Port) : Option String :=
-  let names := registered.toList.map (·.name)
-  names.find? fun nm => names.count nm != 1
-
-/-- **The verifier's reads file names each port once** (`dupName?`): `checkAcc` and `checkAccReads` read a name's first
-port (`find?`), so a second port of that name would be one neither checks. A file `Registered.ofJson` parses names each
-once (a JSON object's keys); the refusal holds whatever list of ports the verifier is given. -/
+/-- **The verifier's reads file names each port once** (`Registered.dupName?`): `checkAcc` and `checkAccReads` read a
+name's first port (`find?`), so a second port of that name would be one neither checks. `Registered.ofJson` refuses a file
+naming a port twice by the same check; this refusal holds whatever list of ports the verifier is given. -/
 def checkNames (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit :=
-  match dupName? registered with
+  match Registered.dupName? registered.toList with
   | some nm => throw s!"{s.name}: the registered reads name two ports {nm}, and each check reads a name's first"
   | none => pure ()
 
@@ -848,7 +911,7 @@ ports (rec_vstage.py:357), a part of R's opening's too (`rec_residuals.stage_ope
 def accPorts : VStar.Stmt → List String
   | .inner _ _ p => (p.S.ports.map (·.1)).filter fun nm => nm == "acc0" || nm == "acc1"
   | .recOpen .. | .recOpenStacked .. => ["acc", "acc_out"]
-  | .sparse .. | .cap .. => []
+  | .sparse .. | .cap .. | .link .. => []
   | .opening _ _ _ _ ports _ => (ports.map (·.1)).filter fun nm => nm == "acc0" || nm == "acc1"
 
 /-- **A session's `rec-acc` reads are one registration, the verifier's** (the `site` of `Family/AccRows.lean`: value,
@@ -1293,7 +1356,7 @@ def innerCommits (tr : Json) (record : String) (reg : Option Json := none) (boun
   checkFinished tr
   let held ← registration reg bound
   let .ok rounds := tr.getObjValAs? (Array Json) "rounds" | throw "rec inner transcript: rounds is not a list"
-  let rec_ ← match Json.parse record with
+  let rec_ ← match JsonParse.parse record with
     | .ok j => pure j
     | .error e => throw s!"rec inner transcript: the inner session's record is not JSON: {e}"
   let .ok streams := rec_.getObjValAs? (Array Json) "streams" | throw "rec inner transcript: the inner session's record has no streams"
@@ -1629,7 +1692,7 @@ def innerLink (tr : Json) (record : String) : V InnerLink := do
   if flat.size != np * m then throw s!"rec inner transcript: {flat.size} link coins for {np} points of {m}"
   let coins ← f128sOfHex "link.points" flat
   let points := (Array.range np).map fun i => coins.extract (i * m) (i * m + m)
-  let rec_ ← match Json.parse record with
+  let rec_ ← match JsonParse.parse record with
     | .ok j => pure j
     | .error e => throw s!"rec inner transcript: the inner session's record is not JSON: {e}"
   let .ok rp := (rec_.getObjVal? "link" >>= (·.getObjValAs? (Array (Array String)) "points"))

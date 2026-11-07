@@ -1,4 +1,19 @@
-import Proofs.Flock.Recursive.Registrants
+module
+
+public import Proofs.Flock.Recursive.Registrants
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # V*'s bridge: the recursive audit's open obligation
@@ -20,6 +35,8 @@ C-Flock's definitions are still in its proofs package (`Proofs.Flock.Soundness`)
 package builds without `security_proofs`, does not import it: `Proofs.Flock.Recursive` does.
 -/
 
+@[expose] public section
+
 namespace Flock.Assumptions
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -33,8 +50,8 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 its file's digest through `ZkOuter.hc`, under the law `(Vs j).law`; `k, Rw` the count curve's). Four facts about V*'s
 circuits, laws and inputs, each read at every history `(R, ω, t)` (the registration, the draw of the hidden circuit's
 units, the rounds' commitments and coins) and every registration `R₂` of the outer proof (`outerV`: the values V*'s
-sessions read that the history does not fix, its running sums `rec-acc` and with `link_rows` its opened rows
-`rec-rows-L<level>`, sent after the last inner coin and before any session):
+sessions read that the history does not fix, its running sums `rec-acc` and its opened rows and their siblings
+`rec-rows-L<level>` and `rec-aux-L<level>`, sent after the last inner coin and before any session):
 
 * **they accept only an accepted inner transcript** (`VBridgeOff RegColl`): where no two of V*'s sessions' registrant
   records clash (`RegColl`: two registered reads whose openings or hm96 leaves are a SHA-512 collision, which the

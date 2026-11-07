@@ -1,5 +1,13 @@
-import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
-import Proofs.Flock.Soundness.Discharge.Layout.Site
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
+public import Proofs.Flock.Soundness.Discharge.Layout.Site
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -17,6 +25,7 @@ namespace FlockSoundness.Discharge.Layout
 
 open Flock Refine Model
 
+-- `walk_step` down the unfolded do-block that puts the sample in the population's header, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.drawn`'s outputs**: the proved units' `nOut` output words, unit by unit. -/
 theorem drawn_outputs {c : Circuit} {pop pub : Public} {d : Lean.Json} (h : HmRow.drawn c pop d = .ok pub) :
@@ -36,6 +45,7 @@ theorem two_bytes_lt (a b : UInt8) : a.toNat + 256 * b.toNat < 2 ^ 16 := by
   have := b.toNat_lt
   omega
 
+-- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **The population's outputs**: a public file holds `n · nOut` output words, each two bytes (below `2^16`). -/
 theorem loadPublic_outputs {tags : Tags} {c : Circuit} {file : ByteArray} {pop : Public}

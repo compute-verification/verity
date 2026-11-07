@@ -1,7 +1,15 @@
+module
+
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.M1
+public import Definitions.Pouw.Witness.Copy
+public import Definitions.Pouw.Witness.Model
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
+public import Mathlib.Data.Set.Finite.List
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
+import Proofs.Pouw.Reduction
 import Proofs.Pouw.Witness
-import Proofs.Pouw.Copy
-import Mathlib.Data.Set.Finite.List
-import Mathlib.Data.Fintype.Pigeonhole
 
 /-!
 # Sanity: degenerate instances and side conditions
@@ -28,6 +36,8 @@ the pinned statements excludes it or makes it harmless.
 | R_copy with zero noise | `copy_zero_noise`: Nz fails and R_copy's bound fails |
 | (d′)'s hypotheses together | `milestone_hypotheses_consistent` (at `W_ref = m1Wref`, `Ω_max = Ω_M1`) |
 -/
+
+@[expose] public section
 
 namespace Pouw.Sanity
 
@@ -83,12 +93,12 @@ theorem noisedAct_rank_zero (P : D1.Params Q R S) (hr : P.r = 0) (H : Q → R) (
   simp [D1.Params.noisedAct, hr, mm]
 
 theorem checkIdx_depth_zero (P : D1.Params Q R S) (hd : P.d = 0) (sh : Shape) : P.checkIdx sh = ∅ := by
-  simp [D1.Params.checkIdx, D1.nBlocks, hd]
+  simp [D1.Params.checkIdx, D1.nSegments, hd]
 
 /-- Every block but the last is a full step of `d`. -/
-theorem blockEnd_full {d k t : ℕ} (hd : 0 < d) (ht : t + 1 < D1.nBlocks d k) : D1.blockEnd d k t = (t + 1) * d := by
+theorem blockEnd_full {d k t : ℕ} (hd : 0 < d) (ht : t + 1 < D1.nSegments d k) : D1.blockEnd d k t = (t + 1) * d := by
   unfold D1.blockEnd
-  unfold D1.nBlocks at ht
+  unfold D1.nSegments at ht
   have h := (Nat.le_div_iff_mul_le hd).1 (show t + 2 ≤ (k + d - 1) / d by omega)
   have : (t + 1) * d ≤ k := by
     have : (t + 2) * d = (t + 1) * d + d := by ring
@@ -96,8 +106,8 @@ theorem blockEnd_full {d k t : ℕ} (hd : 0 < d) (ht : t + 1 < D1.nBlocks d k) :
   exact min_eq_left this
 
 /-- The last block ends at `k`, whether or not `d ∣ k`. -/
-theorem blockEnd_last {d k : ℕ} (hd : 0 < d) (hk : 0 < k) : D1.blockEnd d k (D1.nBlocks d k - 1) = k := by
-  unfold D1.blockEnd D1.nBlocks
+theorem blockEnd_last {d k : ℕ} (hd : 0 < d) (hk : 0 < k) : D1.blockEnd d k (D1.nSegments d k - 1) = k := by
+  unfold D1.blockEnd D1.nSegments
   have h1 := Nat.div_add_mod (k + d - 1) d
   have h2 := Nat.mod_lt (k + d - 1) hd
   have hq : 1 ≤ (k + d - 1) / d := (Nat.le_div_iff_mul_le hd).2 (by omega)
@@ -110,7 +120,7 @@ theorem blockEnd_last {d k : ℕ} (hd : 0 < d) (hk : 0 < k) : D1.blockEnd d k (D
 /-- The last checked block is the whole noised product. -/
 theorem Y_last (P : D1.Params Q R S) (hd : 0 < P.d) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat)
     (hk : 0 < (U.layout.shape u).k) :
-    P.Y H s U u A (D1.nBlocks P.d (U.layout.shape u).k - 1)
+    P.Y H s U u A (D1.nSegments P.d (U.layout.shape u).k - 1)
       = mm (U.layout.shape u).k (P.noisedAct H s U u A) (P.noisedWt H s U u) := by
   unfold D1.Params.Y
   rw [blockEnd_last hd hk]

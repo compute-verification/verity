@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import random
 from pathlib import Path
 
 import numpy as np
@@ -65,17 +64,6 @@ def reference(c: SR.Committed) -> dict[str, bytes]:
     return roots
 
 
-def test_chacha20_is_rfc8439():
-    key, nonce = bytes(range(32)), bytes.fromhex("000000090000004a00000000")
-    assert SR.chacha20(key, nonce, 64, counter=1).hex() == (
-        "10f1e7e4d13b5915500fdd1fa32071c4c7d1f4c733c068030422aa9ac3d46c4e"
-        "d2826446079faa0914c2d705d98b02a2b5129cd1de164eb9cbd083e8a2503c4e")
-    crypto = pytest.importorskip("cryptography.hazmat.primitives.ciphers")
-    k, nc = random.Random(1).randbytes(32), random.Random(2).randbytes(12)
-    enc = crypto.Cipher(crypto.algorithms.ChaCha20(k, (0).to_bytes(4, "little") + nc), mode=None).encryptor()
-    assert SR.chacha20(k, nc, 200_003) == enc.update(bytes(200_003))
-
-
 def test_m0_serving_row_leaf_vector():
     dv = VECTOR["domain"]
     dom = CommitmentDomain(bytes.fromhex(dv["binding"]), dv["owner"], RangeIndexedDomain(0, VECTOR["rows_n"]), hash="sha512")
@@ -129,7 +117,7 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     w = window(9, 4)
     c = SR.commit(w, data(w), salt_key=bytes(32))
     idx = IX.index_doc(w.members, [[[0, 9, "r0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
-    win = SR.write(c, tmp_path, {"row": 101, "commitment": "vllm-v1"}, idx, registrar=R)
+    win = SR.write(c, tmp_path, {"row": 101, "commitment": "rows-sha512"}, idx, registrar=R)
     rec = json.loads((tmp_path / "registration.json").read_text())
     assert (rec["format"], rec["population"], rec["partition"], rec["window"]["kind"], rec["window"]["run"]) == (
         R.FORMAT, 13, w.partition_digest, "served", RUN)
@@ -165,7 +153,7 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
 
 def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp_path):
     """``index.json`` names what was served (a request, its engine step, its token row), so the registration binds its
-    salted leaf and never a digest of it: the leaf opens under ``index-salt.bin``, a given salt fixes it, a fresh one or
+    hiding leaf and never a digest of it: the leaf opens under ``index-salt.bin``, a given salt fixes it, a fresh one or
     another index moves it, no public file holds the index's SHA-512, and the index and its salt are the owner's alone,
     a rewrite over a world-readable index included."""
     w = window(9, 4)

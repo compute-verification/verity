@@ -1,11 +1,30 @@
-import Proofs.Flock.Recursive.Sound
-import Proofs.Flock.Recursive.Multi
-import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
-import Proofs.Flock.Recursive.ZkReg.Vals
-import Proofs.Flock.Recursive.ZkReg.Off
-import Proofs.Flock.Recursive.Finds
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
-import Proofs.Flock.Soundness.Assumptions.CustodyZk
+module
+
+public import Proofs.Flock.Recursive.Finds
+public import Proofs.Flock.Recursive.Sound
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Recursive.ZkReg.Off
+public import Proofs.Flock.Soundness.Assumptions.CustodyZk
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: the outer proof, `--zk --registered` sessions of fixed public verifiers V*
@@ -30,11 +49,11 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
 * `sessions`: the `S` sessions in a row, each played by a strategy the prover names at its start (`seqC`, `ofBase`);
   every strategy of a session is named (`ZkOuter.ofBase_surj`), so no prover is lost.
 * `outerV`: the outer proof at a history: the prover registers `R₂`, the values V*'s sessions read that the history
-  does not fix (V*'s running sums `rec-acc`, which every level's session and the algebra read, and with `link_rows`
-  each level's opened rows `rec-rows-L<level>`), then V*'s sessions at `R₂` (`zs R ω t R₂ j`) in a row. `R₂` is one
-  registration for all of them, sent before any session's draw, so each session's `own`, `rd` and `hown` may read its
-  roots and values, and `Good` ties every session to the same values. Its binding is in each session's `bound`:
-  `regTermZC` at the registrant's leaf and `qR²/2^513` off it.
+  does not fix (V*'s running sums `rec-acc`, which every level's session and the algebra read, and each level's opened
+  rows and their siblings, `rec-rows-L<level>` and `rec-aux-L<level>`), then V*'s sessions at `R₂` (`zs R ω t R₂ j`) in
+  a row. `R₂` is one registration for all of them, sent before any session's draw, so each session's `own`, `rd` and
+  `hown` may read its roots and values, and `Good` ties every session to the same values. Its binding is in each
+  session's `bound`: `regTermZC` at the registrant's leaf and `qR²/2^513` off it.
 * `VBridge`: what V*'s circuits compute: when every session accepts and every layer is `Good`, the messages `wmsg` reads
   from the layers hold an inner transcript the inner verifier accepts on the hidden circuit's statement `x R ω` at the
   rounds' coins.
@@ -45,6 +64,8 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
   SHA-512 collision; with none, `CR` holds at budget `0` (`ZkOuter.cr_of_not_fork`) and `boundIf` there is at most
   `ZkOuter.boundCR`, the miss and the drawn units' statistical errors (`ZkOuter.boundIf_le`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 
@@ -595,8 +616,9 @@ theorem sessions_le
 variable {Reg₂ : Type}
 
 /-- **V*'s outer proof at one history**: the prover registers `R₂`, the values V*'s sessions read that the history does
-not fix (V*'s running sums `rec-acc`, which every level's session and the algebra read, and with `link_rows` each
-level's opened rows `rec-rows-L<level>`), and then V*'s sessions at `R₂` run in a row. The output records `R₂`. -/
+not fix (V*'s running sums `rec-acc`, which every level's session and the algebra read, and each level's opened rows
+and their siblings, `rec-rows-L<level>` and `rec-aux-L<level>`), and then V*'s sessions at `R₂` run in a row. The
+output records `R₂`. -/
 noncomputable abbrev outerV (zs : Reg₂ → (j : Fin S) → (Vs j).Outer Reg') (dg : ByteArray → ByteArray) (N : ℕ) :
     Game (Reg₂ × VRec Vs Reg' dg N) :=
   .send Reg₂ fun R₂ => (sessions (zs R₂) dg N).map fun b => (R₂, b)

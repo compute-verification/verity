@@ -1,5 +1,6 @@
-import Definitions.Accounting.Confidence
-import Mathlib.Data.Fintype.Pi
+module
+
+public import Definitions.Accounting.Confidence
 
 /-!
 # Composition and fit (trusted)
@@ -19,6 +20,8 @@ The actual-circuit model's composition and fit.
 
 The proofs are in `Security/Proofs/Accounting/Actual/Confidence.lean`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

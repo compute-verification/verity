@@ -1,5 +1,10 @@
-import Proofs.Flock.Soundness.ZK.GK.Rand
-import Proofs.Flock.Soundness.ZK.GK.Extract
+module
+
+public import Proofs.Flock.Soundness.ZK.GK.Rand
+public import Proofs.Flock.Soundness.ZK.GK.Extract
+import Mathlib.Algebra.CharP.Defs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Zero knowledge: the Goldreich–Kahan simulator for C-Flock ZK
@@ -22,6 +27,8 @@ If `V*` does not complete it (it aborts, or its coin openings fail), that view i
 probability of `bind`) and `ev_rewinds_real` (rewinding with real runs reaches a completed view with probability
 `1 − (1 − p)^n`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.GK
 

@@ -1,12 +1,13 @@
-"""Sessions of several tables (PROTOCOL.md §16.12, `--session-tables J`): the Lean verifier builds each table's
+"""Sessions of several tables (`Stmt.setupTables`, `--session-tables J`): the Lean verifier builds each table's
 statement from its part of the session's draw (without one, of the population's units), never from anything in the record.
 The sessions are live ones on RoPE, all accepted by its server, and none is `--zk`. Without `--plain-tables`, several
-tables without `--zk` are a form the one-table plain claim does not cover (§16.15), so the verifier refuses every session, for
+tables without `--zk` are a form the one-table plain claim does not cover (`Flock.ProvedScope`), so the verifier refuses every session, for
 that once every check has passed: a drawn one for its subset sample without `--zk` at setup first, and a sample it sets no
 statement up from keeps its setup's reason. Under `--plain-tables` (`flock_verify_sound`'s plain multi-table claim, at up to
 64 tables and a subset sample) with the verifier's own program (the RoPE Definition's, META's `program_sha512`), both drawn
-sessions are accepted, a tampered one keeps its check's reason, the sample-less one meets D12's refusal, and the verifier
-refuses an honest session verified against another program than the one META binds, or without one."""
+sessions pass every check and are refused last for their statement, a selftest build's (`ProvedScope.servedForm`), a
+tampered one keeps its check's reason, the sample-less one meets D12's refusal, and the verifier refuses an honest session
+verified against another program than the one META binds, or without one."""
 from __future__ import annotations
 
 import json
@@ -55,7 +56,7 @@ def _session(root: Path, name: str, k: int = 0) -> Path:
 
 def _verify(root: Path, tables: int, *sessions: Path, statement: str = STATEMENT, flags: tuple = ()) -> list[dict]:
     p = subprocess.run([str(BIN), "verify", "--statement", statement, "--circuit", str(root / "stage" / "circuit.txt"),
-                        "--public", str(root / "stage" / "pub-8.bin"), "--coins", "seed", "--session-tables", str(tables),
+                        "--public", str(root / "stage" / "pub-8.bin"), "--session-tables", str(tables),
                         *flags, "--session", *map(str, sessions)], capture_output=True, text=True, check=False)
     return [json.loads(line.split(" ", 1)[1]) for line in p.stdout.splitlines() if line.startswith("VERDICT ")]
 
@@ -161,7 +162,7 @@ DRAWLESS = "refused: a session without a draw: every soundness claim is about a 
 def _program(path: Path, d: int) -> Path:
     """The RoPE Definition's descriptor at head dimension `d`, as the verifier's own `--program` file."""
     pytest.importorskip("verity_numerical")
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity.ml.circuits.program import Program
@@ -193,13 +194,19 @@ def plain(rope, program, tmp_path_factory):
     return dict(zip(dirs, _verify(rope, 2, *dirs.values(), flags=("--plain-tables", "--program", str(program)))))
 
 
+#: the fixture's statement, a selftest build's on seed coins: `verify` refuses it once every check has passed
+SELFTEST = (f"refused: {STATEMENT}, a selftest build's statement, whose coins the prover injected: verify takes only "
+            "verity/flock-circuit and verity/flock-circuit+plain-leaves")
+
+
 @pytest.mark.slow
-def test_plain_tables_accepts_an_honest_session_of_two_tables(rope, plain):
-    """The honest drawn sessions pass every check and the form `--plain-tables` covers, against the verifier's own program."""
+def test_plain_tables_refuses_an_honest_session_of_two_tables_last(rope, plain):
+    """The honest drawn sessions pass every check and the form `--plain-tables` covers, against the verifier's own program,
+    and are refused only for their statement version (`ProvedScope.servedForm`)."""
     meta = _meta(rope)
     for name in ("honest", "honest, the other session"):
         v = plain[name]
-        assert v["accepted"] is True, (name, v["why"])
+        assert not v["accepted"] and v["why"] == SELFTEST, (name, v["why"])
         assert v["program_sha512"] == meta["program_sha512"], v
 
 

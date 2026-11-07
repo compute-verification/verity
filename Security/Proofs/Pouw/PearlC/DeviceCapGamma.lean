@@ -1,7 +1,12 @@
-import Proofs.Pouw.PearlC.DeviceRev1Gamma
-import Definitions.Pouw.PearlC.DevicePrices
-import Definitions.Pouw.Guarantees.PearlC
+module
+
+public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.PearlC.DeviceRev1Gamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceGamma
 import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.Prob
 
 /-!
 # The unpromoted record, the cap, and γ at sm_120's prices
@@ -21,6 +26,8 @@ Staged; nothing pinned.
 
 `devSm120v1` and `devSm120v2` meet the hypotheses by `rfl` once the flags twin defines them.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

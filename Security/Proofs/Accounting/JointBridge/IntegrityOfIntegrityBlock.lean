@@ -1,5 +1,21 @@
-import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock
-import Proofs.Flock.EndToEnd.Carry
+module
+
+public import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityBlock
+public import Proofs.Flock.EndToEnd.Carry
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Game.Interleave
 import Proofs.Pouw.Prob
 
 /-!
@@ -11,6 +27,8 @@ total more than `ε·units ≥ ln(1/δ)/q`. Read on the monitoring period's reco
 (`ServerBlocks.BlockEscapes`), the event `Flock.SecurityProofs.IntegrityBlockCarried` bounds; the realization's `law`
 carries the bound from the monitoring period's game to the uniform coins.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

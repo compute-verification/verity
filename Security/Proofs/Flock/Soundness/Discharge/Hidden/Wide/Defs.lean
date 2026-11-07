@@ -1,4 +1,19 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `OutputsCommitted` and `OutputsBinding`, widened: the frozen statements
@@ -15,6 +30,8 @@ unit, or a tail's last stage):
   is partial and so in its `hm96` slot, is not covered);
 * `…Wide`: a population file with shared rows too (header `shared_rows`, `pop.tables ≠ none`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

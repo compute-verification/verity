@@ -1,7 +1,24 @@
-import Proofs.Flock.VBridge.Top
-import VStar.Stage
-import VStar.Compose
-import Flock.RecVStar
+module
+
+public import Flock.RecVStar
+public import Proofs.Flock.VBridge.AlgHolds
+public import Proofs.Flock.VBridge.Stages
+public import Proofs.Flock.VBridge.Top
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.VBridge.Algebra.BitsOk
+import Proofs.Flock.VBridge.Full
 
 /-!
 # VBridge G at V*'s statement family
@@ -35,6 +52,8 @@ registered reads (`RegOut`). At the family the parts' and openings' outputs are 
 `vbridge_of_family` (`Openings.lean`) composes the same per-rep lemmas at `HResL` (`Rep.lean`) and `HUL`:
 `Flock.Assumptions.VBridge` from one named `Prop` per remaining hypothesis.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -180,8 +199,8 @@ structure VStarFamily where
   zs : Reg → L.Ω → List (Cm × (ℐ).Coin) → Reg₂ → (j : Fin stmts.size) → (Vs j).Outer Reg'
   hfile : ∀ R ω t R₂ j, circuitFile stmts[j] (bind j) = .ok (zs R ω t R₂ j).I.circuitFile
   /-- Each statement's circuit carries V*'s META (`RecVStar.checkParsed`, which `checkCircuit` runs on every session it
-  accepts after `checkFile`, `checkCircuit_ok`): what `HmRow.parse` reads through `Lean.Json.parse`, which no proof
-  unfolds, stated as the check's verdict. -/
+  accepts after `checkFile`, `checkCircuit_ok`): what `HmRow.parse` reads through `Flock.JsonParse.parse`, which no proof
+  here evaluates, stated as the check's verdict. -/
   hparsed : ∀ j, RecVStar.checkParsed stmts[j] (Vs j).c = .ok ()
   /-- Each part's statement's row ports and v elements are the verifier's part's (`RecVStar.checkPart`, which
   `checkCircuit` runs after `checkParsed`, `checkCircuit_ok`), stated as the check's verdict. -/

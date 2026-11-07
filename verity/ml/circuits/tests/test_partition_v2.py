@@ -1,7 +1,7 @@
 """`verity/partition/v2` (`verity.ml.circuits.partition_v2`): the advice of a private partition, its rows, the statement, the
 global predicates G1-G7 and their refusals, the local predicates L1-L4 on each sampled proof block (from the opened rows alone, against
 the advice root of `verity.ml.commitments.advice`), v1's numbering in query mode, and the pinned vector
-`partition_v2_vectors.json`.  `python verity/ml/circuits/tests/test_partition_v2.py --write` rewrites it.
+`partition_v2_vectors.json`.  Its `--write` rewrites it; `REWRITE` names the command that runs it.
 
 The program is v1's pinned program (`partition_vectors.json`) on 16-bit values: the same Calls on BF16 instead of I32 and F32,
 since the width limit of 16 bits out refuses every unit of v1's that returns a 32-bit value."""
@@ -33,6 +33,8 @@ from verity.ml.circuits.ops.prims import const
 from verity.ml.circuits.ops.scalar import Bf16GtStrict, SelectBf16
 
 PATH = Path(__file__).parent / "partition_v2_vectors.json"
+REWRITE = ("the vector differs from the tree's; a change meant to move it rewrites it with "
+           "`uv run python tools/verity/check/pins.py --write verity/ml/circuits/tests/partition_v2_vectors.json`")
 V1 = json.loads((Path(__file__).parent / "partition_vectors.json").read_text())
 BF16 = Value(16)
 
@@ -92,7 +94,7 @@ def _registered(program, q=None, preds=None, family="test", grid_bits=V.GRID_BIT
     preds = dict(preds)
     preds["grid_bits"] = grid_bits
     rs = V.pad(V.rows(adv), grid_bits)
-    reg = A.register(rs, V.ROW_BITS, V.BINDING, _salts(label, len(rs)))
+    reg = A.commit(rs, V.ROW_BITS, V.BINDING, _salts(label, len(rs)))
     return adv, rs, reg, V.statement(family, preds, adv, reg.root)
 
 
@@ -184,7 +186,7 @@ def _restart(adv: V.Advice) -> V.Advice:
 
 def _classes(adv, j, program, owner):
     from verity.ml.circuits.units import Activation
-    fn = [fn for _k, fn in PO.calls(program) if V.definition_digest(fn) == adv.entries[j].definition][0]
+    fn = [fn for _k, fn in PO.calls(program) if V.id_digest(fn) == adv.entries[j].definition][0]
     shape, classes = V._classes(uc.shape for uc in Activation(fn).circuits(owner))
     return {"owner": tuple(owner), "units": max(owner) + 1, "shape": shape, "classes": classes}
 
@@ -462,13 +464,13 @@ def test_the_pinned_vector():
     want = json.loads(PATH.read_text())
     got = json.loads(json.dumps(build()))
     for k in want:
-        assert got[k] == want[k], k
-    assert set(got) == set(want)
+        assert got[k] == want[k], f"{k}: {REWRITE}"
+    assert set(got) == set(want), REWRITE
     rs = [bytes.fromhex(r) for r in want["rows"]]
     P = codec.decode_program(json.loads(want["descriptor"]), REGISTRY)           # the verifier's side: from the bytes alone
     assert codec.program_digest(P) == want["program_digest"] == codec.program_digest(_program())
     assert V.check(want["statement"], rs, P).ok and V.decode(rs) == V.build(P)
-    assert A.register(rs, V.ROW_BITS, V.BINDING, _salts("vtop", len(rs))).root.hex() == want["root"] == want["statement"]["advice"]["root"]
+    assert A.commit(rs, V.ROW_BITS, V.BINDING, _salts("vtop", len(rs))).root.hex() == want["root"] == want["statement"]["advice"]["root"]
 
 
 if __name__ == "__main__" and "--write" in sys.argv:

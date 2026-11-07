@@ -1,6 +1,37 @@
-import Proofs.Flock.Soundness.Refine.RepConverse
-import Proofs.Flock.Claims.Recursion.NextShaDec
-import Flock.With.Eq
+module
+
+public import Proofs.Flock.Claims.Recursion.NextShaDec
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A rep's verdict on its decoded proof, from its program's run
@@ -17,12 +48,14 @@ whose Merkle scheme is the registry's (`Named`):
 `FlockVBridge.Family.runs_of_files` gives the program's run from the pieces (`RunsFrom`, `AlgebraHolds`, `AccHolds`).
 -/
 
+@[expose] public section
+
 namespace RecDeploy
 
 open Flock
 
 theorem verifyRepPWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.merkle.Named) (sch : Flock.Schedule)
-    (sess : Session) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
+    (sess : RunRecord) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
     (hpar : (p.params != pcsParams st.merkle sch) = false)
     (hprog : FlockSoundness.Refine.repProg st sch p extras
       (Transcript.init stream.rounds (spec.domain spec.tables[i]! r).toUTF8) = .ok ((), t₄))
@@ -43,7 +76,7 @@ theorem verifyRepPWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.me
   rfl
 
 theorem verifyRepDWith_std_of_prog (spec : SessionSpec) (st : Setup) (hN : st.merkle.Named) (sch : Flock.Schedule)
-    (sess : Session) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
+    (sess : RunRecord) (i r : ℕ) (stream : StreamRec) (extras : Array Claim) (p : Proof) (t₄ : Transcript)
     (hs : sess.streams.find? (fun x => x.name == toString spec.tables[i]! ++ toString "/rep" ++ toString r) =
       some stream)
     (hex : st.extra sess.points = .ok extras)

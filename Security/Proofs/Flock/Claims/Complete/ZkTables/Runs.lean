@@ -1,5 +1,47 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Count
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Decode
+public import Proofs.Flock.Claims.Complete.Zk.Json.Record
+public import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Canon
+import Proofs.Flock.Claims.Complete.Json.Goals
+import Proofs.Flock.Claims.Complete.Zk.Discharge
 import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Proofs.Flock.Claims.Complete.Zk.Link
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.DeployK
 
 /-!
 # The honest masked session runs, at several tables
@@ -13,6 +55,8 @@ stopped, `repRunJ`; at every case of several tables `ProverRunsJ`). Every table'
 through `Hashes.ofSha512` so do its masked level-0 commitment (`commitPZk_ok`) and its pads' (`innerCommitP_ok`); the
 session walks its rep streams in order (`JsonRT.Runs.forIn_idx`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 
@@ -40,7 +84,7 @@ that decodes to the statement's instances, the statement's draw the one it was s
 an object with a `coins` object and prints. -/
 def StmtAt (c : Case H rel) : Prop :=
   0 < c.spec.sigma.size ∧ DrawOk c.spec ∧ c.spec.unitDraw = c.s.read.draw ∧
-    ∃ m kvs : Std.TreeMap.Raw String Json compare, Json.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
+    ∃ m kvs : Std.TreeMap.Raw String Json compare, Flock.JsonParse.parse c.spec.hello = .ok (.obj m) ∧ m.WF ∧ kvs.WF ∧
       m.get? "coins" = some (.obj kvs) ∧ Good (helloJ (.obj m))
 
 variable (H rel) in
@@ -102,10 +146,10 @@ end Several
 
 /-- **The masked session runs** at a good case where the statement's `hello` prints and the prover's pieces
 return. -/
-theorem Case.sessionRuns (S : JsonSpec) (c : Case H rel) (hS : StmtAt c) (hR : ProverRunsAt c) :
+theorem Case.sessionRuns (c : Case H rel) (hS : StmtAt c) (hR : ProverRunsAt c) :
     ∃ record proofs bodies, sessionS H c.resp c.spec c.sts c.w c.ω = (.ok (record, proofs), bodies) := by
   obtain ⟨-, -, -, m, kvs, hown, -, -, -, hg⟩ := hS
-  obtain ⟨hz, hcn, -⟩ := S.canon_ok _ hg
+  obtain ⟨hz, hcn, -⟩ := FlockComplete.JsonRT.canon_ok _ hg
   obtain ⟨ct, hct⟩ : ∃ ct, c.spec.coinTree = some ct := Option.isSome_iff_exists.1 c.ready_parts.2.2.2.2
   have hfit := c.ready_parts.2.2.1
   obtain ⟨-, -, hspec, hall⟩ := c.tables
@@ -242,7 +286,7 @@ theorem Case.sessionRuns (S : JsonSpec) (c : Case H rel) (hS : StmtAt c) (hR : P
   exact Runs.pure trivial
 
 /-- **The masked session runs** at several tables: the goal `SessionRunsJ`. -/
-theorem sessionRunsJ_goal (S : JsonSpec) (hS : StmtOkJ H rel) (hR : ProverRunsJ H rel) : SessionRunsJ H rel :=
-  fun c hc => c.sessionRuns S (hS c hc) (hR c hc)
+theorem sessionRunsJ_goal (hS : StmtOkJ H rel) (hR : ProverRunsJ H rel) : SessionRunsJ H rel :=
+  fun c hc => c.sessionRuns (hS c hc) (hR c hc)
 
 end FlockComplete.ZkTables

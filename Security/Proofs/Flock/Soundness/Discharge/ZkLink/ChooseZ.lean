@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
-import Proofs.Flock.Soundness.Game.LockChoose
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
+public import Proofs.Flock.Soundness.Game.LockChoose
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The masked session's fork probabilities do not read the chooser
@@ -10,6 +13,8 @@ compiled side or the slots. So the locksteps are `Lock.AlignedT`, builder by bui
 `Lock.Aligned`, and a fork probability in the session is the same under any two choosers and any two level-0 tables
 (`forkE_lockSessZ_choose`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

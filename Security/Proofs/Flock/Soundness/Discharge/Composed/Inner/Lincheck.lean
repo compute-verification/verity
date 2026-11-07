@@ -1,4 +1,28 @@
+module
+
+public import Flock.Zk
+public import Proofs.Flock.Soundness.LincheckPhase
+public import Proofs.Flock.Soundness.Refine.Realizes
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Level3.FoldedBase
 import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Lincheck
 
 /-!
 # The lincheck is complete on the masked replay (live PROTOCOL.md §4, §10)
@@ -14,6 +38,8 @@ pads `h`.
 each under its pad, the constraint vanishes at `h` and the `ab` claim holds for `w`, at every coin: the lincheck neither
 divides nor refuses.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed.Lincheck
 

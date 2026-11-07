@@ -58,10 +58,14 @@ import hashlib
 import itertools
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
+from typing import BinaryIO
 
 import numpy as np
+
+from verity.ml.windows.interface import K_MAX, K_MIN, MASK_LOG, PER_SLOT, SLOT_LOG
 
 from . import ir_lower as IL
 
@@ -82,7 +86,8 @@ OWNER = -1
 #: SHA-512 column digest, leaf = ``tree_leaf(key, b || c)``, an opening = the column and its 192-byte salt (``opened_salts``).
 #: Salts are the OS's own bytes, every leaf's 192 read a tree at a time in bulk (``zk_hooks::LeafSalts``),
 #: never reused or stored, as ``salt_source`` says. The Lean verifier pins this object (``Flock/Tags.lean``'s
-#: ``leafSchemeHm96Os``; statements composed up to verity ``b3727bd9`` name a per-proof ChaCha20 key, ``@b3727bd9``), and
+#: ``leafSchemeHm96Os``; statements composed up to verity ``b3727bd9`` name a per-proof ChaCha20 key, ``@b3727bd9``, a
+#: superseded version its ``verify`` refuses once every check has passed), and
 #: ``live/src/circuit.rs``'s ``leaf_scheme`` is the same object. The level-0 salts are shared by
 #: both reps (one root). Key: the scheme's ``default_key``, one constant of the statement for every
 #: tree, pinned by its SHA-512. Never a witness: a prover choosing the key after commitment solves for one that opens a leaf to
@@ -98,10 +103,8 @@ LEAF_SCHEME = {"id": "hm96-sha512/v1", "inner": "sha512 column digest", "salt_by
 #: ZK off only: ``flock-circuit --zk`` refuses it (``live/src/circuit.rs``'s ``leaf_scheme_plain`` is the same object).
 LEAF_SCHEME_PLAIN = {"id": "flock-leaf/sha512-unsalted", "inner": "sha512 column digest", "salt_bytes": 0,
                      "use": "a recursive session's inner statement: the gateway commits every tree top under a salt, ZK off"}
-SHA_NET, HM_NET, PER_SLOT = "sha512x3", "hm96", 3
-SHA_LOG = HM_LOG = 18
-MASK_LOG = 14
-K_MAX = 27
+SHA_NET, HM_NET = "sha512x3", "hm96"
+SHA_LOG = HM_LOG = SLOT_LOG
 #: The partition is a named query of the program, P = Q(C): its digest is SHA-512 over the tag and
 #: canon({program, query, version, params}). Without a verity/partition/v1 object, the query here is this lowering's
 #: own split of a VU into slots (its unit circuit, leaf and output maps, wires), under a provisional tag.
@@ -400,7 +403,7 @@ def _ranges(items: list[tuple[str, int, int, dict]]) -> tuple[list[dict], int]:
         at = -(-at // (1 << sl)) << sl
         out[i] = {"type": typ, "slot_log": sl, "pos0": at >> sl, "count": n, **extra}
         at += n << sl
-    return out, max(20, (at - 1).bit_length())
+    return out, max(K_MIN, (at - 1).bit_length())
 
 
 #: MUFU lookup slots: low decoder bits per table (``lookup.rs``); the high decoder takes the rest
@@ -529,7 +532,7 @@ def aligned_blocks(words: list[int]) -> list[tuple[int, int]]:
 
 
 def public_blocks(group: tuple, li: list[list[int]], lp: list[list[int]]) -> list[tuple[int, int]]:
-    """The ``in`` regions' words in a unit slot (PROTOCOL.md §16.10): the 128-bit words holding a public leaf in some unit, as
+    """The ``in`` regions' words in a unit slot (`Flock.HmRow`): the 128-bit words holding a public leaf in some unit, as
     :func:`aligned_blocks`, inside the leaf group, every leaf in them a public or a zero leaf in every unit."""
     col, words, bits = group
     if any(b != 16 for b in bits):
@@ -594,7 +597,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
             public_inputs: dict | None = None, seg_ports: frozenset[str] = frozenset(), seg_out_rows: tuple = (),
             v2_out_rows: tuple = (), links: list | None = None, definition: str | None = None,
             leaf_scheme: dict | None = None, extra_meta: dict | None = None, tail=None, layout: str | None = None,
-            pinned_outputs: tuple = ()) -> str:
+            pinned_outputs: tuple = (), out: BinaryIO | None = None) -> str:
     """The ``flock-circuit`` text for a template lowered to identical units and, for a cut lowering, its tail in the circuit
     (:mod:`tail`: stage circuits and MUFU lookup slots, wired to the units' cut ports). ``partition``: the caller's
     ``verity/partition/v1`` digest (64-byte hex), else the provisional unit cover; ``program``: the Program's SHA-512 the
@@ -611,11 +614,11 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     ``S[j] XOR y``); bit rows only, and the all-zero instance's must be zero.
 
     ``public_inputs`` (``{port: {"seed": ..., "derivation": ...}}``): input ports that are not rows but public words the verifier
-    recomputes from public data, each naming its seed and derivation (PROTOCOL.md §16.10). The units read them from ``in``
+    recomputes from public data, each naming its seed and derivation (`Flock.HmRow`). The units read them from ``in``
     regions (META ``public_inputs``, ``leaves_public``), which must be whole words of the unit's leaf group (:func:`public_blocks`).
     The data guard counts a port whose derivation it does not list as data (``verity.ml.circuits.operations.public_data``).
 
-    ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, PROTOCOL.md §16.13): input rows that hold template parameter
+    ``links`` (``[{"port", "leaves": [lo, hi]}]``, META ``links``, `HmOut`): input rows that hold template parameter
     leaves ``[lo, hi)`` as an output row holds outputs (a word per leaf), so that a reader whose leaves are another unit's outputs
     commits its writer's output row; the verifiers compare the two rows' ``b || c``. ``definition``: META ``definition``, the
     descriptor id of the Definition the unit lowers, which a template query may list (a unit class's own template id is
@@ -633,7 +636,12 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     `class_statement.TmplLowering`, whose only statement this is and whose ``unit_sha256`` is over the template's text):
     META ``template`` its lines and ``layout`` the mode, in place of the ``CIRCUIT unit`` section and the flat META
     ``template``. The verifier unrolls the template and commits its columns at the layout's positions (`tmpl.layout`), so
-    the unit's range and ``unit_log`` are that net's slot. A unit class's ``definition`` has no templated form."""
+    the unit's range and ``unit_log`` are that net's slot. A unit class's ``definition`` has no templated form.
+
+    ``out`` (a binary file, `compose_to`'s): the text is written there, UTF-8, as it is rendered, and only its first two lines
+    (the format line and META) are returned. The unit's netlist goes from `ir_lower.netlist_pieces` into the file and into
+    ``unit_sha256`` a piece at a time; a flat statement's META, which ``unit_sha256`` precedes, is written with stand-ins of
+    its digests' lengths and rewritten in place once the netlist is."""
     for name, v in (("partition", partition), ("program", program)):
         if v is not None and (len(v) != 128 or v != v.lower() or any(ch not in "0123456789abcdef" for ch in v)):
             raise ValueError(f"{name}: a SHA-512 digest is 128 lowercase hex digits")
@@ -748,8 +756,12 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     out_net = f"stage{len(stages) - 1}" if U.tail_rets else "unit"
     out_net_ports = _ret_ports(tail.stages[-1], tail.slotted_rets) if U.tail_rets else []
     programs = program_digests(sub, statics)
-    unit = tmpl_text if hasattr(low, "template") else _expanded(low.layout, low.name)
-    unit_sha256 = low.sha256_of(unit)
+    if hasattr(low, "template") or out is None:
+        unit = tmpl_text if hasattr(low, "template") else _expanded(low.layout, low.name)
+        unit_sha256 = low.sha256_of(unit)
+    else:
+        unit = None
+        unit_sha256 = "0" * 64 if template is None else _write_netlist(low)[0]
     stage_texts = [_expanded(lay, f"{low.name}/tail/stage{i}") for i, lay in enumerate(stages)]
     cover = {"program": programs, "query": f"flock-circuit/unit-cover:{low.name}", "version": 0,
              "params": {"unit_sha256": unit_sha256, "units_per_vu": U.n, "leaves_in": lv["in"], "leaves_out": lv["out"], "tail_wires": tail_wires,
@@ -779,16 +791,101 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         if clash := sorted(set(extra_meta) & set(meta)):
             raise ValueError(f"extra_meta: {clash} are META's own keys")
         meta.update(extra_meta)
-    meta_json = [json.dumps(meta, sort_keys=True, separators=(",", ":"))]
-    if template is not None:
-        a, b = meta_json[0].split(json.dumps(_SPLICE))
-        meta_json = [a, json.dumps(tmpl_text.splitlines(), separators=(",", ":")), b]
-    texts = [] if template is not None else [("unit", unit)]
-    texts += [(SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
-              (HM_NET, _expanded(IL.layout(S.hm96_row(), ["cv", "pad", "y"], ["bc"]), HM_NET))]
+
+    def serialized() -> list[str]:
+        meta_json = [json.dumps(meta, sort_keys=True, separators=(",", ":"))]
+        if template is not None:
+            a, b = meta_json[0].split(json.dumps(_SPLICE))
+            meta_json = [a, json.dumps(tmpl_text.splitlines(), separators=(",", ":")), b]
+        return meta_json
+
+    meta_json = serialized()
+    head = f"{meta['format']} {low.name}\nMETA "
+    texts = [(SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
+             (HM_NET, _expanded(IL.layout(S.hm96_row(), ["cv", "pad", "y"], ["bc"]), HM_NET))]
     texts += [(f"stage{i}", t) for i, t in enumerate(stage_texts)]
-    return "".join([f"{meta['format']} {low.name}\nMETA ", *meta_json, "\n",
-                    *(s for nm, t in texts for s in (f"CIRCUIT {nm} {t.count(chr(10))}\n", t))])
+    sections = lambda texts: (s for nm, t in texts for s in (f"CIRCUIT {nm} {t.count(chr(10))}\n", t))  # noqa: E731
+    if out is None:
+        return "".join([head, *meta_json, "\n", *sections(([] if template is not None else [("unit", unit)]) + texts)])
+    _put(out, head)
+    at = out.tell()
+    for s in [*meta_json, "\n"]:
+        _put(out, s)
+    if template is None:
+        lines = 1 + low.layout.useful
+        _put(out, f"CIRCUIT unit {lines}\n")
+        unit_sha256, got = _write_netlist(low, out)
+        if got != lines:
+            raise AssertionError(f"{low.name}: the unit's netlist has {got} lines, not the {lines} its section names")
+        stand_in = "".join(meta_json).encode()
+        cover["params"]["unit_sha256"] = meta["unit_sha256"] = unit_sha256
+        if not partition:
+            meta["partition"]["digest"] = partition_digest(cover)
+        meta_json = serialized()
+        if len(b := "".join(meta_json).encode()) != len(stand_in):
+            raise AssertionError(f"{low.name}: META is {len(b)} bytes, its stand-in {len(stand_in)}")
+        end = out.tell()
+        out.seek(at)
+        out.write(b)
+        out.seek(end)
+    for s in sections(texts):
+        _put(out, s)
+    return "".join([head, *meta_json, "\n"])
+
+
+def compose_to(path: Path, low: IL.Lowering, sub, **kw) -> dict:
+    """`compose`'s circuit (``kw`` its keywords) written to ``path`` as it is composed (its ``out``), never held whole, and read
+    once more for its digests: ``head`` (its format line and META, which `meta_of` reads), ``sha512`` its pin (:func:`digest`),
+    ``class`` (:func:`class_digest`) and ``bytes``. The file is at ``path`` only once it is whole."""
+    path = Path(path)
+    part = path.with_name(f".{path.name}.part")
+    try:
+        with open(part, "wb") as f:
+            head = compose(low, sub, out=f, **kw)
+        got = {"head": head, **_file_digests(part, head), "bytes": part.stat().st_size}
+        os.replace(part, path)
+    finally:
+        part.unlink(missing_ok=True)
+    return got
+
+
+def _put(out: BinaryIO | None, s: str, h=None) -> None:
+    """``s`` written to ``out`` as UTF-8 and hashed into ``h``, each where given, :data:`_HASH_CHUNK` characters at a time."""
+    for k in range(0, len(s), _HASH_CHUNK):
+        b = s[k:k + _HASH_CHUNK].encode()
+        if h is not None:
+            h.update(b)
+        if out is not None:
+            out.write(b)
+
+
+def _write_netlist(low: IL.Lowering, out: BinaryIO | None = None) -> tuple[str, int]:
+    """The unit's netlist (:func:`_expanded`'s text) rendered a piece at a time (`ir_lower.netlist_pieces`), each piece hashed and
+    written to ``out`` where given, and dropped before the next is rendered: its ``unit_sha256`` (`Lowering.sha256_after`) and
+    its lines."""
+    h, lines = hashlib.sha256(), 0
+    for piece in IL.netlist_pieces(low.layout, low.name):
+        _put(out, piece, h)
+        lines += piece.count("\n")
+        del piece
+    return low.sha256_after(h), lines
+
+
+def _file_digests(path: Path, head: str) -> dict:
+    """The circuit file's pin and class (:func:`digest` and :func:`class_digest` of its text) in one pass over its bytes,
+    ``head`` its format line and META (`compose`'s with ``out``)."""
+    i = head.index("\n") + 1
+    meta = {k: v for k, v in json.loads(head[i + 5:-1]).items() if k not in BINDING_KEYS}
+    h_file, h_class = hashlib.sha512(), _sha512(itertools.chain([head[:i], "META "], _COMPACT.iterencode(meta)))
+    skip, at = len(head.encode()) - 1, 0     # the class reads the file from the newline that ends META
+    with open(path, "rb") as f, ThreadPoolExecutor(1) as pool:
+        while b := f.read(_HASH_CHUNK):
+            job = pool.submit(h_file.update, b)
+            if at + len(b) > skip:
+                h_class.update(memoryview(b)[max(0, skip - at):])
+            at += len(b)
+            job.result()
+    return {"sha512": h_file.hexdigest(), "class": h_class.hexdigest()}
 
 
 def _expanded(lay: IL.LoweredUnit, name: str) -> str:
@@ -837,10 +934,16 @@ def _dummy(low: IL.Lowering, in_ports: list[tuple[str, int]], ins: list[Port], o
 
 def coins(live: list[dict]) -> str | None:
     """The coins M0's sessions ran on, as their LIVE records name them: ``os-seed-prf`` when the verdict opens the step-0 seed (the
-    binary's default), ``live-os`` when the identity names per-round OS coins (``FC_COINS=os``); None for anything else (a
-    ``--zk`` session's committed coin tree) and for sessions that differ."""
-    modes = {"os-seed-prf" if (x.get("verdict") or {}).get("coin_seed") else
-             "live-os" if str((x.get("identity") or {}).get("coins", "")).startswith("live-os") else None for x in live}
+    binary's default), ``coin-tree`` for a plain session that doesn't (``FC_COINS=tree``: the keyed coin tree, the challenger's
+    under `serve --tree-from`, whose identity is the default's); None for anything else (a ``--zk`` session's committed coin
+    tree, a record without an identity) and for sessions that differ."""
+    def mode(x: dict) -> str | None:
+        ident = x.get("identity") or {}
+        if (x.get("verdict") or {}).get("coin_seed"):
+            return "os-seed-prf"
+        return "coin-tree" if ident and (ident.get("hooks") or {}).get("zk") is not True else None
+
+    modes = {mode(x) for x in live}
     return modes.pop() if len(modes) == 1 else None
 
 
@@ -969,7 +1072,7 @@ def _public_bytes(pins: list[dict], words: dict, n: int) -> bytes:
 
 
 def write_public_inputs(text: str, words: dict, n: int, path) -> None:
-    """The verifier's own ``--public-inputs`` file (PROTOCOL.md §16.10): a header line ``{format, instances, ports}``, its ports
+    """The verifier's own ``--public-inputs`` file (`Flock.HmRow`): a header line ``{format, instances, ports}``, its ports
     META's ``public_inputs`` (each with its seed and derivation), then ``words`` (``{port: (n, words)}``, the verifier's own
     recomputation of the population's public words) as the public file holds them."""
     pins = meta_of(text).get("public_inputs", [])
@@ -985,7 +1088,7 @@ def public_file(head: dict, public: bytes) -> bytes:
     return line.encode() + b"\n" + public
 
 
-def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
+def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, salt_key: bytes | None = None, indices: list | None = None,
           share_rows: bool = False, rows: dict | None = None, outs: dict | None = None, tables: dict | None = None,
           refs: dict | None = None, salts: dict | None = None, registered: dict | None = None,
           public_words: dict | None = None, identifier: dict | None = None, digests: tuple[str, str] | None = None,
@@ -1017,18 +1120,21 @@ def write(text: str, input_set, lo: int, hi: int, path, pub_path=None, salt_key:
     ``i``'s output is the registered row at ``positions[i]``, under that row's registered salt ``salts[port][i]``). A padding
     instance's rows keep their zero salts and pinned ``dummy`` either way: the verifier opens only the instances' rows.
 
-    A circuit with public inputs (META ``public_inputs``, PROTOCOL.md §16.10): the header names them as META does, and both files
+    A circuit with public inputs (META ``public_inputs``, `Flock.HmRow`): the header names them as META does, and both files
     end with every instance's public words (u16 LE, instance-major, the ports in order): ``public_words``
     (``{port: (n, words)}``), else the set's.
 
-    ``identifier``: the header's ``identifier`` (PROTOCOL.md §16.10), a JSON object Flock does not read, on which canonical JSON
+    ``identifier``: the header's ``identifier`` (``Flock.HmRow``), a JSON object Flock does not read, on which canonical JSON
     is RFC 8785 (``verity.ml.circuits.codec.jcs_domain_error``). The public digest binds it, and the verifier holds it to its own
     (``--identifier F``).
 
     ``digests`` and ``meta``: ``text``'s (:func:`digest`, :func:`class_digest`; :func:`meta_of`), from a caller that writes many
-    statements of one circuit (`class_statement.UnitStager`); else computed here."""
+    statements of one circuit (`class_statement.UnitStager`), whose ``text`` may then be None (a circuit it never holds);
+    else computed here."""
     from verity.ml.circuits.codec import jcs_domain_error
 
+    if text is None and (digests is None or meta is None):
+        raise ValueError("write: without the circuit's text, give its digests and META")
     if identifier is not None:
         bad = jcs_domain_error(identifier, "identifier") if isinstance(identifier, dict) else "identifier: not a JSON object"
         if bad:
@@ -1172,7 +1278,7 @@ def main(argv=None) -> int:
     (repeatable): an input port the verifier recomputes from public data (:func:`compose`'s ``public_inputs``)."""
     import argparse
 
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     ap = argparse.ArgumentParser()
     ap.add_argument("--input-set", required=True)
@@ -1185,7 +1291,7 @@ def main(argv=None) -> int:
     ap.add_argument("--share-rows", action="store_true", help="each input port's distinct rows as one committed table, refs per instance")
     ap.add_argument("--typed", action="store_true", help="the typed statement (verity_flock.typed_statement.stage)")
     ap.add_argument("--public-input", nargs=3, action="append", default=[], metavar=("PORT", "SEED", "DERIVATION"),
-                    help="an input port the verifier recomputes from public data, naming its seed and derivation (PROTOCOL.md §16.10)")
+                    help="an input port the verifier recomputes from public data, naming its seed and derivation (the Lean verifier's Flock.HmRow)")
     a = ap.parse_args(argv)
     public_inputs = {p: {"seed": sd, "derivation": d} for p, sd, d in a.public_input} or None
     if public_inputs and a.typed:

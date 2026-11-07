@@ -1,7 +1,9 @@
-import Definitions.Pouw.PearlC.Game
-import Definitions.Pouw.PearlC.Skip
-import Definitions.Pouw.PearlC.PeelExact
-import Definitions.Pouw.PearlC.SaltDead
+module
+
+public import Definitions.Pouw.PearlC.Game
+public import Definitions.Pouw.PearlC.Skip
+public import Definitions.Pouw.PearlC.PeelExact
+public import Definitions.Pouw.PearlC.SaltDead
 
 /-!
 # Pearl-C's named protocol and error (trusted)
@@ -24,6 +26,8 @@ are `creditOf` minus the replayed debit (`unitDebit`), and `wrefOf`.
 * `alpha`, `beta`, `floor`: a row's scale, noise scale and noise-floor quantity (§5: α from the model's quantizer,
   σ = δ·ρ with ρ over every 8th position, floor σ·α).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
@@ -138,8 +142,8 @@ draws and the units gives `ε`, and it needs no independence between them. With 
   normal code. `E′ = 0` is therefore impossible, and the per-row probability is `0 ≤ 2^−128`.
 - Every draw also keeps at least 85% of its nominal `‖E′‖ = σα·√32/16`, so no draw can be recognized from `E′` alone as
   weak. The `2^−128` above is thus a conjecture about draws that all carry their noise.
-- The check is `pearlc-noise-loss.py`. At norm 256 the largest entry
-  is at least `2^−8`, also nonzero; an earlier `2^−90` for norm 256 wrongly treated the 32 entries as independent. -/
+- At norm 256 the largest entry
+  is at least `2^−8`, also nonzero; the 32 entries are not independent. -/
 noncomputable def εPearlC (q N : ℕ) : ℝ := ((q + N : ℕ) : ℝ) / 2 ^ 128
 
 end Pouw.PearlC

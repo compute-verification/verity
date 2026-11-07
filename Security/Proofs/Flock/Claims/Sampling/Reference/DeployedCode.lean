@@ -1,5 +1,38 @@
-import SampledProofs.Registration
-import Proofs.Flock.Claims.Sampling.Reference.Deployed
+module
+
+public import SampledProofs.Registration
+public import Proofs.Flock.Claims.Sampling.Reference.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The sampled verifier's code from its Lean draw
@@ -36,13 +69,15 @@ At this code:
   with no unit named.
 * `N₀_of_shapes`, `sessIn_of_shapes`: `N₀` reads only the session's table sizes, so `SessIn`'s `N₀` clause holds when
   every session at `x` has the tables `shape x` fixes (`ShapesFixed`). Nothing the Lean verifier runs establishes it at
-  `sess`: its registration refusal (`Run.countVaries`) fixes the drawn count only, and its outcome step takes the
+  `sess`: its registration refusal (`Draw.countVaries`) fixes the drawn count only, and its outcome step takes the
   session's statement as an opaque object.
 * `shapeChecked`, `shapesFixed_checked`, `shapesFixed_iff_checked`, `sessIn_checked`: the shape check an outcome step
   would run (`sess` with every session refused whose tables aren't `shape x`) fixes the shapes, refuses nothing exactly
   when `ShapesFixed` holds at `sess`, and puts its sessions in `SessIn`.
 * `complete_code`: `Complete` at the code from Flock's masked completeness and those premises.
 -/
+
+@[expose] public section
 
 namespace SamplingDeploy
 
@@ -254,7 +289,7 @@ theorem sessionsIn_code_iff : SessionsIn (code c reg L bytes sr sess) ↔ SessIn
 /-! ## The sessions' table shapes -/
 
 /-- **The session's table shapes are the statement's**: whatever a run shows, the session's statement sets up tables of
-sizes `shape x`, in order. The sampled verifier's registration refusal (`Run.countVaries`: `shapes`) fixes the drawn
+sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.countVaries`: `shapes`) fixes the drawn
 count only, and its outcome step never reads the session's tables, so nothing in the Lean verifier establishes this at
 `sess`; at the session the shape check lets through it holds (`shapesFixed_checked`). -/
 def ShapesFixed (shape : Msg → List ℕ) : Prop :=

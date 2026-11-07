@@ -1,7 +1,9 @@
-import Flock.HmRow
-import Flock.Norm
-import Flock.Verify
-import Proofs.Flock.Soundness.Audit.OneStage
+module
+
+public import Flock.HmRow
+public import Flock.Norm
+public import Flock.Verify
+public import Proofs.Flock.Soundness.Audit.OneStage
 
 /-!
 # flock-verify's acceptance, as an event of the audit
@@ -19,10 +21,12 @@ event, on an audit whose outcome carries the transcript.
   event. A run of several sessions sets each drawn session up at its own draw.
 * `auditLive L Reg live`: the audit as it runs, the registration, then the verifier's draw, then the live session
   `live S R` that ends in the transcript, and its outcome the registration, the draw and the transcript.
-* `ExecRefines`: the open guarantee R11 at one strategy pair, the probability that flock-verify accepts in the live
+* `ExecRefines`: the open refinement at one strategy pair, the probability that flock-verify accepts in the live
   audit is at most the probability that the audit as Lean defines it accepts, plus a live event `bad` (for `bad = ⊥`,
   the skeleton's `hExec`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 
@@ -56,7 +60,7 @@ structure Transcript where
 /-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`Flock.norm`): `Main.recordDraw`, which
 the executable's root module defines and no library exports. -/
 def recordDraw (record : String) : Option Json :=
-  match Json.parse record with
+  match Flock.JsonParse.parse record with
   | .ok j => match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some (Flock.norm d)
@@ -87,8 +91,8 @@ def auditLive (L : Law n) (Reg : Type) (live : Finset (Fin n) → Reg → Game T
 /-- flock-verify accepts the live audit's transcript. -/
 def LiveAccepts (I : Inputs) (o : Reg × Finset (Fin n) × Transcript) : Prop := Accepts I o.2.2
 
-/-- **R11 at one strategy pair**: the event `acc` of the live game `G` played by `τ` is no likelier than the audit `Gm`
-as Lean defines it, played by `σ`, accepts, up to the live event `bad`. -/
+/-- **The refinement at one strategy pair**: the event `acc` of the live game `G` played by `τ` is no likelier than the
+audit `Gm` as Lean defines it, played by `σ`, accepts, up to the live event `bad`. -/
 def ExecRefines {β : Type} (G : Game β) (τ : Strategy G) (acc bad : β → Prop) (Gm : Game (Bool × Finset (Fin n)))
     (σ : Strategy Gm) : Prop :=
   prob acc G τ ≤ prob (fun o => o.1 = true) Gm σ + prob bad G τ

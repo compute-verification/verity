@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.Recursion.SeqSession
-import Proofs.Flock.Soundness.ZK.HidingAdaptive
-import Proofs.Flock.Soundness.ZK.RealLeaves
-import Proofs.Flock.Claims.ZK.Rewind
+module
+
+public import Proofs.Flock.Claims.Recursion.SeqSession
+public import Proofs.Flock.Soundness.ZK.HidingAdaptive
+public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.Claims.ZK.Rewind
 
 /-!
 # The masked recursion's first part, from `Hm96Hiding`
@@ -31,6 +33,8 @@ statement's own first-part tape (`preTape`: the other randomness, one salt per i
 which reads as the inner prover's tape and the staging salts with the zero salt past them (`preOf`;
 `preCommits_commit`). On one tape for every statement, it would bound the inner rounds and the commit strings.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 
@@ -64,8 +68,6 @@ instance instAddCommGroupXorBytes : AddCommGroup XorBytes where
   add_comm a b := funext fun i => UInt8.xor_comm (a i) (b i)
   nsmul := nsmulRec
   zsmul := zsmulRec
-
-theorem xorBytes_add (a b : XorBytes) : a + b = xorBytes a b := rfl
 
 /-! ## Probabilities, both ways -/
 
@@ -331,19 +333,19 @@ theorem simRounds_interact (H : Claims.Msg → Claims.Msg) (ask : List Claims.Ms
     (f : List (Claims.Msg × Claims.Out) → Claims.SP Claims.Msg) :
     ∀ (n : ℕ) (ms : List (Claims.Msg × Claims.Out)), (∀ p ∈ ms, Claims.ZKMal.isMsg p.2 = true) →
       (Claims.SP.eval H ask (Claims.Recursion.simRounds f n ms)).1 =
-        ms ++ Claims.ZKMal.interact ask (fun h => (Claims.SP.eval H ask (f (asRounds h))).1) n
-          (Claims.ZKMal.histOf ms)
-  | 0, ms, _ => by simp [Claims.Recursion.simRounds, Claims.SP.eval, Claims.ZKMal.interact]
+        ms ++ Claims.interact ask (fun h => (Claims.SP.eval H ask (f (asRounds h))).1) n
+          (Claims.histOf ms)
+  | 0, ms, _ => by simp [Claims.Recursion.simRounds, Claims.SP.eval, Claims.interact]
   | n + 1, ms, hm => by
       rw [Claims.Recursion.simRounds, ite_eq_left_iff.2 fun h => absurd (recGoesOn_of_msgs hm) h,
         Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval]
-      have hf : (Claims.ZKMal.histOf ms).map Prod.fst = ms.map Prod.fst := by simp [Claims.ZKMal.histOf]
-      simp only [Claims.SP.eval, Claims.ZKMal.interact, asRounds_histOf hm, hf]
+      have hf : (Claims.histOf ms).map Prod.fst = ms.map Prod.fst := by simp [Claims.histOf]
+      simp only [Claims.SP.eval, Claims.interact, asRounds_histOf hm, hf]
       cases hk : ask (ms.map Prod.fst ++ [(Claims.SP.eval H ask (f ms)).1]) with
       | msg m =>
         simp only
         rw [simRounds_interact H ask f n _ (fun p hp => ?_)]
-        · simp [Claims.ZKMal.histOf]
+        · simp [Claims.histOf]
         · rcases List.mem_append.1 hp with hp | hp
           · exact hm p hp
           · simp only [List.mem_singleton] at hp
@@ -386,10 +388,10 @@ theorem stage_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims.Ms
 theorem simInner_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out)
     (n : ℕ) (salts : Fin n → Salt) :
     (Claims.SP.eval H ask (Claims.Recursion.simInner (deployRec IV ivScope b) n salts)).1 =
-      Claims.ZKMal.interact ask (leafPm hmLeaf n (fun _ => 0) maskX (saltH H) salts) n [] := by
+      Claims.interact ask (leafPm hmLeaf n (fun _ => 0) maskX (saltH H) salts) n [] := by
   unfold Claims.Recursion.simInner
   rw [simRounds_interact H ask _ n [] (by simp)]
-  simp only [List.nil_append, Claims.ZKMal.histOf, List.map_nil]
+  simp only [List.nil_append, Claims.histOf, List.map_nil]
   congr 1
   funext h
   have hl : (asRounds h).length = h.length := List.length_map _
@@ -403,25 +405,25 @@ theorem simStage_eval (ivScope : Claims.Msg → Bool) (H : Claims.Msg → Claims
     (x : Claims.Msg) (n : ℕ) (salts : Fin (kS x) → Fin (b.nC x) → Salt) (τ : List (Claims.Msg × Claims.Out))
     (hm : ∀ p ∈ τ, Claims.ZKMal.isMsg p.2 = true) (hl : τ.length = n) :
     (Claims.SP.eval H ask (Claims.Recursion.simStage (deployRec IV ivScope b) x n salts τ)).1 =
-      τ ++ Claims.ZKMal.interact ask (fun h => stgOf b x n h fun j =>
+      τ ++ Claims.interact ask (fun h => stgOf b x n h fun j =>
         hmLeaf (0 + maskX (salts ⟨0, Nat.zero_lt_one⟩ j), saltH H (salts ⟨0, Nat.zero_lt_one⟩ j))) 1
-        (Claims.ZKMal.histOf τ) := by
+        (Claims.histOf τ) := by
   unfold Claims.Recursion.simStage
   rw [simRounds_interact H ask _ _ τ hm]
   congr 1
-  change Claims.ZKMal.interact ask _ 1 _ = _
+  change Claims.interact ask _ 1 _ = _
   rw [Claims.ZKMal.interact_one]
   conv_rhs => rw [Claims.ZKMal.interact_one]
   congr 2
   funext _
-  have hτ : (asRounds (Claims.ZKMal.histOf τ)).length - n = 0 := by
+  have hτ : (asRounds (Claims.histOf τ)).length - n = 0 := by
     rw [asRounds_histOf hm, hl, Nat.sub_self]
-  have h0 : (asRounds (Claims.ZKMal.histOf τ)).length - n < (deployRec IV ivScope b).kS x := by
+  have h0 : (asRounds (Claims.histOf τ)).length - n < (deployRec IV ivScope b).kS x := by
     rw [hτ]
     exact Nat.zero_lt_one
-  have ht : (Claims.ZKMal.histOf τ).take n = Claims.ZKMal.histOf τ :=
+  have ht : (Claims.histOf τ).take n = Claims.histOf τ :=
     List.take_of_length_le (by rw [Claims.ZKMal.histOf_length, hl])
-  have hs : (⟨(asRounds (Claims.ZKMal.histOf τ)).length - n, h0⟩ : Fin ((deployRec IV ivScope b).kS x)) =
+  have hs : (⟨(asRounds (Claims.histOf τ)).length - n, h0⟩ : Fin ((deployRec IV ivScope b).kS x)) =
       ⟨0, Nat.zero_lt_one⟩ := Fin.ext hτ
   simp only [h0, ↓reduceDIte, hs]
   simp only [Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval, zeroCommits_eval, stgOf, ht, stage_eval]
@@ -446,7 +448,7 @@ theorem simPre_eval {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recur
   split
   · rename_i hg
     have hl := Claims.ZKMal.goesOn_length hg
-    have hm : ∀ p ∈ Claims.ZKMal.interact ask (leafPm hmLeaf (I.V.k (xIOf x)) (fun _ => 0) maskX (saltH H) c.1)
+    have hm : ∀ p ∈ Claims.interact ask (leafPm hmLeaf (I.V.k (xIOf x)) (fun _ => 0) maskX (saltH H) c.1)
         (I.V.k (xIOf x)) [], Claims.ZKMal.isMsg p.2 = true := by
       simp only [Claims.ZKMal.goesOn, Bool.and_eq_true, List.all_eq_true] at hg
       exact hg.2
@@ -456,7 +458,7 @@ theorem simPre_eval {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recur
     rw [simRounds_stop _ _ _ ?_]
     · rfl
     rcases Nat.eq_zero_or_pos (I.V.k (xIOf x)) with h0 | h0
-    · exact absurd (by simp [h0, Claims.ZKMal.interact, Claims.ZKMal.goesOn]) hg
+    · exact absurd (by simp [h0, Claims.interact, Claims.ZKMal.goesOn]) hg
     · exact (Claims.ZKMal.recGoesOn_interact ask _ (I.V.k (xIOf x)) [] h0).trans (Bool.eq_false_iff.2 hg)
 
 /-! ## The first part's prover is a first part of leaves -/
@@ -487,11 +489,11 @@ theorem preP_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Cla
       List.ofFn (fun i => dI h i ^^^ maskOf (yI ⟨h.length, hh⟩) i) ++ saltH H (yI ⟨h.length, hh⟩))
     (hdig : ∀ h j (hj : j < b.nC x), (b.ref.digests w (pre t).1 h).getD j 0 = dS h ⟨j, hj⟩)
     (hsalt : ∀ j (hj : j < b.nC x), (pre t).2 j = yS ⟨j, hj⟩) :
-    Claims.ZKMal.interact ask (fun h => (((preP IV b pre w).next x h t).eval H).1) (kPre IV x) [] =
+    Claims.interact ask (fun h => (((preP IV b pre w).next x h t).eval H).1) (kPre IV x) [] =
       prefixRun hmLeaf maskX (saltH H) ask (IV.k (xIOf x)) (b.nC x) (fun h => asX (dI h))
         (fun h j => asX (dS (h.take (IV.k (xIOf x))) j)) (stgOf b x (IV.k (xIOf x))) yI yS := by
-  have hin : Claims.ZKMal.interact ask (fun h => (((preP IV b pre w).next x h t).eval H).1) (IV.k (xIOf x)) [] =
-      Claims.ZKMal.interact ask (leafPm hmLeaf (IV.k (xIOf x)) (fun h => asX (dI h)) maskX (saltH H) yI)
+  have hin : Claims.interact ask (fun h => (((preP IV b pre w).next x h t).eval H).1) (IV.k (xIOf x)) [] =
+      Claims.interact ask (leafPm hmLeaf (IV.k (xIOf x)) (fun h => asX (dI h)) maskX (saltH H) yI)
         (IV.k (xIOf x)) [] := by
     refine Claims.ZKMal.interact_congr_lt ask _ _ (IV.k (xIOf x)) (fun h hh => ?_) _ [] (by simp)
     have e : (((preP IV b pre w).next x h t).eval H).1 = (((b.ref.PI w).next (xIOf x) h (pre t).1).eval H).1 := by
@@ -509,7 +511,7 @@ theorem preP_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Cla
     conv_rhs => rw [Claims.ZKMal.interact_one]
     congr 2
     funext _
-    have hl : (Claims.ZKMal.histOf (Claims.ZKMal.interact ask
+    have hl : (Claims.histOf (Claims.interact ask
         (leafPm hmLeaf (IV.k (xIOf x)) (fun h => asX (dI h)) maskX (saltH H) yI) (IV.k (xIOf x)) [])).length =
         IV.k (xIOf x) := by
       rw [Claims.ZKMal.histOf_length, Claims.ZKMal.goesOn_length hg]

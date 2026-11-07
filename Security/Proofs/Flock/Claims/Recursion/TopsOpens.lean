@@ -1,6 +1,47 @@
-import Proofs.Flock.Claims.Recursion.CapOpens
-import Proofs.Flock.Claims.Recursion.FinOpen
+module
+
+public import Proofs.Flock.Claims.Recursion.CapOpens
+public import Proofs.Flock.Claims.Recursion.FinOpen
+public import Proofs.Flock.Claims.Recursion.RecRecord
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.Reps.AtList
+import Proofs.Flock.C3.VStarList.Accepts
 import Proofs.Flock.Claims.Recursion.BoundAccepts
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Claims.Scope.Setup
 
 /-!
 # `PartOpensB` at `layoutBTops` and the coin server's record
@@ -23,6 +64,8 @@ So `PartOpensB` holds at `layoutBTops` and `cmtTr recRead` wherever the inner ve
 `bitsLin2_deployed_open` at `recRead` with `PartOpensB` dropped. What they still take: `PartChecksBV`, `DecompB`, the
 readers' `ReadersTrue`, and `recRead` reading the coin server's transcript back (`ReadsBackB`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -399,10 +442,11 @@ theorem topsListed_at {i : RecVStar.Inner} {K : Array VStar.Stmt} {rs : Array Re
     rw [Array.getElem?_eq_getElem hg, Option.map_some] at e
     exact Option.some.inj e
 
-theorem list_at {A C K : Array VStar.Stmt} {N g : ℕ} (hg : g < K.size) :
-    (A ++ C ++ (K ++ #[.cap 0 N]))[A.size + C.size + g]? = some K[g] := by
+theorem list_at {A C K L : Array VStar.Stmt} {N g : ℕ} (hg : g < K.size) :
+    (A ++ C ++ (K ++ L ++ #[.cap 0 N]))[A.size + C.size + g]? = some K[g] := by
   rw [Array.getElem?_append_right (by simp), Array.size_append, Nat.add_sub_cancel_left,
-    Array.getElem?_append_left hg, Array.getElem?_eq_getElem hg]
+    Array.getElem?_append_left (by rw [Array.size_append]; omega), Array.getElem?_append_left hg,
+    Array.getElem?_eq_getElem hg]
 
 /-- The schedule's `topsBefore rs k + e`-th top is round `k`'s `e`-th. -/
 theorem topSizes_at {rs : Array RecVStar.SchedRound} {k e : ℕ} (hk : k < rs.size)
@@ -427,8 +471,9 @@ theorem capStmt_at {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVSt
     (hrs : repSched r.shape = some rs) {g n : ℕ} (hn : (RecVStar.topSizes rs)[g]? = some n) :
     (RecVStar.statements r.shape).toOption.bind (·[capsFrom r rs + g]?) = some (.cap (g + 1) (2 * n)) := by
   obtain ⟨vs, hvs, hlen⟩ := readX_statements hr
-  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, N, hK, hT, rfl⟩ := FlockC3.Reps.list_ok hvs
+  obtain ⟨_, _, _, _, _, _, A, C, _, _, _, _, _, _, _, K, L, N, hK, hT, hL, rfl⟩ := FlockC3.Reps.list_ok hvs
   have hsz := topsListed_size hT hrs
+  have hLs := linkParts_size hL
   obtain ⟨hg', -⟩ := List.getElem?_eq_some_iff.1 hn
   have hg : g < K.size := by rw [hsz]; exact hg'
   obtain ⟨N', hN'⟩ := levelCap_at hK hg
@@ -436,11 +481,11 @@ theorem capStmt_at {x : Msg} {r : XR} (hr : readX x = some r) {rs : Array RecVSt
   rw [hN'] at hi
   have hcf : capsFrom r rs + g = A.size + C.size + g := by
     unfold capsFrom
-    rw [hlen, ← hsz]
+    rw [hlen, ← hsz, ← hLs]
     simp only [Array.size_append, Array.size_singleton]
     omega
   rw [hvs, hcf]
-  show (A ++ C ++ (K ++ #[.cap 0 N]))[A.size + C.size + g]? = _
+  show (A ++ C ++ (K ++ L ++ #[.cap 0 N]))[A.size + C.size + g]? = _
   rw [list_at hg, hN']
   simp only [VStar.Stmt.instances] at hi
   rw [hi]

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from verity.ml.commitments import advice
 
 from .binding import Placed, frames, traffic
-from .logical import Registration, commit, evaluate
+from .logical import RegisteredInputs, commit, evaluate
 from .memory import Challenge, ReadWindow, Wipe, answer_time, read_rate
 from .physical import Port
 from .plan import Plan
@@ -73,8 +73,8 @@ class Trace:
     placement: Placed
     inputs: dict[str, int | Sequence[int]]
     values: dict[int, int]
-    commitment: advice.Registration
-    registration: Registration | None
+    commitment: advice.Committed
+    registration: RegisteredInputs | None
     records: list[PortRecord]
     answers: list[Response]
 

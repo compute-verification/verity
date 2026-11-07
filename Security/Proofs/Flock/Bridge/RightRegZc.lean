@@ -1,4 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Right on the registration, with canonical openings
@@ -16,7 +21,10 @@ right and more are wrong:
 * `analysisZCRegC`, `zk_flock_countC_regC`: `analysisZCReg` and its count curve with "wrong" `wrongRegZc`, under
   `OpeningsCanon`. Its knowledge and link terms are `analysisZCReg`'s, and its `cover` is the same argument: the
   unit's openings from the satisfying message are canonical (`OpeningsCanon`), so the unit is right with them.
+* `zk_flock_escapeC_regC`: the same bound at a set `W` of units, `Pr[accept ∧ W ⊆ wrong] ≤ escape W + ε_ks + δ_link`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 
@@ -172,5 +180,26 @@ theorem zk_flock_countC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown
       (fun S R j => (hr S R j).trans_lt hρ) hlow hown hcan a hj)
     (zc_knowledgeSound_regC A Hs P planZ tab vb canon _ _ hlow hown hcan hj)
     (zk_linkSoundC_regC A Hs P planZ tab vb canon hlow hown hcan hRw hM hρ hr hj ht) K σ
+
+/-- **The compiled `--zk` escape bound, "wrong" with canonical openings**: `zk_flock_countC_regC` at a set `W` of units
+in place of a count, `Pr[accept ∧ W ⊆ wrong] ≤ escape W + ε_ks(σ) + δ_link(σ)`. -/
+theorem zk_flock_escapeC_regC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u)
+    (hcan : OpeningsCanon A P planZ tab vb canon) {k Rw M : ℕ}
+    (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
+    {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
+    (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') (W : Finset (Fin n))
+    (σ : Strategy (audit L Reg (batchedSessionZC A Hs planZ))) :
+    prob (fun o => o.1 = true ∧
+        W ⊆ wrongRegZc A P planZ tab vb canon (reg σ) (XplurZC A Hs P planZ tab vb (reg σ) (cont σ) k Rw))
+        (audit L Reg (batchedSessionZC A Hs planZ)) σ ≤
+      L.escape W + ksAvgZC A Hs planZ k a (reg σ) (cont σ) +
+        linkBoundZC A Hs P planZ tab vb k Rw M ρ t' (reg σ) (cont σ) := by
+  refine (extraction_audit_le (analysisZCRegC A Hs P planZ tab vb canon
+      (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k (fun S R j => (hr S R j).trans_lt hρ) hlow hown hcan a hj)
+    (zc_knowledgeSound_regC A Hs P planZ tab vb canon _ _ hlow hown hcan hj)
+    (zk_linkSoundC_regC A Hs P planZ tab vb canon hlow hown hcan hRw hM hρ hr hj ht)
+    (fun (rx : Reg × (Fin C.N → Bool)) _ => W ⊆ wrongRegZc A P planZ tab vb canon rx.1 rx.2) σ).trans
+    (add_le_add (add_le_add ?_ le_rfl) le_rfl)
+  exact prCoin_mono fun ω h => h.2.mono_right h.1
 
 end FlockSoundness.Discharge.ZkLink

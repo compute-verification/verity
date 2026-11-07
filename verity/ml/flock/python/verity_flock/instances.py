@@ -140,7 +140,7 @@ def instances_digest(name: str, n: int) -> str:
     return hashlib.sha256(f"{rel.name} synthetic|seed={rel.instance_seed}|n={n}|K={K}".encode()).hexdigest()
 
 
-def instances_ref(name: str, total: int) -> dict:
+def input_set_ref(name: str, total: int) -> dict:
     rel = _relation(name)
     if rel.frozen_tier:
         return {"dataset": rel.instances_dataset, "tier": rel.instances_tier, "range": [0, total],
@@ -162,7 +162,7 @@ def _e4m3_operands(rng: np.random.Generator, shape) -> np.ndarray:
 
 def _draw(args):
     name, seed, lo, hi = args
-    from verity.ml.circuits.silicon.silicon import tc_dot
+    from verity.ml.circuits.silicon.models import tc_dot
     rel = _relation(name)
     operands = _e4m3_operands if rel.word_dtype == "<u1" else rel.operands
     xs, ws, accs = [], [], []
@@ -237,7 +237,7 @@ def statement(name: str, x, w, accs, total: int | None = None, lo: int = 0, leaf
     schemas = {"a": SCHEMES[leaf], "b": SCHEMES[leaf], "y": ysch}
     bind = {t: binding_digest(dataset=rel.instances_dataset, tier=rel.instances_tier, manifest_sha256=manifest,
                                        lo=lo, hi=lo + n, K=K, tree=t, schema=schemas[t]) for t in "aby"}
-    dom = {n: CommitmentDomain(bind[n], OWNER[n], RangeIndexedDomain(0, counts[n])) for n in "aby"}
+    dom = {n: CommitmentDomain(bind[n], OWNER[n], RangeIndexedDomain(0, counts[n]), hash="sha256") for n in "aby"}
     fv = FrameV3({"a": Port(dom["a"], RowLeaf(leaf, ROLE_X, word_bits, K)),
                   "b": Port(dom["b"], RowLeaf(leaf, ROLE_W, word_bits, K)), "y": Port(dom["y"], WordLeaf(ysch, ybytes))})
     if leaf == "sha256":
@@ -276,7 +276,7 @@ def write(path: str | Path, name: str, total: int, procs: int = 1, cache: str | 
     x, w, accs = draw(name, total, procs, cache, lo, hi)
     st = statement(name, x, w, accs, total, lo, leaf)
     out = np.asarray([f32_to_bf16_word(int(a[-1])) if pipe.epilogue else int(a[-1]) for a in accs], dtype="<u4")
-    ref = instances_ref(name, total)
+    ref = input_set_ref(name, total)
     ref["range"] = [lo, hi]
     header = {"format": FORMAT, "relation": name, "vus": hi - lo, "k": K, "word_bits": pipe.word_bits, "units": rel.steps,
               "row_bytes": K * pipe.word_bits // 8, "epilogue": pipe.epilogue, "instances": ref,
@@ -303,7 +303,7 @@ def _frame_v3(dataset: str, tier: str, manifest: str, lo: int, K_: int, schema_r
     schemas = {"a": schema_row, "b": schema_row, "y": ysch}
     bind = {t: binding_digest(dataset=dataset, tier=tier, manifest_sha256=manifest, lo=lo, hi=lo + n, K=K_, tree=t,
                                        schema=schemas[t]) for t in "aby"}
-    dom = {t: CommitmentDomain(bind[t], OWNER[t], RangeIndexedDomain(0, n)) for t in "aby"}
+    dom = {t: CommitmentDomain(bind[t], OWNER[t], RangeIndexedDomain(0, n), hash="sha256") for t in "aby"}
     fv = FrameV3({"y": Port(dom["y"], WordLeaf(ysch, ybytes))})
     leaves = {"a": [dom["a"].leaf(r, r, schema_row, d) for r, d in enumerate(digests_a)],
               "b": [dom["b"].leaf(r, r, schema_row, d) for r, d in enumerate(digests_b)],
@@ -443,7 +443,7 @@ def write_synth(path: str | Path, relation: str, K_: int, lo: int, hi: int, leaf
 
 def _chain_rows(args):
     relation, x, w = args
-    from verity.ml.circuits.silicon.silicon import tc_dot
+    from verity.ml.circuits.silicon.models import tc_dot
     from .lowering import _model
     pipe = PIPES[relation]
     model, k = _model(pipe.model), pipe.k

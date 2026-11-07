@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.ZK.FinishSwFrame
-import Proofs.Flock.Claims.ZK.SimLig
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwFrame
+public import Proofs.Flock.Claims.ZK.SimLig
 
 /-!
 # Level 0's opening at the switched source
@@ -10,12 +12,16 @@ session's opening computes at the coins plus the pads, and the restart's `y₁'`
 receives only the PIOP's `zp 64` words; it computes level 0's opening itself. So the switched prover's clear values
 are the firewall's (`valsFw`), with level 0's opening's clear values `l0Clear` from `zp 64` on.
 
-* `LigLock.l0Clear`: level 0's opening's clear value at each pad index, as the session computes it at the coins.
+* `LigLock.l0Clear`: level 0's opening's clear value at each pad index, as the session computes it at the coins. It
+  reads the extra lanes only below the folded table's `2^cols` entries (`LigLock.l0Clear_congr`,
+  `Masked.tabS_ligTab_size`, `Masked.l0Clear_ligTab`).
 * **`LigLock.ligHyp_of_l0`**: `LigHyp` from a source whose masked values from `zp 64` to `h_ab` are `l0Clear` plus the
   pads, and its `y₁'`, `ȳ` and salts.
 * **`Masked.swSrcE_ligHyp_frame`**: so at the switched source at the firewall's clear values, with `B = l0Clear` and
   the firewall's request's pads (`swSrcE_l0_frame`), `LigHyp` holds at its `y₁'`, `ȳ` and salts.
 -/
+
+@[expose] public section
 
 namespace FlockComplete
 
@@ -86,6 +92,23 @@ theorem l0Clear_e (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t b
     omega
   unfold l0Clear
   rw [ite_eq_right h1, ite_eq_right h2, ite_eq_left h3, hd, show (2 * i + c) / 2 = i by omega, show (2 * i + c) % 2 = c by omega]
+
+theorem tabS_size (coin : ℕ → ℕ → F128) (p0 : ℕ) (t : Array F128) :
+    ∀ k, (tabS coin p0 t k).size = t.size / 2 ^ k
+  | 0 => by simp [tabS, FlockComplete.embedF]
+  | k + 1 => by
+    simp only [tabS, FlockComplete.foldK, Array.size_map, Array.size_range, tabS_size coin p0 t k, pow_succ,
+      Nat.div_div_eq_div_mul]
+
+/-- **`l0Clear` reads the extra lanes only below the folded table's size.** -/
+theorem l0Clear_congr (coin : ℕ → ℕ → F128) (p0 : ℕ) (sch : Schedule) (t b : Array F128) (lay : Zk.PadLayout)
+    {extra extra' : ℕ → ℕ → F128} (he : ∀ e c, c < (tabS coin p0 t sch.k0).size → extra e c = extra' e c)
+    (rep k : ℕ) : l0Clear coin p0 sch t b lay extra rep k = l0Clear coin p0 sch t b lay extra' rep k := by
+  have hA : ∀ e, (Array.range (tabS coin p0 t sch.k0).size).map (extra e) =
+      (Array.range (tabS coin p0 t sch.k0).size).map (extra' e) := fun e =>
+    Array.map_congr_left fun c hc => he e c (Array.mem_range.1 hc)
+  unfold l0Clear
+  simp only [hA]
 
 /-- **`LigHyp` from level 0's opening's clear values**: where the source's masked values from `zp 64` to `h_ab` are
 `l0Clear` plus the pads `h`, at a layout with one out-of-domain value and the schedule's `k₀` lane rounds, the source holds
@@ -164,6 +187,32 @@ open CoinLayer
 
 namespace Masked
 
+/-- **Table `j`'s packed table folded by its `k₀` lane challenges has `2^cols` entries**, `cols` level 0's. -/
+theorem tabS_ligTab_size (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (j : Fin (jOf x)) : (FlockComplete.LigLock.tabS coin p0 (ligTab x w τ j) (zkTab x j).sch.k0).size =
+      2 ^ (lv0 x j).cols := by
+  obtain ⟨-, -, -, -, -, hm⟩ := tabC_z PE x j
+  obtain ⟨-, -, hl0, -, -, -⟩ := zkLevel0 (zkTab x j).hz
+  unfold lv0 at hm
+  rw [hl0] at hm
+  have hmL : (ligSt x j).m = (tabC PE x j).S.m := by
+    unfold ligSt
+    rw [tabsOf_stAt]
+    rfl
+  rw [FlockComplete.LigLock.tabS_size, ligTab, FlockComplete.JsonRT.packed_size, hmL,
+    show (tabC PE x j).S.m - 7 = (zkTab x j).sch.k0 + (lv0 x j).cols by unfold lv0; omega, pow_add,
+    Nat.mul_div_cancel_left _ (Nat.two_pow_pos _)]
+
+/-- **`l0Clear` at table `j` reads the extra lanes only below `2^cols`**, `cols` level 0's. -/
+theorem l0Clear_ligTab (coin : ℕ → ℕ → _root_.Flock.F128) (p0 : ℕ) (x : Msg) (w : Claims.Flock.Wit) (τ : UE.Tape)
+    (j : Fin (jOf x)) (b : Array _root_.Flock.F128) (lay : _root_.Flock.Zk.PadLayout)
+    {extra extra' : ℕ → ℕ → _root_.Flock.F128} (he : ∀ e c, c < 2 ^ (lv0 x j).cols → extra e c = extra' e c)
+    (rep k : ℕ) :
+    FlockComplete.LigLock.l0Clear coin p0 (zkTab x j).sch (ligTab x w τ j) b lay extra rep k =
+      FlockComplete.LigLock.l0Clear coin p0 (zkTab x j).sch (ligTab x w τ j) b lay extra' rep k :=
+  FlockComplete.LigLock.l0Clear_congr _ _ _ _ _ _
+    (fun e c hc => he e c (by rw [← tabS_ligTab_size coin p0 x w τ j]; exact hc)) rep k
+
 /-- **`repCut_fw`'s `hlig` at the switched source, at the firewall's request `q`**, but for the restart: at the
 firewall's clear values `valsFw x c A B` whose level 0 part `B j r` is `l0Clear` at the coins from round `p₀`, the
 packed table `t` and the basis `b`, at `pads_frame`'s premises, where table `j`'s rows hold at its base, rep `r`'s source
@@ -183,7 +232,7 @@ theorem swSrcE_ligHyp_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (
       (Claims.ZKServer.tapeOfDraws t₀ (L.lay x) (L.draws ρ) rep).h j.val r.val k)
     (hrows : ((tabC PE x j).T (czExe PE x c j)).tab.onVals.RowsAt (wtOf PE x w j, valsFw x c A B j)
       (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).1
-      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1.2.1)
+      (((tabC PE x j).T (czExe PE x c j)).randOf ((UE.tape x τ).1 j) 0).2.1)
     (hk0 : 1 ≤ sch.k0) (hn0 : sch.n ≠ 0) (hlv : 2 ≤ sch.levels.size) (hlk : (zkTab x j).sch.k0 = sch.k0)
     (hy1 : p0 + 3 + sch.k0 < n → _root_.Flock.Zk.rhoIndependent (FlockComplete.LigLock.rhoS coin p0 sch.k0) = true →
       ((swSrcE x c w (valsFw x c A B) τ j.val).rep r.val).y1 =

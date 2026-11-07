@@ -35,7 +35,7 @@ a block). An audit is cheap: about 1.7 s at `2^19` blocks, mostly the table's ro
 of its own (`challenger_party`) on `period.json`'s `challenger_host`, with its own coins and a key at S1's deployed
 parameters (`memory_challenger.LMS`) that `challenger` makes once on that host; the prover and the verifier run on the
 node.
-`trusted-host`'s premise, that the memory challenger runs on a machine the prover doesn't control, holds only
+`trusted-host`'s premise, that the memory challenger runs on a machine the developer doesn't control, holds only
 when the challenger host isn't the node, and the leg says which (`challenger_party.placement`). The setup's salt is
 still drawn on the node.
 """
@@ -139,7 +139,7 @@ def point_of(doc: Mapping[str, Any]) -> R.Point:
 
 
 def case(point: R.Point, session_id: bytes, trusted: Sequence[bytes], published: R.Setup, digests: bytes,
-         session: R.Session, setup_of: Mapping[str, Any]) -> dict[str, Any]:
+         session: R.ChallengePhaseRecord, setup_of: Mapping[str, Any]) -> dict[str, Any]:
     """The run protocol's case, `{"commitment": hex, "evidence": hex, "params": JSON}` (`PousCheck.RunProtocol`): its
     evidence carries the setup's own commitment and evidence, from `setup_of`, the setup protocol's case."""
     params = {"point": point_json(point), "session_id": session_id.hex(), "trusted": [t.hex() for t in trusted]}
@@ -169,7 +169,7 @@ def tie(point: R.Point, published: R.Setup, inputs: SetupInputs) -> None:
 
 
 def answer(point: R.Point, schemes: Mapping[str, mc.Verify], trusted: Collection[bytes], published: R.Setup,
-           digests: bytes, session: R.Session, session_id: bytes, protocol: str = PROTOCOL, *,
+           digests: bytes, session: R.ChallengePhaseRecord, session_id: bytes, protocol: str = PROTOCOL, *,
            setup_inputs: SetupInputs) -> dict[str, Any]:
     """The run protocol's answer (`Core.Answer.canonical`) on decoded inputs: `tie` on the setup's own inputs, then
     `run.check_at`, then `certify`."""
@@ -228,26 +228,31 @@ def honest(blocks: Sequence[bytes]) -> Callable[[int], bytes]:
 
 
 @dataclass(frozen=True)
-class Period:
-    """A period's PoUS: the run protocol's answer and case, and the setup protocol's case that published its commitment."""
+class Run:
+    """A subprotocol's run over one monitoring period, PoUS's or the bandwidth audit's: its answer in the core
+    interface's canonical form, the core case its Lean replays to that answer, and, for a run on a setup (PoUS's), the
+    setup protocol's case that published its commitment."""
 
     answer: dict[str, Any]
     case: dict[str, Any]
-    setup_case: dict[str, Any]
+    setup_case: dict[str, Any] | None = None
 
     @property
     def verdict(self) -> str:
         return self.answer["verdict"]
 
-    @property
-    def s_bits(self) -> int:
-        """The storage certified, in bits: 0 unless accepted under a certificate that covers the point."""
-        return self.answer["public"]["s_bits"] if self.verdict == "accept" else 0
+    def public(self, key: str) -> int:
+        """What the run certifies under `key` (PoUS's `s_bits`, the bandwidth audit's `q_bytes`): 0 unless accepted."""
+        return self.answer["public"][key] if self.verdict == "accept" else 0
 
     @property
     def eps(self) -> Fraction:
-        """The error `s_bits` holds at: 0 (vacuous) when nothing is certified."""
+        """The error what it certifies holds at: 0 (vacuous) when nothing is certified."""
         return Fraction(self.answer["public"]["eps"]) if self.verdict == "accept" else Fraction(0)
+
+
+Period = Run
+"""`Run`, under the name some of its readers still use; it goes when none does."""
 
 
 @dataclass(frozen=True)
@@ -337,16 +342,16 @@ def audit(node: str, held: Store, coins: bytes, *, signer: mc.Signer | None = No
         challenger = mc.MemoryChallenger(tree, signer, log=log, limit_ns=point.limit_ns, block_bytes=q.block_bytes,
                                          binding=published.root, clock=clock)
         signed = challenger.run(prover(held.blocks))
-        session, key = R.Session(signed, challenger.commitment, challenger.openings()), signer.public_key
+        session, key = R.ChallengePhaseRecord(signed, challenger.commitment, challenger.openings()), signer.public_key
     else:
         got = challenger_party.session(party, challenger_party.request_of(node, point, published.root),
                                        prover(held.blocks))
         session_id, key = bytes.fromhex(got["session_id"]), bytes.fromhex(got["public_key"])
-        session = R.Session.from_json(got["session"])
+        session = R.ChallengePhaseRecord.from_json(got["session"])
     trusted = (key,) if trusted is None else tuple(trusted)
-    return Period(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
-                         setup_inputs=setup_inputs(held.setup_case)),
-                  case(point, session_id, trusted, published, held.digests, session, held.setup_case), held.setup_case)
+    return Run(answer(point, schemes, trusted, published, held.digests, session, session_id, protocol,
+                      setup_inputs=setup_inputs(held.setup_case)),
+               case(point, session_id, trusted, published, held.digests, session, held.setup_case), held.setup_case)
 
 
 def run(node: str, store: bytes, coins: bytes, *, signer: mc.Signer | None = None, log: mc.SessionLog | None = None,
@@ -588,11 +593,11 @@ def leg(period_dir: Path, node: str, out: Path) -> dict[str, Any]:
     q = held.point.params
     (out / "pous.json").write_text(json.dumps({
         "answer": answer, "blocks": q.blocks, "eps": str(period.eps), "lean": lean, "placement": where,
-        "s_bits": period.s_bits, "seconds": seconds, "setup": {"fresh": fresh, "seconds": setup_s if fresh else 0},
-        "w_bytes": q.w_bytes}, sort_keys=True, indent=1))
+        "s_bits": period.public("s_bits"), "seconds": seconds,
+        "setup": {"fresh": fresh, "seconds": setup_s if fresh else 0}, "w_bytes": q.w_bytes}, sort_keys=True, indent=1))
     return answer
 
 
-__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "SetupInputs", "Store", "answer", "audit",
-           "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg", "point_for",
-           "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]
+__all__ = ["LEDGER_SCHEMAS", "PROTOCOL", "SETUP_WORKERS", "Period", "Prover", "Run", "SetupInputs", "Store", "answer",
+           "audit", "case", "certificate", "certify", "challenger", "cite", "cited", "encode", "gaps", "honest", "leg",
+           "point_for", "point_of", "profile", "records", "run", "serve", "setup_case", "setup_inputs", "setup_store", "tie"]

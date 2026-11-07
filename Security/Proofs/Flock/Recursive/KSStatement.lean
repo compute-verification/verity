@@ -1,7 +1,39 @@
-import Proofs.Flock.Claims.Recursion.KSLin2R
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.DeployedBrings
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.KSLinks
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The recursive verifier's knowledge soundness at the deployed reader (trusted)
@@ -19,6 +51,8 @@ guarantee `RecursiveKS` is this at the deployed values: the reader `DeployedR.rd
 the brings' setup `deployedB` (the compiled verifier's own evaluations), for every other field of the brings and every
 record the coin server keeps (`aux`, `nOf`, `hd`, `recRest`).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -59,5 +93,34 @@ def RecursiveKS : Prop :=
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
     RecursiveKSAt RecDeploy.DeployedR.rdR RecDeploy.DeployedR.finalR RecDeploy.OpenRows.elemR RecDeploy.DeployedR.wER
       RecDeploy.DeployedR.wR (RecDeploy.deployedB b) aux nOf hd recRest
+
+/-- **Knowledge soundness of the recursive verifier at the linked relation, at a compiled record** `D`: `RecursiveKSAtRec`
+with the linked relation (`Claims.Recursion.RL`: the deployed relation, and the link clause `Q` at the inner witness and
+the link table's rows), the extractor that reads the table's rows off its judged draw's outer witnesses (`rows`), and
+one more term, the link finder's `Pr[B_L]` over the inputs `ins` reads (`Claims.Recursion.KSLin2LinkOn`). -/
+def RecursiveKSLinkAtRec {Tb : Type} (D : Claims.Recursion.RecAt Coin) (rd : Msg → Option FinalP)
+    (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg)) (wE w : Msg → ℝ)
+    (Q : Msg → Claims.Flock.Wit → Tb → Prop) (rows : Msg → List Claims.Flock.Wit → Tb)
+    (ins : (Msg → Msg) → Msg → List ((ℕ → Coin) × List (Msg × Out) × List Claims.Flock.Wit) → Claims.Flock.Wit → Tb →
+      List Msg) : Prop :=
+  Claims.Recursion.KSLin2LinkOn FlockDeploy.sha512 D
+    (RecDeploy.bdDeployed _root_.Flock.Readable.relation (FlockDeploy.nextR rd)
+      (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation rd).cols wE FlockDeploy.joinR
+      RecDeploy.rowInDeployed final w)
+    (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt Q rows ins
+
+/-- **Knowledge soundness of the recursive verifier at the linked relation**, at the deployment's parameters
+(`RecursiveKSLinkAtRec` at the deployment's compiled record, as `RecursiveKSAt`). -/
+def RecursiveKSLinkAt {Tb : Type} (rd : Msg → Option FinalP)
+    (final : Msg → Option (List (List (Msg × RecDeploy.Salt)) × Msg))
+    (rest : (r : RecDeploy.XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE w : Msg → ℝ)
+    (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
+    (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8)
+    (Q : Msg → Claims.Flock.Wit → Tb → Prop) (rows : Msg → List Claims.Flock.Wit → Tb)
+    (ins : (Msg → Msg) → Msg → List ((ℕ → Coin) × List (Msg × Out) × List Claims.Flock.Wit) → Claims.Flock.Wit → Tb →
+      List Msg) : Prop :=
+  RecursiveKSLinkAtRec
+    (RecDeploy.recBoundAt _root_.Flock.Readable.relation { b with tr := RecDeploy.recTr aux nOf hd recRest }
+      (RecDeploy.DeployedR.layR rest)) rd final wE w Q rows ins
 
 end Flock.Guarantees

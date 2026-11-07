@@ -1,6 +1,7 @@
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.Finset.Card
-import Definitions.Core.Boolean
+module
+
+public import Definitions.Core.Boolean
+public import Mathlib.Data.Fintype.Card
 
 /-!
 # Partitions of a circuit, and the correctness of a unit
@@ -17,6 +18,8 @@ inputs (`Partition.Correct`): evaluate `u`'s gates in order, reading every other
 
 The lemmas about them (composition, congruence, refinement) are in `Proofs.Flock.Soundness.Audit.Circuit`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

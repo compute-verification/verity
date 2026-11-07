@@ -87,7 +87,7 @@ def datacenter(hw: DeviceGraph, cadence: D.Cadence, kinds: set[str], rate: float
         cadence)
 
 
-def placement(model, hw: DeviceGraph, p: P.StepPlacement, dc: D.Datacenter, registration: D.Registration) -> D.Placed:
+def placement(model, hw: DeviceGraph, p: P.StepPlacement, dc: D.Datacenter, registration: D.RegisteredInputs) -> D.Placed:
     program = model.program
     body = program.root.body
     client = hw.leaves[hw.client]
@@ -111,7 +111,7 @@ def placement(model, hw: DeviceGraph, p: P.StepPlacement, dc: D.Datacenter, regi
 def crossing_pairs(dp: D.Placed) -> set[tuple[int, str]]:
     """The accounting layer's crossings as (gate, reading unit), the pairs `placement.crossings` makes edges of: each
     crossing census value expanded to its gates."""
-    return {(g, getattr(dp.datacenter.block_of(x.dst), "name", OUTSIDE)) for x in D.crossings(dp)
+    return {(g, getattr(dp.datacenter.zone_of(x.dst), "name", OUTSIDE)) for x in D.crossings(dp)
             for g in gates(dp.program, x.value)}
 
 

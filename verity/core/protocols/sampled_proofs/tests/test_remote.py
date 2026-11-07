@@ -24,7 +24,7 @@ import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
 from verity.core.protocols.sampled_proofs import remote as R
-from verity.core.protocols.sampled_proofs.coins import ChallengerCoins
+from verity.core.protocols.sampled_proofs.coins import ChallengerCoins, coins_within
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
@@ -32,6 +32,7 @@ from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value
 from verity.ml.commitments.identity import tagged_sha512
 from verity.ml.crypto import lms
+from verity.ml.commitments import coin_tree as CT
 
 from test_challenger import HOST, entropy, lms_key, lms_verify
 
@@ -42,9 +43,8 @@ WINDOW = {"root": "11" * 64}
 #: 1018753ee5, whose second parent is 882770e600
 MAIN = R.main_lines(Path(__file__).parent / "fixtures" / "main-first-parent.txt")
 PIN = "c81c31e6d51f9c481cdead96221d65ad6d7afd2c"
-#: the host's pins log as its operator published it when it repinned vy-challenger-1 to `PIN`; every open seals it
-#: unless a
-#: test says otherwise
+#: the host's pins log as its operator published it when it repinned the challenger host to `PIN`; every open seals it
+#: unless a test says otherwise
 HOST_PINS = ['{"commit":"c81c31e6d51f9c481cdead96221d65ad6d7afd2c","main":"c81c31e6d51f9c481cdead96221d65ad6d7afd2c",'
              '"pinned_utc":"2026-10-22T11:07:28Z"}']
 #: the challenger key the window's deployment pins: sixteen leaves, four a session (the ledger's open, the record, the
@@ -467,11 +467,11 @@ def test_the_client_refuses_a_bad_answer_and_every_coin_after(case):
 BATCH = [("positions", 0, root(0)), ("replay", 0, root(0)), ("positions", 1, root(1))]
 
 
-def _served(directory, signer, ask) -> tuple[bytes, object, str | None]:
-    """`ask(client)` against a challenger served on one end of a socketpair (`serve`, on a clock that counts), the
-    client then closing the session: the release log's bytes, what `ask` returned, and how `serve` ended."""
+def _served(directory, signer, ask, families=FAMILIES) -> tuple[bytes, object, str | None]:
+    """`ask(client)` against a challenger over `families` served on one end of a socketpair (`serve`, on a clock that
+    counts), the client then closing the session: the release log's bytes, what `ask` returned, and how `serve` ended."""
     directory.mkdir()
-    session = R.open_session(C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host")), pinned_key(), HOST, signer,
+    session = R.open_session(C.LiveChallenger(SCHEME, 0, families, entropy("host")), pinned_key(), HOST, signer,
                              directory, "s-1")
     a, b = socket.socketpair()
     ended: list[str | None] = []
@@ -558,6 +558,171 @@ def test_a_withheld_session_releases_only_raw_coins_until_its_signed_close(tmp_p
     assert got is not None
 
 
+TREE_SPEC = {"block": 3, "rounds_log": 2, "scheme": CT.SCHEME, "streams": [CT.SESSION, "t/rep0", "t/rep1"]}
+NONCE = bytes(range(32))
+ROOT_F, ROOT_B = root(20), {"t": root(21)}
+
+
+def f128(w: int) -> str:
+    return f"{w:032x}"
+
+
+def tree_record(nonce: bytes, tree_root: bytes, key: bytes, points: list[int], rounds: dict[str, list]) -> dict:
+    """A ``--zk`` session's record on the coin tree under `tree_root`: its link points one per point and each stream's
+    rounds as ``(msg_sha512, n, coins)``."""
+    return {"coin_tree": {"key": key.hex(), "nonce": nonce.hex(), "root": tree_root.hex(), "spec": TREE_SPEC},
+            "link": {"points": [[f128(c)] for c in points], "root_b": {t: r.hex() for t, r in ROOT_B.items()},
+                     "root_f": ROOT_F.hex()},
+            "streams": [{"stream": s, "rounds": [{"coins": [f128(c) for c in coins], "k": k, "msg_sha512": m.hex(), "n": n}
+                                                 for k, (m, n, coins) in enumerate(rs)]} for s, rs in rounds.items()]}
+
+
+def test_a_coin_tree_is_drawn_and_opened_in_the_windows_session_under_its_signed_close(tmp_path, signer):
+    """The challenger samples a ``--zk`` session's coin tree under the prover's nonce and opens each round itself, after
+    what it follows, between the session's own coins; each line is logged before its answer, the signed close covers
+    them, the verifier's read of the session's roots reads past them, and a record on those coins is held to them
+    (`session_tree_reason`), one whose round's coins differ refused, as is one held to another ``root_B`` length. Its
+    log is the sample, then the link, then the other rounds (`sample_link_first`) for the coin released before the tree
+    was sampled, and not for the one released after its rounds."""
+    host = Host(tmp_path, signer, withhold=True)
+    client = R.RemoteChallenger.connect(host.address)
+    positions = C.LiveRecord(client, "positions", itertools.count().__next__)
+    positions.record(root(0))
+    nonce, tree_root, key = client.tree(TREE_SPEC, NONCE)
+    assert nonce == NONCE and CT.answer_of(CT.words(tree_root) + CT.words(key)) == (tree_root, key)
+    points, ws = client.tree_open(tree_root, CT.SESSION, 0, 2, C.link_after(ROOT_F, ROOT_B))
+    assert ws[:2] == points
+    rep = [client.tree_open(tree_root, "t/rep0", k, 3 - k, root(30 + k))[0] for k in range(2)]
+    positions.record(root(1))
+    client.close()
+    assert host.ended() is None
+    commitment, roots = host.trusted()
+    assert roots == {"positions": (root(0), root(1)), "replay": ()}
+    log = R.session_files(host.directory)["log"]
+    assert [json.loads(line)["event"] for line in log] == ["commitment", "root", "release", "coin-tree", "tree-open",
+                                                           "tree-open", "tree-open", "root", "release"]
+    assert C.sample_link_first("positions", root(0), log[1:])
+    assert not C.sample_link_first("positions", root(1), log[1:])
+    assert json.loads((host.directory / R.CLOSE).read_text())["lines"] == len(log)
+    trees = C.coin_trees_of(log)
+    assert list(trees) == [tree_root.hex()] and trees[tree_root.hex()].record()["key"] == key.hex()
+    record = tree_record(nonce, tree_root, key, points, {"t/rep0": [(root(30), 3, rep[0]), (root(31), 2, rep[1])]})
+    lens = {t: len(r) for t, r in ROOT_B.items()}
+    assert C.session_tree_reason(trees, lens, record) is None
+    assert C.session_tree_reason(trees, {"t": 2 * lens["t"]}, record) == C.LINK_ROOT_LEN
+    record["streams"][0]["rounds"][1]["coins"][0] = f128(rep[1][0] ^ 1)
+    assert C.session_tree_reason(trees, lens, record) == ("its t/rep0 round 1 is not coins the challenger "
+                                                          "opened under its tree after that round's message")
+
+
+def _tree_frames(tree_root: str) -> dict[str, list[dict]]:
+    tree_open = {"type": "tree-open", "after": root(5).hex(), "n": 1, "round": 0, "stream": "t/rep0", "tree": tree_root}
+    return {
+        "a round ahead of its stream's next": [{**tree_open, "round": 1}],
+        "a round opened twice": [tree_open, tree_open],
+        "a round past its block": [{**tree_open, "n": 4}],
+        "a stream the tree hasn't": [{**tree_open, "stream": "u/rep0"}],
+        "a tree no one sampled": [{**tree_open, "tree": root(6).hex()}],
+        "a round after a short root": [{**tree_open, "after": root(5)[:32].hex()}],
+        "a round frame with an extra key": [{**tree_open, "retry": True}],
+        "a tree of another scheme": [{"type": "tree", "nonce": None, "spec": {**TREE_SPEC, "scheme": "coin-tree/v1"}}],
+        "a tree of a stream named twice": [{"type": "tree", "nonce": None,
+                                            "spec": {**TREE_SPEC, "streams": [CT.SESSION, CT.SESSION]}}],
+        "a tree past the coin cap": [{"type": "tree", "nonce": None, "spec": {**TREE_SPEC, "block": C.MAX_BLOCK,
+                                                                               "rounds_log": C.MAX_ROUNDS_LOG}}],
+        "a tree under a short nonce": [{"type": "tree", "nonce": NONCE[:16].hex(), "spec": TREE_SPEC}],
+    }
+
+
+@pytest.mark.parametrize("case", sorted(_tree_frames("")))
+def test_a_tree_frame_out_of_its_form_or_order_is_refused_and_ends_the_session(tmp_path, signer, case):
+    """A coin tree's frames are refused as the session's own coins are: each round of each stream once, in order, at
+    most its block, after 64 bytes, of a tree the challenger sampled from a spec it takes; the refusal ends the
+    session."""
+    host = Host(tmp_path, signer, closed=True)
+    with socket.create_connection(host.listener.getsockname()) as s:
+        s.sendall(frame({"type": "hello"}))
+        assert reply(s)["type"] == "commitment"
+        s.sendall(frame({"type": "tree", "nonce": NONCE.hex(), "spec": TREE_SPEC}))
+        sampled = reply(s)
+        assert sampled["type"] == "tree"
+        frames = _tree_frames(sampled["tree"]["root"])[case]
+        for f in frames[:-1]:
+            s.sendall(frame(f))
+            assert reply(s)["type"] == "tree-coins"
+        s.sendall(frame(frames[-1]))
+        answer = reply(s)
+        assert answer["type"] == "refused"
+    assert host.ended() == answer["reason"]
+    assert host.error is None
+    lines = R.log_lines(host.directory / R.RELEASES)
+    assert len(C.coin_trees_of(lines)[sampled["tree"]["root"]].opened) == len(frames) - 1
+
+
+def _tree_server(answer):
+    """A client over a socketpair to a server that answers its hello with a commitment, its tree frame with
+    ``answer("tree", frame)`` and its tree-open frame with ``answer("tree-open", frame)``."""
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("host"))
+    a, b = socket.socketpair()
+
+    def run() -> None:
+        wire = R._Wire(a)
+        with a:
+            wire.recv()
+            wire.send({"type": "commitment", "commitment": ch.commitment.to_json()})
+            for kind in ("tree", "tree-open"):
+                if not a.recv(1, socket.MSG_PEEK):
+                    return  # the client hung up on a reply it refused
+                wire.send(answer(kind, wire.recv()))
+
+    t = threading.Thread(target=run)
+    t.start()
+    return R.RemoteChallenger(b), t
+
+
+def _honest_tree(other: bool = False):
+    """The answers of a challenger that samples the asked tree (another tree when `other`, under the nonce asked for)
+    and opens its rounds."""
+    sampled: list[CT.CoinTree] = []
+
+    def answer(kind: str, head: dict) -> dict:
+        if kind == "tree":
+            ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("tree"))
+            tree, _ = ch.sample_tree(head["spec"], bytes.fromhex(head["nonce"]))
+            sampled.append(ch.sample_tree(head["spec"], bytes.fromhex(head["nonce"]))[0] if other else tree)
+            return {"type": "tree", "tree": {"key": tree.key.hex(), "nonce": tree.nonce.hex(), "root": tree.root().hex()}}
+        stream = TREE_SPEC["streams"].index(head["stream"])
+        words = sampled[0].open(stream, head["round"], head["n"])[1]
+        return {"type": "tree-coins", "tree-coins": [f128(w) for w in words]}
+    return answer
+
+
+@pytest.mark.parametrize("answer, why", [
+    (_honest_tree(other=True), "do not open its coin tree"),
+    (lambda kind, head: {"type": "tree", "tree": {"key": "00" * CT.KEY_BYTES, "nonce": "00" * CT.NONCE_BYTES,
+                                                  "root": root(1).hex()}}, "not under the nonce asked for"),
+    (lambda kind, head: {"type": "tree", "tree": {"key": "ff" * CT.KEY_BYTES, "nonce": NONCE.hex(),
+                                                  "root": root(1).hex()}}, "bit 2047 clear"),
+])
+def test_the_client_refuses_a_tree_or_round_that_isnt_the_one_asked_for(answer, why):
+    client, t = _tree_server(answer)
+    with pytest.raises(C.CoinError, match=why):
+        tree_root = client.tree(TREE_SPEC, NONCE)[1]
+        client.tree_open(tree_root, "t/rep0", 0, 2, root(5))
+    t.join()
+    with pytest.raises(C.CoinError, match="session ended"):
+        client.open("positions", 0, root(0))
+
+
+def test_the_client_takes_an_honest_round_and_its_coins():
+    client, t = _tree_server(_honest_tree())
+    tree_root = client.tree(TREE_SPEC, NONCE)[1]
+    coins, ws = client.tree_open(tree_root, "t/rep0", 0, 2, root(5))
+    assert len(coins) == 2 and ws[:2] == coins
+    client._wire.sock.close()
+    t.join()
+
+
 def _scripted(n: int, answer):
     """A client over a socketpair to a server that sends the challenger's commitment, reads `n` open frames and only
     then answers them with the frames `answer(openings)` gives, the honest openings in the order asked: so the client
@@ -636,6 +801,84 @@ def test_a_batch_past_its_bound_is_refused_before_a_frame_is_written(tmp_path, s
 
     _, got, why = _served(tmp_path / "s", signer, ask)
     assert why is None and [(o.label, o.index) for o in got] == [("positions", 0)]
+
+
+def test_the_release_log_takes_lines_up_to_its_caps_and_refuses_past_them(tmp_path):
+    """v2 refuses a release log past `MAX_LOG_LINES` lines (`coins.LIMITS`) or with a line past `MAX_LOG_LINE`
+    characters, so `_append`, the one place the log grows, writes the line that fills either and refuses, writing
+    nothing, a batch past them."""
+    path = tmp_path / R.RELEASES
+    with open(path, "a", encoding="utf-8") as log:
+        lines = ["x"] * (C.MAX_LOG_LINES - 2)
+        R._append(log, lines, ["a" * C.MAX_LOG_LINE], "the coin")
+        with pytest.raises(C.CoinError, match=f"at most {C.MAX_LOG_LINE} characters, so the coin stays on the host"):
+            R._append(log, lines, ["a" * (C.MAX_LOG_LINE + 1)], "the coin")
+        with pytest.raises(C.CoinError, match=f"at most {C.MAX_LOG_LINES} lines, so the coin stays on the host"):
+            R._append(log, lines, ["b", "c"], "the coin")
+        R._append(log, lines, ["b"], "the coin")
+        assert len(lines) == C.MAX_LOG_LINES and coins_within({"session": {"log": lines}})
+        with pytest.raises(C.CoinError, match=f"at most {C.MAX_LOG_LINES} lines, so the coin stays on the host"):
+            R._append(log, lines, ["c"], "the coin")
+    assert path.read_text() == "a" * C.MAX_LOG_LINE + "\nb\n" and len(lines) == C.MAX_LOG_LINES
+    assert not coins_within({"session": {"log": lines + ["c"]}})
+
+
+def test_a_coin_whose_release_line_is_past_its_cap_stays_on_the_host_and_ends_the_session(tmp_path, signer):
+    """A layout label long enough that its coin's release log line passes `MAX_LOG_LINE` characters: the challenger
+    refuses the coin and ends the session, signed, its log holding its head alone."""
+    label = "a" * C.MAX_LOG_LINE
+
+    def ask(client):
+        with pytest.raises(C.CoinError, match=f"at most {C.MAX_LOG_LINE} characters, so a+ coin 0 stays on the host"):
+            C.LiveRecord(client, label, itertools.count().__next__).record(root(0))
+
+    log, _, why = _served(tmp_path / "s", signer, ask, [(label, 1)])
+    assert why.endswith(f"at most {C.MAX_LOG_LINE} characters, so {label} coin 0 stays on the host")
+    assert [json.loads(line)["event"] for line in log.decode().splitlines()] == ["commitment"]
+    close = json.loads((tmp_path / "s" / R.CLOSE).read_text())
+    assert (close["ended"], close["lines"]) == (why, 1)
+
+
+def test_refused_hellos_are_logged_up_to_their_cap_and_the_next_past_it_is_refused(tmp_path):
+    """v2 refuses a session past `MAX_HELLOS` refused hellos (`coins.LIMITS`), so `log_hello` logs the last its evidence
+    holds and refuses the next, writing nothing; serve.py then ends the session (`test_serve.py`)."""
+    why = "the hello's secret is not the session's"
+    R.log_hello(tmp_path, C.MAX_HELLOS - 1, why)
+    with pytest.raises(C.CoinError, match=f"refused {C.MAX_HELLOS} hellos, the most a session's evidence holds"):
+        R.log_hello(tmp_path, C.MAX_HELLOS, why)
+    assert [json.loads(line) for line in R.hello_lines(tmp_path / R.HELLOS)] == [{"n": C.MAX_HELLOS - 1, "reason": why}]
+    assert coins_within({"session": {"hellos": ["h"] * C.MAX_HELLOS}})
+    assert not coins_within({"session": {"hellos": ["h"] * (C.MAX_HELLOS + 1)}})
+
+
+def test_a_coin_tree_at_its_coin_cap_is_sampled_and_the_logs_tree_lines_stop_at_theirs():
+    """`sample_tree` samples a tree of `MAX_TREE_COINS` coins (here up to its first read of entropy, which this test's
+    entropy refuses) and refuses one past them before it reads any (`_tree_frames`' "a tree past the coin cap"); the
+    release log's `MAX_TREE_LINES`-th coin-tree line is written (`_tree_line`) and the next refused."""
+    class Read(Exception):
+        pass
+
+    base, armed = entropy("cap"), []
+
+    def source(n: int) -> bytes:
+        if armed:
+            raise Read
+        return base(n)
+
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, source)
+    armed.append(True)
+    at = {**TREE_SPEC, "block": C.MAX_BLOCK, "rounds_log": 9, "streams": [CT.SESSION, "t/rep0"]}
+    assert (len(at["streams"]) << at["rounds_log"]) * at["block"] == C.MAX_TREE_COINS
+    with pytest.raises(Read):
+        ch.sample_tree(at, NONCE)
+    with pytest.raises(C.CoinError, match=f"holds at most {C.MAX_TREE_COINS} coins"):
+        ch.sample_tree({**at, "streams": [CT.SESSION, "t/rep0", "t/rep1"]}, NONCE)
+
+    ch = C.LiveChallenger(SCHEME, 0, FAMILIES, entropy("lines"))
+    ch._tree_lines = C.MAX_TREE_LINES - 1
+    tree, _ = ch.sample_tree(TREE_SPEC, NONCE)
+    with pytest.raises(C.CoinError, match=f"at most {C.MAX_TREE_LINES} coin-tree lines"):
+        ch.open_tree(tree.root().hex(), CT.SESSION, 0, 1, root(5))
 
 
 def test_a_root_the_prover_rewrites_is_refused_against_the_challengers_log(tmp_path, signer):
@@ -943,7 +1186,7 @@ def test_two_sessions_under_one_key_cant_both_pass_for_one_window(tmp_path, sign
 
 
 def test_one_root_gets_one_session_whichever_schema_opens_it(tmp_path, signer):
-    """RT4-INT-24: a v1 open names its window by Commit and a period label; a v2 open of the same root later would give
+    """A v1 open names its window by Commit and a period label; a v2 open of the same root later would give
     it a second draw of coins, so the ledger is refused for both. A v1 open alone is refused too: it names no prover and
     seals no refused hellos. And no v1 entry follows a v2 one."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer, schema=C.LEDGER_SCHEMA_V1)
@@ -968,7 +1211,7 @@ def test_one_root_gets_one_session_whichever_schema_opens_it(tmp_path, signer):
 
 @pytest.mark.parametrize("leaves", [[3, 3], [5, 2], [4, 6, 6, 7]])
 def test_a_ledger_that_reuses_or_goes_back_on_a_leaf_is_refused(leaves):
-    """RT4-INT-27: a host whose key state and ledger are restored signs its next entry at a leaf it has signed at
+    """A host whose key state and ledger are restored signs its next entry at a leaf it has signed at
     already; the key signs at increasing leaves, so a ledger whose leaves don't increase was forked."""
     key_sha512 = hashlib.sha512(lms.public_key(PINNED)).hexdigest()
 
@@ -1116,7 +1359,7 @@ def _period_close(ledger: Ledger, windows: list, complete: bool, name: str = "p-
 def test_a_ledger_with_periods_is_read_and_a_close_that_misstates_its_windows_is_refused(tmp_path, signer):
     """The operator's signed `period-open` and `period-close` entries pass through the ledger's check
     (`verify_periods`): a
-    period's windows are the opens of its lane between them, and a close that lists other windows or outcomes is
+    period's windows are the opens of its prover between them, and a close that lists other windows or outcomes is
     refused, as is a period entry under another key or under v1."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer)
     _period_open(ledger)
@@ -1198,7 +1441,7 @@ def test_a_reserved_window_is_read_when_its_open_binds_its_reserve(tmp_path, sig
 
 
 def test_a_period_commits_its_cap_and_circuit_and_holds_no_window_past_its_cap(tmp_path, signer):
-    """A period's open commits the most windows it may hold and its circuit (compute-accounting's CircuitWorkPeriod): a
+    """A period's open commits the most windows it may hold and its circuit (compute-accounting's CircuitWorkMonitoringPeriod): a
     window past the cap is refused, as is a cap or circuit of another form, and a window in a period that committed
     neither (opened before they were required) isn't read, since its cap is unknown."""
     one = Ledger(tmp_path / "one.jsonl", signer)
@@ -1321,7 +1564,7 @@ def _pinned_host(tmp_path, pinned: str, **seal) -> Host:
 
 
 def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(tmp_path):
-    """RT4-INT-40: the open names the commit its host ran and seals the host's pins log as it stood, and
+    """The open names the commit its host ran and seals the host's pins log as it stood, and
     `pinned_session` takes the session only when one of the sealed lines pins that commit. An honest session at a main
     commit is read under any later extension of the log; a commit pinned off main, or only after the open, is refused
     naming the fix; so are a missing, malformed, cut or edited pins log and an open that seals none."""
@@ -1339,14 +1582,14 @@ def test_a_session_counts_only_from_a_tree_the_hosts_pins_log_records_as_mains(t
         off = R.ledger_lines(_pinned_host(tmp_path / pin, pin).ledger.path)
         refused(off, later, f"session {RESERVED_SESSION} ran commit {pin}, which the host's pins log doesn't record "
                             "as a commit of main's history: repin the challenger host to a commit origin/main "
-                            "contains (vy-challenger-pin) and rerun the window there")
+                            "contains (with its pin command) and rerun the window there")
     refused(lines, None, C.NO_PINS)
     refused(lines, "\n".join(PINS), f"the host's pins log is malformed: {C.PINS_FORM}")
     for bad in (PINS[1].replace("c0", "C0"), PINS[1].replace(":", ": "), PINS[1][:-1] + ',"x":1}',
                 C.ledger_text({"commit": MAIN_PIN, "main": "e1" * 20, "pinned_utc": "2026-02-30T13:00:00Z"}), 5):
         refused(lines, [PINS[0], bad], f"the host's pins log line 1 is malformed: {C.PINS_FORM}")
     refused(lines, PINS[:1], f"the host's pins log has 1 lines, fewer than the 2 the open of session "
-                             f"{RESERVED_SESSION} sealed: take infra's newest published pins log")
+                             f"{RESERVED_SESSION} sealed: take the auditor host's operator's newest published pins log")
     edited = [PINS[0], C.pin_line(MAIN_PIN, "e2" * 20, "2026-10-21T13:00:00Z")]
     for log in (edited, PINS[::-1]):
         refused(lines, log, f"the host's pins log is not the one the open of session {RESERVED_SESSION} sealed: its "
@@ -1377,7 +1620,7 @@ MERGE = "1018753ee5ff8c659fa8e8c5ccbc31b0d2b1a366"
 
 def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_line(tmp_path, signer):
     """`credited_session` reads the window's session through `pinned_session`, the pin first, then the circuit.
-    A session whose open names `PIN`, main's tip when vy-challenger-1 was repinned and the one line of the pins log it
+    A session whose open names `PIN`, main's tip when the challenger host was repinned and the one line of the pins log it
     published, sealed in the open, is credited against the auditor's own first-parent list of main. Refused, each with
     its reason and no fallback to `audited_session`: a pin on main's first-parent line the log doesn't record, an absent
     log, an open that seals none, no copy of main or a malformed one, and a logged pin that is in main's history but not
@@ -1406,7 +1649,7 @@ def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_l
                                "which is not on main's first-parent line in the verifier's copy (`git rev-list "
                                "--first-parent origin/main`): a branch commit merged into main is in main's history but "
                                "no tree main's check ran on; repin the challenger host to a commit on main's "
-                               "first-parent line (vy-challenger-pin) and rerun the window there")
+                               "first-parent line (with its pin command) and rerun the window there")
     for pin in BRANCH_PINS:
         assert "not on main's first-parent line" in C.first_parent_reason(RESERVED_SESSION, pin, MAIN)
     assert C.first_parent_reason(RESERVED_SESSION, PIN, MAIN) is None
@@ -1428,8 +1671,8 @@ def test_a_session_is_credited_only_from_a_logged_commit_on_mains_first_parent_l
     assert C.pins_reason(RESERVED_SESSION, opened, HOST_PINS) is None
     assert C.pins_reason(RESERVED_SESSION, {k: v for k, v in opened.items() if k != "pinned"}, HOST_PINS) == (
         f"session {RESERVED_SESSION} ran commit None, which the host's pins log doesn't record as a commit of main's "
-        "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the window "
-        "there")
+        "history: repin the challenger host to a commit origin/main contains (with its pin command) and rerun the "
+        "window there")
 
 
 def test_the_ledger_is_the_longest_of_the_operators_heads_when_each_extends_the_others(tmp_path, signer):
@@ -1486,7 +1729,7 @@ def test_the_pin_is_read_from_the_operators_key_record():
 
 
 def test_a_release_log_rewritten_after_its_end_is_refused(tmp_path, signer):
-    """RT4-INT-26: the round roots in the release log rewritten after the session's end, to roots chosen after every
+    """The round roots in the release log rewritten after the session's end, to roots chosen after every
     coin: the log is no longer the one the ledger's end sealed (nor the one the close signs)."""
     host = Host(tmp_path, signer)
     honest(host)

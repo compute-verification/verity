@@ -3,8 +3,15 @@
 layout mode its rows are the logical rows moved; and it refuses a map that sends two columns to one position, moves an
 input row, breaks an output group, or places a column past the constant.
 -/
-import Flock.TmplAt
-import Flock.Test.Tmpl
+module
+
+public import Flock.NetAt
+public import Flock.Test.Tmpl
+public import Flock.TmplAt
+meta import Flock.Test.Tmpl
+meta import Flock.TmplAt
+
+@[expose] public section
 
 namespace Flock.Test.NetAt
 

@@ -1,4 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # The lengths of a decoded proof
@@ -11,6 +27,8 @@ The reader program is stepped through in the logic of `Post x Q`: every value th
 and `post_bind_caps` step over a `vecExact`, a vector of digests, the ring switches and the recursive caps' loop, with
 their lengths.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZL
 
@@ -172,7 +190,7 @@ theorem post_bind_caps {β : Type} {R n : ℕ} {want : ℕ → ℕ} {w : ℕ →
       vecExact (want i) (Reader.bytes n) (w i) >>= fun x => pure (ForInStep.yield (s.push x))) >>= f) Q :=
   post_bind fun a ha => h a (yields_capsLoop ha).1 (yields_capsLoop ha).2
 
-/-- A ring switch's `s_hat_v` (PROTOCOL.md §8): 128 values, then a zero grinding nonce. -/
+/-- A ring switch's `s_hat_v` (`Flock.Proof`): 128 values, then a zero grinding nonce. -/
 theorem post_switch :
     Post (do
         let v ← vecExact 128 f128 "s_hat_v"

@@ -146,7 +146,7 @@ class Record:
 def timing(cubin, reps: int = 10) -> dict:
     """Per-unit noise on the GPU against the int8 GEMM of the same M x N x K call, both from CUDA events."""
     import torch
-    import receipts as RC
+    from verity_vllm.protocols.pouw.h1 import receipts as RC
 
     def clock(fn, n: int) -> float:
         fn()
@@ -426,7 +426,7 @@ def run(a: argparse.Namespace) -> dict:
                              **({"commitment": cs.commitment.to_json()} if live else {})})
     workers = a.workers or max(2, min(48, len(os.sched_getaffinity(0)) - 2))
     pool = mp.get_context("spawn").Pool(workers)
-    import receipts as RC
+    from verity_vllm.protocols.pouw.h1 import receipts as RC
 
     cubin = RC.Cubin(a.cubin) if a.cubin else None
     torch.backends.cuda.matmul.allow_tf32 = False
@@ -520,7 +520,7 @@ def run(a: argparse.Namespace) -> dict:
     round_log: list[dict] = []
     if live:
         from verity.core.protocols.pouw import window as Wd
-        from verity.core.protocols.pouw.circuit import h1tile as HT
+        from verity.ml.protocols.pouw.circuit import h1tile as HT
         from verity.core.protocols.sampled_proofs import challenger as Ch
         live_salt = cs.salt(registration)
         rounds = cs.rounds
@@ -739,7 +739,9 @@ def run(a: argparse.Namespace) -> dict:
                       for r, root, o in zip(round_log, roots, openings)]
         coins.update(scheme=Wd.LIVE_SCHEME, commitment=cs.commitment.to_json(), salt_coin=live_salt.to_json(),
                      draw_coin=draw.to_json(), draw_after=draw_after.hex(),
-                     draw_reason=Ch.live_reason(commitment, draw, Wd.DRAW, 0, draw_after),
+                     draw_session=cs.draw_session and cs.draw_session.id, draw_commitment=cs.draw_commitment.to_json(),
+                     draw_reason=Wd.draw_epoch_reason(cs.draw_commitment)
+                     or Ch.live_reason(cs.draw_commitment, draw, Wd.DRAW, 0, draw_after),
                      rounds=round_log, rounds_reason=Wd.rounds_reason(commitment, roots, openings),
                      rounds_cover_steps=[r["round"] for r in round_log] == list(range(s_max)),
                      roots_and_keys_recomputed=all(recomputed), coin_bytes=len(openings[0].coin) if openings else None,
@@ -757,7 +759,7 @@ def run(a: argparse.Namespace) -> dict:
         coins["verify"] = ("the verifier's check: coins.py check --challenger-out <the session as the gate publishes it> "
                            "--ledger <each head of the auditor's ledger infra published> --pins <the host's pins log "
                            "infra published> --main <the verifier's git rev-list --first-parent origin/main> "
-                           "--manifest manifest.json "
+                           "--manifest manifest.json --draw-out <the draw session as the gate publishes it> "
                            "--key-record <the challenger's "
                            "challenger-key/v1 record> --period <the window's period> --root <the window's root>, from the "
                            "challenger's own record, never this one" if cs.source == "off-node"
@@ -864,7 +866,7 @@ def gate(a, calls: list[dict], data: list[dict], levels: list, layers: list, mod
     """Units picked on `rng` (`gate_rng`'s, from the sampling coin, when live) against the gated `h1tile.reference`, and the
     controls: per site a live and a dead unit of real steps' calls, then units of empty steps (dead)."""
     import torch
-    import receipts as RC
+    from verity_vllm.protocols.pouw.h1 import receipts as RC
 
     picks = []
     for site in SITES:

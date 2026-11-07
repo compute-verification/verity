@@ -1,3 +1,5 @@
+module
+
 /-!
 # The FP8 tensor-core steps: `verity.ml.circuits.silicon.total_fp8`
 
@@ -11,6 +13,8 @@ operand classes and product are `total_fp8.e5m2_class`, `e5m2_product_total` and
 
 An operand is a byte `Code`; the accumulator a word below `2^32`.
 -/
+
+@[expose] public section
 
 namespace Evaluate.TC.Fp8Atom
 

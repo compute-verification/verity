@@ -5,17 +5,17 @@ at least this noise, so 1 + noise / plain is a lower bound on its gamma.
 
     python h1bench.py --lib h1noise.so --out OUT [--reps 5] [--ms ...] [--linears ...] [--js 1,4]
 
-Units are the call's full 32 x 32 tiles (`served_h1/receipts.units`); below 32 rows a call has none, so M = 1 is counted
+Units are the call's full 32 x 32 tiles (`pouw_h1_receipts.units`); below 32 rows a call has none, so M = 1 is counted
 as one padded row tile (an assumption: the padding rule for decode is open). Every unit is counted live (the
 dead-unit share is the credit's to count). The 4 SHA-512 compressions a unit spends on seed_j and sigma_R themselves are
 not timed.
 
 Arms (each one CUDA graph; noise arms launch the seed_j stream then the sigma_R stream):
-  ca-sink, ca-write     served_h1/noise.cu's kernel, hashing only (one XOR word a block) / writing the noise
+  ca-sink, ca-write     pouw_cuda/noise.cu's kernel, hashing only (one XOR word a block) / writing the noise
   mid-sink-jJ, mid-write    h1noise.cu's midstate kernel, J blocks a lane
   int_mm, cutlass       the plain call: torch._int_mm (17-row padding below 17) and vLLM's cutlass_scaled_mm
 
-Gates before any timing (a failed gate exits 4 and times nothing): ca-write's noise against hashlib on sampled blocks;
+Gates before any timing (a failed gate exits 4 and times nothing): ca-write's noise against seeds.noise_block on sampled blocks;
 mid's write equal to ca-write's on every block; each sink equal to the XOR fold of ca-write's; 0xA5 poison before each run and a
 no-write control (a launch over zero units) that must be rejected.
 """
@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import ctypes
-import hashlib
 import json
 import math
 import statistics
@@ -39,9 +38,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from hb_kbench import LINEARS, MS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
-from verity.core.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
-NOISE_TAG = b"verity/pouw/noise/v1".ljust(24, b"\0")
 KEY_BLOCKS = 32
 WRITE_CAP = 4 << 30
 
@@ -110,7 +109,7 @@ def gate(lib: Lib, nb: int, js: list[int], gen: torch.Generator, samples: int = 
     bad = 0
     picks = [(0, 0), (S - 1, nb - 1)] + [(int(g.integers(S)), int(g.integers(nb))) for _ in range(samples)]
     for u, t in picks:
-        d = hashlib.sha512(NOISE_TAG + seed_bytes(host[u]) + t.to_bytes(8, "big")).digest()
+        d = SD.noise_block(seed_bytes(host[u]), t)
         want = np.frombuffer(d, dtype=">u4").astype(np.uint32)
         got = out_ca[u, t].cpu().numpy().view(np.uint32)
         bad += int((want != got).sum())

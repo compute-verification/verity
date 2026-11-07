@@ -1,6 +1,9 @@
-import PousCheck.RunProtocol
-import MemoryChallenger.WipeProtocol
-import Properties.Pous.EndToEndAt
+module
+
+public import PousCheck.RunProtocol
+public import MemoryChallenger.WipeProtocol
+public import Properties.Pous.EndToEndAt
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUS and the wipe as components: what their compiled checks' acceptance gives the guarantees
@@ -42,6 +45,8 @@ the compiled check's type: at the compiled check each is its guarantee (`Iff.rfl
 everything (`AcceptsAll`) each is false, which is each guarantee's nontrivial lemma. The digests have none: they are
 equations about the code's digest, and no check takes part in them.
 -/
+
+@[expose] public section
 
 open MemoryChallenger MemoryChallenger.Properties
 open PousCheck PousCheck.Properties

@@ -1,5 +1,6 @@
-import Flock.RecVStar
-import Flock.Record
+module
+
+public import Flock.RecVStar
 
 /-!
 # live-verifier at the inner session: the coin server's records of it
@@ -14,6 +15,8 @@ coins, where a map `InnerRecordMap` says what each round fixes in them.
 The records are read through `held`, the verifier's hold of the inner transcript (`Recursion.innerCommitsAt` against
 R's registration, at the guarantee), so this module reads only the executable: `Flock.Premises` abbreviates it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Assumptions
 

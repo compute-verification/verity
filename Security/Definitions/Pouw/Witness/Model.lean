@@ -1,4 +1,6 @@
-import Definitions.Pouw.Game.Defs
+module
+
+public import Definitions.Pouw.Game.Defs
 
 /-!
 # The witness cost model (trusted definitions; used only by the satisfiability witnesses)
@@ -11,6 +13,8 @@ commits to (`some`): committing a unit's transcript costs that unit's GEMM, and 
 Every function of the oracle answers is a program here, so the model forbids nothing; it only prices commitments.
 It is not M_4090, where committing (hashing) is free. What this witness shows and does not show: `NOTES.md`.
 -/
+
+@[expose] public section
 
 namespace Pouw
 

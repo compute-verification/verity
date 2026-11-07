@@ -1,4 +1,9 @@
-import Proofs.Flock.Soundness.Headline
+module
+
+public import Proofs.Flock.Soundness.Headline
+public import Proofs.Flock.Soundness.CROnly.Defs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Binding.E2E
 import Proofs.Flock.Soundness.CROnly.Link
 
 /-!
@@ -19,6 +24,8 @@ At the best budget, `q³ = t'·2^512`, the link term's `2t'(1 + k)/2^256` become
 verifier checks `final_c` in the clear. None is about `--zk`, whose session model (`Discharge/ZkSession`) receives
 `final_c'` before the inner proof, which the verifier does not.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

@@ -6,8 +6,31 @@ two (`sha_ne_hm`). So the block row at `x` is `[src]`, and the block holds the c
 row prefix's midstate, each later `cv` the previous output, the `hm96` slot's `cv` the last output and its `pad` the
 padding block (`row_copies_of_sat`), the constant bits read from the pin and the forced-zero row.
 -/
-import Proofs.Flock.Soundness.Discharge.Hm.Copies
-import Proofs.Flock.Soundness.Discharge.Hm.SatEx
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hm.Copies
+public import Proofs.Flock.Soundness.Discharge.Hm.SatEx
+public import Proofs.Flock.Soundness.Discharge.Hm.Accept
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Verifier.HmNets
+
+@[expose] public section
 
 open Flock FlockLevel3
 

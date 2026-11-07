@@ -1,5 +1,12 @@
+module
+
+public import Definitions.Population.Oblivious
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Proofs.Population.Pointer
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Fintype.BigOperators
 import Proofs.Population.Oblivious
-import Proofs.Population.Leakage
 import Proofs.Population.Work
 
 /-!
@@ -20,6 +27,8 @@ What these do not give is isolation: they count the egress a faulty proof block'
 from. `vm_honest_wiring_fails` is the pointer machine meeting this bound (its pointer step's cone holds every output)
 while the honest wiring's upstream would bound it by `2`.
 -/
+
+@[expose] public section
 
 namespace Population.DynPopulation
 

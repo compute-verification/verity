@@ -1,13 +1,46 @@
-import Definitions.Accounting.TS.Play
+module
+
+public import Definitions.Accounting.TS.Play
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A window's proofs: what (I8) reads of the proof service (trusted)
+# A window's proofs: what (I8) reads of the proof system (trusted)
 
-EPS1-SPEC §2.7's (I8), `Accounting.Assumptions.TS.ProofsSound`, reads three pieces of the proof service and one of the
+EPS1-SPEC §2.7's (I8), `Accounting.Assumptions.TS.ProofsSound`, reads three pieces of the proof system and one of the
 TS model's accounting:
 
-* **binding at `δ_bind`** (`ProofLayer.BindingAt`): an accepted proof opens its round's leaves (hm96 rows in
-  frame-v3-sha512 trees, committed before the round's σ) to the values the round committed (`ProofLayer.Moved`, its
+* **binding at `δ_bind`** (`ProofLayer.BindingAt`): an accepted proof opens its round's leaves (hm96 rows or keyed
+  leaves in frame-v3-sha512 trees, committed before the round's σ) to the values the round committed (`ProofLayer.Moved`, its
   failure). Its fork form (`ProofLayer.Forked`, as ruled): two runs off one commitment, both accepted, open it
   differently;
 * **proof soundness at `δ_ZK`**: an accepted proof's opening satisfies its relation on its path, outside `δ_ZK` a proof
@@ -36,6 +69,8 @@ for every prover. The relation and rightness read the path instead (`ProofLayer.
 relation reads σ_w (the salt its unit takes) and the keyed words its proofs give on the path, which it fixes from the
 round's leaves and σ_w, so they need no binding of their own.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS
 

@@ -1,4 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.At
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
 
 /-!
 # The rows at the `--zk` tables, with or without shared rows
@@ -9,6 +26,8 @@ has them (`Flock.Registered.check` refuses a registered port that is not a table
 `Integrate.table_bcSiteS`, and `laySh`, `rowsSh` are the shadow layout and rows `layZAt` and `rsZAtS` move to the
 `--zk` tables, where the registered reads (`Registered.Reads`) are read.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

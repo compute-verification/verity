@@ -1,10 +1,45 @@
-import Proofs.Flock.Claims.Recursion.VStarBuild
-import Proofs.Flock.Claims.Recursion.NextRCounts
-import Proofs.Flock.Recursive.HoloSchedCheck
-import Proofs.Flock.C3.Reps.RoundOfHolo
+module
+
+public import Proofs.Flock.C3.Reps.AtList
+public import Proofs.Flock.C3.Reps.RoundOfHolo
+public import Proofs.Flock.Claims.Recursion.VStarBuild
+public import Proofs.Flock.Recursive.HoloSchedCheck
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Reps.RoundLinks
-import Proofs.Flock.C3.Reps.AtList
-import Proofs.Flock.VBridge.Family.Structure
+import Proofs.Flock.Claims.Recursion.NextRCounts
+import Proofs.Flock.Claims.Recursion.NextRFits
+import Proofs.Flock.Recursive.HoloRepCoins
 
 /-!
 # V\*'s inner parts' port names (`innerPorts_named`)
@@ -22,6 +57,8 @@ Every port of an inner part at the compiled statement (`partAt x s = some (.inne
 * **The count** (`vrounds_size`, `repRounds_countP`, `holoRepRounds_countP`): `repRounds` absorbs at `N` of its rounds
   (`m ≥ 22`), and `holoRepRounds` at one more.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.VStarBuild
 
@@ -414,7 +451,7 @@ theorem inner_mem {i : RecVStar.Inner} {vs : Array _root_.VStar.Stmt} (h : RecVS
     {nm : String} {pt : _root_.VStar.Part} (hs : vs[s]? = some (.inner j nm pt)) :
     ∃ sp ps, _root_.VStar.Algebra.specOf (FlockC3.Reps.vshOf i) i.holo = .ok sp ∧ _root_.VStar.parts sp = .ok ps ∧
       pt ∈ ps := by
-  obtain ⟨-, -, -, -, -, -, A, C, -, -, -, -, -, hA, hC, K, n, hK, -, rfl⟩ := FlockC3.Reps.list_ok h
+  obtain ⟨-, -, -, -, -, -, A, C, -, -, -, -, -, hA, hC, K, L, n, hK, -, hL, rfl⟩ := FlockC3.Reps.list_ok h
   obtain ⟨sch, sp, ps, -, hsp, hps, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   refine ⟨sp, ps, hsp, hps, ?_⟩
   have hm := Array.mem_of_getElem? hs
@@ -429,8 +466,7 @@ theorem inner_mem {i : RecVStar.Inner} {vs : Array _root_.VStar.Stmt} (h : RecVS
         exact Array.getElem_mem hj'
     · rcases FlockC3.Reps.candidate3_kinds hC _ hm with ⟨_, _, he⟩ | ⟨_, _, _, _, he⟩ |
         ⟨_, _, _, _, _, _, he⟩ <;> cases he
-  · obtain ⟨_, _, he⟩ := FlockC3.VStarList.caps_cap hK n _ hm
-    cases he
+  · rcases FlockC3.VStarList.tail_cases hK hL n _ hm with ⟨_, _, he⟩ | ⟨_, _, _, he⟩ <;> cases he
 
 /-! ## The names -/
 

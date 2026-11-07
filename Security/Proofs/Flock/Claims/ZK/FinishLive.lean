@@ -1,4 +1,42 @@
-import Proofs.Flock.Claims.ZK.FinishBridge
+module
+
+public import Proofs.Flock.Claims.ZK.FinishBridge
+public import Batteries.Lean.LawfulMonadLift
+import Batteries.Lean.LawfulMonad
+import Flock.With.SimWalk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FinishLig
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The live inner rep runs the firewall's rep
@@ -21,10 +59,12 @@ sent, then `repFw`'s inner proof (`innerP`), its rounds sent live. `repFw` itsel
 * **`repFw_parts`**: a `repFw` run that returns is its `repCons`, no constraint failing on the pads, then `innerP` on
   `repCons`'s proof, constraints and transcript.
 * **`innerLive_eq`**, **`innerProg_run`**: `innerLive` is its pads commitment, then `repCons` and the tail
-  (`innerTail`: the round check, the constraints sent, `innerP` live); where the port's `repCons` returns after the
+  (`innerTail`: the round and `final_c` check, the constraints sent, `innerP` live); where the port's `repCons` returns after the
   request's coins, the live rep runs the tail on `repCons`'s proof and constraints from the port's transcript. So the
   live inner proof is `repFw`'s `innerP` on the same proof, constraints and transcript, its rounds answered live.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Finish
 
@@ -251,33 +291,37 @@ theorem repFw_parts (C' : Array (Array F128)) (hs : Hashes (StateT ℕ V)) (st :
 
 /-! ## The live inner rep -/
 
-/-- **The live inner rep after its `repCons`** (`innerLive`'s): the round check, the constraints sent, then `repFw`'s
-inner proof on the proof `p` and constraints `cons`, its rounds sent live. -/
+/-- **The live inner rep after its `repCons`** (`innerLive`'s): the round and `final_c` check (`consWhy`), the
+constraints sent, then `repFw`'s inner proof on the proof `p` and constraints `cons`, its rounds sent live past
+`sent` and their coins held by `held`. -/
 def innerTail (ch : Frame.Chan) (t : Tab) (q : RepIn) (ic : InnerCommit) (p : Proof)
-    (cons : Array (String × Zk.Lin)) : TMW LiveM Unit := do
+    (cons : Array (String × Zk.Lin)) (sent : ℕ → ByteArray → IO (Option String))
+    (held : ℕ → Array F128 → IO (Option String)) : TMW LiveM Unit := do
   let k := (← getThe (Array (Array F128))).size
-  if k != q.coins.size then throwThe String s!"finish: the rep's PIOP and opening took {k} of its {q.coins.size} rounds of coins"
+  if let some why := consWhy q.coins.size k cons (padsOf q.draws).h then throwThe String why
   let b := consBytes cons
   ch.write ((s!"cons {b.size}\n").toUTF8 ++ b)
   ch.flush
-  let _ ← innerP (liveAsks ch q.coins true) (Hashes.ofSha512 Sha512.hash) (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0)
-    (padsOf q.draws) ic p.zerocheck.finalC cons
+  let _ ← innerP (liveAsks ch q.coins true sent held) (Hashes.ofSha512 Sha512.hash)
+    (Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0) (padsOf q.draws) ic p.zerocheck.finalC cons
 
 /-- **The live inner rep's program** at the pads commitment `ic`: `repCons` on the request's recorded coins, then
 `innerTail`. -/
-def innerProg (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : RepIn) (ic : InnerCommit) :
+def innerProg (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : RepIn) (ic : InnerCommit)
+    (sent : ℕ → ByteArray → IO (Option String)) (held : ℕ → Array F128 → IO (Option String)) :
     TMW LiveM Unit := do
   let (p, _, cons) ← repCons (liveAsks ch q.coins false) (fun lv g salt => pure (commitFw lv g salt)) t.st t.sch t.tPad
     rep dom t.g t.cm0 (claimsOf q.xs) (padsOf q.draws) ic q.vals t.extra t.lanePad
     (fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty))
-  innerTail ch t q ic p cons
+  innerTail ch t q ic p cons sent held
 
 /-- **`innerLive` is its pads commitment, then `innerProg`.** -/
-theorem innerLive_eq (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : RepIn) :
-    innerLive ch t rep dom q = (do
+theorem innerLive_eq (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : RepIn)
+    (sent : ℕ → ByteArray → IO (Option String)) (held : ℕ → Array F128 → IO (Option String)) :
+    innerLive ch t rep dom q sent held = (do
       let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) (padsOf q.draws) (saltAt q.draws.salts) :
         V InnerCommit) : LiveM InnerCommit)
-      let _ ← (innerProg ch t rep dom q ic).run (Transcript.init #[] dom)) := rfl
+      let _ ← (innerProg ch t rep dom q ic sent held).run (Transcript.init #[] dom)) := rfl
 
 /-- **The live inner rep runs `repFw`'s inner proof**: where the port's `repCons` (`repFw`'s, answered by `asksOf C'`,
 which is the request's coins `q.coins` below their count) returns the proof `p`, level-0 messages `zl`, constraints
@@ -285,6 +329,7 @@ which is the request's coins `q.coins` below their count) returns the proof `p`,
 `innerTail` on `p` and `cons` from `tr₁`, with `q.coins` recorded: the round check passes, and the inner proof is
 `innerP` on `repFw`'s own inputs (`repFw_parts`). -/
 theorem innerProg_run (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) (q : RepIn) (ic : InnerCommit)
+    (sent : ℕ → ByteArray → IO (Option String)) (held : ℕ → Array F128 → IO (Option String))
     (C' : Array (Array F128)) (hC : ∀ i < q.coins.size, C'[i]? = q.coins[i]?)
     (hm : t.st.merkle = MerkleScheme.hm96Sha512) {p : Proof} {zl : Zk.Level0Msgs} {cons : Array (String × Zk.Lin)}
     {tr₁ : Transcript}
@@ -292,8 +337,8 @@ theorem innerProg_run (ch : Frame.Chan) (t : Tab) (rep : ℕ) (dom : ByteArray) 
       (claimsOf q.xs) (padsOf q.draws) ic q.vals t.extra t.lanePad
       (fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty))).run (Transcript.init #[] dom)).run 0 =
         .ok (((p, zl, cons), tr₁), q.coins.size)) :
-    ((innerProg ch t rep dom q ic).run (Transcript.init #[] dom)).run #[] =
-      ((innerTail ch t q ic p cons).run tr₁).run q.coins := by
+    ((innerProg ch t rep dom q ic sent held).run (Transcript.init #[] dom)).run #[] =
+      ((innerTail ch t q ic p cons sent held).run tr₁).run q.coins := by
   unfold innerProg
   exact bind_repCons_live ch q.coins C' hC false t.st hm t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs) (padsOf q.draws)
     ic q.vals t.extra t.lanePad _ _ h _

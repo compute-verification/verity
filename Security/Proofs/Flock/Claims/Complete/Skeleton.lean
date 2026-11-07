@@ -1,7 +1,41 @@
-import Proofs.Flock.Claims.Complete.Coins
-import Proofs.Flock.Claims.Complete.Sim
-import Proofs.Flock.Claims.Complete.Verdict
-import Proofs.Flock.Claims.Scope.Matches
+module
+
+public import Proofs.Flock.Claims.Complete.Coins
+public import Proofs.Flock.Claims.Complete.Verdict
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Encode
+import Proofs.Flock.Claims.Scope.Sizes
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The completeness proof's skeleton
@@ -25,6 +59,8 @@ error `δc H` (`Claims.Flock.Complete H (deployPlain rel)`), given one goal per 
 * **The composition**: `Run.rep_ok` (`verifyRepWith_ok`), `Run.verdict_ok` (`verifyWith_ok`), `Run.checks_ok'`
   (`checks_ok`), then `Run.acc` (`run_acc_of`), and `complete_of_goals` (`complete_of`).
 -/
+
+@[expose] public section
 
 open Flock FlockDeploy Transcript
 
@@ -105,7 +141,7 @@ def live {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Rel
 
 /-- The record, decoded. -/
 def sess {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
-    (o : Run H rel) : Session := val (Record.decodeWith o.hs o.spec o.record)
+    (o : Run H rel) : RunRecord := val (Record.decodeWith o.hs o.spec o.record)
 
 /-- Table `i`'s schedule. -/
 def sch {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}

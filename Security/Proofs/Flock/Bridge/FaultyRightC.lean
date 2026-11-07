@@ -1,6 +1,42 @@
+module
+
+public import Proofs.Flock.Bridge.Canon
+public import Proofs.Flock.Claims.Bridge.WrongSet
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Bridge.Lowers
-import Proofs.Flock.Bridge.Deployed
-import Proofs.Flock.Bridge.Canon
+import Proofs.Flock.SamplingBoundary
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
 # A unit right on its canonical openings is not faulty
@@ -22,6 +58,8 @@ wire's position under `Cm` and `roots`. It reads the transport only at the right
   `wireAt`, so `lowers` gives the unit's gates correct, and each input the unit owns is one of its committed wires
   (`mem_io_of_owner`), so its row opens.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -158,11 +196,11 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
     (htr : ∀ g ∈ P.io u, κ g = none → ∀ o : Opn, com o = cs (pos g) → canon g (val o) →
       ∃ d : Claims.Msg, Cm.Opens H roots ⟨posOf C g, bit (val o) g, d⟩ = true)
     (hκ : ∀ g ∈ P.io u, ∀ b, κ g = some b → C.eval Xr g = b)
-    (kd : ℕ) (desc : Claims.Msg) (q : Query) :
-    u.val ∉ faulty H Cm (stmtOf P κ kd desc q roots) (partOf P κ) (witDep C Cm H roots Xr) := by
+    {ns : List ℕ} (hns : ns.sum = n) (r : OneStage) (desc : Claims.Msg) (q : Query) :
+    u.val ∉ faulty H Cm (stmtOf P κ r desc q roots) (partOf P κ ns) (witDep C Cm H roots Xr) := by
   obtain ⟨op, hop⟩ := hright
   have hval : ∀ a ∈ P.io u, κ a = none →
-      (witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots) (posOf C a) = some (C.eval Xr a) := by
+      (witDep C Cm H roots Xr).val H Cm (stmtOf P κ r desc q roots) (posOf C a) = some (C.eval Xr a) := by
     intro a ha hk
     obtain ⟨h1, h3, h2⟩ := hop a ha
     obtain ⟨d, hd⟩ := htr a ha hk _ h1 h2
@@ -178,9 +216,9 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
   apply hmem.2
   by_cases hN : Nonempty (Fin C.N)
   · obtain ⟨d⟩ := hN
-    refine ⟨blockOf P κ u, blocks_partOf_getElem? P u, fun i => C.eval Xr (wireAt C d i), ?_⟩
+    refine ⟨blockOf P κ u, blocks_partOf_getElem? P hns u, fun i => C.eval Xr (wireAt C d i), ?_⟩
     change (progOf C κ).Correct ((progOf C κ).refIn (blockOf P κ u)
-      ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots)) (fun i => C.eval Xr (wireAt C d i)))
+      ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ r desc q roots)) (fun i => C.eval Xr (wireAt C d i)))
       (blockOf P κ u)
     rw [ref_blockOf, correct_blockOf]
     refine ⟨lowers P u (wireAt C d) (wireAt_posOf d) Xr hκ' _ fun i hi hc => ?_, fun a ha => ?_⟩
@@ -188,7 +226,7 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
     · obtain ⟨hin, hk, -⟩ := mem_insOf.1 ha
       rw [Boundary.ref_input _ (gates_posOf_input hin hk), hval a (mem_io_of_owner ha) hk]
       simp
-    change (progOf C κ).refIn (unitGates P u) ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ kd desc q roots))
+    change (progOf C κ).refIn (unitGates P u) ((witDep C Cm H roots Xr).val H Cm (stmtOf P κ r desc q roots))
       (fun i => C.eval Xr (wireAt C d i)) i = some (C.eval Xr (wireAt C d i))
     unfold Claims.Sampling.Prog.refIn
     split_ifs with hin
@@ -205,7 +243,7 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
           exact absurd (gates_posOf_const (input_of_isInput (hκin a b hk)) hk) (hc b)
       rw [wireAt_posOf]
       exact hval a ha hnone
-  · refine ⟨blockOf P κ u, blocks_partOf_getElem? P u, fun _ => false, ?_⟩
+  · refine ⟨blockOf P κ u, blocks_partOf_getElem? P hns u, fun _ => false, ?_⟩
     intro g hg
     rcases mem_blockOf.1 hg with hg | ⟨a, -, -⟩
     · obtain ⟨w, -⟩ := mem_unitGates.1 hg
@@ -214,7 +252,7 @@ theorem faultyRightC {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {Pos Val
 
 /-- **`FaultyRightTargetC`**, at any `canon` (`Bridge.Canon`): `faultyRightC`. -/
 theorem faultyRightTargetC : FaultyRightTargetC := by
-  intro C n P Pos Val Opn Com pos bit val com cs canon H Cm roots Xr κ u hκin hright htr hκ kd desc q
-  exact faultyRightC P pos bit val com cs canon H Cm roots Xr κ u hκin hright htr hκ kd desc q
+  intro C n P Pos Val Opn Com pos bit val com cs canon H Cm roots Xr κ u hκin hright htr hκ ns r desc q hns
+  exact faultyRightC P pos bit val com cs canon H Cm roots Xr κ u hκin hright htr hκ hns r desc q
 
 end Flock.Bridge

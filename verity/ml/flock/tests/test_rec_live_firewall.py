@@ -1,5 +1,5 @@
 """The inner phase's ZK server (`verity_flock.rec_live`) held to what live PROTOCOL.md §10.3 says it does, one rule a test:
-``Link``'s ``y`` is the schedule's number of zero elements; the coin server is shown the schedule's ``Hello``, once the
+``Link``'s ``y`` is the schedule's number of zero elements; the challenger is shown the schedule's ``Hello``, once the
 prover's is the same canonical JSON; the record lists streams by name, whatever order the prover opened them in; a session
 that ends without ``Finish`` is a stop, written and counted; any exception while handling a request is a refusal; and the
 schedule is required, derived from the statement's public shape (`schedule_for`), never from a session the prover ran."""
@@ -102,7 +102,7 @@ def test_link_y_of_another_length_is_refused_before_the_coin_server_sees_it(n):
 
 
 def test_the_coin_server_records_the_pinned_hello_never_the_provers_spelling():
-    """A Hello in another key order (or other whitespace) is held, and the coin server records the schedule's, in canonical
+    """A Hello in another key order (or other whitespace) is held, and the challenger records the schedule's, in canonical
     form; key order alone was log2(7! 2!) free bits a session."""
     sched = _schedule()
     spelled = {k: HELLO[k] for k in reversed(list(HELLO))}
@@ -120,7 +120,7 @@ def test_the_coin_server_records_the_pinned_hello_never_the_provers_spelling():
                                   {"link": {"sigma": 7, "m": 4, "points": 2}}])
 def test_a_hello_whose_canonical_json_is_not_the_pinned_ones_is_refused(edit):
     """``==`` holds ``2.0`` equal to ``2``; the canonical JSON does not. A Hello without Σ as a string is refused too (the
-    session record needs it, the coin server never sees it)."""
+    session record needs it, the challenger never sees it)."""
     proxy = _proxy(_schedule())
     assert _refusal(_run(proxy, hello={**HELLO, **edit})).startswith("rec proxy: FIREWALL-REFUSED: Hello: ")
     assert proxy.coins.hello is None and proxy.coins.link is None
@@ -128,7 +128,7 @@ def test_a_hello_whose_canonical_json_is_not_the_pinned_ones_is_refused(edit):
 
 def test_the_record_lists_streams_in_the_schedules_order_whatever_order_they_were_opened_in():
     """Each stream is pinned by its parent and position, not by when it is opened, so the prover may open rep1 first; the
-    coin server's record is the same either way (log2(s!) free bits with s streams, otherwise)."""
+    challenger's record is the same either way (log2(s!) free bits with s streams, otherwise)."""
     two = ("circuit/rep0", "circuit/rep1")
     recs = []
     for opens in (two, two[::-1]):
@@ -139,7 +139,7 @@ def test_the_record_lists_streams_in_the_schedules_order_whatever_order_they_wer
 
 
 def _stopped_record(reqs, then_stop=b"not a request"):
-    """The coin server's record of a session sent `reqs` and then a request the ZK server refuses."""
+    """The challenger's record of a session sent `reqs` and then a request the ZK server refuses."""
     proxy = _proxy(_schedule())
     for r in reqs + [then_stop]:
         proxy.handle(r)
@@ -148,7 +148,7 @@ def _stopped_record(reqs, then_stop=b"not a request"):
 
 def test_a_stopped_record_does_not_show_whether_or_when_an_open_was_sent():
     """An Open is accepted any time before its stream's first round, so a stream enters the record only at that round;
-    otherwise two sessions stopped at the same point differ in whether the Open came (the review's probe, r2)."""
+    otherwise two sessions stopped at the same point differ in whether the Open came."""
     reg, hello = RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":")))
     commit = RL.encode_req(RL.REQ_COMMIT, b"sigma-root-f", [("circuit", T.CAP0)], [])
     link = RL.encode_req(RL.REQ_LINK, bytes(32))
@@ -162,7 +162,7 @@ def test_a_stopped_record_does_not_show_whether_or_when_an_open_was_sent():
 
 
 def _coin_calls(reqs, schedule):
-    """Every call the ZK server makes on the coin server while it handles `reqs`, in order, the ones it refuses included."""
+    """Every call the ZK server makes on the challenger while it handles `reqs`, in order, the ones it refuses included."""
     coins, calls = RL.CoinServer(T._counter_rand()), []
     for name in ("start", "commit", "y", "open", "round", "record"):
         f = getattr(coins, name)
@@ -174,8 +174,8 @@ def _coin_calls(reqs, schedule):
 
 
 def test_the_coin_server_never_sees_where_an_open_was_sent():
-    """The coin server is the auditor's, so its calls, not only its record, must not show where the prover sent each Open
-    (ZK server-contract's gap 3): every placement of the two Opens before their first rounds, finished or cut anywhere,
+    """The coin server is the auditor's, so its calls, not only its record, must not show where the prover sent each Open:
+    every placement of the two Opens before their first rounds, finished or cut anywhere,
     gives the coin server the honest session's calls or a prefix of them."""
     two = ("circuit/rep0", "circuit/rep1")
     sched = _schedule(two)
@@ -211,8 +211,7 @@ def test_the_coin_server_never_sees_where_an_open_was_sent():
 def test_a_stray_commit_link_or_finish_reaches_the_coin_server_as_a_plain_stop():
     """A Commit before Hello or after the first, a Link before Commit or after the first, and a Finish before the last
     round are refused by the ZK server itself, before any call on the coin server, so wherever one comes the coin server's
-    calls are a prefix of the honest session's: they show where the session stopped, never which request stopped it
-    (review-zk-gateway's r4)."""
+    calls are a prefix of the honest session's: they show where the session stopped, never which request stopped it."""
     two = ("circuit/rep0", "circuit/rep1")
     sched = _schedule(two)
     reg, hello = RL.encode_req(RL.REQ_REGISTER), RL.encode_req(RL.REQ_HELLO, json.dumps(HELLO, separators=(",", ":")))
@@ -232,14 +231,15 @@ def test_a_stray_commit_link_or_finish_reaches_the_coin_server_as_a_plain_stop()
             assert calls == honest[:len(calls)], (stray[:1], p)
 
 
-def _serve(tmp_path, sessions, schedule):
-    """`rec_live.serve` on a thread; its result (or what ended it) in ``got``, the address it bound in ``got["addr"]``."""
+def _serve(tmp_path, sessions, schedule, **kw):
+    """`rec_live.serve` on a thread (``kw`` its other arguments); its result (or what ended it) in ``got``, the address it
+    bound in ``got["addr"]``."""
     bound, got = threading.Event(), {}
 
     def run():
         try:
             got["res"] = RL.serve("127.0.0.1:0", tmp_path, T._counter_rand(), sessions=sessions, schedule=schedule,
-                                  ready=lambda a: (got.update(addr=a), bound.set()))
+                                  ready=lambda a: (got.update(addr=a), bound.set()), **kw)
         except Exception as e:  # noqa: BLE001 - the test reports what ended serve
             got["crash"] = f"{type(e).__name__}: {e}"
         finally:
@@ -271,7 +271,7 @@ class _Wire:
 
 def test_a_session_that_ends_without_finish_is_written_and_counted_as_a_stop(tmp_path):
     """A connection that closes after flipping coins (here after its binding round), and one cut inside a frame, are each a
-    session that stopped: the coin server's record of it is written and says so, and it counts. Otherwise the prover could
+    session that stopped: the challenger's record of it is written and says so, and it counts. Otherwise the prover could
     flip coins, look at them and drop the connection as often as it likes, and the record would never show it."""
     t, got = _serve(tmp_path, 3, _schedule())
     w = _Wire(got["addr"])
@@ -310,7 +310,7 @@ def test_a_hello_the_firewall_cannot_read_is_a_refusal(hello):
 
 
 def test_any_exception_while_handling_a_request_is_a_refusal_and_serve_goes_on(tmp_path):
-    """The ZK server's own fault (here the coin server's, a KeyError) stops the session it happened in, as a refusal; and a
+    """The ZK server's own fault (here the challenger's, a KeyError) stops the session it happened in, as a refusal; and a
     request that raises something other than ValueError ends neither `Proxy.handle` nor `serve`."""
 
     class Broken(RL.CoinServer):

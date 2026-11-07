@@ -1,5 +1,38 @@
-import Proofs.Flock.Claims.ZK.SessionLean
-import Proofs.Flock.Claims.ZK.FrameOwn
+module
+
+public import Proofs.Flock.Claims.ZK.FrameOwn
+public import Proofs.Flock.Claims.ZK.SessionLean
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The release at the session loop's own frames
@@ -25,6 +58,8 @@ placeholder draws, and the release whose transport state it is:
   now `ProgChecks` at `ofLoop`: that the deployed frame's state is this one's but for `stopped`, the frame reading a
   round's shape alone (`roundFree_alike`, `passes_frames`, `innerOwn_ownRound`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -158,8 +193,8 @@ noncomputable def freshOf (x : Msg) (cs : List FlockDeploy.Coin) : Except String
 for levels ≥ 1 (`real k` for rep stream `k`, as `Frames.placeOf` computes them from the session's level 0 and its finish's
 salts): rep stream `k`'s scheduled round `i` (`schedSoFar`), `k` and `i` as `progOf` locates them. The empty round where
 the rep's table or its schedule is refused: the loop has no round there (`Frames.placeOf` refuses it, and the session
-stops), and the frame's check refuses the empty round. None past the rep's schedule (the inner proof's rounds, whose round
-the firewall sends itself), or where `x` sets up no session. -/
+stops), and the frame's check refuses the empty round. None past the rep's schedule (the inner proof's rounds, the frame's
+own: `Loop.innerOf`), or where `x` sets up no session. -/
 noncomputable def schedOf (real : ℕ → V (Tab × Array ByteArray)) (x : Msg) (cs : List FlockDeploy.Coin) :
     Option ByteArray :=
   match FlockDeploy.setupOf true x, cs.length with
@@ -195,7 +230,7 @@ namespace LeanRelease
 /-- `L₀` with the loop's own frames: its transport's states are `Loop.progOf` and `Loop.freshOf` of the decoded coins, each round's rep is
 its rep stream, started as the loop starts it, and the round in a scheduled round's place is the loop's own
 (`Loop.schedOf`), on each rep's table and salts for levels ≥ 1 at `x`, the witness and the tape (`real`); at the inner
-proof's rounds, `L₀`'s. At the `Hello`'s round, which the release never schedules (`kindAt`: the server's own), the
+proof's rounds, `L₀`'s (the loop's own at `LeanRelease.withInner`). At the `Hello`'s round, which the release never schedules (`kindAt`: the server's own), the
 empty round, which the frame's check refuses. Each round's coin count is the one the loop hands `Frames.round`, its
 request's (`Loop.loopNr`): the round after `h` takes opening `h.length - 1`'s coins. -/
 noncomputable def withFrames (T : ZKMal.CoinLayer.TableData)

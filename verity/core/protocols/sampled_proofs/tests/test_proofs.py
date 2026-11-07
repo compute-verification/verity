@@ -1,17 +1,21 @@
 """The proof system's own run of C-Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
-session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, proved by C-Flock in
-one loopback session under a subset sample of 16 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The
-verifier's own program, partition and `--registered` file are the fixture's `stage/`, the ones
+session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, its `x` row and
+output row registered too, proved by C-Flock in one loopback session under a subset sample of 16
+(`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
+file are the fixture's `stage/`, the ones
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
 
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
 verdict comes from core's own verifier run: the honest session, whose public file is a shared-row file in the form
 `SampledKSLiveV5` covers (`Flock.KsScope.sharedWhy`), is accepted with its program and registered finding read off that
-run, and proves the proof blocks its draw drew; a circuit file other than the committed one
+run, and proves the proof blocks its sample holds; a circuit file other than the committed one
 is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
-names them or not.
+names them or not. Under the registration's strata (`STRATA`) its public file's units are the population in order, and an
+accepted session under another population is rejected (`population_why`). A registration whose partition object queries
+the program for another population is rejected at setup, by the v2 audit and by `verify` alike: the circuit file binds the
+digest of its own partition object.
 
 Without registered reads (``registered`` None), `verify` refuses a program with an input bound at registration (a
 `RegisteredInput`) before Lean runs (fast tests, no fixture): Lean demands registered reads only where the public file's
@@ -32,15 +36,24 @@ from verity.core.protocols.sampled_proofs.one_stage import proofs as PF
 
 #: `test_lean_served_registered.py`'s row/v1 fixture, fetched from the evidence store as that test fetches it (its records
 #: re-rendered in the canonical text the verifier requires)
-FIXTURE = "art:48ed507aa908f8a220405467097af6ce986fab36ba32d2d7aede8b7cbc5213d5"
+FIXTURE = "art:54456e32d1e801018ba6c9da92548482a0e9c8c8fd5c2fc956086cb6e3d8bd4b"
 VERIFIER = Path(__file__).resolve().parents[4] / "ml" / "flock" / "verifier"
 #: the SHA-512 of the fixture's circuit file, as an auditor would commit it (its public file's `circuit_sha512` pin)
 CIRCUIT = ("7b9e46f755bced2c6e00a7706f3fca90631864ca22a2d08b51c8b82260a7bd9a"
            "9ae7a191c0eabe2993a6fbf686b832c440f2a78dad65fa3b13b3cf5bd47284e0")
-CS_ROOT = ("8c31089e5864c2e01b73d983ea3bcfa704e49e961466476987a2a4d908a87ef3"
-           "d65628f58e1ac7eb5f3d86da77250db500a01d1a4c9cf77e0be83ca3aae5413a")
-#: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
-DRAWN = (0, 3, 4, 5, 8, 11, 12, 13, 17, 18, 23, 26, 28, 29, 30, 31)
+#: the registration's strata over the fixture's program and query (`partition.strata`): one template's 32 instances
+STRATA = (("RoPEHead_v1{D=64}", ((0, 32),)),)
+#: the fixture's registered roots: every port of the circuit is registered (`Flock.Registered.checkComplete`)
+REGISTERED_ROOTS = {
+    "cs": {"value": "cs_table", "root": "e06311d0afa0492b635c50a6a983041b1ed4a577f27209d705aebcb1d5690820"
+                                        "97d7da63c77fb2c614f5838501f22e2a557f838d48fa0c143a43751f4593296e"},
+    "x": {"value": "x", "root": "504f74c35b38fceacb9485685bf8a2fa753254d9e47eab2cd788584f4f2d417c"
+                                "bde4dc5c56538d21d7047a2b834c0c7ef816e3b8b68378738e38820ad0e3fe70"},
+    "out": {"value": "rope_out", "root": "cffcc31602347cbafa44022c617bae5506de1f8f800b5b0c4b75559020f3c50a"
+                                         "2960e8ff8e0968d9d4adf7281c8739366165795a5a72c1dd55d6798aaf1dd4fb"},
+}
+#: the instances the session's own sample holds, which are the proof blocks, the public file's indices being 0..31
+DRAWN = (1, 4, 6, 7, 9, 14, 16, 18, 19, 20, 21, 22, 23, 24, 27, 29)
 
 #: a test that runs Lean on the fixture
 lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -72,6 +85,26 @@ def test_a_program_without_registered_reads_or_given_them_goes_on_to_its_files(t
     got, why = PF.verify(PF.Proof(tmp_path / "circuit.txt", tmp_path / "pub.bin", (tmp_path / "session",)),
                          circuit_sha512="ab" * 64, program=program, partition={}, registered=registered)
     assert got is None and why[0] == "proof", why
+
+
+@pytest.mark.parametrize("indices, strata, ok", [
+    ([0, 1, 2], [("a", [[0, 2]]), ("b", [[2, 3]])], True),
+    ([], [], True),
+    ([0, 1], [("a", [[0, 3]])], False),
+    ([0, 1, 2], [("a", [[0, 2]])], False),
+    ([1, 0], [("a", [[0, 2]])], False),
+    ([1, 2], [("a", [[0, 2]])], False),
+    ([0, 1, 2], [("a", [[0, 1], [2, 3]]), ("b", [[1, 2]])], False),
+    ([0, 1], [("a", [[1, 2], [0, 1]])], False),
+], ids=["two strata in order", "empty", "a unit short", "a unit over", "two swapped", "shifted",
+        "strata interleaved", "ranges out of order"])
+def test_the_population_is_the_public_files_units_in_order(indices, strata, ok):
+    """`population_why` (`FilePart.why`) passes only where the strata, read stratum by stratum, are the units 0, 1, …
+    in order and the public file's units are exactly those."""
+    why = PF.population_why(indices, strata)
+    assert (why is None) == ok, why
+    if not ok:
+        assert why.startswith("partition: "), why
 
 
 def _files(d: Path, groups: int = 1, meta: dict | None = None, header: dict | None = None) -> tuple[Path, Path]:
@@ -111,6 +144,51 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     assert got is None and why[0] == "form" and why[1].endswith(SCOPE), why
 
 
+def _template(d: Path, const: int, meta: dict) -> Path:
+    """A circuit file's head: META and a ``unit`` circuit of one input group of one word, its constant at row
+    `const`."""
+    circuit = d / "circuit.txt"
+    circuit.write_text(f"flock-circuit/v1 u\nMETA {json.dumps(meta)}\nCIRCUIT unit 2\n"
+                       f"flock-ir-unit/v2 u {const + 1} {const} 1 0 1 1 16 1 1 1 1 16\n0 0\n")
+    return circuit
+
+
+TEMPLATES = {"one unit, 16 bits": (129, {"units_per_vu": 1, "leaves_out": [[0]]}, None),
+             "one unit, no computed row of its net's own": (128, {"units_per_vu": 1, "leaves_out": [[0]]}, None),
+             "no unit": (129, {"units_per_vu": 0, "leaves_out": []}, PF.NO_ROW_WHY),
+             "the widest class": (129, {"units_per_vu": 2, "leaves_out": [list(range(8192))] * 2}, None),
+             "one leaf past it": (129, {"units_per_vu": 2, "leaves_out": [list(range(8192)), list(range(8193))]},
+                                  PF.WIDE_WHY),
+             "a leaf map past units_per_vu is no unit's": (
+                 129, {"units_per_vu": 1, "leaves_out": [[0], list(range(16384))]}, None)}
+
+
+@pytest.mark.parametrize("const, meta, want", TEMPLATES.values(), ids=TEMPLATES.keys())
+def test_the_mirror_of_the_template_check_refuses_what_lean_refuses(tmp_path, const, meta, want):
+    """`template_why` on a circuit file's head: `OneStageZk.templateOk`'s two refusals with their reasons, at the widest
+    class's edge, and only over the ``units_per_vu`` units' leaf maps."""
+    assert PF.template_why(_template(tmp_path, const, meta)) == want
+
+
+def test_a_session_lean_accepts_on_a_template_the_mirror_refuses_is_rejected_with_its_reason(tmp_path, monkeypatch):
+    """`verify` rejects a session the verifier accepts on a circuit `template_why` refuses, with v2's reason, as a
+    finding rather than a refusal of the run."""
+    circuit = _template(tmp_path, 129, {"units_per_vu": 0, "leaves_out": []})
+    public = tmp_path / "pub.bin"
+    public.write_bytes(b"{}\n")
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
+    monkeypatch.setattr(PF, "executable", lambda: Path("flock-verify"))
+    monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
+                         program=RUN_ONLY, partition={"program": "p"}, registered=None)
+    assert why is None, why
+    (f,) = got
+    assert (f.accepted, f.why, f.units) == (False, PF.NO_ROW_WHY, ()), f
+
+
 @pytest.fixture(scope="module")
 def fx(tmp_path_factory) -> Path:
     sys.path.insert(0, str(VERIFIER))
@@ -124,12 +202,13 @@ def fx(tmp_path_factory) -> Path:
     return root
 
 
-def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True,
+            strata=STRATA, partition=None):
     st = fx / "stage"
     return PF.verify(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
                      program=(st / "program.json").read_bytes(),
-                     partition=json.loads((st / "partition.json").read_text()),
-                     registered=json.loads((st / "registered.json").read_text()) if own else None)
+                     partition=partition or json.loads((st / "partition.json").read_text()),
+                     registered=json.loads((st / "registered.json").read_text()) if own else None, strata=strata)
 
 
 @lean
@@ -145,7 +224,7 @@ def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_
     assert (f.accepted, f.why) == (True, ""), f
     assert PF.ks_form_why(fx / "stage" / "circuit.txt", fx / "stage" / "pub-32.bin") is None
     assert f.program == partition["program"]
-    assert f.registered == {"cs": {"value": "cs_table", "root": CS_ROOT}}
+    assert f.registered == REGISTERED_ROOTS
     assert f.units == DRAWN
     draw = json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
     assert tuple(draw["units"]) == DRAWN, draw
@@ -227,11 +306,11 @@ def test_missing_proof_files_are_refused(fx, tmp_path):
     assert got is None and why[0] == "proof", why
 
 
-def _v2(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True):
+def _v2(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-32.bin", own: bool = True, partition=None):
     st = fx / "stage"
     return PF.verdicts_v2(PF.Proof(st / "circuit.txt", st / public, (session,)), circuit_sha512=circuit,
                           program=json.loads((st / "program.json").read_bytes()),
-                          partition=json.loads((st / "partition.json").read_text()),
+                          partition=partition or json.loads((st / "partition.json").read_text()),
                           registered=json.loads((st / "registered.json").read_text()) if own else None)
 
 
@@ -259,6 +338,45 @@ def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
         if own and session == fx / "session":
             (f,) = mine
             assert (f.accepted, f.why, f.units) == (True, "", DRAWN), f
+
+
+@lean
+@pytest.mark.slow
+def test_an_accepted_session_of_another_population_is_rejected(fx):
+    """Under a registration of 31 units, the honest session that the verifier accepts on its public file of 32 is
+    rejected with `population_why`'s reason: its file's unit 31 is no slot of the registration's."""
+    (f,), why = _verify(fx, fx / "session", strata=(("RoPEHead_v1{D=64}", ((0, 31),)),))
+    assert why is None, why
+    assert (f.accepted, f.units) == (False, ()) and f.why == PF.population_why(range(32), [("t", [[0, 31]])]), f
+
+
+@lean
+@pytest.mark.slow
+def test_a_registration_whose_partition_disagrees_with_the_circuit_file_is_refused_by_the_v2_audit(fx):
+    """A registration whose partition object asks the fixture's program for its `Q_call` units at X = 16, the RoPE
+    heads' calls (2048 of them, `partition.strata`), rather than the 32 template instances the circuit file holds: the
+    v2 audit's own run rejects the honest session at setup, since the circuit file binds another partition object's
+    digest (`Flock.checkPartitionWith`), before any verdict reaches `FilePart.check`; `verify`, handed that
+    registration's strata, rejects it the same way. The other tests here run the v2 audit only on the circuit file's own
+    partition object."""
+    from verity.core.protocols.sampled_proofs.one_stage import partition as PA
+    from verity.ml.circuits.codec import decode_program
+    from verity.ml.definitions.registry.catalog import load
+
+    st = fx / "stage"
+    part = {**json.loads((st / "partition.json").read_text()),
+            "query": {"name": "Q_call", "version": 1, "params": {"X": 16}}}
+    strata = PA.strata(decode_program(json.loads((st / "program.json").read_text()), load()[0]), part["query"])
+    why = PF.population_why(range(32), strata)
+    assert why is not None and why.startswith("partition: the public file's 32 units are not"), (why, strata)
+    mine, refused = _v2(fx, fx / "session", partition=part)
+    assert refused is None, refused
+    (f,) = mine
+    assert (f.accepted, f.why, f.units) == (
+        False, "setup: partition: the circuit's partition digest is not the verifier's partition object's", ()), f
+    got, refused = _verify(fx, fx / "session", strata=strata, partition=part)
+    assert refused is None, refused
+    _same(got, mine)
 
 
 @lean

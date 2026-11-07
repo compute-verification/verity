@@ -2,10 +2,15 @@
 The draw (`one_stage/draw.py`): the verifier's law expanded over its own program and query (`derive`), a draw held to the
 registration and to that law (`checkDraw`), and the proved statement's units held to the draw (`checkProved`). The strata,
 their rules, the law object and the samplers are C-Flock's (`Flock.Draw`). The check samples nothing: the draw comes from
-the verifier's own randomness, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
+the challenger's coins, raw bytes with no derivation, which `drawFirst` reads as `coins.draw_first` does.
 -/
-import Flock.Draw
-import SampledProofs.Partition
+module
+
+public import SampledProofs.Partition
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Draw
 
@@ -31,7 +36,7 @@ def deriveLaw (p : Program) (query law : Json) (table : Option Json) : V (Option
 def derive (p : Program) (query law : Json) (table : Option Json) : V Json :=
   return ((← deriveLaw p query law table).map (·.toJson)).getD law
 
-/-- `draw.same_law`: the same canonical bytes. -/
+/-- `draw.same_design`: the same canonical bytes. -/
 def sameLaw (a b : Json) : Bool := jeq a b
 
 /-- `draw.law_of`: the law a draw names. -/
@@ -98,6 +103,16 @@ def probability? (p : String) : Option (Nat × Nat) :=
   match p.splitOn "/" with
   | [a, b] => if digits a && digits b && 0 < b.toNat! && a.toNat! ≤ b.toNat! then some (a.toNat!, b.toNat!) else none
   | _ => none
+
+/-- `service.count_varies`: the law draws a count that varies from draw to draw, so the sessions of one registration set
+up tables of different shapes: `bernoulli` at `0 < p < 1`, which the sampled audit's soundness statement doesn't cover.
+The stream's run (`Run.run`: `shapes`) and the audit (`OneStage.paramsOfJson`) refuse it. -/
+def countVaries (law : Json) : Bool :=
+  match getD law "law", getD law "p" with
+  | .str "bernoulli", .str p => match probability? p with
+    | some (num, den) => 0 < num && num < den
+    | none => false
+  | _, _ => false
 
 private def sumSizes (rs : Array (Int × Int)) : Int := rs.foldl (fun a (lo, hi) => a + (hi - lo)) 0
 

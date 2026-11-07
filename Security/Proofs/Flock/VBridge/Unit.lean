@@ -1,5 +1,29 @@
-import Proofs.Flock.VBridge.Net
+module
+
+public import Proofs.Flock.VBridge.Net
+public import Properties.Flock.Circuit.Rows
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.ExecRows
+import Proofs.Flock.Soundness.SparseRows
+import VCVio.Prelude.Core
 
 /-!
 # V*'s opening in a unit of a partition
@@ -14,6 +38,8 @@ So copy `j` of a unit whose rows are a stack of V*'s laid-out opening computes `
 at the unit's local evaluation (`unit_recOpen`, over `copyVal`). The copy's input columns read the transcript
 (`copyVal_input`), and so does every committed column of a correct unit (`copyVal_committed`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

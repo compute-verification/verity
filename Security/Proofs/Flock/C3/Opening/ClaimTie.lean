@@ -1,6 +1,19 @@
-import Proofs.Flock.C3.Opening.SrcOpening
-import Proofs.Flock.Soundness.Refine.Opening
-import Proofs.Flock.Level3.Fold
+module
+
+public import Proofs.Flock.C3.Opening.SrcOpening
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Level3.Assembly
 
 /-!
@@ -18,6 +31,8 @@ the tie is two facts about the run's claims:
 
 `openingReadAt_src_ties` is `openingReadAt_src` with the two in place of the claim tie.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

@@ -1,8 +1,51 @@
-import Proofs.Flock.Claims.ZK.L0PinChain
-import Proofs.Flock.Claims.ZK.FrameRho
-import Proofs.Flock.Claims.ZK.FrameReal
-import Proofs.Flock.Claims.ZK.FrameInner
-import Proofs.Flock.Claims.ZK.FrameOuter
+module
+
+public import Proofs.Flock.Claims.ZK.FramePlan
+public import Proofs.Flock.Claims.ZK.FrameRho
+public import Proofs.Flock.Claims.ZK.FrameZK
+public import Proofs.Flock.Claims.ZK.L0PinChain
+public import Proofs.Flock.Claims.ZK.L0PinRec
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.Table
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.ZK.FrameBeta
+import Proofs.Flock.Claims.ZK.FrameRankFault
+import Proofs.Flock.Claims.ZK.FrameTaken
+import Proofs.Flock.Claims.ZK.L0PinBind
+import Proofs.Flock.Claims.ZK.L0PinLive
 
 /-!
 # Level 0 at the session loop
@@ -17,6 +60,8 @@ level 0's are the binding and level 0's bodies at the rep's own table and draws 
   (`Loop.wordsAt_take`).
 * The bodies' coins are the opened coins from the binding's (`Loop.l0Body_clean`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer.Count
 
@@ -315,6 +360,8 @@ theorem answered_ok_of_live {W R : Type} (L : LeanRelease W R) (wk : L.toSrv.Wor
   | error e => rw [hA] at hp; cases hp
   | ok m => exact ⟨m, rfl⟩
 
+-- one proof of a few hundred lines down `FlockComplete.piopRoundsZk`'s unfolded rounds, `rw` and `omega` on the round
+-- indices
 set_option maxHeartbeats 2000000 in
 /-- **The loop's level-0 messages**: at a `Live` statement the loop serves, on a live history of `refK x` openings
 whose last coins the frame takes, whose messages are the release's own and whose tables are the loop's (`RealTabs`),
@@ -443,17 +490,15 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     rw [List.length_take]
     omega
   -- the placeholder at the binding: the frame's state there
-  have hopJ := (coins_taken_of_live (ofLoop T L₀ real) wk x w ρ κ ((m₀, ρ₀) :: ops) hlive
-    hle hrf (i := J) (by omega) (by omega)).1
   obtain ⟨mA, hA⟩ := answered_ok_of_live (ofLoop T L₀ real) wk x w ρ κ (((m₀, ρ₀) :: ops).take J)
     (by rw [htl J (by omega)]; exact hkd J le_rfl (by omega))
     ((ofLoop T L₀ real).live_take wk x w ρ κ _ hlive J)
-  have hAJ := hA
+  have hAJ := frameAnswer_of_answered hA
   obtain ⟨⟨dm, da⟩, hd⟩ : ∃ d, ops[J - 2]? = some d := ⟨ops[J - 2]'(by omega), List.getElem?_eq_getElem _⟩
   have htk2 : ops.take (J - 1) = ops.take (J - 2) ++ [(dm, da)] := by
     rw [show J - 1 = J - 2 + 1 by omega, List.take_add_one, hd]; rfl
   have hts : (ops.take (J - 2)).length = J - 2 := by rw [List.length_take]; omega
-  rw [answered_of_opens _ _ _ _ hopJ, htk J (by omega),
+  rw [htk J (by omega),
     ofLoop_frameAnswer_same T L₀ real x ρ (m₀, ρ₀) (ops.take (J - 1)) hsx (q := J - 2) (j := P - 1)
       (by rw [List.length_take]; omega)
       (by rw [hloc (J - 2) (J - 1 - R) (by omega) (by omega)]; show J - 1 - R = P - 1 + 1; omega),
@@ -461,6 +506,7 @@ theorem ofLoop_l0 (T : ZKMal.CoinLayer.TableData)
     progOf_snoc x ((ops.take (J - 2)).map fun p => ZKMal.CoinLayer.rd p.2) (ZKMal.CoinLayer.rd da) hsx (q := J - 3)
       (by rw [List.length_map, hts]; omega),
     hloc (J - 3) (P - 1) (by omega) (by omega)] at hAJ
+  replace hAJ := (bind_rankStop_ok hAJ).1
   dsimp only at hAJ
   rcases hph : placeholder spec (Masked.stsOf x) (2 * j + r)
       (wordsAt x ((ops.take (J - 2)).map fun p => ZKMal.CoinLayer.rd p.2) 0) with e | ⟨c', t, dom, xs, hi⟩

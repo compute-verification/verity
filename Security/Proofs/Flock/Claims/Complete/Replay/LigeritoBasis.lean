@@ -1,5 +1,46 @@
-import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Discharge
+import Proofs.Flock.Claims.Complete.Replay.Satisfies
+import Proofs.Flock.Level3.LookupRows
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Basis
+import Proofs.Flock.Soundness.Refine.Seam
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The verifier's basis is the batched basis's extension
@@ -13,6 +54,8 @@ import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
 * **The rep's claims** (`claims_xsize`): every claim a rep opens has `m − 6` coordinates, so its switched claim's
   suffix point has `m − 7`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 
@@ -50,7 +93,7 @@ theorem fOf_basisTerm (sw : Switched) (l : ℕ) (hrpp : sw.rpp.size = 7) (hz : s
   rw [unpack_fOf, ← eqTable_vecOf sw.rpp 7 hrpp u.val (by simp)]
   split_ifs <;> simp [fOf_zero]
 
-/-- **The batched basis on the cube** (§12.4) is the model's: `basisVals sws` at `w < 2^ℓ` is
+/-- **The batched basis on the cube** (`Flock.Opening`) is the model's: `basisVals sws` at `w < 2^ℓ` is
 `Σ_k γ_k·Φ_k(eq(z_k, w))`. -/
 theorem fOf_basisVals (sws : Array Switched) (l : ℕ) (hrpp : ∀ k < sws.size, (sws[k]!).rpp.size = 7)
     (hz : ∀ k < sws.size, (sws[k]!).z.size = l) (w : ℕ) (hw : w < 2 ^ l) :

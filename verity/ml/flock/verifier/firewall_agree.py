@@ -5,7 +5,7 @@ the contract's property.
 
     python firewall_agree.py --lean BIN --out DIR [--cases] [--sessions DIR... [--schedule FILE]]
 
-Each session runs through the ZK server with `verity_flock.firewall_transcript` watching what it sends the coin server; the
+Each session runs through the ZK server with `verity_flock.firewall_transcript` watching what it sends the challenger; the
 ZK server's decision is whether the session ended with Finish, the contract's is `Flock.Firewall.Contract.run` on the
 transcript under the verifier's public input, the session's own schedule (`verdicts`, `decide`). `--cases` runs the built-in sessions (`cases`): honest ones (on live coins,
 as `rec_live serve`'s, and on coins the challenger committed to), the red team's six against the firewall (at
@@ -14,7 +14,7 @@ does not open, or none), and tamper controls, firewalls that let out what the co
 contract must cut. `--sessions` replays
 recorded inner sessions (`rec_live serve`'s output directories: ``session/session.json``, ``public.json``, ``private.json``,
 ``coins.json`` when the challenger committed, and ``schedule.json`` beside them or in their parent, or ``--schedule``) with
-their own coins and salts, checks the replay gives the recorded coin server record and commitments byte for byte, and
+their own coins and salts, checks the replay reproduces the challenger's record and commitments byte for byte, and
 expects both to accept. Each case carries its expectation (``firewall``, ``lean``,
 and a prefix of the contract's reason); one where the two may differ says why (``divergence``). Writes DIR/<case>.json,
 DIR/agreement.tsv and DIR/result.json; exits 1 if any case misses its expectation.
@@ -182,8 +182,8 @@ class WrongOpening(FT.RecordingCoins):
     """A challenger that sends its link points with a salt that opens no commitment of its to them: a wrong one when it
     committed to its coins, a stray one when they are live."""
 
-    def _draw(self, stream, k, n):
-        coins = super()._draw(stream, k, n)
+    def _draw(self, stream, k, n, after):
+        coins = super()._draw(stream, k, n, after)
         if (stream, k) == (RL.LINK_COINS, 0):
             self.openings[(stream, k)] = bytes(FT.INST.salt_bytes)
         return coins
@@ -192,8 +192,8 @@ class WrongOpening(FT.RecordingCoins):
 class NoOpening(FT.RecordingCoins):
     """A challenger that sends round 1 of rep 0's coins without the salt that opens its commitment to them."""
 
-    def _draw(self, stream, k, n):
-        coins = super()._draw(stream, k, n)
+    def _draw(self, stream, k, n, after):
+        coins = super()._draw(stream, k, n, after)
         if (stream, k) == (STREAMS[0], 1):
             del self.openings[(stream, k)]
         return coins
@@ -302,7 +302,7 @@ def replay(d: Path, schedule: dict | None = None) -> tuple[FT.Session, str | Non
     diff = next((k for k in got if k in pub and json.dumps(got[k], sort_keys=True) != json.dumps(pub[k], sort_keys=True)), None)
     if diff is None and rec_coins is not None and s.coins.commitment_record() != rec_coins:
         return s, "the replay's commitments to the coins differ from coins.json"
-    return s, (f"the replay's coin server record differs from public.json at {diff}" if diff else None)
+    return s, (f"the challenger's record in the replay differs from public.json at {diff}" if diff else None)
 
 
 def decide(lean: str, out: Path, named: list[tuple[str, dict, dict]]) -> list[dict]:

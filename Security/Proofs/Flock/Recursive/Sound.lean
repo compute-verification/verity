@@ -1,5 +1,9 @@
+module
+
+public import Proofs.Flock.Recursive.Fork
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Recursive.Compose
-import Proofs.Flock.Recursive.Fork
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Recursion: soundness of the recursive audit under `cr/sha-512`
@@ -18,6 +22,8 @@ The bound is `εo + εP + Σ_{k < r} (E[εtr k] + (Σ_pos κ k pos)·√(q_k²/2
 rewinding's loss. `recursive_sound_upto` is the same on `commit_and_prove_upto`: stage `k` opens to `msg k v`, and its
 transfer bounds the decoded message not being `same k` as that.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

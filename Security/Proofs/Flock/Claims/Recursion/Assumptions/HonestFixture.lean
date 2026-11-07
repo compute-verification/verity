@@ -1,4 +1,37 @@
-import Proofs.Flock.Claims.Recursion.HonestHalf
+module
+
+public import Proofs.Flock.Claims.Recursion.HonestHalf
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The honest deployed recursive run (`HonestFixture`)
@@ -9,6 +42,8 @@ conjuncts are the named Props that theorem reads, with their statements unchange
 (`HonestRunAccepted` and `NoCollAt` in `HonestHalf`, `HonestWitSatisfies` in `HonestWitR`, `IrShaped` in `VStarDense`),
 and the tape exception, named here (`TopsAt`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -62,7 +97,7 @@ Python's builder with C-Flock's CPU prover, not `refP`.
 
 What ties the two provers is `verity/core/service/vstar/tests/test_vstar_trace_difftest.py`. `refP`'s V\* parts are
 `bringsAt`'s `refPartsFin (A0 mask)`: each part's `VStar.Trace.assign` at its fitted port inputs (`VStar.In.partIn`,
-which `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
+whose level, algebra and cap builders `test_vstar_in_difftest` holds to Python's stager). The trace difftest holds `VStar.Trace.assign` (`vstar-trace`) to
 C-Flock's CPU prover's witness (`flock-trace`: `Stmt::row_inputs`, `unit_inputs`, `converge`, `witness`), block for
 block and range for range, on parts Python's `rec_vstage.stage` staged:
 * `test_the_recorded_plain_leaf_sessions_traces` (at 547915a62c)

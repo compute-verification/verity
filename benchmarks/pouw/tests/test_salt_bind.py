@@ -31,8 +31,8 @@ from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import window as Wd
 from verity.core.protocols.pouw.audit import Epoch, Workload, weights_root
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 from verity.core.protocols.sampled_proofs import challenger as Ch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "served_zk"))
@@ -129,13 +129,13 @@ def _certifier(sid: bytes, key, sign, record: bytes, tmp_path: Path,
     return active.CertifierClient(*reveals(c), signers[0].public_key(), signers[1], LINK, RUN_ID), drawn
 
 
-def _challenger(params, c, prover, path: Path, ledger: PS.Registrations) -> SC.Challenger:
+def _challenger(params, c, prover, path: Path, ledger: PS.WindowOpens) -> SC.Challenger:
     k = lms.keygen(lms.Params(64, 4, 2), hashlib.sha512(str(path).encode()).digest())
-    live = Wd.live_challenger(0, 1, random.Random(str(path)).randbytes)
+    live = Wd.draw_challenger(0, random.Random(str(path)).randbytes)
     Ch.write_record(path, live.sign_record("auditor-host", lms.public_key(k), lambda m: lms.sign_at(k, 0, m).encode()))
     deployment = SC.Deployment(c.certifier_key, c.run_id, Ch.ChallengerKey(4, 2, lms.public_key(k)))
     return SC.Challenger(params, live, clock=lambda: 0.0, record=OR.Record(lean=False), certifier=c, prover=prover,
-                         coin_record=path, deployment=deployment, registrations=ledger)
+                         coin_record=path, deployment=deployment, opens=ledger)
 
 
 def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
@@ -158,7 +158,7 @@ def _window(p: int, reveal: bytes, sid: bytes, prover: bytes, words) -> dict:
 def _pub(priv, advice, t: int) -> bytes:
     """The drawn unit's proof's public file as `verity_flock.circuit.write` lays it out: the header over the circuit the
     verifier pins, then the unit's A row's and B row's b ‖ c."""
-    from verity.core.protocols.pouw.circuit import leaves as L
+    from verity.ml.protocols.pouw.circuit import leaves as L
     e, i, j = Wd.tile_at(SC.entries_of(advice), t)
     schemas = {"a0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["a"]], "b0": L.ROW_SCHEMA["fp8-pi", SC.SIDES["b"]],
                "o0": L.ROW_SCHEMA["tile", SC.SIDES["a"]]}
@@ -178,7 +178,7 @@ def test_rows_formed_before_any_salt_are_refused_at_a_certified_windows_opening(
     prover, sid = PS.prover_id(key.public), _sid()
     committed = PS.pouw_record(weights_root(_pass(RUN)[1]), sid, prover)
     c, drawn = _certifier(sid, key, sign, committed, tmp_path, reveals)
-    ledger = PS.Registrations()
+    ledger = PS.WindowOpens()
     refused = "the window is certified, and its template's unit reads no salt"
     for p in (0, 1):
         w = _window(p, drawn[p], sid, prover, PRECOMPUTED)

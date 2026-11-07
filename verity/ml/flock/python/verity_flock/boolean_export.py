@@ -237,9 +237,9 @@ class CircuitTypeTable:
         #: per root: the flat circuit's ANDs and its types' (their difference: the sharing a type boundary stops)
         self.shared: list[tuple[str, int, int]] = []
 
-    def type_of(self, build, name: str, kind: str, label: str | None = None) -> str:
+    def type_of(self, build, name: str, kind: str, label: str | None = None, circuit: Circuit | None = None) -> str:
         """The type of the circuit ``build()`` makes, and every type below it: validated, the root evaluated against the flat
-        circuit. Returns the root's digest."""
+        circuit (``circuit``, one ``build()`` made already, else built here). Returns the root's digest."""
         from verity.ml.circuits import library
 
         _patch()
@@ -247,7 +247,7 @@ class CircuitTypeTable:
         for d, t in types.items():
             if d not in self.types:
                 CT.validate(t, lambda x: types.get(x) or self.types[x])
-        C = build()
+        C = build() if circuit is None else circuit
         if not _evaluate_type(types, root, C):
             raise AssertionError(f"the types of {name} disagree with its circuit")
         self.evaluated += 1
@@ -1222,7 +1222,7 @@ def template(reg: CircuitTypeTable, tname: str, tp: dict, T_range=None, cache: d
                else walker.store.find("GemmCoordinate_v1", K=str(tp["K"])))
         return _walked(base, walker, ids.get(None), f"GemmCoordinate{json.dumps(tp, sort_keys=True)}")
     if tname in SPINE_UNITS:
-        from verity_numerical.bench import templates as TM
+        from verity_flock import subcircuit_templates as TM
 
         sub = TM.subcircuit(SPINE_UNITS[tname], **_params(tname, tp))
         return _spine(reg, sub, base, walker, spec, f"{tname}{json.dumps(tp, sort_keys=True)}",
@@ -1380,7 +1380,7 @@ def statics_key(statics: dict) -> str:
 
 
 def subcircuit(sub, statics=({},)) -> dict:
-    """One bound subcircuit's Boolean export (``verity_numerical.bench.templates.Subcircuit``), self-contained: a template record
+    """One bound subcircuit's Boolean export (``verity_flock.subcircuit_templates.Subcircuit``), self-contained: a template record
     per instance statics (``variants``, keyed by :func:`statics_key`; attention one per key count T), as a row's templates are
     recorded (a spine template its C-Flock unit and tail, any other its Definition walked), with every definition, subcircuit
     node and circuit type (``circuit_types`` content, keyed by digest) they reach. Raises where the subcircuit has no core

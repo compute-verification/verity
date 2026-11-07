@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
-import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Basic
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Session
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The batched `--zk` session on committed coins (live/PROTOCOL.md §9, C-Flock ZK)
@@ -14,6 +17,8 @@ decoder for, is a live coin (`fresh`).
 The structure follows `sessionZK`: `TGame.interleave` and `TGame.batch` are `Game.interleave` and `Game.batch`, the two
 reps of a table run concurrently in any order the prover picks, each on its own stream (`tagRep`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkCoins
 

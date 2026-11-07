@@ -1,5 +1,40 @@
-import Definitions.Accounting.HeadlineDc
-import Definitions.Accounting.Assumptions.Sheet
+module
+
+public import Definitions.Accounting.Assumptions.Sheet
+public import Definitions.Accounting.HeadlineDc
+public import Definitions.Accounting.HeadlineDc.Sm100Measured
+public import Definitions.Accounting.HeadlineDc.Sm90MeasuredI3
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The data-centre families' headline guarantees (trusted)
@@ -47,7 +82,7 @@ the menu: li's XOR has three inputs a half step, `y ⊕ w ⊕ k`, and those two 
 not a fold; with the third input it is the three-slot round trip, which is on the menu.
 
 Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, with no advantage bound) and read at `√δ_fork`
-(`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves. The proof service's other pieces
+(`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves. The proof system's other pieces
 are named premises too: proof soundness (`ProofSoundAt`, which C-Flock's bound doesn't discharge until it states the
 rows link) and the Definitions' pinning (`ProofsPin`, which no Lean checks of the served relations: `PouwSegCheck_v2`
 lacks it, and the pinning checks recompute every word they absorb), beside `RightFixed`. `ProofLayer.Of` and
@@ -187,6 +222,8 @@ Each statement's docstring gives its binding branch exactly, the exporter's `bou
 Each is proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.HeadlineDc`: with `χ* = 0` it is an instance
 of `headline_of_branches` at the data's π*, each branch's floor bounded from below by lower bounds on `w*` and `φ*`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

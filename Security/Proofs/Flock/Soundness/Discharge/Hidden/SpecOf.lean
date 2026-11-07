@@ -1,4 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # What `Stmt.setupHiddenOf` checked and produced (`SpecOf`)
@@ -6,6 +24,8 @@ import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 `Spec` on the circuit the caller parsed (`parsed`), which `Stmt.setupHiddenOf` reads: `HmOut.parseCommit`'s for
 `Stmt.setupHidden` (`Stmt.setupHidden_eq`). `SpecOf.spec` is `Spec` at `HmOut.parseCommit`.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)
@@ -42,6 +62,7 @@ structure SpecOf (parsed : V Circuit) (tags : Tags) (pf : ByteArray) (coins : Co
   sigma : st.sigma = Sha512.hash (tags.sigmaTag.toUTF8 ++ st.c.sha ++ st.digest ++ st.pub.sha)
   hello : helloOf tags st.sigma (PT_LOCAL + st.nbl) coins = .ok st.hello
 
+-- `walk_step` down `Stmt.setupHiddenOf`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHiddenOf` accepted** is its `SpecOf`. -/
 theorem setupHiddenOf_spec (h : Stmt.setupHiddenOf parsed tags pf coins draw partition program = .ok st) :

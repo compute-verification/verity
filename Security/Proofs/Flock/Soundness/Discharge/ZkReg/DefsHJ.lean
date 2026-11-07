@@ -1,5 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The registered reads of a hidden-output `verify --zk --registered F` session of `J` tables
@@ -12,6 +27,8 @@ with each read `(u, q)` at the table `u` is drawn into: the draw is that table's
 rank is its rank in that table's draw. At one table they are `OwnReadsH` and `regPathsH` (`ownReadsHJ_one`,
 `regPathsHJ_one`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

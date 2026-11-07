@@ -1,6 +1,41 @@
-import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
+public import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 
 /-!
 # The masked replay's rows vanish wherever the plain checks pass at its coins
@@ -21,6 +56,8 @@ sends, so each row is a plain check on the clear proof at the replay's coins, mo
 It is `replay_zerocheck` and `replay_lincheck` (the rows' shapes) composed with the transfer's evaluation lemmas
 (`c_eval_eval`, `final_eval`, `lcFinal_eval`, `lcAbValue_eval`); no row needs its own walk of the masked run.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.Replay
 

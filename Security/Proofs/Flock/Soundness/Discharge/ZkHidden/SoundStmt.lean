@@ -1,6 +1,29 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Sound
-import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.Headline
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Count
+import Proofs.Flock.Soundness.Discharge.ZkLink.Count
+
+@[expose] public section
 
 set_option Elab.async false
 

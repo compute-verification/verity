@@ -1,4 +1,20 @@
-import Proofs.Flock.VBridge.Family.Commits
+module
+
+public import Proofs.Flock.VBridge.Family.Commits
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 
 /-!
 # The family's reads files, round map and round commitments
@@ -27,6 +43,8 @@ The tops (`rec-top-L<l>`) are no commit strings: a RecOpen instance reads its le
 the verifier's query coins draw after the cap's round, so no digest the round's commitment fixes is registered at a top
 row and `VCommits` cannot hold there.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -140,10 +158,10 @@ def mPort (name : String) (k : ℕ) : Registered.Port :=
 def mIndex (nm : String) : Option ℕ := if nm.startsWith "m" then (nm.drop 1).toString.toNat? else none
 
 /-- **A statement's message-round ports**: an algebra part's ports `m<k>`, none of a RecOpen's, nor of candidate 3's
-statements or RecCap, which no session of the circuit table's family is. -/
+statements, RecCap or RecLink, which no session of the circuit table's family is. -/
 def ownOf : VStar.Stmt → Array Registered.Port
   | .inner _ _ p => (p.S.ports.filterMap fun (nm, _) => (mIndex nm).map (mPort nm)).toArray
-  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. | .cap .. => #[]
+  | .recOpen .. | .recOpenStacked .. | .sparse .. | .opening .. | .cap .. | .link .. => #[]
 
 /-- A message-round port: one named `m<k>` or registering a `rec-c<k>`. -/
 def isMsg (p : Registered.Port) : Bool := (mIndex p.name).isSome || (cIndex p.value).isSome
@@ -162,7 +180,7 @@ def SameMsg (own own' : Array Registered.Port) : Prop := ∀ q, q ∈ msgPorts o
 
 theorem isMsg_ownOf {st : VStar.Stmt} {p : Registered.Port} (hp : p ∈ ownOf st) : isMsg p = true := by
   cases st with
-  | recOpen | recOpenStacked | sparse | opening | cap => simp [ownOf] at hp
+  | recOpen | recOpenStacked | sparse | opening | cap | link => simp [ownOf] at hp
   | inner _ _ part =>
     simp only [ownOf, List.mem_toArray, List.mem_filterMap, Option.map_eq_some_iff] at hp
     obtain ⟨⟨nm, _⟩, -, k, hk, rfl⟩ := hp

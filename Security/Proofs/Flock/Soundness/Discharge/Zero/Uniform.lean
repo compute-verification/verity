@@ -1,9 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.Zero.Cols
-import Proofs.Flock.Soundness.Discharge.Zero.Stack
+module
+
+public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
+public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+public import Proofs.Flock.Soundness.Discharge.Zero.Cols
+public import Proofs.Flock.Soundness.Discharge.Zero.Stack
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Aliased.Keys
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
-import Proofs.Flock.Soundness.Discharge.Placed.Keyed
-import Proofs.Flock.Soundness.Discharge.Const.Inst
 
 /-!
 # `hZero` at the circuit's program (e2e, untyped statements)
@@ -22,6 +25,8 @@ The untyped statement `Stmt.setupH` accepted places a template instance (`upv` s
   `zeroCols_progPlaces` is the same at `Placed.progPlaces`, and `zeroCols_keyProg` at `Placed.Sites.progPlaces_keyProg`,
   which takes only the sites and the parse.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

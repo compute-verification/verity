@@ -1,10 +1,12 @@
-import PousCheck.Run
-import Properties.Pous
-import Properties.Pous.TimedAudit
-import Properties.Pous.MemoryChallenger
-import Properties.Identity
-import Definitions.Pous.Assumptions.P2
-import Definitions.Pous.P2.Cost
+module
+
+public import PousCheck.Run
+public import Properties.Pous
+public import Properties.Pous.TimedAudit
+public import Properties.Pous.MemoryChallenger
+public import Properties.Identity
+public import Definitions.Pous.Assumptions.P2
+public import Definitions.Pous.P2.Cost
 
 /-!
 # PoUS end to end: what an accepted run certifies, and P2's audit in the ring model
@@ -65,6 +67,8 @@ Two gaps stood between these statements and the deployed verifier:
 * **G-2**, fixed: the composed setup-to-challenger check is `PousCheck.Run.check`, and `RunCheckAccepts` is what its
   acceptance gives.
 -/
+
+@[expose] public section
 
 open MemoryChallenger MemoryChallenger.Properties
 open PousCheck PousCheck.Properties
@@ -180,7 +184,8 @@ the device's own readings: what the server reports about its latency enters nowh
 challenger's own: whichever table it held, an accepted one has the published root, so it is `C*`'s or there is a
 collision. -/
 def RunCheckAccepts : Prop :=
-  ∀ (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray),
+  ∀ (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord)
+    (sid : ByteArray),
     Run.check trusted pub digests r sid = .ok () →
     ∀ (dev : Challengers) (C : Array (Array ByteArray)),
       AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧ r.signed.publicKey ∈ trusted ∧
@@ -193,7 +198,7 @@ salt and publishes `pub`, and the composed check accepts, against the verifier's
 keys (never the run's record), `pub`, the memory challenger's table and its session under the id `sid` the auditor
 designated. -/
 def Accepted (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) : Prop :=
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray) : Prop :=
   SetupProtocol.protocol.check q c C = .accept pub () ∧ Run.check trusted pub digests r sid = .ok ()
 
 /-- **An accepted run certifies `C*`.** For every verifier's list `trusted` of memory-challenger keys (never the run's
@@ -207,7 +212,8 @@ data holds a SHA-512 collision or an LMS forgery under a key in `trusted`. A dis
 check's `AcceptsDecodes` and `PublishesRoot`, all proved. -/
 def RunCertifies : Prop :=
   ∀ (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Challengers),
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray)
+    (dev : Challengers),
     Accepted trusted c C pub digests r sid →
       DecodesToCommitment q c C ∧ Published q c C pub ∧ AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧
         r.signed.publicKey ∈ trusted ∧
@@ -273,7 +279,7 @@ server learns from indices seen after one only helps a server the game counts as
 structure Server (S D Q L : ℕ) : Type where
   pre : Preprocessor sch S
   step : SessionCommitment → Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
-    Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
+    OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
   bounded : ∀ sc W pp j σ i, (step sc W pp j σ i).RingBounded D Q L
 
 /-- **The server passes the session**: `ω`, the coins and the streams `x`; the code's sampler reads index `I j` from

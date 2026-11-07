@@ -1,5 +1,40 @@
-import Proofs.Flock.Claims.Recursion.VStarBound
-import Proofs.Flock.Claims.Recursion.DeployPremises
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarBound
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.FlockKSRecord
 
 /-!
 # `KSBound` at the deployment (option (d))
@@ -35,6 +70,8 @@ reads them apart.
 
 Statements only, with those three lemmas and (P1) at the deployed plain verifier's own steps (`plainKSAbort_bd`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -123,13 +160,11 @@ noncomputable def recBoundAt (rel : _root_.Flock.Readable.Parsed → _root_.Floc
 
 /-- **`KSBound` at the deployment**, the guarantee option (d) states: at SHA-512, the compiled record `deployRec` whose
 inner view runs `IVStar` at V*'s bound layout (`recBoundAt`), the deployed bound record (`bdDeployed`) and the deployed
-outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` it is `KSBoundCover`. Its level
-(`Claims.Recursion.lam`) is about 65 bits per SHA-512 call at the deployed shape (one inner table at `m = 35`, `γ`'s
-weight at `IVStar` at `coverW`), below the 100-bit floor and the `2^-128` target under every weight. Route 2C's
-bound λ₂ (`lamLin2`) evaluates to at least 100 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep`), but
-`KSLin2` at the deployment's dense statements (`KSLin2On` at `RecDeploy.DenseAt`) only follows from premises still open
-(`RecDeploy.ksLin2_deployed_open`), Holo statements being candidate 3's own model, and `BitsLin2` at those statements
-follows from it (`bitsLin2On_of_ksLin2On`). -/
+outer `--zk` record (`deployZkRec`). At `γ`'s weight `wCover` at `IVStar` it is `KSBoundCover`. No theorem
+evaluates its level (`Claims.Recursion.lam`) at the deployment. Route 2C's bound λ₂ (`lamLin2`) evaluates to at least
+135.7 at the deployed records (`RecDeploy.lamLin2_deployed_ge_dep_tight`), and `KSLin2` at the deployment's dense
+statements (`KSLin2On` at `RecDeploy.DenseAt`) is proved (`Flock.SecurityProofs.RecursiveKS`), Holo statements being
+candidate 3's own model, and `BitsLin2` at those statements follows from it (`bitsLin2On_of_ksLin2On`). -/
 def KSBoundDeployed (rel relO : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (b : Brings)
     (L : Claims.Recursion.VStarB.LayoutB) (nextE : Msg → List Msg → List Coin → Claims.OC Out)
     (colsE : Claims.Seen → ℕ → List (ℕ × List FlockLevel3.GF128)) (wE : Msg → ℝ) (join : List Msg → Msg)

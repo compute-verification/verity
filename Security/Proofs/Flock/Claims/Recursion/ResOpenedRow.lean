@@ -1,4 +1,43 @@
-import Proofs.Flock.Claims.Recursion.OpenSlots
+module
+
+public import Proofs.Flock.Claims.Recursion.OpenSlots
+public import Proofs.Flock.Claims.Recursion.RestReadsAt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.BoundAccepts
+import Proofs.Flock.Claims.Recursion.CutOpens
+import Proofs.Flock.Claims.Recursion.HmOpen
+import Proofs.Flock.Claims.Recursion.RestFinal
 
 /-!
 # The row a stream round opens is its first holder's
@@ -8,6 +47,8 @@ first half), so each round's opened rows are its slots' rows read off their part
 round's slots are its tops' instances, then its row's slot (`roundSlots`), so the row past the tops' rows is the
 round's `rowSlot`'s (`opened_row`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.OpenSlots
 

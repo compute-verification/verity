@@ -1,5 +1,41 @@
-import Proofs.Flock.Claims.Complete.Encode
-import Proofs.Flock.Claims.Complete.Prover.Session
+module
+
+public import Proofs.Flock.Claims.Complete.Encode
+public import Proofs.Flock.Claims.Complete.Prover.Session
+public import Proofs.Flock.Claims.Deploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The plain verdict accepts when each of its checks passes
@@ -20,6 +56,8 @@ names, one goal each.
   coins), the scope, and a drawn session.
 -/
 
+@[expose] public section
+
 open Flock FlockDeploy Transcript
 
 namespace FlockComplete
@@ -29,7 +67,7 @@ theorem ok_bind {ε α β : Type} (a : α) (f : α → Except ε β) : (Except.o
 /-! ## A rep -/
 
 /-- **A rep accepts** when each of its checks passes, each replay from the transcript the previous one left. -/
-theorem verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : Session)
+theorem verifyRepWith_ok (hs : Flock.Hashes V) (spec : SessionSpec) (st : Setup) (sch : Schedule) (sess : RunRecord)
     (i r : ℕ) (bytes : ByteArray) {stream : StreamRec} {extras : Array Claim} {p : Proof} {zc : ZcOut} {lc : LcOut}
     {T : F128} {sws : Array Switched} {t₁ t₂ t₃ t₄ : Transcript}
     (hS : sess.streams.find? (·.name == s!"{spec.tables[i]!}/rep{r}") = some stream)
@@ -92,7 +130,7 @@ theorem dgWith_ofSha512 (spec : SessionSpec) (h : ByteArray → ByteArray) (b : 
 
 /-- **The plain verdict accepts** when each of its checks passes. -/
 theorem verifyWith_ok (h : ByteArray → ByteArray) (spec : SessionSpec) (tabs : Array Setup) (record : String)
-    (proofs : Array ByteArray) {sess : Session}
+    (proofs : Array ByteArray) {sess : RunRecord}
     (hT : (tabs.size != spec.tables.size || tabs.size == 0) = false)
     (hD : Record.decodeWith (Flock.Hashes.ofSha512 h : Flock.Hashes V) spec record = Except.ok sess)
     (hU : ∀ q ∈ (tabs.zip sess.publics).toList, q.1.publics q.2 = .ok ())

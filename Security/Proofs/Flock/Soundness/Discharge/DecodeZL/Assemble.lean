@@ -1,5 +1,29 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The decoder is right at the headline's draws
@@ -16,6 +40,8 @@ accepts:
   points, root and proof files are the record's.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.DecodeZL
 
 open Flock Refine Exec Game Model Accounting Audit
@@ -30,7 +56,7 @@ the salted verdict on the two runs at `capOfRoot` of the table's root and `opnOf
 theorem accepts_reps {I : Inputs} {t : Exec.Transcript} (hh : I.tags.hiddenOutputs = false)
     (hrr : I.tags.retainRounds = true) (hl : I.tags.merkleLeaf = "hm96-sha512/v1") (hc1 : I.count ≤ 1)
     (h : Accepts I t) :
-    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : Session) (sch : Flock.Schedule),
+    ∃ (st : Flock.Stmt) (spec : SessionSpec) (sess : RunRecord) (sch : Flock.Schedule),
       Flock.Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (recordDraw t.record) I.partition I.program =
         .ok st ∧ setupOf I t.record = .ok (spec, #[st]) ∧ Record.decode spec t.record = .ok sess ∧
       Flock.fast100 st.m = some sch ∧

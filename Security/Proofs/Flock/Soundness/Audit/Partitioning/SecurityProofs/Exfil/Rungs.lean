@@ -1,4 +1,7 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Model
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
 # Exfiltration: what a certified leak forces
@@ -12,6 +15,8 @@ With every unit `b` bits wide, the bound `CertifiesLeak` certifies is `H + locBi
   `RefinementRule` compares. `Σ_{j ≤ K+1} C(n, j) ≤ (K + 2)·C(n, K + 1)` when `2(K + 1) ≤ n`, and
   `C(r·n, K + 1) ≥ r^(K+1)·C(n, K + 1)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil
 

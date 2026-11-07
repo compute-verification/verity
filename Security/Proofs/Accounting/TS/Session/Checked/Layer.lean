@@ -1,4 +1,39 @@
-import Proofs.Accounting.TS.Session.Assumptions
+module
+
+public import Definitions.Accounting.TS.ProofLayer
+public import Proofs.Accounting.TS.Session.Assumptions
+public import Proofs.Flock.SoundAtBridge.Session
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A checked unit's proof layer through its C-Flock sessions
@@ -6,7 +41,7 @@ import Proofs.Accounting.TS.Session.Assumptions
 The proof layer a checked record (`Accounting.Served`'s `Held`, at `PouwH1TileZy_v1`) is realized by, when proof `i` of
 round `w` on the path `x` is the C-Flock session `sess x w i` (a `RowsSession`) with outcome `out x w i`:
 
-* `accepted`: flock-verify `--zk --registered` accepts the session (`LiveAcceptsZKR`), so the proof service's rule
+* `accepted`: flock-verify `--zk --registered` accepts the session (`LiveAcceptsZKR`), so the proof system's rule
   (`Accounting.Assumptions.TS.AcceptedLive`) holds of it by definition;
 * `opened`: the registered rows, the committed trees' own: at each unit `u` and each wire of `u` at a registered read
   of `rdU u` (the unit's `zy` and A rows, its registered B, and its `ok` row), the bit of the registrant's opening
@@ -25,6 +60,8 @@ session's value layer (`XplurZC`) at them, the `rows` `ServedChecksHold` and `Se
 These definitions read `RowsSession`, in the proofs package, so they sit here under `reads_exempt`'s
 `Proofs.Accounting.TS.Session`, as `Accounting.Assumptions.TS`'s do.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Checked
 
