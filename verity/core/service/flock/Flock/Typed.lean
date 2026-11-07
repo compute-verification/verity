@@ -9,7 +9,7 @@ are in logical order. `flock-rows --part` prints unchecked rows, so nothing here
 old statement had it. `HmRow.parseTyped` reads that as it reads any statement, and keeps the typed file's own digest and
 class. The keys:
 * `types`: `{digest: content}`, each the digest of its content and checked by `CircuitType.check`;
-* `layouts`: layout records, each its `sha512`'s record, checked by `Layout.check`;
+* `layouts`: layout records, each its `sha512`'s record, checked by `BlockLayout.check`;
 * `unit_layout`: the unit's layout, derived (`own` is `derive`);
 * `unit_type`: that layout's type;
 * `policy`: `calls/v1`;
