@@ -7,8 +7,8 @@ public import Proofs.Flock.SamplingGeneric.TwoRankin
 /-!
 # Rankin's bound on the two-stage count says something
 
-`AdmissibleTwoRankin` and `AdmissibleTwoRankinPatterns` are guarantees that the lock's `claims.generic` names, each held
-to an honest and a nontrivial witness.
+`AdmissibleTwoRankin`, `AdmissibleTwoRankinPatterns` and `AdmissibleTwoRankinServed` are guarantees that the lock's
+`claims.generic` names, each held to an honest and a nontrivial witness.
 
 * `rankinTwo`: `twoStmt`'s two proof blocks in one replay block (`onePart`), its first stage `bernoulli:1/2`, `k = 1`.
   It is in scope, its first stage meets the rates' hypothesis at `q_ρ = 1/2` (`bernoulli_Pa_le`), and a request reading
@@ -17,7 +17,10 @@ to an honest and a nontrivial witness.
   every footprint and both sets of proof blocks are admissible at `δ = 9/10`. Claimed at the rate `1/2` it doesn't meet,
   the bound fails at `θ = 1`: the count is `1 + 2 = 3` and `δ^{−1}·G = (10/9)·(1·1 + 2·(1/2)) = 20/9`
   (`rankinTwo_nontrivial`). With one request reading the one output, the patterns are the sets' and the numbers the same
-  (`rankinTwoPatterns_nontrivial`).
+  (`rankinTwoPatterns_nontrivial`), and so they are under the served-output cap at `S = 1`
+  (`rankinTwoServed_nontrivial`).
+* `twoReq`: `twoStmt`'s outputs as two requests, each reading its own proof block, so they read disjoint proof blocks
+  and the requests reading in `rankinTwo`'s one replay block serve `2` bits (`rankinTwoServed_honest`).
 -/
 
 @[expose] public section
@@ -201,5 +204,78 @@ theorem rankinTwoPatterns_nontrivial :
   have : (3 : ℝ) ≤ (9 / 10)⁻¹ * 2 :=
     h.trans (mul_le_mul_of_nonneg_left hfac (by norm_num))
   norm_num at this
+
+/-! ## The served-output cap's form -/
+
+/-- `twoStmt`'s two requests, each reading one of its outputs. -/
+def twoReq : Fin twoStmt.prog.outs.length → Fin twoStmt.prog.outs.length := id
+
+/-- `twoStmt`'s gates are inputs, so a gate reads only itself. -/
+theorem two_reads {g j : ℕ} (h : twoStmt.prog.Reads g j) : g = j := by
+  cases h with
+  | refl => rfl
+  | step hx hi _ =>
+    have h0 : ∀ x ∈ twoStmt.prog.gates, x.reads = [] := by decide
+    rw [h0 _ (List.mem_of_getElem? hx)] at hi
+    simp at hi
+
+theorem two_outs_mem :
+    ∀ i : Fin twoStmt.prog.outs.length, ∀ v < 2, twoStmt.prog.outs[i] ∈ twoPart.blocks.getD v [] → v = i := by
+  decide
+
+theorem two_blocksTo (r : Fin twoStmt.prog.outs.length) :
+    blocksTo twoStmt.prog twoPart twoReq (range twoPart.blocks.length) r ⊆ {(r : ℕ)} := by
+  intro v hv
+  obtain ⟨hvN, g, hg, -, i, rfl, hr⟩ := (mem_blocksTo twoReq).1 hv
+  rw [← two_reads hr] at hg
+  exact mem_singleton.2 (two_outs_mem i v (mem_range.1 hvN) hg)
+
+/-- **`AdmissibleTwoRankinServed`'s honest witness**: `rankinTwo_honest`'s; `twoStmt`'s two requests read disjoint
+proof blocks; and the requests that read in a replay block serve at most `2` bits. -/
+theorem rankinTwoServed_honest : InScopeTwo twoPart rankinTwo twoStmt ∧
+    (∀ T ⊆ range rankinTwo.part.blocks.length, rankinTwo.replay.Pa rankinTwo.part T ≤ ∏ _ρ ∈ T, (1 - (1 / 2 : ℝ))) ∧
+    (∀ r r' : Fin twoStmt.prog.outs.length, r ≠ r' →
+      Disjoint (blocksTo twoStmt.prog twoPart twoReq (range twoPart.blocks.length) r)
+        (blocksTo twoStmt.prog twoPart twoReq (range twoPart.blocks.length) r')) ∧
+    ∀ ρ, ∑ r ∈ univ.filter
+        (fun r => (blocksTo twoStmt.prog twoPart twoReq (blocksIn twoPart rankinTwo.part ρ) r).Nonempty),
+      servedBits twoReq r ≤ 2 :=
+  ⟨rankinTwo_honest.1, rankinTwo_honest.2,
+    fun r r' h => (disjoint_singleton.2 fun h' => h (Fin.ext h')).mono (two_blocksTo r) (two_blocksTo r'),
+    fun _ => (sum_le_sum_of_subset (filter_subset _ _)).trans (by decide)⟩
+
+theorem toy_blocksTo_empty (r : Unit) : blocksTo toyStmt.prog toyPart toyReq ∅ r = ∅ :=
+  subset_empty.1 (blocksTo_subset _ _ _ _ _)
+
+theorem toy_blocksTo_zero (r : Unit) : blocksTo toyStmt.prog toyPart toyReq {0} r = {0} := toy_blocksTo
+
+theorem toy_servedBits_unit (r : Unit) : servedBits toyReq r = 1 := toy_servedBits
+
+theorem toy_bitsOf_empty : bitsOf toyStmt toyPart ∅ = 0 := by simp [bitsOf]
+
+theorem nothingTwo_countServed : (∑ T ∈ admissibleTwo toyPart nothingTwo (9 / 10), 2 ^ min (bitsOf toyStmt toyPart T)
+    (∑ r ∈ univ.filter (fun r => (blocksTo toyStmt.prog toyPart toyReq T r).Nonempty),
+      min (bitsOf toyStmt toyPart (blocksTo toyStmt.prog toyPart toyReq T r)) (servedBits toyReq r)) : ℕ) = 3 := by
+  rw [nothingTwo_admissible, show (range 1).powerset = ({∅, {0}} : Finset (Finset ℕ)) by decide,
+    sum_pair (by decide)]
+  simp [toy_blocksTo_empty, toy_blocksTo_zero, toy_bitsOf_empty, toy_bitsOf_zero, toy_servedBits_unit]
+
+theorem nothingTwo_rankinFactorCapped : rankinFactorCapped toyStmt toyPart nothingTwo 1 (1 / 2) 1 0 = 2 := by
+  unfold rankinFactorCapped
+  rw [toy_blocksIn, powerset_zero, sum_pair (by decide), nothingTwo_passes_empty, nothingTwo_passes_zero,
+    toy_bitsOf_zero, toy_bitsOf_empty]
+  norm_num
+
+/-- **`AdmissibleTwoRankinServed`'s conclusion fails** at `nothingTwo`, claimed at the rate `1/2`, with one request
+reading the one output and the cap `1`: `1 + 2 = 3 > (10/9)·2`. -/
+theorem rankinTwoServed_nontrivial :
+    ¬ ((∑ T ∈ admissibleTwo toyPart nothingTwo (9 / 10), 2 ^ min (bitsOf toyStmt toyPart T)
+          (∑ r ∈ univ.filter (fun r => (blocksTo toyStmt.prog toyPart toyReq T r).Nonempty),
+            min (bitsOf toyStmt toyPart (blocksTo toyStmt.prog toyPart toyReq T r)) (servedBits toyReq r)) : ℕ) : ℝ) ≤
+      (9 / 10 : ℝ) ^ (-(1 : ℝ)) *
+        ∏ ρ ∈ range nothingTwo.part.blocks.length, rankinFactorCapped toyStmt toyPart nothingTwo 1 (1 / 2) 1 ρ := by
+  rw [nothingTwo_countServed, show nothingTwo.part.blocks.length = 1 from rfl, prod_range_one,
+    nothingTwo_rankinFactorCapped, Real.rpow_neg_one]
+  norm_num
 
 end Claims.Witness.SamplingGeneric
