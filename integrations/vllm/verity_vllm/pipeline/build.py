@@ -488,7 +488,7 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 raise _Refused()
             observe_attention_impls(res["attention_impls_observed"])
             log = TritonLaunchLog()
-            chunks = list((launch or {}).get("chunks") or ())
+            chunks = list((launch or {}).get("chunks", ()))
             mod, inputs = vm.make_wrapper(wrapper, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos, sampling=sampling, C=C, chunks=chunks)
             ntok = M if wrapper == "step" else LP - C
             if tp > 1:

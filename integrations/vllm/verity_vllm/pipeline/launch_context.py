@@ -100,7 +100,7 @@ def bad_chunks(launch: dict | None, wrapper: str, LP: int, T: int, C: int) -> di
     chunks = (launch or {}).get("chunks")
     if not chunks:
         return None
-    steps = len(launch["batch_by_step"]) if launch.get("batch_by_step") else 0
+    steps = len(launch["batch_by_step"])
     if wrapper == "request" and not C and sum(chunks) == LP and steps == len(chunks) + T:
         return None
     return {"reason": "launch_context", "phase": "applicability", "node": None, "module_path": None,
