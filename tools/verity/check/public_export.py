@@ -24,7 +24,7 @@ The report gives:
   lane handles, dates, names);
 * the known residue (`public_boundary.toml`'s `[[residue]]`), each entry's sites, and the change that removes it;
 * the third-party code DEST pins: the Lean packages its manifests pin, the Python distributions its lock resolves, and the
-  Rust upstream C-Flock patches;
+  Rust upstream Flock patches;
 * with `--build`, each Lake package's `lake build` and the workspace's `uv sync` (a node's work: `research run`), and the
   licenses of what they fetched and of the Rust upstream at its pin.
 """

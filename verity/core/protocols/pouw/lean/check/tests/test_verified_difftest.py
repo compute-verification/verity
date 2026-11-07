@@ -1,4 +1,4 @@
-"""The Lean verifier of record of a served window's statements (`PouwCheck.Verified`, `pouw-check-difftest`'s
+"""The Lean verifier of a served window's statements (`PouwCheck.Verified`, `pouw-check-difftest`'s
 ``credit-verified``) held to its Python reference, `credit._asks` and `credit._verified`, on `pouw_verified_cases`:
 with `runs` null, the verifier runs the Lean names (or the verdict, when it names none); with the answers, the verdict,
 each sampled proof block's outcome or the refusal, string for string, the lanes form's (`PouwCheck.Lanes`) among them.

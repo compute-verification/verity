@@ -78,8 +78,8 @@ theorem sitesShHI_parse :
 variable {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
 
 include hpub in
-/-- **`BcSiteH` at every satisfiable site** of the public plan: at a draw `verify --zk` sets up by `tableH_bcSiteI`; at
-a refused draw no message satisfies the table. -/
+/-- **`BcSiteH` at every satisfiable site** of the public plan: at a sample `verify --zk` sets up by `tableH_bcSiteI`; at
+a refused sample no message satisfies the table. -/
 theorem sitesShHI_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShH dj y₀) (tabShH dj y₀) S R u), Binding.Sat (planShH dj y₀) (tabShH dj y₀) S R u M →
@@ -123,7 +123,7 @@ theorem rsShHI_computes : (rsShHI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg))
     (checkFactsH (zkTyped ht) hc).upv_pos (sitesShHI_bcSite dj y₀ ht hc hrf hpub)
     (instKeysRowH (zkTyped ht) hc dj y₀.x hU hpr hw)
 
-/-- **Each drawn unit's place in its hidden-output `--zk` table, at `instProg`**: `instPlaceH`'s place in the public
+/-- **Each sampled proof block's place in its hidden-output `--zk` table, at `instProg`**: `instPlaceH`'s place in the public
 table, along `planAtZKH_S`. -/
 noncomputable def placeZHI (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     UnitPlace ((instProg c n).partition (outsOfI c n)) (tabOfZ (planAtZKH dj y₀) (tabAtZKH dj y₀) S R u).S u :=
@@ -287,7 +287,7 @@ theorem rsShHJI_computes : (rsShHJI dj y₀ ht hc hrf hpub hU hpr hw (Reg := Reg
   instRowsH_computes (sitesShHJI_parse dj y₀ ht hc hrf) hrf (outsOfI c n) (fun _ => pub) outsOutI_outsOfI
     (checkFactsH (zkTyped ht) hc).upv_pos (sitesShHJI_bcSite dj y₀ ht hc hrf hpub) (instKeysRowHJ y₀ ht hc hU hpr hw)
 
-/-- **Each drawn unit's place in its hidden-output `--zk` table at `J` tables, at `instProg`**: `instPlaceH`'s place
+/-- **Each sampled proof block's place in its hidden-output `--zk` table at `J` tables, at `instProg`**: `instPlaceH`'s place
 in the public table, along `planZHJ_S`. -/
 noncomputable def placeZHJI (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     UnitPlace ((instProg c n).partition (outsOfI c n)) (tabOfZ (planZHJ dj y₀) (tabZHJ dj y₀) S R u).S u :=

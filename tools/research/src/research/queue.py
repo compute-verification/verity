@@ -375,7 +375,7 @@ PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 #: the codemod that puts the in-tree Lake packages' Lean on Lean's module system, and the one reading of a Lean header it reads
 #: with: a merge into a tree on the module system runs the codemod over the merged tree (`ported`)
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
-#: the root modules of Security's `Definitions` library and C-Flock's `Flock`, which the port makes modules: a tree holding
+#: the root modules of Security's `Definitions` library and Flock's `Flock`, which the port makes modules: a tree holding
 #: the codemod is on the module system when each is a module (`on_modules`)
 PORTED_ROOTS = ("Security/Definitions.lean", "verity/core/service/flock/Flock.lean")
 #: what the codemod's run over a tree reads besides the codemod and its header reader: a merge that changes none of these onto
@@ -4788,7 +4788,7 @@ class LeanCheck:
 class RecordsGate:
     """`ready`'s records gate, before the preflight and the mark, which warns and never refuses: a head whose change against the
     landing branch (`into_at` `main`: `checked` under `land_into = "checked"`, else `main`, whose locks the PRs that landed there
-    were held to; from their merge base) touches a Lake package's lock (`lean-audit.json`) draws a warning, naming the run that
+    were held to; from their merge base) touches a Lake package's lock (`lean-audit.json`) samples a warning, naming the run that
     would record it, for each such package unless the store holds a records run of that exact head in which the package passed
     on the head's own lock (as PKG, or as a requirer PKG's run audited), or a Lean check of the head that audited the package
     and passed it on that lock (`_checked`).  The lock run after its landing regenerates the records (`RECORDS_AFTER_LANDING`),

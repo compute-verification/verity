@@ -73,7 +73,7 @@ def PouwEndToEndPerRun : Prop :=
         ≤ (1 - εs) ^ t + ε q U.layout.N
 
 /-- **PoUW's per-run guarantee is the compute audit's per-run guarantee.** Under `PouwEndToEndPerRun`'s hypotheses, for
-any run on any device whose compute audit realizes PoUW's game at price `p`, with at least one draw of the game's coins
+any run on any device whose compute audit realizes PoUW's game at price `p`, with at least one sample of the game's coins
 and the device's oracle queries over the compute window at most `2^64`, the compute audit has its per-run guarantee at
 certificate `(1 − γ)(1 − εs)·W` and error `(1 − εs)^t + ε(q, N)`, where `q` is the device's oracle rate times the compute
 window's length. -/
@@ -139,7 +139,7 @@ def PearlCEndToEndPerRun : Prop :=
 /-- **Pearl-C's per-run guarantee is the compute audit's per-run guarantee on the priced sum.** Under
 `PearlCEndToEndPerRun`'s hypotheses, for any run on any device whose compute audit realizes Pearl-C's game with the
 adversary's cost covered by the compute account's work at price `p` plus `pRead` per bit it read
-(`RealizesPearlCPriced`), with at least one draw of the game's coins and the device's oracle queries over the compute
+(`RealizesPearlCPriced`), with at least one sample of the game's coins and the device's oracle queries over the compute
 window at most `2^64`, the compute audit has its per-run guarantee on the priced sum at certificate
 `(1 − γ)(1 − ε_s)·∑_u W_ref(u)` and error `(1 − ε_s)^t + η(q, N)`, where `q` is the device's oracle rate times the
 compute window's length. Tables cite the work and the bits read separately; the certificate is on their priced sum. -/
@@ -183,7 +183,7 @@ def PearlCStopEndToEndPerRun : Prop :=
 /-- **The compute audit's per-run guarantee on the priced sum, from the γ-gap property per coin.** Under
 `PearlCStopEndToEndPerRun`'s hypotheses, for any run on any device whose compute audit realizes Pearl-C's game on
 `CM.withStop` with the adversary's cost covered by the compute charge, the compute account's work at price `p`, plus the
-bandwidth charge, `pRead` per bit it read (`RealizesPearlCPriced CM.withStop`), with at least one draw of the game's
+bandwidth charge, `pRead` per bit it read (`RealizesPearlCPriced CM.withStop`), with at least one sample of the game's
 coins and the device's oracle queries over the compute window at most `2^64`, the compute audit has its per-run
 guarantee on the priced sum at the certified `(1 − γ)(1 − ε_s)·∑_u W_ref(u)` and error `(1 − ε_s)^t + η(q, N)`, where
 `q` is the device's oracle rate times the compute window's length. The device need not stop a run: a run that realizes

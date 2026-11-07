@@ -44,7 +44,7 @@ import Proofs.Flock.Claims.Recursion.KSStated
 /-!
 # The recursion's KS over the masked record, from the masked table bound counted per round
 
-The recursion's chain at the abort law (`KSAbort_of_tableBoundOnAcc`) reads the table bound with escapes on accepted
+The recursion's chain at the abort distribution (`KSAbort_of_tableBoundOnAcc`) reads the table bound with escapes on accepted
 runs fitting as `Escapes.FitsFork` asks, every fork event charged at the busiest round's count, which the masked
 escapes with level 0's fork event do not fit at the deployed weight (`ZkFitsW`). Counted per round
 (`Claims.Recursion.TableBoundθOnAccR`, at every statement `Flock.TableBoundθAccAtR`, which `TableBoundθOnAcc` gives:
@@ -68,7 +68,7 @@ namespace Claims.Recursion
 
 open Claims Claims.Flock FlockSoundness FlockSoundness.Game FlockSoundness.Extract FlockSoundness.Rewinding
 
-/-! ## Fork events over draws, merged by round -/
+/-! ## Fork events over samples, merged by round -/
 
 section MergeD
 
@@ -177,7 +177,7 @@ theorem EscapesD.term_le_mergeR [Fintype Coin] [Fintype A] (e : EscapesD H n tr)
 
 end MergeD
 
-/-! ## The chain at the abort law, counted per round -/
+/-! ## The chain at the abort distribution, counted per round -/
 
 section TableBound
 
@@ -207,7 +207,7 @@ def TableBoundθAbortR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg 
               lookCol (D.cols (abortRun H P D.V x keep ω d).seen 0) p.val = some u ∧ u ≠ C p
 
 /-- **The abort-law table bound counted per round, from the table bound with escapes on accepted runs counted per
-round**: `tableBoundθAbort_of_onAcc`, whose escapes at the abort law have the same rounds and weights. -/
+round**: `tableBoundθAbort_of_onAcc`, whose escapes at the abort distribution have the same rounds and weights. -/
 theorem tableBoundθAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (Ok : Msg → Col → Prop) (decC : Msg → Msg → Coin) (htab : TableBoundθOnAccR H D N Ok) (hVk : ∀ x, 0 < D.V.k x)
     (hpc : CoinsShown H D.V decC) (hlast : AccLast H D.V) (hfree : DecideFree H D.V) (href : Refusable H D.V) :
@@ -222,7 +222,7 @@ theorem tableBoundθAbortR_of_onAccR (H : Msg → Msg) (D : Flock.Deploy Coin Co
     (fun s => ∃ (p : Fin (N x)) (u : Col), lookCol (D.cols s 0) p.val = some u ∧ u ≠ C p) ω
     (fun g => hb (ω, g) C hC hg)
 
-/-- **Flock's one-wait bound at the abort law, from the table's bound there counted per round**:
+/-- **Flock's one-wait bound at the abort distribution, from the table's bound there counted per round**:
 `oneWaitAbort_of_tableBound`, the escapes with the conflict fork merged by round (`EscapesD.mergeR`). -/
 theorem oneWaitAbort_of_tableBoundR (H : Msg → Msg) (D : Flock.Deploy Coin Col T) (N : Msg → ℕ)
     (hN : ∀ x, (N x : ℝ) ≤ D.N₀ x) (hεt : ∀ x, 0 ≤ D.εtable x) (hVk : ∀ x, 0 < D.V.k x)

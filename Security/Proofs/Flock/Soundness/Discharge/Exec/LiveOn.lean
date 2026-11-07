@@ -3,13 +3,13 @@ module
 public import Proofs.Flock.Soundness.Discharge.Exec.Live
 
 /-!
-# The refinement for one-table sessions, with the decoder right at the law's draws only
+# The refinement for one-table sessions, with the decoder right at the sampling design's samples only
 
-`DecodesAll` asks `Decodes` at every draw `S` and registration. The audit plays only the law's draws `L.draw ω`, so
+`DecodesAll` asks `Decodes` at every sample `S` and registration. The audit plays only the sampling design's samples `L.draw ω`, so
 `DecodesOn L` asks it there and nowhere else, and `execRefines_on` and `Prog.flock_headline_live_on` take it in place
 of `DecodesAll`, with the same bound. `DecodesAll` implies it (`decodesOn_of_all`), and at it the simulated prover is
-the same (`simAudit_eq_on`). At a draw the law never makes, the table `T S R` and the decoder are unconstrained; at a
-draw it makes, `T S R` must be the table flock-verify sets up there, `m_pts` included (`Pts.lean`).
+the same (`simAudit_eq_on`). At a sample the sampling design never makes, the table `T S R` and the decoder are unconstrained; at a
+sample it makes, `T S R` must be the table flock-verify sets up there, `m_pts` included (`Pts.lean`).
 -/
 
 @[expose] public section
@@ -30,8 +30,8 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap D)) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify accepts, at the law's draws** (R11b): `DecodesAll` at the
-draws `L.draw ω` only. -/
+/-- **The decoder is right on the sessions flock-verify accepts, at the sampling design's samples** (R11b): `DecodesAll` at the
+samples `L.draw ω` only. -/
 def DecodesOn (L : Law n) : Prop :=
   ∀ ω R, Decodes (fun (caps : Fin 1 → Cap D) pend os => tableOutL H E Lf (caps 0) pend os)
     (fun o => Accepts I (wr (L.draw ω) R o)) (·.accepted = true) (opn (L.draw ω) R) (dec (L.draw ω) R)
@@ -44,8 +44,8 @@ theorem decodesOn_of_all (L : Law n) (h : DecodesAll H E Lf T I wr opn dec one f
 
 variable {L : Law n}
 
-/-- **The simulated audit strategy**, from the decoder at the law's draws: the live prover's registration, and at each
-draw the simulated session strategy against its live session. -/
+/-- **The simulated audit strategy**, from the decoder at the sampling design's samples: the live prover's registration, and at each
+sample the simulated session strategy against its live session. -/
 noncomputable def simAuditOn (hdec : DecodesOn H E Lf T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     Strategy (audit L Reg (batchedSessionL H E Lf fun S R => [T S R])) :=
@@ -58,7 +58,7 @@ noncomputable def simAuditOn (hdec : DecodesOn H E Lf T I wr opn dec one fin cap
 /-- **The refinement for one-table sessions.** Against any live prover `τ` of the live audit whose session is
 `liveTable` written out by `wr`, flock-verify's acceptance is no likelier than the salted audit's acceptance against the
 simulated prover `simAuditOn … τ`, with no live event added (`bad = ⊥`), whenever the decoder is right on accepted
-sessions at the law's draws (`DecodesOn`). -/
+sessions at the sampling design's samples (`DecodesOn`). -/
 theorem execRefines_on (hdec : DecodesOn H E Lf T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     ExecRefines (auditLive L Reg (liveOf dg mPts N wr)) τ (LiveAccepts I) (fun _ => False)
@@ -88,14 +88,14 @@ theorem execRefines_on (hdec : DecodesOn H E Lf T I wr opn dec one fin capOf L)
 
 variable {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
 
-/-- **The headline at the executable, for one-table sessions of the challenger.** Let the verifier draw the units
-as in `Prog.flock_headline_L` (the live stratified draw under A3), let each draw's session be one table `T S R`, and let
-the live session be `liveTable` (the challenger, its coins uniform per round and drawn after the round's retained
+/-- **The headline at the executable, for one-table sessions of the challenger.** Let the verifier sample the units
+as in `Prog.flock_headline_L` (the live stratified sample under A3), let each sample's session be one table `T S R`, and let
+the live session be `liveTable` (the challenger, its coins uniform per round and sampled after the round's retained
 bytes), written out as a session directory by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K`
-wrong units of the committed values of the simulated prover (`simAuditOn … τ`) with probability at most
+incorrect proof blocks of the committed values of the simulated prover (`simAuditOn … τ`) with probability at most
 `miss(K) + ε_ks + δ_link`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_on`, so `Pr[bad] = 0`.
 Beyond `Prog.flock_headline_L`'s (`pp`, `hConst`, `hZero`, `lay`, `rs`, `hHm`, and the assumptions through `hA3`, `hKS`,
-`hCR`), it takes `hdec`: the decoder is right on the sessions flock-verify accepts, at the draws the law makes (R11b). -/
+`hCR`), it takes `hdec`: the decoder is right on the sessions flock-verify accepts, at the samples the sampling design makes (R11b). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_on {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
