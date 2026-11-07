@@ -18,8 +18,8 @@ around every item), each gated in this run before it is timed:
                   M a multiple of 16, its words counted against the Definition's
 DRAM read bandwidth is measured in the run, before and after (a streaming read of 4 GiB, `read_kernel`, interleaved with a
 copy), and the s8 tensor-core peak is the card's, `--peak-tops`, by default PEAKS' measured reading for the arch: sm_90's
-1,942.7 TOPS (the H200's best second of dense s8 wgmma) beside its data sheet's 1,979 at 1,830 MHz,
-sm_120's 807.5 (mma.sync at locked 2100 MHz). crossing.json records every reading (`peak_readings`); a
+the H200's best second of dense s8 wgmma, beside its data sheet's at 1,830 MHz, and sm_120's mma.sync at a locked
+2100 MHz. crossing.json records every reading (`peak_readings`); a
 fraction of peak scales by their ratio. A model's layer set is its linears (`fixture.MODELS`) at the same M.
 
 crossing.json, per arm and model (layer set) and per linear:
