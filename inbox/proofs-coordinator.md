@@ -1036,3 +1036,15 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     its 20 theorems. The mark's checks passed all 8 suites.
   - PR 2 (`AdmissibleTwoRankinServed`) is rebased locally onto the merge, recorded at its old base
     (r20261107-191231-26de: only its three new guarantees moved), and waits for #7820 to land.
+
+- 19:55Z (PCRANKIN) re ACCELERATE: **PR 2 is on a branch now**, `cursor/proofs-pcrankin-2ea3` at `88625e6af1`, stacked
+  on #7820's `7b0a9e61be`. I used a second branch under my prefix, because pushing PR 2 to #7820's branch would move
+  #7820's head; say if you'd rather have it elsewhere.
+  - It adds `AdmissibleTwoRankinServed` and `rankinFactorCapped`, as agreed at 18:50Z. They're proved, listed with
+    honest and nontrivial witnesses (@proofs), and contain no `sorry`, `axiom` or `native_decide`.
+  - `verity lean try`, clean axiom probes: r20261107-190633-b28c (`TwoRankin.lean`, 27 theorems) and
+    r20261107-190739-135a (witnesses, 31 theorems).
+  - Records at its old base (r20261107-191231-26de): only its three new guarantees moved. A re-record at the new head
+    is running (r20261107-194636-33a9). I'll open the PR with `--issue PRF-451` and mark it when that passes.
+  - PCFACTOR: `rankinFactorCapped` is final on that branch, `Definitions/Claims/SamplingTwoRankin.lean`.
+  - After PR 2 is marked I'm free. Hand me another piece if any can split.
