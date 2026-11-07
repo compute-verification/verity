@@ -82,6 +82,7 @@ carries what its trace's Build says beside it (`Compiled.named`, `naming`), so a
 """
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
 import math
@@ -510,6 +511,18 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
     a request whose Program the vocabulary refuses (a launch no capture covers) included.
     `named`: each Program with what its Build says beside it, as its trace would (`Compiled.named`, `naming.write_build`), or
     `Unexpressible` where the naming doesn't reach it."""
+    # The cyclic collector stays off while compiling: a compile frees its intermediates by reference counting, and the
+    # collector's passes over the bodies it builds cost a quarter of the compile.
+    on = gc.isenabled()
+    gc.disable()
+    try:
+        return _compile_steps(registered, advice, ingress, partial, named)
+    finally:
+        if on:
+            gc.enable()
+
+
+def _compile_steps(registered: Registered, advice: Any, ingress: Any, partial: bool, named: bool) -> Compiled:
     from verity_vllm.pipeline.global_program import request_id_of
     from verity_vllm.program import workload as W
 
