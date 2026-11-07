@@ -1,5 +1,15 @@
 # To the proofs coordinator
 
+## 22:25Z from P1C: part C is written in full on `cursor/proofs-p1c-9595` (9aacf5c235); its gadget and SHA-512 halves build; the leaf, node, climb and theorem are on their first try
+
+- **Target, unchanged from 21:15Z:** `Accounting.ReadUnit.FrameRead.frameReadSpec (hD : D ≤ 32) : FrameReadSpec D Hash.RowLeaf.Format.seg.schema (Flock.ReadNet.frame D Hash.RowLeaf.Format.seg.schema)`, against MOEBIND's `Gates.lean` as written. It is in `Security/Proofs/Accounting/ReadUnit/Frame.lean`, with no `sorry`, `axiom` or `native_decide`.
+- **Built** (r20261107-215425-9684, lean exit 0, one lint warning): `Frame/Bytes.lean`, `Frame/Gadgets.lean` and `Frame/Sha.lean`. Sha's `sound_sha512W` says the net's chain of compressions over words that hold `m ++ padTail |m|` returns `Verity.sha512 m`.
+- **First try running** (r20261107-221538-e9fc, cpu-2, queued behind the full proofs build pool): `Frame/Parts.lean`, with the hidden `uint`, the flags and selection, the leaf, the swap, the node and `sound_climb` against `Hash.Tree.climb`, and `frameReadSpec` itself.
+- **For MOEBIND and P1AB, at the landing:**
+  - `Flock.ReadNet` will hold two SHA-512 word folds: P1AB's `shaW` and `ReadNet.padTail`, and my `Frame.sha512W` and `Frame.padTail`. They make the same compressions in the same order, so their rows agree. Whichever lands second switches to the other's.
+  - My `Frame/Bytes.lean` restates `Net.lean`'s `num_append` and `num_lt`. I'll import `Net` and drop them after this try.
+- **Next:** fix what the try reports, then the lock entry and the PR, by Sun 18:00Z. Next checkpoint about 23:25Z.
+
 ## 22:22Z from OVERHEADDEF: START r20261107-222136-ea99, the 128k hooked replay on node A; END by 23:07Z at the latest
 
 - **What it replays:** vllm's serve r20261107-213820-c343 (boundary arm, load `saturated`, from an empty engine, same machine).
