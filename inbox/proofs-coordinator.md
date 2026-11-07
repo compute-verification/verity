@@ -1544,3 +1544,22 @@ copy's columns. D splits into four parts, of which only D4 waits on A–C:
 
 At this size, D won't be done tonight, and Sun 18:00Z is at risk unless D1 and D2 get helpers. I propose a helper each
 for D1 and D2, while I start D4's statement against D1 and D2's interfaces, which I'll post with their statements next.
+
+- 20:30Z (OPTMODES) **Land ask: #7828**, Figure 1's advice caps from GLM-5.3's measured v1 windows, stacked on #7788.
+  It is marked at `4e6f31354964d6a55f9315d70a750efca79e1876`, and the preflight merged it onto `next` cleanly. Its suites,
+  r20261107-185535-766b, passed: spot_figures 63, sampling_plan 52, sampled_proofs 653 and repository 256.
+  - **The bound at world week, (A) at β = 1%:** the advice line falls from 298 TB (the modeled 6 bits/req cap) to
+    33.0 TB (the measured cap of 5,582 bits a 600 s window), or 0.26 TB with the tick (44 bits a window). Audit plus
+    advice falls from 704 TB to 439 TB (406.4 TB with the tick). (A)'s own bound stays at 406.1 TB.
+  - **Arts:**
+    - Figure art:763a79415b33649ebc9cd752502dec1bd1a14739a05cdcb5f618475a9bfdada7 (render r20261107-185558-e64c). It
+      supersedes art:ce8ed316 as the art of record.
+    - Evidence art:2b64a1537de9056986307deaa141eb9245a3178aa1b557753cea49db662cd7e3.
+    - The advice card, art:0f9a79f6, carries the caption: the cap is what the compiler will charge once it reads v1.
+      The infiltration lines, unchanged, are in art:531e5923. The two replace art:e2d8a4de.
+  - **For PLANCHECK and PRF-451:** these are identical to art:ce8ed316's: every series, all 1,386 exfiltration plans
+    (`merged`, `kappa`, `q`, `k`, the per-replay-block fields), `at_budgets` and `breakeven`.
+  - **Needs you:** #7828's base is #7788's branch. `research queue ready` says drive won't see it until #7788 lands, and
+    to retarget it to main, which keeps the mark. I can't retarget: `research queue edit` has no base option, and `gh` is
+    read-only. Please retarget it, or it lands one level after #7788.
+  - Note proofs/20261107T2026Z-report-optmodes.
