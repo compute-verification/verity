@@ -19,7 +19,7 @@ record's session (`Properties.RemoteAudit.Line.Verified`). The two properties jo
   `certify sm g`'s, the reads that record's openings certify and their error. The check refuses what `sessionOf`
   refuses, so what it accepts is `Shared.run g`'s, never `Flight.run`'s at one window in flight, which no property
   covers.
-* **LineHeldAtComponent**: `Properties.RemoteAudit.Line.LineHeld` with the component's acceptance in the event in place
+* **LineHeldAtSubprotocol**: `Properties.RemoteAudit.Line.LineHeld` with the component's acceptance in the event in place
   of `Verified`. On the same node, trace, records and premises, and the bytes `a ω`, `b ω` and `e ω` the component is
   given at each outcome (the parameters, the commitment and the evidence), the probability that the component accepts
   bytes that play the record of `ω` on the node (`Plays`) while the record's link-charged line credits a stretch more
@@ -34,7 +34,7 @@ that is not the record's is an outcome the bound counts nothing for, not one the
 
 @[expose] public section
 
-namespace Properties.RemoteAudit.Component
+namespace Properties.RemoteAudit.Subprotocol
 
 open Accounting.Remote.Held Accounting.Remote.Held.Assumptions Accounting.Remote.Draw
   Accounting.Remote.Draw.Assumptions Properties.RemoteAudit.Line
@@ -75,7 +75,7 @@ each outcome (`a`, `b`, `e`: the parameters, the commitment and the evidence): t
 accepts bytes that play the record of `ω` on the node (`Plays`) while a stretch of the record's link-charged line
 credits more than the trace held over its span is at most `δs + (δ + Σ_c s / 2^64 + Σ_c adv_c + Σ_c hide_c + bind)`,
 `LineHeld`'s bound. -/
-def LineHeldAtComponent : Prop :=
+def LineHeldAtSubprotocol : Prop :=
   ∀ (node : Node) (κ : ℕ) (X Cm : Type) [Fintype X] (prf : Fin node.draws → Pous.Bits κ → Blocks receiptMax)
     (rest : Coins node.draws κ X → Fin node.draws → ℕ → ℕ) (recs : Cm → Coins node.draws κ X → Record)
     (correct : Cm → Fin node.draws → Coins node.draws κ X → Finset ℕ) (com : Coins node.draws κ X → Cm)
@@ -96,4 +96,4 @@ def LineHeldAtComponent : Prop :=
           ((F.play (Committed.junk com t)).distinguisher prf (node.delta : ℝ) t)).toReal +
         (∑ t, F.hide com prf (node.delta : ℝ) t).toReal + (R.binding (F.play com) prf rest).toReal)
 
-end Properties.RemoteAudit.Component
+end Properties.RemoteAudit.Subprotocol

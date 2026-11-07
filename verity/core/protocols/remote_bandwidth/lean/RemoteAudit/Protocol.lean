@@ -26,7 +26,7 @@ the difftest's `session` reads (`Difftest.sessionFn`):
   its clock's reading. The log is the verifier's own, as PoUS's `trusted` keys are: it never comes from the prover;
 * the check: the session replayed through the verifier. It rejects with the failure that rejected the session, or
   when the parameters or the log don't decode, as the difftest's port refuses; it is undecided while the session runs
-  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Component.AcceptIsVerified`
+  (a window not yet verified); it accepts once every window is. `Properties.RemoteAudit.Subprotocol.AcceptIsVerified`
   states that it accepts only what `Shared.run g` accepts, and publishes `certify` of that run's record at g.
 
 On acceptance it publishes the reads it certifies and the error that holds at, `{"eps", "q_bytes"}` (`certify`): the
