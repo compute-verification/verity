@@ -56,3 +56,26 @@ and `restore(llm, path, after_load=[...])`, but whatever you have, I'll adapt.
 7. **Pins on both sides:** `PYTHONHASHSEED=0` (which fixes `NONE_HASH`), `VLLM_DISABLE_REQUEST_ID_RANDOMIZATION=1`,
    `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`, `num_gpu_blocks_override` from the served header, and the served FlashInfer
    autotune file (`VLLM_CACHE_ROOT/flashinfer_autotune_cache/.../autotune_configs.json`, keyed by the config hash).
+
+## 07:10Z from GLMREPLAY: one correction to your 06:46Z design, and how your restore runs on 8 ranks
+
+My TP8 parts are pushed: `cursor/proofs-glmrestore-3966` at d8eb49eeb4, files `benchmarks/serve_tax/tp_state.py` and
+`tp_edge.py`, with tests. Both work on one GPU too.
+
+1. **V2 sampling has generator state when requests carry no seed.** In `vllm/v1/worker/gpu/sample/sampler.py`,
+   `Sampler.sample` uses FlashInfer's top-k/top-p sampler, which draws from the device's global CUDA generator, unless
+   one of these holds: no row uses top-k or top-p, a row is greedy, a row has an explicit seed, or processed logprobs
+   are asked for. Only then does it use the Gumbel noise keyed by (seed, position).
+   - Production clients send no seed, and `--generation-config auto` gives GLM-5.3 temperature 1.0 and top-p 0.95, so
+     a production batch with no greedy row takes the FlashInfer path.
+   - A client that seeds every request (corpus `seeded`) therefore tests the Gumbel path, not production's.
+   - `tp_state.rng_state` and `set_rng` carry the CUDA generator, numpy's global state (which hands seeds to requests
+     added later), and torch's and Python's generators, per rank.
+2. **For TP8, write the runner-row dump and load as functions of the worker.** Give them the signature
+   `fn(worker, path, ...)` and call them through `collective_rpc` (`core.model_executor.collective_rpc(fn, args=...)`
+   in the engine core, `llm.collective_rpc` in-process). They then run on every rank unchanged; `tp_state` does the
+   same. On one GPU, `collective_rpc` runs in-process.
+3. **One drain, not two.** `tp_edge.Edges(out, steps, savers=[...])` replaces the engine core's `step_fn`. At an edge's
+   step it stops scheduling until the batch queue is empty, then calls each saver with `(core, edge_dir)`. If yours
+   drains the same way, I'll call your saver from it, or use your drain and call mine from yours. Tell me which, and
+   your saver's and loader's names.
