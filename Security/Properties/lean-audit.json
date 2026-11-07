@@ -34,6 +34,7 @@
   "Properties.SampledProofs",
   "Properties.SampledProofs.Draw",
   "Properties.SampledProofs.Bits",
+  "Properties.SampledProofs.Interval",
   "Properties.SampledProofs.Halt",
   "Properties.SampledProofs.Second",
   "Properties.Pous.TimedAudit",
@@ -1016,6 +1017,38 @@
   "Verity.soundness_of_upFront": {
    "honest": ["Verity.soundness_of_upFront_honest"],
    "nontrivial": "Verity.soundness_of_upFront_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.expLowerSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.expLowerSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.expLowerSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.expUpperSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.expUpperSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.expUpperSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.lnLowerSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.lnLowerSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnUpperSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.lnUpperSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.lnUpperSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.powLowerSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.powLowerSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.powLowerSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.powUpperSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.powUpperSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.powUpperSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnUpperSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.boundLnUpperSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.boundLnUpperSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnBoundSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.boundLnBoundSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.boundLnBoundSound_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1843,7 +1876,12 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits", "Properties.SampledProofs.Second"],
+   "except": [
+    "Properties.SampledProofs.Draw",
+    "Properties.SampledProofs.Bits",
+    "Properties.SampledProofs.Second",
+    "Properties.SampledProofs.Interval"
+   ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier.DeviceOutput": {
@@ -2092,6 +2130,11 @@
    "imports": ["Definitions.Claims.Sampling", "SampledProofs.Bits"],
    "except": [],
    "why": "Bits' layout read as the claims' program (`bitsGate`, `bitsProg`) is stated against Bits' own gates and lowering (`SampledProofs.Bits`) and the claims' gates and program (`Definitions.Claims.Sampling`), never a proof"
+  },
+  "Properties.SampledProofs.Interval": {
+   "imports": ["Mathlib", "SampledProofs"],
+   "except": [],
+   "why": "what the interval bounds bound is stated against their own functions (`SampledProofs.Interval`, `SampledProofs.Bound`, on Lean core) and Mathlib's `Real.exp`, `Real.log` and `Real.rpow`, never a proof"
   }
  },
  "reads_exempt": {
@@ -7568,6 +7611,95 @@
    "type_hash": "4eda244e871db8f10d252cf426606eb73ab8ae55c86ca35968158571dee735d5",
    "unfolded_hash": "d54ce5e55b0eb1169fa600b83cb1082b8a79773f6cbacd24e520c08181762100"
   },
+  "Properties.SampledProofs.SecurityProofs.boundLnBoundSound": {
+   "owner": "@proofs",
+   "signature": ["Properties.SampledProofs.SecurityProofs.boundLnBoundSound : Properties.SampledProofs.BoundLnBoundSound"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "50e09c3b6ed0eb4eed39fa15da24db5b5234498d8e3d5a2ddeb37f4c810f85ec",
+   "unfolded_hash": "1eab7739ca08d789a7e4fabb67fd89565d8e88794dfb091cd5222a853cb8f4d4"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnBoundSound_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.boundLnBoundSound_honest :",
+    "  Rat.instLT.lt",
+    "    (instHSub.hSub (SampledProofs.Bound.lnBound 100 1 Bool.true) (SampledProofs.Bound.lnBound 100 1 Bool.false))",
+    "    (instHDiv.hDiv 1 (instHPow.hPow 2 100))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "42a14492dc93446590e6785e932d4d87a871593ab8832965fb5b1e742ef45631"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnBoundSound_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.boundLnBoundSound_nontrivial :",
+    "  Not (Real.instLE.le (Rat.cast 1) (Real.log (instHDiv.hDiv (Nat.cast 2) (Nat.cast 1))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e37263990dc3eabf5ca78636062de1ad0d9d6f612dcae06ff1202bba1233d652"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnUpperSound": {
+   "owner": "@proofs",
+   "signature": ["Properties.SampledProofs.SecurityProofs.boundLnUpperSound : Properties.SampledProofs.BoundLnUpperSound"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e088cc231419175dbf7fc542f50e189aa89ec446cd86eda8589e2ef3049c32fb",
+   "unfolded_hash": "02f19a30cce2e6f3db9059ade94109a80c23d5324bcef0a0a0f3e28b7e046f20"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnUpperSound_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.boundLnUpperSound_honest :",
+    "  Rat.instLT.lt (instHSub.hSub (SampledProofs.Bound.lnUpper (1 / 100)) (SampledProofs.Bound.lnBound 100 1 Bool.false))",
+    "    (instHDiv.hDiv 1 (instHPow.hPow 2 63))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "3d8b3b42fc706fec3d050a51a109c03e4d35ea573a25dbfd7c85dd8878b81893"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnUpperSound_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.boundLnUpperSound_nontrivial :",
+    "  Not (Real.instLE.le (Real.log (instHDiv.hDiv 1 (1 / 2).cast)) (Rat.cast 0))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ebecc829fc8f3a634280556784f97e7e6598ca5413182483923e572f8f2763db"
+  },
   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.SecurityProofs.designWellFormed : Properties.SampledProofs.DesignWellFormed"],
@@ -7593,6 +7725,274 @@
    },
    "type_hash": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119",
    "unfolded_hash": "e44586bf18963ce99c0fc55d9d547d505a5cc576f2a2c6905df554be71464de2"
+  },
+  "Properties.SampledProofs.SecurityProofs.expLowerSound": {
+   "owner": "@proofs",
+   "signature": ["Properties.SampledProofs.SecurityProofs.expLowerSound : Properties.SampledProofs.ExpLowerSound"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "248e082059d770126cf04f71f1faec8cd0df52a5008a2ae56938021d0830ac9e",
+   "unfolded_hash": "b776926fea895f003282099837b41eed60d14433303a89bae7e1a2c0d26c8fd2"
+  },
+  "Properties.SampledProofs.SecurityProofs.expLowerSound_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.expLowerSound_honest :",
+    "  Rat.instLE.le (instHSub.hSub (SampledProofs.Interval.expUpper (-1) 64) (SampledProofs.Interval.expLower (-1) 64))",
+    "    (instHDiv.hDiv 1 (instHPow.hPow 2 63))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "664078ce21055eaba170a1bdfd39636ec447115a95e1e8445699cb4fcde970b3"
+  },
+  "Properties.SampledProofs.SecurityProofs.expLowerSound_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.expLowerSound_nontrivial :",
+    "  Not (Real.instLE.le (Rat.cast 3) (Real.exp (Rat.cast 1)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "e09bc677a4f4370b6d1829e85a4bb8c7bb991b4d573210cf79f606ad3ae7302c"
+  },
+  "Properties.SampledProofs.SecurityProofs.expUpperSound": {
+   "owner": "@proofs",
+   "signature": ["Properties.SampledProofs.SecurityProofs.expUpperSound : Properties.SampledProofs.ExpUpperSound"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "402907234b29ae7053e5488540f43c488dc74b471ebc14e9fc2db50db55f5907",
+   "unfolded_hash": "4c9fb442f01264e3ac696cb2f2bb01645f3bf2009fc22c707bb7f0afce512ffb"
+  },
+  "Properties.SampledProofs.SecurityProofs.expUpperSound_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.expUpperSound_honest :",
+    "  Rat.instLE.le (instHSub.hSub (SampledProofs.Interval.expUpper 1 64) (SampledProofs.Interval.expLower 1 64))",
+    "    (instHDiv.hDiv 1 (instHPow.hPow 2 63))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "f3400e37029432a7a6e9384803859ee8bf9a8217910f4dbb36c56637de1bde42"
+  },
+  "Properties.SampledProofs.SecurityProofs.expUpperSound_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.expUpperSound_nontrivial :",
+    "  Not (Real.instLE.le (Real.exp (Rat.cast 1)) (Rat.cast 2))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "39ca6de2fab8b7a231cadcdf11fa2885a02274d917f6c45308920aa4068b8853"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
+   "owner": "@proofs",
+   "signature": ["Properties.SampledProofs.SecurityProofs.lnLowerSound : Properties.SampledProofs.LnLowerSound"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "03ce01601e84c56ce086a482a98a6da527faee158bbd54a851cb082ae4aa1d29",
+   "unfolded_hash": "80eabfcabf9999a658ec6dabb3ab27a044c68f6ad866bac0bf41247b2368d639"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnLowerSound_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.lnLowerSound_honest :",
+    "  Rat.instLE.le",
+    "    (instHSub.hSub (SampledProofs.Interval.lnUpper (instHDiv.hDiv 1 (instHPow.hPow 10 30)) 64)",
+    "      (SampledProofs.Interval.lnLower (instHDiv.hDiv 1 (instHPow.hPow 10 30)) 64))",
+    "    (instHDiv.hDiv 1 (instHPow.hPow 2 62))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "9b73ea50719d1ea932fdd28ffd0346993b56497a36ad9776406bc72bc9ff2d3a"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnLowerSound_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.lnLowerSound_nontrivial :",
+    "  Not (Real.instLE.le (Rat.cast 1) (Real.log (Rat.cast 2)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "76c3df4ad262ed10b8431e23c6dab1459318f04928da334a0e5ba3bc58693781"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnUpperSound": {
+   "owner": "@proofs",
+   "signature": ["Properties.SampledProofs.SecurityProofs.lnUpperSound : Properties.SampledProofs.LnUpperSound"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "6305bbf4e2a0dda2511d77c4399b8f4550ab4a93f2c7a037c4648416139358a0",
+   "unfolded_hash": "803d83f6a7f5d4e37f09df479a8aa848f681b0d6c7aca0bb7fb702688ed813fb"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnUpperSound_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.lnUpperSound_honest :",
+    "  Rat.instLE.le (instHSub.hSub (SampledProofs.Interval.lnUpper 2 64) (SampledProofs.Interval.lnLower 2 64))",
+    "    (instHDiv.hDiv 1 (instHPow.hPow 2 62))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "97c188d673281e7d14bc7df7c96aa0c5c15307efdab85c6468d89c9072cb0fb5"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnUpperSound_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.lnUpperSound_nontrivial :",
+    "  Not (Real.instLE.le (Real.log (Rat.cast 2)) (Rat.cast 0))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "7d98ac9564f0872f59bf121667570f982465f7c50932ab06f4254af0c8b2e8ac"
+  },
+  "Properties.SampledProofs.SecurityProofs.powLowerSound": {
+   "owner": "@proofs",
+   "signature": ["Properties.SampledProofs.SecurityProofs.powLowerSound : Properties.SampledProofs.PowLowerSound"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "67f7e3174b5ac3e790aaa39493b25e1c2408a2d6907df139810ca60c13f6624d",
+   "unfolded_hash": "93065d4825dd01780be1642856cfc6b585f6c662d381e3c94e5ce2f1775b958c"
+  },
+  "Properties.SampledProofs.SecurityProofs.powLowerSound_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.powLowerSound_honest :",
+    "  Rat.instLE.le (instHSub.hSub (SampledProofs.Interval.powUpper 2 (-1) 64) (SampledProofs.Interval.powLower 2 (-1) 64))",
+    "    (instHDiv.hDiv 1 (instHPow.hPow 2 62))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "43d820b9daacb695a29a953bc3029706025eb297944cca966148e54e029b38b7"
+  },
+  "Properties.SampledProofs.SecurityProofs.powLowerSound_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.powLowerSound_nontrivial :",
+    "  Not (Real.instLE.le (Rat.cast 1) (instHPow.hPow (1 / 2).cast (Rat.cast 1)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "af840cf14c22ec59d4fc70b648b49b43b0629acc8695b299939708f99539b55b"
+  },
+  "Properties.SampledProofs.SecurityProofs.powUpperSound": {
+   "owner": "@proofs",
+   "signature": ["Properties.SampledProofs.SecurityProofs.powUpperSound : Properties.SampledProofs.PowUpperSound"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "569c62dff57dde345f6b16a496e003b54880d1c266e220b71cb89fad0ec5f574",
+   "unfolded_hash": "1fd5bfe800d17ad2add0c29c5b17f84e122e4706dbe4ad5e952e66e59ef872bd"
+  },
+  "Properties.SampledProofs.SecurityProofs.powUpperSound_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.powUpperSound_honest :",
+    "  Rat.instLE.le",
+    "    (instHSub.hSub (SampledProofs.Interval.powUpper (1 / 2) (1 / 2) 64)",
+    "      (SampledProofs.Interval.powLower (1 / 2) (1 / 2) 64))",
+    "    (instHDiv.hDiv 1 (instHPow.hPow 2 62))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d1a8655a8819e983dbbacff43beebfdbd2f46d083aad18fef01adcb05b9aaa7e"
+  },
+  "Properties.SampledProofs.SecurityProofs.powUpperSound_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.powUpperSound_nontrivial :",
+    "  Not (Real.instLE.le (instHPow.hPow (1 / 2).cast (Rat.cast 1)) (Rat.cast 0))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "24ea47e6ee755967f318d2dc09f12e38adab3deb636fecf57a24b6e21f7d2f81"
   },
   "Properties.SampledProofs.SecurityProofs.secondMisses": {
    "owner": "@proofs",
@@ -9990,6 +10390,38 @@
    "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.expLowerSound": {
+    "function": "SampledProofs.Interval.expLower",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.expUpperSound": {
+    "function": "SampledProofs.Interval.expUpper",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
+    "function": "SampledProofs.Interval.lnLower",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.lnUpperSound": {
+    "function": "SampledProofs.Interval.lnUpper",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.powLowerSound": {
+    "function": "SampledProofs.Interval.powLower",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.powUpperSound": {
+    "function": "SampledProofs.Interval.powUpper",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.boundLnUpperSound": {
+    "function": "SampledProofs.Bound.lnUpper",
+    "outcome": "none"
+   },
+   "Properties.SampledProofs.SecurityProofs.boundLnBoundSound": {
+    "function": "SampledProofs.Bound.lnBound",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -20984,6 +21416,19 @@
     "Properties.SampledProofs.runs": "5e902b37bc4bc82e7d5e5751770f9582236448a6370b92784bac4beae709e5ff"
    }
   },
+  "Properties.SampledProofs.Interval": {
+   "digest": "37eeffbed781b6e0704fd5c4869e0974cccc9fc9dcac995b8b0ada3f3b68641a",
+   "definitions": {
+    "Properties.SampledProofs.BoundLnBoundSound": "dfc63839feebf66b23033d5947d819c97613d20f3d2dcfa6d2167886529b24a7",
+    "Properties.SampledProofs.BoundLnUpperSound": "596d8e9866b2f4a9384fb623cd7699bdf9a5a3ac763a8f45a057e5e2d3cfddcb",
+    "Properties.SampledProofs.ExpLowerSound": "81ca222cebb1dc3aa33a4b4e73aae6f6bca77379f9993a257a78464b6b3971ab",
+    "Properties.SampledProofs.ExpUpperSound": "5273f1b0c573e5eada51c4e3b27861d68313cf4e3afc86d172ffb00cbceb9a9d",
+    "Properties.SampledProofs.LnLowerSound": "43ecefe6836bb3894ee2dcab482d65876274b5c2215f76b4a1c752a938bae496",
+    "Properties.SampledProofs.LnUpperSound": "100d63c7389161f2a3158174648d622f1243b19d57ef108291b8ef88ed88b33d",
+    "Properties.SampledProofs.PowLowerSound": "482113a2186e65d8188fb9ff1f0d43d4b6c026d0f09f86732794c6f0230169dc",
+    "Properties.SampledProofs.PowUpperSound": "d9ae8d990227a7cc54743a6c8b50ca7fec68a75cbbeee513c52f24ef2d939fb2"
+   }
+  },
   "Properties.SampledProofs.Second": {
    "digest": "fe4c91d73e5c2a5a55c2dcc19203bf73b94227637fef571a1ab201cbffbc5b15",
    "definitions": {
@@ -21918,14 +22363,24 @@
    }
   },
   "SampledProofs.Bound": {
-   "digest": "99ebf35c3e721ee3badf73f4775c427f4f5a82af46a6ec33e67814492b948432",
+   "digest": "0596bcb685e0e99dddb26823103b92717ea5ab659954f8c2139082bfeb0ab2e3",
    "definitions": {
     "SampledProofs.Bound.Stratum.finite": "57e8380218c68fbdb2e6b9b647987245a5ddfd2c479338af786e63e6d40e22c6",
+    "SampledProofs.Bound.atanhSum": "1f3636843fa20cd82897f60a62ed5f3453db01d86e2e3cf7d3b3c62b9e6118b4",
     "SampledProofs.Bound.bernoulliBound": "a2cf67e59b5926940c7337d08c7a3b74a09aa8efa31c4fbef576b2c6597c76f4",
     "SampledProofs.Bound.boundOf": "9b07f911450117747a675c21d442c1b8ee0ec88f36d2dbf58d1a862de8cfeb14",
     "SampledProofs.Bound.countBound": "26818f603c03ce93855ef6e35b446c988306d4b6b3b9af4caa9a27509eb60fde",
+    "SampledProofs.Bound.ln2Lower": "dd833ecfd0d0b4df7aa262c546d7940f8e18bbd9541711a730f1288b06fb8b8e",
+    "SampledProofs.Bound.ln2Upper": "f463f15148839c4f4653bbebf218d8347d4f296f322453fa4e1c6bd11120f086",
+    "SampledProofs.Bound.lnBits": "b72adfe4be71a67976b98576eb6db1ce569ba49524b41b63743b33d552a10595",
+    "SampledProofs.Bound.lnBound": "6f05f749fedc2aa1feb5998d5aa1265030ab68fd45d013befb3e05031114175f",
+    "SampledProofs.Bound.lnPrec": "74351d018321ea1f7712b05d74b6f5f0d1bd068702a98b5be9437b2854d64987",
+    "SampledProofs.Bound.lnTerms": "fb6cc1c3e5347e392a930f5ed5494161c4618f815e57a53b2edee1f134c38bf6",
+    "SampledProofs.Bound.lnUpper": "fda3b101bc840f44adb374dd034a4f630110af5d069106692beb97feba875c79",
     "SampledProofs.Bound.strataOf": "edc25804767f13687ffacff249e778add366fa95ac8cbce604f804c8e4a9bade",
     "SampledProofs.Bound.stratumBound": "5a11b705581794e0a64ccbdd08f5272cc14d7bb6d06d19901b7cc4a55c60dfad",
+    "SampledProofs.Bound.twoAtanhLower": "625ad6fd9a9bbed95cff46e78e9f8eb577658ba9f3c76c52154842f12b108d9f",
+    "SampledProofs.Bound.twoAtanhUpper": "853d3bf22f4686ca597ca4a7237521ec48e033460c4c70b1b397a09686c3bd21",
     "_private.SampledProofs.Bound.0.SampledProofs.Bound.atLeast": "bdcfaab6a4403f46a76b672cef6ff1131cd57800ed90b417f224cfca19a869c5",
     "_private.SampledProofs.Bound.0.SampledProofs.Bound.escapes": "65ae2cdc0c08d59de1ff3cae9612589942a21faa63a5a873ba8613269664a458",
     "_private.SampledProofs.Bound.0.SampledProofs.Bound.next": "7aefcc80a02e01c3b615f2ce29ddda790b76a9086cb298e220cf88fa8d0e0e0e",
@@ -22307,6 +22762,35 @@
     "SampledProofs.Fleet.run": "a16dc98954e699a4876177852e3cdfe792560af2d9896a27ad37553eb2279302",
     "SampledProofs.Fleet.step": "4f66ab56ee9b9b0d11cdbd4139297244e400f63368415f20eb33f428436777c3",
     "SampledProofs.Fleet.streamsOf": "7cc05cf9b10b6457eb9ce7aaf680c38145bc0b03247b3438a638472635190b9e"
+   }
+  },
+  "SampledProofs.Interval": {
+   "digest": "39d5f3f70d5c3a08b5573f4b09ef20fa019bbb9cd84510bcfb655baf81c4c022",
+   "definitions": {
+    "SampledProofs.Interval.atanhTerms": "992169ecced127fabcdcd1c3d2703a74632e1050d407972869ffdcd581ef62ac",
+    "SampledProofs.Interval.ceilTo": "5439a9213b4ff9a77108f4ba6b6e010b3d1bb1cafac0e4bbc4d2e281afc155c3",
+    "SampledProofs.Interval.expLower": "490f9398075a9c4e9e8882f50e37fb14efdecac836bc00f15e958cafc28a5a58",
+    "SampledProofs.Interval.expNonneg": "f8e43a661335ee65480c7ba03a09b089d6d751a7fa5302657d5253d001606ba3",
+    "SampledProofs.Interval.expPrec": "1d4a494de1614e3f4f5c7e65f7146875583ac27a56b2be181d7fbd4a3984ee17",
+    "SampledProofs.Interval.expShift": "9f809ee1260f5e3a53502e8c568f4d1a48b3bdc5aa337413d1d28136dcd65b83",
+    "SampledProofs.Interval.expTerms": "8c58476ad25032a8d4b9be59c18192e8a93c8f7a40ad4c0c1cb0860dca3b7354",
+    "SampledProofs.Interval.expUpper": "acf32f5cbf755fc23961aa953d48fe1d04e8a993f0da8acc93340ba3619a7f5c",
+    "SampledProofs.Interval.firstAbove": "74c796f467e0f39eb629f91822a1af0ab5342772382e4f795bf0a6d0c2fbeeac",
+    "SampledProofs.Interval.firstBelow": "768d36ea268976110d5efe7b2d5da9a7260d6eecb389b4a72b6e70955589c626",
+    "SampledProofs.Interval.floorTo": "5c01f4dbbe315b5f9f3f0b5a88e7c9d7bfcf013d53381143ed8012812ebb1029",
+    "SampledProofs.Interval.halvings": "18b07a21bb82d514faed1613ab0f2e2867cc3f5e9774f7d25f4b215e5a5304c7",
+    "SampledProofs.Interval.lnApprox": "0c1a615a8c7d817f1e5230da7c535307753215d9f490378bdec56a3f66af69f9",
+    "SampledProofs.Interval.lnLower": "071085795e9a064941db962d0ca456d3884e8fbff8612787a7d437d6567c74d0",
+    "SampledProofs.Interval.lnPrec": "dbb33f58ee6370c0e75fd058efb3805c85922c4d5bdebd4cf65a16bbde6c6ef2",
+    "SampledProofs.Interval.lnTries": "3868c62bf2250f5c6acdb68aa12729e1514ac99955a4980f08ea5139d4f2d34c",
+    "SampledProofs.Interval.lnUpper": "edd6023783ce1a08cebee20995cbf9bda08538d04b94ad433e4f001db35580d6",
+    "SampledProofs.Interval.powLower": "6c33d89bb056e8820e7f28e2e51fa1ff78de23202221f9db56291e9fa6805dbb",
+    "SampledProofs.Interval.powPrec": "025d355bc9cc848589fb3b172d0da60e84015ad270a23b3a0af980185aaa0863",
+    "SampledProofs.Interval.powUpper": "61e74b90757f5f116945fc3bb600ec72f14e3af3938bfdd38fc56788827d62c9",
+    "SampledProofs.Interval.roundTo": "3074c7b4647ace149c2b351178f1fc830e873ba666b2004631d26beeaa20f125",
+    "SampledProofs.Interval.series": "a27fd6765b36d9d6911d7c71e6c0c2bb5be4efa1ccdf66a87d5dc4d053799d9c",
+    "SampledProofs.Interval.squares": "45c7f8b5395809b5a33b9c1a91ad9cdf671672fd81508fca1663aa16e3e4063e",
+    "SampledProofs.Interval.twoAtanh": "732eb8844ef349ff649fc327930177ff1c054380d6a28efadf6922d493094716"
    }
   },
   "SampledProofs.Json": {
