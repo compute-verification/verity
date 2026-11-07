@@ -3152,3 +3152,17 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   - records at `e4d8898277`, r20261107-222549-4b2c, superseded by (B). A records run at the final head follows the lean try.
 
   I open one PR for (A), (A′) and (B) with `--issue PRF-451` once the lean try passes, and mark it when the records and suites are green.
+
+## 22:50Z from TWOOPENS: the pin and the reduction now sit on #7868's head; `ksTwo_spot_of_eval` is written; PRF-460 item 1's listing needs your call on the witness
+
+- **Branch** `cursor/proofs-twoopens-68e5` @ `bdb265579c` merges #7868's head `84c6d55b78`, as TSVERIFY asked, so my PR stacks on #7868. Since 21:58Z:
+  - The merge brought TWOSESS's `SpotFlock.sessionOk_of_stmtOk` (in `Sessions`), which has the same statement as mine. Opens now uses that one; the two would have clashed at `Proofs.Flock`'s import.
+  - `ksTwo_spot_of_eval (hA) (dec) (he : Evaluates h dec) (hr : Reveals h dec)` gives `ksTwo_spot`'s conclusion, KS at `code h`, by `ksTwo_spot h hA (sessionOpensTwo_of_eval h dec he hr)`. So PRF-460 item 1's proof is done; only the lock entry is left.
+- **Runs.** The records run r20261107-223311-69f9 at `bdb265579c` is on cpu-2, waiting for a check slot. The quick suites r20261107-221353-fd48 at `37091185a5` are running. When the records pass I open the PR (`--issue PRF-460`, stacked on #7868), run the suites at its head and mark it. Target: marked before 02:00Z, if cpu-2's slots allow.
+- **Item 1's lock entry.** TSVERIFY's 22:20Z covers placement and the witness. One addition to the witness options:
+  - (a″) is (a′) without weakening `Held`. The honest lemma takes an open premise that some statement is in Flock's masked scope (`∃ xS, zkOk xS = true`), as `RecursiveKS`'s honest lemma takes the open `RecDeploy.HonestFixture` (LEAN-186). The premise sits under `Proofs.Flock.Claims` like that one, so the trees rule passes. Item 2 stays as it is, with no case split back in `sessionsIn_code`.
+  - What's left is the degenerate registration: its `partition` is `none` (a `blockQuery` the layout refuses), so no unit is checked and `Evaluates` and `Reveals` hold vacuously. The caveat stays the same: Lean shows that a `Held` exists, not one with a real circuit.
+  - It needs TSVERIFY's move of `Code.lean` under `Proofs/Flock/Claims/`, with my `Dec`, `seenAt`, `Evaluates` and `Reveals` moved beside it. It also adds one open premise beyond `Evaluates` and `Reveals`, which needs your word.
+- **What can't make Sun 20:00Z without a decision:** the lock entry. With (a″) and the move approved by about Sun 10:00Z, I'll have it by 20:00Z. Otherwise I agree with TSVERIFY's (c): `ksTwo_spot_of_eval` lands now and the listing waits for the spec extraction. Item 1's wording would then read "stated and composed (`ksTwo_spot_of_eval`); listed at the spec extraction".
+- **ZKTWO's offer to take `Reveals`:** `Reveals` is about `h.frame` and the session format (item 2), and neither exists yet, so there's nothing to prove until item 2 fixes the format. I'd keep ZKTWO on the relay.
+- **Item 2 (the format):** who owns it? Once the PR is marked, I can draft its Lean side: what `xS₀`'s circuit computes of the drawn units' gates, how the witness encodes the values, and what `h.frame` reveals.
