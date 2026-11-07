@@ -94,7 +94,7 @@ class Capture:
             raise SystemExit("the step root is not SHA-512 over the ranks' roots")
         self.root, self.coins = c0["root"], bytes.fromhex(c0["coins"])
         self.layers = sorted(x for v in c0["layers"].values() for x in v)
-        self.whole = all(self.commit[r].get("kept") == "every recorded tensor" for r in self.ranks)
+        self.whole = all(self.commit[r].get("whole", self.commit[r].get("kept") == "every recorded tensor") for r in self.ranks)
         self.every = False
         self.per_call = 0
         self._params: dict = {}
@@ -106,7 +106,11 @@ class Capture:
         if "sha512" not in ref:
             raise LookupError(f"not recorded with its bytes: {ref}")
         h = ref["sha512"]
-        raw = (self.d / f"rank{r}" / "blobs" / h[:2] / h).read_bytes()
+        p = self.d / f"rank{r}" / "blobs" / h[:2] / h
+        if not p.is_file():
+            raise LookupError(f"not kept: rank {r}'s {ref['dtype']} {ref['shape']} (over the capture's keep cap, outside the "
+                              "opened layers)")
+        raw = p.read_bytes()
         if hashlib.sha512(raw).hexdigest() != h:
             raise SystemExit(f"rank {r}: blob {h[:16]} is not its name")
         return np.frombuffer(raw, dtype=NP[ref["dtype"]]).reshape(ref["shape"])
@@ -587,10 +591,14 @@ def every_call(cap: Capture, pops: dict, a) -> dict:
             done[label].append(g)
         pool.terminate()
     for label, gs in done.items():
-        bad = [g for g in gs if g["agree"] is not True]
+        def kept(g: dict) -> bool:
+            return not (g["agree"] is None and g["error"].startswith("LookupError: not kept"))
+        bad = [g for g in gs if g["agree"] is not True and kept(g)]
+        not_kept = [g for g in gs if not kept(g)]
         rep["types"][label].update(gated=len(gs), calls_gated=len({call_of(label, g["key"]) for g in gs}),
                                    agree=sum(g["agree"] is True for g in gs), disagree=sum(g["agree"] is False for g in gs),
-                                   errors=sum(g["agree"] is None for g in gs), failures=bad[:8])
+                                   errors=sum(g["agree"] is None for g in gs) - len(not_kept), not_kept=len(not_kept),
+                                   failures=bad[:8] + not_kept[:2])
     ops: dict[str, int] = {}
     for r in cap.ranks:
         for e in cap.events[r]:
@@ -654,8 +662,9 @@ def main() -> int:
         rep["seconds"] = round(time.time() - t0, 1)
         (out / "gate.json").write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
         for label, rec in rep["types"].items():
-            print(f"gate {label}: {rec.get('agree', 0)} agree, {rec.get('disagree', 0)} disagree, {rec.get('errors', 0)} errors "
-                  f"over {rec.get('calls_gated', 0)}/{rec.get('calls', 0)} calls {rec.get('why', '')}", flush=True)
+            print(f"gate {label}: {rec.get('agree', 0)} agree, {rec.get('disagree', 0)} disagree, {rec.get('errors', 0)} errors, "
+                  f"{rec.get('not_kept', 0)} not kept over {rec.get('calls_gated', 0)}/{rec.get('calls', 0)} calls "
+                  f"{rec.get('why', '')}", flush=True)
         print(f"gate: not gated ops {rep['not_gated_ops']}; not modelled {sorted(k for k, v in unstaged.items() if 'why' in v)}; "
               f"population errors {rep['population_errors']}", flush=True)
         return 0
