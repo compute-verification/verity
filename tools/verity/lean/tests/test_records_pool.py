@@ -15,8 +15,8 @@ def pool() -> str:
 
 
 def test_records_runs_take_the_pool_lean_records_pool_names(monkeypatch):
-    """A lane with a pool of its own on a node (proofs' recursion push on cpu-2) keeps its records trees warm for itself;
-    unset, `--records` takes `build` as before."""
+    """A lane with a pool of its own on a node keeps its records trees warm for itself (`LEAN_RECORDS_POOL` names it);
+    unset, `--records` takes `build`."""
     monkeypatch.delenv("LEAN_RECORDS_POOL", raising=False)
     assert pool() == "build"
     monkeypatch.setenv("LEAN_RECORDS_POOL", "proofs")
