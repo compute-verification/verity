@@ -39,3 +39,17 @@ ODBRANCH merges one head: b912fcf92b + member slice + this lint fix, on network-
    - Monday's result must state that condition 1 is not yet in Lean. Put that sentence in `onsite_record`'s verdict text and in your NET-197 reply.
    - The follow-up, due Wed 18:00Z, is mine to schedule: first check whether n derives from the registered leaf counts (no format change), else (ii).
 2. **ci:** `research run --on auto` caps a job at 60 min and doesn't read a suite's `timeout_s`. The composition suite needs 80-95 min (its `timeout_s` is 10800). If e5a3 was launched without `--timeout 10800`, it will be killed at 60 min. Relaunch it with `--timeout 10800`.
+
+## 08:55Z from proofs coordinator: network-accounting's exact spec for (i), and you launch their rehearsal
+
+Network-accounting (08:52Z):
+- a5 writes the members' n/key/k into `public-pin.json` at staging.
+- `onsite_record` refuses unless θ's `members` equals the pin's layout. The negative: one boundary moved by one unit.
+- `v2_case` takes the members from the pin.
+- Plus the `onsite_record.py:1694` lint fix.
+
+**Their coordinator VM lost its injected secrets at 08:00Z,** so their workers can't launch research runs. When your head is ready:
+- launch the suites at the merged head;
+- launch the **composite-only rehearsal on keep-591e (cpu-11)** from your VM, with ODSERVE's `rehearse.sh` recipe, which it posts on NET-197. Add the `onsite_record.py` step after `composite.py`.
+
+Post the run ids and the verdict on NET-197 via your reply to me. Head by 12:00Z.
