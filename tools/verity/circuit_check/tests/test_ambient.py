@@ -1,5 +1,5 @@
 """`circuit_check.ambient` (``circuit-check --ambient``): a Definition's flat lowering is one text in a plain interpreter and a
-perturbed one and reads no environment, clock or unseeded draw, so it depends only on its builders' operands; a builder that
+perturbed one and reads no environment, clock or unseeded sample, so it depends only on its builders' operands; a builder that
 reads anything else is refused by name. And no word primitive is lowered by whichever of two builders was imported first."""
 from __future__ import annotations
 
@@ -42,7 +42,7 @@ BAD = {"Counted": "differs", "SetOrder": "differs", "Environ": "reads", "Clocked
 
 
 def test_a_builder_that_reads_state_besides_its_operands_is_refused_by_name():
-    """A count of earlier lowerings, the order of a set of strings, the environment, a clock, an unseeded draw
+    """A count of earlier lowerings, the order of a set of strings, the environment, a clock, an unseeded sample
     (`fixtures/ambient_builders.py`): each refused, and the read named where the builder made it."""
     specs = [f"ambient_builders:{n}" for n in [*BAD, "Plain"]]
     rs = dict(zip(specs, A.check(specs, path=(str(FIXTURES),))))

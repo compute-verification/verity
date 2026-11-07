@@ -117,7 +117,7 @@ def test_given_salts_are_the_rows_salts_and_one_reused_is_refused():
 
 
 def test_a_windows_rows_arent_kept_unless_asked():
-    """Without ``keep_rows`` the tree is the same and a read of a row is refused; the salts are still drawn on read."""
+    """Without ``keep_rows`` the tree is the same and a read of a row is refused; the salts are still sampled on read."""
     words = np.arange(12, dtype=np.uint16).reshape(3, 4)
     got, ref = NR.commit(PROGRAM, "v", words, KEY, 9, window=WINDOW), _core(PROGRAM, "v", words, KEY, 9, window=WINDOW)
     assert got.entry() == ref.entry() and got.levels == ref.levels and len(got.rows) == 3

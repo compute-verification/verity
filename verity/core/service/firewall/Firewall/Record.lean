@@ -1,7 +1,7 @@
 /-
-# The firewall's record (`firewall/v0`, live PROTOCOL.md §10.5)
+# The ZK server's record (`firewall/v0`, live PROTOCOL.md §10.5)
 
-`record.jsonl` in the firewall's state directory: its events in order, one line each, as Python's `json.dumps(ev,
+`record.jsonl` in the ZK server's state directory: its events in order, one line each, as Python's `json.dumps(ev,
 sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall` keeps it byte for byte
 (`live/src/firewall_record_vectors.json`); this is the same record in Lean, and the same rules over it:
 
@@ -23,10 +23,10 @@ sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall
    session's stop; one that reads only registrations already admitted admits nothing. The number is public.
 
 The functions here are pure: each takes the events read so far and returns its result and the events after it, which only
-ever extend them. `Record.read` reads the record whole and fails closed: every line must be exactly a line the firewall
+ever extend them. `Record.read` reads the record whole and fails closed: every line must be exactly a line the ZK server
 writes, with its `seq` its position, every registration's number its place among the registrations, and every
 admission's and skip's its place among them, below the registrations before it, so a torn line (a writer killed inside
-its append), and any line the firewall would not have written, refuses every call. Python reads any JSON line and
+its append), and any line the ZK server would not have written, refuses every call. Python reads any JSON line and
 defaults what it can't find; Lean refuses it instead. Its other liberties Lean doesn't take either: a `\r` before a
 line's end, a budget or release time past 2^64, a statement name that isn't a string.
 -/
@@ -195,13 +195,13 @@ def registrations (evs : Events) : Array ByteArray :=
 def frontier (evs : Events) : Nat :=
   evs.foldl (fun k e => match e with | .admitted .. | .skipped .. => k + 1 | _ => k) 0
 
-/-- The firewall's state: the record's text and its events. -/
+/-- The ZK server's state: the record's text and its events. -/
 structure Record where
   text : String
   events : Events
   deriving Inhabited
 
-/-- The record whole, or why the firewall serves nothing (a line it can't read, or one it didn't write). Blank lines are
+/-- The record whole, or why the ZK server serves nothing (a line it can't read, or one it didn't write). Blank lines are
 skipped, as Python's reader skips them, and the last line needs no newline. -/
 def Record.read (text : String) : V Record := do
   let lines := (text.splitOn "\n").filter (!·.isEmpty)
@@ -234,7 +234,7 @@ def Record.read (text : String) : V Record := do
 /-- The record after `evs`, which extend its events: its text with their lines appended. -/
 def Record.extend (r : Record) (evs : Events) : Record := { text := r.text ++ linesFrom evs r.events.size, events := evs }
 
-/-- One op as the firewall runs it on its file: read the record whole, act on its events, append the events the op adds.
+/-- One op as the ZK server runs it on its file: read the record whole, act on its events, append the events the op adds.
 Python reads the file again at every op, under its lock, so a record one op left unreadable (its line appended to a
 last line without a newline) is the next op's error. -/
 def Record.op {α : Type} (r : Record) (f : Events → α × Events) : V (α × Record) := do
@@ -314,7 +314,7 @@ private def showBudget : Option Nat → String
   | none => "None"
 
 /-- `rec_live` opens a recursive session: why it may not (its statements, budget or schedule), its id, or why the
-firewall refuses it (the stream stopped at its budget). The first check needs no record: `openArgs`. -/
+ZK server refuses it (the stream stopped at its budget). The first check needs no record: `openArgs`. -/
 inductive Opened where
   | ok (session : String)
   | refused (why : String)
@@ -360,7 +360,7 @@ def stop (evs : Events) (s part why : String) : Bool × Events :=
 /-- An outer proof of the recursive session was released (the challenger's verdict accepted it). -/
 def release (evs : Events) (s part : String) : Events := evs.push (.release s part)
 
-/-- The firewall's one outer slot, taken by a session that found it free: a `slot` whose session has no outcome after it
+/-- The ZK server's one outer slot, taken by a session that found it free: a `slot` whose session has no outcome after it
 is that session's stop, then `slot`. -/
 def slot (evs : Events) (s part : String) : Events :=
   let evs := match orphan evs with

@@ -24,8 +24,12 @@ import hashlib
 import random
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 #: (n, k) of the frozen shape's linears
 LINEARS = {"q": (16384, 16384), "kv": (128, 16384), "o": (16384, 16384), "up": (65536, 16384), "down": (16384, 65536),
@@ -66,14 +70,14 @@ def stream_row(seed: bytes, name: str, row: int, n: int) -> bytes:
     return b"".join(sha(key + g + i.to_bytes(8, "little")).digest() for i in range(-(-n // 64)))[:n]
 
 
-def _codes(seed: bytes, name: str, rows, k: int) -> np.ndarray:
+def _codes(seed: bytes, name: str, rows: Sequence[int] | np.ndarray, k: int) -> np.ndarray:
     out = np.empty((len(rows), k), np.int8)
     for j, r in enumerate(rows):
         out[j] = np.frombuffer(stream_row(seed, name, int(r), k), np.int8)
     return out
 
 
-def weight_rows(linear: str, rows, k: int | None = None) -> np.ndarray:
+def weight_rows(linear: str, rows: Sequence[int] | np.ndarray, k: int | None = None) -> np.ndarray:
     """Rows `rows` of the linear's B, s8 [len(rows), K]: its served tensors' generation rows, in `SERVED` order."""
     k = LINEARS[linear][1] if k is None else k
     out, first = np.empty((len(rows), k), np.int8), 0
@@ -116,7 +120,7 @@ def special_of(m: int, r: int) -> str | None:
     return None
 
 
-def activation_rows(linear: str, m: int, rows) -> np.ndarray:
+def activation_rows(linear: str, m: int, rows: Sequence[int] | np.ndarray) -> np.ndarray:
     """Rows `rows` of the call's A, s8 [len(rows), K]."""
     k = LINEARS[linear][1]
     out = _codes(X_SEED, f"x/{linear}", rows, k)

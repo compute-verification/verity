@@ -1,13 +1,13 @@
 """What a point's arms certify, and each resource's covert residual.  Pure (stdlib and `verity`), so it runs on a CPU.
 
 * **W_cert, compute.**  `Pouw.Guarantees.EndToEnd` (``Security/Definitions/Pouw/Guarantees/Game.lean``) bounds the chance that an
-  audit of t draws accepts a transcript whose prover spent T < (1 − γ)(1 − ε_s)·ΣW_ref by (1 − ε_s)^t + ε_TT(q, N).  So
-  W_cert = (1 − γ)(1 − ε_s)·ΣW_ref, in W1 units (one dense FP8 MAC on the device), with ΣW_ref the drawn statement's
+  audit of t samples accepts a transcript whose prover spent T < (1 − γ)(1 − ε_s)·ΣW_ref by (1 − ε_s)^t + ε_TT(q, N).  So
+  W_cert = (1 − γ)(1 − ε_s)·ΣW_ref, in W1 units (one dense FP8 MAC on the device), with ΣW_ref the sampled statement's
   reference work over the credited cells (`clear_work.ticket_cell`; about 1.09 to 1.11 per MAC at the sweep's shapes).
   γ is looked up from the Lean-pinned price twins (`price_twins.lookup`) of the statement on the priced path the scheme's
   sample cites (`clear_work.draw_wref`), at both FP32 prices, the larger published; it is never typed.  Twins are stated
   at the cubes 8,192³ and 16,384³ and at each of Llama-3.1-8B's linears (n, k) and its layout (`GAMMA_PIN`), so
-  every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 draws
+  every shape the sweep names is priced; a shape no twin states has W_cert unproved.  ε_s = 0.1% at t = K = 27,713 samples
   (`plan.RECORD_K`, (1 − ε_s)^K ≤ 2⁻⁴⁰).  A chain's credited rows are its screened rows less those the screen failed or
   left unsure, a lower bound on the rows the records credit.
 * **Q_cert, bandwidth**: ``Bandwidth.SecurityProofs.AuditRO`` at the point the red team granted at 5761861fd (`Q_GRANT`,
@@ -122,7 +122,7 @@ def price_twins():
 
 
 def clear_work():
-    """PoUW's work law, the clear audit's (`clear_work`; benchmarks/pouw/clear is not a package)."""
+    """PoUW's work sampling design, the clear audit's (`clear_work`; benchmarks/pouw/clear is not a package)."""
     if str(CLEAR) not in sys.path:
         sys.path.append(str(CLEAR))
     import clear_work
@@ -167,7 +167,7 @@ def gamma(n: int | None, k: int | None, layout: str | None = None) -> dict:
 
 
 def wref_cell(n: int, k: int) -> Fraction:
-    """One credited cell's reference work at (n, k), every channel kept: the drawn statement's (`ticket_cell`)."""
+    """One credited cell's reference work at (n, k), every channel kept: the sampled statement's (`ticket_cell`)."""
     from verity.core.protocols.pouw.protocol import Matmul, Shape
     from verity.ml.protocols.pouw.schemes import pearl_c_work as PW
     return clear_work().ticket_cell(scheme(), PW.UnitRecord(Matmul(0, Shape(16, k, n), 0), 1, k))

@@ -67,7 +67,7 @@ plain Flock's:
   before each inner and staging round and after the last, `stopRounds`) it sends the empty message, as `SimStop` does
   (`refPStop_halted`, `refPStop_live`).
 * **The record** (`deployRecStop`): `deployRec` with `refPStop` as its reference prover and `stopsRec` as its stop, so
-  `Complete` at it reads the stopping prover at `δcRec`; its tape at each statement drawn from a finite nonce and rest
+  `Complete` at it reads the stopping prover at `δcRec`; its tape at each statement sampled from a finite nonce and rest
   by `tapeOf` (`Tape b` is not finite), the outer simulators `SO`, and the inner rounds' commit strings `nAt` in the
   layout `innerMsg`. Those four stay parameters, as `tapeOf` and `SO` do in the masked record of `ZK`: the inner
   prover (`RefParts.PI`) is a parameter of `deployRec`, and its round messages fix `nAt` and `innerMsg`. `ZKStop`
@@ -140,7 +140,7 @@ noncomputable def refPStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg →
     else (refP IV b w).next x hist ω⟩
 
 /-- **The compiled verifier with its reference prover's stop**: `deployRec`, its reference prover `refPStop` and its
-stop `stopsRec`, which reads no oracle; the reference prover's tape at each statement `x` drawn from the finite nonce
+stop `stopsRec`, which reads no oracle; the reference prover's tape at each statement `x` sampled from the finite nonce
 and rest `N x × Ω x` by `tapeOf x`, the outer simulators `SO`, and the inner rounds' commit strings `nAt` in the
 layout `innerMsg`. -/
 noncomputable def deployRecStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
@@ -160,7 +160,7 @@ noncomputable def deployRecStop (IV : Claims.Verifier Coin) (ivScope : Claims.Ms
     stops := fun _ => stopsRec IV ivScope b.st }
 
 /-- **`ZKStop` reads the record's own reference prover**: at each statement `x`, `refPStop` on the tape `tapeOf x`
-draws. -/
+samples. -/
 theorem prover_deployRecStop (IV : Claims.Verifier Coin) (ivScope : Claims.Msg → Bool) (b : Brings)
     (tapeOf : (x : Claims.Msg) → N x × Ω x → Tape b) (SO : ℕ → Claims.Msg → ℕ → Claims.Recursion.OSim)
     (nAt : Claims.Msg → ℕ → ℕ)

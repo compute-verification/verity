@@ -191,7 +191,7 @@ theorem inst_zero {g : ℕ} (hg : g < a.st.c.g) (x : Fin (instRows a.st.c).w) (h
 
 end AcceptedH
 
-/-- **A drawn unit's message-keyed composite input holds its row's bit**: in a satisfying witness of an accepted
+/-- **A sampled proof block's message-keyed composite input holds its row's bit**: in a satisfying witness of an accepted
 hidden-output statement, at block `o` and template instance `g`, the composite input whose Δ key is message bit `bit` of
 byte `byte` of row `q` holds the witness's bit at that message column (`Typed.msgCol`), when the column is in the block.
 `copy_siteH` at the template instance's rows. -/
@@ -238,7 +238,7 @@ theorem SitesH.rows_instProg (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u �
     (instProg c n).rows u = instRows (si.acc S R u h).st.c :=
   (rows_uniform _ _ _ _ _ n u).trans (congrArg instRows (hparse S R u h)).symm
 
-/-- **A drawn unit's columns in its table's block**: its template instance's composite columns
+/-- **A sampled proof block's columns in its table's block**: its template instance's composite columns
 (`AcceptedH.instCol`). -/
 noncomputable def SitesH.instCol (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     Fin ((instProg c n).rows u).w → Fin (2 ^ (Partition.tabOf plan tab S R u).S.kLog) :=
@@ -247,7 +247,7 @@ noncomputable def SitesH.instCol (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h :
 variable (outs : Finset (Fin (instN c n)))
 
 /-- **`ProgPlaces` for the program of the whole template instance at hidden-output sites**, from the sites and the
-parse, at output rows that fit: each drawn unit placed at its template instance (`AcceptedH.placement_inst`), its
+parse, at output rows that fit: each sampled proof block placed at its template instance (`AcceptedH.placement_inst`), its
 instance the program's own, its composite inputs on one gate carrying one value (`AcceptedH.inst_aliased`). -/
 noncomputable def SitesH.progPlaces_instProg : ProgPlaces (instProg c n) outs plan tab where
   inst := Const.Prog.instC (instProg c n) outs
@@ -600,7 +600,7 @@ variable {c : Flock.Circuit} {n : ℕ} {Reg : Type} {mPts : ℕ} {plan : Finset 
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
   (si : SitesH plan tab)
 
-/-- **Row `q`'s salt at a drawn unit's site**: its `hm96` slot's salt input (`Hm.saltCol`) at the unit's template
+/-- **Row `q`'s salt at a sampled proof block's site**: its `hm96` slot's salt input (`Hm.saltCol`) at the unit's template
 instance (`keySaltAddrH` on `instProg`'s gates). -/
 noncomputable def instSaltAddrH (S : Finset (Fin n)) (R : Reg) (u : Fin n)
     (q : (Fin n × Fin c.ports.size) ⊕ Fin (instN c n)) (j : Fin 192) (t : Fin 8) :
@@ -664,8 +664,8 @@ theorem instProgH_copies : (instReadersH hparse hrf outs popOf).Copies (instPlac
     exact this
 
 include hparse in
-/-- **The rows' `b ‖ c` at `instProg`'s sites in hidden-output tables is the registration's**: at each row a drawn
-unit reads, input or output, the bytes at its `hm96` output are the population's `b ‖ c` of the unit (`bc_site_ofH`). -/
+/-- **The rows' `b ‖ c` at `instProg`'s sites in hidden-output tables is the registration's**: at each row a sampled
+proof block reads, input or output, the bytes at its `hm96` output are the population's `b ‖ c` of the unit (`bc_site_ofH`). -/
 theorem instProgH_bcPinned
     (hsite : ∀ S R u (h : u ∈ S) M, Binding.Sat plan tab S R u M →
       BcSiteH (si.acc S R u h) (popOf R) (si.o S R u h) (si.vu S R u h) u.val) :
@@ -763,7 +763,7 @@ theorem instRowH_enc {S : Finset (Fin n)} {R : Reg} {u : Fin n} (hu : u ∈ S) (
   · rw [Layout.rowEncP_row _ hrw hle, hbytes]
 
 /-- **`HmRowComputes` at `instProg`'s rows in hidden-output tables** (`hHm` for `instRowsH`), with a unit per VU
-(`hupv`): at every drawn unit's committed wire held by a row, input or output, the `b ‖ c` at the row's `hm96` output is
+(`hupv`): at every sampled proof block's committed wire held by a row, input or output, the `b ‖ c` at the row's `hm96` output is
 the commit string of the row's bytes and the salt the witness holds at `Hm.saltCol` (`bc_site_commitH`,
 `instRowH_enc`). -/
 theorem instRowsH_computes (hupv : 0 < c.upv)

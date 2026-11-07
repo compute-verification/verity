@@ -1,7 +1,7 @@
 // The H200's sustained int8 rate per operand class, alone and beside SHA-512 paced at a ratio of compressions a T MAC.
 // Timings only: every rate and clock is the kernels' own clock64 over %globaltimer, and nothing else on the card is read.
 //
-// Operand classes (Verity.OperandClass), each byte drawn from a hash of its position: s8 uniform on [-128, 127], s2 on
+// Operand classes (Verity.OperandClass), each byte sampled from a hash of its position: s8 uniform on [-128, 127], s2 on
 // [-2, 1], u2 on [0, 3], u4 on [0, 15], zero. Kernels:
 //   wgmma  one warpgroup an SM issuing wgmma m64n256k32 back to back on A and B resident in
 //          shared memory (KS k-slices, cycled), the tensor pipe's issue limit with no loads. ENC is the instruction's operand

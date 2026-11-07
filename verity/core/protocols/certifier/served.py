@@ -2,7 +2,7 @@
 from the ingress counts under the declared clock sync, zero-knowledge. A Boolean Definition, a gated part of N2's
 served proof block (`service`'s `NetworkServedLinkWindow` v4), which runs on every execution phase; its one output is
 the ok bit. That proof block's Program holds it as one gate that names its circuit digest (`gate`), pinned in this
-module's sidecar and held to the Definition by circuit-check; N2's verifier of record reads its output from the proof
+module's sidecar and held to the Definition by circuit-check; N2's verifier reads its output from the proof
 block's proof, and the in-the-clear check (`LinkWindows.clear`) runs its `reference`, which the tests hold to the
 circuit.
 

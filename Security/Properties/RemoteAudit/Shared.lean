@@ -8,7 +8,7 @@ public import RemoteAudit.Shared
 
 `Properties.RemoteAudit.Coins` and the draw's statement in `Properties.RemoteAudit`, for a session that draws its
 openings `g` windows at a time (`audit.Params.groups_per_coin`, `RemoteAudit.Shared.run g`): draw `c` is windows
-`c·g … min(c·g + g, W) − 1` (`drawWindows`), drawn together at the close of the last of them by one coin,
+`c·g … min(c·g + g, W) − 1` (`drawWindows`), sampled together at the close of the last of them by one coin,
 `coins[W + c]`, on the openings key of `c`, over the draw's receipts in order, numbered across its windows
 (`drawLengths`). Each window gets the draws in its passes, renumbered to its own (`shareOf`, `passesBefore`), and
 `verify` checks them against its own record. Where `Coins` indexes by window `t`'s coin `W + t`, these index by
@@ -20,19 +20,19 @@ draw `c`'s, `W + c`.
   share accepts, each value is an openable receipt of the window it falls in (`receiptCount`). Like today's, which is
   on `verifyWindow` (`draws`, then `checkWindow`), it is on `draws` and `checkWindow` alone, over the records `ws` of
   the draw's windows, whose passes number its receipts (`lengthsOf`, `passCount`).
-* `SessionDrawsRecords` (`Shared.run`, the session link), for every `g ≥ 1`: in a run, a drawn draw is `draws` over
+* `SessionDrawsRecords` (`Shared.run`, the session link), for every `g ≥ 1`: in a run, a sampled draw is `draws` over
   its windows' records (`drawRecords`, `State.record`), each window holding its share, and a window of it is accepted
   only with an empty share (which the close accepts at `g ≥ 2`) or with `checkWindow` of its share passing on the
   session's appends: the hypotheses `AcceptDrawsOpenable` reads, each window's on the one array of appends. It needs
   `min_passes ≥ 1`.
 * `AcceptedDrawsOpenable` (`Shared.run`, the two joined): in a run that has accepted every window of draw `c`, each
   value of the draw's sampler is an openable receipt, on the session's appends, of the window it falls in.
-* `OpeningsUnreadUntilDrawn` (`Live`, the coin order): a run that leaves draw `c`'s first window undrawn reads no
+* `OpeningsUnreadUntilDrawn` (`Live`, the coin order): a run that leaves draw `c`'s first window unsampled reads no
   coin at `W + c` or above.
-* `RecordKeptAfterDraw`: once a window is drawn, the rest of the session keeps its draws, its record and its openable
+* `RecordKeptAfterDraw`: once a window is sampled, the rest of the session keeps its draws, its record and its openable
   receipts, as at `g = 1`.
 * `ReleaseOrder`, `LiveUnder`: the deployment's premise and `Live` as the code states it, per draw: on coins that
-  agree below `W + c`, wherever two sessions have drawn draw `c`, each window of it has the same record and the same
+  agree below `W + c`, wherever two sessions have sampled draw `c`, each window of it has the same record and the same
   openable receipts.
 
 At `g = 1`, `Shared.run 1` is `Session.run` (`RemoteAudit.Shared.run_one`), `c` is the window, and draw `c` is window
@@ -116,7 +116,7 @@ def AcceptDrawsOpenable : Prop :=
 def drawRecords (g : Nat) (s : Session.State) (c : Nat) : List WindowRecord :=
   (drawWindows g s.params.windows c).map s.record
 
-/-- **The session link**, per draw, at any `g ≥ 1` windows a draw: in a run from `State.init` that has drawn the first
+/-- **The session link**, per draw, at any `g ≥ 1` windows a draw: in a run from `State.init` that has sampled the first
 window of draw `c` (one of the session's, `c·g < W`), the draw is `draws` on the openings key of `c` and the coin
 `coins[W + c]` over the records `ws` of `c`'s windows (`drawRecords`), `U` their receipts (`lengthsOf`); window `k` of
 it holds its share (`shareOf`, from its passes' start, `passCount`); and once window `k` is accepted, its share is
@@ -153,7 +153,7 @@ def AcceptedDrawsOpenable : Prop :=
         ∀ v ∈ us, ∃ k, ∃ hk : k < (drawRecords g s c).length, receiptCount ((drawRecords g s c).take k) ≤ v ∧
           Openable reg s.appends (drawRecords g s c)[k] (v - receiptCount ((drawRecords g s c).take k))
 
-/-- A run from `State.init` that leaves draw `c`'s first window undrawn reads no coin at `W + c` or above: on coins
+/-- A run from `State.init` that leaves draw `c`'s first window unsampled reads no coin at `W + c` or above: on coins
 `coins'` that agree with `coins` below `W + c`, the same events give the same results and the same state, with
 `coins'`. -/
 def OpeningsUnreadUntilDrawn : Prop :=
@@ -165,7 +165,7 @@ def OpeningsUnreadUntilDrawn : Prop :=
       Shared.run g (Session.State.init params reg coins' appendCoins notBeforeNs) events =
         .ok (rs, { s with coins := coins' })
 
-/-- Once a run from `State.init` has drawn window `t` (at `s`), any events after it keep the window's draws, its record
+/-- Once a run from `State.init` has sampled window `t` (at `s`), any events after it keep the window's draws, its record
 and its openable receipts: at `s'` they are those at `s`. -/
 def RecordKeptAfterDraw : Prop :=
   ∀ (g : Nat) (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
@@ -178,7 +178,7 @@ def RecordKeptAfterDraw : Prop :=
 
 /-- **The release order**, per draw (the deployment's, which the code cannot give): `D` gives the events a session sees
 on its coins, and draw `c`'s openings coin reaches none of them before the one that draws it. While the first `k`
-events leave draw `c`'s first window undrawn, the next is the same on coins that agree below `W + c`. -/
+events leave draw `c`'s first window unsampled, the next is the same on coins that agree below `W + c`. -/
 def ReleaseOrder (g : Nat) (params : Session.Params) (reg : Registration) (appendCoins : Array ByteArray)
     (notBeforeNs : Nat) (D : Array ByteArray → Array Session.Event) : Prop :=
   ∀ (coins coins' : Array ByteArray) (c k : Nat) (rs : Array Session.Result) (s : Session.State),
@@ -187,7 +187,7 @@ def ReleaseOrder (g : Nat) (params : Session.Params) (reg : Registration) (appen
     drawnOf s (c * g) = none → (D coins')[k]? = (D coins)[k]?
 
 /-- **`Live`, as the code states it**, per draw, on the events `D` a session sees on its coins: two sessions on coins
-that agree below `W + c`, each run to a point where window `t` of draw `c` is drawn, see the same record of it and the
+that agree below `W + c`, each run to a point where window `t` of draw `c` is sampled, see the same record of it and the
 same openable receipts. -/
 def LiveUnder (g : Nat) (params : Session.Params) (reg : Registration) (appendCoins : Array ByteArray)
     (notBeforeNs : Nat) (D : Array ByteArray → Array Session.Event) : Prop :=

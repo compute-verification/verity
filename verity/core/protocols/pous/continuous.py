@@ -5,7 +5,7 @@ Its model is the memory challenger of `Security/Definitions/Pous/Model/Continuou
 guarantee `Pous.SecurityProofs.ContinuousAudit`.  That memory challenger sends `n` uniform, independent indices and
 counts a miss for every round that is not a hit: wrong, late or rejected.  Three requirements are theorems about it
 (`Security/Proofs/Pous/Continuous/Verifier.lean`), and `ContinuousMemoryChallenger` enforces each one on a single
-`audit.UnsignedRounds` over the whole stream, with its clock and its index draws:
+`audit.UnsignedRounds` over the whole stream, with its clock and its index samples:
 
 1. **No pipelining.** Challenge `j + 1` is revealed only once answer `j` is in or its hard deadline has passed
    (`UnsignedRounds.challenge`), and each deadline runs from the memory challenger's own clock reading when it reveals
