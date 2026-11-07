@@ -104,7 +104,7 @@ files and at the strategy a strategy of the period's game projects to. This modu
     samples trees of at most `maxLeaves` (`2^46`) leaves in all (`Leaves.play_leaves_le`), and the term is the closed
     `2 · 2^46/2^257 = 2^-210` (`Live.hidingTerm`);
   * the circuit file's and the public file's finders (`Vocab.fileFinder`, `Vocab.publicFinder`), `2²/2^513` each;
-  * the read finder's published bound at `t` (`cr`, `Vocab.crBound`).
+  * the read finder's collision bound at `t`, its budget over `2^256` (`cr`, `Vocab.crBound`).
 -/
 
 @[expose] public section
@@ -988,7 +988,7 @@ it is v2's (`coinsRead`); the finder is `K`'s read finder and the forger `K`'s, 
 the extractor is the
 session's at the projected strategy (`Live.extract`), the vocabulary's openings hold wherever the session's deployed
 commitment opens (`Live.OpensUnder`), `error`'s condition holds the leg's per-finder premises (`FinderCR`), and the
-published `δ` is at least the session's at the read finder's published bound (`Live.delta`). -/
+published `δ` is at least the session's at the read finder's collision bound (`Live.delta`, `Vocab.crBound`). -/
 structure Deployed (V : Vocab d α) (K : Constructions V) (S : ByteArray → Array ByteArray → Option Live) :
     Prop where
   setsUp : ∀ θ F A, S θ F = some A → SetsUp V θ F A

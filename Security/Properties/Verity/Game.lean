@@ -68,10 +68,10 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **One adversary form: every prover, and collisions a fixed finder outputs.** There is no strategy class and no break
   in the event. The finder `B` (`finder a`, a `Claims.Finder`) is a fixed construction applied to the strategy whose
   SHA-512 calls are at most `c · calls(τ) + d` (`finder_calls`). Subprotocol `a`'s error at a strategy (`error`) is,
-  where `B^τ` outputs a SHA-512 collision with probability at most the published `ε_cr` at the strategy's calls
-  (`FinderCR`, quantitative), its published `δ` at those calls plus its loss at `Pr[B^τ]`, the form of
-  `Accounting.PeriodLive.error`; elsewhere `⊤`. That admits C-Flock's conditional bound (`loss = 0`) and the additive
-  one (`crBound = 1`). A bound that reads further finders built from the strategy lists them (`finders`, each a
+  where `B^τ` meets `ecr/sha-512` (`FinderCR`, `Claims.ExpectedCR` at the finder), its published `δ` at the strategy's
+  calls plus its loss at `Pr[B^τ]`, the form of `Accounting.PeriodLive.error`; elsewhere `⊤`. There `B^τ` outputs a
+  SHA-512 collision with probability at most its budget over `2^256` (`crBound`), which a bound reads as `ε_cr`. That
+  admits C-Flock's conditional bound (`loss = 0`). A bound that reads further finders built from the strategy lists them (`finders`, each a
   `FinderSpec`: the finder, and its budget as a function of the strategy's calls that bounds its calls), and the error
   is `⊤` where one of them outputs a collision with probability above its budget over `2^256` (`finderCR`, built by
   `finderCROf`), the bound `ecr/sha-512` gives it. Two openings of one position
@@ -633,8 +633,8 @@ each with its budget in the strategy's calls (`finders`); the committed circuit'
 their window's coin; the world each play realizes; the declaration's registered inputs and the inference-only policy's
 budgets; the wipe that opens the period, at a boundary of a schedule of the committed circuit's blocks, and each play
 read at that boundary as the wipe's game;
-the deployment's honest prover; and the certificates, survivor threshold, errors, collision and forgery bounds and
-losses the composite publishes, from the parameters and the strategy's SHA-512 calls alone.
+the deployment's honest prover; and the certificates, survivor threshold, errors, forgery bounds and losses the
+composite publishes, from the parameters and the strategy's SHA-512 calls alone.
 
 `cost θ F c σ` is the strategy's SHA-512 calls in one run (`t' τ`): `Verity.Game` has no call model of
 strategies, so it is declared, as `Claims.Finder.cost` is. -/
@@ -723,7 +723,6 @@ structure Vocab {ι : Type} (d : Device ι) (α : Type) [Fintype α] where
   honest : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) →
     Game.Strategy (play (families θ) (signer θ) θ F c)
   certOf : ByteArray → Certificates
-  crBound : ByteArray → Subprotocol → ℕ → ℝ
   delta : ByteArray → Subprotocol → ℕ → ℝ≥0∞
   /-- **The published `ε_forge(t, Q)`**: the bound `Hash.Assumptions.LmsUnforgeable` gives a forger of at most `t`
   SHA-512 calls that has at most `Q` of the device's messages signed on each of its coins -/
@@ -836,12 +835,24 @@ the strategy's calls (`finderCROf`); `True` where the bound reads only `finder`.
 def finderCR (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
   finderCROf (V.finders a θ F c) σ
 
-/-- **`B^τ`'s collision premise, quantitative**: subprotocol `a`'s finder applied to the strategy outputs a SHA-512
-collision with probability at most the published bound at the strategy's SHA-512 calls (`ε_cr`). `ecr/sha-512` is asked
-at the finder's budget, `callsMul θ a * cost θ F c σ + callsAdd θ a` calls (`finder_calls`), a defined function of the
-strategy's `cost` as `qF`/`qS` are of `t'`. -/
+/-- **Subprotocol `a`'s finder with its budget** (`finder_calls`): `callsMul θ a * t + callsAdd θ a` SHA-512 calls at
+the strategy's `t`, a defined function of the strategy's `cost` as `qF`/`qS` are of `t'`. -/
+def finderSpec (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) :
+    FinderSpec (V.game θ F c) (V.cost θ F c) where
+  finder := V.finder a θ F c
+  budget t := V.callsMul θ a * t + V.callsAdd θ a
+  calls σ x := V.finder_calls a θ F c σ x
+
+/-- **`ε_cr`, subprotocol `a`'s finder's collision bound at `t` calls**: its budget over `2^256`, what `ecr/sha-512`
+gives a finder of that many calls. -/
+noncomputable def crBound (θ : ByteArray) (a : Subprotocol) (t : ℕ) : ℝ :=
+  ((V.callsMul θ a * t + V.callsAdd θ a : ℕ) : ℝ) / 2 ^ (256 : ℝ)
+
+/-- **`B^τ`'s collision premise**: `ecr/sha-512` (`Claims.ExpectedCR`) at subprotocol `a`'s finder applied to the
+strategy. Its calls are within its budget on every coin (`finderSpec`), so it outputs a SHA-512 collision with
+probability at most `crBound` at the strategy's calls. -/
 def FinderCR (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : Prop :=
-  (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ)
+  Claims.ExpectedCR sha512Msg (V.finder a θ F c σ)
 
 /-- **`B^τ`'s forgery premise**: subprotocol `a`'s forger applied to the strategy meets
 `Hash.Assumptions.LmsUnforgeable` at the compiled LMS verifier, at the finder's budget of SHA-512 calls
@@ -855,8 +866,7 @@ def Unforgeable (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : By
 and its forger its forgery premise (`Unforgeable`), its published `δ` at the strategy's SHA-512 calls, plus the published
 `ε_forge(t, Q)` at the forger's budget and the device's signatures (`epsForge`), plus its loss at the probability that
 the finder outputs a collision, the form of `Accounting.PeriodLive.error` with the forgery term beside `δ`; elsewhere no
-bound (`⊤`), as `Accounting.condError` reads it. C-Flock's conditional bound is the case `loss = 0`, the additive one
-the case `crBound = 1`. -/
+bound (`⊤`), as `Accounting.condError` reads it. C-Flock's conditional bound is the case `loss = 0`. -/
 noncomputable def error (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (V.game θ F c)) : ℝ≥0∞ :=
   condError (fun σ => V.finderCR a θ F c σ ∧ V.FinderCR a θ F c σ ∧ V.Unforgeable a θ F c σ)
     (fun σ => V.delta θ a (V.cost θ F c σ) +

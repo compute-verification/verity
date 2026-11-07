@@ -134,7 +134,6 @@ noncomputable def vocab (δ : ℝ≥0∞) (W : ℝ) : Vocab device Unit where
   foreignBits _ := 0
   honest θ F c := requestThen [] signer θ F c .empty ⟨.empty, fun _ => ⟨(.empty, #[]), ⟨⟩⟩⟩
   certOf _ := ⟨0, W, 0, 0, 0⟩
-  crBound _ _ _ := 0
   delta _ _ _ := δ
   epsForge _ _ _ := 0
   loss _ _ _ := 0
