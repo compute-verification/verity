@@ -64,7 +64,9 @@ theorem correct_bits {u : Fin n} {tr : (circuitOf D hU n).Transcript} (hX : (par
     apply BitVec.eq_of_getLsbD_eq
     intro i hi
     obtain rfl : i = 0 := by change i < 1 at hi; omega
-    simp [Verity.Circuit.ofBits]
+    show (tr g).getLsbD 0 = (BitVec.ofBool ((tr g).getLsbD 0)).getLsbD 0
+    generalize (tr g).getLsbD 0 = b
+    cases b <;> rfl
   have h1 : u ∉ (partsOf D hU n).wrong tr := by
     rw [Verity.Partition.mem_wrong]
     exact not_not.mpr hX
@@ -91,7 +93,7 @@ theorem rows_of_correct {u : Fin n} {tr : (circuitOf D hU n).Transcript} (hX : (
   · intro i
     simp only [FlockVBridge.copyVal, FlockVBridge.colVal_fin]
     exact hs i
-  · rw [FlockVBridge.copyVal, FlockVBridge.colVal_fin]
+  · simp only [FlockVBridge.copyVal, FlockVBridge.colVal_fin]
     exact hone
   · rcases hcm with hin | hm
     · exact FlockVBridge.copyVal_input (R := Rows.ofNet hU) (k := D.unroll.upv) (unitInst D hU n u) _ hj hin
