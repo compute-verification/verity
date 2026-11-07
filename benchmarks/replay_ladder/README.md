@@ -10,14 +10,14 @@ and replay.
 For each model:
 
 - `serve`: one burst of 800 requests at 1,000 req/s on stock compiled vLLM measures the model's capacity; then the
-  `record` arm serves serve_tax's workload (C4 prompts, most behind one of eight shared prefixes, Poisson arrivals, every
-  request decoding to its cap) at 1.45 times that capacity for 60 s: a saturated window of mixed arrivals, prefill
-  chunks beside decodes.
+  `record` arm serves serve_tax's workload (C4 prompts from the whole shard, each opening with the checkpoint's own
+  document start and blank line, most behind one of eight shared prefixes, Poisson arrivals, every request decoding to
+  its cap) at 1.45 times that capacity for 60 s: a saturated window of mixed arrivals, prefill chunks beside decodes.
 - `replay`: in a fresh process, the window replayed under its recorded schedule, compiled, compared with serving step by
-  step and token by token, and from the second replay on with the first replay too. `run.sh` runs three replays that
-  load their graphs from vLLM's compile cache and one that compiles them from empty caches (`VLLM_DISABLE_COMPILE_CACHE=1`,
-  fresh Inductor and Triton directories): replays differing from each other at the same schedule are run-to-run
-  variation.
+  step and token by token, and from the second replay on with the first replay too. `run.sh` runs three replays on
+  vLLM's compile cache (the first fills it: the server's entries don't match an offline engine's, so it compiles) and
+  one that compiles from empty caches (`VLLM_DISABLE_COMPILE_CACHE=1`, fresh Inductor and Triton directories); each
+  replay's summary says which. Replays differing from each other at the same schedule are run-to-run variation.
 - `alone`: 64 of the window's requests, evenly spaced in arrival order, each served by itself on an empty prefix cache in
   one compiled engine, compared with serving and with the first replay: how far a request's tokens depend on its batch,
   which is why a replay needs the recorded schedule.
@@ -40,7 +40,8 @@ research run --on NODE --project verity --source . --cwd source --send c4-val-00
 python benchmarks/replay_ladder/coverage_table.py render COVERAGE.json --ladder OUT/summary.json --out DIR
 ~~~
 
-`run.sh` takes `REPLAYS` (3), `FRESH` (1), `ALONE` (64), and `SPAN_S`, `OVER` and `BURST` for the window. A TP2 or TP4
+`run.sh` takes `REPLAYS` (3), `FRESH` (1), `ALONE` (64), and `SPAN_S`, `OVER` and `BURST` for the window
+(`ladder.py serve --docs` caps the shard's documents a plan draws from). A TP2 or TP4
 model needs a node with that many GPUs. FP8 models run DeepGEMM, which JIT-compiles with the newest CUDA toolkit under
 `/usr/local` (12.8 or newer; a RunPod image's 12.4 can't, so install `cuda-nvcc-12-9 cuda-cudart-dev-12-9 cuda-cccl-12-9`
 first), unless `DEEP_GEMM=0`; `engine_env.txt` records the choice.

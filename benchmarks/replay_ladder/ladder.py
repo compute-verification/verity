@@ -1,7 +1,7 @@
 """The replay ladder: on each model of a ladder of pinned checkpoints, does replaying a saturated served window under its
 recorded schedule give the served tokens, compiled, run after run, and how far do the tokens depend on the batch?
 
-    ladder.py serve   --model ID --c4 C4.json.gz --out DIR [--span-s 60] [--over 1.45] [--burst 800]
+    ladder.py serve   --model ID --c4 C4.json.gz --out DIR [--span-s 60] [--over 1.45] [--burst 800] [--docs N]
     ladder.py replay  --model ID --out DIR --index I
     ladder.py alone   --model ID --out DIR [--requests 64]
     ladder.py summary DIR... --out DIR
@@ -11,8 +11,9 @@ engine: vLLM's own OpenAI server, compiled with CUDA graphs, chunked prefill, pr
 (serve_tax.BASE_ARGS), BF16 activations, at the model's tensor-parallel width.
 
 - ``serve`` measures the model's capacity with one burst of ``--burst`` requests (serve_tax's ``compiled`` arm), then
-  serves serve_tax's workload (C4 prompts, most behind one of eight shared prefixes, Poisson arrivals, every request
-  decoding to its cap) at ``--over`` times that capacity for ``--span-s`` seconds with the scheduler's step trace
+  serves serve_tax's workload (C4 prompts from the shard's first ``--docs`` documents, each opening with the checkpoint's
+  own document start, most behind one of eight shared prefixes, Poisson arrivals, every request decoding to its cap) at
+  ``--over`` times that capacity for ``--span-s`` seconds with the scheduler's step trace
   (the ``record`` arm): a saturated window of mixed arrivals, prefill chunks beside decodes.
 - ``replay`` replays that window in a fresh process under its recorded schedule, compiled (serve_tax's `replay`), and
   compares its schedule and every request's tokens with serving's, and from the second replay on its tokens with the
