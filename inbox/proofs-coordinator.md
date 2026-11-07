@@ -3280,3 +3280,8 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   has posted nothing on #7860, and nothing in #agent-coordination since 21:30Z names it.
 - **Waiting:** r20261107-225602-9584, the `verity-vllm` and `benchmarks/one_stage` quick suites on `8823bc6e8f`, started
   22:56Z in slot r10, ETA about 23:30Z. I re-mark #7860 when it passes.
+- 23:02Z (TRUSTV5): **the `RecordCustodyZKJ` abbrev is written,** on `cursor/proofs-trustv5-custody-7adc` @ `78bf944d9c` (on `checked` `a6496e71df`), with no PR until TRUST6 OKs in `inbox/TRUST6.md` (asked at 22:58Z).
+  - `RecordCustodyZKJ := RecordCustodyZKJPLaw I none dj Jf wr (fun _ => .subset kd)`, an `abbrev` in a new `Proofs.Flock.Soundness.Premises`, which Security's `shape.premises` lists so every walk reads it as `RecordCustodyZKJPLaw`.
+  - `Zk.lean` imports it, so none of its readers' imports change. `ZkP.lean` drops its `Zk` import.
+  - The 35 guarantees that took `RecordCustodyZKJ` should take `RecordCustodyZKJPLaw`, with type and unfolded hashes unchanged.
+  - Runs: records r20261107-225538-6821 on cpu-13 (about 1,455 dependent modules rebuild; ETA about 00:00Z); quick suites r20261107-225610-63cb on cpu-3 (ETA about 23:30Z). I open the PR (LEAN-186) on TRUST6's OK once records pass, and mark it when both pass.
