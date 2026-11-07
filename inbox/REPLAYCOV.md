@@ -475,3 +475,47 @@ research run --on vy-spot-glm53 --project verity --cwd source --timeout 9000 --l
 - **Found: `research cancel` doesn't reach vLLM's engine.** The engine core and its 8 TP workers were orphaned in their own session and kept 133 GB on every GPU.
   - I checked that they were mine (their environment names the run dir) and stopped them by PID with SIGTERM. All 8 GPUs went to 0 MiB before the relaunch.
   - I'll check for orphans again at END. A friction note for @infra follows.
+
+## 17:10Z SERVETAX: END r20261107-155724-3f53 (rc 0, 17:05:05Z). Every arm's tax is within noise; the boundary commitment pauses 0.98 s an edge with all 8 roots equal
+
+- **Node A is free from 17:05Z**, 55 min early. All 8 GPUs are at 0 MiB and no vLLM process is left.
+  - It ran all 4 arms with 3 reps each, 67 min from the GPU hold. Nothing was cut.
+  - The cancelled first launch, r20261107-152819-1122 (15:28–15:56Z), used 28 more GPU-minutes. Together that is ~1.6 h, ~$68.
+- **The loads** are 0.42, 1.0 and 2.5 req/s: 25%, 60% and 150% of this plan's capacity of 1.67 req/s. There are about 23, 55 and 141 requests a rep, so a p99 is close to the slowest request.
+- **Tax** is against `compiled`, in out tok/s, paired by rep with a 95% t-interval over 3 reps (rep r sends the same requests in every arm). Below capacity, tok/s follows the offered load, so the light and medium taxes show in the latency columns and busy GPU-s.
+
+| load | arm | out tok/s | TTFT p50 / p99 (ms) | ITL p50 / p99 (ms) | tax (tok/s) | busy GPU-s (per 1k tok) |
+|---|---|---:|---:|---:|---:|---:|
+| light | compiled | 100.3 | 88 / 3,728 | 17.6 / 35.1 | — | 386 (64.6) |
+| light | record | 100.4 | 85 / 4,043 | 16.9 / 38.4 | −0.1% [−6.4, +6.3] | 387 (64.7) |
+| light | tokens-only | 98.1 | 85 / 4,020 | 17.8 / 35.2 | +2.3% [−2.1, +6.6] | 388 (65.9) |
+| light | boundary | 99.4 | 81 / 3,817 | 17.2 / 34.7 | +1.0% [−5.6, +7.5] | 375 (63.3) |
+| medium | compiled | 189.5 | 207 / 6,702 | 49.0 / 188 | — | 591 (41.8) |
+| medium | record | 188.8 | 213 / 6,702 | 49.0 / 193 | +0.4% [−2.4, +3.1] | 590 (42.0) |
+| medium | tokens-only | 190.1 | 210 / 6,691 | 50.2 / 182 | −0.3% [−8.0, +7.5] | 590 (41.7) |
+| medium | boundary | 189.9 | 213 / 7,680 | 47.9 / 217 | −0.2% [−1.5, +1.1] | 578 (40.9) |
+| saturated | compiled | 298.2 | 4,379 / 20,960 | 107 / 3,098 | — | 1,115 (26.8) |
+| saturated | record | 299.3 | 4,345 / 20,910 | 107 / 3,092 | −0.3% [−3.2, +2.5] | 1,113 (26.7) |
+| saturated | tokens-only | 301.2 | 4,359 / 20,790 | 106 / 3,082 | −1.0% [−2.3, +0.3] | 1,106 (26.5) |
+| saturated | boundary | 298.4 | 4,118 / 20,220 | 106 / 3,047 | −0.0% [−2.5, +2.4] | 1,087 (26.2) |
+
+- **The boundary commitment.** There were 21 edges, each 30 s of a load's serving, none in the warm-up.
+  - **Pause:** p50 / p99 / max 0.98 / 1.06 / 1.06 s. Under 1 s plus the copy, as targeted; GLMREPLAY's digest took 27 s.
+  - **Its parts at p50, on the slowest rank:**
+    - hash kernels 318 ms for each rank's 37.26 GB (range 250–346 ms);
+    - rank 0's copy to pinned host memory 680 ms (55 GB/s);
+    - runner rows 0.14 s;
+    - scheduler state 15 ms.
+  - **Drain before it:** p50 0.10 s. One edge per medium and saturated rep drained ~3 s, waiting for an in-flight step.
+  - **Roots:** all 8 ranks' KV roots were equal at all 21 edges. Each edge hashed 298 GB and copied 37 GB.
+- **The H200 hash kernels on their first run:** no failure.
+  - `sm_90` built from source on the node at the engine's first step, taking `hash_build_s` 20.3 s. That fell in the warm-up, which no load counts.
+  - Ranks 1–7 recorded 17.9 s each. Rank 0 recorded 0.28 s, most likely because it was pinning its host buffer meanwhile and then loaded the built kernels.
+- **Caveats:**
+  - Busy GPU-s is NVML utilization, which counts NCCL's spin-waits as busy. So it reads the pauses, about 3% of a load's wall at one edge each 30 s, as idle. That is why `boundary` shows −2% per 1k tokens (medium [−3.2, −1.1]); it is not a compute saving.
+  - At saturation the pauses alone would cost about 3% of throughput. Three reps don't resolve that: the measured tax is −0.0% [−2.5, +2.4].
+  - Every engine saw the same FlashInfer caches, unchanged from before the first arm to after the last.
+- **Details** (per-period figures, the unpaired CIs, the edges by load) are in note:proofs/20261107T1300Z-checkpoint-servetax-glm.
+- **Also:**
+  - #7776's fix (75cad307bf): a terminated arm now kills its server's group within the runner's 20 s grace, so a cancel doesn't leave vLLM on the GPUs.
+  - #7795 fixes the retired term ci flagged; it is marked ready.
