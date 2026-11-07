@@ -259,7 +259,7 @@ def legacyWhy (name : String) : Option String :=
 def mMin (zk : Bool) : Nat := if zk then 25 else 22
 
 /-- **The tables' sizes the proof covers**: every table's `m` (`ms`, each table's `Setup.m`) at least `mMin`. A table's
-`m` is its drawn statement's, which only the setup computes, so `verify` checks this on the session's tables right after
+`m` is its sampled statement's, which only the setup computes, so `verify` checks this on the session's tables right after
 `check`, not on the statement's files. Each verifier's own schedule refuses a smaller `m` before it (`fast100` below `22`,
 `Zk.schedule` at `m ≤ 24`), so this refuses no session `verify` would otherwise accept. -/
 def sizesOk (zk : Bool) (ms : Array Nat) : Except String Unit :=
@@ -475,13 +475,13 @@ theorem programP_ok {parsed : V Circuit} {program : Option ByteArray} (h : progr
     | none => rfl
     | some w => simp [hw] at h
 
-/-- What a draw's law is, when no soundness claim draws by it at the session's form: the one rule
-for which law each form draws by. Without `--plain-tables`: the stratified law at every form `check` passes, each claim at
-one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset law under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
-and, without it, exactly where a plain claim draws by it: at hidden outputs, at the one table `check` admits there
-(`SoundExecH` at its subset draw design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset law alone. So a
-bernoulli draw, a work draw (with or without a closure), a subset draw without `--zk` or `--plain-tables` at public outputs,
-and a stratified draw under `--plain-tables` are outside them. -/
+/-- What a sample's law is, when no soundness claim samples by it at the session's form: the one rule
+for which law each form samples by. Without `--plain-tables`: the stratified sampling design at every form `check` passes, each claim at
+one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset sampling design under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
+and, without it, exactly where a plain claim samples by it: at hidden outputs, at the one table `check` admits there
+(`SoundExecH` at its subset sample design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset sampling design alone. So a
+bernoulli sample, a work sample (with or without a closure), a subset sample without `--zk` or `--plain-tables` at public outputs,
+and a stratified sample under `--plain-tables` are outside them. -/
 def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : Option String :=
   match d.law with
   | .stratified .. => if plainTables then some "a stratified draw under --plain-tables" else none
@@ -489,9 +489,9 @@ def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : 
   | .bernoulli .. => some "a bernoulli draw"
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
 
-/-- **The session's draw is by a law a soundness claim draws by at its form** (`lawWhy`): `draw` is
-the record's (`recordDraw`), none for a session without one. Every claim is about a drawn session, so a session without
-a draw is refused (D12); so is a draw that does not parse. -/
+/-- **The session's sample is by a sampling design a soundness claim samples by at its form** (`lawWhy`): `draw` is
+the record's (`recordDraw`), none for a session without one. Every claim is about a sampled session, so a session without
+a sample is refused (D12); so is a sample that does not parse. -/
 def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
   | none => .error "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
   | some j => match Draw.UnitDraw.ofJson j with

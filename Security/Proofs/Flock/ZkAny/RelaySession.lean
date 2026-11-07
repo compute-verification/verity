@@ -13,7 +13,7 @@ invariant's start and its step from one round to the session's next request, ove
 * `stopped_fresh`, `stopped_first`: a session none of whose frames is in the loop's frames has not stopped, nor has it
   after updates that keep its stop (`SessKept`: its `Hello`'s `Sessions.begin`, its `Commit`'s link, the frames port's
   starts, the other sessions' requests). `liveBefore_two`: and at its first frame round every earlier round passed,
-  where the worker's link is the firewall's own; **`stopped_two`**: so there the session's stop is the model's.
+  where the worker's link is the ZK server's own; **`stopped_two`**: so there the session's stop is the model's.
 * `roundPlace_nd`: a stopped session's round takes no device round, at every place; `roundPlace_nd_eq`: and a round
   of a session that has not stopped takes the device's.
 * `stopped_put_kept`: a put after updates that keep the rep's frame and the session's stop stops the session as on the
@@ -45,7 +45,7 @@ theorem stopped_first {R R₁ : Sessions} {sid : Nat} (h : ∀ p ∈ R.reps, p.s
     R₁.stopped sid = false :=
   (stopped_sessKept hS).trans (stopped_fresh h)
 
-/-- **At the session's first frame round every earlier round passed**, where the worker's link is the firewall's own:
+/-- **At the session's first frame round every earlier round passed**, where the worker's link is the ZK server's own:
 the `Hello` passes and so does the link (`toSrv_pass_own`, `toSrv_pass_recomp`). -/
 theorem liveBefore_two {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : Rr)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : h.length = 2) (hlt : 1 < L.last x)
@@ -72,7 +72,7 @@ theorem liveBefore_two {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker
 
 /-- **At the session's first frame round its stop is the model's**: neither has stopped, where none of the session's
 frames was in the loop's frames before its `Hello`, only updates that keep its stop came after, and the worker's link
-is the firewall's own. -/
+is the ZK server's own. -/
 theorem stopped_two {W Rr : Type} (L : LeanRelease W Rr) (wk : L.toSrv.Worker) (x : Msg) (w : W) (ρ : Rr)
     (κ : L.toSrv.Chk) (h : List (Msg × Msg)) (hl : h.length = 2) (hlt : 1 < L.last x)
     (hv : wk x w ρ (h.take 1) 0 = some (L.ownMsg x w ρ (h.take 1), false)) {R R₁ : Sessions} {sid : Nat}

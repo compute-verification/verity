@@ -187,7 +187,7 @@ def test_a_two_stage_profile_is_read_for_infiltration_and_exfiltration_and_refus
 
 def test_the_two_stage_bound_is_at_least_the_footprint_count_evaluated_in_lean():
     """`fixtures/exfiltration_two_lean.json` (`lean/ExfiltrationTwoVectors.lean`, `gridTwo_influence`): R replay blocks of N
-    proof blocks each, the first stage at rate num/den, k of each sampled replay block's proof blocks drawn, at
+    proof blocks each, the first stage at rate num/den, k of each sampled replay block's proof blocks sampled, at
     delta = 2^-e with b bits per proof block.  Lean takes the largest
     product of the replay blocks' acceptance factors at each total count, in exact integers, and the kernel checks that
     every count past K escapes with probability at most delta, so the served outputs at any inputs number at most

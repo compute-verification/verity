@@ -1677,13 +1677,13 @@ pub struct Instances {
     /// every row's `b || c`, instance-major, ports in order (a shared-row file: its tables' rows, port-major)
     pub bcs: Vec<[u8; BC_BYTES]>,
     /// SHA-512 of the header's compact key-sorted JSON (no newline) and every public byte after the rows and salts
-    /// (`b || c`, refs): what Σ binds. A drawn statement's header is its sample's, which no file holds, so this is no file's hash.
+    /// (`b || c`, refs): what Σ binds. A sampled statement's header is its sample's, which no file holds, so this is no file's hash.
     pub public_sha512: [u8; 64],
     /// SHA-512 of the verifier's own public file of the registered population (`public_file`'s bytes, which is the staged
-    /// `pub-<n>.bin` when its writer writes the header as serde does: `verity_flock.circuit.public_file`). A drawn statement
+    /// `pub-<n>.bin` when its writer writes the header as serde does: `verity_flock.circuit.public_file`). A sampled statement
     /// keeps its population's.
     pub public_file_sha512: [u8; 64],
-    /// the registered population's `b || c` (a drawn statement: the frame-v3 roots are over them); `None`: the statement's own
+    /// the registered population's `b || c` (a sampled statement: the frame-v3 roots are over them); `None`: the statement's own
     pub population: Option<(usize, Vec<[u8; BC_BYTES]>)>,
     /// a shared-row file's row tables (header `shared_rows`); `None`: every instance carries its own rows
     pub tables: Option<RowTables>,
@@ -1858,7 +1858,7 @@ impl Instances {
         let pw = c.public_words();
         let public: Vec<u16> = units.iter().flat_map(|&u| self.public[u * pw..(u + 1) * pw].to_vec()).collect();
         if let Some(t) = &self.tables {
-            // the tables stay the population's; the drawn instances keep their refs into them
+            // the tables stay the population's; the sampled instances keep their refs into them
             let refs = units.iter().flat_map(|&u| t.refs[u * np..(u + 1) * np].to_vec()).collect();
             return Ok(Instances { header, n: units.len(), rows: None, salts: None, bcs: self.bcs.clone(), public_sha512,
                                   public_file_sha512, population, tables: Some(RowTables { refs, ..t.clone() }), public });
@@ -2171,7 +2171,7 @@ pub fn check_links(c: &Composite, inst: &Instances, file: Option<&Value>) -> Res
 }
 
 /// The frame-v3-sha512 roots of the file's public part, one row tree per row (input rows, then output rows): over the
-/// registered population (a drawn statement's instances are some of its units), a shared-row file's row trees over its tables.
+/// registered population (a sampled statement's instances are some of its units), a shared-row file's row trees over its tables.
 pub fn frame_roots(c: &Composite, inst: &Instances) -> Result<Vec<(String, [u8; 64])>, String> {
     let fv = &inst.header["frame_v3"];
     let dom_of = |k: &str| -> Result<Vec<u8>, String> { hexb(fv["domain_ids"][k].as_str().ok_or(format!("frame_v3.domain_ids.{k} missing"))?) };
@@ -3438,7 +3438,7 @@ mod tests {
     }
 
     /// The verifier's public file, written as `public_file` writes it, is the file whose SHA-512 the prover's record
-    /// carries (`public_file_sha512`), and a drawn statement keeps its population's; Σ's public digest is neither.
+    /// carries (`public_file_sha512`), and a sampled statement keeps its population's; Σ's public digest is neither.
     #[test]
     fn the_public_file_digest_is_the_files_own() {
         let c = Composite::parse(&typed_statement(), None).unwrap();
@@ -3463,7 +3463,7 @@ mod tests {
     }
 
     /// A prover's file with its salts set elsewhere (the ZK server's: `flock-circuit --salt-refs`) is written as `load` reads
-    /// it: the same rows, the new salts and the same public part. Salts of another count, a verifier's file and a drawn
+    /// it: the same rows, the new salts and the same public part. Salts of another count, a verifier's file and a sampled
     /// statement are refused.
     #[test]
     fn salts_set_on_a_prover_file_round_trip() {

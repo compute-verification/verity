@@ -1,6 +1,6 @@
 """Dither-a's units launch on one GPU, as served (`-hbr -aomn`): each call's noise (`kh_one_noise`, h1s_noise into its
 workspace), then its units (`kh_one_units` of a receipts-only build: h1k where the call's live units fit, h1u past
-H1K_MAXU), at Llama-3.1-8B's four linears, a window of T rows with M live (decode B32 at T = 64: one live row tile of
+H1K_MAXU), at Llama-3.1-8B's four linears, an execution phase of T rows with M live (decode B32 at T = 64: one live row tile of
 two). Each build in `--lib NAME=PATH` (the first is the base, today's) is gated, then timed against the others:
 
     python unitsbench.py --lib base=h1u_kr.so --lib NAME=h1u_x.so ... --out OUT [--t 64] [--m 32] [--reps 7]

@@ -552,7 +552,7 @@ def _statement(d: Path, transcript: Path | None = None) -> subprocess.CompletedP
 @pytest.mark.slow
 def test_a_rec_sparse_statements_message_rows_are_the_sparse_streams_c_k(sparse, tmp_path):
     """`RecVStar.checkPubRows` on RecSparse (`fixedRow`'s `rec-sparse-<p>`): `rec-c3-inner`'s statement, about 300 MB at
-    n18-e13-s6-t0, is the only RecSparse statement whose message rows a coin server recorded, so nothing smaller shows
+    n18-e13-s6-t0, is the only RecSparse statement whose message rows a live-coin part recorded, so nothing smaller shows
     the verifier reads `sparse/rep<x>`'s rounds at the ports' order. `statement` with the inner transcript sets it up
     (its `rec-sparse-v` compared with no round), and refuses it at a transcript whose `sparse/rep1`
     `c_k` of `u` (the round before the claim's) is one bit off; without the transcript it sets up as before. Its reads file
@@ -688,7 +688,7 @@ def _bit_off(h: str) -> str:
 @pytest.mark.parametrize("d", [C3, PLAIN], ids=["c3", "plain"])
 def test_the_records_link_points_are_the_coin_servers(tmp_path, d):
     """`RecVStar.innerLink`: check 5 takes the extra claims at the inner session record's link points (the prover's record),
-    so they must be the ones the coin server drew after `root_B` (the transcript's `link.points`, `points × m` coins in
+    so they must be the ones the challenger's live-coin part drew after `root_B` (the transcript's `link.points`, `points × m` coins in
     point order). `rec-c3-inner`'s and rec-coins' sessions pass; a transcript whose first link coin is one bit off is refused, and so
     is a record whose last coin is, or whose two points are swapped."""
     assert _read(_fixture(d))[0] == 0
@@ -784,8 +784,8 @@ def _python_off(t: dict, shape: dict) -> bool:
 
 
 def _bypassed(tmp_path: Path, change, declare: bool = True) -> tuple[Path, Path]:
-    """The plain session as one that bypassed the proxy leaves it: ``change`` on circuit/rep0's rounds in the coin
-    server's record (which still ends ``finish``, and declares the stream's new count when ``declare``), and the
+    """The plain session as one that bypassed the proxy leaves it: ``change`` on circuit/rep0's rounds in the challenger's
+    live-coin part's record (which still ends ``finish``, and declares the stream's new count when ``declare``), and the
     prover's record holding the same coins at every round, so the reps' coins are the record's (`innerCommits`)."""
     t = json.loads((_fixture(PLAIN) / "public.json").read_text())
     r = json.loads((PLAIN / "session" / "session.json").read_text())
@@ -811,7 +811,7 @@ def _transcript_of(transcript: Path, record: Path, shape: dict | None, tmp_path:
 
 def test_the_honest_records_are_on_the_verifiers_schedule(tmp_path):
     """`RecVStar.checkSchedule` and its mirror `rec_live.on_schedule` pass the plain session's record and `rec-c3-inner`'s at
-    their inner shapes, round for round, and both read in the coin server's own format as their JSON readers read
+    their inner shapes, round for round, and both read in the challenger's live-coin part's own format as their JSON readers read
     them (`RecSetup.checkReads`)."""
     t = json.loads((_fixture(PLAIN) / "public.json").read_text())
     assert not _python_off(t, PLAIN_SHAPE)
@@ -963,8 +963,8 @@ def test_a_stopped_sessions_record_is_refused(tmp_path, d):
 
 
 def test_the_record_rec_live_writes_for_a_stopped_session_is_refused(tmp_path):
-    """A session `rec_live`'s ZK server stops (here at a `Link` whose `y` is not the schedule's length) still gets the coin
-    server's record, ending `stop` (`test_rec_live_firewall`); presented as the inner transcript, it is refused as no inner
+    """A session `rec_live`'s ZK server stops (here at a `Link` whose `y` is not the schedule's length) still gets the challenger's
+    live-coin part's record, ending `stop` (`test_rec_live_firewall`); presented as the inner transcript, it is refused as no inner
     proof before anything else is read. The same session run to `Finish` ends `finish` and is refused, if at all, for
     something else."""
     import test_rec_live_firewall as F

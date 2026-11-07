@@ -12,7 +12,7 @@ import Proofs.Flock.Claims.ZK.Reference
   release checks the setup's `Hello` at the transport's nonce, requests the loop's openings, and takes the coins after
   the `Hello`.
 * **`loopKept_round_deployed`**: `loopKept_round` at the loop's own tables on `src` (`Loop.realOf src`), its `hcur`
-  being `repJ_round` with the loop's tables `RealTabs` (`Loop.realTabs_realOf`) and the model's draws the tables the
+  being `repJ_round` with the loop's tables `RealTabs` (`Loop.realTabs_realOf`) and the model's samples the tables the
   loop's level 0 give (`realAt_h0`), given `RoundFacts` at each request at the slot as the loop answers it (`hA`).
 -/
 
@@ -78,10 +78,10 @@ theorem LoopModel.Deployed.frameAnswer_one {T : ZKMal.CoinLayer.TableData}
   rw [hD.setup] <;> rfl
 
 /-- **`LoopJ` is kept at a frame round of the deployed loop**: at the loop's own tables on `src`
-(`LoopModel.Deployed` at `Loop.realOf src`), the loop handed `src`'s bytes (`hsrc`) whose level 0 are drawn from the
+(`LoopModel.Deployed` at `Loop.realOf src`), the loop handed `src`'s bytes (`hsrc`) whose level 0 are sampled from the
 tape (`Loop.Level0Src`) at a statement the masked session proves (`hlive`), where `RoundFacts` holds at each request at
 the slot as the loop answers it (`hA`, `roundFacts_loop`'s): `loopKept_round`, the round's own rep one round on by
-`repJ_round`, the loop's tables being `RealTabs` (`Loop.realTabs_realOf`) and the model's draws at each rep the table
+`repJ_round`, the loop's tables being `RealTabs` (`Loop.realTabs_realOf`) and the model's samples at each rep the table
 its level 0 gives once the session's entry is the setup's and its level 0 the ones the loop drew (`realAt_h0`). -/
 theorem loopKept_round_deployed {M : LoopModel Claims.Flock.Wit
       ((ZKMal.CoinLayer.session Loop.loopNr ZKMal.Masked.dataE).refP.Nonce ×

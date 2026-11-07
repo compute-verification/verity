@@ -49,18 +49,18 @@ Which form each takes:
   `Accounting.Guarantees.TS.ProofsSoundOfPinned` derives it from a window's proofs (`Accounting.TS.ProofLayer`):
   binding at `δ_bind` (at `√δ_fork` from its fork form, `Accounting.Guarantees.TS.BindingOfFork`), proof soundness at
   `δ_ZK`, the Definitions' pinning, and `RightFixed`. For a sampled window, `Accounting.Guarantees.TS.ProofsSoundOfDrawn`
-  derives it at `n_π = 1`, `δ_ZK = δ_ks`, from the drawn units' proofs (`Accounting.TS.DrawnLayer`): binding of every
+  derives it at `n_π = 1`, `δ_ZK = δ_ks`, from the sampled proof blocks' proofs (`Accounting.TS.DrawnLayer`): binding of every
   committed position before the coin that follows its commitment (at `|L|·√δ_fork`,
-  `Accounting.Guarantees.TS.DrawnBindingOfFork`), the proofs' soundness jointly over a round's draws at `δ_ks`, each
+  `Accounting.Guarantees.TS.DrawnBindingOfFork`), the proofs' soundness jointly over a round's samples at `δ_ks`, each
   unit's pinning, the share covering every unit that isn't good (`DrawnLayer.Covers`, proved for each game), and
-  `UnitFixed`. Its crypto half, the drawn units right, is `Accounting.Guarantees.TS.DrawnRightOff`.
+  `UnitFixed`. Its crypto half, the sampled proof blocks right, is `Accounting.Guarantees.TS.DrawnRightOff`.
 * `RightFixed`: E1(c) with the rounds' equal shares, the part of (I8) that is the TS model's accounting rather than the
   proof system's.
 * `BindingForkAt`, `ProofSoundAt`, `ProofsPin`: `ProofsSoundOfPinned`'s proof-system pieces as named premises, binding
   in its fork form, so the headlines' binding is `√δ_fork` and no advantage bound.
-* `UnitFixed`: E1(c) per unit, which doesn't read the draw: the good units' words are fixed, a unit being good when
+* `UnitFixed`: E1(c) per unit, which doesn't read the sample: the good units' words are fixed, a unit being good when
   the run computed it and the units that write it values after its coin (not skipped and guessed), and the words of
-  every unit not skipped whole are folded (its fold clause). A sampled window's proofs vouch for the drawn units only,
+  every unit not skipped whole are folded (its fold clause). A sampled window's proofs vouch for the sampled proof blocks only,
   so `RightFixed`, which asks for every committed value right, says nothing there; and a unit's check can pass by luck,
   so goodness reads the run's modes, not rightness.
 
@@ -254,14 +254,14 @@ at `√δ_fork` from it. -/
 def BindingForkAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δfork : ℝ) : Prop :=
   ∀ w, prob (fun p : Paths Ω S × Paths Ω S => pf.Forked w p.1 p.2) ≤ δfork
 
-/-- `accounting-ts-proofs-sound` (proof soundness; C-Flock's `Flock.Guarantees.EndToEndHiddenDrawn` for a session).
+/-- `accounting-ts-proofs-sound` (proof soundness; Flock's `Flock.Guarantees.EndToEndHiddenDrawn` for a session).
 **Proof soundness at `δ_ZK`**: each proof of the window is accepted with an opening that fails its relation on the path
 (the round's coin and the words keyed by it that its proof gives there) with probability at most `δ_ZK` over the
-window's coins (`ProofLayer.SoundAt`). C-Flock's bound is `t·2^-λ` for a prover making `t` hash calls, so it gives
+window's coins (`ProofLayer.SoundAt`). Flock's bound is `t·2^-λ` for a prover making `t` hash calls, so it gives
 `δ_ZK` only for a cheater whose hash calls over the window are capped. Its "wrong" is against the committed transcript
 fixed at registration, and its statement leaves out the rows link: that the committed inputs and the program's outputs
 on them are the rows the public file commits "is not stated here" (`Proofs/Flock/EndToEndHidden/Statement.lean`).
-`ProofLayer.rel` reads exactly that link (the Definition with the leaves' rows among its outputs), so C-Flock's bound
+`ProofLayer.rel` reads exactly that link (the Definition with the leaves' rows among its outputs), so Flock's bound
 doesn't discharge this premise until it states the link. -/
 def ProofSoundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLayer Ω S nπ V) (δzk : ℝ) : Prop :=
   pf.SoundAt δzk
@@ -269,7 +269,7 @@ def ProofSoundAt {Ω : Type} [Fintype Ω] {S nπ : ℕ} {V : Type} (pf : ProofLa
 /-- `accounting-ts-proofs-pin` (the Definitions' pinning; conjectured, and no Lean checks it of the served relations).
 **The relations pin every committed value** (`ProofLayer.Pins`): values that satisfy every proof's relation on a path
 are right for their derivations on that path's coins. It is a property of the Definitions the window's proofs pass,
-which no Lean here models. As `ProofLayer`'s module doc says, `PouwSegCheck_v2` lacks it: it ties only the drawn
+which no Lean here models. As `ProofLayer`'s module doc says, `PouwSegCheck_v2` lacks it: it ties only the sampled
 segment's prefix-word set to the one before, so its window's other sets are free witness. `PouwSegCheck_v3`,
 `PouwCallCheck_v1`, `PouwWarpCheck_v1` and `_v2` recompute every word they absorb, and nothing states that the
 served relations are those. -/
@@ -284,7 +284,7 @@ every accepted path:
 * the run's owned right fixed words per unit are at least the words `wt w j` of the good units over `S`. Unit `j` of
   round `w` is good (`DrawnLayer.Good`) when the run computed it and every unit that writes it a value after the coin
   its noise reads (`DrawnLayer.Late`, transitively; for a K-chunk, the K-chunks before it in its running sum), none of
-  them skipped and guessed. Values committed before a unit's coin are fixed when its noise is drawn, and a late value
+  them skipped and guessed. Values committed before a unit's coin are fixed when its noise is sampled, and a late value
   from a computed unit is the honest function of values fixed before it, so a good unit's words are its own and none is
   adaptive (E1(c): an adaptive word lies below a committed value wrong for its own derivation). A skipped unit whose
   check passes by luck (`PouwWarpCheck_v2` compares its receipt's checkpoints, not its words) isn't credited: its words
@@ -292,7 +292,7 @@ every accepted path:
 * the fold clause: the run's folded words `folded x` per unit are at least the words of the units not skipped whole
   over `S`: a paid unit folds its words, a folded unit its committed ones, and only a whole unit skips its fold.
 
-It reads neither the draw nor the proofs: the modes are the run's, and the proofs only vouch for the drawn units
+It reads neither the sample nor the proofs: the modes are the run's, and the proofs only vouch for the sampled proof blocks
 (`Accounting.Guarantees.TS.DrawnRightOff`). Under live coins a unit's coin is the live coin its noise reads; under
 seeded (Fiat–Shamir) coins it is read per query, on the circuit's cut layer: the layer's coins are the seed answers the
 prover queried, and a unit's coin the query its noise's seed answers (it may stay on that layer because it reads no

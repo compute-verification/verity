@@ -206,7 +206,7 @@ def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
     """Mismatches of the lowered unit against ``verity.ml.circuits.silicon`` (``tc_dot`` and the ``f32_to_bf16`` epilogue) on ``n``
     random units over the whole finite domain: operand words uniform over every finite encoding (all exponent fields,
     subnormals and signed zeros included), and accumulators uniform over every finite FP32 exponent field, with a third of
-    the cases drawn near each other in exponent so the alignment and cancellation paths are exercised too. Saturating
+    the cases sampled near each other in exponent so the alignment and cancellation paths are exercised too. Saturating
     units (the reference's +-inf word) are compared like any other."""
     from verity.ml.circuits.silicon.cast import f32_to_bf16_word
     from verity.ml.circuits.silicon.models import tc_dot

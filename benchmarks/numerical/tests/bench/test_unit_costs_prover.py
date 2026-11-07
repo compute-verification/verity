@@ -30,7 +30,7 @@ def test_the_fit_over_the_source_runs():
 
 
 def test_the_registered_check():
-    """The posted column missed both registered sessions by more than 25%, its session model and its law alike; the refit
+    """The posted column missed both registered sessions by more than 25%, its session model and its sampling design alike; the refit
     holds them within 25%."""
     rows = PR.check(PR.fit()["coef"])
     assert [r["K"] for r in rows] == [16384, 32768] and [r["k_log"] for r in rows] == [26, 27]
@@ -91,7 +91,7 @@ def test_the_slot_sumcheck_at_fixed_coefficients():
 
 def test_dp4t_keys_buckets_by_template():
     """N = 1000, K = 160. Two registered types share a template (r1, r2: one tc-step-like unit) and differ in Z; a bulk
-    generic type g has its own; a rare generic type x (0.16 draws per audit) pads dp2's top bucket to its template (at most Z), so
+    generic type g has its own; a rare generic type x (0.16 samples per audit) pads dp2's top bucket to its template (at most Z), so
     dp4t gives it a bucket of its own (B = 1: its quantile sessions of one slot cost less than one session of 16)."""
     units = [P.Unit("r1", "t", 500, 1000, 1000), P.Unit("r2", "t", 300, 2000, 2000), P.Unit("g", "u", 199, 1500, 1500),
              P.Unit("x", "v", 1, 1900, 1900)]
@@ -142,7 +142,7 @@ def test_pieces_pmf():
 
 
 def test_a_tiny_audit_unsplit_and_split():
-    """N = 6 units, 4 of 3 nonzeros and 2 of 10; K = 3 drawn; dp2 at 2 slots; one second per session. Split at 5, each b is
+    """N = 6 units, 4 of 3 nonzeros and 2 of 10; K = 3 sampled; dp2 at 2 slots; one second per session. Split at 5, each b is
     2 pieces, so its bucket takes X_b sessions: E = 1, and X_b <= 2 gives 2 public sessions."""
     units = [P.Unit("a", "t", 4, 3, 3), P.Unit("b", "t", 2, 10, 10)]
     coef = {"rss_gib": (1.0, 0.0, 0.0, 0.0), "prove_s": (1.0, 0.0, 0.0, 0.0), "wall_s": (0.0, 0.0, 0.0, 0.0)}

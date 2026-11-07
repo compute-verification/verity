@@ -6,10 +6,10 @@ Not a package: run the modules with this directory on `PYTHONPATH` (the suite's 
 ## The drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`)
 
 `verity_e2e_demo/replay_bundle.py`, schema `verity_e2e_demo/schemas/drawn-unit-bundle.v2.schema.json`. What the prover
-behind the firewall reads to prove a window's drawn units: per unit its coordinates (block, step, slot, layer, op, unit),
+behind the ZK server reads to prove a window's sampled proof blocks: per unit its coordinates (block, step, slot, layer, op, unit),
 its template id and binding, each row's opening (input and output rows against the step commitment, weight rows against
 their registered value's root, every row against its window port's registered root) and the Flock `--zk` session's
-member, subset draw and `frame_v3` header entry. A JSON document holds the public part; the private rows and salts are a
+member, subset sample and `frame_v3` header entry. A JSON document holds the public part; the private rows and salts are a
 binary payload beside it (`<name>.bin`, mode 0600), each named by `[offset, length]`. The payload is each unit's rows in
 order, each row's u16 words little-endian then its 192-byte salt.
 
@@ -23,17 +23,18 @@ reproduce; its roots and digests are those of the commit `REFERENCE` pins.
 
 `target` names the card's binding of the templates' dot: `GEMM_SM90_S8` for the H200's INT8, `GEMM_HOPPER` for its BF16,
 `GEMM_SM120_S8` for the RTX PRO 6000. `check` refuses a template that binds another dot. On `main`, `GEMM_SM90_S8`
-resolves to the same s8 dot as `GEMM_SM120_S8`, so only the field tells the two cards apart. A `live` draw carries
+resolves to the same s8 dot as `GEMM_SM120_S8`, so only the field tells the two cards apart. A `live` sample carries
 `draw.receipt`, the challenger's live-coin receipt; `check` and `build` refuse one without it. Against the window's
-registration, `check` refuses a draw whose law isn't the registered one (fixed before any coin, so the prover can't
-pick it), a subset draw of other than its k units, and a `draw.record` that isn't a draw of the bundle's units under
-that law over the registered population (Lean's `flock-verify draw --registration F` refuses to draw one).
+registration, `check` refuses a sample whose sampling design isn't the registered one (fixed before any coin, so the
+prover can't pick it), a subset sample of other than its k units, and a `draw.record` that isn't a sample of the
+bundle's units under that sampling design over the registered population (Lean's `flock-verify draw --registration F`
+refuses to sample one).
 
     python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.json [--registration tests/fixtures/drawn-unit-registration.json]
 
 `build` writes a bundle from a window and the prover's step records, given where each port's row is in the step layout
 (`locate`), a unit's coordinates (`coords`) and its registered reads (`reads`). The fixture,
-`tests/fixtures/drawn-unit-bundle.{json,bin}` with its window's registration, is four drawn units of a W8A8 MLP's window
+`tests/fixtures/drawn-unit-bundle.{json,bin}` with its window's registration, is four sampled proof blocks of a W8A8 MLP's window
 (two requests, one step, both linears, width 128: 512 units, registered `subset:4`), its weights registered as core's
 registered values and its step committed under test salt keys, its target the RTX PRO 6000's. The suite pins its
 SHA-512s. `check` recomputes every string, path and domain and replays each unit's Definition on its input rows. The
@@ -81,7 +82,7 @@ sampled proofs at δ = 1/100 and the wipe on the same server, the other subproto
 price; its H and B are one recorded run of proofs' planner (`benchmarks/sampling_plan/demo_a.py --spans week`), filled
 together with `PLANNER`. A measurements file with `sections` or `proved` renders the H200 report (`m3.template`): every row is one number with
 its run, its own verdict line quoted and its target, whose misses are listed as visible failures. `proved` is the
-drawn-block proving run's VERDICT and PROVEBUNDLE lines verbatim: the first line is the fallback's until every drawn
+drawn-block proving run's VERDICT and PROVEBUNDLE lines verbatim: the first line is the fallback's until every sampled
 H200 proof block is proved in Flock and accepted by Lean. Per-call noise's serving overhead is one line,
 `serve_noise_line`: the seconds it adds a step with both ratios, never γ_step alone, ending the section marked
 `"serve_noise": true`; a row stating it on its own is refused. The rendered report goes to the
