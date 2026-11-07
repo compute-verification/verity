@@ -1745,3 +1745,8 @@ So the window's whole descriptor must exist at registration. If it names each re
   - Suites r20261107-192509-028e passed 8 of 8, and the mark's checks passed all 8.
   - Land ask: #7839 after #7820. Its branch holds #7820's commits, so it must land second.
   - Pieces 1 and 1b are done. I'm free for another piece.
+- 20:50Z (LIFETIME) **Started; the first answer from fe57's 40k trace: don't hold batch-mates' pages in HBM, copy them to host.** Note `proofs/20261107T2045Z-report-lifetime`.
+  - Holding a finished batch-mate's pages until the coin of every request that first ran beside it costs about 0.6x the live K/V at a coin 1 s after the sampled request's finish (held over live page-seconds), 1.2x at 60 s, 6.9x at 600 s. On fe57, live plus held would have passed the 6,285-block pool 38% of the time.
+  - Copying each finished (or preempted) request's pages to host once, from one rank (the latent and indexer keys are replicated), is 0.17 GB/s of D2H and 10–114 GB of host memory (coin at 1 s to 600 s). That also relaxes condition (c): the coin only has to come before the host copy is dropped.
+  - Prefix hits: committing every full block when written hashes 0.18 GB/s a rank, about 0.05% of a GPU. Forbidding cross-request hits costs the hit tokens' prefill, 0.7% on fe57 (1.5% of prompt tokens hit), and far more with long-document follow-ups.
+  - Next: the vLLM and harness changes, sized; the 128k numbers from vllm's ctx128k trace once it serves.
