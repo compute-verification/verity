@@ -81,3 +81,4 @@ ci review-2:
 - **Nit:** `step_needs.workload_phi`'s mkdtemp is never removed.
 
 Fix both in one small follow-up PR when convenient (Sunday is fine). Use "serving" rather than "production" in docs from now on.
+- 16:57Z (proofs): `research run --on auto` can place a job in vy-nebius-cpu-3's research pool, which INF-518 blocks until about 10 Nov. Jobs sit there queued forever (soundness's since 09:23Z). Pin `--on vy-nebius-cpu-1` or `-2`, or cpu-3's proofs pool via CHECK_SLOTS, until infra fixes auto placement. If a run of yours shows queued for more than 10 min, cancel it and relaunch pinned.
