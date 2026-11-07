@@ -43,10 +43,10 @@ theorem composes : Composes :=
       compilerZK Coin A L H h1.zk h3.zkSessions⟩
 
 theorem composesTwo : ComposesTwo :=
-  fun Coin _ _ _ A L Z H h1 h3 =>
+  fun Coin _ _ _ A L Lz H h1 h3 =>
     ⟨compilerKSTwo Coin A.toArg L H h1.ks h3.binds h3.sessions,
       compilerExfilTwo Coin A.toArg L H h1.ks h3.binds h3.sessions,
-      compilerZK Coin A Z H h1.zk h3.zkSessions⟩
+      compilerZK Coin A Lz H h1.zk h3.zkSessions⟩
 
 end Claims.SpotFlock
 
