@@ -4302,7 +4302,7 @@ class Pipeline:
                                        search=search, prefix=(*PIPELINE_PREFIX, str(self.pid)), held=True,
                                        digest=self.digest)
             rec |= {"checked": stats["checked"], "phases": stats["phases"], "peak_gib": stats["peak_gib"],
-                    "failures": [f.split("\n")[0][:300] for f in fails if not f.startswith("replay.axioms")]}
+                    "failures": [f.split("\n")[0][:300] for f in fails if f.code != "replay.axioms"]}
             if "closure" in stats:
                 rec["closure_checked"] = stats["closure"]["checked"]
         except Exception as e:                                  # a batch only saves work: the final replay decides
