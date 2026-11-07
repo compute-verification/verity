@@ -143,6 +143,12 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   (`wiring.check`) is recorded beside it as the reference (``wiring_reference``), never gating. A sparse-MLA row's combine reads its splits' partials and lses the same way
   (`pipeline.split_rows`, `a5_sparse_mla.py` its stand-in). The negatives (`wiring_negatives`) wire a unit to another unit, swap
   two of a combine's slots, and flip a wired row's string in its reader's public body.
+* **Values tied to an earlier registration** (``a.tie``, records_audit's ``--tie``): a window whose population program takes
+  values ahead of its templates' parameters (`program_values`, a served window's H1 tables) registers them as the values of
+  the earlier record that registered them first (one-stage's ``outputs``: PoUW H1's registration W of the window, which the
+  registration is chained right after), so R1-R7 run with W as the log, each value's words, W's entry of it and its row
+  format (`tie`), on the stream too, which takes the values and W as its log (`stream_of`). Its proof blocks read the values
+  as registered reads at W's roots (``registered``).
 """
 from __future__ import annotations
 
@@ -160,7 +166,7 @@ from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_compl
 from dataclasses import replace
 from fractions import Fraction
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from verity_vllm.pipeline import advice_windows as AW
@@ -171,6 +177,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import a5_coins as AC  # noqa: E402
 import a5_memo as AM  # noqa: E402
+import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
@@ -225,15 +232,34 @@ SELECT_COINS = AC.SELECT_COINS
 CHALLENGER = "a5.py on the auditor's challenger's coins"
 
 
+def tie(a: argparse.Namespace) -> dict[str, Any]:
+    """The window's tie to the earlier registration of the values its program takes (``a.tie``, records_audit's
+    ``--tie``): one-stage's ``log`` (that record), ``registered`` (each value's words), ``outputs`` (each value that
+    record's) and ``schemas`` (their row formats), as `verifier.check` takes them; empty without one."""
+    return dict(getattr(a, "tie", None) or {})
+
+
+def registering(a: argparse.Namespace) -> dict[str, Any]:
+    """`tie` as a stream's `register` takes it: the log is the stream's (`stream_of`)."""
+    return {k: v for k, v in tie(a).items() if k != "log"}
+
+
+def program_values(program: Program) -> tuple[tuple[str, int, int], ...]:
+    """The values a window's population program takes ahead of its templates' parameters (`mixed_population_program`'s
+    ``values``, ``(name, leaves, width)`` each); none for a program without."""
+    return tuple(tuple(v) for v in program.fn.bindings.get("values", ()))
+
+
 def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want: dict, leaf_layer: str | None,
               coins: Callable[[int], bytes]) -> tuple[S.Stream, dict | None]:
     """The rank's `service.Stream` on ``coins`` (the challenger's, a `ChallengerCoins`, or the verifier's own, its
     `challenger` naming which): its unit the window's templates in their order (the one
     template's Definition where the window's query is `Q_template_instance`), the Spec's values the window's ports (a
     row-table window's `row-table` port a tree over its steps' roots, `service.ROOTS` over row-seg leaves), its public
-    items what the registration shows (N, each template's stratum, the window, the leaf layer and each port's layout), its
-    selection the partition file's rule, and its proof deadline every member's session; -> (the stream, `register`'s counts,
-    None for one template's)."""
+    items what the registration shows (N, each template's stratum, the window, the leaf layer and each port's and registered
+    value's layout), its selection the partition file's rule, and its proof deadline every member's session. A program that
+    takes values (`program_values`) has them registered beside the ports, on a stream that takes them and the tie's log
+    (`tie`); -> (the stream, `register`'s counts, None for one template's)."""
     defs: dict[str, list] = {}
     for mm in members:
         defs.setdefault(P.template_id(mm["defn"]), [mm["defn"], 0])[1] += mm["m"].n
@@ -247,16 +273,19 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     digests = tuple(P.program_digest(Program(u)) for u in units)
     schemas = {m.port(p): m.schema(p) for m in mine.members for p in CS.port_leaves(m)}
     strata = [s["template"] for s in D.derive(mine.program, mine.query, mine.law, mine.work_table).get("strata") or ()]
+    taken = program_values(mine.program)
     public = [("population", "N, the window's proof units"), *((f"population:{t}", "a template's stratum") for t in strata),
               ("window", "the window's provenance"),
               *([("leaf_layer", "the leaf layer over the public bodies")] if leaf_layer is not None else []),
-              *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain"))]
+              *((f"{x}:{p}", "a port's layout") for p in sorted(want) for x in ("leaves", "domain")),
+              *((f"{x}:{v}", "a registered value's layout") for v, _n, _w in taken for x in ("leaves", "words", "domain"))]
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")
-                   for p in sorted(want))
+                   for p in sorted(want)) + tuple(S.Value(v, None, "serve", registered=True) for v, _n, _w in taken)
     spec = S.Spec(values, S.Law(a.rule),
                   S.Check(digests[0] if one else digests, mine.query, proof_deadline=(a.session_timeout + 3600) * len(members)),
                   tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(a.window_root))
-    stream = S.Stream(spec, units[0] if one else units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins)
+    stream = S.Stream(spec, units[0] if one else units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins,
+                      values=taken, log=tie(a).get("log", ()))
     return stream, None if one else {t: n for t, (_, n) in defs.items()}
 
 
@@ -300,7 +329,8 @@ def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, me
     try:
         stream, counts = stream_of(a, mine, members, want, leaf_layer, coins)
         coins.plan(AC.need(a.rule, mine.program, mine.query, mine.population, mine.work_table))
-        reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table)
+        reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
+                              **registering(a))
         coins.commit(bytes.fromhex(reg.digest))
         draw = stream.select(reg)
     except S.Refused as e:
@@ -332,7 +362,8 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
         result, told = None, {"stream": stream.digest, "accepted": False, "refused": AC._refusal(e)}
     neg = AC.verifier_negatives(
         lambda c: stream_of(a, mine, members, want, leaf_layer, c)[0],
-        lambda s: s.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table),
+        lambda s: s.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
+                             **registering(a)),
         stream, coins, draw, outcome, a.window_root)
     checks = (result or {}).get("checks") or {}
     record = {"source": stream.coin_source, "challenger": stream.challenger, "read": bytes(coins.read).hex(), "outcome": told,
@@ -384,7 +415,8 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         window = "00" * 64 if name == "coins-for-another-window" else root
         s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
         try:
-            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table))
+            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
+                                    **registering(a)))
             if d.draw != draw.draw:
                 raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
             got, audit = outcome(s, d, coins)
@@ -678,7 +710,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
-    checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table).to_json()
+    checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
+                                     **tie(a)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -854,7 +887,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part)
+                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a))
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -874,16 +907,16 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         for mm in members:
             by_template.setdefault(mm["m"].template, [mm["defn"], 0])[1] += mm["m"].n
         defs = [tuple(x) for x in by_template.values()]
-        fewer = resized_program(defs) if len(defs) > 1 or defs[0][1] == 1 \
-            else P.population_program(defs[0][0], defs[0][1] - 1)
-        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table)
+        taken = program_values(program)
+        fewer = R2.program(defs, mixed=len(defs) > 1 or bool(taken), values=taken)
+        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, **tie(a))
         neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
         other = CS.expected_ports(replace(mine, run="00" * 32))
-        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table)
+        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table, **tie(a))
         neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
         first = members[0]["m"].key
         flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
-        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table)
+        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **tie(a))
         neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
         neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -891,7 +924,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         if proved:
             v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
             neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
-        neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved))
+        neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved,
+                                           tie(a)))
         neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
         neg.update(coin_neg)
         if linked is not None:
@@ -923,12 +957,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
 
 def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.Binding, want: dict, leaf_layer: str, draw: dict,
-                            drawn_law: dict, proved: list[int]) -> dict[str, dict]:
+                            drawn_law: dict, proved: list[int], tied: dict | None = None) -> dict[str, dict]:
     """A window whose registered compiler lists ``transfer_gates`` (`advice_windows`: every unit of theirs proved, an All stratum of
     the work sampling design beside the sampled rest): each way a transfer-gate unit is left out of the proved set, refused. The proved set less
     one (`check_proved`); a sample that trades one for an unsampled unit of the rest, the same count (`check_draw`: its stratum samples
     every unit); and a registration whose sampling design samples the transfer-gate templates as the rest is, work 1 and floor 1 (R1: the
-    verifier's own sampling design, under its own work table, proves them whole)."""
+    verifier's own sampling design, under its own work table, proves them whole), checked with the window's ``tied`` values (`tie`)."""
     gates = [u for s in drawn_law.get("strata") or () if s["template"] in set(transfer_gates) for lo, hi in s["units"]
              for u in range(lo, hi)]
     if not gates:
@@ -943,7 +977,7 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
         neg["draw-trading-a-transfer-gate-unit-for-another (check_draw)"] = {"refused": not v.ok, "codes": list(v.codes)}
     sampled = {t: {"work": 1, "floor": 1} if t in transfer_gates else w for t, w in (mine.work_table or {}).items()}
     v = V.check({**rec, "law": D.derive(mine.program, mine.query, mine.law, sampled)}, mine.program, mine.query, mine.law, CS.SCHEME,
-                want, leaf_layer=leaf_layer, work_table=mine.work_table)
+                want, leaf_layer=leaf_layer, work_table=mine.work_table, **(tied or {}))
     neg["registration-drawing-the-transfer-gates-as-the-rest (R1)"] = {"refused": not v.ok, "codes": list(v.codes)}
     return neg
 
@@ -951,20 +985,21 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
-               partition: dict | None = None) -> None:
+               partition: dict | None = None, tied: dict | None = None) -> None:
     """The audit as `SampledProofs.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
-    verifier's own partition object, which v2 verifies the sessions against), in ``out/case.json``, and the current
-    Python on it (`replay.python`) in ``out/case-python.json``. With ``v2`` (`v2_proof`), the case of the audit on the
-    proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in ``out/case-v2.json``, and that case in sampled
-    proofs' one-stage form (`case_with_form`), which onsite's and remote's evidence carries for sampled proofs, in
-    ``out/case-sampled.json``; or why there is neither in ``out/case-v2-error.txt``. Sampled proofs refuses one-stage
-    v1's case, so an audit with no v2 case has no sampled proofs case."""
+    verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
+    in ``out/case.json``, and the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2``
+    (`v2_proof`), the case of the audit on the proofs themselves, `SampledProofs.OneStageZk`'s (`case_v2`), in
+    ``out/case-v2.json``, and that case in sampled proofs' one-stage form (`case_with_form`), which onsite's and remote's
+    evidence carries for sampled proofs, in ``out/case-sampled.json``; or why there is neither in
+    ``out/case-v2-error.txt``. Sampled proofs refuses one-stage v1's case, so an audit with no v2 case has no sampled
+    proofs case."""
     try:
         import replay as RP
 
         d = str(Fraction(delta).limit_denominator(10**12))
-        p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table, partition=partition)
+        p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table, partition=partition, **(tied or {}))
         e = RP.evidence(record, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
         c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)
         (out / "case.json").write_text(json.dumps(c.case(), sort_keys=True))
@@ -1077,13 +1112,6 @@ def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | No
               "registered reads, shared rows and wires wait for proofs' PR C")]
     why = [w for ok, w in rules if not ok]
     return "; ".join(why) + f" ({PLAIN_SCOPE})" if why else None
-
-
-def resized_program(defs: list[tuple]) -> Program:
-    """R2's other partition: the window's population, `(template, n)` per template, with its first template one instance
-    short, or one over where it has a single instance (a population has at least one)."""
-    resized = [(d, (n - 1 if n > 1 else 2) if i == 0 else n) for i, (d, n) in enumerate(defs)]
-    return P.mixed_population_program(resized) if len(resized) > 1 else P.population_program(*resized[0])
 
 
 def deferred(a: argparse.Namespace, sets: dict, out: Path) -> bool:
