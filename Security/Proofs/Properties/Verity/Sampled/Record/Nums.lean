@@ -123,7 +123,7 @@ theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
   try dsimp only at hu
   obtain ⟨us, hus, hX⟩ := Option.bind_eq_some_iff.1 hu
   cases hX
-  rw [_root_.Properties.SampledProofs.size_qsort, size_mapM_option hus, size_mapM_except hm]
+  rw [Verity.QSort.size_qsort, size_mapM_option hus, size_mapM_except hm]
 
 /-- **The coins draw `A.kd` units** where the draw ends: `A`'s law is on its strata and draws `A.kd` (`Live.hlaw`). -/
 theorem drawn_length (A : Live) {src : ByteArray} {u : Array ℕ} {rd : ℕ}

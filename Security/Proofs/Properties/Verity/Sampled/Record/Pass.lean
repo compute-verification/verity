@@ -209,7 +209,7 @@ theorem refOk_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sample
     rw [hJ] at h
     exact h
   obtain ⟨u, rd', hdu⟩ := drawUnits_of_accepts A o he hacc hn hlaw (prefix_of_live A o P ω r hlive.1)
-  rw [htn, hnD, proved_of_drawLaw hD hlawc, ← unitsAt_size hX hD, _root_.Properties.SampledProofs.size_qsort,
+  rw [htn, hnD, proved_of_drawLaw hD hlawc, ← unitsAt_size hX hD, Verity.QSort.size_qsort,
     List.size_toArray]
   exact drawn_length A hdu
 
