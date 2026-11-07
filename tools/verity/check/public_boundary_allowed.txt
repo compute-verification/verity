@@ -23,7 +23,6 @@ benchmarks/recursion_e2e/run.py -> tools/research/pyproject.toml
 benchmarks/recursion_e2e/settings.py -> benchmarks/harness
 benchmarks/recursion_e2e/settings.py -> benchmarks/harness/verity_bench/settings.py
 benchmarks/recursion_e2e/tests/test_settings.py -> benchmarks/harness/verity_bench/settings.py
-integrations/vllm/pyproject.toml -> tools/research/pyproject.toml
 integrations/vllm/tests/commit/test_memory_map.py -> verity/core/protocols/remote_bandwidth/__init__.py
 integrations/vllm/tests/commit/test_memory_map.py -> verity/core/protocols/remote_bandwidth/memory_map.py
 integrations/vllm/tests/engine/fattn_oracle.py -> benchmarks/pouw/edited_gemm
@@ -73,8 +72,6 @@ integrations/vllm/tests/protocols/remote_bandwidth/test_remote_session.py -> ver
 integrations/vllm/tests/protocols/test_pous_option.py -> verity/core/protocols/pous/__init__.py
 integrations/vllm/tests/protocols/test_pous_option.py -> verity/core/protocols/pous/schemes/p2.py
 integrations/vllm/tests/protocols/test_pouw_h1_circuits.py -> benchmarks/live_challenger/auditor.py
-integrations/vllm/tests/regression/store_io.py -> tools/research/pyproject.toml
-integrations/vllm/tests/regression/store_io.py -> tools/research/src
 integrations/vllm/tests/regression/test_attempt_resolution.py -> tools/research/src/research/store/__init__.py
 integrations/vllm/tests/regression/test_attempt_resolution.py -> tools/research/src/research/store/local.py
 integrations/vllm/tools/migrate/superseded_quarantine.py -> tools/verity/circuit_check/src/circuit_check/__init__.py
