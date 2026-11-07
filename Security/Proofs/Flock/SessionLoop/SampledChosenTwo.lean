@@ -36,8 +36,8 @@ open scoped ENNReal
 
 /-- **What the auditor holds before the second stage, having chosen the first-stage sample**: at both streams'
 randomness `q.1` and the auditor's coins `q.2`, the boundary's record, the coins and the interior's record. -/
-def recChosenOf {K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ X₁ : Type} (sv : Service K S Y V O T R) {r : ℕ} {m : Fin r → ℕ}
-    (v : Fin r → V) (st : StreamStack K V S O T R r m) (sv₁ : Service K₁ S₁ Y₁ W O₁ T₁ R₁) {r₁ : ℕ}
+def recChosenOf {K S Ys V O T R K₁ S₁ Ys₁ W O₁ T₁ R₁ X₁ : Type} (sv : Service K S Ys V O T R) {r : ℕ} {m : Fin r → ℕ}
+    (v : Fin r → V) (st : StreamStack K V S O T R r m) (sv₁ : Service K₁ S₁ Ys₁ W O₁ T₁ R₁) {r₁ : ℕ}
     {m₁ : Fin r₁ → ℕ} (w : StreamRecord r S O T R → X₁ → Fin r₁ → W)
     (st₁ : StreamRecord r S O T R → X₁ → StreamStack K₁ W S₁ O₁ T₁ R₁ r₁ m₁)
     (q : ((K × ((i : Fin r) → Fin (m i) → S)) × (K₁ × ((i : Fin r₁) → Fin (m₁ i) → S₁))) × X₁) :
@@ -56,15 +56,15 @@ simulator's coins are those of `CB j` through `eC`, and each stream's ideal valu
 dummy values, the audit's view of the sessions' frames at their outcomes `s` (each a verdict and how many frames left)
 is `SampledAuditTwoChosenAny`'s bound, with the sessions' simulators run in turn (`Tup.sims`) and their errors at the
 verdicts added. -/
-theorem sampledAuditTwoChosen_zkOutRelay {K S Y V O T R K₁ S₁ Y₁ W O₁ T₁ R₁ X₁ X₂ ι Wt St N₀ Ω₀ Θ : Type}
-    [Fintype K] [Fintype S] [Fintype Y] [Fintype T] [Fintype R] [Fintype K₁] [Fintype S₁] [Fintype Y₁] [Fintype T₁]
+theorem sampledAuditTwoChosen_zkOutRelay {K S Ys V O T R K₁ S₁ Ys₁ W O₁ T₁ R₁ X₁ X₂ ι Wt St N₀ Ω₀ Θ : Type}
+    [Fintype K] [Fintype S] [Fintype Ys] [Fintype T] [Fintype R] [Fintype K₁] [Fintype S₁] [Fintype Ys₁] [Fintype T₁]
     [Fintype R₁] [Fintype X₁] [Fintype X₂] [Fintype N₀] [Nonempty N₀] [Fintype Ω₀] [Nonempty Ω₀] {CB : ℕ → Type}
     [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] {H : Msg → Msg} {k : Msg → ℕ}
     {Pv : ι → Wt → Msg → Prover (N₀ × Ω₀)} {Rl : Rel Wt} {out : Msg → List (Msg × Out) → St} {Sm : SimOut St}
     {ε : ι → (x : Msg) → Wt → (Θ' : Type) → VStar Θ' → Θ' → St → ℝ} {ok : ι → Prop}
     (hZ : ∀ i, ok i → ZKOutRelay (fun _ => N₀) (fun _ => Ω₀) H k (Pv i) Rl out Sm (ε i))
-    (sv : Service K S Y V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v v₀ : Fin r → V)
-    (st : StreamStack K V S O T R r m) (k₀ : K) (sv₁ : Service K₁ S₁ Y₁ W O₁ T₁ R₁) (r₁ : ℕ) (m₁ : Fin r₁ → ℕ)
+    (sv : Service K S Ys V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v v₀ : Fin r → V)
+    (st : StreamStack K V S O T R r m) (k₀ : K) (sv₁ : Service K₁ S₁ Ys₁ W O₁ T₁ R₁) (r₁ : ℕ) (m₁ : Fin r₁ → ℕ)
     (b₁ : ℕ) (w w₀ : StreamRecord r S O T R → X₁ → Fin r₁ → W)
     (st₁ : StreamRecord r S O T R → X₁ → StreamStack K₁ W S₁ O₁ T₁ R₁ r₁ m₁) (k₁ : K₁) (ℓ : ℕ)
     (Q : RelaySessions (StreamRecord r S O T R × X₁ × StreamRecord r₁ S₁ O₁ T₁ R₁) X₂
@@ -94,7 +94,7 @@ theorem sampledAuditTwoChosen_zkOutRelay {K S Y V O T R K₁ S₁ Y₁ W O₁ T�
             E (streamRecOf sv v st q.1.1) q.2.1 (interiorRecOf sv v st sv₁ w st₁ q.1 q.2.1) q.2.2.1
               (Tup.rels (Q.rel (q.1, q.2.1) q.2.2.1) ℓ q.2.2.2)) ≤
       avg (fun q : X₁ × X₂ × Tup CB ℓ =>
-          (∑ d₁ ∈ streamChoices r₁ m₁ b₁, avg fun y : Fin r₁ → S₁ × Y₁ × T₁ × R₁ =>
+          (∑ d₁ ∈ streamChoices r₁ m₁ b₁, avg fun y : Fin r₁ → S₁ × Ys₁ × T₁ × R₁ =>
             (∑ d ∈ streamChoices r m b,
               (sv.streamIdeal m v₀ (passed d) (fun ρ =>
                   E ρ q.1 (idealStreamRec sv₁ m₁ (w₀ ρ q.1) (passed d₁) y) q.2.1
