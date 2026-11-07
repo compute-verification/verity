@@ -134,8 +134,8 @@ def powPrec (c θ : Rat) (p : Nat) : Nat :=
   let a := if 0 ≤ θ then θ else -θ
   p + 8 + a.ceil.toNat.log2 + 2 * (θ * lnApprox c (p + 8)).ceil.toNat
 
-/-- A multiple of `2^-p` at least `c^θ` for `c ≥ 0`: `1` at `θ = 0`, `0` at `c = 0`, else `e^{θ ln c}` with `ln c`
-bounded above when `θ ≥ 0` and below when `θ < 0`. -/
+/-- A multiple of `2^-p` at least `c^θ` for `c ≥ 0`: `1` at `θ = 0`, `0` at `c = 0` (`Real.rpow`'s `0^θ` for every
+`θ ≠ 0`, negative included), else `e^{θ ln c}` with `ln c` bounded above when `θ ≥ 0` and below when `θ < 0`. -/
 def powUpper (c θ : Rat) (p : Nat) : Rat :=
   if θ = 0 then 1
   else if c ≤ 0 then 0
@@ -143,8 +143,8 @@ def powUpper (c θ : Rat) (p : Nat) : Rat :=
     let q := powPrec c θ p
     expUpper (θ * if 0 ≤ θ then lnUpper c q else lnLower c q) p
 
-/-- A multiple of `2^-p` at most `c^θ` for `c ≥ 0`: `1` at `θ = 0`, `0` at `c = 0`, else `e^{θ ln c}` with `ln c`
-bounded below when `θ ≥ 0` and above when `θ < 0`. -/
+/-- A multiple of `2^-p` at most `c^θ` for `c ≥ 0`: `1` at `θ = 0`, `0` at `c = 0` (`Real.rpow`'s `0^θ` for every
+`θ ≠ 0`, negative included), else `e^{θ ln c}` with `ln c` bounded below when `θ ≥ 0` and above when `θ < 0`. -/
 def powLower (c θ : Rat) (p : Nat) : Rat :=
   if θ = 0 then 1
   else if c ≤ 0 then 0
