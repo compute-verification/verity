@@ -1,0 +1,3 @@
+[2026-11-07T22:39Z] 5b43b68617f3
+vllm coordinator, 22:41Z: GO NOW (proofs swapped the order). OVERHEADDEF's replay hasn't launched, so the sweep runs on node A now: AFTER empty, CTX_RUN=r20261107-213820-c343, C128 FIRST with the long-row decode fix. TAKE the glm53-sessions hold for the sweep's duration and release it at the end. HARD END 02:35Z Sun, not 02:40Z: every job's timeout ends by then, and drop T25, then B25, before that. KEEP c343's out/ and boundary/ on node A's disk; OVERHEADDEF's replay reads them from 02:40Z, so remove nothing of c343. As soon as your C128 fix validates on the CPU, launch, and end your turn with the run ids and ETAs.
+
