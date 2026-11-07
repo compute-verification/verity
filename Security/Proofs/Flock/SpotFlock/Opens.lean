@@ -34,30 +34,6 @@ section Steps
 
 variable {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out)
 
-/-- **A run only appends** to its state's messages. -/
-theorem stepWith_msgs_prefix :
-    ∀ (f : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
-      ∃ rest, (stepWith H P x ω vn f hist as t).msgs = t.msgs ++ rest
-  | 0, _, _, t => ⟨[], by simp [stepWith]⟩
-  | f + 1, hist, as, t => by
-    rcases hvb : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H with ⟨o, lo⟩
-    cases o with
-    | msg m =>
-      obtain ⟨rest, hr⟩ := stepWith_msgs_prefix f (hist ++ [(((P.next x hist ω).eval H).1, m)])
-        (as ++ [((P.next x hist ω).eval H).1])
-        { t with msgs := t.msgs ++ [(((P.next x hist ω).eval H).1, .msg m)],
-                 pLog := t.pLog ++ ((P.next x hist ω).eval H).2, vLog := t.vLog ++ lo }
-      refine ⟨(((P.next x hist ω).eval H).1, .msg m) :: rest, ?_⟩
-      simp only [stepWith, hvb]
-      rw [hr]
-      simp
-    | acc =>
-      refine ⟨[(((P.next x hist ω).eval H).1, .acc)], ?_⟩
-      simp only [stepWith, hvb]
-    | rej =>
-      refine ⟨[(((P.next x hist ω).eval H).1, .rej)], ?_⟩
-      simp only [stepWith, hvb]
-
 theorem stepWith_succ_msg {f : ℕ} {hist : List (Msg × Msg)} {as : List Msg} {t : Trace} {m : Msg}
     {lo : List (Msg × Msg)} (h : (vn (as ++ [((P.next x hist ω).eval H).1])).eval H = (.msg m, lo)) :
     stepWith H P x ω vn (f + 1) hist as t =
@@ -93,7 +69,7 @@ theorem stepWith_three (c₀ c₁ : Msg) (ok : Msg → Msg → Bool) (hv1 : ∀ 
     | true =>
       rw [stepWith_succ_msg H P x ω vn (m := []) (lo := [])
         (by rw [List.cons_append, List.singleton_append, hv3, hok]; rfl)]
-      obtain ⟨rest, hr⟩ := stepWith_msgs_prefix H P x ω vn g _ _ _
+      obtain ⟨rest, hr⟩ := Claims.Sampling.stepWith_msgs_prefix H P x ω vn g _ _ _
       refine ⟨a₀, a₁, _, rest, ?_, hok⟩
       rw [hr]
       simp
