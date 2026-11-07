@@ -15,7 +15,8 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
 * A served window's pieces on a small synthetic serve-openai run dir (no Commit): its requests' bodies by I1 id, φ of the served
   engine, the registered compiler, the prover committing under the published binding (no re-commit), `serve_check`'s codes
-  (a compiler without the cap, a root that isn't rows-sha512) and its negatives, and the CLI's served run.
+  (a compiler without the cap, a root that isn't rows-sha512, a carried request that doesn't follow from the last window's
+  close) and its negatives, and the CLI's served run.
 * What no Program digest covers (a Build's row names, its parameters' names and types, its correspondence): the verifier's I2
   reads it only from its own Build of each Program, which its compile writes (`own_builds`, `naming.write_build`), whatever the
   row dir holds under the same digests, and its compile command runs with no vLLM importable.
@@ -45,6 +46,7 @@ from verity.ml.circuits.codec import canonical_json
 from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
+from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.pipeline.tp import serving_rows as SRT
 
 HERE = Path(__file__).resolve().parent
@@ -1245,7 +1247,7 @@ def test_the_prover_commits_a_served_window_under_the_published_binding(tmp_path
     assert [q["digest"] for q in requests] == ["d0" * 64, "d1" * 64]
     assert PP.serve_check_of(s.a, bound) == {"ok": True, "codes": [], "detail": {
         "window": 0, "published_root": s.root, "commitment": SRT.ROWS_SCHEME, "compiler": s.bound["compiler"],
-        "advice": s.bound["advice"], "run_id": "RUN/w0"}}
+        "advice": s.bound["advice"], "run_id": "RUN/w0", "follows": {"last": None, "carried": []}}}
     by_id = PP.i2_against_record(s.a, requests)
     assert by_id["equal"] and by_id["units"]["r1"] == {"i2": "d1" * 64, "of_record": "d1" * 64, "equal": True}
     (Path(s.a.row_dir) / "manifest.json").unlink()
@@ -1272,14 +1274,107 @@ def test_a_served_window_is_refused_before_any_commit_by_name(tmp_path, monkeypa
 def test_a_served_windows_negatives_are_each_refused_by_name(tmp_path, monkeypatch):
     s = _served(tmp_path, monkeypatch)
     w = PP.serve_window(str(s.run), 0)
-    assert {k: v["codes"] for k, v in PP.serve_negatives(w, s.compiler, s.bound, s.root, SRT.ROWS_SCHEME).items()} == {
+    assert {k: v["codes"] for k, v in PP.serve_negatives(w, s.compiler, s.bound, s.root, SRT.ROWS_SCHEME, s.data).items()} == {
         "registration-without-the-cap (serve)": ["cap", "compiler"],
         "registration-of-another-window (serve)": ["window"],
         "published-root-not-sha512 (serve)": ["sha512", "run_root", "commit"],
         "published-root-of-another-commit (serve)": ["run_root", "commit"]}
     ok = PP.source1({}, SimpleNamespace(run=s.root), {"commitment": "x", "served_programs": {}, "stand_in": {"of": 1, "link": 2}})
-    both = PP.with_serve(ok, PP.serve_check(w, s.bound, "cc" * 64, SRT.ROWS_SCHEME))
+    both = PP.with_serve(ok, PP.serve_check(w, s.bound, "cc" * 64, SRT.ROWS_SCHEME, s.data))
     assert not both["ok"] and both["codes"][-1] == "run_root" and both["detail"]["serve"]["published_root"] == s.root
+
+
+def _wstep(*rows: tuple[int, int, int]) -> WA.StepAdvice:
+    return WA.StepAdvice(tuple(WA.Row(r, "decode" if n == 1 and s >= 3 else "prefill", s, n, 0, False, ()) for r, s, n in rows))
+
+
+QA, QB = WA.RequestAdvice("a", 3, 4, "length"), WA.RequestAdvice("b", 3, 3, "length")
+# window 0 admits a and b (prompts of 3) and c, which finishes in it; a keeps 2 outputs and b 1, so both must carry
+W0 = WA.Advice((QA, QB, WA.RequestAdvice("c", 3, 1, "eos")), (_wstep((0, 0, 3), (1, 0, 3)), _wstep((0, 3, 1), (2, 0, 3))),
+               (0, 0, 1, 1))
+AT_A, AT_B = WA.Carried(0, 4, 2, ((0, 4),)), WA.Carried(0, 3, 1, ((0, 3),))
+ON = (_wstep((0, 4, 1)), _wstep((1, 3, 1)))
+# window 1 carries both on from where window 0 left them
+W1 = WA.Advice((QA, QB), ON, (0, 1), (AT_A, AT_B))
+
+
+def _register(s: SimpleNamespace, w: int, advice: WA.Advice) -> Path:
+    """Window ``w``'s advice as `verity-vllm advice` registers a Commit window's (`window_advice`'s bytes and length) under the
+    served compiler, its Commit the row dir's; -> its opening's path."""
+    data = WA.encode(advice)
+    reg, adv = AW.commit_advice(s.compiler, data), s.run / "advice" / f"w{w}"
+    (adv / "private").mkdir(parents=True, exist_ok=True)
+    (adv / "registration.json").write_text(json.dumps({
+        "schema": "verity-vllm/advice-registration/v1", "scheme": AW.SCHEME,
+        "binding": AW.binding(s.compiler, reg.root.hex(), WA.total_bits(advice)),
+        "window": w, "commit": {"run_id": f"RUN/w{w}", "run_root": s.root}}))
+    (adv / "private" / "advice.bin").write_bytes(data)
+    (adv / "private" / "opening.json").write_text(json.dumps(AW.opening(data, reg)))
+    return adv / "private" / "opening.json"
+
+
+def _carried(tmp_path: Path, monkeypatch, w1: WA.Advice, w0: WA.Advice = W0) -> SimpleNamespace:
+    """`_served`'s run with window 0's advice ``w0`` and a window 1 whose advice is ``w1``, both windows of the row dir's Commit,
+    I2's compile stubbed for any window; -> the run and window 1's arguments (``a``) and verdict (``v``)."""
+    from verity_vllm.program.predict import steps as ST
+
+    s = _served(tmp_path, monkeypatch)
+    monkeypatch.setattr(ST, "compile_steps", lambda registered, data, ingress, *, named=False: SimpleNamespace(requests=[], named={}))
+    (s.run / "windows.jsonl").write_text("".join(json.dumps({"window": w, "run_id": f"RUN/w{w}", "run_root": s.root}) + "\n"
+                                                 for w in (0, 1)))
+    s.a.opening = str(_register(s, 0, w0))
+    a = argparse.Namespace(**{**vars(s.a), "window": 1, "opening": str(_register(s, 1, w1))})
+    _c, _r, bound, _o = PP.compiled(a)
+    return SimpleNamespace(s=s, a=a, bound=bound, v=PP.serve_check_of(a, bound))
+
+
+def test_a_served_window_s_carried_requests_follow_from_the_last_window_s_close(tmp_path, monkeypatch):
+    """The verifier reads a served window's advice as `window_advice`'s, so a window may carry requests in, and holds them to
+    the close of the window before it, opened under that window's registration: each carried request at its place in that
+    window's edge (`edge.carried`)."""
+    c = _carried(tmp_path, monkeypatch, W1)
+    assert PP.serve_window(str(c.s.run), 1).last.window == 0 and PP.serve_window(str(c.s.run), 0).last is None
+    assert c.v["ok"] and c.v["detail"]["follows"] == {"last": 0, "carried": [{"id": "a", "edge": 0, "computed": 4},
+                                                                            {"id": "b", "edge": 1, "computed": 3}]}
+    assert c.bound["advice"]["bits"] == WA.total_bits(W1) and PP.served_advice(c.a)[1] == c.bound
+    assert PP.serve_check_of(c.s.a, PP.compiled(c.s.a)[2])["detail"]["follows"] == {"last": None, "carried": []}
+
+
+@pytest.mark.parametrize("code, w1", [
+    ("C", WA.Advice((QA, QB), ON, (0, 1), (AT_A, WA.Carried(1, 3, 1, ((0, 3),))))),
+    ("computed", WA.Advice((QA, QB), (_wstep((0, 4, 1)), _wstep((1, 2, 1)), _wstep((1, 3, 1))), (0, 1),
+                           (AT_A, WA.Carried(0, 2, 1, ((0, 2),))))),
+    ("kept", WA.Advice((QA, QB), ON, (0,), (AT_A, WA.Carried(0, 3, 2, ((0, 3),))))),
+    ("made", WA.Advice((QA, QB), ON, (0, 1), (AT_A, WA.Carried(0, 3, 1, ((1, 3),))))),
+    ("dropped", WA.Advice((QA,), ON[:1], (0,), (AT_A,))),
+], ids=["C", "computed", "kept", "made", "dropped"])
+def test_a_served_window_whose_carried_request_doesnt_follow_from_the_last_close_is_refused_by_name(tmp_path, monkeypatch, code, w1):
+    """A carried request whose counters aren't the ones window 0 left it with, or a request window 0 left with outputs to keep
+    that window 1 doesn't carry, is refused before any commit, naming the counter and the request."""
+    c = _carried(tmp_path, monkeypatch, w1)
+    assert c.v["codes"] == ["follows"]
+    assert {k: c.v["detail"]["follows"][k] for k in ("last", "code", "request")} == {"last": 0, "code": code, "request": "b"}
+    with pytest.raises(ValueError, match=rf"window 1's published records are refused \(follows\).*\"code\": \"{code}\""):
+        PP.served_advice(c.a)
+
+
+def test_a_served_window_follows_only_an_opening_of_the_last_window_s_registered_root(tmp_path, monkeypatch):
+    """The window before is read only through an opening of the root its registration binds: another salt opens no registered
+    root, and a window that carries requests in with no window before it is refused for its first."""
+    c = _carried(tmp_path, monkeypatch, W1)
+    last = c.s.run / "advice" / "w0" / "private" / "opening.json"
+    doc = json.loads(last.read_text())
+    last.write_text(json.dumps({**doc, "salts": ["00" * (len(doc["salts"][0]) // 2), *doc["salts"][1:]]}))
+    v = PP.serve_check_of(c.a, c.bound)
+    assert v["codes"] == ["follows"] and {k: v["detail"]["follows"][k] for k in ("last", "code")} == {"last": 0, "code": "opening"}
+    assert "not what its registration of window 0 binds" in v["detail"]["follows"]["why"]
+    last.unlink()
+    v = PP.serve_check_of(c.a, c.bound)
+    assert v["codes"] == ["follows"] and {k: v["detail"]["follows"][k] for k in ("last", "code")} == {"last": 0, "code": "opening"}
+    first = _carried(tmp_path / "first", monkeypatch, W1, w0=W1)
+    v = PP.serve_check_of(first.s.a, PP.compiled(first.s.a)[2])
+    assert v["codes"] == ["follows"]
+    assert {k: v["detail"]["follows"][k] for k in ("last", "code", "request")} == {"last": None, "code": "order", "request": "a"}
 
 
 def test_a_served_run_is_its_window_and_row_dir_with_the_servers_advice_and_opening(tmp_path, monkeypatch):
