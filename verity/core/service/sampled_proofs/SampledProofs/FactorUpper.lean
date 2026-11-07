@@ -15,7 +15,9 @@ blocks. This module bounds each above, in exact arithmetic, from the replay bloc
 * `lnFactorUpper cs P`: at least `ln G_ρ(θ)` (`Properties.SampledProofs.FactorUpperSound`);
 * `lnFactorUpperPatterns cs reads N S P`: at least `ln` of the patterns' factor, when at most `N` requests read the
   replay block's proof blocks, each serving `S` bits and reading at most `reads`, and no two read one proof block
-  (`FactorUpperPatternsSound`).
+  (`FactorUpperPatternsSound`);
+* `lnFactorUpperCapped cs S P`: at least `ln` of the capped factor, each set's bits capped at `S`
+  (`FactorUpperCappedSound`).
 
 The bound is `optimize.two_stage_exfil`'s, term by term:
 
@@ -32,7 +34,11 @@ The bound is `optimize.two_stage_exfil`'s, term by term:
    outputs and has `y ≥ y_S = min_g r_g max(1, S/b_g)` (`heavyY`, a breakpoint), and its sets of at most `S` bits are
    summed (`lightPatterns`) by the lesser of two bounds: each group's sets of at most `⌊S/b_g⌋` of its proof blocks,
    `Σ_{1≤j≤m} C(n, j) x^j`, bounded by `C(n, j) ≤ n^j/j!` and Stirling's `ln m! ≥ m ln m − m + ½ ln(2πm)` (`lnHead`);
-   and `2^S Σ_{1≤j≤S/b_min} W^j/j!`, `W = Σ_v w_v`.
+   and `2^S Σ_{1≤j≤S/b_min} W^j/j!`, `W = Σ_v w_v`;
+5. in the capped form, a set's `2^{min(b(U), S)}` is at most the product of `2^{min(b_g(U), S)}` over the groups, so
+   each group's sum is the lesser of `(1 + 2^{b_g} w_g)^{n_g}` and its sets of at most `m = ⌊S/b_g⌋` proof blocks plus
+   `2^S` times the rest (`servedFac`), the rest at most `(1 + w_g)^{n_g} − 1` and, at `z = n_g w_g < m + 2`, at most
+   `z^{m+1}/(m+1)! · 1/(1 − z/(m+2))` (`heavyTail`); the whole sum is also at most `2^S (∏_g (1 + w_g)^{n_g} − 1)`.
 
 Every quantity is carried as an upper bound on its logarithm, and a factor `1 + L` as bounds on both `ln(1 + L)` and
 `ln L` (`Fac`), so that a product of factors each barely above `1` keeps its size. The precision `p` (and `θ`'s, for
@@ -387,6 +393,55 @@ def lnFactorUpperPatterns (cs : List Cell) (reads : List (List (Nat × Nat))) (N
       | some y => if ({ P with ys := insertY y P.ys } : Params).valid then { P with ys := insertY y P.ys } else P
       | none => P
     bound P' (fun s => ((requestFac L fin yS (P.θ * s) S P.p).pow N lnN P.p).l) whole
+  else none
+
+/-! ## The capped factor -/
+
+/-- At least `ln Σ_{j>m} C(n, j) w^j`, a group's sets of more than `m = ⌊S/b⌋` of its proof blocks at `w = e^{lw}`:
+`(1 + w)^n − 1`, and once `z = n w < m + 2` also `z^{m+1}/(m+1)! · 1/(1 − z/(m+2))`, as `C(n, j) ≤ n^j/j!` and each
+term is at most `z/(m+2)` of the one before. -/
+def heavyTail (g : Group) (lw : Rat) (S p : Nat) : Option Rat :=
+  let grow := ((Fac.one lw p).pow g.n g.lnN p).l
+  let m := S / g.b
+  let e := expUp (g.lnN + lw - lnLower ((m + 2 : Nat) : Rat) p) p
+  if e < 1 then
+    omin grow (some ((m + 1 : Nat) * (g.lnN + lw) - (g.lf + lnLower ((m + 1 : Nat) : Rat) p) - lnLower (1 - e) p))
+  else grow
+
+/-- **A group's served sum**: at least `ln Σ_U 2^{min(b(U), S)} ∏_{v∈U} w` over its sets at `w = e^{lw}`, the lesser
+of `(1 + 2^b w)^n` (`wholeFac`) and, once a set can hold more than `S` bits, its sets of at most `⌊S/b⌋` proof blocks
+(`cappedFac`) plus `2^S` times the rest (`heavyTail`). -/
+def servedFac (L : Ln2) (g : Group) (lw : Rat) (S p : Nat) : Fac :=
+  let W := wholeFac L g lw p
+  if g.b = 0 ∨ g.n ≤ S / g.b then W
+  else
+    let l := omin W.l (lse ([(cappedFac L g lw S p).l,
+      (heavyTail g lw S p).map ((S : Rat) * L.up + ·)].filterMap id) p)
+    ⟨min W.f (lnOnePlus l p), l⟩
+
+/-- **The served sets' sum**: at least `ln Σ_{∅ ≠ U} 2^{min(b(U), S)} ∏_{v∈U} w_v` over the sets of the groups' proof
+blocks, each group `g` at weight `w = e^{lw}`: the lesser of the product of the groups' `servedFac`, as
+`min(a + b, S) ≤ min(a, S) + min(b, S)`, and `2^S (∏_g (1 + w_g)^{n_g} − 1)`. -/
+def servedSets (L : Ln2) (gs : List (Group × Rat)) (S p : Nat) : Option Rat :=
+  omin (Fac.prod (gs.map fun x => servedFac L x.1 x.2 S p) p).l
+    ((Fac.prod (gs.map fun x => (Fac.one x.2 p).pow x.1.n x.1.lnN p) p).l.map ((S : Rat) * L.up + ·))
+
+/-- **At least `ln G^S_ρ(θ)`**, Rankin's capped factor of the replay block with cells `cs`
+(`Claims.Sampling.rankinFactorCapped`), each set's bits capped at `S`: at slope `s`, the served sets' sum at
+`w = e^{−θ s r}`, and the sets meeting a cell sampled whole, `(1 − q)^θ` times the lesser of
+`∏_F G_g (∏_I G_g − 1)` over the groups' served sums at `w = 1` and `2^S 2^{n_F} (2^{n_I} − 1)`. `none` when the
+parameters are not valid. -/
+def lnFactorUpperCapped (cs : List Cell) (S : Nat) (P : Params) : Option Rat :=
+  if P.valid then
+    let L := Ln2.of P.p
+    let (fin, inf) := split (groupsOf cs S P.p)
+    let whole := if inf.isEmpty then none
+      else oadd (lnPassWhole P.q P.θ P.p) (omin
+        ((Fac.prod (inf.map (servedFac L · 0 S P.p)) P.p).l.map
+          ((Fac.prod (fin.map (servedFac L · 0 S P.p)) P.p).f + ·))
+        ((Fac.prod (inf.map fun g => (Fac.one 0 P.p).pow g.n g.lnN P.p) P.p).l.map
+          ((S : Rat) * L.up + (fin.map fun g => (g.n : Rat)).sum * L.up + ·)))
+    bound P (fun s => servedSets L (fin.map fun g => (g, -(P.θ * s * g.r))) S P.p) whole
   else none
 
 end SampledProofs.FactorUpper

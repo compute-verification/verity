@@ -1104,6 +1104,10 @@
   "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound": {
    "honest": ["Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_honest"],
    "nontrivial": "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_nontrivial"
   }
  },
  "unwitnessed": {
@@ -7887,6 +7891,68 @@
    },
    "type_hash": "39ca6de2fab8b7a231cadcdf11fa2885a02274d917f6c45308920aa4068b8853"
   },
+  "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound : Properties.SampledProofs.FactorUpperCappedSound"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Properties.SampledProofs.Covers"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "12340e04c926fd893867ff39f57f6eab3dea27a4eaec8ac657ef036c6feacacd",
+   "unfolded_hash": "f56ba4b625a0ce8476e83b49096010b48bbe1d97f76c71ccc25e7c4a0fecf4de"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_honest :",
+    "  And",
+    "    (Properties.SampledProofs.Covers Properties.SampledProofs.FactorUpperWitness.pairStmt",
+    "      Properties.SampledProofs.FactorUpperWitness.pairPart Properties.SampledProofs.FactorUpperWitness.pairDesign 0",
+    "      Properties.SampledProofs.FactorUpperWitness.pairCells)",
+    "    (And",
+    "      (Eq",
+    "        (SampledProofs.FactorUpper.lnFactorUpperCapped Properties.SampledProofs.FactorUpperWitness.pairCells 1",
+    "            Properties.SampledProofs.FactorUpperWitness.honestParams).isSome",
+    "        Bool.true)",
+    "      (Eq",
+    "        (SampledProofs.FactorUpper.lnFactorUpperCapped Properties.SampledProofs.FactorUpperWitness.honestCells 64",
+    "            Properties.SampledProofs.FactorUpperWitness.honestParams).isSome",
+    "        Bool.true))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "929fe8440de75dbfab059f8157977a480802c9d32848933be446dd5d36cb27aa"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.Sampling.rankinFactorCapped Properties.SampledProofs.FactorUpperWitness.emptyStmt",
+    "        Properties.SampledProofs.FactorUpperWitness.emptyPart Properties.SampledProofs.FactorUpperWitness.emptyDesign 64",
+    "        (1 / 2) 1 0)",
+    "      (Real.exp (-1)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d6bef3ba9fdd75b1e7cdf4eb52612cce1673f73612ec4f96b1648104a62c50f4"
+  },
   "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
    "owner": "@proofs",
    "signature": [
@@ -10809,6 +10875,10 @@
    "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
     "function": "SampledProofs.FactorUpper.lnFactorUpperPatterns",
     "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
+    "function": "SampledProofs.FactorUpper.lnFactorUpperCapped",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -13076,11 +13146,12 @@
    }
   },
   "Definitions.Claims.SamplingTwoRankin": {
-   "digest": "b88d19e76037a0ff0189516c37858a979527ec310eb409e4d3a09b41b1d80247",
+   "digest": "f96f8076f76f614b234e0c06700b7e0b6aa99e36044478069e60cb10de8bd338",
    "definitions": {
     "Claims.Sampling.Design.Two.passes": "b1a8d94eaca0500eba283bd61246fab415eb1d427d2095f91a094082e56bef19",
     "Claims.Sampling.blocksIn": "72daacf89ce7fad980a9a3c7608922a8f992a403c67b357208dd1889968306ed",
     "Claims.Sampling.rankinFactor": "e287aa04eef2610430b6677637f6eca7097ad7ceb517f5372ad301f4bc83d79e",
+    "Claims.Sampling.rankinFactorCapped": "02c0b0b035f1c0434ff27e513d8882f449e38ef430b534ad97da6080fef403e8",
     "Claims.Sampling.rankinFactorPatterns": "0063b26a0c3809fe529fa6ebc2c4294db168cf62ca737bd170c1e1fbc8efa676"
    }
   },
@@ -21877,9 +21948,10 @@
    }
   },
   "Properties.SampledProofs.FactorUpper": {
-   "digest": "f485f6b9e31d6677ef3b8f918d117a9389590575c419eedcfd5d0139c3ddb0e9",
+   "digest": "e985bb313718dfaf43247c0592db50aa0f035ab38ebff6e097258228f8726d4f",
    "definitions": {
     "Properties.SampledProofs.Covers": "d1ea27fbfc48f3cf287d474f92748a46c1f1483191bcba393157a288a310f9e6",
+    "Properties.SampledProofs.FactorUpperCappedSound": "30d74cdeb4021906fcb18e8d2a7961f74615d58f81fa4bdef50a90338227c61d",
     "Properties.SampledProofs.FactorUpperPatternsSound": "05b108d5f63e741165a0b640932f7c70e05f321431eeb521c39141b5086950d9",
     "Properties.SampledProofs.FactorUpperSound": "89c02da178ee34ac94536847e7bfcb020323605b9e8198459c8254b4d0c5d1af",
     "Properties.SampledProofs.FactorUpperWitness.emptyDesign": "7a2dd231b6d369975370ac90dc6b19a3f09836e98be96ba8b72523ef4970aa04",
@@ -23227,7 +23299,7 @@
    }
   },
   "SampledProofs.FactorUpper": {
-   "digest": "9d351d09bb1bf4c9cae178276f8a4d108eede80210255c831fe2d2239bd894dc",
+   "digest": "dce1612f09d1032b3bce117134986f5cc975e64d5c21ee0f06e8ad37f64dd6c5",
    "definitions": {
     "SampledProofs.FactorUpper.Cell": "314b5f86863248904092946caf4f314d22fa725256a8143c8f89915a0788c1e7",
     "SampledProofs.FactorUpper.Cell.count": "9cfa8dfa68eef2cdaac13f39a31acb427db5938b9b458535ecb0d1ad2c228620",
@@ -23272,6 +23344,7 @@
     "SampledProofs.FactorUpper.expUp": "4f1bf26903b13f442ad4b6ad1edaa4eee75c99ed8410bccdc7a31ba312d3ad1f",
     "SampledProofs.FactorUpper.groupsOf": "c4efc5a0b9d9ebe0c1b46cb9a6b51b1c7695494491e251990b2aee62ba27f3ee",
     "SampledProofs.FactorUpper.hLower": "518e7e9a7549a29a4a58ad100a2cc9dd74f51093aa696a13a5aad7f5f2dc9731",
+    "SampledProofs.FactorUpper.heavyTail": "3212cf4400167aa2ca4820840997466992ad56f0ad0d477cbf7332dca2987388",
     "SampledProofs.FactorUpper.heavyY": "63c9a880a0f4dce538445489935d060000270f50b7e995b2155c3090db63d214",
     "SampledProofs.FactorUpper.increasing": "6c836801cbb3d91092ee9778bebedf47e5bdcc60ac31ee0d5eed2d499b8f65f7",
     "SampledProofs.FactorUpper.insertY": "b22acf75c5d348d98c7ea1e6d9aa54ced383471c1c773a0a3de7a317a4c66439",
@@ -23282,6 +23355,7 @@
     "SampledProofs.FactorUpper.lightSets": "39144a04df66a702d96cd23caf66f10be476cbb9b5098094dc17b37b1f0e4b44",
     "SampledProofs.FactorUpper.lnFactLower": "b9f3ea52126bb8ec4093d358801c3ffc95154fd79ea8cb322421575f6522048b",
     "SampledProofs.FactorUpper.lnFactorUpper": "70274b6ef50163fbf4a0154ec3c8146f08deb6873b5b6af075514750c098e73b",
+    "SampledProofs.FactorUpper.lnFactorUpperCapped": "727d15091a0da2cf5f01795aa75affd04bc1d03d36a0d1d8bda1efe6facacbe4",
     "SampledProofs.FactorUpper.lnFactorUpperPatterns": "3ab140b9b8d5c495ecab765041bdd63a5e08600fa35d0f5298b80bb3ee82104c",
     "SampledProofs.FactorUpper.lnHead": "c0e298839280b90ccf5369fefc061f33e271b7ad26acbe55dd19b0f2fcde4275",
     "SampledProofs.FactorUpper.lnOnePlus": "e47f0b9e516b29ece297fe2a897146f5c70ae601e017291d2170b160334774d2",
@@ -23295,6 +23369,8 @@
     "SampledProofs.FactorUpper.omin": "6bf26d9363e93a33e4d1e8e285df59c4c86efd693b791a8135908e684a4928ea",
     "SampledProofs.FactorUpper.readGroups": "ca062af6181d442df41125a4c409e1efa326fda5dfc62722aada19d8c174761e",
     "SampledProofs.FactorUpper.requestFac": "99c24c0d6ade82454b51c7aa9dbc9e54ee3e4e842efbeff1ea4a6f3bc74fc162",
+    "SampledProofs.FactorUpper.servedFac": "3fd3a096dcb1e962c893aab9ba7bb63b6ede43ff071a0c176a51203ff182544a",
+    "SampledProofs.FactorUpper.servedSets": "778ab03f6c2c1346fbcf3a558f1fcf5a0f601d329b825a8eb8366b46cf809150",
     "SampledProofs.FactorUpper.softplusUp": "72d7bcf8c334f9fa305770d42db99e94baab10fc2191e3e977c4a8cac6797b94",
     "SampledProofs.FactorUpper.split": "6a2c13f52031fa02859d7ac19a8ee8975462dc184baae726529ab1a3d32dc74b",
     "SampledProofs.FactorUpper.touchCount": "9ca27777210221f77a00b23aed06e0b5e8b5eb1246d48c4f50eebb080bc086b6",

@@ -15,9 +15,11 @@ precision it accepts:
   replay block `ρ` whose cells `cs` covers (`Covers`: as many proof blocks of each width or more, a `k` or less);
 * `FactorUpperPatternsSound`: when `lnFactorUpperPatterns cs reads N S P` returns `v`, the patterns' factor is at most
   `e^v` (`Claims.Sampling.rankinFactorPatterns`) for every such `ρ` whose proof blocks are read by at most `N` requests,
-  each serving `S` bits and reading at most `reads` (`ReadsCover`), no two reading one proof block.
+  each serving `S` bits and reading at most `reads` (`ReadsCover`), no two reading one proof block;
+* `FactorUpperCappedSound`: when `lnFactorUpperCapped cs S P` returns `v`, the capped factor, each set's bits capped at
+  `S`, is at most `e^v` (`Claims.Sampling.rankinFactorCapped`) for every replay block `ρ` that `cs` covers.
 
-How tight the bound is (`optimize.two_stage_exfil`'s figure, at the points the module's `#guard`s check) is not stated.
+How tight the bound is against `optimize.two_stage_exfil`'s figure is not stated.
 -/
 
 @[expose] public section
@@ -25,7 +27,8 @@ How tight the bound is (`optimize.two_stage_exfil`'s figure, at the points the m
 namespace Properties.SampledProofs
 
 open Claims.Sampling
-open _root_.SampledProofs.FactorUpper (Cell Params chords countIn lnFactorUpper lnFactorUpperPatterns)
+open _root_.SampledProofs.FactorUpper (Cell Params chords countIn lnFactorUpper lnFactorUpperPatterns
+  lnFactorUpperCapped)
 
 /-- **`cs` covers replay block `ρ`'s cells**: one cell per stratum of the proof-block partition, each with, for every
 width `b`, at least as many proof blocks committing `b` bits as cell `(ρ, t)` has, and a second stage's `k` at most the
@@ -64,6 +67,13 @@ def FactorUpperPatternsSound : Prop :=
       (∀ r r', r ≠ r' →
         Disjoint (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r) (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r')) →
       rankinFactorPatterns s Pt d req (P.q : ℝ) (P.θ : ℝ) ρ ≤ Real.exp (v : ℝ)
+
+/-- **The capped bound is above the capped factor**: when `lnFactorUpperCapped cs S P` returns `v`, every replay block
+`ρ` that `cs` covers has its capped factor, each set's bits capped at `S`, at most `e^v`. -/
+def FactorUpperCappedSound : Prop :=
+  ∀ (cs : List Cell) (S : ℕ) (P : Params) (v : ℚ), lnFactorUpperCapped cs S P = some v →
+    ∀ (s : AuditStatement) (Pt : Partition) (d : Design.Two) (ρ : ℕ), Covers s Pt d ρ cs →
+      rankinFactorCapped s Pt d S (P.q : ℝ) (P.θ : ℝ) ρ ≤ Real.exp (v : ℝ)
 
 /-! ## The witnesses' replay blocks
 
