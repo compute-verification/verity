@@ -56,6 +56,9 @@ static const char* const TAG_SHORT[TAGS] = {"gf31", "ro", "b3"};
 static const char TAG_DOMAIN[] = "verity/bandwidth/tag/v1";        // + its NUL: 24 bytes
 static const char LEAF_DOMAIN[] = "verity/bandwidth/tag-leaf/v1";  // + its NUL: 29 bytes
 
+using sx::bswap64;
+using sx::IV_DEV;
+
 struct Mid {
   uint64_t h[8];
 };
@@ -63,11 +66,6 @@ struct Mid {
 // One SHA-512 compression of the big-endian words `w` (clobbered) into `s`: sha512.cuh's five passes of one 16-round
 // body, the schedule updated in place at the top of each pass after the first.
 __host__ __device__ __forceinline__ void compress(uint64_t s[8], uint64_t w[16]) { sx::compress<0, 2>(s, w); }
-
-__device__ __forceinline__ uint64_t bswap64(uint64_t v) {
-  uint32_t lo = (uint32_t)v, hi = (uint32_t)(v >> 32);
-  return ((uint64_t)__byte_perm(lo, 0, 0x0123) << 32) | __byte_perm(hi, 0, 0x0123);
-}
 
 // x mod p for any x < 2^64: two folds (2^31 ≡ 1) and one conditional subtract.
 __device__ __forceinline__ uint32_t red64(uint64_t x) {
@@ -238,7 +236,7 @@ __global__ void fill_store(uint64_t* E8, uint64_t blocks) {
     w[i] = v;
   }
   uint64_t s[8];
-  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
+  for (int i = 0; i < 8; ++i) s[i] = IV_DEV[i];
   compress(s, w);
   int n = c == 32 ? 1 : 8;
   for (int i = 0; i < n; ++i) E8[j * ROW_U64 + 8 * c + i] = bswap64(s[i]);
@@ -526,7 +524,7 @@ __device__ __forceinline__ void node_hash(const uint64_t* L, const uint64_t* R, 
     prev = cur;
   }
 #pragma unroll
-  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
+  for (int i = 0; i < 8; ++i) s[i] = IV_DEV[i];
   compress(s, w);
 #pragma unroll
   for (int i = 0; i < 16; ++i) w[i] = 0;
@@ -585,7 +583,7 @@ __global__ void read_kernel(const uint4* __restrict__ p, uint64_t n16, uint32_t*
 __global__ void sha512_selftest(const uint64_t* w_in, uint64_t* out) {
   uint64_t w[16], s[8];
   for (int i = 0; i < 16; ++i) w[i] = w_in[i];
-  for (int i = 0; i < 8; ++i) s[i] = sx::IV_DEV[i];
+  for (int i = 0; i < 8; ++i) s[i] = IV_DEV[i];
   compress(s, w);
   for (int i = 0; i < 8; ++i) out[i] = s[i];
 }

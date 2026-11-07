@@ -29,7 +29,7 @@ from verity.core.protocols.pous.verifier import MerkleTree, node_hash  # noqa: E
 from verity.ml.crypto import blake3  # noqa: E402
 
 CU = (HERE / "tagger.cu").read_text()
-SHA512 = (HERE.parents[1] / "verity" / "ml" / "kernels" / "sha512.cuh").read_text()
+SHA512 = (HERE / re.search(r'#include "([^"]*sha512\.cuh)"', CU)[1]).read_text()
 M64, M32 = (1 << 64) - 1, (1 << 32) - 1
 P = tags.MERSENNE31
 GF31, RO, B3 = tags.get("gf31-poly/v1"), tags.get("ro-sha512/v1"), tags.get("ro-blake3/v1")
