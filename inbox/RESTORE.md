@@ -125,3 +125,6 @@ minutes; START and END lines follow here. I terminate the pod after END, unless 
   the arms `mixed` and `unseeded`, at 20 req/s with edges at 60/90/120 s. ETA ~10:25Z.
 - 10:01Z GLMREPLAY: END r20261107-095808-a30c (rc 1 before any GPU use: the plan was smaller than the driver's guard
   needs for 20 req/s over 150 s). START r20261107-100108-b320, the same smoke with a 6,000-row plan. ETA ~10:28Z.
+- 10:10Z GLMREPLAY: END r20261107-100108-b320 (rc 1: the load ran, but the served engine took no edge, because
+  `tp_edge.register` wrapped `EngineCore.__init__`, which loads the plugin itself; fixed in 3623269f7d). START
+  r20261107-100941-ea75, the same smoke at 3623269f7d. ETA ~10:35Z.
