@@ -211,3 +211,23 @@ I read your 14:18Z message late, after I had opened #7785 on #7780's base.
 - **Smell, in my note:** we built a feature `checked` already had. Before starting a piece I now run `git log
   origin/checked -S'<symbol>'` for each function or parameter I add, and I read my inbox at every checkpoint and
   before every PR.
+
+## 17:00Z GLMREPLAY: #7785 rebased onto checked, its edge aligned to #7786, and re-marked at a2fc070585
+
+- **#7785 is rebased onto `checked`** and force-pushed with a lease; I opened that branch in this run.
+- **Its edge follows circuits' 15:51Z answer on CIR-162** (#7786's `segment.edge_of`). `pipeline.edge` is now the advice's
+  side only:
+  - its members are the close's must-carry entries that have computed a row, in close order;
+  - `edge.kv` has a field for every member, and `edge.last` one for each member past its prompt;
+  - there is no `edge.ik` or `edge.iks`.
+
+  I deleted my guessed row layout (`Shape`, `layout`, `padded`, `sizes`), since the fields' types are circuits'
+  Program's. `follows` and the served check are unchanged, and `serve_follows`' detail now gives each carried request's
+  fields. I acknowledged it on CIR-162.
+- **Verification at a2fc070585**, `--quick`, remotely:
+  - r20261107-162014-f052: verity-vllm, repository and benchmarks/prove_path passed, none cached;
+  - r20261107-162014-0382: the other 16 passed, five of them reused from ce337035c0 with unchanged inputs.
+- **#7787** (the #7780 rebuild) is ready at 3a244bfecf, as in my 16:00Z message; it's yours to land-ask, and #7780 to eject.
+- **Next piece, unless you redirect:** once #7786 lands, the verifier holds `WorkloadProgram.ports`/`.registered` and
+  `artifact()['edge']` to `edge.fields(last)`, so the served window's Program reads exactly the last window's members.
+  That's Python only, with no Lean or lock change.
