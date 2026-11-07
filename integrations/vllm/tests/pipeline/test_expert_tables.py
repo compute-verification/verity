@@ -1,7 +1,8 @@
 """`expert_tables`: a TP rank's registration of the per-expert cut's tables, on a synthetic block-FP8 MoE checkpoint (E = 8 experts,
 two MoE layers, TP2).  Each registered entry is the one a window's committer commits for the same served weights
-(`expert_rows.commit_tables` under `expert_tables.committer`'s key, program and nonces); a table served with another byte has another
-root; the two ranks are distinct values; and a registration's file is the committer's (`of_request`)."""
+(`expert_rows.commit_tables` under `expert_rows.committer`'s key, program and nonces); a table served with another byte has another
+root; the two ranks are distinct values; and a registration's file is the record a window's committer reads
+(`records.expert_tables`, `expert_rows.of_request`)."""
 from __future__ import annotations
 
 import gzip
@@ -14,6 +15,7 @@ import pytest
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import expert_rows as ER
 from verity_vllm.pipeline import expert_tables as ET
+from verity_vllm.records import expert_tables as XT
 from tests.check.test_weights_of_record import write_safetensors
 
 G, I, H, E, WORLD = 128, 256, 256, 8, 2
@@ -113,7 +115,7 @@ class _Plan:
 def _commit(served: dict[str, np.ndarray], doc, key=KEY, wrap=WRAP):
     """`commit_tables` over ``served``, the plan's tables named under ``wrap`` and ``served`` keyed by the same names."""
     return ER.commit_tables(_Plan(BLOCKS, wrap), None, None, None, lambda _pi, _s, _w, _rid, _a, label: [served[label]],
-                            ET.committer(doc, key))
+                            ER.committer(XT.ExpertTables.of(doc, "registration"), key))
 
 
 def test_registered_entries_are_the_committers(ckpt, regs):
@@ -122,8 +124,9 @@ def test_registered_entries_are_the_committers(ckpt, regs):
     I_r = I // WORLD
     per_layer = 2 * I_r // BLOCKS["w13"] + 2 * I_r // G + H // BLOCKS["w2"] + H // G
     for rank, doc in enumerate(regs):
-        assert (doc["schema"], doc["repo"], doc["revision"], doc["world"], doc["rank"]) == (ET.FORMAT, REPO, REV, WORLD, rank)
+        assert (doc["schema"], doc["repo"], doc["revision"], doc["world"], doc["rank"]) == (XT.SCHEMA, REPO, REV, WORLD, rank)
         assert doc["program"] == ET.program(REPO, REV, WORLD, rank, doc["prefix"])
+        assert XT.ExpertTables.of(doc, "registration").dump() == doc
         assert len(doc["values"]) == per_layer * len(LAYERS)
         got = _commit(_served(ckpt, rank), doc)
         assert {p: r.entry() for p, r in got.items()} == doc["values"]
@@ -143,7 +146,7 @@ def test_a_table_served_otherwise_has_another_root(ckpt, regs):
 def test_ranks_and_keys_are_distinct_values(ckpt, regs):
     """The two ranks' tables are registered under distinct programs at disjoint nonces, and another key draws other salts."""
     assert regs[0]["program"] != regs[1]["program"]
-    n0, n1 = (set(ET.committer(d, KEY)["nonces"].values()) for d in regs)
+    n0, n1 = (set(d["nonces"].values()) for d in regs)
     assert len(n0) == len(regs[0]["values"]) and not n0 & n1 and min(n0 | n1) >= ET.TABLES_NONCE
     other = bytes(31) + b"\x01"
     got = _commit(_served(ckpt, 0), regs[0], key=other)
@@ -165,9 +168,9 @@ def test_stacks_and_refusals(ckpt, regs):
     with pytest.raises(ValueError, match="no expert stack"):
         ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, stacks=[f"{WRAP}model.layers.7.mlp.experts"], checkpoints_manifest=ckpt["man"])
     with pytest.raises(ValueError, match="32-byte key"):
-        ET.committer(regs[0], KEY[:16])
-    with pytest.raises(ValueError, match="a nonce for each of its tables"):
-        ET.committer({**regs[0], "nonces": dict(list(regs[0]["nonces"].items())[1:])}, KEY)
+        ER.committer(XT.ExpertTables.of(regs[0], "registration"), KEY[:16])
+    with pytest.raises(ValueError, match="one salt nonce for each table"):
+        XT.ExpertTables.of({**regs[0], "nonces": dict(list(regs[0]["nonces"].items())[1:])}, "registration")
 
 
 def test_a_shard_the_manifest_does_not_pin_refuses(ckpt, tmp_path):
@@ -206,8 +209,7 @@ def test_of_request_reads_the_ranks_file(tmp_path, regs):
     for doc in regs:
         (tmp_path / f"tables{doc['rank']}.json").write_text(json.dumps(doc))
     spec = {"key": str(key), "registration": str(tmp_path / "tables{rank}.json")}
-    assert ET.of_request(spec, rank=1) == ET.committer(regs[1], KEY)
-    assert ET.of_request(None) is None
+    assert ER.of_request(spec, rank=1) == {"key": KEY, "program": regs[1]["program"], "nonces": regs[1]["nonces"]}
     (tmp_path / "tables0.json").write_text(json.dumps(regs[1]))
     with pytest.raises(ValueError, match="of rank 1, not of rank 0"):
-        ET.of_request(spec, rank=0)
+        ER.of_request(spec, rank=0)

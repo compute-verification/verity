@@ -2,13 +2,12 @@
 each table of each expert stack's weights and scales on the rank (`expert_rows.table_param`, its rows `expert_rows.table_words`
 of the weight as `check.weights_of_record` composes it from the checkpoint's shards for the rank) committed as core's
 ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows under the committer's secret key, at the rank's program (`program`)
-and the table's nonce (`nonces`), written before the first window's coins.  The record is ``{"schema", "program", "repo",
-"revision", "world", "rank", "prefix", "blocks", "nonces": {param: nonce}, "values": {param: entry}}``, each entry core's
-``Registered.entry()``: the ``{program, values}`` the verifier pins (``records_audit.py audit --registered``), so a window's table
-read and opening count registered exactly where the window's root for the table is this one.  The key never leaves the
-committer; a window's committer commits the tables it serves under the same key at the program and nonces the record names
-(`committer`, `serving_rows.after_commit`'s ``tables``), so a table served as registered has its registered root and any other's
-reads are free.
+and the table's nonce (`nonces`), written before the first window's coins as the record `records.expert_tables.ExpertTables`:
+the ``{program, values}`` the verifier pins (``records_audit.py audit --registered``), so a window's table read and opening count
+registered exactly where the window's root for the table is this one.  The key never leaves the committer; a window's committer
+commits the tables it serves under the same key at the program and nonces the record names (`expert_rows.committer`,
+`serving_rows.after_commit`'s ``tables``), so a table served as registered has its registered root and any other's reads are
+free.
 
 A stack's tables are its e4m3 weight's blocks of ``blocks[proj]`` rows (n, a power of two dividing N) and its f32 scales' rows, as
 the partition's read templates read them: a block of rows of ``H = n K / 2`` words, a scale row of ``H = 2 K / G``.  Without a Build,
@@ -32,11 +31,11 @@ import numpy as np
 from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline.expert_rows import table_param, table_words
+from verity_vllm.records import expert_tables as XT
+from verity_vllm.records.expert_tables import SCHEMA
 
-__all__ = ["FORMAT", "TABLES_NONCE", "committer", "entries", "nonces", "of_request", "program", "register", "served_fields",
-           "tables_of"]
+__all__ = ["SCHEMA", "TABLES_NONCE", "entries", "nonces", "program", "register", "served_fields", "tables_of"]
 
-FORMAT = "verity-vllm/expert-tables/v1"
 #: the salt nonces of the tables under the committer's key start here, a rank's 2^32 apart (`nonces`): above every weight
 #: parameter's and the state's (`program.predict.window_weights.WEIGHTS_NONCE` and on)
 TABLES_NONCE = 3 << 61
@@ -46,7 +45,7 @@ BITS = {"float8_e4m3fn": 8, "uint8": 8, "bfloat16": 16, "float16": 16, "float32"
 def program(repo: str, revision: str, world: int, rank: int, prefix: str) -> str:
     """The program a rank's tables are registered under (their domains', core's ``registered.domain``): the SHA-512 of the model,
     its revision, the TP world and rank and the Programs' wrapper prefix, so two ranks' tables of one name are distinct values."""
-    doc = {"format": FORMAT, "repo": repo, "revision": revision, "world": int(world), "rank": int(rank), "prefix": prefix}
+    doc = {"format": SCHEMA, "repo": repo, "revision": revision, "world": int(world), "rank": int(rank), "prefix": prefix}
     return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -84,29 +83,6 @@ def nonces(tables: Mapping[str, Sequence[tuple[int, str, str, int]]], order: Seq
                 raise ValueError(f"{param}: field {at[label]} or block {b} past the nonce's 14 and 18 bits")
             out[param] = TABLES_NONCE + (int(rank) << 32) + (at[label] << 18) + b
     return out
-
-
-def committer(doc: Mapping[str, Any], key: bytes) -> dict[str, Any]:
-    """A window's committer's tables (`serving_rows.after_commit`'s ``tables``) from its registration ``doc``: its ``key``, the
-    rank's program and each table's nonce, as the registration names them."""
-    if doc.get("schema") != FORMAT:
-        raise ValueError(f"an expert tables registration is {FORMAT}, not {doc.get('schema')!r}")
-    if not isinstance(key, bytes) or len(key) != 32:
-        raise ValueError("a table's salts are drawn under the committer's 32-byte key")
-    if set(doc["nonces"]) != set(doc["values"]):
-        raise ValueError("the registration names a nonce for each of its tables and no other")
-    return {"key": key, "program": doc["program"], "nonces": {p: int(n) for p, n in doc["nonces"].items()}}
-
-
-def of_request(spec: Mapping[str, Any] | None, rank: int = 0) -> dict[str, Any] | None:
-    """`committer` of a serving-rows request's ``tables``, ``{"key": FILE, "registration": FILE}`` (``{rank}`` in the registration's
-    path its rank's), or None without one."""
-    if not spec:
-        return None
-    doc = json.loads(Path(str(spec["registration"]).format(rank=rank)).read_text())
-    if int(doc.get("rank", -1)) != int(rank):
-        raise ValueError(f"{spec['registration']}: the tables registration of rank {doc.get('rank')}, not of rank {rank}")
-    return committer(doc, Path(spec["key"]).read_bytes())
 
 
 def _prefix(prog: dict[str, Any], ck: Any) -> str:
@@ -221,8 +197,8 @@ def register(program_dir: str | None, checkpoint_dir: str, key: bytes, blocks: M
     if missing := sorted(set(nonce) - set(values)):
         raise ValueError(f"{len(missing)} tables not composed from the checkpoint, e.g. {missing[0]}; weights_of_record left "
                          f"{len(why)} fields unresolved: {why[:2]}")
-    return {"schema": FORMAT, "program": digest, "repo": repo, "revision": rev, "world": world, "rank": rank, "prefix": prefix,
-            "blocks": dict(sorted(blocks.items())), "nonces": dict(sorted(nonce.items())), "values": dict(sorted(values.items()))}
+    return XT.ExpertTables(program=digest, repo=repo, revision=rev, world=world, rank=rank, prefix=prefix, blocks=blocks, values=values,
+                           nonces=nonce).dump()
 
 
 @dataclass(frozen=True, kw_only=True)
