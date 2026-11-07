@@ -1,4 +1,4 @@
-"""`verity.core.protocols.pouw.period_check` held to `pouw-period serve`, PoUW's verifier of record for a period
+"""`verity.core.protocols.pouw.period_check` held to `pouw-period serve`, PoUW's verifier for a period
 (`PouwCheck.Period`, ``verity/pouw/period/v1``, onsite's work component), on the shared harness (`verity_difftest`,
 `of_record="lean"`): one `ProtocolPort` over the cases `pouw_period_cases` generates (a period of the auditor's ledger
 and its windows, honest or with one mutation aimed at every refusal of `credit.period_credit`, and the protocol's own
@@ -48,7 +48,7 @@ server = D.server_fixture(PORT)
 
 @pytest.mark.slow
 def test_pouw_period(server):
-    """Generated periods, then each mutation over two seeds (`replay`), so every refusal is reached whatever the draw: an
+    """Generated periods, then each mutation over two seeds (`replay`), so every refusal is reached whatever the sample: an
     honest period is accepted with its credit and profile, every refusal of `credit.period_credit` rejects it with that
     refusal, and each framing break is refused at the input it breaks."""
     RULES.clear()

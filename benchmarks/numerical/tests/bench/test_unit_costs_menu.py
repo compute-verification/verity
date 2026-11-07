@@ -1,5 +1,5 @@
 """F6's pinned menu: each bucket's B is the cheapest at its public session count among those that are in range, fit one
-node and stay in the law's fitted D, with the outer proof's cost when given and on the inner alone without it."""
+node and stay in the sampling design's fitted D, with the outer proof's cost when given and on the inner alone without it."""
 from __future__ import annotations
 
 import math
@@ -19,7 +19,7 @@ def _bucket(units, Z):
 
 
 def test_the_cheapest_public_b_that_fits_one_node():
-    """N = 100, a type of 60 units, K = 50 drawn: its public count q needs ceil(q / B) one-second sessions, fewer at larger B.
+    """N = 100, a type of 60 units, K = 50 sampled: its public count q needs ceil(q / B) one-second sessions, fewer at larger B.
     A 2^22-bit slot gives RSS 1 + B / 128 GiB: within 1.2 GiB, B = 16 is the largest that fits and so the cheapest."""
     b = _bucket([P.Unit("a", "t", 60, 3, 3)], 3)
     opts = {B: M.inner(100, 50, b, B, {}, COEF, **TINY) for B in (1, 4, 16, 64)}

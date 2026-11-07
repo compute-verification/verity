@@ -12,7 +12,7 @@ D        BLAKE3-keyed(K_a, M), 32 bytes: chunk i under counter i, BLAKE3's left-
 commit   the prover sends (root, D), and the verifier's clock stops on both
 open(i)  chunk i's path in BLAKE3's tree: the sibling chaining values, leaf to top; the verifier regenerates chunk i from
          K_s (its 64 AES blocks) and climbs to D, with ROOT on the last parent
-samples  window key.uniform(C, ("stream", t)) for t < s, drawn only for an on-time commitment
+samples  window key.uniform(C, ("stream", t)) for t < s, sampled only for an on-time commitment
 ~~~
 
 `M` is `S` permuted within each 64 KiB group so that the device's 64 threads of a group, one chunk each, read `S`
@@ -266,7 +266,7 @@ def verify(key: bytes, digest: bytes, chunks: int, i: int, chunk: bytes, opening
 
 
 def samples(window: Key, chunks: int, s: int) -> tuple[int, ...]:
-    """The stream chunks a window opens, from the window's key, drawn only for an on-time commitment."""
+    """The stream chunks a window opens, from the window's key, sampled only for an on-time commitment."""
     return tuple(window.uniform(chunks, ("stream", t)) for t in range(s))
 
 

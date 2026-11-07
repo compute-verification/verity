@@ -8,20 +8,20 @@ nothing carries across it. Its subcircuits are Definitions (`templates`): the W8
 and the row units (RMSNorm, the quantizer, softmax, the residual add, the gathers, the embedding and
 argmax), each id `stub:` until its Definition lands, its ANDs composed from pinned pieces.
 
-**The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one C-Flock `--zk`
-session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` drawn units each
-(m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
+**The sampling design is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one Flock `--zk`
+session sampling a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` sampled proof blocks each
+(m = k_log + nbl <= 35). Every subcircuit samples `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
 fewer than `K0 = ln(S/delta) n/k` <= share n units incorrect outside delta (the S sampling blocks of the block split delta), and by
 `IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The incorrect ANDs beside
 them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: the law-level bound is proved
 (`FlockSoundness.Audit.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
 
-**Cost** is C-Flock's fit (`transformer.costs`: zero-knowledge sessions on sm_120, in RTX PRO 6000 GPU-seconds, taken as
+**Cost** is Flock's fit (`transformer.costs`: zero-knowledge sessions on sm_120, in RTX PRO 6000 GPU-seconds, taken as
 H200 GPU-seconds; `--card h200`: GLM-5.3's proof blocks proved on one H200 by the deployed prover, in its own
-GPU-seconds), per table `statement_fixed + statement_per_and A` and per drawn unit `(per_and + staged_per_and) A`,
-A a unit's ANDs with its rows' openings (`row_ands`); staging is taken to scale with the drawn units, not n. The fit
+GPU-seconds), per table `statement_fixed + statement_per_and A` and per sampled proof block `(per_and + staged_per_and) A`,
+A a unit's ANDs with its rows' openings (`row_ands`); staging is taken to scale with the sampled proof blocks, not n. The fit
 measured units of 5.1e6 to 3.0e7 ANDs, so the row subcircuits' (up to 2e8) are extrapolated. Replaying
-the drawn requests (`REPLAY_BLOCKS` of the block's own run) and committing every unit's outputs (a design rule, not a
+the sampled requests (`REPLAY_BLOCKS` of the block's own run) and committing every unit's outputs (a design rule, not a
 choice) are priced beside the proving, not traded against it.
 
     uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad]
@@ -51,7 +51,7 @@ from verity.ml.circuits.ops import fp32 as F, gemm as G  # noqa: E402
 DELTAS = X.DELTAS
 #: each subcircuit's sampling block certifies at most this share of its units incorrect at delta = 1% (`transformer.TARGET_SHARE`)
 SHARE = X.TARGET_SHARE
-#: replaying the drawn requests, in blocks of the block's own run: stand-in, the drawn units touch nearly every request
+#: replaying the sampled requests, in blocks of the block's own run: stand-in, the sampled proof blocks touch nearly every request
 #: and a step's cost is its weights' decode, not its batch, which is not yet priced
 REPLAY_BLOCKS = 1.0
 #: output channels a static-matmul tile spans (`--tiles`, the option of a 2,048-bit tile unit)
@@ -105,7 +105,7 @@ class Template:
 
     @property
     def proved(self) -> int:
-        """A drawn unit's ANDs with its rows' openings, the fit's feature."""
+        """A sampled proof block's ANDs with its rows' openings, the fit's feature."""
         return self.ands + sum(row_ands(r) for r in self.rows)
 
 
@@ -185,7 +185,7 @@ class Rates:
 
 @dataclass(frozen=True)
 class Window:
-    """One subcircuit's sampling block of the block: `k` of its units drawn in one session of `tables` tables."""
+    """One subcircuit's sampling block of the block: `k` of its units sampled in one session of `tables` tables."""
 
     template: Template
     k: int
@@ -201,7 +201,7 @@ class Window:
 
 
 def window(t: Template, k: int, windows: int, r: Rates) -> Window:
-    """`t`'s sampling block drawing k: its tables (at most `_cap` drawn units each, k rounded up to a multiple of them, as
+    """`t`'s sampling block sampling k: its tables (at most `_cap` sampled proof blocks each, k rounded up to a multiple of them, as
     `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
     the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's sampling blocks."""
     a, cap = t.proved, X._cap(t.proved)
@@ -226,8 +226,8 @@ def commit_cost(ts: list[Template], r: Rates) -> float:
 
 
 def replay_cost(ws: list[Window], m: Shape) -> float:
-    """Replaying the drawn units' requests: `REPLAY_BLOCKS` of the block's run, scaled by the expected share of requests
-    the draw touches."""
+    """Replaying the sampled proof blocks' requests: `REPLAY_BLOCKS` of the block's run, scaled by the expected share of requests
+    the sample touches."""
     drawn = sum(w.k for w in ws)
     return REPLAY_BLOCKS * m.block_s * (1 - exp(-drawn / m.batch))
 

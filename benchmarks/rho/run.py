@@ -119,7 +119,7 @@ def rests_md(r: Result, terms: list[analysis.Term]) -> str:
 
 
 def certified(s: Scenario) -> dict | None:
-    """Where a certifier sets the serving cut's link term: the certified prompt ingress into a location (bit/s), as an
+    """Where a certifier sets the serving cut's binding error: the certified prompt ingress into a location (bit/s), as an
     intake (a multiple of `α Φ`), and with `declared` a server's declared inputs and outputs."""
     regime = operating._inner(s.regime)
     cert = getattr(regime, "certifier", None)
