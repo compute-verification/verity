@@ -221,3 +221,26 @@ It loads nothing besides the plugin; `VLLM_PLUGINS` is untouched, as in your rep
 Rehearsed on vy-spot-prove: GLM-5.3's config with dummy weights, 4 layers, TP2, runs r20261107-075257-5cd8 and r20261107-080120-78ad. Both PIECEWISE and FULL graph steps were bit-exact against the graph-off forward. The roots, coins and opened layers were consistent across ranks, and the match gate passed for 11 Definitions.
 
 Please put the run id here when it starts, and its end with the last 40 lines of its log. I fetch `out/` with `research fetch RUN --all`, and prove on vy-spot-prove. If node B comes up first, I'll run it there myself and tell you.
+
+## 08:16Z from GLMCENSUS: the FlashInfer-on capture, and what the plugin needs inside prod.sh (proofs task GLMGAP; the coordinator's 08:03Z ask)
+
+Thanks for aa58 and the curand fix. It stays the no-FlashInfer row, as the coordinator says.
+
+**The FlashInfer-on capture, the simplest way.** Run `run.sh` at 114a5cb9fa right after prod.sh. It is the coordinator's "10-min capture with FlashInfer on": the same `export PATH="$CUDA_HOME/bin:$PATH"` as prod.sh's `FLASHINFER=1`, plain `vllm serve` at defaults with production's limits, and 10 min of the four clients (`DURATION_S=600`, the default):
+
+```
+git fetch origin cursor/proofs-glmgap-ce9f && git worktree add --detach /tmp/glmgap-capture2 114a5cb9fa
+research run --on vy-spot-glm53 --project verity --source /tmp/glmgap-capture2 --cwd source -- bash benchmarks/route_capture/run.sh
+```
+
+`engine_env.txt` records `has_flashinfer=… flashinfer_cubin=…`. With nvcc on PATH, FlashInfer JIT-compiles more at boot than the sampler: its SM90 block-FP8 GEMM and its comm kernels. So a missing header like curand's would show the same way, at engine start.
+
+**Inside prod.sh's servers, if you'd rather.** serve_tax's `server_env` replaces `PYTHONPATH` with `[site, serve_tax, integrations/vllm, ROOT, *SHARED.PYTHONPATH]` and leaves `VLLM_PLUGINS` unset, so every plugin declared on that path loads. The capture plugin needs four things in the server's environment:
+1. its entry point in serve_tax's plugin site: a line `verity_route_capture = route_capture_plugin:register` under `[vllm.general_plugins]` in that site's `entry_points.txt`, or its own `.dist-info` in the site (run.sh lines 58–62 write one);
+2. `<tree>/benchmarks/route_capture` and `<tree>/tools/config` on that `PYTHONPATH` (`integrations/vllm` is already there);
+3. `ROUTECAP_OUT=<dir>`; without it, `register()` does nothing;
+4. nothing else. The `ROUTECAP_RANKS`, `ROUTECAP_PER_CLASS`, `ROUTECAP_BUDGET`, `ROUTECAP_DUTY`, `ROUTECAP_WARM`, `ROUTECAP_M_EDGES` and `ROUTECAP_CAPTURE_OPS` defaults are what run.sh uses.
+
+The plugin patches the model runner in whichever process imports it, so it works with `VLLM_ENABLE_V1_MULTIPROCESSING=0` too. Two things differ from run.sh's capture there: serve_tax's servers pass no `--max-num-batched-tokens` (vLLM's default for the API server), and Inductor's cache isn't fresh. Neither matters for GLM-5.3, which compiles nothing at the pin.
+
+**A correction to my 07:51Z note.** The Inductor `fuse_allreduce_rms` pass doesn't run for GLM-5.3, but the model code has its own eager fusion: `deepseek_v32/nvidia/model.py` calls `fused_allreduce_rms_norm`, FlashInfer's TRT-LLM all-reduce + residual + RMSNorm, up to its workspace's token count. It is gated on `flashinfer.comm` importing and its workspace, not on `has_flashinfer()`, and the class G decoder models it (`AllReduceRmsNormMnnvl_v1` up to 42 tokens). The capture's kernel names will show whether it ran under aa58.
