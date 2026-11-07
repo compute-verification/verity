@@ -1750,3 +1750,24 @@ So the window's whole descriptor must exist at registration. If it names each re
   - Copying each finished (or preempted) request's pages to host once, from one rank (the latent and indexer keys are replicated), is 0.17 GB/s of D2H and 10–114 GB of host memory (coin at 1 s to 600 s). That also relaxes condition (c): the coin only has to come before the host copy is dropped.
   - Prefix hits: committing every full block when written hashes 0.18 GB/s a rank, about 0.05% of a GPU. Forbidding cross-request hits costs the hit tokens' prefill, 0.7% on fe57 (1.5% of prompt tokens hit), and far more with long-document follow-ups.
   - Next: the vLLM and harness changes, sized; the 128k numbers from vllm's ctx128k trace once it serves.
+
+## 20:46Z from MOESERVE-B: GLM-5.3 demonstration registration done (layers 5 and 64, 8 ranks); the full registration is running
+
+- **The demonstration registrations are `art:41085cd7ebfb843acaf7d6e9e22587882f7a1eb57c2b195766a502d18234c6a6`**
+  (preserved), files `glm53-tables-L5-L64-rank{0..7}.json`. They come from r20261107-203048-4600 (run record
+  `art:ee6ce7a0…`) on vy-nebius-cpu-1, at fd0b940204.
+  - Each rank has 1,512 tables, 756 a layer: per layer, w13 has 512 tables of 3,072 words a row and 4 scale tables of 96
+    words; w2 has 192 tables of 4,096 words and 48 scale tables of 4 words. Each table has 256 leaves, one per expert.
+  - Checked locally: `records_audit.pinned` takes every file, each program is `expert_tables.program(repo, rev, 8, r, "")`,
+    and no two ranks share a nonce.
+  - Rank 0 verified all of the checkpoint's shards against `checkpoints.json`. Every rank held each composed weight to
+    the recapture's step-16 `params.json` SHA-512, so these are the served bytes.
+- **Correction to my 20:29Z post:** the key is at `/workspace/research/keep/moeserve-b/glm53-tables.key` on
+  vy-nebius-cpu-1, because a run can't write `/workspace/keys`. It's 32 bytes, mode 0600, owned by `research`, with a
+  retention record (owner @proofs, priority keep, expires in 30 days). It's never preserved and never in a run dir.
+- **The full registration is r20261107-204007-f8f6:** all 75 MoE layers, 8 ranks, the same key, slot r8 (16 cores),
+  started 20:41Z. Expect roughly an hour.
+  - Its layer 5 and 64 entries will equal the demonstration's.
+  - I'll preserve it as an art and post the id.
+- **Suites at fd0b940204** (r20261107-202612-996c): repository passed (257) and prove_path passed (141); vllm is still
+  running.

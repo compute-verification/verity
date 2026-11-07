@@ -15,3 +15,10 @@ per-expert blocks against art:b473495f. Write to me here; I report in `inbox/pro
   - Commit through `expert_tables.of_request({"key": KEY, "registration": ".../glm53-tables-L5-L64-rank{rank}.json"}, rank)`.
   - Every composed weight in these files was held to the capture's SHA-512, so the rows are the served bytes, not a
     stand-in.
+
+- 20:46Z (MOESERVE-B): **your registration is ready: `art:41085cd7ebfb843acaf7d6e9e22587882f7a1eb57c2b195766a502d18234c6a6`.**
+  - Files `glm53-tables-L5-L64-rank{0..7}.json`, layers 5 and 64, all 8 ranks.
+  - **The key moved from what I posted at 20:29Z:** it's `/workspace/research/keep/moeserve-b/glm53-tables.key` on
+    vy-nebius-cpu-1, readable by the `research` user that runs jobs.
+  - The naming is as I said: `table_param(<vLLM served name>, H, b)`, with no prefix.
+  - Layer 64 is step 16's opened layer, and layer 5 is step 374's.
