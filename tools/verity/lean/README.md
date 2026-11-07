@@ -90,6 +90,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   definitions or properties tree imports one;
 - every `Prop` a guarantee takes is named, another listed guarantee's statement or a plain range (`inline_failures`;
   `shape.inline`, which only shrinks, excepts some, and its size is the `AUDIT` line's inline debt);
+- each deployed guarantee rests, outside the trust base, only on what its `trust_gap` entry lists, and on all of it
+  (`trust_failures`; `trust`, below), and the report prints each one's gap;
 - every instance has a name in its source. Lean names an anonymous one from its type, and adds the project's root
   (`_proofs`) when nothing in the type is the project's own, so a move into another root or a split renames it, and every
   record whose definitions use it changes. `--name-instances` writes each current name into its declaration;
@@ -242,6 +244,15 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   record's, else that of it and every definition it reads in `meaning` and this repository's modules
   (`assumption_reads`). So a change to a premise or to what it reads fails under its own name,
   and the landing DM shows it; one no guarantee reads fails.
+- `trust`: the named premises that are the trust base (SHA-512's collision resistance, uniform random bytes, an honest
+  verifier's coin log), one list in every lock. `deployed`: the guarantees that state the deployed system. `trust_gap`
+  ({deployed guarantee: [premise, ...]}): what each rests on outside the trust base, its gap (`trust_gaps`): the named
+  assumptions and open premises its record lists, and through each domain hypothesis that cites another listed
+  guarantee, that guarantee's, transitively. A domain hypothesis is part of what the guarantee says and counts for none,
+  and neither does a `Prop` it only reads. A premise new to a gap fails (`trust.gap-new`) until a person lists it, and
+  `--update` adds none, so the gap only shrinks; one a gap no longer has fails (`trust.gap-gone`) until the entry drops,
+  as does an entry of a guarantee `deployed` doesn't list (`trust.gap-stale`), and `--update` drops both. The report
+  prints each deployed guarantee's gap and their total, the number the trust base is driven to.
 - `meaning` (default `roots`): the modules whose definitions a guarantee's meaning is followed through. What a
   statement is about (an executable, Mathlib) stays outside.
 - `compile_time`: the modules that must run code while they compile, one by one. Write the entry with its `why`; `--update`
@@ -347,6 +358,8 @@ writes:
   listed under `open`, owned by its guarantees' owner (the first, of several), on the lock's `open_default_issue` (else
   `BOOKKEEPING_ISSUE`), due seven days from the run;
 - a guarantee the witnesses rule now holds to witnesses it lacks is listed under `unwitnessed` at its current hashes;
+- a premise a deployed guarantee no longer rests on outside the trust base is dropped from its `trust_gap` entry (a new
+  one is never added);
 - a stale entry is dropped, and a missing owner is set to the guarantees' owner, else `BOOKKEEPING_OWNER`.
 
 The run then judges the policy's checks again on that lock, so whatever else fails still fails: the build, the replay,
