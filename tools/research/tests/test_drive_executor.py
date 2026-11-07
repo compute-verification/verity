@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+import research.drive as D
 from research import merge
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, SLIM_JUDGED, SLIM_STEPS, task_files
 from research.executor import (AFTER_LANDING_PRIORITY, BLOCKED, GRAPH_V2, SHADOW_WAIT_S, TASKS_GRAPH_KIND, Executor, FileTransport,
@@ -588,8 +589,8 @@ def test_on_a_graph_with_no_task_of_a_job_main_waits_for_gates_nothing_and_is_to
 def test_on_names_the_one_landing_of_the_batch_whose_change_touches_the_failed_tasks_inputs(world, monkeypatch, tmp_path):
     """Three landings in one check; the failed test file's inputs are `pkg/tests/test_x.py` and `pkg/x.py`, which only #2
     changes (#3 changes `pkg/y.py`, in the suite's directory, which a run's rule would blame too).  The red is its suite's,
-    names #2, rings #2's lane and the suite's owner, and reverts #2 on `checked` at once, while the check goes on; once it
-    ended, the revert's tip is checked."""
+    names #2 and rings #2's lane and the suite's owner at once, while the check goes on; once it ended and `FIX_FORWARD_S`
+    passed with no fix marked, #2 is reverted on `checked` and the revert's tip is checked."""
     _owning(world, {"lane-2": [], "pkg-owner": ["pkg/"]})
     _move_main(world, {**GATED_TREE, "pkg/pyproject.toml": '[project]\nname = "My_Pkg"\n'})
     h = Review(world, monkeypatch, land_into="checked")
@@ -611,19 +612,22 @@ def test_on_names_the_one_landing_of_the_batch_whose_change_touches_the_failed_t
     assert f"Culprit: #2 (its change touches pkg/x.py, which {X} depends on), of the 3 landing(s) since" in ring, ring
     r = h.postland()["red"]["suite my-pkg"]
     assert r["culprit"][0] == 2 and r["base"] == main and r["paths"] == ["pkg/x.py"] and r["step"] == "pytest"
-    assert h.postland()["run"]["tip"] == tip, "B is still pending: the check goes on, red named at once"
+    assert h.postland()["run"]["tip"] == tip == _checked(world), "B is still pending: the check goes on, red named at once"
+    _results(fake, g, {X: {"exit": 1, "failed_tests": [TEST]}})
+    _slim(h, tmp_path)
+    h.tick()
+    pl = h.postland()
+    assert pl["failed"] == tip and _main(world) == main and pl.get("gated") != tip and _checked(world) == tip
+    assert len(_rings(h)) == 1, "named once per tip"
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
     assert "pkg/x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
     assert "pkg/y.py" in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
     assert any(p.startswith("@lane-2 @pkg-owner queue: #2 reverted on `checked`") for p in h.posts), h.posts
-    _results(fake, g, {X: {"exit": 1, "failed_tests": [TEST]}})
-    _slim(h, tmp_path)
-    h.tick()
     pl = h.postland()
-    assert pl["failed"] == tip and _main(world) == main and pl.get("gated") != tip
-    assert len(_rings(h)) == 1, "named once per tip"
-    assert pl["run"]["tip"] == reverted == _checked(world), "the revert's tip is checked next"
+    assert pl["run"]["tip"] == reverted, "the revert's tip is checked next"
     assert fake.enqueued()[-1]["check"] == f"after-landing:{reverted}"
     assert [c for c, _, _ in h.posted] == [tip, reverted], "beside a run of its own"
 
@@ -657,10 +661,10 @@ def test_on_a_failed_task_an_unexpired_allowance_covers_is_not_red(world, monkey
 
 
 @pytest.mark.parametrize("allowed", [False, True])
-def test_on_a_red_task_off_the_gate_holds_no_promotion_and_reverts_its_culprit_at_once(world, monkeypatch, tmp_path, allowed):
+def test_on_a_red_task_off_the_gate_holds_no_promotion_and_names_its_culprit(world, monkeypatch, tmp_path, allowed):
     """A circuit-check task is off the merge gate (policy.toml's `off_gate`): every task on the gate passed, so `main` follows
-    the tip though the binding failed; its red is circuit-check's, whose culprit is reverted at once.  An allowance of each
-    failure it names covers it, and the tip is verified."""
+    the tip though the binding failed; its red is circuit-check's, whose culprit is reverted `FIX_FORWARD_S` after with no fix
+    marked.  An allowance of each failure it names covers it, and the tip is verified."""
     _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(*([(f"circuit-check {FP8}", "ci", LIVE)] * allowed))})
     h = Review(world, monkeypatch, land_into="checked")
     fake = _executor(h, tmp_path, "on")
@@ -681,7 +685,10 @@ def test_on_a_red_task_off_the_gate_holds_no_promotion_and_reverts_its_culprit_a
     assert pl["gated"] == tip and pl["gated_by"] == f"after-landing:{tip}" and pl["failed"] == tip
     assert list(pl["red"]) == ["step circuit-check"]
     (ring,) = [p for p in h.posts if "Culprit: #1" in p]
-    assert "step circuit-check is red on `checked`" in ring and "Drive reverts #1 now" in ring, ring
+    assert "step circuit-check is red on `checked`" in ring and "or drive reverts #1 then." in ring, ring
+    assert _checked(world) == tip
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip
     assert "pkg/fp8.circuit-check.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
@@ -833,8 +840,9 @@ def test_on_a_red_ratchet_gate_in_the_run_beside_the_check_holds_nothing_and_nam
     """Every task of the executor's check passes, but the run beside it fails ratchet-gate, its log naming the merge the gate
     fails.  ratchet-gate is off the gate (policy.toml's `off_gate`, as in the tree), so it holds nothing, as in a run of every
     step: the tip is `gated` and `main` follows it.  The red names that merge's PR as its culprit and rings as a run's does,
-    and drive reverts it on `checked` at once.  The revert's check, launched in the same tick, runs beside a run whose gate
-    judges above the red tip, where the revert lies; that passing, `main` follows the revert and the red ends."""
+    and drive reverts it on `checked` once `FIX_FORWARD_S` passed with no fix marked.  The revert's check, launched in the tick
+    that reverts it, runs beside a run whose gate judges above the red tip, where the revert lies; that passing, `main`
+    follows the revert and the red ends."""
     _owning(world, {"lane-2": []})
     _move_main(world, {**GATED_TREE, "tools/verity/check/policy.toml": _policy(off_gate=("circuit-check", "ratchet-gate"))})
     h = Review(world, monkeypatch, land_into="checked")
@@ -857,18 +865,22 @@ def test_on_a_red_ratchet_gate_in_the_run_beside_the_check_holds_nothing_and_nam
     (ring,) = _rings(h)
     assert ring.startswith(f"@lane-2 @ci queue: step ratchet-gate is red on `checked` {tip[:12]} (run r-post-0): "
                            f"`#2 ({merge2[:12]}): failed: grows p01.json 2 -> 3 entries`"), ring
-    assert "Culprit: #2 (the ratchet gate fails its merge), of the 3 landing(s)" in ring and "Drive reverts #2 now." in ring, ring
+    assert "Culprit: #2 (the ratchet gate fails its merge), of the 3 landing(s)" in ring and "or drive reverts #2 then." in ring, ring
     assert pl["red"]["step ratchet-gate"]["culprit"][:1] == [2]
     assert pl["ratchet_judged"] == {"tip": tip, "base": verified, "failed": [merge2]}
     assert pl["failed"] == tip
-    assert pl["verified"] == verified and pl["gated"] == tip == _main(world) != main, world.logs
+    assert pl["verified"] == verified and pl["gated"] == tip == _main(world) == _checked(world) != main, world.logs
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
+    pl = h.postland()
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == tip
     assert f"This reverts commit {merge2}" in _git(world.origin, "log", "-1", "--format=%B", reverted)
     assert any(p.startswith("@lane-2 @ci queue: #2 reverted on `checked`") for p in h.posts), h.posts
-    assert pl["run"]["tip"] == pl["slim"]["tip"] == reverted, "the revert's check and its run, launched in the red tick"
+    assert pl["run"]["tip"] == pl["slim"]["tip"] == reverted, "the revert's check and its run, launched in the tick reverting"
     got, steps, kw = h.posted[-1]
-    assert got == reverted and steps == "ratchet-gate" and kw["base"] == verified and kw["ratchet_base"] == tip, kw
+    assert pl["verified"] == tip, "`main` reached the red tip, past every step on the gate, before the revert"
+    assert got == reverted and steps == "ratchet-gate" and kw["base"] == tip and "ratchet_base" not in kw, kw
     g = _graph_v2(reverted)
     fake.list_graph(f"after-landing:{reverted}", g)
     _results(fake, g)
