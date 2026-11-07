@@ -1,4 +1,4 @@
-"""`engine.class_admission`: a served class-G window refuses a prompt over the class's long-prefill threshold before the scheduler
+"""`engine.class_admission`: a served class-G window refuses a prompt over the class's served max_model_len before the scheduler
 holds it, and a Commit window's close while a request is in flight; a refusal is sticky, and uninstalling puts the scheduler back.
 
 The scheduler here keeps what the admission reads of vLLM V1's: ``add_request`` and ``requests``, the requests it holds, from
@@ -37,21 +37,21 @@ def _request(rid: str, n: int):
 def test_class_g_admits_a_prompt_at_its_limit_and_refuses_one_over_it_before_the_scheduler_holds_it():
     sched, eng = _engine()
     adm = Admission("G").install(eng)
-    assert adm.limit == EC.prompt_limit("G") == 256
-    sched.add_request(_request("a", 256))
-    with pytest.raises(Refused, match=r"engine class G refused: request b: a prompt of 257 tokens, over the 256 a class-G window "
-                                      r"admits \(its long_prefill_token_threshold"):
-        sched.add_request(_request("b", 257))
+    assert adm.limit == EC.prompt_limit("G") == EC.CLASS_G_SERVED["max_model_len"] == 2048
+    sched.add_request(_request("a", 2048))
+    with pytest.raises(Refused, match=r"engine class G refused: request b: a prompt of 2049 tokens, over the 2048 a class-G window "
+                                      r"admits \(its served max_model_len\)"):
+        sched.add_request(_request("b", 2049))
     assert list(sched.requests) == ["a"]
 
 
 def test_a_refusal_ends_the_window():
     sched, eng = _engine()
     adm = Admission("G").install(eng)
-    with pytest.raises(Refused, match="a prompt of 300 tokens"):
-        sched.add_request(_request("long", 300))
+    with pytest.raises(Refused, match="a prompt of 3000 tokens"):
+        sched.add_request(_request("long", 3000))
     for refused in (lambda: sched.add_request(_request("short", 8)), adm.close_window):
-        with pytest.raises(Refused, match="request long: a prompt of 300 tokens"):
+        with pytest.raises(Refused, match="request long: a prompt of 3000 tokens"):
             refused()
     assert sched.requests == {}
 
@@ -84,7 +84,7 @@ def test_uninstall_puts_the_schedulers_add_request_back():
     sched, eng = _engine()
     adm = Admission("G").install(eng)
     adm.uninstall()
-    sched.add_request(_request("long", 1000))
+    sched.add_request(_request("long", 3000))
     assert list(sched.requests) == ["long"]
 
 

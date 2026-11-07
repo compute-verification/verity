@@ -51,7 +51,7 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The session's coin tree -/
 
--- `walk_step` splits `setupHidden`, at each draw, into one goal per path through its checks
+-- `walk_step` splits `setupHidden`, at each sample, into one goal per path through its checks
 set_option maxHeartbeats 4000000 in
 /-- **`Stmt.setupHidden`'s statement keeps the coins' tree** at the verifier's public inputs `own`, any value. -/
 theorem setupHidden_coinTreeP {tags : Flock.Tags} {cf pf : ByteArray} {coins : Flock.Coins}

@@ -15,7 +15,7 @@ At `t = 167` its `m = 501,788` gives `(501788/2^19)^105 ≈ 0.009996 < 1%`, so `
 
 The honest period (`periodHeldHonest`): the honest strategy keeps its state and runs a `ret` every round
 (`seqRounds_ret`), so each answer takes no round or query, and its state is `C`'s `FULL` bits, which the capacity
-account holds at tick `0` of the window; the code's draw never fails at a 32-byte id (`coinView_some`,
+account holds at tick `0` of the window; the code's sample never fails at a 32-byte id (`coinView_some`,
 `uniformOn_split`), and a lookup returns the challenged block; `63,000,000 · 105 + 2^30 + 437,248,000 = 8,125,989,824 ≤
 S₀ = 8,169,621,180`; `⌊854,000 · 349 / 36,155⌋ = 8,243 ≤ 16,446`; and `16,447 · 36,155 / 349 ≥ 1.995 · 854,000`.
 The empty period has probability 1 of the accept-all event, and the honest one held `105 · FULL` bit-ticks

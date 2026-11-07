@@ -6,7 +6,7 @@ otherwise it builds N tensor-parallel ranks × M pipeline stages on the multipro
 greedy requests plain, then under the window, and writes its tokens, the window's record (``pouw-h1-calls.json``) and a
 summary to ``--out``.
 
-Both draw their in-process coins from one fixed stream (`entropy`) and use one fixed hm96 key (`KEY`), a measurement that
+Both flip their in-process coins from one fixed stream (`entropy`) and use one fixed hm96 key (`KEY`), a measurement that
 credits nothing (the coins aren't a challenger's) but makes the two windows' commitments comparable bit for bit.
 ``--compare ONE_DIR OTHER_DIR`` (no GPU) holds the served tokens equal and both layouts static and complete (every one of
 the window's steps × linears called). At one TP (pipeline stages only) the layout is the same, so it also holds every

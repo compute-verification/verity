@@ -48,7 +48,7 @@ import Proofs.Flock.SessionLoop.FinRepXs
 import Proofs.Flock.SessionLoop.FinRounds
 
 /-!
-# The views' cut PIOP returns where the firewall's rep did
+# The views' cut PIOP returns where the ZK server's rep did
 
 The cut PIOP returns on its coins alone (`Masked.piopCut_of_repFwC`), so where the session's rep on the loop's table
 and request returned (`RepAt`, as `finRepCut` runs it at the opened coins), the cut PIOP from any source, layout, cap,

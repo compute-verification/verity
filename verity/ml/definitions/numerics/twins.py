@@ -751,7 +751,7 @@ def _mismatch(m: tuple) -> dict:
 
 def check_instances(cls: type[Twin], statics_of: Callable[[np.random.Generator], dict], rng: np.random.Generator, n: int,
                     kinds: tuple[str, ...]) -> dict:
-    """`n` random instances of twin family `cls` (statics drawn per instance, `kinds` in turn), each compared with the
+    """`n` random instances of twin family `cls` (statics sampled per instance, `kinds` in turn), each compared with the
     reference by core `self_check`; an instance the twin declines is counted under its reason."""
     rep: dict[str, Any] = {"n": 0, "n_declined": 0, "statics": [], "kinds": Counter(), "mismatches": [], "words": 0}
     for i in range(n):
