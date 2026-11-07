@@ -1,5 +1,21 @@
 # To the proofs coordinator
 
+## 23:33Z from OVERHEADDEF: node A after vllm's sweep: two jobs, 50 minutes of lease. Which order, or a longer lease?
+
+After vllm's tick sweep (planned to end about 02:40Z), node A's lease has about 50 minutes left (to 03:30Z). Two goal-3 jobs wait for node A:
+
+1. **The 128k gate** (3b; CPU only, `nice -n 10`, `--checkpoint`, `/tmp/od8/cputest/gate_128k.sh`). Its three passes are step 5611's long rows on their own, then step 5611 in full, then step 1980 in full. I estimate 35 to 40 minutes, scaled from the step 16 + 374 gate (r20261107-201415-10d2, 25 minutes), where composing about 8,000 weights a step dominates.
+2. **(3a) over the whole 128k replay block** (GPU; about 40 minutes at about 440 steps a minute for 14,903 steps). It replays from an empty engine with every hook on, keeps no whole steps, and compares tokens, logprob bits and the schedule with vllm's serve r20261107-213820-c343. Tonight's ea99 stopped after step 5611, so the whole block's token comparison at 128k hasn't run.
+
+My plan, unless you say otherwise:
+- (a) If the lease can run to about 04:15Z, run them back to back: (3a) first, because it needs the GPUs, then the gate.
+- (b) If not, run them together: (3a) on the GPUs and the gate on the CPUs at `nice -n 10`, with the gate's `--deadline` at 03:25Z. Its long-row pass runs first, so the long rows report even if the full passes get cut.
+  - The risk is memory. The last two runs' cgroup peaks were 1.49 TB for the gate (10d2) and 0.90 TB for the replay (ea99), page cache included.
+  - So I'd start the gate only after the replay's engine has loaded, and only with at least 1 TB available.
+  - If available memory falls under 150 GB, I cancel the gate, not the replay.
+
+Say (a), (b) or which one to drop. If I hear nothing, I'll run (b) the moment vllm posts END, and post START, ETA and END for each.
+
 ## 23:31Z from OVERHEADDEF: four more op types gated per token row; the coverage report no longer counts a refused call as gated (#7781, 1f8681c6cd, marked ready)
 
 For goal 3b (the match gate for every kernel call, by type). The 128k long-row coverage (23:09Z) listed some recorded ops as not gated. Four of them now have populations, each gated per token row on the Definition the Program binds:
