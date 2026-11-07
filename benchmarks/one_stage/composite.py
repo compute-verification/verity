@@ -181,11 +181,13 @@ def public_record(product: str, commitment: bytes, cases: Sequence[dict[str, Any
 def check_public(public: bytes, cases: Sequence[dict[str, Any]]) -> None:
     """Refuse ``public`` when it shares a run of ``2 * WINDOW`` bytes or more with any case's evidence, raw or hex. The
     cases' commitments and digests are public by definition (hiding commitments), and evidence may carry the same
-    roots, so they are masked first; everything else, the pieces' own answers included, is held to it."""
-    for p in cases:
-        for v in (p["commitment"], p["digest"]):
-            if len(v) >= WINDOW:
-                public = public.replace(v.hex().encode(), b"*").replace(v, b"*")
+    roots, so they are masked first, longest first: one case's commitment can hold another's (the network certifier's
+    holds V3c's registration, which sampled proofs' and the policy's commit to), and masking the inner one first would
+    leave the rest of the outer one to meet the evidence that carries it. Everything else, the pieces' own answers
+    included, is held to it."""
+    masks = {v for p in cases for v in (p["commitment"], p["digest"]) if len(v) >= WINDOW}
+    for v in sorted(masks, key=lambda v: (-len(v), v)):
+        public = public.replace(v.hex().encode(), b"*").replace(v, b"*")
     seen = {public[i:i + WINDOW] for i in range(len(public) - WINDOW + 1)}
     for p in cases:
         for e in (p["evidence"], p["evidence"].hex().encode()):
