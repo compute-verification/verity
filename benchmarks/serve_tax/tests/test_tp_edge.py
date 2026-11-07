@@ -179,7 +179,9 @@ def test_a_snapshot_checks_the_ranks_dumps_one_copy_and_records_the_edge(tmp_pat
     assert got["ids"] == [0, 1, 2, 3, 4, 5, 7, 8, 9, 10, 11] and got["pool"]["cached_free"] == 4
     assert [w["rank"] for w in got["dump"]] == [0] and saved == ["edge-000005"]
     assert json.loads((tmp_path / "edge-000005" / "edge.json").read_text())["ids"] == got["ids"]
-    assert got["seconds"] == {"digest": 1, "dump": 1, "savers": 1}
+    assert got["seconds"] == {"digest": 1, "dump": 1, "savers": 1} and got["trace_step"] is None
+    core.scheduler._verity_servetax = [object(), NS(scheduled=41)]
+    assert E.trace_step(core.scheduler) == 41
     assert edges.snapshot(core, 9)["dump"] == []
 
     T.tensors(workers[2])[2][7, 1, 1] += 1

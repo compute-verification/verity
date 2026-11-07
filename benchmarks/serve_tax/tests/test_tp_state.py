@@ -65,6 +65,15 @@ def test_a_dump_loads_back_at_the_same_ids_and_every_other_block_is_nan(tmp_path
             assert torch.isnan(b[others].float()).all()
 
 
+def test_each_rank_loads_its_own_dump_if_there_is_one_else_rank_zeros(tmp_path):
+    S.dump(worker(1, rank=0), str(tmp_path), [0, 1], ranks=[0])
+    S.dump(worker(3, rank=2), str(tmp_path), [0, 1], ranks=[2])
+    one, two = worker(5, rank=1), worker(5, rank=2)
+    S.load_rank(one, str(tmp_path)), S.load_rank(two, str(tmp_path))
+    assert torch.equal(tensors(one)[0][:2], tensors(worker(1))[0][:2])
+    assert torch.equal(tensors(two)[0][:2], tensors(worker(3))[0][:2])
+
+
 def test_a_subset_loads_and_a_block_the_dump_lacks_is_refused(tmp_path):
     served, fresh = worker(1), worker(2)
     S.dump(served, str(tmp_path), [0, 3, 4], ranks=[0])

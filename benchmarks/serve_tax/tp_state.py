@@ -167,6 +167,20 @@ def load(worker: Any, src: str, ids: Sequence[int] | None = None, fill: bool = T
     return {"rank": rank_record(worker)["rank"], "blocks": len(want), "filled": bool(fill)}
 
 
+def load_rank(worker: Any, edge_dir: str, ids: Sequence[int] | None = None, fill: bool = True) -> dict[str, Any]:
+    """`load` from an edge's directory: this rank's own dump when the edge kept every rank's (they differed), else rank
+    0's."""
+    rank = rank_record(worker)["rank"]
+    own = Path(edge_dir) / f"kv.rank{rank}"
+    return load(worker, str(own if own.is_dir() else Path(edge_dir) / "kv.rank0"), ids, fill)
+
+
+def set_rng_ranked(worker: Any, rngs: Mapping[Any, Mapping[str, Any]], seeds: bool = False) -> dict[str, Any]:
+    """`set_rng` with this rank's own state from ``rngs`` (rank -> `rng_state`, keys ints or their strings)."""
+    rank = rank_record(worker)["rank"]
+    return set_rng(worker, rngs[rank] if rank in rngs else rngs[str(rank)], seeds)
+
+
 def rank_record(worker: Any) -> dict[str, Any]:
     """Where this rank runs: its global, tensor-parallel and local ranks, its device (index, UUID, PCI bus), the host,
     ``CUDA_VISIBLE_DEVICES`` and the all-reduce backends its tensor-parallel group enabled, in dispatch order."""

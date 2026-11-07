@@ -109,13 +109,28 @@ def _rpc(core: Any) -> Callable[..., list[Any]]:
     return core.model_executor.collective_rpc
 
 
+def trace_step(sched: Any) -> int | None:
+    """The scheduler's step trace's count of steps scheduled with tokens (`StepTrace.scheduled`, the index its next
+    such step gets), from serve_tax's installs or a replay's trace, or None without one."""
+    for obj in (*getattr(sched, "_verity_servetax", ()), getattr(sched, "_verity_trace", None)):
+        if obj is not None and hasattr(obj, "scheduled"):
+            return int(obj.scheduled)
+    return None
+
+
+def scheduler_step(core: Any) -> int:
+    return core.scheduler.current_step
+
+
 class Edges:
     """The drained edges of one engine core, each snapshotted under ``out/edge-<step>``: at scheduler steps ``steps``
     (a replay, which knows the served edges' steps), or at the first step ``at_s`` seconds after the engine's first
-    scheduled step (serving, which doesn't). The first ``dump`` edges taken also write their blocks."""
+    scheduled step (serving, which doesn't). Steps count as ``counter`` counts them: the scheduler's ``current_step``,
+    or a replay's step trace (`trace_step`). The first ``dump`` edges taken also write their blocks."""
 
     def __init__(self, out: str | Path, steps: Iterable[int] = (), at_s: Iterable[float] = (), dump: int = 1,
-                 savers: Sequence[Callable[[Any, Path], Any]] = (), clock: Callable[[], float] = time.monotonic):
+                 savers: Sequence[Callable[[Any, Path], Any]] = (), clock: Callable[[], float] = time.monotonic,
+                 counter: Callable[[Any], int] = scheduler_step):
         self.out = Path(out)
         self.pending: list[int] = sorted(set(int(s) for s in steps))
         self.times: list[float] = sorted(float(t) for t in at_s)
@@ -124,6 +139,7 @@ class Edges:
         self.dump = int(dump)
         self.savers = list(savers)
         self.clock = clock
+        self.counter = counter
         self.t_first: float | None = None
         self.draining: int | None = None
         self.taken: list[dict[str, Any]] = []
@@ -156,7 +172,7 @@ class Edges:
                     self.snapshot(core, edge)
                 return got
             got = step_fn()
-            edge = self.due(core.scheduler.current_step)
+            edge = self.due(self.counter(core))
             if edge is not None:
                 if core.batch_queue:
                     self.draining = edge
@@ -188,7 +204,8 @@ class Edges:
         for save in self.savers:
             save(core, d)
         t3 = self.clock()
-        rec = {"edge": edge, "current_step": sched.current_step, "sched_step_seq": sched.sched_step_seq,
+        rec = {"edge": edge, "current_step": sched.current_step, "trace_step": trace_step(sched),
+               "sched_step_seq": sched.sched_step_seq,
                "running": len(sched.running), "waiting": len(sched.waiting), "pool": pool_counts(pool), "ids": ids,
                "check": check, "rank_map": rank_map(recs), "layers": recs[0]["layers"],
                "ranks": [{k: r[k] for k in ("layer_digests", "rng_digest", "rng")} | {"rank": r["rank"]["rank"]}
