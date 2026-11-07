@@ -157,10 +157,9 @@ theorem constGate_mem_io (u : Fin n) (hupv : 0 < D.unroll.upv) : constGate D hU 
   have hread : ∀ g : Fin (keyCircuit D hU n).N, g = constGate D hU n u → g ∈ (coreOp ((keyCircuit D hU n).op
       ((unitInst D hU n u).wire ((Placed.circuitRows D.unroll hU).comp ⟨0, h0⟩)))).args.toFinset := by
     intro g hg
-    subst hg
     rw [(unitInst D hU n u).op ⟨0, h0⟩]
     simp only [coreOp, Audit.Op.args, List.mem_toFinset, List.mem_append, List.mem_map]
-    exact Or.inl ⟨_, hrow, rfl⟩
+    exact Or.inl ⟨_, hrow, hg.symm⟩
   rw [Verity.Partition.io, Finset.mem_filter]
   exact ⟨hcom, Or.inr ⟨_, (unitInst D hU n u).mem ⟨0, h0⟩, hread _ rfl⟩⟩
 
@@ -177,12 +176,11 @@ theorem copyGate_mem_committed (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (c 
   have hout : ∀ g : Fin (Layout.keyN D.unroll hU n), g = copyGate D hU n u hj c →
       g ∈ Layout.outsOf D.unroll hU n := by
     intro g hg
-    subst hg
     unfold Layout.outsOf
     rw [Finset.mem_filter]
     exact ⟨Finset.mem_univ _, u, Fin.cast (congrArg Rows.w (rows_keyProg D hU n u)).symm
-      ((Rows.ofNet hU).stackCol D.unroll.upv hj c), (unitInst_wire D hU n u _).symm, j, jj, t, hj, hjj, ht,
-      hc ▸ hlo, hc ▸ hhi, hx⟩
+      ((Rows.ofNet hU).stackCol D.unroll.upv hj c), (unitInst_wire D hU n u _).symm.trans hg.symm, j, jj, t, hj,
+      hjj, ht, hc ▸ hlo, hc ▸ hhi, hx⟩
   exact Verity.Partition.mem_committed_of_output _ (hout _ rfl)
 
 end Flock.Bridge
