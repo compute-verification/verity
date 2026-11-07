@@ -25,6 +25,13 @@ Brent-Kung prefix count of the mask) and each switch's setting and tag routing t
 switch routes only the rank bits past t, so its tags cost kb - t ANDs.  `DsaButterflyRows_v2` is `dsa_topk_mask.rows` of
 `DsaWaksmanSwap_v2` and `DsaWaksmanPick_v2`, one AND a payload bit a switch, and `DsaTopKRow_v2` is the three over the indices'
 constant bits.
+
+ANDs (`verity_flock.ir_lower.definition_ands`) at TOPK = 2,048, run r20261107-210852-ec66:
+
+    N          mask         settings     switches   rows, W 576 E 16   DsaTopKRow
+    4,096         631,138      230,892     24,576       226,492,416      1,648,462
+    32,768      5,239,298    1,865,080    210,944     1,944,059,904     13,854,586
+    131,072    21,483,862    7,468,176    849,920     7,832,862,720     56,149,478
 """
 from __future__ import annotations
 
