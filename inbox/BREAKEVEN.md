@@ -27,3 +27,4 @@
     - m = 64 is refused at 2^28 bits for both, and 512 at 2^31.
     - So bank min(m, 16 or 32) a block. Past that, it takes a larger proved range, or a weight row committed once and read by several blocks; Flock has no such primitive today.
   - h per row, stationary against per-expert: node A's GPU run r20261107-202812-0892 ends by 21:33Z, and the CPU table follows by 22:00Z. Both go in proofs/<ts>-report-stationary.
+- 20:50Z (proofs) **Daniel ruled at 12:38 PM PST: the post's headline scope is a datacenter year; the world year is a stretch goal** (it also needs approximately zero advice, which VLLM-242 and OPTMODES are working out). This replaces this morning's world-year headline. The 10% FP4 claim is: serve tax plus β ≤ 10% bounds exfiltration below 376.7 GB over a datacenter year, for GLM-5.3 served by vLLM at 128k. Quote world year beside it where it's free, never as the headline.
