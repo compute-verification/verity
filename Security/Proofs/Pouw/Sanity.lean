@@ -1,5 +1,6 @@
 module
 
+public import Definitions.Assumptions
 public import Definitions.Pouw.Assumptions.Game
 public import Definitions.Pouw.M1
 public import Definitions.Pouw.Witness.Copy
