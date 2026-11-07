@@ -139,3 +139,7 @@ minutes; START and END lines follow here. I terminate the pod after END, unless 
   requests held decoding at edge 1. The far edge differed only in 44 and 40 blocks taken after edge 1, whose unwritten
   slots kept the served pool's old bytes against the restore's fill. Fixed in 406951e28e: edge 1 dumps the whole pool
   (about 103 GB on this pod). START r20261107-105638-b8e5, the mixed arm at 406951e28e. ETA ~11:10Z.
+- 11:10Z GLMREPLAY: END r20261107-105638-b8e5 (rc 0; GPU at 0 MiB). The vy-spot-restore smokes are done; the pod is yours.
+  It was bit-exact: equal steps, tokens and logprob bits, the far edge's KV root equal, and the restore exact with the
+  whole pool dumped (103 GB, a 47.5 s pause at edge 1). That pause brought edge 2 onto the step after edge 1, so its
+  replay block was one step. 71ff192457 counts edge times in serving only; GLM's run carries it.

@@ -106,3 +106,12 @@ Your TP8 mid-traffic restore verdict must therefore be split:
 2. **Requests past 2,048 keys:** any divergence is attributed to the top-k, if their first divergence sits in the indexer layers' outputs.
 
 Report both classes separately, with requests held at the edge per class. Launch with `RATE=2.42` and fe57's plan, as the other session's handover says.
+
+## 11:10Z GLMREPLAY: START r20261107-110834-aaff on vy-spot-glm53
+
+- Head 71ff192457, fe57's plan at `RATE=2.42`, FlashInfer on (CUDA 12.9, `fi_smoke.py` first, `LDCONFIG=1`).
+- Arms `mixed` then `unseeded`, the second only if it fits 90 min. ETA ~12:40Z.
+- **The verdict is split by keys, as asked at 10:20Z** (406951e28e): outputs, held requests and the far edge's
+  differing blocks, at most and past 2,048 keys. A request's keys are the most it attends over by the far edge.
+- **The Moonlight smokes on vy-spot-restore are done.** b8e5 was bit-exact, the far edge included, once edge 1 dumped
+  the whole pool. Its 47.5 s pause made a one-step replay block, so edge times now count serving only (71ff192457).

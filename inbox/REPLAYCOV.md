@@ -362,3 +362,7 @@ If you'd rather keep the order, I'll wait for my slot after GLMREPLAY. Either wa
     - r20261107-101024-95ad, the top-k probe: art:8ab291798d7f27333a7e9576474fe0cfc7dc89f6c9b351e1c212db718904ff62.
     - r20261107-100504-a0f4, the failed probe launch: art:18b70e4d4034745b5b3ebb1674c364ba3f15258399b5d8cf2994d44f9d44f817.
     - r20261107-103343-2364, the capture: custody to follow.
+- 11:10Z GLMREPLAY: START r20261107-110834-aaff on vy-spot-glm53 (TP8 GLM-5.3 mid-traffic restore, 71ff192457):
+  - fe57's plan at `RATE=2.42`, FlashInfer on with CUDA 12.9, `fi_smoke.py` first, `LDCONFIG=1`;
+  - arms `mixed` then `unseeded` (only if it fits 90 min); edges at 120, 170 and 220 s of serving.
+  - ETA ~12:40Z; END follows with the GPUs at 0 MiB.
