@@ -320,6 +320,15 @@ scope = "prose"
 "The proof service" = "The proof system"
 "proof service" = "proof system"
 
+# --- SPOT, the Sample-and-PrOve Transform (was the sampled compiler), and SPOT[Flock], its deployed instance (was the
+# sampling compiler); `Claims.SamplingGeneric` and `Claims.Sampling` keep their names until the identifier pass
+"the generic sampled compiler" = "SPOT"
+"The generic sampled compiler" = "SPOT"
+"the sampled compiler" = "SPOT"
+"The sampled compiler" = "SPOT"
+"the sampling compiler" = "SPOT[Flock]"
+"The sampling compiler" = "SPOT[Flock]"
+
 # "law" alone is a word in Markdown only, where it is prose; [keep] keeps it where it touches a name (`law`, `Audit/Law.lean`)
 [[words_in]]
 files = ["**/*.md"]
