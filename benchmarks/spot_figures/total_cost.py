@@ -76,10 +76,15 @@ TICKS = (0.984, 0.960)
 LIVE = (0.15, 0.05, 0.5)
 #: SHA-512 at 3.1 and 4.79 G compressions a second, 44 a 4 KiB row (`benchmarks/prove_path/window_cost.py`'s `RATES`)
 HASH_RATES = (4096 / 44 * 4.79e9, 4096 / 44 * 3.1e9)
-#: the pause at a replay block's edge, seconds: Moonlight's measured 0.95 s for a 32.6 GB pool on one H200 (the KV
-#: copy and its SHA-512 rows), scaled to GLM-5.3's 37.5 GB a rank at TP8; the least, its hashing alone at the measured
-#: kernel's 190 GB/s; the most, a copy to host at 25 GB/s plus that hashing and Moonlight's other 0.18 s
-EDGE_PAUSE = (0.95 * 37.5 / 32.6, 37.5 / 190, 37.5 / 25 + 37.5 / 190 + 0.18)
+#: the pause at a replay block's edge, seconds, measured on GLM-5.3 at TP8 over 21 edges (rank 0's copy of its 37.26 GB
+#: KV pool to pinned host memory, each rank's SHA-512 rows of its own, the runner rows and the scheduler state): the
+#: median and the most
+EDGE_PAUSE = (0.98, 1.06)
+#: the same server's throughput tax against stock compiled vLLM with the step record, the token commits and an edge each
+#: 30 s, measured within noise at every load: the 95% interval's top at saturation, which 3 reps can't rule out
+SERVED_HIGH = 0.024
+#: the measured serving run of `SERVED_HIGH` and `EDGE_PAUSE`
+SERVED_RUNS = ["r20261107-155724-3f53"]
 #: the deterministic DSA top-k that makes GLM-5.3's replay bit-exact, a share of serving (kernel-modeled)
 TOPK_SHARE = 0.0025
 #: batch-invariant kernels' throughput tax against stock compiled vLLM at saturation on one H200: the MoE's
@@ -188,12 +193,13 @@ def priced_card(model: str = "GLM-5.3") -> dict:
                        "tick on Llama-3.2-1B traces, simulated and validated against them; it makes the advice 0 bits"}
     tokens = hashed("token ids", c["token_bytes"].value, "the design card's token_bytes")
     window = c["window"].value
-    edge = {"part": "replay-block edge snapshot", "share": EDGE_PAUSE[0] / window, "low": EDGE_PAUSE[1] / window,
-            "high": EDGE_PAUSE[2] / window,
-            "source": f"the serving pause at each {window:g} s replay block's edge to copy and hash the KV pool: "
-                      f"{EDGE_PAUSE[0]:.2f} s, Moonlight's measured 0.95 s on one H200 (32.6 GB, throughput unchanged) "
-                      f"scaled to GLM-5.3's 37.5 GB a rank, estimated; {EDGE_PAUSE[1]:.2f} s for the hashing alone at "
-                      f"the measured kernel's 190 GB/s, {EDGE_PAUSE[2]:.2f} s with a copy to host at 25 GB/s"}
+    edge = {"part": "step record, token commits and replay-block edge snapshot",
+            "share": EDGE_PAUSE[0] / window, "low": EDGE_PAUSE[0] / window,
+            "high": max(EDGE_PAUSE[1] / window, SERVED_HIGH),
+            "source": f"measured on {model} at TP8 against stock compiled vLLM: the serving pause at each {window:g} s "
+                      f"replay block's edge to copy and hash the KV pool, {EDGE_PAUSE[0]:.2f} s at the median and "
+                      f"{EDGE_PAUSE[1]:.2f} s at most; the throughput with the record, the token commits and an edge "
+                      f"each 30 s within noise at every load, up to {SERVED_HIGH:.1%} at saturation"}
     topk = {"part": "deterministic top-k", "share": TOPK_SHARE, "low": TOPK_SHARE, "high": TOPK_SHARE,
             "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8 mid-traffic, "
                       "kernel-modeled"}
@@ -211,16 +217,16 @@ def priced_card(model: str = "GLM-5.3") -> dict:
     def entry(config: str, parts: list[dict], lower_bound: bool = False) -> dict:
         return {"config": config, "status": "priced", "tax": sum(p["share"] for p in parts),
                 "low": sum(p["low"] for p in parts), "high": sum(p["high"] for p in parts), "lower_bound": lower_bound,
-                "parts": parts}
+                "parts": parts} | ({"runs": SERVED_RUNS} if edge in parts else {})
 
     return spot_cards.check({
         "schema": spot_cards.SCHEMA, "slot": "serve_tax", "model": model, "status": "modeled", "provisional": True,
         "source": "priced from each configuration's parts against a token's GPU-seconds at serving's MFU on the H200's "
                   "dense FP8 peak (total_cost.priced_card); measured values replace it configuration by configuration",
-        "runs": [], "owner": "@proofs",
+        "runs": SERVED_RUNS, "owner": "@proofs",
         "value": {"baseline": "stock vLLM, compiled, on the model's served circuit",
-                  "configurations": [entry("tokens", [ticks, tokens, edge, topk]),
-                                     entry("tokens_bi", [ticks, tokens, edge, topk, invariant]),
+                  "configurations": [entry("tokens", [ticks, edge, topk]),
+                                     entry("tokens_bi", [ticks, edge, topk, invariant]),
                                      entry("layer_of_token", [ticks, tokens, layers, topk]),
                                      entry("every_block", [ticks, blocks], lower_bound=True)]}})
 
