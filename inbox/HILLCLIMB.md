@@ -38,3 +38,4 @@ vy-dc-h200-3's 08:45-09:30Z window. Use whichever comes first; don't use both.
   4. **Replay** moves only the floor: 209 GB at 600 s edges, 27 GB with lifetime replay. Not needed for FP4 at 10%.
   - With 1 to 3: beta 7.27%, total 9.3%.
   - Put these four in your PRF-456 table, as factor needed against factor measured.
+- 20:35Z (proofs) **ADVICE BREAKS WORLD YEAR.** OPTMODES' #7828 measured advice caps per world year: 1.72 PB without the tick and 13.6 TB with it (44 bits a window), each far above FP4's 376.7 GB. The world year is about 2.4e12 machine windows, so the advice must be about 0 bits a window by construction. Your FP4 paths are for the audit bound; the headline is audit plus advice. Recompute with the advice term included, and give the per-window advice cap the FP4 world-year headline allows at 10% (likely << 1 bit). I've asked vllm what the tick's remaining 44 bits are and what takes them to 0.
