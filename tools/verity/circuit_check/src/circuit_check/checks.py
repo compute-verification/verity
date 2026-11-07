@@ -14,7 +14,10 @@
                      (`verity.ml.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
                      (``word:<word>``): the Boolean Definition is the definition.  A
                      registered table a Definition reads (`targets.TABLE_PROBES`) is read lazily and probed at chosen
-                     entries (`vectors.table_instances`), recorded under ``table`` with the words the vectors read
+                     entries (`vectors.table_instances`), recorded under ``table`` with the words the vectors read; an
+                     operand over the input budget (`targets.LAZY_OPERANDS`, a weight) takes its edge and random words one
+                     vector at a time and is read lazily (`vectors.wide_words`), recorded under ``wide`` with the reads of
+                     its words; on both paths the kernels decline, as they take arrays, and the lowering takes every leaf
     ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
                      as facts about a primitive: its reference on edge and random operands, each leaf of a bounded parameter
                      folded into its bound, returns every leaf within its interval; and a primitive's transfer, on drawn
@@ -170,9 +173,11 @@ def _gates(t: Any) -> int:
     return 1 if isinstance(t, (PrimitiveDefinition, ScalarReference)) else int(t.gates)
 
 
-def _n_vectors(t: Any, opts: Options, table: int | None = None) -> int:
+def _n_vectors(t: Any, opts: Options, lazy: int | Iterable[int] = ()) -> int:
+    """The vectors of ``t``'s correspondence; the parameters ``lazy`` names are read lazily, so their leaves don't count."""
     params, _ = signature_of(t)
-    leaves = sum(pt.leaves for j, pt in enumerate(params) if j != table)
+    skip = {lazy} if isinstance(lazy, int) else set(lazy)
+    leaves = sum(pt.leaves for j, pt in enumerate(params) if j not in skip)
     n = max(opts.min_vectors, min(opts.vectors, opts.reference_budget // max(1, _gates(t))))
     return max(1, min(n, opts.input_budget // max(1, leaves)))
 
@@ -220,20 +225,111 @@ def _probed_correspondence(t: Any, params: Sequence, probe: Any, opts: Options, 
     return rec, None, ref
 
 
+_WIDE_HOLDERS: dict[str, PrimitiveDefinition] = {}
+
+
+def _wide_holder(name: str) -> PrimitiveDefinition:
+    """A primitive declaring ``name`` a registered table, as `RegisteredTable` requires of what it reads: an operand read lazily
+    is declared by no Definition."""
+    h = _WIDE_HOLDERS.get(name)
+    if h is None:
+        from verity.ml.circuits.types import Value
+
+        h = _WIDE_HOLDERS[name] = PrimitiveDefinition("CircuitCheckLazyOperand", 1, (("x", Value(64)),), Value(64), lambda x: x,
+                                                        register=False, tables=((name, "registered"),))
+    return h
+
+
+def _unread_operand(t: Any, params: Sequence, wide: Sequence[int]) -> str | None:
+    """Why ``t``'s parameters ``wide`` can't be read lazily on `_wide_correspondence`'s vectors, or None."""
+    from .targets import lazy_operands
+
+    names = [n for n, _ in resolve(t).signature()[0]] if not isinstance(t, ScalarReference) else []
+    listed = set(lazy_operands(t))
+    for j in wide:
+        if not names or names[j] not in listed:
+            return (f"parameter {j} has {params[j].leaves} leaves, over the input budget, and is neither a registered table a probe "
+                    "reads (`circuit_check.targets.TABLE_PROBES`) nor an operand read lazily (`circuit_check.targets.LAZY_OPERANDS`)")
+        w = params[j].homogeneous_width()
+        if w is None or w > 64:
+            return f"parameter {j} ({names[j]!r}) is read lazily, so it needs one width of at most 64 bits"
+    if isinstance(t, PrimitiveDefinition):
+        if getattr(t, "evaluate_lazy", None) is None:
+            return f"{t.id} is a primitive without `evaluate_lazy`, so it reads every leaf of a parameter"
+        return None
+    from verity.ml.circuits.refs import Affine
+
+    prog, _call = standalone_call(t)
+    for j in wide:
+        refs = prog.input_coll(j).refs
+        if not (isinstance(refs, Affine) and refs.count == params[j].leaves):
+            return f"parameter {j} ({names[j]!r}) is read lazily, so it needs one contiguous run of Input gates, not {refs!r}"
+    return None
+
+
+def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Options, F: Findings) -> tuple[dict, None, list]:
+    """The reference on the vectors of a Definition with operands over the input budget (`targets.LAZY_OPERANDS`): every
+    parameter takes its edge and random words, the wide ones one vector at a time (`vectors.wide_words`), each read lazily as a
+    `RegisteredTable`.  No kernel takes them."""
+    from verity.ml.circuits.evaluation import RegisteredTable
+
+    from .vectors import edges, wide_words
+
+    n = _n_vectors(t, opts, wide)
+    rest = [j for j in range(len(params)) if j not in wide]
+    other = [params[j] for j in rest]
+    arrays = vectors(other, n, opts.seed)
+    n_edge = min(n, max([edge_count(other)] + [len(edges(params[j].homogeneous_width())) for j in wide]))
+    names = [nm for nm, _ in resolve(t).signature()[0]]
+    reads = dict.fromkeys(wide, 0)
+
+    def lazily(j: int, word: Callable[[int], int]) -> Callable[[int], int]:
+        def read(k: int) -> int:
+            reads[j] += 1
+            return word(k)
+        return read
+
+    ref: list[tuple[int, ...] | None] = []
+    raised: list[dict] = []
+    for i in range(n):
+        args: list[Any] = [None] * len(params)
+        for j, a in zip(rest, instance_args(other, arrays, i)):
+            args[j] = a
+        for j in wide:
+            args[j] = RegisteredTable(f"operand:{names[j]}", lazily(j, wide_words(params[j], i, n_edge, opts.seed, j)),
+                                      params[j].leaves, _wide_holder(f"operand:{names[j]}"))
+        try:
+            ref.append(tuple(evaluate(t, *args)))
+        except Exception as e:  # noqa: BLE001  (a partial reference: the finding)
+            ref.append(None)
+            raised.append({"instance": i, "args": _short(args), "error": f"{type(e).__name__}: {str(e)[:160]}"})
+    rec: dict[str, Any] = {"vectors": n, "edge_vectors": n_edge, "reference_raised": len(raised), "realizations": [],
+                           "wide": [{"param": j, "name": names[j], "leaves": params[j].leaves,
+                                     "width": params[j].homogeneous_width(), "reads": reads[j]} for j in wide]}
+    if raised:
+        F.fail("correspondence", "reference-not-total", t.id, f"raised on {len(raised)} of {n} vectors", examples=raised[:_EXAMPLES])
+    lazy = ", ".join(repr(names[j]) for j in wide)
+    for name in sorted(kernels(t)):
+        rec["realizations"].append({"via": f"kernel:{name}", "declines": f"a kernel takes arrays, not {lazy} read lazily"})
+    return rec, None, ref
+
+
 def correspondence(t: Any, opts: Options, F: Findings) -> tuple[dict, list[np.ndarray] | None, list]:
     """The reference on the vectors (totality) and every registered kernel against it; ``None`` for the vectors when the
-    Definition reads a registered table (probed, `_probed_correspondence`) or has a parameter over the input budget that is none
-    (a failure)."""
+    Definition reads a registered table (probed, `_probed_correspondence`) or an operand over the input budget (read lazily,
+    `_wide_correspondence`), or has a parameter over the input budget that is neither (a failure)."""
     from .targets import table_probe
 
     params, _ret = signature_of(t)
     probe = table_probe(t)
     if probe is not None:
         return _probed_correspondence(t, params, probe, opts, F)
-    wide = [(j, pt.leaves) for j, pt in enumerate(params) if pt.leaves > opts.input_budget]
+    wide = [j for j, pt in enumerate(params) if pt.leaves > opts.input_budget]
     if wide:
-        F.fail("correspondence", "unprobed-table", t.id, f"parameter {wide[0][0]} has {wide[0][1]} leaves, over the input budget "
-               f"{opts.input_budget}, and no registered table probes it (`circuit_check.targets.TABLE_PROBES`)")
+        why = _unread_operand(t, params, wide)
+        if why is None:
+            return _wide_correspondence(t, params, wide, opts, F)
+        F.fail("correspondence", "unprobed-table", t.id, why)
         return {"vectors": 0, "edge_vectors": 0, "reference_raised": 0, "realizations": []}, None, []
     n = _n_vectors(t, opts)
     arrays = vectors(params, n, opts.seed)
@@ -932,7 +1028,8 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     with spent("lowering"):
         if arrays is None:
             low = {"lowered": False, "reason": "a lowering takes every input leaf, and this Definition's correspondence reads a "
-                   "registered table lazily" if "table" in corr else "no vectors"}
+                   "registered table lazily" if "table" in corr else "a lowering takes every input leaf, and this Definition's "
+                   "correspondence reads an operand over the input budget lazily" if "wide" in corr else "no vectors"}
         elif lower_whole or kind != "composite":
             low = whole_lowering(t, params, arrays, ref, opts, F, pins, memo)
         else:

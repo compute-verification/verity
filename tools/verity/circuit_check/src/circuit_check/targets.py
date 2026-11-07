@@ -438,6 +438,36 @@ def table_probe(fn: Any) -> Any:
     return None if make is None else make()
 
 
+#: the parameters over `checks.Options.input_budget` leaves that are operands, not a registered table, by the id of their
+#: Definition without statics: each takes the vectors' edge and random words like any other parameter, drawn one vector at a
+#: time and read lazily (`checks._wide_correspondence`, `vectors.wide_words`); a wide parameter in neither this nor
+#: `TABLE_PROBES` fails ``correspondence/unprobed-table``
+LAZY_OPERANDS: dict[str, tuple[str, ...]] = {
+    # weights: a linear's or a GEMM's [N][K], an MoE launch's every expert's, and the vocabulary's rows
+    "CublasSplitKGemmF32Out_v1": ("w",),
+    "DeepGemmFp8Linear_v1": ("w",),
+    "Embedding_v1": ("table",),
+    "EmbeddingShard_v1": ("table",),
+    "FlashInferFp8Linear_v1": ("w",),
+    "GemmF32Out_v1": ("w",),
+    "Gemm_v2": ("w",),
+    "MarlinMoeExpertGemm_v1": ("wq",),
+    "MarlinMoeExpertGemmW_v1": ("wq",),
+    "MoeExpertFp8Gemm_v1": ("w",),
+    "MoeExpertFp8GemmW_v1": ("w",),
+    "ScaledMmFp8BlockGrouped_v1": ("w",),
+    # activations: every rank's partial sums
+    "AllReduceMultimem_v1": ("parts",),
+}
+
+
+def lazy_operands(fn: Any) -> tuple[str, ...]:
+    """The names of ``fn``'s parameters `LAZY_OPERANDS` lists."""
+    from verity.ml.circuits.evaluation.reference import key_of
+
+    return LAZY_OPERANDS.get(key_of(fn), ())
+
+
 #: roots the catalog could not build: (label, error); the suite requires none
 ROOT_ERRORS: list[tuple[str, str]] = []
 
