@@ -17,9 +17,9 @@ DsaIndexerQ, DsaMqaLogits and DsaTopKShortRow; the all-reduce + residual + RMSNo
 budget, else the all-reduce and RMSNormFusedCuda); the SiLU MLP below FIRST_DENSE, and from it on the MoE block: the f32 router GEMM,
 the shared expert, MoeRouterSigmoidBias, Fp8GroupQuantUe8m0, the block-FP8 expert GEMMs per (token, slot) pair, MoeSum and the
 shared expert's add; then the last row's logits, their all-gather and the token select (greedy, or the seeded temperature + top-p
-select: `common.select_token`).  A fact outside it raises `Unexpressible`, φ's
-when the decoder is made and a launch's (a prefill past the decode threshold, a row of more than INDEX_TOPK keys, a GEMM, all-reduce
-or MoE tile no record covers) when the launch is written.
+select: `common.select_token`).  A fact outside it raises `Unexpressible`, φ's and a history of more than INDEX_TOPK keys
+(the long rows' Waksman path, whose order is a `run` value, isn't mirrored) when the decoder is made, and a launch's (a prefill
+past the decode threshold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
 
 from __future__ import annotations
@@ -92,6 +92,8 @@ class Net:
             facts.append(str(e))
         if facts:
             _refuse("; ".join(facts))
+        if int(history) > int(C["INDEX_TOPK"]):
+            _refuse(f"a row of {int(history)} keys > TOPK {C['INDEX_TOPK']} (the top-k kernels' radix selection)")
         self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), phi.engine.get("env") or {})
         ff = FF.facts_for(hf)
         self.model_class, self.NL = served_class(ff["vllm_class"]), int(C["NL"])

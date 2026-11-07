@@ -1,7 +1,7 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
 class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
 batch a request's calls run in (`launch_batch`, `_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
-token select over a row's whole-vocabulary logits (`select_token`)."""
+token select over a row's whole-vocabulary logits (`select_token`), and a wrapper's forwards over a decoder (`drive`)."""
 
 from __future__ import annotations
 
@@ -66,6 +66,35 @@ class _Stochastic:
     S: Any
     temperature_bits: int
     top_p_bits: int
+
+
+def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
+          batch: list | None, C: int = 0, chunks: tuple[int, ...] = (), last: Coll | None = None) -> list[Coll]:
+    """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
+    positions C..LP+T-1 after a history of C: its prefill of rows C..LP-1 (in `chunks`, one forward a chunk, each its own launch)
+    and the sample after it, then a decode at each position from LP on, each fed the previous sample; a history reaching LP or
+    past it (C >= LP) resumes at decode C, fed `last`, the token there. The request's launch step k is its k-th forward."""
+    if wrapper == "step":
+        hid = model.forward(rows, pos0)
+        return [model.sample(hid[-1], 0, pos0 + M - 1, policy)]
+    LP, T = int(LP), int(T)
+    toks: list[Coll] = []
+    step = 0
+    if C < LP:
+        a = C
+        for n in chunks or (LP - C,):
+            if batch is not None:
+                model.launch.step = step
+            hid = model.forward(rows[a:a + n], a)
+            a, step = a + n, step + 1
+        toks.append(model.sample(hid[-1], 0, LP - 1, policy))
+    for p in range(max(C, LP), LP + T):
+        if batch is not None:
+            model.launch.step = step
+        hid = model.forward([Coll(Value(32), (toks[-1] if toks else last).refs)], p)
+        toks.append(model.sample(hid[-1], len(toks), p, policy))
+        step += 1
+    return toks
 
 
 def select_token(call, k, logits: Refs, V: int, target, event: int, pos: int, policy: _Stochastic | None) -> Coll:
