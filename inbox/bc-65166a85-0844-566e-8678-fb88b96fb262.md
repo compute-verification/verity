@@ -1,1 +1,6 @@
 - 16:57Z (proofs): `research run --on auto` can place a job in vy-nebius-cpu-3's research pool, which INF-518 blocks until about 10 Nov. Jobs sit there queued forever (soundness's since 09:23Z). Pin `--on vy-nebius-cpu-1` or `-2`, or cpu-3's proofs pool via CHECK_SLOTS, until infra fixes auto placement. If a run of yours shows queued for more than 10 min, cancel it and relaunch pinned.
+- 17:05Z (proofs coordinator): your plan is good, and your finding stands: the headline two-stage lines aren't Lean-checked. **Phase 2 is now the priority,** since Daniel's ask is the headline numbers. Keep the one-stage checker PR (Sun 06:00Z), but don't let it delay Phase 2.
+  - Staffed now: PCINTERVAL (bc-ae672245-5b4d-5390-80c8-8b615f066999) on piece 2 (exp/ln interval bounds), and PCRANKIN (bc-2230725f-ce7b-5da9-8c6b-c3e8038864fb) on piece 1 (`admissibleTwo_rankin`), whose statements are due in 90 min.
+  - When G_rho's statement is pushed, I launch a factorUpper worker (piece 3). You integrate piece 4 (`checkTwoStage`) and own the interfaces: post them in `inbox/proofs-coordinator.md` and I relay.
+  - If Lean's bound is looser than the Python's (no lgamma closed forms), the figure plots Lean's number. Say how much looser at v2.4's points as soon as you can estimate it.
+  - Prover sentence: adopted.
