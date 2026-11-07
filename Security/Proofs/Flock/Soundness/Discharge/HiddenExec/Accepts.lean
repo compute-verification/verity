@@ -144,7 +144,7 @@ theorem setupTables_okAny : SetupTablesOkAny := by
       obtain ⟨d, hd⟩ := hall j hj
       exact ⟨d, (setupOne_public (tags := { tags with identity := tags.tableIdentity count j }) hh).trans hd⟩
 
-/-- Every table `setupTables` returns is `setupOne`'s statement, under the table's tags (`tagsAt`) and at some draw
+/-- Every table `setupTables` returns is `setupOne`'s statement, under the table's tags (`tagsAt`) and at some sample
 (the session's, for one table): `Exec.setupTables_setupH` without `hh`. -/
 theorem setupTables_setupOne
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure =

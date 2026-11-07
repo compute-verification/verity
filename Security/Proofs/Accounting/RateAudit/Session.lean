@@ -42,15 +42,15 @@ import Proofs.Accounting.RateAudit.Windows
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The pooled draw: windows and sessions, the proof
+# The pooled sample: windows and sessions, the proof
 
-**A window.** The window's draw of `d` openings is uniform over its `P·N` receipts and independent of its passes'
-coins: at each store and each value of those coins, the window's correct receipts are one fixed set, and the draw lands
+**A window.** The window's sample of `d` openings is uniform over its `P·N` receipts and independent of its passes'
+coins: at each store and each value of those coins, the window's correct receipts are one fixed set, and the sample lands
 in it with probability `(#correct/(P·N))^d` (`Horizon.pr_sample'`, `Chain.pr_draw_le`).
 
 **The monitoring period.** A session's windows are causal rounds over `M = P·N` items (`Rate.Causal`): window `w`'s
-correct receipts read the store, the earlier windows' coins, their draws among them, and its own passes' coins, never
-its own draw. `HorizonSampling` bounds the session's shortfall over its windows (`Session.pr_draws_le`).
+correct receipts read the store, the earlier windows' coins, their samples among them, and its own passes' coins, never
+its own sample. `HorizonSampling` bounds the session's shortfall over its windows (`Session.pr_draws_le`).
 
 **The floor in every window.** Keep the first window whose correct receipts number at most `K_w` as it is and count
 every other window's receipts all good: still causal, since whether window `w` is the first short one reads only the
@@ -155,7 +155,7 @@ theorem card_correctAll (A : Chain P N b h ρ S L q r s) (E : Store N b) (ω : F
   rw [Finset.sum_boole]
   simp
 
-/-- **A window's pooled draw**: every opening lands on a correct receipt while the window holds at most `K`,
+/-- **A window's pooled sample**: every opening lands on a correct receipt while the window holds at most `K`,
 at most `(K/(P·N))^d`. -/
 theorem pr_draw_le (A : Chain P N b h ρ S L q r s) (d K : ℕ) :
     pr (fun x : Store N b × WindowCoins P N b h ρ r s d =>
@@ -176,7 +176,7 @@ theorem pr_draw_le (A : Chain P N b h ρ S L q r s) (d K : ℕ) :
     rw [Horizon.pr_false]
     exact zero_le
 
-/-- A window's unpaid words from a per-pass bound, with its draw beside: at most `P·ε`. -/
+/-- A window's unpaid words from a per-pass bound, with its sample beside: at most `P·ε`. -/
 theorem pr_unpaid_draw_le {τ : ℕ} (A : Chain P N b h ρ S L q r s) (tier : ℕ → Fin τ) (slack d : ℕ) (ε : ℝ≥0∞)
     (hε : ∀ j η, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (A.device j η).tierReads tier t x.1 x.2.1 x.2.2 + (A.device j η).rebuilt x.1 x.2.1 x.2.2 * b + slack <
@@ -224,7 +224,7 @@ theorem pr_window_le (A : Session n P N b h ρ S L q r s d) (w : Fin n)
     rw [hη]
   simpa [e, hω, hc] using hy
 
-/-- **A session's pooled draws**: every window's openings land on correct receipts while the session holds at most
+/-- **A session's pooled samples**: every window's openings land on correct receipts while the session holds at most
 `K` in all or some window at most `K_w`. -/
 theorem pr_draws_le (A : Session n P N b h ρ S L q r s d) (K Kw : ℕ) :
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
@@ -308,12 +308,12 @@ open Pous (pr)
 open scoped ENNReal
 open Bandwidth (pr_mono pr_or_le)
 
-/-- **A window's pooled draw** (`Accounting.Guarantees.RateWindowDraw`). -/
+/-- **A window's pooled sample** (`Accounting.Guarantees.RateWindowDraw`). -/
 theorem RateWindowDraw : Accounting.Guarantees.RateWindowDraw := by
   intro P N b h ρ S L q r s d K A
   exact Chain.pr_draw_le A d K
 
-/-- **A session's pooled draws: the monitoring period and every window** (`Accounting.Guarantees.RateSessionDraw`). -/
+/-- **A session's pooled samples: the monitoring period and every window** (`Accounting.Guarantees.RateSessionDraw`). -/
 theorem RateSessionDraw : Accounting.Guarantees.RateSessionDraw := by
   intro n P N b h ρ S L q r s d K Kw A
   exact Session.pr_draws_le A K Kw

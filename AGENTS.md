@@ -35,8 +35,9 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   proof systems (A-GKR, B-Ligero, D-SP1, the VOLE prover) were deleted in `2091252fe3`; `git checkout 2091252fe3^ --
   archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
-  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). New infra components go to
-  compute-verification/infra, and `INFRA_PATHS` (`tests/test_infra_paths.py`) lists what is still here and only shrinks.
+  messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
+  exported to the public repository (Daniel, 4 Nov); new infra goes here too. compute-verification/infra holds only the
+  website.
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`
@@ -179,7 +180,7 @@ team skill). A red's culprit is the one landing whose change touches what its fa
 a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
 forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
 rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
-is the only check before it joins, and a body naming no live goal draws a warning, never a refusal. A change a `warn_gates`
+is the only check before it joins, and a body naming no live goal samples a warning, never a refusal. A change a `warn_gates`
 gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
 ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
 next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s

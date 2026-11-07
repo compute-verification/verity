@@ -9,7 +9,7 @@ The statements of `Definitions.Accounting.Guarantees.Compose` that are steps of 
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same
 name, and audited with the proofs: no record pins it.
 
-* `ServiceBudget`: the window's budget `RoundGame.BudgetAt Λ` for the service's one draw, from per-stage luck and the
+* `ServiceBudget`: the window's budget `RoundGame.BudgetAt Λ` for the service's one sample, from per-stage luck and the
   stage-share bound (W3), with folded and whole shares priced apart (B1);
 * `SplitRateClosed`: `SplitRate` at `Λ = max(a(1 + Kρw_max)/(ρK(1 − p)), b(1 + Kρw_max)/(ρK(1 − p0)))` for whole units
   lucky at the guess bound `p0 ∈ [0, 1)`;
@@ -34,7 +34,7 @@ tiles' cones in `CircuitWork`), each tile at least `ρ` times its share of the `
 `ρ = 1/(F·r)`, `r = (N/N_real)·(w_max/w̄)`), every stage's share at most `w_max`, per-stage luck `lk` folded and `lk0`
 whole on the tiles' checked values (`SplitStages.LuckAt`), at most `p` and `p0` on every tile that carries work, and
 costs `a, b ≥ 0` per unit of folded and whole share: if `SplitRate K ρ p p0 a b w_max Λ`, the window's one round, its
-draw a uniform `K`-subset (`serviceGame`), has its saving per unit of detection bounded by `Λ`. Stages are independent
+sample a uniform `K`-subset (`serviceGame`), has its saving per unit of detection bounded by `Λ`. Stages are independent
 given the past, so the cheater's best is to concentrate its share in one stage, and `Λ` falls as `1/K` until the stage
 share binds (W3). -/
 def ServiceBudget : Prop :=
@@ -44,10 +44,10 @@ def ServiceBudget : Prop :=
     (∀ v, 0 < w v → lk v ≤ p ∧ lk0 v ≤ p0) → W.LuckAt lk lk0 stg → 0 ≤ a → 0 ≤ b →
     SplitRate K ρ p p0 a b wmax Λ → RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) stg W w a b K)
 
-/-- **The rate in closed form, whole units lucky at the guess bound.** For `K ≥ 1` draws, `ρ > 0`, `0 ≤ ρ·w_max ≤ 1`,
+/-- **The rate in closed form, whole units lucky at the guess bound.** For `K ≥ 1` samples, `ρ > 0`, `0 ≤ ρ·w_max ≤ 1`,
 folded luck `p ∈ [0, 1)`, whole luck `p0 ∈ [0, 1)` (the guess bound, at any value) and costs `a, b > 0`, `SplitRate`
 holds at `Λ = max(a(1 + Kρw_max)/(ρK(1 − p)), b(1 + Kρw_max)/(ρK(1 − p0)))`, the larger of the folded and the whole
-branch: B1's `max(κ/ln(1/p), (σ_w + σ_f)/s)` for the service's one draw, with `1/(K(1 − p))` in place of
+branch: B1's `max(κ/ln(1/p), (σ_w + σ_f)/s)` for the service's one sample, with `1/(K(1 − p))` in place of
 `1/(K·ln(1/p))`. The folded branch binds when `b·(1 − p) ≤ a·(1 − p0)`, the whole one otherwise. A whole luck `p0 = 0`
 is one a guess exceeds. At `K_d = 96,000`, `ln(1/δ_s) = ln 2^40`, `a = 0.218`, `b = 0.998`, `p = 7/8`, `F = 1` and
 `Kρw_max = 2/r`, with whole units at `p0 = ½` (B′'s, the live line's value), `b/a = 4.58` exceeds
@@ -60,7 +60,7 @@ def SplitRateClosed : Prop :=
     SplitRate K ρ p p0 a b wmax
       (max (a * (1 + K * ρ * wmax) / (ρ * K * (1 - p))) (b * (1 + K * ρ * wmax) / (ρ * K * (1 - p0))))
 
-/-- **The rate, sharp, with its `ν` in closed form**. For `K ≥ 1` draws, `ρ > 0`, `0 < ρ·w_max ≤ 1`, lucks
+/-- **The rate, sharp, with its `ν` in closed form**. For `K ≥ 1` samples, `ρ > 0`, `0 < ρ·w_max ≤ 1`, lucks
 `p, p0 ∈ [0, 1)` and costs `a, b > 0`, `SplitRateAt` holds at
 `Λ = max(a·w_max/−ln(p + (1 − p)·e^{−Kρw_max}), b·w_max/−ln(p0 + (1 − p0)·e^{−Kρw_max}))` with
 `ν = (e^{a·w_max/Λ} − 1)/((1 − p)·w_max)` and `ν₀ = (e^{b·w_max/Λ} − 1)/((1 − p0)·w_max)`. The proof: the left side is
@@ -78,7 +78,7 @@ def SplitRateExp : Prop :=
     SplitRateAt K ρ p p0 a b wmax Λ ((Real.exp (a * wmax / Λ) - 1) / ((1 - p) * wmax))
       ((Real.exp (b * wmax / Λ) - 1) / ((1 - p0) * wmax))
 
-/-- **The rate in closed form, merged.** For `K ≥ 1` draws, `ρ > 0`, `0 ≤ ρ·w_max ≤ 1`, luck `p, p0 ≤ q` with
+/-- **The rate in closed form, merged.** For `K ≥ 1` samples, `ρ > 0`, `0 ≤ ρ·w_max ≤ 1`, luck `p, p0 ≤ q` with
 `q ∈ [0, 1)` and costs `0 < a ≤ b`, `SplitRate` holds at `Λ = b(1 + Kρw_max)/(ρK(1 − q))`: every skip priced at the
 whole cost and the larger luck. -/
 def SplitRateMerged : Prop :=
@@ -109,12 +109,12 @@ open Classical in
 per-prover floors use). For a sampled window's proofs (`DrawnLayer`) whose round-`w` slots lie in `L`, and a SHA-512
 collision finder `F` for `H` whose collisions bound the fork event up to `κ` (`DrawnLayer.Forked` at most
 `Pr[F finds] + κ`: the prover's fork finder, which runs the window twice from the cut and takes both openings with
-C-Flock's knowledge extractor, `κ` its extraction failure), for every `δ' > 0`
+Flock's knowledge extractor, `κ` its extraction failure), for every `δ' > 0`
 `Pr[MovedIn w] ≤ δ' + |L|²/(4δ')·(ecr(F) + κ)`, where `ecr(F)` is `E[cost F]/2^256` if `F` meets `ecr/sha-512`
 (`Claims.ExpectedCR`) and `⊤` if it doesn't. It is `DrawnBindingOfFork` (`Pr[MovedIn]² ≤ |L|²·Pr[fork]`)
 with AM–GM (`√(γx) ≤ δ' + γx/(4δ')`), and it assumes no hash: a prover whose fork finder beats `ecr` gets `⊤`, so it
 is the per-prover `δ_bind` the statements take (`MovedIn ≤ δ_bind`), on the IR's layer under live coins and on the
-draw's (`Declared.atDraw`) under seeded ones. `SeedLuckAt`'s `δ_b` is read the same way, at a round's roots, at about
+sample's (`Declared.atDraw`) under seeded ones. `SeedLuckAt`'s `δ_b` is read the same way, at a round's roots, at about
 `2·T_q` SHA-512 calls. At the best `δ'` the bound is about `|L|·√(E[cost F]/2^256)`, and a seeded window prices it at
 the budget its premium reads (one `T` for the cheater): at `2^128` it is `|L|·2^-64` (`2^-44` to `2^-34` at `|L|` from
 `2^20` to `2^30`, not negligible beside `δ_s = 2^-40`), at `2^80` it is `|L|·2^-88` (`2^-68` to `2^-58`). `ecr` is the
