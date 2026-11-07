@@ -128,3 +128,6 @@ minutes; START and END lines follow here. I terminate the pod after END, unless 
 - 10:10Z GLMREPLAY: END r20261107-100108-b320 (rc 1: the load ran, but the served engine took no edge, because
   `tp_edge.register` wrapped `EngineCore.__init__`, which loads the plugin itself; fixed in 3623269f7d). START
   r20261107-100941-ea75, the same smoke at 3623269f7d. ETA ~10:35Z.
+- 10:21Z GLMREPLAY: END r20261107-100941-ea75 (rc 1; GPU back to 0 MiB). Both arms' served engines took their three
+  edges, and then each restore stopped at the served step trace's path (fixed in 78575c793a). START
+  r20261107-102043-ccfa, the same smoke at 78575c793a. ETA ~10:42Z.
