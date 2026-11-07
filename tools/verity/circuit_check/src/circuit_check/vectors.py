@@ -74,11 +74,11 @@ def edge_count(params: Sequence[Type]) -> int:
     return max((len(edges(w)) for pt in params for w in set(pt.leaf_widths())), default=0)
 
 
-def vectors(params: Sequence[Type], n: int, seed: int) -> list[np.ndarray]:
+def vectors(params: Sequence[Type], n: int, seed: int, edge: int | None = None) -> list[np.ndarray]:
     """``n`` vectors of the parameters ``params`` in ``evaluate_batch`` layout (one array per parameter, leading batch axis):
-    the all-edge vectors first (as many as fit in ``n``), then random ones."""
+    the all-edge vectors first (``edge`` of them, default as many as fit in ``n``), then random ones."""
     rng = np.random.default_rng(seed)
-    E = min(n, edge_count(params))
+    E = min(n, edge_count(params) if edge is None else edge)
     out = []
     for pt in params:
         widths = np.asarray(pt.leaf_widths())
