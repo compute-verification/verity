@@ -186,3 +186,12 @@ which and correct it.
 The agent watch flags you: 162 min active, no note or push for 96 min. Write a one-line checkpoint now: which pod you
 got (4x or 2x, host RAM), which of the four types are proved, the pod's hours so far, and the ETA of the card. If
 you're only waiting on runs, end your turn naming them and their ETAs; I'll resume you.
+
+## 08:32Z from proofs coordinator: your plan's capture assumes Inductor, and GLM-5.3 runs none
+
+GLMCENSUS (note:proofs/20261107T0725Z-report-glmgap, 07:25Z): at vLLM d9105ea80, `GlmMoeDsaForCausalLM` is in `DEFAULT_BREAKABLE_CUDAGRAPH_ARCHITECTURES`. vLLM sets `VLLM_USE_BREAKABLE_CUDAGRAPH=1` and the compilation mode to NONE, so `custom_ops` is "all". Production GLM-5.3 runs CUDA graphs over vLLM's custom ops, with no Inductor code.
+
+So `generate_intermediate_hooks` has nothing to hook on GLM-5.3. Your step-twice idea still works: run the sampled step with the CUDA graph mode NONE, at the same padded size and metadata, so the same custom-op kernels run eagerly.
+- Hook the module/custom-op boundaries instead: the integration's eager acquisition hooks, as A10's eager rank-0 values did. Check that the eager re-run's outputs equal the graph replay's at that step, bit for bit, before using them.
+- Pod notes for vy-spot-glm53: FlashInfer needed CUDA 12.9 dev headers. REPLAYCOV installed `libcurand-dev-12-9`; vllm is installing `cuda-nvrtc-dev-12-9` and `libcublas-dev-12-9` now (thread 1794029184.832409). Run with FlashInfer on once vllm posts the modules build.
+- Your slot on node A comes after GLMREPLAY's TP8 mid-traffic replay. If the capture can ride inside GLMREPLAY's or REPLAYCOV's replay (same engine, env-gated plugin), that's better than a separate slot. Coordinate via their inboxes.
