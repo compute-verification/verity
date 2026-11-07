@@ -12,8 +12,7 @@ local bound has three ingredients, and only two of them carry premises:
   (expensive to recompute), `MinEntropyHard` (unpredictable), and `SourceHard` with `Recovers` (derived from a hard
   source the outputs reveal), each over an item family.
 * **structure**: how much counted computation held values support. Definitions checkable on a named circuit
-  (`Nci.Capability.Incidence`, `Nci.Capability.Consumers.Upstream`, `Nci.Capability.Consumers.OverlapWeights`), no
-  premise.
+  (`Nci.Capability.Consumers.Upstream`, `Nci.Capability.Consumers.OverlapWeights`), no premise.
 * **coverage**: every sufficiently cheap successful method contains enough of that computation.
   `CoversEfficientMethods`, stated over tasks and runs in `Definitions.Accounting.Assumptions.Coverage`.
 
