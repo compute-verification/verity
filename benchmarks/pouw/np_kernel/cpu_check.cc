@@ -15,12 +15,12 @@
 //           (-beta_j, a1 . C, T . G, the walk and sigma over twice the lane coins' range) of a random row, column, S and
 //           coins: fold_word reads back p and the served bf16 is int8_epilogue on p; at bound + 1 and -(bound + 1) it
 //           reads back another integer, so the bound is the fold's.
-//   draw    G's rejection draw (g_word_of) over all 2^32 words: each of the 2,401 G in [-3, 3]^4 from exactly
+//   sample    G's rejection sample (g_word_of) over all 2^32 words: each of the 2,401 G in [-3, 3]^4 from exactly
 //           floor(2^32 / 2401) words, and the other 872 rejected.
 // served:FILE holds the lead to verity_int8's own y on one call: FILE holds the call as verity_int8 serves it (x, the
 //           activations quantized a row, and s_a; w, the weight quantized a row, and s_w; their int32 product z and the
 //           served y, from int8_exact; the suite's test writes them at Llama-3.2-1B's linears) and a coin seed. A' and B'
-//           are formed from the certifier's coins (drawn from the seed), every final word comes from the lanes, the fold
+//           are formed from the certifier's coins (sampled from the seed), every final word comes from the lanes, the fold
 //           must read back z, and each served bf16 must be y's bit for bit. Controls, which must serve outputs other
 //           than y: the same words through 83d82109a8's fold (row source 0, column source 0x4B400000 - sigma, so n_ij =
 //           A_i . B_j's word less sigma less A_i . B_j stays in; FFMA(v, s_j, fl(-1.5 2^23 s_j)), then FMUL s_i), and
@@ -38,7 +38,7 @@
 //           words and not what is served, so the check is on what is served. As a control, the other row class's
 //           column source is also tried, and under ROT=1 it must serve wrong outputs.
 // Build: g++ -O2 -std=c++17 -ffp-contract=off cpu_check.cc -o cpu_check.
-// Usage: cpu_check [--bound B] LEVEL...: ragged, window, draw, served:FILE, or DIR (fold_vectors.py's --out); B is the
+// Usage: cpu_check [--bound B] LEVEL...: ragged, window, sample, served:FILE, or DIR (fold_vectors.py's --out); B is the
 // fold's bound, 2^22 unless given (serving.LEAD_FOLD_BOUND, which the suite's test passes). One JSON line a vector or
 // call and a summary line; exit 1 on any mismatch.
 #include <cinttypes>
@@ -302,7 +302,7 @@ static bool ragged_check(int cm, int cn, int K, int BN, long long bound, uint64_
   const int m = (cm + 63) / 64 * 64, n = (cn + BN - 1) / BN * BN, S = steps_of(K), H = coin_words(S), tiles = m / 64;
   const int R = pad_rows(cm), C = pad_cols(cn), formed = control ? cm : R;
   uint64_t x = seed;
-  // the certifier's feed, every coin drawn raw: row words over the R committed rows, then G words over the C committed
+  // the certifier's feed, every coin flipped raw: row words over the R committed rows, then G words over the C committed
   // columns by rejection
   size_t redraws = 0;
   const std::vector<uint32_t> feed = draw_feed(R, S, C, x, &redraws);

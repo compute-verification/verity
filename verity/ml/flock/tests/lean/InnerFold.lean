@@ -1,7 +1,7 @@
 import Flock
 
 /-!
-What V* computes natively for the inner session's algebra, from the Lean verifier of record and nothing the prover sends:
+What V* computes natively for the inner session's algebra, from the Lean verifier and nothing the prover sends:
 the extra claims at the session's link points (`Stmt.extraClaims`) and, per rep, the lincheck's circuit fold `comb`
 (`CircuitFold.folded`) at the rep's fold points. The points are the verifier's own coins (the link points from the
 session's public record, the fold points from each rep's recorded transcript), so this reads no proof and no session
@@ -19,7 +19,7 @@ with META links needs for Linking.
 `--registered`: the verifier's own registered reads (`verify --registered`, `verity/registered-reads/v0`) of the inner
 statement's description: its rows, read from the developer's registration (`Registered.checkDescription`, `Tags.withPlainLeaves`), or the fold is refused; without it, a statement naming registered reads is refused.
 `--plain-leaves`: the statement's tags with the inner statement's plain SHA-512 leaves (`leafSchemePlain`) in place of
-their own leaf-commitment scheme: a recursive session's inner statement, whose tree tops the firewall salts.
+their own leaf-commitment scheme: a recursive session's inner statement, whose tree tops the ZK server salts.
 `--hide NET`: circuit NET's unit circuits are hidden (`verity_flock.rec_session`): each rep's `comb` is the fold of the
 statement without NET's range (its slots' A₀ and B₀; Δ and the pin stay), `full` the whole fold, and `hidden` names NET.
 -/

@@ -40,7 +40,7 @@ named below are proved in `Proofs.Core.Structure`.
   (`Method.profile`) is the vectors whose cell it lies in.
 
 **Where it meets Accounting.** Core cannot import Accounting, so Accounting reads these. An `Actual.Run` is an
-`Execution` (`A.toCircuit`, `val`, `faithful`) once its protocol's baseline is given. `Slowdown.Task`'s coin draws the
+`Execution` (`A.toCircuit`, `val`, `faithful`) once its protocol's baseline is given. `Slowdown.Task`'s coin samples the
 task's input, a method's external input here; a method's `coins` are its own randomness, neither the task's nor the
 verifier's (`Verity.Coins`). A class of methods `𝔐` gives the `Slowdown.Class` of pairs `(C, x)` whose runs on every
 input realize evaluations of one method of `𝔐`, the same for every `x`.

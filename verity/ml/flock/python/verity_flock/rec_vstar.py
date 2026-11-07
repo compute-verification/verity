@@ -1,11 +1,11 @@
 """The reference for V*'s hashing (hiding model architectures): every inner Ligerito opening's leaf climbs to
-the node of its tree's top that its coin-derived position names, every top opens the hiding commitment the coin server
+the node of its tree's top that its coin-derived position names, every top opens the hiding commitment the challenger's live-coin part
 received, and every message row opens its commitment.
 
 V* (the outer statement) checks an inner session of `verity_flock.rec_live` without seeing the inner statement or a tree's
 top. Its hashing part, which this module states over plain Python:
 
-* **Tops** (`tops`). Each tree's top (its Ligerito cap, ``2^c`` nodes) is the prover's (``private.json``); the coin server
+* **Tops** (`tops`). Each tree's top (its Ligerito cap, ``2^c`` nodes) is the prover's (``private.json``); the challenger's live-coin part
   received each node's hiding commitment (`verity_flock.rec_live.commit_top`): level 0's at ``Commit`` (``root_B``, the one
   tree both reps share), level ``l >= 1``'s in the round that absorbed it. A top whose nodes and salts do not open those
   commitments is refused (``FIREWALL-REFUSED: tree top``). The stacked table R has no root at ``Commit``: its level 0 is

@@ -73,8 +73,8 @@ over strata; `flock_e2e_drawn_exec` and `flock_e2e_count_exec` are the e2e theor
 (`execStratified`), the count curve bounded by `Law.stratified`'s `miss`. `execStrata_of_ofJson`
 (`ExecStrataOf.lean`): the strata of a sample file `UnitDraw.ofJson` accepts describe some assignment's (`ExecStrata`), each
 stratum's `k` at most its size, so those two hypotheses follow from the verifier accepting. The `FailClosed` claims take
-neither: their law is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
-(`liveStrata_of_ofJson`: non-empty at an accepted sample file's law). `drawOS_subset_escape_le`,
+neither: their sampling design is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
+(`liveStrata_of_ofJson`: non-empty at an accepted sample file's sampling design). `drawOS_subset_escape_le`,
 `drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live sample**:
 `Flock.Draw.drawWith` on the challenger's coins (`SampledProofs.Draw.drawUnits`; `Flock.Draw.drawOS` is `drawWith` on
 `IO.getRandomBytes`, `drawOS_def`), extending a stream that runs out and rerunning, misses $B$ with probability at most
@@ -206,7 +206,7 @@ context.
 - `Partition.Refines.exists_wrong_fine`: an incorrect coarse unit has an incorrect fine unit under every interior, the lemma
   behind (b).
 - `Refines.oracle₂_profile`, `oracle₂_full_profile`: the same at the oracle layer, from a sound fine-level session
-  (`SessionSound₂ ε`), with the link term zero. These are the plan's `two_stage_b_profile` and
+  (`SessionSound₂ ε`), with the binding error zero. These are the plan's `two_stage_b_profile` and
   `two_stage_full_eq_one_stage` as stated there.
 
 **Composition** (`Audit/Circuit.lean`): `compose` (every unit correct and the inputs anchored give the circuit's
@@ -254,7 +254,7 @@ fine unit per gate, with a uniform `k₂`-subset of each sampled chain's gates i
 - `two_stage_b_tight`: for every first-stage sampling design, a prover whose chains are all incorrect is accepted with
   probability exactly `twoStage_count`'s bound, $\mathbb E_{S_1}[q^{|S_1|}]$ with
   $q = \binom{n_v - 1}{k_2}/\binom{n_v}{k_2} = 1 - k_2/n_v$;
-- `naive_two_level_unsound`: if the second stage leaves a gate undrawn and the first samples anything, that exceeds
+- `naive_two_level_unsound`: if the second stage leaves a gate unsampled and the first samples anything, that exceeds
   $\mathrm{miss}_{L_1}(K)$, the bound that one-stage over the coarse partition (and the `m`-dependent reading of
   the retired Python `TwoStageLaw.profile`, at $m = n_v$) would give. Nested sampling dilutes;
 - `late_interior_insecure`: with the interior committed after the fine sample (`twoStageLate`), an incorrect chain is accepted
