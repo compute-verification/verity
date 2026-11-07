@@ -470,7 +470,7 @@ theorem DampenerRemotePeriod_honest : Guarantees.DampenerRemotePeriod_honest := 
     fun _ => by norm_num, by norm_num [Finset.card_univ], fun ξ => ?_⟩
   · rw [prob_of_forall_not _ fun _ h => h]
     positivity
-  · simp only [remoteDampener, hardwareMultiple, efficiency, unmonitoredShare, residualShare, lagShare,
+  · simp only [remoteDampener, hardwareMultiple, efficiency, unregisteredShare, residualShare, lagShare,
       declaredShare, rhoT, Finset.card_univ, Fintype.card_unit]
     norm_num
 
@@ -502,7 +502,7 @@ theorem DampenerRemotePeriod_nontrivial : Guarantees.DampenerRemotePeriod_nontri
     linarith
   · rw [prob_of_forall_not _ fun ξ hG => by
       have h2 := hG.2
-      simp only [remoteDampener, hardwareMultiple, efficiency, unmonitoredShare, residualShare, lagShare,
+      simp only [remoteDampener, hardwareMultiple, efficiency, unregisteredShare, residualShare, lagShare,
         declaredShare, rhoT, Guarantees.AcceptAll.M, Guarantees.AcceptAll.W] at h2
       norm_num at h2]
     norm_num [Guarantees.AcceptAll.ks]

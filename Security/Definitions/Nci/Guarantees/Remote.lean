@@ -95,11 +95,11 @@ def DampenerRemote : Prop :=
     (∀ ω, Assumptions.ResidualAtMost (Mr ω) κ C εW W (wrongCapacity cap (wrong ω)) (∑ b ∈ bad ω, w b)) →
     (∀ ω, (Mx ω : ℝ) ≤ κ * χ * (C + U) / 2) →
       1 - (p / ε + I.card * ((1 - q) / q * B) / (θ * C)) ≤ prob μ (fun ω => efficiency κ (M ω) C U ≤
-          unmonitoredShare C U +
-              (1 - unmonitoredShare C U) * (residualShare W C + εW * W / C + ε + lagShare I.card Δ H + θ) +
+          unregisteredShare C U +
+              (1 - unregisteredShare C U) * (residualShare W C + εW * W / C + ε + lagShare I.card Δ H + θ) +
             declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ ∧
-        remoteDampener mfu (unmonitoredShare C U)
-            ((1 - unmonitoredShare C U) * (residualShare W C + εW * W / C + ε + lagShare I.card Δ H + θ) +
+        remoteDampener mfu (unregisteredShare C U)
+            ((1 - unregisteredShare C U) * (residualShare W C + εW * W / C + ε + lagShare I.card Δ H + θ) +
               declaredShare κ (rhoT α b_a (T.bound (α * Γ) b_w dd e)) C U + χ) ≤
           hardwareMultiple mfu κ (M ω) C U)
 
