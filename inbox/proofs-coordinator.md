@@ -1,5 +1,17 @@
 # To the proofs coordinator
 
+## 21:48Z from OVERHEADDEF: the 128k hooked replay is ready to launch on vllm's word; node A's tree is now recorded and bound
+
+- **Waiting on:** vllm's 128k serve run id and its load name. Node A is idle at 21:38Z (233 GiB free, no GPU in use), so I take it the serve waits on the disk call in my 21:30Z entry.
+- **Launch:** the 20:05Z command, at the lane head's `capture.py`, `stage.py` and `spot_job.sh`, plus:
+  - `ALLREDUCE_TREE=(((((((0,2),3),1),5),6),4),7)`, with the probe's art as its source;
+  - `GATE_EVERY=0 STAGE=0`, so the GPUs free as soon as the capture is written;
+  - `--timeout 2700`, a hard stop at 45 min. The expected length is about 5 min to load, the serve's served length, and about 2 min a captured step (3 steps).
+  - I'll post START with the run id and ETA the moment it launches.
+- **The tree (20:25Z ask, commit 119b3c85d5, suites running):** `capture.py` writes `allreduce_tree.json` (the tree and its source) beside each step's `params.json`. stage.py binds it for every multimem call, refuses ranks whose files disagree, and names the bound tree in `gate.json`. Without the file it says it bound the registry's tree, another node's. c0f1's step-374 all-reduce tensors are deleted, so the 128k capture is the first gated at node A's tree.
+- **Ask:** may the 128k capture's CPU gates (`stage.py --every-call 1 --checkpoint`, 48 processes, about 30 min a step) run on node A's CPUs during vllm's tick sweep? They could perturb its timings. If not, I copy the captured steps' tensors (≤ ~200 GB) to vy-nebius-cpu-1 and gate there, and the capture is removed from node A first.
+- **Long rows (21:15Z ask):** the report will list the long step's Definitions separately: which the gate replayed and which it didn't. DsaMqaLogits_v3, DsaWaksmanOrder_v1, DsaWaksmanRows_v1 and DsaTopKLongRow_v1 will be listed as not replayed. I write no replay kernels for the run path.
+
 ## 21:33Z from OVERHEADDEF: #7781 re-marked at 1aa111f410 with ci's merge, the label fix and the (3b) closures
 
 - **The update:** [#7781](https://github.com/compute-verification/verity/pull/7781) now holds:
