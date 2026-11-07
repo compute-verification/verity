@@ -58,10 +58,34 @@ def small(monkeypatch):
     monkeypatch.setattr(X, "PROBE_M", {1: 4, 2: 6})
     monkeypatch.setattr(X, "AR_M", (2, 6, 171))
     monkeypatch.setattr(X, "PROBE_M_AR", (171,))
+    monkeypatch.setattr(X, "NCCL_PROBE_M", ())
     monkeypatch.setattr(X, "SWITCH_M", (171,))
     monkeypatch.setattr(X, "DSV4_HIDDEN", N7)
     monkeypatch.setattr(X, "DSV4_AR_M", (2, 146, 148))
     monkeypatch.setattr(X, "DSV4_PROBE_M", (148,))
+
+
+@pytest.fixture
+def nccl_small(small, monkeypatch):
+    """`small` with symmetric memory's cap at 171 tokens of N, so that NCCL takes 172, its NCCL probe's M."""
+    monkeypatch.setattr(T, "SYMM_MEM_MAX_BYTES", 171 * N * 2)
+    monkeypatch.setattr(X, "AR_M", (2, 171, 172))
+    monkeypatch.setattr(X, "NCCL_PROBE_M", (172,))
+
+
+RING = (3, 1, 4, 0, 7, 5, 2, 6)
+
+
+def _ring(flat: np.ndarray, chunk: int = 4096, ring=RING, f32: bool = False) -> np.ndarray:
+    """A ring all-reduce's words: chunk k of `chunk` elements reduced around `ring` from its (k + 1)-th rank, each hop's add rounded
+    to bf16 (`nccl_tree_rows`, NCCL's `FuncSum` on bf16), or in f32 rounded once (`f32`)."""
+    W, size = flat.shape
+    out = np.empty(size, np.uint16)
+    for k, lo in enumerate(range(0, size, chunk)):
+        order = [ring[(k + 1 + i) % W] for i in range(W)]
+        cols = flat[:, lo:lo + chunk]
+        out[lo:lo + chunk] = DR.f2fp_bf16(K.tree_sum(cols, T.chain(W, order), False)) if f32 else K.nccl_tree_rows(cols, order[::-1])
+    return out
 
 
 def _case(phase: str, name: str, M: int, seed: int = 1, served: str = "defaults") -> dict:
@@ -99,6 +123,8 @@ def _ar_words(case: dict, trees=TREES, ftz: bool = True) -> dict[str, np.ndarray
         out = K.mnnvl_rows(flat, case["shot"])
     elif comm == "symm_mem_comm":
         out = K.multimem_rows(flat, trees, ftz)
+    elif comm == "pynccl_comm" and X.nccl_modelled(case):
+        out = _ring(flat)
     else:
         out = K.custom_rows(flat, case["stage"] or 2)
     return {"out": out.reshape(parts.shape[1:])}
@@ -222,14 +248,19 @@ def test_the_cases_cover_every_route() -> None:
         cs = X.cases(quick, set(X.PHASES))
         assert {(c["shot"], c["cluster"]) for c in cs if c.get("path") == X.FUSED} == geoms and X.UNFUSED in {c.get("path") for c in cs}
         ar = [c for c in cs if c["phase"] == "allreduce"]
-        assert {c["comm"] for c in ar} == {"fi_ar_comm", "symm_mem_comm"} and {c["shot"] for c in ar if c["shot"]} == {1, 2}
+        assert {c["comm"] for c in ar} - {"pynccl_comm"} == {"fi_ar_comm", "symm_mem_comm"} and {c["shot"] for c in ar if c["shot"]} == {1, 2}
         assert 1 in {c["M"] for c in ar} and 256 in {c["M"] for c in ar}
+        assert {c["M"] for c in ar if c["comm"] == "pynccl_comm"} == (set() if quick else set(X.NCCL_PROBE_M))
+        assert {c["M"] for c in ar if c["comm"] == "symm_mem_comm"} >= ({43, 256} if quick else {43, 2048, 2049, 4096, 5461})
         assert {(c["comm"], c["stage"]) for c in cs if c["phase"] == "switch"} == {("ca_comm", 2), ("pynccl_comm", None)}
         probes = {c["M"]: c["seed"] for c in cs if c["phase"] == "probe"}
-        assert probes and probes == {c["M"]: c["seed"] for c in cs if c["phase"] == "again"}
+        assert probes and probes == {c["M"]: c["seed"] for c in cs if c["phase"] == "again"} and max(probes) == 5461
+        nccl = {c["M"]: c["seed"] for c in cs if c["phase"] == "nccl_probe"}
+        assert set(nccl) == set(X.NCCL_PROBE_M) == {5462, 8192} and nccl == {c["M"]: c["seed"] for c in cs if c["phase"] == "nccl_again"}
         assert all(c["comm"] == "symm_mem_comm" for c in cs if c["phase"] in X.PROBE_PHASES)
+        assert all(c["comm"] == "pynccl_comm" and X.nccl_modelled(c) for c in cs if c["phase"] in X.NCCL_PROBE_PHASES)
         assert {c["spawn"] for c in cs} == set(X.spawns("defaults")) and len({c["key"] for c in cs}) == len(cs)
-        assert len({c["seed"] for c in cs if c["phase"] != "again"}) == len(cs) - len(probes)
+        assert len({c["seed"] for c in cs if c["phase"] not in ("again", "nccl_again")}) == len(cs) - len(probes) - len(nccl)
         h = [c for c in cs if c["spawn"] == "h7168"]
         assert {c["H"] for c in h} == {X.DSV4_HIDDEN} and {c["H"] for c in cs if c["spawn"] != "h7168"} == {X.HIDDEN}
         assert {c["comm"] for c in h} == {"fi_ar_comm", "symm_mem_comm"} and {c["shot"] for c in h if c["shot"]} == {1, 2}
@@ -318,10 +349,7 @@ def test_the_probe_reads_any_trees_and_ftz_back() -> None:
         assert all(o["families_agree"] and o["absorbing"] == [True, True] for o in got["owners"].values())
 
 
-def test_the_capture_probes_read_trees_at_glm53s_sizes(tmp_path) -> None:
-    """The run's own probe operands at GLM-5.3's and DeepSeek-V4-Pro's widths and seeds give back distinct trees per owner, and the
-    `again` probes' operands are the first probes'."""
-    cs = X.cases(False, {"probe", "again", "h7168_probe"})
+def _read_probes_back(tmp_path, cs: list[dict]) -> None:
     for c in cs:
         c.update(X.make_operands(tmp_path, c))
     for c in [c for c in cs if c["phase"] in ("probe", "h7168_probe")]:
@@ -332,6 +360,23 @@ def test_the_capture_probes_read_trees_at_glm53s_sizes(tmp_path) -> None:
             assert np.array_equal(parts, np.load(again["ops"]["parts"]).reshape(X.WORLD, -1))
         out = K.multimem_rows(parts, TREES, False)
         assert X.decode_probe(out, parts.shape[1])["trees"] == list(TREES) and X.decide_ftz(out, parts)["ftz"] is False
+
+
+def test_the_capture_probes_read_trees_at_glm53s_sizes(tmp_path) -> None:
+    """The run's own probe operands at GLM-5.3's and DeepSeek-V4-Pro's widths and seeds, to the 2048 tokens the eager workload
+    batches, give back distinct trees per owner, and the `again` probes' operands are the first probes'."""
+    _read_probes_back(tmp_path, [c for c in X.cases(False, {"probe", "again", "h7168_probe"}) if c["M"] <= X.STEP_TOKENS])
+
+
+@pytest.mark.slow
+def test_the_multimem_probe_reads_trees_at_64_mib(tmp_path) -> None:
+    """The probe at 5461 tokens, symmetric memory's last M (64 MiB, about 30 s and 2 GB): its operands at the run's seed, read back
+    through the model at 8 random trees and IEEE adds.  Catches an owner slice of `multimem_owners` that is not whole periods, or a
+    seed or layout change, at the size that lets `CAPTURED` reach 5461; the smaller probes' tests can't, since the slices'
+    remainders depend on the size."""
+    cs = [c for c in X.cases(False, {"probe", "again"}) if c["M"] == max(X.PROBE_M_AR)]
+    assert [c["M"] for c in cs] == [5461, 5461]
+    _read_probes_back(tmp_path, cs)
 
 
 def _f64_sum(parts: np.ndarray) -> np.ndarray:
@@ -467,6 +512,108 @@ def test_fma_is_decided_only_when_the_probes_tell() -> None:
     assert X.fma_of({**t, "normed_words": 0}) is None
 
 
+# --- NCCL's runs -----------------------------------------------------------------------------------------------------------------
+
+def test_the_nccl_probe_runs_its_periods_over_the_flat_tensor() -> None:
+    """Every `PERIOD` elements from 0 hold the 56 pairs then the specials, each period's specials one rank on, whatever the owners."""
+    size = 64 * 20 + 32
+    parts = X.nccl_probe_parts(np.random.default_rng(0), size)
+    for k in range(size // X.PERIOD):
+        at = k * X.PERIOD
+        for f, big in enumerate(X.BIG):
+            for p, (i, j) in enumerate(X.PAIRS):
+                e = at + f * len(X.PAIRS) + p
+                assert parts[i, e] == big and parts[j, e] == big | 0x8000
+        assert (parts[:, at + 2 * len(X.PAIRS) + 3] == X.NEG0).all() and parts[k % 8, at + 2 * len(X.PAIRS)] == 0x0001
+
+
+@pytest.mark.parametrize("f32", [False, True])
+def test_the_nccl_decoder_recovers_a_simulated_ring(f32: bool) -> None:
+    """A ring all-reduce whose chunks start one rank further round a random ring each, at bf16 adds per hop or f32 adds: every
+    chunk one run, its chain the ring from its start (the first two added in either order), and the model that made the words
+    the one that fits every word."""
+    size, chunk = 6144, 256
+    parts = X.nccl_probe_parts(np.random.default_rng(1), size)
+    ring = tuple(int(r) for r in np.random.default_rng(2).permutation(X.WORLD))
+    out = _ring(parts, chunk, ring, f32)
+    dec = X.decode_runs(out, size)
+    assert dec["undecoded"] == 0 and [r[:2] for r in dec["runs"]] == [[lo, lo + chunk] for lo in range(0, size, chunk)]
+    for k, (_, _, t) in enumerate(dec["runs"]):
+        want = [ring[(k + 1 + i) % X.WORLD] for i in range(X.WORLD)][::-1]
+        got = dec["chains"][t]
+        assert list(got[:-2]) == want[:-2] and set(got[-2:]) == set(want[-2:]), k
+    assert len(dec["trees"]) == X.WORLD
+    fit = X.nccl_fit(out, parts, dec)
+    assert fit["model"] == ("f32" if f32 else "bf16") and fit["fit"][fit["model"]] == 0
+    assert np.array_equal(X.nccl_rows(parts, dec, fit["model"]), out)
+    if f32:
+        assert fit["fit"]["bf16"] > 0
+
+
+def test_a_run_edge_inside_a_period_is_undecoded() -> None:
+    """Chunks of 96 elements put an edge inside every third period: those periods name no tree and are counted; chunks of 128 put
+    none inside one."""
+    size = 6144
+    parts = X.nccl_probe_parts(np.random.default_rng(3), size)
+    dec = X.decode_runs(_ring(parts, 96), size)
+    bad = [r for r in dec["runs"] if r[2] < 0]
+    assert bad and bad[0][:2] == [64, 128] and dec["undecoded"] == sum(hi - lo for lo, hi, _ in bad)
+    assert X.decode_runs(_ring(parts, 128), size)["undecoded"] == 0
+    assert X.chain_of(((0, 1), (2, 3))) is None and X.chain_of((((0, 1), 2), 3)) == (3, 2, 1, 0)
+
+
+def _nccl_cases(tmp_path, again_ring=RING) -> tuple[dict, dict, dict]:
+    probe, again, ar = (_made(tmp_path, _case(p, "M172", 172)) for p in ("nccl_probe", "nccl_again", "allreduce"))
+    for c, ring in ((probe, RING), (again, again_ring), (ar, RING)):
+        _write(c, {"out": _ring(np.load(c["ops"]["parts"]).reshape(X.WORLD, -1), 4096, ring).reshape(172, N)})
+    return probe, again, ar
+
+
+def test_an_nccl_launch_takes_its_probes_runs(nccl_small, tmp_path) -> None:
+    """NCCL's launch at the NCCL probe's M is modelled at the runs both probes decoded: every word, every rank and the reference
+    (`AllReduceNcclTreeCoordinate_v1` at each run's chain) equal, a flipped word found; an again probe whose words differ, or a
+    launch at an M no probe decoded, is not modelled."""
+    probe, again, ar = _nccl_cases(tmp_path)
+    assert {c["comm"] for c in (probe, again, ar)} == {"pynccl_comm"} and all(X.nccl_modelled(c) for c in (probe, again, ar))
+    got = X.nccl_analysis([probe, again])
+    assert got["agree"] and got["again_words_equal"] == {"nccl_again/M172": True} and set(got["runs"]) == {"172"}
+    dec = got["runs"]["172"]
+    assert dec["fit"] == "bf16" and len(dec["runs"]) == 65 and len(dec["trees"]) == X.WORLD and None not in dec["chains"]
+    job = X.jobs_of([ar], nccl=got["runs"])[0]
+    assert job["model"] == "nccl"
+    t = X.compare(job)
+    assert "error" not in t, t
+    assert (t["words"], t["mismatch"], t["rank_mismatch"], t["twin_mismatch"]) == (172 * N, 0, 0, 0)
+    assert t["reference"] == len(X.nccl_sample(172 * N, dec)) > 65
+    _write(ar, {"out": _ring(np.load(ar["ops"]["parts"]).reshape(X.WORLD, -1)).reshape(172, N)}, ("out", (171, N - 2)))
+    t = X.compare(job)
+    assert t["mismatch"] == 1 and t["first_mismatch"]["at"] == [172 * N - 2]
+    assert X.jobs_of([ar], nccl={})[0]["model"] is None
+    _, again, _ = _nccl_cases(tmp_path, (0, 1, 2, 3, 4, 5, 6, 7))
+    assert not X.nccl_analysis([probe, again])["agree"]
+
+
+def test_the_nccl_log_is_read() -> None:
+    """NCCL's version, each collective's tuning by its bytes (named, numbered or with its channels), and device 0's init lines."""
+    import tempfile
+
+    lines = {0: ["h:1:1 [0] NCCL INFO NCCL version 2.27.5+cuda12.9", "h:1:1 [0] NCCL INFO Channel 00/24 : 0 1 2 3 4 5 6 7",
+                 "h:1:1 [0] NCCL INFO AllReduce: 67117056 Bytes -> Algo RING proto SIMPLE channel{Lo..Hi}={0..23}",
+                 "h:1:1 [0] NCCL INFO AllReduce: 67117056 Bytes -> Algo RING proto SIMPLE channel{Lo..Hi}={0..23}",
+                 "h:1:1 [0] NCCL INFO AllReduce: 4 Bytes -> Algo 0 proto 0 time 9.5"],
+             3: ["h:4:4 [3] NCCL INFO Channel 00/24 : 0 1 2 3 4 5 6 7",
+                 "h:4:4 [3] NCCL INFO AllReduce: 67117056 Bytes -> Algo RING proto SIMPLE channel{Lo..Hi}={0..23}"]}
+    with tempfile.TemporaryDirectory() as d:
+        for r, ls in lines.items():
+            (Path(d) / f"nccl.h.{r}.log").write_text("\n".join(ls) + "\n")
+        got = X.nccl_log(Path(d))
+    assert got["files"] == 2 and got["version"] == ["2.27.5+cuda12.9"] and got["init"] == ["NCCL version 2.27.5+cuda12.9", "Channel 00/24 : 0 1 2 3 4 5 6 7"]
+    assert got["tuning"] == [{"func": "AllReduce", "bytes": 4, "algo": "TREE", "proto": "LL", "channels": None, "calls": 1, "devs": [0]},
+                             {"func": "AllReduce", "bytes": 67117056, "algo": "RING", "proto": "SIMPLE", "channels": "0..23", "calls": 3,
+                              "devs": [0, 3]}]
+    assert X.nccl_choice({"served": got}, 5462 * 6144 * 2) == [{"algo": "RING", "proto": "SIMPLE", "channels": "0..23", "calls": 3}]
+
+
 # --- launches, bindings, routes, verdicts ----------------------------------------------------------------------------------------
 
 KERNELS = {"ca_comm": "void vllm::cross_device_reduce_{stage}stage<__nv_bfloat16, 8>(...)",
@@ -510,7 +657,8 @@ def test_a_fused_call_is_on_its_expected_path(change: dict, ok: bool) -> None:
 
 
 @pytest.mark.parametrize("phase,M", [("allreduce", 11), ("allreduce", 43), ("probe", 256), ("switch", 64), ("switch", 683),
-                                     ("h7168", 36), ("h7168", 37), ("h7168_probe", 37)])
+                                     ("h7168", 36), ("h7168", 37), ("h7168_probe", 37), ("allreduce", 5461), ("allreduce", 8192),
+                                     ("nccl_probe", 5462), ("nccl_again", 8192)])
 def test_an_all_reduce_is_on_its_expected_communicator_and_kernel(phase: str, M: int) -> None:
     case = _case(phase, f"M{M}", M)
     assert X.launch_ok(case, _records([case]))
@@ -531,12 +679,12 @@ def test_an_all_reduce_is_on_its_expected_communicator_and_kernel(phase: str, M:
 
 
 def test_the_programs_bind_at_every_glm53_shape() -> None:
-    """The fused norm at 4 geometries x 2 contractions, FlashInfer's all-reduce at 5 M, multimem at 4 sizes at the probes' trees,
-    the custom all-reduce at 4; at DeepSeek-V4-Pro's width FlashInfer's at 6 M and multimem at 3."""
+    """The fused norm at 4 geometries x 2 contractions, FlashInfer's all-reduce at 5 M, multimem at 7 sizes at the probes' trees
+    (to 5461 tokens), the custom all-reduce at 4, NCCL at none; at DeepSeek-V4-Pro's width FlashInfer's at 6 M and multimem at 3."""
     cs = X.cases(False, set(X.PHASES))
     glm, h = [c for c in cs if c["spawn"] in X.GLM_SPAWNS], [c for c in cs if c["spawn"] == "h7168"]
     got = X.bind_check(glm, list(TREES), True)
-    assert got["ok"] and len(got["bindings"]) == 8 + 5 + 4 + 4
+    assert got["ok"] and len(got["bindings"]) == 8 + 5 + 7 + 4
     assert got["bindings"]["AllReduceRmsNormMnnvl_v1{WORLD=8,N=6144,SHOT=2,CLUSTER=2,EPS=1e-05,FMA=True}"]
     assert got["bindings"]["AllReduceCustom_v1{WORLD=8,SIZE=4190208,STAGE=2}"]
     assert got["bindings"]["AllReduceMnnvl_v1{WORLD=8,N=258048,SHOT=2}"]
@@ -594,7 +742,27 @@ def _derive(doc: dict) -> dict:
     doc["cases"] = X.case_verdicts(doc)
     doc["routes"] = X.routes(doc)
     doc["h7168"] = X.h7168_verdict(doc)
+    doc["nccl"] = X.nccl_verdict(doc)
     return doc
+
+
+def _with_nccl(doc: dict, ok: bool = True) -> dict:
+    """`doc` with NCCL's launch at 5462 tokens and its two NCCL probes, decoded into one run on a chain."""
+    cs = [_case("allreduce", "M5462", 5462), _case("nccl_probe", "M5462", 5462), _case("nccl_again", "M5462", 5462)]
+    zero = {k: 0 for k in X.TOTALS}
+    doc["case_list"] += cs
+    doc["comparisons"] += [{"key": c["key"], **zero, "words": 9, "reference": 7, "mismatch": int(not ok and i == 0)}
+                           for i, c in enumerate(cs)]
+    sp = X.spawns("defaults")
+    for s in ("served", "served_again"):
+        doc["ranks"][s] = _records([c for c in doc["case_list"] if c["spawn"] == s])
+        doc["dispatch"][s] = X.dispatch_check(sp[s], [r["communicators"] for r in doc["ranks"][s]])
+    tree = T.chain(X.WORLD, RING)
+    doc["nccl_probes"] = {"agree": True, "runs": {"5462": {"trees": [tree], "chains": [X.chain_of(tree)], "runs": [[0, 5462 * 6144, 0]],
+                                                           "fit": "bf16"}}}
+    doc["nccl_log"] = {"served": {"tuning": [{"func": "AllReduce", "bytes": 5462 * 6144 * 2, "algo": "RING", "proto": "SIMPLE",
+                                              "channels": "0..23", "calls": 30, "devs": [0]}]}}
+    return _derive(doc)
 
 
 def _with_h7168(doc: dict, ok: bool = True) -> dict:
@@ -711,6 +879,28 @@ def test_the_h7168_verdict_stands_apart_from_glm53s() -> None:
     assert _derive(doc)["h7168"]["same_as_glm53"] is False and doc["h7168"]["ok"]
 
 
+def test_the_nccl_verdict_stands_apart_from_glm53s() -> None:
+    """NCCL is GO on its probes' runs, its launches at their M and both served spawns, with its runs, model, chains and tuning per
+    M, and GLM-5.3's verdict reads none of it; skipped when no NCCL probe ran.  Its launches are covered only when it is GO."""
+    assert _doc()["nccl"] == {"ok": None}
+    doc = _with_nccl(_doc())
+    assert doc["nccl"]["ok"] is True and X._verdict(doc)
+    m = doc["nccl"]["M"]["5462"]
+    assert (m["runs"], m["model"], m["chains"]) == (1, "bf16", [X.chain_of(T.chain(X.WORLD, RING))])
+    assert m["tuning"] == [{"algo": "RING", "proto": "SIMPLE", "channels": "0..23", "calls": 30}]
+    assert {"setting": "defaults", "N": 6144, "route": "pynccl_comm", "M": [5462]} in X.coverage(doc, True)
+    for mutate in (lambda d: d["comparisons"][-3].update(mismatch=1), lambda d: d["nccl_probes"].update(agree=False),
+                   lambda d: d["dispatch"]["served_again"].update(ok=False), lambda d: d["ranks"]["served_again"].pop(),
+                   lambda d: d["ranks"]["served"][2]["cases"]["nccl_probe/M5462"].update(comms=["symm_mem_comm"] * 2)):
+        doc = _with_nccl(_doc())
+        mutate(doc)
+        _derive(doc)
+        assert doc["nccl"]["ok"] is False and "pynccl_comm" not in {r["route"] for r in X.coverage(doc, True)}
+    doc = _with_nccl(_doc())
+    doc["comparisons"][-3]["mismatch"] = 1
+    assert X._verdict(_derive(doc)) and not doc["cases"]["allreduce/M5462"]["ok"]
+
+
 def test_the_coverage_is_what_a_go_record_shows() -> None:
     """Per setting, hidden size and route, the token counts of a GO record's launches: the fused calls on FlashInfer's path, its
     and multimem's and the custom all-reduce's, not NCCL's or the norm module's; a route with a NO-GO launch, or a family whose
@@ -802,7 +992,7 @@ def test_the_capture_map_claims_no_all_reduce_capture_has_not_covered() -> None:
 
     cmap = json.loads(CMAP.read_text())
     setting = X.workload_setting()["setting"]
-    Ms = range(1, max(X.AR_M) + 1)
+    Ms = range(1, X.STEP_TOKENS + 1)
     calls = {"fused-allreduce-rmsnorm": [("fused", M) for M in Ms if X.expected_path(M) == X.FUSED],
              "tp-allreduce": [(X.expected_comm(M, setting), M) for M in Ms]}
     for pid, cs in calls.items():
@@ -896,6 +1086,31 @@ def test_main_end_to_end_on_stubbed_ranks(small, tmp_path, monkeypatch, capsys) 
     assert {r["setting"] for r in doc["coverage"]} == {"custom-off", "switch"} and all(r["N"] == N for r in doc["coverage"])
     printed = capsys.readouterr().out.splitlines()[-1]
     assert "served=custom-off prefill=switch trees=none ftz=None" in printed and "h7168=NO-GO" in printed
+
+
+@pytest.mark.slow
+def test_main_models_nccl_at_its_probes_runs(nccl_small, tmp_path, monkeypatch, capsys) -> None:
+    """`main` over the all-reduce and NCCL probe phases with the rank processes stood in for, NCCL's words a simulated ring: the
+    NCCL probes decoded into runs in both sets of rank processes, the NCCL launch modelled at them through the spawned worker
+    pool, the nccl verdict, its record and its line, and the NCCL words saved, so a slip in the NCCL orchestration shows here and
+    not on the 8-GPU node.  About 15 s, the worker pool's start."""
+    monkeypatch.setattr(X, "gate", lambda *a: {"ok": True, "checks": {}})
+    monkeypatch.setattr(X.G, "_environment", lambda: {})
+    workload = tmp_path / "workload.json"
+    workload.write_text(json.dumps({"engine": {"args": {"disable_custom_all_reduce": False}}}))
+    monkeypatch.setattr(X, "WORKLOAD_PATH", workload)
+    monkeypatch.setattr(X, "spawn_ranks", _fake_spawn({}, {"served": TREES, "served_again": TREES}))
+    out = tmp_path / "out"
+    argv = ["--out", str(out), "--scratch", str(tmp_path), "--workers", "1", "--only", "allreduce,nccl_probe,nccl_again"]
+    assert X.main(argv) == 1
+    doc = json.loads((out / X.RECORD).read_text())
+    assert doc["digest"] == digest_of(doc) and not doc["errors"] and doc["ok"] is False
+    assert {k for k, c in doc["cases"].items() if not c["ok"]} == {"allreduce/M171"}
+    assert doc["nccl"]["ok"] is True and doc["nccl"]["M"]["172"]["model"] == "bf16" and doc["nccl"]["M"]["172"]["runs"] == 65
+    assert doc["nccl_probes"]["agree"] and doc["nccl_probes"]["per_probe"]["nccl_again/M172"]["undecoded"] == 0
+    assert {"words/allreduce_M172.npy", "words/nccl_probe_M172.npy", "words/nccl_again_M172.npy"} <= set(doc["words"])
+    assert set(doc["nccl_log"]) == {"served", "served_again"} and doc["coverage"] == []
+    assert "nccl=GO nccl_models=['bf16']" in capsys.readouterr().out.splitlines()[-1]
 
 
 def test_a_failed_gate_runs_nothing(tmp_path, monkeypatch, capsys) -> None:
