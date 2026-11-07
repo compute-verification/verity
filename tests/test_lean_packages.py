@@ -88,6 +88,13 @@ def test_the_unwitnessed_list_only_shrinks():
           "witnesses under `witnesses` (check.py's failure names both) instead")
 
 
+def test_the_trust_base_is_one_list():
+    """Every lock that names a trust base (`trust`, tools/verity/lean/README.md) names the same one, so no package's
+    deployed guarantees count a premise as trusted that another's count in their gap."""
+    bases = {_rel(p): _lock(p)["trust"] for p in lake_packages() if "trust" in _lock(p)}
+    assert "Security" in bases and len({tuple(b) for b in bases.values()}) == 1, bases
+
+
 def test_the_randomness_assumption_cites_this_toolchain():
     """A3 (C-Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
     for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and

@@ -3268,6 +3268,98 @@
    "due": "2026-11-06"
   }
  },
+ "trust": [
+  "Claims.ExpectedCR",
+  "Claims.StrictBirthday",
+  "FlockSoundness.Assumptions.SHA512CRExpected",
+  "FlockSoundness.Assumptions.SHA512CRStrict",
+  "FlockSoundness.Assumptions.UniformRandomBytes",
+  "FlockSoundness.Assumptions.UniformRandomBytesTest",
+  "Verity.Assumptions.ChallengerLogsCoins",
+  "Verity.Assumptions.FlipsAfterRecorded",
+  "Verity.Assumptions.VerifierReadsLog"
+ ],
+ "deployed": [
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed",
+  "Accounting.SecurityProofs.RemoteSessionConservationDeployed",
+  "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed",
+  "Accounting.SecurityProofs.StackedRequirementSketchDeployed",
+  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed",
+  "Bandwidth.SecurityProofs.AuditRO",
+  "Flock.SecurityProofs.DeltaPubDeployed",
+  "Flock.SecurityProofs.RecursiveKSDeployed",
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed",
+  "Flock.SecurityProofs.SampledKSLiveV3",
+  "Flock.SecurityProofs.SampledKSLiveV5",
+  "Flock.SecurityProofs.SessionLoopZKDeployed",
+  "NetTiming.SecurityProofs.PeriodLeakAccepted",
+  "Pous.SecurityProofs.StreamedWipe"
+ ],
+ "trust_gap": {
+  "Accounting.SecurityProofs.Remote.SketchBoundDeployed": [
+   "Accounting.Assumptions.SketchHashRandom",
+   "Accounting.Assumptions.SketchRank",
+   "Accounting.Remote.Sketch.Assumptions.KeyBudget",
+   "Accounting.Remote.Sketch.Assumptions.Present",
+   "Accounting.Remote.Sketch.Assumptions.Receipted"
+  ],
+  "Accounting.SecurityProofs.RemoteSessionConservationDeployed": ["Accounting.Assumptions.SquaringCeiling", "Accounting.Assumptions.WorkHardness"],
+  "Accounting.SecurityProofs.RemoteSessionConservationSketchDeployed": ["Accounting.Assumptions.SketchHashBudget", "Accounting.Assumptions.SketchRank"],
+  "Accounting.SecurityProofs.StackedRequirementSketchDeployed": [
+   "Accounting.Assumptions.ChainSum",
+   "Accounting.Assumptions.KeyBinding",
+   "Accounting.Assumptions.SketchHashBudget",
+   "Accounting.Assumptions.SketchRank",
+   "Accounting.Assumptions.SquaringFloor",
+   "Accounting.Requirement.PlanMatches",
+   "Accounting.Requirement.StoreMatches"
+  ],
+  "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": [
+   "Accounting.Assumptions.ChainSum",
+   "Accounting.Assumptions.KeyBinding",
+   "Accounting.Assumptions.SketchHashBudget",
+   "Accounting.Assumptions.SketchRank",
+   "Accounting.Assumptions.SquaringFloor"
+  ],
+  "Flock.SecurityProofs.RecursiveKSDeployed": ["Claims.Flock.ListWithin", "Claims.Hm96Hiding", "RecDeploy.DenseAt"],
+  "Flock.SecurityProofs.RecursiveZKLoopAnySumDeployed": [
+   "Claims.ZKMal.RefSession.SwCausalOn",
+   "Flock.Guarantees.ReleaseReadsNoStop",
+   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Honest",
+   "FlockSoundness.Discharge.Recursion.OuterZK.LoopSessions.Sized"
+  ],
+  "Flock.SecurityProofs.SampledKSLiveV3": [
+   "FlockSoundness.Assumptions.LinkCRZCAt",
+   "FlockSoundness.Assumptions.TableCRZAt",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
+   "FlockSoundness.Built",
+   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
+  ],
+  "Flock.SecurityProofs.SampledKSLiveV5": [
+   "Flock.Bridge.DrawsUnder",
+   "Flock.Bridge.NotBernoulli",
+   "Flock.Bridge.RootFixesDomainL",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+   "FlockSoundness.Built",
+   "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+   "FlockSoundness.Discharge.ZkLink.LinkCRZC",
+   "FlockSoundness.Discharge.ZkLink.SessCRZ"
+  ],
+  "Flock.SecurityProofs.SessionLoopZKDeployed": [
+   "Claims.ZKMal.RefSession.SwCausalOn",
+   "Claims.ZKServer.LeanRelease.FillRoundEq",
+   "Claims.ZKServer.LeanRelease.LiveRoundEq",
+   "Claims.ZKServer.Loop.Src",
+   "Flock.Guarantees.LoopInnerRound0"
+  ],
+  "NetTiming.SecurityProofs.PeriodLeakAccepted": [
+   "Claims.Flock.ListWithin",
+   "Claims.Sampling.KS",
+   "NetTiming.ScopeAcc",
+   "NetTiming.TapOpens",
+   "Verity.Assumptions.TrustedHost"
+  ]
+ },
  "meaning": [
   "Definitions.Core",
   "Definitions.Core.Assumptions",
@@ -8789,7 +8881,7 @@
    "unfolded_hash": "a467a79bf0f9b8aaf729731f5acb2904c06d190ff22c10fcff357bff2e009ea7"
   },
   "Accounting.SecurityProofs.Remote.SketchBoundDeployed": {
-   "owner": "@memory-accounting",
+   "owner": "@lean",
    "signature": [
     "Accounting.SecurityProofs.Remote.SketchBoundDeployed : Accounting.Guarantees.Remote.SketchBoundDeployed"
    ],
@@ -9336,7 +9428,7 @@
    "unfolded_hash": "409d79481699848021cab81f36ada6a63dfbb6bfc315522c28f581164d18bd05"
   },
   "Accounting.SecurityProofs.StackedRequirementSketchDeployed": {
-   "owner": "@memory-accounting",
+   "owner": "@lean",
    "signature": [
     "Accounting.SecurityProofs.StackedRequirementSketchDeployed : Accounting.Guarantees.StackedRequirementSketchDeployed"
    ],
@@ -9380,7 +9472,7 @@
    "unfolded_hash": "1519fc9eb505b38dfdf9a187c51ddf60317baf5f7784ad9d9984345a3ae68f4c"
   },
   "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed": {
-   "owner": "@memory-accounting",
+   "owner": "@lean",
    "signature": [
     "Accounting.SecurityProofs.StackedSessionConservationSketchDeployed :",
     "  Accounting.Guarantees.StackedSessionConservationSketchDeployed"
