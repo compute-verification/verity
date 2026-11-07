@@ -4,10 +4,16 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+#: GLM-5.3's sparse MLA decode at its served statics, over every key count its DSA top-k selects (at most 2,048) and every split
+#: count serving takes: checked at the `_model_roots` spots it covers (`circuit_check.ranges`)
+RANGES = ("SparseMlaSplit_v1{T=1..2048,NS=1..28,NH=8,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa3InvSum_v1,"
+          "SCALE=0.0625}",)
+
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
-    """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
-    leaf families they do not reach, at small statics."""
+    """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), the leaf
+    families they do not reach, at small statics, and the spots of its ``RANGES``: both ends of each range, the most-served
+    rows, and rows of each other split shape."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import sparse_mla_split
 
@@ -21,4 +27,16 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("SparseMlaCombine_v1", lambda: bind(sparse_mla_split.SparseMlaCombine, NSPLIT=16, DV=glm["DV"], INV=glm["INV"])),
         ("SparseMlaHeadSplit_v1", lambda: bind(sparse_mla_split.SparseMlaHeadSplit, T=130, NS=2, **head)),
         ("SparseMlaSplit_v1", lambda: bind(sparse_mla_split.SparseMlaSplit, T=130, NS=2, **glm)),
+        # the range's ends: one key unsplit, and the whole top-2,048 unsplit and in 28 splits (16 of 128 keys)
+        ("SparseMlaSplit_v1/T=1,NS=1", lambda: bind(sparse_mla_split.SparseMlaSplit, T=1, NS=1, **glm)),
+        ("SparseMlaSplit_v1/T=2048,NS=1", lambda: bind(sparse_mla_split.SparseMlaSplit, T=2048, NS=1, **glm)),
+        ("SparseMlaSplit_v1/T=2048,NS=28", lambda: bind(sparse_mla_split.SparseMlaSplit, T=2048, NS=28, **glm)),
+        # the most-served rows, the top-2,048 in two, three and eleven splits; a short row in two splits (a block, then 24
+        # keys), a long one unsplit, and one in 25 single-block splits ending in a partial block
+        ("SparseMlaSplit_v1/T=2048,NS=2", lambda: bind(sparse_mla_split.SparseMlaSplit, T=2048, NS=2, **glm)),
+        ("SparseMlaSplit_v1/T=2048,NS=3", lambda: bind(sparse_mla_split.SparseMlaSplit, T=2048, NS=3, **glm)),
+        ("SparseMlaSplit_v1/T=2048,NS=11", lambda: bind(sparse_mla_split.SparseMlaSplit, T=2048, NS=11, **glm)),
+        ("SparseMlaSplit_v1/T=88,NS=2", lambda: bind(sparse_mla_split.SparseMlaSplit, T=88, NS=2, **glm)),
+        ("SparseMlaSplit_v1/T=257,NS=1", lambda: bind(sparse_mla_split.SparseMlaSplit, T=257, NS=1, **glm)),
+        ("SparseMlaSplit_v1/T=1557,NS=25", lambda: bind(sparse_mla_split.SparseMlaSplit, T=1557, NS=25, **glm)),
     ]
