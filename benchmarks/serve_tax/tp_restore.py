@@ -184,6 +184,7 @@ def serve(a: argparse.Namespace) -> int:
                             "long_share": a.long_share, "long_tokens": a.long_tokens, "server_argv": argv[1:], "pins": PINS,
                             "edges_at": a.edges_at,
                             "savers": a.saver, "scratch": str(scratch), "autotune_dir": str(scratch / "autotune"), "versions": S.versions(), "host": os.uname().nodename}
+    meta["open_files"] = S.open_files()
     rc = 0
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:

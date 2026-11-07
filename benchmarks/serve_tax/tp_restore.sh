@@ -2,7 +2,7 @@
 # A model served mid-traffic, restored at its first edge into a fresh engine and replayed to its second (tp_restore.py),
 # on one node under `research run`, from the shipped tree's root, the C4 shard sent with --send (or C4=PATH):
 #   [MODEL_ID=glm53] [RATE=10] [SPAN_S=240] [EDGES_AT=150,210] [SAMPLING=production] [LONG_SHARE=0.03]
-#     [LONG_TOKENS=8192,32768] [MAX_MODEL_LEN=40960] [FLASHINFER=0]
+#     [LONG_TOKENS=8192,32768] [MAX_MODEL_LEN=40960] [FLASHINFER=0] [LDCONFIG=1] (--send fi_smoke.py: run it first)
 #     [SAVER=boundary:save_edge] [LOADER=boundary:load_edge] [PERMUTE=1] [KEEP=1] [MAX_MIN=150]
 #     bash benchmarks/serve_tax/tp_restore.sh
 # The plan (OUT/plan.jsonl) is made before the GPUs are held, LONG_SHARE of its requests then given prompts of 8k-32k
@@ -52,15 +52,29 @@ v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "tp-restore: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
 mkdir -p "$OUT"
 if [ "${1:-}" != leased ]; then
+  # LDCONFIG=1: refresh the linker cache first, so libnvrtc and the rest resolve to the CUDA_HOME a node's dev packages
+  # were installed for, the same for every engine of this job
+  [ "${LDCONFIG:-0}" = 1 ] && ldconfig
   for k in FLASHINFER VLLM_USE_FLASHINFER_SAMPLER VLLM_USE_DEEP_GEMM CUDA_HOME CUDA_VISIBLE_DEVICES; do echo "$k=${!k-unset}"; done \
     > "$OUT/engine_env.txt"
-  { command -v nvcc && nvcc --version | tail -1; } >> "$OUT/engine_env.txt" 2>&1
+  { command -v nvcc && nvcc --version | tail -1
+    echo "has_flashinfer=$("$PY" -c 'from vllm.utils.flashinfer import has_flashinfer; print(has_flashinfer())')"
+    ldconfig -p | grep -m2 'libnvrtc.so.12 '; } >> "$OUT/engine_env.txt" 2>&1
 fi
 [ "${1:-}" = leased ] || "$PY" "$here/tp_restore.py" preflight --model-id "$MODEL_ID" --checkpoint "$CK" \
   ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} ${TP:+--tp "$TP"} || exit 2
 
 if [ "${1:-}" = leased ]; then
   nvidia-smi --query-gpu=index,name,uuid,pci.bus_id,memory.used,memory.total --format=csv
+  # vllm's fi_smoke.py, when sent: FlashInfer's small-batch FP8 GEMMs compiled (into ~/.tensorrt_llm/cache) before the
+  # first engine, so no compile lands inside the served traffic; the cache's digest is the build's pin
+  smoke=$(ls "$D"/inputs/fi_smoke.py 2>/dev/null)
+  if [ -n "$smoke" ] && [ "${FLASHINFER:-1}" = 1 ]; then
+    echo "== fi_smoke $(date -u +%FT%TZ)"
+    GPUS=$GPUS "$PY" "$smoke" "$OUT/fi_smoke.json" > "$OUT/fi_smoke.log" 2>&1 || { tail -n 20 "$OUT/fi_smoke.log"; exit 1; }
+  fi
+  c=$HOME/.tensorrt_llm/cache
+  [ -d "$c" ] && echo "tensorrt_llm_cache=$(cd "$c" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64) files=$(find "$c" -type f | wc -l)" >> "$OUT/engine_env.txt"
   echo "== serve $(date -u +%FT%TZ)"
   "$PY" "$here/tp_restore.py" serve --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" --plan "$PLAN" --docs "$DOCS" \
     --rate "$RATE" --span-s "$SPAN_S" --edges-at "$EDGES_AT" --sampling "$SAMPLING" --long-share "$LONG_SHARE" --long-tokens "$LONG_TOKENS" \
