@@ -21,7 +21,8 @@ statement alone. So the server is a `Zk` (`FlockZk.server`), but what it meets i
   (`ZkServer.proverD`) against a verifier of the protocol's rounds (`FlockZk.Verifier`), the simulator's is `leaky1`'s.
 * `FlockZk.server_below`, `FlockZk.server_zkBelow`: `zk_server_lean_loop` in `Exp`'s terms, at the relation `LiveRel`, the
   statement's relation together with the live path's premises at the statement.
-* `FlockZk.audit_below`: the Flock instance, with every premise of `zk_server_lean_loop` carried as it states it.
+* `FlockZk.audit_below`: the Flock instance, with every premise of `zk_server_lean_loop` carried as it states it or as
+  one that gives it.
 -/
 
 @[expose] public section
@@ -67,7 +68,7 @@ theorem avg_const_mul {C : Type} [Fintype C] (x : ℝ≥0∞) (f : C → ℝ≥0
   exact Finset.sum_congr rfl fun _ _ => by ring
 
 /-- **One-sided closeness under a uniform coin**: if each coin's experiment is `α`-below the other's at `ε r`, so is
-the experiment that draws the coin first and relabels each view by the coin, at `ε` averaged (`Close.coin`'s one-sided
+the experiment that flips the coin first and relabels each view by the coin, at `ε` averaged (`Close.coin`'s one-sided
 form). -/
 theorem Below.coin {Rnd V W : Type} [Fintype Rnd] [Nonempty Rnd] (a b : Rnd → Exp V) (f : Rnd → V → W)
     {α : ℝ≥0∞} (ε : Rnd → ℝ≥0∞) (h : ∀ r, Below (a r) (b r) α (ε r)) :
@@ -112,7 +113,7 @@ theorem audit_below {n : ℕ} {Tr Rnd Com Wit VS View : Type} [Fintype Rnd] [Non
     exact hH _ Xt X₀ (auditSimAfter Zs samp v)
   exact h1.trans_close h2
 
-/-- **A uniform coin's experiment, in the claims' terms**: the probability of an event of a view drawn from uniform
+/-- **A uniform coin's experiment, in the claims' terms**: the probability of an event of a view sampled from uniform
 coins is the claims' `Pr` of it. -/
 theorem pr_uniform {C V : Type} [Fintype C] [Nonempty C] (f : C → V) (E : V → Prop) :
     Exp.pr (⟨.coin C fun c => .ret (f c), fun _ => PUnit.unit⟩ : Exp V) E =
@@ -244,7 +245,8 @@ abbrev LiveRel (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess
 /-- **`zk_server_lean_loop` in `Exp`'s terms**: at a statement in the relation with its live path's premises
 (`LiveRel`), the honest view is `2`-below the simulator's at the server's error, against every verifier of the server's
 rounds. The tables' side (`hS`, `hV`, `hD`, `hc`, `hsc`, `hT`), hm96's hiding (`hT1`, `hδ₁`) and the release at the
-session loop (`hL`) are the theorem's premises as it takes them. -/
+session loop (`hL`) are the theorem's premises or give them: `SwCausal` gives `SwCausalOn` at every coin vector
+(`swCausalOn_of_swCausal`), which every stop rule's `StopsOk` takes in (`stopsOk_true`). -/
 theorem server_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)
@@ -257,8 +259,9 @@ theorem server_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs :
       (err rel T vs L pc fc t δ₁ x w v) := by
   obtain ⟨hR, hPr, hLk, hF, hE, hEf⟩ := hR
   intro E
-  have h := Claims.ZKServer.Flock.zk_server_lean_loop rel T vs t ht hT1 hδ₁ hS hV hD hc hsc hT L₀ L hL wk x w hR
-    pc fc hPr hLk hF hE hEf v.Vs v.θ (v.hk x) E
+  have h := Claims.ZKServer.Flock.zk_server_lean_loop rel T vs t ht hT1 hδ₁ hS hV hD hc (fun _ _ => True)
+    ((Sess T).swCausalOn_of_swCausal vs _ hsc) hT L₀ L hL wk x w hR pc fc hPr ((Sess T).stopsOk_true _) hLk hF hE
+    hEf v.Vs v.θ (v.hk x) E
   rw [server_real_pr, server_sim_pr, err]
   refine (ENNReal.ofReal_le_ofReal (h.trans_eq (congrArg (fun z => 2 * z) (add_assoc _ _ _)))).trans ?_
   rw [ENNReal.ofReal_mul (by norm_num), ENNReal.ofReal_ofNat, ← mul_add]
@@ -285,7 +288,7 @@ deployment's relation (`hR`) and meets the live path's premises there (`hPr`, `h
 view is `2`-below the simulator's at any fixed trace `X₀` (`auditSim`, at the server's simulator), at `2·ε_hide` plus
 the server's error averaged over the prover's commitment coins:
 $$\Pr_{\rm audit}[E]\le 2\Pr_{\rm sim}[E]+2\varepsilon_{\rm hide}+\mathbb E_r[\mathrm{err}(x_r,w_r,v)].$$
-Every other premise is `zk_server_lean_loop`'s, as it takes it. -/
+Every other premise is `zk_server_lean_loop`'s or gives it, as at `server_below`. -/
 theorem audit_below (rel : Parser) (T : Claims.ZKMal.CoinLayer.TableData) (vs : (Sess T).SwVals) (t : ℕ)
     (ht : 0 < t) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding FlockSoundness.Discharge.ZkView.My FlockSoundness.Discharge.ZkView.saltHash δ₁)

@@ -1,8 +1,8 @@
-"""FP8 (`--quantization fp8`) linear of the B1 serving program on Hopper — lane QZ, port `b1-fp8`.
+"""FP8 (`--quantization fp8`) linear of the B1 serving program on Hopper, port `b1-fp8`.
 
 Under `LLM(quantization="fp8")` on an H100 (pinned build d9105ea80, eager, `VLLM_BATCH_INVARIANT=1`, TP=1) every
 decoder linear of Qwen2.5-1.5B (qkv_proj, o_proj, gate_up_proj, down_proj; the tied lm_head stays bf16) is
-executed by two kernels, both read from the vLLM source and confirmed on the production run (fp8.md §1):
+executed by two kernels, both read from the vLLM source and confirmed on the production run:
 
 1. `_C.dynamic_per_token_scaled_fp8_quant` (`dynamic_per_token_scaled_fp8_quant_kernel_strided`, 256 threads per
    token row, `scale_ub = None`): per-row absmax `m = max_e |f32(x_e)|` (thread partials from `0.f` over 8-element
@@ -147,7 +147,7 @@ def Fp8ActQuant(B, S, x):
 _SCALED_MM_CONF = ("exact-model-tested; _C.cutlass_scaled_mm vs the model at 320/320 sampled coordinates over five B1 shapes (K=1536/8960, "
                    "N=1536/2048/17920, bias on/off; gpu/tc-fp8/vllm_fp8_kernels_probe.py --gemm, "
                    f"{EVIDENCE['vllm_fp8_kernels_probe']['captured_utc']}) and 0 mismatches at every coordinate-sampled quantised gemm "
-                   "leaf of the production capture (corr-A/B, fp8.md §5); the k32 step pinned by the tc-fp8 campaign")
+                   "leaf of the production capture (corr-A/B); the k32 step pinned by the tc-fp8 campaign")
 
 
 @composite("DotE4m3", 1, ["K"], lambda S: ((("xq", Array(S.K, E4M3)), ("wq", Array(S.K, E4M3))), F32),
@@ -389,10 +389,12 @@ def ScaledMmFp8Block(B, S, xq, sx, w, ws):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# the same blockwise GEMM with each weight block's scale products computed once (`TargetProfile.fp8_scale_construction`, the default).
+# the same blockwise GEMM with each weight block's scale products computed once (`TargetProfile.fp8_scale_construction`'s one value).
 # `ScaledMmFp8Block_v1` forms `s = FMUL(sx[kb], sw[kb])` inside every coordinate, so the G coordinates of one weight block compute
-# the same K/G products in G units: G - 1 recomputes of each.  Here a weight block's products are one node its G coordinates read,
-# and the partition commits them: K/G f32 words per weight block, N/G * K/G per Call.
+# the same K/G products in G proof blocks: G - 1 recomputes of each, which the partition refuses in a Call, so no served Program
+# calls it.
+# Here a weight block's products are one node its G coordinates read, and the partition commits them: K/G f32 words per weight
+# block, cdiv(N, G) * K/G per Call.
 # ---------------------------------------------------------------------------------------------------------
 
 

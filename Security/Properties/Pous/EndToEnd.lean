@@ -30,7 +30,7 @@ bytes, `k = 105` rounds, `Δ + RTT ≤ 854,000 ns`), which nothing joins inside 
 * `EndToEndRing`, `EndToEndRingDeployed`, `DrawExact`, `HonestPassesRing` and `HonestPassesAccepts`, **in the ring
   model, with `ω` uniform**: P2's square–mask–square over `Z/p` with a uniformly random odd labeling and uniformly random
   per-block keys (`p2ring`), against a server that is a `Server S D Q L` of this module, with the memory challenger's
-  coins drawn as the code draws them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from
+  coins flipped as the code samples them (`CoinTree.make`, `FlockSoundness.Randomness.uniformOn` at `DRAW_BYTES`) from
   uniform bytes.
 
 The step from the ring game to the deployed system is four claims, each its own id in `verity.core.claims`, cited
@@ -38,7 +38,7 @@ separately so that each can be rejected alone:
 
 1. `pous-ring-device` (the model): the deployed server is a `Server`: a ring-model server whose state is bounded between
    setup, the session and its rounds, with one session per audit (the memory challenger's `SessionLog`, of which its
-   host never restores an earlier copy: `trusted-host`) and the coins drawn online, after its state is fixed. It
+   host never restores an earlier copy: `trusted-host`) and the coins flipped online, after its state is fixed. It
    names no number.
 2. `pous-ring-speed` (the numbers, by measurement): no allowed hardware finishes a `(D + 1)`-th sequential
    multiplication round, `Q + 1` key queries or `L + 1` ring operations within `Δ + RTT`, at the corollary's
@@ -184,7 +184,8 @@ the device's own readings: what the server reports about its latency enters nowh
 challenger's own: whichever table it held, an accepted one has the published root, so it is `C*`'s or there is a
 collision. -/
 def RunCheckAccepts : Prop :=
-  ∀ (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray),
+  ∀ (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord)
+    (sid : ByteArray),
     Run.check trusted pub digests r sid = .ok () →
     ∀ (dev : Challengers) (C : Array (Array ByteArray)),
       AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧ r.signed.publicKey ∈ trusted ∧
@@ -197,7 +198,7 @@ salt and publishes `pub`, and the composed check accepts, against the verifier's
 keys (never the run's record), `pub`, the memory challenger's table and its session under the id `sid` the auditor
 designated. -/
 def Accepted (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) : Prop :=
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray) : Prop :=
   SetupProtocol.protocol.check q c C = .accept pub () ∧ Run.check trusted pub digests r sid = .ok ()
 
 /-- **An accepted run certifies `C*`.** For every verifier's list `trusted` of memory-challenger keys (never the run's
@@ -211,7 +212,8 @@ data holds a SHA-512 collision or an LMS forgery under a key in `trusted`. A dis
 check's `AcceptsDecodes` and `PublishesRoot`, all proved. -/
 def RunCertifies : Prop :=
   ∀ (trusted : List ByteArray) (c : SetupProtocol.Commitment) (C : Array (Array ByteArray))
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray) (dev : Challengers),
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray)
+    (dev : Challengers),
     Accepted trusted c C pub digests r sid →
       DecodesToCommitment q c C ∧ Published q c C pub ∧ AuditsSetup pub r.commitment ∧ r.commitment.session = sid ∧
         r.signed.publicKey ∈ trusted ∧
@@ -231,7 +233,7 @@ noncomputable def S : ℕ := sch.stateBound Params.ρ
 /-- The full state: all of `C`, `2^19 · 16,448` bits, more than `S`. -/
 def FULL : ℕ := 2 ^ 19 * 16448
 
-/-- `n` bytes, each uniform when drawn. -/
+/-- `n` bytes, each uniform when sampled. -/
 abbrev Bytes (n : ℕ) : Type := Fin n → Fin 256
 
 /-- The bytes, as the code holds them. -/
@@ -267,7 +269,7 @@ answer within `(D, Q, L)` (`RingBounded`: at most `D` rounds with a multiplicati
 operations, for every `ω`):
 
 * `pre W pp C ω` is all that survives setup, `S` bits, a function of `W`, `C` and the whole primitive (perfect
-  isolation); it is fixed before the memory challenger's coins are drawn (online coins);
+  isolation); it is fixed before the memory challenger's coins are flipped (online coins);
 * `step sc W pp j σ i` answers round `j`'s index `i` from the state `σ`, what is public (`W`, `pp`) and the one session
   commitment `sc` of the audit, returning the block and the next `S`-bit state.
 
@@ -277,7 +279,7 @@ server learns from indices seen after one only helps a server the game counts as
 structure Server (S D Q L : ℕ) : Type where
   pre : Preprocessor sch S
   step : SessionCommitment → Bits sch.n → Bits sch.t → ℕ → Bits S → Fin sch.B →
-    Prog (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
+    OracleAlgorithm (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)) (Bits sch.ℓ × Bits S)
   bounded : ∀ sc W pp j σ i, (step sc W pp j σ i).RingBounded D Q L
 
 /-- **The server passes the session**: `ω`, the coins and the streams `x`; the code's sampler reads index `I j` from
@@ -297,7 +299,7 @@ def Passes {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n) (A : S
           (A.pre W (sch.enc W x.1 ()).1 (sch.enc W x.1 ()).2 x.1) =
         List.ofFn fun j => (sch.enc W x.1 ()).2 (I j)
 
-/-- **The draw's rejection sampling never rejects at `2^19` blocks (`ε_rs = 0`)**: `uniformOn (2^19)` on `DRAW_BYTES`
+/-- **The sample's rejection sampling never rejects at `2^19` blocks (`ε_rs = 0`)**: `uniformOn (2^19)` on `DRAW_BYTES`
 uniform bytes returns an index, and it is exactly uniform. Its word is `width (2^19) = 11` bytes, and `2^19` divides
 `2^88`, so no word is rejected. -/
 def DrawExact : Prop :=
@@ -364,7 +366,7 @@ def HonestPassesRing : Prop :=
 
 /-- **Non-vacuity of `EndToEndRing`'s event, in the ring model, with `ω` uniform**: the honest full-state server, a
 `Server FULL 0 0 0`, passes the session with probability 1 for every 32-byte session id, binding and `W`: the code
-always builds the coin tree, and the draw never fails (`ε_rs = 0`, `DrawExact`). -/
+always builds the coin tree, and the sample never fails (`ε_rs = 0`, `DrawExact`). -/
 def HonestPassesAccepts : Prop :=
   ∃ A : Server FULL 0 0 0, ∀ session : ByteArray, session.size = 32 → ∀ (binding : ByteArray) (W : Bits sch.n),
     pr (Passes session binding W A) = 1

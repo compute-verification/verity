@@ -4,9 +4,10 @@ fixed schedule, so it rebuilds the framing of every connection it carries.
 The network certifier runs on an auditor host (`trusted-host`; co-located with the server for the demo, a named
 assumption). It terminates each client's TCP connection, opens one to the server for it, and forwards each direction's
 bytes unchanged in content: no tokenizer, API, request or stop string is the network certifier's. The one addition is
-the release order on the server's copy of an HTTP request (`release`): what the network certifier decides is the framing
-and the timing, both public functions of the schedule (`WardenParams`), and it certifies every cell it sends with the
-certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
+on the server's side (`release`): each HTTP request's place in the release order and its release bucket on the server's
+copy, and, with `watermark`, a stream that tells the server each bucket's close. What the network certifier decides is
+the framing and the timing, both public functions of the schedule (`WardenParams`), and it certifies every cell it sends
+with the certifier's grid (`grid.Certifier`) and certificates (`certificate.Issuer`, in the runner).
 
 **Cells.** Every cell is B = `cell_bytes` bytes, `active.encode_frame(kind, ordinal, payload)`: the header (kind u8,
 the connection's ordinal u32, the payload's length u32), at most P = B − 9 payload bytes, zero fill. `DATA` carries
@@ -34,9 +35,9 @@ a bucket each way from s on:
   and ingress has no cells after it. Ingress must end within `ingress_buckets` buckets and `ingress_cells` cells. Its
   release never waits on the server: the server gets a connection's ingress whole once its `END` is released, as
   `release.with_release` puts it, N the count of `END`s the network certifier released before (so the order of the `END`
-  cells in the ingress records) and the run the network certifier's `run_id`; what it releases before then, or before
-  the server's connection opens, is held for the server (at most the `ingress_cells` cells' bytes the ingress bound
-  allows; past them the connection fails closed, and the server gets none of it);
+  cells in the ingress records), the run the network certifier's `run_id` and the bucket a; what it releases before
+  then, or before the server's connection opens, is held for the server (at most the `ingress_cells` cells' bytes the
+  ingress bound allows; past them the connection fails closed, and the server gets none of it);
 - egress: `PAD` in every slot of the buckets before s + D, D = `delay`; then egress cell i is in bucket
   s + D + ⌊i/r⌋, slot i mod r: `DATA` with the server's bytes iP … (i+1)P − 1 if it has sent them, else `END` with its
   remaining 0 … P bytes if it has ended, else `FAIL` (late): the cell's deadline passed. The rest of the bucket of
@@ -65,6 +66,17 @@ time, or whose release started more than `slack` after it, faults every grid's w
 tick does. A window's three records are published once every bucket of it that was handed is released, or by the
 next window's first tick, faulted `monitor-unavailable` if one isn't by then. A client that reads slowly holds only its
 own bytes in the pacer, and one more than `WRITE_BACKLOG` behind is closed, as on the loop.
+
+**The watermark** (`Warden(watermark=…)`, off by default): one connection to the server, opened by `watermark` when the
+run starts, on which the network certifier sends `release.watermark_head` and then a line for each tick t,
+`release.watermark_chunk(t, n, lost)`, n the `END`s released through bucket t. Tick t makes the line, and it is sent,
+in order, once each release of bucket t has been written whole to its server connection with that transport's buffer
+emptied, or is lost, its connection closing, failed or ended first; the line names the lost ones. A release still on
+its way (its connection opening, its bytes buffered) holds its line and the later ones until it arrives or its
+connection ends. The run's end sends the lines still held, then the terminating chunk. The network certifier never
+reads that connection and no tick waits on it: the lines sent before it opens are kept for it, and once more than
+`WRITE_BACKLOG` of them are unwritten it is closed. Each line's t and n are functions of the ingress record, its lost
+releases the server connections' state, and no cell or record changes.
 
 **The records.** Each direction's grid has r·`lanes` slots a bucket of B-byte frames, and its frames are exactly the
 cells the network certifier sent that way: every connection's r cells of the bucket, in ordinal order, padding included.
@@ -95,7 +107,7 @@ from verity.core.protocols.certifier.active import (DATA, HEADER, PAD, RUN_ID_BY
                                                    precise_sleep)
 from verity.core.protocols.certifier.grid import Certifier, GridParams, Reason, Record, Row, Status, row_count
 from verity.core.protocols.certifier.pacer import Pacer, Report
-from verity.core.protocols.certifier.release import with_release
+from verity.core.protocols.certifier.release import WATERMARK_END, watermark_chunk, watermark_head, with_release
 
 PARAMETERS_TAG = "verity-network-warden/parameters/v3"
 #: the network certifier's cell kinds, beside `active`'s PAD and DATA
@@ -259,6 +271,8 @@ class _Connection:
     held: bytearray = field(default_factory=bytearray)  # released, held for the server until the END's release
     unsent: bytearray = field(default_factory=bytearray)  # released whole before the server's connection opened
     release: int | None = None  # N: its END's place in the network certifier's release order
+    wrote: bool = False  # its release was written whole to its server connection, open
+    written: bool | None = None  # with the watermark: its release reached the server's transport (True) or was lost
     ingress_ended: bool = False  # the client's END has been received
     ingress_end: int | None = None  # a: the bucket the network certifier released ingress's END
     ingress_cells: int = 0
@@ -295,8 +309,12 @@ class Warden:
     - `release(link, row)`, when given, receives each grid's row as it ticks, ingress, egress, then fails, before
       that tick's `publish`: a publisher in another process builds each record from them as it fills, so that the
       tick never hands it a whole window at once;
-    - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`), and
-      `run_id`, `RUN_ID_BYTES` sampled from `run_nonce` at construction, names the run on the server's side;
+    - `requests_released` counts the `END`s released, each connection's N its count before (`log`'s `release`, its
+      bucket `ingress_end`), and `run_id`, `RUN_ID_BYTES` sampled from `run_nonce` at construction, names the run on
+      the server's side;
+    - with `watermark`, a connect like `connect` (off by default), the watermark stream (the module docstring's "The
+      watermark"): `watermarked` is the last line's (t, n), `watermark_lost` the releases its lines named lost, and
+      `watermark_error` why the stream stopped, if it did;
     - with `paced`, seconds past `slack` (off by default), each tick hands its bucket to the pacer (`pacer.Pacer`;
       the module docstring's "The pacer"), which releases it `paced` after its boundary on the host's monotonic clock,
       `origin`'s clock then, to each connection's socket (`writer.get_extra_info("socket")`); `releases` holds each
@@ -310,7 +328,8 @@ class Warden:
                  withhold: Callable[[Record, GridParams], None] | None = None,
                  release: Callable[[str, Row], None] | None = None, slack: float = 0.025,
                  egress_link: str = "responses", ingress_link: str = "requests", fails_link: str = "fails",
-                 run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None) -> None:
+                 run_nonce: Callable[[int], bytes] = secrets.token_bytes, paced: float | None = None,
+                 watermark: Callable[[], Awaitable[tuple[Any, Any]]] | None = None) -> None:
         if paced is not None and not (isinstance(paced, (int, float)) and slack < paced < params.bucket_ms / 1000):
             raise ValueError(f"a paced bucket leaves past the slack and before the next boundary, so that a tick in "
                              f"time hands it before its time, not {paced!r} s after its boundary")
@@ -323,6 +342,13 @@ class Warden:
         if not (isinstance(self.run_id, bytes) and len(self.run_id) == RUN_ID_BYTES):
             raise ValueError(f"a run id is {RUN_ID_BYTES} bytes")
         self.requests_released = 0
+        self.watermark = watermark
+        self.watermarked: tuple[int, int] | None = None
+        self.watermark_lost: list[int] = []
+        self.watermark_error: str | None = None
+        self._watermark_writer: Any = None
+        self._watermark_unsent = bytearray()
+        self._watermark_lines: deque[tuple[int, int, list[_Connection]]] = deque()
         self.params, self.connect = params, connect
         self.origin, self.windows, self.clock, self.sleep, self.slack = origin, windows, clock, sleep, slack
         self.egress = Certifier(egress_link, params.grid)
@@ -375,6 +401,7 @@ class Warden:
         if self.paced is not None:
             self._pacer = await Pacer.start(backlog=WRITE_BACKLOG)
             reports = asyncio.create_task(self._reports(self._pacer))
+        opening = asyncio.create_task(self._open_watermark()) if self.watermark is not None else None
         try:
             for t in range(self.windows * self.params.window):
                 deadline = self.origin + t * tau
@@ -394,6 +421,9 @@ class Warden:
             for connection in [*self.active, *self.queue]:
                 self._end(connection, cut=True)
             self.active, self.queue = [], deque()
+            if opening is not None:
+                opening.cancel()
+                self._end_watermark()
             if self._pacer is not None:
                 reports.cancel()
                 await self._pacer.kill()
@@ -407,11 +437,13 @@ class Warden:
             self._emit(t // T - 1, Reason.MONITOR_UNAVAILABLE)
         while self.queue and len(self.active) < self.params.lanes:
             self._admit(self.queue.popleft(), t)
-        parts = []
+        parts, released = [], []
         for c in self.active:
             if c.ingress_end is None and c.failed is None:
                 for frame in self._ingress(c, t):
                     self.ingress.enqueue(frame)
+                if c.ingress_end == t:
+                    released.append(c)
             out = self._egress(c, t)
             for frame in out:
                 self.egress.enqueue(frame)
@@ -426,6 +458,9 @@ class Warden:
             if c.ended is not None:
                 self._end(c)
         self.active = [c for c in self.active if c.ended is None]
+        if self.watermark is not None:
+            self._watermark_lines.append((t, self.requests_released, released))
+            self._flush_watermark()
         for grid in (self.ingress, self.egress, self.fails):
             row = grid.tick()
             if self.release is not None:
@@ -517,8 +552,11 @@ class Warden:
         try:
             c.server = await self.connect()
             if c.unsent:
+                c.wrote = not c.server[1].is_closing()
                 c.server[1].write(bytes(c.unsent))
                 c.unsent.clear()
+            if self.watermark is not None:
+                self._flush_watermark()
             self._changed.set()
             reader = c.server[0]
             while c.bytes_out <= cap:
@@ -531,6 +569,8 @@ class Warden:
                 self._changed.set()
         except OSError as e:
             c.upstream = f"{type(e).__name__}: {e}"
+            if self.watermark is not None:
+                self._flush_watermark()
         finally:
             self._changed.set()
 
@@ -560,12 +600,13 @@ class Warden:
         c.held += b"".join(sent)
         if c.ingress_end == t:
             c.release, self.requests_released = self.requests_released, self.requests_released + 1
-            whole = with_release(bytes(c.held), c.release, self.run_id)
+            whole = with_release(bytes(c.held), c.release, self.run_id, t)
             c.held.clear()
             if c.server is None:
                 c.unsent += whole
             elif not c.server[1].is_closing():
                 c.server[1].write(whole)
+                c.wrote = True
         return out
 
     def _egress(self, c: _Connection, t: int) -> list[bytes]:
@@ -615,9 +656,80 @@ class Warden:
             return
         writer.write(data)
 
+    async def _open_watermark(self) -> None:
+        """Open the watermark stream and send its head, then the lines made before it opened."""
+        try:
+            _, writer = await self.watermark()
+        except OSError as e:
+            self.watermark_error = f"{type(e).__name__}: {e}"
+            return
+        if self.watermark_error is not None:
+            writer.close()
+            return
+        self._watermark_writer = writer
+        self._send_watermark(watermark_head(self.run_id) + bytes(self._watermark_unsent))
+        self._watermark_unsent.clear()
+
+    def _written(self, c: _Connection) -> bool | None:
+        """Whether c's release has reached its server connection: written whole to it open and its transport's buffer
+        emptied (True), or lost, the connection closing, failed or ended first (False); None while neither holds."""
+        if c.written is None:
+            w = None if c.server is None else c.server[1]
+            if c.wrote and not w.is_closing() and w.transport.get_write_buffer_size() == 0:
+                c.written = True
+            elif (w is not None and w.is_closing()) or c.upstream is not None or c.done.done():
+                c.written = False
+        return c.written
+
+    def _flush_watermark(self) -> None:
+        """Send the lines made, in order, each once every release of its bucket has reached the server or been lost,
+        naming the lost: a release still on its way holds its line and the later ones, never a tick, at most until its
+        connection ends."""
+        while self._watermark_lines:
+            t, n, released = self._watermark_lines[0]
+            done = [self._written(c) for c in released]
+            if None in done:
+                return
+            self._watermark_lines.popleft()
+            lost = [c.release for c, ok in zip(released, done) if not ok]
+            self.watermarked = (t, n)
+            self.watermark_lost += lost
+            self._send_watermark(watermark_chunk(t, n, lost))
+
+    def _send_watermark(self, data: bytes) -> None:
+        """Write `data` on the watermark stream, or keep it until the stream opens, never waiting: a stream with more
+        than `WRITE_BACKLOG` unwritten is closed, and a stopped one takes nothing more."""
+        if self.watermark_error is not None:
+            return
+        w = self._watermark_writer
+        if w is None:
+            self._watermark_unsent += data
+            if len(self._watermark_unsent) > WRITE_BACKLOG:
+                self.watermark_error = "backlog"
+                self._watermark_unsent.clear()
+        elif w.is_closing():
+            self.watermark_error = "closed"
+        elif w.transport.get_write_buffer_size() > WRITE_BACKLOG:
+            self.watermark_error = "backlog"
+            w.close()
+        else:
+            w.write(data)
+
+    def _end_watermark(self) -> None:
+        """At the run's end, every connection ended: the lines still held, the terminating chunk, and the stream
+        closed."""
+        self._flush_watermark()
+        if self._watermark_writer is None:
+            self.watermark_error = self.watermark_error or "unopened"
+            return
+        self._send_watermark(WATERMARK_END)
+        self._watermark_writer.close()
+
     def _end(self, c: _Connection, cut: bool = False) -> None:
         for task in c.tasks:
             task.cancel()
+        if self.watermark is not None and c.release is not None:
+            self._written(c)
         if c.server is not None:
             c.server[1].close()
         c.writer.close()

@@ -1,12 +1,44 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.DeployHonest
-public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-public import Proofs.Flock.Claims.Recursion.SlotsCheck
-public import Proofs.Flock.Claims.Recursion.VStarLinks
-public import Proofs.Flock.Recursive.VStarCheck
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Recursive.VStarCheck
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # A staged part's numbers do not depend on the inner rounds (`numsFixed`)
@@ -14,16 +46,16 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 `NumsFixed st`: wherever part `s`'s staged statement sets up at two inner rounds `ms` and `ms'`, its numbers (`numsOf`:
 `VO`'s rounds and the table error, `N₀` and weight) agree. The two statements are `partRaw` at the same compiled
 statement and part, so they differ only in what the stage reads off the rounds: the part's public file, the inner
-session's record and the coin server's transcript. The record and transcript are recursive inputs the setup's tables
+session's record and the challenger's live-coin part's transcript. The record and transcript are recursive inputs the setup's tables
 don't read (`RecIns.setup_read`), and the public file changes nothing else Flock's parsers read (`rawIns_pf`). So the
 two setups are `Stmt.setupTables` at the same arguments but the public file; the recursive setup holds each to one
 table (`RecSetup.oneFull`) under `verity/flock-circuit`'s hidden outputs (`staged_one`), which is `Stmt.setupHidden`'s
 statement (`setupTables_okH'`).
 
 The numbers read a table's `m`, `mPts`, `k_log` and region count and the spec's `points` and `mPts`. `setupHidden_key`
-reads those off the circuit (`HmOut.parseCommit`, the same file) and the statement's `n`: without a draw, the loaded file's
+reads those off the circuit (`HmOut.parseCommit`, the same file) and the statement's `n`: without a sample, the loaded file's
 instance count, which `RecVStar.checkCircuit` holds to the instances of V*'s statement `s` at the verifier's own inner
-shape (`staged_pop`); with one, the draw's proved units (`Layout.drawn_spec`), the same draw.
+shape (`staged_pop`); with one, the sample's proved units (`Layout.drawn_spec`), the same sample.
 -/
 
 @[expose] public section
@@ -130,7 +162,7 @@ theorem inLoad_row {tags : Tags} {c : Circuit} {pi : HmIn.Ports} {f : ByteArray}
 
 set_option maxHeartbeats 4000000 in
 /-- **What `Stmt.setupHidden` set up**, at any `--public-inputs`: its circuit is `HmOut.parseCommit`'s, its public file the
-loaded one or its draw, and its `n`, `m`, `mPts` and region count are the circuit's and the public file's. -/
+loaded one or its sample, and its `n`, `m`, `mPts` and region count are the circuit's and the public file's. -/
 theorem setupHidden_key {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program q : Option ByteArray} {st : Flock.Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program q = .ok st) :
@@ -154,7 +186,7 @@ theorem setupHidden_key {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
       rw [Array.size_append, outRegions_size ‹HmOut.regions _ _ = _›, inRegions_size ‹HmIn.regions _ _ _ = _›]
 
 /-- **Two setups at the same arguments but the public file have the same numbers' inputs**, where they hold the same
-population without a draw. -/
+population without a sample. -/
 theorem hidden_same {tags : Tags} {cf pf pf' : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program q : Option ByteArray} {t t' : Flock.Stmt}
     (h : Stmt.setupHidden tags cf pf coins tables draw partition program q = .ok t)

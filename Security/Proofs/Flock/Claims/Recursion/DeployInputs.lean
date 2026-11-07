@@ -1,8 +1,39 @@
 module
 
 public import Proofs.Flock.Claims.DeployInputs
-public import Flock.RecBudget
 public import Flock.RecLinkPart
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import VCVio.Prelude.Core
 
 /-!
 # A V* part's statement: its bytes, its parser and its recursive setup
@@ -12,7 +43,7 @@ flags, is the canonical byte encoding (`RecRaw.encode`) of exactly what that com
 directory: Flock's statement (`FlockDeploy.Raw`, `--zk` on) and the bytes and numbers of `--rec-inner`, `--rec-part`,
 `--rec-bindings`, `--rec-rows`, the inner statement's files (`--rec-inner-circuit`, `--rec-inner-public`,
 `--rec-inner-partition`; `--rec-inner-coins`, which the verifier refuses), the inner session's record
-(`--rec-inner-session`'s `session.json`), the coin server's transcript (`--rec-inner-transcript`), the circuit
+(`--rec-inner-session`'s `session.json`), the challenger's live-coin part's transcript (`--rec-inner-transcript`), the circuit
 registration (`--rec-inner-registration`) and how the inner statement is set up (`--rec-inner-statement`,
 `--rec-inner-tables`' tables, `--rec-inner-draw`), the inner population's link table
 (`--rec-links`: its root and row count) and the verifier's program of the inner statement (`--rec-inner-program`).
@@ -24,14 +55,14 @@ other format, `flock-verify-rec-statement/v3` (with the inner statement's coins)
 `RecVStar.ownBindingsOfJson`, `RecCoins.filesInput`'s source, the inner circuit's META binding
 (`innerMetaRegistration`, from the header's first nine lines, `metaOf`), `recTranscriptInput`'s commits
 (`RecSetup.commits`), `recLinkInput`'s tops and link points (`RecVStar.innerLink`, `linkInputOf`) and `Registered.ofJson`
-on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's draw with those inputs and no
+on `--rec-rows`. `RecIns.setup` is `verifyCmd`'s `setupOf` at the statement's sample with those inputs and no
 `--identifier`, in its order: `RecSetup.checkInner`, `RecLinkPart.checkShape` (the link table the inner shape's),
 `RecBudget.regs`, `RecBudget.statements`, the session's statement (`Stmt.setupTables`) with each table's registered
 reads and the identifier's absence, `Registered.checkFull`, `RecSetup.checks`, `RecSetup.oneFull`, `RecBudget.table`,
 `Zk.shapeOk`,
 `RecCoins.check`, `RecVStar.checkPubRows`, `RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink`
 (through `checkOpenTops` and `checkLevelTopReads`), `RecLinkPart.check` (the link table's part against the table and
-the inner statement), `RecVStar.checkLabels` and the draw's law.
+the inner statement), `RecVStar.checkLabels` and the sample's law.
 Like `FlockDeploy.Ins.setup` it refuses a statement without hm96-sha512 rows first, and its SHA-512 calls are the
 shipped ones, outside the oracle.
 -/
@@ -169,7 +200,7 @@ def boundOf : Option ByteArray → Flock.V (Option String × Option RecVStar.Sta
   | none => .ok (none, none)
   | some c => do RecSetup.metaBound (← metaOf c)
 
-/-- **How the inner statement is set up** (`RecCoins.formInput`): `--rec-inner-statement` with its tables and draw, or
+/-- **How the inner statement is set up** (`RecCoins.formInput`): `--rec-inner-statement` with its tables and sample, or
 none. -/
 def formOf (w : RecRaw) : Except String (Option RecCoins.InnerForm) :=
   match w.innerStatement with
@@ -217,9 +248,9 @@ def commitsOf (w : RecRaw) (src : Option RecCoins.Source) (bound : Flock.V (Opti
         some <$> RecSetup.commits inner (textOf "rec inner transcript" t)
           (w.registration.mapM (textOf "rec inner registration")) bound record
 
-/-- **The circuit table's tops and the link points, as the coin server recorded them** (`recLinkInput`): with
+/-- **The circuit table's tops and the link points, as the challenger's live-coin part recorded them** (`recLinkInput`): with
 `--rec-inner-transcript` and the source's record, `RecVStar.innerLink` on the transcript, which holds the record's link
-points to the coin server's; none without either. -/
+points to the challenger's live-coin part's; none without either. -/
 def linkInputOf (w : RecRaw) (src : Option RecCoins.Source) : Except String (Option RecVStar.InnerLink) :=
   match w.transcript, src.map (·.record) with
   | some t, some record => do
@@ -261,7 +292,7 @@ def RecRaw.ins (w : RecRaw) : Except String RecIns := do
     (Registered.ofJson (← jsonOf "rec rows" b)).mapError fun e => s!"rec rows: {e}"
   pure { base, inner, part := w.recPart, bindings, src, bound, commits, link, rows, links }
 
-/-- **`verifyCmd`'s setup with the recursive inputs** at the statement's draw, with no `--identifier`. -/
+/-- **`verifyCmd`'s setup with the recursive inputs** at the statement's sample, with no `--identifier`. -/
 def RecIns.setup (s : RecIns) : Flock.V (SessionSpec × Array Stmt) := do
   let r := s.base.read
   if !r.tags.hm96Rows then

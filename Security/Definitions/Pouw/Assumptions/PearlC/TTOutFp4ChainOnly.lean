@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Pouw.Assumptions.PearlC.TTOutFp4
 public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
 
 /-!
 # TT_OUT under the chain-only reading at an FP4 record (staged, nothing pinned)

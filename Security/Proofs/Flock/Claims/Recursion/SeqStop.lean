@@ -110,30 +110,30 @@ theorem simRounds_pre_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.Ms
     (hf : ∀ h : List (Claims.Msg × Claims.Msg), h.length < n → (Claims.SP.eval H ask (f (asRounds h))).1 = pm h)
     (hg : ∀ h : List (Claims.Msg × Claims.Msg), h.length = n → (Claims.SP.eval H ask (g (asRounds h))).1 = pm h) :
     (Claims.SP.eval H ask (Claims.Recursion.simRounds g k
-      (Claims.SP.eval H ask (Claims.Recursion.simRounds f n [])).1)).1 = Claims.ZKMal.interact ask pm (n + k) [] := by
+      (Claims.SP.eval H ask (Claims.Recursion.simRounds f n [])).1)).1 = Claims.interact ask pm (n + k) [] := by
   subst hk
   rw [simRounds_interact H ask f n [] (by simp), List.nil_append,
-    show Claims.ZKMal.histOf ([] : List (Claims.Msg × Claims.Out)) = [] from rfl,
+    show Claims.histOf ([] : List (Claims.Msg × Claims.Out)) = [] from rfl,
     Claims.ZKMal.interact_congr_lt ask _ pm n hf n [] (by simp), Claims.ZKMal.interact_add ask pm n 1 []]
   unfold Claims.ZKMal.cont
   split
   · rename_i hgo
     have hl := Claims.ZKMal.goesOn_length hgo
-    have hm : ∀ p ∈ Claims.ZKMal.interact ask pm n [], Claims.ZKMal.isMsg p.2 = true := by
+    have hm : ∀ p ∈ Claims.interact ask pm n [], Claims.ZKMal.isMsg p.2 = true := by
       have h' := hgo
       simp only [Claims.ZKMal.goesOn, Bool.and_eq_true, List.all_eq_true] at h'
       exact h'.2
     rw [simRounds_interact H ask g 1 _ hm, List.nil_append]
     congr 1
-    have e := hg (Claims.ZKMal.histOf (Claims.ZKMal.interact ask pm n [])) (by rw [Claims.ZKMal.histOf_length, hl])
+    have e := hg (Claims.histOf (Claims.interact ask pm n [])) (by rw [Claims.ZKMal.histOf_length, hl])
     rw [Claims.ZKMal.interact_one ask (fun h => (Claims.SP.eval H ask (g (asRounds h))).1)
-      (Claims.ZKMal.histOf (Claims.ZKMal.interact ask pm n [])), e]
+      (Claims.histOf (Claims.interact ask pm n [])), e]
     exact (Claims.ZKMal.interact_one ask pm _).symm
   · rename_i hgo
-    have hs : Claims.Recursion.goesOn (Claims.ZKMal.interact ask pm n []) = false := by
+    have hs : Claims.Recursion.goesOn (Claims.interact ask pm n []) = false := by
       rcases Nat.eq_zero_or_pos n with h0 | h0
       · subst h0
-        exact absurd (by simp [Claims.ZKMal.interact, Claims.ZKMal.goesOn]) hgo
+        exact absurd (by simp [Claims.interact, Claims.ZKMal.goesOn]) hgo
       · exact (Claims.ZKMal.recGoesOn_interact ask pm n [] h0).trans (Bool.eq_false_iff.2 hgo)
     rw [simRounds_stop g 1 _ hs] <;> rfl
 
@@ -143,7 +143,7 @@ theorem simRounds_bind_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.M
     (hf : ∀ h : List (Claims.Msg × Claims.Msg), h.length < n → (Claims.SP.eval H ask (f (asRounds h))).1 = pm h)
     (hg : ∀ h : List (Claims.Msg × Claims.Msg), h.length = n → (Claims.SP.eval H ask (g (asRounds h))).1 = pm h) :
     (Claims.SP.eval H ask (Claims.Recursion.spBind (Claims.Recursion.simRounds f n []) fun ms =>
-      Claims.Recursion.simRounds g k ms)).1 = Claims.ZKMal.interact ask pm (n + k) [] := by
+      Claims.Recursion.simRounds g k ms)).1 = Claims.interact ask pm (n + k) [] := by
   rw [Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval]
   exact simRounds_pre_eval H ask f g n k pm hk hf hg
 
@@ -155,7 +155,7 @@ theorem simRounds_tail_eval (H : Claims.Msg → Claims.Msg) (ask : List Claims.M
     (hg : ∀ h : List (Claims.Msg × Claims.Msg), h.length = n → (Claims.SP.eval H ask (g (asRounds h))).1 = pm h) :
     (Claims.SP.eval H ask (Claims.Recursion.spBind (Claims.Recursion.simRounds f n []) fun ms =>
       Claims.Recursion.spBind (Claims.Recursion.simRounds g k ms) tail)).1 =
-        (Claims.SP.eval H ask (tail (Claims.ZKMal.interact ask pm (n + k) []))).1 := by
+        (Claims.SP.eval H ask (tail (Claims.interact ask pm (n + k) []))).1 := by
   simp only [Claims.ZKMal.recSpBind_eq, Claims.ZKMal.spBind_eval]
   rw [simRounds_pre_eval H ask f g n k pm hk hf hg]
 
@@ -173,7 +173,7 @@ theorem simPre_pm {W : Type} (ivScope : Claims.Msg → Bool) (I : Claims.Recursi
     (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg → Claims.Out) (x : Claims.Msg)
     (hI : I.V.k (xIOf x) = IV.k (xIOf x)) (c : (simPre (deployRec IV ivScope b) I).C x) :
     (Claims.SP.eval H ask ((simPre (deployRec IV ivScope b) I).prog x c)).1 =
-      Claims.ZKMal.interact ask (pmZ b H x (I.V.k (xIOf x)) c.1 (c.2 ⟨0, Nat.zero_lt_one⟩)) (kPre IV x) [] := by
+      Claims.interact ask (pmZ b H x (I.V.k (xIOf x)) c.1 (c.2 ⟨0, Nat.zero_lt_one⟩)) (kPre IV x) [] := by
   have hK : I.V.k (Claims.Recursion.xI (deployRec IV ivScope b) x) + (deployRec IV ivScope b).kS x = kPre IV x := by
     show I.V.k (xIOf x) + kS x = IV.k (xIOf x) + kS x
     rw [hI]
@@ -277,7 +277,7 @@ noncomputable def stepS (H : Claims.Msg → Claims.Msg) (ask : List Claims.Msg �
       Claims.SP (List (Claims.Msg × Claims.Out)))
     (τ : List (Claims.Msg × Claims.Out)) (j : ℕ) (c : (SO x j).C) : List (Claims.Msg × Claims.Out) :=
   if Claims.Recursion.goesOn τ then
-    τ ++ (Claims.SP.eval H ask (Claims.ZKMal.spUnder (τ.map Prod.fst) (pB j x (Claims.ZKMal.histOf τ) c))).1
+    τ ++ (Claims.SP.eval H ask (Claims.ZKMal.spUnder (τ.map Prod.fst) (pB j x (Claims.histOf τ) c))).1
   else τ
 
 /-- **The stopped parts' nested simulator's transcript**: the first part's, then one `stepS` per session, on the

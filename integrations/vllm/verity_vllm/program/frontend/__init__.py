@@ -22,6 +22,6 @@ else:
     from verity_vllm.program.frontend.program_identity import check_identity  # noqa: F401
     from verity_vllm.program.frontend.schemas import Arr, Dep, Tup  # noqa: F401
     from verity_vllm.program.frontend.torch_frontend import (Bound, ExportReport, Function, Ops, Prim, Registered,  # noqa: F401
-                                                             batch, bind, definition_digest, export, export_report, function,
+                                                             batch, bind, export, export_report, function,
                                                              ops, scan)
     from verity_vllm.program.frontend.value_types import type_of  # noqa: F401

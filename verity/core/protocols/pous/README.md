@@ -58,22 +58,22 @@ print(v.profile().statement())                                                 #
 ~~~
 
 On the deployed path the timed rounds run on the memory challenger (`memory_challenger`), an auditor-trusted device
-on a machine the prover doesn't control at the prover's site (the auditor's own VM or box, under the auditor's account),
-never a process on the prover's node. It commits its indices in a coin tree before the session, hashes each whole
+on a machine the developer doesn't control at the developer's site (the auditor's own VM or box, under the auditor's account),
+never a process on the developer's node. It commits its indices in a coin tree before the session, hashes each whole
 answer after reading its receipt time (`block_digest`, its `sha512/row/v2` digest: the inner digest of C's leaf, which
-`answer_circuit.py` opens), and signs the session's round records once, under a header bound to the setup's root of `C*`.
-A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has used. `verdict` checks a
-signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at `lms.DEPLOYED`
-(`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused. `verdict_circuit`'s
-`PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof block, its one output bit the public verdict: 1
-iff at most `M` of the `K` rounds miss, a round hitting when its record names it, is on time within `LIMIT` and holds
-the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/Proofs/Pous/Continuous/Verdict.lean`).
+`verity/ml/protocols/pous/answer_circuit.py` opens), and signs the session's round records once, under a header bound
+to the setup's root of `C*`. A session's id is the auditor's for one audit, and its `SessionLog` refuses an id it has
+used. `verdict` checks a signed session in the clear and publishes only the verdict. It accepts S1's LMS over SHA-512 at
+`lms.DEPLOYED` (`memory_challenger.LMS`) and nothing else: a test-signed or unsigned record is refused.
+`verity.ml.protocols.pous.verdict_circuit`'s `PousVerdict_v1{K, M, LIMIT}` is the verdict over the rounds as one proof
+block, its one output bit the public verdict: 1 iff at most `M` of the `K` rounds miss, a round hitting when its record
+names it, is on time within `LIMIT` and holds the expected digest of its block (`PousVerdict.verdictProg_accepts`, `Security/Proofs/Pous/Continuous/Verdict.lean`).
 Its gates as Lean code, `PousCheck.Verdict.prog` (`check/PousCheck/Verdict.lean`), are `verdictProg` gate for gate
 (`Security/Proofs/Pous/Continuous/VerdictCode.lean`), and `check/tests/test_verdict_difftest.py` holds the Definition's
 compiled circuit to that code.
 
 As an auditor party with a device identity, the challenger reports its sessions under its party's per-period root
-instead (`period_reports`, on `verity.core.attest`): each session is a sampling block whose one public output is its
+instead (`period_reports`, on `verity.core.attest`): each session is an execution phase whose one public output is its
 liveness record, and the period's root is signed once at its close, for the prover only. The party starts its
 attachment on its key once (`lms.PartyKey.start`), so a challenger restarted within the attachment signs no more of its
 sessions. `period_reports.PERIOD` is not in `memory_challenger.SCHEMES` until `PousCheck.RunProtocol` reads
@@ -101,7 +101,7 @@ DIGESTS.bin SESSION.json SESSION_ID` (`check/`) is the same check in Lean.
 
 **The streamed-label wipe** (`streamed_wipe`, experimental) is a proof of secure erasure for a memory wipe: the memory
 challenger fills every memory tier of one server with labels it derives itself (SHA-512 under a key fresh for the server
-and the wipe), then reveals `k` indices drawn on live coins once the fill is complete and checks each answer against its
+and the wipe), then reveals `k` indices sampled on live coins once the fill is complete and checks each answer against its
 own label, under a deadline per batch. `Pous.SecurityProofs.StreamedWipe` bounds what an accepted wipe leaves of the
 prior content, with no named assumption, for the sequential reveal, the only one the verdict accepts (batch size 1); at
 2.6 TB and `k = 74,000`, the egress plus 1.075 GB at `2^-40` (`StreamedWipeMeets2600GB`); at `k = 2152`, for every
@@ -131,13 +131,13 @@ print(v.public())                                                              #
 ~~~
 
 A period's wipe is `wipe_period`: one streamed wipe of the node, the memory challenger a party of its own on
-`period.json`'s `challenger_host` (`wipe_party`, which streams the fill and times the reads over a socket), judged as the
-wipe's component of onsite Verity, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
+`period.json`'s `challenger_host` (`wipe_party`, which streams the fill and times the reads over a socket), judged as onsite
+Verity's wipe subprotocol, `verity/wipe/v0` (`MemoryChallenger.WipeProtocol`, `wipe-protocol` in
 `verity/core/devices/memory_challenger/lean/`). An accepted wipe publishes `M` (every declared tier), the reads `k` the
 memory challenger chose (`wipe_party --reads`, 2152 by default; the prover never names them), `r = ratio(k)` and the
 foreign content it may leave, `StreamedWipeMeetsReads`' `512·(⌈n/r⌉ − 1) + n + ⌊log₂ k⌋ + 130 + R + E` at `2^-128` with
 the egress counted (`R` the declared memory past the fill), and `M` (vacuous) otherwise; an unsigned session is
-undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's leg of the all-protocols period runner.
+undecided. `wipe_period.leg(period_dir, node, out)` is the wipe's run in the all-protocols period runner.
 `wipe_monitoring` reports one accepted wipe over a week, a month and a year of a deployment's machines, each wiped
 every `cadence_s` seconds (a day by default), at δ = 1% and 10⁻⁶: the T wipes, at most M − 1 of them failing their bound
 except with δ (`prCoin_count_le_choose`'s count bound, which PoUB's period shares), every one
@@ -149,11 +149,11 @@ On a GPU, `period.json`'s `wipe` puts the fill in device memory (`wipe_store`: t
 before the fill, with host memory as its CPU stand-in) and has the challenger stream it natively (`wipe_stream.c`, built
 and gated on the challenger's host by `wipe_stream`); `benchmarks/pous/streamed_wipe/demo.sh` runs it on one H200. Its
 `foreign_bytes` makes the prover the cheat that keeps prior content in place of the fill's first labels (`fM`: one label
-past the published figure, which must reject), its `reads` the reads the leg expects, and its `placement` `simulated` names a challenger on the prover's node the stand-in for
-one on its own host. The leg's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
+past the published figure, which must reject), its `reads` the reads the wipe expects, and its `placement` `simulated` names a challenger on the prover's node the stand-in for
+one on its own host. The wipe's record names what the bound doesn't cover (`uncertified`): the links leaving the node that
 no network certifier counts (the placement's `links`: `wipe.links`, and the challenger's as the prover connected to it),
-the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's leg
-declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the leg declares the larger
+the node's memory outside the declared tier (`undeclared_tiers`: the device's past the declared tier, which a GPU's wipe
+declares whole, the host's DRAM, its disks), a GPU's driver reserve when NVML gave no total (the wipe declares the larger
 of CUDA's and NVML's totals, and NVML's counts the reserve: `wipe_store.Cuda.info`) and an egress signed `UNCOUNTED`. It
 also carries the session's window, `t0` (the prover connected) and `t1` (the session signed) on the challenger's clock,
 which a network certifier counts the egress over.
@@ -180,7 +180,7 @@ its parity chosen), and `σ_K(r)` is `r ⊕ K` when that is below `p` and `r` ot
 payload bytes in each 2,056-byte block), `B = 2^19` blocks in 8 segments of `2^16`, `k = 105` challenges revealed one at
 a time, `Δ = 0.5 ms` plus a measured RTT allowance of at most 354 µs, and SHA-512 with its whole output for every digest.
 Every integer is fixed-width, unsigned and big-endian. A block's `K` and `t` are expanded where they are used:
-counter-mode SHA-512 over a prefix that frames the setup salt, drawn after `W` is committed, zero-padded to whole 128-byte
+counter-mode SHA-512 over a prefix that frames the setup salt, sampled after `W` is committed, zero-padded to whole 128-byte
 chunks; `K` is the stream's first `w/8` bytes and `t` its first `w/8`-byte word below `p`. The challenges are
 `verity.ml.randomness` v2, bound to the epoch, the verification root and the salt. P2 is experimental: its
 instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
@@ -202,12 +202,16 @@ instantiation assumption, P2–M1-SGI (`P2RingReducesToM1p`), is not accepted.
   `P2RingRoundSecureWide` and `CoinCommitHides`. `schemes.p2.P2_CLAIMS` and `WIDE_CLAIMS` are the claims a certificate
   rests on.
 - **Python.** `schemes.p2`: `P2Params`, the schemes `P2` (`p2-16448/v4`) and `P2ChaCha` (`p2-16448/v2`),
-  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `encode_segment`,
-  `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the fastest cooperating
-  16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`). `benchmarks/pous/p2_v1/reference.py`
-  is the reference (the maps, keys, salt, tree and derivations), and `wire.py` beside it is `p2-audit-wire/v4`
+  `family_certificate`, `wide_certificate`, `expand_prefix`, `stream`, `below`, `sha512_keys`, `sha512_keys_indexed`,
+  `encode_segment`, `decode_segment`, and `CERT_K`, `DELTA_NS`, `RTT_ALLOWANCE_CAP_NS` and `ROOT_CALL_NS` (half the
+  fastest cooperating 16,448-bit root; the cap is the largest whole µs with `Δ + cap < ROOT_CALL_NS`).
+  `benchmarks/pous/p2_v1/reference.py` is the reference: its maps and key streams are `schemes.p2`'s (its field and
+  `sha512_keys_indexed`) under the reference's names and refusals, its `K_AUDIT`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`
+  are `CERT_K`, `DELTA_NS` and `RTT_ALLOWANCE_CAP_NS`, its `DEPLOYMENT` is the certificate's store as a `P2Params`
+  (`Params.of`), its salt, key prefix, leaves and derivations are its own, and
+  the tree over its leaves is `verifier.py`'s (`MerkleTree`, `verify_path`). `wire.py` beside it is `p2-audit-wire/v4`
   (`envelope`, `setup_messages`, `open_message`, `challenge_message`, `response_message`, `record`, `final_message`,
-  `verify_path`, `parse_envelope`, `verify_audit`, `parse_final`).
+  `parse_envelope`, `verify_audit`, `parse_final`).
 - **The registered scheme and the wire.** `p2-16448/v4` runs the generic protocol's setup, so four things differ from
   `reference.py` and the wire: its setup salt (24 bytes from `setup.draw_salt`, not 32 from `verity/pous/p2-setup/v4`
   over the commitment), its key prefix (it frames that salt), its leaf (`0x00 ‖ tag_s ‖ u16le(v) ‖ R`, not

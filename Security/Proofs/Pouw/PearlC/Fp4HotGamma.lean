@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Pouw.PearlC.TileGamma
 public import Definitions.Pouw.PearlC.DeviceFp4Hot
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.PearlC.DeviceFp4Issue
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TileGamma
 
 /-!
 # Pearl-C4 v2's price twins, at any FP32 price and scale path (staged)

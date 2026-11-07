@@ -5,7 +5,7 @@ recursion's guarantee reads (`RecDeploy.V`, `Proofs.Flock.Claims.Recursion.Deplo
 `RecDeploy.partRaw … s p`: of what `verify` reads, only the part's Flock statement (its circuit, partition, program and
 registered reads, with its staged public file), its index and the verifier's own bindings of it vary by part, and every
 other input is one value for every part (`Shared`, with the shared rows `--rec-rows`): the verifier's inner shape, the
-inner statement's files and how it is set up, the inner session's record, the coin server's transcript, the circuit
+inner statement's files and how it is set up, the inner session's record, the challenger's live-coin part's transcript, the circuit
 registration and the inner population's link table (`--rec-links`). No part sees another, so only the composition can
 hold every part to one set. Each part's `VERDICT` names
 the SHA-512 of each (`rec_shared`, `rec_rows_sha512`), whether it ran `--zk` (`zk`), and its session's coin key
@@ -28,15 +28,15 @@ then the close. It accepts only when the staging is the record's first event, at
 set every part read; each of V*'s statements has exactly one session opened and no other index has one; every opened
 session is a composed part's (its part and coin key) and every composed part's session is among them; and the close is
 the last event (`checkRun`). `OneRun` states it, and `check_oneRun` proves it of `check`. The record holds no coin:
-each session's coins are its own keyed coin tree's, drawn fresh at its `Hello`, never committed before the run. The
+each session's coins are its own keyed coin tree's, sampled fresh at its `Hello`, never committed before the run. The
 record is read once, in comparisons quadratic in V*'s statement count (at most 16, `RecBudget`), never per gate.
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.JsonParse
 public import Flock.Bytes
 public import Flock.Hash
+public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 
@@ -51,7 +51,7 @@ def digest (b : ByteArray) : String := hexOf (Sha512.hash b)
 /-- **What every part of one recursive statement reads alike**, as its `VERDICT` names it (`rec_shared`): the SHA-512 of
 the verifier's own inner shape (`--rec-inner`), of the inner statement's files (`--rec-inner-circuit`,
 `--rec-inner-public`, `--rec-inner-partition`), of a record of check 5's coins (`--rec-inner-coins`, which `verify`
-refuses), of the inner session's record (`--rec-inner-session`'s `session.json`), of the coin server's transcript
+refuses), of the inner session's record (`--rec-inner-session`'s `session.json`), of the challenger's live-coin part's transcript
 (`--rec-inner-transcript`) and of the circuit registration (`--rec-inner-registration`); how the inner statement is set
 up (`--rec-inner-statement`, each lookup table's name and SHA-512, and the SHA-512 of
 `--rec-inner-draw`); the inner population's link table (`--rec-links ROOT:N`: its root in hex and its row count); and
@@ -189,7 +189,7 @@ def PartVerdict.ofJson (j : Json) : PartVerdict where
 
 /-- **The shared inputs in the compiled verifier's form**: every part of `RecDeploy.V` reads the verifier's own inner
 shape, here the composition's (`inner`, its SHA-512), the inner statement's three files, the inner session's record,
-the coin server's transcript and how the inner statement is proved, and no record of check 5's coins; and the link
+the challenger's live-coin part's transcript and how the inner statement is proved, and no record of check 5's coins; and the link
 table it reads is the composition's own (`links`, `--rec-links`). -/
 def Shared.Complete (inner : String) (links : Option (String × Nat)) (s : Shared) : Prop :=
   s.recInner = some inner ∧ s.innerCircuit.isSome ∧ s.innerPublic.isSome ∧ s.innerPartition.isSome ∧

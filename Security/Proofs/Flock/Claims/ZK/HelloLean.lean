@@ -1,21 +1,51 @@
 module
 
 public import Proofs.Flock.Claims.ZK.Release
-public import Proofs.Flock.Claims.ZK.CoinLayer
 public import Flock.Firewall.Hello
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The `Hello` at Lean's `flock-firewall hello`
 
-`flock-firewall hello` (`Flock.Firewall.Hello`) is the code of record of a firewalled session's `Hello`: the verifier's
-own session parameters at the session's statement, with the nonce it draws in `coins.nonce`, framed as `Req::Hello`
+`flock-firewall hello` (`Flock.Firewall.Hello`) is the code of record of a ZK server session's `Hello`: the verifier's
+own session parameters at the session's statement, with the nonce it samples in `coins.nonce`, framed as `Req::Hello`
 (live `PROTOCOL.md` §10). Here that function is held to the coin layer's `Hello`.
 
 * `Flock.Firewall.Hello.json_eq`: its `Hello` is `CoinLayer.helloJson`, by `rfl`.
 * `CoinLayer.helloMsg`: its message at the masked session the statement `x` sets up (`sessOf`) and a nonce;
   `CoinLayer.helloD_eq`: that is `CoinLayer.helloD`, the session's `Hello`.
 * `LeanRelease.HelloIs`: the server's `Hello` is `helloMsg`, a named trust narrower than `HelloEq`. It is a fact about
-  what the transport hands `flock-firewall hello` (`x`'s statement files and the verifier's draw) and how it frames the
+  what the transport hands `flock-firewall hello` (`x`'s statement files and the verifier's sample) and how it frames the
   `Hello` it answers, not about how a `Hello` is made. `Refine`'s `LeanRelease.helloEq_of_helloIs` gives `HelloEq`
   from it.
 -/
@@ -54,7 +84,7 @@ namespace LeanRelease
 /-- **The server's `Hello` is `flock-firewall hello`'s**: at every tape, the server's own `Hello` is `CoinLayer.helloMsg`
 at the tape's nonce. A named hypothesis, one of the transport's trusts, narrower than `HelloEq`: that the transport hands
 `flock-firewall hello` the statement `x`'s files (the circuit, the verifier's own public file, the lookup tables, the
-table count, the partition and the program) and the verifier's draw, that the nonce it answers at is the tape's, and that
+table count, the partition and the program) and the verifier's sample, that the nonce it answers at is the tape's, and that
 `flock-circuit` frames the text it answers as `Req::Hello` (`firewall::LeanHello`); never how a `Hello` is made. -/
 def HelloIs (nr : Msg → ℕ → ℕ) (T : CoinLayer.TableData)
     (L : LeanRelease Claims.Flock.Wit ((CoinLayer.session nr T).refP.Nonce × (CoinLayer.session nr T).refP.Rand))

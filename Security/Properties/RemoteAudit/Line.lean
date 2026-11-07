@@ -1,11 +1,41 @@
 module
 
-public import Definitions.Pouw.Basic.Prob
 public import Definitions.Accounting.Assumptions.RemoteHeld
 public import Definitions.Accounting.Assumptions.RemoteOutside
 public import Definitions.Accounting.Assumptions.RemoteDraw
 public import Properties.RemoteAudit.Line.Record
 public import Properties.RemoteAudit.Line.Premises
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The memory line of record, over what the Lean verifier accepts (`RemoteAudit.Line.lineOfRecordAt`)
@@ -21,7 +51,7 @@ over its span, and `max(0, w − lost)` weights bytes a tick, `w` the weights bl
   through the coin commitment (`recordCommitted`: holding commitment `c` its record at `ω` is `recs c ω`, and the
   session it plays that record's opening draw `recordDraw`, one draw for each of the session's `⌈W/g⌉` (`Node.draws`,
   a window each at g = 1), draw `c` with the receipts its windows have in the state the record's session reaches,
-  drawing `min(s, U_c)` at the session's `samples` s) and
+  sampling `min(s, U_c)` at the session's `samples` s) and
   the record of outcome `ω` the prover's holding the deployed commitment `com ω` (`played`), whose trace of record
   (`ofRecord`, the trace over the registration's blocks with the Lean verifier's verdict on the record as its own)
   meets the memory model's premises (the links' ceiling `Links`, `SquaringCeiling`, `Disks`, `ChipCeiling`, `Routed`,
@@ -92,7 +122,7 @@ def LineChecked : Prop :=
       0 ≤ rates.linkBurstBytes ∧ 0 ≤ l.wrong
 
 /-- **The verifier refuses a line that isn't registered.** A line `line_record` computes off a record given bare,
-drawn `g` windows a coin (`lineOfRegistered`), is of a record of the registration given with it: the record names that
+sampled `g` windows a coin (`lineOfRegistered`), is of a record of the registration given with it: the record names that
 registration's digest, its registered blocks, which the line credits, are the registration's, and the line is the
 record's (`lineOfRecordOn`). -/
 def LineRegistered : Prop :=

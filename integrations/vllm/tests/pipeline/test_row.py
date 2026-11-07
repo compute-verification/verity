@@ -25,7 +25,6 @@ import gzip
 import json
 import os
 import select
-import shutil
 import signal
 import subprocess
 import sys
@@ -46,7 +45,6 @@ from verity_vllm.pipeline.row_stages import SingleRow
 TREE = Path(__file__).resolve().parents[2]
 WL = TREE / "workloads"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
-_GNU_TIMEOUT = shutil.which("timeout") is not None and b"GNU" in subprocess.run(["timeout", "--version"], capture_output=True).stdout
 
 
 def _opts(tmp: Path, *argv: str, environ: dict[str, str] | None = None, row: str = ROW):
@@ -218,7 +216,7 @@ def _start(tmp: Path, stage_exit: str | None = None) -> tuple[subprocess.Popen, 
     return p, d
 
 
-@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+@pytest.mark.usefixtures("gnu_timeout")
 @pytest.mark.parametrize("sig,rc", [(signal.SIGTERM, 143), (signal.SIGINT, 130)])
 def test_killpg_on_the_row_takes_the_stage_and_its_grandchild(tmp_path, sig, rc):
     p, d = _start(tmp_path)
@@ -238,7 +236,7 @@ def test_killpg_on_the_row_takes_the_stage_and_its_grandchild(tmp_path, sig, rc)
     assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "cancel"}.items() <= tl[1].items()
 
 
-@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+@pytest.mark.usefixtures("gnu_timeout")
 def test_the_expiry_path_still_kills_the_forked_worker(tmp_path):
     p, d = _start(tmp_path)
     stage, grand, to = (int((d / f"{n}.pid").read_text()) for n in ("stage", "grandchild", "timeout"))
@@ -250,7 +248,7 @@ def test_the_expiry_path_still_kills_the_forked_worker(tmp_path):
     assert "TIMEOUT after 0s" in log and "CANCELLED" not in log
 
 
-@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+@pytest.mark.usefixtures("gnu_timeout")
 def test_a_normal_exit_returns_the_stage_rc_unchanged(tmp_path):
     p, d = _start(tmp_path, stage_exit="7")
     assert p.wait() == 7
@@ -505,7 +503,7 @@ def _built(r: SingleRow, monkeypatch, **kw) -> dict:
 
 
 @pytest.mark.slow
-@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+@pytest.mark.usefixtures("gnu_timeout")
 def test_a_call_boundary_without_a_source_stops_the_row_after_its_build_by_name(tmp_path, monkeypatch):
     r = _row(tmp_path, "--stages", "build,match")
     _built(r, monkeypatch, embed=PF)
@@ -522,7 +520,7 @@ def test_a_call_boundary_without_a_source_stops_the_row_after_its_build_by_name(
     assert {"stage": "row", "ev": "end", "ok": False, "stopped_at": "call_boundaries"}.items() <= _timeline(r)[-1].items()
 
 
-@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+@pytest.mark.usefixtures("gnu_timeout")
 def test_a_row_whose_every_call_boundary_has_a_source_goes_on_to_match(tmp_path, monkeypatch):
     r = _row(tmp_path, "--stages", "build,match")
     man = _built(r, monkeypatch)
@@ -535,7 +533,7 @@ def test_a_row_whose_every_call_boundary_has_a_source_goes_on_to_match(tmp_path,
     assert gate[3].startswith(f"identities={n} claimed=0 covered={n} uncovered=0 unattached=0 sources=call_boundary wall=")
 
 
-@pytest.mark.skipif(not _GNU_TIMEOUT, reason="GNU timeout (coreutils) required -- the pods have it, macOS does not")
+@pytest.mark.usefixtures("gnu_timeout")
 def test_a_tp_row_stops_after_its_build_on_any_call_boundary(tmp_path, monkeypatch):
     t = _tp_row(tmp_path, TP_DENSE)
     os.makedirs(t.d, exist_ok=True)

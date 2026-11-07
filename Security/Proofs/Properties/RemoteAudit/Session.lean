@@ -1,15 +1,15 @@
 module
 
-public import Properties.RemoteAudit
 public import Proofs.Properties.RemoteAudit.Plan
+public import Properties.RemoteAudit
 
 /-!
 # The session's bookkeeping (`AcceptedMinPasses`, `PassesStepped`, `PassesReadDistinct`, `ReceiptsBelowLimit`,
 `AppendsInOrder`, `PassesChained`)
 
 One invariant of every state a run reaches from `State.init` (`Inv`, on the fields it reads), kept by every event
-(`step_inv`): passes arrive only in the window being filled, each with its plan, step and head; a window is drawn only
-with `min_passes` passes and accepted only once drawn; the steps strictly increase in arrival order below `2^64`; every
+(`step_inv`): passes arrive only in the window being filled, each with its plan, step and head; a window is sampled only
+with `min_passes` passes and accepted only once sampled; the steps strictly increase in arrival order below `2^64`; every
 plan reads distinct blocks of the store; each window's receipts stay below `RECEIPT_LIMIT`; the appends are the store's
 next indices, each with the next append coin; and the session's head, and each pass's, is the chain over a prefix of the
 appends, past which the pass's plan reads nothing. A rejection only marks its window's verdict, so it keeps the
@@ -85,8 +85,8 @@ theorem inv_init (params : Params) (reg : Registration) (coins appendCoins : Arr
 
 /-! ## Window updates -/
 
-/-- `w'` keeps `w`'s passes, is drawn only if `w` was or has `min_passes` passes, stays drawn, and is accepted only if
-`w` was or it is drawn. -/
+/-- `w'` keeps `w`'s passes, is sampled only if `w` was or has `min_passes` passes, stays sampled, and is accepted only if
+`w` was or it is sampled. -/
 def Keeps (P : Params) (w w' : Win) : Prop :=
   w'.roots = w.roots ∧ w'.plans = w.plans ∧ w'.steps = w.steps ∧ w'.heads = w.heads ∧
     (w'.drawn.isSome → w.drawn.isSome ∨ P.minPasses ≤ w.roots.size) ∧ (w.drawn.isSome → w'.drawn.isSome) ∧
@@ -167,7 +167,7 @@ theorem inv_final {s : State} (h : Inv s) (u : Nat) :
     Inv { s with windows := s.windows.modify u ({· with final := true}) } :=
   invOn_same h (samePasses_modify _ _ _ _ fun _ => keeps_refl _ _)
 
-/-- A fresh window: no passes, not drawn, no verdict. -/
+/-- A fresh window: no passes, not sampled, no verdict. -/
 theorem invOn_push {P R AC ws filling stp extent appends drawnN head} (h : InvOn P R AC ws filling stp extent appends drawnN head)
     (w : Win) (hr : w.roots = #[]) (hp : w.plans = #[]) (hs : w.steps = #[]) (hh : w.heads = #[])
     (hd : w.drawn = none) (hv : w.verdict = none) :

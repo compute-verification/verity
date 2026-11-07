@@ -742,7 +742,7 @@ def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_o
     low, lo = SLOT.join(tmp_path, priority=True, rank=15)                   # the lowest train, resent later
     lane, la = SLOT.join(tmp_path)
     assert SLOT.ahead(low) == 0 and SLOT.ahead(high) == 1 and SLOT.ahead(unranked) == 2 and SLOT.ahead(lane) == 3
-    post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the post-landing run of `main`
+    post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the after-landing run of `main`
     assert SLOT.ahead(post) == 0 and SLOT.ahead(low) == 1
     waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=UTC))
     assert [w["priority"] for w in waits] == [True, True, True, True, False]
@@ -904,7 +904,7 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     assert not sent("--on", "vy-nebius-1")
     assert check.train_gb(True, "research", None, False) is None
     assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
-    assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # a post-landing run of the suites
+    assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # an after-landing run of the suites
     assert check.train_gb(True, None, ["lean-build", "lean-audit", "lean-suites"], False) == check.TRAIN_GB   # its Lean shard
     assert check.train_gb(True, None, ["lean-suites:verity-flock"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, ["flock-circuit-build", "circuit-check"], False) == check.TRAIN_GB
@@ -1134,9 +1134,9 @@ def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp
 def test_a_train_check_counts_only_other_train_checks_reservations_and_a_lane_check_counts_every_one(tmp_path, monkeypatch, capsys):
     """A free train slot (mem=300) would read a negative net behind pool checks that reserve 279 GB each and use 25 and 5,
     and wait until someone shrank their reservations by hand. A
-    `--priority` waiter (a train's check, drive's post-landing run) counts another job at what it holds, already out of
+    `--priority` waiter (a train's check, drive's after-landing run) counts another job at what it holds, already out of
     memory_gb, and another priority check's reservation in full; a lane's check still counts every reservation. Each check's own
-    reservation is its slot's whole mem= in research.mem's GB: the post-landing run's 601.3 GB on n2 was slot a's mem=560."""
+    reservation is its slot's whole mem= in research.mem's GB: the after-landing run's 601.3 GB on n2 was slot a's mem=560."""
     proc = tmp_path / "proc"
     for pid, gib in ((100, 25), (300, 5), (200, 50)):                          # a research run, pool check p0, another train
         (proc / str(pid)).mkdir(parents=True)

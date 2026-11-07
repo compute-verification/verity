@@ -1,11 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkCoins.Lazy
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Leaf
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.Statements
-public import Proofs.Flock.Soundness.CROnly.Hiding
-public import Proofs.Flock.Soundness.CROnly.Hm96Sha512
-public import Proofs.Flock.Soundness.CROnly.ZKKey
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.Weights
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.CROnly.Hm96Sha512
+import Proofs.Flock.Soundness.CROnly.ZKKey
+import Proofs.Flock.Soundness.Discharge.ZkCoins.Lazy
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Committed coins against live coins: a hybrid over committed rounds
@@ -13,11 +17,11 @@ public import Proofs.Flock.Soundness.CROnly.ZKKey
 `committed_le` (`CommittedLe`) and its hm96-sha512 form `committed_le_hm96` (`CommittedLeHm96`).
 
 Each committed round is in a mode (`m j : Option D`): real (`none`), with its block and salt uniform and the prover
-shown its leaf, or ideal with leaf `v` (`some v`), with its block uniform, its salt drawn from the posterior of `v`
+shown its leaf, or ideal with leaf `v` (`some v`), with its block uniform, its salt sampled from the posterior of `v`
 (`kern`) and the prover shown `v`. `Exp m` is the committed prover's success probability in mode `m`; with every round
 real it is `probC`.
 
-* `exp_step`: one round from real to ideal costs `δ`, with the ideal leaf averaged over its law. For each block, the
+* `exp_step`: one round from real to ideal costs `δ`, with the ideal leaf averaged over its sampling design. For each block, the
   salt is first redrawn from its posterior given its own leaf (`fiber_avg`, exact); the run is then a `[0,1]`-valued
   test of that leaf, and T1 (`hiding_fun`) swaps it for an ideal leaf; with the leaf fixed, the round's law changes
   (`reweight`) to the ideal mode's.

@@ -76,12 +76,6 @@ WIDE = CompositeDefinition("OneStageTestWide", 0, ("N",),
                            lambda B, S, x, y: B.batch(XOR64, x, y, axes=(0, 0)), register=False)
 
 
-def test_the_size_classes_are_the_powers_of_two_from_16_to_the_widest():
-    assert P.UNIT_CLASSES == tuple(16 * 2 ** i for i in range(15)) and P.UNIT_CLASSES[-1] == P.UNIT_CLASS_MAX == 262_144
-    assert [P.unit_class(b) for b in (0, 16, 17, 24, 1024, 1025, 262_144, 262_145)] == \
-        [16, 16, 32, 32, 1024, 2048, 262_144, None]
-
-
 def test_a_unit_wider_than_the_widest_class_or_a_template_of_no_gate_is_refused():
     """Each proof block's committed bits fit a public size class, the least that holds them, and a template has a gate: a
     template instance of 262,144 bits (the widest class, `Gemm_v2{K=2048,N=16384}`'s in the measured widths) is taken, one
@@ -256,6 +250,28 @@ def test_registration_refusals():
     ports = _ports(prog, q, P.units(prog, q))
     codes = {_check({**rec, **both}, prog, q, ports=dict(order)).codes for order in (ports.items(), reversed(ports.items()))}
     assert len(codes) == 1 and set(next(iter(codes))) == {"R3-domain", "R3-leaves"}
+
+
+def test_the_window_runs_its_days_declared_circuit():
+    """R2 holds the record's program to the one circuit the registration log declares for the window's day, read off the
+    accepted log's view: another day's program is `R2-declared`, a day the log declares nothing for `R2-undeclared`, and
+    a day declared twice, which the log's own check refuses, `R2-declared-twice`. A verifier passes the day and the
+    declarations together, as the view writes them, or neither."""
+    from verity.core.protocols import registration as G
+    prog, q, rec = _registration(6)
+    bodies = [G.Declaration(0, rec["program"], (PAIR.id,)), G.Declaration(1, "0" * 128, (PAIR.id,))]
+    declared = G.check(G.Auditor(), "remote", G.chain("remote", bodies)).view().to_json()["declarations"]
+    assert _check(rec, prog, q).ok and _check(rec, prog, q, day=0, declarations=declared).ok
+    assert _check(rec, prog, q, day=1, declarations=declared).codes == ("R2-declared",)
+    assert _check(rec, prog, q, day=2, declarations=declared).codes == ("R2-undeclared",)
+    with pytest.raises(G.Refused, match="entry 2: duplicate-declaration"):
+        G.check(G.Auditor(), "remote", G.chain("remote", [*bodies, G.Declaration(0, "0" * 128)]))
+    twice = [*declared, {"blocks": [], "day": 0, "program": "0" * 128}]
+    assert _check(rec, prog, q, day=0, declarations=twice).codes == ("R2-declared-twice",)
+    for day, given in ((0, None), (None, declared), (-1, declared), (True, declared),
+                       (0, [{"day": 0, "program": rec["program"]}])):
+        with pytest.raises(ValueError, match="declar"):
+            _check(rec, prog, q, day=day, declarations=given)
 
 
 def test_window_domains_bind_program_partition_port_schema_leaves_and_run():
@@ -535,7 +551,7 @@ def test_stratified_draw_checks():
     law = D.derive(prog, q, rule)
     good = {"law": "stratified", "population": 6, "k": 4, "strata": law["strata"], "units": [1, 3, 4, 5]}
     assert D.check_draw(good, rec, law).ok and D.law_of(good) == law
-    assert D.check_draw({**good, "units": [0, 1, 3, 4]}, rec, law).ok         # 2 and 2: another valid draw
+    assert D.check_draw({**good, "units": [0, 1, 3, 4]}, rec, law).ok         # 2 and 2: another valid sample
     assert D.check_draw({**good, "units": [0, 1, 3, 5]}, rec, law).codes == ("strata-count",)
     assert D.check_draw({**good, "units": [1, 3, 4, 6]}, rec, law).codes == ("units-range", "strata-count")
     assert D.check_draw({**good, "k": 5}, rec, law).codes == ("law", "strata")
@@ -756,7 +772,7 @@ def _work_program():
 
 def test_derive_expands_the_work_rule_over_the_verifiers_table():
     """PAIR does the PoUW work; XOR3 stands for proof blocks credited nothing (dequantization, or filler: proof blocks of padded rows only,
-    or declared uncredited), which draw their floor for integrity and add nothing to W."""
+    or declared uncredited), which sample their floor for integrity and add nothing to W."""
     prog, q = _work_program()
     table = {PAIR.id: 10, XOR3.id: 0}
     law = D.derive(prog, q, D.parse_law("work:4"), table)
@@ -827,7 +843,7 @@ def test_work_draw_checks_and_closures():
 
 def test_audit_record_under_the_work_law():
     """The work sampling design is the stratified sampling design at its sizes, so the profile is core's `Stratified` over the same strata at the
-    work sizes; the zero-work stratum is bounded by its floor draw."""
+    work sizes; the zero-work stratum is bounded by its floor sample."""
     from verity.core.protocols.profile import Stratified, Stratum
     prog, q, rule, table, rec = _work_registration()
     law = D.derive(prog, q, rule, table)

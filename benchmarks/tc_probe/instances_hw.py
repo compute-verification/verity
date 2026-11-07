@@ -69,7 +69,7 @@ from verity_config.settings import SHARED
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import tc_probe as P  # sibling module: kernels, formats, instruction table, SASS check, result envelope
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S
 from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 from verity.ml.circuits.targets import target as T
 
@@ -230,7 +230,7 @@ def bf16_random_finite_operands(rng: np.random.Generator, shape) -> np.ndarray:
 @dataclass(frozen=True)
 class Synthetic:
     """A seeded synthetic set of a ligero chain relation (``archive.direct.ligero.relchain.instances`` / ``instances_digest``,
-    and before it ``fp8.chain.instances_fp8``): input ``i`` draws ``rng = default_rng([seed, i])``, ``a`` then ``b`` (``K_VU`` words
+    and before it ``fp8.chain.instances_fp8``): input ``i`` samples ``rng = default_rng([seed, i])``, ``a`` then ``b`` (``K_VU`` words
     each) with ``operands``, and records ``tc_dot(model)`` chained from ``+0`` after every step.  The set has no files: its
     ``manifest_sha256`` is ``sha256("<relation> synthetic|seed=<seed>|n=<n>|K=1536")``."""
 

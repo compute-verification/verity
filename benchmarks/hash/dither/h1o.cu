@@ -3,7 +3,7 @@
 // H1 + fx1 receipts (`h1r_unit`'s MMAs over X = A + b and W' = B + c + U and its tail, `segment.call_words`), so the MMAs
 // whose words are receipted are the MMAs that serve: no other product of A and B is computed.  wb⁺ = [B + c + U > 127] and
 // wb⁻ = [B + c + U < -128] come from B and the noise in the unit (never an input), so z = X (B + c)^T exactly for every
-// int8 B (s32, mod 2^32), the z each cell commits.  The seeds are the call's own, from the window's
+// int8 B (s32, mod 2^32), the z each cell commits.  The seeds are the call's own, from the execution phase's
 // salt and root(A_j), root(B_j) (`unit_seed`, the seeded regime), so a call needs its A table's root before its
 // units and nothing from a later round.  A served call is two plain launches on the caller's stream into caller-owned
 // buffers, the step read from the device (`H1OStep`), so a CUDA graph captured once serves every step:
@@ -69,7 +69,7 @@ struct OutEpiT {
   const float* sw;
   int n, M, m, flags;
   uint8_t* wbs;  // the warp's wb operand, 32 * XS bytes of shared memory
-  const u64* salt;       // the window's salt (8 words)
+  const u64* salt;       // the execution phase's salt (8 words)
   const u64* step_base;  // the step's first position
   u64 st0, st1, st2, rt0, rt1, rt2;  // the seed and receipt tags
   const u32* bws = nullptr;  // BAND: the call's band workspace (h1o_bandrows_k), band (ri, b) at 16 (ri nl + b) 32 RB words
@@ -219,7 +219,7 @@ __global__ void __launch_bounds__(STH, 2) h1o_unitss_k(const H1O* __restrict__ F
   h1s_unit<OutEpiT<PL, BD>>(C, blockIdx.x, sh, F->seeds, nt0, nt1, nt2, F->out[p], (st.flags & F_NW_UNITS) ? 1 : 0, ep);
 }
 
-// J10 banded (measured only; labelled noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): band (ri, b)
+// J10 banded (measured only; labelled noise=j10-banded, a reading of SharedNoise.lean): band (ri, b)
 // of g column tiles reads one set of row streams, its leader unit ri ncb + b g's h1tile rows (seed_j's blocks l RB + c),
 // written here once a step into bws before the call's units, which hash only their own columns.  One warp a (live row
 // block ri, band b, J consecutive chunks), lane l row l; every lane derives the leader's seed_j (`unit_seed`, the
@@ -335,7 +335,7 @@ __global__ void __launch_bounds__(32) h1o_ref_k(const H1Call* __restrict__ call,
 constexpr int NWO = 4;
 
 // one served call: xq [M, K] s8 and sa [M] f32 (row_quant's), sw [N] f32 (the layer's), y [M, N] bf16 and zo [M, N] s32
-// (the call's outputs); F (the call's entry), S, the window's salt and the step's base position on the device.  The
+// (the call's outputs); F (the call's entry), S, the execution phase's salt and the step's base position on the device.  The
 // weights are the call table's.  The caller's h1c_a_call (the slot and its A table) runs first.
 extern "C" int h1o_units_launch(const H1O* F, const H1OStep* S, int units, int n, int k, const int8_t* xq, const float* sa,
                                 int M, const float* sw, void* y, int* zo, const u64* salt, const u64* step_base,
@@ -395,7 +395,7 @@ H1O_UNITS_EXPORT(h1o_unitsb2p_launch, unitsb, true, 2)
 H1O_UNITS_EXPORT(h1o_unitss2_launch, unitss, false, 2)
 H1O_UNITS_EXPORT(h1o_unitss2p_launch, unitss, true, 2)
 
-// J10 banded, peeled (measured only; noise=j10-banded, j10b_ref.py's reading of SharedNoise.lean): bws holds
+// J10 banded, peeled (measured only; noise=j10-banded, a reading of SharedNoise.lean): bws holds
 // h1o_band_bytes(units, n, k, g) bytes, the call's own; form 0 block2 (OCC 2) and 3 block with the rows read in the
 // segment loop (NoEpi::BAND 1), 1 split and 2 split2 (staged), 4 block2 and 5 block staged (BAND 2); mode 0 the band-rows
 // pass then the units, 1 the units alone (rows from the last pass), 2 the pass alone, 3 mode 0 with the units launched as

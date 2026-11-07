@@ -68,18 +68,18 @@ class LeanError(RuntimeError):
 
 
 @functools.cache
-def executable() -> Path:
-    """`lake build sampled-proofs-verifier`, once per process, under `BUILD_LOCK`; the executable's path."""
+def executable(exe: str = EXE) -> Path:
+    """`lake build sampled-proofs-verifier` (or `exe`), once per process, under `BUILD_LOCK`; the executable's path."""
     BUILD_LOCK.parent.mkdir(parents=True, exist_ok=True)
     with open(BUILD_LOCK, "a") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         try:
-            p = subprocess.run(["lake", "build", EXE], cwd=PACKAGE, capture_output=True, text=True)
+            p = subprocess.run(["lake", "build", exe], cwd=PACKAGE, capture_output=True, text=True)
         except FileNotFoundError:
-            raise LeanError(f"lake is not on the PATH, so {EXE} in {PACKAGE} cannot be built") from None
+            raise LeanError(f"lake is not on the PATH, so {exe} in {PACKAGE} cannot be built") from None
     if p.returncode != 0:
-        raise LeanError(f"lake build {EXE} in {PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
-    return PACKAGE / ".lake" / "build" / "bin" / EXE
+        raise LeanError(f"lake build {exe} in {PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
+    return PACKAGE / ".lake" / "build" / "bin" / exe
 
 
 def _dumps(value: Any) -> str:
@@ -105,10 +105,11 @@ def _dumps(value: Any) -> str:
 
 
 class _Server:
-    """One `sampled-proofs-verifier serve` process per Python process (`Difftest.serve`: a request line, an answer line),
-    started at the first call and again after it dies."""
+    """One serving process of `exe` per Python process (`Difftest.serve`: a request line, an answer line), started at
+    the first call and again after it dies."""
 
-    def __init__(self) -> None:
+    def __init__(self, exe: str = EXE) -> None:
+        self.exe = exe
         self._proc: subprocess.Popen | None = None
         self._stderr: Any = None
         self._lock = threading.Lock()
@@ -119,8 +120,8 @@ class _Server:
         with self._lock:
             if self._proc is None or self._proc.poll() is not None:
                 self._stderr = tempfile.TemporaryFile()
-                self._proc = subprocess.Popen([str(executable())], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                              stderr=self._stderr, text=True, encoding="utf-8")
+                self._proc = subprocess.Popen([str(executable(self.exe))], stdin=subprocess.PIPE,
+                                              stdout=subprocess.PIPE, stderr=self._stderr, text=True, encoding="utf-8")
             try:
                 self._proc.stdin.write(line + "\n")
                 self._proc.stdin.flush()
@@ -133,16 +134,16 @@ class _Server:
                 self._stderr.seek(0)
                 err = self._stderr.read().decode("utf-8", "replace")[-2000:]
                 self._proc = None
-                raise LeanError(f"{EXE} ended on {fn}: {err}")
+                raise LeanError(f"{self.exe} ended on {fn}: {err}")
         try:
             msg = json.loads(reply)
         except ValueError:
-            raise LeanError(f"{EXE} on {fn} answered a line that is not JSON: {reply[:500]}") from None
+            raise LeanError(f"{self.exe} on {fn} answered a line that is not JSON: {reply[:500]}") from None
         if isinstance(msg, dict) and len(msg) == 1:
             (kind, body), = msg.items()
             if kind == "output" or (kind == "reject" and isinstance(body, str)):
                 return kind, body
-        raise LeanError(f"{EXE} on {fn}: {reply[:500]}")
+        raise LeanError(f"{self.exe} on {fn}: {reply[:500]}")
 
     def close(self) -> None:
         """End the server: `Difftest.serve` stops at the end of its input."""
@@ -228,7 +229,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
             pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None) -> dict[str, Any]:
+            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
+            day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -251,6 +253,9 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["held"] = list(held)
     if outputs is not None:
         p["outputs"] = {v: dict(o) for v, o in outputs.items()}
+    if day is not None or declarations is not None:
+        p["day"] = day
+        p["declarations"] = None if declarations is None else [dict(d) for d in declarations]
     return p
 
 
@@ -261,14 +266,16 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
           binding: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
           window_root: str | None = None, held: Sequence[str] | None = None,
-          outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
-    """`registration.check` (R1-R7) by the verifier."""
+          outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
+          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
+    """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
-                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held)
+                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
+                 day=day, declarations=declarations)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs),
+                                                  window_root, held, outputs, day, declarations),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
@@ -315,16 +322,30 @@ def hello(own: Mapping[str, Any], received: str, coin_tree: Any, seen: Sequence[
 def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], program: Program, query: Mapping[str, Any],
            work_table: Mapping[str, Any] | None = None,
            closure: Mapping[int, Sequence[int]] | None = None) -> tuple[dict[str, Any], Verdict]:
-    """The challenger's draw by the verifier: the Lean's `Select.select` on `read`, the bytes of the challenger's
-    coins that the Python draw `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
+    """The challenger's sample by the verifier: the Lean's `Select.select` on `read`, the bytes of the challenger's
+    coins that the Python sample `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
     `to_json`) over the population `program` and the check's `query`, with the work table and the closure map. The two
-    agree when the Lean draws the same object and reads exactly `read`; the sample of record is then `RECORD_VERDICT`'s. Where
+    agree when the Lean samples the same object and reads exactly `read`; the sample of record is then `RECORD_VERDICT`'s. Where
     they disagree, or the Lean refuses, the verdict fails with `DISAGREE` alone (the sample returned is Python's, and the
     caller refuses it)."""
     got = lean("select", {"rule": dict(rule), "program": codec.encode_program(program), "query": dict(query),
                           "work_table": None if work_table is None else dict(work_table),
                           "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
                           "source": read.hex()})
+    mine = {"draw": dict(python), "read": len(read)}
+    verifiers = {"of_record": RECORD_VERDICT, "lean": {"refused": got["refused"]} if "refused" in got else
+                 {"read": got.get("read")}, "python": {"read": len(read)}}
+    if "refused" in got or got.get("read") != len(read) or not _same(got.get("draw"), python):
+        return dict(python), Verdict(False, (DISAGREE,), {DISAGREE: {"lean": dict(got), "python": mine}}, verifiers)
+    return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
+
+
+def select_second(python: Mapping[str, Any], read: bytes, sample: Sequence[int], n: int,
+                  k: int) -> tuple[dict[str, Any], Verdict]:
+    """A two-stage design's second stage by the verifier: the Lean's `Select.selectSecond` on `read`, the bytes of the
+    challenger's coins that the Python sample `python` (`service.select_second`'s) read in order, over the replay sample
+    `sample`, `n` proof blocks in each replay block and `k` of them sampled in each; compared as `select` compares."""
+    got = lean("select_second", {"sample": list(sample), "n": n, "k": k, "source": read.hex()})
     mine = {"draw": dict(python), "read": len(read)}
     verifiers = {"of_record": RECORD_VERDICT, "lean": {"refused": got["refused"]} if "refused" in got else
                  {"read": got.get("read")}, "python": {"read": len(read)}}
@@ -344,33 +365,61 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         session_roots: Mapping[str, str] | None = None, *, supplied: Mapping[str, Any] | None = None,
         pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-        held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None) -> Verdict:
+        held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None,
+        value_outputs: Mapping[str, Mapping[str, str]] | None = None,
+        interior: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
-    `verifiers`): on `check`'s copies, `check_public`'s values and declared items, the receipt's challenger and place in
+    `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
+    log registered first), `check_public`'s values and declared items, the receipt's challenger and place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
     with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
     opens for `window_root` released after the registration's digest, and refuses the select step where they aren't or
     `coins` is missing (code `coins`); for one that read none, `coins` must be None. Where the two differ,
-    or the Lean refuses a step, the verdict fails with `DISAGREE` alone."""
+    or the Lean refuses a step, the verdict fails with `DISAGREE` alone.
+
+    Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
+    `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`), one replay block's Program
+    (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`) and their evidence
+    (`coins`), and its `proved_units`, `instances`, `served` and `session_roots`; `python` then holds its
+    `{"receipt", "draw", "read", "audit"}` under `interior`."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
-    got = lean("run", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                                         registered, supplied, pinned, binding, schemas, window_root, held),
-                       "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
-                       "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
-                       "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
-                       "sessions": list(sessions), "verdicts": {k: dict(verdicts[k]) for k in sorted(verdicts)},
-                       "outputs": list(outputs), "statement": dict(statement), "delta": exact,
-                       "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
-                       "served": None if served is None else list(served),
-                       "session_roots": None if session_roots is None else dict(session_roots),
-                       "coins": None if coins is None else dict(coins)})
-    if isinstance(got.get("audit"), str):
-        try:
-            got = {**got, "audit": json.loads(got["audit"])}
-        except ValueError:
-            got = {"refused": f"{EXE} answered a run whose record is not JSON: {got['audit'][:500]}"}
+    args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
+                              registered, supplied, pinned, binding, schemas, window_root, held, value_outputs),
+            "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
+            "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
+            "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
+            "sessions": list(sessions), "verdicts": {k: dict(verdicts[k]) for k in sorted(verdicts)},
+            "outputs": list(outputs), "statement": dict(statement), "delta": exact,
+            "proved_units": None if proved_units is None else list(proved_units), "instances": instances,
+            "served": None if served is None else list(served),
+            "session_roots": None if session_roots is None else dict(session_roots),
+            "coins": None if coins is None else dict(coins)}
+    if interior is not None:
+        it = interior
+        i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held = it["copies"]
+        args["interior"] = {
+            "params": _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log, None,
+                              None, i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held),
+            "replay": codec.encode_program(it["replay"]),
+            "values": [{"name": n, "registered": r} for n, r in it["values"]], "record": dict(it["record"]),
+            "received": it["received"], "source": it["read"].hex(),
+            "coins": None if it["coins"] is None else dict(it["coins"]),
+            "proved_units": None if it["proved_units"] is None else list(it["proved_units"]),
+            "instances": it["instances"], "served": None if it["served"] is None else list(it["served"]),
+            "session_roots": None if it["session_roots"] is None else dict(it["session_roots"])}
+    got = lean("run", args)
+    for path in (("audit",), ("interior", "audit")):
+        at = got
+        for key in path[:-1]:
+            at = at.get(key) if isinstance(at, dict) else None
+        if isinstance(at, dict) and isinstance(at.get(path[-1]), str):
+            try:
+                at[path[-1]] = json.loads(at[path[-1]])
+            except ValueError:
+                got = {"refused": f"{EXE} answered a run whose record is not JSON: {at[path[-1]][:500]}"}
+                break
     side = (lambda r: {"refused": r["refused"]} if "refused" in r else
             {"step": r["step"], "codes": r["codes"]} if "step" in r else {"symbol": r.get("symbol")})
     verifiers = {"of_record": RECORD_VERDICT, "lean": side(got), "python": side(python)}
@@ -471,5 +520,5 @@ def audit_record(registration: Mapping[str, Any], receipt: Mapping[str, Any], dr
 
 
 __all__ = ["BUILD_LOCK", "COINS_MAX", "DISAGREE", "EXE", "LeanError", "PACKAGE", "RECORD_VERDICT", "audit_record",
-           "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "fleet",
-           "lean", "matches_public", "run", "select", "stream"]
+           "check", "check_draw", "check_proved", "check_public", "check_verdicts", "coins", "executable", "fleet", "lean",
+           "matches_public", "run", "select", "select_second", "stream"]

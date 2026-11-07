@@ -2,7 +2,6 @@ module
 
 public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Finset.Prod
-public import Mathlib.Logic.Relation
 
 /-!
 # Populations: units over committed value slots, with public dataflow
@@ -14,7 +13,7 @@ from it.
 A **population** (`Dataflow`) is a finite set of units `U` over value slots `S`. Some slots are inputs (`input`); every
 unit `u` reads the slots `reads u` and writes the slots `writes u`. The read and write sets are public and fixed before
 any value exists: they are not functions of values. Inside a unit anything goes: unit `u`'s function (`Fns`) is any map
-from the values it reads to the values it writes, a whole program if need be, since a sampled unit is proved entire.
+from the values it reads to the values it writes, a whole program if need be, since a sampled proof block is proved entire.
 
 An assignment `σ : S → V` gives every slot a value (the committed values). Unit `u` is **correct** in `σ` when its
 written slots hold its function of its read slots (`Correct`); `wrong f σ` is the set of units that are not. The
@@ -28,9 +27,9 @@ What a checker can confirm from the dataflow alone (`Checked`):
 `Determinate` is the semantic property: for every choice of unit functions, every input has exactly one assignment in
 which every unit is correct. `down B` is the downstream cone of a set of units, `up O` the slots upstream of a set of
 slots, and `coneEgress O B` the egress slots inside `B`'s cone (at `B = {u}`, its size is `E(u)`, the egress a wrong
-`u` reaches). `egress f a X O B` is what the assignments that hold the inputs `a` (off the secret slots `X`) and whose wrong
-units lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` wrong units. `amp` is the
-amplification set: the egress values the secrets give once the wrong units and their writes are fixed. `SkipsLucky` is
+`u` reaches). `egress f a X O B` is what the assignments that hold the inputs `a` (off the secret slots `X`) and whose incorrect
+proof blocks lie in `B` show on the egress slots `O`; `egressAt` is the same with at most `m` incorrect proof blocks. `amp` is the
+amplification set: the egress values the secrets give once the incorrect proof blocks and their writes are fixed. `SkipsLucky` is
 work accounting's per-unit premise: a unit the prover skipped is right on honest inputs only by luck.
 
 `DynPopulation` is the object a machine trace is: its read sets depend on values, as a VM step reads memory at an
@@ -63,7 +62,7 @@ def Correct {V : Type} (f : P.Fns V) (σ : S → V) (u : U) : Prop :=
   ∀ s : P.writes u, σ s = f u (fun r => σ r) s
 
 open Classical in
-/-- The wrong units of an assignment. -/
+/-- The incorrect proof blocks of an assignment. -/
 noncomputable def wrong [Fintype U] {V : Type} (f : P.Fns V) (σ : S → V) : Finset U :=
   univ.filter fun u => ¬ P.Correct f σ u
 
@@ -114,13 +113,13 @@ noncomputable def coneEgress [Fintype U] (O : Finset S) (B : Finset U) : Finset 
 
 open Classical in
 /-- **The egress values** at the wrong set `B`: what the assignments that hold the inputs `a` off the secret slots `X`,
-and whose wrong units lie in `B`, show on the egress slots `O`. -/
+and whose incorrect proof blocks lie in `B`, show on the egress slots `O`. -/
 noncomputable def egress [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V) (X O : Finset S)
     (B : Finset U) : Finset (O → V) :=
   (univ.filter fun σ : S → V => P.Holds a X σ ∧ P.wrong f σ ⊆ B).image fun σ o => σ o
 
 open Classical in
-/-- **The egress values with at most `m` wrong units**. -/
+/-- **The egress values with at most `m` incorrect proof blocks**. -/
 noncomputable def egressAt [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V) (X O : Finset S)
     (m : ℕ) : Finset (O → V) :=
   (univ.filter fun σ : S → V => P.Holds a X σ ∧ (P.wrong f σ).card ≤ m).image fun σ o => σ o
@@ -129,7 +128,7 @@ open Classical in
 /-- **The amplification set** at the wrong set `B` and its writes `b`, over the secrets `Cl`: what the egress slots
 `O` show in the assignments that hold the inputs `a` with a secret `s ∈ Cl` on the secret slots `X`, are wrong only in
 `B`, and write `b` on `B`'s slots. Its size is how many egress values the rest of the population makes of the secrets
-once the wrong units' writes are fixed. -/
+once the incorrect proof blocks' writes are fixed. -/
 noncomputable def amp [Fintype U] [Fintype S] [DecidableEq S] {V : Type} [Fintype V] [DecidableEq V] (f : P.Fns V) (a : S → V) (X O : Finset S)
     (Cl : Finset (S → V)) (B : Finset U) (b : P.writesOf B → V) : Finset (O → V) :=
   ((Cl ×ˢ (univ : Finset (S → V))).filter fun p =>
@@ -163,7 +162,7 @@ variable {U S V : Type} (D : DynPopulation U S V)
 def Correct (σ : S → V) (u : U) : Prop := ∀ s ∈ D.writes u, σ s = D.f u σ s
 
 open Classical in
-/-- The wrong units of an assignment. -/
+/-- The incorrect proof blocks of an assignment. -/
 noncomputable def wrong [Fintype U] (σ : S → V) : Finset U := univ.filter fun u => ¬ D.Correct σ u
 
 /-- `σ` holds the inputs `a` on every input slot outside `X`. -/

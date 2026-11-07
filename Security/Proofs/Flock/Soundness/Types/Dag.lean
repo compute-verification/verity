@@ -2,6 +2,8 @@ module
 
 public import Flock.DeriveCheck
 public import Proofs.Flock.Soundness.Types.Flat
+import Proofs.Flock.Soundness.Audit.Circuit
+import Std.Data.HashSet.Lemmas
 
 /-!
 # Derived rows compute their circuit type, over the type DAG

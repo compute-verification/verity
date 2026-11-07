@@ -8,7 +8,7 @@ public import Proofs.Core.Game.Seq
 public import Proofs.Flock.Claims.Prob
 
 /-!
-# Soundness at the verifier of record, from its subprotocols' targets
+# Soundness at the verifier, from its subprotocols' targets
 
 A composite's acceptance is its acceptance as a `same` composition and every component's on its own case
 (`accepts_same`, `accepts_components`, from `Properties.Composition`'s `answerAccepts` at the composite, `acceptTied` at
@@ -52,7 +52,7 @@ theorem component_mem {k : Verity.Registration.Composite} {a : Subprotocol} {P :
   cases k <;> cases a <;> simp [component] at h <;> subst h <;>
     simp [componentsOf, Onsite.components, Remote.components]
 
-/-- **Each composite's verifier of record is the one the composites' table lists for it**, with its subprotocols'
+/-- **Each composite's verifier is the one the composites' table lists for it**, with its subprotocols'
 ids. -/
 theorem verifier_mem (k : Verity.Registration.Composite) :
     (verifier k, (componentsOf k).map (·.id)) ∈ Composites.composites := by
@@ -60,14 +60,14 @@ theorem verifier_mem (k : Verity.Registration.Composite) :
   · exact List.mem_cons.2 (Or.inl rfl)
   · exact List.mem_cons.2 (Or.inr (List.mem_cons.2 (Or.inl rfl)))
 
-/-- **What a composite's verifier of record accepts, it accepted as a `same` composition**: an accepted composition of
-its components whose record subprotocols committed to one record, at onsite PoUS and PoUB-P2 on one store, and at
-remote every window of PoUW's period on the policy's record. -/
+/-- **What a composite's verifier accepts, it accepted as a `same` composition**: an accepted composition of
+its components whose record subprotocols committed to one record, every window of PoUW's period on the policy's record,
+and at onsite PoUS and PoUB-P2 on one store. -/
 theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) : SameAccepts k s := by
   cases k
   · obtain ⟨ps, c, ev, hp, hc, he, pub, prof, hch⟩ :=
       Properties.Composition.answerAccepts (Onsite.protocol.on s.blobs) s.params s.commitment s.evidence h
-    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied [Onsite.store] ev
+    obtain ⟨hh, hties⟩ := Properties.Composition.acceptTied Onsite.ties ev
       (Composition.checkSame "verity/onsite/v0" Onsite.tied (s.components .onsite) ps c ev) pub prof hch
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
@@ -78,7 +78,7 @@ theorem accepts_same {k : Verity.Registration.Composite} {s : Sent} (h : Accepts
     exact ⟨ps, c, ev, ⟨hp, hc, he⟩, pub, prof,
       Properties.Composition.acceptSame _ _ _ _ _ _ _ _ hh, hties⟩
 
-/-- **What a composite's verifier of record accepts, each of its subprotocols' components accepts on its own
+/-- **What a composite's verifier accepts, each of its subprotocols' components accepts on its own
 case.** -/
 theorem accepts_components {k : Verity.Registration.Composite} {s : Sent} (h : Accepts k s) {a : Subprotocol}
     (ha : a ∈ subprotocols k) : ComponentAccepts k a s := by
@@ -137,8 +137,8 @@ theorem remote_soundness_of_subprotocols : RemoteSoundness := by
   all_goals exact absurd (Finset.mem_filter.1 ha).2 Bool.false_ne_true
 
 open Classical in
-/-- **The close's draw**: from the prover's close, an event's probability is its probability over the device's draw, at
-the bytes the close leaves to the device and the evidence the strategy sends after each draw. -/
+/-- **The close's sample**: from the prover's close, an event's probability is its probability over the device's sample, at
+the bytes the close leaves to the device and the evidence the strategy sends after each sample. -/
 theorem prob_finish (D : Signer) (θ : ByteArray) (F : Array ByteArray) (c a : ByteArray) (log : List Release)
     (p : Exchange → Prop) (t : Game.Strategy (finish D θ F c a log)) :
     Game.prob p (finish D θ F c a log) t = Game.avg fun ρ : Fin D.draws → Bool =>

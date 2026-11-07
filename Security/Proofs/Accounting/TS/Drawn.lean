@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Accounting.TS.Fork
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # (I8) for a sampled window
@@ -9,11 +10,11 @@ A unit's `Good` reads the run's modes, and E1(c) is per unit (`UnitFixed`). `Dra
 don't read `UnitFixed`; `DrawnLayer.covers_of_cone` is the share's side of `Covers`: a share that charges each unit the
 run didn't pay for its late cone's weight covers every unit that isn't good.
 
-`DrawnRightOff`: the event is "in some round, binding fails (`MovedIn`) or some drawn unit's proof is unsound", which
+`DrawnRightOff`: the event is "in some round, binding fails (`MovedIn`) or some sampled proof block's proof is unsound", which
 the union bound puts at `S·(δ_bind + δ_ks)`. Off it, an accepted proof opens its unit's committed values (not
 `MovedIn`), which satisfy its relation (not `Unsound`), so they are right (`Pins`).
 
-`ProofsSoundOfDrawn`: `DrawnRightOff`'s event; off it, on an accepted path every drawn unit's proof is accepted (`Of`),
+`ProofsSoundOfDrawn`: `DrawnRightOff`'s event; off it, on an accepted path every sampled proof block's proof is accepted (`Of`),
 so the ideal game accepts (`Of`), and the good units' words over `S` (`UnitFixed`) are at least
 `(S·N_w − d·N_w)/S` by `Covers` and `Σ wt = S·N_w`.
 
@@ -270,7 +271,7 @@ theorem covers_of_cone [Fintype J] {K T L U : Type} (P : Play (Paths C m × B) S
 
 end DrawnLayer
 
-/-- A sampled window's drawn units are right at their committed values, outside binding and joint soundness failures. -/
+/-- A sampled window's sampled proof blocks are right at their committed values, outside binding and joint soundness failures. -/
 theorem DrawnRightOff : Accounting.Guarantees.TS.DrawnRightOff := by
   intro J Q Pos V _ C B _ _ S m s pf δbind δks hB hZ hPin
   refine ⟨fun x => ∃ w ∈ (Finset.univ : Finset (Fin S)), pf.MovedIn x w ∨ ∃ i, pf.Unsound x w i, ?_, ?_⟩

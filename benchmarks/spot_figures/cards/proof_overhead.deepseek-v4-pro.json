@@ -1,0 +1,24 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "proof_overhead",
+ "model": "DeepSeek-V4-Pro",
+ "status": "measured",
+ "provisional": true,
+ "source": "C-Flock --zk on an H200 without the ZK server's send check, the witness on the device, warm, statements of 1,024 and 2,048 blocks (benchmarks/flock_s8_block); a stand-in, none of DeepSeek-V4-Pro's own proof blocks, and the vertical line its marginal price until DeepSeek-V4-Pro's blocks are measured",
+ "runs": ["r20261105-042916-546a", "r20261105-044913-6ff9", "r20261105-050310-c09e"],
+ "owner": "@proofs",
+ "value": {
+  "definition": "proving GPU-seconds over the same GPU's seconds for the block's MACs at its dense peak (the census's H200 FP8 peak, equal to its s8 peak)",
+  "device": "H200",
+  "format": "s8",
+  "peak_mac_s": 9.8945e14,
+  "arm": "dev",
+  "blocks": [
+   {"block": "flock_s8_block row block {K=4096,R=1}", "stands_in": true, "macs": 4096, "out_bits": 32, "k_log": 23,
+    "seconds_per_block": 6.32e-4, "fixed_seconds": 0.209, "statement_blocks": 2048, "overhead": 1.773e8,
+    "runs": ["r20261105-042916-546a", "r20261105-044913-6ff9", "r20261105-050310-c09e"]}
+  ],
+  "model_overhead": 1.5e8,
+  "label": "Measured on an H200, an s8 stand-in (provisional)"
+ }
+}

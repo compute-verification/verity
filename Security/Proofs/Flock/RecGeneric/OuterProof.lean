@@ -21,15 +21,16 @@ public import Proofs.Flock.Claims.Aggregate
 * `E_O` fails only where some session's extraction fails on the accepted run (`Compiled.eo_bad_session`: `collect`
   gives none at a session that gives none, and witnesses outside `R_O` come from a session whose witness is outside
   `A`'s relation), so its failure is at most the sum over sessions (`Compiled.PrBad_le_sum`).
-* A session's extraction, on the forks of a draw at the session's first round, is `A`'s extractor against the session
-  prover after the draw's earlier messages (`Compiled.sessionProg_eval`, from `Runs`), at the statement the draw's
+* A session's extraction, on the forks of a sample at the session's first round, is `A`'s extractor against the session
+  prover after the sample's earlier messages (`Compiled.sessionProg_eval`, from `Runs`), at the statement the sample's
   staging rounds fix, whose shape is the session's (`Shapes`); so it fails at most as `A`'s does there, within the
   session's bounds (`Bounded`; `Compiled.prefix_bad_le`, the fork's coins and `E_O`'s coins read uniformly).
 * Averaged over prefixes, Jensen moves the average under the root; the session's round guesses are among the compiled
   verifier's `k(x)` (`Compiled.Ex_sPrB_le`), so session `s` costs `κb_s + √(γb_s·k(x)·Pr[B])`
   (`Compiled.sessKS`), and the sum of the roots is `√(γ_O·Pr[B])`.
 
-`Flock.SecurityProofs.GenericRecursiveKSCompiled` is L2: L1 at `compile(Π, A, S)` with O1 for its `E_O`.
+`compilerKS` is L2, `Definitions.Claims.RecursionGeneric`'s `CompilerKS`: L1 (`compositionKS`) at
+`compile(Π_in, A, S)` with O1 for its `E_O`.
 -/
 
 @[expose] public section
@@ -59,7 +60,7 @@ namespace Compiled
 
 variable {Coin : Type} [Inhabited Coin] {A : Arg Coin}
 
-/-! ## One session at a draw -/
+/-! ## One session at a sample -/
 
 /-- Session `s`'s staged statement in the run at coins `r`. -/
 def stmtAt (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ)
@@ -362,8 +363,8 @@ theorem sPrB_mul_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) 
   · rw [zero_mul]
     exact Finset.sum_nonneg fun j _ => Pr_nonneg _
 
-/-- **The collision term, averaged**: `𝔼[Pr[B] at the session prover]·k_s ≤ k(x)·Pr[B]`. A draw's prefix is a fork of
-a draw (`Ex_fork`), so the session's forks at rounds `off + j`, `j < k_s`, are among the compiled verifier's `k(x)`
+/-- **The collision term, averaged**: `𝔼[Pr[B] at the session prover]·k_s ≤ k(x)·Pr[B]`. A sample's prefix is a fork of
+a sample (`Ex_fork`), so the session's forks at rounds `off + j`, `j < k_s`, are among the compiled verifier's `k(x)`
 round guesses (`Fits`). -/
 theorem Ex_sPrB_le (L : Compiled Coin A) (H : Msg → Msg) (hS : L.Sessions H) {Ω : Type} [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (x : Msg) (s : Fin (L.nS x)) :
@@ -489,17 +490,22 @@ theorem outerSessionsKS : OuterSessionsKS := by
         simp only [hk]
         rfl
 
-end Claims.RecGeneric
+/-- `κ_O` is nonnegative where the sessions' bounds are (`Compiled.Bounded`). -/
+theorem Compiled.κO_nonneg {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+    {L : Compiled Coin A} {H : Msg → Msg} (hS : L.Sessions H) (x : Msg) : 0 ≤ L.toComp.κO x :=
+  show (0 : ℝ) ≤ ∑ s : Fin (L.nS x), L.κb x s from Finset.sum_nonneg fun s _ => (hS.bounded x s).1
 
-open Claims Claims.RecGeneric in
-/-- **L2** (`Flock.Guarantees.GenericRecursiveKSCompiled`): L1 at `compile(Π, A, S)`, whose `E_O` is knowledge sound by
-O1 (`Claims.RecGeneric.outerSessionsKS`) at `κ_O`, `γ_O`, nonnegative by the sessions' bounds. -/
-theorem Flock.SecurityProofs.GenericRecursiveKSCompiled : Flock.Guarantees.GenericRecursiveKSCompiled := by
+/-- `γ_O` is a square. -/
+theorem Compiled.γO_nonneg {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+    (L : Compiled Coin A) (x : Msg) : 0 ≤ L.toComp.γO x :=
+  show (0 : ℝ) ≤ (∑ s : Fin (L.nS x), Real.sqrt (L.γb x s * L.V.k x)) ^ 2 from sq_nonneg _
+
+/-- **L2** (`CompilerKS`): L1 (`compositionKS`) at `compile(Π_in, A, S)`, whose `E_O` is knowledge sound by O1
+(`outerSessionsKS`) at `κ_O`, `γ_O`, nonnegative by the sessions' bounds. -/
+theorem compilerKS : CompilerKS := by
   intro Coin W _ _ _ H I S A C hWF hKS hCF hB hAKS hSess x hK Ω _ _ P m M
-  exact Flock.SecurityProofs.GenericRecursiveKS Coin W H I S (compile C I S).toComp hWF hKS hCF hB x
+  exact compositionKS Coin W H I S (compile C I S).toComp hWF hKS hCF hB x
     (fun Ω _ _ P => outerSessionsKS Coin H A (compile C I S) hAKS hSess x Ω P)
-    (show (0 : ℝ) ≤ ∑ s : Fin ((compile C I S).nS x), (compile C I S).κb x s from
-      Finset.sum_nonneg fun s _ => (hSess.bounded x s).1)
-    (show (0 : ℝ) ≤ (∑ s : Fin ((compile C I S).nS x),
-        Real.sqrt ((compile C I S).γb x s * (compile C I S).V.k x)) ^ 2 from sq_nonneg _)
-    hK Ω P m M
+    (Compiled.κO_nonneg hSess x) (Compiled.γO_nonneg _ x) hK Ω P m M
+
+end Claims.RecGeneric

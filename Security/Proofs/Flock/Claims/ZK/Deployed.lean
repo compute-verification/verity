@@ -2,9 +2,46 @@ module
 
 public import Proofs.Flock.Claims.ZK.Hypotheses
 public import Proofs.Flock.Claims.ZK.Prefinal
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
-public import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
-public import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
+public import Proofs.Flock.Soundness.Discharge.Composed.RegWords
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.Flock
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.Discharge.Composed.Setup
+import Proofs.Flock.Soundness.Discharge.FailClosed.Mask
+import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+import Proofs.Flock.Soundness.Discharge.ZkView.Prefinal
+import Proofs.Flock.Soundness.ZK.GK.Link
+import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Flock's zero knowledge at the tables `verify --zk` sets up
@@ -48,7 +85,7 @@ open Claims
 open FlockSoundness.Discharge
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-! ## The tables the session sets up -/
 
@@ -69,7 +106,7 @@ theorem SetupTable.ok {C : Composed.CoinedSetup} (h : SetupTable C) :
   obtain ⟨_, P, Tz, st, hwf, hr, hS, M, hdm, hW, rfl⟩ := h
   exact ⟨(Composed.coinedOf_setup_of P Tz st hwf hS M hdm).2.2.2.2.2, Composed.coinedOf_reg P Tz st hwf hr hS hW⟩
 
-/-- **Each table of the hidden-output session's plan is a table the session sets up**, at every draw `verify --zk` sets
+/-- **Each table of the hidden-output session's plan is a table the session sets up**, at every sample `verify --zk` sets
 that table up (`zk_session_viewHJ`'s tables). -/
 theorem setupTable_planZHJ {mPts n : ℕ} {Reg : Type} (P : Composed.LigProver) (I : Exec.Inputs)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}

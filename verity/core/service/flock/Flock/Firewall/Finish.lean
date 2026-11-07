@@ -1,11 +1,11 @@
 /-
-# The firewall's final round (live PROTOCOL.md §10.1): a firewalled rep's proof file, computed by the firewall itself
+# The ZK server's final round (live PROTOCOL.md §10.1): a firewalled rep's proof file, computed by the ZK server itself
 
-At a firewalled rep's end the proof file that leaves is the firewall's own, this code's (`flock-circuit` sends it, in
-`zk_finish_fw`, after its end check `Firewall::finish`): the zerocheck and lincheck sent as the values that passed the firewall, masked by the rep's pads, `final_c`
+At a firewalled rep's end the proof file that leaves is the ZK server's own, this code's (`flock-circuit` sends it, in
+`zk_finish_fw`, after its end check `Firewall::finish`): the zerocheck and lincheck sent as the values that passed the ZK server, masked by the rep's pads, `final_c`
 the one those values fix; the ring switch, the masked Ligerito opening and the levels above it computed from the host's
 witness, the table's level-0 hiding and the rep's salts; and the inner proof on the rep's pads. Here that file is code the
-firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `FinishProver`) on what the firewall holds:
+ZK server runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `FinishProver`) on what the ZK server holds:
 
 * `rowsFft`, `commitFw`: a level ≥ 1's commitment of an F-table, its codeword by the additive FFT (`Link.fft`) on each lane
   (`FlockComplete.commitP`'s, which evaluates each entry on its own), its leaves `hm96-sha512/v1`'s in tasks.
@@ -20,18 +20,21 @@ firewall runs, the analysis's masked prover (`Flock.Firewall.Finish`'s copies, `
   masked Ligerito, `repOpening`; the verifier's own replay and the ring-switch and lane-phase constraints, `repCons`; the
   inner proof), its proof file
   `encZk` at `shapeZk`; a constraint that fails on the rep's pads (`failingOn`) stops it, and no file leaves. The rank check is the Lean frame's (`Frame.maskRank`), which stops the rep before this runs.
+* `Memo`, `repOpeningMemo`: what a rep's opening computes that its proof computes again, the claims' switched vectors and
+  the batched basis, left by the session loop's opening of the rep and read back by its proof, which stays the same
+  (`repOpeningMemo_fst`, `repConsWith_eq`).
 * `asksOf`: a rep's rounds answered by the coins the stream answered them, round by round.
-* `liveAsks`, `openLive`, `innerLive`: the rep's rounds past its recorded coins sent to the firewall as they come, each
+* `liveAsks`, `openLive`, `innerLive`: the rep's rounds past its recorded coins sent to the ZK server as they come, each
   waiting for the coins the stream answered it: the opening's (`repPiop` and `repOpening` at zero values and pads), the
   rounds the Lean frame holds the device's opening rounds to, and the inner proof's (`repCons` and `innerP`), the
-  firewall's own (live PROTOCOL.md §10.1): in the session loop each goes to the loop's frames before it leaves, which
+  ZK server's own (live PROTOCOL.md §10.1): in the session loop each goes to the loop's frames before it leaves, which
   release it themselves, and its coins are held to the ones the stream answered (`serve`'s `inner` and `own`). Only the
   `Asks` is live: the code that computes each round is `repFw`'s.
 
 * `serve`: the requests, on the statement of `flock-verify verify --zk`: each table's level 0, each rep's salts for levels
-  ≥ 1, which this code draws itself from the operating system and hands the prover (`salts`), in the session loop only
+  ≥ 1, which this code samples itself from the operating system and hands the prover (`salts`), in the session loop only
   once the rep's frame took its algebraic phase's last coins (`Own.algebraEnded`), and
-  each rep's proof file on them and on the rep's draws, which never come from the prover: its frame's in the session
+  each rep's proof file on them and on the rep's samples, which never come from the prover: its frame's in the session
   loop (`Own`), else this code's own (`drawsOf`). `flock-firewall finish` serves them on its standard input (`cmd`,
   `Witness.setupOf`); the session loop on its frames port (`serveLoop`, `Hello.Setup`), reading each table's level 0 from
   its own `Level0`s.
@@ -76,6 +79,23 @@ def treeOf (leaves : Array ByteArray) (k : Nat) : Array (Array ByteArray) × Arr
     cur := (Array.range (cur.size / 2)).map fun i => Sha512.hash (cur[2 * i]! ++ cur[2 * i + 1]!)
     layers := layers.push cur
   return (layers, cur)
+
+/-- `treeOf` with each level's nodes `step cur`. -/
+def treeOfWith (step : Array ByteArray → Array ByteArray) (leaves : Array ByteArray) (k : Nat) :
+    Array (Array ByteArray) × Array ByteArray := Id.run do
+  let mut layers := #[leaves]
+  let mut cur := leaves
+  for _ in [0:k] do
+    cur := step cur
+    layers := layers.push cur
+  return (layers, cur)
+
+/-- `treeOf` with each level's nodes in tasks (`Link.nodesPar`). -/
+def treeOfPar : Array ByteArray → Nat → Array (Array ByteArray) × Array ByteArray := treeOfWith Link.nodesPar
+
+/-- Compiled code runs `treeOfPar`; the kernel and every proof see `treeOf`. It stays above `commitRows`. -/
+@[csimp] theorem treeOf_eq_treeOfPar : @treeOf = @treeOfPar :=
+  (congrArg treeOfWith (funext Link.nodesPar_eq)).symm
 
 /-- **A commitment of given rows** under the `hm96-sha512/v1` leaves, salt `q` fitted to 192 bytes, `2^CHUNK` rows to a
 task. -/
@@ -357,6 +377,98 @@ def repOpening (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArr
     lanePad salt (fun _ _ => 0)
   return (ss, lg, zl, rec)
 
+deriving instance DecidableEq for Flock.Switched
+
+/-- **What a rep's opening computed that its proof computes again**: each claim's switched vector on the packed table `g`
+(`switchVec`, which reads a claim's coordinates alone, the claims' `xs`) and the batched basis on `2^l` points at the
+switched claims `sws` (`basisVals`). The session loop's opening of the rep (`Drive.openStepM`) leaves it in the rep's
+frame, and the rep's proof (`innerLiveK`) reads it back (`repOpeningMemo`). -/
+structure Memo where
+  g : Array F128
+  xs : Array (Array F128)
+  sv : Array (Array F128)
+  sv_eq : ∀ claims : Array Claim, claims.map (·.x) = xs →
+    sv = (Array.range claims.size).map fun k => switchVec g claims[k]!
+  sws : Array Switched
+  l : Nat
+  bv : Array F128
+  bv_eq : bv = basisVals sws l
+
+theorem switchVecs_x (g : Array F128) {a b : Array Claim} (h : a.map (·.x) = b.map (·.x)) :
+    (Array.range a.size).map (fun k => switchVec g a[k]!) = (Array.range b.size).map fun k => switchVec g b[k]! := by
+  have hs : a.size = b.size := by simpa using congrArg Array.size h
+  rw [hs]
+  refine Array.map_congr_left fun k hk => ?_
+  have hk := Array.mem_range.1 hk
+  have e := congrArg (fun c : Array (Array F128) => c[k]?) h
+  simp only [Array.getElem?_map, Array.getElem?_eq_getElem (show k < a.size by omega), Array.getElem?_eq_getElem hk,
+    Option.map_some, Option.some.injEq] at e
+  rw [Fast.getElem!_eq a (show k < a.size by omega), Fast.getElem!_eq b hk]
+  unfold switchVec
+  rw [e]
+
+/-- `claims`' switched vectors on `g`: `memo`'s where it holds them for `g` (the same array, else an equal one) and claims
+at the same coordinates, else computed, a task to a claim (`ringSwitchPFast`'s). -/
+def Memo.switchVecs (memo : Option Memo) (g : Array F128) (claims : Array Claim) :
+    {sv : Array (Array F128) // sv = (Array.range claims.size).map fun k => switchVec g claims[k]!} :=
+  match memo with
+  | some M =>
+    match withPtrEqDecEq M.g g (fun _ => inferInstance) with
+    | .isTrue hg =>
+      if hx : claims.map (·.x) = M.xs then ⟨M.sv, by rw [M.sv_eq claims hx, hg]⟩
+      else ⟨Fast.parTab 1 (fun k => switchVec g claims[k]!) claims.size, Fast.parTab_eq _ _ _⟩
+    | .isFalse _ => ⟨Fast.parTab 1 (fun k => switchVec g claims[k]!) claims.size, Fast.parTab_eq _ _ _⟩
+  | none => ⟨Fast.parTab 1 (fun k => switchVec g claims[k]!) claims.size, Fast.parTab_eq _ _ _⟩
+
+/-- The batched basis on `2^l` points at `sws`: `memo`'s where it holds it at `sws` and `l`, else computed. -/
+def Memo.basis (memo : Option Memo) (sws : Array Switched) (l : Nat) : {bv : Array F128 // bv = basisVals sws l} :=
+  match memo with
+  | some M => if h : M.sws = sws ∧ M.l = l then ⟨M.bv, by rw [M.bv_eq, h.1, h.2]⟩ else ⟨basisVals sws l, rfl⟩
+  | none => ⟨basisVals sws l, rfl⟩
+
+/-- The `Memo` of `claims`' switched vectors `sv` on `g` and the batched basis `bv` on `2^l` points at `sws`. -/
+def Memo.of (g : Array F128) (claims : Array Claim)
+    (sv : {sv : Array (Array F128) // sv = (Array.range claims.size).map fun k => switchVec g claims[k]!})
+    (sws : Array Switched) (l : Nat) (bv : {bv : Array F128 // bv = basisVals sws l}) : Memo :=
+  { g, xs := claims.map (·.x), sv := sv.1, sv_eq := fun _ hc => sv.2.trans (switchVecs_x g hc.symm), sws, l,
+    bv := bv.1, bv_eq := bv.2 }
+
+/-- **`repOpening` reading and leaving a `Memo`** (`repOpeningMemo_fst`): the same rounds and the same proof, the claims'
+switched vectors and the batched basis read off `memo` where it holds them (`Memo.switchVecs`, `Memo.basis`), else
+computed, and the `Memo` of the ones it used. -/
+def repOpeningMemo (memo : Option Memo) (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit)
+    (st : Setup) (sch : Flock.Schedule) (lay : Zk.PadLayout) (tPad rep : Nat) (g : Array F128) (cm0 : Commit)
+    (claims : Array Claim) (h : Array F128) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
+    TMW M ((Array (Array F128) × LigeritoProof × Zk.Level0Msgs × Zk.L0Rec) × Memo) := do
+  let sv := Memo.switchVecs memo g claims
+  let (ss, T, sws) ← ringSwitchP io (fun k => if k < claims.size then sv.1[k]! else switchVec g claims[k]!) claims
+  let bv := Memo.basis memo sws (st.m - 7)
+  let (lg, zl, rec) ← ligeritoPZk io commit st.merkle sch T cm0 g bv.1 lay h rep tPad extra lanePad salt (fun _ _ => 0)
+  return ((ss, lg, zl, rec), Memo.of g claims sv sws (st.m - 7) bv)
+
+/-- **Reading a `Memo` changes no rep's opening**: `repOpeningMemo` at any `memo` is `repOpening` with its `Memo`. -/
+theorem repOpeningMemo_fst [LawfulMonad M] (memo : Option Memo) (io : Asks M)
+    (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup) (sch : Flock.Schedule)
+    (lay : Zk.PadLayout) (tPad rep : Nat) (g : Array F128) (cm0 : Commit) (claims : Array Claim) (h : Array F128)
+    (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
+    Prod.fst <$> repOpeningMemo memo io commit st sch lay tPad rep g cm0 claims h extra lanePad salt =
+      repOpening io commit st sch lay tPad rep g cm0 claims h extra lanePad salt := by
+  unfold repOpeningMemo repOpening
+  have hs : (fun k => if k < claims.size then (Memo.switchVecs memo g claims).1[k]! else switchVec g claims[k]!) =
+      fun k => switchVec g claims[k]! := by
+    funext k
+    split
+    · rw [(Memo.switchVecs memo g claims).2]
+      exact Fast.getElem!_range_map _ ‹_›
+    · rfl
+  dsimp only
+  rw [hs, map_bind]
+  refine bind_congr fun ⟨ss, T, sws⟩ => ?_
+  dsimp only
+  rw [(Memo.basis memo sws (st.m - 7)).2, map_bind]
+  refine bind_congr fun ⟨lg, zl, rec⟩ => ?_
+  simp only [map_pure]
+
 /-- **A rep up to its inner proof**, as rep `rep` of a stream whose transcript starts at `dom`: its PIOP on the passed
 values `vals` (by pad index) masked by the rep's pads `pads` committed as `ic`, its opening (`repOpening`) on the
 statement's extra claims `extras` and the table's extra lanes and paddings, then the verifier's own replay of them and the
@@ -379,7 +491,36 @@ def repCons (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray)
   let lgc ← StateT.lift (monadLift (Zk.ligeritoConstraints lay rec lg zl) : M (Array (String × Zk.Lin)))
   return (p, zl, rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc)
 
-/-- **The firewall's proof of one rep**: `repCons`, then the inner proof on the rep's pads and the constraints it returns.
+/-- `repCons` with its opening reading `memo` (`repOpeningMemo`), which changes nothing it returns (`repConsWith_eq`). -/
+def repConsWith (memo : Option Memo) (io : Asks M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit)
+    (st : Setup) (sch : Flock.Schedule) (tPad rep : Nat) (dom : ByteArray) (g : Array F128) (cm0 : Commit)
+    (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit) (vals : Array F128) (extra lanePad : Nat → Nat → F128)
+    (salt : Nat → Nat → ByteArray) : TMW M (Proof × Zk.Level0Msgs × Array (String × Zk.Lin)) := do
+  let lay := Zk.PadLayout.new st.m st.kLog sch.k0
+  let (zp, lp, claims) ← repPiop io st lay (flat cm0.cap) ic.root extras fun i => vals[i]! + pads.h[i]!
+  let ((ss, lg, zl, rec), _) ← repOpeningMemo memo io commit st sch lay tPad rep g cm0 claims pads.h extra lanePad salt
+  let p : Proof := { cap := cm0.cap, params := pcsParams st.merkle sch, zerocheck := zp, lincheck := lp,
+                     ringSwitches := ss, ligerito := lg }
+  let tr' ← get
+  let (rp, _) ← StateT.lift (monadLift ((Zk.replay st lay p ic.root).run (Transcript.init tr'.rounds dom)) :
+    M (Zk.Replayed × Transcript))
+  let ccAb := Zk.claimCheck rp.claims[0]! ss[0]!
+  let ccC := Zk.claimCheck rp.claims[1]! ss[1]!
+  let lgc ← StateT.lift (monadLift (Zk.ligeritoConstraints lay rec lg zl) : M (Array (String × Zk.Lin)))
+  return (p, zl, rp.cons ++ #[("ring switch ab", rp.abValue.addConst ccAb), ("ring switch c", rp.cValue.addConst ccC)] ++ lgc)
+
+theorem repConsWith_eq [LawfulMonad M] (memo : Option Memo) (io : Asks M)
+    (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup) (sch : Flock.Schedule) (tPad rep : Nat)
+    (dom : ByteArray) (g : Array F128) (cm0 : Commit) (extras : Array Claim) (pads : PadsZk) (ic : InnerCommit)
+    (vals : Array F128) (extra lanePad : Nat → Nat → F128) (salt : Nat → Nat → ByteArray) :
+    repConsWith memo io commit st sch tPad rep dom g cm0 extras pads ic vals extra lanePad salt =
+      repCons io commit st sch tPad rep dom g cm0 extras pads ic vals extra lanePad salt := by
+  unfold repConsWith repCons
+  refine bind_congr fun ⟨zp, lp, claims⟩ => ?_
+  dsimp only
+  rw [← repOpeningMemo_fst memo, bind_map_left]
+
+/-- **The ZK server's proof of one rep**: `repCons`, then the inner proof on the rep's pads and the constraints it returns.
 A constraint that fails on the pads stops the rep before its inner proof, and no file leaves (`zk_finish_fw`'s
 `constraints_failing_on_pads`, which stops the session at its `Finish`). -/
 def repFw (io : Asks M) (hs : Hashes M) (commit : Level → Array F128 → (Nat → ByteArray) → M Commit) (st : Setup)
@@ -404,7 +545,7 @@ def asksOf (coins : Array (Array F128)) : Asks (StateT Nat V) where
     set (k + 1)
     return fun i => cs[i]!
 
-/-! ## What the firewall hands it -/
+/-! ## What the ZK server hands it -/
 
 /-- **One table's state**: its statement, its `--zk` schedule and `t_pad`, the packed table, its extra lanes and lane
 paddings, and level 0's commitment. -/
@@ -417,8 +558,8 @@ structure Tab where
   lanePad : Nat → Nat → F128
   cm0 : Commit
 
-/-- **What one rep's proof reads beyond its table**: its draws (`Frame.Draws`, the Lean frame's, never the request's), the
-values that passed the firewall by pad index, the extra claims' coordinates, levels ≥ 1's salts by level (`192` bytes a
+/-- **What one rep's proof reads beyond its table**: its samples (`Frame.Draws`, the Lean frame's, never the request's), the
+values that passed the ZK server by pad index, the extra claims' coordinates, levels ≥ 1's salts by level (`192` bytes a
 leaf, `hiSaltsOf`'s), and each round's coins. -/
 structure RepIn where
   draws : Frame.Draws
@@ -427,20 +568,22 @@ structure RepIn where
   hiSalts : Array ByteArray
   coins : Array (Array F128)
 
-/-- **What the session loop holds of a rep**: the draws its frame took at the rep's start, which its finish proves with
+/-- **What the session loop holds of a rep**: the samples its frame took at the rep's start, which its finish proves with
 (`drawsOf`), and what the finish holds the rep's requests to (`RepIn.differs`): the values the frame took by pad index,
 the extra claims at the session's link points, the coins the stream answered each of the rep's rounds so far, and whether
 the frame took the coins of every round of the rep's algebraic phase, before which the rep's salts for levels ≥ 1 are
-not drawn (`serve`'s `salts`). -/
+not sampled (`serve`'s `salts`). Once the loop's opening of the rep ended, until the rep's inner proof's first round, it
+also holds what that opening computed (`memo`), which the rep's proof reads back (`innerLiveK`). -/
 structure Own where
   draws : Frame.Draws
   vals : Array F128
   xs : Array (Array F128)
   coins : Array (Array F128)
   algebraEnded : Bool
+  memo : Option Memo := none
 
 /-- **Where the request `q` is not what the loop holds of the rep (`o`)**, or none: its passed values, its extra claims or
-its coins. Its draws are `o`'s (`drawsOf`). `final_c`'s slot (`lay.fc`) is the request's: the passed values fix it, and
+its coins. Its samples are `o`'s (`drawsOf`). `final_c`'s slot (`lay.fc`) is the request's: the passed values fix it, and
 where it is another, the rep's `zerocheck c_eval` constraint fails and its `inner` request is refused before any round of
 its inner proof (`consWhy`). -/
 def RepIn.differs (lay : Zk.PadLayout) (q : RepIn) (o : Own) : Option String :=
@@ -450,7 +593,7 @@ def RepIn.differs (lay : Zk.PadLayout) (q : RepIn) (o : Own) : Option String :=
   else if q.coins != o.coins then some "its coins are not the ones the stream answered"
   else none
 
-/-- A rep's pads from its draws (`FlockComplete.padsOf`'s: `h_ab` and `w` set by `Draws.ofBytes`). -/
+/-- A rep's pads from its samples (`FlockComplete.padsOf`'s: `h_ab` and `w` set by `Draws.ofBytes`). -/
 def padsOf (d : Frame.Draws) : PadsZk :=
   { h := d.h, mu := d.mu, padH := d.padH, padMu := d.padMu, tauSalt := fitBytes Zk.TAU_SALT_BYTES d.tauSalt }
 
@@ -501,7 +644,7 @@ def vecOf (what : String) : Rd (Array F128) := do
 
 /-- **A rep's request** for the table `t`, every byte little-endian: the passed values (`lay.zp 64` words, by pad index),
 the extra claims (a count, then each as a count and its words), and the coins (a round count, then each round as a count
-and its words); nothing after. The rep's draws are `draws` (`drawsOf`) and levels ≥ 1's salts `hiSalts`, the ones drawn
+and its words); nothing after. The rep's samples are `draws` (`drawsOf`) and levels ≥ 1's salts `hiSalts`, the ones sampled
 here for the rep (`hiSaltsOf`): neither comes from the prover. -/
 def parseRep (t : Tab) (draws : Frame.Draws) (hiSalts : Array ByteArray) (b : ByteArray) : V RepIn := do
   let lay := Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0
@@ -535,7 +678,7 @@ def tabOfLevel0 (st : Setup) (l : Level0.Level0) : V Tab := do
   let i := l.toIn
   return { st, sch, tPad, g := l.g, extra := i.extra, lanePad := i.lanePad, cm0 := commitOf l }
 
-/-- **A rep's salts for levels ≥ 1** of the table `t`, drawn from `get`: `192·2^d` bytes for each level `1` to `R` of its
+/-- **A rep's salts for levels ≥ 1** of the table `t`, sampled from `get`: `192·2^d` bytes for each level `1` to `R` of its
 schedule, one read a level. The prover's trees at those levels take them (`salts`), so they never come from it. -/
 def hiSaltsOf (get : USize → IO ByteArray) (t : Tab) : IO (Array ByteArray) :=
   (Array.range (t.sch.levels.size - 1)).mapM fun j => get (192 * 2 ^ (t.sch.levels.getD (j + 1) default).d).toUSize
@@ -554,7 +697,7 @@ abbrev LiveM := StateT (Array (Array F128)) (ExceptT String IO)
 
 /-- **A rep's rounds, live** on `ch`: round `k` (the rounds taken so far) by `coins[k]` while the rep's recorded coins last,
 which must hold the round's coin count (its squeeze header's last eight bytes), as `asksOf`. Past them, with `live`, the
-round, the `j`-th past them, goes to `sent j` and then to the firewall as `round N LEN` followed by its `LEN` bytes, `N`
+round, the `j`-th past them, goes to `sent j` and then to the ZK server as `round N LEN` followed by its `LEN` bytes, `N`
 its coin count, and is answered `coins N` followed by the `16 N` bytes of the coins the stream answered it, which go to
 `held k`; any other answer, a refusal of `sent` or `held`, or a round past them without `live`, ends the rep. -/
 def liveAsks (ch : Frame.Chan) (coins : Array (Array F128)) (live : Bool)
@@ -582,7 +725,7 @@ def liveAsks (ch : Frame.Chan) (coins : Array (Array F128)) (live : Bool)
     set (got.push cs)
     return fun i => cs[i]!
 
-/-- The constraints as they go to the firewall: their count, then each as its name's byte count and bytes, its constant and
+/-- The constraints as they go to the ZK server: their count, then each as its name's byte count and bytes, its constant and
 its coefficients (a count and the words), every count a `u64le`. -/
 def consBytes (cons : Array (String × Zk.Lin)) : ByteArray :=
   cons.foldl (fun b (n, l) => b ++ wBytes n.toUTF8 ++ l.c.toBytes ++ wVec F128.toBytes l.a) (wLen cons.size)
@@ -606,7 +749,7 @@ def openLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (xs : Arr
       (Array.replicate lay.len 0) t.extra t.lanePad salt
   let _ ← prog.run (Transcript.init #[] dom)
 
-/-- **Why a live rep's constraints `cons` do not go to the firewall**, if they do not, its PIOP and opening having taken `k`
+/-- **Why a live rep's constraints `cons` do not go to the ZK server**, if they do not, its PIOP and opening having taken `k`
 rounds of coins: not the request's `n`, or a request whose `final_c` is not the one its passed values fix, where its
 `zerocheck c_eval` constraint (`Σ λ_i(z) r1c_i + final_c`, each value masked by its own pad, so no pad changes it) fails on
 the pads `h`. So the inner proof's `final_c'` is that one under `h_fc`, whatever the host sends. -/
@@ -617,7 +760,7 @@ def consWhy (n k : Nat) (cons : Array (String × Zk.Lin)) (h : Array F128) : Opt
   else none
 
 /-- **A rep's inner proof, live**: `repFw` on the request `q` but for its stop, its `repCons` on `q`'s recorded coins (every
-one of which it must take), then, unless `consWhy` refuses them, its constraints sent to the firewall as `cons LEN`
+one of which it must take), then, unless `consWhy` refuses them, its constraints sent to the ZK server as `cons LEN`
 followed by their `LEN` bytes (`consBytes`), then `repFw`'s inner proof (`innerP`) on them, each round sent live
 (`liveAsks`, its `j`-th to `sent j` before it leaves and the coins of the rep's round `k` to `held k`). Where `repFw` stops
 on a constraint that fails on the pads but `consWhy`'s, this speaks on schedule (`proofFile` then refuses the rep's file,
@@ -644,18 +787,20 @@ def innerLive (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : Rep
 
 /-- **A rep's inner proof, live, kept** (`innerLiveK_discard`): `innerLive`, returning the names of its constraints that
 fail on the pads (`failingOn`) and the proof it computed, which is `repFw`'s where none does: `repFw` on `q` with every coin
-this took, the proof `proofFile` computes on a `rep` request with those inputs and coins (`Kept`). -/
+this took, the proof `proofFile` computes on a `rep` request with those inputs and coins (`Kept`). Its opening reads
+`memo` (`repConsWith`), which changes none of it. -/
 def innerLiveK (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn)
     (sent : Nat → ByteArray → IO (Option String) := fun _ _ => pure none)
-    (held : Nat → Array F128 → IO (Option String) := fun _ _ => pure none) : LiveM (Array String × Zk.ZkProof) := do
+    (held : Nat → Array F128 → IO (Option String) := fun _ _ => pure none) (memo : Option Memo := none) :
+    LiveM (Array String × Zk.ZkProof) := do
   let pads := padsOf q.draws
   let ic ← (monadLift (innerCommitP (Hashes.ofSha512 Sha512.hash) pads (saltAt q.draws.salts) : V InnerCommit) : LiveM InnerCommit)
   let hs : Hashes LiveM := Hashes.ofSha512 Sha512.hash
   let commit : Level → Array F128 → (Nat → ByteArray) → LiveM Commit := fun lv g salt => pure (commitFw lv g salt)
   let salt : Nat → Nat → ByteArray := fun l => saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)
   let prog : TMW LiveM (Array String × Zk.ZkProof) := do
-    let (p, zl, cons) ← repCons (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0 (claimsOf q.xs)
-      pads ic q.vals t.extra t.lanePad salt
+    let (p, zl, cons) ← repConsWith memo (liveAsks ch q.coins false) commit t.st t.sch t.tPad rep dom t.g t.cm0
+      (claimsOf q.xs) pads ic q.vals t.extra t.lanePad salt
     let k := (← getThe (Array (Array F128))).size
     if let some why := consWhy q.coins.size k cons pads.h then throwThe String why
     let b := consBytes cons
@@ -675,12 +820,14 @@ instance instLawfulEST {ε σ : Type} : LawfulMonad (EST ε σ) := LawfulMonad.m
 
 instance instLawfulEIO {ε : Type} : LawfulMonad (EIO ε) := inferInstanceAs (LawfulMonad (EST ε IO.RealWorld))
 
-/-- `innerLiveK` is `innerLive` with its result kept: the same rounds, the same bytes to the firewall, the same coins. -/
+/-- `innerLiveK` is `innerLive` with its result kept, at any `memo`: the same rounds, the same bytes to the ZK server, the
+same coins. -/
 theorem innerLiveK_discard (ch : Frame.Chan) (t : Tab) (rep : Nat) (dom : ByteArray) (q : RepIn)
-    (sent : Nat → ByteArray → IO (Option String)) (held : Nat → Array F128 → IO (Option String)) :
-    (do let _ ← innerLiveK ch t rep dom q sent held) = innerLive ch t rep dom q sent held := by
+    (sent : Nat → ByteArray → IO (Option String)) (held : Nat → Array F128 → IO (Option String))
+    (memo : Option Memo) :
+    (do let _ ← innerLiveK ch t rep dom q sent held memo) = innerLive ch t rep dom q sent held := by
   unfold innerLiveK innerLive
-  simp only [StateT.run_bind, map_bind, bind_pure_comp]
+  simp only [repConsWith_eq, StateT.run_bind, map_bind, bind_pure_comp]
   congr 1; funext ic; congr 1; funext a; congr 1; funext b
   have h : ∀ {α} (X : TMW LiveM α) s,
       (fun _ => ()) <$> Prod.fst <$> X.run s = (fun _ => ()) <$> ((fun _ => ()) <$> X).run s := by
@@ -737,7 +884,7 @@ def coinsWhy (own : Nat → Nat → ByteArray → IO (Option (Except String Own)
   ownWhy own i r t fun o =>
     if o.coins[k]? == some cs then none else some s!"its round {k}'s coins are not the ones the stream answered"
 
-/-- **Table `i`'s rep `r`'s draws** on the table `t`: the ones its frame took at the rep's start where the session loop
+/-- **Table `i`'s rep `r`'s samples** on the table `t`: the ones its frame took at the rep's start where the session loop
 holds the rep (`own`), else `mine`, the ones this finish drew with the rep's salts for levels ≥ 1. No request carries
 them, so the prover never holds the pads it is masked with. -/
 def drawsOf (own : Nat → Nat → ByteArray → IO (Option (Except String Own))) (i r : Nat) (t : Tab)
@@ -748,7 +895,7 @@ def drawsOf (own : Nat → Nat → ByteArray → IO (Option (Except String Own))
   | none, some d => return .ok d
   | none, none => return .error s!"finish: table {i} rep {r}'s draws, which no session loop holds and this finish did not draw"
 
-/-- **A rep's draws, this finish's own**, where no session loop is beside it: `Frame.drawBytes` of the table's layout from
+/-- **A rep's samples, this finish's own**, where no session loop is beside it: `Frame.drawBytes` of the table's layout from
 `get`, in one read. -/
 def drawsFrom (get : USize → IO ByteArray) (t : Tab) : IO Frame.Draws := do
   let lay := Zk.PadLayout.new t.st.m t.st.kLog t.sch.k0
@@ -764,18 +911,19 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
 * `table I LEN`: table `I`'s level-0 data (`Link.parse`'s, `tabOf`), kept; the answer is its level-0 root.
 * `level0 I LEN`: the root of a level 0 that `level0Of` holds (the session loop's), kept as table `I` (`tabOfLevel0`);
   the answer is its root.
-* `salts I R 0`: rep `R`'s salts for levels ≥ 1 on table `I`, drawn from `get` once (`hiSaltsOf`), handed to `keep`
-  with the table's level-0 root and kept for its proof file; the answer is them (`saltsBytes`). A rep's salts are drawn
-  once: asking again is refused, and so is a draw `keep` refuses (the session loop keeps a rep's first, on any of its
-  finishes, and refuses another). Where the session loop holds the rep (`own`), they are drawn only once its frame took
+* `salts I R 0`: rep `R`'s salts for levels ≥ 1 on table `I`, sampled from `get` once (`hiSaltsOf`), handed to `keep`
+  with the table's level-0 root and kept for its proof file; the answer is them (`saltsBytes`). A rep's salts are sampled
+  once: asking again is refused, and so is a sample `keep` refuses (the session loop keeps a rep's first, on any of its
+  finishes, and refuses another). Where the session loop holds the rep (`own`), they are sampled only once its frame took
   the coins of every round of the rep's algebraic phase (`Own.algebraEnded`): asking before is refused, so no round of
-  the algebraic phase the prover sends can depend on them. Without `liveOnly`, the rep's draws are drawn here too
+  the algebraic phase the prover sends can depend on them. Without `liveOnly`, the rep's samples are sampled here too
   (`drawsFrom`) and kept, never answered.
 * `open I R LEN`: rep `R`'s opening on table `I`, after its salts, on the extra claims and the algebraic phase's coins
-  (`parseOpen`): each of its rounds goes to the firewall as it comes and waits for its coins (`openLive`, `liveAsks`), the
+  (`parseOpen`): each of its rounds goes to the ZK server as it comes and waits for its coins (`openLive`, `liveAsks`), the
   rounds the Lean frame holds the device's opening rounds to; answered `ok 0` after the last.
-* `inner I R LEN`: rep `R`'s request (`parseRep`) with the coins of its PIOP and opening: its constraints, then its inner
-  proof's rounds, live (`innerLive`), its `j`-th handed to `inner` with the table's level-0 root before it goes, and
+* `inner I R LEN`: rep `R`'s request (`parseRep`) with the coins of its PIOP and opening: its constraints, its opening
+  reading back what the session loop's opening of the rep computed where the loop holds it (`Own.memo`, `innerLiveK`),
+  then its inner proof's rounds, live (`innerLive`), its `j`-th handed to `inner` with the table's level-0 root before it goes, and
   where `inner` refuses it, so does this; answered after the last with the names of its constraints that fail on the
   rep's pads (`namesBytes`). Its proof file is then `rep`'s on every round's coins, where none does.
 * `rep I R LEN`: rep `R`'s request (`parseRep`) on table `I`, after its salts; the answer is its proof file
@@ -783,12 +931,12 @@ followed by `LEN` bytes, answered `ok N` followed by `N` bytes:
   are this one's and no constraint failed on its pads (`Kept.answers`). Another rep's requests may come between the
   two. The file is handed to `file` with the table's level-0 root before it is answered, and where `file` refuses it, so
   does this.
-A rep's draws are never the request's: they are the ones its frame took where the session loop holds the rep (`own`, by
-table, rep and the table's level-0 root), else, without `liveOnly`, the ones drawn here at its salts (`drawsOf`); with it,
+A rep's samples are never the request's: they are the ones its frame took where the session loop holds the rep (`own`, by
+table, rep and the table's level-0 root), else, without `liveOnly`, the ones sampled here at its salts (`drawsOf`); with it,
 a rep the loop does not hold is refused. Where the loop holds the rep,
 an `open`, `inner` or `rep` request that is not what it holds is refused (`RepIn.differs`; an opening's extra claims and
 coins), and so are coins that answer an `inner` request's round but are not the ones the stream answered it
-(`coinsWhy`): the draws, the passed values, the extra claims and the coins are the loop's own, whatever the host sends.
+(`coinsWhy`): the samples, the passed values, the extra claims and the coins are the loop's own, whatever the host sends.
 With `liveOnly` (the session loop's finish, `serveLoop`), a table comes only as the loop's level 0 (`level0`, never
 `table`), and a rep's proof file is only the one its last `inner` request computed live (`Kept.answers`): a `rep` request
 no such proof answers is refused, never computed afresh from the request.
@@ -897,10 +1045,14 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
           | .error _ => pure none
       if let some why := why then return (← refuse why)
       kept := kept.filter fun k => !(k.i == i && k.r == r)
+      let memo ← if line.startsWith "open " then pure none else do
+        match ← own i r (flat t.cm0.cap) with
+        | some (.ok o) => pure o.memo
+        | _ => pure none
       let run : V (LiveM (Option Kept × ByteArray)) := if line.startsWith "open " then
           (parseOpen b).map fun (xs, coins) => do openLive ch t r dom xs s coins; return (none, ByteArray.empty)
         else (parseRep t d s b).map fun q => do
-          let (fails, proof) ← innerLiveK ch t r dom q (inner (flat t.cm0.cap) r) (coinsWhy own i r t)
+          let (fails, proof) ← innerLiveK ch t r dom q (inner (flat t.cm0.cap) r) (coinsWhy own i r t) memo
           let coins ← getThe (Array (Array F128))
           return (if fails.isEmpty then some ({ i, r, q, coins, proof } : Kept) else none, namesBytes fails)
       match run with
@@ -915,9 +1067,9 @@ def serve (ch : Frame.Chan) (get : USize → IO ByteArray) (spec : SessionSpec) 
   return 0
 
 /-- **`flock-firewall finish --circuit F --public F [--statement ID] [--session-tables J] [--tables DIR] [--partition F]
-[--program F] [--draw F]`**: the firewall's proof files, `serve`d on stdin and stdout, on the statement `flock-verify verify
---zk` sets up (`Witness.setupOf`, at the `unit_draw` of the JSON object in `--draw`), every salt and every rep's draws
-drawn from the operating system. With no session loop beside it, it holds no level 0 of its own: a table comes as
+[--program F] [--draw F]`**: the ZK server's proof files, `serve`d on stdin and stdout, on the statement `flock-verify verify
+--zk` sets up (`Witness.setupOf`, at the `unit_draw` of the JSON object in `--draw`), every salt and every rep's samples
+sampled from the operating system. With no session loop beside it, it holds no level 0 of its own: a table comes as
 `table I LEN`. -/
 def cmd (args : List String) : IO UInt32 := do
   let ch ← Frame.stdio
@@ -944,12 +1096,12 @@ def cmd (args : List String) : IO UInt32 := do
   serve ch IO.getRandomBytes spec (sts.map Setup.ofCircuit) fun _ => pure none
 
 /-- **The session loop's finish**, a connection to its frames port whose first line is `line`: `finish LEN` followed by
-the `LEN` bytes of the session's draw (`Hello.drawOf`'s JSON, `null` for none) sets the session's statement up as the
-loop's `Hello` does (`Hello.Setup.setupAt`), is answered `ok 0`, and then `serve`s, every salt drawn from the operating
+the `LEN` bytes of the session's sample (`Hello.drawOf`'s JSON, `null` for none) sets the session's statement up as the
+loop's `Hello` does (`Hello.Setup.setupAt`), is answered `ok 0`, and then `serve`s, every salt sampled from the operating
 system and each `level0 I LEN` read from the loop's own level 0 of that root (`Level0.Slots`, `l0s`), each rep's salts
 for levels ≥ 1 handed to `keep`, the loop's frames' copy, which keeps a rep's once, each round of a rep's inner proof to
 `inner`, which the loop's frames release in its place, and each rep's proof file to `file`, the proof the loop sends
-(`Session.relay`), each rep's draws its frame's and its requests held to what the loop holds of it (`own`,
+(`Session.relay`), each rep's samples its frame's and its requests held to what the loop holds of it (`own`,
 `Frames.ownOf`). -/
 def serveLoop (ch : Frame.Chan) (S : Hello.Setup) (specs : Hello.Specs) (l0s : IO.Ref Level0.Slots)
     (keep : ByteArray → Nat → Array ByteArray → IO (Option String)) (file : ByteArray → Nat → ByteArray → IO (Option String))

@@ -1,7 +1,7 @@
 [project]
 name = "verity-network-e2e"
 version = "0.0.0"
-description = "Network accounting end to end: a certifier-serve rehearsal, N2's verdicts, the proved head checks, the negatives and the chain (advice bits, prove path), as one report."
+description = "Network certification end to end: a certifier-serve rehearsal, N2's verdicts, the proved head checks, the negatives and the chain (advice bits, prove path), as one report."
 requires-python = ">=3.12"
 dependencies = ["verity"]
 

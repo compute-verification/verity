@@ -14,14 +14,18 @@ from __future__ import annotations
 import ctypes
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import numpy as np
 import torch
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 sys.path.append(str(Path(__file__).resolve().parents[2] / "hash" / "dither"))
 import j10r_ws as JWS
 
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 
 T = 32
 WS_TAIL, WS_SENTINEL = 1 << 20, 0x5C
@@ -44,7 +48,7 @@ def seed_data(salt: bytes, root_a: bytes, root_b: bytes) -> torch.Tensor:
     return torch.tensor(np.array(w, dtype=np.uint64).view(np.int64), device="cuda")
 
 
-def digest(words) -> bytes:
+def digest(words: np.ndarray) -> bytes:
     """A digest from its 8 big-endian u64 words (int64 on the device)."""
     return b"".join((int(v) & ((1 << 64) - 1)).to_bytes(8, "big") for v in words)
 
@@ -53,7 +57,7 @@ def _stream() -> int:
     return torch.cuda.current_stream().cuda_stream
 
 
-def twice(call, run=None) -> dict:
+def twice(call: H1uCall | RefCall, run: Callable[[], None] | None = None) -> dict:
     """``run`` (default ``call.run``) under each of `POISONS` in turn: the receipt words left unwritten (each poison where
     it was), the words that differ between the two runs otherwise, and the words equal to the first poison after its run
     (written words among them: the single-poison test's false alarms). ``call.out`` holds the second run's."""
@@ -73,7 +77,7 @@ def twice(call, run=None) -> dict:
 
 
 class H1u:
-    def __init__(self, path: str, sm: bool = False):
+    def __init__(self, path: str, sm: bool = False) -> None:
         h = self.h = ctypes.CDLL(path)
         vp, u32, u64 = ctypes.c_void_p, ctypes.c_uint, ctypes.c_ulonglong
         self.path, self.sm = path, sm
@@ -106,7 +110,8 @@ class H1uCall:
     """One call on one H1u build: its seeds [units, 16] int64 ([seed_c, sigma_R] words), row workspace and receipts
     [units, words] int32."""
 
-    def __init__(self, lib: H1u, a: torch.Tensor, b: torch.Tensor, salt: bytes, roots: tuple[bytes, bytes], base: int):
+    def __init__(self, lib: H1u, a: torch.Tensor, b: torch.Tensor, salt: bytes, roots: tuple[bytes, bytes],
+                 base: int) -> None:
         self.lib, self.a, self.b, self.base = lib, a, b, base
         m, k = a.shape
         n = b.shape[0]
@@ -160,7 +165,7 @@ class H1uCall:
 
 
 class Ref:
-    def __init__(self, path: str):
+    def __init__(self, path: str) -> None:
         h = self.h = ctypes.CDLL(path)
         vp, u32 = ctypes.c_void_p, ctypes.c_uint
         self.path = path
@@ -180,7 +185,7 @@ class RefCall:
     [n, words] int32 and z [n, 32, 32] int32."""
 
     def __init__(self, lib: Ref, a: torch.Tensor, b: torch.Tensor, salt: bytes, roots: tuple[bytes, bytes], base: int,
-                 units: list[int] | None = None, z: bool = True):
+                 units: list[int] | None = None, z: bool = True) -> None:
         self.lib, self.a, self.b, self.base = lib, a, b, base
         m, k = a.shape
         n = b.shape[0]

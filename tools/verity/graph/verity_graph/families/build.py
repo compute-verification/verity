@@ -1,4 +1,4 @@
-"""The build family: the check's steps that build the Flock verifier and run what it built, and C-Flock's Rust, as
+"""The build family: the check's steps that build the Flock verifier and run what it built, and Flock's Rust, as
 `tools/verity/check/check.py` runs them (its `lean_steps` and `groups`), each step one task.
 
 - `lean-build:verity/core/service/flock`: `lake build` of the Lean verifier; its outputs are the executables its lakefile's
@@ -8,8 +8,9 @@
   reads no data), its output the script's result.json.
 - `lean-agreement:verity/ml/flock/verifier`: `check.py --lean-agreement` on the flock-verify it reads, against upstream's Rust
   verifier on the upstream build and inputs `upstream.json` pins; its output is ci.py's per-set verdicts.
-- `lean-suites:SUITE`: `suites.py` on one of the suites check runs after lean-build (`suites.AFTER_LEAN`, read from its source),
-  on every executable lean-build outputs, and `lean-suites:SUITE:K/M` on part K of `PARTS`' M of one split by test file, so no
+- `lean-suites:SUITE`: `suites.py` on one of the suites check runs after lean-build (`suites.AFTER_LEAN`, read from its source:
+  `lean_suites`, whose test files the test-file family leaves out), on every executable lean-build outputs, and
+  `lean-suites:SUITE:K/M` on part K of `PARTS`' M of one split by test file, so no
   task holds a suite a slot can't run inside an hour; its inputs are the whole tree, as tasks/v1 keys a job that declares none,
   since those suites build and run Lake packages no tracer follows; its output is suites.py's report. A suite that declares
   `parallel` takes the family's slot, and one that doesn't one process (`suites.TEST_PROCESS_GB`, or its `worker_gb`); its
@@ -94,12 +95,19 @@ def after_lean(root: Path, files: list[str]) -> list[str]:
     return [str(s) for s in suites_literals(root, files, "AFTER_LEAN").get("AFTER_LEAN", ())]
 
 
+def lean_suites(root: Path, files: list[str]) -> list[str]:
+    """The suites the lean-suites tasks run, each by its name or path: `after_lean` where the tree has the verifier lean-build
+    builds (`executables`), none where it hasn't, as check runs them with the rest of the suites there.  The test-file family
+    lists none of their test files, so each runs once, after the build it needs."""
+    return after_lean(root, files) if executables(root, files) else []
+
+
 def suite_tasks(root: Path, files: list[str], build: str, bin_: str, exes: list[str]) -> list[dict]:
-    """A lean-suites task for each suite of `after_lean`, or one for each of its `PARTS` (`suites.py NAME --files K/M`), each
+    """A lean-suites task for each suite of `lean_suites`, or one for each of its `PARTS` (`suites.py NAME --files K/M`), each
     with its suite's resources and timeout: a suite that declares `[tool.verity.tests] parallel` the family's slot, else one
     process of its `worker_gb` (`suites.TEST_PROCESS_GB` undeclared); its `timeout_s`, else the family's.  A name no suite has
     is listed all the same, so suites.py's refusal of it is the task's error."""
-    names = after_lean(root, files)
+    names = lean_suites(root, files)
     if not names:
         return []
     tree = Tree(root, files)

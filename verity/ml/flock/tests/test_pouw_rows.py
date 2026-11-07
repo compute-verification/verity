@@ -1,4 +1,4 @@
-"""PoUW's tile-check rows (`verity.core.protocols.pouw.circuit.leaves`) are Flock's rows byte for byte: every row's vector of
+"""PoUW's tile-check rows (`verity.ml.protocols.pouw.circuit.leaves`) are Flock's rows byte for byte: every row's vector of
 ``verity/core/protocols/pouw/tests/vectors/pouw_rows.json``, recomputed from its case's words and salt through the port Flock stages
 for the row (`circuit._port`: ``n_words`` u16 leaves, a bit row of ``16 n_words`` bits under ``hm96-sha512/row/v2`` or
 ``hm96-sha512/row-seg/v1``), gives the pinned row bytes, digest, commit string (`circuit._commit_strings`) and tree leaf;
@@ -26,8 +26,8 @@ from verity.ml.commitments.rowleaf import (ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_RO
                                         sha512_row_v2_digest)
 from verity.ml.circuits.types import Tuple
 from verity_flock import circuit as FC
-from verity.core.protocols.pouw.circuit import leaves as L
-from verity.core.protocols.pouw.circuit import pc4, pc8
+from verity.ml.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import pc4, pc8
 
 POUW_TESTS = Path(__file__).resolve().parents[3] / "core" / "protocols" / "pouw" / "tests"
 LEAN = Path(__file__).resolve().parents[3] / "core" / "service" / "flock"
@@ -138,7 +138,7 @@ def test_a_row_unit_writes_its_row_seg_row_as_its_reader_commits_it(vid, tmp_pat
 
 #: each check's hiding unit templates (`PORTS` are theirs) and a small depth
 UNITS = {"pc4": (lambda k: pc4.templates(k, pc4.TILE, True), 64),
-         "pc8": (lambda k: pc8.templates(k, pc8.TILE, "sm120", True), 128)}
+         "pc8": (lambda k: pc8.templates(k, pc8.TILE, "sm120", True, "h0"), 128)}
 MODS = {"pc4": pc4, "pc8": pc8}
 OUT_ROWS = [(m, role, j, out[0], out[1]) for m, mod in MODS.items() for role, ports in mod.PORTS.items()
             for j, out in enumerate(r for r in ports["rows"] if isinstance(r[2][0], int))]
@@ -430,7 +430,7 @@ def test_pouw_anchors_are_public_input_ports_held_to_the_verifiers_recomputation
     from verity.ml.circuits.defs import CompositeDefinition, bind
     from verity.ml.circuits.types import Array, Value
     from verity_flock import class_statement as CS
-    from verity.core.protocols.pouw.circuit.anchors import public_ports
+    from verity.ml.protocols.pouw.circuit.anchors import public_ports
 
     spec = importlib.util.spec_from_file_location("pouw_regions_vectors", POUW_TESTS / "pouw_regions_vectors.py")
     RV = importlib.util.module_from_spec(spec)

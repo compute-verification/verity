@@ -1,7 +1,7 @@
 # One Boolean Definition as one proof block
 
-`run.py` builds a word primitive's Boolean version as one C-Flock proof block (`verity_flock.class_statement.UnitStager`), each
-parameter one `hm96-sha512/row/v2` bit row and its return one more, and measures two things against C-Flock's proved range of
+`run.py` builds a word primitive's Boolean version as one Flock proof block (`verity_flock.class_statement.UnitStager`), each
+parameter one `hm96-sha512/row/v2` bit row and its return one more, and measures two things against Flock's proved range of
 2^27 witness bits (`verity_flock.circuit.K_MAX`):
 
 - **the select alone**: the lowered unit, its ANDs and rows, and its slot of 2^`unit_log` bits;

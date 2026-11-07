@@ -1,21 +1,23 @@
 module
 
 public import Proofs.Properties.RemoteAudit.Shared
+import Proofs.Properties.RemoteAudit.Draw
+import Proofs.Properties.RemoteAudit.Window
 
 /-!
 # The session link windows a draw (`SessionDrawsRecords`, `AcceptedDrawsOpenable`)
 
-A run keeps, at any `g ≥ 1`, three facts of every drawn draw and accepted window:
+A run keeps, at any `g ≥ 1`, three facts of every sampled draw and accepted window:
 
 * the draw is `draws` over its windows' plans, on the session's digest and coin `W + c`, and each window of it holds
   its share (`passesBefore`). At `g ≥ 2` that is `DrawLink` (`LinkInv`, `linkInv_step`): the close that draws it gives
-  it (`drawIsSubset`), and every later event keeps it, since a drawn window keeps its draw and plans (`Frz`). At
+  it (`drawIsSubset`), and every later event keeps it, since a sampled window keeps its draw and plans (`Frz`). At
   `g = 1` the draw is window `c`'s own (`DL1`, `Link1`, `link1_step`), the whole of it its share (`shareOf_all`).
-* `DrawsIn`: each drawn window's draws are receipts of its plans (`close_drawsIn`, `drawsIn_of_link`), so its check
+* `DrawsIn`: each sampled window's draws are receipts of its plans (`close_drawsIn`, `drawsIn_of_link`), so its check
   reads only blocks below the store's extent at its draw (`draw_in_record`, `record_reads`).
-* `AcceptNow`: an accepted window is drawn, and its share is empty or `checkWindow` of it passes on the session's
+* `AcceptNow`: an accepted window is sampled, and its share is empty or `checkWindow` of it passes on the session's
   appends now. Only `verify` and the close accept a window (`VK`, each event's `vk_*`): `verify` on `checkWindow`'s
-  verdict (`acc_verify`), the close at `g ≥ 2` on an empty share (`acc_sclose`). A drawn window's record is kept
+  verdict (`acc_verify`), the close at `g ≥ 2` on an empty share (`acc_sclose`). A sampled window's record is kept
   (`record_frz`), and appends past its draw start above every block it reads (`firsts_big`), so its verdict holds on
   the appends that follow (`checkWindow_grow`).
 
@@ -286,7 +288,7 @@ theorem acc_sclose {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s' 
     · left
       rwa [finalize_verdict] at h
 
-/-- At `g ≥ 2` a window newly accepted is drawn with an empty share, or `verify`'s on `checkWindow` of its draws. -/
+/-- At `g ≥ 2` a window newly accepted is sampled with an empty share, or `verify`'s on `checkWindow` of its draws. -/
 theorem acc_sstep {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Result} {s' : State}
     (he : Shared.step g s e = .ok (r, s')) (u : Nat) (h : s'.windows[u]!.verdict = some .accept) :
     s.windows[u]!.verdict = some .accept ∨ s'.windows[u]!.drawn = some #[] ∨
@@ -347,7 +349,7 @@ theorem acc_step1 {s : State} {e : Event} {r : Result} {s' : State} (he : Sessio
         · exact h'
 
 
-/-! ## What a drawn window keeps -/
+/-! ## What a sampled window keeps -/
 
 theorem plans_frz {s s' : State} (hf : Frz s s') {u : Nat} (hu : (dr s.windows u).isSome) :
     s'.windows[u]!.plans = s.windows[u]!.plans ∧ dr s'.windows u = dr s.windows u := by
@@ -411,7 +413,7 @@ theorem fold_plans {g : Nat} (s : State) (t : Int) (d : Array (Nat × Nat)) (now
 
 /-! ## Each draw is a receipt of its window -/
 
-/-- Each drawn window's draws are receipts of its passes' plans. -/
+/-- Each sampled window's draws are receipts of its passes' plans. -/
 def DrawsIn (ws : Array Win) : Prop :=
   ∀ (u : Nat) (d : Array (Nat × Nat)), ws[u]!.drawn = some d → ∀ k (hk : k < d.size),
     d[k].1 < ws[u]!.plans.size ∧ d[k].2 < ws[u]!.plans[d[k].1]!.length
@@ -502,7 +504,7 @@ theorem drawsIn_step {s : State} {e : Event} {r : Result} {s' : State} (h : FInv
   | close t now => exact close_drawsIn he hin
   | verify t openings => injection he with he; exact keep (keep_verify he)
 
-/-- A drawn window's draws are receipts of its record's passes. -/
+/-- A sampled window's draws are receipts of its record's passes. -/
 theorem draw_in_record {s : State} (hI : Inv s) (hin : DrawsIn s.windows) {t : Nat} (ht : t < s.windows.size)
     {d : Array (Nat × Nat)} (hd : s.windows[t]!.drawn = some d) {k : Nat} (hk : k < d.size) :
     d[k]!.1 < (s.record t).passes.size ∧ d[k]!.2 < (s.record t).passes[d[k]!.1]!.plan.length := by
@@ -591,9 +593,9 @@ theorem passCount_draw {g : Nat} {s : State}
       List.sum_cons, List.sum_nil, Nat.add_zero]
     rw [drawRecords_get s c k hk', record_size, hs]
 
-/-! ## A drawn window's verdict on later appends -/
+/-! ## A sampled window's verdict on later appends -/
 
-/-- A drawn window's `checkWindow` is the same on any appends that extend the session's: its draws read only blocks
+/-- A sampled window's `checkWindow` is the same on any appends that extend the session's: its draws read only blocks
 below the store's extent, and the appends past it start at the extent or above. -/
 theorem checkWindow_grow {s s' : State} (hI : Inv s) (hI' : Inv s') (hin : DrawsIn s.windows)
     (more : Array Append) (happ : s'.appends = s.appends ++ more) (hr : s'.reg = s.reg) {t : Nat}
@@ -663,7 +665,7 @@ theorem drawLengths_mid {g : Nat} {s : State} (hs : ∀ u : Nat, s.windows[u]!.p
 
 /-! ## At `g ≥ 2`: the draw's link -/
 
-/-- Each drawn draw is `draws` over its windows' plans, on the session's digest and coin `W + c`, and each window of
+/-- Each sampled draw is `draws` over its windows' plans, on the session's digest and coin `W + c`, and each window of
 it holds its share. -/
 def DrawLink (g : Nat) (s : State) : Prop :=
   ∀ c, (dr s.windows (c * g)).isSome → ∃ drawn,
@@ -724,7 +726,7 @@ theorem drawLink_step {g : Nat} (hg : 2 ≤ g) {s : State} {e : Event} {r : Resu
       · exact (h0 hc2).elim
 
 
-/-- With each draw linked, each drawn window's draws are receipts of its plans: its share of its draw's values, each
+/-- With each draw linked, each sampled window's draws are receipts of its plans: its share of its draw's values, each
 a receipt of the draw's passes (`drawIsSubset`), falls in its own passes. -/
 theorem drawsIn_of_link {g : Nat} (hg : 1 ≤ g) {s : State} (hI : Inv s) (hpre : Prefix s.windows)
     (hD : DP g s.params.windows s.windows) (hL : DrawLink g s) : DrawsIn s.windows := by
@@ -762,7 +764,7 @@ theorem drawsIn_of_link {g : Nat} (hg : 1 ≤ g) {s : State} (hI : Inv s) (hpre 
 
 /-! ## Accepted windows -/
 
-/-- Each accepted window is drawn, and its share is empty or passes `checkWindow` on the session's appends. -/
+/-- Each accepted window is sampled, and its share is empty or passes `checkWindow` on the session's appends. -/
 def AcceptNow (s : State) : Prop :=
   ∀ u, s.windows[u]!.verdict = some .accept → ∃ d, dr s.windows u = some d ∧
     (d = #[] ∨ ∃ openings : Array Opening, checkWindow s.reg s.digest s.appends (s.record u) d openings = .accept)
@@ -847,7 +849,7 @@ theorem linkInv_init (g : Nat) (params : Params) (reg : Registration) (coins app
   rw [getElem!_neg (State.init params reg coins appendCoins notBeforeNs).windows u (by simp [State.init])] at h
   cases h
 
-/-- At `g = 1`, each drawn window's draws are `draws` over its own plans, on the session's digest and its coin. -/
+/-- At `g = 1`, each sampled window's draws are `draws` over its own plans, on the session's digest and its coin. -/
 def DL1 (digest : ByteArray) (coins : Array ByteArray) (W samples : Nat) (ws : Array Win) : Prop :=
   ∀ u d, dr ws u = some d → draws digest u coins[W + u]! samples (ws[u]!.plans.map (·.length)) = some d
 

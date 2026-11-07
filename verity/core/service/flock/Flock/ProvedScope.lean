@@ -62,16 +62,18 @@ def segRow (p : Port) : Bool :=
       let m := min (p.bits - HmRow.ROW_SEG_BITS * j) HmRow.ROW_SEG_BITS
       decide (128 * (((m + 7) / 8 + 17 + 127) / 128 - 1) ≤ (m + 7) / 8)
 
-/-- Every row is a `v2Row` or a `segRow`, of any mix, and each output row is a `v2Row` holding one output port. -/
+/-- Every row is a `v2Row` or a `segRow`, of any mix, and each output row is a `v2Row` or a `segRow` holding one output
+port. -/
 def bitRowsU (c : Circuit) : Bool :=
   c.ports.all (fun p => v2Row p || segRow p) && c.outRowPorts.all (· == 1) &&
-    (List.range c.outRowPorts.size).all fun j => v2Row (c.ports.getD (HmOut.nIn c + j) default)
+    (List.range c.outRowPorts.size).all fun j =>
+      v2Row (c.ports.getD (HmOut.nIn c + j) default) || segRow (c.ports.getD (HmOut.nIn c + j) default)
 
 /-- `bitRowsU`, and no pinned output (`unpinned`). -/
 def bitRows (c : Circuit) : Bool := bitRowsU c && unpinned c
 
 /-- The circuits the hidden-output headlines cover: `scopeOk`'s conditions on the unit, and every row a
-`sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row a `v2Row` of one output port
+`sha512/row/v1` row (`v1Ports`) or every row a `v2Row` or a `segRow`, each output row of one output port
 (`bitRows`). -/
 def scopeOkH (c : Circuit) : Bool :=
   c.unit.inGroups.size == 1 && c.outNet == c.unitNet && decide (c.unit.unitLog ≤ 32) && portReadsB c.unit &&
@@ -180,7 +182,7 @@ def scopeWhy (hidden : Bool) (c : Circuit) : String :=
   else if v1Rows c || (hidden && bitRowsU c) then pinnedWhy
   else if hidden then "rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all \
     unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of \
-    16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each"
+    16 · words bits whose segments end in their last block, one output port per output row"
   else "a row that is not a sha512/row/v1 row of 16 · words bits in at least one chunk"
 
 /-- **A templated circuit the hidden-output headlines cover** (its statement circuit is the flat
@@ -257,7 +259,7 @@ def legacyWhy (name : String) : Option String :=
 def mMin (zk : Bool) : Nat := if zk then 25 else 22
 
 /-- **The tables' sizes the proof covers**: every table's `m` (`ms`, each table's `Setup.m`) at least `mMin`. A table's
-`m` is its drawn statement's, which only the setup computes, so `verify` checks this on the session's tables right after
+`m` is its sampled statement's, which only the setup computes, so `verify` checks this on the session's tables right after
 `check`, not on the statement's files. Each verifier's own schedule refuses a smaller `m` before it (`fast100` below `22`,
 `Zk.schedule` at `m ≤ 24`), so this refuses no session `verify` would otherwise accept. -/
 def sizesOk (zk : Bool) (ms : Array Nat) : Except String Unit :=
@@ -473,13 +475,13 @@ theorem programP_ok {parsed : V Circuit} {program : Option ByteArray} (h : progr
     | none => rfl
     | some w => simp [hw] at h
 
-/-- What a draw's law is, when no soundness claim draws by it at the session's form: the one rule
-for which law each form draws by. Without `--plain-tables`: the stratified law at every form `check` passes, each claim at
-one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset law under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
-and, without it, exactly where a plain claim draws by it: at hidden outputs, at the one table `check` admits there
-(`SoundExecH` at its subset draw design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset law alone. So a
-bernoulli draw, a work draw (with or without a closure), a subset draw without `--zk` or `--plain-tables` at public outputs,
-and a stratified draw under `--plain-tables` are outside them. -/
+/-- What a sample's law is, when no soundness claim samples by it at the session's form: the one rule
+for which law each form samples by. Without `--plain-tables`: the stratified sampling design at every form `check` passes, each claim at
+one table (`SoundExec`, `SoundExecH`, `SoundZ`, `SoundZH`); the subset sampling design under `--zk` (`SoundZJ`, `SoundZHJ`, `SoundZHJR`)
+and, without it, exactly where a plain claim samples by it: at hidden outputs, at the one table `check` admits there
+(`SoundExecH` at its subset sample design). Under `--plain-tables` (`plainTables`, `SoundExecJ`), the subset sampling design alone. So a
+bernoulli sample, a work sample (with or without a closure), a subset sample without `--zk` or `--plain-tables` at public outputs,
+and a stratified sample under `--plain-tables` are outside them. -/
 def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : Option String :=
   match d.law with
   | .stratified .. => if plainTables then some "a stratified draw under --plain-tables" else none
@@ -487,9 +489,9 @@ def lawWhy (zk : Bool) (tags : Tags) (plainTables : Bool) (d : Draw.UnitDraw) : 
   | .bernoulli .. => some "a bernoulli draw"
   | .work .. => some (if d.closure.isEmpty then "a work draw" else "a work draw with a closure")
 
-/-- **The session's draw is by a law a soundness claim draws by at its form** (`lawWhy`): `draw` is
-the record's (`recordDraw`), none for a session without one. Every claim is about a drawn session, so a session without
-a draw is refused (D12); so is a draw that does not parse. -/
+/-- **The session's sample is by a sampling design a soundness claim samples by at its form** (`lawWhy`): `draw` is
+the record's (`recordDraw`), none for a session without one. Every claim is about a sampled session, so a session without
+a sample is refused (D12); so is a sample that does not parse. -/
 def drawLaw (zk : Bool) (tags : Tags) (plainTables : Bool) : Option Lean.Json → Except String Unit
   | none => .error "refused: a session without a draw: every soundness claim is about a drawn session (D12)"
   | some j => match Draw.UnitDraw.ofJson j with

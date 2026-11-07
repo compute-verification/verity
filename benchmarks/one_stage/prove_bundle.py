@@ -1,6 +1,6 @@
-"""A drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`, `examples/h200/interfaces`) proved: each drawn member's units in
-one Flock `prove --zk` session behind the Lean ZK server, served the bundle's own draw, and decided by Lean's `verify --zk`,
-the verifier of record; then the honest session with one bit of its proof flipped, which Lean must refuse, and optionally a
+"""A drawn-unit replay bundle (`verity/drawn-unit-bundle/v2`, `examples/h200/interfaces`) proved: each sampled member's units in
+one Flock `prove --zk` session behind the Lean ZK server, served the bundle's own sample, and decided by Lean's `verify --zk`,
+the verifier; then the honest session with one bit of its proof flipped, which Lean must refuse, and optionally a
 tampered window's member, whose proof must not be accepted.
 
     python benchmarks/one_stage/prove_bundle.py --bundle B.json --window DIR --bin flock-circuit --lean flock-verify \\
@@ -13,16 +13,16 @@ tampered window's member, whose proof must not be accepted.
   private files included), since Flock's statement is a whole member. Checks: the bundle's own check
   (`replay_bundle.check` against the window's registration: every string, path and domain, and each unit's Definition
   replayed, and the sample's law the registered one); the bundle's run, registration digest and partition are the
-  window's; each drawn member's public body is the one the bundle names (SHA-512); and a live sample (``--live`` requires
+  window's; each sampled member's public body is the one the bundle names (SHA-512); and a live sample (``--live`` requires
   one) is held to the window (`held_draw`): its receipt names the window's registration, and its record is a sample of
   the bundle's units under the registered law over the registered population (`draw.check_draw`).
-* **Staging** as a5 stages a drawn member. The circuit is composed from the template's Definition, bound to the window's
+* **Staging** as a5 stages a sampled member. The circuit is composed from the template's Definition, bound to the window's
   partition and program (`records_audit.verifier_window`'s composer). The public file is made under that circuit and
   held to the registration's roots and domains, and the prover's file is made under the same header.
-* **The session** serves the bundle's member draw (`serve --zk --draw-file`). The prover runs behind the ZK server's send
+* **The session** serves the bundle's member sample (`serve --zk --draw-file`). The prover runs behind the ZK server's send
   check (``FC_FIREWALL=1``, Lean's `flock-firewall`), and Lean `verify --zk --archive --partition --program` decides it.
   The sessions run one at a time, and Lean verifies each (one core) while the next one proves.
-  A unit is accepted when its session's M0 and Lean verdicts accept, the served draw is the bundle's, and the proved
+  A unit is accepted when its session's M0 and Lean verdicts accept, the served sample is the bundle's, and the proved
   units are the bundle's units.
 * **Flipped bits** (`flipped`): `zk_mutants.py`'s one-bit proof edits of the honest session of least k_log (each with the
   retained rounds a prover sending it would have made), each verified by Lean, which must refuse it with the reason the
@@ -85,7 +85,7 @@ def hold(doc: dict, payload: bytes, wdir: Path) -> tuple[dict[str, bool], dict]:
 
 
 def held_draw(doc: dict, wdir: Path) -> dict[str, bool]:
-    """A live sample held to the window (module docstring); ``{}`` for a fixture's. Its law against the registered one is
+    """A live sample held to the window (module docstring); ``{}`` for a fixture's. Its sampling design against the registered one is
     also the bundle check's (`replay_bundle.check`)."""
     d = doc["draw"]
     if d.get("source") != "live":
@@ -114,7 +114,7 @@ class Staged:
         self.composed: dict[str, tuple[Path, dict, object]] = {}
 
     def member(self, k: int) -> dict:
-        """Member ``k`` staged as a5 stages a drawn one: its circuit, public file and header held to the registration, and
+        """Member ``k`` staged as a5 stages a sampled one: its circuit, public file and header held to the registration, and
         its prover's file under that header."""
         m = self.mine.members[k]
         pd, prog = self.mine.partition_digest, self.mine.partition["program"]

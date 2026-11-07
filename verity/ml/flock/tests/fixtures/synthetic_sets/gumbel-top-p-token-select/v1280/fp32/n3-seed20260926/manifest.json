@@ -1,0 +1,126 @@
+{
+ "content_digest": "ed9ab3f6b02b0fa3fe17eff6d286561925fe8a3f297c81bae059360f6d6c07b1",
+ "content_digest_rule": "sha256 of the canonical JSON of {schema, set, relation, n, ports, files without index.json}",
+ "files": {
+  "in0.u16": {
+   "bytes": 7680,
+   "sha256": "dc7312f7ceab3b93e8c7f67da242b68f4549918bd94289367155e5b4e33ed17f"
+  },
+  "in1.u32": {
+   "bytes": 12,
+   "sha256": "07964a1f60da704a45e79f69e9eb05fb102d3dce9de218068f17ef4444bcd2dc"
+  },
+  "in2.u64": {
+   "bytes": 24,
+   "sha256": "030dcdbcb57c69f06d0cfa31e984c5d5d5f1477abacee27ddc38f567dc8fd145"
+  },
+  "in3.u64": {
+   "bytes": 24,
+   "sha256": "f560c33428a92bd0daafd261dcf11690747d17ac74500f6b8e70c21536b7bfa8"
+  },
+  "in4.u32": {
+   "bytes": 12,
+   "sha256": "92c2f41716fce314a8de51171a865575492302c027569bdd54edb1de457933b0"
+  },
+  "in5.u32": {
+   "bytes": 12,
+   "sha256": "80be4e8795bd5a31e612ae3494f60c4095fe1f1285ee4503d1f88f3f32eb5757"
+  },
+  "index.json": {
+   "bytes": 354,
+   "sha256": "9b7e99f96a60c137646aba1b84fcd61df8c88ccb22463a8f4c51025baaecab74"
+  },
+  "out.sampled_token_ids.u64": {
+   "bytes": 24,
+   "sha256": "39031613581806ceaa796d8a32adb0338a64851bd3eb0c649fd352453bce41bd"
+  }
+ },
+ "n": 3,
+ "ports": {
+  "in0": {
+   "dtype": "u16",
+   "file": "in0.u16",
+   "words": 1280
+  },
+  "in1": {
+   "dtype": "u32",
+   "file": "in1.u32",
+   "words": 1
+  },
+  "in2": {
+   "dtype": "u64",
+   "file": "in2.u64",
+   "words": 1
+  },
+  "in3": {
+   "dtype": "u64",
+   "file": "in3.u64",
+   "words": 1
+  },
+  "in4": {
+   "dtype": "u32",
+   "file": "in4.u32",
+   "words": 1
+  },
+  "in5": {
+   "dtype": "u32",
+   "file": "in5.u32",
+   "words": 1
+  },
+  "out.sampled_token_ids": {
+   "dtype": "u64",
+   "file": "out.sampled_token_ids.u64",
+   "words": 1
+  }
+ },
+ "provenance": {
+  "manifest_digest": null,
+  "model": null,
+  "pair": null,
+  "program_digests": {
+   "GumbelTopPTokenSelect_v1{V=1280}": "25d5f68d5e8fa230a30ad8b22396a67366d087b722c6c3de1c415ac431930e8f21fb81d74d20ff0995173ec34888ad075f4f6ed6d5a1a1d03c54af4687451a37"
+  },
+  "recipe": {
+   "admission": "every BF16 output word finite (Subcircuit.admitted); instance i = the i-th admitted draw",
+   "draw": "templates.Subcircuit.draw(key, j): each port's words from key.stream((port, j), 4 bytes per word)",
+   "draws": 3,
+   "generator": "verity_numerical.bench.generate",
+   "key": "verity.ml.randomness.derive(b'verity input-set synthetic', 'verity/input-sets/synthetic/v1', {'subcircuit': 'gumbel-top-p-token-select/v1280/fp32', 'seed': 20260926})",
+   "n": 3,
+   "parameters": {
+    "V": 1280
+   },
+   "rejected": 0,
+   "rejected_draws": [],
+   "samplers": {
+    "in0 (logits)": "bf16 window: exponent field 127 +- h, h in [2, 4] per draw; 1/32 edge words [0, 32768, 1, 32769, 16256, 49024]",
+    "in1 (top_p)": "f32 of 0.05 + 0.95 u / 2^32",
+    "in2 (seed)": "u64 stream word",
+    "in3 (pos)": "key.uniform(2^20)",
+    "in4 (temp)": "f32 of 0.3 + 1.7 u / 2^32",
+    "in5 (splits)": "1 << key.uniform(4)"
+   },
+   "seed": 20260926,
+   "subcircuit": "gumbel-top-p-token-select/v1280/fp32",
+   "template": "gumbel-top-p-token-select"
+  },
+  "research_run": null,
+  "revision": null,
+  "row": null,
+  "row_key": null,
+  "run_root": null,
+  "selection": "the first n admitted draws, in draw order",
+  "source": "synthetic",
+  "versions": null
+ },
+ "relation": {
+  "definition": "GumbelTopPTokenSelect_v1",
+  "rule": "the registered row kernel of GumbelTopPTokenSelect_v1 (verity_vllm.program.kernels.rows)",
+  "statics": {
+   "V": 1280
+  },
+  "subcircuit": "GumbelTopPTokenSelect_v1"
+ },
+ "schema": "input-set/v1",
+ "set": "gumbeltopptokenselect-v1-v1280"
+}

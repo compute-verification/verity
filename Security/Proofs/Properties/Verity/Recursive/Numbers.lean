@@ -1,12 +1,46 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.SlotsCheck
-public import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Flock.Claims.Recursion.NumsFixedR
-public import Proofs.Flock.Recursive.VStarCheck
-public import Proofs.Flock.Soundness.Discharge.Hidden.Public
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
-public import Proofs.Flock.Soundness.Discharge.Exec.Setup
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.ResLowerDeployed
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Recursive.VStarCheck
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # A staged part's numbers don't read its public file
@@ -14,12 +48,12 @@ public import Proofs.Flock.Soundness.Discharge.Exec.Setup
 Part `s`'s staged statement at inner rounds `ms` (`RecDeploy.staged`) differs from the one at `ms'` only in what
 the rounds put in it: the part's public file, the inner session's record and the transcript. Its numbers (`numsOf`:
 `ε_table`, `N₀`, the weight and the rounds) read only its one table's `m`, `k_log`, region count and `m_pts`, and
-those read the circuit, the tables, the draw and the unit count `n`:
+those read the circuit, the tables, the sample and the unit count `n`:
 
 * `RecSetup.oneFull`, under the inner shape every staged statement carries, passes one table only.
 * `RecVStar.checkStmt` passes only `verity/flock-circuit`, a statement with hidden outputs, so the table is
   `Stmt.setupHidden`'s.
-* With a draw, `n` is the draw's proved units (`HmRow.drawn`). Without one, the public file records no population
+* With a sample, `n` is the sample's proved units (`HmRow.drawn`). Without one, the public file records no population
   (`HmRow.loadPublic`), so `n` is the table's population, which `checkStmt` pins to V*'s statement `s` at the inner
   shape.
 
@@ -96,7 +130,7 @@ theorem setupTables_hidden (hh : tags.hiddenOutputs = true)
        exact Or.inr ⟨by omega, hsz⟩)
 
 set_option maxHeartbeats 4000000 in
-/-- What `setupHidden`'s table is made of, at any public input words: its circuit, its population and draw, the unit
+/-- What `setupHidden`'s table is made of, at any public input words: its circuit, its population and sample, the unit
 count `n` the shape reads, and its regions. -/
 theorem setupHidden_shape {st : Flock.Stmt}
     (h : Flock.Stmt.setupHidden tags cf pf coins tables draw partition program publicInputs = .ok st) :
@@ -178,7 +212,7 @@ theorem staged_ins {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claim
   have h' : (partRaw r st x ms s p).ins.toOption = some i := by simpa using h
   exact ⟨r, p, hr, hp, by simpa [partRaw] using hz, RecRaw.ins_base (toOption_eq_some h')⟩
 
-/-- **The staged statements at any two rounds are read alike**: the same tags, circuit file, tables and draw. -/
+/-- **The staged statements at any two rounds are read alike**: the same tags, circuit file, tables and sample. -/
 theorem reads_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Claims.Out)} {s : ℕ} {i i' : RecIns}
     (hi : insO (staged st x ms s) = some i) (hi' : insO (staged st x ms' s) = some i') :
     i.base.read.tags = i'.base.read.tags ∧ i.base.read.I.circuitFile = i'.base.read.I.circuitFile ∧
@@ -199,7 +233,7 @@ theorem reads_eq {st : Stage} {x : Claims.Msg} {ms ms' : List (Claims.Msg × Cla
 
 /-! ## One staged table's shape -/
 
-/-- The unit count a staged table must have: the draw's proved units, else V*'s statement `s`'s instances. -/
+/-- The unit count a staged table must have: the sample's proved units, else V*'s statement `s`'s instances. -/
 def nOf (r : XR) (s : ℕ) : Option Json → Option ℕ
   | some d => (Draw.UnitDraw.ofJson d).toOption.map (·.proved.size)
   | none => ((RecVStar.statements r.shape).toOption.bind (·[s]?)).map (·.instances)

@@ -1,6 +1,9 @@
 module
 
+public import Definitions.Core.Game
 public import Proofs.Flock.Soundness.ZK.Hiding
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Assumptions
 
 /-!
 # One committed round's leaf
