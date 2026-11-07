@@ -95,6 +95,15 @@ environment extension loaded, so none of the package's code runs), and replays t
                  plain range (`0 < x`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals), unless
                  `shape.inline`, which only shrinks, lists it (`inline_failures`), or did under names a rename changed
                  (`paired`); its size is the AUDIT line's inline debt
+    trust        (`trust`: the premises that are the trust base, `base`, each with which trust assumption it states,
+                 and a deployed guarantee's own, `extra`, each with the reason a ruling's rule gives; `deployed`: the
+                 guarantees that state the deployed system)
+                 a deployed guarantee rests on a premise outside its trust that its `trust_gap` entry doesn't list (an
+                 update adds none, so the gap only shrinks), or the entry lists one it no longer rests on, or
+                 `trust_gap` lists a guarantee `deployed` doesn't (`--update` drops both): what it rests on is the named
+                 assumptions and open premises its record lists, and through each domain hypothesis that is another
+                 listed guarantee's statement (`cites`) that guarantee's, transitively (`trust_gaps`); the report prints
+                 each one's gap
     trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
                  the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
                  tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
@@ -258,8 +267,9 @@ CONTROLS = {"control": "violations.json", "modules": "module-violations.json"}
 GENERATED = re.compile(r"^(_.*|match_\d+|proof_\d+|eq_\d+|eq_def|mk|rec|recOn|casesOn|noConfusion|noConfusionType|below|brecOn"
                        r"|binductionOn|ibelow|ctorIdx|inj|injEq|sizeOf_spec)$")
 ORDER = ("roots", "proved_in", "exempt", "runs", "axioms", "assumptions_module", "assumptions", "domain", "open", "open_seed",
-         "open_default_issue", "meaning", "escapes", "verifier", "claims", "witnesses", "unwitnessed", "witnesses_assumed",
-         "compile_time", "dependency_unchecked", "layers", "reads_exempt", "trees", "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
+         "open_default_issue", "trust", "deployed", "trust_gap", "meaning", "escapes", "verifier", "claims", "witnesses",
+         "unwitnessed", "witnesses_assumed", "compile_time", "dependency_unchecked", "layers", "reads_exempt", "trees",
+         "upstream", "four_names", "guarantees", "shape", "reads", "dependencies")
 #: a guarantee's `owner`: the handle of the lane that answers for it (`@lane`)
 OWNER = re.compile(r"@[a-z0-9][a-z0-9-]*")
 #: an open premise's `issue` (the Linear issue that discharges it) and `due`
@@ -1190,9 +1200,18 @@ def renamed(name: str, moved: dict[str, str]) -> str:
 
 
 def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
-    """The policy's `witnesses`, `unwitnessed` and `witnesses_assumed` with every guarantee, theorem and assumption they
-    name `renamed` by ``moved``."""
+    """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed` and `trust_gap` with every
+    guarantee, theorem and premise they name `renamed` by ``moved``."""
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
+    if name_list(policy.get("deployed")):
+        out["deployed"] = sorted(renamed(n, moved) for n in policy["deployed"])
+    if isinstance(trust := policy.get("trust"), dict):
+        def keyed(m):
+            return {renamed(p, moved): why for p, why in m.items()} if isinstance(m, dict) else m
+        out["trust"] = {k: {renamed(g, moved): keyed(ps) for g, ps in v.items()}
+                        if k == "extra" and isinstance(v, dict) else keyed(v) for k, v in trust.items()}
+    if isinstance(gap := policy.get("trust_gap"), dict):
+        out["trust_gap"] = {renamed(g, moved): sorted(renamed(p, moved) for p in name_list(ps)) for g, ps in gap.items()}
     if isinstance(taken := policy.get("witnesses_assumed"), dict):
         out["witnesses_assumed"] = {renamed(a, moved): why for a, why in taken.items()}
     if isinstance(ws, dict):
@@ -1601,6 +1620,9 @@ def judge(policy: dict, facts: dict, files: dict[str, str], update: bool = False
         out.pop("open_seed", None)
     if update and policy.get("verifier") and facts.get("verifier") is not None:
         out["verifier"] = policy["verifier"] | {"allow": verifier_allow(policy["verifier"], facts["verifier"])}
+    if update and isinstance(policy.get("trust_gap"), dict):
+        out["trust_gap"] = trust_gap_kept(out)
+    fails += trust_failures(out)
     return fails, out
 
 
@@ -2011,15 +2033,44 @@ def concluded_constants(read: dict) -> set[str]:
     return {c for k in read.get("conclusion") or [] for c in (k.get("head"), *(k.get("defs") or [])) if c}
 
 
+def args_agree(taken: list | None, concluded: list | None) -> bool:
+    """Whether a conjunct at the arguments ``concluded`` (`Facts.lean`'s `args`: a closed one's canon text, `∀` for one it
+    holds at every value of, None for one it fixes no value of) concludes a premise its guarantee takes at ``taken`` (a
+    closed one's text, None for one that ranges with the guarantee's binders): each argument the guarantee fixes is the
+    conjunct's, or one the conjunct holds at every value of. A premise read with no arguments (packed in `∧`, or under
+    binders of its own) agrees by its head alone."""
+    if not isinstance(taken, list):
+        return True
+    if not isinstance(concluded, list) or len(concluded) != len(taken):
+        return all(t is None for t in taken)
+    return all(t is None or c in (t, "∀") for t, c in zip(taken, concluded))
+
+
+def honest_concludes(pin: dict, witnesses: list[dict]) -> set[str]:
+    """What the honest witnesses ``witnesses`` (their facts) conclude of the guarantee whose facts are ``pin``: each
+    conjunct's head and the definitions it applies (`concluded_constants`), of each witness's statement as written and
+    with a lifted definition unfolded once (`lifted`, which unfolds `P inst` past its head `P`); less a premise of
+    ``pin`` that conjuncts headed by it conclude only at other arguments than ``pin`` takes it at (`args_agree`). The
+    statements are the witnesses' types as the kernel has them (`Facts.lean`'s `body`), not their names."""
+    reads = [r for w in witnesses for r in (w.get("body") or {}, (w.get("body") or {}).get("lifted") or {})]
+    out = set().union(*map(concluded_constants, reads)) if reads else set()
+    conjuncts = [k for r in reads for k in r.get("conclusion") or []]
+    for p in pin.get("premises") or []:
+        heads = [k for k in conjuncts if k.get("head") == p.get("head")]
+        if heads and not any(args_agree(p.get("args"), k.get("args")) for k in heads):
+            out.discard(p.get("head"))
+    return out
+
+
 def honest_cover(policy: dict, facts: dict) -> dict[str, set[str]]:
-    """{guarantee: what its `honest` witnesses conclude together at the deployed instance}, for each guarantee whose
-    `witnesses` entry lists honest witnesses the build has."""
+    """{guarantee: what its `honest` witnesses conclude of it together at the deployed instance (`honest_concludes`)},
+    for each guarantee whose `witnesses` entry lists honest witnesses the build has."""
     ws, listed, out = policy.get("witnesses"), policy.get("guarantees") or {}, {}
     for g, w in sorted((ws if isinstance(ws, dict) else {}).items()):
         names = w.get("honest") if isinstance(w, dict) else None
         pins = [facts["pins"].get(n) if n in listed else None for n in names] if isinstance(names, list) and names else []
         if pins and all(p and p.get("kind") == "theorem" and isinstance(p.get("body"), dict) for p in pins):
-            out[g] = set().union(*(concluded_constants(statement_read(p)) for p in pins))
+            out[g] = honest_concludes(facts["pins"].get(g) or {}, pins)
     return out
 
 
@@ -2148,7 +2199,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     - `honest`: together their conclusions conclude, at the honest deployed instance, each premise of the guarantee outside
       a named assumption's module and `witnesses_assumed` (`honest_premises`) and, for a property, its function's
       acceptance (`accepted`): a
-      conjunct headed by or applying each. Each says something (`vacuous_meets`), and none applies a verifier that accepts
+      conjunct headed by or applying each, a premise's head read as written too and at the arguments the guarantee
+      fixes (`honest_concludes`). Each says something (`vacuous_meets`), and none applies a verifier that accepts
       everything (`accept_all`: that is the nontrivial lemma's object). A premise that can never hold fails here;
     - `nontrivial`: past its binders, `¬ C …` with `C` a head of the guarantee's conclusion, or one it unfolds through
       (`concluded`). For the `acceptance` kind, at the verifier that accepts everything, with a `∀` before the `¬` for each
@@ -2234,15 +2286,15 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                  f"of the {kind} kind ({why})"))
             continue
         kind = w.get("kind", kind or "acceptance")
-        covered, reached, checked = set(), set(), skip != "honest"
+        hps, reached, checked = [], set(), skip != "honest"
         for n in w.get("honest") or []:
             hp, why_not = witness_pin("witnesses", n, g, "honest", policy, facts)
             fails += why_not
             if hp is None:
                 checked = False
                 continue
+            hps.append(hp)
             read = statement_read(hp)
-            covered |= concluded_constants(read)
             for k in read.get("conclusion") or []:
                 reached |= set(k.get("defs") or [])
             for v in [*([x] if (x := vacuous_meets(ranges_dropped(read), None)) else []), *assumes(hp, policy, own)]:
@@ -2256,6 +2308,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                      f"verifier that accepts everything ({', '.join(hp['accept_all'])}): an honest lemma is "
                                      f"at the deployed verifier, and the accept-all one is the `nontrivial` lemma's object "
                                      f"(LEAN-68's HonestH200)"))
+        covered = honest_concludes(pin, hps)
         missing = [p for p in honest_premises(pin, policy, own) if p not in covered]
         fns = accepted(policy, g)
         if checked and (missing or (fns and not any(reaches(f, reached) for f in fns))):
@@ -2889,12 +2942,14 @@ RECORD_DIFFERENCE = Codes({
 
 #: the bookkeeping `--bookkeeping warn` (drive's lock run after a landing) repairs in the lock it regenerates
 #: instead of failing, each with one warning naming the entry and its owner, so the next PR does the work: a premise's
-#: kind and its ticket, an entry no guarantee has, an owner, and a guarantee the witnesses rule holds to witnesses it lacks
+#: kind and its ticket, an entry no guarantee has, an owner, a guarantee the witnesses rule holds to witnesses it lacks,
+#: and a `trust_gap` entry that lists more than its deployed guarantee rests on outside its trust
 BOOKKEEPING = Codes({
     "open.unlisted", "assumptions.outside-module", "domain.uncovered", "open.seed",    # under `open`, on the default ticket
     "witnesses.missing", "witnesses.unwitnessed-changed",                              # under `unwitnessed`, as it is now
     "witnesses.stale", "witnesses.assumed-stale", "shape.properties-stale", "shape.frozen-stale",   # dropped
     "guarantees.no-owner", "assumptions.no-owner", "open.no-owner", "domain.no-owner",               # owned
+    "trust.gap-gone", "trust.gap-stale",                                               # dropped from `trust_gap`
 })
 #: the issue `--bookkeeping warn` files a premise under when the lock gives no `open_default_issue`, the days to its due
 #: date, and the owner of an entry whose guarantees name none
@@ -2907,7 +2962,8 @@ def regenerated(policy: dict, facts: dict, files: dict[str, str], fails: list[st
     if not fails or not all(RECORD_DIFFERENCE.match(f) for f in fails):
         return None
     new = judge(policy, facts, files, update=True)[1]
-    return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape") if k in new}
+    return policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "trust_gap")
+                     if k in new}
 
 
 def bookkeeping_ticket(policy: dict, due: str) -> dict:
@@ -2921,12 +2977,13 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     (`regenerated`), an open premise the lock doesn't list, and an `assumptions` or uncovered `domain` entry that is one,
     listed under `open` on ``ticket`` (`bookkeeping_ticket`; `open_seed` first, which goes), an entry without an owner given
     its guarantees' (the first, of several) or ``ticket``'s, each guarantee failing `witnesses.missing` or
-    `witnesses.unwitnessed-changed` under `unwitnessed` with its statement's hashes as built, and each entry of no guarantee
-    (`witnesses.stale`, `witnesses.assumed-stale`, `shape.properties-stale`, `shape.frozen-stale`) dropped.  The audit then
-    judges the package on it (`audit`): what still fails there fails."""
+    `witnesses.unwitnessed-changed` under `unwitnessed` with its statement's hashes as built, each entry of no guarantee
+    (`witnesses.stale`, `witnesses.assumed-stale`, `shape.properties-stale`, `shape.frozen-stale`) dropped, and `trust_gap`
+    as an update keeps it (`trust_gap_kept`).  The audit then judges the package on it (`audit`): what still fails there
+    fails."""
     new = judge(policy, facts, files, update=True, ticket=ticket)[1]
-    out = policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "unwitnessed")
-                    if k in new}
+    out = policy | {k: new[k] for k in ("guarantees", "reads", "assumptions", "domain", "open", "shape", "unwitnessed",
+                                        "trust_gap") if k in new}
     out.pop("open_seed", None)
     allow, shape_ = dict(out.get("unwitnessed") or {}), dict(out.get("shape") or {})
     drops = {"witnesses.stale": ("witnesses",), "witnesses.assumed-stale": ("witnesses_assumed",),
@@ -2952,9 +3009,13 @@ def repaired(policy: dict, facts: dict, files: dict[str, str], fails: list[str],
     return out
 
 
-def bookkeeping_warnings(fails: list[str], lock: dict, ticket: dict) -> list[str]:
+def bookkeeping_warnings(fails: list[str], lock: dict, ticket: dict, was: dict | None = None) -> list[str]:
     """One line for each repair `repaired` made of ``fails`` (their codes in `BOOKKEEPING`) in ``lock``: the entry, its owner,
-    what the repair did and the failure's code."""
+    what the repair did and the failure's code; a premise dropped from `trust_gap` is named from ``was``, the lock before."""
+    def dropped(g: str) -> str:
+        before, now = ((x.get("trust_gap") or {}).get(g) or [] for x in (was or {}, lock))
+        return ", ".join(sorted(set(before) - set(now))) or "what it no longer rests on"
+
     def owner(entry: str | None) -> str:
         for section in ("open", "assumptions", "domain", "guarantees"):
             if isinstance(rec := (lock.get(section) or {}).get(entry), dict) and rec.get("owner"):
@@ -2973,12 +3034,117 @@ def bookkeeping_warnings(fails: list[str], lock: dict, ticket: dict) -> list[str
             what = "`open_seed` consumed"
         elif c.startswith("witnesses.") and c not in ("witnesses.stale", "witnesses.assumed-stale"):
             what = "listed under `unwitnessed` at its statement's hashes now: it owes its `honest` and `nontrivial` witnesses"
+        elif c == "trust.gap-gone":
+            what = f"dropped from its `trust_gap` entry, outside its trust no longer: {dropped(e)}"
+        elif c == "trust.gap-stale":
+            what = "its `trust_gap` entry dropped: `deployed` doesn't list it"
         elif c.endswith("-stale") or c.endswith(".stale"):
             what = "dropped: no guarantee has it"
         else:
             what = f"owner set to {owner(e)}"
         out.append(f"bookkeeping: {e or 'the lock'} ({owner(e)}): {what} ({c})")
     return out
+
+
+#: the premises of a guarantee's record its trust gap counts: the named assumptions and the open premises it takes. A domain
+#: hypothesis is part of what the guarantee says, and one that is another listed guarantee's statement (its entry's
+#: `cites`) brings in that guarantee's premises
+GAP_KINDS = ("assumptions", "open")
+
+
+def name_list(v) -> list[str]:
+    """``v`` when it is a list of names, else none."""
+    return v if isinstance(v, list) and all(isinstance(x, str) for x in v) else []
+
+
+def premise_closure(lock: dict, name: str) -> set[str]:
+    """The named assumptions and open premises guarantee ``name``'s record lists, and those of each listed guarantee whose
+    statement it takes as a domain hypothesis (the `domain` entry's `cites`), transitively."""
+    listed, domain = lock.get("guarantees") or {}, lock.get("domain") or {}
+    out, seen, todo = set(), set(), [name]
+    while todo:
+        if (g := todo.pop()) in seen or not isinstance(rec := listed.get(g), dict):
+            continue
+        seen.add(g)
+        took = rec.get("premises") if isinstance(rec.get("premises"), dict) else {}
+        out |= {p for k in GAP_KINDS for p in name_list(took.get(k))}
+        todo += [e["cites"] for d in name_list(took.get("domain"))
+                 if isinstance(e := domain.get(d), dict) and isinstance(e.get("cites"), str)]
+    return out
+
+
+def trusted(lock: dict, name: str) -> set[str]:
+    """The premises deployed guarantee ``name`` may rest on: the trust base (`trust.base`) and its own
+    (`trust.extra`)."""
+    trust = lock.get("trust") if isinstance(lock.get("trust"), dict) else {}
+    extra = trust.get("extra") if isinstance(trust.get("extra"), dict) else {}
+    base = trust.get("base") if isinstance(trust.get("base"), dict) else {}
+    return set(base) | set(extra.get(name) if isinstance(extra.get(name), dict) else ())
+
+
+def trust_gaps(lock: dict) -> dict[str, list[str]]:
+    """{each guarantee `deployed` lists: the premises of its closure (`premise_closure`) it may not rest on
+    (`trusted`)}: what the deployed system rests on beyond its trust base."""
+    return {g: sorted(premise_closure(lock, g) - trusted(lock, g)) for g in name_list(lock.get("deployed"))}
+
+
+def trust_form(trust) -> bool:
+    """Whether ``trust`` is {"base": {premise: the trust assumption it states}, "extra": {deployed guarantee: {premise:
+    its reason}}}, each reason one line, `extra` optional and each of its entries holding a premise."""
+    def reasons(ps) -> bool:
+        return isinstance(ps, dict) and bool(ps) and all(isinstance(w, str) and w.strip() and "\n" not in w
+                                                         for w in ps.values())
+    extra = trust.get("extra", {}) if isinstance(trust, dict) else None
+    return (isinstance(trust, dict) and set(trust) <= {"base", "extra"} and reasons(trust.get("base"))
+            and isinstance(extra, dict) and all(map(reasons, extra.values())))
+
+
+def trust_failures(lock: dict) -> list[str]:
+    """The trust gap's ratchet.  `trust` holds the premises that are the trust base (`base`, each with the trust
+    assumption it states) and, for a deployed guarantee a ruling's rule trusts more for, its own with their reasons
+    (`extra`; `trust_form`); `deployed` lists the guarantees that state the deployed system, each one the lock lists;
+    and `trust_gap` ({deployed guarantee: its premises outside its trust}) holds each one's gap (`trust_gaps`): a premise
+    new to a gap fails until a person lists it, since an update adds none, and one a gap no longer has, or an entry of a
+    guarantee `deployed` doesn't list, fails until the entry drops (`trust_gap_kept`, which `--update` and the lock run's
+    bookkeeping write)."""
+    held = lock.get("trust_gap", {})
+    fails = [] if "trust" not in lock or trust_form(lock["trust"]) else [Failure(
+        "trust.form", None, 'trust: `trust` is {"base": {premise: the trust assumption it states}, "extra": {deployed '
+        'guarantee: {premise: its reason}}}, each reason one line, `extra` optional')]
+    if "deployed" in lock and lock["deployed"] != name_list(lock["deployed"]):
+        fails.append(Failure("trust.form", None, "trust: `deployed` is a list of names"))
+    if not isinstance(held, dict) or any(v != name_list(v) for v in held.values()):
+        fails.append(Failure("trust.form", None, "trust: `trust_gap` is {deployed guarantee: [premise, ...]}"))
+    if fails:
+        return fails
+    listed, deployed = lock.get("guarantees") or {}, set(name_list(lock.get("deployed")))
+    for g in sorted(set((lock.get("trust") or {}).get("extra", {})) - deployed):
+        fails.append(Failure("trust.extra-unlisted", g, f"trust: `trust.extra` lists {g}, which `deployed` doesn't: a "
+                             "guarantee's own trust is a deployed guarantee's; drop the entry, or list the guarantee"))
+    for g, gap in trust_gaps(lock).items():
+        if g not in listed:
+            fails.append(Failure("trust.deployed-unlisted", g, f"trust: `deployed` lists {g}, which `guarantees` doesn't: "
+                                 "list the guarantee that states the deployed system, or drop the entry"))
+        elif new := sorted(set(gap) - set(held.get(g, []))):
+            fails.append(Failure("trust.gap-new", g, f"trust: {g}, a deployed guarantee, rests on {', '.join(new)}, outside "
+                                 "its trust (`trust`), which its `trust_gap` entry doesn't list: discharge each (prove "
+                                 "it, or state it as a premise of the trust base at its instance), or list it there "
+                                 "and say why in the PR: the gap only shrinks"))
+        if g in listed and (gone := sorted(set(held.get(g, [])) - set(gap))):
+            fails.append(Failure("trust.gap-gone", g, f"trust: {g}'s `trust_gap` entry lists {', '.join(gone)}, which it no "
+                                 "longer rests on outside its trust: drop it from the entry (`check.py --update` "
+                                 "does)"))
+    for g in sorted(set(held) - set(name_list(lock.get("deployed")))):
+        fails.append(Failure("trust.gap-stale", g, f"trust: `trust_gap` lists {g}, which `deployed` doesn't: drop the "
+                             "entry (`check.py --update` does)"))
+    return fails
+
+
+def trust_gap_kept(lock: dict) -> dict[str, list[str]]:
+    """The `trust_gap` an update writes: each entry of a deployed guarantee less the premises its gap no longer has, and no
+    entry left empty or of a guarantee `deployed` doesn't list.  It adds nothing, so the gap only shrinks."""
+    held, gaps = lock.get("trust_gap") or {}, trust_gaps(lock)
+    return {g: kept for g in sorted(held) if g in gaps and (kept := sorted(set(name_list(held[g])) & set(gaps[g])))}
 
 
 #: what a property's one hypothesis that is not a premise says its function returned (`shape`): `none` for a function that
@@ -4409,6 +4575,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         return reported(rep)
     facts["source_modules"] = sorted(module_files(pkg))
     fails, new = judge(current, facts, files, update, owner)
+    if "deployed" in new:
+        rep["trust_gap"] = trust_gaps(new)
     _, debt, rep["inline"] = inline_failures(current, facts)
     rep["inline_debt"] = [len(debt), sum(map(len, debt.values()))]
 
@@ -4499,7 +4667,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             notes = review(policy, fixed, facts, sources())
             (work / "review.txt").write_text("\n".join(notes) + "\n")
             rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY),
-                    "bookkeeping": bookkeeping_warnings(fails, fixed, ticket)}
+                    "bookkeeping": bookkeeping_warnings(fails, fixed, ticket, policy)}
             log(f"audit: {pkg}/{POLICY}: passes on its lock with the bookkeeping repaired, {work / POLICY}, which drive "
                 f"commits: {len(rep['bookkeeping'])} repairs, each a warning")
     elif update:
@@ -4854,6 +5022,11 @@ def main(argv: list[str]) -> int:
                 print(f"  {w}", flush=True)
             for n in rep.get("notes", []):
                 print(f"  note: {n}", flush=True)
+            if (gaps := rep.get("trust_gap")) is not None:
+                print(f"  trust gap: {sum(map(len, gaps.values()))} premises outside their trust over the {len(gaps)} "
+                      f"deployed guarantees, {len(set().union(*gaps.values()))} distinct:", flush=True)
+                for g, gap in gaps.items():
+                    print(f"    {g}: {len(gap)}" + (f" ({', '.join(gap)})" if gap else ""), flush=True)
             if hb := rep.get("heartbeats"):
                 print(f"  heartbeats: {len(hb)} overrides, {sum(h['reason'] is None for h in hb)} without a reason "
                       f"(value; its module's build time; reason):", flush=True)

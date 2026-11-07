@@ -118,13 +118,15 @@ CAP_ENTRY = re.compile(r'\s*"([^"\\]*)"\s*:\s*(\d+)\s*')
 #: where a merged string array wraps
 WIDTH = 120
 #: the sections `check.py --update` writes in sorted order; the others keep ours' order, with theirs' new entries after it
-SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time"}
+SORTED = {"assumptions", "domain", "open", "guarantees", "reads", "dependencies", "compile_time", "trust_gap"}
 #: sections whose entries are maps merged entry by entry in turn (`upstream`'s `scan` and `watch`, `shape`'s `properties`,
-#: `frozen` and `conjectures`, `trees`' `except`)
-NESTED = {"upstream", "shape", "claims", "trees"}
+#: `frozen` and `conjectures`, `trees`' `except`, `trust`'s `base` and `extra`), or lists of names merged as lists
+#: (`trust_gap`'s premises, so a side's discharge and the other's new premise both apply)
+NESTED = {"upstream", "shape", "claims", "trees", "trust", "trust_gap"}
 #: nested maps whose entries are maps merged one level deeper still: `shape.inline`'s guarantees, each {premise: why} merged
-#: premise by premise, a guarantee left with none dropped (the check refuses an empty one, and `--update` drops it)
-DEEPER = {"shape[inline]"}
+#: premise by premise, a guarantee left with none dropped (the check refuses an empty one, and `--update` drops it), and
+#: `trust.extra`'s, each {premise: reason} merged the same way
+DEEPER = {"shape[inline]", "trust[extra]"}
 #: the witness rule's sections, merged entry by entry with theirs' value where the sides disagree (`judged`)
 JUDGED = {"unwitnessed", "witnesses"}
 MISSING = object()
