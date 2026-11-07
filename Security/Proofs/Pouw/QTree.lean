@@ -1,9 +1,8 @@
 module
 
 public import Definitions.Pouw.Basic.QTree
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Logic.Function.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # Oracle programs: sequencing, querying a list, and a transcript built unit by unit

@@ -3,9 +3,10 @@
 session, signs its release log when it ends and publishes nothing secret; the verifier checks the session from the
 process's `out/` and the auditor's signed ledger alone.  A Lean that can't answer starts no session, a second session
 signs at the key's next leaves, a session id the key has signed for is refused, a key inside `out/` is refused, a refused
-hello is logged and the next connection taken, a broken sequence after the hello ends the session with exit 1, signed as
-such, a salt opens only after `--root`, and with `--peer` (development sessions alone: a window's, with `--root`, is
-refused it) the tunnel opens once the challenger listens and a tunnel that ends first ends it."""
+hello is logged and the next connection taken up to the cap on refused hellos, past which the session ends, a broken
+sequence after the hello ends the session with exit 1, signed as such, an open whose label is past ASCII is refused in
+ASCII and its close written, a salt opens only after `--root`, and with `--peer` (development sessions alone: a window's,
+with `--root`, is refused it) the tunnel opens once the challenger listens and a tunnel that ends first ends it."""
 
 from __future__ import annotations
 
@@ -83,13 +84,14 @@ class Auditor:
 
 
 def start(tmp_path: Path, out: str = "out", key: Path | None = None, *extra: str, env=None, session: str | None = None,
-          auditor: Auditor | None = None, root: str | None = None) -> tuple:
-    """serve.py on loopback for session `session` (s-OUT), writing `out`; `auditor`'s ledger opens it first, for `root`."""
+          auditor: Auditor | None = None, root: str | None = None, stub: tuple[str, ...] = ()) -> tuple:
+    """serve.py on loopback for session `session` (s-OUT), writing `out`; `auditor`'s ledger opens it first, for `root`;
+    `stub` the stub's own flags."""
     out_dir = tmp_path / out
     if auditor is not None:
         auditor.open(session or f"s-{out}", root)
     proc = subprocess.Popen(
-        [sys.executable, str(STUB), str(SERVE), "--out", str(out_dir), "--port", "0", "--scheme", "verity/test/coins/v1",
+        [sys.executable, str(STUB), *stub, str(SERVE), "--out", str(out_dir), "--port", "0", "--scheme", "verity/test/coins/v1",
          "--families", json.dumps(FAMILIES), "--session", session or f"s-{out}", "--key", str(key or tmp_path / "key"),
          "--params", f"{PARAMS.W},{PARAMS.H}", "--keygen-workers", "1", "--host", HOST, *extra],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
@@ -231,6 +233,28 @@ def test_a_broken_sequence_after_the_hello_ends_the_session_with_exit_1(tmp_path
         trusted(out, auditor)
 
 
+@pytest.mark.parametrize("label", ["positions\u00e9", "\ud800", ["positions"]])
+def test_an_open_whose_label_is_past_ascii_is_refused_in_ascii_and_the_close_is_written(tmp_path, label):
+    """An open's label that isn't an ASCII string is refused before any coin opens, in ASCII, so the close that signs how
+    the session ended is written and the verifier reads it as refused."""
+    auditor = Auditor(tmp_path)
+    proc, out, first = start(tmp_path, auditor=auditor)
+    host, port = first.split()[1].split(":")
+    hello = json.dumps({"type": "hello"}).encode()
+    head = json.dumps({"type": "open", "label": label, "index": 0, "after": "00" * 64}).encode()
+    with socket.create_connection((host, int(port))) as s:
+        s.sendall(R.HEADER.pack(len(hello), 0) + hello)
+        assert s.recv(1 << 16)
+        s.sendall(R.HEADER.pack(len(head), 0) + head)
+        assert R.LABEL.encode() in s.recv(1 << 16)
+    assert finish(proc)[0] == 1
+    assert close(out)["ended"] == R.LABEL and R.LABEL.isascii()
+    record = C.ChallengerRecord.from_json(json.loads((out / R.RECORD).read_text()))
+    assert not any(R.released_roots(out / R.RELEASES, record.commitment).values())
+    with pytest.raises(C.CoinError, match="ended without its client closing it: an open's label is an ASCII string"):
+        trusted(out, auditor)
+
+
 def test_refused_hellos_are_logged_and_the_next_connection_is_taken_until_one_is_accepted_then_none(tmp_path):
     """A refused hello releases nothing, so it can't spend the window (proofs, on the thread): the session takes the next
     connection, and once a hello is accepted it stops listening."""
@@ -264,6 +288,31 @@ def test_refused_hellos_are_logged_and_the_next_connection_is_taken_until_one_is
     for bad in (["--root", root.upper()], ["--root", root + "\n"]):
         proc, out, first = start(tmp_path, "bad", None, *bad)
         assert finish(proc)[0] == 2 and first == ""
+
+
+def test_a_session_serves_after_max_hellos_refused_hellos_and_ends_at_the_next_past_them(tmp_path):
+    """v2 refuses a session past `MAX_HELLOS` refused hellos (`coins.LIMITS`): a client whose hello is accepted after that
+    many is served, and the next refused past them ends the session, signed, logging no more. The cap is lowered to 2
+    here (the stub's `--max-hellos`); `test_remote.py` holds `remote.log_hello` to the real one."""
+    stub = ("--max-hellos", "2")
+    proc, out, first = start(tmp_path, "at", None, stub=stub)
+    host, port = first.split()[1].split(":")
+    for _ in range(2):
+        socket.create_connection((host, int(port))).close()
+    session(first.split()[1])
+    assert finish(proc)[0] == 0 and close(out)["ended"] is None
+    assert [json.loads(ln)["n"] for ln in (out / R.HELLOS).read_text().splitlines()] == [0, 1]
+
+    proc, out, first = start(tmp_path, "past", None, stub=stub)
+    host, port = first.split()[1].split(":")
+    for _ in range(3):
+        socket.create_connection((host, int(port))).close()
+    code, err = finish(proc)
+    assert code == 1 and "ended: the challenger refused 2 hellos" in err
+    assert close(out)["ended"].startswith("the challenger refused 2 hellos, the most a session's evidence holds, and "
+                                          "refuses the session at the next")
+    assert [json.loads(ln)["n"] for ln in (out / R.HELLOS).read_text().splitlines()] == [0, 1]
+    assert close(out)["lines"] == 1
 
 
 SALTED = ["--families", json.dumps([["pouw/salt", 1], ["pouw/round", 1]])]

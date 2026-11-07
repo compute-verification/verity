@@ -2,7 +2,6 @@ module
 
 public import Mathlib.Data.Fintype.Pi
 public import Mathlib.Data.Finset.Prod
-public import Mathlib.Logic.Relation
 
 /-!
 # Populations: units over committed value slots, with public dataflow

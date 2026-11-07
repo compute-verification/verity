@@ -1,8 +1,39 @@
 module
 
 public import Proofs.Flock.Claims.DeployInputs
-public import Flock.RecBudget
 public import Flock.RecLinkPart
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import VCVio.Prelude.Core
 
 /-!
 # A V* part's statement: its bytes, its parser and its recursive setup
@@ -14,10 +45,10 @@ directory: Flock's statement (`FlockDeploy.Raw`, `--zk` on) and the bytes and nu
 `--rec-inner-partition`; `--rec-inner-coins`, which the verifier refuses), the inner session's record
 (`--rec-inner-session`'s `session.json`), the coin server's transcript (`--rec-inner-transcript`), the circuit
 registration (`--rec-inner-registration`) and how the inner statement is set up (`--rec-inner-statement`,
-`--rec-inner-statement-coins`, `--rec-inner-tables`' tables, `--rec-inner-draw`), the inner population's link table
+`--rec-inner-tables`' tables, `--rec-inner-draw`), the inner population's link table
 (`--rec-links`: its root and row count) and the verifier's program of the inner statement (`--rec-inner-program`).
 `decodeRec` keeps only a reading whose encoding is `x`, so it is injective (`decodeRec_injective`), and refuses every
-other format, `flock-verify-rec-statement/v2` (no inner program) among them.
+other format, `flock-verify-rec-statement/v3` (with the inner statement's coins) among them.
 
 `RecRaw.ins` runs the verifier's readers on those bytes as `Main.verifyCmd` runs them: Flock's (`Raw.ins`), then
 `RecLinkTree.linksArg`'s checks of the link table's root and row count (`linksOf`), `RecVStar.Inner.ofJson`,
@@ -50,7 +81,7 @@ open Lean (Json)
 /-- **What `flock-verify verify --zk` reads of a V* part's statement** besides the session directory: Flock's statement,
 then `--rec-inner`, `--rec-part`, `--rec-bindings`, `--rec-rows`, `--rec-inner-circuit`, `--rec-inner-public`,
 `--rec-inner-partition`, `--rec-inner-coins`, `--rec-inner-session`'s `session.json`, `--rec-inner-transcript`,
-`--rec-inner-registration`, `--rec-inner-statement`, `--rec-inner-statement-coins`, the tables in `--rec-inner-tables`,
+`--rec-inner-registration`, `--rec-inner-statement`, the tables in `--rec-inner-tables`,
 `--rec-inner-draw`, `--rec-links`' root and row count, and `--rec-inner-program`. -/
 structure RecRaw where
   base : Raw
@@ -66,14 +97,13 @@ structure RecRaw where
   transcript : Option ByteArray
   registration : Option ByteArray
   innerStatement : Option String
-  innerStatementCoins : Option Bool
   innerTables : Option (List (String × ByteArray))
   innerDraw : Option ByteArray
   recLinks : Option (ByteArray × ℕ)
   innerProgram : Option ByteArray
 
 /-- The encoding's format string, its first field. -/
-def RFORMAT : String := "flock-verify-rec-statement/v3"
+def RFORMAT : String := "flock-verify-rec-statement/v4"
 
 /-- **The statement's canonical bytes**: Flock's statement's (`Raw.encode`) as one field, then the recursive flags'. -/
 def RecRaw.encode (w : RecRaw) : Claims.Msg :=
@@ -81,7 +111,7 @@ def RecRaw.encode (w : RecRaw) : Claims.Msg :=
     encOpt encBytes w.recBindings ++ encOpt encBytes w.recRows ++ encOpt encBytes w.innerCircuit ++
     encOpt encBytes w.innerPublic ++ encOpt encBytes w.innerPartition ++ encOpt encBytes w.innerCoins ++
     encOpt encBytes w.innerSession ++ encOpt encBytes w.transcript ++ encOpt encBytes w.registration ++
-    encOpt encStr w.innerStatement ++ encOpt encBool w.innerStatementCoins ++
+    encOpt encStr w.innerStatement ++
     encOpt (encList fun p => encStr p.1 ++ encBytes p.2) w.innerTables ++ encOpt encBytes w.innerDraw ++
     encOpt (fun l => encBytes l.1 ++ encNat l.2) w.recLinks ++ encOpt encBytes w.innerProgram
 
@@ -102,7 +132,6 @@ def RecRaw.read : Rd RecRaw := do
   let transcript ← rdOpt rdBytes
   let registration ← rdOpt rdBytes
   let innerStatement ← rdOpt rdStr
-  let innerStatementCoins ← rdOpt rdBool
   let innerTables ← rdOpt (rdList do
     let n ← rdStr
     let b ← rdBytes
@@ -114,7 +143,7 @@ def RecRaw.read : Rd RecRaw := do
     pure (t, n))
   let innerProgram ← rdOpt rdBytes
   pure ⟨base, recInner, recPart, recBindings, recRows, innerCircuit, innerPublic, innerPartition, innerCoins,
-    innerSession, transcript, registration, innerStatement, innerStatementCoins, innerTables, innerDraw, recLinks,
+    innerSession, transcript, registration, innerStatement, innerTables, innerDraw, recLinks,
     innerProgram⟩
 
 /-- **The statement's decoder**: `RecRaw.read` on all of `x`, kept only when its encoding is `x`. -/
@@ -171,15 +200,15 @@ def boundOf : Option ByteArray → Flock.V (Option String × Option RecVStar.Sta
   | none => .ok (none, none)
   | some c => do RecSetup.metaBound (← metaOf c)
 
-/-- **How the inner statement is set up** (`RecCoins.formInput`): `--rec-inner-statement` with its coins (the coin
-server's where `--rec-inner-statement-coins` is `os`, `true` here; `seed` unless it says), tables and draw, or none. -/
+/-- **How the inner statement is set up** (`RecCoins.formInput`): `--rec-inner-statement` with its tables and draw, or
+none. -/
 def formOf (w : RecRaw) : Except String (Option RecCoins.InnerForm) :=
   match w.innerStatement with
   | none =>
-    if w.innerStatementCoins.isSome || w.innerTables.isSome || w.innerDraw.isSome then
-      .error "--rec-inner-statement-coins, --rec-inner-tables and --rec-inner-draw go with --rec-inner-statement"
+    if w.innerTables.isSome || w.innerDraw.isSome then
+      .error "--rec-inner-tables and --rec-inner-draw go with --rec-inner-statement"
     else .ok none
-  | some s => .ok (some ⟨s, w.innerStatementCoins.getD false, w.innerTables.getD [], w.innerDraw⟩)
+  | some s => .ok (some ⟨s, w.innerTables.getD [], w.innerDraw⟩)
 
 /-- **Check 5's source** (`RecCoins.filesInput`): the inner statement's three files with the inner session's record,
 how it is set up (`formOf`) and the verifier's program of it, or none; `--rec-inner-coins` is refused
@@ -350,5 +379,93 @@ theorem readOfO_zk {x : Claims.Msg} {r : Readable.Read} (h : readOfO x = some r)
     cases hw
     rw [FlockDeploy.Raw.ins_zk (RecRaw.ins_base hi)]
     simpa using hz
+
+/-! ## Flock's statements and the V* parts' -/
+
+/-- Flock's statement reader reads Flock's format string first. -/
+theorem read_format {x : Claims.Msg} {p : Raw × Claims.Msg} (h : FlockDeploy.Raw.read.run x = some p) :
+    ∃ r, rdStr.run x = some (FlockDeploy.FORMAT, r) := by
+  unfold FlockDeploy.Raw.read at h
+  simp only [StateT.run_bind] at h
+  cases hs : rdStr.run x with
+  | none => simp [hs] at h
+  | some q =>
+    obtain ⟨s, r⟩ := q
+    by_cases e : s = FlockDeploy.FORMAT
+    · exact ⟨r, by rw [e]⟩
+    · (simp [hs, e] at h) <;> cases h
+
+/-- A V* part's statement reader reads its format string first. -/
+theorem RecRaw.read_format {x : Claims.Msg} {p : RecRaw × Claims.Msg} (h : RecRaw.read.run x = some p) :
+    ∃ r, rdStr.run x = some (RFORMAT, r) := by
+  unfold RecRaw.read at h
+  simp only [StateT.run_bind] at h
+  cases hs : rdStr.run x with
+  | none => simp [hs] at h
+  | some q =>
+    obtain ⟨s, r⟩ := q
+    by_cases e : s = RFORMAT
+    · exact ⟨r, by rw [e]⟩
+    · (simp [hs, e] at h) <;> cases h
+
+theorem formats_ne : FlockDeploy.FORMAT ≠ RFORMAT := by decide
+
+/-- **No statement is both Flock's and a V* part's**: the two encodings' first fields, their format strings, differ. -/
+theorem decodeRec_none {x : Claims.Msg} {w : Raw} (h : FlockDeploy.decode x = some w) : decodeRec x = none := by
+  unfold FlockDeploy.decode at h
+  split at h
+  · rename_i w' hr
+    obtain ⟨r, hr'⟩ := read_format hr
+    unfold decodeRec
+    split
+    · rename_i v hv
+      obtain ⟨r', hv'⟩ := RecRaw.read_format hv
+      rw [hr'] at hv'
+      exact absurd (Prod.mk.inj (Option.some.inj hv')).1 formats_ne
+    · rfl
+  · cases h
+
+theorem decode_none {x : Claims.Msg} {w : RecRaw} (h : decodeRec x = some w) : FlockDeploy.decode x = none := by
+  cases hd : FlockDeploy.decode x with
+  | none => rfl
+  | some v => rw [decodeRec_none hd] at h; cases h
+
+/-- A statement that decodes as no V* part's has no recursive setup. -/
+theorem setupO_none {x : Claims.Msg} (h : decodeRec x = none) : setupO x = none := by
+  unfold setupO insO
+  simp [h]
+
+/-- A statement that decodes as no Flock statement sets up no session of Flock's. -/
+theorem setupOf_none {zk : Bool} {x : Claims.Msg} (h : FlockDeploy.decode x = none) : FlockDeploy.setupOf zk x = none := by
+  unfold FlockDeploy.setupOf FlockDeploy.insOf
+  simp [h]
+
+theorem decodeRec_of_setupO {x : Claims.Msg} {p : RecIns × SessionSpec × Array Stmt} (h : setupO x = some p) :
+    ∃ w, decodeRec x = some w := by
+  cases hd : decodeRec x with
+  | none => rw [setupO_none hd] at h; cases h
+  | some w => exact ⟨w, rfl⟩
+
+theorem decodeRec_of_readOfO {x : Claims.Msg} {r : Readable.Read} (h : readOfO x = some r) :
+    ∃ w, decodeRec x = some w := by
+  unfold readOfO insO at h
+  cases hd : decodeRec x with
+  | none => simp [hd] at h
+  | some w => exact ⟨w, rfl⟩
+
+theorem decode_of_readOf {zk : Bool} {x : Claims.Msg} {r : Readable.Read} (h : FlockDeploy.readOf zk x = some r) :
+    ∃ w, FlockDeploy.decode x = some w := by
+  unfold FlockDeploy.readOf FlockDeploy.insOf at h
+  cases hd : FlockDeploy.decode x with
+  | none => simp [hd] at h
+  | some w => exact ⟨w, rfl⟩
+
+/-- What a deployed parser parses, its reader reads. -/
+theorem read_of_parseOf {rel : Readable.Parsed → Readable.Relation} {rd : Claims.Msg → Option Readable.Read}
+    {x : Claims.Msg} {s : Claims.Flock.Stmt} (h : Readable.parseOf rel rd x = some s) : ∃ r, rd x = some r := by
+  unfold Readable.parseOf Readable.parseBytes at h
+  cases hr : rd x with
+  | none => simp [hr] at h
+  | some r => exact ⟨r, rfl⟩
 
 end RecDeploy

@@ -1,8 +1,15 @@
 module
 
 public import Proofs.Flock.Soundness.ExecRowsAt
-public import Proofs.Flock.Soundness.TmplUnrollAt
 public import Flock.TmplValue
+public import Flock.TmplAt
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.ExecParse
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.TmplUnrollAt
 
 /-!
 # A templated unit's committed net, satisfied, composes its Definitions

@@ -2,6 +2,19 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.Defs
 public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The compiled `--zk` count curve at the hidden-output tables
@@ -24,7 +37,7 @@ variable {K : Type} [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ} {D Sl : T
   (A : Arith 𝔽 K) (Hs : Hashes 𝔽 D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {I : Inputs}
   (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I mPts S₀ (dj S₀))
 
-/-- **#874's compiled `--zk` count curve at the hidden-output tables**: `zk_flock_countC_execOS_cr` at
+/-- **The compiled `--zk` count curve at the hidden-output tables**: `zk_flock_countC_execOS_cr` at
 `planAtZKH dj y₀` (each draw's table `tableAtZKH dj y₀ S`, every unit in it). -/
 theorem zk_flock_countC_execOS_crH (hA : A.Correct)
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)

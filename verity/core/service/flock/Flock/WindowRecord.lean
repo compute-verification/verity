@@ -2,6 +2,7 @@ module
 
 public import Flock.Canon
 public import Flock.Hash
+public import Lean.Data.Json.FromToJson.Basic
 
 /-!
 # A one-stage window record's digest

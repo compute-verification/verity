@@ -2,6 +2,11 @@ module
 
 public import Proofs.Flock.Soundness.TmplFoldClassOk
 public import Proofs.Flock.Soundness.TmplPosMap
+public import Proofs.Flock.Soundness.TmplFoldTree
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.TmplFoldRef
 
 /-!
 # The template fold is its reference

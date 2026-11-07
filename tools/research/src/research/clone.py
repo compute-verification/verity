@@ -22,7 +22,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-#: git's merge drivers for `lean-audit.json`, `.lean` files, lakefiles, the fixture map and the vLLM lints' allowlists
+#: git's merge drivers for `lean-audit.json`, `.lean` files, lakefiles, pyprojects, the fixture map and the vLLM lints' allowlists
 #: (`.gitattributes`), set in every run clone and for every git a gate runs (research.gates): a clone's config holds it only
 #: after `merge.py --install`, and without it git
 #: merges a record line by line (the queue's own clone, a fresh VM's checkout); a tree from before the tools/verity move has it
@@ -40,7 +40,9 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.vllm-allowlist.driver": "python3 integrations/vllm/tests/lint/merge_allowlist.py %O %A %B %P",
                  "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet caps "
                                          "(tools/verity/lean/merge.py)",
-                 "merge.lean-caps.driver": "python3 tools/verity/lean/merge.py --caps %O %A %B %P"}
+                 "merge.lean-caps.driver": "python3 tools/verity/lean/merge.py --caps %O %A %B %P",
+                 "merge.pyproject-test-lists.name": "pyproject.toml: each side's [tool.verity.tests] lists (tools/verity/lean/merge.py)",
+                 "merge.pyproject-test-lists.driver": "python3 tools/verity/lean/merge.py --pyproject %O %A %B %P"}
 
 
 CWD_CLONE = "clone"
