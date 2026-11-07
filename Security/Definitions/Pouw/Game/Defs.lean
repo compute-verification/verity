@@ -36,8 +36,8 @@ Simplifications (each listed in `STATEMENTS.md` with its bridge or as a gap):
 
 The break (step 6) is how the game uses SHA-512 without a collision-resistance assumption: a guarantee bounds the
 probability of its event together with no collision among the inputs the run itself hashed, so every collision it
-excludes is bounded by what the run carries. A model whose programs hash nothing (`CostModel.Hashless`, every model's
-default) never breaks, and there each statement reads as it did without the break.
+excludes is bounded by what the run carries. A model whose programs hash nothing (`CostModel.Hashless`, a named
+assumption in `Definitions.Assumptions`, every model's default) never breaks, and there each statement reads as it did without the break.
 -/
 
 @[expose] public section
@@ -120,10 +120,6 @@ structure CostModel (Q R S : Type) where
   calls : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → ℕ
   sha : Hash.Msg → Hash.Digest := fun _ => default
   hashed : Prog → (Q → R) → Workload → (ℕ → Mat) → State → S → List Hash.Msg := fun _ _ _ _ _ _ => []
-
-/-- The model's programs hash nothing, so no run breaks. -/
-def CostModel.Hashless {Q R S : Type} (CM : CostModel Q R S) : Prop :=
-  ∀ (prog : CM.Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S), CM.hashed prog H U act σ s = []
 
 /-- The model's programs reach `H` only through counted queries: on fixed inputs, a run is the result
 of an adaptive oracle program, and `calls` counts that program's queries. -/
