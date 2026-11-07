@@ -30,9 +30,8 @@ incorrect set of the trace the extractor recovers.
    δ = C(n−K₀, k)/C(n, k) for k of n proof blocks sampled uniformly, with ε̄_ks Flock's error averaged over the sessions
    and ε_link the link's term:
    - Domain: the circuit and public files parse, the statement is in scope, and k ≤ n splits evenly over the tables.
-   - Real: SHA-512 collision resistance (`SHA512CRStrict`, `SHA512CRExpected`), at the prover's finders (`TableCRZAt`
-     and `LinkCRZCAt` unfold to it), and `UniformRandomBytes` (the verifier's bytes, exactly uniform), each declared in
-     `Definitions/Assumptions.lean`.
+   - Real: SHA-512 collision resistance (`TableCRZAt` and `LinkCRZCAt` unfold to it) and `UniformRandomBytes` (the
+     verifier's bytes, exactly uniform).
    - Folds into: `RecordCustodyZKJ` (the record is the live session's) into Core's challenger premises.
    - Open: `TagsOkZHJ` and `Built`, hypotheses on the statement's form.
 2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Claims/RecursionGeneric.lean`, proved in
