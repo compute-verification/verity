@@ -95,7 +95,7 @@ def test_the_class_circuit_holds_each_quantizers_leaf_and_each_token_to_its_row_
 
 
 def test_each_tables_readers_are_templates_of_their_own():
-    """A sample stratified by template draws a unit from every template, so each table has a drawn reader when its readers
+    """A sample stratified by template samples a unit from every template, so each table has a sampled reader when its readers
     are templates of their own: each template that holds a table row holds one on each of its units, all of one table, and
     every table has one. Round s's quantizers bind ROUND = s; round 0's token rows are its `ScanSlots_v2` and `TokenFeed_v1`
     units' and round 1's its selects', `SelectCollect_v2{..., ROUND=1}`. Without the tables no template binds a round."""

@@ -1,16 +1,16 @@
-"""`PouwWindow.Lanes`, a drawn H1 leaf's lane and combine statements port by port (option A), held to the Python on the
+"""`PouwWindow.Lanes`, a sampled H1 leaf's lane and combine statements port by port (option A), held to the Python on the
 shared harness (`verity_difftest`): each port's fields to `h1zy.statement_ports` (their bits from the Definitions'
 signatures), each port's row to `pouw.leaf_lanes`' (`reads`, `known`), each known port's row to `leaf_lanes.known_rows`
 (its words, and each field's bits where Lean's layout puts it), and the unit's input wires (`wires?`, `wireOf?`) to
-the circuits C-Flock lowers the statements to (`class_statement.unit_lowering` on `h1zy.statement_rows`, and the circuit
+the circuits Flock lowers the statements to (`class_statement.unit_lowering` on `h1zy.statement_rows`, and the circuit
 file's META as `UnitStager` writes it, as h1_lanes stages them).
 
-The drawn inputs are tiles on and off a leaf's (R / 4 and C / 8 powers of two, at least two lanes), K on and off the
+The sampled inputs are tiles on and off a leaf's (R / 4 and C / 8 powers of two, at least two lanes), K on and off the
 32-wide step, lane indices in and out of range, paths that are and aren't a statement's and wires in, between and past
 the ports. The fixed ones are the served 32 × 32 leaf at K = 448 (h1_lanes' default), 4096 and 14336
 (Llama-8B's), and the sidecar's 8 × 16 leaf at K = 64 (`h1zy.circuit-check.py`), every lane and the combine, over both H1
 tiles; the lowered ones are the combine at the sidecar's leaf, at 8 × 16 and the served leaf at K = 448, the sidecar's
-lane (whose 8-bit admit row C-Flock refuses), and with `VERITY_POUW_WINDOW_LOWERED_LANES` a 16 × 16 lane at K = 64 and a
+lane (whose 8-bit admit row Flock refuses), and with `VERITY_POUW_WINDOW_LOWERED_LANES` a 16 × 16 lane at K = 64 and a
 served lane at K = 448.
 
 A J10-R leaf's statements (`j10r_lane_ports`, `j10r_combine_ports`: `PouwH1LaneZy_v2`, `PouwH1LaneZyChunk_v2` and
@@ -66,7 +66,7 @@ def _tile(r: int, c: int, k: int, defn: Any = H.PouwH1Tile) -> Any:
 def _j10r_statement(x: dict) -> tuple[Any, H.Layout, tuple]:
     """A J10-R leaf's chunk ``x["chunk"]`` of lane ``x["lane"]`` in ``x["n"]`` (`PouwH1LaneZy_v2` at n = 1,
     `PouwH1LaneZyChunk_v2` past it) or its combine (`PouwH1Combine_v2`, ``lane`` None), over `PouwH1Tile_v5`, bound; a
-    reject where `h1zy` refuses them. The drawn ``n`` is `weights.chunks`(K) wherever the tile is a leaf's, the lanes'
+    reject where `h1zy` refuses them. The sampled ``n`` is `weights.chunks`(K) wherever the tile is a leaf's, the lanes'
     chunks `leaf_lanes` reads (and Lean, which takes n, then states the same statements)."""
     ln, n, ch, k = x.get("lane"), x["n"], x.get("chunk"), x["k"]
     try:
@@ -177,7 +177,7 @@ _LOWERINGS: dict[tuple, Any] = {}
 def _lowering(x: dict, stage: bool = False) -> tuple[Any, dict | None]:
     """C-Flock's lowering of ``x``'s statement (`class_statement.unit_lowering` on `h1zy.statement_rows`) and, with
     ``stage``, its circuit file's META (`UnitStager`: each input row ``hm96-sha512/row/v2`` of its bits, ``ok`` one v2 row,
-    as h1_lanes stages them); a reject where C-Flock refuses a row that isn't whole u16 words. Each is built once
+    as h1_lanes stages them); a reject where Flock refuses a row that isn't whole u16 words. Each is built once
     (a lane's lowering is about 2M ANDs), a staged one serving an unstaged ask."""
     key = (x["r"], x["c"], x["k"], x.get("lane"), x.get("n"), x.get("chunk"))
     got = _LOWERINGS.get(key)
@@ -203,7 +203,7 @@ def _lowering(x: dict, stage: bool = False) -> tuple[Any, dict | None]:
 
 
 def _columns(x: dict) -> tuple[dict[int, int], list[tuple[str, int]]]:
-    """The lowered unit's input columns, each row word's (C-Flock's u16 input ``in<j>`` at `Layout.in_port_cols[j]`, on
+    """The lowered unit's input columns, each row word's (Flock's u16 input ``in<j>`` at `Layout.in_port_cols[j]`, on
     the row word META's ``leaves_in`` names, or the lowering's own leaf map unstaged), and its row ports' words in order
     (the lowering's own signature)."""
     low, meta = _lowering(x)
@@ -243,7 +243,7 @@ def lowered_wire_of(x: dict) -> dict | None:
     raise AssertionError(f"row word {g} is past the rows {sig}")
 
 
-# ---- the drawn inputs ---------------------------------------------------------------------------------------------------
+# ---- the sampled inputs ---------------------------------------------------------------------------------------------------
 
 def _leaf(rng: random.Random) -> dict:
     r = rng.choice((4, 8, 8, 16, 32, 32, 64, rng.choice((0, 3, 12, 20))))
@@ -271,7 +271,7 @@ def _tiles_k(k: int) -> bool:
 
 
 def _j10r_leaf(rng: random.Random) -> dict:
-    """A leaf as `_leaf` draws it, or at a served J10-R K, with ``n`` its lanes' chunks: `weights.chunks`(K) at every K a
+    """A leaf as `_leaf` samples it, or at a served J10-R K, with ``n`` its lanes' chunks: `weights.chunks`(K) at every K a
     leaf's tile takes (a K there that `chunks` refuses is sampled again), any small n at one it doesn't."""
     while True:
         x = _leaf(rng)
@@ -378,9 +378,9 @@ def test_the_leaves(r: int, c: int, k: int, server) -> None:
 
 @pytest.mark.parametrize("r,c,k", SERVED, ids=lambda v: str(v))
 def test_the_served_rows_are_proved_rows(r: int, c: int, k: int, server) -> None:
-    """At the served leaf every input row of the 33 statements, in Lean's layout, is whole 16-bit words (C-Flock's
+    """At the served leaf every input row of the 33 statements, in Lean's layout, is whole 16-bit words (Flock's
     `unit_lowering`; the Lean verifier's v2 rule takes a row of any length), and the combine has a row that
-    compresses before its last SHA-512 block, at least 112 bytes (C-Flock's, `h1zy.LEAST_K`), so a proof can take every
+    compresses before its last SHA-512 block, at least 112 bytes (Flock's, `h1zy.LEAST_K`), so a proof can take every
     statement."""
     lanes = H.Layout(r, c, k).lanes
     for ln in [*range(lanes), None]:
@@ -452,7 +452,7 @@ def test_the_j10r_leaves(r: int, c: int, k: int, server) -> None:
 
 @pytest.mark.parametrize("r,c,k", J10R_LOWERED, ids=lambda v: str(v))
 def test_the_j10r_combines_lowered_wires(r: int, c: int, k: int, server) -> None:
-    """Lean's wire map of a J10-R combine (v1's rows, then each lane's and chunk's ok row) is the circuit C-Flock lowers
+    """Lean's wire map of a J10-R combine (v1's rows, then each lane's and chunk's ok row) is the circuit Flock lowers
     `PouwH1Combine_v2` to."""
     _lowered_wires({"r": r, "c": c, "k": k, "n": W.chunks(k), "lane": None}, server)
 
@@ -506,8 +506,8 @@ def _lowered_wires(x: dict, server) -> None:
 
 @pytest.mark.parametrize("r,c,k,lane", LOWERED, ids=lambda v: str(v))
 def test_the_lowered_wires(r: int, c: int, k: int, lane: int | None, server) -> None:
-    """Lean's wire map is the circuit C-Flock lowers the statement to (`class_statement.unit_lowering`): its row ports
-    and their words, each u16 input's column and row word. The sidecar's lane is C-Flock's refusal and Lean's (its admit
+    """Lean's wire map is the circuit Flock lowers the statement to (`class_statement.unit_lowering`): its row ports
+    and their words, each u16 input's column and row word. The sidecar's lane is Flock's refusal and Lean's (its admit
     row is 8 bits)."""
     _lowered_wires({"r": r, "c": c, "k": k, "lane": lane}, server)
 
@@ -531,7 +531,7 @@ def _circuit_ports(x: dict, server) -> None:
 def test_the_circuit_files_ports(r: int, c: int, k: int, server) -> None:
     """The combine's circuit file at 8 × 16 and the served leaf (K = 448) holds its rows as Lean's wires say: what a
     decoder of the proved statement reads, which `unit_lowering` alone doesn't write. Slow: the first `UnitStager` builds
-    C-Flock's SHA-512 and hm96 slot circuits, about 14 s."""
+    Flock's SHA-512 and hm96 slot circuits, about 14 s."""
     _circuit_ports({"r": r, "c": c, "k": k, "lane": None}, server)
 
 
@@ -551,7 +551,7 @@ def test_the_sidecar_combine_has_no_circuit_file() -> None:
 def test_the_lanes_circuit_files_ports(r: int, c: int, k: int, lane: int, server) -> None:
     """A lane's circuit file holds its rows as Lean's wires say, at the least leaf whose admit row is whole words (16 × 16,
     K = 64) and at the served leaf (K = 448): what the combine's can't check, the lane's own rows (A, B, admit, zy,
-    partials, pub) and their order as C-Flock lowers them."""
+    partials, pub) and their order as Flock lowers them."""
     try:
         _circuit_ports({"r": r, "c": c, "k": k, "lane": lane}, server)
     finally:

@@ -121,7 +121,7 @@ open scoped ENNReal
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
-/-- **The recursive audit at public units, as the verifier of record runs it, with no A3.** -/
+/-- **The recursive audit at public units, as the verifier runs it, with no A3.** -/
 theorem PublicAuditNoA3 : Flock.Guarantees.PublicAuditNoA3 := by
   refine And.intro ?_ ?_
   swap
@@ -173,7 +173,7 @@ theorem PublicAuditNoA3 : Flock.Guarantees.PublicAuditNoA3 := by
       (le_trans (prob_mono_outcome _ (Flock.Guarantees.transported zr hCust hT σ)
         fun o _ h => ⟨h.2.1.1, h.2.2⟩) hb)))))
 
-/-- **The recursive audit at public units, as the verifier of record runs it.** -/
+/-- **The recursive audit at public units, as the verifier runs it.** -/
 theorem PublicAudit : Flock.Guarantees.PublicAudit := by
   refine And.intro ?_ ?_
   swap

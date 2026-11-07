@@ -1,7 +1,7 @@
 """Dither's served linear in one stream in compiled vLLM (`h1o.cu`, H1V3): every int8-exact linear's y = dequant(z),
 z = O' - sum_d 128^d D_d + 256 X (wb⁺ - wb⁻)^T from the noised mainloop whose words the call's H1 + fx1 receipts fold and
 the wrap bits of W' = B + c + U, computed in the unit from B and the noise (H1V3's exact wrap correction).  The seeds are
-the call's own, from the window's salt and root(A_j), root(B_j) (the seeded regime: epsilon is 'seeded'), so each
+the call's own, from the execution phase's salt and root(A_j), root(B_j) (the seeded regime: epsilon is 'seeded'), so each
 call commits its A table on the device before its units and nothing waits on a later round.
 
     import dither_one as DO
@@ -9,7 +9,7 @@ call commits its A table on the device before its units and nothing waits on a l
     llm = LLM(model=int8_exact_checkpoint, ...)       # compiled, CUDA graphs: the op is opaque to Inductor, its launches captured
     DO.hook(llm)
 
-The window: its B tables at install, then one live round whose coin gives the epoch salt (`h1tile.live_salt` of the
+The execution phase: its B tables at install, then one live round whose coin gives the execution phase's salt (`h1tile.live_salt` of the
 round over the B roots).  Before step s's forward, the A tables' parts that read the step but no row (`h1c_a_step`:
 domains, salts, prefixes, and the leaves and nodes over rows >= m alone).  A linear call (`dither1::one_mm`), on the
 forward's stream, is two launches: its A slot and table (`h1c_a_call`, the root where its seeds read it), then its units
@@ -34,8 +34,8 @@ product, taken from the same O: z = O + 256 X (wb⁺ - wb⁻)^T - X c^T - (b - 2
 the binary-by-int8 MMAs beside the wrap MMA, never a product of A itself: y is today's served y and the tokens are exact's
 (both gated); the receipts are the same words, and a perturbed noised word moves z.
 
-Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows; the window is the
-engine's life; the epoch round's root (a b-step tree over the B roots) and the z table (AROW's row-table format) are this
+Labelled simplifications (none changes a step's cost): the admitted slots are the step's first m rows; the execution phase is the
+engine's life; the execution-phase round's root (a b-step tree over the B roots) and the z table (AROW's row-table format) are this
 harness's rendering of the credit's forms.  Its stats, checks and verdict say form=beside (`forms.form_of`): not
 `forms.FORM_A`.
 """
@@ -57,11 +57,11 @@ from verity_config.settings import of
 settings = of(__file__)
 F_DUMP, F_NW_TILES, F_NW_UNITS, F_FAULT, F_FAULT_WB, F_FAULT_XA = 1, 2, 4, 8, 16, 32     # h1o.cu's H1OStep.flags
 F_FAULT_Y = 64      # dither_a's ycommit only: bit 0 of the served y[0, 0] flipped, in place, every call
-# the round's leaves past a-step, admit-step and z-step (set before the window is built): "y-step" the calls' served-y
+# the round's leaves past a-step, admit-step and z-step (set before the execution phase is built): "y-step" the calls' served-y
 # roots (an arm's Side fills them in `before_mid`), "receipt-step" the calls' receipt-table roots, both
 # under the round recorded before the next coin
 ROUND_EXTRA: tuple = ()
-CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled window's add "fault_xa" (`DitherState.captures`)
+CAPTURES = ("gate", "control", "fault", "fault_wb")     # a peeled execution phase's add "fault_xa" (`DitherState.captures`)
 LIB_ENV = "DITHER_H1O"
 PHASE_RANGE = "verity/dither/phase/"    # `DitherState.phase`'s NVTX ranges, under DITHER_NSYS=prof only
 UNITS_ENV = "DITHER_UNITS"
@@ -96,9 +96,9 @@ class _O(C.Structure):
 
 
 class DitherState:
-    """A window's device state: per linear one A, scale and z slot (a step's tables are built before the next step's
+    """An execution phase's device state: per linear one A, scale and z slot (a step's tables are built before the next step's
     forward reads its slots); the h1c sets (B tables once; the A, admit and z tables, the step trees and the round); one
-    call table for the seeds and receipts; the `h1o` table and step struct; the epoch salt."""
+    call table for the seeds and receipts; the `h1o` table and step struct; the execution phase's salt."""
     group_slots = False     # `slot_groups` and `scale_all` (dither_so's ring copies a step's slots from them)
     a_step = False          # A_STEP_ENV's tables (dither_so sets it, with group_slots)
     h2d_pinned = False      # `before`'s inputs through pinned buffers, without a host wait (`_h2d`)
@@ -644,7 +644,7 @@ def _s32(v: np.ndarray) -> np.ndarray:
 
 
 def cap_salt(win, g: dict) -> tuple[bytes, torch.Tensor]:
-    """The salt capture g's step ran under (the epoch's, or with step_salt its round's) and its words on the device."""
+    """The salt capture g's step ran under (the execution phase's, or with step_salt its round's) and its words on the device."""
     b = g.get("salt", win.salt_bytes)
     return b, torch.from_numpy(words(b)).to(win.dev)
 
@@ -814,7 +814,7 @@ def check(win: DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int 
           cpu_calls: tuple = (0, 1, 2, 3, 126, 127)) -> dict:
     """`which`'s capture against references other than the served kernel: every call's A, admit and z roots, the receipt
     roots of CPU_CALLS and the step's round = commit.py's; every receipt = h1r v1's (another unit implementation, gated
-    against receipts.py) on the saved slots under the window's salt and the CPU's roots; every z = h1o_ref's (noise from
+    against receipts.py) on the saved slots under the execution phase's salt and the CPU's roots; every z = h1o_ref's (noise from
     full compressions, T_last and Y by scalar dp4a, z = T_last - U Y + 256 X wbᵀ by a scalar scatter over the integer
     B + c + U, which also counts wb: its density); y (dumped) = dequant of the kernel's own z on the rows < m; a few units =
     H1V3's Definition on the CPU (`h1v3_unit`: z, receipt, z = X (B + c)^T) and by H1V3's own code (`h1v3_itself`).  Every
@@ -863,7 +863,7 @@ def check(win: DitherState, lib_h1o: str, which: str = "gate", n_cpu_units: int 
                        [a_step, admit_step, z_step])
     doc["round"] = {"a_step": a_step == g["leaves"][0], "admit_step": admit_step == g["leaves"][1],
                     "z_step": z_step == g["leaves"][2], "root": rnd == g["root"]}
-    # receipts (h1r v1) and z (h1o_ref) on the saved slots, the window's salt and the CPU's roots
+    # receipts (h1r v1) and z (h1o_ref) on the saved slots, the execution phase's salt and the CPU's roots
     r = H1R(lib_h1o)
     o = C.CDLL(lib_h1o)
     o.h1o_ref_launch.argtypes = [C.c_void_p, C.c_int, C.c_void_p, C.c_void_p, C.c_int, C.c_void_p, C.c_void_p]

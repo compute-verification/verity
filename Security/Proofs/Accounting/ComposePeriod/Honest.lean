@@ -11,7 +11,7 @@ The positive twin of `Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringP
 as I8-COIN's `Keyed.lean` twins are of their layers), whose premises are the same at `a, b > 0`: a period of `n ≥ 1`
 windows of a circuit of one gate, one credited word, one tile and one
 live round, every tile live in every window, every stage paid with its words right and its checked values honest, and
-every drawn tile's proof accepted (`honest_meets`). It meets every premise at live numbers: `K_d = 1`, `ρ = 1`,
+every sampled tile's proof accepted (`honest_meets`). It meets every premise at live numbers: `K_d = 1`, `ρ = 1`,
 `w_max = 1`, lucks `p = p0 = ½` (the operand luck pinned, `r_B = ½`, the guess bound `½`), costs `a = b = 1` and
 `SplitRateClosed`'s rate there, `Λ = 4`; binding at `δ_bind = 0` and joint soundness at `δ_ks = 0` (its openings are in
 `Unit`, so each is its committed value, and every relation holds), and `UnitFixed` at one fixed and one folded word a
@@ -82,7 +82,7 @@ def period : (n : ℕ) → WindowPlay Bool (Paths Bool 1 × (Equiv.Perm (Fin 1) 
   | 0 => .done
   | n + 1 => .window (fun _ => true) stages fun _ => period n
 
-/-- Its proofs' run: every drawn tile's proof accepted, opening values in `Unit`, every relation and rightness
+/-- Its proofs' run: every sampled tile's proof accepted, opening values in `Unit`, every relation and rightness
 holding. -/
 def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit where
   accepted := fun _ _ _ => True

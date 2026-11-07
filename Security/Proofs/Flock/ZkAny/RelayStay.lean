@@ -17,7 +17,7 @@ session's requests:
 * `saltsAt`, `saltsAt_stay`: the salts for levels ≥ 1 of a rep on the table of level-0 root `root`, once kept, are
   kept: `keepOf` keeps the first.
 
-Two sessions' tables share no level-0 root where the roots bind their draws (hash collision resistance), so another
+Two sessions' tables share no level-0 root where the roots bind their samples (hash collision resistance), so another
 session's end leaves the rep's salts.
 -/
 
