@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Bridge.Canon
 public import Flock.PortRoots
+public import Proofs.Flock.Soundness.Discharge.Hidden.Built
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -115,15 +116,18 @@ of distinct names, and no two registered roots, each framed at its port's schema
 the public file's population), the
 sampled-proofs run passes the registration's population (`Bridge.RunPopOk`: the descriptor `desc` and the query `qr`
 give the game's `n` units in order, in the strata `Bridge.nsOf desc qr` the statement's partition lays), and the claims
-relation fails. It has none of V2's hypotheses `RowsOk`,
+relation fails. It has none of V2's hypotheses `Built` (its unit is built because the circuit file parses,
+`Discharge.Hidden.built_of_parseStmt`), `RowsOk`,
 `dupName = none`, `rootsColl = none` and `PopMatches`; the game's `n` is the public file's population (`pub.n = n`).
 Its finders' charges are V2's: `2(t' + v)` and `t' + v` for the knowledge finders and `t' + v` per run for the link
 finders. `SampledKSLiveV2` implies it (`sampledKSLiveV3_of`). -/
 def SampledKSLiveV3 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
-    (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
+    (D : Flock.Desc) (hD : Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D),
+    let hU : Built D.unroll.unit :=
+      Discharge.Hidden.built_of_parseStmt (Flock.Desc.parseStmt_of_parse hD) ((zkTags_typed I).trans ht)
+    ∀ (pub : Public) (hpub : HmOut.loadPublic (zkTags I) D.unroll I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     -- the game's units are the public file's population
     (_hn : pub.n = n)
