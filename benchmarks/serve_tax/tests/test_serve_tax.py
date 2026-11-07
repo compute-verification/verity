@@ -396,3 +396,26 @@ def test_a_given_plan_is_served_as_it_is_and_a_short_one_refused(tmp_path: Path)
     with pytest.raises(SystemExit, match="holds 5 requests and these loads may send 6"):
         S.plan_of(f, tmp_path / "no-c4", tmp_path, 6, 10, 0)
     assert len(f.read_text().splitlines()) == 5
+
+
+def test_nvml_says_why_a_run_has_no_busy_gpu_seconds(monkeypatch: pytest.MonkeyPatch):
+    import importlib.machinery
+    import importlib.util
+    import sys
+    import types
+
+    fake = types.ModuleType("pynvml")
+    fake.__spec__ = importlib.machinery.ModuleSpec("pynvml", None)
+
+    def no_driver():
+        raise RuntimeError("Driver Not Loaded")
+
+    fake.nvmlInit = no_driver
+    monkeypatch.setitem(sys.modules, "pynvml", fake)
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda m, *a: None if m == "vllm" else real(m, *a))
+    assert S.nvml() == (None, "pynvml.nvmlInit: RuntimeError('Driver Not Loaded')")
+    fake.nvmlInit = lambda: None
+    assert S.nvml() == (fake, None)
+    monkeypatch.setattr(importlib.util, "find_spec", lambda m, *a: None)
+    assert S.nvml() == (None, "no NVML bindings (vllm.third_party.pynvml, pynvml)")

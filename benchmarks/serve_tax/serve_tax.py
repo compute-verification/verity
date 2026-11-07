@@ -370,21 +370,25 @@ def parse_rates(text: str) -> dict[str, float]:
 
 # ------------------------------------------------------------------------------------------------------------ run
 
-def nvml() -> object | None:
-    """NVML's bindings (vLLM's own copy, else nvidia-ml-py's), initialized; None where neither loads or no driver
-    answers."""
+def nvml() -> tuple[object | None, str | None]:
+    """NVML's bindings (vLLM's own copy, else nvidia-ml-py's), initialized, or None and why not (neither installed, or no
+    driver answered)."""
+    import importlib
+    import importlib.util
+
+    def found(m: str) -> bool:
+        parts = m.split(".")
+        return all(importlib.util.find_spec(".".join(parts[:k])) is not None for k in range(1, len(parts) + 1))
+
+    name = next((m for m in ("vllm.third_party.pynvml", "pynvml") if found(m)), None)
+    if name is None:
+        return None, "no NVML bindings (vllm.third_party.pynvml, pynvml)"
+    lib = importlib.import_module(name)
     try:
-        from vllm.third_party import pynvml
-    except ImportError:
-        try:
-            import pynvml
-        except ImportError:
-            return None
-    try:
-        pynvml.nvmlInit()
-    except Exception:  # noqa: BLE001 -- NVMLError's class lives in the module that failed to initialize
-        return None
-    return pynvml
+        lib.nvmlInit()
+    except Exception as e:  # noqa: BLE001 -- NVMLError's class lives in the module that failed to initialize
+        return None, f"{name}.nvmlInit: {e!r}"
+    return lib, None
 
 
 class GpuBusy:
@@ -544,13 +548,15 @@ def run(a: argparse.Namespace) -> int:
     BODY_EXTRA.clear()
     BODY_EXTRA.update({"logprobs": 0} if arm.logprobs else {})
     edges = edge_config(arm, model, a, rates)
-    lib = nvml()
+    lib, no_nvml = nvml()
+    if no_nvml:
+        print(f"[serve-tax] no busy GPU-seconds: {no_nvml}", flush=True)
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "plugin": list(arm.plugin), "env": arm.env, "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,
             "plan_sha256": file_sha256(Path(a.plan)) if a.plan and Path(a.plan).is_file() else None,
             "span_s": a.span_s, "c4": a.c4, "seed": a.seed, "sampling": arm.sampling, "logprobs": arm.logprobs, "edges": edges,
-            "gpu_busy": lib is not None, "versions": versions(), "host": os.uname().nodename,
+            "gpu_busy": lib is not None, "no_gpu_busy": no_nvml, "versions": versions(), "host": os.uname().nodename,
             "run_id": SHARED.RESEARCH_RUN_ID, "gpus": SHARED.CUDA_VISIBLE_DEVICES, "open_files": nofile, "loads": []}
     (out / "meta.json").write_text(json.dumps(meta, indent=1))
     t = time.monotonic()
