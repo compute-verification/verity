@@ -1,11 +1,17 @@
 """I2, the compiler: a served session's advice -> the Programs its committed rows must pass (v0, request-major).
 
-`compile_steps(registered, advice, ingress)` reads these three and nothing else of the run:
+`compile_steps(registered, advice, ingress)` reads these three and nothing else of the run (and, under the advice code, the
+certified record its string decodes against):
 - `registered` (`Registered`): φ without workload or sampling (the model, target, TP, engine, execution and profile), the public
-  default seed a request without one is sampled under (`engine.served_seed`), and ℓ, the public cap on the advice's length in bits.
+  default seed a request without one is sampled under (`engine.served_seed`), ℓ, the public cap on the advice's length in bits,
+  and the advice code, if the registration selects it (`Registered.code`).
 - `advice`: I1 v0 (`verity.core.protocols.certifier.advice`), or a served Commit window's (`pipeline.window_advice`: I1 v0 with
   the state of the requests the window carries across its open and close, and its client aborts), private: what serving decided
-  that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Nothing else is advice.
+  that nothing registered predicts. Its canonical bytes, or an `Advice` of either, which is held to its encoding. Under a
+  registration that selects the advice code, it is the advice v1 string (`pipeline.advice_code.codec`): only what the certified
+  record (`codec.Record`, the network certifier's), vLLM's scheduler replayed under the registered engine and the derived rules
+  leave. `advice_of` decodes it against that record into the I1 v0 it carries, which the compiler plans from as it would I1's
+  bytes, and ℓ bounds the string's bits. Nothing else is advice.
 - `ingress`: each request's certified body by its id (I1's `RequestAdvice.id`, the body's `user`), the fixed ingress schema: an
   OpenAI completions request with `prompt` as token ids. Sampling parameters are values the request brings, never advice. A body
   given as the network certifier's attested bytes is ingress v0 (`program.registry.io_shell`, under `Registered.served_model`), and its
@@ -47,7 +53,9 @@
 
 The compiler is total: it compiles its input or refuses it by name (`Unexpressible`), deterministically. Refused, in order:
 - advice that isn't I1's bytes or an `Advice`, is over ℓ (before any of it is read), or isn't I1 v0 (`MalformedAdvice`: I1's
-  validity, its types, ranges, order and the schedule's position rules);
+  validity, its types, ranges, order and the schedule's position rules); under the advice code, advice that isn't a v1 string's
+  bytes, is over ℓ (before any of it is read), comes without its certified record, or isn't a string v1 decodes
+  (`AdviceCodeError`, "ill-formed v1 advice": the code's own bits, and windows that are the replay's residual);
 - a target without batch invariance outside class G, and in class G a step over the registered `max_num_batched_tokens`;
 - a request whose body is missing or off the ingress schema, whose prompt isn't `prompt_len` token ids of the vocabulary, or
   whose `output_len` and `finish` its `max_tokens` contradicts;
@@ -88,6 +96,7 @@ from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.pipeline.advice_code import codec as V1
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.prune import dead_units
 from verity.ml.definitions.registry import io_shell as IO
@@ -118,12 +127,15 @@ _TRANSPORT = ("prompt", "model", "user", "stream", "stream_options", "return_tok
 class Registered:
     """The registration's static part: φ without workload or sampling (the model, target, TP, engine, execution and profile), the
     default seed a request without one is sampled under (the public rule, `engine.served_seed`), ℓ, the cap on the advice's
-    length in bits, and the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no request's ingress is bytes)."""
+    length in bits, the served model name ingress v0's ``"model"`` carries (`io_shell`; None: no request's ingress is bytes), and
+    the advice code the registration selects (`advice_code.codec.Registered`: the replay's engine, the stop ids, the row order,
+    the window, the codebook and the tick; None: the advice is I1's), whose strings ℓ bounds in its place."""
 
     phi: Phi
     default_seed: int
     cap_bits: int = CAP_BITS
     served_model: str | None = None
+    code: V1.Registered | None = None
 
     def __post_init__(self) -> None:
         if self.phi.requests:
@@ -132,11 +144,14 @@ class Registered:
             raise ValueError(f"the cap ℓ is a whole number of bits, at least 8, not {self.cap_bits!r}")
         if self.served_model is not None and (why := IO.refuse({"MODEL": self.served_model})):
             raise ValueError(f"the served model name has no ingress v0 layout: {why}")
+        if self.code is not None and type(self.code) is not V1.Registered:
+            raise ValueError(f"the advice code is an advice_code.codec.Registered, not a {type(self.code).__name__}")
 
     @classmethod
-    def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS, served_model: str | None = None) -> Registered:
+    def of(cls, phi: Phi, default_seed: int, cap_bits: int = CAP_BITS, served_model: str | None = None,
+           code: V1.Registered | None = None) -> Registered:
         return cls(Phi.from_json({**phi.to_json(), "workload": {}, "sampling": {"kind": "greedy"}}), int(default_seed), cap_bits,
-                   served_model)
+                   served_model, code)
 
 
 @dataclass(frozen=True)
@@ -249,25 +264,61 @@ def policy_of(i: int, sampling: Any, default_seed: int, num_sms: int | None) -> 
              "splits": registered_splits(int(num_sms))}, int(default_seed if seed is None else seed))
 
 
-def advice_of(registered: Registered, advice: Any) -> WA.Advice:
-    """The advice as a Commit window's (`window_advice`; I1 v0's when it carries nothing): its canonical bytes within ℓ, or an
-    I1 or window `Advice` whose encoding is; anything else refused by name."""
+def advice_of(registered: Registered, advice: Any, record: V1.Record | None = None) -> WA.Advice:
+    """The advice as a Commit window's (`window_advice`; I1 v0's when it carries nothing). Under a registration that selects the
+    advice code (`Registered.code`), its v1 string's bytes within ℓ, decoded against the certified `record` by the scheduler
+    replay (`advice_code.codec.decode`) into the I1 v0 it carries; otherwise I1's canonical bytes within ℓ, or an I1 or window
+    `Advice` whose encoding is. Anything else is refused by name."""
+    if registered.code is not None:
+        return _coded_advice(registered, advice, record)
+    if record is not None:
+        raise Unexpressible("a certified record is the advice code's to decode against, and the registration selects none: its "
+                            "advice is I1's")
+    data = _advice_bytes(advice)
+    _within_cap(registered, data)
+    return _window_advice(data)
+
+
+def _advice_bytes(advice: Any) -> bytes:
     if isinstance(advice, (I1.Advice, WA.Advice)):
         try:
-            data = (WA if isinstance(advice, WA.Advice) else I1).encode(advice)
+            return (WA if isinstance(advice, WA.Advice) else I1).encode(advice)
         except Exception as e:  # noqa: BLE001 -- an Advice built around its checks has no encoding: a refusal like any other
             raise Unexpressible(f"ill-formed advice: an Advice with no encoding ({type(e).__name__}: {e})") from None
-    elif type(advice) is bytes:
-        data = advice
-    else:
-        raise Unexpressible(f"the advice is I1's bytes or an I1 Advice, not a {type(advice).__name__}: nothing else is advice")
+    if type(advice) is bytes:
+        return advice
+    raise Unexpressible(f"the advice is I1's bytes or an I1 Advice, not a {type(advice).__name__}: nothing else is advice")
+
+
+def _within_cap(registered: Registered, data: bytes) -> None:
     if 8 * len(data) > registered.cap_bits:
         raise Unexpressible(f"the advice is {8 * len(data)} bits, over the registered cap ℓ = {registered.cap_bits} bits")
+
+
+def _window_advice(data: bytes) -> WA.Advice:
     try:
         return WA.decode(data)
     except Exception as e:  # noqa: BLE001 -- I1's refusal is MalformedAdvice; any other failure on these bytes refuses them too
         raise Unexpressible(f"ill-formed advice: {e}" if isinstance(e, I1.MalformedAdvice) else
                             f"ill-formed advice: its decode failed ({type(e).__name__}: {e})") from None
+
+
+def _coded_advice(registered: Registered, advice: Any, record: Any) -> WA.Advice:
+    """A v1 string's I1 v0, held to ℓ before any of it is read and decoded under the registered code at that ℓ."""
+    if type(advice) is not bytes:
+        raise Unexpressible(f"the registration selects the advice code: its advice is a v1 string's bytes, not a "
+                            f"{type(advice).__name__}")
+    _within_cap(registered, advice)
+    if type(record) is not V1.Record:
+        raise Unexpressible(f"the advice code decodes against the certified record (an advice_code.codec.Record), not a "
+                            f"{type(record).__name__}")
+    try:
+        data = I1.encode(V1.decode(advice, record, replace(registered.code, cap_bits=registered.cap_bits)))
+    except V1.AdviceCodeError as e:
+        raise Unexpressible(f"ill-formed v1 advice: {e}") from None
+    except Exception as e:  # noqa: BLE001 -- v1's refusal is AdviceCodeError; any other failure on these bytes refuses them too
+        raise Unexpressible(f"ill-formed v1 advice: its decode failed ({type(e).__name__}: {e})") from None
+    return _window_advice(data)
 
 
 def ingress_body(i: int, q: I1.RequestAdvice, body: bytes, served: str | None, vocab: int) -> dict:
@@ -459,9 +510,11 @@ def request_program(registered: Registered, unit: RequestUnit, named: bool = Fal
     return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch())
 
 
-def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, named: bool = False) -> Compiled:
+def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, named: bool = False,
+                  record: V1.Record | None = None) -> Compiled:
     """The Programs of `advice`'s session (module docstring): each request's at its (LP, T, policy), GP-01 over them, and each step's
-    live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice` and `ingress` only, and compiles them or raises
+    live rows as `RowRef`s. Total and deterministic: it reads `registered`, `advice` and `ingress` only (and `record`, the certified
+    record a v1 string decodes against, under a registration that selects the advice code), and compiles them or raises
     `Unexpressible`. `partial` refuses request by request (`Compiled.refused`) where a refusal would otherwise refuse the session.
     `named`: each Program with what its Build says beside it, as its trace would (`Compiled.named`, `naming.write_build`), or
     `Unexpressible` where the naming doesn't reach it."""
@@ -469,7 +522,8 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
     from verity_vllm.program import workload as W
 
     from .score import request_component
-    plan = plan_steps(registered, advice, ingress, partial=partial)
+    adv = advice_of(registered, advice, record)
+    plan = _plan(registered, adv, ingress, partial)
     programs: dict[str, Any] = {}
     comps: dict[str, Any] = {}
     digests: dict[str, str] = {}
@@ -494,7 +548,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
                         cap_bits=registered.cap_bits, idle=plan.idle, named=names)
     from .batch import BatchDependent, check_compiled
     try:
-        check_compiled(registered, advice_of(registered, advice), ingress, compiled, plan_steps)
+        check_compiled(registered, adv, ingress, compiled, _replan)
     except BatchDependent as e:
         if not partial:
             raise
@@ -502,9 +556,19 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
     return compiled
 
 
-def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False) -> Plan:
+def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False,
+               record: V1.Record | None = None) -> Plan:
     """`compile_steps` up to building Programs: every refusal, each request's shape and policy, and each step's live rows."""
-    adv = advice_of(registered, advice)
+    return _plan(registered, advice_of(registered, advice, record), ingress, partial)
+
+
+def _replan(registered: Registered, solo: WA.Advice, bodies: Mapping[str, Any]) -> Plan:
+    """`batch.check_compiled`'s plan of one request alone: its solo window `Advice` held to I1's encoding, without ℓ, which bounds
+    the session's advice as it was sent, not an I1 the compiler derives from it."""
+    return _plan(registered, _window_advice(_advice_bytes(solo)), bodies, False)
+
+
+def _plan(registered: Registered, adv: WA.Advice, ingress: Any, partial: bool) -> Plan:
     phi0 = registered.phi
     if not (bi := phi0.target_profile().batch_invariant):
         launch_class(phi0)
