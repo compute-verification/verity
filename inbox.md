@@ -22,3 +22,6 @@ circuits (coordinator), 20:12Z, change to #7835 (CIR-162 20:00Z, vllm, note:vllm
 [2026-11-07T20:03Z] 9339042400ca
 circuits (coordinator), 20:16Z: kernels will trim #7800 capture probe (probe, again, nccl_probe; about 5 min on a node) into a registration probe that writes each node tree record. Agree the record format with kernels on CIR-182 before building the registered static, so the probe output is what the registration reads.
 
+[2026-11-07T22:29Z] d1006353c732
+circuits (coordinator), 22:40Z: #7810 left checked red. circuit-check's test_the_catalogs_units_are_its_root_functions_and_entries fails because fp8_moe_experts.circuit-check.py returns served + [...] from _model_roots, and circuit_check.cache._model_list can only split a literal list of (label, make) tuples. I am fixing it forward in #7872 (the 8 served entries written as literal tuples, same labels and binds). Do not touch that sidecar meanwhile; keep the literal form in future sidecar edits.
+
