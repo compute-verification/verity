@@ -188,15 +188,16 @@ class TargetProfile:
     # for the architectures it defaults to breakable CUDA graphs (`DEFAULT_BREAKABLE_CUDAGRAPH_ARCHITECTURES`, GLM-5.3's among them):
     # `VLLM_USE_BREAKABLE_CUDAGRAPH` forces CompilationMode NONE (config/vllm.py:721-737), so the eager kernels run, captured per padded
     # batch, with attention and the DSA indexer eager breaks on the real batch (compilation/breakable_cudagraph.py); the capture sizes
-    # are applied and declared, since every captured launch-dependent selection reads them (`targets.graph_tokens`): vLLM's default at
-    # class G's max_num_seqs 8 (min(2 * 8, 512) -> 1, 2, 4, 8, 16).
+    # are applied and declared, since every captured launch-dependent selection reads them (`targets.graph_tokens`): vLLM's default on
+    # cc 9.0 at class G's max_num_seqs 256 (`VllmConfig._set_cudagraph_sizes`: up to min(2 * 256, 512), by 8 below 256, by 16 above).
     COMPILATIONS = {"piecewise": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
                                   "emulate_precision_casts": False,
                                   "attention": "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"},
                     "piecewise-emu": {"mode": "VLLM_COMPILE", "backend": "inductor", "cudagraph_mode": "PIECEWISE", "use_inductor_graph_partition": False,
                                       "emulate_precision_casts": True,
                                       "attention": "splitting op (vllm::unified_attention_with_output) executed outside the CUDA graphs"},
-                    "breakable": {"mode": "NONE", "cudagraph_mode": "FULL_AND_PIECEWISE", "capture_sizes": [1, 2, 4, 8, 16],
+                    "breakable": {"mode": "NONE", "cudagraph_mode": "FULL_AND_PIECEWISE",
+                                  "capture_sizes": [1, 2, 4, *range(8, 256, 8), *range(256, 513, 16)],
                                   "use_inductor_graph_partition": False, "emulate_precision_casts": False, "breakable": True,
                                   "attention": "eager breaks (eager_break_during_capture) on the real batch between captured segments"}}
     fp8_block_gemm: str | None = None

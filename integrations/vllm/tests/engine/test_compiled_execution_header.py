@@ -83,8 +83,9 @@ def test_a_breakable_profile_needs_vllms_breakable_graphs_at_its_capture_sizes(m
                         lambda i: types.SimpleNamespace(major=dev.compute_capability[0], minor=dev.compute_capability[1], multi_processor_count=dev.num_sms))
     monkeypatch.setattr(B, "observed_flash_attn_version", lambda model: 2)
     breakable = dev.with_overrides(compilation="breakable")
+    declared = breakable.graph_capture_sizes()
 
-    def llm(mode=_Mode.NONE, sizes=(1, 2, 4, 8, 16)):
+    def llm(mode=_Mode.NONE, sizes=declared):
         out = _llm(False, _CG.FULL_AND_PIECEWISE, sizes)
         out.llm_engine.vllm_config.compilation_config.mode = mode
         return out
@@ -93,7 +94,7 @@ def test_a_breakable_profile_needs_vllms_breakable_graphs_at_its_capture_sizes(m
     assert A.compilation_facts(llm())["breakable_cudagraph"] is True
     assert A.target_mismatches(_engine(breakable, llm())) == []
     assert A.target_mismatches(_engine(breakable, llm(sizes=(1, 2, 4)))) == [
-        "profile declares capture sizes [1, 2, 4, 8, 16], engine captures [1, 2, 4]"]
+        f"profile declares capture sizes {list(declared)}, engine captures [1, 2, 4]"]
     assert any("breakable CUDA graphs False" in b for b in A.target_mismatches(_engine(dev.with_overrides(compilation="piecewise"), llm())))
     monkeypatch.setenv("VLLM_USE_BREAKABLE_CUDAGRAPH", "0")
     bad = A.target_mismatches(_engine(breakable, llm(_Mode.VLLM_COMPILE)))

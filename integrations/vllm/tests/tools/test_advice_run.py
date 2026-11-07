@@ -116,6 +116,6 @@ def test_a_class_g_runs_registration_is_in_class_g():
     assert phi.target_profile().compilation == "breakable" and phi.target_profile().execution_label == "compiled"
     launch_class(phi)
     check_phi(dataclasses.replace(phi, model={**phi.model, "dtype": "float8_e4m3fn"}), Net.DOMAIN)
-    assert graph_capture_sizes(phi) == (1, 2, 4, 8, 16)
+    assert graph_capture_sizes(phi) == phi.target_profile().graph_capture_sizes() and graph_capture_sizes(phi)[-1] == 512
     with pytest.raises(Unexpressible, match="target compilation None at execution 'compiled', not 'breakable'"):
         launch_class(_class_g_phi("compiled", {"breakable_cudagraph": False}))

@@ -246,20 +246,21 @@ def test_an_engine_class_fills_its_settings():
 def test_class_g_serves_compiled_at_its_breakable_graphs():
     """Class G's compiled execution is vLLM's breakable CUDA graphs at the class's capture sizes: its options fix them, and a built
     compiled engine that ran other graphs is refused by name."""
-    graphs = {"cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": [1, 2, 4, 8, 16]}
+    sizes = [1, 2, 4, *range(8, 256, 8), *range(256, 513, 16)]
+    graphs = {"cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": sizes}
     assert L.class_options({"engine_class": "G", "execution": "compiled"}) == {
-        "engine_class": "G", "execution": "compiled", "max_num_seqs": 8, **CLASS_G_ARGS, "compilation_config": graphs}
+        "engine_class": "G", "execution": "compiled", "max_num_seqs": 256, **CLASS_G_ARGS, "compilation_config": graphs}
     assert EC.compilation("G", "compiled") == "breakable" and EC.compilation("G", None) is None
     with pytest.raises(Refused, match="execution 'bi-compiled' \\(class G serves eager, compiled\\)"):
         EC.compilation("G", "bi-compiled")
     with pytest.raises(Refused, match="compilation_config=.*where the class serves"):
         L.class_options({"engine_class": "G", "execution": "compiled", "compilation_config": {"cudagraph_mode": "PIECEWISE"}})
-    eff = {"tensor_parallel_size": 8, "enable_prefix_caching": False, **{k: CLASS_G_ARGS[k] for k in EC.CLASS_G_LIMITS},
-           "enforce_eager": False, "breakable_cudagraph": True, "capture_sizes": [1, 2, 4, 8, 16]}
+    eff = {"tensor_parallel_size": 8, "enable_prefix_caching": False, **EC.CLASS_G_SERVED,
+           "enforce_eager": False, "breakable_cudagraph": True, "capture_sizes": sizes}
     assert EC.effective_refusals("G", eff) == []
     assert EC.effective_refusals("G", {**eff, "breakable_cudagraph": False, "capture_sizes": [1, 2, 4]}) == [
         "the built engine's breakable_cudagraph is False, not the class's True",
-        "the built engine's capture_sizes is [1, 2, 4], not the class's [1, 2, 4, 8, 16]"]
+        f"the built engine's capture_sizes is [1, 2, 4], not the class's {sizes}"]
     assert EC.effective_refusals("G", {**eff, "enforce_eager": True, "breakable_cudagraph": False}) == []
 
 

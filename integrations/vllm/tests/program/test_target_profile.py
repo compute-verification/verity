@@ -170,13 +170,15 @@ def test_breakable_profile_applies_vllms_breakable_graphs_at_its_capture_sizes()
     VLLM_USE_BREAKABLE_CUDAGRAPH set, and a declared engine block of mode NONE at those capture sizes for GM-01."""
     b = TargetProfile(batch_invariant=False, compilation="breakable")
     assert b.execution_label == "compiled" and b.env()["VLLM_USE_BREAKABLE_CUDAGRAPH"] == "1"
+    sizes = [1, 2, 4, *range(8, 256, 8), *range(256, 513, 16)]
+    assert b.graph_capture_sizes() == tuple(sizes) and TargetProfile(compilation="piecewise").graph_capture_sizes() == ()
     assert b.engine_args() == {"enforce_eager": False, "compilation_config": {"cudagraph_mode": "FULL_AND_PIECEWISE",
-                                                                              "cudagraph_capture_sizes": [1, 2, 4, 8, 16]}}
+                                                                              "cudagraph_capture_sizes": sizes}}
     assert b.engine_args(execution=False) == {}
     me = b.modelled_engine()
     assert me["enforce_eager"] is False and me["compilation"]["profile"] == "breakable"
     assert {k: me["compilation"][k] for k in ("mode", "cudagraph_mode", "capture_sizes")} == \
-        {"mode": "NONE", "cudagraph_mode": "FULL_AND_PIECEWISE", "capture_sizes": [1, 2, 4, 8, 16]}
+        {"mode": "NONE", "cudagraph_mode": "FULL_AND_PIECEWISE", "capture_sizes": sizes}
     assert "VLLM_USE_BREAKABLE_CUDAGRAPH" not in TargetProfile(batch_invariant=False, compilation="piecewise").env()
     assert TargetProfile.from_json(b.to_json()) == b
 
