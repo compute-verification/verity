@@ -21,8 +21,10 @@ sequences and 8,192 tokens a step, prompts up to 32k tokens. Four `vllm bench se
     # on the node, from a checkout of this tree, under research run (VENV's vLLM at the integration's pin)
     research run --on NODE --project verity --source CHECKOUT -- bash benchmarks/route_capture/run.sh
 
-`run.sh`'s header lists its variables (`VENV`, `CKPT`, `SHAREGPT`, `DURATION_S`). The FlashInfer sampler stays on,
-vLLM's default; if a sampled smoke request fails with it, the server restarts with it off, and `engine_env.txt` says so.
+`run.sh`'s header lists its variables (`VENV`, `CKPT`, `SHAREGPT`, `DURATION_S`). The engine runs with the Inductor pin
+the integration serves with (`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`), so the fused kernels captured are the ones a replay
+runs. The FlashInfer sampler stays on, vLLM's default; if a sampled smoke request fails with it, the server restarts with
+it off, and `engine_env.txt` says so.
 
 ## The plugin
 

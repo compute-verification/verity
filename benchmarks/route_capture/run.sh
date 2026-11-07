@@ -22,6 +22,8 @@ export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
 export CUDA_HOME
 unset NCCL_P2P_DISABLE
+# the Inductor pin the integration serves with: one reduction tiling, so the fused kernels captured are the ones replayed
+export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=${TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK:-0}
 DURATION_S=${DURATION_S:-600}; PORT=${PORT:-8031}; MAX_MODEL_LEN=${MAX_MODEL_LEN:-40960}; SERVED=glm-5.3
 mkdir -p "$OUT/clients"
 
@@ -68,6 +70,7 @@ export ROUTECAP_OUT=$OUT/capture
   echo "checkpoint=$CKPT"; echo "tree=$(git -C "$ROOT" rev-parse HEAD 2>/dev/null)"
   echo "sharegpt_sha256=$(sha256sum "$SHAREGPT" | cut -d' ' -f1)"
   for k in VLLM_USE_FLASHINFER_SAMPLER VLLM_USE_DEEP_GEMM VLLM_ATTENTION_BACKEND VLLM_USE_V2_MODEL_RUNNER CUDA_HOME \
+           TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK \
            CUDA_VISIBLE_DEVICES $(compgen -e | grep -E '^ROUTECAP_' || true); do echo "$k=${!k-unset}"; done
   "$CUDA_HOME/bin/nvcc" --version 2>/dev/null | tail -1
 } > "$OUT/engine_env.txt"
