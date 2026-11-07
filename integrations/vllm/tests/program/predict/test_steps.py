@@ -807,11 +807,11 @@ def test_class_g_admits_async_scheduling_and_plans_the_row_it_discards_into_the_
 
 @pytest.mark.slow
 def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discarded(tmp_path):
-    """`_async_window` compiled whole under a class-G registration with async scheduling: both request Programs at their launch
-    contexts (r1's holding r0's discarded row), GP-01 at LAG 1, the discarded row in no Program, and the batch rules pass. What no
-    cheaper test can: that the Build builds a class-G Program at a launch holding a row async scheduling discarded, and that
-    `compile_steps` composes them. Its two GLM-5.3 builds take about a minute."""
-    reg = _class_g(tmp_path, target={"async_scheduling": True})
+    """`_async_window` compiled whole under a class-G registration with async scheduling, on GLM-5.3's first four layers: both
+    request Programs at their launch contexts (r1's holding r0's discarded row), GP-01 at LAG 1, the discarded row in no Program,
+    and the batch rules pass. What no cheaper test can: that the Build builds a class-G Program at a launch holding a row async
+    scheduling discarded, and that `compile_steps` composes them."""
+    reg = _class_g(tmp_path, layers=4, target={"async_scheduling": True})
     advice, ingress = _async_window()
     c = compile_steps(reg, advice, ingress)
     assert c.batch_rule is None and not c.refused and len(c.programs) == 2 and c.discarded == [(3, 0, 10, 1)]
