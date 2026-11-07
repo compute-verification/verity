@@ -310,6 +310,13 @@ class Registered:
         if not e.enable_chunked_prefill and e.max_num_batched_tokens < e.max_model_len:
             raise AdviceCodeError("without chunked prefill the token budget holds a whole max_model_len prompt (vLLM's own check)")
 
+    def decode(self, data: bytes, record: Record, cap_bits: int | None = None) -> I1.Advice:
+        """The module's `decode` of `data` against `record` under this registration, at ℓ = `cap_bits` where it is given
+        (the compiler's registration's): the advice code as `steps.Registered.code` reads it."""
+        if type(record) is not Record:
+            raise AdviceCodeError(f"v1 decodes against a certified Record, not a {type(record).__name__}")
+        return decode(data, record, self if cap_bits is None else replace(self, cap_bits=cap_bits))
+
     def config(self, engine: Any) -> Any:
         """The derived rules' `Config` for `engine`."""
         return D.Config(block_size=engine.block_size, num_gpu_blocks=engine.num_gpu_blocks,

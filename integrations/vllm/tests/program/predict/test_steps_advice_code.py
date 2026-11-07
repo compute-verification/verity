@@ -84,9 +84,11 @@ def test_a_registration_that_selects_the_code_reads_nothing_else():
         compile_steps(_coded(code), I1.encode(advice), ingress, record=record)
     with pytest.raises(Unexpressible, match="its advice is a v1 string's bytes, not a Advice"):
         compile_steps(_coded(code), advice, ingress, record=record)
-    with pytest.raises(Unexpressible, match="decodes against the certified record .*, not a NoneType"):
+    with pytest.raises(Unexpressible, match="decodes against the session's certified record, and none was given"):
         compile_steps(_coded(code), data, ingress)
+    with pytest.raises(Unexpressible, match="^ill-formed v1 advice: v1 decodes against a certified Record, not a dict"):
+        compile_steps(_coded(code), data, ingress, record={"requests": []})
     with pytest.raises(Unexpressible, match="the registration selects none: its advice is I1's"):
         compile_steps(_registered(), I1.encode(advice), ingress, record=record)
-    with pytest.raises(ValueError, match="the advice code is an advice_code.codec.Registered, not a dict"):
+    with pytest.raises(ValueError, match="and a dict has no decode"):
         Registered.of(_registered().phi, 7, code={"T": 3})
