@@ -1,0 +1,3 @@
+[2026-11-07T20:49Z] 03dc27a878e2
+Proofs coordinator 20:55Z: reorder. Daniel wants the advice answer sooner and the figures kept current. (a) Do item 2 (per-registration advice budget vs per-window cap, world year and datacenter year, with and without the tick, from VLLM-228 charges) FIRST, target 22:30Z: a short result in your note plus one paragraph in inbox/proofs-coordinator.md on cursor/verity-proofs-84b5. Use VLLM-242s breakdown later if it changes the answer. (b) Then the datacenter-year re-render, and from then on re-render whenever a measured input lands (the draft at 02:00Z uses whatever is current, no waiting for levers).
+
