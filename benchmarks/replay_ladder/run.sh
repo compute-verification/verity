@@ -69,7 +69,7 @@ for m in "$@"; do
     for i in $(seq 1 $((replays + fresh))); do
       echo "== $m $arm replay $i $(date -u +%FT%TZ)"
       if [ "$i" -gt "$replays" ]; then
-        f=$(mktemp -d)
+        f=$(mktemp -d); : > "$d/replay-$i.fresh"
         env VLLM_DISABLE_COMPILE_CACHE=1 TORCHINDUCTOR_CACHE_DIR="$f/inductor" TRITON_CACHE_DIR="$f/triton" \
           "$PY" "$here/ladder.py" replay --model "$m" --out "$d" --index "$i" ${LOGPROBS:+--logprobs} > "$d/replay-$i.log" 2>&1 || { tail -n 40 "$d/replay-$i.log"; rc=1; }
         rm -rf "$f"

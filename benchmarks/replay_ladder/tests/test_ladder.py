@@ -69,6 +69,16 @@ def test_compile_mode_reads_vllm_s_log(tmp_path):
     assert [L.compile_mode(p) for p in (fresh, load, none, tmp_path / "missing.log")] == ["compile", "load", None, None]
 
 
+def test_a_replay_run_sh_started_from_empty_caches_compiled_where_vllm_logs_neither(tmp_path):
+    log, mark = tmp_path / "replay-4.log", tmp_path / "replay-4.fresh"
+    log.write_text("INFO Graph capturing finished in 29 secs\n")
+    assert L.compile_mode(log, mark) is None
+    mark.touch()
+    assert L.compile_mode(log, mark) == "compile"
+    log.write_text("INFO Directly load AOT compilation from path /x\n")
+    assert L.compile_mode(log, mark) == "load"
+
+
 def tiling_log(d: Path, *kept: int, xblock: int = 1024, only: bool = False) -> None:
     """One process a kept R0_BLOCK: each keeps it on reduction k (and 2048 on j unless ``only``), and ``xblock`` on a
     pointwise kernel."""

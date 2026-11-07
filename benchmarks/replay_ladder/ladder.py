@@ -332,12 +332,15 @@ COMPILE_FRESH = re.compile(r"Compiling a graph for compile range|saved AOT compi
 COMPILE_LOAD = re.compile(r"Directly load AOT compilation|Directly load the compiled graph")
 
 
-def compile_mode(log: Path) -> str | None:
-    """``compile`` when the process compiled its graphs, ``load`` when it read them from vLLM's compile cache."""
-    if not log.exists():
-        return None
-    text = log.read_text(errors="replace")
-    return "compile" if COMPILE_FRESH.search(text) else "load" if COMPILE_LOAD.search(text) else None
+def compile_mode(log: Path, fresh: Path | None = None) -> str | None:
+    """``compile`` when the process compiled its graphs, ``load`` when it read them from vLLM's compile cache. Where vLLM
+    logs neither (GLM-5.3 at the pin), a replay that run.sh started from empty caches (its ``.fresh`` mark) compiled."""
+    text = log.read_text(errors="replace") if log.exists() else ""
+    if COMPILE_FRESH.search(text):
+        return "compile"
+    if COMPILE_LOAD.search(text):
+        return "load"
+    return "compile" if fresh is not None and fresh.exists() else None
 
 
 def model_row(d: Path) -> dict:
@@ -369,7 +372,7 @@ def model_row(d: Path) -> dict:
             "rows_exact_share": 1 - r["token_positions_differing"] / tokens, "bit_exact": r["bit_exact"],
             "against_first_requests_differing": (r.get("against") or {}).get("requests_tokens_differing"),
             "against_first_logprobs_differing": ((r.get("against") or {}).get("logprobs") or {}).get("requests_logprobs_differing"),
-            "replay_over_served": r["replay_over_served"], "compile": compile_mode(d / f"{rd.name}.log"),
+            "replay_over_served": r["replay_over_served"], "compile": compile_mode(d / f"{rd.name}.log", d / f"{rd.name}.fresh"),
             "tilings": tilings(rd)})
     row["serve_tilings"] = tilings(d / SERVING_TILINGS)
     runs = [k for k in (kept(d / SERVING_TILINGS), *(kept(d / f"replay-{x['index']}") for x in row["replays"])) if k]
