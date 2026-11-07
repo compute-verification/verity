@@ -6,7 +6,7 @@ The channel is a pair of byte streams carrying one JSON object of one key a line
 latency changes nothing in its verdict. The verifier holds its own registration, never the prover's word for it: the
 memory challenger's own record of a PoUS session's setup on this host (`--pous-record DIR --pous-session SID`,
 `pous_record`: the store PoUS's session SID bound, its whole store the plan), or the auditor's registration file
-(`--registration FILE`, `registration_json`); and it draws its coins from its own host's OS.
+(`--registration FILE`, `registration_json`); and it flips its coins from its own host's OS.
 The record's `plan` is the units every pass reads (`plan_of`): the units holding a tensor's block, so not the store's
 padding past the last tensor, which is PoUS's and which the decode never reads; without one, every unit.
 
@@ -587,7 +587,7 @@ def session(f_in: BinaryIO, f_out: BinaryIO, registration: p2.Registration, *, c
     """The verifier's side of one session over the channel (`f_in`, `f_out`), decided by `lean`, which holds
     `registration` and `plan` (`hold`; every unit by default), with the books beside it (`Twin`): the prover's
     request, refused unless it carries the auditor's parameters `auditor` (`params_of`), the registration, each pass
-    asked for in order under `plan`, each window's openings drawn once its roots
+    asked for in order under `plan`, each window's openings sampled once its roots
     are final and verified, the session's coins disclosed, its case (`p2_case.case_of`, which `keep` is given too)
     unless the books vetoed it, and the answer, sent last and returned, naming the verifier's `host` (this one's name
     by default). A line out of form or a closed channel rejects the session (its answer says why)."""
@@ -680,7 +680,7 @@ class Prover(Protocol):
         """Pass i of window t: one step's reads under the pass's seed, its receipts committed; the root."""
 
     def open(self, t: int, draws: Sequence[tuple[int, int]]) -> list[p2.Opening]:
-        """Window t's drawn receipts `(pass, position)` opened."""
+        """Window t's sampled receipts `(pass, position)` opened."""
 
     def end(self, commitment: C.LiveCommitment, openings: Sequence[C.LiveOpening]) -> None:
         """The session's coin commitment and every released coin's opening, after its last root: refuse them unless

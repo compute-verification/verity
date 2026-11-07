@@ -721,8 +721,8 @@ def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tm
 class _Gate:
     """The challenger gate for a run of several windows (`pouw_h1_gpu.window_sessions`): each ``reserve`` is a challenge phase of its own
     on a challenger host of its own (`challenger_host.Host`, gated), all under one auditor key and one ledger, which
-    reserves, opens and ends them in turn; a reserve of no `steps` is a window's draw's challenge phase, whose host, over
-    the draw's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
+    reserves, opens and ends them in turn; a reserve of no `steps` is a window's sample's challenge phase, whose host, over
+    the sample's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
     window's open is signed at a leaf held from its reserve. Calling it is the gate's open (`pouw_h1_window.Gate`), the
     serving side reaches the challenge phase opened last, and ``ended`` is the challenge phase's ``status`` once its end
     is in the ledger."""
@@ -764,7 +764,7 @@ class _Gate:
 
 def _live(gate, sessions, name):
     """``coins`` for `_window`: window `name`'s settings as the GPU harness makes them with ``--challenger --gate --peer``,
-    its challenge phase and its draw's the ones `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
+    its challenge phase and its sample's the ones `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
     from tests.protocols import pouw_h1_gpu as G
 
     def settings(eng, kw):
@@ -781,7 +781,7 @@ def _in_process(eng, kw):
 
 def _summary_row(gate, sessions, name, record, run):
     """Window `name` as the GPU harness's record keeps it for `pouw_h1_gpu.coins_summary`, its challenge phase and its
-    draw's ended."""
+    sample's ended."""
     from tests.protocols import pouw_h1_gpu as G
     ends = {}
     if name in getattr(sessions, "held", {}):

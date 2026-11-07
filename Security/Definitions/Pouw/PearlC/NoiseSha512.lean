@@ -7,7 +7,7 @@ public import Definitions.Pouw.PearlC.Sha512
 # Pearl-C's noise as SHA-512 gives it (trusted; definitions only)
 
 `PearlCSem.noise` is abstract: the named assumptions take the noise as a function of the oracle `H`. This module is the
-noise Pearl-C's h3 hashing actually draws, as a function of the salt, the weight's commitment root and the committed
+noise Pearl-C's h3 hashing actually samples, as a function of the salt, the weight's commitment root and the committed
 activations, through the spec's own SHA-512 (`Sha512.digest`), not a random oracle. A statement that wants the noise of
 the deployment instantiates `PearlCSem` with `sha512Sem`; the oracle `H` is then unused, and what is uniform is the salt.
 
@@ -30,7 +30,7 @@ The rules, op for op, are `verity/ml/protocols/pouw/schemes/pearl_c.py` (h3, row
 
 **What is a parameter.**
 - The salt's bytes, `salt : S → List ℕ`: the 32-byte epoch salt (`identifier.SALT_BYTES`, `coins.COIN_BYTES`) is
-  `Salt32`, uniform when the game draws `s : Salt32` uniformly.
+  `Salt32`, uniform when the game samples `s : Salt32` uniformly.
 - `rootB w`, the 64-byte root of weight `w`'s hiding commitment. It is fixed with the weights before the salt, and its
   opening (the leaves' salts) is the committer's randomness, so the noise does not determine it from the weight codes.
 - `fc`, `alpha`, `beta` and `floor` are the base `PearlCSem`'s: only the noise is pinned here.

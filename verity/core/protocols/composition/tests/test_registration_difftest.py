@@ -322,7 +322,7 @@ def test_registration_difftest() -> None:
 
 
 def test_a_reference_without_the_challengers_reach_is_caught() -> None:
-    """A Python that skips onsite's `challenger-reach` disagrees with the Lean on some drawn log."""
+    """A Python that skips onsite's `challenger-reach` disagrees with the Lean on some sampled log."""
     real = G.site_refusal
 
     def lax(auditor, composite, s, head, e):
@@ -338,7 +338,7 @@ def test_a_reference_without_the_challengers_reach_is_caught() -> None:
 
 
 def test_a_reference_that_takes_a_second_declaration_of_a_day_is_caught(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A Python that takes a second declaration of a day disagrees with the Lean on some drawn log."""
+    """A Python that takes a second declaration of a day disagrees with the Lean on some sampled log."""
     real = G.State.refusal
 
     def lax(self, auditor, composite, e):

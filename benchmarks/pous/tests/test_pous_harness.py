@@ -391,7 +391,7 @@ def test_the_control_responder_holds_only_the_late_controls_answers():
 
 
 def test_the_memory_challenger_takes_a_seed_on_the_logical_clock_alone(tmp_path):
-    """`--seed` fixes the CPU tests' challenge sources, since a control's gate is a statistical test that real draws fail now
+    """`--seed` fixes the CPU tests' challenge sources, since a control's gate is a statistical test that real samples fail now
     and then; a timed audit on the wall clock refuses it before reading anything, so its challenges stay `os.urandom`'s."""
     _harness()
     from verity.core.devices.memory_challenger import timed_audit as mc

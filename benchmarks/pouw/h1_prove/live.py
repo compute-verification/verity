@@ -1,5 +1,5 @@
 """live.py: a served H1 window's live units (``live@<s>``, `circuit.live`) through sampled proofs, the
-verifier's side and the prover's staging; `live.sh` proves them by C-Flock --zk and has Lean verify them.
+verifier's side and the prover's staging; `live.sh` proves them by Flock --zk and has Lean verify them.
 
     python live.py prepare --live DIR --work W
     python live.py summarize --work W --out OUT
@@ -36,7 +36,7 @@ The checks of W/plan.tsv (``C`` lines; ``S`` lines are the statements to prove):
 
 ``evidence`` writes the window's live evidence as core's credit reads it (`credit.LIVE_STATEMENTS`: the live descriptor
 and each round's honest statement's circuit, public file and sessions; `evidence`), which ``served_verdicts.py pouw
---live-evidence`` hands credit, whose verifier of record verifies each session itself.
+--live-evidence`` hands credit, whose verifier verifies each session itself.
 
 **Past T = `live.PIECE_ROWS`** (`R`) a round's live check is cut by rows (`live.PouwLiveRows_v1`, `form`): the Program is
 `live.program_rows` of P = T / R pieces a round, unit u = s·P + j round s's piece j, each statement one piece on its R

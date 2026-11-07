@@ -38,9 +38,9 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Zk.Level0Lanes
 
 /-!
-# Level 0's values from the firewall's run
+# Level 0's values from the ZK server's run
 
-The firewall computes level 0's opening itself: where `repFwC` returns, its Ligerito proof's out-of-domain value,
+The ZK server computes level 0's opening itself: where `repFwC` returns, its Ligerito proof's out-of-domain value,
 lane messages and pair's sums are `ligeritoPZk_lanes`' closed forms at the coins from the round the opening begins, on
 its packed table and the basis of its PIOP's switched vectors, plus the pads. Those closed forms are `l0Clear`'s at the
 same coins, table and basis (`LigLock.tabS_foldKs`, `LigLock.wS_foldKs`, and the lane coins, point and weights at the
@@ -119,7 +119,7 @@ theorem take_range_map {α : Type} (f : ℕ → α) {j k : ℕ} (hj : j ≤ k) :
 
 -- one proof of over a hundred lines down `piopFw`'s unfolded run at level 0, `rw`, `dsimp` and `norm_num` on each step
 set_option maxHeartbeats 1000000 in
-/-- **Level 0's values from the firewall's run**: where `repFwC`, answered by `asksCut coin n` at replies `resp` whose
+/-- **Level 0's values from the ZK server's run**: where `repFwC`, answered by `asksCut coin n` at replies `resp` whose
 coins are `coin`'s, returns, and its PIOP ends at round `p₀` having switched to the basis `b`, its proof's
 out-of-domain value, lane messages and pair's sums are level 0's clear values at the coins from `p₀` on the packed
 table `g` and `b` (`l0Clear`), plus the pads, at each value's layout position. -/

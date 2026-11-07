@@ -6,23 +6,23 @@ The challenger listens and the prover connects. Each round is one frame each way
 time); `u64be 2^64 − 1` ends the session, after its last round or a late one. Before round 0 the challenger sends
 `WARMUPS` frames on `WARMUP_INDEX`, which no coin chose, and discards their answers: nothing times, records or signs them,
 so the first timed round doesn't pay for waking both processes and the prover's memory path after the session's setup.
-The challenger draws its coins on its own host, designates the session id from them, the node and the setup's root
+The challenger flips its coins on its own host, designates the session id from them, the node and the setup's root
 (`period.SESSION_DOMAIN`), signs under its own key and claims the id in its own session log. It reports `{"host",
 "public_key", "session", "session_id", "warmups"}`.
 
-That id is a request's that names no audit (`period.audit`'s), whose salt is drawn where setup ran. An audit's two coins
+That id is a request's that names no audit (`period.audit`'s), whose salt is sampled where setup ran. An audit's two coins
 are the challenger's, the setup's salt and the session's:
 
 - **The salt.** Before setup encodes `C*`, the prover's side sends `{"salt": {"audit", "commitment"}}`: the audit's
-  64-byte binding and the commitment to `W` that setup will publish. The challenger draws the salt's source from its
+  64-byte binding and the commitment to `W` that setup will publish. The challenger samples the salt's source from its
   host's OS after it (`give_salt`), logs the audit, the commitment and the salt (`setup.draw_salt` of that source) in its
   salt log (`memory_challenger.SaltLog`, which holds one salt an audit), and prints `{"source": HEX}`, which setup takes
   as its salt source (`challenger_session.salt`).
 - **The session.** A request naming its audit (`audit`, and `published`, setup's published outputs) runs under
-  `session_id(audit, commitment, salt)`, derived from what the challenger logged and never drawn. The challenger
+  `session_id(audit, commitment, salt)`, derived from what the challenger logged and never sampled. The challenger
   refuses it (`designate`) unless the published outputs carry exactly the logged commitment and salt and the session
   binds the root they publish; its session log refuses a second session under the id. So an audit has one salt and one
-  session, and a retry is a visible failure, never a redraw. The verifier computes the id from the audit's binding and
+  session, and a retry is a visible failure, never a resample. The verifier computes the id from the audit's binding and
   what setup published, never from the report, so a session under any other id is refused.
 
 A refusal prints `{"refused": REASON}` and exits 1 before the side listens.
@@ -84,7 +84,7 @@ class Refusal(RuntimeError):
 
 
 def give_salt(salts: mc.SaltLog, request: Mapping[str, Any], draw: Callable[[int], bytes] = os.urandom) -> bytes:
-    """The challenger's answer to a salt request `{"audit", "commitment"}`: a source drawn from `draw` after the
+    """The challenger's answer to a salt request `{"audit", "commitment"}`: a source sampled from `draw` after the
     commitment, its salt (`setup.draw_salt`) logged under the audit in `salts` before the source is returned. Refused
     (`Refusal`) when the audit has a salt already."""
     audit, commitment = bytes.fromhex(request["audit"]), bytes.fromhex(request["commitment"])
@@ -179,7 +179,7 @@ class Challenger:
         return [_read_clock()]
 
     def _coins(self, body: bytes) -> list[Any]:
-        """The session's coins, then the coin tree's hiding key, then each round's salt, each drawn in turn; once all
+        """The session's coins, then the coin tree's hiding key, then each round's salt, each sampled in turn; once all
         are in, the session's challenger."""
         q, self._drawn = self.request, [*self._drawn, body]
         if len(self._drawn) < q["k"] + 2:

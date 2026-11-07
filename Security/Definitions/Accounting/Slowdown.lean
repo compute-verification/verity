@@ -10,7 +10,7 @@ import Mathlib.Basic.ENNReal.Real
 
 The symbol table's task and slowdown rows, and the classes they are read in:
 
-* a **task** `𝒢` (`Task`): one uniform coin, drawn up front, giving the input `x` and the set `𝒴` of its acceptable
+* a **task** `𝒢` (`Task`): one uniform coin, flipped up front, giving the input `x` and the set `𝒴` of its acceptable
   outputs. Tasks are static;
 * **success** (`Succeeds`): the output a run holds at output positions fixed before `x` lies in `𝒴`;
 * **cost** is fleet-time (`fleetTime`), not size: the elapsed time, from tick `0` to one past the run's last computed
@@ -33,7 +33,7 @@ namespace Accounting.Slowdown
 open Verity
 open scoped ENNReal
 
-/-- **A static task** `𝒢` over inputs `In` and outputs `Y`: one uniform coin, drawn up front, and the input `x` and the
+/-- **A static task** `𝒢` over inputs `In` and outputs `Y`: one uniform coin, flipped up front, and the input `x` and the
 set `𝒴` of its acceptable outputs that it gives (`draw ω = (x, 𝒴)`). -/
 structure Task (In Y : Type) where
   /-- the coin -/
@@ -45,7 +45,7 @@ structure Task (In Y : Type) where
 
 attribute [instance] Task.fintype Task.nonempty
 
-/-- The task as a game: its one coin, then the pair it draws. -/
+/-- The task as a game: its one coin, then the pair it samples. -/
 def Task.game {In Y : Type} (G : Task In Y) : Game (In × Set Y) := .coin G.Ω fun ω => .ret (G.draw ω)
 
 /-- **The probability over the task** `Pr_{(x, 𝒴) ∼ 𝒢}[E x 𝒴]`. -/
@@ -57,7 +57,7 @@ whose value's bits are `y i`. -/
 def Reads {L : Type} {m : ℕ} (R : Actual.Run L) (pos : Fin m → L × ℕ × ℕ) (y : Fin m → List Bool) : Prop :=
   ∀ i, ∃ g, (R.A.x g, R.A.cell g, R.A.t g) = pos i ∧ Actual.bits (R.A.w g) (R.val g).toNat = y i
 
-/-- **Success**: the output the run `R` holds at the positions `pos`, fixed before the input is drawn, lies in `𝒴`. -/
+/-- **Success**: the output the run `R` holds at the positions `pos`, fixed before the input is sampled, lies in `𝒴`. -/
 def Succeeds {L : Type} {m : ℕ} (R : Actual.Run L) (pos : Fin m → L × ℕ × ℕ) (𝒴 : Set (Fin m → List Bool)) :
     Prop :=
   ∃ y ∈ 𝒴, Reads R pos y

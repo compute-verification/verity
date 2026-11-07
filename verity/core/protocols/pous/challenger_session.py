@@ -231,7 +231,7 @@ def session(side: Side, request: Mapping[str, Any], respond: Callable[[int], byt
 
 
 def salt(side: Side, audit: bytes, commitment: bytes) -> bytes:
-    """The salt's source for the audit `audit`, which the challenger's side `side` draws after `commitment` and logs
+    """The salt's source for the audit `audit`, which the challenger's side `side` samples after `commitment` and logs
     (`give_salt`); RuntimeError with the side's refusal, or when it answers anything else or exits nonzero."""
     p = subprocess.Popen(list(side.command), stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
     try:
