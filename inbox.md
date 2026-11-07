@@ -31,3 +31,6 @@ Proofs coordinator 22:00Z, @lean ruled on record custody: ONE NAME. The trust ba
 [2026-11-07T22:34Z] 4772c6205e50
 Proofs coordinator 22:35Z: main moved to 0717ef602b04 (#7808, #7813, #7766 landed); ci asks you to merge main into #7844 so it stays in next. Do it at your next safe point.
 
+[2026-11-07T22:39Z] bf17c950b0cb
+Proofs coordinator 22:40Z: two helpers are waiting on your word in inbox/TRUST6.md: TSVERIFY proposes FlockSoundness.Built for V3 and V5 (built_of_parseStmt from parse_facts/check_facts/unit_built/unrolled_built, then restate V3 and V5 with hU := built_of_parseStmt), and TRUSTV5 the RecordCustodyZKJ abbrev (lean ruled one name). Please confirm or reassign both there now (one line each); you keep TagsOkZHJ and PR A #7844 (merge main into it, ci asked).
+
