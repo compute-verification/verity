@@ -739,8 +739,9 @@ def lower(registered: Any, cls: WindowClass, programs: int | None = None, grain:
         b.settle()
     roots, openings = b.merged()
     params = {**b.params, SS.SCAN_STATE: cls.buckets * scan.bindings["NS"]}
+    held = () if tables is None else tuple(v for s in range(cls.outputs) for v in (tables.a(s), tables.ids(s)))
     reg = IF.Registered(dict(sorted(params.items())), tuple(b.tables.values()), tuple(IF.coalesce(b.reads)), tuple(roots),
-                        tuple(openings))
+                        tuple(openings), values=held)
     circuit = IF.Circuit(name, tuple((fn, b.units[tid]) for tid, fn in b.fns.items()),
                          external=(f"{descriptor_id(scan)}/state", f"{progs[0].entry_unit[0]}/o0"),
                          wires=tuple(IF.coalesce(b.wires)), cuts=b.cuts, registered=reg,
