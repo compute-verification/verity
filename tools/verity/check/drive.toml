@@ -40,8 +40,8 @@ warn_gates = ["tools/verity/check/gates/markdown_caps.py"]
 land = "review"
 # the branch the review landing fast-forwards and `next` is built on: "checked", whose tip drive's full check (`train.sh TIP
 # MACHINES`, recorded) checks after each landing; `main` moves only to a commit of `checked` whose check passed every
-# step on the merge gate (not circuit-check, `off_gate` in policy.toml), and a red step's culprit is reverted on `checked`,
-# never on `main`. "main" lands on `main` and checks it after. Only drive's App pushes `checked`
+# step on the merge gate (not circuit-check, `off_gate` in policy.toml), and a red step's culprit, unless fixed forward within
+# 2 h, is reverted on `checked`, never on `main`. "main" lands on `main` and checks it after. Only drive's App pushes `checked`
 land_into = "checked"
 # the after-landing run reuses every pass whose declared inputs are unchanged, as any check does: it gates `main`, and a cold
 # run (pytest 74 min, lean-audit 73 min, circuit-check hours) holds every landing; circuit-check reuses its per-target passes
@@ -62,8 +62,7 @@ after_landing_shards = 3
 # judged by policy.toml as a run's failures are, a red naming the landing whose change touches what the failed task depends
 # on; the graph's own lean-agreement task counts for nothing. Beside it drive launches `train.sh TIP ON --deferred
 # lean-agreement,ratchet-gate` on `on` (the preflights and lean-agreement's lean-build with them; lean-agreement left out when
-# nothing it checks changed), with the --base and --ratchet-base a run of every step takes, its reds named and reverted as a
-# run's. `main` follows once every task on the gate passed, the graph has a task of every other job `main` waits for, and that
+# nothing it checks changed), with the --base and --ratchet-base a run of every step takes, its reds named as a run's. `main` follows once every task on the gate passed, the graph has a task of every other job `main` waits for, and that
 # run passed its preflights and its steps on the gate: a red ratchet-gate, off it (policy.toml's `off_gate`), holds `main` no
 # more than in a run of every step
 executor = "shadow"
@@ -80,7 +79,8 @@ verdict_first = true
 # the low-risk lane: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next`, in its order, onto
 # `checked` on their ready mark alone (no land verdict), each whose merge onto `checked`'s tip changes nothing
 # `lowrisk_excludes` names, merges with no conflict, contains no unlanded PR and passes `landing_gates` and the compile gate;
-# the after-landing run checks them, and a red one reverts its culprit. The next sync rebuilds `next` on what it landed.
+# the after-landing run checks them, and a red one names its culprit as any red does. The next sync rebuilds `next` on what it
+# landed.
 # false: drive lands only on review
 lowrisk_lane = true
 lowrisk_per_tick = 20

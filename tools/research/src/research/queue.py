@@ -33,7 +33,7 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    none: REASON` line (`goal_gate`; the goals as this machine last read them
                                                    when the page can't be read, said in one line), and (the records gate,
                                                    `RecordsGate`: the lock run after its landing regenerates the records, and
-                                                   a failure there reverts it) when the head changes a Lean lock against the
+                                                   a failure there blames it) when the head changes a Lean lock against the
                                                    landing branch that no records run or Lean check passed, of the head or of
                                                    a commit whose files of the package and the
                                                    packages it requires (tests and docs aside), lean-toolchain and the Lean
@@ -188,7 +188,7 @@ one closed unlanded; the sync leaves such a head off `next` too), and a failure 
 the head; the sync, on its merge onto `next`); a warn gate's failure (a Markdown file over its cap) it prints as a warning.  A
 Lean change can pass its own Lean check and break a module
 another PR on `next` owns (a changed signature, dropped premises, a dropped import), which drive's lock run finds only after it
-lands, reverting it; the preflight builds those modules (`LakeBuild`), from a machine without a warm Lean tree on the first node of
+lands, blaming it; the preflight builds those modules (`LakeBuild`), from a machine without a warm Lean tree on the first node of
 `PREFLIGHT_LEAN_ON` that starts the build, whatever the tier, and refuses a head whose modules no node can build.  A head whose lock, merged onto `next` by
 `tools/verity/lean/merge.py`, drops a `shape.inline` premise or a `shape.frozen` key that `next`'s unchanged statements still need
 (a lock regenerated on an older tree) fails that lock run too; the preflight names each such entry (`lock_drops`), and the sync
@@ -202,7 +202,7 @@ merges onto, as the sync's clone defines them (`base_drivers`): a branch's older
 the mark admits the PR, and the sync's merge onto `next` is the only check after it (see `next`).
 
 Records gate.  The lock run after a landing regenerates the records of the locks it changed, and what it can't regenerate fails
-it, which reverts the culprit; so the gate refuses nothing.  `ready` (and `judge`) warn, naming each package and the run that
+it, a red whose culprit is fixed forward or reverted; so the gate refuses nothing.  `ready` (and `judge`) warn, naming each package and the run that
 would record it, when a head's change against the landing branch (drive.toml's `land_into` at `main`: `checked`, else `main`)
 touches a `lean-audit.json` and the store holds no records run or Lean check of that head that passed the package on its lock,
 nor of a commit whose inputs for the package are the head's (its files and those of the packages it requires, tests and docs
@@ -289,7 +289,7 @@ move on `next`.  The preflight merges no move PR's head, and notes rather than r
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 as any other, by a fast-forward of `checked` (no new merge commit), commits the lock records a lock run regenerates after a
 Lean change, and checks `checked` after each landing,
-reverting on `checked` what that check fails, and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
+naming the culprit of what that check fails (fixed forward, else reverted on `checked`), and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
 `CI` what it refuses.  A push refused because `checked` moved leaves it alone; drive's next tick takes the new `checked` only
 if drive wrote it, and otherwise holds and rings `CI` and `TOP` (`Driver._unwritten`).  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
@@ -1200,7 +1200,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 
 
 #: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, checked by the
-#: after-landing run, a failure reverting it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
+#: after-landing run, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
 #: grader, the certifier program, the inference-only check, the remote audit's verifier), and a lock run follows its landing
 LEAN_PROOFS_TREE = "Security/"
 #: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions and Models libraries, and the Lake files of
@@ -1216,8 +1216,8 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
     guarantee's statement nor a definition it reads reaches `main` without its record (the after-landing lean-audit,
     `--no-regenerate`, fails on a record difference), or a Lean source outside `LEAN_PROOFS_TREE` of a Lake package that has a
     lock, Lean that runs as code, whose lock (its `verifier.allow` among them) would go stale the same way.  A change to
-    `Security/`'s other Lean alone is proofs: no lock run follows it, and the after-landing lean-audit reverts it on a
-    failure."""
+    `Security/`'s other Lean alone is proofs: no lock run follows it, and a failure of the after-landing lean-audit blames
+    it."""
     files = changed(repo, base or f"{commit}^1", commit)
     if any(Path(f).name == LEAN_LOCK or f.endswith(LEAN_SOURCES) and f.startswith(LEAN_SPEC) for f in files):
         return True
@@ -4669,7 +4669,7 @@ RECORDS_COMMAND = ("research run --on auto --mem-gb 32 --max-min 120 --project v
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
 #: why `RecordsGate` warns and never refuses, which each of its warnings says
 RECORDS_AFTER_LANDING = ("the lock run after its landing regenerates the records, and what it can't regenerate fails that run, "
-                         "which reverts the PR")
+                         "a red whose culprit, the PR, is fixed forward or reverted")
 #: where a records run keeps, under its `--out`, PKG's record `--update` wrote when it differs from the commit's lock (each
 #: package's, PKG's and a requirer's, is also under `record/<path>/`)
 RECORD_KEPT = "record/" + LEAN_LOCK
