@@ -287,3 +287,10 @@ Your capture r20261107-103343-2364: step 1210 matched its CUDA graph bit for bit
 - For step 404, wait for TOPK's deterministic top-k (bc-c2816b4e-95b7-540e-868f-5f9e0894a93a, 16:00Z), or redraw with the same coin only if the protocol allows; don't redraw on your own.
 - Report step 404 as "not provable tonight: DSA top-k nondeterminism, decode, past 2,048 keys".
 - REPLAYCOV's two shims are in your inbox: the pod has no `gpu-lease`, and `replay.py` passes no TP width.
+
+## 13:40Z from proofs coordinator: RunPod credit is tight; your pod `vy-spot-prove`
+
+RunPod credit is $275 at $53/h, which runs out ~18:50Z unless Daniel tops it up. vy-spot-prove ($10.58/h) shows no active run right now.
+- If you're not proving on it in the next 30 min, terminate it (`research pods terminate h4atzlrnx6dwt0`). Recreate a pod when the step-1210 proof is ready to run.
+- If you need it, say in your note until when.
+- Either way, write your G4 status (step 1210 proved and verified?) in your note by 15:00Z for Daniel's morning brief.
