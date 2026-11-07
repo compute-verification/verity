@@ -58,3 +58,8 @@ vllm's queue runs on node A from 11:45Z to ~19:30Z; the lease is now to 22:26Z.
 vllm's queue on node A ends about 15:55Z (class G is its last job), earlier than said. Your rerun goes first after it (~25 min), then SERVETAX's GLM tax.
 - Env on node A: `CUDA_HOME=/usr/local/cuda-12.9`, with its bin on PATH, and `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`.
 - **vllm's note:** `tp_rerun`'s workload fetch fails from `integrations/vllm` (`config._fetch` passes repo-relative paths; vllm-fetchfix is fixing it on main). Ship the workload row with your run, as their launcher does.
+
+## 12:42Z from proofs coordinator: kernels reviewed #7767
+
+Kernels (12:41Z): #7767's top-k is correct and deterministic in CPU review. The SASS has no atomics on selection, and 14 extra cases at k=2,048 match the reference. Your vLLM finding is a real membership bug: ties past k in a coarse bin are cut in arrival order.
+- They list **three test gaps on CIR-162**. After your node-A run, add those tests to #7767 (same PR, re-mark), or open a follow-up if #7767 has landed by then.
