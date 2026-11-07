@@ -39,9 +39,9 @@ INF, NEG_INF = 0x7F800000, 0xFF800000
 PACK = 8
 
 _CONF = ("model-untested: read from the SASS of vLLM d9105ea80's merge_attn_states_kernel<__nv_bfloat16, __nv_bfloat16, 128, "
-         "false> for sm_90 (the module docstring) and held word for word to that reading's CPU twin "
-         "(verity/ml/definitions/tests/test_merge_attn_states.py); the check that would make it exact is the kernel's own words on "
-         "an H200 for that test's edge and random inputs")
+         "false> at cc 9.0 (the module docstring) and held word for word to that reading's CPU twin "
+         "(verity/ml/definitions/tests/test_merge_attn_states.py); the check that would make it exact is the kernel's own words at "
+         "cc 9.0 for that test's edge and random inputs")
 
 
 def _refuse(statics: dict) -> str | None:
