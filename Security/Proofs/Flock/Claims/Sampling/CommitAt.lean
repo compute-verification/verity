@@ -35,7 +35,7 @@ theorem opens_own {c : Code} {H : Msg → Msg} {roots : List Msg} {o : Opening B
   cases ha : c.at_ roots o.pos with
   | none => simp [ha, OC.eval] at h
   | some ri =>
-    refine ⟨ri, by first | rfl | exact ha, ?_⟩
+    refine ⟨ri, rfl, ?_⟩
     simp only [ha, ocBind_eval] at h
     cases hl : ((hm96Leaf (row c.place c.bits) c.salt o).eval H).1 with
     | none => simp [hl, OC.eval] at h
