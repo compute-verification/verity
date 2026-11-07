@@ -120,14 +120,15 @@ class Meter:
     @contextlib.contextmanager
     def phase(self, name: str):
         r = _rss()
-        p = {"phase": name, "depth": len(self.open), "t0": time.perf_counter(), "rss0": r, "peak": r}
+        path = "/".join([q["phase"] for q in self.open] + [name])
+        p = {"phase": name, "path": path, "depth": len(self.open), "t0": time.perf_counter(), "rss0": r, "peak": r}
         self.open.append(p)
         try:
             yield p
         finally:
             self.open.remove(p)
             r = _rss()
-            self.done.append({"phase": name, "depth": p["depth"], "wall_s": round(time.perf_counter() - p["t0"], 3),
+            self.done.append({"phase": name, "path": path, "depth": p["depth"], "wall_s": round(time.perf_counter() - p["t0"], 3),
                               "rss0_gib": round(p["rss0"] / 2**30, 3), "rss1_gib": round(r / 2**30, 3),
                               "peak_gib": round(max(p["peak"], r) / 2**30, 3)})
 
@@ -141,13 +142,25 @@ class Meter:
         setattr(owner, attr, wrapped)
 
     def by_phase(self) -> list[dict]:
-        out: dict[tuple, dict] = {}
-        for d in self.done:
-            o = out.setdefault((d["depth"], d["phase"]), {"phase": d["phase"], "depth": d["depth"], "calls": 0, "wall_s": 0.0, "peak_gib": 0.0})
+        """The phases by call path, each under its caller, in order of first entry."""
+        out: dict[str, dict] = {}
+        for d in sorted(self.done, key=lambda d: d["path"].count("/")):
+            o = out.setdefault(d["path"], {"phase": d["phase"], "path": d["path"], "depth": d["depth"], "calls": 0, "wall_s": 0.0,
+                                           "peak_gib": 0.0})
             o["calls"] += 1
             o["wall_s"] = round(o["wall_s"] + d["wall_s"], 3)
             o["peak_gib"] = max(o["peak_gib"], d["peak_gib"])
-        return sorted(out.values(), key=lambda o: (o["depth"], -o["wall_s"]))
+        kids: dict[str, list[dict]] = {}
+        for o in out.values():
+            kids.setdefault(o["path"].rpartition("/")[0], []).append(o)
+        order: list[dict] = []
+
+        def walk(parent: str) -> None:
+            for o in sorted(kids.get(parent, []), key=lambda o: -o["wall_s"]):
+                order.append(o)
+                walk(o["path"])
+        walk("")
+        return order
 
 
 def instrument(m: Meter) -> None:
@@ -215,7 +228,7 @@ def main() -> int:
     rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers,
            "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "wall_s": round(wall, 3),
            "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3), "profiled": a.profile, "phases": m.by_phase(),
-           "timeline": m.done}
+           "timeline": [d for d in m.done if d["phase"] != "Builder.finish"]}
     (out / "compile_cost.json").write_text(json.dumps(rec, indent=1) + "\n")
     if prof:
         import io
