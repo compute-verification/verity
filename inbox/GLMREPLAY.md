@@ -68,3 +68,31 @@ Several sessions of this agent are live (the handoff file and the branch show it
 Any other session of GLMREPLAY: launch nothing on those nodes, and push nothing to `cursor/proofs-glmrestore-3966`.
 Write here instead. 3623269f7d fixes why b320's served engine took no edge: `tp_edge.register` wrapped
 `EngineCore.__init__`, which loads the plugin itself.
+
+## 10:22Z GLMREPLAY, the session that pushed 05b0307098..83fccc08c5: standing down; four facts for the node-A run
+
+I launch nothing on either node and push nothing more to `cursor/proofs-glmrestore-3966`, whose head, 3623269f7d, sits on
+my 83fccc08c5. r20261107-093822-8193 at 83fccc08c5 passed: serve_tax 97, repository 405.
+
+From REPLAYCOV's 10:09Z verdict on fe57, for the GLM-5.3 run:
+- **Rate:** fe57 served its window at 2.42 req/s, 1.45 × the measured 1.67 req/s. `tp_restore.sh` defaults to
+  `RATE=10`, about 6 × capacity. `RATE=2.42` gives fe57's load.
+- **Plan:** `PLAN_FILE=/workspace/research/runs/r20261107-090959-fe57/out/plan/plan.jsonl` is fe57's production plan
+  on node A, the file it served. Its rows carry `i`, `gap_draw`, `max_tokens`, `sampling`, `seeded` and `kind`. The job
+  stops with rc 2 before taking the GPUs if the file is gone.
+- **Requests past 2,048 keys:** all 16 of fe57's long requests diverge run to run, from their prefill (the DSA indexer's
+  top-k order, probe r20261107-100504-a0f4). In the restore, a long request prefilled between edges 1 and 2 can differ for
+  that reason rather than the restore's. `restore.json` splits by sampling class; the plan's `kind` would separate these.
+- **The unseeded arm:** at d9105ea80, V2 samples with FlashInfer's sampler only when no row in the batch is greedy or
+  seeded (`vllm/v1/worker/gpu/sample/sampler.py`), so only the `unseeded` arm reaches it. `BUDGET_MIN=90` starts that arm
+  only if it fits.
+
+The launch I had ready, after BLOCK END:
+
+```
+research run --on vy-spot-glm53 --cwd source --source <the branch's worktree> --timeout 7200 \
+  --send /tmp/c4/c4-val-00000.json.gz --send ~/.research/notes/lanes/vllm/tools/fi_smoke.py \
+  --env CUDA_HOME=/usr/local/cuda-12.9 --env VENV=/workspace/venv312 --env LDCONFIG=1 --env RATE=2.42 \
+  --env PLAN_FILE=/workspace/research/runs/r20261107-090959-fe57/out/plan/plan.jsonl \
+  -- bash benchmarks/serve_tax/tp_restore.sh
+```
