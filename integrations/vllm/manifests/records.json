@@ -1,6 +1,6 @@
 {
  "schema": "verity-vllm/records-index/v1",
- "about": "Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.  A switched row's `aot` names the comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.predict.aot`), its pins the predicted Programs, and its rebuild the trace.",
+ "about": "Per row of record: `record`, its config record's art: id (`verity-vllm records publish`; null for a row pinned before it has one), and its circuit's pins: every rank's Program digests (step, each request shape, GP-01's workload) as the Build `pinned_from` names made them (the record, when they are its Programs), the manifest digest and the tier of its rebuild.  `verity-vllm neutrality` rebuilds a row and compares; the PR that changes a circuit on purpose re-pins it (`verity-vllm neutrality ROW --update`) and re-publishes its record.  A switched row's `aot` names the comparison run whose predicted Programs equal its traced Build's on every rank (`verity-vllm predict compare`) and that traced Build (`trace`): its record path's Build is the AOT Build (`verity_vllm.program.predict.aot`), its pins the predicted Programs, and its rebuild the trace.",
  "rows": {
   "dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
    "record": "art:b70ee40e853da7b1096e2e3186c1ae03ebf6545e049ea225fc07f9e29de02090",
@@ -78,72 +78,72 @@
    "record": "art:74c6c3ccd452e00ba6d2215c4282d9ae75a44b7da6d6d96861bdef5b1d661d69",
    "tier": "heavy",
    "pinned_from": {
-    "record": "art:74c6c3ccd452e00ba6d2215c4282d9ae75a44b7da6d6d96861bdef5b1d661d69",
-    "build": "art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35",
-    "tree": "cursor/glm-v2-21f3@f8fd97166277c4de1094dfbf7a11b5a1186449b7"
+    "build": "art:a12b99f5480315ed35f1a066268b37f3b3d83c16d5eb4c68aee9eadddc15313a",
+    "run": "r20261107-023336-64be",
+    "tree": "4aa4285af11ddce0ff5b4ec88c07b2a24fc6d36a"
    },
-   "manifest_digest": "9cc899187e87230548b6c00a7b5390e78187dd23a56d29ebaad848a1b2a2a77a",
+   "manifest_digest": null,
    "programs": {
     "0": {
-     "step": "00d09c910e3ed568727791dbf7e81936aec27df1a2da1b92a6e04ac8d89f2192fd56ed9483841f9e692ff94bc5e02f7f9365422985464eef20eef32b7591ea58",
-     "workload": "641e16daf9424cf98ae01cca303d27103b3950b4eb7aeba12c006aee78309fc743877b2b1ed9ab45f99b686a1f8af100ed27fe8e04db035d282e556cd54d2db0",
+     "step": "67b49336a8bfa3baf5bdfe998bec5654055171cbdea9ce9a89d93ce7e37540b032346d8462d379336c64b66a5d3bc1158728b5dc60abfd4505088b9551b066bb",
+     "workload": "6225b1f68d5cad5254dc8f81236f5391dfdf50a1021111dd932015ecc3268718a0a71013b6ec24b9f3088b5f4526cc0b9add2371250cb628a0d5b886fdcfe845",
      "requests": {
-      "build_request_LP256_T31": "90166e48642d28f6de4ab7fcde6b302714d2615a78ecdb7c4f0542848249a10404a7e86d477da61bafa1f12428de8e0bfeeecf60ceec83e29d1a532267ff7f01"
+      "build_request_LP256_T31": "8e7fcd3c5f213c6ec3bdf11f87517ce90ea9f43cd1ac9fa3987dcc6cc06819011cf428af39e5bb5fe8842fb95c740f66149d24d997c18229d90b3d8fb277be7d"
      }
     },
     "1": {
-     "step": "7b1e95fa11ff6bd5e5571882c469854bd9ec4f1cbcc17f12de219c39afda1943a3ab1c478346782de535f87edac7131b413ee70d3bd64eec617e38e11b5ba9b9",
-     "workload": "5b970b2754b07dd6a55f42c762b699e94267707183bde7fc2a687028a70072763be01880ad7c05b8e6d8c5d0313dcf90d8cf22ec08d817215967775b6dd9916a",
+     "step": "674ddaa9657f63cafd857fdeb4970bdfcd2221ba7cedba731bcbabcf8bab497dafbfb711a5ca92633f389c080eb80fc5d6b8ffff4d6c12e6cf6154767186c17a",
+     "workload": "da7540046ee0a036e03510bd14d2094a420171b405d3e2ac73fb175e65bea5e80670a59d2d778214716863e9e9faea4d90e645a34667462204cf418519ca56af",
      "requests": {
-      "build_request_LP256_T31": "8ad2b0b957b0a796eb69fd7e4510560aac651cd16083542dbcc8e5ca2bcd710b6aabc7576414906582a82c14d6a79b6f6feb2dcb4b85fa6266d4d74bb2183a7b"
+      "build_request_LP256_T31": "2442174aa47e99e2d2156107d6e53effcf9b42f1e0b10b2b8693b91206b8926b28caf1a04ad87cc3a51d1191e4bed10664f53484cfe344e261fd265a0ab56cea"
      }
     },
     "2": {
-     "step": "690728d5047b1a24a47907c08d2071d89e736106d61c30ae8544fd878b3b174221dc9550c518de67467230a6ad2917e7b209d60e192f37dc0713031342ef29af",
-     "workload": "bad1498a898e0effcd51a21fd95f81db5e05c72ed1f38df86e5820cb51a32150154a8f00bd7f1bdfe468ce060b442a65e4279aa985b929c9aeaa86909b239b96",
+     "step": "43ee05c66e12b9d66a01a12b6b3526ee820345076a034311b090896d66943f27b8cd88d23799f15c6f4850c5a666d261fd2185fe594ba10c725c887dafc2d49d",
+     "workload": "117f39d3c39385e98a7c637291e0e3db27a9314910f1d90190de9677cfbf71a00a963143d6561b17157f606c74f379be3861d8604e9780a4d3b76e74ef7f956d",
      "requests": {
-      "build_request_LP256_T31": "ed32ebf7b4ab6cc3696a1e42264f44d50630ae8ec44de5c1504e5e911a19cf25204779f3efa4574a33c5fc8adc14aa5170e173d4b456ae1bcd22cb165cadbbef"
+      "build_request_LP256_T31": "63616fc402b3785b44951c59bead222012349261b2234be391aad68dda428c9fa92240f32173d5d197db7ff6e6e1b09e7cbce7271f4b3c88b569c03493801638"
      }
     },
     "3": {
-     "step": "260bc2bde669c9cb72b1fd06f57ebcce4ba33e97ebb676fb6da7dc37ec3d9ba21c53a1a46722627661f44981748ebaf8f0a385286f635c8b2451e58f21874b69",
-     "workload": "b55d06f846e65e7fa5ba9efca797fdf3e844a4cdcdb593e42fb3635967f2986a54f08ea3864c9917da0135efeb6020b82a8bc964f7d4385119501bad325994b8",
+     "step": "a6145dc986ff62499511a1f2be5d71a4ce54f7dec41ad3e67eebf39016f6d24797ef25462ef4641e28da68d252588ae791bc647b350d248c9ba41b7523682e38",
+     "workload": "ca5ce417e145d75511e78aaf2e6dac7b7c400aaf428cb8e4e568d6f1283255e9dfc78ad02ecdb2f84bc12080408e230ca308029b725fee5180a2b5435c4b8bd5",
      "requests": {
-      "build_request_LP256_T31": "3742bf8db041619ff199a36e8d40a2950c955ca808a6d04cdc9d273a1dc700a5a945f9a273d6ce4db7aa17a682914dd79ca71f29ff1efc1f0d799a8730371429"
+      "build_request_LP256_T31": "0ffb97419e33d00e06fed1e49b2a4c764fd9a4474e90c91cafc01374ac61d35d091f0365d094ce88f54ef564797caad97099f031962a0ed3ec05c83a6b5411b6"
      }
     },
     "4": {
-     "step": "2705cb1a71dfd1ba8dcda61a418f49a0fcd7d7124c1d401003608e168760c6d05036a9bfd4b803e1b9833964915375dcbe453d1648582ca79eed72815a30dec8",
-     "workload": "f4d043a74f110446f55356b18b2da72881f969ed3037baed00dd760eb0885e2fbbbc071b3695892cd994320853a67ea8657aa743db8b810d26d451a4fa23473a",
+     "step": "c4a3b2066146bbc612407f7427e81a25008c4eef4a1be018803e707698d5b8ca85a16fa2701b28112a55ee282b69398ba429f2e03a849acae3d8a04d97134c0e",
+     "workload": "ac62e18b28f78fc0f5a14dc2cd177f466fc525677de8927111608045564e6e340e4740943daf9e4a36f615652d271467736d84bb00b23111e1c32e0b66090c58",
      "requests": {
-      "build_request_LP256_T31": "d66baa1f3a2ef822743febb57c2134a2f4324a5f060a39cdc466f85d85d3bfc49b4963e2048cda6d5d01d16e942d66e33a7cde92c0718bb1917db5d60407a7a7"
+      "build_request_LP256_T31": "1bd2e29d0084e879fb3c5faf354982283aba7643a9adf3d94809a20ef75b696a76e71e415a8b99e0b3d5f7671e82ee16cadc536b2313d638c3496a65f23a66b5"
      }
     },
     "5": {
-     "step": "969125b44cfa702442b7a3cf3fc06a608623d920e2679726e4f64489f0f5b0f21d62465a383ec6e8302b25fcfa61ef445137806cde95d2f39fd7a537088cc450",
-     "workload": "6c85e26d8a536b8cba96183b9453c3829cdaaeae877db9ef0890ec5709f2f5af1254a02570a974484756d957b8604456805690f1de24339042b9a71000353a74",
+     "step": "c396319a393f73425324eaa463a3766fe659df5ce8cbcf21b75c87d59c444ce33dd947ad7357acb9b4ebcbeee3e0c8019511fa613206284e5d18a42b02380dc5",
+     "workload": "845aa8ead98d56d14267fb81d00b9e7662c9d3c02127343d072bb2bb07478d364040a32d014bf60bdac38fd68dbeaa468388218fbc2cc62201506f08337bb18a",
      "requests": {
-      "build_request_LP256_T31": "ca7a5b8a77506b4418df9cd34e6e7c87ec8630a53225dfc0e5703c786a9ba1d91e09412f171f54e3043e05bc6246416eb43a953645a2b87d90bdaf6821e494db"
+      "build_request_LP256_T31": "6bd5913a537685c4554d6bbbbb68abd073d1888c5840c3d1e1c51d16a70a2ccd4e4ee059281562ac7a3070e72ec54c431b7fc7bd2aab2aa5a5f7fcbf30957e2f"
      }
     },
     "6": {
-     "step": "2d0e65ce42e0339fafa1dbabb379e91270368dea4cc9445a7625f6c175327fe0067ac609ab5c15f8853ab24a2d07c9bb6a7846836e7146d44b3f0968901cebac",
-     "workload": "b51b02f252c173dc56aed14d45767f459183edcaebe00b37bc28299f0745b8aea011f4b25ce5b35988fb28d64e9bd603617d9d4188ad310e43fce62be61a041c",
+     "step": "66f4890b39b2c8edc41e606a279a57f4fcee23722438b5dba88c2e5bf84d0afeca7266bc7a036f1c3e58a7c0258e03bc25de0b90de86a420546e9dcc1bd07308",
+     "workload": "9e69fe847acaf3d99a7304e2bc808482a7dfc8825c318f760d197557c275a760f5c496a3987beebfa3d736378c8a038656d88534a70f2245e55d76c8f993480d",
      "requests": {
-      "build_request_LP256_T31": "1ee9ae119a6eee638bd2e96d14822144d0d8f467b15d08bd0c58d3f941c754c62615e4864233443eea4d2748faa24403e1017f0e07ddeb1e12ee043d8baf7213"
+      "build_request_LP256_T31": "010347118131f7b223917318ab57c6fff0835d5d68e446e00327c037227e201833ae433fd3eced543380e382282e2dcc09ab190d507649b222d0ac42a5d2fcbe"
      }
     },
     "7": {
-     "step": "f10d3f59d33a24dffbf9d7ec3bdb962809243b8f69cf58a810253bec419198e359f3a9b4ae8d53b9d5af92ed89c1f7698c92586d96f8c426d3a1087e8ecd2072",
-     "workload": "ff9d516c095cf77f238e582870919b73e12c27797189a729d80e261fce1c36c7142d3e76f34a3a823605af01ac632bb7e76a8df37a825df367d8eba6d579c1df",
+     "step": "ff33fcffee1d1103806a7f7c1868b30a5e950b59ddb2b8b4b296a4cd7f835bf33a6cd3a9e60e4d80f45b256e90721adbac4d1f7cd4b1ac2b19906109be1e63c6",
+     "workload": "54a6c78fdc030b76d059d86b800f340513b4dd31658062322b3cfc4f9bb9108f8dc0bbe87ad7f7d7d522973eb7913ce019f74ddc171513e8953dd83f96264e8b",
      "requests": {
-      "build_request_LP256_T31": "f26574deebb5088db1bd957b6582ca224884e2b6ce68cd6fcebf4c1d4da171acdfd8ce143945e8ed912d581b7348b8f0211b8cfb43686f351297769e6db358e0"
+      "build_request_LP256_T31": "b34169ac2a7a8af2f34286ab15b3278ae683b18625c2912ba3d4aa4c45182106109e6e009fb6ec39e500958b18f7ef3475a4d91635066092a89d97ab7a2219d9"
      }
     }
    },
    "aot": {
-    "comparison": "r20261019-230514-985c",
-    "trace": "art:a8efd2cf3ef141c19d2aa26367c4ff7a81dcd1fa824adfcd981d82ce9b121b8f"
+    "comparison": "r20261107-030721-7a1a",
+    "trace": "art:a12b99f5480315ed35f1a066268b37f3b3d83c16d5eb4c68aee9eadddc15313a"
    }
   },
   "glm53__fp8__h200__tp8__b32__i256__o32__mixed-arrivals__greedy__eager": {
