@@ -1,6 +1,6 @@
-"""The canonical top-k row (`dsa_topk.reference`): rows of at most k keys are vLLM's, a longer row takes the k largest
-keys with ties to the larger index, in ascending order, with NaN as -inf and both zeros one key; the torch reference
-agrees with it; the wrappers run the real op first and the pass only on calls that can hold a row longer than k, in
+"""The canonical top-k row (`dsa_topk.reference`): rows of at most k keys are vLLM's, a longer row takes the registered
+relation's top-k set (`topk_set`: the fast kernels' key, ties to the smaller index) in ascending order; the torch
+reference agrees with it; the wrappers run the real op first and the pass only on calls that can hold a row longer than k, in
 the right row mode; install wraps once; the plugin is off unless asked; and, where Triton is importable, its kernels
 (in Triton's interpreter) rewrite any fast selection, right, wrong or garbage, into the reference."""
 import json
@@ -24,15 +24,26 @@ def f32(bits: int) -> float:
     return struct.unpack("<f", struct.pack("<I", bits & 0xFFFFFFFF))[0]
 
 
-def test_ordered_preserves_float_order():
-    vals = [-math.inf, -3.4e38, -1.0, -1e-45, -0.0, 0.0, 1e-45, 1e-38, 1.0, 3.4e38, math.inf]
-    keys = [dsa_topk.float_key(v) for v in vals]
-    assert keys == sorted(keys)
-    assert len(set(keys)) == len(vals) - 1  # only the two zeros share a key
-    assert dsa_topk.float_key(-0.0) == dsa_topk.float_key(0.0) == 0
-    for nan in (0x7FC00000, 0xFFC00000, 0x7F800001, 0xFFFFFFFF):
-        assert dsa_topk.ordered(struct.unpack("<i", struct.pack("<I", nan))[0]) == dsa_topk.float_key(-math.inf)
+WORDS = [0xFFFFFFFF, 0xFFC00000, 0xFF800001, 0xFF800000, 0xFF7FFFFF, 0xBF800000, 0x80000001, 0x80000000, 0x00000000,
+         0x00000001, 0x00800000, 0x3F800000, 0x7F7FFFFF, 0x7F800000, 0x7F800001, 0x7FC00000, 0x7FFFFFFF]
+
+
+def signed(word: int) -> int:
+    return struct.unpack("<i", struct.pack("<I", word))[0]
+
+
+def test_ordered_is_the_fast_kernels_key():
+    # -NaN < -inf < ... < -0 < +0 < ... < +inf < +NaN, the registered relation's key less 2**31
+    keys = [dsa_topk.ordered(signed(w)) for w in WORDS]
+    assert keys == sorted(set(keys))
     assert all(-(1 << 31) <= k < (1 << 31) for k in keys)
+    assert [k + (1 << 31) for k in keys] == [registered().topk_key(w) for w in WORDS]
+
+
+def registered():
+    from verity.ml.definitions.registry import dsa_topk as T
+
+    return T
 
 
 def test_short_rows_are_vllms():
@@ -41,13 +52,27 @@ def test_short_rows_are_vllms():
     assert dsa_topk.reference([5.0, -1.0, 2.0, 0.0], 4) == [0, 1, 2, 3]
 
 
-def test_long_row_takes_largest_keys_ties_to_larger_index_ascending():
+def test_long_row_takes_largest_keys_ties_to_smaller_index_ascending():
     assert dsa_topk.reference([3.0, 9.0, 1.0, 7.0, 5.0], 3) == [1, 3, 4]
-    assert dsa_topk.reference([1.0, 1.0, 1.0, 1.0, 0.0], 2) == [2, 3]
-    assert dsa_topk.reference([2.0, 1.0, 1.0, 1.0, 1.0], 3) == [0, 3, 4]
-    assert dsa_topk.reference([0.0, -0.0, 0.0, -0.0], 2) == [2, 3]
-    assert dsa_topk.reference([math.nan, -math.inf, -1.0, math.nan], 2) == [2, 3]
-    assert dsa_topk.reference([math.nan, 0.0, math.inf, math.nan], 1) == [2]
+    assert dsa_topk.reference([1.0, 1.0, 1.0, 1.0, 0.0], 2) == [0, 1]
+    assert dsa_topk.reference([1.0, 1.0, 1.0, 1.0, 2.0], 3) == [0, 1, 4]
+    assert dsa_topk.reference([-0.0, 0.0, -0.0, 0.0], 2) == [1, 3]
+    assert dsa_topk.reference([math.inf, -math.nan, 1.0, math.nan], 2) == [0, 3]
+    assert dsa_topk.reference([-math.nan, -math.inf, -1.0, -math.nan], 2) == [1, 2]
+
+
+@pytest.mark.parametrize("dist", ["randn", "int", "edge"])
+def test_reference_is_the_registered_relations_set(dist):
+    T = registered()
+    k = 6
+    data, lo, n = rows_case(2, 60, 24, k, dist)
+    for row, a, m in zip(data, lo, n):
+        vals = [struct.unpack("<f", struct.pack("<f", v))[0] for v in row[a:a + m]]
+        if m <= k:
+            continue
+        got = dsa_topk.reference(vals, k)
+        words = [struct.unpack("<I", struct.pack("<f", v))[0] for v in vals]
+        assert set(got) == T.topk_set(words, k) and T.order_ok(words, got, k) == 1
 
 
 def rows_case(seed: int, rows: int, cols: int, k: int, dist: str):
@@ -57,11 +82,12 @@ def rows_case(seed: int, rows: int, cols: int, k: int, dist: str):
         if dist == "int":
             row = [float(rng.randrange(4)) for _ in range(cols)]
         elif dist == "edge":
-            row = [rng.choice([math.nan, 0.0, -0.0, math.inf, -math.inf, rng.gauss(0, 1)]) for _ in range(cols)]
+            row = [rng.choice([math.nan, -math.nan, 0.0, -0.0, math.inf, -math.inf, rng.gauss(0, 1)]) for _ in range(cols)]
         else:
             row = [rng.gauss(0, 1) for _ in range(cols)]
-        a = rng.randrange(cols)
-        m = rng.choice([-3, 0, 1, k - 1, k, k + 1, cols - a, rng.randrange(cols - a + 1)])
+        a = rng.randrange(cols - 2 * k)
+        m = rng.choice([-3, 0, 1, k - 1, k, k + 1, cols - a, cols - a, rng.randrange(k + 1, cols - a + 1),
+                        rng.randrange(cols - a + 1)])
         data.append(row)
         lo.append(a)
         n.append(min(m, cols - a))
@@ -193,16 +219,19 @@ def test_site_declares_the_plugin(tmp_path):
 
 def fast_selection(torch, x, lo, n, k, how, rng):
     """What a fast kernel might write: the right set in a shuffled order with ties broken at random (``atomic``), or a
-    wrong selection (``wrong``: random distinct indices; ``garbage``: anything, out of range included)."""
+    wrong selection (``dup``: the right set with one index other than the k-th key's written twice; ``wrong``: random
+    distinct indices; ``garbage``: anything, out of range included)."""
     out = torch.full((x.shape[0], k), -1, dtype=torch.int32)
     for r in range(x.shape[0]):
         m = max(int(n[r]), 0)
         if m <= k:
             out[r, :m] = torch.arange(m, dtype=torch.int32)
             continue
-        if how == "atomic":
+        if how in ("atomic", "dup"):
             key = [dsa_topk.ordered(int(b)) for b in x[r, lo[r]:lo[r] + m].contiguous().view(torch.int32)]
             order = sorted(range(m), key=lambda i: (key[i], rng.random()), reverse=True)[:k]
+            if how == "dup":
+                order[1] = order[0]
             rng.shuffle(order)
             out[r] = torch.tensor(order, dtype=torch.int32)
         elif how == "wrong":
@@ -219,9 +248,9 @@ def interpreted(monkeypatch):
     return torch
 
 
-@pytest.mark.parametrize("path,seg_min_keys", [("bits", 1 << 20), ("scan", 1 << 20), ("bits", 24)])
+@pytest.mark.parametrize("seg_min_keys", [1 << 20, 24])
 @pytest.mark.parametrize("dist", ["randn", "int", "edge"])
-def test_kernels_canonicalize_in_interpreter(monkeypatch, dist, path, seg_min_keys):
+def test_kernels_canonicalize_in_interpreter(monkeypatch, dist, seg_min_keys):
     torch = interpreted(monkeypatch)
     rng = random.Random(3)
     k, rows, cols = 12, 10, 90
@@ -229,8 +258,9 @@ def test_kernels_canonicalize_in_interpreter(monkeypatch, dist, path, seg_min_ke
     x = torch.tensor(data, dtype=torch.float32)
     lo_t, n_t = torch.tensor(lo, dtype=torch.int32), torch.tensor(n, dtype=torch.int32)
     ref = dsa_topk.reference_rows(x, lo, n, k)
-    for how in ("atomic", "wrong", "garbage"):
-        canon = dsa_topk.Canon(seg_min_keys=seg_min_keys, block=16, path=path)
+    assert sum(m > k for m in n) >= rows // 3
+    for how in ("atomic", "dup", "wrong", "garbage"):
+        canon = dsa_topk.Canon(seg_min_keys=seg_min_keys, block=16)
         canon._sms[x.device] = 64
         assert (canon.segments(x.device, rows, cols) > 1) == (seg_min_keys < cols)
         out = fast_selection(torch, x, lo, n, k, how, rng)

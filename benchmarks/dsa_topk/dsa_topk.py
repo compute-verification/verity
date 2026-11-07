@@ -7,17 +7,20 @@ vLLM's kernels write a row of ``n <= k`` keys as ``0, 1, ..., n - 1`` and then `
 leaves those rows untouched (no kernel runs when no row of the call can be longer than ``k``). A longer row's kernels
 place the selected indices with shared-memory atomics, so their order varies run to run, and they admit the keys tied at
 the k-th score in atomic order, so the set can vary too; the sparse attention then sums over the keys in that order.
-The canonical row is upstream vLLM's deterministic selector's (its batch-invariant op library's
-``top_k_per_row_prefill_index_order``):
+The canonical row's selection is the registered relation's top-k set (`verity.ml.definitions.registry.dsa_topk`'s
+``topk_set``, which ``DsaTopKOrder`` checks), and its order is ascending:
 
-- each score's 32 bits are made order-preserving as a signed integer (`ordered`), with both zeros one key and every NaN
-  the key of ``-inf``;
-- the selection is the ``k`` largest (key, index) pairs, so a tie at the k-th key goes to the larger indices;
+- each score's key is the fast kernels' own, ``convert_to_uint32_v2`` of its 32 bits, here as the signed integer of the
+  same order (`ordered`): ``-0`` below ``+0``, a positive NaN above ``+inf`` and a negative one below ``-inf``;
+- the selection is the ``k`` first indices under (key descending, index ascending), so a tie at the k-th key goes to
+  the smaller indices;
 - the output is the selection in ascending index order, ``k`` indices, each relative to its row's first key.
 
-The device pass reads the fast kernel's selection only for a candidate k-th key ``tau``, which it checks against the
-whole row's counts (``#{key > tau} < k <= #{key >= tau}``); a row whose candidate fails (a NaN the fast kernel ranks
-first, say) is selected again by bisection over the keys. Either way the output is the row's canonical one. Rows of
+The device pass reads the fast kernel's selection for a candidate k-th key ``tau``, which it checks against the whole
+row's counts (``#{key > tau} < k <= #{key >= tau}``). When ``#{key >= tau} == k`` and the selection is ``k`` distinct
+indices of the row, it is the canonical set and is written sorted; when a tie straddles the k-th key, the row is
+written from the counts; a row whose candidate fails (a fast kernel that missed a larger key) is selected again by
+bisection over the keys. Every way the output is the row's canonical one. Rows of
 ``n > k`` keys are a prefill's (``top_k_per_row_prefill``: keys ``[start, end)`` of the gathered row) or a decode's (the
 three decode selectors: keys ``[0, length)``).
 
@@ -46,26 +49,18 @@ STATS = ("rows_long", "rows_tied", "rows_bisected")
 #: a segment of a row (a call of few rows splits each over programs) is at least this many keys
 SEG_MIN_KEYS = 8192
 #: keys a program reads at a time (below 2**15: dsa_topk_kernels packs two block counts in an int32), and its warps
-BLOCK = 4096
+BLOCK = 2048
 NUM_WARPS = 8
 #: programs a multiprocessor should get before a row is split
 FILL = 2
-#: a call of one program a row: ``bits`` (count, then order the fast kernel's selection by a bitmap) or ``scan``
-PATH = "bits"
 #: `log_to` rewrites its record every this many calls (a device sync), since vLLM's workers may never reach atexit
 FLUSH_EVERY = 4096
 
 INT32_MIN = -(1 << 31)
-NEG_INF_BITS = -8388608  # 0xFF800000, the bits of -inf as an int32
 
 
 def ordered(bits: int) -> int:
-    """The order-preserving signed key of a float32's bits (an int32 value): ``-0`` is ``+0``, a NaN is ``-inf``."""
-    mag = bits & 0x7FFFFFFF
-    if mag > 0x7F800000:
-        bits = NEG_INF_BITS
-    elif mag == 0:
-        bits = 0
+    """The signed key of a float32's bits (an int32 value): ``convert_to_uint32_v2``'s key minus ``2**31``."""
     return bits ^ 0x7FFFFFFF if bits < 0 else bits
 
 
@@ -75,12 +70,11 @@ def float_key(v: float) -> int:
 
 def reference(values: Sequence[float], k: int) -> list[int]:
     """The canonical top-k row of ``values`` (one row's keys, as float32): ``0..n-1`` then ``-1`` up to ``k`` for
-    ``n <= k``, else the ``k`` largest (key, index) pairs' indices in ascending order."""
+    ``n <= k``, else the ``k`` first indices under (key descending, index ascending), in ascending order."""
     n = len(values)
     if n <= k:
         return list(range(n)) + [-1] * (k - n)
-    keys = [(float_key(v), i) for i, v in enumerate(values)]
-    return sorted(i for _, i in sorted(keys, reverse=True)[:k])
+    return sorted(sorted(range(n), key=lambda i: (-float_key(values[i]), i))[:k])
 
 
 def keys(logits: Any) -> Any:
@@ -88,8 +82,6 @@ def keys(logits: Any) -> Any:
     import torch
 
     bits = logits.contiguous().view(torch.int32).to(torch.int64)
-    mag = bits & 0x7FFFFFFF
-    bits = torch.where(mag > 0x7F800000, NEG_INF_BITS, torch.where(mag == 0, 0, bits))
     return torch.where(bits < 0, bits ^ 0x7FFFFFFF, bits)
 
 
@@ -104,10 +96,10 @@ def reference_rows(logits: Any, lo: Any, n: Any, k: int) -> Any:
     col = torch.arange(logits.shape[1], dtype=torch.int64, device=dev).reshape(1, -1)
     rel = col - lo
     inside = (rel >= 0) & (rel < n)
-    comp = torch.where(inside, keys(logits) * (1 << 32) + rel, torch.iinfo(torch.int64).min)
+    comp = torch.where(inside, keys(logits) * (1 << 32) + (0xFFFFFFFF - rel), torch.iinfo(torch.int64).min)
     top = torch.topk(comp, min(k, logits.shape[1]), dim=1).values
     out = torch.full((logits.shape[0], k), -1, dtype=torch.int32, device=dev)
-    out[:, :top.shape[1]] = (top & 0xFFFFFFFF).sort(dim=1).values.to(torch.int32)
+    out[:, :top.shape[1]] = (0xFFFFFFFF - (top & 0xFFFFFFFF)).sort(dim=1).values.to(torch.int32)
     short = torch.arange(k, dtype=torch.int64, device=dev).reshape(1, -1)
     return torch.where(n <= k, torch.where(short < n, short, -1).to(torch.int32), out)
 
@@ -121,8 +113,7 @@ def kernels() -> dict[str, Any]:
         import importlib
 
         mod = importlib.import_module("dsa_topk_kernels")
-        _KERNELS.update(canon_one=mod.canon_one, canon_bits=mod.canon_bits, count_seg=mod.count_seg,
-                        emit_seg=mod.emit_seg)
+        _KERNELS.update(canon_row=mod.canon_row, count_seg=mod.count_seg, emit_seg=mod.emit_seg)
     return _KERNELS
 
 
@@ -131,12 +122,10 @@ class Canon:
     ``logits`` (float32, rows x columns) in place."""
 
     def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK, num_warps: int = NUM_WARPS,
-                 fill: int = FILL, path: str = PATH) -> None:
+                 fill: int = FILL) -> None:
         if not 0 < block < 1 << 15 or block & (block - 1):
             raise ValueError(f"block: a power of two below 2**15, not {block}")
-        if path not in ("bits", "scan"):
-            raise ValueError(f"path: 'bits' or 'scan', not {path!r}")
-        self.seg_min_keys, self.block, self.num_warps, self.fill, self.path = seg_min_keys, block, num_warps, fill, path
+        self.seg_min_keys, self.block, self.num_warps, self.fill = seg_min_keys, block, num_warps, fill
         self.calls = {op: 0 for op in OPS}
         self.launches: dict[str, int] = {op: 0 for op in OPS}
         self._stats: dict[Any, Any] = {}
@@ -181,12 +170,8 @@ class Canon:
         seg = self.segments(dev, rows, ncols)
         args = (logits, ls0, ls1, out, out.stride(0), a, b, ncols, next_n)
         const = dict(K=k, KP2=next_pow2(k), BLOCK=self.block, MODE=mode, num_warps=self.num_warps)
-        if seg == 1 and self.path == "scan":
-            K["canon_one"][(rows,)](*args, stats, **const)
-            return
         if seg == 1:
-            nw = -(-ncols // 32)
-            K["canon_bits"][(rows,)](*args, self.workspace(dev, rows * 2 * nw), nw, stats, WBLOCK=1024, **const)
+            K["canon_row"][(rows,)](*args, stats, **const)
             return
         ws = self.workspace(dev, rows * (2 * seg + 1))
         K["count_seg"][(rows, seg)](*args, ws, seg, **const)

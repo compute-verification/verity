@@ -10,9 +10,6 @@ import triton.language as tl
 @triton.jit
 def _ordered(x):
     b = x.to(tl.int32, bitcast=True)
-    mag = b & 0x7FFFFFFF
-    b = tl.where(mag > 0x7F800000, -8388608, b)
-    b = tl.where(mag == 0, 0, b)
     return tl.where(b < 0, b ^ 0x7FFFFFFF, b)
 
 
@@ -57,9 +54,9 @@ def _count(row, start, end, tau, ls1, BLOCK: tl.constexpr):
 
 
 @triton.jit
-def _emit(row, orow, start, end, tau, skip, gt_before, eq_before, ls1, BLOCK: tl.constexpr):
-    # keys [start, end) of the row in ascending order: every key above tau, and the tied keys after the first
-    # `skip` of the row's; each at its rank among those kept (gt_before, eq_before: the counts before start)
+def _emit(row, orow, start, end, tau, need, gt_before, eq_before, ls1, BLOCK: tl.constexpr):
+    # keys [start, end) of the row in ascending order: every key above tau, and the row's first `need` keys equal to
+    # it; each at its rank among those kept (gt_before, eq_before: the counts before start)
     gt_before = gt_before + tau * 0
     eq_before = eq_before + tau * 0
     for b in range(start, end, BLOCK):
@@ -72,8 +69,8 @@ def _emit(row, orow, start, end, tau, skip, gt_before, eq_before, ls1, BLOCK: tl
         p = tl.cumsum(both, axis=0) - both
         gt_ex = gt_before + (p & 0xFFFF)
         eq_ex = eq_before + (p >> 16)
-        keep = (gt > 0) | ((eq > 0) & (eq_ex >= skip))
-        tl.store(orow + gt_ex + tl.maximum(eq_ex - skip, 0), idx, mask=keep)
+        keep = (gt > 0) | ((eq > 0) & (eq_ex < need))
+        tl.store(orow + gt_ex + tl.minimum(eq_ex, need), idx, mask=keep)
         tot = tl.sum(both, axis=0)
         gt_before += tot & 0xFFFF
         eq_before += tot >> 16
@@ -97,72 +94,16 @@ def _bisect(row, orow, n, ls1, K: tl.constexpr, BLOCK: tl.constexpr):
         hi_t = tl.where(ge, hi_t, mid - 1)
     tau = lo_t.to(tl.int32)
     n_gt, n_eq = _count(row, 0, n, tau, ls1, BLOCK)
-    _emit(row, orow, 0, n, tau, n_eq - (K - n_gt), n * 0, n * 0, ls1, BLOCK)
+    _emit(row, orow, 0, n, tau, K - n_gt, n * 0, n * 0, ls1, BLOCK)
     return n_eq > K - n_gt
 
 
 @triton.jit
-def canon_one(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
+def canon_row(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
               K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr):
-    # one program a row: one pass from the row's end that keeps every key above the candidate and the m tied keys
-    # with the largest indices (m from the fast kernel's selection), checked against the row's counts once done
-    r = tl.program_id(0)
-    lo, n = _bounds(r, A, B, ncols, next_n, MODE)
-    if n > K:
-        row = logits + r.to(tl.int64) * ls0 + lo.to(tl.int64) * ls1
-        orow = out + r.to(tl.int64) * os0
-        tau, gt_hint = _hint(row, orow, n, ls1, K, KP2)
-        m_eq = K - gt_hint
-        kept_after = n * 0
-        eq_after = n * 0
-        n_gt = n * 0
-        nblocks = tl.cdiv(n, BLOCK)
-        for bi in range(nblocks):
-            idx = (nblocks - 1 - bi) * BLOCK + tl.arange(0, BLOCK)
-            m = idx < n
-            key = _ordered(tl.load(row + idx.to(tl.int64) * ls1, mask=m, other=0.0))
-            gt = (m & (key > tau)).to(tl.int32)
-            eq = (m & (key == tau)).to(tl.int32)
-            both = gt + (eq << 16)
-            p = tl.cumsum(both, axis=0)
-            tot = tl.sum(both, axis=0)
-            gt_tot = tot & 0xFFFF
-            eq_tot = tot >> 16
-            gt_later = gt_tot - (p & 0xFFFF)
-            eq_later = eq_tot - (p >> 16)
-            quota = tl.maximum(m_eq - eq_after, 0)
-            keep = (gt > 0) | ((eq > 0) & (eq_later < quota))
-            pos = K - 1 - (kept_after + gt_later + tl.minimum(eq_later, quota))
-            tl.store(orow + pos, idx, mask=keep & (pos >= 0))
-            kept_after += gt_tot + tl.minimum(eq_tot, quota)
-            eq_after += eq_tot
-            n_gt += gt_tot
-        tl.atomic_add(stats + 0, 1)
-        if (n_gt == gt_hint) & (m_eq >= 1) & (eq_after >= m_eq):
-            if eq_after > m_eq:
-                tl.atomic_add(stats + 1, 1)
-        else:
-            tl.atomic_add(stats + 2, 1)
-            if _bisect(row, orow, n, ls1, K, BLOCK):
-                tl.atomic_add(stats + 1, 1)
-
-
-@triton.jit
-def _popc(x):
-    u = x.to(tl.uint32, bitcast=True)
-    u = u - ((u >> 1) & 0x55555555)
-    u = (u & 0x33333333) + ((u >> 2) & 0x33333333)
-    u = (u + (u >> 4)) & 0x0F0F0F0F
-    return ((u * 0x01010101) >> 24).to(tl.int32)
-
-
-@triton.jit
-def canon_bits(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, NW, stats,
-               K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, WBLOCK: tl.constexpr):
-    # one program a row: the row's counts against the fast kernel's smallest selected key, one read with no scan; when
-    # that key is the k-th with no tie across it and the selection is k distinct indices, the selection is the
-    # canonical set, put in ascending order through a bitmap of the row (ws: NW words, then their prefix counts);
-    # otherwise the row is emitted from the counts, or bisected
+    # one program a row: the row's counts against the fast kernel's smallest selected key, one read with no scan. When
+    # that key is the k-th with no tie across it and the selection is k distinct indices of the row, the selection is
+    # the canonical set and is written sorted; otherwise the row is emitted from the counts, or bisected
     r = tl.program_id(0)
     lo, n = _bounds(r, A, B, ncols, next_n, MODE)
     if n > K:
@@ -172,8 +113,7 @@ def canon_bits(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, NW, stats,
         sel = tl.load(orow + offs, mask=offs < K, other=-1)
         ok = (sel >= 0) & (sel < n)
         x = tl.load(row + tl.where(ok, sel, 0).to(tl.int64) * ls1, mask=ok, other=0.0)
-        key = tl.where(ok, _ordered(x), 2147483647)
-        tau = tl.min(key, axis=0)
+        tau = tl.min(tl.where(ok, _ordered(x), 2147483647), axis=0)
         n_ok = tl.sum(ok.to(tl.int32), axis=0)
         n_gt, n_eq = _count(row, 0, n, tau, ls1, BLOCK)
         tl.atomic_add(stats + 0, 1)
@@ -182,31 +122,13 @@ def canon_bits(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, NW, stats,
                 tl.atomic_add(stats + 1, 1)
             emit = 1
             if (n_gt + n_eq == K) & (n_ok == K):
-                bm = ws + r.to(tl.int64) * (2 * NW)
-                pf = bm + NW
-                nw = tl.cdiv(n, 32)
-                for wb in range(0, nw, WBLOCK):
-                    wi = wb + tl.arange(0, WBLOCK)
-                    tl.store(bm + wi, tl.zeros([WBLOCK], dtype=tl.int32), mask=wi < nw)
+                s = tl.sort(tl.where(offs < K, sel, 2147483647))
+                tl.store(orow + offs, s, mask=offs < K)
                 tl.debug_barrier()
-                tl.atomic_or(bm + (sel >> 5), 1 << (sel & 31), mask=offs < K)
-                tl.debug_barrier()
-                carry = n * 0
-                for wb in range(0, nw, WBLOCK):
-                    wi = wb + tl.arange(0, WBLOCK)
-                    m = wi < nw
-                    c = _popc(tl.load(bm + wi, mask=m, other=0, cache_modifier=".cg"))
-                    tl.store(pf + wi, carry + tl.cumsum(c, axis=0) - c, mask=m)
-                    carry += tl.sum(c, axis=0)
-                tl.debug_barrier()
-                if carry == K:
-                    emit = 0
-                    w = tl.load(bm + (sel >> 5), mask=offs < K, other=0, cache_modifier=".cg").to(tl.uint32, bitcast=True)
-                    p = tl.load(pf + (sel >> 5), mask=offs < K, other=0, cache_modifier=".cg")
-                    below = (tl.full([KP2], 1, tl.uint32) << (sel & 31).to(tl.uint32)) - 1
-                    tl.store(orow + p + _popc(w & below), sel, mask=offs < K)
+                nxt = tl.load(orow + offs + 1, mask=offs + 1 < K, other=-1, cache_modifier=".cg")
+                emit = tl.sum(((offs + 1 < K) & (nxt == s)).to(tl.int32), axis=0) > 0
             if emit:
-                _emit(row, orow, 0, n, tau, n_eq - (K - n_gt), n * 0, n * 0, ls1, BLOCK)
+                _emit(row, orow, 0, n, tau, K - n_gt, n * 0, n * 0, ls1, BLOCK)
         else:
             tl.atomic_add(stats + 2, 1)
             if _bisect(row, orow, n, ls1, K, BLOCK):
@@ -255,7 +177,7 @@ def emit_seg(logits, ls0, ls1, out, os0, A, B, ncols, next_n, ws, stats, SEG,
         if (n_gt < K) & (n_gt + n_eq >= K):
             seg = tl.cdiv(tl.cdiv(n, SEG), BLOCK) * BLOCK
             start = s * seg
-            _emit(row, orow, start, tl.minimum(start + seg, n), tau, n_eq - (K - n_gt),
+            _emit(row, orow, start, tl.minimum(start + seg, n), tau, K - n_gt,
                   tl.sum(tl.where(segs < s, gts, 0), axis=0), tl.sum(tl.where(segs < s, eqs, 0), axis=0),
                   ls1, BLOCK)
             if s == 0:
