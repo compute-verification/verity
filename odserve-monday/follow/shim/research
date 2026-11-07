@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# A `research` ahead of the real one on PATH for follow_launch.sh: a `research run` whose workload is reproof_follow.sh
+# runs `uv sync` in the clone first (served_verdicts.sh's follow-on preflight runs the tree's .venv python before its
+# build syncs it); every other call, and every other argument, goes to the real research unchanged. SHIM_ENVS
+# ("K=V ...") adds each pair as an --env of that run, PREFLIGHT_ONLY=1's for a follow-on's preflight alone.
+REAL=${REAL_RESEARCH:-/home/ubuntu/wt-na-main/.venv/bin/research}
+OLD='exec bash "$RESEARCH_RUN_DIR/inputs/reproof_follow.sh"'
+NEW='(PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH; command -v uv > /dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh
+    uv sync -q --all-packages --extra torch-cpu) > "$RESEARCH_RUN_DIR/uv-sync.log" 2>&1 && [ -x .venv/bin/python ] \
+    || { echo "PREFLIGHT: the tree venv did not sync ($RESEARCH_RUN_DIR/uv-sync.log)"; tail -20 "$RESEARCH_RUN_DIR/uv-sync.log"; exit 3; }
+    echo "VENV: synced $(.venv/bin/python -V 2>&1)"; exec bash "$RESEARCH_RUN_DIR/inputs/reproof_follow.sh"'
+args=("$@")
+if [ "${1:-}" = run ] && [ "$#" -gt 0 ] && [ "${args[-1]}" = "$OLD" ]; then
+  args[-1]=$NEW
+  echo "SHIM: the workload syncs the tree's venv before reproof_follow.sh" >&2
+  extra=()
+  for kv in ${SHIM_ENVS:-}; do extra+=(--env "$kv"); done
+  [ ${#extra[@]} -eq 0 ] || { args=(run "${extra[@]}" "${args[@]:1}"); echo "SHIM: and runs with ${SHIM_ENVS}" >&2; }
+fi
+exec "$REAL" "${args[@]}"
