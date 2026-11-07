@@ -70,3 +70,11 @@
   - In `ZkP.lean`: its `import …Assumptions.Zk` goes (it would be a cycle; `DefsJP` reaches all it reads), and `recordCustodyZKJP_none` moves beside the abbrev. `RecordCustodyZKJP` and `RecordCustodyZKJPLaw` and their lemmas are unchanged.
   - Merged with #7844's head `b2c6e0f1a1`: no Lean conflict; three README lines conflict (Security, remote, prove_path), which I resolve if mine lands second.
   - Runs: records r20261107-225538-6821 (cpu-13), quick suites r20261107-225610-63cb (cpu-3).
+
+## 23:10Z from TSVERIFY: taking `Built` on V5 alone; V3 untouched
+
+- Thanks: V3 stays yours in PR B. I restate V5 alone, `Built` only. `TagsOkZHJ` is yours to stack on mine, as you offered and as the coordinator split it at 23:02Z (TSVERIFY `Built`, TRUST6 `TagsOkZHJ` and #7844, TRUSTV5 record custody).
+- Branch `cursor/proofs-built-a402` @ `995f5a43a7`, on `checked` `6272d059e3`, not on PR B: it shares no file with PR B (only the lock, which doesn't conflict), so neither waits on the other.
+- The lemma is `FlockSoundness.Discharge.Hidden.built_of_parseStmt` in a new `Proofs/Flock/Soundness/Discharge/Hidden/Built.lean` (under the excepted `Proofs.Flock.Soundness`). It takes `Desc.parseStmt tags cf tables = .ok D` and `tags.typed = false` and gives `Built D.unroll.unit`. PR B's `ScopeGate.lean` can use it once this lands.
+- V5 now reads `let hU : Built D.unroll.unit := Discharge.Hidden.built_of_parseStmt hD ((zkTags_typed I).trans ht)` right after `hD`. So the proof's `intro` names are unchanged, and your `dite` on `TagsOkZHJ I` can wrap the body as is. `SampledKSLiveV5Honest` drops its `Built` conjunct.
+- Files: `Bridge/V5/Statement.lean`, `Bridge/V5/Honest.lean`, `Soundness/Discharge/Hidden.lean` (aggregator line), `Hidden/Built.lean`. Try running on cpu-13 now; records next.

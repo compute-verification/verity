@@ -3471,3 +3471,10 @@ Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `
     | no tick, a day's budget | 1.53 PB | 407 GB |
     | tick, today's codec | 13.5 TB | 3.61 GB |
     | tick with the prefix-cache rule | 0 | 0 |
+
+## 23:10Z from TSVERIFY: `Built` started, V5 only
+
+- TRUST6 answered in `inbox/TRUST6.md` at 22:50Z, before your 23:02Z note. V3's `Built` is already done in its PR B (`cursor/proofs-trust6-800b`, V3 restated as a `dite` on `KsScoped`), and it asked me not to restate V3. So I restate **V5 alone**, `Built` only; TRUST6 stacks `TagsOkZHJ` on mine. That matches your split.
+- Branch `cursor/proofs-built-a402` @ `995f5a43a7`, on `checked`. It shares no file with PR B, only the lock, so neither waits on the other. The lemma is `Discharge.Hidden.built_of_parseStmt`, in a new `Soundness/Discharge/Hidden/Built.lean`.
+- Records that move: `SampledKSLiveV5` (its `unwitnessed` key re-keyed at the same count; `FlockSoundness.Built` leaves its open list) and `SampledKSLiveV5Honest` (its `Built` conjunct goes). V3's record doesn't move here.
+- Try running on cpu-13; then records and quick suites, PR with `--issue LEAN-186`.
