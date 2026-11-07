@@ -87,7 +87,7 @@ import hashlib
 import json
 import math
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
@@ -299,11 +299,16 @@ def _within_cap(registered: Registered, data: bytes) -> None:
 
 
 def _window_advice(data: bytes) -> WA.Advice:
+    return _decoded("ill-formed advice", I1.MalformedAdvice, lambda: WA.decode(data))
+
+
+def _decoded(what: str, refusal: type[Exception], decode: Callable[[], Any]) -> Any:
+    """``decode()``, any failure refused by name: ``what: why`` for the decoder's own `refusal`, else the failure named."""
     try:
-        return WA.decode(data)
-    except Exception as e:  # noqa: BLE001 -- I1's refusal is MalformedAdvice; any other failure on these bytes refuses them too
-        raise Unexpressible(f"ill-formed advice: {e}" if isinstance(e, I1.MalformedAdvice) else
-                            f"ill-formed advice: its decode failed ({type(e).__name__}: {e})") from None
+        return decode()
+    except Exception as e:  # noqa: BLE001 -- the decoder's refusal is `refusal`; any other failure on these bytes refuses them too
+        raise Unexpressible(f"{what}: {e}" if isinstance(e, refusal) else
+                            f"{what}: its decode failed ({type(e).__name__}: {e})") from None
 
 
 def _coded_advice(registered: Registered, advice: Any, record: Any) -> WA.Advice:
@@ -314,16 +319,13 @@ def _coded_advice(registered: Registered, advice: Any, record: Any) -> WA.Advice
     _within_cap(registered, advice)
     if record is None:
         raise Unexpressible("the advice code decodes against the session's certified record, and none was given")
-    try:
+
+    def v0() -> bytes:
         adv = registered.code.decode(advice, record, registered.cap_bits)
         if type(adv) is not I1.Advice:
             raise TypeError(f"it gave a {type(adv).__name__}, not an I1 Advice")
-        data = I1.encode(adv)
-    except ValueError as e:
-        raise Unexpressible(f"ill-formed v1 advice: {e}") from None
-    except Exception as e:  # noqa: BLE001 -- v1's refusal is a ValueError; any other failure on these bytes refuses them too
-        raise Unexpressible(f"ill-formed v1 advice: its decode failed ({type(e).__name__}: {e})") from None
-    return _window_advice(data)
+        return I1.encode(adv)
+    return _window_advice(_decoded("ill-formed v1 advice", ValueError, v0))
 
 
 def ingress_body(i: int, q: I1.RequestAdvice, body: bytes, served: str | None, vocab: int) -> dict:
