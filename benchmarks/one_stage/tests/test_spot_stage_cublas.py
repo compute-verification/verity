@@ -1,8 +1,9 @@
 """spot_proved's staging of a step's bf16 cuBLAS GEMMs (`stage.cublas_instances`) on a fake capture, committed as `capture.py`
 commits one: GLM-5.3's router gate (``aten::mm`` against the gate weight's transposed view, f32 out) and its indexer's wk +
-weights projection (bf16 out) are staged per token row at the Definition the Program binds at the call's M rows, and pass the
-match gate on words the route's numpy model computes; a call whose M is past the route table is counted, with why, and the
-step's other calls are still staged."""
+weights projection (``aten::linear``, as vLLM's ``F.linear`` records, bf16 out) are staged per token row at the Definition the
+Program binds at the call's M rows, and pass the match gate on words the route's numpy model computes; a call whose M is past
+the route table is counted, with why, and the step's other calls are still staged; an ``aten::mm`` of two activations and a
+biased ``aten::linear`` are counted, not staged."""
 from __future__ import annotations
 
 import hashlib
@@ -53,10 +54,11 @@ def _served(x: np.ndarray, w: np.ndarray, phase: str) -> np.ndarray:
 
 
 def fake_capture(d: Path, calls: list[tuple[str, int, int]], flip: int | None = None, other: bool = False) -> list[int]:
-    """Step 0 of a one-rank capture of ``calls``, each (weight, N, M): an ``aten::mm`` of M bf16 rows (T of them the step's
-    real tokens) against the opened weight's transposed view, its output the route's words at M (f32 for the gate, bf16 for
-    wk). A call at more M than the route table maps records only shapes. ``flip``: the call whose first output word is
-    changed. ``other``: then an ``aten::mm`` of two activations, shapes only. Returns each call's seq."""
+    """Step 0 of a one-rank capture of ``calls``, each (weight, N, M): M bf16 rows (T of them the step's real tokens) against
+    the opened weight, the gate's an ``aten::mm`` against its transposed view and wk's an ``aten::linear``, its output the
+    route's words at M (f32 for the gate, bf16 for wk). A call at more M than the route table maps records only shapes.
+    ``flip``: the call whose first output word is changed. ``other``: then an ``aten::mm`` of two activations and a biased
+    ``aten::linear``, shapes only. Returns each call's seq."""
     rng = np.random.default_rng(11)
     ws = {GATE: _bf16(rng, (256, K)), WK: _bf16(rng, (160, K))}
     (d / "rank0" / "step0" / "open").mkdir(parents=True)
@@ -79,12 +81,21 @@ def fake_capture(d: Path, calls: list[tuple[str, int, int]], flip: int | None = 
             if flip == i:
                 ya.reshape(-1)[0] ^= 1
             x, y = _blob(d, xa, "torch.bfloat16"), _blob(d, ya, dtype)
-        events.append({"seq": i, "layer": LAYER, "parent": None, "op": "aten::mm", "in": {"self": x, "mat2": mat2},
-                       "out": {"ret0": y}})
+        if name == GATE:
+            events.append({"seq": i, "layer": LAYER, "parent": None, "op": "aten::mm", "in": {"self": x, "mat2": mat2},
+                           "out": {"ret0": y}})
+        else:
+            weight = {"param": name, "shape": [N, K], "dtype": "torch.bfloat16"}
+            events.append({"seq": i, "layer": LAYER, "parent": None, "op": "aten::linear",
+                           "in": {"input": x, "weight": weight, "bias": None}, "out": {"ret0": y}})
     if other:
         a = {"shape": [M, 64], "dtype": "torch.bfloat16", "stride": [64, 1], "big": 0}
         events.append({"seq": len(events), "layer": LAYER, "parent": None, "op": "aten::mm",
                        "in": {"self": a, "mat2": {**a, "shape": [64, M], "stride": [1, 64]}}, "out": {"ret0": {**a, "shape": [M, M]}}})
+        b = {"shape": [160], "dtype": "torch.bfloat16", "big": 0}
+        events.append({"seq": len(events), "layer": LAYER, "parent": None, "op": "aten::linear",
+                       "in": {"input": {**a, "shape": [M, K]}, "weight": {"param": WK, "shape": [160, K], "dtype": "torch.bfloat16"},
+                              "bias": b}, "out": {"ret0": {**a, "shape": [M, 160]}}})
     events.append({"seq": len(events), "layer": None, "parent": None, "op": "model_output", "in": {},
                    "out": {"hidden": {"shape": [calls[0][2], K]}}})
     sd = d / "rank0" / "step0"
@@ -99,7 +110,7 @@ def fake_capture(d: Path, calls: list[tuple[str, int, int]], flip: int | None = 
     step_root = hashlib.sha512(f"verity/spot/step-root\0{root}".encode()).hexdigest()
     (sd / "commit.json").write_text(json.dumps({"root": step_root, "coins": "00" * 64, "rank_roots": [root],
                                                 "layers": {"moe": [LAYER]}, "opened": opened}))
-    return list(range(len(calls) + other))
+    return list(range(len(calls) + 2 * other))
 
 
 def _label(phase: str, M: int, N: int) -> str:
@@ -179,5 +190,7 @@ def test_every_call_gates_each_cublas_call_and_names_any_other_mm(tmp_path, monk
     for label in (_label("router", M, 256), _label("linear", M, 160)):
         t = rep["types"][label]
         assert (t["calls"], t["calls_gated"], t["agree"], t["disagree"], t["errors"]) == (1, 1, 1, 0, 0), label
-    assert rep["unstaged"]["AtenMm_other"]["calls"] == [{"rank": 0, "seq": seqs[-1]}]
-    assert rep["gated_ops"] == {"aten::mm": 3} and "aten::mm" not in rep["not_gated_ops"]
+    assert rep["unstaged"]["AtenMm_other"]["calls"] == [{"rank": 0, "seq": seqs[-2]}]
+    assert rep["unstaged"]["AtenLinear_other"]["calls"] == [{"rank": 0, "seq": seqs[-1]}]
+    assert rep["gated_ops"] == {"aten::linear": 1, "aten::mm": 1}
+    assert rep["not_gated_ops"] == {"aten::linear": 1, "aten::mm": 1}

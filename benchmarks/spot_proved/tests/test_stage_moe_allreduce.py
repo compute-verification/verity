@@ -164,3 +164,8 @@ def test_op_coverage_lists_ops_inside_an_ungated_op_and_not_inside_a_gated_one(m
     gated, other = stage.op_coverage(_Cap([0, 1], {0: ev, 1: ev}, {}))
     assert gated == {"moe_launch": 2, "vllm::all_reduce": 2}
     assert other == {"_moe_C::moe_align_block_size": 2, "vllm::moe_forward_shared": 2}
+    refused = {"AllReduceNccl_W2": {"calls": [{"seq": 3}]}, "AtenAdd_other": {"calls": [{"rank": 1, "seq": 2}]}}
+    gated, other = stage.op_coverage(_Cap([0, 1], {0: ev, 1: ev}, {}), refused)
+    assert gated == {"moe_launch": 1}
+    assert other == {"_moe_C::moe_align_block_size": 2, "vllm::moe_forward_shared": 2, "moe_launch": 1,
+                     "vllm::all_reduce": 2, "symm_mem::multimem_all_reduce_": 2, "aten::copy_": 2}
