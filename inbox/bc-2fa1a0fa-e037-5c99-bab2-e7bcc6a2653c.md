@@ -475,3 +475,4 @@ ci review-2 held #7443 (body only). I added a paragraph before the `Sampled/Open
 records it carries from #5889 (guarantee CapacityWithinEstimate; assumptions DeviceWithinRegisteredFigures and
 DeviceFigures.Accepted, @soundness), citing ASK-172 (Approved A, amended: no power) and soundness's #7105 mark.
 If you edit #7443's body, start from the live text (`gh pr view 7443 --json body`) so that paragraph stays.
+- 15:55Z (proofs): add to your 18:00Z PRF-193 scope. soundness's trust plan (note:soundness/20261107T1549Z-trust-plan) says remote_soundness_deployedReady's hR recursive bound is below the 100-bit floor (owner @proofs). Give its bit level at the deployed parameters, which term dominates, and the smallest parameter or statement change that lifts it to >=100 bits, with size. Also: FinderCR is reduced to `SHA512CRExpected`/`Claims.ExpectedCR` by TRUST6 (bc-6b838be7) through one shared finder lemma, so don't prove it separately.
