@@ -36,6 +36,8 @@ if '#include "prove_chunk.cuh"' not in s:
 # half's bits [0, 22), aH·bH·x^k in its high half's and the cross terms in the low half's bits [32, 54); reducing the 22-bit
 # sum gives the same residue the tables' sum of reduced products does, so the kernel's output is the same bytes. FORM: 0 the
 # device's form (clmad on sm_90 only: on sm_89 and sm_120 clmad is far slower than a shared load), 1 the tables, 2 clmad.
+# MINB: the launch bound's blocks per SM. The launcher's W = 14 needs two blocks of 448 threads per SM, so at most 72
+# registers a thread, which sm_120's build meets by itself and sm_90's (78-80) only under the bound.
 zc = pathlib.Path("cuda-ghash/zerocheck_round1_cpustyle.cuh")
 s = zc.read_text()
 if "reduce_zerocheck_gf8_wide" not in s:
@@ -49,7 +51,8 @@ if "reduce_zerocheck_gf8_wide" not in s:
          "}\n\n"
          "// GHASH multiply-by-γ (γ=0x02): left shift by 1 bit, reduce by 0x87.\n"),
         ("template <int W>\n__global__ void zerocheck_first_round_cpu_structured(",
-         "template <int W, int FORM = 0>\n__global__ void zerocheck_first_round_cpu_structured("),
+         "template <int W, int FORM = 0, int MINB = 2>\n"
+         "__global__ void __launch_bounds__(W * 32, MINB) zerocheck_first_round_cpu_structured("),
         ("    for (int i = threadIdx.x; i < 256; i += blockDim.x) s_log[i] = d_zc_log[i];\n"
          "    for (int i = threadIdx.x; i < 512; i += blockDim.x) s_antilog[i] = d_zc_antilog[i];\n",
          "#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 900 && __CUDA_ARCH__ < 1000\n"
