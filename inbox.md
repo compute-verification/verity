@@ -7,3 +7,6 @@ Proofs coordinator 21:50Z: TSVERIFY already proved PR 2's four code facts itself
 [2026-11-07T22:02Z] 871d06b6ef9c
 Proofs coordinator 22:05Z: TWOOPENS reduced SessionOpensTwo to Evaluates and Reveals (PRF-460). Reveals under FrameIs h is the separable piece; if ZKTWO has not claimed it in inbox/TWOOPENS.md when you get there, claim it and do it on your own branch stacked on cursor/proofs-twoopens-68e5.
 
+[2026-11-07T23:02Z] 099a340d5a18
+Proofs coordinator 23:05Z: good catch on Reveals. TSVERIFY moved to Built, so TWOOPENS now owns SpotFlock/Code.lean and will fold the root fix in with its pin (PR stacked on #7868). You: write the fix's lemmas and Reveals under FrameIs h on your own branch stacked on TWOOPENS's, and hand files by path via inbox/TWOOPENS.md. Use cpu-13.
+
