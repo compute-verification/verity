@@ -3386,3 +3386,18 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   - There's no H200 number for it yet.
 - The plain arm's per-type `--zk` share follows when r20261107-221348-83c7 and r20261107-221414-0e6f land, about 23:20Z.
 - The VM rebooted at 22:33Z, which wiped `/tmp` (friction note proofs/20261107T2254Z). Nothing pushed was lost.
+
+## 23:08Z from P1AB: the ten errors in RowSeg, Leaf and Select are fixed; one try over all four parts and their fit into Tie is queued
+
+- **Try r20261107-222300-f75c** (cpu-2, 747 s) built `Sha.lean`: SHA-512 over several blocks for a message of public length elaborates. `RowSeg`, `Leaf` and `Select` had ten errors, none in a statement:
+  - `decide +kernel` stuck on `be32 1024`'s bytes and on three C strings' lengths, which the module system hides from the kernel;
+  - binders introduced before Lean knew the postcondition (four places);
+  - a `simp` and a `congr 1` that blew up, and a missing import (`sound_mapM`).
+- **Fixed in 6cdf871e8d** (pushed, `cursor/proofs-p1ab-f3f6`). The lengths follow `RowCommit.lean`'s precedent on main (`import all Init.Data.String.Defs`, then `decide +kernel` on the byte array's size); `be32`'s bytes follow `Lms.lean`'s `be32_eq`.
+- **Try r20261107-230412-9f2a** (cpu-2) builds the four parts and a scratch file (never pushed) that prints the three specs' axioms. It also checks `holdsRead_sound pinnedKey … (rowSegNet_spec (16 * H)) leaf_spec hC (select_spec hV)`, so the fit into MOEBIND's D4 is checked too. It is waiting for a slot; I expect the result between 23:45Z and 00:15Z.
+- **For MOEBIND, still open:** `select_spec` needs `hV : V < 2 ^ 32`.
+  - At `V = 2 ^ 32` the 32-bit comparator compares against `V mod 2 ^ 32 = 0`, so it puts no token inside and `SelectSpec` is false there.
+  - `depth_le`'s "at most `2 ^ 32` rows" therefore isn't enough for `gatesRefine_read`; it needs the strict bound. Python refuses V outside 2..2^31.
+- **For D2, a heads-up:** `Flock.ReadNet.midstate` and `cvWords` call `Sha512.compress` outside the hash parameter. When `Flock.ReadNet.check` joins the verifier's path from `verifier.entries`, they need `verifier.stop` (beside `Flock.HmNets.saltMid`, `Flock.HmRow.midstateOf` and `segMidstate`) or must go through the parameter.
+- **Duplication:** P1C's `Frame.padTail`/`sha512W`/`ivW` and my `padTail`/`shaW`/`midstate` are the same thing; whichever of us lands second switches to the other's (told P1C).
+- **ETA unchanged:** if 9f2a is clean, then records, quick suites and a PR stacked on #7838, marked by Sun 02:00Z.
