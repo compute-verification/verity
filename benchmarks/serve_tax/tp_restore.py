@@ -460,6 +460,20 @@ def class_outputs(served: Mapping[int, Mapping[str, list]], replayed: Mapping[in
     return out
 
 
+def differing_requests(served: Mapping[int, Mapping[str, list]], replayed: Mapping[int, Mapping[str, list]],
+                       plan: Mapping[int, Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """The requests whose step outputs differ, by client id, each with its plan kind and prompt length (a prompt past
+    GLM-5.3's DSA indexer top-k is the kind a replay from the start differs in too)."""
+    a, b = by_request(served), by_request(replayed)
+    got = []
+    for rid in sorted(set(a) | set(b)):
+        if a.get(rid) != b.get(rid):
+            cid = client_id(rid)
+            r = plan.get(int(cid.split("-")[1]), {})
+            got.append({"id": cid, "kind": r.get("kind", "plain"), "prompt_len": len(r.get("prompt_ids", ()))})
+    return got
+
+
 def snapshot_bytes(files: Mapping[str, int]) -> dict[str, Any]:
     """An edge's snapshot by part (`file_bytes`): the KV dump, rank 0's that every rank loads when the ranks agree; the
     scheduler's state; each rank's runner rows and generators (`boundary.save_rank`); and what one rank reads."""
@@ -643,8 +657,11 @@ def restore(a: argparse.Namespace) -> int:
     replayed_outs = {s: o for s, o in outs.items() if s < s2}
     classes_file = served / "load" / "classes.json"
     classes = json.loads(classes_file.read_text()) if classes_file.exists() else {}
+    kinds = {f"{ID}-{i:05d}": r.get("kind", "plain") for i, r in plan.items()}
     res["outputs"] = B.outputs_diff(served_outs, replayed_outs) | {
-        "recorded": bool(served_outs), "classes": class_outputs(served_outs, replayed_outs, classes)}
+        "recorded": bool(served_outs), "classes": class_outputs(served_outs, replayed_outs, classes),
+        "kinds": class_outputs(served_outs, replayed_outs, kinds),
+        "differing": differing_requests(served_outs, replayed_outs, plan)}
     rep2_dir = scratch / "replay" / f"edge-{edges.taken[0]['edge']:06d}"
     res["edge2"] = {"blocks": len(rec2["ids"]), "first_difference": edge_difference(rec2, rep2, edge2, rep2_dir),
                     "kv_root": {"served": kv_root(rec2), "replayed": kv_root(rep2)}, "replay_check": rep2["check"],

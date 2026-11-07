@@ -197,6 +197,9 @@ def test_step_outputs_are_read_between_two_edges_and_compared_per_sampling_class
     assert T.by_request(served) == {a: ([5, 7], [1, 3]), b: ([6], [2])}
     assert T.class_outputs(served, replayed, {"tpr-00001": "seeded", "tpr-00002": "greedy"}) == {
         "greedy": {"requests": 1, "tokens": 1, "differing": 0}, "seeded": {"requests": 1, "tokens": 2, "differing": 1}}
+    plan = {1: {"kind": "long", "prompt_ids": [0] * 9}, 2: {"kind": "sharegpt", "prompt_ids": [0]}}
+    assert T.differing_requests(served, replayed, plan) == [{"id": "tpr-00001", "kind": "long", "prompt_len": 9}]
+    assert T.differing_requests(served, served, plan) == []
     p = tmp_path / "outputs.jsonl"
     p.write_text("".join(json.dumps({"step": s, "out": {a: [[s], None]}}) + "\n" for s in range(2, 7)))
     assert T.read_outputs(p, 3, 5) == {3: {a: [[3], None]}, 4: {a: [[4], None]}}
