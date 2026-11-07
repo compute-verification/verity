@@ -229,8 +229,9 @@ def keep_repaired(out: Path, path: str, text: str) -> str:
 
 def held_caps(text: str, locks: dict[str, dict]) -> tuple[str, list[str]]:
     """``text`` (`CAPS_TEST`) with each cap of `LOCK_CAPS` that ``locks`` ({package: its lock}) break (`_held`: a count above
-    its cap, or a cap above its count by more than its `ROOM`) set to its count, and a warning naming each. LookupError when
-    a cap's line is not one dict literal there."""
+    its cap, raised to the count; a cap above its count by more than its `ROOM`, lowered to the count and its room, which
+    changes queued on `next` still use), and a warning naming each. LookupError when a cap's line is not one dict literal
+    there."""
     def literal(name: str) -> tuple[re.Match, dict]:
         if not (m := re.search(rf"^{name} = (\{{.*\}})$", text, re.M)):
             raise LookupError(f"{CAPS_TEST} has no line `{name} = {{...}}` for --bookkeeping warn to hold to the locks")
@@ -241,10 +242,11 @@ def held_caps(text: str, locks: dict[str, dict]) -> tuple[str, list[str]]:
         got = {p: n for p, lock in sorted(locks.items()) if (n := count(lock)) or p in caps}
         new = dict(caps)
         for p, n in got.items():
-            if n > caps.get(p, 0) or caps.get(p, 0) > n + room.get(f"{name} {p}", 0):
-                new[p] = n
-                warned.append(f"bookkeeping: {name}[{p!r}] in {CAPS_TEST} ({CAPS_OWNER}): {caps.get(p, 0)} -> {n}, the "
-                              f"count its lock has")
+            held = n if n > caps.get(p, 0) else n + room.get(f"{name} {p}", 0)
+            if held != caps.get(p, 0) and (n > caps.get(p, 0) or caps.get(p, 0) > held):
+                new[p] = held
+                warned.append(f"bookkeeping: {name}[{p!r}] in {CAPS_TEST} ({CAPS_OWNER}): {caps.get(p, 0)} -> {held}, the "
+                              f"count its lock has" + (f" and its room of {held - n}" if held > n else ""))
         if new != caps:
             text = text[:m.start(1)] + json.dumps(new) + text[m.end(1):]
     return text, warned
@@ -1638,7 +1640,7 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, drive's lock run after a landing: "
                     "`check.py --bookkeeping warn`, so a package that fails only on its lock's bookkeeping passes on the lock "
                     "with it repaired; an unread area above its cap, and a cap of `tests/test_lean_packages.py` the locks "
-                    "left break (UNWITNESSED, INLINE), is raised or lowered to the count in a copy under --out's "
+                    "left break (UNWITNESSED, INLINE), is raised to the count, or lowered to the count and its room, in a copy under --out's "
                     "`repaired/`, which audit.json's `repaired` names for drive to commit; each repair is a warning in "
                     "audit.json's `bookkeeping`. Every package is audited (`--package` may name them all, as check.py's parts do): the "
                     "caps count every package")

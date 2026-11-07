@@ -250,15 +250,20 @@ def test_the_lock_runs_audit_repairs_bookkeeping_and_the_caps_the_repaired_locks
 
 
 def test_held_caps_sets_each_broken_cap_to_its_count_and_leaves_the_rest():
-    """A count above its cap, and a cap above its count by more than its room, are set to the count; a cap within its room
-    stays, and a package no cap names with nothing listed gets none. A caps file without the line fails."""
-    text = 'X = 1\nUNWITNESSED = {"a": 5, "b": 4, "c": 9}\nINLINE = {"a": 3}\nROOM = {"UNWITNESSED b": 2}\n'
+    """A count above its cap is raised to, and a cap above its count by more than its room lowered to, the count and its
+    room, which changes queued on `next` still use; a cap within its room stays, and a package no cap names with nothing
+    listed gets none. A caps file without the line fails."""
+    text = ('X = 1\nUNWITNESSED = {"a": 5, "b": 4, "c": 9, "e": 6}\nINLINE = {"a": 3}\n'
+            'ROOM = {"UNWITNESSED b": 2, "UNWITNESSED e": 1}\n')
     locks = {"a": {"unwitnessed": {"t": "h"}, "shape": {"inline": {"t": {"x": "why", "y": "why"}}}},
-             "b": {"unwitnessed": {"t": "h", "u": "h"}}, "c": {"unwitnessed": dict.fromkeys("tuvwxyzpqr", "h")}, "d": {}}
+             "b": {"unwitnessed": {"t": "h", "u": "h"}}, "c": {"unwitnessed": dict.fromkeys("tuvwxyzpqr", "h")}, "d": {},
+             "e": {"unwitnessed": {"t": "h", "u": "h"}}}
     new, warned = LA.held_caps(text, locks)
-    assert new == 'X = 1\nUNWITNESSED = {"a": 1, "b": 4, "c": 10}\nINLINE = {"a": 2}\nROOM = {"UNWITNESSED b": 2}\n'
+    assert new == ('X = 1\nUNWITNESSED = {"a": 1, "b": 4, "c": 10, "e": 3}\nINLINE = {"a": 2}\n'
+                   'ROOM = {"UNWITNESSED b": 2, "UNWITNESSED e": 1}\n')
     assert [w.split(" in ")[0] for w in warned] == ["bookkeeping: UNWITNESSED['a']", "bookkeeping: UNWITNESSED['c']",
-                                                    "bookkeeping: INLINE['a']"]
+                                                    "bookkeeping: UNWITNESSED['e']", "bookkeeping: INLINE['a']"]
+    assert warned[2].endswith("6 -> 3, the count its lock has and its room of 1")
     assert LA.held_caps(new, locks) == (new, [])
     with pytest.raises(LookupError):
         LA.held_caps("UNWITNESSED = {}\n", locks)
