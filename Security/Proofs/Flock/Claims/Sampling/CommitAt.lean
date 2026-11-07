@@ -48,7 +48,8 @@ theorem opens_own {c : Code} {H : Msg → Msg} {roots : List Msg} {o : Opening B
 /-- **The deployed commitment at ports that read the roots**: `c`'s leaves and paths, with an opening checked under
 `roots` at the port of `own roots` whose root it is. -/
 def commitAt (c : Code) (own : List Msg → Array _root_.Flock.Registered.Port) : CommitmentScheme Bool where
-  opens roots := (pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath (own roots)) c.layer).opens roots
+  opens roots :=
+    (pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath (own roots)) c.layer).opens roots
   layer := c.layer
 
 /-- **The deployed commitment is `commitAt` at its own ports**, whatever the roots. -/
