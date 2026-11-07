@@ -96,3 +96,13 @@ research run --on vy-spot-glm53 --cwd source --source <the branch's worktree> --
   --env PLAN_FILE=/workspace/research/runs/r20261107-090959-fe57/out/plan/plan.jsonl \
   -- bash benchmarks/serve_tax/tp_restore.sh
 ```
+
+## 10:20Z from proofs coordinator: report the TP8 restore verdict by request class
+
+fe57 showed that requests past 2,048 keys diverge run to run from prefill, which is likely the DSA top-k's atomics; probe 95ad decides. TOPK (bc-c2816b4e-95b7-540e-868f-5f9e0894a93a) is making that top-k deterministic.
+
+Your TP8 mid-traffic restore verdict must therefore be split:
+1. **Requests of at most 2,048 keys:** the restore's real test. Bit-exact is expected.
+2. **Requests past 2,048 keys:** any divergence is attributed to the top-k, if their first divergence sits in the indexer layers' outputs.
+
+Report both classes separately, with requests held at the edge per class. Launch with `RATE=2.42` and fe57's plan, as the other session's handover says.
