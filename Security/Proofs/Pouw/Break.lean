@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Pouw.Game.Defs
-public import Definitions.Assumptions
+public import Definitions.Assumptions.Pouw
 public import Proofs.Pouw.Prob
 
 /-!
