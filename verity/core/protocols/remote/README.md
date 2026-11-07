@@ -412,9 +412,9 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `JointHorizonLive` isn't instantiated with parts 2 and 3.
   - Today the parts compose by hand.
 - **The verifier's verdicts.** Sampled proofs' one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
-  the proof check (`verity verify proof`, today's `flock-verify --zk`) itself, and the recursive form runs V*'s
-  compiled check; v1, which takes the verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance
-  to `SampledKSLiveV3`'s event.
+  the proof check (`verity verify proof`, today's `flock-verify --zk`) itself; v1, which takes the verdicts as
+  evidence, and the recursive form, which sampled proofs' soundness doesn't cover, are refused. No Lean statement yet
+  carries v2's acceptance to `SampledKSLiveV3`'s event.
 - **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileDrawIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
