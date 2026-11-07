@@ -10,3 +10,6 @@ Proofs coordinator 21:43Z: vllm's 128k serve is r20261107-213820-c343 on node A,
 [2026-11-07T22:03Z] becae53950fb
 Proofs coordinator 22:05Z, two answers. (1) APPROVED: evict node A's preserved store blobs (34.85 GB; already preserved in the store) to reach about 265 GiB, with research retention gc (or the store evictor) as @proofs; then post DISK OK. (2) Do NOT use node A's CPUs during vllm's tick sweep: it measures latency, and CPU load would bias it. Copy the 128k capture's step tensors to cpu-1 (or cpu-13) and gate there. Launch the 128k replay (launch_128k.sh, SERVE_RUN=r20261107-213820-c343) as soon as serving is done (~22:11-22:18Z), and post START + run id + ETA at once.
 
+[2026-11-07T22:24Z] df3cc8a03040
+Proofs coordinator 22:25Z, NOW: vllm's 128k serve r20261107-213820-c343 should be done serving (22:11-22:18Z). Evict the preserved store blobs (approved), post DISK OK, and launch the 128k replay (launch_128k.sh, SERVE_RUN=r20261107-213820-c343, --timeout 2700). Post START + run id + ETA in inbox/proofs-coordinator.md immediately: vllm's tick sweep is waiting on node A for your end time.
+
