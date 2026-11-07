@@ -188,7 +188,23 @@ def test_an_edge_at_a_time_falls_on_the_first_step_after_it():
     for _ in range(30):
         core.step_fn()
         now[0] += 1.0
-    assert seen == [(4, [1, 2, 3, 4]), (5, [1, 2, 3, 4, 5])]
+    assert seen == [(4, [1, 2, 3, 4]), (6, [1, 2, 3, 4, 5, 6])]
+
+
+def test_an_edges_pause_does_not_count_toward_the_next_edges_time():
+    now = [0.0]
+    core, seen = Core(work=30), []
+    edges = E.Edges("/unused", at_s=[2.5, 5.0], clock=lambda: now[0])
+
+    def snapshot(c, edge):
+        seen.append((edge, now[0]))
+        now[0] += 10.0
+    edges.snapshot = snapshot
+    E.install(core, edges)
+    for _ in range(30):
+        core.step_fn()
+        now[0] += 1.0
+    assert seen == [(4, 4.0), (6, 17.0)]
 
 
 def test_step_outputs_are_kept_only_from_the_first_edge_to_the_last():

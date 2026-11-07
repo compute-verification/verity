@@ -155,8 +155,9 @@ def scheduler_step(core: Any) -> int:
 
 class Edges:
     """The drained edges of one engine core, each snapshotted under ``out/edge-<step>``: at scheduler steps ``steps``
-    (a replay, which knows the served edges' steps), or at the first step ``at_s`` seconds after the engine's first
-    scheduled step (serving, which doesn't). Steps count as ``counter`` counts them: the scheduler's ``current_step``,
+    (a replay, which knows the served edges' steps), or at the first step ``at_s`` seconds of serving after the engine's
+    first scheduled step, the earlier edges' pauses not counted, so that a long dump doesn't bring the next edge onto the
+    step after it (serving, which doesn't). Steps count as ``counter`` counts them: the scheduler's ``current_step``,
     or a replay's step trace (`trace_step`). The first ``dump`` edges taken also write their blocks: the live ones, or
     with ``whole_pool`` every block of the pool, so that a restore starts from the served pool's bytes, the slots no
     token has written yet included (a block a request takes after the edge keeps them until it fills)."""
@@ -197,6 +198,12 @@ class Edges:
     def wrap(self, core: Any, step_fn: Callable[[], Any]) -> Callable[[], Any]:
         """``step_fn`` with the edges: after the call that schedules an edge's step, scheduling stops until the batch
         queue is empty; the call that empties it snapshots."""
+        def take(edge: int) -> None:
+            t0 = self.drain_t0
+            self.snapshot(core, edge)
+            if self.t_first is not None:
+                self.t_first += self.clock() - t0
+
         def step() -> Any:
             if self.draining is not None:
                 sched = core.scheduler
@@ -207,7 +214,7 @@ class Edges:
                     del sched.has_requests
                 if not core.batch_queue:
                     edge, self.draining = self.draining, None
-                    self.snapshot(core, edge)
+                    take(edge)
                 return got
             got = step_fn()
             edge = self.due(self.counter(core))
@@ -216,7 +223,7 @@ class Edges:
                 if core.batch_queue:
                     self.draining = edge
                 else:
-                    self.snapshot(core, edge)
+                    take(edge)
             return got
         return step
 
