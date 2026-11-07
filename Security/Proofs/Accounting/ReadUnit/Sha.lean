@@ -306,7 +306,8 @@ theorem bytesOf_append64 {A : List Bool} (B : List Bool) (hA : A.length = 64) :
     ReadUnit.bytesOf (A ++ B) =
       (List.range 8).map (fun m => UInt8.ofNat (num ((A.drop (8 * (7 - m))).take 8))) ++ ReadUnit.bytesOf B := by
   have hn : (A ++ B).length / 64 = B.length / 64 + 1 := by rw [List.length_append, hA]; omega
-  rw [ReadUnit.bytesOf, ReadUnit.bytesOf, hn, List.range_succ_eq_map, List.flatMap_cons, List.flatMap_map]
+  rw [ReadUnit.bytesOf, ReadUnit.bytesOf, hn, List.range_succ_eq_map (n := B.length / 64), List.flatMap_cons,
+    List.flatMap_map]
   congr 1
   · refine List.map_congr_left fun m hm => ?_
     rw [List.mem_range] at hm
