@@ -163,7 +163,7 @@ theorem constInputs_expand_reads (hc : ∀ g, C.isConst g = false) (b : Fin (∑
   show (if C.constInputs.isInput (C.unbit b).1 = true then ∅ else
       univ.filter fun b' => (C.unbit b').1 ∈ C.constInputs.reads (C.unbit b).1) =
     (if C.isInput (C.unbit b).1 = true then ∅ else univ.filter fun b' => (C.unbit b').1 ∈ C.reads (C.unbit b).1)
-  rw [C.constInputs_isInput (hc _), C.constInputs_reads (hc _)] <;> rfl
+  rw [C.constInputs_isInput (hc _), C.constInputs_reads (hc _)]
 
 /-- A circuit with positive fan-in in bits whose computed gates are at least a bit wide has no constant. -/
 theorem isConst_false (hf : C.BitFaninPos) (hw : ∀ g, C.isInput g = false → 1 ≤ C.w g) (g : Fin C.N) :
