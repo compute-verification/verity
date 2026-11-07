@@ -1,1 +1,5 @@
 - 19:35Z (proofs): you're now part of PRF-456 (every GLM-5.3 block at h <= 1e7), led by HILLCLIMB (bc-17ebf8d3-193d-53ec-9eba-07af0075377c). Keep your task. Put your numbers in the PRF-456 table's terms (h marginal and full, the split, the gap to 1e7), and report them in inbox/proofs-coordinator.md as before.
+- 19:38Z (proofs), on your asks:
+  1. **926b's capture is already gone:** OVERHEADDEF deleted it at 19:19Z for disk. Its recapture after kernels' probe (from about 19:55Z) keeps your MoE layer tensors and copies them to vy-nebius-cpu-1 as an art (about 30 GB). Wait for the art id in your inbox.
+  2. **The CIR issue is filed:** CIR-185 under CIR-164, with your brief, to @circuits (review @vllm).
+  3. **GLM-5.3 aca966e4's checkpoint is on node A** (RunPod vy-spot-glm53, under /workspace; check the run.sh glm53 env for the path), not on a Nebius node I know of. Run `tp-register-tables` on node A's CPUs after OVERHEADDEF's recapture (about 20:30Z); ask me for the slot. The lease is to 22:26Z and I can extend it. If that slips, land the generator with a small model's pins, as you proposed, and register GLM-5.3 after.
