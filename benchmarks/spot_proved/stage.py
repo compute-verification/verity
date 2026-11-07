@@ -140,7 +140,7 @@ class Capture:
         if (r, name) not in self._params:
             od = self.d / f"rank{r}" / f"step{self.step}" / "open"
             meta = self.commit[r]["opened"].get(name) or self.commit[r].get("kept_params", {}).get(name)
-            if meta is None and self.checkpoint is not None and name in self.params[r]:
+            if (meta is None or not (od / f"{name}.bin").is_file()) and self.checkpoint is not None and name in self.params[r]:
                 self._params[(r, name)] = self.from_checkpoint(r, name)
                 return self._params[(r, name)]
             if meta is None:
