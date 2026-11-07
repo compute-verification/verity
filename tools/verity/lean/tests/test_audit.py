@@ -749,7 +749,9 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
     bare = {k: v for k, v in wrec.items() if k != "witnesses"} | {
         "unwitnessed": {"P.sound": wfacts["pins"]["P.sound"]["type_sha256"]}}
     frozen = {"frozen": {"P.t": "frozen: open"}}
-    without = lambda rec, key: {k: v for k, v in rec.items() if k != key}
+
+    def without(rec, key):
+        return {k: v for k, v in rec.items() if k != key}
     return {
         "open.unlisted": ({**POLICY, "assumptions": {}}, now),
         "assumptions.outside-module": ({**opol, "open": {}, "assumptions": {"P.Sound": {"owner": "@lean"}}}, now),
@@ -770,7 +772,7 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
 
 
 def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the_flag():
-    """Each code of `BOOKKEEPING` (Daniel, 6 Nov: drive's lock run after a landing repairs the bookkeeping and warns) comes
+    """Each code of `BOOKKEEPING` (drive's lock run after a landing repairs the bookkeeping and warns) comes
     from a lock `repaired` mends, so the policy's checks pass on the lock it writes, and each repair is one warning line naming
     the entry and its owner. Without `--bookkeeping warn` the same lock fails: no bookkeeping code is a record difference, so
     `regenerated` settles none of it. A code in the set that no case provokes fails here."""
@@ -801,8 +803,8 @@ def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the
 
 
 def test_bookkeeping_files_a_premise_on_the_locks_default_issue_and_its_guarantees_first_owner():
-    """An unlisted premise is filed on the lock's `open_default_issue` when it gives one, else LEAN-186, due on the run's date;
-    its owner is its guarantees' (the first, of several), and an entry whose guarantees name no owner gets @lean."""
+    """An unlisted premise is filed on the lock's `open_default_issue` when it gives one, else `BOOKKEEPING_ISSUE`, due on the run's date;
+    its owner is its guarantees' (the first, of several), and an entry whose guarantees name no owner gets `BOOKKEEPING_OWNER`."""
     now = sounded(owners=("@zed", "@amy"))
     lock = {**POLICY, "assumptions": {}, "guarantees": {"P.t": {"owner": "@zed"}, "P.u": {"owner": "@amy"}},
             "open_default_issue": "LEAN-200"}

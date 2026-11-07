@@ -558,7 +558,9 @@ def bookkeeping_warnings(store, rid: str, fetch=fetch_run) -> list[str]:
             audit = json.loads((got[0] / AUDIT).read_text())
         warned = audit.get("bookkeeping") if isinstance(audit, dict) else None
         return [str(w) for w in warned] if isinstance(warned, list) else []
-    except Exception:  # noqa: BLE001  (warnings only: no report, no warnings)
+    except Exception as e:  # noqa: BLE001  (warnings only: no report, no warnings)
+        print(f"research merge: lock run {rid}'s bookkeeping warnings unread ({type(e).__name__}: {e}); its lock commit "
+              f"lists none", file=sys.stderr)
         return []
 
 

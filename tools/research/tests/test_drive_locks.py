@@ -99,9 +99,9 @@ def test_a_lean_member_lands_on_its_verdict_and_main_moves_only_to_its_lock_comm
 
 
 def test_the_bookkeeping_a_lock_run_repaired_is_committed_with_its_records_and_told(world, monkeypatch):
-    """Drive's lock run under `--bookkeeping warn` (Daniel, 6 Nov): a file of `merge.REPAIRED` its Lean report's `repaired`
+    """Drive's lock run under `--bookkeeping warn`: a file of `merge.REPAIRED` its Lean report's `repaired`
     names is committed at its repository path beside the regenerated locks, which the merge gate vouches for against the run
-    as it does the locks; its warnings are listed in the lock commit and told to `@lean` and each owner they name, once."""
+    as it does the locks; its warnings are listed in the lock commit and told to the Lean lane and each owner they name, once."""
     h = _locks(world, monkeypatch)
     tip = _lands(h, {1: LEAN})
     (rid,) = h.lock_ids()

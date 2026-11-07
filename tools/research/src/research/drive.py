@@ -338,8 +338,8 @@ def authed(auth: tuple[str, ...]):
 
 
 def takes_bookkeeping(repo: Path) -> bool:
-    """Whether ``repo``'s train.sh, which the lock run launches from, takes `--bookkeeping-warn` (Daniel, 6 Nov: the lock run
-    repairs bookkeeping and warns); one that predates it would refuse every lock run."""
+    """Whether ``repo``'s train.sh, which the lock run launches from, takes `--bookkeeping-warn` (the lock run repairs bookkeeping
+    and warns); one that predates it would refuse every lock run."""
     try:
         return "--bookkeeping-warn" in (repo / "tools" / "verity" / "check" / "train.sh").read_text()
     except OSError:
@@ -2997,8 +2997,8 @@ class Driver:
     def _put_locks(self, drive: dict, pl: dict, tip: str, rid: str, files: list[str]) -> str | None:
         """Commit ``files``, the records lock run ``rid`` regenerated, staged on its ``tip``, and push that lock commit onto the
         landing branch, or its merge onto the branch's tip when the branch moved (`_commit_locks`).  The bookkeeping the run
-        repaired (`merge.bookkeeping_warnings`: Daniel, 6 Nov, it warns and the next PR fixes it) is listed in the commit and
-        told to `@lean` and each owner a warning names, once per lock commit.  The lock commit; None when the gate refused it
+        repaired (`merge.bookkeeping_warnings`: it warns, and the next PR fixes it) is listed in the commit and
+        told to the Lean lane and each owner a warning names, once per lock commit.  The lock commit; None when the gate refused it
         (`CI` told once) or the push lost a race (the next tick tries again)."""
         from .merge import bookkeeping_warnings
 

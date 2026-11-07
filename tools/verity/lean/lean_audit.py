@@ -192,7 +192,7 @@ UNREAD_SCHEMA = "lean-unread-facts/v1"
 #: the facts entries a node keeps beside the passes (`unread/` in the cache), last stored or reused first: Security/Proofs'
 #: are some 6 MB each, and a pass whose facts went is audited again
 UNREAD_KEPT = 64
-#: the caps `--bookkeeping warn` (drive's lock run after a landing; Daniel, 6 Nov) holds to what the run measures, each
+#: the caps `--bookkeeping warn` (drive's lock run after a landing) holds to what the run measures, each
 #: repaired in a copy under the run's `repaired/` for drive to commit beside the regenerated locks: the ratchet's, and the
 #: repository suite's caps on what the locks list (`tests/test_lean_packages.py`'s `_held`), each {cap: a lock's count}
 UNREAD_CAPS = "tools/verity/lean/unread-caps.json"

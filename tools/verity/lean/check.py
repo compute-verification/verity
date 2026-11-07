@@ -159,7 +159,7 @@ lists beside its text (`failure_codes`, `settled_codes`); what settles is decide
 `--regenerate` (the lean-audit step of the Lean check of a commit of `next`) such a package passes instead, and
 `audit.json`'s `regenerated` maps each to its record for drive to commit when it lands that commit; the package's own lock
 is never written, and every other failure fails as before.  `--regenerate --bookkeeping warn` (drive's lock run after a
-landing; Daniel, 6 Nov) passes a package that fails only on its lock's bookkeeping (`BOOKKEEPING`) on the lock with it
+landing) passes a package that fails only on its lock's bookkeeping (`BOOKKEEPING`) on the lock with it
 repaired (`repaired`), each repair a warning (`bookkeeping_warnings`) in the report's and audit.json's `bookkeeping`; the
 policy's checks are judged again on that lock, so the build, the replay, the axioms and a malformed lock fail as before.
 A guarantee whose statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
@@ -2887,7 +2887,7 @@ RECORD_DIFFERENCE = Codes({
 })
 
 
-#: the bookkeeping `--bookkeeping warn` (drive's lock run after a landing; Daniel, 6 Nov) repairs in the lock it regenerates
+#: the bookkeeping `--bookkeeping warn` (drive's lock run after a landing) repairs in the lock it regenerates
 #: instead of failing, each with one warning naming the entry and its owner, so the next PR does the work: a premise's
 #: kind and its ticket, an entry no guarantee has, an owner, and a guarantee the witnesses rule holds to witnesses it lacks
 BOOKKEEPING = Codes({

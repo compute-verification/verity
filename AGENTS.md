@@ -215,10 +215,10 @@ lock's bookkeeping: it repairs it in that commit, with a warning for each repair
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
-  after a landing (Daniel, 6 Nov). A PR's own check still fails on it. Drive's lock run repairs it in its lock commit and
+  after a landing. A PR's own check still fails on it. Drive's lock run repairs it in its lock commit and
   warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
   the witnesses rule holds to missing witnesses, a stale entry, a missing owner, or a cap of `unread-caps.json` or
-  `tests/test_lean_packages.py`. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
+  `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
   malformed lock always fail. Lock files never conflict on merge.
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
   lean-proofs skill.
