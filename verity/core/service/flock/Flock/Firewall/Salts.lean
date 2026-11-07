@@ -18,10 +18,9 @@ Every salt message is 205 bytes and every tag message 333, under different const
 * `Epoch`, `recordOf`: the commit sessions the service opened since its last registration, and a registration's
   record: its number `n` on the ZK server's record, the number `m` of sessions its epoch opened, the registered
   session's table refs and a record tag under `k` over all three (`recordTagOf`; an interior session's under its own
-  key). A registration closes the epoch, so the
-  stack registers one session of the `m` it had and no other; the service of record opens one an epoch, so `m` is 1
-  (`Values.answer`). The number is the record's: registrations are numbered
-  0, 1, 2, … in the order the ZK server's record holds them, with no gap (`core-firewall values`).
+  key). A registration closes the epoch, so the stack registers one session of the `m` it had and no other; the
+  service of record opens one an epoch, so `m` is 1 (`Values.answer`). The number is the record's: registrations are
+  numbered 0, 1, 2, … in the order the ZK server's record holds them, with no gap (`core-firewall values`).
 * `treesOfFile`, `readsOf`: a statement's hm96 trees, and the registrations they read: for each tree, the first
   registration on the record that holds a table at its domain, leaf count, schema and root, its record tag checked. The
   release side admits each registration once, oldest first, at the first statement that reads it, and a statement none of
@@ -354,9 +353,9 @@ def treesOfFile (publicFile : ByteArray) : Except String (Array (String × Table
 
 /-- **The registrations a statement reads**, in order and each once: for each of its hm96 trees `trees`, the first of the
 registrations `regs` (their records, registration `n` at `n`) that holds a table at the tree's domain, leaf count, schema
-and root, its record tag checked under the key `k`. Refused where a record does not read as one, where no registration
-holds a tree (the stack committed it under salts of its own, or never registered it), or where the one that holds it does
-not carry the server's record tag. -/
+and root, its record tag checked under the key `k` or its interior session's own (`RegistrationRecord.valid`). Refused
+where a record does not read as one, where no registration holds a tree (the stack committed it under salts of its own,
+or never registered it), or where the one that holds it does not carry the server's record tag. -/
 def readsOf (k : ByteArray) (regs : Array ByteArray) (trees : Array (String × Table × ByteArray)) :
     Except String (Array Nat) := do
   let rs ← (Array.range regs.size).mapM fun n => (RegistrationRecord.parse regs[n]!).mapError (s!"registration {n}: {·}")
