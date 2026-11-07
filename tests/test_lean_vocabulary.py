@@ -977,10 +977,6 @@ KNOWN: dict[str, str] = {
     "verity/ml/circuits/defs.py::Registry": "homonym, the registered Definitions by id: rename (proofs)",
     "verity/ml/circuits/layout.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/layout.py::Gate":
-        "duplicate of `Flock.Program`'s gate: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/partition_object.py::Partition":
-        "duplicate of `Verity.Partition`: becomes its Python mirror, held by a difftest (proofs)",
     "verity/ml/circuits/requirement.py::Layout":
         "homonym, each value's place in the store: rename (`Accounting.Requirement.Layout`'s mirror) (proofs)",
     "verity/ml/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",

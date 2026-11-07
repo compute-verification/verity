@@ -26,7 +26,7 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
   Hopper's and sm_120's E4M3, sm_120's E5M2, NVFP4 and MXFP4), on copies of Security's step semantics: `Spec.lean` of
   `Security/Definitions/Core/TC/{Pipeline,Spec}.lean` (`tc_dot_total`), `Fp8Atom.lean` of `Pouw/Fp8Atom/{E4M3,Atom}.lean` and
   `Pouw/PearlC/Sm120.lean` (`tc_dot_total_e4m3`), `Fp4.lean` of `Pouw/PearlC/Fp4.lean` (`BlockScaledAlignAdd`). The E5M2 step
-  and the FP4 primitives' rules outside the block-scaled model (NaN scales, non-finite accumulators, MXFP4's overflow to
+  and the FP4 primitives' rules outside the scale-group model (NaN scales, non-finite accumulators, MXFP4's overflow to
   `±inf`) are transcribed from the Python; Security has none yet.
 - `Evaluate/Words.lean`: PoUW's `Pouw*` word primitives and the three `Ncp*` (six copied from
   `Security/Definitions/Pouw/PearlC/RowPrims.lean`, the rest transcribed). `Evaluate/Libdevice.lean`: the sampler's
