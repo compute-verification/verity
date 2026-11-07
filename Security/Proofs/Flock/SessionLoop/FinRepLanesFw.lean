@@ -1,10 +1,53 @@
 module
 
 public import Proofs.Flock.SessionLoop.FinRepMsgsFw
-public import Proofs.Flock.SessionLoop.FinPiopRet
-public import Proofs.Flock.SessionLoop.FinL0Vals
-public import Proofs.Flock.Claims.ZK.FinishFwL0
-public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictForms
+public import Proofs.Flock.SessionLoop.FinRepRows
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.View
+import Proofs.Flock.Claims.ZK.FinishFwL0
+import Proofs.Flock.Claims.ZK.FinishSwMkAny
+import Proofs.Flock.Claims.ZK.FinishSwPts
+import Proofs.Flock.Claims.ZK.FinishSwRep
+import Proofs.Flock.SessionLoop.FinCommits
+import Proofs.Flock.SessionLoop.FinL0Vals
+import Proofs.Flock.SessionLoop.FinPiopRet
+import Proofs.Flock.SessionLoop.FinPoints
+import Proofs.Flock.SessionLoop.FinPrevFw
+import Proofs.Flock.SessionLoop.FinRepXs
+import Proofs.Flock.SessionLoop.FinRounds
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # `FinRepLanes` with no rows
@@ -69,7 +112,7 @@ theorem finRepLanes_ret (vs : finS.SwVals)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w)
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs) : FinRepLanes vs L₀ src (realOf src) wk x w := by
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) : FinRepLanes vs L₀ src (realOf src) wk x w := by
   intro ν t κ m₀ ρ₀ ops s0 spec j r tb hi q f ic' l p tr l' hrun
   obtain ⟨hF, hsx, hRep, -, hl, hgo⟩ := hrun
   have hx : Masked.Live x := Masked.live_of hsc hR

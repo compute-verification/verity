@@ -33,11 +33,12 @@
 #     log, and the certifier front's session, bundle and log, in the serve dir's private/, of which the CERTIFIER-FRONT
 #     line says only `served_verdicts.py front-line`'s fields) stays in the serve dir on the node; what leaves it is their
 #     aggregate ($OUT/serve/overhead.json, except with LOAD=front, whose warden-paced load no stock
-#     control compares to) and verdict lines that name no window and count none of a window's own: no window's number, no
-#     count of the windows closed, sealed or refused, no engine step, request count or user of one. Each line goes out
-#     through `served_verdicts.py public-lines`, in full to the serve dir's private/verdicts.txt, and once the run is
-#     done, however it ends, `served_verdicts.py publish` holds in full in the serve dir's private/out each file of $OUT
-#     that names or counts a window, its public form in its place. The advice registration's published copies
+#     control compares to) less the load's counts and span, and verdict lines that name no window and count none of a
+#     window's own: no window's number, no count of the windows closed, sealed or refused, no engine step, request count or
+#     user of one. Each line goes out through `served_verdicts.py public-lines`, in full to the serve dir's
+#     private/verdicts.txt, and once the run is done, however it ends, `served_verdicts.py publish` holds in full in the
+#     serve dir's private/out each file of $OUT that names or counts a window or holds a load's tokens or span (the
+#     aggregate's, which `served_overhead.py table` reads there), its public form in its place. The advice registration's published copies
 #     ($OUT/registration.json, the records audit's served-records) carry the advice's length padded to its compiler's
 #     cap (`served_verdicts.py public-registration`), and the audit's log and run.sh's served path (its summary,
 #     registrations, sessions and audit log, which carry the advice's length) stay in the serve dir, where the record reads
@@ -247,7 +248,7 @@ FW=${FLOCK_WORK:-$ROOT/flock-work}
 export PY=$VENV/bin/python HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 CUDA_HOME=${CUDA_HOME:-/usr/local/cuda-13.0}
 export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src
 export TORCH_EXTENSIONS_DIR=$ROOT/cache/torch-extensions TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
-export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
+export VLLM_BATCH_INVARIANT=1 VERITY_RETAIN=host NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$HOME/.elan/bin:$PATH
 # Every verdict line goes out in its published form, naming no window and counting none of a window's own, and in full to
 # the serve dir's private/verdicts.txt (`served_verdicts.py public-lines`), under the node's python3, the venv's absent
@@ -526,7 +527,7 @@ serve() {  # under the lease: the endpoint, the requests, every closed window se
   fi
   # shellcheck disable=SC2086
   "$PY" -m verity_vllm.pipeline.cli serve-openai --model "$REPO" --revision "$REV" --out "$D" --port "$PORT" \
-    --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal --gpu-tree \
+    --precision "$PRECISION" --run-id "${RESEARCH_RUN_ID:-local}" --scheme rows-sha512 --seal \
     --max-num-batched-tokens "$T" --window-steps "$WINDOW_STEPS" "${h1[@]}" \
     --required-manifest "$PRED/manifest.json" --hidden-so "$HIDDEN_SO" --norm-tap-so "$NORM_TAP_SO" --tap-cap-mb 2048 \
     --admit release-order --window-requests "$SLOTS" --max-model-len "$MAX_MODEL_LEN" --window-gb 32 \
@@ -629,6 +630,24 @@ measure() {  # in TREE: the class of record, unless CLASSES gates on it; it gate
     *) circuit record "WC_RECORD_TIMEOUT=${WC_RECORD_TIMEOUT:-45m}" "WINDOW-CIRCUIT class record (measurement)";;
   esac
   return 0
+}
+block_counts() {  # in TREE: the picked window's (c, k)-inference blocks at each class of CLASSES it counted, judged against
+  # the inference-only policy (IO_POLICY) where the run has one: the judgment public, its exact counts in the serve dir's private/
+  local c tag f pins=() day decl=${IO_POLICY:-$OUT/inference-only-policy.json}
+  [ -f "$decl" ] || { say "BLOCK-COUNTS: none, since the run declares no c, k and n"; return 0; }
+  [ -f "$WREG" ] && pins=(--pins "$WREG")
+  day=$("$PY" -c 'import datetime, json, sys; t = json.load(open(sys.argv[1]))["clocks"]["time"]; print(datetime.datetime.fromtimestamp(t, datetime.timezone.utc).date())' "$D/serve.json") || return 0
+  (umask 077; mkdir -p "$D/private")
+  for c in $CLASSES; do
+    tag=${c//,/-}; [ "$c" = record ] && tag=record
+    f=$D/window-circuit-w$K-$tag.json
+    [ -f "$f" ] || continue
+    if "$PY" -m verity_vllm.pipeline.cli block-counts --day "$day" --declaration "$decl" \
+         --window "$f" "$D/advice/w$K/registration.json" "${pins[@]}" --private "$D/private/block-counts-$tag.json" \
+         --out "$OUT/block-counts-$tag.json" > /dev/null 2> "$D/block-counts-$tag.err"; then
+      say "BLOCK-COUNTS class $c, the picked window alone: $(tail -1 "$D/block-counts-$tag.err" | cut -c1-400)"
+    else say "BLOCK-COUNTS class $c refused: $(tail -1 "$D/block-counts-$tag.err" | cut -c1-600)"; fi
+  done
 }
 front_ok() {  # preflight: LOAD=front has a front, and each flag CERTIFIER_FRONT passes to the tree's front, it takes
   [ "$LOAD" != front ] || [ -n "${CERTIFIER_FRONT:-}" ] \
@@ -934,7 +953,8 @@ EOF
 cp "$D/period.json" "$OUT/serve/" 2>/dev/null
 [ -d "$D/h1" ] && (cd "$D" && cp --parents h1/window-program.json.gz h1/window-program.meta.json "$OUT/serve/" 2>/dev/null)
 [ -n "${H1_CIRCUITS:-}" ] && [ -f "$H1_CIRCUITS/circuit-files.json" ] && cp "$H1_CIRCUITS/circuit-files.json" "$OUT/serve/"
-# the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate.
+# the serve dir's step trace and the load's records stay on the node; what the stock control's table reads is their aggregate,
+# in full in the serve dir's private/out/serve once `publish` holds the load's counts and span.
 # A front's load is the warden's, paced by its buckets, which no stock run's is, and one window's aggregate is its timing.
 if [ "$LOAD" = front ]; then
   say "OVERHEAD: none with LOAD=front (the warden paces its requests, so no stock control compares)"
@@ -984,6 +1004,7 @@ say "ADVICE: $("$PY" -c 'import json, sys; w = json.load(open(sys.argv[1]))["win
 cd "$TREE" || exit 9
 wc_ok=0
 circuits && wc_ok=1
+block_counts
 wait "$BUILD"; rc=$?
 [ "$rc" = 0 ] || { tail -30 "$OUT/build.log"; stop build "$rc"; }
 [ "$MAX_TOKENS" = 1 ] && export PP_PARTITION=${PP_PARTITION:-benchmarks/prove_path/llama32_1b_silu_mul_v2_i8192_l0_step0.json}

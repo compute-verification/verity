@@ -3,6 +3,7 @@ module
 public import Definitions.Pouw.Guarantees.Dither
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Pouw.ShaRealize
+public import Proofs.Pouw.Lemmas.Dither
 
 /-!
 # The no-fold Dither protocol's work-soundness: the headline's proof
@@ -35,6 +36,8 @@ public import Proofs.Pouw.ShaRealize
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Pouw.SecurityProofs.Dither
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions Finset
@@ -63,16 +66,16 @@ theorem FreedOfFloor : Pouw.Guarantees.Dither.FreedOfFloor := by
 
 /-! ## Expectations over fresh coins -/
 
-theorem expect_equiv {α β : Type*} [Fintype α] [Fintype β] (e : α ≃ β) (f : β → ℝ) :
+theorem expect_equiv {α β : Type} [Fintype α] [Fintype β] (e : α ≃ β) (f : β → ℝ) :
     expect (fun a => f (e a)) = expect f := by
-  unfold Pouw.RelativeSecurity.expect
+  unfold Claims.Ex
   rw [Fintype.card_congr e]
   congr 1
   exact Fintype.sum_equiv e _ _ fun _ => rfl
 
-theorem expect_affine3 {Ω : Type*} [Fintype Ω] (a b c : ℝ) (hc : 0 ≤ c) (f g : Ω → ℝ) :
+theorem expect_affine3 {Ω : Type} [Fintype Ω] (a b c : ℝ) (hc : 0 ≤ c) (f g : Ω → ℝ) :
     expect (fun ω => a * f ω + b * g ω + c) ≤ a * expect f + b * expect g + c := by
-  unfold Pouw.RelativeSecurity.expect
+  unfold Claims.Ex
   rcases Nat.eq_zero_or_pos (Fintype.card Ω) with h0 | h0
   · simp [h0, hc]
   · have hN : (Fintype.card Ω : ℝ) ≠ 0 := by exact_mod_cast h0.ne'
@@ -83,14 +86,14 @@ theorem expect_affine3 {Ω : Type*} [Fintype Ω] (a b c : ℝ) (hc : 0 ≤ c) (f
 
 /-- An event whose every slice at the first coordinate has probability at most `κ ≥ 0` has probability at most
 `κ`. -/
-theorem prob_le_of_slices_fst {α β : Type*} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
+theorem prob_le_of_slices_fst {α β : Type} [Fintype α] [Fintype β] (E : α × β → Prop) {κ : ℝ} (hκ : 0 ≤ κ)
     (h : ∀ a, prob (fun b => E (a, b)) ≤ κ) : prob E ≤ κ := by
   classical
   rw [prob_eq_expect, expect_prod]
   exact expect_le_of_le hκ fun a => by rw [← prob_eq_expect (fun b => E (a, b))]; exact h a
 
 /-- Markov's inequality at `e^t` for a nonnegative function of mean at most 1. -/
-theorem prob_le_of_expect_le_one {Ω : Type*} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f ω) (hE : expect f ≤ 1)
+theorem prob_le_of_expect_le_one {Ω : Type} [Fintype Ω] {f : Ω → ℝ} (hf : ∀ ω, 0 ≤ f ω) (hE : expect f ≤ 1)
     (t : ℝ) {E : Ω → Prop} (hsub : ∀ ω, E ω → Real.exp t ≤ f ω) : prob E ≤ Real.exp (-t) := by
   have hpos := Real.exp_pos t
   have h2 : Real.exp t * prob E ≤ 1 :=
@@ -157,7 +160,7 @@ theorem exp_convex3 {a b c u v : ℝ} (ha : 0 ≤ a) (hb : 0 ≤ b) (hc : 0 ≤ 
 
 
 /-- An event on the first coordinate of a pair has at most its own probability. -/
-theorem prob_fst_le {α β : Type*} [Fintype α] [Fintype β] (D : α → Prop) :
+theorem prob_fst_le {α β : Type} [Fintype α] [Fintype β] (D : α → Prop) :
     prob (fun ω : α × β => D ω.1) ≤ prob D :=
   prob_le_of_slices (fun ω : α × β => D ω.1) (prob_nonneg D) fun _ => le_rfl
 
@@ -623,7 +626,7 @@ theorem WorkMoment : Pouw.Guarantees.Dither.WorkMoment := by
         (∃ w, Good ox.1 w (adv ox.1 ox.2 w, A.inst ox.1 ox.2 w) ∧ deg ox.1 ox.2 w),
     fun ox => Finset.sum_nonneg fun w _ => hDval0 _ _ w, fun ox => Finset.prod_nonneg fun w _ => hF0 _ _ _ _,
     ?_, ?_, ?_⟩
-  · show Pouw.RelativeSecurity.expect _ ≤ 1
+  · show Claims.Ex _ ≤ 1
     rw [expect_prod]
     exact expect_le_of_le zero_le_one fun o =>
       expect_prod_rounds (fun x w => (adv o x w, A.inst o x w)) (hadvI o)

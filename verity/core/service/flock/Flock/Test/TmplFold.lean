@@ -8,14 +8,15 @@ net committed at the layout's positions (`Tmpl.unrollAt`), the matrices a flat u
 -/
 module
 
-public import Flock.TmplSplit
 public import Flock.NetAt
 public import Flock.Statement
+public import Flock.Test.Tmpl
 public import Flock.Test.TmplLayout
-meta import Flock.TmplSplit
+public import Flock.TmplSplit
 meta import Flock.NetAt
 meta import Flock.Statement
 meta import Flock.Test.TmplLayout
+meta import Flock.TmplSplit
 
 @[expose] public section
 

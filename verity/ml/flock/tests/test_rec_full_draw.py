@@ -1,4 +1,4 @@
-"""The recursive inner session's sample: the coin server answers ``Register`` with the verifier's full draw
+"""The recursive inner session's sample: the challenger answers ``Register`` with the verifier's full draw
 (`verity_flock.rec_live.full_draw`, the stratified law at K = the population, so every unit) and the session record keeps
 it as ``unit_draw``, which `verify` holds to its own law (``--stratified N --program --partition``). `full_draw` is checked
 against Lean's own derivation (``flock-verify draw`` at K = N), and the controls `rec_inner.py forge` makes of a drawn

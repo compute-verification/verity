@@ -1,10 +1,43 @@
 module
 
-public import Mathlib.Data.List.GetD
-public import Mathlib.Tactic.IntervalCases
-public import Mathlib.Tactic.Linarith
-public import Mathlib.Tactic.NormNum.Basic
 public import Properties.Accounting.Served
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Proofs of the served tie's statements (`Accounting.Served`, `Properties.Served`)
@@ -1082,7 +1115,7 @@ def witTwiceRest : Accounting.Gates.IntDag ℕ :=
         Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [106] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-/-- The window of one product for two units (`witTwice`, `ServedTwice.lean`): two units of one call, unit 1's served
+/-- The window of one product for two units (`witTwice`): two units of one call, unit 1's served
 product a copy of unit 0's, each unit with its own `y` and its own receipt over its own noised GEMM. -/
 def witTwice : Declared ℕ where
   dag := witPre ++ witTwiceRest
@@ -1175,7 +1208,7 @@ def witWSRest : Accounting.Gates.IntDag ℕ :=
         Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [102] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-/-- The window of an A and a B word as the scales (`witWS`, `ServedTwice.lean`): `witZ` with its served `y`'s scales
+/-- The window of an A and a B word as the scales (`witWS`): `witZ` with its served `y`'s scales
 the A row's first word and the B column's first word. -/
 def witWS : Declared ℕ := { witZ with dag := witPre ++ witWSRest }
 

@@ -22,7 +22,10 @@ entry point visible by writing a ``.dist-info`` beside this module on the server
   - ``outputs.PID.jsonl``, one line per recorded step once its model output is back: the model runner's batch order and the
     tokens it sampled for each row;
   - ``requests.PID.jsonl``, one line per request when the scheduler frees it: arrival time, prompt and output ids, finish
-    reason, preemptions and prefix-cache hit.
+    reason, preemptions and prefix-cache hit;
+
+  and ``engine.PID.json``, the scheduler's KV pool when the tracer starts: its ``block_size``, ``num_gpu_blocks`` and
+  ``kv_cache_groups`` (the replay models one pool of one block size).
 
 A request id is the engine's (``cmpl-{X-Request-Id}-0-{8 hex}``) cut back to the client's X-Request-Id (`client_id`). An
 error inside the hook is counted and written to ``hook_errors.PID.txt``; it never reaches the engine. The API server's
@@ -77,6 +80,13 @@ class Tracer:
         if self.errors <= MAX_ERRORS:
             with open(self.errors_path, "a", encoding="utf-8") as f:
                 f.write(f"--- {where} (error {self.errors})\n{traceback.format_exc()}\n")
+
+    def engine(self, sched) -> None:
+        kv = getattr(sched, "kv_cache_config", None)
+        rec = {"block_size": getattr(sched, "block_size", None),
+               "num_gpu_blocks": getattr(getattr(sched, "cache_config", None), "num_gpu_blocks", None),
+               "kv_cache_groups": None if kv is None else len(kv.kv_cache_groups), "scheduler": type(sched).__name__}
+        (self.out / f"engine.{os.getpid()}.json").write_text(json.dumps(rec) + "\n")
 
     def arrived(self, sched, req) -> None:
         self.write("arrivals", {"id": client_id(req.request_id), "t": time.time(), "arrival": req.arrival_time,
@@ -146,6 +156,10 @@ def _tracer(sched) -> Tracer:
     t = getattr(sched, "_verity_tracer", None)
     if t is None:
         t = sched._verity_tracer = Tracer(Path(os.environ[TRACE_DIR]))
+        try:
+            t.engine(sched)
+        except Exception:  # noqa: BLE001 -- the engine must serve on
+            t.error("engine")
     return t
 
 

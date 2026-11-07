@@ -1,6 +1,6 @@
-"""Asks as Linear issues: `research msg ask` (and `send --to` one handle) files the ask in its owner's
-team, the registry's `linear` key, and rings on Slack with the issue's link; `close` and `close --declined` move the issue to done or
-canceled.
+"""Asks as Linear issues: `research msg ask` files the ask in its owner's team, the registry's `linear` key (a lane with no
+team of its own: its parent's, with its `linear_label`), on that team's current milestone (`current_milestone`), and rings on
+Slack with the issue's link; `send` files nothing.  `close` and `close --declined` move the issue to done or canceled.
 
 Credentials come from the environment only. LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET are an OAuth app's client-credentials
 grant (never the authorization-code flow): an `app` actor, so each issue and comment shows as filed by the asking handle
@@ -61,6 +61,7 @@ ASK_RECENT_D = 7                                                 # a person's as
 SENDER = r"\s*(?:@[\w./-]+:\s*)?"                                # a personal key's comment starts `@sender: `
 ASKED_AGAIN_RE = re.compile(SENDER + r"asked again\b", re.I)    # a comment recording that the asker restated it
 POSTMORTEM_RE = re.compile(SENDER + r"postmortem\b", re.I)      # a comment answering one restatement
+SLIP_RE = re.compile(SENDER + r"slip\b", re.I)                  # a comment answering the slips up to it
 ASKER_RE = re.compile(r"[a-z][a-z0-9-]{0,30}")
 ASK_KINDS = ("parked", "unstaffed", "slipped", "repeated")
 AUDIT_KINDS = ("orphan", "milestone", "lapsed", "undated", "overdue", "quiet", "stale", "title", "landed", "unlinked", "stray",
@@ -143,8 +144,9 @@ _title = title                                                   # `Linear.file`
 
 
 def owners(reg: dict) -> dict[str, str]:
-    """Each Linear team key a handle owns (the Slack registry's `linear`), to its handle."""
-    return {h["linear"]: h["handle"] for h in reg.get("handles", []) if h.get("linear")}
+    """Each Linear team key a handle owns (the Slack registry's `linear`), to its handle; a lane that files in its parent's
+    team (`linear_label`) owns none."""
+    return {h["linear"]: h["handle"] for h in reg.get("handles", []) if h.get("linear") and not h.get("linear_label")}
 
 
 def _pick(nodes: list[dict], prefix: str, what: str) -> dict:
@@ -227,7 +229,7 @@ def ask_findings(asks: list[dict], now: float) -> list[dict]:
     - parked: in Backlog, or canceled, without ASKER_OK: only its asker parks or cancels it.  A duplicate isn't parked: the
       ask goes on in the issue it duplicates.
     - unstaffed: in Triage or Todo ASK_START_H after it was filed: In Progress means its worker is on it.
-    - slipped: not closed, and its date moved later ASK_SLIPS times or more.
+    - slipped: not closed, its date moved later ASK_SLIPS times or more, and no `slip:` comment since its last move.
     - repeated: not done, and restated (`asked again` comments) more often than answered (`postmortem` comments)."""
     out = []
     for a in asks:
@@ -241,9 +243,9 @@ def ask_findings(asks: list[dict], now: float) -> list[dict]:
             and f"{who}'s ask, filed {(now - a['created']) / 3600:.0f} h ago, has no worker: move it to In Progress (`research msg "
                 f"linear state {ident} In Progress`) with a comment naming its worker (a `bc-` id, or the lead) and the date its "
                 "outcome lands",
-            "slipped": t in (*OPEN_TYPES, "backlog") and a["slips"] >= ASK_SLIPS
-            and f"its date moved later {a['slips']} times ({' -> '.join(a['dates'])}): comment what missed each date and what holds "
-                "the next; top hears of it",
+            "slipped": t in (*OPEN_TYPES, "backlog") and a["slips"] >= ASK_SLIPS and not a["explained"]
+            and f"its date moved later {a['slips']} times ({' -> '.join(a['dates'])}): comment `slip:` what missed each date and "
+                f"what holds the next (`research msg linear comment {ident} 'slip: ...' --as ME`); top hears of it",
             "repeated": t != "completed" and a["again"] > a["postmortems"]
             and f"{who} asked for it again ({a['again']} `asked again`, {a['postmortems']} `postmortem` comments): comment "
                 "`postmortem:` why it isn't delivered and the change that stops that recurring, today",
@@ -343,20 +345,30 @@ class Linear:
                 raise
 
     def file(self, team: str, sender: str, body: str, parent: str | None = None, title: str | None = None,
-             asker: str | None = None) -> dict:
+             asker: str | None = None, label: str | None = None, current: bool = False) -> dict:
         """The ask as an issue in `team`, from `sender`: {id, identifier, url, project, projectMilestone}. With `parent` (an
         identifier such as TEAM-92) it is that issue's sub-issue, on its project and milestone, so it lands on the board of the
         deliverable it serves; where Linear refuses the project (the team isn't in it), under the parent alone, said on stderr.
-        `title` replaces the one derived from the body. `asker` names the person who asked for its outcome (`asker_label`)."""
-        i = {"teamId": self.team(team)["id"], "title": title.strip() if title else _title(body), "description": body,
-             "labelIds": [self.label(f"from:{sender}"), *([self.label(asker_label(asker))] if asker else [])]}
+        Without one, `current` puts it on the team's current milestone (`current_milestone`), and in no project, said on
+        stderr, when the team has none. `title` replaces the one derived from the body. `asker` names the person who asked
+        for its outcome (`asker_label`); `label` is one more label (a lane's `lane:<handle>` in its parent's team)."""
+        t = self.team(team)
+        i = {"teamId": t["id"], "title": title.strip() if title else _title(body), "description": body,
+             "labelIds": [self.label(f"from:{sender}"), *([self.label(asker_label(asker))] if asker else []),
+                          *([self.label(label)] if label else [])]}
         if self.app:
             i["createAsUser"] = sender
-        board = {}
+        board, on = {}, f"{parent}'s project"
         if parent:
             p = self.gql("query($id: String!) { issue(id: $id) { id project { id } projectMilestone { id } } }", {"id": parent})["issue"]
             i["parentId"] = p["id"]
             board = {k: x["id"] for k, x in (("projectId", p.get("project")), ("projectMilestoneId", p.get("projectMilestone"))) if x}
+        elif current:
+            if m := self.current_milestone(t["id"]):
+                board, on = {"projectId": m["project"]["id"], "projectMilestoneId": m["id"]}, f"{m['project']['name']} / {m['name']}"
+            else:
+                print(f"research msg: {t['key']} has no active project with a milestone not yet past; filed in no project",
+                      file=sys.stderr)
         q = ("mutation($i: IssueCreateInput!) { issueCreate(input: $i) { issue { id identifier url project { name } "
              "projectMilestone { name } } } }")
         try:
@@ -364,10 +376,23 @@ class Linear:
         except LinearError as e:
             if not board:
                 raise
-            print(f"research msg: Linear refused {parent}'s project for this issue ({e}); filed under {parent} alone", file=sys.stderr)
+            print(f"research msg: Linear refused {on} for this issue ({e}); filed " + (f"under {parent} alone" if parent else
+                  "in no project"), file=sys.stderr)
             issue = self.gql(q, {"i": i})["issueCreate"]["issue"]
         self._quiet(issue["id"])
         return issue
+
+    def current_milestone(self, team_id: str) -> dict | None:
+        """The milestone an ask to the team (its id) lands on: of the milestones not yet past (a target date today or later,
+        UTC) in the team's active projects, the earliest; a tie goes to the one earlier in its project's ladder, then to the
+        project first by name.  {id, name, targetDate, sortOrder, project: {id, name}}, or None when no active project of
+        the team has one (an undated milestone has no place on the ladder)."""
+        q = ('query($id: String!) { team(id: $id) { projects(first: 50, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
+             "{ nodes { id name projectMilestones(first: 50) { nodes { id name targetDate sortOrder } } } } } }")
+        today = datetime.fromtimestamp(self.now(), UTC).date().isoformat()
+        ms = [{**m, "project": {"id": p["id"], "name": p["name"]}} for p in self.gql(q, {"id": team_id})["team"]["projects"]["nodes"]
+              for m in p["projectMilestones"]["nodes"] if (m.get("targetDate") or "") >= today]
+        return min(ms, key=lambda m: (m["targetDate"], m.get("sortOrder") or 0, m["project"]["name"]), default=None)
 
     def tag(self, issue: str, name: str, remove: bool = False) -> str:
         """Add the label `name` to the issue (its identifier), or remove it: the issue's labels after."""
@@ -378,7 +403,7 @@ class Linear:
 
     def projects(self) -> list[dict]:
         """The active projects (not completed or canceled), each with its milestones: {id, name, projectMilestones}."""
-        q = ('{ projects(first: 100, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
+        q = ('{ projects(first: 50, filter: {status: {type: {nin: ["completed", "canceled"]}}}) '
              "{ nodes { id name projectMilestones(first: 50) { nodes { id name } } } } }")
         return self.gql(q)["projects"]["nodes"]
 
@@ -674,9 +699,9 @@ class Linear:
              days: float = ASK_RECENT_D) -> list[dict]:
         """Every issue a person asked for (an `asker:` label) that is open, in Backlog, or closed within `days`, of `teams` or
         every team, oldest first: {issue, url, title, team, lane, asker, state, type (its state's), due, created, closed
-        (epochs), dates (each due date it was given, in order), slips (moves to a later date), again (`asked again`
-        comments), postmortems (`postmortem` comments), ok (it carries ASKER_OK)}.  Delivered is `type` completed; filing it,
-        dating it or starting it is not."""
+        (epochs), dates (each due date it was given, in order), slips (moves to a later date), explained (a `slip:` comment
+        follows its last slip), again (`asked again` comments), postmortems (`postmortem` comments), ok (it carries
+        ASKER_OK)}.  Delivered is `type` completed; filing it, dating it or starting it is not."""
         now, owners = self.now() if now is None else now, owners or {}
         since = datetime.fromtimestamp(now - days * 86400, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
         f: dict = {"labels": {"some": {"name": {"startsWith": ASKER_LABEL}}},
@@ -686,19 +711,21 @@ class Linear:
             f["team"] = _team_filter(teams)
         out = []
         for i in self._paged("identifier title url dueDate createdAt completedAt canceledAt state { name type } team { key } "
-                             "labels { nodes { name } } comments(first: 100) { nodes { body } } "
+                             "labels { nodes { name } } comments(first: 100) { nodes { body createdAt } } "
                              "history(first: 100) { nodes { createdAt fromDueDate toDueDate } }", f):
             labels = [x["name"] for x in i["labels"]["nodes"]]
             moves = sorted((h for h in i["history"]["nodes"] if h.get("fromDueDate") or h.get("toDueDate")), key=lambda h: h["createdAt"])
+            slips = [h["createdAt"] for h in moves if h.get("fromDueDate") and h.get("toDueDate")
+                     and h["toDueDate"][:10] > h["fromDueDate"][:10]]
             bodies = [c.get("body") or "" for c in i["comments"]["nodes"]]
+            noted = [c["createdAt"] for c in i["comments"]["nodes"] if SLIP_RE.match(c.get("body") or "")]
             closed = i.get("completedAt") or i.get("canceledAt")
             out.append({"issue": i["identifier"], "url": i["url"], "title": i["title"], "team": i["team"]["key"],
                         "lane": _lane(i, owners), "asker": next(x[len(ASKER_LABEL):] for x in labels if x.startswith(ASKER_LABEL)),
                         "state": i["state"]["name"], "type": i["state"]["type"], "due": i.get("dueDate"),
                         "created": _epoch(i["createdAt"]), "closed": _epoch(closed),
                         "dates": [h["toDueDate"][:10] for h in moves if h.get("toDueDate")],
-                        "slips": sum(bool(h.get("fromDueDate") and h.get("toDueDate") and h["toDueDate"][:10] > h["fromDueDate"][:10])
-                                     for h in moves),
+                        "slips": len(slips), "explained": bool(slips) and any(_epoch(t) >= _epoch(slips[-1]) for t in noted),
                         "again": sum(bool(ASKED_AGAIN_RE.match(b)) for b in bodies),
                         "postmortems": sum(bool(POSTMORTEM_RE.match(b)) for b in bodies), "ok": ASKER_OK in labels})
         return sorted(out, key=lambda a: (a["created"] or 0, a["issue"]))
@@ -823,9 +850,11 @@ class Linear:
 
 
 def ask_issue(owner: str, sender: str, body: str, linear: Any = None, parent: str | None = None,
-              title: str | None = None, asker: str | None = None) -> tuple[dict | None, str | None]:
-    """`msg ask`'s issue: (issue, None), or (None, why) when it couldn't be filed, so the ask still goes out on Slack."""
+              title: str | None = None, asker: str | None = None, label: str | None = None) -> tuple[dict | None, str | None]:
+    """`msg ask`'s issue, on its parent's board or else its team's current milestone: (issue, None), or (None, why) when it
+    couldn't be filed, so the ask still goes out on Slack."""
     try:
-        return (linear or Linear()).file(owner, sender, body, parent=parent, title=title, asker=asker), None
+        return (linear or Linear()).file(owner, sender, body, parent=parent, title=title, asker=asker, label=label,
+                                         current=True), None
     except (LinearError, OSError, ValueError) as e:
         return None, str(e)

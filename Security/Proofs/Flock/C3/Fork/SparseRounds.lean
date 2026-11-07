@@ -1,9 +1,18 @@
 module
 
-public import Proofs.Flock.Soundness.RepSound
 public import Definitions.Flock.Holo
-public import Mathlib.Tactic.LinearCombination
-public import Mathlib.Tactic.Push
+public import Definitions.Core.Game
+public import Mathlib.Algebra.Polynomial.Degree.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Data.Nat.Bitwise
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Poly
+import Proofs.Flock.Soundness.LincheckPhase
+import Proofs.Flock.Soundness.OpeningPhase
+import Proofs.Flock.Soundness.Rounds
+import Proofs.Flock.Soundness.ZerocheckPhase
+import VCVio.Prelude.Core
 
 /-!
 # The sparse phase's rounds, one coin at a time

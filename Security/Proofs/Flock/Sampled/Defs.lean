@@ -1,11 +1,13 @@
 module
 
 public import Mathlib.Data.Finset.Sort
-public import Proofs.Flock.Soundness.Audit.Law
-public import Proofs.Flock.Soundness.Game.Prob
-public import Flock.Statement
 public import Proofs.Flock.Verifier.Registered
 public import VStar.Stage
+public import Definitions.Flock.Audit.Law
+public import Definitions.Flock.Game.Prob
+public import Mathlib.Algebra.Group.End
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Sampling with prover-chosen batching, the partition hidden: the model

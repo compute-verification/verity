@@ -5,7 +5,7 @@ the Commit's tie (`pouw_h1_commit.reuse`), which `pouw_h1` imports, reads them."
 from __future__ import annotations
 
 from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity_vllm.protocols.pouw.h1 import requests as RQ
 
 #: the window Program's parameter prefix, the same for every window of a period

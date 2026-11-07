@@ -1,10 +1,11 @@
 """`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
 with the command it lacks and given no verdict, one that refused to run is missing, and one that ran out of its limit or
-wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to a pending block record that
+wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to an undecided block record that
 `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
-block record. The record accepts only when every subprotocol accepted on its node, and names each one missing, rejecting,
-malformed or about another server. The wipe composes only when its answer accepts on the record's server. Remote's
+block record. The block record's verdict is the Lean check's answer, so with none here it is undecided (the window's
+pending) even when every subprotocol accepted on its node; the record names each one missing, rejecting, malformed or
+about another server. The wipe composes only when its answer accepts on the record's server. Remote's
 product runs no onsite piece and composes sampled proofs and PoUW alone, the others dropped. PoUW's
 development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
@@ -25,7 +26,8 @@ of V3c's audit's memory. There
 step 6 defers the audit and the composite, leaving the follow-on's settings and its every input, listed and hashed, and
 nothing in $OUT but a line; the follow-on holds the copy to those sums, refuses another setting, a node short of the
 memory or another tree, and audits, records about the served node and composes, each saying it composed elsewhere, as
-the record says where it was composed and what was deferred. Its load, `serve_load.py
+the record says where it was composed and what was deferred. What it publishes holds a load's tokens and span by
+path, leaving the inference-only policy, its digest and its verdict line as written. Its load, `serve_load.py
 --varied`, writes each request's send, first-token and done times beside its record, on an injected clock and a stand-in
 endpoint."""
 from __future__ import annotations
@@ -59,7 +61,7 @@ sys.path.insert(0, str(HERE.parent))
 import served_verdicts as S
 from verity_e2e_demo import block_record as BR
 
-SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v1.schema.json").read_text())
+SCHEMA = json.loads((Path(BR.__file__).parent / "schemas" / "block-record.v2.schema.json").read_text())
 _SL = importlib.util.spec_from_file_location("serve_load", HERE.parents[2] / "examples" / "vllm" / "serve_load.py")
 SL = importlib.util.module_from_spec(_SL)
 _SL.loader.exec_module(SL)
@@ -253,6 +255,90 @@ def test_publish_holds_whole_each_file_that_isnt_text_but_the_declared_program(t
     assert S.publish(out, private) == []
 
 
+#: `served_overhead.py metrics`' aggregate of a composed run's one load: 4 requests of 4 tokens, so 16 tokens, one block
+#: a request
+AGGREGATE = {"schema": "verity-bench/served-overhead-metrics/v0", "run_id": "r1", "commit": True, "protocols": ["commit"],
+             "identity": {"precision": "verity_int8"}, "scheduler": {"max_num_batched_tokens": 512},
+             "loads": [{"requests": 4, "tokens": 16, "steps": 9, "span_s": 2.5, "windows": {"n": 1, "open_s": 0.5, "h1": ["tied"]},
+                        "time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}]}
+#: an inference-only policy as `inference_only.py policy` writes it, whose ``n_inputs.span_s`` is the lease's, not a load's
+POLICY = {"format": "verity-bench/inference-only-policy/v1", "written_utc": "2026-11-06T05:58:00+00:00", "tree": "ab" * 20,
+          "class": {"slots": 4, "prompt": 32, "outputs": 4, "positions": 35},
+          "serve": {"model": "verity-int8/Llama-3.2-1B-INT8", "revision": "15b0976d", "precision": "verity_int8"},
+          "session": {"definition": "cd" * 32, "key": "Session_v1{S=4}", "slots": 4, "positions": 35},
+          "c": 123_456_789, "k": 4_096, "n": 25_165_824,
+          "theta": "every weight parameter the class's circuit registers (147), held",
+          "table": {"sha512": "ef" * 64, "entries": 40, "priced": ["BitAtx32_v1"]},
+          "n_inputs": {"n": 25_165_824, "raw": 24_570_799, "grid_bits": 3,
+                       "rate": {"macs_per_s": 989_429_760_000_000, "clock_mhz": 1830, "source": "θ"},
+                       "utilization": [1, 4], "span_s": 3600, "utilization_source": "the declared share",
+                       "span_source": "the serve's GPU lease limit",
+                       "work": {"linears": 34_057_748_480, "attention": 41_287_680, "lm_head": 1_050_673_152,
+                                "theta_macs": 36_241_670_144, "source": "one slot of the class's fixed load"}}}
+
+
+def _digest(doc: dict) -> str:
+    """A policy's digest as its verdict cites it: SHA-512 of its sorted, compact JSON."""
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def test_publish_holds_the_loads_tokens_and_span_by_path_and_leaves_the_policy_and_its_digest_as_written(tmp_path):
+    """The load's tokens over a block's outputs are its exact block count, so `publish` holds each load's ``tokens`` and
+    ``span_s`` (`OWN_AT`, by path) with its counts, keeping its rates; an inference-only policy's ``n_inputs.span_s``, a
+    ``tokens`` under no load and the verdict citing the policy's digest stay byte for byte, and the digest is the same
+    before and after."""
+    out, private = tmp_path / "out", tmp_path / "serve" / "private" / "out"
+    (out / "serve").mkdir(parents=True)
+    (out / "serve" / "overhead.json").write_text(json.dumps(AGGREGATE) + "\n")
+    (out / "inference-only-policy.json").write_text(json.dumps(POLICY, indent=1, sort_keys=True) + "\n")
+    before = _digest(json.loads((out / "inference-only-policy.json").read_text()))
+    verdict = {"verdict": "accept", "reason": None, "complies": True, "failure": None,
+               "policy": {"sha512": before, "written_utc": POLICY["written_utc"]}, "c": POLICY["c"], "k": POLICY["k"],
+               "n": POLICY["n"], "classes": [["cd" * 32, 1_000, 4_000]], "slots": 4, "positions": 35}
+    (out / "record").mkdir()
+    (out / "record" / "inference-only.json").write_text(json.dumps(verdict, indent=1, sort_keys=True) + "\n")
+    (out / "pieces" / "pearlplus").mkdir(parents=True)
+    (out / "pieces" / "pearlplus" / "load.json").write_text(json.dumps({"tokens": 1024, "span_s": 9.5, "served_tokens": 64}))
+    kept = {p: p.read_bytes() for p in out.rglob("*.json") if p.name != "overhead.json"}
+    assert S.publish(out, private) == ["serve/overhead.json"]
+    (ld,) = json.loads((out / "serve" / "overhead.json").read_text())["loads"]
+    assert ld == {"time_per_output_token_s": 0.15625, "tokens_per_s": 6.4, "client_tokens_per_s": 6.1}
+    assert json.loads((private / "serve" / "overhead.json").read_text()) == AGGREGATE
+    assert {p: p.read_bytes() for p in kept} == kept
+    after = json.loads((out / "inference-only-policy.json").read_text())
+    assert after["n_inputs"]["span_s"] == 3600 and _digest(after) == before == _digest(POLICY)
+    assert json.loads((out / "record" / "inference-only.json").read_text())["policy"]["sha512"] == before
+    assert S.public_json(POLICY) == POLICY and S.public_json(verdict) == verdict
+    assert S.publish(out, private) == []
+
+
+def test_a_published_line_holds_a_loads_tokens_and_span_and_leaves_the_inference_only_lines(tmp_path):
+    """A verdict line's published form has no load's ``tokens`` or ``span_s`` in its JSON, in a JSON string's text or in a
+    JSON object cut short, and the INFERENCE-ONLY lines, the policy's (its span in seconds) and the verdict's (the policy's
+    digest), are their own published form."""
+    agg = json.dumps(AGGREGATE)
+    assert S.public_line(f"OVERHEAD {agg}") == "OVERHEAD " + json.dumps(S.public_json(AGGREGATE))
+    assert not re.search(r'"(?:tokens|span_s)"', S.public_line(f"OVERHEAD {agg}"))
+    assert S.public_line('OVERHEAD {"loads": [{"tokens": 16, "span_s": 2.5, "tokens_per_s": 6.') == f"OVERHEAD {S.CUT}"
+    quoted = json.dumps({"said": agg})
+    assert json.loads(json.loads(S.public_line(quoted))["said"]) == S.public_json(AGGREGATE)
+    for kept in ('{"n_inputs": {"span_s": 3600, "raw": 24570799}}', '{"tokens": 1024, "span_s": 9.5}',
+                 'POLICY {"n_inputs": {"span_s": 3600, "raw": 2457',
+                 'PEARL+ {"load": {"requests": "all", "prompt_tokens": 1024}, "served_tokens": 64}'):
+        assert S.public_line(kept) == kept
+    i, digest = POLICY["n_inputs"], _digest(POLICY)
+    policy_line = (f"INFERENCE-ONLY POLICY at class 4,32,4: c {POLICY['c']} gates, k {POLICY['k']} fresh bits, n {POLICY['n']} "
+                   f"sessions (⌈{i['utilization'][0]}/{i['utilization'][1]} x {i['rate']['macs_per_s']} MAC/s x {i['span_s']} s / "
+                   f"{i['work']['theta_macs']} θ-MACs⌉ = {i['raw']}, on the grid); session {POLICY['session']['definition'][:16]}…, "
+                   f"policy {digest[:16]}…")
+    verdict_line = (f"INFERENCE-ONLY accept: session {'cd' * 8}… (the registered one), 1000 gates and 4000 fresh bits a block, "
+                    f"against c {POLICY['c']}, k {POLICY['k']}, n {POLICY['n']} (no count published: n is judged on the blocks' "
+                    "exact count, held on the node)")
+    pub = {"verdict": "accept", "c": POLICY["c"], "k": POLICY["k"], "n": POLICY["n"], "policy": {"sha512": digest}}
+    for line in (policy_line, verdict_line, f"INFERENCE-ONLY {json.dumps(pub)}"):
+        assert S.public_line(line) == line and S.public_line(line + "\n") == line + "\n"
+
+
 def test_the_sampled_proofs_line_names_the_partition_and_its_draw_and_no_advice_length_population_or_steps(tmp_path, capsys):
     row = {"ok": True, "accepted": True, "draw": [0, 2], "population": 37,
            "leak": {"advice_bits": 832, "bound": "vacuous", "other_inputs": 786432, "registered": 0}}
@@ -410,12 +496,13 @@ def _rows(integrity: dict, pieces: Path) -> dict:
     return {"integrity": integrity, **{k: S.piece_row(k, pieces) for k in S.PIECES}, "wipe": S.piece_row("wipe", pieces)}
 
 
-def test_sampled_proofs_alone_composes_to_a_pending_block_record(tmp_path):
+def test_sampled_proofs_alone_composes_to_an_undecided_block_record(tmp_path):
     report, rec, line = S.record(_rows(_accepted(), tmp_path), window=1, steps=(5, 11), node="vy-dc-h200", run="r1")
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert BR.check(rec) == {}
     assert rec["legs"]["integrity"]["quantity"]["value"] == 2 and rec["server_time"] == [{"server": "vy-dc-h200", "steps": [5, 11]}]
     assert (line["composed"], line["record_missing"]) == ("pending", ["bandwidth", "certifier", "pous", "pouw", "wipe"])
+    assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
     assert {name: why.split(" unset: ")[0] for name, why in line["missing"].items()} == {
         "PoUW": "POUW_CMD", "the bandwidth audit": "BANDWIDTH_CMD", "PoUS": "POUS_CMD", "the network certifier": "CERTIFIER_CMD",
         "the wipe": "WIPE_CMD"}
@@ -449,7 +536,7 @@ def test_an_accepted_pous_answer_says_when_its_weights_were_held_their_share_and
                              "checkpoint (linears); the embedding and the head, the norms, the per-row scales are outside "
                              "its claim; its quantity is not established at δ = 1/100 or 1/1000000: the run established "
                              "it except with 1/100 + 2^-128)")
-    assert line["reason"] == report["composed"]["reason"] == rec["composed"]["onsite"]["reason"]
+    assert line["reason"] == report["composed"]["reason"] and rec["composed"]["answer"] is None
     assert line["reason"].startswith("sampled proofs: accept; ")
 
 
@@ -543,11 +630,12 @@ COMPONENTS = ("pouw", "bandwidth", "pous", "certifier", "wipe")
 
 @pytest.mark.parametrize("case, piece", [("accept", None)] + [
     (case, piece) for case in ("missing", "reject", "elsewhere", "malformed") for piece in COMPONENTS])
-def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_names_each_that_does_not(
+def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_that_does_not_accept(
         tmp_path, monkeypatch, capsys, case, piece):
     """Every piece's answer accepted on the record's node (each piece's `RAN`, which a `SERVED` naming no server leaves it
-    about, and the wipe's `SERVED`): the composed verdict is ``accept``, with nothing missing, and its reason names each
-    subprotocol's accept. One piece with no answer leaves it ``pending`` and names that piece missing with
+    about, and the wipe's `SERVED`): the composed verdict is ``pending``, the block record's ``undecided``, since its
+    verdict is the Lean check's answer and none ran, with nothing missing, and its reason names each subprotocol's
+    accept. One piece with no answer leaves it ``pending`` and names that piece missing with
     why; one that rejects, or accepts with outputs that are not its leg's certificate, makes it ``reject`` naming it, with
     no block record; one about another server leaves it ``pending``, carried and named as elsewhere."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
@@ -589,11 +677,12 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert rc == 0 and line["check"] == {} == BR.check(rec)
     if case == "accept":
-        assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("accept", [], {}, {})
+        assert (line["composed"], line["record_missing"], line["missing"], line["elsewhere"]) == ("pending", [], {}, {})
+        assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
         assert rec["composed"]["legs"] == {k: "accept" for k in BR.LEGS}
         late = {"the network certifier": " (its quantity is not established at δ = 1/1000000: the run established it "
                                          "except with 1/100)"}
-        assert rec["composed"]["onsite"]["reason"] == line["reason"] == "; ".join(
+        assert line["reason"] == "; ".join(
             f"{n}: accept{late.get(n, '')}" for n in S.NAMES.values())
         return
     assert line["composed"] == "pending" and line["record_missing"] == [leg]
@@ -609,9 +698,10 @@ def test_the_record_accepts_only_when_every_subprotocol_accepts_on_its_node_and_
 def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(tmp_path, monkeypatch, capsys):
     """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
-    composed, whatever their pieces left, and composes accept from sampled proofs' and PoUW's accepts on its node. The
-    same pieces composed for onsite reject on the wipe's answer. The report and the line say they were composed on the
-    served node, from the answer files it wrote, and the published line keeps that."""
+    composed, whatever their pieces left, and sampled proofs' and PoUW's accepts on its node leave it pending with nothing
+    missing, the block record undecided until the remote check answers. The same pieces composed for onsite reject on the
+    wipe's answer. The report and the line say they were composed on the served node, from the answer files it wrote, and
+    the published line keeps that."""
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     monkeypatch.setattr(S.socket, "gethostname", lambda: "vy-dc-h200")
     monkeypatch.setattr(S, "sampled_proofs_row", lambda _audit_dir, _run=None: _accepted())
@@ -638,7 +728,8 @@ def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(
     rec = json.loads((tmp_path / "record" / "block-record.json").read_text())
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
     assert rc == 0 and line["check"] == {} == BR.check(rec)
-    assert (line["product"], line["composed"], line["record_missing"], line["missing"]) == ("remote", "accept", [], {})
+    assert (line["product"], line["composed"], line["record_missing"], line["missing"]) == ("remote", "pending", [], {})
+    assert (rec["composed"]["verdict"], rec["composed"]["answer"]) == ("undecided", None)
     names = ("PoUS", "the bandwidth audit", "the network certifier", "the wipe")
     assert line["dropped"] == {n: why for n in names} and all(line["verdicts"][n] == "dropped" for n in names)
     assert line["reason"] == "sampled proofs: accept; PoUW: accept; " + "; ".join(f"{n}: dropped, {why}" for n in names)
@@ -729,8 +820,8 @@ def test_a_development_pouw_piece_checks_the_windows_session_and_credits_nothing
     assert line["composed"] == "pending" and "pouw" in line["record_missing"] and line["development"] == {"PoUW": "accept"}
     assert line["verdicts"]["PoUW"] == S.DEV_VERDICT == "development run, credits nothing" and line["missing"]["PoUW"] == why
     jsonschema.Draft202012Validator(SCHEMA).validate(rec)
-    assert BR.check(rec) == {} and rec["composed"]["onsite"] == report["composed"]
-    reason = rec["composed"]["onsite"]["reason"]
+    assert BR.check(rec) == {} and rec["composed"]["answer"] is None
+    reason = report["composed"]["reason"]
     assert reason.startswith(f"sampled proofs: accept; PoUW: {why}; ")
     for name, cmd in (("the bandwidth audit", "BANDWIDTH"), ("PoUS", "POUS"), ("the network certifier", "CERTIFIER"),
                       ("the wipe", "WIPE")):
@@ -1996,7 +2087,7 @@ def test_the_offline_program_is_the_one_serve_openai_declares_under_the_same_pro
     from types import SimpleNamespace
 
     torch = pytest.importorskip("torch")
-    from verity.core.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1tile as HT, h1window as HW
     from verity_vllm.pipeline import serve_h1 as SH
     from verity_vllm.protocols import pouw
     from verity_vllm.protocols.pouw import h1 as PH

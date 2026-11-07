@@ -4,7 +4,7 @@ The vLLM integration (`verity_vllm`), Verity's frontend for vLLM. It pins one vL
 serves to its circuit, commits the values of that circuit the proofs need while vLLM serves, and installs the subprotocols'
 hooks on the engine. Verity itself knows nothing of vLLM.
 
-The one entry point is `examples/vllm/run.sh` (`verity example vllm`), which serves a workload on a GPU node and audits it
+The one entry point is `examples/vllm/run.sh` (`verity demo vllm`), which serves a workload on a GPU node and audits it
 through every subprotocol (`examples/vllm/README.md`).
 
 ## What it does
@@ -32,9 +32,13 @@ through every subprotocol (`examples/vllm/README.md`).
   computed, and the GPU committer (`commit/committer/`) commits it under the scheme `rows-sha512` (`commit/step_rows.py`;
   `vllm-v1`, `commit/scheme.py`, by name). The checks (`check/`) end in one verdict, `verdict.json` (`check/verdict.py`).
 - **Serve.** `verity-vllm serve-openai` is an OpenAI-compatible endpoint on the in-process engine that commits every step and,
-  with `--seal`, seals each closed sampling period for a later audit.
+  with `--seal`, seals each closed window for a later audit.
 - **Records.** The circuit database (`pipeline/circuit_db.py`, `verity-vllm records`) keeps, per workload of record
   (`manifests/records.json`), the exact circuit it served and the evidence that it is faithful, never committed values.
+  `verity-vllm block-counts` (`program/predict/block_counts.py`) reads a day's window circuit records and judges its
+  (c, k)-inference blocks against the day's declared c, k and n: its public output is the judgment alone (accept or refuse,
+  each rule's outcome, c, k, n, the declaration's digest and each class's gates and fresh bits a block), never a count of
+  blocks or windows, which go only to a private file (0600).
 
 ## Layout
 
@@ -83,6 +87,7 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 | `tensor_parallel_size` | 1 | GPUs the model is sharded over |
 | `max_num_seqs` | 8 | requests the scheduler runs together |
 | `max_num_batched_tokens` | vLLM's | tokens per scheduler step |
+| `long_prefill_token_threshold` | vLLM's, no cap | the most tokens of one prompt a scheduler step prefills |
 | `max_model_len` | the pin's | context length |
 | `gpu_memory_utilization` | the profile's | fraction of device memory the engine may take |
 | `kv_cache_memory_bytes` | vLLM's sizing | the KV cache's size in bytes, in place of sizing it from free memory |
@@ -91,6 +96,7 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 | `async_scheduling` | vLLM's, on | False schedules each step once the previous step's output is in |
 | `enforce_eager` | True | eager execution; False compiles with torch.compile and CUDA graphs |
 | `execution` | `bi-eager`, or `bi-compiled` with `enforce_eager` False | the execution label (`engine.served.EXECUTIONS`) |
+| `engine_class` | none | a registered engine class (`engine/profiles/engine_classes.py`), whose settings the engine runs at and whose window limits it refuses past |
 | `dtype` | the profile's | served dtype override |
 | `quantization` | the checkpoint's | vLLM quantization override, such as `"fp8"` |
 | `compilation_config` | vLLM's | compilation and CUDA-graph settings |
@@ -103,7 +109,10 @@ outputs = llm.generate(["The capital of France is"], SamplingParams(temperature=
 
 Any other option, or a value of the wrong type, raises `TypeError` naming it. `generate` returns vLLM's `RequestOutput` list
 unchanged and appends a `GenerateRecord` to `llm.records`; `llm.pin` is the resolved `EnginePin`, `llm.engine_record` the
-engine as built, `llm.vllm` the wrapped `vllm.LLM` and `llm.model` the served model, which protocol options install on.
+engine as built, `llm.vllm` the wrapped `vllm.LLM` and `llm.model` the served model, which protocol options install on. Under
+`engine_class`, an option the class contradicts is refused before the build, a prompt over the class's
+`long_prefill_token_threshold` is refused as it reaches the scheduler, and `llm.close_window()` is refused while a request is in
+flight (`errors.Refused`, `engine/class_admission.py`).
 
 ## Protocol hooks
 

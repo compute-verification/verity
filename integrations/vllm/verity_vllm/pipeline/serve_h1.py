@@ -42,13 +42,16 @@ own Commit.
 * **Off the engine loop.** At a window's close the loop takes only H1's hooks and tap off; its release (the empty
   steps' calls, the manifest's commit, the draw coin, the session's close and the wait for its end entry) runs on
   ``closer``, one thread in window order, while the next window serves. Each window still has its own session,
-  coins and transcript, and its outcome is recorded in window order once its release ends.
+  coins and transcript, and its outcome is recorded in window order once its release ends. With ``--h1-prover`` each
+  served call's prover state is copied off the device and written by the server's `pouw_h1_prover.Writer`, whose ring
+  holds a window's bytes at most, and the window's release waits for its files: one not written is the window's error,
+  ``kept`` in its outcome otherwise.
 * **Its draw, for the draw-gated release** (``--retain device --seal --release-after pouw``, `serve_release`). Once a
   window's draw coin is open, its release puts H1's draw of the window under `DRAWER` (`H1Windows.drawn`): the proof
   blocks core draws (`credit.drawn` over the window Program's layout, as `pouw_h1_challenger.drawn_of` draws them), each
   read as the Commit's values it opens (`drawn_reads`): its call's x_q and s_a rows of its row tile at the engine step its
   step maps to. With a gate session its stream is the window's open root and its K its period-open's ``draw_k``; with
-  in-process coins (no open root, no period, nothing credited) its calls_root and the proof service's K
+  in-process coins (no open root, no period, nothing credited) its calls_root and the proof system's K
   (`pouw_h1_challenger.draw_k`). A window whose draw can't be formed (it never opened, its close failed, no draw coin,
   no period) refuses its release by name, so its seal fails visibly and never waits.
 * **Its Commit record, tied to the audited window** (``--seal --h1-prover --h1-window-commit CMD``, `serve_tie`). Its
@@ -249,14 +252,17 @@ class H1Windows:
     runner and each window's coins come from, ``out`` where each window's transcript goes (``h1/w<k>/``). ``key`` is the
     weights' registration key (a fresh one when None); ``unit`` the Program's tile unit at each K (`h1window.tile_unit`
     when None); ``sessions`` each window's session on the auditor host's challenger (`GateSessions`; None: in-process
-    coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`; None:
-    kept nowhere, so no drawn unit or round of it can be proved); ``receipts`` each window's `Served` registers each
-    call's ``receipt@<c>`` (``--h1-receipts``, `pouw_h1_receipts.Receipts.serving`). ``closer`` (a `worker`) runs each
-    window's release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome
-    itself. ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release
-    puts its draw under `DRAWER` (`drawn`) when it waits for one. ``tie`` (`serve_tie.WindowTie`,
-    ``--h1-window-commit``) names each window's Commit record at its close, once the window is sealed (`sealed`), so its
-    release runs on ``closer``. ``clock`` times each part."""
+    coins); ``prover`` the directory each window's prover state and live rows go in (``--h1-prover``, `prover_of`;
+    None: kept nowhere, so no drawn unit or round of it can be proved), the calls' state written by ``writer`` (a
+    `pouw_h1_prover.Writer` whose ring holds the window's bytes, `pouw_h1_prover.kept_bytes`), whose files a window's
+    release waits for: a call's not written is its error, so its draw is refused, and the outcome's ``kept`` otherwise
+    (`pouw_h1_prover.Writer.wait`); ``receipts`` each window's `Served` registers each call's ``receipt@<c>``
+    (``--h1-receipts``, `pouw_h1_receipts.Receipts.serving`). ``closer`` (a `worker`) runs each window's
+    release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
+    ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
+    draw under `DRAWER` (`drawn`) when it waits for one. ``tie`` (`serve_tie.WindowTie`, ``--h1-window-commit``) names
+    each window's Commit record at its close, once the window is sealed (`sealed`) and its prover state written (`kept`),
+    so its release runs on ``closer``. ``clock`` times each part."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
@@ -264,7 +270,9 @@ class H1Windows:
                  draws: Any = None, model_key: Callable[[str], tuple[bytes, str]] | None = None,
                  clock: Callable[[], float] = time.perf_counter, receipts: bool = False, tie: Any = None) -> None:
         from verity_vllm.protocols import pouw
+        from verity_vllm.protocols.pouw import h1 as PH
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
+        from verity_vllm.protocols.pouw.h1 import prover as PV
         from verity_vllm.protocols.pouw.h1 import served as SV
 
         self.model, self.com, self.rows, self.steps, self.engine = model, com, int(rows), int(steps), engine
@@ -275,6 +283,7 @@ class H1Windows:
             raise ValueError(f"{ENTRY}: a window's tie waits for its seal, which comes after its close: its release runs "
                              "off the loop, on closer")
         self.draws: Any = None
+        self._kept: dict[int, Any] = {}
         self._layout: dict[str, Any] | None = None
         self._period_k: dict[str, int] = {}
         pw = pouw.Settings.of(self.config.get("pouw", {}))
@@ -309,6 +318,8 @@ class H1Windows:
         self.window: int | None = None
         self.held: dict[str, Any] | None = None
         self.opened: dict[str, float] = {}
+        self.writer = None if prover is None else PV.Writer(self.steps * sum(
+            PV.kept_bytes(self.rows, k, PH.units(k, n, self.rows)) for n, k in shapes))
         self.outcomes: list[dict[str, Any]] = []
         self.releasing = 0
         self.readied: dict[str, Any] | None = None
@@ -362,6 +373,7 @@ class H1Windows:
                 "reserve": "ahead" if self.sessions is not None and self.sessions.ahead is not None else "at the open",
                 "draw": f"put as {DRAWER} into the draw-gated release" if self.draws is not None else None,
                 "release": "on the loop" if self.closer is None else "off the loop",
+                "prover_ring": None if self.writer is None else self.writer.bound,
                 "linears": len(self.layers), "config": dict(self.config), "ready": self.readied, "receipts": self.receipts,
                 "commit_record": "the tap's" if self.tie is None else {"named": "at the close", **self.tie.describe()}}
 
@@ -390,8 +402,11 @@ class H1Windows:
         settings = {**self.config.get("pouw", {}), "rows": self.rows, "steps": self.steps, "served": served,
                     "transcript_dir": str(self.out / "h1" / f"w{window}"), **coins}
         if self.tie is not None:
-            settings["commit_record"] = self.tie.hook(window, prover, None)
+            settings["commit_record"] = self.tie.hook(window, prover, None if self.writer is None else
+                                                      functools.partial(self.kept, window))
         ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": settings})
+        if self.writer is not None:
+            self.writer.open(prover)
         try:
             served.receipts = RC.Receipts.serving(served, None, self.layers) if self.receipts else None
             ctx = PO.from_engine(dataclasses.replace(ctx, filled=PO.engine_fills(ctx)), self.engine, epoch=window)
@@ -399,6 +414,8 @@ class H1Windows:
         except BaseException:
             self.tap.untap()
             self.tap = None
+            if self.writer is not None:
+                self.writer.wait(prover)
             raise
         self.run, self.window, self.held = pouw.h1_run(ENTRY), window, held
         if served.receipts is not None:
@@ -411,6 +428,18 @@ class H1Windows:
         from verity_vllm.protocols.pouw.h1 import prover as PV
 
         return None if self.prover is None else PV.private(PV.private(self.prover) / f"w{window}")
+
+    def kept(self, window: int) -> dict[str, int]:
+        """Window ``window``'s prover state once written (`pouw_h1_prover.Writer.wait`, which closes its directory, so it is
+        waited for once, by its tie's command or else its release): its calls, bytes and waits. OSError as the writer's."""
+        if window not in self._kept:
+            try:
+                self._kept[window] = self.writer.wait(self.prover_of(window))
+            except OSError as e:
+                self._kept[window] = e
+        if isinstance(got := self._kept[window], OSError):
+            raise got
+        return got
 
     def sealed(self, window: int, line: Mapping[str, Any]) -> None:
         """`serve_commit.CommitWindows`' seal line of window ``window``, or why it has none: its tie's, with a tie."""
@@ -462,6 +491,13 @@ class H1Windows:
             except (ValueError, RuntimeError, OSError) as e:      # the window's failure, its outcome's error
                 error = error or f"{type(e).__name__}: {e}"
             finally:
+                kept = None
+                if self.writer is not None:
+                    try:
+                        kept = self.kept(window)
+                    except OSError as e:                        # its prover state not all written: the window's failure
+                        error = error or f"its prover state: {e}"
+                    self._kept.pop(window, None)
                 if self.tie is not None:
                     self.tie.bound(window, run)
                 t1 = self.clock()
@@ -476,6 +512,8 @@ class H1Windows:
             out = self._outcome(window, run, held, end, seconds)
             if drawn is not None:
                 out["draw"] = drawn
+            if kept is not None:
+                out["kept"] = kept
             if error is not None:
                 out["error"] = f"close: {error}"[:500]
             with self._lock:
@@ -525,14 +563,14 @@ class H1Windows:
     def draw_of(self, run: Any, held: dict[str, Any] | None) -> tuple[int, str, str]:
         """The K a window is drawn at, its stream, and where that K comes from. A gate session's window: its period-open's
         ``draw_k`` (`credit.committed_k` of the gate's ledger, read once a period) and its open root. An in-process
-        window has neither, and credits nothing: the proof service's K (`pouw_h1_challenger.draw_k`) and its calls_root.
+        window has neither, and credits nothing: the proof system's K (`pouw_h1_challenger.draw_k`) and its calls_root.
         ValueError when the session joined no period or the ledger commits it no K."""
         from verity.core.protocols.pouw import credit as CR
 
         from verity_vllm.protocols.pouw.h1 import challenger as PHC
 
         if held is None:
-            return PHC.draw_k(self.layout()), run.commits["calls_root"], "the proof service's draw_k (in-process coins)"
+            return PHC.draw_k(self.layout()), run.commits["calls_root"], "the proof system's draw_k (in-process coins)"
         period = held.get("period")
         if period is None:
             raise ValueError(f"session {held.get('session')} joined no period, so no period-open committed the K its "
@@ -577,7 +615,8 @@ class H1Windows:
 
     def drain(self) -> None:
         """Every window's release ended and its outcome recorded (a tie's window still waiting for a seal refused: the
-        server's sealer has closed), and every session reserved ahead (`GateSessions.drain`)."""
+        server's sealer has closed), every session reserved ahead (`GateSessions.drain`), and the prover state's writer
+        closed."""
         if self.tie is not None:
             self.tie.stop()
         if self.closer is not None:
@@ -585,6 +624,8 @@ class H1Windows:
             self.closer.shutdown(wait=True)
         if self.sessions is not None:
             self.sessions.drain()
+        if self.writer is not None:
+            self.writer.close()
 
     def summary(self) -> dict[str, Any]:
         """summary.json's ``pouw_h1``: windows closed, tied and refused at ROOTS1 (a window that served no step, whose

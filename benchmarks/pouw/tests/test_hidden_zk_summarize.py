@@ -25,7 +25,7 @@ def _staged(out: Path, role: str = "tile") -> Path:
 #: a tile's verdict when every check has passed: its rows are a form the soundness proof does not cover
 TILE_FORM = ("refused: rows that are neither all sha512/row/v1 rows of 16 · words bits in at least one chunk nor all "
              "unsegmented sha512/row/v2 rows of 16 · words bits ending in their hm96 block or sha512/row-seg/v1 rows of "
-             "16 · words bits whose segments end in their last block, the output rows unsegmented, one output port each: a "
+             "16 · words bits whose segments end in their last block, one output port per output row: a "
              "statement form the soundness proof does not cover")
 #: a session's verdict, once every check has passed, when it has no sample
 NO_DRAW = "refused: a session without a draw: every soundness claim is about a drawn session (D12)"

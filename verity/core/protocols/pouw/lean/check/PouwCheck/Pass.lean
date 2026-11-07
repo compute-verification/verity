@@ -1,12 +1,8 @@
 module
 
-public import Flock.Draw
-public import PouwCommit.Draws
 public import PouwWindow.Rounds
 public import PouwCheck.Inputs
-public import SampledProofs.ChallengerRecord
 public import SampledProofs.ChallengerSession
-public import Identity.Domains
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 import all Init.Data.Array.Basic

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUB's per-period guarantee, from the bandwidth audit's (trusted)

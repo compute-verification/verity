@@ -9,7 +9,7 @@ public import Proofs.Flock.Claims.Recursion.OuterKS
 /-!
 # L1 at Flock: `RecoversLinkOn` (F9a)
 
-L1 (`Flock.Guarantees.GenericRecursiveKS`) at the Flock instance, the composite at the deployed decoders (`compDep`) over
+L1 (`CompositionKS`) at the Flock instance, the composite at the deployed decoders (`compDep`) over
 hm96 (`Server.ofBound`) and the element-level Flock (`Proto.ofFlock`), at the loop bounds `(0, M, R)`, gives `KSLinkOn`
 at every statement where the instance's contract holds (`recoversLinkOn_of`). L1's hypotheses are F4 (`protoWFOfFlock`, `kSAbortLinOfFlockLin`),
 F2 (`bindsOfBound`), F5 (`outerKSOfSessions`, at `κ_O ≥ 0` from the sessions' table errors and `γ_O`, a square), F8
@@ -24,7 +24,7 @@ F2 (`bindsOfBound`), F5 (`outerKSOfSessions`, at `κ_O ≥ 0` from the sessions'
 * the gated link's term stays `linkPlan` at `verModel`.
 
 F6's three statements are hypotheses until they are proved; F1 enters only through them. With L1 proved
-(`Flock.SecurityProofs.GenericRecursiveKS`), `ksLinkOn_of` is `KSLinkOn` from `RecoversLinkOn`'s other premises.
+(`compositionKS`), `ksLinkOn_of` is `KSLinkOn` from `RecoversLinkOn`'s other premises.
 -/
 
 @[expose] public section
@@ -161,7 +161,7 @@ theorem recoversLinkOn_of {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty C
   have hF1' := mul_le_mul_of_nonneg_left hF1 hk
   linarith
 
-/-- **`KSLinkOn` from L1, proved** (`Flock.SecurityProofs.GenericRecursiveKS`), and `RecoversLinkOn`'s other premises,
+/-- **`KSLinkOn` from L1, proved** (`compositionKS`), and `RecoversLinkOn`'s other premises,
 given F6's three term comparisons. -/
 theorem ksLinkOn_of {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
     [DecidableEq Col] [DecidableEq Col'] [Zero Col] [Zero Col'] (H : Msg → Msg) (D : RecAt Coin)
@@ -175,6 +175,6 @@ theorem ksLinkOn_of {Coin Col T Col' T' : Type} [Fintype Coin] [Nonempty Coin] [
     (hdI : decOK Bd.DE Bd.deploy.decode) (hdO : decOK DO DO.decode) (hC : ContractOn H D Bd DO Cp G) :
     KSLinkOn H D Bd DO Cp G :=
   recoversLinkOn_of H D Bd DO Cp G hForkPlansLeBinnerV hCapPlanIsFCI hConflictPlanIsF0I
-    _root_.Flock.SecurityProofs.GenericRecursiveKS hKS hO hT hxI hdec hε hLC hB hdI hdO hC
+    compositionKS hKS hO hT hxI hdec hε hLC hB hdI hdO hC
 
 end Claims.RecGeneric

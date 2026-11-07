@@ -3,6 +3,9 @@ redelivery), no-model mode's ring to the admin, the dead letter and the newcomer
 from __future__ import annotations
 
 import json
+import shutil
+import urllib.parse
+from pathlib import Path
 
 import pytest
 
@@ -13,7 +16,9 @@ from slack_events.deps import DEAD, DEAD_TOPIC, LAST_SUCCESS
 
 
 def private(ts: str, key: str = "chat-luke", who: str = "luke") -> str:
-    return f"from {who}, #{key} thread {ts}: (a post in a private channel: research msg read --channel {key} --thread {ts})"
+    """The doorbell of a person's chat post rung as they post it (the tests' clock stands still)."""
+    return (f"from {who} (a person, waiting under a minute), #{key} thread {ts}: (a post in a private channel: research msg "
+            f"read --channel {key} --thread {ts})")
 
 
 def router_lines(world, ch: str, ts: str) -> list[str]:
@@ -42,6 +47,40 @@ def test_an_unaddressed_chat_post_rings_top_after_a_routing_line_that_records_it
     assert world.deps.cache.get(LAST_SUCCESS) == world.clock()
 
 
+def with_lane(world, lane: str) -> None:
+    path = world.people / "luke.json"
+    path.write_text(json.dumps({**json.loads(path.read_text()), "lane": lane}))
+
+
+def test_with_no_model_a_persons_unaddressed_chat_post_goes_to_their_usual_lane(world, monkeypatch):
+    """Luke usually works with the circuits lane (people.d's `lane`): his posts that name no lane ring it, not the admin,
+    with a routing line that says why.  A post naming a lane rings that lane; someone else's post in his chat, and a lane
+    the registry doesn't have, go to the admin as before; a model's pick wins over the lane."""
+    with_lane(world, "circuits")
+    post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
+    assert consume(world.deps, world.event(CHAT, post), 1) == "unaddressed: @circuits"
+    [line] = world.lines(CHAT, post["ts"])
+    assert line["text"] == "sent to @circuits: no lane named; luke's usual lane" == \
+        consumer.USUAL_LANE.format(lane="circuits", person="luke")
+    assert line["metadata"]["event_payload"] == {"post": post["ts"], "names": ["circuits"]}
+    assert world.rung("circuits") == [private(post["ts"])] and world.rung("top") == []
+
+    named = world.slack.add(CHAT, text="@kernels is the hash kernel done?", user=LUKE)
+    assert consume(world.deps, world.event(CHAT, named), 1) == "rule" and world.rung("kernels") == [private(named["ts"])]
+    daniel = world.slack.add(CHAT, text="Luke, did anyone answer?", user=DANIEL)
+    assert consume(world.deps, world.event(CHAT, daniel), 1) == "unaddressed: @top"
+    assert router_lines(world, CHAT, daniel["ts"]) == [NO_MODEL]
+    with_lane(world, "nobody")
+    other = world.slack.add(CHAT, text="anyone?", user=LUKE)
+    assert consume(world.deps, world.event(CHAT, other), 1) == "unaddressed: @top"
+    assert router_lines(world, CHAT, other["ts"]) == [NO_MODEL] and len(world.rung("circuits")) == 1
+
+    with_lane(world, "circuits")
+    Model(monkeypatch, ["kernels"])
+    picked = world.slack.add(CHAT, text="who validates the TP8 kernel?", user=LUKE)
+    assert consume(world.deps, world.event(CHAT, picked), 1) == "unaddressed: @kernels"
+
+
 def test_an_addressed_chat_post_rings_the_names_it_starts_with_and_posts_no_routing_line(world):
     post = world.slack.add(CHAT, text="@circuits is the TP8 sweep done?", user=LUKE)
     assert consume(world.deps, world.event(CHAT, post), 1) == "rule"
@@ -53,11 +92,11 @@ def test_an_addressed_chat_post_rings_the_names_it_starts_with_and_posts_no_rout
 def test_an_unaddressed_ask_post_rings_top_with_its_text_and_an_addressed_one_its_names(world, ch, key):
     plain = world.slack.add(ch, text="what is the TP8 status?", user=DANIEL)
     assert consume(world.deps, world.event(ch, plain), 1) == "unaddressed: @top"
-    assert world.rung("top") == [f"from daniel, #{key} thread {plain['ts']}: what is the TP8 status?"]
+    assert world.rung("top") == [f"from daniel (a person, waiting under a minute), #{key} thread {plain['ts']}: what is the TP8 status?"]
     assert router_lines(world, ch, plain["ts"]) == [NO_MODEL]
     named = world.slack.add(ch, text="@circuits when does the sweep land?", user=DANIEL)
     assert consume(world.deps, world.event(ch, named), 1) == "rule"
-    assert world.rung("circuits") == [f"from daniel, #{key} thread {named['ts']}: @circuits when does the sweep land?"]
+    assert world.rung("circuits") == [f"from daniel (a person, waiting under a minute), #{key} thread {named['ts']}: @circuits when does the sweep land?"]
 
 
 @pytest.mark.parametrize("where,msg,why", [
@@ -174,6 +213,40 @@ def test_a_doorbell_that_does_not_ring_is_a_failure_and_the_retry_rings_only_wha
     world.slack.fail_threads = set()
     assert consume(world.deps, payload, 2) == "unaddressed: @top"
     assert world.rung("top") == [private(post["ts"])] and router_lines(world, CHAT, post["ts"]) == [NO_MODEL]
+
+
+def test_a_route_that_cannot_be_read_is_a_failure_the_retry_rings_and_a_lane_with_no_route_is_not(world, monkeypatch):
+    """With no clone, as on Vercel, a lane's route is its published copy.  One that can't be read (the raw host answering
+    503) leaves its doorbell NOT RUNG, so the delivery fails and the queue retries it, and the retry rings it once.  A lane
+    read as having no route has no inbox: nothing to retry."""
+    rs = world.deps.rs
+    shutil.move(rs.notes_root() / rs.ROUTES_DIR / "top.json", published(world) / "top.json")
+    down, real = [True], rs.Routes
+
+    def get(url: str) -> bytes | None:
+        if down[0] and url.endswith("/top.json"):
+            raise rs.SlackError(f"{url}: HTTP 503")
+        return rs.http_get(url)
+    monkeypatch.setattr(rs, "Routes", lambda *a, **kw: real(*a, get=get, **kw))
+    post = world.slack.add(CHAT, text="how do I read a PoUW receipt?", user=LUKE)
+    payload = world.event(CHAT, post, "EvU")
+    with pytest.raises(Retry):
+        consume(world.deps, payload, 1)
+    assert world.rung("top") == [] and router_lines(world, CHAT, post["ts"]) == [NO_MODEL]
+    assert any(line.get("line", "").startswith("route @top: NOT RUNG (its route couldn't be read: ") for line in world.logs())
+    down[0] = False
+    assert consume(world.deps, payload, 2) == "unaddressed: @top"
+    assert world.rung("top") == [private(post["ts"])] and router_lines(world, CHAT, post["ts"]) == [NO_MODEL]
+
+    nobody = world.slack.add(CHAT, text="@console is the bound tight?", user=LUKE)
+    assert consume(world.deps, world.event(CHAT, nobody, "EvV"), 1) == "rule"
+    assert {"event": "deliver", "event_id": "EvV", "line": "route @console: no inbox; its holder opens one with "
+            "`research msg names open --as console`"} in world.logs()
+
+
+def published(world) -> Path:
+    """The published notes' routes.d, which the service reads with no clone."""
+    return Path(urllib.parse.unquote(world.deps.rs.Routes().base[len("file://"):]))
 
 
 def test_dead_lettering_when_slack_itself_is_down_still_parks_the_message(world):

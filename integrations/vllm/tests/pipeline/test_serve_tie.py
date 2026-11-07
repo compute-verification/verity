@@ -86,7 +86,7 @@ def test_a_tied_window_names_r_reusing_its_tables_from_w_as_its_commit_record_be
     for w, out in enumerate(outs):
         d = serve / "h1" / f"w{w}"
         reg, rec = (json.loads((d / f).read_text()) for f in (TIE.W_FILE, TIE.R_FILE))
-        assert "error" not in out and out["tied"], out
+        assert "error" not in out and out["tied"] and out["kept"]["calls"] > 0, out
         assert reg == CT.registration(runs[w], previous) and rec["previous"] == REG.digest(reg)
         assert out["commit_record"] == {"named": True, "registration": REG.digest(reg), "record": REG.digest(rec)}
         record = json.loads((d / PH.CALLS_FILE).read_text())

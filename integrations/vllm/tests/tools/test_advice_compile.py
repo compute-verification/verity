@@ -55,6 +55,17 @@ def test_the_registered_default_seed_is_the_public_one_and_a_run_that_used_anoth
         AC.registered_seed({})
 
 
+def test_the_registration_takes_the_engines_world_at_the_rank_and_the_engine_args_class_g_states():
+    kw = {"tensor_parallel_size": 8, "max_model_len": 2048, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256,
+          "enable_prefix_caching": False, "gpu_memory_utilization": 0.9, "seed": 0}
+    assert AC.engine_of({"engine_record": {"engine_kwargs": kw}}, 3) == (
+        {"world": 8, "rank": 3}, {"max_model_len": 2048, "max_num_batched_tokens": 2048, "long_prefill_token_threshold": 256,
+                                  "enable_prefix_caching": False})
+    assert AC.engine_of({}, 0) == ({"world": 1, "rank": 0}, {})
+    with pytest.raises(ValueError, match="rank 8: the run's engine has tensor-parallel world 8"):
+        AC.engine_of({"engine_record": {"engine_kwargs": kw}}, 8)
+
+
 def test_a_user_with_two_requests_in_one_window_is_refused(tmp_path):
     run = _run(tmp_path, [_q("u", [3], [1], 8), _q("u", [3], [2], 8)])
     with pytest.raises(ValueError, match="user 'u' has two requests in window 3"):

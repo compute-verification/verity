@@ -662,7 +662,7 @@ class RefDriver:
         self.roots: dict[int, bytes] = {}
         self.ready = ["ready", "ref"]
 
-    def block_of(self, step: int) -> int:
+    def layer_of(self, step: int) -> int:
         return step % NB
 
     def block(self, b: int, g0: int, steps: int, arm: str, cheat: str, seeds: Path, roots: Path) -> dict:
@@ -684,7 +684,7 @@ class RefDriver:
         for s in range(steps):
             for li, (_, n, k) in enumerate(LAYERS):
                 f = shape(n, k, self.row)
-                t = self.block_of(g0 + s)
+                t = self.layer_of(g0 + s)
                 sd = v31.fill_seeds_from(rec[384 * (s * NL + li):384 * (s * NL + li + 1)])
                 skip = _cheated(kind) if kind != "none" and at in (None, li) else None
                 T, O = v31.fill_values(f, np.asarray(operand(self.cfg, "A", li, t)), np.asarray(operand(self.cfg, "B", li, t)),
@@ -715,7 +715,7 @@ class RefDriver:
 
 # --------------------------------------------------------------------------------------------------------- the period
 class Coins:
-    """One challenger session a period: a5_coins' Local (development, not of record) or Gate (vy-challenger-1)."""
+    """One challenger session a period: a5_coins' Local (development, not of record) or GateClient (vy-challenger-1)."""
 
     def __init__(self, how: str, main: Path, peer: str | None, key_record: str | None, gate_key: str | None) -> None:
         import a5_coins as A5
@@ -730,7 +730,7 @@ class Coins:
     def session(self):
         if self.how == "local":
             return self.A5.Local(Path(tempfile.mkdtemp(prefix="highutil-challenger-")), self.main)
-        return self.A5.Gate(self.how.removeprefix("gate:"), self.gate_key, self.peer, self.key_record, self.main)
+        return self.A5.GateClient(self.how.removeprefix("gate:"), self.gate_key, self.peer, self.key_record, self.main)
 
     def evidence(self, session, root: str, openings: list, dest: Path) -> dict:
         """The verifier's check of the session once it has ended: the auditor's ledger and the session's sealed files

@@ -590,6 +590,27 @@ def MoeRouterSigmoidBias(B, S, logits, bias):
     out = B.call(bind(MoeRouterSigmoidNorm, TOPK=S.TOPK, SCALE=S.SCALE, KERNEL=kernel), _array([p[0] for p in pairs]),
                  _array([p[1] for p in pairs]))
     return tuple_of(out, _array(ids))
+
+
+def slots_signature(f32, i32):
+    """`MoeRouterSigmoidBiasSlots`' signature over its element types: `MoeRouterSigmoidBias_v1`'s parameters, and its weights and
+    ids one return field a slot, (w_0, .., w_{TOPK-1}, id_0, .., id_{TOPK-1})."""
+    return lambda S: ((("logits", Array(S.E, f32)), ("bias", Array(S.E, f32))), Tuple(*[f32] * S.TOPK, *[i32] * S.TOPK))
+
+
+def slots(out: Coll, topk: int) -> Coll:
+    """A (weights, ids) pair of TOPK-arrays as its 2 TOPK slot fields, no gate."""
+    return tuple_of(*[out[0][k] for k in range(topk)], *[out[1][k] for k in range(topk)])
+
+
+@composite("MoeRouterSigmoidBiasSlots", 1, ["E", "TOPK", "SCALE", "KERNEL"], slots_signature(F32, I32),
+           conformance="exact-model-tested; MoeRouterSigmoidBias_v1's words, one field a slot, so the captures its conformance "
+                       "names hold it")
+def MoeRouterSigmoidBiasSlots(B, S, logits, bias):
+    """`MoeRouterSigmoidBias_v1` with its outputs one field a slot: a unit's output rows are its return fields, so slot k's
+    expert id is a row of its own, which the read of the expert's weight rows (`gates.embedding`'s ``tok``) wires whole, and
+    slot k's weight one, which its down projection's ``g`` wires whole."""
+    return slots(B.call(bind(MoeRouterSigmoidBias, E=S.E, TOPK=S.TOPK, SCALE=S.SCALE, KERNEL=S.KERNEL), logits, bias), S.TOPK)
 # ---------------------------------------------------------------------------------------------------------
 
 
