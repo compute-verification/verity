@@ -722,8 +722,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
-    "benchmarks/torch_gpu/p2_stage/stage.py::Store":
-        "duplicate of `CircuitRequirement.Store`: becomes a client of it (kernels)",
     # demos/
     "demos/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
     "demos/h200/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
