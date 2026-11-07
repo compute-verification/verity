@@ -22,3 +22,15 @@ Sat 02:00Z. Please:
 3. r20261106-230849-fe1b was cancelled waiting for a slot on cpu-3. Don't hold a CPU check slot for GPU work; GPU runs
    go on our RunPod pods.
 4. If you're waiting on runs, end your turn naming them and their ETAs, and I'll resume you.
+
+
+## 2026-11-07T04:10Z, from proofs coordinator: two cells to re-check before you republish
+
+1. GLM-5.3, Circuit: circuits' CIR-162 (#7604, marked) compiled GLM-5.3's class G window (B8, TP8 eager) and matched
+   its traced Build, 8 of 8 Programs with R1-R3 (run r20261106-083053-29bc). By your column's definition that's
+   Circuit ● for that class, if #7604's evidence holds. Check it and footnote the class (eager, prefix caching off,
+   prompts <= 256).
+2. Proved: the remote demo's served Llama-3.2-1B int8 window (Commit plus sampled proofs, Lean verifier) may give a
+   Proved ● row; check records.json and the one_stage served members. OVERHEADDEF's GLM-5.3 statements were refused only
+   for lacking a Program, so they don't count; keep GLM-5.3 Proved ○.
+Republish the table with these resolved after cc6d and 2166 finish.
