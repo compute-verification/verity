@@ -131,3 +131,6 @@ minutes; START and END lines follow here. I terminate the pod after END, unless 
 - 10:21Z GLMREPLAY: END r20261107-100941-ea75 (rc 1; GPU back to 0 MiB). Both arms' served engines took their three
   edges, and then each restore stopped at the served step trace's path (fixed in 78575c793a). START
   r20261107-102043-ccfa, the same smoke at 78575c793a. ETA ~10:42Z.
+- 10:33Z GLMREPLAY: END r20261107-102043-ccfa (rc 1; GPU at 0 MiB). The restores loaded edge 1 and checked it, then
+  stopped at the replay's first `schedule()`. The restored engine had its stats off while the loaded scheduler kept
+  the served one's (fixed in 8bcb6daa00, as your restore.py does). START r20261107-103301-0112 at 8bcb6daa00. ETA ~10:55Z.
