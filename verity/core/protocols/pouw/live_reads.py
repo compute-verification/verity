@@ -68,7 +68,7 @@ def header_words(headers: Sequence[Sequence[int]]) -> list[list[int]]:
 
 
 def m_table(program: str, prefix: str, window: str, s: int, m: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
-    """Round s's public m ``<prefix>m@<s>``: one row, m's two u16 words, under `core_check.public_row_salt` of the window's
+    """Round s's public m ``<prefix>m@<s>``: one row, m's two u16 words, under `core_check.public_row_salt` of the execution phase's
     open root `window` and s, registered under `program` binding `window`. Every input is public."""
     if not (isinstance(m, int) and 0 <= m < 1 << 32):
         raise ValueError(f"m is a u32, not {m!r}")
@@ -79,7 +79,7 @@ def m_table(program: str, prefix: str, window: str, s: int, m: int) -> tuple[lis
 
 def round_table(program: str, prefix: str, window: str, s: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
     """Round s's public round ``<prefix>round@<s>``, the unit's ``s``: one row, s's two u16 words, under
-    `core_check.public_row_salt` of the window's open root `window` and s, registered under `program` binding `window`.
+    `core_check.public_row_salt` of the execution phase's open root `window` and s, registered under `program` binding `window`.
     Every input is public."""
     if not (isinstance(s, int) and not isinstance(s, bool) and 0 <= s < 1 << 32):
         raise ValueError(f"s is a u32, not {s!r}")
@@ -97,8 +97,8 @@ def caps(max_tokens: Sequence[int], T: int) -> list[int]:
 def caps_table(program: str, prefix: str, window: str, T: int, max_tokens: Sequence[int]
                ) -> tuple[list[list[int]], list[bytes], G.Registered]:
     """The v2 unit's public caps ``<prefix>caps``: T rows, row q `caps`' leaf q as two u16 words, under
-    `core_check.public_row_salt` of the window's open root `window` and q, registered under `program` binding `window`.
-    Every input is public: the caps are the max_tokens the period's open committed."""
+    `core_check.public_row_salt` of the execution phase's open root `window` and q, registered under `program` binding `window`.
+    Every input is public: the caps are the max_tokens the credit period's open committed."""
     cs = caps(max_tokens, T)
     if not all(isinstance(c, int) and 0 <= c < 1 << 32 for c in cs):
         raise ValueError(f"each public cap is a u32, not {cs!r}")
@@ -121,7 +121,7 @@ def base_table(program: str, prefix: str, window: str, j: int, R: int) -> tuple[
 @functools.lru_cache(maxsize=8)
 def ok_table(program: str, prefix: str, window: str, rounds: int) -> tuple[list[list[int]], list[bytes], G.Registered]:
     """The live units' ok rows ``<prefix>live-ok``: row s the one word 1 (`core_check.OK_ROW`) under `core_check.ok_salt` of
-    the window's open root `window` and s, registered under `program` binding `window`. Every input is public."""
+    the execution phase's open root `window` and s, registered under `program` binding `window`. Every input is public."""
     rows = [list(_cc().OK_ROW) for _s in range(rounds)]
     salts = [_cc().ok_salt(window, s) for s in range(rounds)]
     return rows, salts, G.Registered.commit(program, table(prefix, OK_VALUE), rows, salts, G.WORD_BITS, G.SCHEMA_V2,
@@ -145,9 +145,9 @@ def reads_file(program: str, T: int, S: int, s: int, roots: dict[str, str], wind
                prefix: str = "", max_tokens: Sequence[int] | None = None) -> dict[str, Any]:
     """The verifier's ``--registered`` file (`registered.READS`) of round s's statement ``live@<s>``, unit s of the live
     Program of S rounds at T: its slot ports at round s's ``<prefix>slots@<s>`` and its header ports at
-    ``<prefix>requests@0``, at the roots `roots` (``{value: root}``, the window's entries) gives them, each under
-    `registered.domain` of `program` (the window Program's digest, which the tables are registered under), the slot table
-    bound to the window's open root `window` and the request table to its session `session`; ``m`` and ``s`` at their known
+    ``<prefix>requests@0``, at the roots `roots` (``{value: root}``, the execution phase's entries) gives them, each under
+    `registered.domain` of `program` (the execution phase Program's digest, which the tables are registered under), the slot table
+    bound to the execution phase's open root `window` and the request table to its session `session`; ``m`` and ``s`` at their known
     content (`m_table`, `round_table`) and the output row ``o0`` at the ok rows (`ok_table`). With `max_tokens` it is the v2
     unit's: each ``cap_<i>`` reads row i of the known public caps (`caps_table` of them). Units other than s read nothing.
     Refused (ValueError) when `roots` lacks a table or s is no round."""

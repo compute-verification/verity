@@ -5,10 +5,10 @@ public import Proofs.Flock.SampledGeneric.Joint
 /-!
 # The textbook form's transfer, and its theorem
 
-The link term of an extractor that is a game (`JointExtractor.toExtractor`) transfers to its trials
+The binding error of an extractor that is a game (`JointExtractor.toExtractor`) transfers to its trials
 (`JointExtractor.toTrials_transfers`): an accepted session whose witness for the picked proof block opens a position `c`
 to a value other than the trace's makes the extractor's game read a value other than the trace's at `c`
-(`wrongAt_eq_one`), so the link term at the picked proof block is at most the sum over the positions the sample reads
+(`wrongAt_eq_one`), so the binding error at the picked proof block is at most the sum over the positions the sample reads
 (`atTgt_link_le`); averaged over the sample and exchanged with the sum over positions, that is `Σ_c wt_c · errOf_c`
 (`sum_wt_errOf`), with no slack. `Flock.SecurityProofs.GenericSampledKSJoint` is then `GenericSampledKSPa` at the
 extractor and its trials, with the knowledge term at most `κ`.
@@ -64,7 +64,7 @@ theorem wrongExp_nonneg (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (
     0 ≤ J.wrongExp L R τ X ω c :=
   expect_nonneg (fun o => J.wrongAt_nonneg L R c (X c) (ω, o)) _ _
 
-/-- **The link term at a sampled proof block** is at most what the extractor's game reads wrong, in expectation, at
+/-- **The binding error at a sampled proof block** is at most what the extractor's game reads wrong, in expectation, at
 the positions it reads. -/
 theorem link_toReal_le (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (ω : L.Ω) (u : Fin n)
     (hu : u ∈ L.draw ω) :
@@ -85,7 +85,7 @@ theorem link_toReal_le (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (�
           (fun c _ => J.wrongAt_nonneg L R c (X c) (ω, o)) hc
   · exact Finset.sum_nonneg fun c _ => J.wrongAt_nonneg L R c (X c) (ω, o)
 
-/-- **The link term at the picked proof block**, at the sample `ω`, is at most what the extractor's game reads wrong at
+/-- **The binding error at the picked proof block**, at the sample `ω`, is at most what the extractor's game reads wrong at
 every position the sample reads. -/
 theorem atTgt_link_le (R : Reg) (τ : Cont L Reg PS.session R) (X : B.Trace) (ω : L.Ω) (t : Option (Fin n)) :
     atTgt (L.draw ω) t (fun u => J.toExtractor.link (L.draw ω) R (τ ω) u X) ≤

@@ -204,7 +204,7 @@ theorem oCells_eq (c c' : OCells 1 (fun _ => 1) (fun _ => 1) (fun _ => 1)) : c =
   obtain rfl : d = d' := dCells_eq d d'
   rfl
 
-/-- The one-cell overlapped design's target: the one draw's `dTarget`. -/
+/-- The one-cell overlapped design's target: the one sample's `dTarget`. -/
 def oTarget : (OBits 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) → ZMod (2 ^ 32)) → ZMod (2 ^ 32) :=
   fun z => dTarget fun v => z ⟨0, v⟩
 
@@ -219,7 +219,7 @@ theorem oPrefix_cell (c : OCells 1 (fun _ => 1) (fun _ => 1) (fun _ => 1)) :
   obtain rfl := oCells_eq c ⟨0, 0, 0, 0⟩
   rfl
 
-/-- The honest overlapped run: one round of one draw, its one product slot the target. -/
+/-- The honest overlapped run: one round of one sample, its one product slot the target. -/
 def oRun : OverlapRun 1 1 (fun _ => 1) 1 7 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)) where
   play := .round (fun c z => (oneProd oTarget).val z 0 -
     dPrefix (fun _ _ _ => 0) (fun _ _ _ => 0) wRe c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) fun _ => .done
@@ -320,7 +320,7 @@ theorem ojPrefix_cell (c : OCells 1 (fun _ => 1) (fun _ => 1) (fun _ => 1)) :
   obtain rfl := oCells_eq c ⟨0, 0, 0, 0⟩
   rfl
 
-/-- The honest overlapped call run: one round of one call draw, its one product slot the target. -/
+/-- The honest overlapped call run: one round of one call sample, its one product slot the target. -/
 def ojRun : JOverlapRun 1 1 (fun _ => 1) 1 (fun _ => 1) (fun _ => 1) (ZMod (2 ^ 32)) where
   play := .round (fun c z => (oneProd ojTarget).val z 0 -
     jPrefix (fun _ _ _ => 0) (fun _ _ _ => 0) c.2.1 c.2.2.1 c.2.2.2.val fun v => z ⟨c.1, v⟩) fun _ => .done

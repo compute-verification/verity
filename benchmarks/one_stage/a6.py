@@ -1,5 +1,5 @@
 """One-stage audit, run A6: the W8A8 linears of an int8 decoder layer, each output coordinate a unit, sampled by the stratified
-law in one audit. A coordinate is `ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}` (K/32 satfinite s8 IMMA steps on
+sampling design in one audit. A coordinate is `ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}` (K/32 satfinite s8 IMMA steps on
 sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vLLM's int8 profile serves), one template per K.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src \\
@@ -10,7 +10,7 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
   qkv's 3072, o's 2048 and gate_up's 16384 coordinates at K = 2048, and down's 2048 at K = 8192. The program is
   `TemplatePopulations_v1` over the templates, and the partition `Q_template_instances` v0, one unit per coordinate.
 * **Stand-in values.** Each coordinate's rows are seeded N(0, 1) and N(0, 0.02) rows, each quantized to s8 as steps.py's
-  `quant_rows` does (`benchmarks/served_units/stage.py`'s s8-coord draw), committed afresh. The circuit's output is held to
+  `quant_rows` does (`benchmarks/served_units/stage.py`'s s8-coord sample), committed afresh. The circuit's output is held to
   that numpy twin's. The window says so; vllm's int8 Program and its served rows replace these values.
 * **Statements.** One circuit per template, staged by Flock's `UnitStager` bound to the partition: META names the template,
   the partition and the program. A statement holds at most `chunk_cap` instances (flock-circuit's spec shape, m = k_log + nbl
@@ -19,7 +19,7 @@ sm_120, then `benchmarks/ppl/steps.py`'s `int8_linear` scaling, the int8 step vL
   indices. The verifier derives each port's frame domain itself from META's row schemas and the member's set (Flock's
   set-bound domains), holds the public files to the registration, and the leaf layer is the SHA-512 of the canonical map
   from member to the SHA-512 of its public file.
-* **One sample, the stratified law** (`stratified:K`: one stratum per template, k_s = max(1, round(k n_s / n))), made by the
+* **One sample, the stratified sampling design** (`stratified:K`: one stratum per template, k_s = max(1, round(k n_s / n))), made by the
   verifier's Lean `flock-verify draw --program --partition --stratified K` over its own program and partition object. Each
   member's server serves the sample's units it holds (`serve --zk --draw-file`), and Lean `verify --zk --partition --program`
   holds each session (units derived), so the stratum's share is proved across its template's members.
