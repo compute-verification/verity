@@ -229,7 +229,9 @@ theorem provedUnits_eq {pubB : ByteArray} {record : String} {h D : Json}
           | arr ds =>
             simp only [FlockDeploy.norm_arr, Array.mapM_map, Function.comp_def, nat?_norm]
             rw [toOption_bind_pure, mapM_toOption _ (fun e => (nat? e).bind fun i => is[i]?)]
-            · cases Array.mapM (fun e => (nat? e).bind fun i => is[i]?) ds <;> rfl
+            · show _ = Array.mapM (fun e => (nat? e).bind fun i => is[i]?) ds >>= fun units =>
+                pure (units.qsort (· < ·))
+              cases Array.mapM (fun e => (nat? e).bind fun i => is[i]?) ds <;> rfl
             · intro x
               split <;> (rename_i heq; exact heq.symm)
           | obj m' => simp only [FlockDeploy.norm_obj]; rfl

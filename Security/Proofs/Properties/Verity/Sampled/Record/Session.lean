@@ -83,8 +83,7 @@ variable {si : Ins} {I : Flock.Witness.Inputs} {rd : SampledProofs.OneStageZk.Re
 theorem SessionMatch.read_tags (hm : SessionMatch si I rd) : si.read.tags = Flock.Witness.zkTags I := by
   unfold Flock.Readable.Read.tags
   rw [ite_eq_left hm.zk]
-  unfold FlockSoundness.Discharge.ZkExec.zkTags FlockSoundness.Discharge.ZkExec.zkCoins Flock.Witness.zkTags
-    Flock.Witness.zkCoins
+  unfold FlockSoundness.Discharge.ZkExec.zkTags Flock.Witness.zkTags
   rw [hm.tags, hm.circuitFile, hm.count]
 
 theorem SessionMatch.read_coins (hm : SessionMatch si I rd) : si.read.coins = Flock.Witness.zkCoins I := by
