@@ -41,6 +41,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
+import all Init.Data.String.Defs
 
 @[expose] public section
 
@@ -179,7 +180,16 @@ theorem sound_segment_mid {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) (m 
     refine ⟨o1, o2, ?_⟩
     rw [hash_mid hG hpre, o3, hcv, length_packBits, length_evs, hbl]
 
-theorem be32_1024 : (Flock.be32 1024).data.toList = Hash.be 4 1024 := by decide +kernel
+theorem be32_eq (x : UInt32) :
+    Flock.be32 x = ⟨#[(x >>> 24).toUInt8, (x >>> 16).toUInt8, (x >>> 8).toUInt8, x.toUInt8]⟩ := by
+  simp only [Flock.be32, Std.Legacy.Range.forIn_eq_forIn_range', List.forIn_pure_yield_eq_foldl, Std.Legacy.Range.size]
+  rfl
+
+theorem be32_1024 : (Flock.be32 1024).data.toList = Hash.be 4 1024 := by
+  rw [be32_eq]
+  refine List.ext_getElem (by simp [Hash.be]) fun i h1 h2 => UInt8.toNat_inj.1 ?_
+  have hi : i < 4 := by simpa [Hash.be] using h2
+  interval_cases i <;> simp [Hash.be]
 
 /-- The code's `Q(l)` is `Hash.RowSeg.outerPrefix l`. -/
 theorem outerPrefix_data (l : ℕ) : (Flock.HmRow.rowPrefixSeg l).data.toList = Hash.RowSeg.outerPrefix l := by
@@ -194,13 +204,17 @@ theorem segmentPrefix_data (j s m : ℕ) :
 
 theorem size_rowPrefixSeg (l : ℕ) : (Flock.HmRow.rowPrefixSeg l).size = 128 := by
   rw [size_of_data (outerPrefix_data l), Hash.RowSeg.outerPrefix, length_padTo]
-  have : (Hash.cstr "verity/sha512-row-seg/v1").length = 25 := by decide +kernel
+  have : (Hash.cstr "verity/sha512-row-seg/v1").length = 25 := by
+    rw [← push_zero_data, Array.length_toList, ByteArray.size_data]
+    decide +kernel
   simp only [List.length_append, Hash.BindingProofs.be_length, this]
   norm_num
 
 theorem size_segmentPrefix (j s m : ℕ) : (Flock.HmRow.segmentPrefix j s m).size = 128 := by
   rw [size_of_data (segmentPrefix_data j s m), Hash.RowSeg.segmentPrefix, length_padTo]
-  have : (Hash.cstr "verity/sha512-row-seg/v1/segment").length = 33 := by decide +kernel
+  have : (Hash.cstr "verity/sha512-row-seg/v1/segment").length = 33 := by
+    rw [← push_zero_data, Array.length_toList, ByteArray.size_data]
+    decide +kernel
   simp only [List.length_append, Hash.BindingProofs.be_length, this]
   norm_num
 
