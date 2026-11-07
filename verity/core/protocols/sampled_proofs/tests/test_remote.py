@@ -1187,7 +1187,7 @@ def test_two_sessions_under_one_key_cant_both_pass_for_one_window(tmp_path, sign
 
 def test_one_root_gets_one_session_whichever_schema_opens_it(tmp_path, signer):
     """A v1 open names its window by Commit and a period label; a v2 open of the same root later would give
-    it a second draw of coins, so the ledger is refused for both. A v1 open alone is refused too: it names no prover and
+    it a second sample of coins, so the ledger is refused for both. A v1 open alone is refused too: it names no prover and
     seals no refused hellos. And no v1 entry follows a v2 one."""
     ledger = Ledger(tmp_path / "windows.jsonl", signer, schema=C.LEDGER_SCHEMA_V1)
     first = Host(tmp_path, signer, "s-1", "one", ledger=ledger)

@@ -131,7 +131,7 @@ theorem issuer_I : issuer.key.I.size = 16 := by
   rw [(key_spec toyKey_eq).2.1]
   exact ident_size
 
-/-- A certifier salt of 64 zero bytes, the one the honest certifier draws for each record. -/
+/-- A certifier salt of 64 zero bytes, the one the honest certifier samples for each record. -/
 def salt : ByteArray := ⟨Array.replicate 64 0⟩
 
 theorem salt_size : salt.size = saltBytes := by decide +kernel

@@ -4,9 +4,9 @@ public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 public import SampledProofs.Run
 
 /-!
-# The sampled verifier's sessions at the code with its Lean draw
+# The sampled verifier's sessions at the code with its Lean sample
 
-At `SamplingDeploy.code c reg L bytes sr sess`, one proof session per registration proves every drawn unit: every unit
+At `SamplingDeploy.code c reg L bytes sr sess`, one proof session per registration proves every sampled proof block: every unit
 has the session `sess x` on the rounds `sr x`. So the slot at `S = 1` covers every checked unit (`slotsCover_code`),
 and `SessionRuns`, `SessionOpens` and `InnerNumbers` are one statement about the run's one session each:
 
@@ -17,9 +17,9 @@ and `SessionRuns`, `SessionOpens` and `InnerNumbers` are one statement about the
 * `innerNumbers_code_iff`: `InnerNumbers` is Flock's numbers at the one session's statement.
 
 And of `SampledProofs.Run.run` itself, `run_decided`: a run that doesn't refuse (a `{"step", "codes"}` object) passed
-the population and R1–R7 (`Registration.check`) under the law of the rule over the population (`Select.Rule.over`), ran
-the draw of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
-the registration (`Draw.checkDraw`), and its `draw` and `read` are that draw's (under a two-stage rule, the first
+the population and R1–R7 (`Registration.check`) under the sampling design of the rule over the population (`Select.Rule.over`), ran
+the sample of record (`Select.select`, under `Select.resolve`'s rule) on the challenger's bytes (`source`) and held it to
+the registration (`Draw.checkDraw`), and its `draw` and `read` are that sample's (under a two-stage rule, the first
 stage's, with the second stage's after them).
 -/
 
@@ -115,8 +115,8 @@ theorem ite_eq_ok {c : Prop} [Decidable c] {a j : Json} {rest : V Json}
 
 -- `run` unfolds to about 50 decided leaves under one `match` or `if` per step, hence the heartbeat budget.
 set_option maxHeartbeats 4000000 in
-/-- **A decided run passed its registration and ran the draw of record**: `run` either refuses at a step or passed the
-population, R1–R7 under the law of the rule over it (`Rule.over`, a rate law's `subset:K`), and the draw's own check,
+/-- **A decided run passed its registration and ran the sample of record**: `run` either refuses at a step or passed the
+population, R1–R7 under the sampling design of the rule over it (`Rule.over`, a rate law's `subset:K`), and the sample's own check,
 with its `draw` and `read` those of `Select.select` under `Select.resolve`'s rule on the challenger's bytes. -/
 theorem run_decided (i : Input) (j : Json) (h : run i = .ok j) :
     (∃ (step : String) (codes : Array String),

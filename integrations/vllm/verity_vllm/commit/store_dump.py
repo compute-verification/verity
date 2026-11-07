@@ -333,7 +333,7 @@ class _Seg:
 
 class _Block:
     """A dumped step's retained bytes: `holds(lo, hi)` and `blk[lo:hi]` over the step stream, like the committer's host retainers.
-    ``dropped``: a step its window's draw-gated release kept only the drawn leaves of (`device_pool.DrawnRanges`)."""
+    ``dropped``: a step its window's draw-gated release kept only the sampled leaves of (`device_pool.DrawnRanges`)."""
 
     is_cuda = False
     dropped = False
