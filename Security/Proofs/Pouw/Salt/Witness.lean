@@ -50,7 +50,7 @@ keyed verifier's acceptance (`Hash.Keyed.accepts`), at one instance under the sp
 (`Pouw.PearlC.Sha512.digest`): a window key of 64 bytes, a live salt, a key leaf over 192 salt bytes, and one instance,
 a two-leaf frame-v3 subtree whose public digest is the keyed hash of its root node.
 
-* `keyed_leaf_binds_honest`: when a drawn unit's proofs open exactly the honest committer's values (rank 0's and rank
+* `keyed_leaf_binds_honest`: when a sampled proof block's proofs open exactly the honest committer's values (rank 0's and rank
   1's, each with its sibling, under the window's key and key-leaf salt), both premises hold (`SubtreeLayout`,
   `SaltDerivation`), and the keyed verifier accepts the honest opening at rank 0.
 * `keyed_leaf_binds_nontrivial`: when every opening is accepted (the premises dropped), two different values at rank 0

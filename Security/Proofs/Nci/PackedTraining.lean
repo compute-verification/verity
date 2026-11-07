@@ -6,7 +6,7 @@ public import Proofs.Nci.Training
 public import Proofs.Nci.Lemmas
 
 /-!
-# The partial-sum law with dark gates, on a chain with several products to a gate
+# The partial-sum rule with dark gates, on a chain with several products to a gate
 
 Lemma 2 and the split entries' count for a `PackedChain`, then `PackedIncompressibleContainedMatMulOn` and
 `PackedIncompressibleContainedTrainingOn`. As for the fan-out bound, the counts are of products and entries, and
@@ -141,7 +141,7 @@ theorem activationsIncompressible_of_training_packed {c : RegisteredCircuit} {k 
   exact le_of_max_charge_left hba h0.1
 
 open Classical in
-/-- **The partial-sum law with dark gates, in reads, at most `k` products to a gate**: each dark gate is a small IU of
+/-- **The partial-sum rule with dark gates, in reads, at most `k` products to a gate**: each dark gate is a small IU of
 its own, whose partial sums are within its reads. -/
 theorem PackedIncompressibleContainedMatMulOn_rate :
     ∀ (k Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (ch : PackedChain c.D k) (T : Threading c) (dd emax : ℕ)
@@ -223,7 +223,7 @@ theorem packedTrainingIncompressible_toPacked {c : RegisteredCircuit} {ch : Chai
     simp only [hcard]
     exact Iff.rfl
 
-/-- **The per-product partial-sum law with dark gates is the case `k = 1`.** -/
+/-- **The per-product partial-sum rule with dark gates is the case `k = 1`.** -/
 theorem incompressibleContainedMatMulOn_of_packed (h : Guarantees.PackedIncompressibleContainedMatMulOn) :
     Guarantees.IncompressibleContainedMatMulOn :=
   fun Γ α K b_w b_a μ r d ch T dd emax M hα hK hw ha hdd hΓ hαK hμ₀ hμ₁ hd he hP hB hX hT =>

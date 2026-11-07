@@ -171,8 +171,8 @@ def tree_chain(leaves: float) -> int:
 
 
 def block_k_log(ands: int, rows: Sequence[int]) -> int:
-    """The ``k_log`` of the C-Flock block that holds one proof block of ``ands`` ANDs opening ``rows`` (bytes each), as
-    C-Flock's composer lays it out (`verity_flock.circuit.compose`'s ranges): the unit's slot, the least power of two above
+    """The ``k_log`` of the Flock block that holds one proof block of ``ands`` ANDs opening ``rows`` (bytes each), as
+    Flock's composer lays it out (`verity_flock.circuit.compose`'s ranges): the unit's slot, the least power of two above
     its ANDs and its rows' bits (a row an AND and a column a port bit, as `UnitStager`'s early check counts them), beside an
     hm96 slot a row (a power of two in all) and the mask, then a sha512x3 slot per `PER_SLOT` compressions before the rows'
     last SHA-512 blocks. A row's opening is those slots, not ANDs in the unit's slot."""
@@ -184,9 +184,9 @@ def block_k_log(ands: int, rows: Sequence[int]) -> int:
 
 
 def cap(ands: int, rows: Sequence[int]) -> int:
-    """A statement's proof blocks of ``ands`` ANDs opening ``rows``: one a C-Flock block of 2^`block_k_log` under
+    """A statement's proof blocks of ``ands`` ANDs opening ``rows``: one a Flock block of 2^`block_k_log` under
     m = k_log + nbl <= 35, at most 2^20 (below 2^22 the composer packs several a block, about as many a statement); 0, not a
-    proof block, past C-Flock's 2^`K_MAX`."""
+    proof block, past Flock's 2^`K_MAX`."""
     k = block_k_log(ands, rows)
     return 0 if k > K_MAX else min(1 << (35 - k), 1 << 20)
 
@@ -227,7 +227,7 @@ ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
     (14336, 512, 512): (131.07, 119.78, 41.6)}
 
 
-#: PoUB's opening unit (`verity.ml.commitments.gates.block_check`): a drawn receipt opened in
+#: PoUB's opening unit (`verity.ml.commitments.gates.block_check`): a sampled receipt opened in
 #: circuit, its 4 KiB block decoded to its payload, its sketch receipt recomputed, and the receipt leaf and the payload
 #: opened to their roots (its ANDs are the whole unit's, every opening included)
 OPENING = "BlockOpeningCheck_v1{N=512,C=569,K=2,MASKED=0,BYTES=4096,ROWS=16,LEAF=16,P=64,DR=2,DP=12,DV=1}"
@@ -247,7 +247,7 @@ OPENING_SESSIONS: dict[str, dict[tuple[int, int], float]] = {
 
 #: the `h200` card: GLM-5.3's proof blocks at TP8 (benchmarks/served_units/stage.py's types) proved on one H200 by
 #: benchmarks/one_stage/zk_cost.py with `flock-circuit prove --zk --gpu`, the device building the witness and no send check
-#: (arm dev, the deployed prover), per run and (Definition, ANDs a proof block as staged, staged proof blocks, drawn): the
+#: (arm dev, the deployed prover), per run and (Definition, ANDs a proof block as staged, staged proof blocks, sampled): the
 #: median end-to-end seconds of a warm prover's timed sessions (GPU-s, the live verifier's round trips in them), the CPU
 #: time of Lean `verify --zk` where it verified that point (None elsewhere) and the statement's staging (CPU-s); its
 #: `overhead` step's observations.json

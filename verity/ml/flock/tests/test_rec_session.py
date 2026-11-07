@@ -190,7 +190,7 @@ def _client(addr: str, rec: dict, tree: dict | None = None) -> list:
 @pytest.fixture(scope="module")
 def served(tmp_path_factory):
     """`rec_session.serve` on loopback, its challenger returning the fixture's recorded coins in the order the prover's
-    rounds drew them (z_partial's coinless round draws none), and the fake prover's answers."""
+    rounds drew them (z_partial's coinless round samples none), and the fake prover's answers."""
     assert (SET / "stage" / "circuit.txt").is_file(), (
         f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
     rec = json.loads((SET / "records-cpu" / "honest.json").read_text())["record"]

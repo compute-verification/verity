@@ -175,7 +175,7 @@ team skill). A red's culprit is the one landing whose change touches what its fa
 a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
 forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
 rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
-is the only check before it joins, and a body naming no live goal draws a warning, never a refusal. A Markdown file over its
+is the only check before it joins, and a body naming no live goal samples a warning, never a refusal. A Markdown file over its
 cap (`tests/test_repository.py`) is a warning too: drive lands the change and tells its owner, who trims it in their next PR.
 A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s tip (its
 lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit whose

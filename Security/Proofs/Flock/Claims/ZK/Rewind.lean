@@ -162,7 +162,7 @@ theorem Pr_exists_le {α : Type} [Fintype α] : ∀ (n : ℕ) (p : Fin n → α 
       rw [e, Fin.sum_univ_succ]
       exact (Pr_or_le _ _).trans (add_le_add le_rfl (Pr_exists_le n _))
 
-/-- **One of `n` independent samples** has the law of one sample. -/
+/-- **One of `n` independent samples** has the sampling design of one sample. -/
 theorem Pr_coord {α β : Type} [Fintype α] [Fintype β] [Nonempty β] {n : ℕ} (i : Fin n) (p : α → β → Prop) :
     Pr (fun q : α × (Fin n → β) => p q.1 (q.2 i)) = Pr fun q : α × β => p q.1 q.2 := by
   classical

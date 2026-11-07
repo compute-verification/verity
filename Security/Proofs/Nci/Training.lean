@@ -9,13 +9,13 @@ public import Proofs.Nci.Lemmas
 /-!
 # Proofs of NCI's guarantees under training's incompressibility
 
-`TrainingIncompressible` is one law over divisions of the reference circuit. A small IU `R` is a division of `c` into
-`R` and the rest (`splitOff`), so the law gives `WeightsIncompressible` and `ActivationsIncompressible` on `R`; on a
-division into small IUs it gives `PartialSumsIncompressible`. Conversely the three give the law: on a division with an IU
+`TrainingIncompressible` is one sampling design over divisions of the reference circuit. A small IU `R` is a division of `c` into
+`R` and the rest (`splitOff`), so the sampling design gives `WeightsIncompressible` and `ActivationsIncompressible` on `R`; on a
+division into small IUs it gives `PartialSumsIncompressible`. Conversely the three give the sampling design: on a division with an IU
 that is not small, charge every partial sum to that IU (`trainingIncompressible_iff`). The guarantees then follow from the
 thread and partial-sum proofs, which read only those three.
 
-Through a partial containment each dark gate is an IU of its own (`withDark`), so the law bounds the partial sums it
+Through a partial containment each dark gate is an IU of its own (`withDark`), so the sampling design bounds the partial sums it
 absorbs by its reads (`IncompressibleContainedMatMulOn`). At `μ = 1` that budget has no weight, and the activations' half
 alone bounds the products the declaration computes (`ContainedFanOutOn`, the case `k = 1` of `PackedContainedFanOutOn`).
 -/
@@ -78,7 +78,7 @@ section Training
 variable {c : RegisteredCircuit} {ch : Chain c.D} {T : Threading c} {Γ : ℕ} {K b_w b_a : ℝ}
 
 open Classical in
-/-- The law on one small IU: divide `c` into it and the rest. -/
+/-- The sampling design on one small IU: divide `c` into it and the rest. -/
 theorem training_piece (h : Assumptions.TrainingIncompressible c ch T Γ K b_w b_a) {R : Finset (Fin c.D.N)}
     (hR : Small c Γ K R) :
     ∃ s : ℕ,
@@ -174,7 +174,7 @@ theorem IncompressibleContainedTraining_rate :
     _ ≤ d.D.size d.D.computed := hF
 
 open Classical in
-/-- **The partial-sum law with dark gates, in reads**: each dark gate is a small IU of its own, whose partial sums are
+/-- **The partial-sum rule with dark gates, in reads**: each dark gate is a small IU of its own, whose partial sums are
 within its reads. -/
 theorem IncompressibleContainedMatMulOn_rate :
     ∀ (Γ : ℕ) (α K b_w b_a μ : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (T : Threading c) (dd emax : ℕ)

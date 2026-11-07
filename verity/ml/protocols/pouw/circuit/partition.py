@@ -115,7 +115,7 @@ def window_units(shape: Shape, calls: int, kind: str = "shift24") -> tuple[Proof
 
 
 def window_cut(shape: Shape, calls: int, kind: str = "shift24") -> "UnitCut":
-    """C calls on one weight in one root, cut as one Program: the invariant over a window's composition."""
+    """C calls on one weight in one root, cut as one Program: the invariant over an execution phase's composition."""
     return unit_cut_of(ncp2.window(shape, calls, kind), shape, kind)
 
 

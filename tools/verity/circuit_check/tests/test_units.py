@@ -621,7 +621,7 @@ def vtop():
 
 """
 #: the check's value also says whether a Boolean Definition of the target's word is registered where it is checked, as
-#: C-Flock's lowering looks one up (`verity_flock.ir_lower`'s ``_boolean_build``)
+#: Flock's lowering looks one up (`verity_flock.ir_lower`'s ``_boolean_build``)
 WORDED = """def worded(fid):
     from verity.ml.circuits.defs import REGISTRY
 
@@ -802,7 +802,7 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     return {"failures": F.failures, "warnings": [], "gates": fn.gates,
             "value": [evaluate(fn, 3, 0x0105), w["applies"], [f["name"].split(" ")[0] for f in F.failures]]}
 """
-#: `FORKED` with C-Flock's range at 2^5 witness bits, which SynTile's 48 port bits are past, and ``syn.pouw.`` PoUW's; a unit
+#: `FORKED` with Flock's range at 2^5 witness bits, which SynTile's 48 port bits are past, and ``syn.pouw.`` PoUW's; a unit
 #: counted here first, so what counting imports (the kernels its pieces register) is here before any check, as the catalog's
 #: registries have it
 BLOCKED = FORKED.replace("rep = cli.run(", "from verity_flock import circuit as FC\nfrom syn.prims import SynAdd\nFC.unit_witness(SynAdd)\n"
@@ -812,7 +812,7 @@ BLOCKED = FORKED.replace("rep = cli.run(", "from verity_flock import circuit as 
 @pytest.mark.slow
 def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(tmp_path):
     """The fail-open case: from the bindings' records, built apart or reused, with ``--jobs`` or without, a unit staged whole
-    and past C-Flock's range fails ``block/past-range`` as a full build fails it, though the module that makes it PoUW's
+    and past Flock's range fails ``block/past-range`` as a full build fails it, though the module that makes it PoUW's
     (`sidecars.owner`, `checks.UNIT_OWNERS`) is imported only by another binding's body, which a full build builds before any
     check: once the records count and SynTile alone misses (its new pin), no process here builds SynHolder's body.  A lookup
     that read only what the checking process imported would skip the check."""

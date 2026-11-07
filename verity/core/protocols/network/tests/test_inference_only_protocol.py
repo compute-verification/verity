@@ -9,7 +9,7 @@ with the run's own record, the commitment, appended, and that record's digest th
 (`baseline_difftest_vectors.case`), split at the run's own record into the protocol's params, commitment and evidence,
 then at most one change (`MUTATIONS`): the division made to fail (`gamma` 0, so every inference block is over its gate
 budget), the run's record naming another circuit, the run's record repeated in the log, and malformed params,
-commitments and evidence. Onsite's and remote's difftest (`verity/core/protocols/composition/tests/`) draws the
+commitments and evidence. Onsite's and remote's difftest (`verity/core/protocols/composition/tests/`) samples the
 subprotocol's cases from `drawn` and answers them with `reference`."""
 
 from __future__ import annotations
@@ -128,7 +128,7 @@ EXPECT = {"honest": ("accept", "accept"), "refused": ("reject", "code"), "noncom
           "commitment-type": ("reject", "commitment"), "commitment-noncanonical": ("reject", "commitment"),
           "evidence-key": ("reject", "evidence"), "evidence-noncanonical": ("reject", "evidence")}
 MUTATIONS = list(EXPECT)
-#: The first seeds of the provenance difftest's declarations, from which honest and refused cases are drawn.
+#: The first seeds of the provenance difftest's declarations, from which honest and refused cases are sampled.
 SEEDS = 240
 
 

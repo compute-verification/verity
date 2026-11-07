@@ -27,7 +27,7 @@ that nothing a proof block reads is fresh and the policy holds at read cap `0`.
 * `mb0`, the cover theorem's multiplication blocks of no product on a registered circuit's bit view; `mbBits`, the covering
   bound's two products of the toy's bit view (`Cover.bitDecl`), the weight's bit for each of two tokens;
 * `OneWindow`: one PoUW window of capacity `2` over the outcomes `Bool`, its certificate `right` or `wrong` at every
-  outcome, and no faulty proof block (`bad`).
+  outcome, and no incorrect proof block (`bad`).
 -/
 
 @[expose] public section
@@ -224,7 +224,7 @@ def mbBits : Covering.MulBlocks (Cover.bitDecl D) where
   T_disjoint _ _ _ := disjoint_empty_left _
   T_θ _ := disjoint_empty_left _
 
-/-! One PoUW window of capacity `2` over the outcomes `Bool`, and no faulty proof block. -/
+/-! One PoUW window of capacity `2` over the outcomes `Bool`, and no incorrect proof block. -/
 
 namespace OneWindow
 
@@ -237,13 +237,13 @@ abbrev right : Bool → Fin 1 → Prop := fun _ _ => False
 /-- Every certificate is wrong. -/
 abbrev wrong : Bool → Fin 1 → Prop := fun _ _ => True
 
-/-- No faulty proof block. -/
+/-- No incorrect proof block. -/
 abbrev bad : Bool → Finset Empty := fun _ => ∅
 
-/-- A faulty proof block's identity, of none. -/
+/-- An incorrect proof block's identity, of none. -/
 abbrev ident : Empty → Unit := fun b => b.elim
 
-/-- A faulty proof block's time and the declared work it skips, of none. -/
+/-- An incorrect proof block's time and the declared work it skips, of none. -/
 abbrev time : Empty → ℝ := fun b => b.elim
 
 end OneWindow
