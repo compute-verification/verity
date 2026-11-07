@@ -329,8 +329,9 @@ PINNED_CONFIG = ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "ena
 
 
 def engine_args(server_argv: Sequence[str], config: Mapping[str, Any]) -> Any:
-    """The served engine's arguments, parsed from its server's argv as vLLM's OpenAI server parses them, with the
-    served step trace header's block count (``num_gpu_blocks_override``) and `PINNED_CONFIG`."""
+    """The served engine's arguments, parsed from its server's argv as vLLM's OpenAI server parses them (its stats
+    setting too: the scheduler's state a loader restores keeps the served one's), with the served step trace header's
+    block count (``num_gpu_blocks_override``) and `PINNED_CONFIG`."""
     from vllm.engine.arg_utils import EngineArgs
     from vllm.entrypoints.launchers.cli_args import make_arg_parser
     from vllm.utils.argparse_utils import FlexibleArgumentParser
@@ -343,7 +344,6 @@ def engine_args(server_argv: Sequence[str], config: Mapping[str, Any]) -> Any:
     for k in PINNED_CONFIG:
         if config.get(k) is not None and hasattr(args, k):
             setattr(args, k, config[k])
-    args.disable_log_stats = True
     return args
 
 
@@ -540,10 +540,12 @@ def restore(a: argparse.Namespace) -> int:
     verdict = out / "restore.json"
     t0 = time.monotonic()
     usage = UsageContext.OPENAI_API_SERVER
-    vc = engine_args(meta["server_argv"], header["config"]).create_engine_config(usage)
+    args = engine_args(meta["server_argv"], header["config"])
+    vc = args.create_engine_config(usage)
     res["autotune"] = carry_autotune(Path(meta["autotune_dir"]), scratch / "autotune", vc.compute_hash(include_version=False))
-    eng = LLMEngine(vllm_config=vc, executor_class=Executor.get_class(vc), log_stats=False, usage_context=usage,
-                    multiprocess_mode=False)
+    res["log_stats"] = not args.disable_log_stats
+    eng = LLMEngine(vllm_config=vc, executor_class=Executor.get_class(vc), log_stats=res["log_stats"],
+                    usage_context=usage, multiprocess_mode=False)
     core = eng.engine_core.engine_core
     rpc = core.model_executor.collective_rpc
     res["build_s"] = round(time.monotonic() - t0, 1)
