@@ -36,9 +36,9 @@ useful word `(0, 0, 0)`. The adversary `guessAdv` has no preprocessing and suppl
 
 **(b) The narrowed domain** proves the program no attack in two exact senses, and no more:
 - `oneUnit_not_new`: its workload is outside `pearlCDomainDev`, so TT_OUT's quantifier never reaches it;
-- `guess_win_zero_pearlCDev` (and rev1): on every workload in `pearlCDomainDev`, a draw on which the same program wins
+- `guess_win_zero_pearlCDev` (and rev1): on every workload in `pearlCDomainDev`, a sample on which the same program wins
   TT_OUT's game at any `T ≥ 0` has a unit whose reference ticket and useful words `(0, j)`, `0 < j < 64`, are all `+0`:
-  126 words the program never wrote. How rare such draws are is a property of the noise, which this file does not bound.
+  126 words the program never wrote. How rare such samples are is a property of the noise, which this file does not bound.
 `ttOutPearlCDevW1_of_old`: the refuted form implies the narrowed one, so the narrowing only weakens the assumption.
 -/
 
@@ -603,7 +603,7 @@ theorem guess_zero_words {dv : W1.W1Device} {salt : S → List ℕ} {P : Protoco
   rw [hu0, Freeze.wordQ_zero] at h2
   exact ⟨h1.symm, h2.symm⟩
 
-/-- **On a domain of units with `m > 0` and `n ≥ 64`**, a draw on which the program wins at any `θ ≥ 0` has a unit whose
+/-- **On a domain of units with `m > 0` and `n ≥ 64`**, a sample on which the program wins at any `θ ≥ 0` has a unit whose
 reference words `(0, j)`, `0 < j < 64`, ticket and useful, are all `+0`. -/
 theorem guess_win_zero {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol Q R S} {U : Workload} {a : Codes}
     {t y : ℕ} {H : Q → R} {s : S} {θ : ℝ}
@@ -625,7 +625,7 @@ theorem guess_win_zero {dv : W1.W1Device} {salt : S → List ℕ} {P : Protocol 
   exact ⟨u, huN, fun j hj0 hj =>
     guess_zero_words hu (hn u huN).1 (lt_of_lt_of_le hj (hn u huN).2) (by omega)⟩
 
-/-- **(b) for Pearl-C at any record**: on a workload in the narrowed domain, a draw on which the program wins TT_OUT's game
+/-- **(b) for Pearl-C at any record**: on a workload in the narrowed domain, a sample on which the program wins TT_OUT's game
 at `T ≥ 0` has a unit with 126 reference words `+0` (63 ticket and 63 useful, row 0, columns 1 to 63). -/
 theorem guess_win_zero_pearlCDev {dv : W1.W1Device} {salt : S → List ℕ} {d : PearlCDevice} {sem : PearlCSem Q R S}
     {ρ : ℚ} {U : Workload} (hD : pearlCDomainDev d U.layout) {a : Codes} {t y : ℕ} {H : Q → R} {s : S} {T : ℝ}

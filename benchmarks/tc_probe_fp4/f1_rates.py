@@ -26,7 +26,7 @@ emulates (s4, u4, b1 and FP16 m8n8k4 on sm_120a: one ``CALL`` per PTX instructio
 passes the SASS gate as ``emulated``, with its callee's MMAs recorded, and is timed as that route: its price is the emulation's.
 
 Operands are uniform random codes of each form's types (small magnitudes where the accumulator is FP16, so no chain reaches inf);
-the sparse forms carry real 2:4 metadata (every nibble one of the six index pairs ordered_metadata accepts, drawn per lane and per
+the sparse forms carry real 2:4 metadata (every nibble one of the six index pairs ordered_metadata accepts, sampled per lane and per
 operand set; 1:2 for TF32), and ``sp_nvf4_meta_const`` repeats OMMA.SF.SP with one constant nibble.
 A product narrower than an E2M1 product (``s4``, ``u4``, ``b1``) is priced per its own product and flagged: it can't
 hold one E2M1 x E2M1 product (12 x 12 as integers after the x2), so it is not a like-for-like multiplier.  Labels: every rate
@@ -761,7 +761,7 @@ _E4M3_FINITE = np.array([c for c in range(256) if c & 0x7F != 0x7F], np.uint32)
 
 
 #: FP6 / FP4 codes (exponent bits, mantissa bits) and, for the FP16-accumulate forms, how many of the smallest magnitude codes
-#: they draw (|x| <= 0.4375, 0.625, 0.5). A K=32 sum then stays within 16, at most half an FP16 ulp once |D| >= 2^15, so a
+#: they sample (|x| <= 0.4375, 0.625, 0.5). A K=32 sum then stays within 16, at most half an FP16 ulp once |D| >= 2^15, so a
 #: chain of millions of MMAs on fixed operands stalls short of inf
 _NARROW = {"e3m2": (3, 2, 8), "e2m3": (2, 3, 6), "e2m1": (2, 1, 2)}
 #: where kind::f8f6f4 / kind::mxf8f6f4 read a code in its 8-bit container (PTX ISA: E2M1 in the central 4 bits, E3M2 and E2M3

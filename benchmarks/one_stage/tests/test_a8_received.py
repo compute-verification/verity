@@ -1,8 +1,8 @@
-"""A8's scan of what the verifier received (`a8.scan`) cuts each drawn blob whole with the zero-knowledge drivers' one
+"""A8's scan of what the verifier received (`a8.scan`) cuts each sampled blob whole with the zero-knowledge drivers' one
 cutter (`leak_scan.public_pieces`), leaves out the pieces the staged public circuit holds and lists them, and judges
 what it finds by their one rule (`leak_scan.scan`): a chunk whose run of zero bytes the circuit file holds too reads as
 no leak, a chunk piece in a verifier file, its unaligned tail included, reads as leaked, a blob shorter than a piece is
-refused, and the prover's input file still holds every drawn piece."""
+refused, and the prover's input file still holds every sampled piece."""
 
 from __future__ import annotations
 

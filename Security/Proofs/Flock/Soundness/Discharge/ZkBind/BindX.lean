@@ -70,7 +70,7 @@ variable {lay : LayoutZ A P planZ tab decode} (rs : HmRowsZX lay)
 def scheme (p : lay.Pos) : ExplicitLeaf lay.Val :=
   if rs.isRow p then ExplicitLeaf.hm96X (rs.enc p) (rs.ext p) (rs.ext_spec p) else rs.other p
 
-/-- **`HmRowComputes` at the drawn units' rows of `--zk` tables**, each row under its own encoding. -/
+/-- **`HmRowComputes` at the sampled proof blocks' rows of `--zk` tables**, each row under its own encoding. -/
 def Computes : Prop :=
   Assumptions.HmRowComputes (fun l => digBytes (H512 l)) K512.saltPrefix K512.mask
     (fun w : RowSiteZ planZ tab C.N =>
