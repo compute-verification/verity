@@ -27,6 +27,8 @@ KINDS: dict[str, str] = {
     "evidence/v1": "a lane's evidence behind a note, which never goes in the notes (scripts, logs, JSON, plots): payload file or tree; "
                    "meta {lane, what, run?}; the note cites the art: id",
     "fixture/v1": "a repo-replicated input (golden records, instances); payload file/tree",
+    "fleet-samples/v1": "one UTC day of the fleet's 5-minute usage samples (pods/nebius/fleet.py, samples-YYYYMMDD.jsonl), put "
+                        "once the day is over: the usage record's second copy, off the control pod; payload file",
     "notes-evidence-index/v1": "where the bytes of files removed from the notes tree live: payload index.jsonl, one {path, sha256, "
                                "bytes, art, member, kind} per file (`research data fetch <art> --path <member>` restores it); meta "
                                "{notes_commit, files, bytes, note}",
@@ -35,7 +37,7 @@ KINDS: dict[str, str] = {
                           "verity_numerical.bench.frozen.EVIDENCE",
     "commit-map/v1": "a history rewrite's commit map (research.commitmap): payload file of `<old> <new> <same-tree 0|1>` lines; meta {from, to, "
                      "tool, args}; applies once labelled commit_map=accepted by its approver",
-    "input-set/v1": "one subcircuit's input set, synthetic or captured (verity_numerical.bench.input_sets; the vllm-vu-set/v1 "
+    "input-set/v1": "one subcircuit's input set, synthetic or captured (verity_flock.input_sets; the vllm-vu-set/v1 "
                     "layout): payload tree = manifest.json + index.json + flat port arrays; meta {set, subcircuit, template, "
                     "parameters, source, n, content_digest, schema, relation, seed?, row?, model?, research_run?}",
     "run-files/v1": "the files a result.json pointed at, as one tree",

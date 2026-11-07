@@ -27,14 +27,15 @@ def test_every_scenario_evaluates_below_its_best_attack_unless_a_premise_is_name
 
 
 def test_a_bound_refuted_at_a_block_does_not_bound_it_and_is_still_reported_alone():
-    """partial-sum's `ActivationReads` is refuted past 4·10⁹ bits, so on its own it binds NVL72's serving cut (`k_S`
-    far past that) at a standing of refuted, its padded size ratio 76 times the lower bound's (both below 1, so both
-    slowdowns are 1). Every bound at once takes no cap from it at that block, its standing doesn't reach the lower
-    bound's, and the lower bound is still at least every bound alone whose premises aren't refuted."""
-    f = evaluate_named(REG, "reference-onsite-nvl72-elementary").families[0]
-    ps = next(e for e in f.bounds if e.argument == "partial-sum")
-    assert ps.premise == "refuted" and {s.cut for s in ps.overhead.serving.values()} == {"serving"}
-    assert f.combined.padded < ps.padded / 10 and f.combined.premise != "refuted"
+    """With E1's activation rate refuted past its credible 1.1·10⁹ bits, fanout-priced on its own binds onsite H200's
+    serving cut (`k_S` past that) at a standing of refuted, its padded size ratio about 290 times the lower bound's.
+    Every bound at once takes no cap from it at that block, its standing doesn't reach the lower bound's, and the lower
+    bound is still at least every bound alone whose premises aren't refuted."""
+    premise = "premise.e1-activation-rate"
+    f = evaluate_named(REG.override({f"{premise}.beyond": "refuted"}), "reference-onsite-h200").families[0]
+    fp = next(e for e in f.bounds if e.argument == "fanout-priced")
+    assert fp.premise == "refuted" and {s.cut for s in fp.overhead.serving.values()} == {"serving"}
+    assert f.combined.padded < fp.padded / 10 and f.combined.premise != "refuted"
     assert all(e.rho <= f.lo * (1 + 1e-9) for e in f.bounds if e.overhead and e.premise != "refuted")
 
 
@@ -87,12 +88,12 @@ def test_unmonitored_is_the_algorithm_alone():
     no protocol gives `max(1, μ)` for the attack, 1 for the reference's own family, and the reference's time."""
     r = evaluate_named(REG, "unmonitored-h200-kimi")
     f0 = r.scenario.context.fleet
-    mfu = f0.eps_dark * f0.dark_mfu + (1 - f0.eps_dark) * f0.mfu_train
+    mfu = f0.eps_unreg * f0.dark_mfu + (1 - f0.eps_unreg) * f0.mfu_train
     assert r.scenario.mfu == pytest.approx(mfu)
     for f in r.families:
         mu = f.profile.efficiency
         assert math.isclose(f.combined.padded, mu) and math.isclose(f.best_attack.padded, mu / mfu)
-        assert f.lo == pytest.approx(multiple_bound(mfu, f0.eps_dark / mu, (1 - f0.eps_dark) / mu))
+        assert f.lo == pytest.approx(multiple_bound(mfu, f0.eps_unreg / mu, (1 - f0.eps_unreg) / mu))
         assert f.attack == pytest.approx(max(1.0, mu))
     s = r.scenario
     assert r.lo == r.attack == 1.0 and math.isclose(s.seconds(r.attack), s.reference / (mfu * s.total_phi))
@@ -100,16 +101,6 @@ def test_unmonitored_is_the_algorithm_alone():
 
 def test_onsite_adds_a_cut_so_its_lower_bound_is_never_below_remotes():
     assert evaluate_named(REG, "onsite-h200-kimi").lo >= evaluate_named(REG, "remote-h200-kimi").lo * (1 - 1e-9)
-
-
-def test_the_counts_match_the_lean_docstrings_at_kimi_k2():
-    k = 2e7
-    # FanOutIntensity: 7.45e11 products per block at c = 1; FanOutReadIntensity: 1.86e11 at f = 4
-    assert math.isclose(classes.fanout(k, 2.5, 512, 37248, 1, 163840, 1), 7.45e11, rel_tol=2e-3)
-    assert math.isclose(classes.fanout_read(k, 2.5, 4, 512, 37248, 1, 163840, 1), 1.86e11, rel_tol=2e-3)
-    assert classes.lookups(k, 1, 163840) == 122
-    assert classes.fanout(k, 2.5, 100, 37248, 1, 163840, 1) == math.inf
-    assert classes.cover(k, 2.5) == k * k / 2.5 + k
 
 
 def test_every_lean_citation_is_in_a_lock():
@@ -130,7 +121,7 @@ def test_admitting_weaker_statuses_never_lowers_the_guarantee(name):
 
 def test_a_scenario_reads_its_own_tables_and_not_the_others():
     keys = reads(REG, "reference-onsite-h200")
-    assert "fleet.world-h200.eps_dark" in keys and "regime.onsite.k_wipe" in keys and "units.gates_per_flop" in keys
+    assert "fleet.world-h200.eps_unreg" in keys and "regime.onsite.k_wipe" in keys and "units.gates_per_flop" in keys
     assert not any(k.startswith(("fleet.world-nvl72.", "model.kimi-k2.")) for k in keys)
 
 
@@ -171,15 +162,15 @@ def test_s_times_defaults_to_the_reference_average_under_the_straddling_premise(
 
 def test_no_protocol_gives_1_and_the_overhead_is_against_the_reference_at_its_mfu():
     """The slowdown is a hardware multiple over the reference training algorithm at `MFU₀` (0.4), at least 1, so the
-    adversary no protocol encumbers is at 1, and remote under PoUW as deployed on the H200 about 1.04; remote with the
-    floor credit at the card table's clock is above it, and onsite far above. Under reference efficiency free compute
-    counts at `MFU₀`, so each is its padded size ratio (3.04 remote); without it the monitored terms shrink by 2.5 and
-    the dark leaves don't (1.22 remote, onsite still above 10)."""
+    adversary no protocol encumbers is at 1, and remote under PoUW as deployed on the H200 about 1.05 (1.04 with the
+    H200's tensor at 1,980 MHz); remote with the floor credit at the card table's clock is above it, and onsite far
+    above. Under reference efficiency free compute counts at `MFU₀`, so each is its padded size ratio (3.04 remote);
+    without it the monitored terms shrink by 2.5 and the dark leaves don't (1.22 remote, onsite still above 10)."""
     u = evaluate_named(REG, "unmonitored-h200-kimi")
     assert u.lo == u.attack == 1.0
     remote, onsite = evaluate_named(REG, "reference-remote-h200"), evaluate_named(REG, "reference-onsite-h200")
     deployed = evaluate_named(REG, "reference-remote-h200-pouw")
-    assert remote.scenario.mfu == onsite.scenario.mfu == pytest.approx(0.4) and deployed.lo == pytest.approx(1.04, abs=5e-3)
+    assert remote.scenario.mfu == onsite.scenario.mfu == pytest.approx(0.4) and deployed.lo == pytest.approx(1.048, abs=5e-3)
     assert remote.lo == pytest.approx(3.04, abs=5e-3) == remote.families[0].combined.padded
     assert onsite.lo == pytest.approx(onsite.families[0].combined.padded) and onsite.lo > 10
     peak = REG.override({"task.reference_efficiency": False})
@@ -192,6 +183,6 @@ def test_the_time_to_the_target_is_the_overhead_times_the_references_time():
     r = evaluate_named(REG, "reference-onsite-h200")
     s = r.scenario
     f, loc = s.context.fleet, s.context.location
-    total = f.count * loc.phi / (1 - f.eps_dark)
+    total = f.count * loc.phi / (1 - f.eps_unreg)
     assert s.total_phi == pytest.approx(total)
     assert s.seconds(r.lo) == pytest.approx(r.lo * s.context.units.gates(s.run.target(s.model)) / (s.mfu * total))

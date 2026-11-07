@@ -1,10 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Session
-public import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
-# Several tables in one batched session (PROTOCOL.md §5)
+# Several tables in one batched session (`Flock.Record`)
 
 The protocol batches tables. `Commit` sends every table's level-0 cap, the link points are one
 draw for all tables, and then every table's reps and openings run concurrently (`sessionB`). The
@@ -78,7 +79,7 @@ noncomputable def sessAfterB (fs : List ((Fin 2 → Fin mPts → F) → Game (Ou
     Game (List (OutC F D)) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts => batch (fs.map (· pts))
 
-/-- **A batched session** (PROTOCOL.md §5): `Commit` sends every table's level-0 cap, then one
+/-- **A batched session** (`Flock.Record`): `Commit` sends every table's level-0 cap, then one
 link-point draw, then every table's reps and openings concurrently. -/
 noncomputable def sessionB (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (ts : List (TabSpec mPts)) : Game (List (OutC F D)) :=

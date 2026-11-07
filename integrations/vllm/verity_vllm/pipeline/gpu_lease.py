@@ -10,7 +10,7 @@ once the Commit lets go and nvidia-smi lists nothing on the leased GPUs, so a Co
 after the process has closed the lease's descriptors, stays inside its lease.
 
 A leased Commit's weights registration hashes on its leased GPU (``VERITY_WEIGHTS_HASH=device`` unless the item sets it: the same
-leaves, tree and root as the host path, ``commit.committer.leafhash``), where the host path holds the GPU idle while it copies and
+leaves, tree and root as the host path, ``commit.committer.weights_rows``), where the host path holds the GPU idle while it copies and
 hashes every tensor (79 to 91 s for a 7B or 8B model in cov-gm186, gm177 and gm178, against 0.1 s on the device).
 
 After its last run the Commit gives the GPU back (``release``): the engine shut down, the device's CUDA context destroyed with every

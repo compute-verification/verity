@@ -7,6 +7,7 @@ character above U+FFFF as its UTF-16 surrogate pair).
 module
 
 public import Lean.Data.Json
+public import Lean.Data.Json.Basic
 meta import Lean.Data.Json
 
 @[expose] public section

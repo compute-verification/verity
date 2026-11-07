@@ -1,6 +1,6 @@
-"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a warden run's execution phase and the
-scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror and its
-Lean.
+"""scan-period: `verity/certifier/v0`'s rows form (`NetworkCheck.Period`) on a network certifier run's execution phase
+and the scan's answer for it (`scan_zk.py prove --group 1`'s ``answers.json``), checked by the period's Python mirror
+and its Lean.
 
     python benchmarks/network_traces/scan_period.py --mirror PERIOD_CASE_PY --lean NETWORK_PERIOD --out DIR \
         NAME=WARDEN_RUN,SCAN_OUT[,tampered|chain|forged] ...

@@ -1,9 +1,51 @@
 module
 
 public import Proofs.Flock.Claims.Recursion.VerdictRowDTie
-public import Proofs.Flock.Claims.Recursion.RestLens
 import all Init.Data.Repr
 import all Init.Data.String.Defs
+public import Proofs.Flock.Claims.Recursion.CoinTie
+public import Proofs.Flock.Claims.Recursion.RestRead
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.VStarList.Accepts
+import Proofs.Flock.Claims.Recursion.CoinPos
+import Proofs.Flock.Claims.Recursion.DeployHonest
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.InnerForm
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.RestLens
+import Proofs.Flock.Claims.Recursion.SchedDense
 
 /-!
 # Check 5's inner session at a staged part is the inner statement at the coins
@@ -612,7 +654,7 @@ theorem stmt_unit {f : RecCoins.Files} {u u' : String} {p : SessionSpec × Stmt}
     f.stmt u' = .ok p := by
   unfold RecCoins.Files.stmt at h ⊢
   revert h
-  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub Coins.os 1 (partition := some f.partition)
+  cases Stmt.setupTables RecCoins.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := some f.partition)
       (program := f.program) with
   | error e => intro h; cases h
   | ok q =>

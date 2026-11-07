@@ -1,13 +1,27 @@
 module
 
+-- as in `ExecRows`: level3 already realizes the lemmas this file's `simp` calls need (`Std.Legacy.Range.mk.congr_simp`)
+public import Aesop.BuiltinRules
+public import Flock.Comp
 public import Flock.Net
 public import Mathlib.Algebra.BigOperators.Group.List.Basic
 public import Mathlib.Algebra.Group.Action.Defs
+public import Mathlib.Algebra.GroupWithZero.Nat
 public import Mathlib.Data.Nat.Bitwise
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
 public import Mathlib.Tactic.NormNum
 public import Mathlib.Tactic.Ring
--- as in `ExecRows`: level3 already realizes the lemmas this file's `simp` calls need (`Std.Legacy.Range.mk.congr_simp`)
+public import Mathlib.Tactic.ToDual
 public import Proofs.Flock.Level3.LookupRows
+import Mathlib.Algebra.BigOperators.Group.List.Defs
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.List.Basic
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Ring.RingNF
 
 /-!
 # `Sparse`: the bytes `ofRows` writes, and `row` reads them back

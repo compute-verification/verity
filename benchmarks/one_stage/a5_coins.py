@@ -5,7 +5,8 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
   (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
-  writes, and its key is this run's alone, so its draws show the path, not an auditor's coins. Its pins log pins main's
+  writes, and its key is this run's alone, so its draws show the path, not an auditor's coins; and since that key is
+  not at `Lms.deployed`, sampled proofs' v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins the challenger host only to such a commit; its code is this
   tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: the challenger host through infra's gate with the lane's gate key: `reserve` with this machine as its
@@ -28,7 +29,7 @@ of record, from whose coins each rank's registration draws once (`sampled_proofs
   on the one client until `drawn` returns its segment, which is settled once the session has closed (`Draws.released`).
   Once every rank has drawn or won't (`skip`), the client closes the
   session. `Replay` reads an honest draw's bytes again, for the negatives' streams.
-* **The evidence** (`Local.finish` or `Gate.finish`, on a thread of the run's process once the session closed): the session's out/,
+* **The evidence** (`Local.finish` or `GateClient.finish`, on a thread of the run's process once the session closed): the session's out/,
   the auditor's ledger and the host's pins log, copied to ``out/challenger/``, the key, the verifier's own copy of main's
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
   ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one draw's `{key, ledger, main, pins,
@@ -404,7 +405,7 @@ def lean_side(audit: dict | None) -> dict | None:
 
 
 def verifier_negatives(stream_of: Callable[[Callable[[int], bytes]], S.Stream],
-                       register: Callable[[S.Stream], S.Registration], honest: S.Stream, coins: VerifierCoins,
+                       register: Callable[[S.Stream], S.WindowCommitmentRecord], honest: S.Stream, coins: VerifierCoins,
                        draw: S.Draw, outcome: Callable[[S.Stream, S.Draw, dict | None], tuple[S.Outcome, dict | None]],
                        window: str) -> dict[str, dict]:
     """The refusals that apply to a sample `draw` from the verifier's own `coins` on stream `honest`, once its outcome is
@@ -550,7 +551,7 @@ class Local:
         return dest / "session", dest / "windows.jsonl", dest / "pins.jsonl", key
 
 
-class Gate:
+class GateClient:
     """The challenger host's session through infra's gate `gate` (USER@HOST) with the lane's gate key `ssh_key`, its challenger
     listening on `peer`'s 127.0.0.1 (this machine's name in the host's /etc/vy/peers), and the challenger key the deployment
     records at `key_record`; `main` is the verifier's copy of main's first-parent line."""
@@ -615,7 +616,7 @@ class Gate:
 
 
 class Loopback:
-    """The challenger party's host on this machine (`challenger_party.Host`, `verity run CONFIG --party challenger`'s)
+    """The challenger party's host on this machine (`challenger_party.Host`, the ``host`` of sampled proofs' challenger)
     at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
     from the party itself, so its coins are a development session's, not an auditor's (`simulated`)."""
 
@@ -676,7 +677,7 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
     elif challenger.startswith("loopback:"):
         session = Loopback(challenger.removeprefix("loopback:"))
     elif challenger.startswith("gate:") and peer and key_record:
-        session = Gate(challenger.removeprefix("gate:"), ssh_key, peer, key_record, first_parent)
+        session = GateClient(challenger.removeprefix("gate:"), ssh_key, peer, key_record, first_parent)
     else:
         raise SystemExit(f"--challenger is local, loopback:HOST:PORT or gate:USER@HOST (with --peer and --challenger-key), "
                          f"not {challenger!r}")
