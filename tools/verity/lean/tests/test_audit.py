@@ -543,7 +543,7 @@ def test_the_record_follows_a_statement_through_the_modules_the_trees_except(tmp
     class Read(Exception):
         pass
 
-    def facts_of(q, qpol, work, moved=None, keep=True):
+    def facts_of(q, qpol, work, moved=None, keep=True, sealed=None):
         scopes.append(A.record_scope(qpol))
         raise Read
     monkeypatch.setattr(A, "facts_of", facts_of)
@@ -1079,11 +1079,11 @@ def test_an_audit_keeps_the_package_s_and_its_provers_facts_as_kept_facts_says(t
     (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
     seen = []
 
-    def facts_of(q, policy, work, moved=None, keep=True):
+    def facts_of(q, policy, work, moved=None, keep=True, sealed=None):
         seen.append(keep)
         return {"modules": [], "oleans": [], "pins": {}}
 
-    def proved(q, policy, facts, work, moved=None, ready=None, keep=True):
+    def proved(q, policy, facts, work, moved=None, ready=None, keep=True, seals=None):
         seen.append(keep)
         raise RuntimeError("stop after the provers' facts")
 
@@ -4489,7 +4489,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
                 order.append(getattr(args[0], "__name__", str(args[0])))
             return super().submit(fn, *args, **kw)
 
-    def proved(pkg, policy, facts, work, moved, ready, keep=True):
+    def proved(pkg, policy, facts, work, moved, ready, keep=True, seals=None):
         order.append("proved")
         return [], facts | {"pins": {"P.g": {"kind": "theorem", "reads": []}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
 
@@ -4501,7 +4501,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
         return f
 
     monkeypatch.setattr(A, "ThreadPoolExecutor", Recording)
-    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True: own)
+    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: own)
     monkeypatch.setattr(A, "proved", proved)
     monkeypatch.setattr(A, "replay_step", stub("replay_step", ([], {"checked": 1, "reused": 0})))
     monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", ([A.Failure("unchecked.dependency", None, "unchecked: a hit")], 7)))
@@ -4633,6 +4633,91 @@ def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tm
     assert any(f.startswith(kernel["fails"]) for f in rep["failures"]), rep["failures"]
 
 
+#: the parts of a module a seal copies and a swap must overwrite to change what the kernel replays
+_BAD_PARTS = ("Bad.olean", "Bad.olean.server", "Bad.olean.private", "Bad.ir.sig", "Bad.ir")
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_seal_replays_the_build_at_the_seal_not_a_swap_a_dependent_makes(tmp_path, monkeypatch):
+    """The gap LEAN-212 closes: once a package is sealed, a dependent's build may write its `.lake` (`writable`), so a
+    reader of the live files could be shown bytes the build swaps out and back.  The audit copies the build at the seal and
+    reads the copies.  Here a package is built with a `Control.Bad` whose declaration skips the kernel (the sealed, true
+    state), and a dependent package's compile-time `#eval` overwrites that `.olean` with a good one during the window; the
+    replay must reject the sealed declaration all the same and store nothing under the good one's key, and it must keep
+    rejecting on a warm cache.  The mutation that reads the live files instead (``Sealed.moved`` mapping nothing) passes the
+    swapped-in good bytes, which proves the copies are what protect the verdict."""
+    S = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", S, ignore=shutil.ignore_patterns(".lake"))
+    kernel = json.loads((HERE / "fixtures" / "violations.json").read_text())["kernel"]
+    for rel, (old, new) in kernel["replace"].items():                   # the canonical way to pull Control.Bad into Control
+        (S / rel).write_text((S / rel).read_text().replace(old, new))
+    A.dump(S, A.load(S) | kernel["policy"])
+    lib = S / ".lake" / "build" / "lib" / "lean" / "Control"
+    build = lambda d=S: subprocess.run(["lake", "build"], cwd=d, check=True, capture_output=True, env=A.lake_env())
+
+    def stash(dst: Path) -> Path:
+        dst.mkdir()
+        for n in _BAD_PARTS:
+            if (lib / n).is_file():
+                shutil.copyfile(lib / n, dst / n)
+        return dst
+
+    def restore(src: Path) -> None:
+        for n in _BAD_PARTS:
+            (lib / n).unlink(missing_ok=True)
+            if (src / n).is_file():
+                shutil.copyfile(src / n, lib / n)
+
+    (S / "Control" / "Bad.lean").write_text("theorem Control.bogus : True := trivial\n")
+    build()
+    good = stash(tmp_path / "good")
+    (S / "Control" / "Bad.lean").write_text(kernel["write"]["Control/Bad.lean"])
+    build()
+    bad = stash(tmp_path / "bad")                        # the sealed, true state: the kernel rejects it
+
+    p = tmp_path / "p"                                   # a dependent whose compile-time code swaps the good bytes in
+    (p / "P").mkdir(parents=True)
+    (p / "lean-toolchain").write_text((S / "lean-toolchain").read_text())
+    (p / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[require]]\nname = "control"\npath = "../control"'
+                                     '\n\n[[lean_lib]]\nname = "P"\n')
+    (p / "lake-manifest.json").write_text(json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [
+        {"type": "path", "scope": "", "name": "control", "manifestFile": "lake-manifest.json", "inherited": False,
+         "dir": "../control", "configFile": "lakefile.toml"}], "name": "p", "lakeDir": ".lake"}))
+    (p / "P.lean").write_text("import P.Swap\n")
+    names = ", ".join(f'"{n}"' for n in _BAD_PARTS)
+    (p / "P" / "Swap.lean").write_text(
+        '#eval show IO Unit from do\n'
+        f'  for n in [{names}] do\n'
+        f'    let g := System.FilePath.mk ("{good}/" ++ n)\n'
+        '    if ← g.pathExists then\n'
+        f'      IO.FS.writeBinFile (System.FilePath.mk ("{lib}/" ++ n)) (← IO.FS.readBinFile g)\n')
+    def swap() -> None:                                  # the dependent's build; its `#eval` swaps the good bytes in
+        shutil.rmtree(p / ".lake", ignore_errors=True)   # so Lake recompiles `P.Swap` and runs its `#eval` every window
+        build(p)
+
+    def run(out: str, cache: Path) -> dict:
+        restore(bad)
+        seals = A.Seals(tmp_path / f"sealed-{out}")
+        try:
+            return A.audit(S, tmp_path / out, update=True, seals=seals, built=swap, replay_cache=cache, runs=False,
+                           log=lambda *_: None)
+        finally:
+            seals.close()
+
+    def rejected(rep: dict) -> bool:
+        return any(f.startswith("replay:") and "Control.Bad" in f for f in rep["failures"])
+
+    cache = tmp_path / "cache"
+    assert rejected(run("out1", cache)), "the replay read the sealed declaration the kernel rejects, not the swapped-in good one"
+    stored = [json.loads(c.read_text()).get("module") for c in cache.glob("*.json")]
+    assert "Control.Bad" not in stored, "the rejected module is stored under no key, the swapped-in good bytes' included"
+    assert rejected(run("out2", cache)), "a warm cache keeps rejecting: the swap stored no pass that lets the module be skipped"
+    monkeypatch.setattr(A.Sealed, "moved", lambda self, path: None)
+    assert not rejected(run("out3", tmp_path / "cache-live")), \
+        "reading the live files instead passes the swapped-in good bytes: the private copies are what protect the verdict"
+
+
 def test_the_closure_plan_joins_every_module_above_one_that_has_not_passed():
     """A dependency module that has not passed is checked, and every module importing it joins the replay unchecked, since
     an import of one would bring it in unchecked; the rest stay imported."""
@@ -4701,7 +4786,7 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
     for m in ("Init", "Old", "A", "Unrelated"):
         (cache / f"{m}.json").write_text("{}")
         os.utime(cache / f"{m}.json", (1000, 1000))
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     argv = []
 
