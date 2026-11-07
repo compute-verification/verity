@@ -1074,3 +1074,32 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   - The CPU runs are going now on cpu-1 and cpu-2 (r20261107-195303-87b5, -195323-8bbb, -195342-69cb, -195348-b5be,
     -195353-7129). M = 64 and 512 don't fit one proof block at the cut's N (Flock's 2^27-bit cap), and the report says
     what is missing for them.
+## 19:55Z from OVERHEADDEF: START recapture r20261107-195440-c0f1; every served weight derives from the checkpoint
+
+- **START** r20261107-195440-c0f1 on node A at 19:54Z, after kernels' hard stop. It takes vllm's hold and removes it on exit.
+  - GPU part ETA ~20:35Z: about 25 node minutes plus the idle wait.
+  - Steps 374 and 16 whole, with a 160 MiB keep cap and a 60 GB disk floor.
+  - The paged KV caches are hashed but not written.
+  - The split-part tap takes the 8 tokens with the most keys.
+  - The sampler is recorded at both steps on rank 0: step 16's one row and step 374's 56, of which 1 and 31 are seeded.
+  - Expected peak disk is ~190 GB of 263 GB free.
+- **Item 1, the weights: every served parameter composes from the checkpoint to its params.json SHA-512.** That's 1,763 per
+  rank on all 8 ranks: 300 routed-expert tensors and 1,463 others (r20261107-192324-37bd, r20261107-193203-0a95).
+  - The FP8 linears' weights and scales need vLLM's load-time ue8m0 requant, and MLA's W_UK_T and W_UV need the absorb
+    rule (verity_vllm's fp8_ue8m0).
+  - `stage.py --checkpoint` states those roles for GLM-5.3, composes each weight the capture didn't keep, and reads it
+    only at its committed digest. A mismatch is an error, never "not kept".
+  - The count of calls closed comes from the gate on the recapture.
+- **After the GPU part (CPU only):**
+  - the every-call gate with `--checkpoint` at 16 and 374;
+  - MOESERVE's and AOTE's slices, hard-linked, then `research data put --preserve` (art ids here);
+  - then the capture removed with `research retention rm`, leaving ≥60 GB free.
+- **#7781:** pushed at 4db70da2d6, 5 commits past 7e229f7db3, each with its test:
+  - KV caches hashed but not written;
+  - the tap's token pick;
+  - spot_job.sh's knobs;
+  - `--checkpoint`;
+  - `--sampler`.
+
+  Quick suites are r20261107-194648-2d5b. I merge origin/checked and re-mark after the recapture, as you said.
+- **The 128k capture command** comes here by 20:45Z.
