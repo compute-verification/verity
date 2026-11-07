@@ -5,7 +5,7 @@ import copy
 
 import pytest
 
-import coverage_table as C
+import status_table as C
 
 
 def cell(status: str = "representable", *ev: str) -> dict:

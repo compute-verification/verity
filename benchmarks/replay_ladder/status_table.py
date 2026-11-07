@@ -1,7 +1,7 @@
 """The per-model status table: one row per model, grouped by architecture and sorted by size, with four status columns, each
-cell one glyph that its sidecar (COVERAGE.json) backs with the run or art ids behind it.
+cell one glyph that its sidecar (STATUS.json) backs with the run or art ids behind it.
 
-    coverage_table.py render COVERAGE.json [--ladder SUMMARY.json]... --out DIR
+    status_table.py render STATUS.json [--ladder SUMMARY.json]... --out DIR
 
 - Circuit: the served computation compiles to a Program whose Definitions pass circuit-check and that equals its traced
   Build, with `predict.batch.check_compiled`'s R1-R3 holding.
@@ -14,8 +14,8 @@ cell one glyph that its sidecar (COVERAGE.json) backs with the run or art ids be
 
 A cell's status is `measured` (filled), `representable` (hollow: representable, not run) or `unrepresentable` (a dash:
 can't represent yet), and every cell names its evidence. `--ladder` takes `ladder.py summary`'s summary.json and fills the
-Replay cells of each row whose `ladder` names one of its models, from its pinned and unpinned arms. DIR gets coverage.md
-and the merged coverage.json.
+Replay cells of each row whose `ladder` names one of its models, from its pinned and unpinned arms. DIR gets status.md
+and the merged status.json.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-SCHEMA = "verity-bench/coverage/v0"
+SCHEMA = "verity-bench/status-table/v0"
 GLYPH = {"measured": "●", "representable": "○", "unrepresentable": "—"}
 COLUMNS = ("circuit", "replay", "replay_unpinned", "proved")
 HEADS = {"circuit": "Circuit", "replay": "Replay", "replay_unpinned": "Replay, unpinned", "proved": "Proved"}
@@ -48,7 +48,7 @@ def check(cov: dict) -> None:
             elif not c.get("evidence"):
                 bad.append(f"{row['model']}.{col}: no run or art id behind its glyph (give `evidence`)")
     if bad:
-        raise SystemExit("coverage: " + "; ".join(bad))
+        raise SystemExit("status table: " + "; ".join(bad))
 
 
 def pct(share: float) -> str:
@@ -134,18 +134,18 @@ def markdown(cov: dict) -> str:
             "output rows exact in the worst replay, serving and replaying with each of Inductor's on-device choices "
             "pinned to its first candidate; unpinned, a kernel with several candidate configs (a norm's tiling) times "
             "them on its first launch in each process and keeps the fastest, which can change the order of its sums."
-            f"{verdict} vLLM {cov['pin']}, {cov['date']}; each cell's run and art ids are in coverage.json.\n")
+            f"{verdict} vLLM {cov['pin']}, {cov['date']}; each cell's run and art ids are in status.json.\n")
 
 
 def render(a: argparse.Namespace) -> int:
-    cov = json.loads(Path(a.coverage).read_text())
+    cov = json.loads(Path(a.sidecar).read_text())
     cov = merge(cov, [json.loads(Path(s).read_text()) for s in a.ladder])
     check(cov)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "coverage.json").write_text(json.dumps(cov, indent=1, ensure_ascii=False) + "\n")
+    (out / "status.json").write_text(json.dumps(cov, indent=1, ensure_ascii=False) + "\n")
     md = markdown(cov)
-    (out / "coverage.md").write_text(md)
+    (out / "status.md").write_text(md)
     print(md, end="")
     return 0
 
@@ -154,7 +154,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("render")
-    r.add_argument("coverage")
+    r.add_argument("sidecar")
     r.add_argument("--ladder", action="append", default=[], help="a `ladder.py summary` summary.json (repeatable)")
     r.add_argument("--out", required=True)
     a = ap.parse_args(argv)

@@ -38,7 +38,7 @@ For each model:
   request's token at one position, and its share exact is the window's output tokens less those that differ, over the
   window's output tokens.
 
-`coverage_table.py` renders the per-model status table, one row per model with its Circuit, Replay (pinned), Replay unpinned and
+`status_table.py` renders the per-model status table, one row per model with its Circuit, Replay (pinned), Replay unpinned and
 Proved status, from a sidecar that backs every cell with its run or art ids, and fills each ladder model's Replay cells
 from a summary.json's two arms.
 
@@ -51,7 +51,7 @@ On a node with the pinned vLLM venv and the ladder's checkpoints (`integrations/
 ~~~sh
 research run --on NODE --project verity --source . --cwd source --send c4-val-00000.json.gz -- \
   bash benchmarks/replay_ladder/run.sh qwen3-8b llama31-8b olmoe-1b-7b
-python benchmarks/replay_ladder/coverage_table.py render COVERAGE.json --ladder OUT/summary.json --out DIR
+python benchmarks/replay_ladder/status_table.py render STATUS.json --ladder OUT/summary.json --out DIR
 ~~~
 
 `run.sh` takes `ARMS` (`pinned unpinned`; `rblock` too on request), `REPLAYS` (3), `FRESH` (1) and `ALONE` (64) for the pinned arm,
