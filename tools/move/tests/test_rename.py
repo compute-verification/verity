@@ -479,6 +479,40 @@ def test_a_json_pin_follows_a_manifest_the_move_rewrites(toy, toy_map):
         "inputs": {"README.md": sha(readme), "Sec/Proofs/lake-manifest.json": sha(moved)}, "out": [1]}
 
 
+def test_a_sorted_json_object_gets_a_renamed_key_in_its_sorted_place(toy, tmp_path_factory, capsys):
+    """An object whose keys were sorted comes back sorted, as its writer (`unread.py`'s caps) writes it, its lines otherwise
+    as they were; one that wasn't sorted keeps its order, and a file on one line or with a key twice keeps the words alone.
+    A second run changes nothing."""
+    def caps(areas: list[str]) -> str:
+        return json.dumps({"schema": "caps/v1", "areas": {a: [f"{a}.x", f"{a}.y"] for a in areas}}, indent=1) + "\n"
+    files = {"Sec/caps.json": caps(["Proofs/Core", "Proofs/Population", "Proofs/Rest"]),
+             "Sec/order.json": json.dumps({"Zeta": 1, "Population": 2, "Core": 3}, indent=1) + "\n",
+             "Sec/line.json": json.dumps({"Core": 1, "Population": 2, "Rest": 3}) + "\n",
+             "Sec/twice.json": '{\n "Core": 1,\n "Core": 2,\n "Population": 3,\n "Rest": 4\n}\n'}
+    for p, t in files.items():
+        (toy / p).write_text(t)
+    git(toy, "add", "-A")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "json")
+    words = tmp_path_factory.mktemp("map") / "map.toml"
+    words.write_text('[words]\n"Population" = "SampledProofs"\n')
+    assert M.main(["--map", str(words), "--root", str(toy)]) == 0
+    assert (toy / "Sec/caps.json").read_text() == caps(["Proofs/Core", "Proofs/Rest", "Proofs/SampledProofs"])
+    for p in ("Sec/order.json", "Sec/line.json", "Sec/twice.json"):
+        assert (toy / p).read_text() == files[p].replace("Population", "SampledProofs"), p
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
+    capsys.readouterr()
+    assert M.main(["--map", str(words), "--root", str(toy)]) == 0
+    assert "files rewritten: 0" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("path", ["Sec/lean-audit.json", "Sec/Proofs/lake-manifest.json", M.MOVES, "Sec/caps.toml"])
+def test_a_lock_a_manifest_moves_json_or_a_file_not_json_keeps_the_words_alone(path):
+    old = json.dumps({"Core": 1, "Population": 2, "Rest": 3}, indent=1) + "\n"
+    new = old.replace("Population", "SampledProofs")
+    assert M.resorted(old, new, path) == new
+    assert M.resorted(old, new, "Sec/caps.json") == json.dumps({"Core": 1, "Rest": 3, "SampledProofs": 2}, indent=1) + "\n"
+
+
 def test_it_refuses_a_dirty_worktree(toy, toy_map):
     (toy / "README.md").write_text("edited\n")
     with pytest.raises(SystemExit, match="isn't clean"):

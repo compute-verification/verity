@@ -13,7 +13,9 @@ branch across it):
 1. renames each [words] entry in every tracked text file the map doesn't exclude, except inside what [keep] keeps (a domain
    tag, a format id, an id; a name in a Python module's `__all__` only as it keeps the name, never as a quoted string,
    since `__all__` names what the module exports; the name of a file the second step leaves in place, `Words.hold`) and,
-   in the files a [keep_in] glob matches, the words it lists;
+   in the files a [keep_in] glob matches, the words it lists; in a JSON file other than a lock, a Lake manifest or
+   `moves.json`, it sorts again each object whose keys were sorted and that renamed keys leave out of order, keeping the
+   file's lines but for their order and trailing commas, or else leaves the renamed text as it is (`resorted`);
 2. moves each tracked file whose path the same words rename, with `layout.py`'s machinery (`layout.Run.move`), but for the
    words a [keep_in] or [keep_paths] glob lists for it ([keep_paths] holds a path and not the file's text); a module's
    name is its path's, so the first step has already renamed every import of it;
@@ -533,6 +535,83 @@ def record_spans(text: str) -> list[tuple[int, int]]:
     return spans
 
 
+JSON_GAP = re.compile(r"[ \t\n\r]*")
+
+
+def resorted(old: str, new: str, path: str) -> str:
+    """``new``, the text ``old`` becomes under the words, with each JSON object whose keys were sorted in ``old`` and that
+    renamed keys leave out of order sorted again, as a writer that keeps its keys sorted (`unread.py`'s caps) writes it:
+    in a `*.json` file other than a lock, a Lake manifest or `moves.json`, when its lines stay ``new``'s but for their
+    order and trailing commas. Otherwise (a JSON text on one line, a duplicate key, text that isn't JSON) ``new`` as it
+    is."""
+    if (old == new or not path.endswith(".json") or posixpath.basename(path) in (POLICY, MANIFEST) or path == MOVES
+            or not (_is_json(old) and _is_json(new))):
+        return new
+
+    def again(value: tuple, was: tuple) -> str | None:
+        """``new``'s span of ``value`` with each object sorted again that was sorted in ``was`` (``old``'s) and isn't now:
+        its members change places and the text between them stays. None when the two differ in shape."""
+        kind, start, end, parts = value
+        if (kind, len(parts)) != (was[0], len(was[3])):
+            return None
+        if not kind:
+            return new[start:end]
+        inner = [again(v, w) for (_, _, v), (_, _, w) in zip(parts, was[3])]
+        if None in inner:
+            return None
+        members = [new[at:v[1]] + s for (_, at, v), s in zip(parts, inner)]
+        keys, before = [k for k, _, _ in parts], [k for k, _, _ in was[3]]
+        if kind == "{" and before == sorted(before) and keys != sorted(keys):
+            members = [m for _, m in sorted(zip(keys, members))]
+        out, at = [], start
+        for (_, a, v), m in zip(parts, members):
+            out += [new[at:a], m]
+            at = v[2]
+        return "".join(out) + new[at:end]
+
+    o, n = (_value(t, JSON_GAP.match(t).end()) for t in (old, new))
+    body = again(n, o)
+    out = new if body is None else new[:n[1]] + body + new[n[2]:]
+    lines = [sorted(x.removesuffix(",") for x in t.splitlines()) for t in (out, new)]
+    return out if lines[0] == lines[1] else new
+
+
+def _unique(pairs: list) -> list:
+    if len({k for k, _ in pairs}) < len(pairs):
+        raise ValueError("a key twice in one object")
+    return pairs
+
+
+def _is_json(text: str) -> bool:
+    """Whether ``text`` is JSON with no key twice in an object."""
+    try:
+        json.loads(text, object_pairs_hook=_unique)
+    except ValueError:
+        return False
+    return True
+
+
+def _value(text: str, i: int) -> tuple:
+    """The value at ``text[i]`` of a JSON text with no key twice in an object, as (kind, start, end, parts): an object's
+    (`{`) parts its members (key, the key's start, value), a list's (`[`) its values (None, start, value), a scalar's
+    none."""
+    if text[i] not in "{[":
+        return "", i, json.JSONDecoder().raw_decode(text, i)[1], []
+    kind, start, parts = text[i], i, []
+    i = JSON_GAP.match(text, i + 1).end()
+    while text[i] not in "}]":
+        key, at = None, i
+        if kind == "{":
+            key, i = json.decoder.scanstring(text, i + 1)
+            i = JSON_GAP.match(text, JSON_GAP.match(text, i).end() + 1).end()
+        value = _value(text, i)
+        parts.append((key, at, value))
+        i = JSON_GAP.match(text, value[2]).end()
+        if text[i] == ",":
+            i = JSON_GAP.match(text, i + 1).end()
+    return kind, start, i + 1, parts
+
+
 def renamed(name: str, moved: dict[str, str]) -> str:
     """`tools/verity/lean/check.py`'s `renamed`: `name` with its longest moved prefix replaced."""
     parts = name.split(".")
@@ -749,7 +828,7 @@ def main(argv: list[str] | None = None) -> int:
             continue
         keep = record_spans(text) if lock else []
         here = Counter()
-        new = words.sub(text, p, keep, counts, here)
+        new = resorted(text, words.sub(text, p, keep, counts, here), p)
         kept.update({(p, w): n for w, n in here.items()})
         if new != text:
             texts[p] = new

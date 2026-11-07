@@ -9,6 +9,10 @@ and all-reduce routes (`registry.bf16_gemm_check`, `registry.tp_allreduce`), vLL
 A request after a history of C positions (`build.build_program`'s C: a prefix-cache hit, or where a Commit window carries it in)
 reads each layer's history as Inputs (`Net.prefix_params`): every layer's latent rows and every indexer layer's keys and scales,
 which open its layers' logs (`_Model.open_with`) before its first call.
+The compiled execution is the target's compilation "breakable": vLLM serves `glm_moe_dsa` without torch.compile
+(`VLLM_USE_BREAKABLE_CUDAGRAPH`, config/vllm.py:721-737), the same kernels replayed from CUDA graphs, so every selection a launch
+reads is at the step's padded tokens (`targets.graph_tokens`) but the indexer's and the sparse MLA's, graph breaks that read the real
+batch (`_sparse_indexer_and_attn`), and the logits', computed outside the graphs.
 
 Vocabulary: EmbeddingShard and the embedding's all-reduce; RMSNorm (layer 0's input norm); per layer the block-FP8 linears (FlashInfer
 below 32 rows, else DeepGEMM), DsaRMSNorm of q_c and kv_c, the interleaved RoPE of k_pe and of each head's q_pe, the latent absorptions
@@ -28,7 +32,8 @@ from verity.ml.circuits.defs import Builder
 from verity.ml.circuits.refs import Coll, PartLog, Refs, concat, strided_view
 from verity.ml.circuits.types import Type, Value
 
-from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
+from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, graph_capture_sizes, kind,
+                     select_token, served_class)
 from .phi import Phi
 
 
@@ -46,7 +51,7 @@ class Net:
     """One rank's decoder: the configuration, the weights record (`leaves`), the peers a pass reads (`peer_shapes`) and the target's
     selections the forward (`model`) reads."""
 
-    DOMAIN = ((8,), "eager", ("float8_e4m3fn",))
+    DOMAIN = ((8,), ("eager", "compiled"), ("float8_e4m3fn",))
 
     def __init__(self, phi: Phi, M: int, history: int) -> None:
         from verity_vllm.engine.profiles import family_facts as FF
@@ -65,6 +70,10 @@ class Net:
         self.C, self.tp, self.device = C, phi.target_profile(), phi.target.get("device_name")
         self.indexers = frozenset(C.get("INDEXER_LAYERS") or ())
         facts = []
+        if phi.execution == "compiled" and self.tp.compilation != "breakable":
+            facts.append(f"a compiled execution by {self.tp.compilation!r} (vLLM serves glm_moe_dsa's eager kernels from breakable CUDA "
+                         f"graphs, the target's compilation 'breakable')")
+        self.capture_sizes = graph_capture_sizes(phi)
         if self.tp.compute_capability != (9, 0):
             facts.append(f"target cc {self.tp.capability_str} (the served defaults are stated on cc 9.0)")
         if not self.device:
@@ -145,7 +154,7 @@ class _Model:
     reads_launch = True
 
     def __init__(self, net: Net, B: Builder, W: Coll, peers: _Peers) -> None:
-        self.net, self.C, self.B, self.peers, self.launch = net, net.C, B, peers, _Launch()
+        self.net, self.C, self.B, self.peers, self.launch = net, net.C, B, peers, _Launch(capture_sizes=net.capture_sizes)
         self.w = {key: W[i] for i, (_, _, key) in enumerate(net._leaves) if key is not None}
         self.logs: dict[int, dict[str, PartLog]] = {}
         self._kinds: dict[tuple, object] = {}
@@ -356,7 +365,7 @@ class _Model:
         w = lambda f: self.w[(L, f)]  # noqa: E731
         logits = self.router(x, w("gate_w"))
         shared = self.fp8_linear(self.silu(self.fp8_linear(x, w("sh_gate_up_w"), w("sh_gate_up_ws"))), w("sh_down_w"), w("sh_down_ws"))
-        kernel = router_kernel(E, M, TOPK)
+        kernel = router_kernel(E, self.launch.tokens(M), TOPK)
         if kernel is None:
             _refuse(f"the grouped top-k launch at E={E}, top {TOPK} (registry.moe.router_kernel pins no kernel)")
         rt = self.k("moe_router_sigmoid_bias", E=E, TOPK=TOPK, RSF=float(C["ROUTED_SCALING_FACTOR"]), KERNEL=kernel)
