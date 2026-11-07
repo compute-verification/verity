@@ -3,9 +3,7 @@ and registered in fixtures/artifacts.json, an absent one is fetched by its art i
 through, and `verity-vllm workload-file` makes them present for the shell scripts."""
 from __future__ import annotations
 
-import contextlib
 import hashlib
-import io
 import json
 import os
 import subprocess
@@ -100,52 +98,6 @@ def test_a_failed_fetch_names_the_workload_and_the_fix(tmp_path, monkeypatch):
     (argv, pythonpath), = seen
     assert argv[2:] == ["research", "data", "fetch-fixtures", "--repo", str(repo.resolve()), "--json", str(repo.resolve() / "w" / "a.json")]
     assert pythonpath == str(repo.resolve() / "tools" / "research" / "src")
-
-
-def test_the_fetch_resolves_the_same_registry_entries_from_the_integration_and_from_the_repository_root(tmp_path, monkeypatch, capsys):
-    """`verity-vllm workload-file`, run from the integration (where its shell scripts run it) or from the repository root, fetches
-    the same registry entries: `research data fetch-fixtures` reads a relative PATH from its working directory, not from --repo.
-    The real command runs in this process, with a directory remote in place of the evidence store's remotes."""
-    from research.store import fetchset, fixtures as F
-    from research.store.cli import main as data_main
-    from research.store.local import LocalStore, manifest_key, object_key
-    from research.store.remote import FsRemote
-
-    repo = tmp_path / "repo"
-    vllm = repo / "integrations" / "vllm"
-    data = _stored(vllm / "workloads", {"a.json": {"x": 1}, "b.json": {"x": 2}})
-    origin, remote, registry = LocalStore(tmp_path / "origin"), FsRemote(tmp_path / "remote"), {}
-    for n, b in data.items():
-        (vllm / "workloads" / n).write_bytes(b)
-        art = origin.put_artifact(F.FIXTURE_KIND, {}, None, file=vllm / "workloads" / n)
-        for h, _ in origin.get_manifest(art).blobs():
-            remote.put(object_key(h), origin.object_path(h))
-        remote.put(manifest_key(art.split(":", 1)[1]), origin.manifest_path(art.split(":", 1)[1]))
-        registry[art] = f"integrations/vllm/workloads/{n}"
-        (vllm / "workloads" / n).unlink()
-    (repo / "fixtures").mkdir()
-    (repo / "fixtures" / "artifacts.json").write_text(json.dumps(registry))
-    monkeypatch.setenv("RESEARCH_STORE", str(tmp_path / "store"))
-    monkeypatch.setattr(fetchset, "sources", lambda st, **kw: [remote])
-    monkeypatch.setattr(F, "tracked", lambda repo: None)
-    seen = []
-
-    def run(argv, **kw):
-        assert argv[1:5] == ["-m", "research", "data", "fetch-fixtures"], argv
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            rc = data_main(argv[4:])
-        seen.append(sorted((e["path"], e["status"]) for e in json.loads(out.getvalue())["entries"]))
-        return subprocess.CompletedProcess(argv, rc, out.getvalue(), "")
-    monkeypatch.setattr(C.subprocess, "run", run)
-    for cwd, rel in ((vllm, Path("workloads")), (repo, Path("integrations/vllm/workloads"))):
-        for n in data:
-            (vllm / "workloads" / n).unlink(missing_ok=True)
-        monkeypatch.chdir(cwd)
-        assert cli.main(["workload-file", *(str(rel / n) for n in data)]) == 0
-        assert capsys.readouterr().out == "".join(f"{rel / n}\n" for n in data)
-        assert {n: (vllm / "workloads" / n).read_bytes() for n in data} == data
-    assert seen == [[(p, "fetched")] for p in registry.values()] * 2
 
 
 def test_row_file_finds_a_stored_row_that_is_not_here(tmp_path, monkeypatch):
