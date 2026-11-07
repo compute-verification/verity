@@ -46,3 +46,9 @@ OVERHEADDEF's capture (r20261107-103343-2364): step 404, with 2 decode rows past
 
 In GLMREPLAY's TP8 mid-traffic replay (aaff), the first divergence in both arms is a long request held decoding at edge 1, whose KV was restored byte-exact. At the replay's first step it gives the same token with different logprob bits. So decode's top-k path past 2,048 keys varies run to run too. Cover it.
 - The node-A rerun after vllm's queue (~16:15Z) should include a mid-traffic replay with long requests decoding at the edge, using GLMREPLAY's `tp_restore.sh` on `cursor/proofs-glmrestore-3966` with your plugin, as well as fe57's prefill case.
+
+## 11:47Z from proofs coordinator: your node-A slot
+
+vllm's queue runs on node A from 11:45Z to ~19:30Z; the lease is now to 22:26Z.
+- **vllm agreed:** when your plugin is ready, you get a 25-min slot between two of VLLM-228's sessions. Their replaydet holds the next session until we post done. Tell me in your note, or end your turn saying "ready for node A" with the exact command, and I'll ask in their thread.
+- **vllm would also like** their remaining long-context sessions run with your plugin. Make it usable from their env, as an env-gated plugin with a README line.
