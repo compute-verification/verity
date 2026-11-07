@@ -215,13 +215,29 @@ them, changes no text. -/
 def helperCanon (env : Environment) (e : Expr) (rn : Name → Name := id) : String :=
   canonText (inlineHelpers env e) rn
 
-/-- Each argument of the application `e`: its `helperCanon` text where it is closed, `∀` where it is one of `alls`, a
-variable the statement holds at every value of, and none where it mentions another (a binder of the guarantee, an `∃`'s
-witness, a hypothesis). -/
+/-- The binder infos of `t`'s leading `∀`s. -/
+def binderInfosOf : Expr → Array BinderInfo
+  | .forallE _ _ b bi => #[bi] ++ binderInfosOf b
+  | _ => #[]
+
+/-- `e` with each argument a constant takes as an instance (`[inst : C α]`) in place of `_inst`: a term elaborated in
+two modules, whose imports gave instance search different paths to one instance, reads alike. -/
+partial def eraseInstances (env : Environment) (e : Expr) : Expr :=
+  e.replace fun x => do
+    let .const c _ := x.getAppFn | none
+    let bis := binderInfosOf (← env.find? c).type
+    guard (x.isApp && bis.any (·.isInstImplicit))
+    return mkAppN x.getAppFn (x.getAppArgs.mapIdx fun i a =>
+      if (bis[i]?.map (·.isInstImplicit)).getD false then .const `_inst [] else eraseInstances env a)
+
+/-- Each argument of the application `e`: its `helperCanon` text, its instances erased (`eraseInstances`), where it is
+closed, `∀` where it is one of `alls`, a variable the statement holds at every value of, and none where it mentions
+another (a binder of the guarantee, an `∃`'s witness, a hypothesis). -/
 def argsOf (env : Environment) (e : Expr) (alls : Array Expr := #[]) : Array (Option String) :=
   e.getAppArgs.map fun a =>
     let a := a.consumeMData
-    if !a.hasFVar && !a.hasMVar then some (helperCanon env a) else if alls.contains a then some "∀" else none
+    if !a.hasFVar && !a.hasMVar then some (helperCanon env (eraseInstances env a))
+    else if alls.contains a then some "∀" else none
 
 /-- What a read definition contributes to what a statement means: its type, and a definition's value, each by
 `helperCanon`. -/
