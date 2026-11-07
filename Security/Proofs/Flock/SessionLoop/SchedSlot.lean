@@ -32,12 +32,6 @@ set_option synthInstance.maxHeartbeats 1000000 -- `ofLoopLink`'s session types, 
 
 namespace Loop
 
-/-- A statement in a `--zk` deployment's scope parses as a Flock statement, so it is no V\* part's. -/
-theorem decodeRec_none_of_scope {rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation} {x : Msg}
-    (hsc : Claims.Flock.Scope (FlockDeploy.deployZk rel) x) : RecDeploy.decodeRec x = none := by
-  obtain ⟨_, hp, -⟩ := hsc
-  exact decodeRec_none_of_parse hp
-
 /-- **A round within the rep's schedule so far is before its inner proof's**: at a `Live` statement the loop serves, a
 history of `q + 1 < refK x` decoded coins at rep stream `k`'s round `i`, below the end of its schedule so far `rsched` on
 a table `real` answers as the loop's own (`Count.RealTabs`), is table `k / 2`'s rep `k % 2`'s round, from its first
@@ -194,8 +188,8 @@ open Loop in
 on tables `real` answers as the loop's own (`Count.RealTabs`), a live history past the link at which the loop schedules a
 round of its own (`Loop.schedOf`) has the length of some rep `2j + r`'s round from its first (`repBase`) to the one
 before its inner proof's (`repSlot … (innerOff 0)`). Live there, the frame's check passed the worker's round against
-the rep's schedule so far (`ofLoop_sched_live`), which holds the round (`Loop.schedOf_none_of_innerAt`,
-`Loop.InnerAt`), so `Loop.sched_slot_at`. -/
+the rep's schedule so far (`ofLoop_sched_live`), which holds the round (`Loop.schedOf_none_of_innerAt`, `Loop.InnerAt`),
+so `Loop.sched_slot_at`. -/
 theorem sched_slot (L₁ : LeanRelease Flock.Wit
       ((CoinLayer.session loopNr Masked.dataE).refP.Nonce × (CoinLayer.session loopNr Masked.dataE).refP.Rand))
     (real : Msg → Flock.Wit →
@@ -214,7 +208,8 @@ theorem sched_slot (L₁ : LeanRelease Flock.Wit
     ∃ (j : Fin (Masked.jOf x)) (r : Fin 2), Masked.repBase x (2 * j.val + r.val) ≤ ops.length ∧
       ops.length < Masked.repSlot x (2 * j.val + r.val) (Masked.innerOff 0) := by
   rcases hs : FlockDeploy.setupOf true x with _ | ⟨s0, spec, sts⟩
-  · exact absurd (refK_of_none hs (decodeRec_none_of_scope hx.1)) (by omega)
+  · obtain ⟨_, hp, -⟩ := hx.1
+    exact absurd (refK_of_none hs (decodeRec_none_of_parse hp)) (by omega)
   obtain ⟨q, hq⟩ : ∃ q, ops.length = q + 1 := ⟨ops.length - 1, by omega⟩
   have hlast : (ofLoop Masked.dataE L₁ real).last x = refK x + 1 :=
     loop_last loopNr Masked.dataE (withFrames Masked.dataE L₁ real) x

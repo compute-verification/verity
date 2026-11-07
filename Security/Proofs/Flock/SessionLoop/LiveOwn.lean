@@ -17,7 +17,8 @@ rounds (`seenRounds`, `maskedOf`, `Loop.valsOf`). At the histories the deferred 
 only (`LeanRelease.LiveRoundEqOwn`), as `FinalRoundEq` asks its own:
 
 * **`LeanRelease.liveRoundEqOwn_ofLoopLink`**: at `SessionLoopZKDeployed`'s release, for every worker, the scheduled
-  rounds' equation (`LiveSchedOwn`) and the inner proof's (`LiveInnerOwn`) give `LiveRoundEqOwn`.
+  rounds' equation (`LiveSchedOwn`) and the inner proof's (`LiveInnerOwn`) give `LiveRoundEqOwn` at a statement that
+  is no V\* part's.
 * **`LeanRelease.liveRoundEqOwn_withInner`**: at that release with the inner proof's rounds the loop's finish's
   (`withInner` at `Loop.finOf`), at `SessionLoopZKDeployed`'s premises on the session, the statement and the loop's
   inputs, `LiveRoundEqOwn` holds at every worker taking some admissible `vs`'s values at its own histories
@@ -29,7 +30,7 @@ only (`LeanRelease.LiveRoundEqOwn`), as `FinalRoundEq` asks its own:
 * **`LeanRelease.liveRoundEqOwn_vsOf`**: they hold at `Loop.vsOf bx` and the worker `Loop.phased bx post`, for every
   algebraic-phase worker `bx` and every `post`, wherever `bx`'s served values' rows hold (`Loop.vsServed`).
 
-`Loop.finishIs` takes `LiveRoundEqOwn`: the `Finish` reads each frame round on the history it ends, a prefix of the own
+`Loop.finishIsOn` takes `LiveRoundEqOwn`: the `Finish` reads each frame round on the history it ends, a prefix of the own
 history `FinishIs` is asked on, which is own (`ZkServer.OwnHist.take`, `msg_of_liveRoundEq`).
 -/
 
@@ -84,7 +85,7 @@ theorem liveRoundEqOwn_withInner (vs : Loop.finS.SwVals) (L₁ : LeanRelease Flo
       wk x w) :
     LiveRoundEqOwn Loop.finS vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real)
       CoinOpen.shaH wk x w :=
-  liveRoundEqOwn_ofLoopLink vs _ src real wk x w (Loop.decodeRec_none_of_scope hsc)
+  liveRoundEqOwn_ofLoopLink vs _ src real wk x w (by obtain ⟨_, hp, -⟩ := hsc; exact decodeRec_none_of_parse hp)
     (liveSchedOwn_ofLoopLink vs _ src real hreal wk hTab hTape hR hSv hsc hSrc hrows hL0 hV)
     (liveInnerOwn_withInner vs L₁ src real hreal x w hTab hTape hR hSv hsc hSrc hcaus wk hV hC hL0 hrows)
 

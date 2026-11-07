@@ -172,7 +172,7 @@ theorem trustsStop_honest (L₁ : LeanRelease Flock.Wit Tp)
   have hE : LiveRoundEq finS finS.honestVals (ofLoopLink (withInner Masked.dataE L₁ (realOf src) fin) src (realOf src))
       CoinOpen.shaH (valsWk finS.honestVals (ofLoopLink (withInner Masked.dataE L₁ (realOf src) fin) src (realOf src)))
       x w :=
-    liveRoundEq_ofLoopLink _ _ src _ _ x w (decodeRec_none_of_scope hsc) (hS x w h)
+    liveRoundEq_ofLoopLink _ _ src _ _ x w (by obtain ⟨_, hp, -⟩ := hsc; exact decodeRec_none_of_parse hp) (hS x w h)
       (liveInner_withInner _ L₁ src (realOf src) fin x w (Masked.live_of hsc hR) hSv
         (fun ρ _ _ _ hs => realTabs_realOf src x w ρ hs) (hSrc x w h).2 _
         (takes_honestVals_ofLoopLink _ src (realOf src)).2 (takesTau_honestVals_ofLoopLink _ src (realOf src))
