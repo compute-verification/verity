@@ -4198,9 +4198,9 @@ SNAPSHOT_CODE = (".ir.sig", ".ir")
 def pipelined(pkg: Path, build: bool, replay: bool, replay_cache: Path | None, lifts) -> bool:
     """Whether ``pkg``'s audit replays its modules while its build runs (`Pipeline`): it builds and replays with a cache, in
     the sandbox (outside it the build could write anything, the cache included), its replay is a heavy one
-    (`replay_threads`) on `PIPELINE_MIN_CORES` cores or more, and `VERITY_LEAN_PIPELINE` isn't 0."""
-    return (build and replay and replay_cache is not None and not lifts and os.environ.get("VERITY_LEAN_PIPELINE") != "0"
-            and cores() >= PIPELINE_MIN_CORES and replay_threads(pkg) is not None and sandboxed())
+    (`replay_threads`) on `PIPELINE_MIN_CORES` cores or more."""
+    return (build and replay and replay_cache is not None and not lifts and cores() >= PIPELINE_MIN_CORES
+            and replay_threads(pkg) is not None and sandboxed())
 
 
 class Pipeline:

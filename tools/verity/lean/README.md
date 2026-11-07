@@ -170,6 +170,16 @@ toolchain, Mathlib or ArkLib, or a change to `Replay.lean`, the first audit on e
 closure adds nothing to the kernel's work. `lean_audit.py --fresh` (the uncached nightly check) gives its packages one cache in
 its scratch tree, so `Security` reuses what `Security/Proofs` checked in the same run.
 
+**The replay during the build.** A heavy package's build on a machine of `PIPELINE_MIN_CORES` (64) cores or more, in the
+sandbox, with a replay cache, also replays its modules as Lake reports them built (`Pipeline`), on the cores the build's
+import chain leaves idle. Once `PIPELINE_BATCH` (300) have been reported, `PIPELINE_FREE_GIB` (160) is free and no other
+heavy replay runs, a batch runs `replay_step` on them, closure and all, at `nice -n 19` and first in line for the OOM
+killer, and stores in the cache what the kernel accepted. The build runs the package's code, which may rewrite any file
+under the `.lake` directories it writes, so a batch reads only copies of those files, taken out of the sandbox's reach,
+and keys each module on the bytes it checked. Its verdict is dropped: the replay after the build is unchanged and judges,
+reusing a module only where the files after the build hold the bytes a batch checked, and checking the rest. It covers the
+same modules and fails the same way as without the batches. The report's `pipeline` lists them.
+
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure
 again on every run, so it runs nightly on `main` instead (`[[run]]` in `tools/research/README.md`). `--closure` with a
