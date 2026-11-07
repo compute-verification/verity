@@ -470,10 +470,8 @@ theorem roundOk_inner0 (L₁ : LeanRelease Flock.Wit Tp)
       (valsDev finS.honestVals (ofLoopLink (withInner Masked.dataE L₁ real fin) src real))).roundOk x w (ν, t)
       ((m₀, ρ₀) :: ops) = true := by
   subst hfin
-  have hk0 : 0 < refK x := by omega
-  have hc0 : 0 < (ops.map fun p => CoinLayer.rd p.2).length := by rw [hq]; omega
-  have hsch := (schedOf_eq_none_iff (real := real x w (ν, t)) hk0 hc0).mpr
-    ⟨s0, spec, sts, q, k, i, tr, hr, rsched, hxs, hq, hloc, hreal, hrs, hend.le⟩
+  have hsch : schedOf (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2) = none :=
+    schedOf_none_of_innerAt ⟨s0, spec, sts, q, k, i, tr, hr, rsched, hxs, hq, hloc, hreal, hrs, hend.le⟩
   have hq1 : ops.length = q + 1 := by rw [← hq, List.length_map]
   obtain ⟨jf, rf, -, he4, hslot, -, -, hi0, -, hnr⟩ := Loop.innerAt_slot hx hSv hxs hq
     (by rw [List.length_map]; exact hlt) hloc (hR (ν, t) s0 spec sts hxs) hreal hrs hend.le
