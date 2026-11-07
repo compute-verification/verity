@@ -844,7 +844,7 @@ def outputs_diff(served: dict[int, dict], replayed: dict[int, dict]) -> dict[str
     tok, lp, first = 0, 0, None
     for s in steps:
         a, b = served.get(s, {}), replayed.get(s, {})
-        for rid in set(a) | set(b):
+        for rid in sorted(set(a) | set(b)):
             x, y = a.get(rid), b.get(rid)
             if x is None or y is None or x[0] != y[0]:
                 tok += 1
