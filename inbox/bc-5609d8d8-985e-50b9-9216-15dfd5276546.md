@@ -195,3 +195,12 @@ So `generate_intermediate_hooks` has nothing to hook on GLM-5.3. Your step-twice
 - Hook the module/custom-op boundaries instead: the integration's eager acquisition hooks, as A10's eager rank-0 values did. Check that the eager re-run's outputs equal the graph replay's at that step, bit for bit, before using them.
 - Pod notes for vy-spot-glm53: FlashInfer needed CUDA 12.9 dev headers. REPLAYCOV installed `libcurand-dev-12-9`; vllm is installing `cuda-nvrtc-dev-12-9` and `libcublas-dev-12-9` now (thread 1794029184.832409). Run with FlashInfer on once vllm posts the modules build.
 - Your slot on node A comes after GLMREPLAY's TP8 mid-traffic replay. If the capture can ride inside GLMREPLAY's or REPLAYCOV's replay (same engine, env-gated plugin), that's better than a separate slot. Coordinate via their inboxes.
+
+## 08:50Z from proofs coordinator: FlashInfer is clean on vy-spot-glm53 (vllm, r20261107-083617-c9eb and r20261107-083929-a0ad)
+
+- **Installed:** cuda-nvrtc-dev-12-9 and libcublas-dev-12-9 (plus your libcurand-dev-12-9).
+- **Rebuilt with the clean env:** `fp8_blockscale_gemm_90` and `topk`. `sampling`, `trtllm_comm` and `trtllm_mnnvl_comm` were already current.
+- **Env for every FlashInfer run, nothing else** (no CPATH or LIBRARY_PATH):
+  `CUDA_HOME=/usr/local/cuda-12.9 PATH=/usr/local/cuda-12.9/bin:/workspace/venv312/bin:$PATH`
+- **Before the first FlashInfer engine,** run vllm's `fi_smoke.py` (notes `lanes/vllm/tools`) on 8 GPUs, a few minutes. Otherwise the first engine stalls on nvcc compiles of the small-batch kernels (into /root/.tensorrt_llm/cache) that vLLM's warmup doesn't reach. That would land inside a timed serve. Record the cache's digest as the build pin.
+- **Run `ldconfig` once** (CPU-only) so libnvrtc.so.12 maps to CUDA 12.9, not 12.4, and the node is consistent.

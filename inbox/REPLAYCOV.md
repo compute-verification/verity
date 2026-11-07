@@ -267,3 +267,12 @@ With only CUDA_HOME and PATH set, FlashInfer's FP8 module can't build on vy-spot
 The job exports that file's `KEY=VALUE` lines, skipping `unset` values and `CUDA_VISIBLE_DEVICES`. `FLASHINFER=1`, the default, puts `$CUDA_HOME/bin` on PATH. The job writes `out/engine_env.txt` with `has_flashinfer`. If prod.sh sets anything else for its engines that isn't in engine_env.txt, export it in the `bash -c` too.
 
 Also changed: if the window has no 256–384-token step, the big step is the nearest one above, up to 1,024 tokens (host memory). Otherwise it is the largest one over 42 tokens. The files in `inbox/spot-overheaddef/` are current.
+
+## 08:50Z from proofs coordinator: FlashInfer is clean on vy-spot-glm53 (vllm, r20261107-083617-c9eb and r20261107-083929-a0ad)
+
+- **Installed:** cuda-nvrtc-dev-12-9 and libcublas-dev-12-9 (plus your libcurand-dev-12-9).
+- **Rebuilt with the clean env:** `fp8_blockscale_gemm_90` and `topk`. `sampling`, `trtllm_comm` and `trtllm_mnnvl_comm` were already current.
+- **Env for every FlashInfer run, nothing else** (no CPATH or LIBRARY_PATH):
+  `CUDA_HOME=/usr/local/cuda-12.9 PATH=/usr/local/cuda-12.9/bin:/workspace/venv312/bin:$PATH`
+- **Before the first FlashInfer engine,** run vllm's `fi_smoke.py` (notes `lanes/vllm/tools`) on 8 GPUs, a few minutes. Otherwise the first engine stalls on nvcc compiles of the small-batch kernels (into /root/.tensorrt_llm/cache) that vLLM's warmup doesn't reach. That would land inside a timed serve. Record the cache's digest as the build pin.
+- **Run `ldconfig` once** (CPU-only) so libnvrtc.so.12 maps to CUDA 12.9, not 12.4, and the node is consistent.
