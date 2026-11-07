@@ -420,7 +420,7 @@ def named(run: Any) -> tuple[str | None, dict[str, Any]]:
     try:
         window, record = run.commit_record(run)
         why = reused(run, window, record)
-    except Exception as e:  # noqa: BLE001  (a hook that fails names nothing: the window's visible refusal, not the server's)
+    except (ValueError, TypeError, KeyError, OSError, RuntimeError) as e:   # the window's refusal, not the server's
         why = f"{type(e).__name__}: {e}"
     if why is not None:
         return None, {"named": False, "reason": why[:500]}
