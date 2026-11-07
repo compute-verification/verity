@@ -268,12 +268,38 @@ class GreedyRequest(nn.Module):
     def forward(self, prompt: torch.Tensor) -> torch.Tensor:
         return self._decode(self._step(prompt, 0, 0))
 
-    def _decode(self, tok: torch.Tensor) -> torch.Tensor:
+    def _decode(self, tok: torch.Tensor, s0: int = 1) -> torch.Tensor:
         toks = [tok]
         for s in range(self.T):
-            tok = self._step(tok, self.LP + s, s + 1)
+            tok = self._step(tok, self.LP + s, s0 + s)
             toks.append(tok)
         return torch.cat(toks)
+
+
+class ChunkedGreedyRequest(GreedyRequest):
+    """`GreedyRequest` for a prompt the engine prefilled in launches of `chunks` rows in turn (vLLM V1's chunked prefill: class G's
+    long-prefill threshold and step budget): chunk j forwards prompt rows a_j.. at those positions as launch step j, each layer's
+    history holding the chunks before; only the last chunk's last row is sampled (vLLM discards the sample of a prompt not yet
+    complete); the T decodes follow at launch steps len(chunks).. Its source class is the request wrapper's, its chunks the
+    derive config (`{"chunks": [...]}`), as `predict.build.build_program(chunks=...)` states it."""
+
+    def __init__(self, model: nn.Module, LP: int, T: int, chunks) -> None:
+        super().__init__(model, LP, T)
+        self.chunks = tuple(int(n) for n in chunks)
+        if len(self.chunks) < 2 or min(self.chunks) < 1 or sum(self.chunks) != LP:
+            raise ValueError(f"prefill chunks {list(self.chunks)}: a chunked request's chunks are its {LP} prompt rows in two or more "
+                             f"launches of at least one")
+
+    def forward(self, prompt: torch.Tensor) -> torch.Tensor:
+        from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch_region
+        a = 0
+        for j, n in enumerate(self.chunks):
+            with launch_region(j, "tokens"):
+                hidden = self.model(prompt[a:a + n], torch.arange(a, a + n, dtype=torch.int64))
+            a += n
+        with launch_region(len(self.chunks) - 1, "sampled"):
+            tok = torch.argmax(self.model.compute_logits(hidden[-1:]), dim=-1).to(torch.int32)
+        return self._decode(tok, len(self.chunks))
 
 
 class CachedGreedyRequest(GreedyRequest):
@@ -466,14 +492,20 @@ def cached_wrapper(mod: nn.Module, inputs: tuple, model: nn.Module, C: int) -> t
 
 
 def make_wrapper(kind: str, model: nn.Module, *, pos0: int = 8, M: int = 1, LP: int = 8, T: int = 4, eos_id: int = 0,
-                 sampling: dict | None = None, C: int = 0) -> tuple[nn.Module, tuple]:
-    """(module, example inputs on meta) for `kind` in {step, request, padded}; `C` > 0: the request wrapper's `cached_wrapper`.
+                 sampling: dict | None = None, C: int = 0, chunks=()) -> tuple[nn.Module, tuple]:
+    """(module, example inputs on meta) for `kind` in {step, request, padded}; `C` > 0: the request wrapper's `cached_wrapper`;
+    two or more `chunks`: the greedy request's `ChunkedGreedyRequest` (with a cached prefix or another policy, refused).
     [X-05] `sampling` is the row's declared policy: the greedy wrappers author `torch.argmax`; `{"kind": "stochastic", "temperature", "top_p", "top_k": 0, "seeded": True, "splits": "derived"}`
     authors `vllm_iface.gumbel_topp_token_select` with the seed as a second forward input and the derived split
     count `splits` (int32, one entry per sampling event: [1] for the step wrapper, [T+1] for the request wrapper) as a third (step /
     request wrappers; padded is greedy-only).  A numeric `splits` is the registered S = SplitsFor_v1(1, num_SMs) the served engine
     pins (`build.sampler_geometry`, `registered_policy_splits`): the wrapper takes no `splits` input.  Any other numeric `splits`
     (the earlier static S / declared schedule) is REFUSED, as is any other policy (derive_step refuses earlier)."""
+    if len(chunks or ()) > 1:
+        if (kind, C, (sampling or {"kind": "greedy"}).get("kind")) != ("request", 0, "greedy"):
+            raise ValueError(f"make_wrapper authors a prefill in chunks for the greedy request without a cached prefix only, not a "
+                             f"{(sampling or {}).get('kind', 'greedy')} {kind} with C={C}")
+        return ChunkedGreedyRequest(model, LP, T, chunks), (torch.empty((LP,), dtype=torch.int32, device="meta"),)
     if C:
         return cached_wrapper(*make_wrapper(kind, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos_id, sampling=sampling), model, C)
     kind_s = (sampling or {"kind": "greedy"}).get("kind")

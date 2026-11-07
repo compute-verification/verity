@@ -261,6 +261,20 @@ def _form_params(j: Any) -> dict:
     raise Reject(f"the parameters' form {form} is not one-stage or recursive")
 
 
+def _covered(form_params: Callable[[Any], dict]) -> Callable[[Any], dict]:
+    """`OneStage.paramsOfJson` behind the form's split: `form_params`, and every bernoulli law refused at any p, as
+    `covered_params` refuses it (`service.bernoulli`)."""
+    def params(j: Any) -> dict:
+        p = form_params(j)
+        if ONE_STAGE.service.bernoulli(p["law"]):
+            raise Reject(ONE_STAGE.service.BERNOULLI)
+        return p
+    return params
+
+
+_form_params = _covered(_form_params)
+
+
 def _form_evidence(b: bytes) -> dict:
     form, rest = _form(P.canonical_json(b), "evidence")
     if form == "one-stage":

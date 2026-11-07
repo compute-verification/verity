@@ -81,9 +81,9 @@ In this order:
 The targets are the theorem's only hypotheses. Three kinds of assumption enter beside them, by their lock names:
 
 - **SHA-512 collision resistance**, `Claims.ExpectedCR` (`ecr/sha-512`, `Security/Definitions/Core/Interaction.lean`;
-  `Security/lean-audit.json`). It is asked only of each subprotocol's fixed finder: `Vocab.FinderCR` bounds the
-  finder's collision probability at the published `ε_cr` at its budget of SHA-512 calls (`Vocab.finder_calls`), and
-  where it fails the error is `⊤`. Further finders a subprotocol's bound reads (`Vocab.finders`) are held to the bound
+  `Security/lean-audit.json`). It is asked only of each subprotocol's fixed finder: `Vocab.FinderCR` is
+  `Claims.ExpectedCR` there, which bounds the finder's collision probability at `ε_cr`, its budget of SHA-512 calls
+  over `2^256` (`Vocab.crBound`, `Vocab.finder_calls`), and where it fails the error is `⊤`. Further finders a subprotocol's bound reads (`Vocab.finders`) are held to the bound
   `ecr/sha-512` gives at their own budgets (`Vocab.finderCR`), and a second file with a registered digest enters the
   same way (`Vocab.fileFinder`, `Vocab.publicFinder`).
 - **LMS unforgeability**, `Hash.Assumptions.LmsUnforgeable` (`euf-cma/lms-sha512`,
