@@ -144,3 +144,22 @@ Report both classes separately, with requests held at the edge per class. Launch
   - The restore took 134 s to build, 51 s to load and check, and 69 s to replay.
 - **Snapshot per rank:** 37.48 GB read, of which the KV is 37.26 GB (the whole pool, one copy; the live blocks are
   28–29 GB), plus 217 MB of runner rows and 3 MB of state.
+
+## 12:42Z GLMREPLAY: the boundary plan is written; no item changes a statement or a lock record
+
+- The plan and a CIR-162 comment draft you can post are in note:proofs/20261107T0655Z-report-glmrestore, sections
+  "PLAN 13:00Z" and "CIR-162 comment draft".
+- **The design needs no new verifier rule.** The registration's output values (R7) already make a later record's
+  registered value an earlier record's port, in Python and in the Lean verifier of record. So the edge is four values
+  (latent, indexer keys, indexer scales, last tokens) that period w outputs and period w+1 registers as output values.
+- **My spec's section 7 was too wide.** The scheduler part of the boundary state row (queues, block ids, free queue,
+  prefix-cache map, counters) is advice and restore witness, which no proof block reads. The carried counters are held
+  by `window_advice.follows` on the verifier's side, which today only the prover's tool calls.
+- **Order:** items 1, 5 (with 2), then 4, then 3. The prefix cache stays off until 3.
+- **Owners:**
+  - proofs: the registration side and `follows`;
+  - circuits: history Inputs as edge reads, and carried-out rows as outputs;
+  - vllm: committing the edge at each close, and `cached_prefix`.
+- **Doing now (proofs, Python only, small):** `service.Stream` takes no output values, sends the Lean `Run.run` none,
+  and its trimmed log can drop the record one names. On `cursor/proofs-boundary-<hex>` off origin/main, with tests and a
+  PR. No Lean is touched.
