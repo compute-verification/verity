@@ -45,6 +45,22 @@ def test_window_is_the_loads_steps_from_its_first_arrival(tmp_path: Path):
     assert w["served_s"] == pytest.approx(0.2)
 
 
+def test_window_reads_the_plan_beside_the_arm_when_the_named_one_isnt_on_this_node(tmp_path: Path):
+    d = arm(tmp_path)
+    (d / "meta.json").write_text(json.dumps({"plan": "/elsewhere/out/plan.jsonl", "checkpoint": "ck"}))
+    assert [r["prompt_ids"] for r in R.window(d, "sat", 1)["requests"]] == [[0, 1], [1, 2]]
+
+
+def test_window_reads_the_plan_in_the_arm_when_meta_names_none(tmp_path: Path):
+    d = arm(tmp_path)
+    (d / "meta.json").write_text(json.dumps({"plan": None, "checkpoint": "ck"}))   # serve_tax.py run without --plan
+    (tmp_path / "plan.jsonl").rename(d / "plan.jsonl")
+    assert [r["prompt_ids"] for r in R.window(d, "sat", 1)["requests"]] == [[0, 1], [1, 2]]
+    (d / "plan.jsonl").unlink()
+    with pytest.raises(SystemExit, match="no plan at"):
+        R.window(d, "sat", 1)
+
+
 def test_window_refuses_a_step_shared_with_another_load(tmp_path: Path):
     with pytest.raises(SystemExit, match="another load"):
         R.window(arm(tmp_path, foreign=True), "sat", 1)

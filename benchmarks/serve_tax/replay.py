@@ -39,8 +39,10 @@ def window(arm_dir: Path, load: str, rep: int) -> dict[str, Any]:
     meta = json.loads((arm_dir / load / f"rep-{rep}" / "meta.json").read_text())
     tag = meta["tag"]
     named = json.loads((arm_dir / "meta.json").read_text()).get("plan")
-    plan_file = next((p for p in (Path(named) if named else None, arm_dir.parent / "plan.jsonl") if p and p.is_file()),
-                     arm_dir.parent / "plan.jsonl")
+    tried = [p for p in (Path(named) if named else None, arm_dir / "plan.jsonl", arm_dir.parent / "plan.jsonl") if p]
+    plan_file = next((p for p in tried if p.is_file()), None)
+    if plan_file is None:
+        raise SystemExit(f"no plan at {', '.join(map(str, tried))} (an evicted run's: `research data fetch` puts it back)")
     plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
     client = {r["id"]: r for r in (json.loads(x) for x in (arm_dir / load / f"rep-{rep}" / "client.jsonl").read_text().splitlines()
                                    if x.strip())}
