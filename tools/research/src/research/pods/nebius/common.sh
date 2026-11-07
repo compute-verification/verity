@@ -136,14 +136,17 @@ print(ids[0])') || die "tenant lookup failed"
 vm_id() { nb compute instance list --parent-id "$PROJECT_ID" --all | by_name "$VM_NAME"; }
 disk_id() { nb compute disk list --parent-id "$PROJECT_ID" --all | by_name "$1"; }
 
-# wait_state ID STATE [TRIES]: poll the VM every 10 s until status.state is STATE
+# wait_state ID STATE [TRIES]: poll the VM every NEBIUS_POLL_S (default 10) s until status.state is STATE.  A start Nebius refuses (no capacity) goes
+# STARTING, then back to STOPPED, so waiting for RUNNING ends there instead of using up TRIES (30 min by default).
 wait_state() {
-  local id=$1 want=$2 tries=${3:-180} st=""
+  local id=$1 want=$2 tries=${3:-180} st="" started=""
   while [ "$tries" -gt 0 ]; do
     st=$(nb compute instance get --id "$id" | jf status.state | tr '[:lower:]' '[:upper:]')
     [ "$st" = "$want" ] && return 0
+    [ "$st" = STARTING ] && started=1
+    [ "$want" = RUNNING ] && [ "$st" = STOPPED ] && [ -n "$started" ] && die "VM $id went back to STOPPED: Nebius refused its start"
     tries=$((tries - 1))
-    sleep 10
+    sleep "${NEBIUS_POLL_S:-10}"
   done
   die "VM $id is $st, not $want, after waiting"
 }

@@ -42,14 +42,14 @@ import Proofs.Flock.Claims.Complete.Zk.PadAlgebra
 `FinishSrc`'s `repCut_fw` asks of its source the masked values `vals + h` below `zp 64` (`hmk`), and level 0's opening's
 from `zp 64` to `h_ab` (`hlig`). At the switched prover's
 source (`swSrcE`), where table `i`'s rows hold at its base, rep `r`'s masked value `n` is the worker's clear value there
-plus the base's pad, each as the firewall's words (`GF128.val`).
+plus the base's pad, each as the ZK server's words (`GF128.val`).
 
 * **`Masked.swSrcE_masked_of_rowsAt`**: that reading, from the switched cut's masked values being the worker's view's
   (`swCutE_masked_of_rowsAt`), whose masked values are `v + h` (`Table.view`, at `Table.onVals`'s values).
 * `Masked.swSrcE_masked`, **`Masked.swSrcE_masked_pad`**: the pad there is the tape's, and below `h_ab` it is the
   session's pad array's entry (`padsOf`), as `srcE_masked` and `srcE_masked_pad` have the honest source's: the switched
   source's masked values are `vals + pads.h` at the worker's values and the session's pads.
-* `Masked.valsFw`, **`Masked.swSrcE_hmk`**, **`Masked.swSrcE_l0`**: at the firewall's clear values by pad index, the
+* `Masked.valsFw`, **`Masked.swSrcE_hmk`**, **`Masked.swSrcE_l0`**: at the ZK server's clear values by pad index, the
   passed values below `zp 64` and level 0's opening from there on: below `zp 64`, `repCut_fw`'s `hmk` with the passed
   values as `vals` and the session's pads as `pads`; from `zp 64` to `h_ab`, the opening's values plus those pads.
 -/
@@ -64,7 +64,7 @@ open CoinLayer
 namespace Masked
 
 /-- **Where table `i`'s rows hold at its base, the switched source's masked values are the worker's values plus the
-base's pads**, as the firewall's words. -/
+base's pads**, as the ZK server's words. -/
 theorem swSrcE_masked_of_rowsAt (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (v : ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals) (τ : UE.Tape) (i : ℕ) (hi : i < jOf x) (r : ℕ)
     (hr : r < 2)
@@ -149,9 +149,9 @@ theorem swSrcE_masked_pad (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w :
   rw [swSrcE_masked x c w v τ j r hrows hkE,
     FlockComplete.padsOf_get (UE.tapeZk τ) j.val r.val (layE x j) k (by omega) (by omega) (by omega)]
 
-/-- **The firewall's clear values by pad index**: table `j`'s rep `r` clear value `k` is, below `zp 64`, word `k` of
-`A j r`, as the firewall reads a rep's passed values (`Finish.RepIn.vals`, `zp 64` words), and from `zp 64` on `B j r k`,
-level 0's opening, which the firewall computes itself; at every witness, mask slot and level 0's hiding. -/
+/-- **The ZK server's clear values by pad index**: table `j`'s rep `r` clear value `k` is, below `zp 64`, word `k` of
+`A j r`, as the ZK server reads a rep's passed values (`Finish.RepIn.vals`, `zp 64` words), and from `zp 64` on `B j r k`,
+level 0's opening, which the ZK server computes itself; at every witness, mask slot and level 0's hiding. -/
 noncomputable def valsFw (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128) :
     ∀ j, ((tabC PE x j).T (czExe PE x c j)).tab.Vals :=
@@ -162,7 +162,7 @@ theorem zp64_lt_hab (x : Msg) (j : Fin (jOf x)) : (layE x j).zp 64 < (layE x j).
   simp only [_root_.Flock.Zk.PadLayout.hab]
   omega
 
-/-- **`repCut_fw`'s `hmk` at the switched source**: at the firewall's clear values (`valsFw`), where table `j`'s rows
+/-- **`repCut_fw`'s `hmk` at the switched source**: at the ZK server's clear values (`valsFw`), where table `j`'s rows
 hold at its base, rep `r`'s masked values below `zp 64` are `A j r` plus the session's pads (`padsOf`). -/
 theorem swSrcE_hmk (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128)
@@ -178,7 +178,7 @@ theorem swSrcE_hmk (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims
   show (if k < (layE x j).zp 64 then (A j r)[k]! else B j r k) + _ = _
   rw [ite_eq_left hk]
 
-/-- **Level 0's opening at the switched source**: at the firewall's clear values (`valsFw`), where table `j`'s rows hold
+/-- **Level 0's opening at the switched source**: at the ZK server's clear values (`valsFw`), where table `j`'s rows hold
 at its base, rep `r`'s masked values from `zp 64` to `h_ab` are `B j r` plus the session's pads (`padsOf`). -/
 theorem swSrcE_l0 (x : Msg) (c : Fin (refK x) → FlockDeploy.Coin) (w : Claims.Flock.Wit)
     (A : Fin (jOf x) → Fin 2 → Array _root_.Flock.F128) (B : Fin (jOf x) → Fin 2 → ℕ → _root_.Flock.F128)

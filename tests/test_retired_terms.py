@@ -76,6 +76,12 @@ DOC_TERMS = {
                               "until renamed)",
     "flock-verify, remote check, naming the verifier": "verity verify proof, verity verify remote (a command someone runs today "
                                                       "stays in backticks)",
+    "coin server, coin source, coin device, randomness source": "the challenger",
+    "salted leaf, salted commitment": "hiding leaf, hiding commitment",
+    "miss probability, detection probability": "acceptance probability (detection is its complement)",
+    "link window": "an execution phase's transfer blocks (`link-window` stays in backticks until a format version)",
+    "block-scaled, blockwise, scale block": "scale group",
+    "production": "serving, or proving",
     "builder, advice compiler, circuit builder": "registered compiler",
     "declared advice": "advice",
     "declared circuit": "registered circuit",
@@ -153,6 +159,9 @@ _SPACE = r"(?:[ \t]+|-|[ \t]*\n[ \t]*)"
 _DOC_TERM = re.compile(rf"(?i:\b(?:(?:wrong|incorrect|isolation|replay){_SPACE}units?|(?:physical|thread|KV){_SPACE}blocks?"
                        rf"|wardens?"
                        rf"|legs?|(?:re)?(?:draws?|drawn|drawing|drew)|components?|firewall(?:s|ed)?|flock-verify"
+                       rf"|coin{_SPACE}(?:servers?|sources?|devices?)|randomness{_SPACE}sources?"
+                       rf"|salted{_SPACE}(?:leaf|leaves|commitments?)|(?:miss|detection){_SPACE}probabilit(?:y|ies)"
+                       rf"|link{_SPACE}windows?|block{_SPACE}scaled|blockwise|scale{_SPACE}blocks?|productions?"
                        rf"|remote{_SPACE}check|builders?|advice{_SPACE}compilers?|declared{_SPACE}(?:advice|circuits?|work(?:loads?)?)"
                        rf"|declar(?:es|ed|ing){_SPACE}(?:its|their|the){_SPACE}advice|sampled{_SPACE}units?"
                        rf"|integrity{_SPACE}periods?|execution{_SPACE}transcripts?"
@@ -194,10 +203,14 @@ ALLOWED: dict[str, str] = {
                                   "`Spec.digest` hashes it",
     "one proof unit per registration: the link-window": "a public item's reason in N2's Spec "
                                                         "(`certifier.service`): `Spec.digest` hashes it",
+    "the client's request commitment, the randomness source": "a line of GLOSSARY.md that a queued PR rewrites; renamed "
+                                                              "after it lands",
+    "production would publish every event": "infra's Vercel deployment, another sense",
+    "Production is `verity-slack-events`": "infra's Vercel deployment, another sense",
+    "the coin server keeps each round's bytes": "a row of Flock's Soundness README beside one a queued PR on next "
+                                                "rewrites; renamed after it lands",
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
-    "the verifier of record runs it": "Flock's Soundness README: a queued PR on next rewrites the line beside it; renamed after "
-                                      "it lands",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
     "verity/proof-service/": "the stream's and outcome's record formats (`sampled_proofs.service.STREAM`, `OUTCOME`), "
                              "which their digests hash",
@@ -215,6 +228,8 @@ ALLOWED: dict[str, str] = {
     "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
+    "(the bytes say draw)": "`verity/ml/commitments/domains.py`'s comment over the POUW_*_SAMPLING tags, which names their "
+                            "bytes (`verity/pouw/pearl-c-draw/v1` and the rest)",
 }
 
 PENDING: dict[str, str] = {
@@ -223,7 +238,6 @@ PENDING: dict[str, str] = {
                                                             "renamed with the Lean",
     "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
                                                              "renamed with the Lean",
-    "benchmarks/README.md": "#7714, on next, rewrites its lines; renamed after it lands",
 }
 
 
@@ -528,7 +542,7 @@ def test_the_doc_scan_reads_each_form():
                 "```sh\nverity example vllm\n```\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
         "benchmarks/pouw/CHANGELOG.md": "a leg",
-        next(f for f in PENDING if f.endswith(".md")): "a leg",
+        **{f: "a leg" for f in PENDING if f.endswith(".md")},
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [(GLOSSARY, 2, "leg"),
@@ -616,6 +630,24 @@ def test_the_doc_scan_reads_the_training_terms():
         ("a.md", 5, "server-windows"), ("a.md", 5, "server time block"), ("a.md", 6, "overhead lower bound"),
         ("a.md", 6, "exclusion bound"), ("a.md", 6, "training classes"), ("a.md", 6, "per-block caps"),
         ("a.md", 6, "dark compute"), ("a.md", 6, "certified work")]
+
+
+def test_the_doc_scan_reads_the_owners_terms():
+    """The owners' renames (`GLOSSARY.md`), on toy files: the challenger, hiding leaves, the acceptance probability,
+    transfer blocks, scale groups and serving; `link-window` in backticks, a quoted "production", a reproduction and a
+    scale group stay."""
+    docs = {
+        "a.md": "The coin server, a coin\nsource, the coin devices and a randomness source; salted leaves and a salted commitment.\n"
+                "A miss probability, the detection probabilities; the link window and a link-window.\n"
+                "Block-scaled FP8, blockwise scales, a scale block; in production, two productions.\n"
+                'The `link-window` key, a quoted "production", a reproduction and a scale group stay.\n',
+    }
+    assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [
+        ("a.md", 1, "coin server"), ("a.md", 1, "coin source"), ("a.md", 2, "coin devices"),
+        ("a.md", 2, "randomness source"), ("a.md", 2, "salted leaves"), ("a.md", 2, "salted commitment"),
+        ("a.md", 3, "miss probability"), ("a.md", 3, "detection probabilities"), ("a.md", 3, "link window"),
+        ("a.md", 3, "link-window"), ("a.md", 4, "Block-scaled"), ("a.md", 4, "blockwise"), ("a.md", 4, "scale block"),
+        ("a.md", 4, "production"), ("a.md", 4, "productions")]
 
 
 def test_the_doc_scan_reads_the_incorrect_terms():

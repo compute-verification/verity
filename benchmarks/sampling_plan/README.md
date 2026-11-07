@@ -47,9 +47,9 @@ their floor.
   certified incorrect ANDs at δ, the share of its ANDs the block's own GPU time buys, the chosen plan for `--share` (1e-3,
   the small model's knee, held fixed), its certificate recomputed through `Stratified.harm_bound` and `count_bound` at
   δ = 1% and 1e-6, the pooled bound over a week, a month and a year on one server and on an assumed 10,000 (an assumed
-  20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one
-  `IntegrityPeriod` execution phase a subcircuit (`subset:k`, its cap and K0), or the block as one execution phase under the `work:1` sampling design.
-  Its tests are this directory's suite.
+  20-minute block: neither is in the census), and the plan as the GPU loop registers it (`handoff`): one execution
+  phase (`IntegrityPeriod`) a subcircuit (`subset:k`, its cap and K0), or the block as one execution phase under the
+  `work:1` sampling design. Its tests are this directory's suite.
 - `h200.py`: the demo's plan on one H200: the frozen MQA shape (52 layers, width 16,384, 256 query heads of 64 and
   one KV head, MLP 65,536, context 32; batch and step are named stand-ins) on the demo's partition,
   one lockstep block of 31 decode steps. Each subcircuit is one `IntegrityPeriod` execution phase, one `--zk` session sampling

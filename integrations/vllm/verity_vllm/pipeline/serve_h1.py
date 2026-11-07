@@ -54,6 +54,11 @@ own Commit.
   in-process coins (no open root, no period, nothing credited) its calls_root and the proof system's K
   (`pouw_h1_challenger.draw_k`). A window whose sample can't be formed (it never opened, its close failed, no sampling coin,
   no period) refuses its release by name, so its seal fails visibly and never waits.
+* **Its Commit record, tied to the audited window** (``--seal --h1-prover --h1-window-commit CMD``, `serve_tie`). Its
+  release, once H1 has closed the window and before its sample coin, waits for the window's seal, writes the window's
+  registration W and runs CMD, V3c's window-commit, whose record R reuses H1's tables from W; R is the window's Commit
+  record in the tap's place (`pouw_h1_commit.bind`), its outcome's ``commit_record``. It never runs with
+  ``--release-after pouw``, whose seal waits for this release's draw.
 
 Each window's outcome (`H1Windows.close`) is its ``windows.jsonl`` line's ``pouw_h1``: ROOTS1's verdict, the requests'
 admission and gaps, the credit gate, the coins, the commitment's calls root, its gate session (the reserve, the open's
@@ -77,30 +82,22 @@ import threading
 import time
 from collections.abc import Callable, Mapping
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timedelta, UTC
 from pathlib import Path
 from typing import Any
 
 from verity_vllm.pipeline.serve_h1_draw import drawn_reads, drawn_units, units
+from verity_vllm.pipeline.serve_h1_gate import LISTEN_S, MARGIN, POLLS, GateSessions, listening
 from verity_vllm.config import option
 from verity_vllm.protocols.pouw.h1 import PROGRAM, PROGRAM_META, SCHEME
 
 ENTRY = f"pouw:{SCHEME}"
 #: the pouw settings the server sets for each window itself
-OWN = ("rows", "steps", "runner", "served", "transcript_dir", "coins", "rounds")
+OWN = ("rows", "steps", "runner", "served", "transcript_dir", "coins", "rounds", "commit_record")
 #: the pouw settings of a gate session a window, which serve-openai sets itself from ``--challenger-gate`` (`GateSessions`)
 SESSIONED = ("challenger", "session", "gate", "period")
 #: the challenger as the window reaches it: this machine's 127.0.0.1, its port the one the gate's open answers
 #: (`pouw_h1_window.at_port`; the gate's 7811..7899)
 AT = "127.0.0.1:7811"
-#: how many times, a second apart, a session's end entry is polled for, and for how many seconds its ``ssh -R`` port is
-#: looked for here
-POLLS = 300
-#: how often a session's ``ssh -R`` port is looked for here once its open answers
-LISTEN_S = 0.1
-#: a session reserved ahead is opened only while its reserve has this long left before it expires (the gate refuses an
-#: expired reserve's open); else its window reserves another
-MARGIN = timedelta(minutes=5)
 #: the subprotocol H1's sample of each window is put under in serve-openai's draw-gated release (``--release-after``)
 DRAWER = "pouw"
 #: an s_a's bytes a row (f32)
@@ -122,15 +119,6 @@ def _on_device(device: int | None) -> None:
 def worker(name: str) -> ThreadPoolExecutor:
     """One thread, named ``name``, that runs what it is handed (``submit``) in turn, on the CUDA device current here."""
     return ThreadPoolExecutor(1, thread_name_prefix=name, initializer=_on_device, initargs=(_cuda_device(),))
-
-
-def _utc_now() -> datetime:
-    return datetime.now(UTC)
-
-
-def _expires(reserved: Mapping[str, Any]) -> datetime | None:
-    at = reserved.get("expires_utc")
-    return datetime.strptime(at, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC) if isinstance(at, str) else None
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
@@ -161,6 +149,12 @@ class GateOptions:
     h1_weights_root: str | None = option("--h1-weights-root", default=None, metavar="HEX",
                                          help="with --h1-model: the registration's weights root (the period's signed one), "
                                               "required when the role is registered more than once under the circuit")
+    h1_window_commit: str | None = option("--h1-window-commit", default=None, metavar="CMD",
+                                          help="with --protocols, --seal and --h1-prover: at each H1 window's close, once it "
+                                               "is sealed and before its sample coin, its registration W is written and CMD "
+                                               "run as `bash -c CMD _ SERVE_DIR K W_FILE R_FILE PROVER_DIR` (V3c's "
+                                               "window-commit, writing R, the audited circuit's registration reusing H1's "
+                                               "tables from W); R is the window's Commit record (serve_tie)")
 
 
 def model_key_of(gate: Any, model: str, weights_root: str | None) -> Callable[[str], tuple[bytes, str]]:
@@ -194,7 +188,7 @@ def config_of(value: str | None) -> dict[str, Any]:
     pouw = doc.get("pouw", {})
     if own := sorted(set(pouw) & set(OWN)):
         raise UsageError(f"--protocols-config: the pouw settings {own} are the server's own (T, S, its runner, the window's "
-                         "served tables and coins, one epoch a window)")
+                         "served tables, Commit record and coins, one epoch a window)")
     if sessioned := sorted(set(pouw) & set(SESSIONED)):
         raise UsageError(f"--protocols-config: the pouw settings {sessioned} need one gate session a window, which serve-openai "
                          "reserves itself: give --challenger-gate and --challenger-peer")
@@ -218,8 +212,13 @@ def refusal(opts: Any) -> str | None:
                 "auditor host's peers, where its challenger reaches the server (ssh -R)")
     if gate and not opts.protocols:
         return f"--challenger-gate draws PoUW H1's coins: it needs --protocols {ENTRY}"
-    if (opts.gate.h1_prover or opts.gate.h1_receipts) and not opts.protocols:
-        return f"--h1-prover and --h1-receipts are PoUW H1's window's: they need --protocols {ENTRY}"
+    if (opts.gate.h1_prover or opts.gate.h1_receipts or opts.gate.h1_window_commit) and not opts.protocols:
+        return f"--h1-prover, --h1-receipts and --h1-window-commit are PoUW H1's window's: they need --protocols {ENTRY}"
+    if opts.gate.h1_window_commit and not (getattr(opts, "seal", False) and opts.gate.h1_prover):
+        return "--h1-window-commit commits the sealed window from H1's prover state: it needs --seal and --h1-prover"
+    if opts.gate.h1_window_commit and DRAWER in (p.strip() for p in after.split(",")):
+        return (f"--h1-window-commit waits for the window's seal before its sample coin, and --release-after {DRAWER} holds "
+                "the seal until that coin's draw: give one of them")
     if opts.protocols_config and not opts.protocols:
         return "--protocols-config without --protocols"
     if not opts.protocols:
@@ -234,171 +233,6 @@ def refusal(opts: Any) -> str | None:
     config_of(opts.protocols_config)
     return None
 
-
-
-def listening(port: int) -> bool:
-    """Whether a socket on this machine listens on TCP `port`, as the kernel's tables say (``/proc/net/tcp``, ``tcp6``;
-    state 0A): a probe connect would take the place of the session's one client."""
-    for table in ("/proc/net/tcp", "/proc/net/tcp6"):
-        try:
-            rows = [r.split() for r in Path(table).read_text().splitlines()[1:]]
-        except OSError:
-            continue
-        if any(int(r[1].rsplit(":", 1)[1], 16) == port and r[3] == "0A" for r in rows):
-            return True
-    return False
-
-
-class GateSessions:
-    """H1's coins from the auditor host's challenger, one session a window, through infra's gate `gate` (a
-    `commit_coins.ChallengerGate`) as peer `peer`, for windows of S `steps` rounds. `take` is a window's session, `open` (the
-    pouw setting ``gate``) opens it on the window's open root and its sampling session on its sample root, and `ended`
-    waits for an end entry. ``held`` is each session reserved, as the gate answered it, under the window it was reserved
-    for, its sampling session's (`reserve`, reserved withheld right after it) as its ``draw``; one no window opened says
-    why (``unused``). With ``ahead`` (a `worker`), a window's session is reserved there before it opens (`ahead_of`,
-    `take`). `wait` sleeps between polls, `listens` is `listening` and `now` the UTC time a reserve's expiry is read
-    against (tests)."""
-
-    def __init__(self, gate: Any, peer: str, steps: int, *, wait: Callable[[float], Any] = time.sleep,
-                 listens: Callable[[int], bool] = listening, ahead: Any = None,
-                 now: Callable[[], datetime] = _utc_now) -> None:
-        from verity_vllm.protocols.pouw.h1 import window as PHW
-
-        self.gate, self.peer, self.steps, self.wait, self.listens = gate, peer, int(steps), wait, listens
-        self.ahead, self.now = ahead, now
-        self._open = PHW.gate_of(gate.call)
-        self.held: list[dict[str, Any]] = []
-        self._lock = threading.Lock()
-        self._ahead: dict[int, Future] = {}
-
-    def reserve(self, window: int) -> dict[str, Any]:
-        """Window `window`'s session reserved (``reserve --peer PEER --scheme SCHEME --families families(S)``): the gate's
-        reserve answer as the pouw setting ``session`` takes it (`pouw_h1_window.reserved_of`). `CoinError` when the gate
-        refuses."""
-        from verity_vllm.protocols.pouw.h1 import challenger as PHC
-        from verity_vllm.protocols.pouw.h1 import window as PHW
-
-        answer = self.gate.call("reserve", "--peer", self.peer, "--scheme", PHC.SCHEME, "--families",
-                                PHC.families(self.steps))
-        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)})
-        with self._lock:
-            self.held.append({"window": window, **reserved})
-        print(f"[serve-h1] window {window}: reserved session {reserved['session']} on {self.peer} "
-              f"(period {reserved.get('period')})", flush=True)
-        self.reserve_draw(window, reserved["session"])
-        return reserved
-
-    def reserve_draw(self, window: int, session: str) -> dict[str, Any]:
-        """Window `window`'s sampling session, reserved withheld right after its session `session` (``reserve ...
-        --withhold``) and held as its ``draw``. `CoinError` when the gate refuses, or reserves it plain."""
-        from verity.core.protocols.sampled_proofs.challenger import CoinError
-
-        from verity_vllm.protocols.pouw.h1 import challenger as PHC
-        from verity_vllm.protocols.pouw.h1 import window as PHW
-
-        answer = self.gate.call("reserve", "--peer", self.peer, "--scheme", PHC.SCHEME, "--families", PHC.draw_families(),
-                                "--withhold")
-        if answer.get("withheld") is not True:
-            raise CoinError(f"the gate reserved sampling session {answer.get('session')} plain, not withheld")
-        reserved = PHW.reserved_of({k: v for k, v in answer.items() if k in ("session", *PHW.RESERVE_FIELDS)},
-                                   "draw_session")
-        self.held_of(session)["draw"] = dict(reserved)
-        print(f"[serve-h1] window {window}: reserved sampling session {reserved['session']} on {self.peer}", flush=True)
-        return reserved
-
-    def draw_session(self, session: str) -> dict[str, Any] | None:
-        """The pouw setting ``draw_session`` of `session`'s window: its sampling session's reserve (`reserve_draw`)."""
-        from verity_vllm.protocols.pouw.h1 import window as PHW
-
-        draw = self.held_of(session).get("draw")
-        return None if draw is None else {k: v for k, v in draw.items() if k in ("session", *PHW.RESERVE_FIELDS)}
-
-    def ahead_of(self, window: int) -> None:
-        """Window `window`'s session reserved on ``ahead``, so its open finds it (`take`); nothing without ``ahead``."""
-        if self.ahead is not None and window not in self._ahead:
-            self._ahead[window] = self.ahead.submit(self.reserve, window)
-
-    def settled(self, window: int) -> dict[str, Any] | None:
-        """Window `window`'s reserve made ahead, once it ends: the session it reserved, or None when none was made or it
-        failed (`take` reserves at the window's open then)."""
-        fut = self._ahead.get(window)
-        if fut is None or fut.exception() is not None:
-            return None
-        return fut.result()
-
-    def take(self, window: int) -> dict[str, Any]:
-        """Window `window`'s session: the one reserved ahead for it, waited for if its reserve is still in flight, unless
-        that reserve failed or expires within `MARGIN`, else one reserved now (`reserve`; `CoinError` when the gate
-        refuses). Then, while that reserve joined no period, the next window's is reserved ahead (`ahead_of`)."""
-        got, fut = None, self._ahead.pop(window, None)
-        if fut is not None and (e := fut.exception()) is not None:
-            print(f"[serve-h1] window {window}: its reserve ahead failed ({type(e).__name__}: {e}); reserving now", flush=True)
-        elif fut is not None:
-            got = fut.result()
-            expires = _expires(got)
-            if expires is not None and expires - self.now() < MARGIN:
-                self._unused(got["session"], f"its reserve expires at {got['expires_utc']}, before its window could open it")
-                got = None
-        if got is None:
-            got = self.reserve(window)
-        if got.get("period") is None:
-            self.ahead_of(window + 1)
-        return got
-
-    def held_of(self, session: str) -> dict[str, Any]:
-        with self._lock:
-            return next((d for h in self.held for d in (h, h.get("draw")) if d and d.get("session") == session), {})
-
-    def _unused(self, session: str, why: str) -> None:
-        held = self.held_of(session)
-        held["unused"] = why
-        if isinstance(held.get("draw"), dict):
-            held["draw"]["unused"] = why
-
-    def drain(self) -> None:
-        """Every reserve made ahead ended, the ones no window took marked ``unused``."""
-        if self.ahead is not None:
-            self.ahead.shutdown(wait=True)
-        for window, fut in sorted(self._ahead.items()):
-            if fut.exception() is None:                  # a reserve ahead that failed holds no session
-                self._unused(fut.result()["session"], f"reserved ahead for window {window}, which never opened")
-        self._ahead.clear()
-
-    def open(self, session: str, root: str, withhold: bool = False) -> dict[str, Any]:
-        """`pouw_h1_window.Gate`: ``open --session SESSION --root ROOT`` (its commitment from ``status`` when the answer's
-        is null; with `withhold`, a withheld sampling session's, which must carry none), answered once the answer's port
-        listens here (the auditor host's ``ssh -R``, looked for every `LISTEN_S` for `POLLS` seconds; ``listen_polls``)."""
-        answer = self._open(session, root, withhold=withhold)
-        port, polls, looks = answer.get("port"), None, round(POLLS / LISTEN_S)
-        if type(port) is int:
-            for i in range(looks):
-                if self.listens(port):
-                    polls = i
-                    break
-                self.wait(LISTEN_S)
-        self.held_of(session).update(port=port, listen_polls=polls)
-        print(f"[serve-h1] session {session} opened on {root[:16]}…: port {port} "
-              + (f"listening after {polls} polls of {LISTEN_S} s" if polls is not None
-                 else f"not listening after {POLLS} s"), flush=True)
-        return answer
-
-    def ended(self, session: str) -> dict[str, Any]:
-        """Session `session` once the gate's ``status`` shows its end entry (polled `POLLS` times), or that it was never
-        opened: ``opened``, and its end's ``rc``, ``closed`` and ``complete`` (None while it has none); ``error`` when
-        the gate refuses the status."""
-        s: Mapping[str, Any] = {}
-        try:
-            for _ in range(POLLS):
-                s = self.gate.call("status", session)
-                if s.get("end") is not None or s.get("open") is None:
-                    break
-                self.wait(1.0)
-        except (ValueError, OSError) as e:
-            return {"opened": None, "error": f"{type(e).__name__}: {e}"[:300]}
-        end = s.get("end")
-        body = end.get("body") if isinstance(end, Mapping) else None
-        return {"opened": s.get("open") is not None,
-                **{k: body.get(k) if isinstance(body, Mapping) else None for k in ("rc", "closed", "complete")}}
 
 
 def sessions_of(opts: Any) -> GateSessions | None:
@@ -426,13 +260,15 @@ class H1Windows:
     (``--h1-receipts``, `pouw_h1_receipts.Receipts.serving`). ``closer`` (a `worker`) runs each window's
     release off the engine loop, and `close` hands back its outcome's `Future`; None: on the loop, the outcome itself.
     ``draws`` is serve-openai's draw-gated release (`serve_release.Draws`), into which each window's release puts its
-    sample under `DRAWER` (`drawn`) when it waits for one. ``clock`` times each part."""
+    sample under `DRAWER` (`drawn`) when it waits for one. ``tie`` (`serve_tie.WindowTie`, ``--h1-window-commit``) names
+    each window's Commit record at its close, once the window is sealed (`sealed`) and its prover state written (`kept`),
+    so its release runs on ``closer``. ``clock`` times each part."""
 
     def __init__(self, model: Any, com: Any, rows: int, steps: int, *, engine: Any, out: Path,
                  config: Mapping[str, Any] | None = None, key: bytes | None = None, unit: Any = None,
                  sessions: GateSessions | None = None, prover: str | Path | None = None, closer: Any = None,
                  draws: Any = None, model_key: Callable[[str], tuple[bytes, str]] | None = None,
-                 clock: Callable[[], float] = time.perf_counter, receipts: bool = False) -> None:
+                 clock: Callable[[], float] = time.perf_counter, receipts: bool = False, tie: Any = None) -> None:
         from verity_vllm.protocols import pouw
         from verity_vllm.protocols.pouw import h1 as PH
         from verity_vllm.protocols.pouw.h1 import hooks as PHK
@@ -442,8 +278,12 @@ class H1Windows:
         self.model, self.com, self.rows, self.steps, self.engine = model, com, int(rows), int(steps), engine
         self.out, self.config, self.unit, self.sessions = Path(out), dict(config or {}), unit, sessions
         self.prover = None if prover is None else Path(prover)
-        self.closer, self.clock, self.receipts = closer, clock, bool(receipts)
+        self.closer, self.clock, self.receipts, self.tie = closer, clock, bool(receipts), tie
+        if tie is not None and closer is None:
+            raise ValueError(f"{ENTRY}: a window's tie waits for its seal, which comes after its close: its release runs "
+                             "off the loop, on closer")
         self.draws: Any = None
+        self._kept: dict[int, Any] = {}
         self._layout: dict[str, Any] | None = None
         self._period_k: dict[str, int] = {}
         pw = pouw.Settings.of(self.config.get("pouw", {}))
@@ -534,7 +374,8 @@ class H1Windows:
                 "draw": f"put as {DRAWER} into the draw-gated release" if self.draws is not None else None,
                 "release": "on the loop" if self.closer is None else "off the loop",
                 "prover_ring": None if self.writer is None else self.writer.bound,
-                "linears": len(self.layers), "config": dict(self.config), "ready": self.readied, "receipts": self.receipts}
+                "linears": len(self.layers), "config": dict(self.config), "ready": self.readied, "receipts": self.receipts,
+                "commit_record": "the tap's" if self.tie is None else {"named": "at the close", **self.tie.describe()}}
 
     def open(self, window: int) -> None:
         """Window ``window``'s H1, on the open Commit period: its session (with ``sessions``, `GateSessions.take`), the
@@ -560,6 +401,9 @@ class H1Windows:
                            program_digest=self.digest, prover=None if prover is None else str(prover))
         settings = {**self.config.get("pouw", {}), "rows": self.rows, "steps": self.steps, "served": served,
                     "transcript_dir": str(self.out / "h1" / f"w{window}"), **coins}
+        if self.tie is not None:
+            settings["commit_record"] = self.tie.hook(window, prover, None if self.writer is None else
+                                                      functools.partial(self.kept, window))
         ctx = PO.Context(stage="serve", enabled=(ENTRY,), settings={"pouw": settings})
         if self.writer is not None:
             self.writer.open(prover)
@@ -585,6 +429,23 @@ class H1Windows:
 
         return None if self.prover is None else PV.private(PV.private(self.prover) / f"w{window}")
 
+    def kept(self, window: int) -> dict[str, int]:
+        """Window ``window``'s prover state once written (`pouw_h1_prover.Writer.wait`, which closes its directory, so it is
+        waited for once, by its tie's command or else its release): its calls, bytes and waits. OSError as the writer's."""
+        if window not in self._kept:
+            try:
+                self._kept[window] = self.writer.wait(self.prover_of(window))
+            except OSError as e:
+                self._kept[window] = e
+        if isinstance(got := self._kept[window], OSError):
+            raise got
+        return got
+
+    def sealed(self, window: int, line: Mapping[str, Any]) -> None:
+        """`serve_commit.CommitWindows`' seal line of window ``window``, or why it has none: its tie's, with a tie."""
+        if self.tie is not None:
+            self.tie.sealed(window, line)
+
     def close(self, window: int) -> dict[str, Any] | Future | None:
         """Window ``window``'s H1 closed: on the loop its hooks and the tap come off the engine and the committer; then
         its release (`_release`), on ``closer`` when there is one, whose outcome this hands back as a `Future`, else here,
@@ -608,6 +469,9 @@ class H1Windows:
         job = functools.partial(self._release, window, comp, run, held, {**opened, "close_on_loop": round(t1 - t0, 4)},
                                 unhooked, t1, off)
         if not off:
+            if self.tie is not None:
+                self.tie.refuse(window, f"its hooks refused to come off ({unhooked}), so it is released on the engine "
+                                        "loop, which seals it after")
             return job()
         with self._lock:
             self.releasing += 1
@@ -630,9 +494,12 @@ class H1Windows:
                 kept = None
                 if self.writer is not None:
                     try:
-                        kept = self.writer.wait(self.prover_of(window))
+                        kept = self.kept(window)
                     except OSError as e:                        # its prover state not all written: the window's failure
                         error = error or f"its prover state: {e}"
+                    self._kept.pop(window, None)
+                if self.tie is not None:
+                    self.tie.bound(window, run)
                 t1 = self.clock()
                 if self.draws is not None:
                     drawn = self.drawn(window, run, held, error)
@@ -743,11 +610,15 @@ class H1Windows:
                 "tied": bool(roots1["tied"]) if roots1 is not None and d.get("steps_served") else None,
                 "session": None if not held else {**held, "unopened": d.get("unopened"),
                                                   "closed": d.get("challenger"), "end": end},
-                "receipts": None if rc is None else {"calls": rc.calls, "seconds": round(rc.seconds, 4)}, "seconds": seconds}
+                "receipts": None if rc is None else {"calls": rc.calls, "seconds": round(rc.seconds, 4)},
+                "commit_record": d.get("commit_record"), "seconds": seconds}
 
     def drain(self) -> None:
-        """Every window's release ended and its outcome recorded, every session reserved ahead (`GateSessions.drain`), and
-        the prover state's writer closed."""
+        """Every window's release ended and its outcome recorded (a tie's window still waiting for a seal refused: the
+        server's sealer has closed), every session reserved ahead (`GateSessions.drain`), and the prover state's writer
+        closed."""
+        if self.tie is not None:
+            self.tie.stop()
         if self.closer is not None:
             print(f"[serve-h1] stopping: {self.releasing} windows still releasing", flush=True)
             self.closer.shutdown(wait=True)
@@ -771,13 +642,17 @@ class H1Windows:
                 "releasing": releasing, "unused": unused[:20]}
 
 
-def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> H1Windows | None:
+def arm_of(opts: Any, llm: Any, com: Any, out: Path, flush: Callable[[], Any] | None = None) -> H1Windows | None:
     """The server's arm under ``--protocols`` over the served ``llm`` and its committer ``com`` (None without): T
     ``--max-num-batched-tokens`` and S ``--window-steps`` a window, each window's session through `sessions_of` (window
-    0's reserved while the Program is declared), its prover state in ``--h1-prover`` and its release on a `worker` of its
-    own, made ready (`H1Windows.ready`)."""
+    0's reserved while the Program is declared), its prover state in ``--h1-prover``, its Commit record named by
+    ``--h1-window-commit`` (`serve_tie.WindowTie`, after ``flush``, the advice trace's drain) and its release on a
+    `worker` of its own, made ready (`H1Windows.ready`)."""
+    from verity_vllm.pipeline.serve_tie import WindowTie
+
     if not opts.protocols:
         return None
+    tie = WindowTie(opts.gate.h1_window_commit, out, flush=flush) if opts.gate.h1_window_commit else None
     sessions = sessions_of(opts)
     if sessions is not None:
         sessions.ahead_of(0)
@@ -786,7 +661,7 @@ def arm_of(opts: Any, llm: Any, com: Any, out: Path) -> H1Windows | None:
         model_key = model_key_of(sessions.gate, opts.gate.h1_model, opts.gate.h1_weights_root)
     arm = H1Windows(llm.model, com, opts.max_num_batched_tokens, opts.window_steps, engine=llm.vllm, out=out,
                     config=config_of(opts.protocols_config), sessions=sessions, prover=opts.gate.h1_prover,
-                    closer=worker("h1-release"), model_key=model_key, receipts=opts.gate.h1_receipts)
+                    closer=worker("h1-release"), model_key=model_key, receipts=opts.gate.h1_receipts, tie=tie)
     arm.ready()
     return arm
 

@@ -995,7 +995,7 @@ its structure, its outputs, the verifier's coins and samples, and hiding commitm
   Every form charges the blocks the node could re-encode from their payloads (its squaring ceiling at the record's
   codec) and read from its own disks (their measured read ceiling), each at its rate over any interval plus one burst
   (`ledger.Node`: a maximal rebuild batch, \(S_{\text{chip}}\), and a maximal disk read, a second at the ceiling;
-  link-charged, one link window as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
+  link-charged, one execution phase's transfer blocks as well), and its on-chip storage \(S_{\text{chip}}\). δ is the horizon's error plus
   the coin commitment's hiding terms \(\sum_t \mathrm{hide}_t\), at most \(n \cdot 2^{-191}\) over \(n\) windows
   (`ledger.hiding`, which `LineHeld` states while it reads the prover's records through the commitment), plus the
   receipts' binding term \(\sum_t \sqrt{|L_t| s_t} \cdot q_t/2^{256.5}\) at the session's
@@ -1228,7 +1228,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     unit's to prove (proofs', I4), inside zero knowledge, and the audit relies on it for exactly this:
     1. every append is a write of the map, of a block completed at the write's step or before it (§4's deferred
        residency records the write at the step before the block's first encoded read), appended once complete and
-       before any plan holds it (§4 checks the latter), and sent after the passes of the steps up to its production
+       before any plan holds it (§4 checks the latter), and sent after the passes of the steps up to the one that wrote it
        step and before the rest: each pass's head is the chain through the appends of the steps below its own, so no
        append is bound into a seed at or before its step's;
     2. the appends are in the map's order, each at the index the verifier gave it (the store's next fresh one), and
@@ -1628,7 +1628,7 @@ values, by name, before the first coin; the Lean reads them from the request.
   \(\varepsilon = 257 \cdot\) `timing.sign_rank_at_most(16, 11)` \(= 2^{-95.2491}\) (\(2^{-96.2548}\) at 4,096-byte
   blocks' 128 sectors). The memory line's `SketchBoundAt` follows from it by `SketchBoundLine`, which holds at every
   \(m\).
-- No property in `Security/Properties/RemoteAudit` states yet what the Lean accepts of a P2 session; the difftest
+- No property in `Security/Properties/Accounting/Remote` states yet what the Lean accepts of a P2 session; the difftest
   (`lean/tests/test_p2.py`'s `p2_session`) holds `p2.Session` to it.
 - Not yet built: the registry's one live registration a node for P2, and the zero-knowledge opening unit of a P2 unit
   (§8).

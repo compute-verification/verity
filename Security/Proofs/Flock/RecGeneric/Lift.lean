@@ -13,7 +13,7 @@ often as in the second, plus as often as its plan there asks about a run where t
 
 `P_O`'s aborting runs (`runModel` at `Comp.innerPO` and `Comp.keepAO`) map so to the composite's reruns
 (`Comp.innerModel`) by `extendDraw` (`Proofs.Flock.RecGeneric.Coupling`), the runs where they may accept differently
-being reruns that accept at a draw `P_O`'s runs don't show (`Comp.BadO`) or at one where `E_O` gives witnesses outside
+being reruns that accept at a sample `P_O`'s runs don't show (`Comp.BadO`) or at one where `E_O` gives witnesses outside
 `R_O` (`Comp.OutRO`): `Comp.PrAt_le_lift`.
 
 Port of `Claims.Recursion.Bound.PrFC_le_FCI` and `Bound.PrF0_le_F0I` to any run finder, compiled verifier, outer
@@ -118,7 +118,7 @@ variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {K : Co
   {S : Server} {H : Msg → Msg} {Ω : Type} {P : Prover Ω} {x : Msg}
 
 /-- **A run finder at `P_O`'s aborting runs finds a collision at most as often as at the composite's reruns, plus as
-often as its plan there asks about a rerun that accepts at a bad draw or at one where `E_O` gives witnesses outside
+often as its plan there asks about a rerun that accepts at a bad sample or at one where `E_O` gives witnesses outside
 `R_O`**: runs map to reruns uniformly (`unifMap_extendDraw`), named and with coins alike (`named_extend`,
 `coins_extend`), accepting alike off those reruns (`accAt_iff`), and a collision among runs' calls is one among their
 reruns' searched evaluations (`findColl_cover`), which are true (`rerunCalls_true`). -/

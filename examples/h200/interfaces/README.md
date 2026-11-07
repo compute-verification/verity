@@ -25,9 +25,10 @@ reproduce; its roots and digests are those of the commit `REFERENCE` pins.
 `GEMM_SM120_S8` for the RTX PRO 6000. `check` refuses a template that binds another dot. On `main`, `GEMM_SM90_S8`
 resolves to the same s8 dot as `GEMM_SM120_S8`, so only the field tells the two cards apart. A `live` sample carries
 `draw.receipt`, the challenger's live-coin receipt; `check` and `build` refuse one without it. Against the window's
-registration, `check` refuses a sample whose sampling design isn't the registered one (fixed before any coin, so the prover can't
-pick it), a subset sample of other than its k units, and a `draw.record` that isn't a sample of the bundle's units under
-that sampling design over the registered population (Lean's `flock-verify draw --registration F` refuses to sample one).
+registration, `check` refuses a sample whose sampling design isn't the registered one (fixed before any coin, so the
+prover can't pick it), a subset sample of other than its k units, and a `draw.record` that isn't a sample of the
+bundle's units under that sampling design over the registered population (Lean's `flock-verify draw --registration F`
+refuses to sample one).
 
 ~~~sh
 python -m verity_e2e_demo.replay_bundle check tests/fixtures/drawn-unit-bundle.json [--registration tests/fixtures/drawn-unit-registration.json]

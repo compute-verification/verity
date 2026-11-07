@@ -321,7 +321,9 @@ A program's weights, constants and tables are values: committed once, under hidi
 - **R7** holds the entries to the verifier's own (`registered_entries`, from its own program). It holds each value to a
   root it already has, when it has one: its pinned root (`pinned`: the weights' root recorded before the salt), the root
   an earlier record of the log registered under the same domain (`held_roots`), or, for an output or reused value, the
-  earlier record's port or entry (`outputs`).
+  earlier record's port or entry (`outputs`). `Stream.register` and `register_interiors` take `outputs`, keep the record
+  each one names in the log R7 reads, and pass them to the run of record: this is how a record reads the state an
+  earlier one left, such as a request carried across a Commit period's edge.
 - **Per-window values.** Given the window's open root R, from the challenger's signed open of the window, every value's
   domain binds R, except the ones the verifier holds across windows (`held`, and its pinned, supplied and output values).
   So a window's values are held to no earlier window's roots. A verifier that names no R refuses its own inputs when a

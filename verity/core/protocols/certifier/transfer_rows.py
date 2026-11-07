@@ -18,7 +18,7 @@ port reads in segments, as `EmbeddingRead_v1` reads a token's embedding):
 D leaves the window out, as a value the verifier holds across windows does, so the root is the one
 `registration.check` holds a pinned value's entry to (`pinned`) and the one the verifier's `--registered` port opens;
 the head and its certificate bind the link-window. `program` is the circuit's program digest (``circuit.json``'s
-``program``), public. salt_r is 192 bytes the certifier draws from the operating system for row r and no other row.
+``program``), public. salt_r is 192 bytes the certifier samples from the operating system for row r and no other row.
 The salts are witness, which the certifier hands to the prover alone (`Transfer.witness`); the rows are what the server
 sent or received, which the prover holds.
 

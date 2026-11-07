@@ -22,7 +22,7 @@ opening-only shape, one instance, `rec-opening/m<m>-c<claims>-p<j>`: `stacked/op
 Every session ends with a `RecCap` per later Ligerito level `l`, over both reps' `2 · 2^cap_l` nodes of its tops
 (`rec-cap/n<N>-l<l>`: `cap/L<l>`, `levelCapStatements`), then `RecCap` over the `2^cap₀` nodes of the table's level-0 cap
 (`rec-cap/n<N>`: `cap`, `capStatement`), which hold each node of every level's committed tops at a fixed row whatever the
-coins draw. A session whose statement carries the inner population's link table has, just before that last cap, the
+coins sample. A session whose statement carries the inner population's link table has, just before that last cap, the
 table's `RecLink{UB, PB}` over its `N = grid(L)` rows, instance `i` checking row `i` (`rec-link/u<UB>-p<PB>`: `links`).
 -/
 

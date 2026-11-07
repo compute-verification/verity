@@ -9,11 +9,11 @@ public import Proofs.Nci.Rate
 public import Proofs.Nci.Lemmas.Reads
 
 /-!
-# Proofs of the partial-sum law on a reference circuit
+# Proofs of the partial-sum rule on a reference circuit
 
 Pull a compliant division of the containing declaration back to `c` (`pull`): each piece has no more gates than its IU
 and reads no more novel information (`novelReads_pull`), so the pieces form a division of `c` into IUs of at most `Γ`
-gates reading at most `αΓ` each. The reads form of the law (`UpdatedMatMulReads`), applied to `c` with that division,
+gates reading at most `αΓ` each. The reads form of the sampling design (`UpdatedMatMulReads`), applied to `c` with that division,
 bounds the pieces' total reads from below by `G · f(αΓ)`; the IUs read at least as much, and at most `α size(d)` in total
 (`containedMatMul_of_reads`).
 
@@ -33,7 +33,7 @@ namespace Nci.SecurityProofs
 
 open Verity Finset
 
-/-- The partial-sum law on a reference circuit, in reads: `UpdatedMatMulReads` with its assumptions on the contained
+/-- The partial-sum rule on a reference circuit, in reads: `UpdatedMatMulReads` with its assumptions on the contained
 circuit `c`. -/
 theorem containedMatMul_of_reads (Γ : ℕ) (α b_w b_a : ℝ) (c d : RegisteredCircuit) (ch : Chain c.D) (dd : ℕ)
     (M : Containment c.D d.D) (hα : 0 < α) (hw : 0 < b_w) (ha : 0 < b_a) (hd : ∀ ℓ, dd ≤ ch.d ℓ)
@@ -205,7 +205,7 @@ theorem partialSums_count {c d : RegisteredCircuit} {M : PartialContainment c d}
   linarith
 
 open Classical in
-/-- **The partial-sum law over the pieces, with a budget for the dark gates**: if the pieces' weight reads and halved
+/-- **The partial-sum rule over the pieces, with a budget for the dark gates**: if the pieces' weight reads and halved
 split-entry contributions are within the IUs' reads and `B`, then
 `max (min c₁ c₂) (μ b_a / Λ) · G_S ≤ α size(d) + (1 − μ) B`. Each piece is within its IU's reads by
 `ActivationsIncompressible` on the reference circuit. -/
