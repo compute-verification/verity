@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.SpotFlock.Code
+public import Proofs.Flock.SpotFlock.KS
 public import Proofs.Flock.SamplingGeneric.OpensTwo
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.Sampling.ProgReads
@@ -38,6 +38,9 @@ the gates it reads (`decodes_of_evaluates`, by `Prog.correct_of_eval`), which is
 the unit's gates gives. Neither holds of every `h`. The check fixes the session statement to `xS₀` but for its
 sample and its registered reads (`pin_of_stmtOk`), so `Evaluates` says that `xS₀`'s circuit computes the drawn units'
 gates on the values its witness encodes, and `Reveals` that the frame (`h.frame`) opens them.
+
+So `ksTwo_spot_of_eval`: SPOT[Flock]'s two-stage knowledge soundness at its code (`ksTwo_spot`) from A3 at the coins'
+bytes, `Evaluates` and `Reveals`.
 -/
 
 @[expose] public section
@@ -126,16 +129,6 @@ theorem run_seenAt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω :
   show (⟨(run H P (V h) x ω r).msgs, (run H P (V h) x ω r).out⟩ : Seen) = _
   rw [hm', hacc]
   rfl
-
-/-- A session statement the verifier's check passes is in scope. -/
-theorem sessionOk_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ xS c₀ c₁ = true) :
-    sessionOk h xS = true := by
-  unfold stmtOk at hok
-  cases hs : parse h x with
-  | none => simp [hs] at hok
-  | some s =>
-    simp only [hs, Bool.and_eq_true] at hok
-    exact hok.1.2
 
 /-- **A session statement the verifier's check passes is the reference one** (`pinOk`) but for its sample and its
 registered reads, which are the auditor's at the run's roots and the round-1 interior roots. -/
@@ -372,5 +365,13 @@ theorem sessionOpensTwo_of_eval (dec : Dec) (he : Evaluates h dec) (hr : Reveals
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots :=
   sessionOpensTwo_of_dec h dec (decodes_of_evaluates h dec he) hr
+
+/-- **SPOT[Flock]'s two-stage knowledge soundness at its code from a decoder**: `ksTwo_spot`, with the sessions'
+openings from a decoder whose values evaluate each checked unit (`Evaluates`) and that the reveal opens (`Reveals`). -/
+theorem ksTwo_spot_of_eval (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte) (dec : Dec)
+    (he : Evaluates h dec) (hr : Reveals h dec) :
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)).KS
+      FlockDeploy.sha512 :=
+  ksTwo_spot h hA (sessionOpensTwo_of_eval h dec he hr)
 
 end SpotFlock
