@@ -270,7 +270,9 @@ class Writer:
                     job.copied.synchronize()
                 a, s_a, *records = (self._ring[at:at + n].view(dtype).reshape(shape) for at, n, dtype, shape in job.spans)
                 _savez(private(Path(job.directory) / CALLS) / f"{job.index}.npz", a, s_a, records[0] if records else None)
-            except Exception as e:  # noqa: BLE001 - any failure is the window's, raised by its `wait`
+            except (OSError, RuntimeError) as e:
+                # the file system's failures and the device's (torch raises a CUDA error as a RuntimeError) are the
+                # window's, raised by its `wait`
                 failed = f"call {job.index}: {type(e).__name__}: {e}"
             with self._cv:
                 self._jobs.popleft()

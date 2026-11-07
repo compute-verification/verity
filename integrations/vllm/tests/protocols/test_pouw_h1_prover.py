@@ -8,11 +8,10 @@ from types import SimpleNamespace
 
 import numpy as np
 import pytest
+from verity_vllm.protocols.pouw.h1 import prover as PV
+from verity_vllm.protocols.pouw.h1 import records as ZR
 
 torch = pytest.importorskip("torch")
-
-from verity_vllm.protocols.pouw.h1 import prover as PV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import records as ZR  # noqa: E402
 
 
 def _today(path, a, s_a, records):
@@ -95,14 +94,17 @@ def test_a_call_goes_where_the_ring_is_free_and_the_caller_waits_only_while_it_i
     assert w._fit(n * PV.ALIGN) == (None if at is None else at * PV.ALIGN)
 
 
-def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch):
-    """A write that fails is its window's: `wait` raises OSError naming the call once the window's other calls are
-    written, and the next window on the writer is written whole."""
+@pytest.mark.parametrize("error, named", [(OSError(28, "No space left on device"), r"OSError: .*No space"),
+                                          (RuntimeError("CUDA error: an illegal memory access was encountered"),
+                                           r"RuntimeError: CUDA error")])
+def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch, error, named):
+    """A write that fails, the file system's or the device's, is its window's: `wait` raises OSError naming the call once
+    the window's other calls are written, and the next window on the writer is written whole."""
     savez = PV._savez
 
     def full(path, *arrays):
         if path.parent.parent.name == "w0" and path.name == "1.npz":
-            raise OSError(28, "No space left on device")
+            raise error
         return savez(path, *arrays)
     monkeypatch.setattr(PV, "_savez", full)
     a, s_a, r = _call(4)
@@ -112,7 +114,7 @@ def test_a_call_not_written_fails_its_window_alone(tmp_path, monkeypatch):
         for i in range(3):
             w.keep(tmp_path / window, i, a, s_a, r)
         if window == "w0":
-            with pytest.raises(OSError, match=r"1 of its 3 calls' prover state wasn't written: call 1: OSError: .*No space"):
+            with pytest.raises(OSError, match=rf"1 of its 3 calls' prover state wasn't written: call 1: {named}"):
                 w.wait(tmp_path / window)
             assert sorted(p.name for p in (tmp_path / window / PV.CALLS).iterdir()) == ["0.npz", "2.npz"]
         else:
