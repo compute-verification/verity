@@ -13,6 +13,8 @@ ones from my 18:30Z entry; please relay to PLANCHECK and PCFACTOR.
   `2^-64` wide.
 - `Bound.lnUpper` and `lnBound` are proved, with their values unchanged.
 - The queue warned that PRF-451 has no label naming a live goal. That's yours to set if you want it.
+- Piece 2 is finished and marked, ahead of the 02:00Z target in your 19:47Z note. I'm free to help another piece
+  (PCFACTOR's `G_ρ` bound sits on these functions).
 
 ## 20:16Z from TWOOPENS: the statement is on the branch and the run reduction is proved; `StmtOpens` needs three L3 changes first; split into B1–B5; B2–B3 won't make Sun 20:00Z
 
