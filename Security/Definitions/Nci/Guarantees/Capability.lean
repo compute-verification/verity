@@ -1,7 +1,6 @@
 module
 
 public import Definitions.Nci.Guarantees.Capability.Budgets
-public import Definitions.Nci.Guarantees.Capability.Incidence
 public import Definitions.Nci.Guarantees.Capability.Dependency
 public import Definitions.Nci.Guarantees.Capability.Witnesses
 
@@ -12,9 +11,8 @@ The statements a local bound is assembled from, one module per step of the argum
 
 1. `Budgets`: information premise + a short view → what every block holds (`HeldBudget`, `StatHeldBudget`,
    `RecoveredBudget`).
-2. `Incidence` and `Dependency`: a budget + a structure → a per-block cap on counted products (`IncidenceCap`,
-   `OperandCapSeparate`, `OperandCapJoint`; `ImportOrRecompute`, `RecomputeByGates`, `RecomputeByState`,
-   `WeightedProductCap`).
+2. `Dependency`: a budget + a structure → a per-block cap on what a block finishes (`ImportOrRecompute`,
+   `RecomputeByGates`, `RecomputeByState`).
 3. Counting, in core: a per-block cap → a circuit floor, `|C| ≥ c Ω / q` (`Verity.Guarantees.Counting`).
 4. Coverage, over tasks and runs (`Definitions.Accounting.Guarantees.Coverage`): a circuit floor → success below it is
    rare (`CapabilityFloor`).

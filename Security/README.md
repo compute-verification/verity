@@ -7,6 +7,27 @@ slowdown a secret training run suffers, with its symbols and where each step sta
 
 ## The security argument
 
+**Start here: training's bound of record.** Two theorems state it, both proved; (H) and (E) are the first one's named
+assumptions.
+
+- **The min-cut theorem**, `Nci.Cut.Guarantees.HE` and `HEShared` (`Definitions/Nci/Guarantees/Cut.lean`, proved in
+  `Proofs/Nci/Cut.lean`): under (H) and (E), every partition of a circuit into m blocks, each reading at most k gates
+  outside θ, has N ≤ m·(k + α) + (k/2)·√(m·O/(β_w·β_x)), α = ½·√(k³/(β_w·β_x·b)), for the N MACs and O output wires
+  of its charged matmuls, and so bounds ρ = m·c/|C| from below at every c; `HEShared` is the same for matmuls that
+  share arrays, each term times F = √(2(1 − 1/ω)).
+- **(H), hardness**, `Nci.Cut.Assumptions.Hardness` (`Definitions/Assumptions.lean`), conjectured: every set S of words
+  with κ(S) ≤ k has Σ_r β_r·|val(S ∩ A_r)| ≤ κ(S), so words behind a cut of κ gates carry at most κ in values, a value
+  of array r costing β_r.
+- **(E), exports**, `Nci.Cut.Assumptions.Exports` (`Definitions/Assumptions.lean`), conjectured: every set B of
+  computed gates has κ(B → E(B)) ≥ b·|E(B)|, E(B) the outputs a MAC inside B feeds that have no wire in B.
+- **The counting bound over kinds of work**, `Nci.Formalism.Guarantees.Counting`
+  (`Definitions/Nci/Guarantees/Formalism.lean`, proved in `Proofs/Nci/Formalism/Slowdown.lean`): every partition into
+  inference blocks has ρ ≥ max(max_K (|B_K|/|C|)/(cap_K/c), max_J Λ_J), for kinds of work B_K, each with a cap cap_K on
+  the gates of it an inference block holds, and kinds J each bounded by Λ_J over the whole partition; `Slowdown` beside
+  it takes the token kind's cap from the named assumption `training-token-work`.
+
+The rest of this section is the argument they are read in, from what makes training hard to the slowdown.
+
 This is a conditional argument, not yet a proved theorem. It separates a learning hypothesis from enforcement.
 Coverage says that sufficiently cheap successful methods require a minimum weighted count of analysed computation.
 Local description and dependency arguments bound how much of that count an inference block can contain: the block must
@@ -180,7 +201,7 @@ meaning is its family's:
 |---|---|---|
 | updated parameter slots, a version each | update hardness | the update has a short description (low rank, a seed), the prefix replays within t, or the slots are predictable from R |
 | operand occurrences, one scalar each | activation hardness | a block cheaply generates operands from what it holds; several uniform rates are refuted by exact decoders |
-| both, priced together (`Items.sum`) | joint hardness | the same bits describe both families; an additive budget is a hypothesis of its own |
+| both, priced together | joint hardness | the same bits describe both families; an additive budget is a hypothesis of its own |
 
 **Recovery** derives an information bound rather than assuming one. A source z of length ℓ_z with
 LDL_{τ,R}(z) ≥ ℓ_z − δ (`Nci.Assumptions.SourceHard`), recoverable from a block's program and a complement of at most
@@ -201,23 +222,6 @@ information are different situations even when a codec gives them the same lengt
 
 #### Structure: how much the held values support
 
-**Incidence** (`Nci.Capability.Incidence`): each counted product reads a cell of its slot and of its operand occurrence.
-With at most r products per slot-operand pair and at most a_out per operand, a block whose products use U slots and V
-operands computes at most (`Nci.Guarantees.IncidenceCap`)
-
-$$ |\mathcal J_I| \;\le\; \min\{\,r\,|U|\,|V|,\ a_{\mathrm{out}}\,|V|\,\}. $$
-
-The budgets decide which (|U|, |V|) are possible (`Nci.Guarantees.OperandCapSeparate`, `Nci.Guarantees.OperandCapJoint`).
-Under one joint budget β_w|U| + β_x|V| ≤ h the cap is
-
-$$ q(h) \;=\; \max_{\beta_w u + \beta_x v \le h} \min\{r u v,\ a_{\mathrm{out}} v\}
-   \;=\; \begin{cases} \dfrac{r h^2}{4\beta_w\beta_x} & r h \le 2\beta_w a_{\mathrm{out}} \text{ (pairs limit it)} \\[1ex]
-   \dfrac{a_{\mathrm{out}}\,(h - \beta_w a_{\mathrm{out}}/r)}{\beta_x} & \text{otherwise (operand supply and fan-out limit it)} \end{cases} $$
-
-and under separate budgets min{r·h_w·h_x/(β_w·β_x), a_out·h_x/β_x}. These are two regimes of one calculation, not two
-kinds of training. The rectangle U × V overcounts pairs that never meet in a product; a finer count of the incidence
-graph is a structural improvement.
-
 **Dependency** (`Nci.Capability.Consumers`, `Nci.Capability.Consumers.Upstream`): a **consumer** is something a block
 finishes, such as a use j (one token's input to one layer at one step, `Consumers.ofUses`) or an output accumulating many
 products (a weight's gradient over tokens, `Consumers.ofOutputs`). It has an upstream region A_j holding no registered
@@ -230,22 +234,21 @@ every required gate reaches, inside A_j, a gate the consumer's finishing gates r
   region or contains G_j, so the served weight is at most k plus the weight of the recomputed uses;
 - **recomputing costs gates** (`Nci.Guarantees.RecomputeByGates`): the recomputed weight is at most c/g;
 - **recomputing costs updated state** (`Nci.Guarantees.RecomputeByState`): if every G_j needs updated state priced above
-  the held budget, nothing is recomputed;
-- **weighted products** (`Nci.Guarantees.WeightedProductCap`): weighting product (i, j) by p_i·ω_j, a block's weighted
-  products are at most the held slot budget h_w times its served weight.
+  the held budget, nothing is recomputed.
 
 These hold for the counted uses with an upstream certificate: for those, the block must import the specified context or
-perform the certified upstream computation. The held budget h_w is not a storage bound; it is what the description
-premise allows. Together, with Ω_I the block's weighted products,
+perform the certified upstream computation. The held budget is not a storage bound; it is what the description premise
+allows. Together, with ω_I the weight of the uses block I serves,
 
-$$ \Omega_I \;\le\; h_w\Big(k + \frac{c}{g}\Big), \qquad\text{and}\qquad \Omega_I \;\le\; h_w\,k
-   \ \text{ when reconstructing the certified upstream computation would expose updated items priced above } h_w. $$
+$$ \omega_I \;\le\; k + \frac{c}{g}, \qquad\text{and}\qquad \omega_I \;\le\; k
+   \ \text{ when reconstructing the certified upstream computation would expose updated items priced above the held budget.} $$
 
 The bound degrades with the gate budget instead of failing at a threshold: importing spends fresh bits, reconstructing
 spends gates. The g gates are the analysed implementation's certificate, not a lower bound on every algorithm computing
 the same function, and products split between blocks still need their own account. The weights replace "every
-activation is hard" with "enough jointly priced, structurally supported computation": cheap slots get low prices,
-overlapping regions low weights, and choosing ω is a linear program once the prices are justified.
+activation is hard" with "enough structurally supported computation": overlapping regions get low weights, and choosing
+ω is a linear program. These caps count the uses a block serves, not its products; over counted products the bound of
+record is the min-cut theorem (Start here).
 
 #### Counting and the standard assemblies
 
@@ -255,21 +258,14 @@ used so far:
 
 | Information | Structure | Per-block cap |
 |---|---|---|
-| update hardness | dependency, recomputing priced out | h_w·k (uniform price β_w: k·(k' + λ_w)/β_w products) |
-| update hardness | dependency, recomputing by gates | h_w·(k + c/g) |
-| update and activation hardness, separately | incidence | min{r·h_w·h_x/(β_w·β_x), a_out·h_x/β_x} |
-| joint hardness | incidence | q(h) |
-| activation hardness | incidence, fan-out only | a_out·h_x/β_x |
+| update hardness | dependency, recomputing priced out | k, in served weight |
+| none | dependency, recomputing by gates | k + c/g, in served weight |
 | a recoverable hard source | outputs | (k' + δ + amb)/β_v |
 
 An assembly counts only when its premises hold for the same blocks, and a refuted premise contributes nothing. The
-smallest valid cap wins only among caps on the same count: a price-weighted product cap, an unweighted product cap and
-a recovery-output cap bound different counts, so they are compared only after conversion to one convention, or applied
-separately, each with its own coverage statement. Since the first rows are about k², they bind only when a block's own
-capacity c·ζ̄ is well above k²/β_w. A justified joint input cost of b bits per imported use gives
-Ω_I ≤ h_w·(k/b + c/g), and without reconstruction h_w·k/b ≈ k²/b: a larger b improves the coefficient, not the
-quadratic growth. A cap linear in k needs another structural fact, such as a fan-out bound that limits products by the
-activation coordinates a block can obtain, with no independently growing held-weight factor.
+smallest valid cap wins only among caps on the same count: a served-weight cap and a recovery-output cap bound different
+counts, so they are compared only after conversion to one convention, or applied separately, each with its own coverage
+statement.
 
 **The budgets are fixed by the execution's boundaries, not chosen per data type.** Unregistered values crossing a
 block's boundary count by the bits they represent; a compressed code counts as the code, and decoding it spends gates;
@@ -383,8 +379,8 @@ None of these is assumed silently; each would restate the conclusion:
 | Coverage | `Nci.Assumptions.CoversEfficientMethods` | A named assumption in the lock; Core not yet read off a run's circuit; untested |
 | Lemma 1 | `Verity.Guarantees.BlockDescription` | Proved |
 | Information premises | `Nci.Assumptions.DescriptionHard`, `Nci.Assumptions.MinEntropyHard`, `Nci.Assumptions.SourceHard`, `Nci.Assumptions.Recovers`, `Nci.Capability.Items` | Named assumptions in the lock, taken by the repertoire's proofs; no price measured at a decoder budget; several uniform activation rates refuted by exact decoders |
-| Structure | `Nci.Capability.Incidence`, `Nci.Capability.Consumers`, `Nci.Capability.Consumers.Upstream`, `Nci.Capability.Consumers.OverlapWeights` | Defined; the certificate not yet checked on a named training circuit |
-| The repertoire | `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.StatHeldBudget`, `Nci.Guarantees.RecoveredBudget`, `Nci.Guarantees.IncidenceCap`, `Nci.Guarantees.OperandCapSeparate`, `Nci.Guarantees.OperandCapJoint`, `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState`, `Nci.Guarantees.WeightedProductCap` | Proved (`Proofs/Nci/Capability/`), over premises not yet tested |
+| Structure | `Nci.Capability.Consumers`, `Nci.Capability.Consumers.Upstream`, `Nci.Capability.Consumers.OverlapWeights` | Defined; the certificate not yet checked on a named training circuit |
+| The repertoire | `Nci.Guarantees.HeldBudget`, `Nci.Guarantees.StatHeldBudget`, `Nci.Guarantees.RecoveredBudget`, `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` | Proved (`Proofs/Nci/Capability/`), over premises not yet tested |
 | Theorem 3 | `Verity.Guarantees.Counting` | Proved |
 | The threaded refinement | `Nci.Threading.Threaded`, `Nci.Assumptions.WeightsIncompressible`, `Nci.Guarantees.ThreadedReads` | Proved for the circuit in hand under assumed read costs |
 | Device model | `Accounting.Placed.ComputeRate`, `Accounting.Placed.Links`, `Accounting.Placed.Memory`, `Accounting.Placed.Causal`, `Accounting.Slowdown.physClass`; hosts carry no compute, `OneClock` and the inventory not yet in Lean | Defined; three premises unstated |

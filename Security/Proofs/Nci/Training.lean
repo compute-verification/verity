@@ -3,7 +3,6 @@ module
 public import Definitions.Nci.Guarantees.Training
 public import Proofs.Nci.Threads
 public import Proofs.Nci.Contained
-public import Proofs.Nci.Packed
 public import Proofs.Nci.Lemmas
 
 /-!
@@ -16,8 +15,7 @@ that is not small, charge every partial sum to that IU (`trainingIncompressible_
 thread and partial-sum proofs, which read only those three.
 
 Through a partial containment each dark gate is an IU of its own (`withDark`), so the law bounds the partial sums it
-absorbs by its reads (`IncompressibleContainedMatMulOn`). At `μ = 1` that budget has no weight, and the activations' half
-alone bounds the products the declaration computes (`ContainedFanOutOn`, the case `k = 1` of `PackedContainedFanOutOn`).
+absorbs by its reads (`IncompressibleContainedMatMulOn`).
 -/
 
 @[expose] public section
@@ -237,10 +235,5 @@ theorem IncompressibleContainedMatMulOn : Guarantees.IncompressibleContainedMatM
 
 theorem IncompressibleContainedTrainingOn : Guarantees.IncompressibleContainedTrainingOn :=
   IncompressibleContainedTrainingOn_rate
-
-/-- **Products done in the declaration are bounded by their fan-out**: the case `k = 1` of the packed bound, at `μ = 1`,
-where the dark gates' budget has weight `1 − μ = 0` and the partial sums are not needed. -/
-theorem ContainedFanOutOn : Guarantees.ContainedFanOutOn :=
-  containedFanOutOn_of_packed PackedContainedFanOutOn
 
 end Nci.SecurityProofs
