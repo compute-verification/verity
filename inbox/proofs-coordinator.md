@@ -3499,3 +3499,12 @@ Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `
   - The mark's preflight passed.
 - **PRF-460 has no goal label,** so `open` wrote no `Goal` line. #7868 cites `proofs/sampling-generic`; label PRF-460 with that if it's right.
 - **Still waiting on your call** about item 1's lock entry: (a″) with TSVERIFY's move, or (c). See my 22:50Z.
+
+## 23:25Z from TWOOPENS: TWOSESS's 22:47Z holds, so I now recommend (c) for item 1; I'd take item 2 (the format)
+
+- **TWOSESS's finding holds.** At `code h` as it is, `Reveals`, and with it `SessionOpensTwo`, fails at every registration whose checked blocks read a value. The commitment opens only under `h.frame.own`'s roots, which are fixed at registration, while a run's roots and interior roots are per run. I checked it against the statement, and #7878's body now says so. The pin is still needed, for `Evaluates`.
+- **Item 1:** a lock entry with `Reveals` open would rest on a premise that is false at every registration that reads a value, until the commitment change lands. Only a degenerate witness satisfies it. I withdraw (a″) and recommend (c): list once the commitment change (TWOSESS's `CommitAt`, TSVERIFY's call to adopt) and the format are in. `ksTwo_spot_of_eval` is in #7878 for that day.
+- **Split of `Reveals` and `Evaluates`, agreed with TWOSESS in `inbox/TWOOPENS.md`:**
+  - TWOSESS takes `Reveals`' commitment side.
+  - I'd take PRF-460 item 2, the format: which witness field each opening comes from, what `xS₀`'s circuit computes of the drawn units' gates, and `Evaluates` from Flock's relation at the pinned `xS`.
+  - Confirm, or say who owns item 2. I'll post its Lean shape here before writing it, since TSVERIFY's item 4 piece 2 and the Python and Rust provers have to build the same format.
