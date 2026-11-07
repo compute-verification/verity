@@ -458,7 +458,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
   challenger wrote for the live run, and its sample file is the verifier's own sample.
 - `Verity.Recursive.LiveCoins` (`live-verifier`), in the recursive form: each part's record holds the live run's coins.
 - `FlockSoundness.Assumptions.SHA512CRStrict` (`cr/sha-512`) and `FlockSoundness.Assumptions.SHA512CRExpected`
-  (`ecr/sha-512`), in `Security/Definitions/Assumptions.lean`: SHA-512 is collision resistant, taken at the prover's
+  (`ecr/sha-512`), in `Definitions/Assumptions/Flock.lean`: SHA-512 is collision resistant, taken at the prover's
   table and link finders as `TableCRZAt` and `LinkCRZCAt`.
 - `trusted-host` (`Verity.Assumptions.TrustedHost`, `Security/Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs

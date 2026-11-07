@@ -24,7 +24,7 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 
 ## Soundness's assumptions (taken without proof)
 
-Soundness rests on five. Three are `Prop`s in `Definitions/Assumptions.lean`, taken as hypotheses: SHA-512's
+Soundness rests on five. Three are `Prop`s in `Definitions/Assumptions/Flock.lean`, hypotheses: SHA-512's
 collision resistance in two forms, and the randomness of the challenger's coins the unit sample reads. The fourth, A6,
 is the challenger's live-coin part's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
 the record's custody (nothing in the record authenticates its writer): `--zk`'s soundness (`zk_session_sound_custody`) takes it as

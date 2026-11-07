@@ -15,7 +15,7 @@ instances, each the definition it stands for at the same arguments: `TableCRAt` 
 
 Each is reducible, so a statement that takes one takes the definition it stands for, a conjunction of
 `StrictCR.Finder.CR`s or a `∀` of `SHA512CRExpected`s at finders built from the prover. Those are the named assumptions
-of `Definitions.Assumptions`, so a guarantee taking these takes SHA-512's collision resistance and nothing else.
+of `Definitions.Assumptions.Flock`, so a guarantee taking these takes SHA-512's collision resistance and nothing else.
 -/
 
 @[expose] public section

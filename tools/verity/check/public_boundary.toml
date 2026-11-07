@@ -26,6 +26,7 @@ flock = [
     "verity/ml/flock",
     "verity/core/service/flock",
     "Security/*/Flock{,.lean}",
+    "Security/Definitions/Assumptions/Flock.lean",
 ]
 ml = ["verity/ml/{circuits,definitions,commitments,crypto,randomness,windows,kernels,private_circuits}"]
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)

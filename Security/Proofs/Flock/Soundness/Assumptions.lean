@@ -5,7 +5,7 @@ public import Proofs.Flock.Soundness.Game.Expect
 public import Randomness
 public import Definitions.Flock.Arith
 public import Definitions.Core.Hm96
-public import Definitions.Assumptions
+public import Definitions.Assumptions.Flock
 
 /-!
 # Named assumptions
@@ -15,15 +15,15 @@ uses one takes it as a hypothesis: the development declares no `axiom`, so `#pri
 lists only Lean's three standard axioms, and a mis-stated assumption can make a theorem
 vacuous but can never make Lean prove something false.
 
-Soundness rests on three: SHA-512's collision resistance in two forms, each a hypothesis about one explicit finder, and the
-verifier's randomness. They are named assumptions, declared with their names in `Definitions.Assumptions`, the module
-the lock reads named assumptions from: `SHA512CRStrict` (`cr/sha-512`) bounds a finder by its worst-case number of
-evaluations (the compiled and knowledge terms' collision finders and `δ_tree`'s), and `SHA512CRExpected` (`ecr/sha-512`,
-Assumption 2) by its expected number (the binding error's). Assumption 3, `UniformRandomBytes`, is a hypothesis about
-the byte source the verifier samples its units from, the operating system's; its per-test form,
-`UniformRandomBytesTest`, is one about the same source's bytes for the commitments' salts and the ZK server's tape, up to
-a slack `η`. The round coins' uniformity (A6, `uniform/flock-coin-server`) is not a `Prop` here: the session game flips
-its coins itself, so the model embodies it (`ASSUMPTIONS.md`).
+Soundness rests on three: SHA-512's collision resistance in two forms, each a hypothesis about one explicit finder, and
+the verifier's randomness. They are named assumptions, declared with their names in `Definitions.Assumptions.Flock`, a
+module under the one the lock reads named assumptions from: `SHA512CRStrict` (`cr/sha-512`) bounds a finder by its
+worst-case number of evaluations (the compiled and knowledge terms' collision finders and `δ_tree`'s), and
+`SHA512CRExpected` (`ecr/sha-512`, Assumption 2) by its expected number (the binding error's). Assumption 3,
+`UniformRandomBytes`, is a hypothesis about the byte source the verifier samples its units from, the operating system's;
+its per-test form, `UniformRandomBytesTest`, is one about the same source's bytes for the commitments' salts and the ZK
+server's tape, up to a slack `η`. The round coins' uniformity (A6, `uniform/flock-coin-server`) is not a `Prop` here:
+the session game flips its coins itself, so the model embodies it (`ASSUMPTIONS.md`).
 
 The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis about one test of `verity.randomness`'s
 keyed streams, for the PoUW window sample, and Assumption 5 one about the window's secret. `HmRowComputes` is not

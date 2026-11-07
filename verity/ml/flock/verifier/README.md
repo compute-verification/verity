@@ -72,7 +72,7 @@ rows, is refused earlier, for its form (`ProvedScope.check`).
   entries of `Security/lean-audit.json`, among them `EndToEnd`, `EndToEndHidden`, `ZeroKnowledgeHidden`, `MaskedZK`,
   `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityHorizon`, each stated in a `Statement.lean` (or
   `KSStatement.lean`, `PublicAudit.lean`) of its area under `Security/Proofs/Flock/`.
-- The named assumptions, the lock's `assumptions`: `Security/Definitions/Assumptions.lean` (`SHA512CRStrict`,
+- The named assumptions, the lock's `assumptions`: `Security/Definitions/Assumptions/Flock.lean` (`SHA512CRStrict`,
   `SHA512CRExpected`, `UniformRandomBytes`, `UniformRandomBytesTest`). The other named premises, the lock's `open` and
   `domain` entries: `Security/Proofs/Flock/Soundness/Assumptions.lean` (`HmRowComputes`), `Assumptions/Custody.lean`
   (`RecordCustodyExec`, `RecordCustodyExecH`) and `Assumptions/Zk.lean` (the `Zk.RecordCustodyZK*` family). What each
