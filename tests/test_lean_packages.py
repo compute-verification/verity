@@ -76,7 +76,7 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-UNWITNESSED = {"Security": 331, "Security/Properties": 191, "verity/core/service/flock": 7}
+UNWITNESSED = {"Security": 311, "Security/Properties": 191, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -89,7 +89,7 @@ def test_the_unwitnessed_list_only_shrinks():
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
-    """A3 (C-Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
+    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
     for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
     updates the citation."""
     proofs = ROOT / "Security/Proofs"
@@ -190,7 +190,7 @@ def test_proofs_require_the_security_package():
 
 
 def test_code_never_requires_the_security_analysis():
-    """Code (C-Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
+    """Code (Flock's verifier, the PoUS grader, the certifier's program) stays with its component and never imports
     `Security/`: the analysis reads the code, never the reverse."""
     code = [pkg for pkg in lake_packages() if not pkg.is_relative_to(SECURITY) and not pkg.is_relative_to(ROOT / "tools")]
     assert code, "no code packages outside Security"
@@ -232,7 +232,7 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 392 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"Security": 1057, "Security/Properties": 132, "verity/core/service/flock": 6}
+INLINE = {"Security": 917, "Security/Properties": 132, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -293,7 +293,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
-#: all C-Flock's until its spec is extracted
+#: all Flock's until its spec is extracted
 TREES_EXCEPT = {"Security": 40}
 
 

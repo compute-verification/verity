@@ -308,7 +308,7 @@ def router_select(S):
 
     def build(C, *p):
         def argmax(keys, ok):
-            """The first strict maximum's index (`RouterArgmaxStep_v1`'s scan), entry j taking part when ``ok[j]``."""
+            """The first strict maximum's index (`ArgmaxStepF32_v1`'s scan), entry j taking part when ``ok[j]``."""
             best, idx = keys[0], [ZERO] * nb
             for j in range(1, E):
                 gt = C.AND(ok[j], _less(C, best, keys[j]))

@@ -18,7 +18,7 @@
 //! randomness, all J roots in one `Commit`, and every proof after the session's last coin (the barrier).
 //!
 //! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk` or `FC_COINS=tree`, with `--sessions N`): each session's
-//! coin tree sampled and opened by the challenger (`flock_live::tree_from`), not drawn here.
+//! coin tree sampled and opened by the challenger (`flock_live::tree_from`), not sampled here.
 
 use std::{
     collections::BTreeMap,
@@ -238,8 +238,8 @@ type LoopLevel0 = flock_live::firewall::LeanLevel0;
 type LoopLevel0 = ();
 
 /// Under the Lean session loop (`plan.lean_frames`), every firewalled table's mask-slot words, level-0 hiding and salts are
-/// the loop's, drawn in one request once the prover has handed it every table's packed witness (`Session.level0`), so no
-/// table's witness can depend on another table's draws: the host witnesses `hosts`, one a table of `tabs`, go to the loop
+/// the loop's, sampled in one request once the prover has handed it every table's packed witness (`Session.level0`), so no
+/// table's witness can depend on another table's samples: the host witnesses `hosts`, one a table of `tabs`, go to the loop
 /// for the session whose `Hello` the loop answered with its id for it, `id`, and each table's answer comes back, for
 /// [`lean_level0`] to take into the table. Every table's level 0 is the loop's or none is: a session with a firewalled
 /// table that has no host witness is refused. The loop keeps them until the session ends and takes one request a session.
@@ -247,7 +247,7 @@ type LoopLevel0 = ();
 /// `zk_worker_level0`) the session asks the loop one more request: `second`, every table's witness again after the loop's
 /// answer, and `past`, before it, every table's witness and one more (table 0's again), for a table the session does not
 /// have; the loop's refusal goes to [`LEVEL0_REFUSED`] (a sample it answers goes there as `drawn again`), and the session
-/// goes on on its one draw. `own-mask` instead fills table 0's mask slot with [`steer`]'s word and keeps it (`lean_level0`),
+/// goes on on its one sample. `own-mask` instead fills table 0's mask slot with [`steer`]'s word and keeps it (`lean_level0`),
 /// never taking the loop's words. [`LEVEL0_MASK`] records what the loop answered table 0.
 #[cfg(feature = "sha512")]
 fn lean_level0s(plan: &Plan, tabs: &Tables, lig: LigeritoProfile, id: &[F128], hosts: &mut [Option<&mut Witness>])
@@ -825,7 +825,7 @@ fn server_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server 
     server_of(&serving(st, inst, count), st, inst, count)
 }
 
-/// What every session of a server serves: the verifier's own draw (`--draw-file`) or its law (`--draw`, `--draw-law`), and
+/// What every session of a server serves: the verifier's own sample (`--draw-file`) or its sampling design (`--draw`, `--draw-law`), and
 /// without either the population's tables. Built once, when the server starts.
 struct Serving {
     given: Option<Value>,
@@ -885,14 +885,14 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     if [&file, &law, &law_file].iter().filter(|s| !s.is_empty()).count() > 1 {
         refuse("one of --draw-file, --draw and --draw-law".into());
     }
-    // the verifier's own draw, made outside this server: served at Register as it is (checked there, U2, and against the
-    // registered population when the drawn statement is built)
+    // the verifier's own sample, made outside this server: served at Register as it is (checked there, U2, and against the
+    // registered population when the sampled statement is built)
     let given = (!file.is_empty()).then(|| {
         let draw = read("--draw-file", &file);
         flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
         draw
     });
-    // `--draw-law`: a law object, a stratified one the verifier's own expansion over its program and query, drawn afresh at
+    // `--draw-law`: a sampling design object, a stratified one the verifier's own expansion over its program and query, sampled afresh at
     // each session's Register over this registered population
     let law = if !law_file.is_empty() {
         let law = Law::of_json(&read("--draw-law", &law_file)).unwrap_or_else(|e| refuse(format!("--draw-law: {e}")));
@@ -906,7 +906,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
         (!law.is_empty()).then(|| Law::parse(&law).unwrap_or_else(|e| refuse(e)))
     };
     // several tables are refused here, before any session, for a sample they cannot split or whose tables `--zk` cannot prove. A
-    // subset or stratified law's table shapes depend on its counts alone, so a sample of the first units stands for every sample.
+    // subset or stratified sampling design's table shapes depend on its counts alone, so a sample of the first units stands for every sample.
     if count > 1 {
         let probe = match (&given, &law) {
             (Some(d), _) => Some(d.clone()),
@@ -1164,7 +1164,7 @@ struct ZkRep {
     lean: Mutex<Option<Result<flock_live::firewall::LoopRep, String>>>,
 }
 
-/// The rep's frame in the Lean session loop and the root of the pads tree over its draws, which stay in the loop: table
+/// The rep's frame in the Lean session loop and the root of the pads tree over its samples, which stay in the loop: table
 /// `table`'s rep `rep` in the session the loop names `name`, at its `frames` address `addr`
 /// (`flock_live::firewall::LoopRep::start`).
 fn lean_frame(frames: Option<(&str, &str, usize, usize)>) -> Result<(flock_live::firewall::LoopRep, [u8; 64]), String> {
@@ -1173,7 +1173,7 @@ fn lean_frame(frames: Option<(&str, &str, usize, usize)>) -> Result<(flock_live:
 }
 
 /// A rep's pads and their commitment (M1), the pads tree under salt id `id`, with the session's level-0 hiding and this rep's pair.
-/// Under the ZK server the rep's frame in the Lean session loop draws them instead, from the OS, and keeps them: of the
+/// Under the ZK server the rep's frame in the Lean session loop samples them instead, from the OS, and keeps them: of the
 /// session the loop names and the table (`frame`); the rep holds only their root.
 #[allow(clippy::too_many_arguments)]
 fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng, level0: &flock_core::pcs::ligerito::zk::Level0Zk,
@@ -1211,9 +1211,9 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
             t_commit, level0: Arc::new(level0), lean: Mutex::new(lean) }
 }
 
-/// M1 on the device: level 0's hiding and both reps' pads with their commitments, drawn beside the witness build (they depend on
+/// M1 on the device: level 0's hiding and both reps' pads with their commitments, sampled beside the witness build (they depend on
 /// the seed alone). The salt ids are the sequential prover's: rep 0's pads tree takes the next id, rep 1's the one after rep 0's
-/// proof's trees (levels 1 to R), which `session` consumes when rep 1 starts. Returns the level-0 draw's seconds, and each rep's
+/// proof's trees (levels 1 to R), which `session` consumes when rep 1 starts. Returns the level-0 sample's seconds, and each rep's
 /// pads with their tree's salt id.
 fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
               points: &Arc<Mutex<Vec<Vec<F128>>>>) -> (f64, [(ZkRep, u64); 2]) {
@@ -1309,7 +1309,7 @@ fn firewall_on(st: &Stmt) -> bool {
     is_zk(st) && std::env::var("FC_FIREWALL").as_deref() == Ok("1")
 }
 
-/// The Lean verifier's name of the statement a firewalled session's `Hello` is set up under: `FC_FIREWALL_STATEMENT`, else
+/// The Lean verifier's name of the statement a ZK server session's `Hello` is set up under: `FC_FIREWALL_STATEMENT`, else
 /// this build's (the circuit's statement, with `+seed-injection` in a build whose identity pins `seed_injection`).
 fn lean_statement(st: &Stmt) -> String {
     std::env::var("FC_FIREWALL_STATEMENT")
@@ -1323,7 +1323,7 @@ fn lean_public(inst: &Instances, what: &str, tables: usize) -> Result<std::path:
     Ok(public)
 }
 
-/// The statement flags the Lean session loop sets a firewalled session's `Hello` up on (`Flock.Firewall.Hello.Setup`): the statement, the
+/// The statement flags the Lean session loop sets a ZK server session's `Hello` up on (`Flock.Firewall.Hello.Setup`): the statement, the
 /// circuit, the public file `public`, the lookup tables and `tables`, then `FC_FIREWALL_HELLO_ARGS`' flags.
 fn lean_statement_args(st: &Stmt, public: &std::path::Path, tables: usize) -> Vec<String> {
     let mut args: Vec<String> = vec!["--statement".into(), lean_statement(st), "--circuit".into(), arg("--circuit", "circuit.txt"),
@@ -1386,14 +1386,14 @@ fn value_salts(c: &Composite, inst: &mut Instances, path: &str) -> Result<(), St
 
 /// Where the salt context's samples go under the ZK server: with a CPU device (`two`), the device's own trees as the sequential
 /// prover takes them, its level-0 commitment from the level-0 salts and every later tree from the table's salts, a rep's
-/// levels ≥ 1 the Lean finish's ([`Firewall::place`] presets them once the rep's algebraic phase ended); any other draw from
+/// levels ≥ 1 the Lean finish's ([`Firewall::place`] presets them once the rep's algebraic phase ended); any other sample from
 /// the table's salts.
 struct FirewallDraws {
     shared: Arc<Mutex<flock_live::zk_hooks::LeafSalts>>,
     level0: Arc<Vec<u8>>,
     device_trees: usize,
     two: bool,
-    /// `cut-tree`: the table's device round at or after which the device's next tree draws its salts one leaf larger, the
+    /// `cut-tree`: the table's device round at or after which the device's next tree samples its salts one leaf larger, the
     /// rounds handed to the ZK server so far, and whether it did
     tree_cut: Option<(usize, Arc<std::sync::atomic::AtomicUsize>, Arc<std::sync::atomic::AtomicBool>)>,
 }
@@ -1485,7 +1485,7 @@ struct Firewall {
 /// device round `FC_FIREWALL_CUT_AT` (default 0, counted over the table's reps), once. At that round it returns an error
 /// (`cut-rc`, a nonzero return code), claims the coins degenerate (`cut-rc240`, the device's return code 240), panics
 /// (`cut-panic`) or falls silent (`cut-silent`: it ticks the ZK server's injected clock and asks nothing more); after its last
-/// round, its output does not decode (`cut-decode`). `cut-tree` is the ZK server's salt context's: the device draws its first tree
+/// round, its output does not decode (`cut-decode`). `cut-tree` is the ZK server's salt context's: the device samples its first tree
 /// after level 0 at or after that round one leaf larger than the statement's.
 #[derive(Clone)]
 struct Cut {
@@ -1694,7 +1694,7 @@ impl Firewall {
     }
 
     /// A rep starts (after its pads tree took its salt id). Its device's trees for levels ≥ 1 take the Lean finish's salts,
-    /// which the finish draws only once the rep's algebraic phase ended ([`Firewall::place`]).
+    /// which the finish samples only once the rep's algebraic phase ended ([`Firewall::place`]).
     fn begin_rep(&mut self, rep: usize, zk: &ZkRep) -> Result<(), String> {
         if rep > 1 || std::mem::replace(&mut self.begun[rep], true) {
             return Err(flock_live::firewall::refused(format!("table {} rep {rep}: a table's reps are 0 and 1, each begun once", self.table)));
@@ -1709,7 +1709,7 @@ impl Firewall {
     }
 
     /// The rep's next place as the Lean session loop names it. Where the loop names the rep's salts for levels ≥ 1 (its
-    /// algebraic phase ended, its opening waits for them), the Lean finish draws them now, the device's trees from here take
+    /// algebraic phase ended, its opening waits for them), the Lean finish samples them now, the device's trees from here take
     /// them ([`FirewallDraws`]), and the place is the one after.
     fn place(&mut self) -> Result<flock_live::firewall::Place, String> {
         use flock_live::firewall::{refused, Place};
@@ -1786,7 +1786,7 @@ impl Firewall {
     /// One device round before anything of it is sent: the round that leaves (the device's, which the rep's frame in the
     /// Lean session loop checks against the statement's round in its place, and masks) and its coin count; or nothing, once the loop names no place of the statement's left. A rep a check here
     /// failed sends the loop's place with no device round in it ([`Firewall::scheduled`]). Until the rep's salts for levels
-    /// ≥ 1 are drawn, each round after its first asks the loop its place first, so the round that opens the opening waits for
+    /// ≥ 1 are sampled, each round after its first asks the loop its place first, so the round that opens the opening waits for
     /// them ([`Firewall::place`]). An error is the ZK server's own fault.
     fn round(&mut self, content: &[u8], n: usize) -> Result<Option<(Vec<u8>, usize)>, String> {
         self.seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
@@ -2317,7 +2317,7 @@ fn ligerito_fields(v: &mut Value, lg: &flock_core::pcs::ligerito::LigeritoProof,
 /// M1's simulator for one rep's whole proof, from the public statement (`inst`'s public part: roots and `b || c`), the
 /// verifier's coins for the rep's stream (every squeeze, in order) and the link points: uniform exposed values and masked
 /// claims' `s_hat_v`, the region claims' `s_hat_v` from the public data, the opening as the honest prover makes it on a dummy
-/// (all-zero) witness with fresh masks (`dummy`: such a proof against the same coins) with level 0's exposed values drawn
+/// (all-zero) witness with fresh masks (`dummy`: such a proof against the same coins) with level 0's exposed values sampled
 /// uniformly, and the inner proof simulated for the constraints the verifier derives from all of that (on the same coins).
 #[allow(clippy::too_many_arguments)]
 fn simulate_full(st: &Stmt, inst: &Instances, coins: &[F128], points: &[Vec<F128>], dummy: &[u8], rng: &mut flock_live::zk_hooks::ProverRng,
@@ -2804,7 +2804,7 @@ fn zk_audit_inner_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
            "accepted": v["accepted"], "reps": reps, "pass": pass})
 }
 
-/// M2's malicious verifiers V*: the honest coin server with its coins committed from a random tape, and a strategy that sees
+/// M2's malicious verifiers V*: the honest live-coin part with its coins committed from a random tape, and a strategy that sees
 /// every prover message. Rewinding V* is a fresh instance on the same tape, replayed to the same point. `Abort` and
 /// `AdaptiveCoins` act at the first round whose message, hashed with the tape, falls below [`TRIGGER`]: the first stops
 /// there; the second answers a coin it picks from that message, under the committed coin's opening. `CoinAt(k)` does the
@@ -3049,7 +3049,7 @@ fn rewind(tabs: &Tables, v: impl Transport + 'static, hello: &str, points: &[Vec
 }
 
 /// A fresh dummy opening for the extracted coins, with no interaction with V*: the honest prover on the dummy witness (fresh
-/// masks, level-0 padding, extra lanes and salts) against a local coin server that commits to exactly those coins, for every
+/// masks, level-0 padding, extra lanes and salts) against a local live-coin part that commits to exactly those coins, for every
 /// table of the session.
 #[cfg(feature = "seed-injection")]
 fn fresh_dummy(st: &Arc<Stmt>, inst: &Arc<Instances>, tabs: &Tables, points: &[Vec<F128>], coins: &[Vec<Vec<F128>>]) -> Result<Vec<Vec<u8>>, String> {
@@ -3084,7 +3084,7 @@ fn fresh_dummy(st: &Arc<Stmt>, inst: &Arc<Instances>, tabs: &Tables, points: &[V
 /// A session of several tables (`tabs`) is one view: every table's streams are extracted, simulated and replayed together.
 #[cfg(feature = "seed-injection")]
 fn gk_simulate(st: &Arc<Stmt>, inst: &Arc<Instances>, tabs: &Tables, make: &dyn Fn() -> VStar, t: usize) -> (View, Value) {
-    // the extraction run draws the coin-tree nonce as the prover does; every later run restarts after its Hello
+    // the extraction run flips the coin-tree nonce as the prover does; every later run restarts after its Hello
     let dummy_run = |nonce: Option<[u8; 32]>| -> View {
         let v = make();
         let view = v.view.clone();
@@ -3836,7 +3836,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                     else if tree { "the verifier's coin-tree root and session key" }
                                     else { "the verifier's seed commitment" })),
         }
-        // under the ZK server every table's level 0 is the Lean session loop's, drawn once it has every table's witness, before
+        // under the ZK server every table's level 0 is the Lean session loop's, sampled once it has every table's witness, before
         // any rep's frame starts (its time counts in table 0's level 0)
         let tl = Instant::now();
         let mut lean_got = {
@@ -3847,7 +3847,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             lean_level0s(plan, &tabs, lig, &commit, &mut hosts)?
         };
         let t_lean_level0 = tl.elapsed().as_secs_f64();
-        // several tables: every table after the first commits its level-0 root (and draws its level-0 hiding) before any stream
+        // several tables: every table after the first commits its level-0 root (and samples its level-0 hiding) before any stream
         // opens, so the session's one Commit, in table 0's first rep, carries every table's root
         let mut later = Vec::new();
         for (j, tb) in tabs.list.iter().enumerate().skip(1) {
@@ -4703,7 +4703,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         // positions both reps open at level 1, which the coins select for each rep independently: on some statements
         // (RMSNormTriton_v5 at N 2048, under each of 16 tapes) the reps share none, and there is no level-1 relation to leak.
         // So level 1 is checked at every shared position, and each rep must have opened level-1 positions: an empty level-1
-        // functional is then a disjoint draw, never a record that lost its queries
+        // functional is then a disjoint sample, never a record that lost its queries
         let rel = |shared_pair: bool| -> Result<([Vec<F128>; 2], [usize; 3]), String> {
             let s0 = Arc::new(Mutex::new(server(st, inst)));
             fix_verifier_coins(&mut s0.lock().unwrap_or_else(PoisonError::into_inner), [9; 32]);
@@ -4725,7 +4725,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
                 let (eq, eq_shared) = (words_equal(&a, &b), words_equal(&sa, &sb));
                 let (len, len_shared): (Vec<usize>, Vec<usize>) = ((0..2).map(|k| a[k].len()).collect(), (0..2).map(|k| sa[k].len()).collect());
                 let lengths_agree = (0..2).all(|k| b[k].len() == len[k] && sb[k].len() == len_shared[k]);
-                // the coins alone draw the positions: one tape, the same positions in both sessions of each kind
+                // the coins alone sample the positions: one tape, the same positions in both sessions of each kind
                 let same_draws = qa == qb && qsa == qsb;
                 let level1_read = [(&a, qa), (&b, qb), (&sa, qsa), (&sb, qsb)].iter()
                     .all(|(r, q)| q[0] > 0 && q[1] > 0 && (q[2] == 0 || !r[1].is_empty()));
@@ -4869,7 +4869,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
                       "why_cut_line": r1, "why_meta_tail": r2});
     }
     if name == "unit_draw_from_file" {
-        // the verifier's own draw (units 0 and the last), served at Register: the session proves exactly those units
+        // the verifier's own sample (units 0 and the last), served at Register: the session proves exactly those units
         let draw = json!({"law": "subset", "population": inst.n, "k": 2.min(inst.n), "units": if inst.n > 1 { json!([0, inst.n - 1]) } else { json!([0]) }});
         let mut srv = with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 0 }, 1);
         srv.cfg.draw_law = None;
@@ -4881,7 +4881,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         return json!({"case": name, "gpu": gpu, "accepted": v["accepted"], "pass": pass, "unit_draw": rec["unit_draw"], "why": v["why"]});
     }
     if name == "unit_draw_session" || name == "unit_draw_ignored_refused" {
-        // the verifier samples one unit of the registered population after Register; the prover proves the drawn statement
+        // the verifier samples one unit of the registered population after Register; the prover proves the sampled statement
         // (or, ignoring the sample, the population's, whose Σ is not the verifier's)
         let s = Arc::new(Mutex::new(with_draw(server(st, inst), st, inst, flock_live::unit_draw::Law::Subset { k: 1 }, 1)));
         let plan = Plan { gpu, ignore_draw: name.ends_with("refused"), ..Plan::default() };
@@ -4889,7 +4889,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let rec = s.lock().unwrap_or_else(PoisonError::into_inner).record_json();
         let acc = verified(&v);
         let draw = rec["unit_draw"].clone();
-        // offline: the record rebuilt under the drawn statement (U1), and refused under the population's
+        // offline: the record rebuilt under the sampled statement (U1), and refused under the population's
         let replay = if acc {
             let (ds, di) = drawn(st, inst, &draw).unwrap();
             let map: BTreeMap<(String, usize), Vec<u8>> = proofs.iter().enumerate().map(|(r, p)| ((TABLE.to_string(), r), p.clone())).collect();
@@ -5011,7 +5011,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         }
         _ => (st.clone(), inst.clone(), inst.clone()),
     };
-    // drawn (`--draw`) only when the verifier's file is the prover's: a drawn statement's digest reads the file, so R7 would
+    // sampled (`--draw`) only when the verifier's file is the prover's: a sampled statement's digest reads the file, so R7 would
     // refuse a case whose files differ before the check it is for
     let s = Arc::new(Mutex::new(if Arc::ptr_eq(&pinst, &vinst) { server(st, &vinst) }
                                 else { Server::new(config(st, &vinst), Box::new(CircuitVerifier::one(st, &vinst))) }));
@@ -5271,7 +5271,7 @@ impl Transport for Wire {
     }
 }
 
-/// The selftest's own process for one firewalled session (`--only zk_worker_session`), its controls from this process's
+/// The selftest's own process for one ZK server session (`--only zk_worker_session`), its controls from this process's
 /// environment (`FC_FIREWALL`, `FC_FIREWALL_TAMPER`, `FC_FIREWALL_CUT_AT`, `FC_WIRE_TAMPER`): the session goes through the
 /// Lean session loop as `prove`'s does ([`session_addr`], with `--firewall-state` an outer session of the ZK server's
 /// release side, [`release_args`]), to a verifier of this process's on loopback, and the record is the
@@ -5426,7 +5426,7 @@ fn worker_wire_case(gpu: bool) -> Value {
 /// workers open a finish of their own and ask it for table 0 rep 0's salts for levels ≥ 1: at the rep's first round
 /// (`salts-early`), which the loop's finish refuses before the rep's algebraic phase ended, so no round of it depends on
 /// them, and just after the session's finish drew them (`salts-again`), which it refuses since the loop keeps a rep's salts
-/// once, so the prover never holds two draws of them. Each session goes on on its own finish, the verifier getting the
+/// once, so the prover never holds two samples of them. Each session goes on on its own finish, the verifier getting the
 /// honest session's every request and accepting.
 fn worker_finish_case(gpu: bool) -> Value {
     let name = "zk_worker_finish";
@@ -5524,11 +5524,11 @@ fn worker_inner_case(gpu: bool) -> Value {
 }
 
 /// `zk_worker_level0` (live PROTOCOL.md §10.4): the level 0 a session binds is the loop's one sample for each table, never one
-/// the prover picks among several, drawn only once every table's witness is in, and its mask slot's words are the loop's.
+/// the prover picks among several, sampled only once every table's witness is in, and its mask slot's words are the loop's.
 /// Beside an honest firewalled CPU session, one session per `FC_LEVEL0_TAMPER` mode, each in a process of its own, which asks
-/// the loop's level 0 once more: every table's witness again after the loop answered (`second`: a witness after a draw), or
+/// the loop's level 0 once more: every table's witness again after the loop answered (`second`: a witness after a sample), or
 /// before it, with one more witness than the session has tables (`past`). The loop refuses it, nothing more is sampled, and
-/// the session goes on on its one draw: the verifier gets the honest session's every request, at its sizes, and accepts. In the honest session the loop answers every mask word, none of them the witness's. One more session's worker
+/// the session goes on on its one sample: the verifier gets the honest session's every request, at its sizes, and accepts. In the honest session the loop answers every mask word, none of them the witness's. One more session's worker
 /// fills table 0's mask slot with a word of its own and keeps it (`own-mask`): the loop commits its own words over it, so the
 /// device's level 0 is not the session's, the rep fails at the `Commit` and the session stops at its `Finish` with no proof,
 /// the verifier getting the honest session's every other request at its sizes.
@@ -5801,8 +5801,8 @@ fn value_salts_run(st: &Stmt, inst: &Instances, core: &std::path::Path, dir: &st
 }
 
 /// `zk_worker_cut_MODE` (PROTOCOL.md §10.1): a worker that fails in one way (`FC_FIREWALL_TAMPER=cut-MODE`) at its table's device
-/// round `k` never chooses where the session ends. Beside an honest firewalled session, one session per `k` (early, half way and
-/// the last of the honest session's `firewall_device_rounds`; `cut-tree` draws its trees in the opening phases, so it takes the
+/// round `k` never chooses where the session ends. Beside an honest ZK server session, one session per `k` (early, half way and
+/// the last of the honest session's `firewall_device_rounds`; `cut-tree` samples its trees in the opening phases, so it takes the
 /// first and the half-way round), each a CPU
 /// session in a process of its own: the verifier gets the honest session's every request up to its `Finish`, in its order and
 /// at its sizes (the rounds, the Commit, the Link: the same bytes and public bytes), no proof, then `Finish`, which reports the
@@ -5860,7 +5860,7 @@ fn worker_cut_case(name: &str, mode: &str, gpu: bool) -> Value {
            "cuts": cuts, "pass": honest_ok && cuts.iter().all(|c| c["ok"] == true)})
 }
 
-/// The public-circuit ZK proof's gap 1, at the session's own draws: two tables' level-0 hiding (every lane's padding, the extra
+/// The public-circuit ZK proof's gap 1, at the session's own samples: two tables' level-0 hiding (every lane's padding, the extra
 /// lanes), both reps' pads (h, μ, the pads' padding, τ's salt), the mask slot, and the salts of their level-0 and later trees
 /// share no 16-byte word. A proving build reads every one from the OS, so the second table sampled at the first's addresses (the
 /// control) shares none either. Under an injected seed (the test harness's) the control repeats every word: the per-rep
@@ -5884,7 +5884,7 @@ fn tables_randomness_case(tabs: &Tables) -> Value {
            "os": os, "injected": injected, "pass": pass(&os, false) && injected_ok})
 }
 
-/// [`tables_randomness_case`]'s draws under `seed`: the words the two tables share, and those the second table sampled at the first's
+/// [`tables_randomness_case`]'s samples under `seed`: the words the two tables share, and those the second table sampled at the first's
 /// addresses (the control) shares with the first.
 fn tables_draws(tabs: &Tables, seed: ProverSeed) -> Value {
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&seed);

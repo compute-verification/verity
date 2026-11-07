@@ -1144,11 +1144,10 @@ end Control
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_the_shape_reads_what_a_hypothesis_applies_through_binders_and_families(tmp_path):
-    """`Facts.lean`'s shape on real statements (the friction note `proofs/20261009T1340Z-friction-shape-check-session-
-    mentions-pass`): mentioning a session whose structure names the function (`hown`) is no acceptance, nor is an
-    implication whose consequent isn't one (`_hop`); a premise under `∀` is read by its head; a family of structures
-    (`Vs : Fin 3 → Stmt`, an `abbrev` of one) holds its fields; a structure's own `Nonempty` is a hypothesis
-    too, since a field `Nonempty {x // Bad x}` is an existence claim. A probability's events are read under the
+    """`Facts.lean`'s shape on real statements: mentioning a session whose structure names the function (`hown`) is no
+    acceptance, nor is an implication whose consequent isn't one (`_hop`); a premise under `∀` is read by its head; a
+    family of structures (`Vs : Fin 3 → Stmt`, an `abbrev` of one) holds its fields; a structure's own `Nonempty` is a
+    hypothesis too, since a field `Nonempty {x // Bad x}` is an existence claim. A probability's events are read under the
     conclusion's binders (`∨ ∃ k, prob …`), and a family's field that applies the function is refused beside them."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
@@ -2344,7 +2343,7 @@ LOOP = ("import Control.Assumptions\nimport Control.Defs\nnamespace Control.Guar
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_premise_of_a_statement_in_an_excepted_module_changes_its_record(tmp_path):
     """On a real build: a guarantee whose statement is a `def G : Prop` of a proofs-tree module under `trees`' `except`
-    and outside `meaning` (`Control.Guarantees.Loop`, as C-Flock's `SessionLoopZKDeployed` is in
+    and outside `meaning` (`Control.Guarantees.Loop`, as Flock's `SessionLoopZKDeployed` is in
     `Proofs.Flock.SessionLoop`) is recorded through `G`'s body. A premise added to it that no named assumption stands for
     (`n ≠ 5`), or dropped from it while another guarantee still takes it (`Hyp`, whose assumption entry and module record
     stay, though the build no longer has `G` read it), changes the record, and the drop its `premises` too, which the
@@ -2404,7 +2403,7 @@ DOUBLED = "theorem doubled : Guarantees.Doubled := by\n  unfold Guarantees.Doubl
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_verifier_read_only_in_an_excepted_module_holds_its_statement_to_witnesses(tmp_path):
     """On a real build: a guarantee whose statement (`Control.Guarantees.Doubled`, a `def … : Prop` of a proofs-tree module
-    under `trees`' `except`, as C-Flock's `SessionLoopZK` is) applies a verifier's acceptance (`verifyDouble`) defined in
+    under `trees`' `except`, as Flock's `SessionLoopZK` is) applies a verifier's acceptance (`verifyDouble`) defined in
     that module and read nowhere under `meaning` states what an acceptance means: the witnesses rule holds it to its
     witnesses as it would one read under `meaning`, and `--update`, which records it, lists it under no `unwitnessed`.
     An entry there at its record's type hash exempts it, and `--update` keeps that entry. A rule that read only what the
@@ -2559,7 +2558,7 @@ def test_a_bound_a_definition_hides_holds_its_guarantee_to_exclusion_witnesses(t
 @pytest.mark.slow
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
 def test_a_bound_hidden_in_an_excepted_module_holds_its_guarantee_to_exclusion_witnesses(tmp_path):
-    """On a real build: the same statement in a proofs-tree module under `trees`' `except`, outside `meaning` (as C-Flock's
+    """On a real build: the same statement in a proofs-tree module under `trees`' `except`, outside `meaning` (as Flock's
     statements are in `Proofs.Flock`): `chain` unfolds through the modules the record follows (`record_scope`), so
     `--update` fails it with `witnesses.missing` of the `exclusion` kind and lists it under no `unwitnessed`. An entry
     there at its record's type hash exempts it, and `--update` keeps that entry. A `chain` that stopped outside `meaning`

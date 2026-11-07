@@ -1,14 +1,14 @@
 /-
-A draw's live coins as a component's check reads them: `coinsReason`'s path with the verifier's own key, window and
+A sample's live coins as a component's check reads them: `coinsReason`'s path with the verifier's own key, window and
 family, never the evidence's.
 
 `drawCoins key window label after coins` reads the evidence `{ledger, main, pins, segment, session}`: the auditor's
-ledger, the verifier's copy of main's first-parent history, the host's pins log, the draw's segment and the session's
+ledger, the verifier's copy of main's first-parent history, the host's pins log, the sample's segment and the session's
 files. The session is the one the ledger opens on `window` under `key` (`trustedSessionOf`), a withheld one
 (`withheldOn`: its challenger released no root, salt or path before it closed). The segment must be of
 family `label`, and its openings exactly the coins that session's signed log shows released after `after`
-(`challengerStream`). The result is their concatenation, the bytes a draw reads. A component whose check reads its
-coins through this (`Core.Live`) takes its draw from the challenger's record, and
+(`challengerStream`). The result is their concatenation, the bytes a sample reads. A component whose check reads its
+coins through this (`Core.Live`) takes its sample from the challenger's record, and
 `Properties.Challenger.DrawnByDevice` says what that record shows: the coins the device drew, or a break.
 -/
 module
@@ -27,7 +27,7 @@ def DRAW_FORM : String :=
   "main's first-parent history, the host's pins log, the draw's coins (Segment.to_json) and the challenger session's files"
 
 /-- The coins of family `label` that the session the auditor's ledger opens on `window` (its open root, lowercase hex)
-under `key` released after `after`, read from `coins`, in order: the bytes a draw reads. The session must be a withheld
+under `key` released after `after`, read from `coins`, in order: the bytes a sample reads. The session must be a withheld
 one (`withheldOn`). -/
 def drawCoins (key : ChallengerKey) (window label : String) (after : ByteArray) (coins : Json) : V ByteArray := do
   unless keys? coins == some #["ledger", "main", "pins", "segment", "session"] do throw DRAW_FORM

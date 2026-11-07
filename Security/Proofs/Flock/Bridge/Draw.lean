@@ -6,31 +6,31 @@ public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 public import Proofs.Flock.Soundness.ExecStrataOf
 
 /-!
-# The deployed draw at the registration's strata
+# The deployed sample at the registration's strata
 
-`SampledKSLiveV5` draws with the deployed draw (`SampledProofs.Draw.drawUnits`, `Flock.Draw.drawWith` on the
-challenger's coins read in order as one stream) under a C-Flock law over the registration's strata, and its `δ` is that
-law's own `P_a`. This file holds what the statement reads and how the draw meets it:
+`SampledKSLiveV5` samples with the deployed sample (`SampledProofs.Draw.drawUnits`, `Flock.Draw.drawWith` on the
+challenger's coins read in order as one stream) under a Flock law over the registration's strata, and its `δ` is that
+sampling design's own `P_a`. This file holds what the statement reads and how the sample meets it:
 
 * `StrataOn St ns`: the strata `St`'s ranges, in order, are the slots `0, …, Σ ns − 1`, at sizes `ns`, so each stratum
   is one run of consecutive slots;
 * `LawOn law ns kd`: `law` is `subset kd`, or `stratified K` or `work K` over strata at `ns`, each stratum's `k` the
   rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli law is none (`NotBernoulli`);
-* `pa_stratified`, `pa_work`: such a law's claims design (`oneStageOf`) misses `B` with `strataPa` of its strata's sizes
-  and draws; `pa_empty_of_lawOn`: it misses nothing with probability `1`;
-* `drawUnits_miss_le`: the deployed draw misses a set `U` of slots with probability at most `P_a(U)` (`one_bound`,
+* `pa_stratified`, `pa_work`: such a sampling design's claims design (`oneStageOf`) misses `B` with `strataPa` of its strata's sizes
+  and samples; `pa_empty_of_lawOn`: it misses nothing with probability `1`;
+* `drawUnits_miss_le`: the deployed sample misses a set `U` of slots with probability at most `P_a(U)` (`one_bound`,
   `strata_bound`);
-* `execSel src law pop`: the deployed draw as a law on the verifier's bytes `src`, a draw that runs out of them drawing
+* `execSel src law pop`: the deployed sample as a sampling design on the verifier's bytes `src`, a sample that runs out of them sampling
   every unit; `execSel_escape_le`: under A3 it escapes `W` with probability at most `P_a` of `W`'s slots;
-* `lawSized_size`: a draw file that decodes to the verifier's draw under a law that is `subset kd`, or whose strata
-  hold each slot once and draw `kd` units in all (`LawSized`, as a law on strata is, `lawSized_of_lawOn`), has `kd`
+* `lawSized_size`: a sample file that decodes to the verifier's sample under a sampling design that is `subset kd`, or whose strata
+  hold each slot once and sample `kd` units in all (`LawSized`, as a sampling design on strata is, `lawSized_of_lawOn`), has `kd`
   units, at any population (`ofJson_shape`, and `UnitDraw.ofJson`'s per-stratum count, `ofJson_count`,
   `ofJson_count_work`, in strata whose ranges it checks tile the population, `strataProblem_none`,
-  `workProblem_chain`); `lawOn_size` at a law on strata;
-* `drawUnits_size`: the deployed draw under such a law that ends holds `kd` units, at any population (`subset_size`,
+  `workProblem_chain`); `lawOn_size` at a sampling design on strata;
+* `drawUnits_size`: the deployed sample under such a sampling design that ends holds `kd` units, at any population (`subset_size`,
   `stratifiedWith_size`);
 * `All`: the rule's law is `subset n` over the `n` units (`Select.Rule.lawOver`), on the strata at `kd = n`
-  (`lawOn_all`), and under it the deployed draw holds every unit whatever its bytes (`drawUnits_all`, `execSel_all`).
+  (`lawOn_all`), and under it the deployed sample holds every unit whatever its bytes (`drawUnits_all`, `execSel_all`).
 -/
 
 @[expose] public section
@@ -40,7 +40,7 @@ namespace FlockSoundness.Discharge.ZkLink
 open Flock Exec ZkExec Finset FlockSoundness.Refine
 
 set_option maxHeartbeats 2000000 in
-/-- **`UnitDraw.ofJson`'s per-stratum count, at a work law** (`ofJson_count`): a draw it decodes under a work law holds
+/-- **`UnitDraw.ofJson`'s per-stratum count, at a work sampling design** (`ofJson_count`): a sample it decodes under a work sampling design holds
 exactly `k_s` of its units in each stratum `s`'s ranges. -/
 theorem ofJson_count_work {j : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D) {K : ℕ}
     {strata : Array Draw.WorkStratum} (hl : D.law = .work K strata) (s : Draw.WorkStratum) (hs : s ∈ strata) :
@@ -76,7 +76,7 @@ def StrataOn (St : List Flock.Draw.Stratum) (ns : List ℕ) : Prop :=
   St.flatMap (fun s => Properties.SampledProofs.SecurityProofs.expand s.units.toList) = List.range ns.sum ∧
     St.map (·.size) = ns
 
-/-- **A law at the strata `ns` that draws `kd` units**: `subset kd`, or `stratified K` or `work K` over strata at `ns`
+/-- **A sampling design at the strata `ns` that samples `kd` units**: `subset kd`, or `stratified K` or `work K` over strata at `ns`
 (`StrataOn`), each stratum's `k` the rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli law is none. -/
 def LawOn (law : Flock.Draw.Law) (ns : List ℕ) (kd : ℕ) : Prop :=
   match law with
@@ -88,11 +88,11 @@ def LawOn (law : Flock.Draw.Law) (ns : List ℕ) (kd : ℕ) : Prop :=
       (∀ s ∈ ws.toList, s.k = Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor) ∧
       (ws.toList.map (·.k)).sum = kd
 
-/-- **No Bernoulli law**: `law` draws a count its strata or its `k` fix, not one the coins set, as `LawOn` and
+/-- **No Bernoulli law**: `law` samples a count its strata or its `k` fix, not one the coins set, as `LawOn` and
 `LawSized` require. -/
 def NotBernoulli (law : Flock.Draw.Law) : Prop := ∀ a b, law ≠ .bernoulli a b
 
-/-- A stratified law's design misses `B` with `strataPa` of its strata's sizes and draws, when its strata have sizes `ns`
+/-- A stratified sampling design's design misses `B` with `strataPa` of its strata's sizes and samples, when its strata have sizes `ns`
 and each stratum's `k` is the rule's. -/
 theorem pa_stratified {K : ℕ} {St : Array Flock.Draw.Stratum} {ns : List ℕ} (hsz : St.toList.map (·.size) = ns)
     (hk : ∀ s ∈ St.toList, s.k = Flock.Draw.stratumK K s.size ns.sum) (B : Finset ℕ) :
@@ -105,7 +105,7 @@ theorem pa_stratified {K : ℕ} {St : Array Flock.Draw.Stratum} {ns : List ℕ} 
   rw [Function.comp_apply, hk s hs]
   rfl
 
-/-- A work law's design misses `B` with `strataPa` of its strata's sizes and draws, when its strata have sizes `ns` and
+/-- A work sampling design's design misses `B` with `strataPa` of its strata's sizes and samples, when its strata have sizes `ns` and
 each stratum's `k` is the work rule's. -/
 theorem pa_work {K : ℕ} {ws : Array Flock.Draw.WorkStratum} {ns : List ℕ}
     (hsz : (ws.toList.map (·.toStratum)).map (·.size) = ns)
@@ -130,7 +130,7 @@ theorem stratumK_le {K n N : ℕ} (hK : K ≤ N) (hn : 1 ≤ n) (hnN : n ≤ N) 
   have : K * n ≤ N * n := Nat.mul_le_mul_right n hK
   nlinarith
 
-/-- **Such a law misses nothing with probability `1`**: each stratum draws at most its size. -/
+/-- **Such a sampling design misses nothing with probability `1`**: each stratum samples at most its size. -/
 theorem pa_empty_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : LawOn law ns kd) :
     (Properties.SampledProofs.oneStageOf law).Pa ns ∅ = 1 := by
   cases law with
@@ -197,7 +197,7 @@ theorem sum_count_strata {α : Type} (E : α → List ℕ) :
       · simp [h] at hus
       · exact h
 
-/-- `strata_bound` at strata whose ranges are the slots `0, …, n − 1` in order: the draw misses the slots `U` themselves. -/
+/-- `strata_bound` at strata whose ranges are the slots `0, …, n − 1` in order: the sample misses the slots `U` themselves. -/
 theorem strata_bound_on (law : Flock.Draw.Law) (St : Array Flock.Draw.Stratum)
     (hSt : (∃ k, law = .stratified k St) ∨ ∃ k ws, law = .work k ws ∧ St = ws.map (·.toStratum)) (n : ℕ)
     (hon : St.toList.flatMap (fun s => Properties.SampledProofs.SecurityProofs.expand s.units.toList) = List.range n)
@@ -212,7 +212,7 @@ theorem strata_bound_on (law : Flock.Draw.Law) (St : Array Flock.Draw.Stratum)
   rw [hon, List.getD_eq_getElem _ _ hv', List.getElem_range]
   exact hm v hv
 
-/-- **The deployed draw misses `U`** with probability at most its law's `P_a(U)` on the strata `ns` it is on. -/
+/-- **The deployed sample misses `U`** with probability at most its sampling design's `P_a(U)` on the strata `ns` it is on. -/
 theorem drawUnits_miss_le {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} (hlaw : LawOn law ns kd) (hns : ns.sum = n)
     (U : Finset ℕ) (hU : U ⊆ Finset.range n) (L : ℕ) :
     Claims.Pr (fun src : Fin L → Fin 256 => ∃ units read,
@@ -236,8 +236,8 @@ theorem drawUnits_miss_le {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} (h
     rw [Array.toList_map, ← hns]
     exact hon
 
-/-- **The deployed draw as a law**: `SampledProofs.Draw.drawUnits` under `law` over `[0, pop)` on the source `t`'s bytes,
-read in order as one stream; a draw that runs out of them draws every unit. -/
+/-- **The deployed sample as a sampling design**: `SampledProofs.Draw.drawUnits` under `law` over `[0, pop)` on the source `t`'s bytes,
+read in order as one stream; a sample that runs out of them samples every unit. -/
 def execSel {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ} (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256)
     (law : Flock.Draw.Law) (pop : ℕ) : Audit.Law n where
   Ω := Ω
@@ -245,8 +245,8 @@ def execSel {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     | .ok r => univ.filter fun u => u.val ∈ r.1
     | .error _ => univ
 
-/-- **The deployed draw escapes `W`** with probability at most its law's `P_a` of `W`'s slots, on a uniform byte source
-(A3), at a law on strata `ns` of the `n` units. -/
+/-- **The deployed sample escapes `W`** with probability at most its sampling design's `P_a` of `W`'s slots, on a uniform byte source
+(A3), at a sampling design on strata `ns` of the `n` units. -/
 theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ht : Assumptions.UniformRandomBytes L t) {law : Flock.Draw.Law}
     {ns : List ℕ} {kd : ℕ} (hlaw : LawOn law ns kd) (hns : ns.sum = n) (W : Finset (Fin n)) :
@@ -282,10 +282,10 @@ theorem execSel_escape_le {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : 
     _ = ENNReal.ofReal (Claims.Pr (E 0)) := by rw [Claims.Sampling.Pr_eq_toReal_prCoin, ENNReal.ofReal_toReal hfin]
     _ ≤ _ := ENNReal.ofReal_le_ofReal (drawUnits_miss_le hlaw hns _ hU (L 0))
 
-/-- **`All`'s law is on the strata**: `subset n` over the `n` units, drawing all of them. -/
+/-- **`All`'s law is on the strata**: `subset n` over the `n` units, sampling all of them. -/
 theorem lawOn_all (ns : List ℕ) : LawOn (.subset ns.sum) ns ns.sum := ⟨rfl, le_rfl⟩
 
-/-- **Under `All` the deployed draw holds every unit**: a draw of `subset n` over `[0, n)` that ends is the image of
+/-- **Under `All` the deployed sample holds every unit**: a sample of `subset n` over `[0, n)` that ends is the image of
 `[0, n)` under a permutation that keeps it (`subset_spec`), so all of `[0, n)`, whatever the bytes. -/
 theorem drawUnits_all (n : ℕ) (src : ByteArray) (r : Array ℕ × ℕ)
     (h : SampledProofs.Draw.drawUnits (.subset n) n src = .ok r) (u : ℕ) (hu : u < n) : u ∈ r.1 := by
@@ -305,7 +305,7 @@ theorem drawUnits_all (n : ℕ) (src : ByteArray) (r : Array ℕ × ℕ)
   obtain ⟨i, hi, hiu⟩ := Finset.mem_image.1 hu'
   exact hm u ((hmem u).2 ⟨i, Finset.mem_range.1 hi, hiu⟩)
 
-/-- **Under `All` the verifier draws every unit, for any coins**: `execSel` at `subset n` over the `n` units. -/
+/-- **Under `All` the verifier samples every unit, for any coins**: `execSel` at `subset n` over the `n` units. -/
 theorem execSel_all {n : ℕ} {Ω : Type} [Fintype Ω] [Nonempty Ω] {L : Fin 1 → ℕ}
     (t : Ω → (i : Fin 1) → Fin (L i) → Fin 256) (ω : Ω) : (execSel (n := n) t (.subset n) n).draw ω = univ := by
   change (match SampledProofs.Draw.drawUnits (.subset n) n (Properties.SampledProofs.bytesOf (t ω 0)) with
@@ -322,7 +322,7 @@ theorem mem_expand_of_mem {rs : List (ℕ × ℕ)} {r : ℕ × ℕ} (hr : r ∈ 
   simp only [Properties.SampledProofs.SecurityProofs.expand, List.mem_flatMap, List.mem_range'_1]
   exact ⟨r, hr, h1, by omega⟩
 
-/-- **A law whose draw files hold `kd` units** (`lawSized_size`): `subset kd`, or a stratified or work law whose
+/-- **A sampling design whose sample files hold `kd` units** (`lawSized_size`): `subset kd`, or a stratified or work sampling design whose
 strata's slots hold each unit once and whose strata's `k`s sum to `kd`. A Bernoulli law is none. -/
 def LawSized (law : Flock.Draw.Law) (kd : ℕ) : Prop :=
   match law with
@@ -336,7 +336,7 @@ def LawSized (law : Flock.Draw.Law) (kd : ℕ) : Prop :=
         Properties.SampledProofs.SecurityProofs.expand s.units.toList).Nodup ∧
       (ws.toList.map (·.k)).sum = kd
 
-/-- A law on strata at `ns` is sized: its strata's slots are `0, …, Σ ns − 1`, each once. -/
+/-- A sampling design on strata at `ns` is sized: its strata's slots are `0, …, Σ ns − 1`, each once. -/
 theorem lawSized_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : LawOn law ns kd) : LawSized law kd := by
   cases law with
   | subset k => exact h.1
@@ -348,10 +348,10 @@ theorem lawSized_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h :
     obtain ⟨⟨hon, -⟩, -, hsum⟩ := h
     exact ⟨by rw [hon]; exact List.nodup_range, hsum⟩
 
-/-- **A draw file of the verifier's draw under a sized law decodes only to `kd` units**, at any population: a subset
-draw has its `k` (`ofJson_shape`), and a stratified or work draw `k_s` units in each stratum (`ofJson_count`,
+/-- **A sample file of the verifier's sample under a sized law decodes only to `kd` units**, at any population: a subset
+sample has its `k` (`ofJson_shape`), and a stratified or work sample `k_s` units in each stratum (`ofJson_count`,
 `ofJson_count_work`), whose slots hold each unit once and whose ranges hold each of its units, since `UnitDraw.ofJson`
-checks that they tile the draw's population (`strataProblem_none`, `workProblem_chain`). -/
+checks that they tile the sample's population (`strataProblem_none`, `workProblem_chain`). -/
 theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSized law kd)
     {dj : Finset (Fin n) → Lean.Json} (hdj : Discharge.ZkLink.DrawFileZK dj law n) (S : Finset (Fin n))
     (D : Flock.Draw.UnitDraw) (hD : Flock.Draw.UnitDraw.ofJson (dj S) = .ok D) : D.units.size = kd := by
@@ -432,13 +432,13 @@ theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSiz
       _ = (ws.toList.map (·.k)).sum := congrArg List.sum (List.map_congr_left hc)
       _ = kd := hsum
 
-/-- **A draw file of the verifier's draw under a law on strata decodes only to `kd` units** (`lawSized_size`). -/
+/-- **A sample file of the verifier's sample under a sampling design on strata decodes only to `kd` units** (`lawSized_size`). -/
 theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (hlaw : LawOn law ns kd)
     {dj : Finset (Fin n) → Lean.Json} (hdj : Discharge.ZkLink.DrawFileZK dj law n) (S : Finset (Fin n))
     (D : Flock.Draw.UnitDraw) (hD : Flock.Draw.UnitDraw.ofJson (dj S) = .ok D) : D.units.size = kd :=
   lawSized_size (lawSized_of_lawOn hlaw) hdj S D hD
 
-/-- A `subset k n` draw that ends holds `k` units. -/
+/-- A `subset k n` sample that ends holds `k` units. -/
 theorem subset_size {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :
     D.size = k := by
   rw [Audit.DrawExec.subset_eq] at h
@@ -447,7 +447,7 @@ theorem subset_size {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Dra
     Array.size_range]
 
 open Properties.SampledProofs.SecurityProofs (bind_ok bind_error onWith_take) in
-/-- **`stratifiedWith` on the verifier's bytes draws each stratum's `k`**: a run that returns a draw holds `∑ k_s` units,
+/-- **`stratifiedWith` on the verifier's bytes samples each stratum's `k`**: a run that returns a sample holds `∑ k_s` units,
 each stratum's `subset` returning its `k` (`subset_size`). -/
 theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
     (h : (Flock.Draw.stratifiedWith (fun _ need => SampledProofs.Draw.take src need) strata).run p =
@@ -514,8 +514,8 @@ theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum
     simp [getElem!_pos strata i hi]
 
 open Properties.SampledProofs.SecurityProofs (bind_ok bind_error onWith_take) in
-/-- **The deployed draw under such a law draws `kd` units**: a draw from `src` that ends holds `kd` units, `subset k`'s
-`k` (`subset_size`), and a stratified or work law's `k_s` in each stratum (`stratifiedWith_size`), at any population. -/
+/-- **The deployed sample under such a sampling design samples `kd` units**: a sample from `src` that ends holds `kd` units, `subset k`'s
+`k` (`subset_size`), and a stratified or work sampling design's `k_s` in each stratum (`stratifiedWith_size`), at any population. -/
 theorem drawUnits_size {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} (hlaw : LawOn law ns kd) {src : ByteArray}
     {units : Array ℕ} {read : ℕ} (h : SampledProofs.Draw.drawUnits law n src = .ok (units, read)) :
     units.size = kd := by

@@ -1,14 +1,14 @@
 """One-stage audit, run A5, on a row-table stand-in: `integrations/vllm/tests/pipeline/test_row_tables.py`'s window (40
 `ScaledMmS8Coordinate_v1{K=64}` units in eight chunks, each of whose ``x`` rows link one of four row tables, one per engine step and linear
-over two engine steps, under the stratified law), its run ``<ROOT>/rank0``, committed as serving commits it
+over two engine steps, under the stratified sampling design), its run ``<ROOT>/rank0``, committed as serving commits it
 (`pipeline.serving_rows._read_s8` on the fixture's served values, `ml.windows.rows.commit` under the step roots
 serving records before each step's coin, `row_tables.step_roots`) and audited by `a5.audit` as rank 0 of a one-rank
 step on the auditor's challenger's coins, a local session on ``ROOT``: the window's `service.Stream` (its ``row-table``
 Value a tree over roots of row-seg leaves), `tables.check_row_tables` against those step roots before the sample, M0's
-`--zk` session of each drawn chunk behind the ZK server, the Lean verifier of record, the stream's outcome and the
+`--zk` session of each sampled chunk behind the ZK server, the Lean verifier, the stream's outcome and the
 negatives. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time context),
-so this window stands in for one. Each chunk's public file is a shared-row file, which Lean's verifier of record covers
-only with its own registered reads: a5 gives each drawn chunk's verify the reads of its one table (`a5`'s module
+so this window stands in for one. Each chunk's public file is a shared-row file, which Lean's verifier covers
+only with its own registered reads: a5 gives each sampled chunk's verify the reads of its one table (`a5`'s module
 docstring), and the run exits 0 only when the outcome is accepted and every negative refused. ``--out`` holds the window
 serving wrote (``window/``, its private files too) and a5's records
 (``rank0/``, ``challenger/``, ``summary.json``).

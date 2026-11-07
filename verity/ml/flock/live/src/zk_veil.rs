@@ -788,7 +788,7 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc
     Ok(Replayed { ab_point, c_point, ab_value: w, c_value: fc, cons, a_value: a, b_value: b })
 }
 
-/// The two z-claim points from the algebraic phase's coins alone (in [`replay`]'s draw order; no message is needed).
+/// The two z-claim points from the algebraic phase's coins alone (in [`replay`]'s sample order; no message is needed).
 pub fn points_from_coins(r1cs: &BlockR1cs, lay: &Layout, has_pin: bool, coins: &[F128]) -> Result<(QuirkyPoint, QuirkyPoint), String> {
     let m = r1cs.m;
     let need = K_SKIP + (m - K_SKIP - N_INNER) + 1 + lay.n_mlv + 1 + usize::from(has_pin) + lay.n_lc + 1;
@@ -981,7 +981,7 @@ fn queries<Ch: Challenger>(ch: &mut Ch, n: usize) -> Vec<usize> {
     query_positions(&ch.sample_f128_vec(Q), n)
 }
 
-/// The inner proof's opened columns for its query coins (drawn with replacement, so a position may repeat).
+/// The inner proof's opened columns for its query coins (sampled with replacement, so a position may repeat).
 pub fn query_positions(words: &[F128], n: usize) -> Vec<usize> {
     words.iter().map(|x| (x.lo as usize) & (n - 1)).collect()
 }
@@ -1353,7 +1353,7 @@ mod tests {
     const HONEST_INNER_PROOF_SHA512: &str =
         "a817dca1ba04991788bf6b362c6d15a80dc1fc68bba6a66cdf2bfaf0977bb45e7c8ad12b43c554e04501990345833130dfa6e9625e48d89f1bc112c13108e35f";
 
-    /// The prover stops at a zerocheck outer coin `r_j = 1` as the coin opens, drawn as one vector or one at a time, and at
+    /// The prover stops at a zerocheck outer coin `r_j = 1` as the coin opens, sampled as one vector or one at a time, and at
     /// no other coin equal to 1 (a skip coin, a later one).
     #[test]
     fn outer_coin_one_is_refused_as_it_opens() {

@@ -2,7 +2,7 @@
 on the domain the row's admission bit admits, its units evaluate to `schemes.pearl_c4`'s forming, clean-up and checked
 words (the pinned ``test-16-nvfp4`` vector), its admission bit is `row_passes` on every row, and its partition computes
 every value in exactly one unit; its hiding Programs publish only admission bits and tile digests, their units' ports are
-`PORTS`, the verifier derives the anchored inputs (`anchors.TileAnchors`), and `plan.tile_layout` draws a tile with its
+`PORTS`, the verifier derives the anchored inputs (`anchors.TileAnchors`), and `plan.tile_layout` samples a tile with its
 rows."""
 from __future__ import annotations
 
