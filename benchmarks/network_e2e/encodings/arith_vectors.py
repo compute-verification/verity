@@ -28,8 +28,9 @@ their cut into `WHOLE` slots, and with `--circuit` `ChargeLink_v2` on the cut's 
 report has its length terms' bits as `ChargeCount_v2` charges them and as v1's string holds them. `--steps` takes the
 replay's step traces in `tests/fixtures` (`test_v1`'s, at T = 20, so they span windows, their decisions cut at the compile
 slice's P·A = 14 whatever `--cut` says) and the fields of the trace-corpus fixture and of sync-crush (`derived.load_trace`;
-its pool evicts, so it sends hits), and `--fixture PATH` writes them as the vectors the certifier's test reads
-(`verity/protocols/certifier/verifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are trace-corpus traces
+its pool evicts, so the derived rules send hits past the bound), and `--fixture PATH` writes them as the vectors the
+certifier's test reads (`verity/protocols/certifier/verifier/tests/fixtures/arith_encode_vectors.json`). LABEL=DIR are
+trace-corpus traces
 (`replay.read_corpus_trace`; `derived.load_corpus_trace`), each read twice: with the warden's ingress, where the
 arrivals are in release order, and with the client's send standing for the release, as v1's own table reads them,
 where they deviate and v1 sends order entries. The fixtures' arrivals never deviate. The report has each stream's

@@ -266,7 +266,7 @@ def test_v1_sends_only_lengths_under_the_tick(asy):
 
 @pytest.mark.parametrize("asy", (False, True), ids=("sync", "async"))
 def test_a_hit_other_than_the_pools_and_an_abort_are_refused(asy):
-    """No string carries a hit: decode refuses a window that sends one, even the shortfall 0 v1 used to send, under a
+    """No string carries a hit: decode refuses a window that sends one, even a shortfall of 0, under a
     book with room for it (one without the tick: the tick's registration refuses such a book), and an advice whose row
     takes a block less than the pool's hit has no string. An abort, an output the stop rule doesn't end, is refused at
     encode and at decode, by name."""
