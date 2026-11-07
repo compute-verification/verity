@@ -122,7 +122,7 @@ def test_registered_entries_are_the_committers(ckpt, regs):
     I_r = I // WORLD
     per_layer = 2 * I_r // BLOCKS["w13"] + 2 * I_r // G + H // BLOCKS["w2"] + H // G
     for rank, doc in enumerate(regs):
-        assert (doc["format"], doc["repo"], doc["revision"], doc["world"], doc["rank"]) == (ET.FORMAT, REPO, REV, WORLD, rank)
+        assert (doc["schema"], doc["repo"], doc["revision"], doc["world"], doc["rank"]) == (ET.FORMAT, REPO, REV, WORLD, rank)
         assert doc["program"] == ET.program(REPO, REV, WORLD, rank, doc["prefix"])
         assert len(doc["values"]) == per_layer * len(LAYERS)
         got = _commit(_served(ckpt, rank), doc)
@@ -144,25 +144,30 @@ def test_ranks_and_keys_are_distinct_values(ckpt, regs):
     """The two ranks' tables are registered under distinct programs at disjoint nonces, and another key draws other salts."""
     assert regs[0]["program"] != regs[1]["program"]
     n0, n1 = (set(ET.committer(d, KEY)["nonces"].values()) for d in regs)
-    assert not n0 & n1 and min(n0 | n1) >= ET.TABLES_NONCE
+    assert len(n0) == len(regs[0]["values"]) and not n0 & n1 and min(n0 | n1) >= ET.TABLES_NONCE
     other = bytes(31) + b"\x01"
     got = _commit(_served(ckpt, 0), regs[0], key=other)
     assert all(r.entry()["root"] != regs[0]["values"][p]["root"] for p, r in got.items())
 
 
-def test_layers_and_refusals(ckpt, regs):
-    """``layers`` registers those layers' tables exactly as the whole registration does (a table's nonce is its own), so one key
-    serves both; a block that does not divide N, a layer without experts, a short key and a param no table names refuse."""
-    one = ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, layers=[2], checkpoints_manifest=ckpt["man"])
-    assert one["values"] and one["values"] == {p: e for p, e in regs[0]["values"].items() if ".layers.2." in p}
-    with pytest.raises(ValueError, match="not a table"):
-        ET.nonces(["weights/model.model.layers.1.mlp.gate.weight@64/b0/table"], 0)
+def test_stacks_and_refusals(ckpt, regs):
+    """``stacks`` registers those stacks' tables exactly as the whole registration does, nonces included (a table's nonce is its
+    own), so one key serves both; a block that does not divide N, a projection or stack no expert weight has, a short key and a
+    registration whose nonces are not its tables' refuse."""
+    stack = f"{WRAP}model.layers.2.mlp.experts"
+    one = ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, stacks=[stack], checkpoints_manifest=ckpt["man"])
+    mine = {p for p in regs[0]["values"] if p.startswith(f"weights/{stack}.")}
+    assert mine and one["values"] == {p: regs[0]["values"][p] for p in mine} and one["nonces"] == {p: regs[0]["nonces"][p] for p in mine}
     with pytest.raises(ValueError, match="power of two"):
         ET.register(ckpt["progs"][0], ckpt["dir"], KEY, {"w13": 3, "w2": 32}, checkpoints_manifest=ckpt["man"])
-    with pytest.raises(ValueError, match="no expert weights"):
-        ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, layers=[7], checkpoints_manifest=ckpt["man"])
+    with pytest.raises(ValueError, match="no expert stack has that projection"):
+        ET.register(ckpt["progs"][0], ckpt["dir"], KEY, {**BLOCKS, "w4": 1}, checkpoints_manifest=ckpt["man"])
+    with pytest.raises(ValueError, match="no expert stack"):
+        ET.register(ckpt["progs"][0], ckpt["dir"], KEY, BLOCKS, stacks=[f"{WRAP}model.layers.7.mlp.experts"], checkpoints_manifest=ckpt["man"])
     with pytest.raises(ValueError, match="32-byte key"):
         ET.committer(regs[0], KEY[:16])
+    with pytest.raises(ValueError, match="a nonce for each of its tables"):
+        ET.committer({**regs[0], "nonces": dict(list(regs[0]["nonces"].items())[1:])}, KEY)
 
 
 def test_a_shard_the_manifest_does_not_pin_refuses(ckpt, tmp_path):
