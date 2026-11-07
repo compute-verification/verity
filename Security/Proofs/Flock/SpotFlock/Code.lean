@@ -17,9 +17,9 @@ these definitions from the premises it names, and nothing here imports a proof.
 **The auditor's copies** (`Held`), fixed before the run and never the prover's: the registration's program (its
 descriptor's bytes and gates), the statement's partition query, the two-stage registration the samples read (`RegTwo`)
 and its proof-block query, the second stage's count per stratum, the registered reads the session must open against at
-a run's roots and interior roots (`registered`), a reference session statement (`xS₀`), whose Flock round count and
-table shapes are every session's, and the commitment's layout and the reference prover's framing (`frame`, a code whose verifier and samples
-are unread).
+a run's roots and interior roots (`registered`), the reference session statement (`xS₀`), which every session's
+statement is but for its sample and its registered reads, and the commitment's layout and the reference prover's framing
+(`frame`, a code whose verifier and samples are unread).
 
 **The run's statement** (`Stmt`): the roots the boundary values are committed under, as canonical bytes (`Stmt.encode`,
 read back by `decode`, which keeps only bytes that encode back to themselves).
@@ -31,8 +31,9 @@ read back by `decode`, which keeps only bytes that encode back to themselves).
   (`Interiors.encode`); the verifier's coin is the second stage's bytes (`Select.selectSecond`);
 * round 2: the prover's message is the session's statement `xS`, which the verifier checks (`stmtOk`): the run's
   statement decodes and its partition and design evaluate, `xS` sets up as a masked Flock statement with `k₀` rounds,
-  in Flock's masked scope and with `xS₀`'s table shapes (`sessionOk`), its sample is the second stage's, and its
-  registered reads are the auditor's at the run's roots and the interior registration's; it refuses `xS` otherwise;
+  in Flock's masked scope and with `xS₀`'s table shapes (`sessionOk`), its sample is the second stage's, its
+  registered reads are the auditor's at the run's roots and the interior registration's, and it is `xS₀` in every other
+  field (`pinOk`); it refuses `xS` otherwise;
 * rounds 3 on: Flock's masked verifier at `xS`, message for message, whose decision is the run's.
 
 The design evaluates (`two`) only where the verifier decides the two-stage scope (`scopeOk`: the program ordered, the
@@ -59,7 +60,7 @@ open Lean (Json)
 /-- **A two-stage registration's copies, as the auditor holds them**: the program's descriptor (`desc`) and gates
 (`prog`), the statement's partition query (`query`), the two-stage registration (`reg`) and the proof-block query its
 interior registration is over (`blockQuery`), the second stage's count per stratum (`k`), the registered reads a session
-opens against at a run's roots and interior roots (`registered`), a reference session statement (`xS₀`), and the
+opens against at a run's roots and interior roots (`registered`), the reference session statement (`xS₀`), and the
 commitment's layout and the reference prover's framing (`frame`). -/
 structure Held where
   desc : Msg
@@ -232,20 +233,29 @@ def secondDraw (c₀ c₁ : FlockDeploy.Coin) : Option Json :=
   | .ok (draw, _) => some draw
   | .error _ => none
 
+deriving instance DecidableEq for FlockDeploy.Raw
+
+/-- **The session's statement is the reference one** but for its sample and its registered reads: decoded as `w`, it is
+`xS₀`'s in every other field, its circuit, public file, tables and program among them. -/
+def pinOk (w : FlockDeploy.Raw) : Bool :=
+  match FlockDeploy.decode h.xS₀ with
+  | some w₀ => decide ({ w with draw := none, registered := none } = { w₀ with draw := none, registered := none })
+  | none => false
+
 /-- **The session's statement reads the run's**, at the statement `s`, the round-1 message `m₁` and the coins of rounds
-0 and 1: its sample is the second stage's, and its registered reads are the auditor's at the run's roots and the
-interior registration's. -/
+0 and 1: its sample is the second stage's, its registered reads are the auditor's at the run's roots and the interior
+registration's, and it is otherwise the reference statement (`pinOk`). -/
 def readsOk (s : AuditStatement) (m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) : Bool :=
   match interiorsOf m₁, secondDraw h c₀ c₁, FlockDeploy.setupOf true xS, FlockDeploy.decode xS with
   | some it, some draw, some (ins, _, _), some w =>
     FlockDeploy.drawEq ins.read.draw (some (Flock.norm draw)) &&
-      w.registered.map ByteArray.data == some (h.registered s.roots it.roots).data
+      w.registered.map ByteArray.data == some (h.registered s.roots it.roots).data && pinOk h w
   | _, _, _, _ => false
 
 /-- **The session's statement is the run's**, at the round-1 message `m₁` and the coins of rounds 0 and 1: the run's
 statement decodes and its partition and design evaluate; `xS` sets up as a masked Flock statement with `k₀` rounds,
-in scope (`sessionOk`); its sample is the second stage's; and its registered reads are the auditor's at the run's roots
-and the interior registration's. -/
+in scope (`sessionOk`); its sample is the second stage's; its registered reads are the auditor's at the run's roots
+and the interior registration's; and it is otherwise `xS₀` (`readsOk`). -/
 def stmtOk (x m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) : Bool :=
   match parse h x with
   | some s =>

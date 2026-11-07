@@ -35,8 +35,9 @@ statement's relation says of its circuit), and the reveal opens each decoded val
 the roots its gate is committed under (`Reveals`, what the commitment's layout and the reveal say of the witness).
 `Decodes` follows from `Evaluates`, that the decoded values evaluate each of the unit's gates on the decoded values of
 the gates it reads (`decodes_of_evaluates`, by `Prog.correct_of_eval`), which is what a session circuit that computes
-the unit's gates gives. Neither holds of every `h`: both need the session statement's composition and its witness's
-encoding, which `h.frame` and `stmtOk` leave open.
+the unit's gates gives. Neither holds of every `h`. The check fixes the session statement to `xS₀` but for its
+sample and its registered reads (`pin_of_stmtOk`), so `Evaluates` says that `xS₀`'s circuit computes the drawn units'
+gates on the values its witness encodes, and `Reveals` that the frame (`h.frame`) opens them.
 -/
 
 @[expose] public section
@@ -135,6 +136,42 @@ theorem sessionOk_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (ho
   | some s =>
     simp only [hs, Bool.and_eq_true] at hok
     exact hok.1.2
+
+/-- **A session statement the verifier's check passes is the reference one** (`pinOk`) but for its sample and its
+registered reads, which are the auditor's at the run's roots and the round-1 interior roots. -/
+theorem pin_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ xS c₀ c₁ = true) :
+    ∃ s it w w₀, parse h x = some s ∧ interiorsOf m₁ = some it ∧ FlockDeploy.decode xS = some w ∧
+      FlockDeploy.decode h.xS₀ = some w₀ ∧
+      { w with draw := none, registered := none } = { w₀ with draw := none, registered := none } ∧
+      w.registered.map ByteArray.data = some (h.registered s.roots it.roots).data := by
+  unfold stmtOk at hok
+  cases hs : parse h x with
+  | none => simp [hs] at hok
+  | some s =>
+    simp only [hs, Bool.and_eq_true] at hok
+    have hr := hok.2
+    unfold readsOk at hr
+    cases hit : interiorsOf m₁ with
+    | none => simp [hit] at hr
+    | some it =>
+      cases hdr : secondDraw h c₀ c₁ with
+      | none => simp [hit, hdr] at hr
+      | some draw =>
+        cases hset : FlockDeploy.setupOf true xS with
+        | none => simp [hit, hdr, hset] at hr
+        | some p =>
+          obtain ⟨ins, spec, sts⟩ := p
+          cases hw : FlockDeploy.decode xS with
+          | none => simp [hit, hdr, hset, hw] at hr
+          | some w =>
+            simp only [hit, hdr, hset, hw, Bool.and_eq_true, beq_iff_eq] at hr
+            obtain ⟨⟨-, hreg⟩, hpin⟩ := hr
+            unfold pinOk at hpin
+            cases hw₀ : FlockDeploy.decode h.xS₀ with
+            | none => simp [hw₀] at hpin
+            | some w₀ =>
+              simp only [hw₀, decide_eq_true_eq] at hpin
+              refine ⟨s, it, w, w₀, ?_, ?_, ?_, ?_, hpin, hreg⟩ <;> first | rfl | assumption
 
 /-- **The checked units** of a run whose statement decodes: the second stage's on the coins of rounds 0 and 1. -/
 theorem checked_eq (x : Msg) {st : Stmt} (hst : decode x = some st) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
