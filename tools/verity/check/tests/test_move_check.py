@@ -535,6 +535,41 @@ def test_a_list_entry_the_words_repeat_may_go(tmp_path):
     assert not _worded(tmp_path / "dropped", base_extra={"owners.json": old}, **{"owners.json": dropped})["certified"]
 
 
+def _caps(areas: dict, indent: int = 1) -> str:
+    """A file whose writer keeps its areas sorted, as `tools/verity/lean/unread.py` writes its caps."""
+    return json.dumps({"schema": "caps/v1", "areas": areas}, indent=indent) + "\n"
+
+
+CAPS = {"Definitions/Hash": {"modules": 1}, "Models/Core": {"modules": 7}, "Proofs/Core": {"modules": 2}}
+RESORTED = {"Definitions/Core": {"modules": 7}, "Definitions/Hash": {"modules": 1}, "Proofs/Core": {"modules": 2}}
+
+
+def test_a_sorted_object_whose_renamed_key_moves_to_its_sorted_place_is_a_move(tmp_path):
+    """The words rename the key `Models/Core`, and the writer puts it in its sorted place."""
+    r = _worded(tmp_path, base_extra={"caps.json": _caps(CAPS)}, **{"caps.json": _caps(RESORTED)})
+    assert r["certified"], r["refusals"]
+    assert {"path": "caps.json", "kind": "sorted"} in r["edits"]
+
+
+def test_a_resorted_object_with_anything_else_changed_is_refused(tmp_path):
+    """The reorder is a move only in the words' own value and lines: a changed value, or the same value laid out anew, is
+    refused with its first hunk."""
+    for case, after in (("value", _caps({**RESORTED, "Definitions/Core": {"modules": 8}})), ("layout", _caps(RESORTED, 2))):
+        (tmp_path / case).mkdir()
+        [f] = _worded(tmp_path / case, base_extra={"caps.json": _caps(CAPS)}, **{"caps.json": after})["refusals"]
+        assert f["path"] == "caps.json" and f["hunk"], case
+
+
+def test_a_reorder_of_an_object_unsorted_before_or_after_is_refused(tmp_path):
+    """Only a writer that keeps the keys sorted explains the reorder: an object that wasn't sorted at BASE, or isn't at HEAD,
+    keeps the order the words leave it in."""
+    for case, before, after in (("before", dict(reversed(CAPS.items())), RESORTED),
+                                ("after", CAPS, dict(reversed(RESORTED.items())))):
+        (tmp_path / case).mkdir()
+        [f] = _worded(tmp_path / case, base_extra={"caps.json": _caps(before)}, **{"caps.json": _caps(after)})["refusals"]
+        assert f["path"] == "caps.json" and f["hunk"], case
+
+
 def test_a_chain_or_regex_spelling_is_kept_only_with_the_word_it_spells(tmp_path):
     """`"Models" / "Hash"` spells `Models/Hash`, which no kept word renames (nothing under `Models/Hash` moved), so the map
     doesn't explain renaming it."""

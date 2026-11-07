@@ -78,7 +78,8 @@ landed outside the queue leaves each open branch, `next`'s members among them, t
 `[words]` and `[paths]` or neither (a move that needs both stages two maps), a script that fails, a map that changes
 nothing, a commit `move_check.py` doesn't certify, and a move whose second run changes anything. `move_check.py` refuses,
 with each path's first offending hunk, every change its docstring doesn't list as part of a pure move. Among them:
-- a file's text changed beyond its moved paths, module names and the words of the word maps at the base;
+- a file's text changed beyond its moved paths, module names and the words of the word maps at the base, other than a
+  sorted JSON object sorted again once the move renames its keys;
 - under `scope = "prose"`, a word renamed in code, a string literal, backticks or a data file; a name renamed to one the
   file already spells, or to different names in different files; a Lean name a lock records; any edit to a file a JSON
   pin records;
