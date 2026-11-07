@@ -1976,3 +1976,38 @@ def test_a_merge_of_main_into_a_verdicted_head_lands_on_its_verdict_and_a_real_c
     assert any(s.startswith(f"research queue: #1 at {one[:8]} takes the `reviewed` labels at {old[1][:8]}") for s in world.logs)
     out = h.tick()
     assert out.startswith(f"nothing reviewed lands: #2 at {two[:8]}") and "no land verdict" in out, out
+
+
+def test_a_refusing_warn_gate_lands_the_pr_and_tells_its_owner_once_a_head_while_a_landing_gate_still_refuses(world,
+                                                                                                             monkeypatch):
+    """A warn gate (drive.toml's `warn_gates`) judges each PR's merge onto `next` as a landing gate does, and keeps no PR out:
+    drive lands the PR and tells its owner and ci what the gate said, once a head, for the owner to fix in their next PR.  A
+    landing gate's refusal still keeps its PR off `next`."""
+    from test_queue import GATE
+
+    _registry(world, "lane-1", "lane-2")
+    _move_main(world, {Q.DRIVE_FLAGS: 'landing_gates = ["gates/g.py"]\nwarn_gates = ["gates/w.py"]\n', "gates/g.py": GATE,
+                       "gates/banned.txt": "bad.txt\n", "gates/w.py": GATE.replace("gates/banned.txt", "gates/warned.txt"),
+                       "gates/warned.txt": "warn.txt\n"})
+    main = _main(world)
+    h = Review(world, monkeypatch)
+    world.gh.put(1, h1 := world.change({"warn.txt": "1\n"}))
+    world.gh.put(2, world.change({"bad.txt": "2\n"}))
+    h.review(2)
+    h.tick()
+    assert world.on_next(h.q) == [1], world.logs
+    assert h.q.load_state()["conflicts"]["2"]["why"].startswith(f"the landing gate gates/g.py at `main` {main[:12]} "), world.logs
+
+    def warned() -> list[str]:
+        return [p for p in h.posts if "lands all the same" in p]
+
+    assert warned() == [f"@lane-1 @ci queue: #1 at {h1[:8]} lands all the same, as a warn gate keeps no PR out: the warn gate "
+                        f"gates/w.py at `main` {main[:12]} on its merge onto `next`: touches warn.txt; delete warn.txt (`python3 "
+                        "gates/w.py origin/main HEAD` on the branch merged with `origin/next` runs it). Fix it in your next PR"]
+    h.tick()
+    assert len(warned()) == 1, "once a head"
+    world.gh.put(1, h1 := world.change({"warn.txt": "1, again\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert len(warned()) == 2 and warned()[1].startswith(f"@lane-1 @ci queue: #1 at {h1[:8]} lands all the same"), h.posts
+    assert world.on_next(h.q) == [] and _subject(world, "main").startswith("Queue: #1")

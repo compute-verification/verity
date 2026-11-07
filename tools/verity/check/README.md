@@ -77,7 +77,7 @@ follows.
 | `train.sh` | the lander's recorded check of a train |
 | `post_train.py` | the vLLM reference regression's manifest rebuilds after a landing |
 | `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
-| `gates/markdown_caps.py` | the landing gate holding Markdown to its caps |
+| `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
 | `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
 | `pins.py` | every file that records a Lean source's digest, with the command that regenerates it |
@@ -191,8 +191,9 @@ over recent recorded checks, and its reds so far. What isn't recorded shows as u
 ## Landing
 
 PRs land through the merge queue (`research queue drive`): its flags are `drive.toml` and its admission rules are
-`queue.toml`. Before a PR lands, the landing gates `drive.toml` names (`gates/markdown_caps.py` among them) judge its
-merge. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
+`queue.toml`. Before a PR lands, the landing gates `drive.toml` names judge its merge, and its warn gates
+(`gates/markdown_caps.py`) too, whose failure keeps no PR out: drive lands it and tells its owner, who fixes it in their next
+PR. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
 with every job, those off the gate too (`train.sh --deferred`), and `main` moves only to a commit whose run passed every step
 on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red job off the gate reverts its culprit on `checked`
 but doesn't hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its

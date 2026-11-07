@@ -3,7 +3,8 @@
 # restart, and a temporary setting is a commit here too. A `--config FILE` on drive's machine is refused, naming each key, unless
 # every key it sets has this file's value; a command-line flag overrides its key only where `command_line` lets it. Before it
 # syncs, each tick refuses, with the fix, a name used here that doesn't exist: the `land_into` branch and drive's push to it,
-# each machine of `on`, each of `landing_gates` (`drive_names`). ci owns this file; infra runs drive from it on the control pod.
+# each machine of `on`, each of `landing_gates` and `warn_gates` (`drive_names`). ci owns this file; infra runs drive from it on
+# the control pod.
 
 # the keys drive's command line (the control pod's /data/drive/args) may override: `--on`; any other flag there that sets a key
 # refuses the tick. The landing order is no key: it is drive's priority file (`--priority-file`), read again at each sync
@@ -18,7 +19,7 @@ marked_after = "2026-10-12T06:00:00Z"
 # to one. false: no lock run, and a landing that leaves a record stale is red in the after-landing run
 regenerate_locks = true
 # scripts each PR passes, run from `main` as `python3 PATH MAIN TOP --json`: TOP is its head at the ready mark's preflight, and
-# its merge onto `next` at the sync, which leaves out what they refuse (a Markdown file over its cap); the
+# its merge onto `next` at the sync, which leaves out what they refuse; the
 # vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source. A sync's TOP holds every PR
 # below it, so a gate is priced at a sync's N PRs, not one:
 # ratchet_gate caches each change's verdict and judges it once per `main` (uncached, one tick ran over 50 min).
@@ -29,7 +30,11 @@ regenerate_locks = true
 # unread_gate (tools/verity/lean/unread_gate.py) is left out while it can't judge a merge onto a commit whose Lean no recorded
 # check has published facts for yet (each Lean landing until its lock run ends) and the sync takes that as a refusal, which
 # ejects the PR and withdraws its mark; the after-landing run's unread ratchet still catches what it would refuse.
-landing_gates = ["tools/verity/check/gates/markdown_caps.py"]
+landing_gates = []
+# scripts run as the landing gates are, whose failure keeps no PR out: the ready mark prints it as a warning, and drive lands
+# the PR and tells its owner and ci once a head, the owner fixing it in their next PR. A Markdown file a merge puts over its
+# cap (tests/test_repository.py)
+warn_gates = ["tools/verity/check/gates/markdown_caps.py"]
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change as any other;
 # the only landing there is. With `land_into = "checked"`, `main` holds only fully checked commits
 land = "review"

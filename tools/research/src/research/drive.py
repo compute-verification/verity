@@ -13,7 +13,9 @@ and how to keep it open (or, with "log", only logged).  After a landing, the own
 a landed PR's head hears once that its base landed and to merge `main` (`_stacked`).
 
 What a sync leaves out of `next` is told once per root cause instead of once per PR and head: the PR that didn't merge or isn't
-admitted, why, and every marked PR it takes out, their owners tagged once, and again only when that changes (`tell_out`).
+admitted, why, and every marked PR it takes out, their owners tagged once, and again only when that changes (`tell_out`).  What
+a warn gate (drive.toml's `warn_gates`: a Markdown file over its cap) says of a PR's merge onto `next` keeps nothing out: the PR
+lands, and its owner and `CI` hear it once a head, for the owner to fix in their next PR (`tell_warned`).
 
 The low-risk lane (drive.toml's `lowrisk_lane`, `land_lowrisk`): after the reviewed prefix, a tick lands up to `lowrisk_per_tick`
 members of `next`, in its order, onto `checked` on their ready mark alone, with no land verdict and no wait in `next`, each
@@ -173,8 +175,8 @@ CHECKED_TIPS = 32
 GIT_MIN, OLD_GIT_EVERY_S, INFRA = (2, 40), 3600, "@infra"
 #: a pytest location (`tests/test_x.py:503: NameError`) or a traceback frame (`File "/.../x.py", line 12`) in a suite's log
 TRACE_RE = re.compile(r'^\s*([\w./+-]+\.py):\d+:|File "([^"]+\.py)", line \d+', re.M)
-#: a repository path a pytest failure report names (`E   tools/x/README.md: 48 KB > 48 KB`: a lint's offender is in
-#: its assertion, not its traceback); relative, with a directory
+#: a repository path a pytest failure report names (`E   tools/x/status.md`: a lint's offender is in its assertion, not its
+#: traceback); relative, with a directory
 NAMED_RE = re.compile(r"(?<![\w./-])((?:[\w+-]+/)+[\w+.-]*\w\.\w+)")
 #: pytest's failing tests in its short summary
 FAILED_RE = re.compile(r"^FAILED ([^\s:]+)::", re.M)
@@ -3598,6 +3600,13 @@ class Driver:
             if self._say(text, (q.handle(b.pr), *(q.handle(entries[n].pr) for n in sorted(deps)))):
                 told[str(m)] = said
 
+    def tell_warned(self, drive: dict, state: dict) -> None:
+        """Tell each PR's owner, and `CI`, once a head what a warn gate (drive.toml's `warn_gates`) said of its merge onto `next`
+        (the sync's `warned`): the PR lands all the same, and its owner fixes it in their next PR."""
+        for n, w in sorted((state.get("warned") or {}).items(), key=lambda x: int(x[0])):
+            self.tell(drive, [f"warn:{n}@{w['head']}"], f"#{n} at {w['head'][:8]} lands all the same, as a warn gate keeps no PR "
+                                                         f"out: {w['why']}. Fix it in your next PR", w.get("handle"), CI[1:])
+
     def _handle(self, pr: int) -> str | None:
         if self._prs is None:
             self._prs = {p.number: p for p in self.q.github.open_prs()}
@@ -3694,6 +3703,7 @@ class Driver:
         entries = q.sync(dry_run)[1]
         state = {**q.load_state(), "drive": drive}
         self.tell_out(drive, entries, state)
+        self.tell_warned(drive, state)
         landed, why, lane = None, self._unbaselined(drive), []
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
@@ -4228,7 +4238,8 @@ class Driver:
         """The stale rule (`research.stale`): ring each stale PR's owner once a UTC day (`idle:N@DAY`), one post per owner, and
         close each PR `stale_close_days` idle with `stale.close_comment`, but not one on `next` or a draft that says "keep open"
         (`stale.keep_open`); a closed PR's branch is kept (`stale_closed`, which `_sweep` never archives).  Ring keys of other
-        days, and the stacked-PR keys (`_stacked`) of PRs no longer open, leave `told`.  At most once in `STALE_EVERY_S`."""
+        days, and the stacked-PR keys (`_stacked`) and warn keys (`tell_warned`) of PRs no longer open, leave `told`.  At most
+        once in `STALE_EVERY_S`."""
         q, now = self.q, self.now()
         if not self.stale_days or now - drive.get("stale_judged", 0) < STALE_EVERY_S:
             return
@@ -4243,7 +4254,8 @@ class Driver:
             q.log(f"research queue drive: stale PRs not judged this tick: {e}")
             return
         drive["told"] = [k for k in drive["told"] if not (k.startswith("idle:") and not k.endswith(f"@{day}"))
-                         and not (k.startswith("stacked:") and int(k[len("stacked:"):].partition("<")[0]) not in prs)]
+                         and not (k.startswith("stacked:") and int(k[len("stacked:"):].partition("<")[0]) not in prs)
+                         and not (k.startswith("warn:") and int(k[len("warn:"):].partition("@")[0]) not in prs)]
         if not (dry_run or q.shadow):
             drive["stale_judged"] = now
         on_next = {m.pr for m in q.chain()}
