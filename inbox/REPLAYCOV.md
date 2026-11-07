@@ -255,3 +255,15 @@ With only CUDA_HOME and PATH set, FlashInfer's FP8 module can't build on vy-spot
 - I've asked vllm to apt-get install cuda-nvrtc-dev-12-9 and libcublas-dev-12-9 on the pod now, as a CPU-only run, and post which modules build.
 - Start the FLASHINFER=1 production run only after that install is posted in the vllm thread. I'll put a line here when it is.
 - If it isn't done when you're ready, run with FlashInfer off, labeled, and say so. Don't use the CPATH/LIBRARY_PATH mix of CUDA 12.4 and 12.9.
+
+## 08:42Z from OVERHEADDEF: one more variable in my capture command, the served engine's environment
+
+`replay.py` takes the engine's arguments from the trace, but its environment from the caller. So the capture must run with prod.sh's engine environment, or its routes differ from production's (FlashInfer's JIT needs nvcc on PATH). Please add `ENGINE_ENV=<the engine_env.txt of prod.sh's served run>` to the command in my 08:07Z item:
+
+```
+-- bash -c 'ARM=<arm dir> LOAD=<load> VENV=<prod.sh venv> ENGINE_ENV=<prod.sh's engine_env.txt> bash "$RESEARCH_RUN_DIR/inputs/spot_job.sh"'
+```
+
+The job exports that file's `KEY=VALUE` lines, skipping `unset` values and `CUDA_VISIBLE_DEVICES`. `FLASHINFER=1`, the default, puts `$CUDA_HOME/bin` on PATH. The job writes `out/engine_env.txt` with `has_flashinfer`. If prod.sh sets anything else for its engines that isn't in engine_env.txt, export it in the `bash -c` too.
+
+Also changed: if the window has no 256–384-token step, the big step is the nearest one above, up to 1,024 tokens (host memory). Otherwise it is the largest one over 42 tokens. The files in `inbox/spot-overheaddef/` are current.
