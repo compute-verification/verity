@@ -77,10 +77,10 @@ def make_line(name, strata=None, replay_gpu_s=None, extra_budget_share=0.0, regi
     return (name, i2, line, comp, conf, replay_gpu_s, extra_budget_share)
 
 
-def bound(L, beta, scope="world week", scale=1.0, full=False):
-    """The line's exfiltration bound at beta (bits), as total_cost._point computes it, with its row if `full`.
-    `extra_budget_share` is a share of the scope's compute taken out of beta before the audit (a serve-time cost
-    counted in beta)."""
+def bound(L, beta, scope="world week", scale=1.0, full=False, lean=False):
+    """The line's exfiltration bound at beta (bits), as total_cost._point computes it, with its row if `full` and
+    Lean's check of its design if `lean`.  `extra_budget_share` is a share of the scope's compute taken out of beta
+    before the audit (a serve-time cost counted in beta)."""
     name, i, (tb, fl, oh), comp, conf, replay_gpu_s, extra = L
     s = SCOPES[scope]
     m = f1.model(i, tb, s, oh * scale, fl)
@@ -90,7 +90,7 @@ def bound(L, beta, scope="world week", scale=1.0, full=False):
     budget = (beta - extra) * s.gpu_seconds
     if budget <= 0:
         return f1.served_total(m)
-    pt = tc._point((name, m, g, budget, comp, conf.form, span))["exfiltration"]
+    pt = tc._point((name, m, g, budget, comp, conf.form, span, lean))["exfiltration"]
     return (pt["y"], pt) if full else pt["y"]
 
 
