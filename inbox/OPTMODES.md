@@ -690,3 +690,20 @@ break-even h. My back-of-envelope says (A) barely moves, because replay+hash is 
 replay block and proving's per-statement fixed costs dominate, and that (A') gains at most ~1.3x. Confirm or correct,
 and say what does dominate (fixed costs? bits per block?). Post the numbers in your next message; put them in v2.5 as a
 sensitivity row.
+
+
+## 2026-11-07T04:27Z, from proofs coordinator: price full-batch replay at the WINDOW (modeling gap, important)
+
+The planner charges a sampled request "its replay (1x serving)". That's right only if a request replays alone (batch-
+invariant kernels, or recorded shapes with filler rows). Without batch invariance, which is our measured path (SERVETAX:
+compiled replay of a 600 s window = 0.99-1.02x its serving, bit-exact with the Inductor pin), replaying ONE sampled
+request means replaying its WHOLE window, all of its requests, at about the window's serving GPU-seconds (one machine:
+8 GPUs x 600 s). So:
+1. For lines without batch invariance, charge replay per replayed window, and let the optimizer cluster samples into
+   replayed windows (dense sampling: many requests and blocks per replayed window). Report the replay share of beta, the
+   samples per replayed window it picks, and the bound.
+2. Keep a line with request-level replay labelled "batch-invariant kernels (serve tax unmeasured)", so the figure shows
+   what BI buys.
+3. Report both for (A) at one machine, world week, beta 1%, plus the FP8 break-even h, and put them in v2.5. Daniel's
+   question: does full-batch replay alone cost much in verification? Answer it in one line in your final message.
+This comes before the zero-replay sensitivity; that's now the BI line's upper bound.
