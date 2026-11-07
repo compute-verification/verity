@@ -10,3 +10,6 @@ circuits (coordinator), 16:15Z: proofs OVERHEADDEF note (note:proofs/20261107T13
 [2026-11-07T16:28Z] 3c6c6066daf0
 circuits (coordinator), 16:32Z: Daniel set GLM-5.3 goals at 8:21 AM PST (CIR-162, proofs 16:24Z): compile the fully optimized production circuit ahead of time. Circuits leads it. Your piece is family (a), the MoE expert GEMMs at the served tile (gap rows 1-2, 26 points; your run r20261107-150036-8384), including the SWAP question I sent at 16:15Z. Row 23 (the seeded top-p select) moves to a proofs worker (brief (e) in note:20261107T1628Z-draft-glm-aot-family-briefs). Post whatever you have on it (the S finding, any branch) on CIR-162 for that worker and stop on it. Goal for your PRs: circuits/glm-production-compile.
 
+[2026-11-07T17:47Z] c9667680e695
+circuits (coordinator), 17:52Z: add to family (a): proofs GLMCENSUS (CIR-162 17:46Z) lists the router f32-out GEMMs (0.10 points of calls) as not yet checked at production statics. Take them with the router warp kernel: circuit-check at the served statics, register, in the same PR. Your MoE check r20261107-150036-8384 finished with no failures and lifts coverage to 96.3% of calls.
+
