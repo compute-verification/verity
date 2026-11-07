@@ -8,7 +8,8 @@
    "digest": "f0b159e63eca73831a6d80d1bbecd21b85472aae5e120138cda49f579ab7fa4d"
   },
   "FlockSoundness.Assumptions.SHA512CRStrict": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "digest": "3dff81602812a1e09dab93812f599b267e137d1b21dd6e6b47e3a815cc60d56f"
   },
   "FlockSoundness.Assumptions.UniformRandomBytes": {
    "owner": "@proofs",
@@ -6406,16 +6407,14 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.SHA512CRStrict"]
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "ab8736f1165491994d7128308b03b0ac3218dd5bae7856b0d28f0cf1b9c30a4f",
    "unfolded_hash": "36cf0f233849dabfc6f712946c6c1328418c65f7a1c47b595456309bc353e00e"
@@ -6427,19 +6426,14 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "9c51b9643d2338efb76b1fb71c237e7e91a2aa0a1cff5a71cc0797723a71b639",
    "unfolded_hash": "ed17dfb4551deaa58326d561798fb8eb6dea991b74cd4753a48075dfeecceafc"
@@ -13060,21 +13054,18 @@
    "signature": ["Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.Composed.TagsOkZJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Discharge.Composed.TagsOkZJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "98d68470d723d245aac78106ff238e8d7903feea054a6748e7afe2e5e24e1aff",
    "unfolded_hash": "6d79095730cedf7f177d644e44e064255164e192f512125601a427da576f167d"
@@ -13084,20 +13075,14 @@
    "signature": ["Flock.SecurityProofs.EndToEndDrawn : Flock.Guarantees.EndToEndDrawn"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
     "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.Composed.TagsOkZJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Discharge.Composed.TagsOkZJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "abddb3f765cc28e5b09bc85098badb0538e46f30a07e1d1dc9f363fade5177a8",
    "unfolded_hash": "63c2c083363b034949554f8a867afd4b16f0bea65db0718354c10d723935e21f"
@@ -13107,21 +13092,18 @@
    "signature": ["Flock.SecurityProofs.EndToEndHidden : Flock.Guarantees.EndToEndHidden"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "6b9c3b10bfa35dd2189691fbf511f15129f63e2b505e3022dfdb9f74ca38b658",
    "unfolded_hash": "0508454c77bbb63c2321613d8778c9551b926ce403e68d8b182dd4d9adf6f02f"
@@ -13131,20 +13113,14 @@
    "signature": ["Flock.SecurityProofs.EndToEndHiddenDrawn : Flock.Guarantees.EndToEndHiddenDrawn"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
     "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "5f1b7fa323d6a69dafb2427a17688fdbebd4d133e7d93ca5bc5d0472055d0cd1",
    "unfolded_hash": "e42bc83dfdde198669086a36f09b440feba189808c82564ccae924a68cf1f9ad"
@@ -13154,20 +13130,14 @@
    "signature": ["Flock.SecurityProofs.EndToEndHiddenDrawnFlat : Flock.Guarantees.EndToEndHiddenDrawnFlat"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
     "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "ba87129775fef4d68b47c92ab874798d1b66b3e984ba35fc46b2025f1a7248e7",
    "unfolded_hash": "a120e5a7b3e74c3d48afc15db9741987c7df56fd2c1fd673a73d7db46a4833db"
@@ -13177,21 +13147,18 @@
    "signature": ["Flock.SecurityProofs.EndToEndHiddenFlat : Flock.Guarantees.EndToEndHiddenFlat"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "375eda7a4fb2d0787fec565a444edfa7fcedaf9ab88e07a18892411cb562199b",
    "unfolded_hash": "5cf2577e3f3d762112cbd13f08da49df5b14b41324ce66a839feb67ee990ddc8"
@@ -13201,22 +13168,19 @@
    "signature": ["Flock.SecurityProofs.EndToEndRegistered : Flock.Guarantees.EndToEndRegistered"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
     "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "d34a654d92785b037477ecbb7b8edc9da63a9324a6b281174383dfdf496a9e91",
    "unfolded_hash": "5963b713557a6efc064c6293549d4f21efcfe5789bb0c30fd40d628915d0ef20"
@@ -13226,21 +13190,15 @@
    "signature": ["Flock.SecurityProofs.EndToEndRegisteredDrawn : Flock.Guarantees.EndToEndRegisteredDrawn"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
     "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23",
    "unfolded_hash": "4cb4f9c998538d99b983ec8a84802d3db0362f51007f36f2ca7c73e81b1687bc"
@@ -13250,21 +13208,15 @@
    "signature": ["Flock.SecurityProofs.EndToEndRegisteredDrawnFlat : Flock.Guarantees.EndToEndRegisteredDrawnFlat"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
     "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
    "unfolded_hash": "cf5a6cdf248a4244cd9e9189f0d391033fb2682352a0837b632a07c03fb3dec2"
@@ -13274,22 +13226,19 @@
    "signature": ["Flock.SecurityProofs.EndToEndRegisteredFlat : Flock.Guarantees.EndToEndRegisteredFlat"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
     "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "74ac90d3b329af83ebb584e436936ef773a7538c4ccd6a3f49a9a9067b0f81b4",
    "unfolded_hash": "2cb28d763be0c54832486e1493680358f0d388cd1d3cc2e00e3fb042a8c4a7c0"
@@ -13299,22 +13248,14 @@
    "signature": ["Flock.SecurityProofs.EndToEndRegisteredRows : Flock.Guarantees.EndToEndRegisteredRows"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
     "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.RowsCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ",
-     "FlockSoundness.StrictCR.Finder.CR"
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "2663b1a7e4d37b7b0c345dbf40b33344f4e86c82f17c36de855847c1e11059d9"
   },
@@ -13323,22 +13264,14 @@
    "signature": ["Flock.SecurityProofs.EndToEndRegisteredRowsFlat : Flock.Guarantees.EndToEndRegisteredRowsFlat"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
     "domain": [],
     "open": [
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.RowsCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ",
-     "FlockSoundness.StrictCR.Finder.CR"
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "9379a1081b06f17ac700b677afa3a3917e440e7d57dee670a1cab1b230c069ce"
   },
@@ -13347,19 +13280,14 @@
    "signature": ["Flock.SecurityProofs.IntegrityBlock : Flock.Guarantees.IntegrityBlock"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "bc19323ffca15deed7d9c8fa88a5522bedeedf1483773412e274d835920cec34",
    "unfolded_hash": "ec8e695ecee78a800873265963583da491fe4335b31cfbcccb98efa72a2c8362"
@@ -13369,16 +13297,14 @@
    "signature": ["Flock.SecurityProofs.IntegrityBlockCarried : Flock.Guarantees.IntegrityBlockCarried"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.SHA512CRStrict"]
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "9bfec7bb00d7b2f13e68fcb0efa8c72cbcbeb570f6b2395e2749070aa96cf2a1",
    "unfolded_hash": "acdac613a0680572245a1f79c8476a5c33c0d3d2aafae7a82d71bc721067e806"
@@ -13388,19 +13314,14 @@
    "signature": ["Flock.SecurityProofs.IntegrityBlocks : Flock.Guarantees.IntegrityBlocks"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "fb2e861a74fe610166c44a14c65d9cfc6742b80e602e1c1b66a7ce70439f9824",
    "unfolded_hash": "f65596e1518720d241c4eb45a92811e294e12c2feec40f2d2321b83ade30bd02"
@@ -13410,19 +13331,14 @@
    "signature": ["Flock.SecurityProofs.IntegrityHorizon : Flock.Guarantees.IntegrityHorizon"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "1d67559b6d5a8972bf15dd6e9487a9631c08027cfe36527058dd22d76a8c3a0f",
    "unfolded_hash": "979c4b0780e4b9eb75085478fb0a65d553ccf19ff6fe021406b80e7f335b535b"
@@ -13432,19 +13348,14 @@
    "signature": ["Flock.SecurityProofs.IntegrityHorizonBlocks : Flock.Guarantees.IntegrityHorizonBlocks"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "5f90cfba614bcea60cda979d8dc6fdbc1cec675bdecbeafb68caca66bd8ebe5d",
    "unfolded_hash": "361382ee32edc580f58994e62bbf8be24dcf17ac25d9d5632b6f2741348625fd"
@@ -13454,16 +13365,14 @@
    "signature": ["Flock.SecurityProofs.IntegrityHorizonCarried : Flock.Guarantees.IntegrityHorizonCarried"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.SHA512CRStrict"]
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "89fbbeb7e268642019ee085f30b6bfc54063bc0970ba372d4c4a1a79f7e26037",
    "unfolded_hash": "42473dd598742b028c72ae89139bfd2d5de46023d3484d520571bd18105ef16f"
@@ -13473,19 +13382,14 @@
    "signature": ["Flock.SecurityProofs.IntegrityPeriod : Flock.Guarantees.IntegrityPeriod"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "320a3ed8346171425b3ea7537f61689dcef36bf45963401c24dbad1a97342ccc",
    "unfolded_hash": "d2b52f5544937684eb17c46f1d24a6f795f8c14e024b8e2c91096cbe872f888c"
@@ -13495,19 +13399,14 @@
    "signature": ["Flock.SecurityProofs.IntegrityPeriodLog : Flock.Guarantees.IntegrityPeriodLog"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "20a8497e59180c39414fe50e1e41293894b8d2c6b974786bb7b8d58803dd58cc",
    "unfolded_hash": "aee6f9b300ae55f3eb5d6d0b9c97c4382d21120d25d0d34419a09b0a7e0bc9c3"
@@ -13517,19 +13416,14 @@
    "signature": ["Flock.SecurityProofs.JointHorizonV5 : Flock.Guarantees.JointHorizonV5"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.LinkCRZCAt",
-     "FlockSoundness.Assumptions.TableCRZAt",
-     "FlockSoundness.Assumptions.UniformRandomBytes"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
      "FlockSoundness.Assumptions.SHA512CRStrict",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"
-    ]
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": [],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"]
    },
    "type_hash": "6bf001db90d1e2f2293065e87750097905100b4b3bfaefd4f26474959f331d72",
    "unfolded_hash": "0c8033f676893e998217880b3ff947c0a5e794719b540d6327a1863fc987482e"
@@ -13539,19 +13433,14 @@
    "signature": ["Flock.SecurityProofs.JointSampledV5 : Flock.Guarantees.JointSampledV5"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.LinkCRZCAt",
-     "FlockSoundness.Assumptions.TableCRZAt",
-     "FlockSoundness.Assumptions.UniformRandomBytes"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
      "FlockSoundness.Assumptions.SHA512CRStrict",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"
-    ]
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": [],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"]
    },
    "type_hash": "2ab8f9edfaf8c3dbbcf8b9fa37933dd79f84b94347d45e1a3fe266d199210b76",
    "unfolded_hash": "374675d926dbb927bea421f4416e9783db957514ac3b51384bf81542b63b59af"
@@ -13561,19 +13450,14 @@
    "signature": ["Flock.SecurityProofs.JointShareV5 : Flock.Guarantees.JointShareV5"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.LinkCRZCAt",
-     "FlockSoundness.Assumptions.TableCRZAt",
-     "FlockSoundness.Assumptions.UniformRandomBytes"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
      "FlockSoundness.Assumptions.SHA512CRStrict",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"
-    ]
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": [],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"]
    },
    "type_hash": "021a8367cbb384241ac411da6a2b8a523ce3aba4efe29fc8d6ba1e1a0add071f",
    "unfolded_hash": "120b414dc3c252643fe80a0b8b6071595faa9abeb3d683374f95263100e2297e"
@@ -13583,19 +13467,14 @@
    "signature": ["Flock.SecurityProofs.JointStratified : Flock.Guarantees.JointStratified"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZK",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZK"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "8a0d33c3f05e59012d7c2818198770e9a9b1ab6c83d82a51a9acd510ca33da6b",
    "unfolded_hash": "e44d70b4e2a1584de312f46c75bac008bdddb9887d6d9644be0370b3315be165"
@@ -13605,19 +13484,14 @@
    "signature": ["Flock.SecurityProofs.JointStratifiedHorizon : Flock.Guarantees.JointStratifiedHorizon"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZK",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZK"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "3e9e80ee60615d188982786bdec4907b7de3104db18d5eb28be48bfb02f945ee",
    "unfolded_hash": "ac9770559b27509e3cab60ef3e63d2c3043c9cf2d34abe227944f7efad6991c5"
@@ -13627,19 +13501,14 @@
    "signature": ["Flock.SecurityProofs.JointStratifiedHorizonMT : Flock.Guarantees.JointStratifiedHorizonMT"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJS",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJS"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "b6e7f9ecc68c0bab5aac13a82c681beb4ba36c38b90508f1952d0b7f2503414d",
    "unfolded_hash": "7823cb925f1107de1f178224a15de2f172a7c7ae453353bce3abfee0b9a6a725"
@@ -13649,19 +13518,14 @@
    "signature": ["Flock.SecurityProofs.JointStratifiedMT : Flock.Guarantees.JointStratifiedMT"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJS",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
-    ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
+    "assumptions": [
      "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
+    "domain": [],
+    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJS"],
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "921a54325dd06a3a4539f3f974854f0413cd37e51b05d8661599f6ba9506bc2b",
    "unfolded_hash": "85b534f29f85996669b4c3ce85c9b879c3639873522be902a4a2aa58c205487c"
@@ -13822,7 +13686,7 @@
    "signature": ["Flock.SecurityProofs.PublicAudit : Flock.Guarantees.PublicAudit"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.UniformRandomBytes"],
     "domain": [],
     "open": [
      "Flock.Assumptions.VBridgeC",
@@ -13830,7 +13694,6 @@
      "Flock.Guarantees.SessionsCoined",
      "Flock.Guarantees.SessionsHonest",
      "Flock.Guarantees.SessionsPublic",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.DrawCustodyZKHJ",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Discharge.Recursion.TagsFound",
@@ -13914,7 +13777,7 @@
     "reads": []
    },
    "type_hash": "1c38adfbef3281ae432ff513899361a76177a11a62c5dd690f26732a5d458c1b",
-   "unfolded_hash": "458098cd3cdb14bc3eed13cb9c1e3e1e53f5a6d93f7678c3da8b13e55a86f506"
+   "unfolded_hash": "47f6dac0e8d1e33c012f8d244c7673a2dbf5500165ecb78dd5eca836300cf61f"
   },
   "Flock.SecurityProofs.RecursiveCircuitPrivate": {
    "owner": "@proofs",
@@ -13927,7 +13790,7 @@
     "reads": []
    },
    "type_hash": "134cfb4bde48d6bbe15eb7f48eab3a97e564a5f35da3ced8d36d2d3acd7696d1",
-   "unfolded_hash": "badd80e07dbc2f2cef00c53ebb5a01973afb8594ffa6af6b52da31176198c816"
+   "unfolded_hash": "881171e27b880e706b23ace144284a7c339bc29615ee7dfeefb53f67ce034353"
   },
   "Flock.SecurityProofs.RecursiveCircuitPrivateLeaves": {
    "owner": "@proofs",
@@ -13940,7 +13803,7 @@
     "reads": []
    },
    "type_hash": "e718471c446e3db3185d1ccd2741bc02613f8bc76f66725264907253b38df8c7",
-   "unfolded_hash": "896b88abe30632c37f4ba24c86d2882071729d16fcd30744cb86d24850a16bcf"
+   "unfolded_hash": "31ae5f30ae3cc6892829c42d57b810148ca99a8b46198da6125dd6f7253fdaa5"
   },
   "Flock.SecurityProofs.RecursiveKS": {
    "owner": "@proofs",
@@ -13999,11 +13862,10 @@
    "signature": ["Flock.SecurityProofs.RecursiveRanRegistered : Flock.Guarantees.RecursiveRanRegistered"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.UniformRandomBytes"],
     "domain": [],
     "open": [
      "Flock.Assumptions.VBridge",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.DrawCustodyZKHJ",
      "FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ",
      "FlockSoundness.Discharge.PrivateCircuit.Commit.Binding",
@@ -14042,7 +13904,7 @@
     "reads": []
    },
    "type_hash": "444c06834fcb5e3f93c0a11fe5912b8345f27f03f6e8b816b86488ca566ed779",
-   "unfolded_hash": "d17a94cf52e2830397a8a65b3ab109e9839c05822c47574bc58b6afa0e91aa12"
+   "unfolded_hash": "f10b5a8cb672fc702f5998adff0da2d48104490f079ca43e4119e0ba10efcee9"
   },
   "Flock.SecurityProofs.RecursiveZKLoop": {
    "owner": "@proofs",
@@ -14360,21 +14222,18 @@
    "signature": ["Flock.SecurityProofs.SampledKSLivePub : Flock.Guarantees.SampledKSLivePub"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
-     "FlockSoundness.Assumptions.LinkCRZCAt",
-     "FlockSoundness.Assumptions.TableCRZAt",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
    "unfolded_hash": "ccea2cef9b7d96cf5d788ba18abc473c222e90f5365fe167933589561cfdafa7"
@@ -14384,21 +14243,18 @@
    "signature": ["Flock.SecurityProofs.SampledKSLiveStated : Flock.Guarantees.SampledKSLiveStated"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "6eb82e74bf701806a374272925b7f3b54c52a8347a519872322043a05dcb8203",
    "unfolded_hash": "73f7aec126919cc09431301d4776b19b2b3b8cf278ddf00f43b9f3cef398d25a"
@@ -14408,21 +14264,18 @@
    "signature": ["Flock.SecurityProofs.SampledKSLiveV2 : Flock.Guarantees.SampledKSLiveV2"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
-     "FlockSoundness.Assumptions.LinkCRZCAt",
-     "FlockSoundness.Assumptions.TableCRZAt",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "43e16e73206c75e215db6b95d1b2daba857ef90f89f56300e63260c0414d8aa5",
    "unfolded_hash": "966ac9e32df511d8bba6f2f1a93f88508bed9345d8b19fd4d02b85c100217e38"
@@ -14432,21 +14285,18 @@
    "signature": ["Flock.SecurityProofs.SampledKSLiveV3 : Flock.Guarantees.SampledKSLiveV3"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
-     "FlockSoundness.Assumptions.LinkCRZCAt",
-     "FlockSoundness.Assumptions.TableCRZAt",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "363e8e7a18f9b0417428098088fd441f7724d15f39eee5ae5f424e4559e7f84b",
    "unfolded_hash": "efc4e98bf4082e88a395254b33ae1a520f107ed14a276746c33d4002ab17287a"
@@ -14456,24 +14306,21 @@
    "signature": ["Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
      "Flock.Bridge.DrawsUnder",
      "Flock.Bridge.NotBernoulli",
      "Flock.Bridge.RootFixesDomainL",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
    "unfolded_hash": "d4cf700c8e82f916d9ff746f87af1da5ed99c2f36bd3e4007919a398ce232ce8"
@@ -14599,7 +14446,7 @@
     "reads": []
    },
    "type_hash": "84c0e48cb401d6662d94c2c1f395aeedc6aeeac630cd5e87ee5bb6e6e09009d0",
-   "unfolded_hash": "fbd9df7e3f6cf3a61d92fb340507c3f62c8bb4bc6b5ab2da5bc47bf813303843"
+   "unfolded_hash": "1ea2da85c0ad64fd575620858a35ec827deb4349614b9b3f55bfaa9e3713688b"
   },
   "Flock.SecurityProofs.recursiveZK_os_gap": {
    "owner": "@proofs",
@@ -14667,12 +14514,12 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.UniformRandomBytesTest"],
     "domain": [],
-    "open": ["FlockSoundness.Assumptions.UniformRandomBytesTest"],
+    "open": [],
     "reads": []
    },
-   "type_hash": "cf50c3a6f03044d2c42880d55266530fe5280574853bd935384832c41897767c"
+   "type_hash": "e0fa927bc1a4eb8862e7246f05e75cefa993bd1028a6818356ae9a840b8ba635"
   },
   "FlockSoundness.Audit.Adaptive.harm_budget": {
    "owner": "@proofs",
@@ -15086,16 +14933,15 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
-     "FlockSoundness.Assumptions.LinkCRAt",
      "FlockSoundness.Assumptions.RecordCustodyExec",
      "FlockSoundness.Assumptions.RecordCustodyExecH",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.TableCRAt",
-     "FlockSoundness.Assumptions.TableCRZAt",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKHJLaw",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKHLaw",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJLaw",
@@ -15103,7 +14949,6 @@
      "FlockSoundness.Discharge.Composed.CoinedSetup.Admits",
      "FlockSoundness.Discharge.Composed.CoinedSetup.Valid",
      "FlockSoundness.Discharge.DecodeZLJ.RecordsLiveJ",
-     "FlockSoundness.Discharge.Exec.SessCRL",
      "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR",
      "FlockSoundness.Discharge.FailClosed.LiveDesign",
      "FlockSoundness.Discharge.FailClosed.ScopeR",
@@ -15115,7 +14960,7 @@
      "FlockSoundness.Discharge.ZkReg.OwnReadsH",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.SHA512CRStrict"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "c27a68a3a851b0ae4402c1038e1d5d1807ee82389c65c7e29096d4aa647af7b5"
   },
@@ -15134,24 +14979,21 @@
    ],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
-     "FlockSoundness.Assumptions.LinkCRAt",
      "FlockSoundness.Assumptions.RecordCustodyExec",
      "FlockSoundness.Assumptions.RecordCustodyExecH",
-     "FlockSoundness.Assumptions.TableCRAt",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR",
      "FlockSoundness.Discharge.FailClosed.LiveDesign",
      "FlockSoundness.Discharge.FailClosed.ScopeR",
      "FlockSoundness.Discharge.ZkReg.OwnReadsH"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "a6e644aaf2eea0abb5aec46ec540a4219c26acbeb09d608b2cd4e068ccfec7b5"
   },
@@ -29727,8 +29569,12 @@
    }
   },
   "Definitions.Assumptions": {
-   "digest": "b86d4d4b13f4d425de3c54c7ff32a390ecd5bac25e7a459681f026891ed10220",
+   "digest": "99f064f3b1335c4e2ec4d948a543a4cab71be56a088d4de057a329a188e56407",
    "definitions": {
+    "FlockSoundness.Assumptions.SHA512CRExpected": "f0b159e63eca73831a6d80d1bbecd21b85472aae5e120138cda49f579ab7fa4d",
+    "FlockSoundness.Assumptions.SHA512CRStrict": "3dff81602812a1e09dab93812f599b267e137d1b21dd6e6b47e3a815cc60d56f",
+    "FlockSoundness.Assumptions.UniformRandomBytes": "d22db3c9f03458b981022d3f6e219b5d207f217b92e7d48dd370f7ebcc0c6c19",
+    "FlockSoundness.Assumptions.UniformRandomBytesTest": "fa42afaba1b547936b644d070e6094891520ef243e3e61e6286f9ac311dc307d",
     "Nci.Cut.Assumptions.Exports": "45a66575def5bbb4d3ab2a6da56b3ea9c3cddd5d096fbf156665d789e887c161",
     "Nci.Cut.Assumptions.Hardness": "f09fae736063873c46856fdfc4975fbee382c2a39f5fe5fab0a90ce3ef2927f6",
     "Nci.Formalism.Assumptions.CutCost": "6f7541ca1175cad38a3a58df3032ca71d908a492f15dde825421e128bad8c5b4",
@@ -43289,10 +43135,10 @@
    }
   },
   "Proofs.Accounting.TS.Session.Held.Known": {
-   "digest": "3dcfe8bb5ad90b9bdc6f372ed0bcf50c5c3d381af63b15b6aaab628a6108534f",
+   "digest": "9da227e7e53f6d6ff1005b2dda831fe5aa6186686b92276ede3bcd61254a72e7",
    "definitions": {
-    "FlockC3.RegLevels.knownColl": "e71810ad87304b5935c9f0c333c562ff3b2e67d58e5995733923c61b0c814f5e",
-    "FlockC3.RegLevels.openPairAs": "a812c1c25ef92a2d039a0b7747ff327deab0457125b0d8c3d7906c32f0d3dd7e"
+    "FlockC3.RegLevels.knownColl": "52ae19fa6a2954b8cf41c3f4583a7f194b672e2b95d8715fa936c2e03092bce8",
+    "FlockC3.RegLevels.openPairAs": "51eac533466598d2d4af87fb925c2d8210493191d5feffede46f38794e456750"
    }
   },
   "Proofs.Accounting.TS.Session.Held.Layer": {
@@ -45857,12 +45703,14 @@
    }
   },
   "Proofs.Flock.Claims.ZK.ExeLayout": {
-   "digest": "232d6a323988bf4db125cb6409b6bccf64d16f5890e9f06225909b487b50a378",
+   "digest": "3a9ea3acc6ced6f94217ee42ecb28d4e55d230de297e9cf1f7bb77834070c910",
    "definitions": {
     "Claims.ZKMal.Masked.ExeBase": "a2606b88b9c4adea1c6c1a303fb81eec9c57f0af9c1ee7ebac1e77c21a401cc3",
+    "Claims.ZKMal.Masked.ExeBase.fintype": "f418f55aca4e32951c4b6f4b6d17964e0466a0c53bf77f0f81a97e92e4437a67",
     "Claims.ZKMal.Masked.ExeCell": "d933cc9b1bfc3237ab69151155397b3e374274f6cf1bd1a21fbd3e00df131fb1",
+    "Claims.ZKMal.Masked.ExeCell.fintype": "d2b9ae7f352cf34b7ccf68fb561759451e88d4c013658cc050edad929900816b",
     "Claims.ZKMal.Masked.HiV": "858bb683f3c030754e4d1410934d319fbe8b57c1ac2b7f317e1ca0d4ee5fd4bf",
-    "Claims.ZKMal.Masked.TapeLayout.exe": "3d446f55459f866762a464d518fad6f23bee6a6d198610daba589319a3bfa692",
+    "Claims.ZKMal.Masked.TapeLayout.exe": "fa9ba93ca284e2f76f15adcc237fafbade6fb675e8beaf9282299c7fbab8e615",
     "Claims.ZKMal.Masked.cellAt": "48069425356a2f8ffd5ac21ae5916b9773cca2eb0fa59c2475a7b73883feff1b",
     "Claims.ZKMal.Masked.exeBase": "24c1d3b06cc78887499d47fe1aab3a54d2434de63970919cf04449bbc1e5d69b",
     "Claims.ZKMal.Masked.exeRead": "c7be72919fec1b6480a9351603d559be3a9f925f9f165fc9a369fcbb8e36fc28",
@@ -47062,10 +46910,10 @@
    }
   },
   "Proofs.Flock.Recursive.Firewall": {
-   "digest": "17c881207a8f1da55346bd1ee7131817e4f52fee372c95f0569597280436b835",
+   "digest": "a98ddf27e49dfae801bdcf4a85df600a36c9c04847afcc676d732ba815f081d3",
    "definitions": {
     "Flock.Guarantees.FirewallSends": "562df1c19fb3ddb0861a89b741ca695aa0276bfceb9fef4fd2a682c6041393cb",
-    "Flock.Guarantees.RecursiveFirewallPrivate": "a2150220f0821ffd3e025c69738aacb14f2b905389b706f93a5226975cf2618c",
+    "Flock.Guarantees.RecursiveFirewallPrivate": "00aa566f727a2812ca73e43c53a8591f07d0fa17880bc7bd37e0495580fa242f",
     "Flock.Guarantees.SessionsCoined": "e76efb1edb904a3bd940af70154b3d8fe0df43f541430eb338e28e4e3fab1e58",
     "Flock.Guarantees.SessionsHonest": "360e3b9f59edd5dc43e9d39c5c8328e53038a797332e68e188c0c43d46115773",
     "Flock.Guarantees.SessionsPublic": "9f8ca19eb73c6e77085e8079a6efea1872bcd76fdde12c53be7806e797234db1",
@@ -47331,9 +47179,9 @@
    }
   },
   "Proofs.Flock.Recursive.Private": {
-   "digest": "fbe78ad16c970e57c1b416a922f38411505349e786da8fbdd478efc59bf09566",
+   "digest": "bd3508760e6ed1405df38b65a2b7b57a43ebe88a5e3df92a315c128887750e01",
    "definitions": {
-    "Flock.SecurityProofs.regRowCommit": "4aba8bdedb389fab8c9b97b6efe4a969777eb97095eba6a3e5d26d639c075d11"
+    "Flock.SecurityProofs.regRowCommit": "77373457c31db6a55e3da9c953b65d94057a94490a79f7a061216c078d480a9d"
    }
   },
   "Proofs.Flock.Recursive.Property": {
@@ -47498,16 +47346,16 @@
    }
   },
   "Proofs.Flock.Recursive.Statements": {
-   "digest": "8862941e1ba9aa608b22bf70c99179e52212f53aa7f4fc7f8a64c23ddeb8e245",
+   "digest": "cecb9730bf364e9606b8c28edc74917f6108579c8f76975a09f5e9a0deeee022",
    "definitions": {
     "Flock.Guarantees.OuterSessionsZK": "01f985e5d645aefddc92875b62cf33834d3b66976f0f8791aa30a88372270d94",
     "Flock.Guarantees.OuterViewZK": "b9cbf6587cb35e5151f1c47cb7598dafeac9d55fa8712a904be256c7456184c1",
     "Flock.Guarantees.RanRegisteredRun": "6e1fb9848bca0b4ba06cb60872549dc8d6d81dda35e4ec473f460be609f2fdf0",
-    "Flock.Guarantees.RecursiveCircuitIndist": "38b1213505a42512c084b8be5cdea8944734d22fcab2116d0c0ccc16f2f9a002",
-    "Flock.Guarantees.RecursiveCircuitPrivate": "00b0fa72fc8d65b5b58ba7f9aa73548f54e585bf3dd88f21cb7e1af93a38856b",
-    "Flock.Guarantees.RecursiveCircuitPrivateLeaves": "f55f4c300add6d4e03edc946738d986ac053e213e339b4baa3e0942da0206a00",
+    "Flock.Guarantees.RecursiveCircuitIndist": "9f3f48af33e2a9f5d141252bfd68f29fac3d228b8b0fff598ede2623ff710309",
+    "Flock.Guarantees.RecursiveCircuitPrivate": "6edd5e652e3253fc7223fc1381851ce6b379c1dea487b2b8d6ffc850c935e70e",
+    "Flock.Guarantees.RecursiveCircuitPrivateLeaves": "5948c1107ac6287f2b191a5fe96ecef03202b0b943dd9571f001ebd8c2cdd7c4",
     "Flock.Guarantees.RecursiveRanRegistered": "9d9976a7b301f6ff060010a50c5bdf23098fcf3fc96c36547cdce38c9d281391",
-    "Flock.Guarantees.RecursiveZK": "eab6435b3a429ba3127f1d127f7935d320bc7dbab38f6d4ca4eb912c12c11f3b",
+    "Flock.Guarantees.RecursiveZK": "0ff69931f387a2fb85c4cbd7e2145929f0854403967d5e89e8a5f4ec7121ebf3",
     "Flock.Guarantees.commitBytes": "a306696805093574152e21a9d23a447fe66f455f97fb09d60ccbdb5542499079",
     "Flock.Guarantees.firewallCommits": "4bf63ec6548cda121d11b679e1facd58fea3cdc1e35a4ba31065f84201c7dc1f",
     "Flock.Guarantees.firewallLeaf": "fddc41ec1f4b4e2810231afa00a4c024566a4b2b2e9daefba922aeb3695bd425",
@@ -47761,13 +47609,9 @@
    }
   },
   "Proofs.Flock.Soundness.Assumptions": {
-   "digest": "f05bdbc3aabcabed88b89003d19ef518a079909d6593bb99598465790351a516",
+   "digest": "02d429016eff90b55a5091a78bfb9e5af537509d480983fd77bd9a6d2815ce4b",
    "definitions": {
-    "FlockSoundness.Assumptions.HmRowComputes": "0b64a2e9af86b5a7be94d3229fdcb5b8fe890a71414e0ec3d840ad7b6134ebae",
-    "FlockSoundness.Assumptions.SHA512CRExpected": "f0b159e63eca73831a6d80d1bbecd21b85472aae5e120138cda49f579ab7fa4d",
-    "FlockSoundness.Assumptions.SHA512CRStrict": "3dff81602812a1e09dab93812f599b267e137d1b21dd6e6b47e3a815cc60d56f",
-    "FlockSoundness.Assumptions.UniformRandomBytes": "d22db3c9f03458b981022d3f6e219b5d207f217b92e7d48dd370f7ebcc0c6c19",
-    "FlockSoundness.Assumptions.UniformRandomBytesTest": "fa42afaba1b547936b644d070e6094891520ef243e3e61e6286f9ac311dc307d"
+    "FlockSoundness.Assumptions.HmRowComputes": "0b64a2e9af86b5a7be94d3229fdcb5b8fe890a71414e0ec3d840ad7b6134ebae"
    }
   },
   "Proofs.Flock.Soundness.Assumptions.Custody": {
@@ -47786,15 +47630,6 @@
     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJLaw": "41828e7ea7d64d93218c62ddf299b12b4b74cb6b242946cbd179816165f2a468",
     "FlockSoundness.Assumptions.Zk.RecordCustodyZKLaw": "55e0ec36f8021aa8cf4643e39f723398dff3ca350739e66a9278bdf1fff9cab8",
     "FlockSoundness.Assumptions.Zk.RecordsCustodyZKJ": "2b15bc78f0f3937e56c0c67a13c380f4e4a38e0721b7d694cda1fa3a3b2b2a98"
-   }
-  },
-  "Proofs.Flock.Soundness.Assumptions.Finders": {
-   "digest": "c05aaa5f23d72f604ea13c6f64b9cf75e3bfa07b2538971005c24f45d550a63d",
-   "definitions": {
-    "FlockSoundness.Assumptions.LinkCRAt": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30",
-    "FlockSoundness.Assumptions.LinkCRZCAt": "4d260e2bc700709383db0595b199c6ff3798e35dc9a90ba9a906092eec9df1e8",
-    "FlockSoundness.Assumptions.TableCRAt": "20a3b540bd59c19a57e0358913aaef55d38bab3da8552fa3c6eb6bed1e4e4f72",
-    "FlockSoundness.Assumptions.TableCRZAt": "c682643ee00b008e6e50867741b22ae66fe4dc13c14f59c6208e32fa256813cd"
    }
   },
   "Proofs.Flock.Soundness.Assumptions.Recursive": {
@@ -48670,9 +48505,9 @@
    }
   },
   "Proofs.Flock.Soundness.Discharge.Exec.StrictCRL": {
-   "digest": "97da82d5f77a28c492f70d38e00b55f798d703c7e08fd2559e9bdda1c9e1d55f",
+   "digest": "1f391145c0fa83d73d4c6494de45ebfc86758ccd01b67a532ee0128e0758c04d",
    "definitions": {
-    "FlockSoundness.Discharge.Exec.SessCRL": "1f634678bbbf41c49601f77365aa9d14b1c76a0722ba5de99ede0af834bc7c8b",
+    "FlockSoundness.Discharge.Exec.SessCRL": "58197d8a9a8f019a7b57449680984d3adf4e7d4671e8d5b47d8f7d87211b3359",
     "FlockSoundness.Discharge.Exec.TableCRL": "2963e506a257367c98bcc29f44ed022a69e29b3893e340e50c6ca9b69297808d",
     "FlockSoundness.Discharge.Exec.advRSFinderL": "9e3c0178d80c5c6f546b2ed1c97e60d173071275f1164bae7f85f3896c93aa93",
     "FlockSoundness.Discharge.Exec.adv₀SFinderL": "e838754ad3cd199e30d3d329de020d92948eaad1a9f5205f1ff5cb1ec3d79718",
@@ -48715,7 +48550,7 @@
    }
   },
   "Proofs.Flock.Soundness.Discharge.FailClosed.One": {
-   "digest": "4c8030b5892acf4de6adef7dc2e333fce5e2ea22e70478dd575c63d9e01acdf4",
+   "digest": "914a484b1477e078cf90a3688d8d1128cf8b8cd1fade1d25c03693a244819116",
    "definitions": {
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAccepts": "ea5c4b6ca5cb51a75d8a57cd78a7f966035c1f7a2d7386f108d2540319c2cd29",
     "FlockSoundness.Discharge.FailClosed.FlockVerifyAcceptsR": "7177e7863bf23bbdf8576702a9cf6cc86ed620b9217be214a380c25507b0337a",
@@ -48742,9 +48577,9 @@
     "FlockSoundness.Discharge.FailClosed.SoundZHJU": "17e206a31d91793c9b61ee3567c4aa0f0f393f33234b305c131638a6c894db87",
     "FlockSoundness.Discharge.FailClosed.SoundZHU": "a04de035dfbd573f549e26a8e7abef2a83733b1bad2cf6d0095f619413ebcd42",
     "FlockSoundness.Discharge.FailClosed.SoundZJ": "46b68078c9b99574e48d09ddd34ed044b9691a82e3e08620fa1f98e9439909df",
-    "FlockSoundness.Discharge.FailClosed.ViewZ": "07e3f69d76a8b8cedf56f31dd6e5c8e5c02662c13034074ec731b459ddf73fcd",
-    "FlockSoundness.Discharge.FailClosed.ViewZHJ": "da9a2213bcebf1dd9eeadc4bca4f378a5ee14b03b5f032c364fdc1b7a07eefc1",
-    "FlockSoundness.Discharge.FailClosed.ViewZHJR": "98c334df15b1be46413fa4d0ba6336f56c1c254b4698cb702eed61af5650c086",
+    "FlockSoundness.Discharge.FailClosed.ViewZ": "36a4899cfd044e128771fe05c71a952ce5b44221e9790f0f79464d8e91c56db1",
+    "FlockSoundness.Discharge.FailClosed.ViewZHJ": "3c81abc814032cfb0d0a2d9c59811858cb0001f925a4ead97ab598d4be2d90c0",
+    "FlockSoundness.Discharge.FailClosed.ViewZHJR": "83e8399e9937a68f9079631effa3521842acf7a11f7d40e8fdb15cf995f7240f",
     "FlockSoundness.Discharge.FailClosed.liveLaw": "47c2dbf7827a2820a16bade7d7f121d857403f7c83c7e3a00297b0809d7f9446"
    }
   },
@@ -50109,9 +49944,9 @@
    }
   },
   "Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ": {
-   "digest": "94d2b4745e5b2a87409ce3298252c9dcdc19dd4de9b6a406071df4ab66a88cdc",
+   "digest": "71d7f43945c6ce1bdcb7698ed48de7e12b803be446023d30c2d971fb362a5a93",
    "definitions": {
-    "FlockSoundness.Discharge.ZkLink.SessCRZ": "099b3ba6e78fe8bc2dee72339ce94c921f82e9d236514b36c8341a028d1d6cfc",
+    "FlockSoundness.Discharge.ZkLink.SessCRZ": "e6c5de0e8c4a2544dfb810df78b44d990e652d938f21da35b6614430cf1eddf3",
     "FlockSoundness.Discharge.ZkLink.TableCRZ": "703e6246921c404dd5608a585df78e122c748c37c0815926819283f3def47fea",
     "FlockSoundness.Discharge.ZkLink.advPadsSFinderZ": "736d106b1cf2212879828a47b2e0e74723572fdf403f7055c9fced6caeb9c464",
     "FlockSoundness.Discharge.ZkLink.advRSFinderZ": "b05ae4ff756f14f1ea9f904eacc6e93013c1c5579653d295b61915c144de0a7b",
@@ -50459,6 +50294,15 @@
    "definitions": {
     "FlockSoundness.Extract.firsts": "5757429a078ef755fa32e06181256f47a08f6baadce661caccdce2f03b66a7e3",
     "FlockSoundness.Extract.waitCost": "c324dbae177844ac5f25bb50473eee437b1a94d2a5db4811e8c0248237515f34"
+   }
+  },
+  "Proofs.Flock.Soundness.Finders": {
+   "digest": "c05aaa5f23d72f604ea13c6f64b9cf75e3bfa07b2538971005c24f45d550a63d",
+   "definitions": {
+    "FlockSoundness.Assumptions.LinkCRAt": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30",
+    "FlockSoundness.Assumptions.LinkCRZCAt": "4d260e2bc700709383db0595b199c6ff3798e35dc9a90ba9a906092eec9df1e8",
+    "FlockSoundness.Assumptions.TableCRAt": "20a3b540bd59c19a57e0358913aaef55d38bab3da8552fa3c6eb6bed1e4e4f72",
+    "FlockSoundness.Assumptions.TableCRZAt": "c682643ee00b008e6e50867741b22ae66fe4dc13c14f59c6208e32fa256813cd"
    }
   },
   "Proofs.Flock.Soundness.Instance": {
@@ -50893,9 +50737,9 @@
    }
   },
   "Proofs.Flock.ZeroKnowledgeHidden.Statement": {
-   "digest": "eff1460940b340b8106b4d2de6695bd203c952df184a9d5ba60e4af826f9756f",
+   "digest": "65f40a9bf14446ef2e730b6253f1759d146ce556f90075d3ecf569ddabf20bea",
    "definitions": {
-    "Flock.Guarantees.ZeroKnowledgeHidden": "84cc2080cce72bea01296bd9c4748cfce924c7820434268915fcc201a1009dc1"
+    "Flock.Guarantees.ZeroKnowledgeHidden": "aac81231d0b2bffe165271c1f09c1ad58c6a1e74172cfd142c1661581e19b6b0"
    }
   },
   "Proofs.Pouw.OnsiteFreed": {
