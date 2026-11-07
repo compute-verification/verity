@@ -3013,3 +3013,26 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
 - The preflight merged it onto `next` cleanly. It leaves 62 importing modules to the lock run after landing.
 - It adds no lock entry: P1 is a hypothesis until Daniel rules on it. I push nothing more to its branch until it lands.
   D1 to D4 and the L3 scheme stay on branches until then.
+
+## 22:30Z from PLANCHECK: piece 4: `checkTwoStage` is proved in both forms; Lean certifies the planner's bits at the figure's points; the figure sweep is running
+
+- **Branch.** `cursor/proofs-plancheck2-1551` @ `e4d8898277`: #7845's head with PCFACTOR's `22d3aa0148` (his witness move) and #7839's `963ae2b92b` merged in.
+- **Proved.** `verity lean try` on the proofs file, r20261107-221725-f28d (cpu-3), exits 0. All 23 of its theorems use only `propext`, `Classical.choice` and `Quot.sound`.
+  - The statements are 21:40Z's. Two names changed: a point is `SampledProofs.TwoStageCheck.Point`, since `Claims.Sampling` has a `Design`, and its classes are `ReplayClass`, since Mathlib has a `Class`.
+  - The witnesses' points and a first stage that samples nothing (`nothingDesign`, which is PCRANKIN's `nothingTwo` by `rfl`) are in the properties tree, in `Properties.SampledProofs.TwoStageCheckWitness`, as PCFACTOR's `dac4b44ae3` does for his.
+- **Measured.** r20261107-220703-fe40 (cpu-3) ran 12 patterns'-form points through the executable: world year and datacenter week, `tokens` and `per_expert`, at β of \(10^{-3}\), \(10^{-2}\) and \(10^{-1}\).
+  - At the planner's θ, Lean's bits over the planner's lie in \([1 - 4\times10^{-6},\ 1 + 6\times10^{-6}]\). That takes 0.7 s a point at \(p = 32\) and 1.2 s at \(p = 64\).
+  - With θ searched for Lean's form, the ratio lies in \([1 - 1.5\times10^{-3},\ 1 + 6\times10^{-6}]\), at about 15 s a point. Lean's own θ certifies 0.15% fewer bits than the planner's at world-year `tokens`.
+  - The figure's driver searches θ (`plancheck.SEARCH`, at \(p = 32\)) and certifies at \(p = 64\).
+- **Running on cpu-3, proofs pool:**
+  - the figure sweep, r20261107-221125-39fd: `total_cost.run(lean=True)` over every scope, so every patterns'-form point is Lean's, world year included, with 32 workers. ETA about 23:00Z.
+  - records, r20261107-222549-4b2c: `--records Security/Properties --update` and its requirers. ETA about 23:15Z.
+  - quick suites, r20261107-222631-c676: `verity/core/protocols/sampled_proofs`, `verity/core/service/sampled_proofs` and `benchmarks/spot_figures`. ETA about 22:50Z.
+
+  I open the PR with `--issue PRF-451` and mark it when the records and the suites are green.
+- **(B)** waits on PCFACTOR's capped head. When it lands on his branch, I add the capped form:
+  - `TwoStageCheckServedSound` on `admissibleTwo_rankin_served`, with replay block ρ's cap \(S_\rho = N_c \cdot S\) at its class \(c\), and `lnFactorUpperCapped c.cells (N_c·S) P` as the class's factor bound;
+  - a premise that the requests reading in each replay block serve at most that cap.
+- **Two numbers in the figure are still not Lean's**, in case Daniel means every number:
+  - the infiltration panel's `write_form`, which has no Lean statement;
+  - the break-even table (`total_cost.breakeven`), which is Python's.
