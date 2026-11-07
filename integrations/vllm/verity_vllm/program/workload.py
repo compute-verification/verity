@@ -250,11 +250,19 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
     back onto them by leaf count, so `groups[j]` names the wrapper parameter batch j belongs to (the shared one is `weights`).
     Without it every batch is its own group (`p<j>`) and nothing can be shared.  `digest`: `program_digest(desc)`, when the caller has it."""
     digest = digest or program_digest(desc)
-    key = (("program_digest", digest), ("program_fn", desc["program_fn"]))
-    cached = _REQUEST_CACHE.get(key)
     dp = decode_program(desc, registry)
     _canonicalize(dp, canon)   # `canon`: this compose's shared-definition set (None -> the process default)
-    body = dp.root.body
+    return program_component(dp.root, digest, desc["program_fn"], wrapper_params)
+
+
+def program_component(root: SpecializedDefinition, digest: str, program_fn: str,
+                 wrapper_params: list[tuple[str, str]] | None = None) -> RequestComponent:
+    """`request_component` of a request Program's root: a decoded descriptor's (`DecodedProgram.root`), or a `Program`'s own
+    (`Program.root`, whose definitions are this process's, so nothing is decoded or re-pointed), its `program_digest` and its
+    program function's descriptor id."""
+    key = (("program_digest", digest), ("program_fn", program_fn))
+    cached = _REQUEST_CACHE.get(key)
+    body = root.body
     K = 0
     while K < len(body.nodes) and _is_input_node(body.nodes[K]):
         K += 1
@@ -292,7 +300,7 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
         offsets.append(offsets[-1] + n.gates)
     ret = _remap(body.ret, K)
     if cached is None:
-        sp = SpecializedDefinition(_REQUEST_DEF, {"program_digest": digest, "program_fn": desc["program_fn"]}, key)
+        sp = SpecializedDefinition(_REQUEST_DEF, {"program_digest": digest, "program_fn": program_fn}, key)
         sp.set_body(Body(params, body.ret_type, nodes, ret, offsets))
         _REQUEST_CACHE[key] = sp
     else:
@@ -310,7 +318,7 @@ def request_component(desc: dict, registry, wrapper_params: list[tuple[str, str]
     if lo != len(nodes):
         bounds.append((lo, len(nodes)))  # trailing instances after the last TokenSelect (none for the request wrapper; kept, never dropped)
     step_gates = tuple((offsets[a], offsets[b]) for a, b in bounds)
-    return RequestComponent(sp, digest, desc["program_fn"], params, input_gates, offsets[-1], len(nodes),
+    return RequestComponent(sp, digest, program_fn, params, input_gates, offsets[-1], len(nodes),
                             hashlib.sha256(json.dumps(offsets).encode()).hexdigest(), tuple(groups), tuple(bounds), step_gates,
                             tuple(body.nodes[j].fn.binding for j in range(K)))
 

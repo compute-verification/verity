@@ -92,6 +92,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
+from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
@@ -490,12 +491,15 @@ class Plan:
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, with its C cached rows,
     in class G at its launch context and in its prefill chunks, at φ's rank, in the registered compiler's form (`dead_free`) at any
-    world; `named`: with its trace's names (`naming.named_program`, which names no class-G decoder)."""
+    world; `named`: with its trace's names (`naming.named_program`, which names no class-G decoder). Its digest is streamed
+    (`codec.program_digest`), so it carries no descriptor unless `named`."""
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
     if named:
         from .naming import named_program
         return named_program(phi, unit.LP, unit.T, unit.C)
-    return build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks)
+    r = build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
+                      with_desc=False)
+    return replace(r, digest=program_digest(r.program))
 
 
 def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bool = False, named: bool = False) -> Compiled:
@@ -525,7 +529,6 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
     programs: dict[str, Any] = {}
     comps: dict[str, Any] = {}
     digests: dict[str, str] = {}
-    canon: dict = {}
     names: dict[str, Any] = {}
     for u in plan.distinct():
         r = built[u.key()]
@@ -536,7 +539,7 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
                                 f"({body.nodes[dead[0]].fn.id}) first, which no output reads: drop them in the lowering, on the "
                                 f"Build's side and predict's alike (`program.prune.without_dead_units` drops a request wrapper's)")
         programs[r.digest], digests[u.key()] = r.program, r.digest
-        comps[u.key()] = request_component(r, canon)
+        comps[u.key()] = request_component(r)
     units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]
     wl = W.WorkloadProgram([W.WorkloadRequest(request_id_of(u.request), u.request, u.LP, u.T + 1, u.first_step, comps[u.key()], T=u.T,
                                               prefix={"rows": u.C, "producers": list(u.producers)} if u.C else None)

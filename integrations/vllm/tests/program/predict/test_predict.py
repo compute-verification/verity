@@ -365,11 +365,11 @@ def test_the_h200_int8_rows_predict_their_builds_of_record(row):
     assert sorted(phi.request_shapes()) == sorted(pin["requests"]), "the workload's request shapes are not its Build's"
     M, step = pin["step"]
     want = {"step": step, **{f"request LP{lp}_T{t}": d for (lp, t), d in pin["requests"].items()}, "workload": pin["workload"]}
-    got, canon, comps = {"step": build_program(phi, "step", M=M, pos0=8).digest}, {}, {}
+    got, comps = {"step": build_program(phi, "step", M=M, pos0=8).digest}, {}
     for lp, t in pin["requests"]:
         r = build_program(phi, "request", LP=lp, T=t)
-        got[f"request LP{lp}_T{t}"], comps[(lp, t)] = r.digest, S.request_component(r, canon)
-    got["workload"] = S.predict_workload(phi, comps, canon)["digest"]
+        got[f"request LP{lp}_T{t}"], comps[(lp, t)] = r.digest, S.request_component(r)
+    got["workload"] = S.predict_workload(phi, comps)["digest"]
     moved = [k for k in want if got[k] != want[k]]
     manifest, identities, over = pin["manifest"]
     stale = [k for k in over if k in moved]

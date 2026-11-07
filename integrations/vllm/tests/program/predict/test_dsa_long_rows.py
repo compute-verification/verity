@@ -146,8 +146,7 @@ def test_a_node_program_past_index_topk_is_refused(phi):
 def test_gp01_composes_rank_programs_that_read_run_and_holds_it_to_its_request(phi):
     """At TP8 a request past INDEX_TOPK has `run` before its weights and one that isn't doesn't, so the weights sit at different
     positions; GP-01 composes them, `run` request-local, and R1's labels hold each request's `run` to it."""
-    canon: dict = {}
-    comps = [request_component(build_program(phi, "request", LP=lp, T=0), canon) for lp in (5, 3)]
+    comps = [request_component(build_program(phi, "request", LP=lp, T=0)) for lp in (5, 3)]
     assert "run" in comps[0].groups and "run" not in comps[1].groups
     wl = W.WorkloadProgram([W.WorkloadRequest(f"r{i}", i, lp, 1, 0, c, T=0) for i, (lp, c) in enumerate(zip((5, 3), comps))], lag=1)
     assert not wl.shared_positions_uniform
