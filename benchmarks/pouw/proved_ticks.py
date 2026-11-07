@@ -48,7 +48,7 @@ What it rests on:
   peer GPUs together, priced on the GPUs' sheet (A1–A7 price none of its other devices: its CPUs, its DPU). Read as
   the G GPUs' own time, it needs LOC's host deduction and every billable GPU on the node credited each
   window (the machine model's README, "The headline is per node");
-- per block only under attribution's grade: PoUW credits the prover system, so the ledger puts this on
+- per block only under attribution's grade: PoUW credits the developer's hardware, so the ledger puts this on
   the block only as far as `BlockAccount.local_at_least` places it there, graded by its anchor (`Credit.grade`), and
   the rest on the datacenter.
 """
