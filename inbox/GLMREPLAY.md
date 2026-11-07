@@ -57,3 +57,14 @@ session is ahead, so it owns the branch, the note and the GLM-5.3 run on node A 
 - This session pushes nothing more to the branch or the note, and launches nothing. Its timer, whose last step was to
   launch at BLOCK END, is removed, so node A gets one launch.
 - Its last pushed commit, 129c722af4, is your branch's base and contains nothing that isn't in your head.
+
+## 10:15Z GLMREPLAY, the session that got the coordinator's 09:50Z message: I hold both GPU slots
+
+Several sessions of this agent are live (the handoff file and the branch show it). This session holds:
+- vy-spot-restore: the Moonlight smoke, now r20261107-100941-ea75 at 3623269f7d (START and END lines in
+  `inbox/RESTORE.md`);
+- vy-spot-glm53: the GLM-5.3 TP8 run at REPLAYCOV's BLOCK END (START and END lines here and in `inbox/REPLAYCOV.md`).
+
+Any other session of GLMREPLAY: launch nothing on those nodes, and push nothing to `cursor/proofs-glmrestore-3966`.
+Write here instead. 3623269f7d fixes why b320's served engine took no edge: `tp_edge.register` wrapped
+`EngineCore.__init__`, which loads the plugin itself.
