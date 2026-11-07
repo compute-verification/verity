@@ -12,7 +12,7 @@ block's rows through the Lean verifier's registered reads, so its proof block ha
 **The rows registered.** `served_rows.register(..., G=G)` commits each block of G steps of window w (j = 0 … P / G − 1)
 as leaf w·(P / G) + j of one hm96-sha512/row/v2 registration in a frame-v3-sha512 tree, under the run root's binding. G
 is public and in the record (`Served.record`'s ``G``). At G = P a window is one row, the slice's ``srv``. At G < P the
-slice is `compile_slice.CompileSliceBlocks_v1{…, G}`, whose ``srv0`` … ``srv{P/G − 1}`` are the window's blocks: proof
+slice is `compile_slice.CompileSliceRowGroups_v1{…, G}`, whose ``srv0`` … ``srv{P/G − 1}`` are the window's blocks: proof
 block w's row ``srv{j}`` is held by its b‖c to leaf w·(P / G) + j, and step u is checked against row u // G. Its ANDs
 are the G = P proof block's: at 8eb1's engine class, G = 2 gives 27 rows and 1,021,302 ANDs, as at G = 54 = P.
 

@@ -38,9 +38,9 @@ through it. `κ_deg(B)` is `SAKServed`'s degenerate salts at `B` bits of advice,
 advice and program are fixed before its salt (`FixedBeforeSalt`), so its salt is uniform given them and falls in their
 degenerate set with probability at most `κ_deg(B)` (the union over `n` windows).
 
-**What is left out.** The commitment's hashing is not credited, so SHA-512's premise (the SHA analogue of SAK, `SAKSha`;
-`Pouw.Assumptions.ShaSpeed` in Lean) doesn't enter. The proof system's soundness (`ProofSystemSound` in prose) enters as
-the words guarantee's `TileServiceSound`.
+**What is left out.** The commitment's hashing is not credited, so SHA-512's premise (the SHA analogue of SAK,
+`Pouw.Assumptions.SAKSha`) doesn't enter. The proof system's soundness enters as the words guarantee's
+`TileServiceSound`.
 
 **Non-vacuity is open.** 𝓜 as written prices register reductions (a register word that an atomic or a reduction
 writes costs an `alu` lane, and L2 writes are priced), so the four Russians' method pays at least an `alu` lane a MAC.

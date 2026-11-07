@@ -208,9 +208,8 @@ def self_check(relation: str, n: int = 200, seed: int = 20260925) -> int:
     subnormals and signed zeros included), and accumulators uniform over every finite FP32 exponent field, with a third of
     the cases drawn near each other in exponent so the alignment and cancellation paths are exercised too. Saturating
     units (the reference's +-inf word) are compared like any other."""
-    from verity.ml.circuits.silicon import models
     from verity.ml.circuits.silicon.cast import f32_to_bf16_word
-    from verity.ml.circuits.silicon.silicon import tc_dot
+    from verity.ml.circuits.silicon.models import tc_dot
 
     pipe = PIPES[relation]
     model = _model(pipe.model)

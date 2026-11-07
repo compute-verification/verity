@@ -5,9 +5,9 @@ public import Proofs.Flock.Soundness.Refine.Tapes
 /-!
 # The live session, and simulating it in the model
 
-The transfer (R11) compares two interactions. The **live** one is the challenger's session as the executable sees it:
-the prover sends framed bytes, the server draws coins, and at the end the executable checks what the server recorded.
-The **model** one is the compiled game the soundness theorems bound.
+The transfer (the refinement `ExecRefines`) compares two interactions. The **live** one is the challenger's session as
+the executable sees it: the prover sends framed bytes, the server draws coins, and at the end the executable checks what
+the server recorded. The **model** one is the compiled game the soundness theorems bound.
 
 * `Sim pL pg L g` is a simulation of a live interaction `L` by a model interaction `g`. It is data: how the model answers
   each live move, bijections between their coins, and a strategy for the model wherever no live run can succeed. With it

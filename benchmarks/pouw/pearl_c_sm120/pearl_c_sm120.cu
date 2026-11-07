@@ -1,4 +1,4 @@
-// Pearl-C on the RTX PRO 6000 Blackwell (sm_120a): the kernels of `pearl-c-sm120-v1` (verity/core/protocols/pouw/schemes/
+// Pearl-C on the RTX PRO 6000 Blackwell (sm_120a): the kernels of `pearl-c-sm120-v1` (verity/ml/protocols/pouw/schemes/
 // pearl_c.py on pearl_c_device.SM120, hashing -h3) and the plain FP8 GEMMs, for run.py.  Every kernel takes one Args by value:
 // 16 pointers p[] and 16 ints i[].  sm_120 has no wgmma, TMA multicast or tcgen05: the products are warp-level mma.sync
 // (kind::f8f6f4 m16n8k32 E4M3 for every FP8 atom, m16n8k16 BF16 for the peel) fed by ldmatrix from shared memory that

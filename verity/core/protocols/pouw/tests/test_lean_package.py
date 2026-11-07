@@ -25,11 +25,11 @@ RUNS = json.loads((LEAN / "Proofs" / "lean-audit.json").read_text())["runs"]
 
 
 def test_cited_theorems_are_guarantees() -> None:
-    """A qualified `Pouw.…` name in the README is a guarantee in the record (proved, or stated and frozen), a named
-    assumption it records, or a definition a guarantee's signature names (a game). Not `reads`: a merged lock's are a
-    candidate until the Lean check regenerates them."""
+    """A qualified `Pouw.…` name in the README is a guarantee in the record (proved, or stated and frozen), a premise
+    it records (a named assumption, an open premise or a domain hypothesis), or a definition a guarantee's signature
+    names (a game). Not `reads`: a merged lock's are a candidate until the Lean check regenerates them."""
     guarantees = set(POLICY["guarantees"]) | set(POLICY["shape"]["frozen"])
-    named = set(POLICY["assumptions"])
+    named = {n for k in ("assumptions", "open", "domain") for n in POLICY.get(k, {})}
     stated = {n for g in POLICY["guarantees"].values() for n in re.findall(r"[\w.']+", " ".join(g["signature"]))}
     doc = (HERE / "README.md").read_text()
     cited = set(re.findall(r"`(Pouw\.[A-Za-z0-9_.']+)`", doc))

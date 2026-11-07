@@ -2,6 +2,7 @@
 guard, and dependencies kept warm across runs."""
 from __future__ import annotations
 
+import ast
 import hashlib
 import importlib.util
 import io
@@ -65,7 +66,7 @@ sys.exit(1 if failed else 0)
 '''
 
 
-def _tree(tmp: Path, monkeypatch) -> Path:
+def _tree(tmp: Path, monkeypatch, extra: dict[str, str] | None = None) -> Path:
     root = tmp / "repo"
     files = {
         "tools/verity/lean/check.py": FAKE_AUDIT, "tools/verity/lean/README.md": "", "tools/verity/lean/tests/fixtures/control.lean": "",
@@ -78,6 +79,7 @@ def _tree(tmp: Path, monkeypatch) -> Path:
         "pkg/b/lake-manifest.json": json.dumps({"packages": [{"name": "a", "type": "path", "dir": "../a"}]}),
         "pkg/b/lean-audit.json": json.dumps({"reads": ["docs/outside.txt"]}),
         "docs/outside.txt": "read by b's audit, but no input of it",
+        **(extra or {}),
     }
     for f, text in files.items():
         (root / f).parent.mkdir(parents=True, exist_ok=True)
@@ -177,6 +179,107 @@ def test_a_trains_audit_passes_on_regenerated_records_names_them_and_keeps_no_su
     assert doc["regenerated"] == {"pkg/b": str(tmp_path / "out2" / "audit-b" / "lean-audit.json")}
     rc, ran, doc = go(3, True)
     assert rc == 0 and ran == ["pkg/b"], "a pass on a regenerated record is not kept"
+
+
+#: a stand-in for check.py --regenerate [--bookkeeping warn]: pkg/b's lock fails on bookkeeping, which only the flag repairs,
+#: in a regenerated lock listing two guarantees under `unwitnessed` and one warning
+BOOK_AUDIT = r'''
+import json, sys
+from pathlib import Path
+a = sys.argv[1:]
+root, out = Path.cwd(), Path(a[a.index("--out") + 1])
+named = [Path(x) for i, x in enumerate(a) if not x.startswith("--") and not (i and a[i - 1] in ("--out", "--repo", "--replay-cache", "--artifacts", "--bookkeeping"))]
+out.mkdir(parents=True, exist_ok=True)
+reps, failed = [], []
+for pkg in named:
+    rep = {"package": str(pkg), "failures": []}
+    if json.loads((pkg / "lean-audit.json").read_text()).get("unlisted"):
+        unlisted = ["open: P.Sound is a premise the lock doesn't list"]
+        if a[a.index("--bookkeeping") + 1:][:1] == ["warn"] if "--bookkeeping" in a else False:
+            rec = out / f"audit-{pkg.name}" / "lean-audit.json"
+            rec.parent.mkdir(parents=True, exist_ok=True)
+            rec.write_text(json.dumps({"unwitnessed": {"P.t": "h", "P.u": "h"}}))
+            rep |= {"settled": unlisted, "regenerated": str(rec),
+                    "bookkeeping": ["bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due D (open.unlisted)"]}
+        else:
+            rep["failures"] = unlisted
+    if rep["failures"]:
+        failed.append(str(pkg))
+    reps.append(rep)
+(out / "audit.json").write_text(json.dumps({"passed": not failed, "failed": failed, "packages": reps}))
+sys.exit(1 if failed else 0)
+'''
+
+
+def test_the_lock_runs_audit_repairs_bookkeeping_and_the_caps_the_repaired_locks_break(tmp_path, monkeypatch):
+    """`--bookkeeping warn` (drive's lock run) reaches check.py: a package that fails only on bookkeeping passes on its
+    repaired lock, and a cap of `tests/test_lean_packages.py` that lock breaks is set to its count in a copy under `repaired/`,
+    which audit.json's `repaired` names for drive to commit, with every warning under `bookkeeping`. Without the flag the
+    package fails and nothing is repaired. The flag goes only with --regenerate, over every package: `--package` naming
+    each, as check.py's `lean-audit:PKG` parts of a deferred run do, is every package, and one that leaves a package out
+    fails."""
+    caps = 'UNWITNESSED = {"pkg/b": 1}\n\nINLINE = {}\n\nROOM = {"UNWITNESSED pkg/a": 2}\n'
+    root = _tree(tmp_path, monkeypatch, {LA.CAPS_TEST: caps})
+    (root / "tools/verity/lean/check.py").write_text(BOOK_AUDIT)
+    (root / "pkg/b/lean-audit.json").write_text(json.dumps({"unlisted": True}))
+    cache, deps = tmp_path / "cache" / "lean-audit", tmp_path / "cache" / "lean-deps"
+
+    def go(n: int, bookkeeping: bool, only: list[str] | None = None) -> tuple[int, dict]:
+        out = tmp_path / f"out{n}"
+        rc = LA.run(out, cache, deps, log=lambda s: None, regenerate=True, bookkeeping=bookkeeping, only=only)
+        return rc, json.loads((out / "audit.json").read_text())
+    rc, doc = go(1, False)
+    assert rc == 1 and doc["failed"] == ["pkg/b"] and "repaired" not in doc and "bookkeeping" not in doc
+    rc, doc = go(2, True)
+    assert rc == 0 and doc["regenerated"] == {"pkg/b": str(tmp_path / "out2" / "audit-b" / "lean-audit.json")}
+    assert doc["repaired"] == {LA.CAPS_TEST: str(tmp_path / "out2" / "repaired" / LA.CAPS_TEST)}
+    assert Path(doc["repaired"][LA.CAPS_TEST]).read_text() == caps.replace('{"pkg/b": 1}', '{"pkg/b": 2}')
+    assert (root / LA.CAPS_TEST).read_text() == caps, "the tree's own copy is never written"
+    assert doc["bookkeeping"] == [
+        "pkg/b: bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due D (open.unlisted)",
+        f"bookkeeping: UNWITNESSED['pkg/b'] in {LA.CAPS_TEST} (@lean): 1 -> 2, the count its lock has"]
+    every = sorted(LA.packages(LA.COMMON.tracked_files(root)))
+    assert "pkg/b" in every and len(every) > 1
+    rc, named = go(3, True, every)
+    assert rc == 0 and named["repaired"].keys() == doc["repaired"].keys() and named["bookkeeping"] == doc["bookkeeping"]
+    logged: list[str] = []
+    assert LA.run(tmp_path / "out4", cache, deps, log=logged.append, regenerate=True, bookkeeping=True, only=["pkg/b"]) == 1
+    assert any("--package leaves out" in s for s in logged), logged
+    with pytest.raises(SystemExit):
+        LA.main(["--out", str(tmp_path / "out5"), "--bookkeeping", "warn"])
+
+
+def test_held_caps_sets_each_broken_cap_to_its_count_and_leaves_the_rest():
+    """A count above its cap is raised to, and a cap above its count by more than its room lowered to, the count and its
+    room, which changes queued on `next` still use; a cap within its room stays, and a package no cap names with nothing
+    listed gets none. A caps file without the line fails."""
+    text = ('X = 1\nUNWITNESSED = {"a": 5, "b": 4, "c": 9, "e": 6}\nINLINE = {"a": 3}\n'
+            'ROOM = {"UNWITNESSED b": 2, "UNWITNESSED e": 1}\n')
+    locks = {"a": {"unwitnessed": {"t": "h"}, "shape": {"inline": {"t": {"x": "why", "y": "why"}}}},
+             "b": {"unwitnessed": {"t": "h", "u": "h"}}, "c": {"unwitnessed": dict.fromkeys("tuvwxyzpqr", "h")}, "d": {},
+             "e": {"unwitnessed": {"t": "h", "u": "h"}}}
+    new, warned = LA.held_caps(text, locks)
+    assert new == ('X = 1\nUNWITNESSED = {"a": 1, "b": 4, "c": 10, "e": 3}\nINLINE = {"a": 2}\n'
+                   'ROOM = {"UNWITNESSED b": 2, "UNWITNESSED e": 1}\n')
+    assert [w.split(" in ")[0] for w in warned] == ["bookkeeping: UNWITNESSED['a']", "bookkeeping: UNWITNESSED['c']",
+                                                    "bookkeeping: UNWITNESSED['e']", "bookkeeping: INLINE['a']"]
+    assert warned[2].endswith("6 -> 3, the count its lock has and its room of 1")
+    assert LA.held_caps(new, locks) == (new, [])
+    with pytest.raises(LookupError):
+        LA.held_caps("UNWITNESSED = {}\n", locks)
+
+
+def test_raised_unread_raises_the_areas_above_their_caps_and_keeps_the_rest():
+    u = types.SimpleNamespace(caps_text=lambda caps: json.dumps(caps, sort_keys=True))
+    unread = {"failures": ["unread: A has 3 ..."], "areas": {
+        "A": {"count": {"modules": 3, "declarations": 30}, "cap": {"modules": 2, "declarations": 40}},
+        "B": {"count": {"modules": 1, "declarations": 5}, "cap": {"modules": 4, "declarations": 50}},
+        "C": {"count": {"modules": 2, "declarations": 6}, "cap": None},
+        "D": {"count": {"modules": 0, "declarations": 0}, "cap": None}}}
+    text, warned = LA.raised_unread(unread, u)
+    assert json.loads(text) == {"A": {"modules": 3, "declarations": 30}, "B": {"modules": 4, "declarations": 50},
+                                "C": {"modules": 2, "declarations": 6}}
+    assert [w.split(" in ")[0] for w in warned] == ["bookkeeping: unread area A", "bookkeeping: unread area C"]
 
 
 def _move(root: Path, monkeypatch, old: str, new: str) -> None:
@@ -874,6 +977,29 @@ def test_each_packages_newest_build_stays_past_the_cap(tmp_path):
     assert builds.evict() == 1 and not old.exists() and not (store / "stale.pkg").exists()
 
 
+def test_builds_past_the_byte_cap_go_least_recently_used_first_but_never_a_packages_newest_or_a_held_one(tmp_path):
+    """Kept by count alone, 48 builds of about 17 GB each fill a node's root disk. Past `max_gb` the least recently used go
+    until the rest fit, but never a package's newest, and never one whose lock a run holds."""
+    import fcntl
+
+    store = tmp_path / "lean-builds"
+    for i in range(5):
+        home = store / f"k{i}"
+        home.mkdir(parents=True)
+        (home / "out.olean").write_bytes(b"x" * 400_000)
+        os.utime(home, (1000 + i, 1000 + i))
+    (store / "k0.pkg").write_text("pkg/a")                  # pkg/a's only build: its newest, so it stays
+    size = LA.tree_bytes(store / "k1")
+    assert size >= 400_000
+    builds = LA.WarmBuilds(store, kept=48, max_gb=3.5 * size / 1e9)     # room for three and a half builds
+    with open(store / "k1.lock", "w") as held:
+        fcntl.flock(held, fcntl.LOCK_EX)
+        assert builds.evict() == 2
+    left = sorted(p.name for p in store.iterdir() if p.is_dir())
+    assert left == ["k0", "k1", "k4"], "k2 and k3 go; k0 is pkg/a's newest and k1 is held"
+    assert LA.WarmBuilds(store, kept=48, max_gb=None).evict() == 0, "no byte cap: the count alone"
+
+
 def test_inputs_are_the_package_its_path_dependencies_and_the_auditor(tmp_path, monkeypatch):
     _tree(tmp_path, monkeypatch)
     files = LA.COMMON.tracked_files()
@@ -907,6 +1033,88 @@ def test_the_real_packages_and_their_inputs():
     assert {"tools/verity/lean/upstream.py", "tools/verity/lean/setup.sh", "tools/verity/lean/cache.py"} <= set(got)
     assert not {f"tools/verity/lean/{n}" for n in LA.NOT_READ} & set(got)
     assert {f"tools/verity/lean/{n}" for n in LA.NOT_READ} <= set(files), "an entry of NOT_READ names no file: remove it"
+    assert "tools/verity/lean/Unread.lean" in got and set(LA.UNREAD_FACTS) <= set(pkgs)
+    lean_check = (ROOT / "tools" / "verity" / "lean" / "check.py").read_text()
+    assert ast.literal_eval(re.search(r"^UNREAD_FACTS = (.+)$", lean_check, re.M).group(1)) == LA.UNREAD_FACTS, \
+        "check.py writes the ratchet's facts in the audits of the packages lean_audit.py joins them from"
+
+
+#: `check.py` as `FAKE_AUDIT`, and the audits of the packages the ratchet reads write its facts as the real one does
+FACTS_AUDIT = FAKE_AUDIT.replace(
+    '    reps.append({"package": str(pkg), "failures": [f"reads {m}" for m in missing]})\n',
+    '''    rep = {"package": str(pkg), "failures": [f"reads {m}" for m in missing]}
+    rel = pkg.relative_to(root).as_posix()
+    if rel in ("Security", "Security/Proofs"):
+        import gzip, hashlib
+        tag = "audit-" + "".join(c if c.isalnum() else "_" for c in rel)
+        (out / tag).mkdir(parents=True, exist_ok=True)
+        gz = out / tag / "unread-facts.jsonl.gz"
+        gz.write_bytes(gzip.compress((json.dumps({"module": rel, "found": True}) + "\\n").encode(), mtime=0))
+        rep["unread_facts"] = {"file": f"{tag}/unread-facts.jsonl.gz", "sha256": hashlib.sha256(gz.read_bytes()).hexdigest()}
+    reps.append(rep)
+''')
+#: a stand-in for `unread.py`'s `check`: the modules the joined facts hold, against a cap of their number
+FAKE_UNREAD = r'''
+import gzip, json
+from pathlib import Path
+CAPS = Path(__file__).resolve().parent / "unread-caps.json"
+def check(root, files, facts, out, caps=CAPS):
+    mods = [json.loads(line)["module"] for f in facts for line in gzip.open(f, "rt")]
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "seen.json").write_text(json.dumps(mods))
+    cap = json.loads(caps.read_text())
+    return {"failures": [f"unread: {len(mods)} above {cap}"] if len(mods) > cap else [], "lower": len(mods) < cap,
+            "seconds": 0.0, "areas": {"A": {"count": {"modules": len(mods), "declarations": 0}, "cap": cap}}}
+'''
+SPEC = {"lakefile.toml": "", "lean-toolchain": "v1\n", "lake-manifest.json": json.dumps({"packages": []}), "lean-audit.json": "{}"}
+
+
+def test_the_ratchet_joins_the_facts_of_this_run_s_audits_or_of_the_passes_it_reuses(tmp_path, monkeypatch):
+    """The ratchet on wholly unread modules runs after the audits on both packages' facts: those an audit wrote, else
+    those kept beside the reused pass; a pass kept without its facts, or with other bytes than its entry names, is audited
+    again; the caps and `unread.py` rerun no audit; a run with one of the two packages leaves the ratchet to another."""
+    extra = {"tools/verity/lean/check.py": FACTS_AUDIT, "tools/verity/lean/unread.py": FAKE_UNREAD,
+             "tools/verity/lean/unread-caps.json": "2", "pkg/b/lean-audit.json": "{}",
+             "Security/S.lean": "", "Security/Proofs/P.lean": "",
+             **{f"Security/{f}": t for f, t in SPEC.items()}, **{f"Security/Proofs/{f}": t for f, t in SPEC.items()}}
+    assert FACTS_AUDIT != FAKE_AUDIT
+    root = _tree(tmp_path, monkeypatch, extra)
+    cache = tmp_path / "cache" / "lean-audit"
+
+    def run(n, **kw):
+        out = tmp_path / f"out{n}"
+        rc = LA.run(out, cache, tmp_path / "cache" / "lean-deps", log=lambda s: None, **kw)
+        ran = sorted(x.split()[0] for x in (out / "ran.txt").read_text().splitlines()) if (out / "ran.txt").exists() else []
+        seen = json.loads((out / "unread" / "seen.json").read_text()) if (out / "unread" / "seen.json").exists() else None
+        return rc, ran, json.loads((out / "audit.json").read_text()), seen
+
+    keys = {p: LA.key(p, LA.COMMON.tracked_files(), LA.FLAGS) for p in ("Security", "Security/Proofs", "pkg/a")}
+    rc, ran, doc, seen = run(1)
+    assert rc == 0 and ran == ["Security", "Security/Proofs", "pkg/a", "pkg/b"] and seen == ["Security", "Security/Proofs"]
+    assert doc["unread"]["failures"] == [] and sorted(p.stem for p in (cache / "unread").glob("*.json")) == sorted(
+        [keys["Security"], keys["Security/Proofs"]])
+    published = sorted(f"{keys[p]}.jsonl.gz" for p in LA.UNREAD_FACTS)
+    assert sorted(f.name for f in (tmp_path / "out1" / "unread").glob("*.jsonl.gz")) == published, \
+        "an audit's facts are left by their key, as the landing gate looks for them"
+    rc, ran, doc, seen = run(2)
+    assert rc == 0 and ran == [] and seen == ["Security", "Security/Proofs"] and len(doc["cached"]) == 4
+    assert sorted(f.name for f in (tmp_path / "out2" / "unread").glob("*.jsonl.gz")) == published, "a reused pass's too"
+    (root / "tools/verity/lean/unread-caps.json").write_text("1")
+    rc, ran, doc, seen = run(3)
+    assert rc == 1 and ran == [] and doc["failed"] == ["unread"] and doc["unread"]["failures"] == ["unread: 2 above 1"]
+    (root / "tools/verity/lean/unread-caps.json").write_text("2")
+    k = keys["Security/Proofs"]
+    entry = cache / "unread" / f"{k}.json"
+    entry.write_text(json.dumps(json.loads(entry.read_text()) | {"facts": "e30K"}))
+    rc, ran, doc, seen = run(4)
+    assert rc == 0 and ran == ["Security/Proofs"] and seen == ["Security", "Security/Proofs"], "other bytes: audited again"
+    entry.unlink()
+    assert not LA.reusable(cache, "Security/Proofs", k) and LA.reusable(cache, "pkg/a", keys["pkg/a"])
+    rc, ran, doc, seen = run(5)
+    assert rc == 0 and ran == ["Security/Proofs"] and entry.is_file()
+    rc, ran, doc, seen = run(6, only=["Security/Proofs"])
+    assert rc == 0 and doc["unread"] is None and seen is None
+    assert LA.prune_facts(cache, kept=1) == 1 and len(list((cache / "unread").glob("*.json"))) == 1
 
 
 def test_a_failed_dependency_fetch_is_no_verdict_and_is_retried():

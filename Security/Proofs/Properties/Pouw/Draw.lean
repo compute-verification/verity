@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Properties.Pouw.Grid
+public import Properties.Pouw
+import Std.Data.DTreeMap.Internal.Operations
 
 /-!
 # Proofs of the draw's properties (`Properties.Pouw`, "The draw")

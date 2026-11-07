@@ -14,6 +14,8 @@ The plays' tail bounds: one bet a round under (L), the deficiency against the de
 
 @[expose] public section
 
+open Claims renaming Ex → expect
+
 namespace Accounting.SecurityProofs.TS
 
 open Accounting.TS Accounting.Assumptions.TS Accounting.Guarantees.TS Pouw.RelativeSecurity
@@ -22,7 +24,7 @@ open Accounting.TS Accounting.Assumptions.TS Accounting.Guarantees.TS Pouw.Relat
 
 namespace Rounds
 
-theorem expect_add {Ω : Type*} [Fintype Ω] (f g : Ω → ℝ) :
+theorem expect_add {Ω : Type} [Fintype Ω] (f g : Ω → ℝ) :
     expect (fun ω => f ω + g ω) = expect f + expect g := by
   unfold expect
   rw [Finset.sum_add_distrib, add_div]
@@ -32,7 +34,7 @@ theorem prob_false {Ω : Type*} [Fintype Ω] : prob (fun _ : Ω => False) = 0 :=
   simp
 
 /-- An indicator below an event's: its expectation is at most the event's probability. -/
-theorem expect_ind_le_prob {Ω : Type*} [Fintype Ω] {P Q : Ω → Prop} {inst : DecidablePred P}
+theorem expect_ind_le_prob {Ω : Type} [Fintype Ω] {P Q : Ω → Prop} {inst : DecidablePred P}
     (h : ∀ ω, P ω → Q ω) : expect (fun ω => if P ω then (1 : ℝ) else 0) ≤ prob Q := by
   classical
   rw [prob_eq_expect Q]

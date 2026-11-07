@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Audit.FlockLink
 public import Proofs.Flock.Soundness.Binding.Leaf
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The layout of registered leaves, and its value binding

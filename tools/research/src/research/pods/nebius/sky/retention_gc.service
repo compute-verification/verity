@@ -1,6 +1,8 @@
-# /etc/systemd/system/vy-retention-gc.service on vy-nebius-1 and vy-nebius-2 (`research deploy` installs it): research's retention
+# /etc/systemd/system/vy-retention-gc.service on the nodes deploy.toml names (`research deploy` installs it): research's retention
 # policy, applied. Over 80% of /workspace it deletes expired paths, oldest and lowest priority first, until under 75%
-# (`research retention gc --apply`, its defaults), with the newest research tool snapshot. On 19 Oct 06:40Z node 2 sat at 80% with
+# (`research retention gc --apply`, its defaults), with the newest research tool snapshot. A node holds no store key, so a path's
+# preserved artifact is checked against the remote replica the node's store recorded as verified (RESEARCH_STORE: without it gc reads
+# an empty store and keeps every preserved path). On 19 Oct 06:40Z node 2 sat at 80% with
 # 3.5 TiB collectable, and the fill runner held every queued run until a hand-run gc. Never inside a timed window on node 2, like the
 # store eviction (store_evict_timed.conf): deleting a few TB competes with a timed measurement for the disk.
 [Unit]
@@ -11,5 +13,6 @@ Type=oneshot
 User=research
 Nice=19
 IOSchedulingClass=idle
+Environment=RESEARCH_STORE=/workspace/research/store
 ExecCondition=/bin/sh -c '! grep -qs "timed True" /workspace/pouw/fill/status.txt'
 ExecStart=/bin/sh -c 'T=$(ls -td /workspace/research/tool/*/ | head -1); cd "$T" && PYTHONPATH="$T" exec timeout 3000 python3 -m research retention gc --apply'

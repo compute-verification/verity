@@ -66,7 +66,15 @@ def test_the_plain_leaf_identity_is_the_provers():
     assert '"leaf_scheme": c.leaf_scheme,' in rust
     assert 'setObjVal! "leaf_scheme" leafSchemePlain' in body
     assert 'merkleLeaf := "flock-leaf/sha512-unsalted", pinnedLeafScheme := some leafSchemePlain, identity }' in body
-    assert "t.pinnedLeafScheme == some leafSchemePlain" in _lean_def("plainLeaves")
+    assert "t.pinnedLeafScheme.map Firewall.canonForm == some (Firewall.canonForm leafSchemePlain)" in _lean_def("plainLeaves")
+
+
+def test_the_pinned_leaf_scheme_is_a_constant():
+    """`plainLeaves` compares by `canonForm`, which is coarser than `Json`'s `==` on numbers (`0.0` prints as `0`), and the
+    two agree on the constants `pinnedLeafScheme` takes. A scheme read from input would widen the plain-leaves refusal."""
+    sets = [m.strip() for p in LEAN.rglob("*.lean") if ".lake" not in p.parts
+            for m in re.findall(r"pinnedLeafScheme := ([^,}\n]+)", p.read_text())]
+    assert sets and all(re.fullmatch(r"some leafScheme\w+", m) for m in sets), sets
 
 
 def test_a_plain_leaf_opening_carries_an_empty_salt_vector():

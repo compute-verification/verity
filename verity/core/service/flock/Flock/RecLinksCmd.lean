@@ -1,8 +1,8 @@
 module
 
-public import Lean.Data.Json
 public import Flock.JsonParse
 public import Flock.RecLinks
+public import Lean.Data.Json.FromToJson.Basic
 
 /-!
 `flock-rec-links`'s command: `Flock.RecLinks.check` on each case of a vectors file (`verity/rec-links-vectors/v1`, written

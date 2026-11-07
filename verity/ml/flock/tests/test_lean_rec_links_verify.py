@@ -25,7 +25,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-from verity_flock import rec_link as LK
 from verity_flock import rec_links as RL
 
 HERE = Path(__file__).resolve().parent
@@ -49,18 +48,6 @@ def plain(tmp_path_factory) -> Path:
         with gzip.open(SET / f"{rel}.gz") as src, open(d / rel, "wb") as dst:
             shutil.copyfileobj(src, dst, 1 << 24)
     return d
-
-
-def _current() -> None:
-    """Skip a test that reaches `Registered.checkComplete` while the fixture's parts are pod 85's first staging, whose reads
-    files name only `trow`, `rin` and `rout`: `flock-verify` refuses those at setup, as it must, and their proved sessions
-    bind that staging, so only a restaged and reproved fixture (`rec_vstage.link_part` registering every port) passes."""
-    need = {*LK.ROWS, "rin", "rout"}
-    for name in ("links", "forged-link"):
-        missing = need - json.loads((SET / name / "registered.json").read_text())["ports"].keys()
-        if missing:
-            pytest.skip(f"{SET.name}/{name}: its reads file names no {sorted(missing)}, which flock-verify refuses at setup "
-                        "(Registered.checkComplete): restage and reprove the fixture with pod 85's REC_LINKS=1 run")
 
 
 def _inner(plain: Path) -> list[str]:
@@ -108,7 +95,7 @@ def statement(plain: Path, name: str, t: tuple[str, int] | None) -> tuple[int, s
 def test_vstars_own_link_file_passes_vstars_checks(plain):
     """The link circuit is V*'s own file for statement J at the inner shape under the verifier's bindings, byte for byte,
     and what the verifier parses from it carries V*'s rows and leaves (`RecVStar.checkCircuit`: `checkFile`,
-    `checkParsed`). `rec-statements` reads no reads file, so this runs on the fixture's first staging too."""
+    `checkParsed`)."""
     _root, n = table("links")
     p = subprocess.run([str(BIN), "rec-statements", "--rec-inner", str(SET / "vstar" / "rec-inner.json"),
                         "--circuit", str(plain / "link" / "circuit.txt"), "--rec-bindings", str(SET / "links" / "bindings.json"),
@@ -121,7 +108,6 @@ def test_vstars_own_link_file_passes_vstars_checks(plain):
 def test_the_honest_link_part_is_accepted(plain):
     """Every check of a link part on V*'s own file, `RecLinkPart.checkUnit` (its unit is V*'s net) and `outsOk` (its
     outputs are V*'s layout) among them."""
-    _current()
     rc, v = verify(plain, "links", table("links"))
     assert (rc, v["accepted"], v["why"]) == (0, True, ""), v
     rc, line = statement(plain, "links", table("links"))
@@ -131,7 +117,6 @@ def test_the_honest_link_part_is_accepted(plain):
 def test_the_forged_row_is_refused_by_its_proof(plain):
     """The forgery's table is its own (another root), registered as the link part reads it: setup passes it, in `verify`
     as in `statement`, and its proof does not hold."""
-    _current()
     assert table("forged-link") != table("links")
     rc, v = verify(plain, "forged-link", table("forged-link"))
     assert rc == 1 and not v["accepted"] and v["why"] and not v["why"].startswith("setup:"), v
@@ -148,17 +133,15 @@ def _other_rows(t: tuple[str, int]) -> tuple[str, int]:
     return t[0], next(n for n in range(t[1] + 1, 2 * t[1] + 2) if RL.grid(n) == n)
 
 
-@pytest.mark.parametrize("name,links,why,complete", [
-    ("links", lambda: _other_root(table("links")), "not the statement's table", True),
-    ("links", lambda: _other_rows(table("links")), "rows (--rec-links), and the verifier's inner shape's", False),
-    ("links", lambda: None, "and the statement carries none (--rec-links ROOT:N)", False),
-    ("forged-link", lambda: table("links"), "not the statement's table", True),
+@pytest.mark.parametrize("name,links,why", [
+    ("links", lambda: _other_root(table("links")), "not the statement's table"),
+    ("links", lambda: _other_rows(table("links")), "rows (--rec-links), and the verifier's inner shape's"),
+    ("links", lambda: None, "and the statement carries none (--rec-links ROOT:N)"),
+    ("forged-link", lambda: table("links"), "not the statement's table"),
 ], ids=["other-root", "other-rows", "no-table", "forgery-at-the-honest-table"])
-def test_verify_and_statement_refuse_another_table_at_setup_alike(plain, name, links, why, complete):
-    """`complete`: the refusal comes after `Registered.checkComplete` (the table's own check, `RecLinkPart.checkTable`);
-    the others come before it (`RecLinkPart.checkShape`)."""
-    if complete:
-        _current()
+def test_verify_and_statement_refuse_another_table_at_setup_alike(plain, name, links, why):
+    """Another root, and the forgery at the honest table, are refused after `Registered.checkComplete`, by the table's own
+    check (`RecLinkPart.checkTable`); another row count, and no table, before it (`RecLinkPart.checkShape`)."""
     t = links()
     rc, v = verify(plain, name, t)
     src, line = statement(plain, name, t)

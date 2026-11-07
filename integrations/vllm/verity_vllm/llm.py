@@ -28,6 +28,8 @@ SUPPORTED: dict[str, Supported] = {
     "tensor_parallel_size": Supported(int, 1, "GPUs the model is sharded over"),
     "max_num_seqs": Supported(int, 8, "requests the scheduler runs together"),
     "max_num_batched_tokens": Supported(int, None, "tokens per scheduler step (default: vLLM's for the model length)"),
+    "long_prefill_token_threshold": Supported(int, None, "the most tokens of one prompt a scheduler step prefills (default: vLLM's, "
+                                                         "0: no cap)"),
     "max_model_len": Supported(int, None, "context length (default: the pin's)"),
     "gpu_memory_utilization": Supported((float, int), None, "fraction of device memory the engine may take (default: the "
                                                             "engine profile's)"),
@@ -43,6 +45,9 @@ SUPPORTED: dict[str, Supported] = {
     "execution": Supported((str, type(None)), None, "the execution label the engine is built for (engine.served.EXECUTIONS), which "
                                                     "sets its batch invariance and enforce_eager (default: bi-eager, or bi-compiled "
                                                     "with enforce_eager False)"),
+    "engine_class": Supported((str, type(None)), None, "a registered engine class (engine.profiles.engine_classes), whose world, "
+                                                       "execution, engine limits, prefix cache and experts the engine runs at, and "
+                                                       "whose window's limits its admission holds (default: none)"),
     "dtype": Supported((str, type(None)), None, "served dtype override (default: the checkpoint profile's)"),
     "quantization": Supported((str, type(None)), None, "vLLM quantization override, such as fp8 (default: the checkpoint's)"),
     "compilation_config": Supported((dict, type(None)), None, "vLLM compilation and CUDA-graph settings"),
@@ -55,8 +60,8 @@ SUPPORTED: dict[str, Supported] = {
     "protocols_config": Supported(dict, None, "each enabled protocol's settings, {name: {...}}; never hashed"),
 }
 #: Options passed to vLLM only when the caller sets them; unset, the engine profile's value stands.
-ENGINE_ARGS = ("max_num_batched_tokens", "max_model_len", "gpu_memory_utilization", "kv_cache_memory_bytes", "enable_chunked_prefill",
-               "enable_prefix_caching", "async_scheduling", "dtype",
+ENGINE_ARGS = ("max_num_batched_tokens", "long_prefill_token_threshold", "max_model_len", "gpu_memory_utilization",
+               "kv_cache_memory_bytes", "enable_chunked_prefill", "enable_prefix_caching", "async_scheduling", "dtype",
                "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend", "seed")
 #: Explicit overrides that can select kernels outside a protocol option's Build.
 KERNEL_PROFILE_OVERRIDES = ("dtype", "quantization", "compilation_config", "attention_backend", "attention_config", "moe_backend")
@@ -89,6 +94,27 @@ def resolve_options(options: dict[str, Any]) -> dict[str, Any]:
                              f"{options['enforce_eager']}")
         out["enforce_eager"] = eager
     return out
+
+
+def class_options(options: dict[str, Any]) -> dict[str, Any]:
+    """``options`` with its ``engine_class``'s settings filled in (`engine.profiles.engine_classes.options`); `errors.Refused`
+    names every option that contradicts the class, every kernel override it doesn't fix and a ``max_num_seqs`` over its."""
+    name = options.get("engine_class")
+    if name is None:
+        return dict(options)
+    resolve_options(options)
+    from verity_vllm.engine.profiles import engine_classes as EC
+    from verity_vllm.errors import Refused
+
+    fixed, most = EC.options(name), EC.max_num_seqs(name)
+    bad = [f"{k}={options[k]!r}, where the class serves {v!r}" for k, v in fixed.items() if k in options and options[k] != v]
+    bad += [f"{k}={options[k]!r}: the class serves the engine profile's" for k in KERNEL_PROFILE_OVERRIDES
+            if k not in fixed and options.get(k) is not None]
+    if options.get("max_num_seqs", most) > most:
+        bad.append(f"max_num_seqs={options['max_num_seqs']}, over the class's {most}: a step's token budget would cut a prefill")
+    if bad:
+        raise Refused(bad, what=f"engine class {name}")
+    return {**fixed, **options, "max_num_seqs": options.get("max_num_seqs", most)}
 
 
 def protocol_context(opts: dict[str, Any], explicit: dict[str, Any] | None = None) -> Any:
@@ -155,6 +181,8 @@ class LLM:
     * ``tensor_parallel_size`` (int, default 1): GPUs the model is sharded over.
     * ``max_num_seqs`` (int, default 8): requests the scheduler runs together.
     * ``max_num_batched_tokens`` (int): tokens per scheduler step; default vLLM's for the model length.
+    * ``long_prefill_token_threshold`` (int): the most tokens of one prompt a scheduler step prefills, the rest in later
+      steps; default vLLM's, 0, no cap.
     * ``max_model_len`` (int): context length; default the pin's.
     * ``gpu_memory_utilization`` (float): fraction of device memory the engine may take; default the engine profile's.
     * ``kv_cache_memory_bytes`` (int): the KV cache's size in bytes, in place of sizing it from free memory; default vLLM's
@@ -169,6 +197,13 @@ class LLM:
     * ``execution`` (str): the execution label the engine is built for, a key of ``engine.served.EXECUTIONS``, which sets
       its batch invariance and ``enforce_eager`` (``"compiled"`` is vLLM's serving defaults); default ``"bi-eager"``, or
       ``"bi-compiled"`` with ``enforce_eager=False``.  An ``enforce_eager`` the label contradicts raises ``ValueError``.
+    * ``engine_class`` (str): a registered engine class (`engine.profiles.engine_classes`), such as ``"G"``: the engine runs at
+      the class's ``tensor_parallel_size``, ``execution``, engine limits, ``moe_backend`` and prefix cache off, with
+      ``max_num_seqs`` at most a step's tokens over the prompt limit (its default).  An option that contradicts the class, another
+      kernel override, or a checkpoint of another model type raises `errors.Refused` before the engine is built, and so does a
+      built engine whose vLLM config doesn't carry the class's settings after it.  The built engine's admission
+      (`engine.class_admission`) refuses a prompt over the class's ``long_prefill_token_threshold``, and
+      ``close_window()`` refuses while a request is in flight; a refusal ends the window.  Default none.
     * ``dtype`` (str): served dtype override; default the checkpoint profile's.
     * ``quantization`` (str): vLLM quantization override, such as ``"fp8"``; default the checkpoint's.
     * ``compilation_config`` (dict): vLLM compilation and CUDA-graph settings.
@@ -195,10 +230,14 @@ class LLM:
     """
 
     def __init__(self, model: str, *, revision: str, **options: Any) -> None:
+        options = class_options(options)
         opts = resolve_options(options)
         self.options = opts
         self.engine_overrides = {k: options[k] for k in KERNEL_PROFILE_OVERRIDES if options.get(k) is not None}
         self.pin = EnginePin.resolve(model, revision, world=opts["tensor_parallel_size"])
+        if opts["engine_class"] is not None:
+            from verity_vllm.engine.profiles import engine_classes as EC
+            EC.check_model(opts["engine_class"], self.pin.model, self.pin.revision)
         ctx = protocol_context(opts, options)
         from verity_vllm.engine import vllm_adapter as va
 
@@ -212,6 +251,15 @@ class LLM:
         self.spec_digest: str | None = None
         self.protocols = None
         self._explicit, self._installs = dict(options), 0
+        self.admission = None
+        if opts["engine_class"] is not None:
+            from verity_vllm.engine.class_admission import Admission
+            from verity_vllm.engine.profiles import engine_classes as EC
+            from verity_vllm.errors import Refused
+            bad = EC.effective_refusals(opts["engine_class"], self._engine.effective or {})
+            if bad:
+                raise Refused(bad, what=f"engine class {opts['engine_class']}")
+            self.admission = Admission(opts["engine_class"]).install(self._engine.llm)
         if ctx is not None:
             self._install(ctx)
 
@@ -253,12 +301,19 @@ class LLM:
         if self.protocols is not None:
             self.protocols.close()
 
+    def close_window(self) -> None:
+        """Close a Commit window on this engine.  Under an engine class, `errors.Refused` while a request is in flight or once the
+        class has refused one (`engine.class_admission`); without one there is nothing to hold."""
+        if self.admission is not None:
+            self.admission.close_window()
+
     @property
     def engine_record(self) -> dict[str, Any]:
         e = self._engine
         return {"pin": asdict(self.pin), "engine_kwargs": dict(e.kwargs), "env_flags": dict(e.env_flags),
                 "execution": e.execution, "effective": e.effective, "build_s": e.build_s,
                 "engine_overrides": dict(self.engine_overrides), "spec_digest": self.spec_digest,
+                "engine_class": self.options["engine_class"],
                 "protocols": None if self.protocols is None else self.protocols.record()}
 
     def generate(self, prompts: Any, sampling_params: Any = None, **kwargs: Any) -> list[Any]:

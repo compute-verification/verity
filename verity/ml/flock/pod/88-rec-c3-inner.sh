@@ -29,7 +29,7 @@
 #   TREE_SECRET_FILE= its session secret, hex; empty: this host's OS draws it, rec_session --tree-test-os, a test's coins,
 #   never the challenger's, out/tree-source.txt says which)
 #   SPARSE=NU,ELL,S_LOG,T_LOG (18,13,6,0 at N=16): the relay also runs each rep's sparse phase (rec_sparse.prove) after both
-#   reps, on the coin server's coins, and rec_vstage stages it as RecSparse (summary.json's sparse; required to hold)
+#   reps, on the challenger's coins, and rec_vstage stages it as RecSparse (summary.json's sparse; required to hold)
 #   STACKED=1 (with SPARSE): the relay also commits the stacked table R ($B stacked --root-out) and opens it at both reps'
 #   sparse claims (--points, after the sparse streams, into the same session); rec_vstar checks R's openings and rec_vstage
 #   stages R's levels (RecOpen, on rec-acc) and its registered opening (summary.json's stacked; required to hold). R's top

@@ -1,7 +1,7 @@
 module
 
 public import NetworkCertifier.Schedule
-public import Std.Data.HashMap
+public import Std.Data.HashMap.Basic
 
 /-!
 # The online prover: each window's sync chosen `lag` buckets before its first bucket
