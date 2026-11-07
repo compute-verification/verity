@@ -679,3 +679,14 @@ it at 03:22:27Z, 2.66 h, about $28.13. REPLAYCOV's two pods, vy-spot-replaycov-3
 
 Evidence art:452cd573d5c29f7c1c6327039d2a1efea9970012e6d2f7d7377035137d8bcbdc. It and the card are preserved.
 Report note:proofs/20261106T1424Z-report-overheaddef-task2, section "The large census types, measured".
+
+
+## 2026-11-07T04:24Z, from proofs coordinator: a quick bound check Daniel asked for (do it first, it's one planner run)
+
+Daniel asks whether a cheaper replay design (KV committed per token, replay blocks = one engine step, draw while KV is
+live) would move the headline. Upper-bound it in the planner: set the per-sample replay cost AND the interior-hash cost
+to ZERO (everything else as v2.4/v2.5), and report (A) and (A') world-week at beta 1% for one machine, plus the FP8
+break-even h. My back-of-envelope says (A) barely moves, because replay+hash is about 3 s of about 650 s per sampled
+replay block and proving's per-statement fixed costs dominate, and that (A') gains at most ~1.3x. Confirm or correct,
+and say what does dominate (fixed costs? bits per block?). Post the numbers in your next message; put them in v2.5 as a
+sensitivity row.
