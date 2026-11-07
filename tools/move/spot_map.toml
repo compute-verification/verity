@@ -1,0 +1,39 @@
+# SPOT's word move: what `tools/move/rename.py --map tools/move/spot_map.toml` renames, after `spot_layout_map.toml`'s
+# directory move. The code's spellings of SPOT's older name (GLOSSARY.md, Older names) take SPOT's: `sampled_proofs`
+# becomes `spot`, `SampledProofs` `Spot`, `sampledProofs` `spot` and `SAMPLED_PROOFS` `SPOT`, in paths, modules, Lean
+# names and text. So the Lean areas (`SampledProofs` under `Definitions/`, `Properties/`, `Proofs/` and
+# `Proofs/Properties/`), the Lake package `core_sampled_proofs` and its library `SampledProofs`, the Python package
+# `verity.core.protocols.sampled_proofs`, and their namespaces and declarations move. Declarations keep their place in the
+# locks' records: `rename.py --moves` prints the renames `tools/verity/lean/check.py --update --moved` takes.
+#
+# What a record, a digest, another system or a recorded run reads keeps its spelling ([keep]):
+# - the ids under `verity/sampled-proofs/`, format ids and coin domains that digests and derived coins hash;
+# - every kebab-case name, which no word here matches: `sampled-proofs`, the protocol option `sampled-proofs:rows-sha512`,
+#   the executables, the distribution `verity-core-sampled-proofs`, check steps and output names;
+# - the protocol label `sampled_proofs` that the vLLM integration's draws record (`"protocol"`, `leaves_by_protocol`,
+#   `w<N>.sampled_proofs.json`) and the h200 demo's `protocol` names, with the adapter module the label names
+#   (`verity_vllm.protocols.sampled_proofs`, [keep_paths]); a quoted `"sampled_proofs"` that joins a path moves;
+# - GLOSSARY.md's Older names row and the ratchet that counts the older spellings (`tests/test_retired_terms.py`).
+
+[words]
+"SampledProofs" = "Spot"
+"sampledProofs" = "spot"
+"SAMPLED_PROOFS" = "SPOT"
+"sampled_proofs" = "spot"
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, research's recorded moves), the
+# older name's ratchet, and files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself).
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "**/fixtures/**", "**/*vectors*.json", "**/*vectors*.txt.gz", "*.patch", "**/TRUSTED.sha256", "uv.lock",
+           "**/*.lock", "tools/verity/check/tests/test_move_check.py", "tools/research/src/research/store/moves.json",
+           "tests/test_retired_terms.py"]
+
+[keep]
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '(?m)^\| "sampled proofs".*$', '(?<!/ )"sampled_proofs"(?! /)', '\.sampled_proofs\.json',
+            'verity_vllm\.protocols\.sampled_proofs', 'protocols/sampled_proofs\.py']
+strings = []
+
+[keep_paths]
+"integrations/vllm/verity_vllm/protocols/sampled_proofs.py" = ["sampled_proofs"]
