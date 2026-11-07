@@ -263,11 +263,11 @@ public-coin form accepts at SHA-512, given:
   rep files (`hfiles`);
 * `LiveCoins`: the record's live session is the session's messages and coins (`hlive`). -/
 theorem decide_of_verdictOf {I : Flock.Witness.Inputs} {rd : SampledProofs.OneStageZk.Reads} {bs : Core.Blobs}
-    {ksFiles : V Unit} {coinKeys : Array String} {record : String} {q : SampledProofs.OneStageZk.RunFiles}
+    {ksFiles population : V Unit} {coinKeys : Array String} {record : String} {q : SampledProofs.OneStageZk.RunFiles}
     {coinKey : Option String} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {si : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final}
-    (hv : SampledProofs.OneStageZk.verdictOf I (scopeOf I rd) ksFiles coinKeys record
+    (hv : SampledProofs.OneStageZk.verdictOf I (scopeOf I rd) ksFiles population coinKeys record
       (Flock.Witness.recordDraw record) (SampledProofs.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record))
       (SampledProofs.OneStageZk.filesOf bs q
         (SampledProofs.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record))) coinKey = .ok ())

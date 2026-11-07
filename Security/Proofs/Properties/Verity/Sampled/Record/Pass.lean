@@ -175,7 +175,7 @@ theorem refOk_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sample
     RefOk A o (drawOf (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen) := by
   have hfits := fits_of_accepts hacc hn hd hpart hreg
   have hu := units_of_pass A o he hacc hn hlaw P ω r hshow hlive
-  obtain ⟨s, rd, B, record, ksFiles, hs, hpl, hrd, hB, hutf, hv⟩ := verdict_of_accepts hacc hn
+  obtain ⟨s, rd, B, record, ksFiles, population, hs, hpl, hrd, hB, hutf, hv⟩ := verdict_of_accepts hacc hn
   have h64 := reach_draw FlockDeploy.sha512 P ω r
   have hsm : (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen.msgs =
       (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).msgs := by
