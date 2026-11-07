@@ -12,7 +12,8 @@ faulty population slots (`CountTarget`: slots below `n`, each holding the input 
 wrong on the registration with canonical openings (`canonAt`), since a unit right in that sense is not faulty
 (`FaultyRightTargetC` at `Val := vb.Opening`, `val := id`, its transport from `TransportsLiveC` at the wires that aren't
 constants, `canonAt`'s second clause; at a constant, `canonAt`'s first clause makes the right opening's bit, the
-evaluation, the constant; the constants are inputs, `constsOf_isInput`). `K₁`'s miss term is `K₀`'s
+evaluation, the constant; the constants, `oneG`, `zeroG` and the program inputs no unit reads, are inputs,
+`constsOf_isInput`). `K₁`'s miss term is `K₀`'s
 (`choose_min_count`): where they differ both are `0`.
 -/
 
@@ -37,8 +38,8 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Disc
 open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
-/-- **The circuit's constants are input gates**: `Bridge.constsOf` fixes only `oneG` and `zeroG`, gates `0` and `1`,
-which are program inputs of `keyProg` (`Layout.unit_uniform_input`), so no unit's. -/
+/-- **The circuit's constants are input gates**: `Bridge.constsOf` fixes only `oneG`, `zeroG` and gates below
+`2 + n·B`, which are program inputs of `keyProg` (`Layout.unit_uniform_input`), so no unit's. -/
 theorem _root_.Flock.Bridge.constsOf_isInput {c : Flock.Circuit} {hU : Built c.unit} {n : ℕ}
     (outs : Finset (Fin (Discharge.Layout.keyN c hU n))) {g : Fin (Discharge.Layout.keyN c hU n)} {b : Bool}
     (h : Bridge.constsOf c hU n g = some b) : (((keyProg c hU n).circuit outs).op g).isInput = true := by
@@ -46,7 +47,9 @@ theorem _root_.Flock.Bridge.constsOf_isInput {c : Flock.Circuit} {hU : Built c.u
     simp only [Bridge.constsOf] at h
     split_ifs at h with h1 h2
     · subst h1; show 0 < 2 + n * Discharge.Layout.keyB c hU; omega
-    · subst h2; show 1 < 2 + n * Discharge.Layout.keyB c hU; omega
+    · rcases h2 with h2 | h2
+      · subst h2; show 1 < 2 + n * Discharge.Layout.keyB c hU; omega
+      · exact h2.1
   exact (((keyProg c hU n).partition outs).input_iff g).1
     (Discharge.Layout.unit_uniform_input (k := Discharge.Placed.inGates n (Discharge.Layout.keyB c hU))
       (R := Discharge.Placed.circuitRows c hU)

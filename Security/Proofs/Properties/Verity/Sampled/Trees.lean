@@ -406,19 +406,19 @@ theorem get_ok {bs : Core.Blobs} {d w : String} {b : ByteArray} (w' : String) (h
   exact e.symm
 
 /-- **Each record v2's evidence names holds to the trees where `treesHeld` accepts**: the record a session's blob
-parses to through `Flock.JsonParse.parse`, as `Verity.Sampled.recordsOf` reads it, is one `sessionTreeReason` accepts
-against them, at the tables `treesHeld` reads for its session. -/
+parses to through `Flock.JsonParse.parse`, as `Verity.Sampled.recordOn` reads it (`null` where it doesn't parse),
+is one `sessionTreeReason` accepts against them, at the tables `treesHeld` reads for its session. -/
 theorem records_held {p : SampledProofs.OneStageZk.Own} {ts : Array LoggedTree} {e : SampledProofs.OneStageZk.Evidence}
     {bs : Core.Blobs} (h : SampledProofs.OneStageZk.treesHeld p ts e bs = .ok ()) {r} (hr : r ∈ e.sessions)
-    {b : ByteArray} {str : String} {rec : Json} (hb : (bs.get r.record "record").toOption = some b)
-    (hs : String.fromUTF8? b = some str) (hp : (Flock.JsonParse.parse str).toOption = some rec) :
+    {w : String} {b : ByteArray} {str : String} {rec : Json} (hb : (bs.get r.record w).toOption = some b)
+    (hs : String.fromUTF8? b = some str) (hp : (Flock.JsonParse.parse str).toOption.getD .null = rec) :
     ∃ tabs, sessionTreeReason ts tabs rec = none := by
   unfold SampledProofs.OneStageZk.treesHeld at h
   dsimp only at h
   obtain ⟨named, hn, hrest⟩ := bind_ok h
   rw [← Array.forIn_toList] at hn
   have hI := forIn_inv (I := fun pre (named : Array (String × Array (String × Option Nat) × Json)) => ∀ r ∈ pre,
-      ∀ b str, (bs.get r.record "record").toOption = some b → String.fromUTF8? b = some str →
+      ∀ w b str, (bs.get r.record w).toOption = some b → String.fromUTF8? b = some str →
       (r.name, SampledProofs.OneStageZk.rootBTables p bs str, (Flock.JsonParse.parse str).toOption.getD .null) ∈
         named) ?_ e.sessions.toList [] #[] named (by simp) hn
   · have hsess : sessionsTreeReason ts named = none := by
@@ -428,8 +428,8 @@ theorem records_held {p : SampledProofs.OneStageZk.Own} {ts : Array LoggedTree} 
       cases hw : sessionsTreeReason ts named with
       | none => rfl
       | some w => exact (hne w hw).elim
-    have hmem := hI r (by simpa using hr) b str hb hs
-    simp only [hp, Option.getD_some] at hmem
+    have hmem := hI r (by simpa using hr) w b str hb hs
+    rw [hp] at hmem
     exact ⟨_, sessions_held hsess (r.name, SampledProofs.OneStageZk.rootBTables p bs str, rec) hmem⟩
   · intro pre x named' res hI' hres
     obtain ⟨b', hb', hres⟩ := bind_ok hres
@@ -437,12 +437,12 @@ theorem records_held {p : SampledProofs.OneStageZk.Own} {ts : Array LoggedTree} 
     case h_2 => cases hres
     rename_i record hrec
     cases hres
-    refine ⟨_, rfl, fun r' hr' b'' str' hb'' hs' => ?_⟩
+    refine ⟨_, rfl, fun r' hr' w'' b'' str' hb'' hs' => ?_⟩
     rcases List.mem_append.1 hr' with hr' | hr'
-    · exact Array.mem_push.2 (.inl (hI' r' hr' b'' str' hb'' hs'))
+    · exact Array.mem_push.2 (.inl (hI' r' hr' w'' b'' str' hb'' hs'))
     · rw [List.mem_singleton] at hr'
       subst hr'
-      obtain rfl : b'' = b' := Option.some.inj (hb''.symm.trans (get_ok "record" hb'))
+      obtain rfl : b'' = b' := Option.some.inj (hb''.symm.trans (get_ok w'' hb'))
       obtain rfl : str' = record := Option.some.inj (hs'.symm.trans hrec)
       exact Array.mem_push.2 (.inr rfl)
 

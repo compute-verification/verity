@@ -25,7 +25,7 @@ Commit record the period's windows name the policy's record too (`windows_tied`)
 acceptance is `NciCheck.Baseline.evaluate`'s with the record naming the circuit (`policy_accept`), which is
 `NciCheck.Desc.evaluate`'s and θ's provenance (`BaselineSteps.evaluate_ok`), whose verdict `DescReports`,
 `DescWitnesses` and `BaselineProvenance` read; `Nci.SecurityProofs.CompliesCK`, `ExpandComplies` and
-`Verity.Circuit.expand_boolean` give the padded `(c, k)`-partitions. The parse, declaration and division an acceptance
+`Verity.Circuit.expand_boolean` give the `(c, k)`-partitions. The parse, declaration and division an acceptance
 exhibits come from `DescAgrees` (the verdict is the gate-by-gate check's on an expansion) and `Decodes` (that check's
 verdicts are about a parse, a layout, a baseline and a division). Sampled proofs' acceptance is one-stage v1's check
 at the coins it read (`OneStage.checkAt`) at its params' form: in the one-stage form v2's, on the verdicts its own run of
@@ -194,7 +194,7 @@ theorem names_program {p : NciCheck.Protocol.Params} {c : NciCheck.Protocol.Comm
   simpa using hn
 
 /-- `PolicyMet` from its first clause, every inference block meeting both bounds, at `α ≥ 0`: the rest follows
-(`Nci.CompliesRate`, and the padded partitions by `CompliesCK`, `ExpandComplies` and `expand_boolean`). -/
+(`Nci.CompliesRate`, and the partitions by `CompliesCK`, `ExpandComplies` and `expand_boolean`). -/
 theorem policyMet_of_meets {d : RegisteredCircuit} {n : ℕ} {U : Partition d.D n} {Γ : ℕ} {α : ℝ} (hα : 0 ≤ α)
     (h : ∀ u, Meets d U Γ α u) : PolicyMet d U Γ α := by
   have hcomp : Nci.CompliesRate Γ α d := ⟨n, U, h⟩

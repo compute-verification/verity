@@ -9,8 +9,8 @@ the integer or `0.0`.
 -/
 module
 
-public import Lean.Data.Json
 public import CoreProtocol.Ratio
+public import Lean.Data.Json.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true

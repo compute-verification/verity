@@ -1,10 +1,10 @@
 # network_e2e
 
-Network accounting end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
+Network certification end to end on a served model, as one command and one report. From a certifier-serve rehearsal (the
 network certifier in front of a served endpoint, `benchmarks/network_traces/certifier_serve.py`), it takes:
 
 - N2's verdict of record on every execution phase, and the link's network verdict;
-- head checks proved with C-Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`
+- head checks proved with Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`
   (`benchmarks/network_traces/n2_zk.py`): every honest execution phase at both ends, and the egress ends of the tampered
   and extra runs;
 - the negatives, each refused: `late`, `extra` and a tampered head (the honest run's execution phase 0 egress head, one
@@ -19,7 +19,7 @@ reuses the rehearsal and `n2_zk.py`'s driver and re-implements neither. `encodin
 ## The one command
 
 `verity bench network_e2e ARGS` runs `run.sh`, ARGS being `e2e.py`'s. Proving runs as a job on a CPU node, whose command
-and resources are in `run.sh`'s header: it builds C-Flock's `flock-circuit`, the Lean `flock-verify`, the Lean firewall
+and resources are in `run.sh`'s header: it builds Flock's `flock-circuit`, the Lean `flock-verify`, the Lean firewall
 and network-records (`benchmarks/pouw/hidden_zk/job.sh`'s `setup`, cached on the node), then runs `e2e.py` with the
 report in `$OUT`. `E2E_MEM_GB` is the proving runs' memory cap. Exit 0 means the report says OK. The job publishes the
 report with the run's outputs in the evidence store, where results are read.

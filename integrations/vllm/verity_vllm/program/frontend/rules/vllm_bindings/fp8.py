@@ -7,10 +7,10 @@ import torch
 from verity.ml.circuits.refs import Coll, array_of
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.rules.base import InPlaceRule, OpRule, RuleInfo, ViewRule
-from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, rows_of, shape
+from verity_vllm.program.frontend.rules.common import dtype_is, from_rows, row_value, rows_of, shape
 from verity_vllm.program.frontend.rules.vllm_bindings.elementwise import _C_op
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import active_target_profile, launch_tokens_of
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _row_value, _untransposed, aten
+from verity_vllm.program.frontend.rules.vllm_bindings.operands import BF16, _untransposed, aten
 from verity_vllm.program.frontend.rules.vllm_iface import iface, targets_for
 from verity.ml.definitions.registry.fp8 import QUANT_GROUPS, weight_blocks
 
@@ -205,7 +205,7 @@ class PerTokenGroupFp8QuantRule(InPlaceRule):
         a = self._scalars(node)
         if not all(k in a for k in ("x", "x_q", "x_s", "group_size", "eps", "fp8_min", "fp8_max")):
             return "unexpected operator arity"
-        r = _row_value(ctx, a["x"], "x")
+        r = row_value(ctx, a["x"], "x")
         if r:
             return r
         xs_shape = shape(ctx, a["x"])
@@ -279,7 +279,7 @@ class CutlassScaledMmFp8BlockRule(InPlaceRule):
         bias = node.args[5] if len(node.args) > 5 else node.kwargs.get("bias")
         if bias is not None:
             return "numerics_unregistered: a fused bias in the blockwise FP8 epilogue has no registered Definition (vLLM adds the bias outside the kernel)"
-        r = _row_value(ctx, a, "a", dtype=FP8_E4M3)
+        r = row_value(ctx, a, "a", dtype=FP8_E4M3)
         if r:
             return r
         if not isinstance(ctx.val(out), Alloc):

@@ -11,7 +11,9 @@ port of its own and drives each itself, every coin a frame takes the loop's own 
 sessions through it are the end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
 import socket
 import struct
@@ -28,6 +30,8 @@ from test_lean_hello import (  # noqa: F401
     _record,
     built,
 )
+
+from verity.ml.commitments import hm96
 
 STOP = "PROVER-STOPPED: "
 
@@ -832,3 +836,175 @@ def test_each_session_its_own_nonce_and_id(zk):
     assert got[0] != got[1] and texts == [recorded.replace(nonce, g) for g in got]
     assert names[0] != names[1] and _answer()[5:69].hex() not in names, names
     lp.close()
+
+
+HM = hm96.SHA512
+
+
+class CoinTree:
+    """The verifier's coin tree, `coin-tree/hm96-sha512/v2` (`live/src/coin_tree.rs`'s `CoinTree`, checked by
+    `Flock/Firewall/Coins.lean`): drawn at `Hello` under the prover's nonce `nonce` and a fresh session key, per stream and
+    round a block of `spec["block"]` coins, `edit(stream, round, block)` choosing some first (`CoinTree::draw_with`). Every
+    SHA-512 input is prefixed by the nonce; a block commits through its chain `T_i = H(CHAIN ‖ c_i ‖ T_{i+1})` from
+    `T_block = H(TAIL)` into a keyed hm96 leaf, each stream's rounds are a subtree, and the streams' roots, padded to a power
+    of two, are one more."""
+
+    def __init__(self, spec: dict, nonce: bytes, edit):
+        self.spec, self.nonce, self.key = spec, nonce, HM.fresh_key()
+        self.rounds, streams = 1 << spec["rounds_log"], spec["streams"]
+        self.blocks, self.tails, self.salts, self.trees = [], [], [], []
+        for s, name in enumerate(streams):
+            bs, ts, ss = [], [], []
+            for k in range(self.rounds):
+                b = [int.from_bytes(os.urandom(16), "little") for _ in range(spec["block"])]
+                edit(name, k, b)
+                t = [self.h(self.tag("tail"))]
+                for c in reversed(b):
+                    t.insert(0, self.h(self.tag("chain"), c.to_bytes(16, "little"), t[0]))
+                bs.append(b)
+                ts.append(t)
+                ss.append(HM.fresh_salt())
+            self.blocks.append(bs)
+            self.tails.append(ts)
+            self.salts.append(ss)
+            self.trees.append(self.flat([self.leaf(s, k, ts[k][0], ss[k]) for k in range(self.rounds)]))
+        self.width = 1 << (len(streams) - 1).bit_length()
+        tops = [t[-1] for t in self.trees]
+        self.top = self.flat(tops + [self.h(self.tag("pad"))] * (self.width - len(tops)))
+
+    @staticmethod
+    def tag(name: str) -> bytes:
+        return f"verity/coin-tree/{name}/v2\0".encode()
+
+    def h(self, *parts: bytes) -> bytes:
+        return hashlib.sha512(self.nonce + b"".join(parts)).digest()
+
+    def leaf(self, s: int, k: int, t0: bytes, salt: bytes) -> bytes:
+        x = self.h(self.tag("round"), s.to_bytes(4, "big"), k.to_bytes(4, "big"), t0)
+        b = bytes(p ^ q for p, q in zip(x, HM.mask(self.key, salt), strict=True))
+        return self.h(HM.leaf_prefix(self.key), b, self.h(HM.salt_prefix, salt))
+
+    def flat(self, leaves: list[bytes]) -> list[bytes]:
+        """A tree's nodes, the leaves first and the root last."""
+        t, at, n = list(leaves), 0, len(leaves)
+        while n > 1:
+            t += [self.h(t[at + 2 * i], t[at + 2 * i + 1]) for i in range(n // 2)]
+            at, n = at + n, n // 2
+        return t
+
+    @staticmethod
+    def path(t: list[bytes], n: int, j: int) -> list[bytes]:
+        out, at = [], 0
+        while n > 1:
+            out.append(t[at + (j ^ 1)])
+            at, n, j = at + n, n // 2, j // 2
+        return out
+
+    def answer(self) -> bytes:
+        """`Hello`'s answer: the root, then the session key."""
+        return _words(self.top[-1] + self.key)
+
+    def opening(self, stream: str, k: int, n: int) -> bytes:
+        """Round `k` of `stream`'s first `n` coins, `T_n`, the salt and the path: the stream's subtree, then the streams'."""
+        s = self.spec["streams"].index(stream)
+        path = self.path(self.trees[s], self.rounds, k) + self.path(self.top, self.width, s)
+        return _words(b"".join(c.to_bytes(16, "little") for c in self.blocks[s][k][:n]) + self.tails[s][k][n]
+                      + self.salts[s][k] + b"".join(path))
+
+
+def _words(b: bytes) -> bytes:
+    """`Resp::Coins` of the words of `b`."""
+    return coins([b[i:i + 16] for i in range(0, len(b), 16)])
+
+
+def _field(f: bytes, o: int) -> tuple[bytes, int]:
+    (n,) = struct.unpack_from("<I", f, o)
+    return f[o + 4:o + 4 + n], o + 4 + n
+
+
+class TreeAuditor:
+    """A scripted auditor that commits to its coins at `Hello` (`CoinTree`, `edit` choosing some) and answers the `Commit`
+    and each `Round` with its stream's next opening."""
+
+    def __init__(self, edit):
+        self.edit, self.next, self.tree = edit, {}, None
+
+    def opening(self, stream: str, n: int) -> bytes:
+        k = self.next.get(stream, 0)
+        self.next[stream] = k + 1
+        return self.tree.opening(stream, k, n)
+
+    def __call__(self, f: bytes) -> bytes:
+        if f[0] == 1:
+            h = json.loads(f[5:])
+            self.tree = CoinTree(h["coins"], bytes.fromhex(h["coins"]["nonce"]), self.edit)
+            self.links = h["link"]["points"] * h["link"]["m"]
+            return self.tree.answer()
+        if f[0] == 7:
+            return self.opening("session", self.links)
+        if f[0] == 4:
+            stream, o = _field(f, 1)
+            _, o = _field(f, o)
+            return self.opening(stream.decode(), struct.unpack_from("<I", f, o)[0])
+        return {10: draw("null")}.get(f[0], b"\x01")
+
+
+def _domain(d: str) -> bytes:
+    """A stream's domain frame (`Frames.domainFrame`), which its first round begins with."""
+    b = d.encode()
+    return b"\x01" + bytes(7) + struct.pack("<Q", len(b)) + b + bytes(-len(b) % 16)
+
+
+def _place(lp: Loop, name: str) -> int:
+    """The coins rep 0's next scheduled round squeezes (`place`)."""
+    f = TcpFrame(lp)
+    line = f.ask(f"place {name} 0 0")
+    f.close()
+    assert line.startswith("alg "), line
+    return int(line.split()[1])
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("at, why", [((1, 0), STOP + "degenerate coin: zerocheck outer coin r_0 = 1"),
+                                     ((1, 11), STOP + "degenerate coin: zerocheck outer coin r_11 = 1"),
+                                     ((0, 5), None), ((2, 0), None)])
+def test_an_outer_coin_of_one_stops_the_session_as_its_round_opens(zk, at, why):
+    """A verifier that commits to a zerocheck outer coin `r_j = 1` (at the fixture's m = 25, rep 0's round 1 opens all twelve)
+    stops the session where that round's coins open: they open the committed tree, the rep's Lean frame refuses them
+    (`Frame.Masker.answer`), and the prover receives `Refused` in their place. Every request after it, a `Round`, a `Commit`
+    or `Finish`, is refused for the same reason without reaching the auditor, which saw the schedule's rounds up to that
+    one and nothing after. A coin `1` anywhere else (a skip coin of round 0, round 2's) is a coin like any other, which the
+    prover receives once the frame took it. The prover is one whose device stopped, each round sent empty (the first its
+    domain frame alone), so every round that leaves is the frame's scheduled one; its `Open` and `Link` are at the honest
+    prover's places."""
+    stream, (k1, j) = "circuit/rep0", at
+    tree = TreeAuditor(lambda s, k, b: b.__setitem__(j, 1) if (s, k) == (stream, k1) else None)
+    auditor = Auditor(tree)
+    lp = Loop(auditor, _args(zk, "pub-16.bin"))
+    s = lp.connect()
+    call(s, REGISTER)
+    name = _name(call(s, hello("")))
+    assert call(s, open_(stream)) == b"\x01"
+    f = TcpFrame(lp)
+    assert isinstance(f.ask(f"rep {name} 0 0"), tuple)
+    _, _, root = level0(lp, 25, _zeros(25), name)
+    assert call(s, commit([("circuit", root)]))[:1] == b"\x02"
+    assert call(s, LINK) == b"\x01"
+    got = []
+    for k in range(3):
+        n = _place(lp, name)
+        got.append((n, call(s, round_(stream, _domain("flock-circuit/fast100x2/rep0") if k == 0 else b"", n))))
+    block = tree.tree.blocks[tree.tree.spec["streams"].index(stream)]
+    stop = k1 if why else None
+    for k, (n, r) in enumerate(got):
+        if stop is None or k < stop:
+            assert r == _words(b"".join(c.to_bytes(16, "little") for c in block[k][:n])), k
+        else:
+            assert reason(r) == why, k
+    if why:
+        assert reason(call(s, commit([("circuit", root)]))) == why
+        assert reason(call(s, b"\x06")) == why
+    s.close()
+    f.close()
+    lp.close()
+    assert [x[0] for x in auditor.got[0]] == [10, 1, 3, 7, 2] + [4] * (3 if stop is None else stop + 1)

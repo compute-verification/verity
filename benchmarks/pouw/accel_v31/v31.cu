@@ -1,4 +1,4 @@
-// Dither's no-fold call (verity/core/protocols/pouw/circuit/dither.py) on the GPU, the prover's side of one call, bit for
+// Dither's no-fold call (verity/ml/protocols/pouw/circuit/dither.py) on the GPU, the prover's side of one call, bit for
 // bit v31.py's reference (its docstring has the semantics, the coin streams and the layout; this file follows it):
 //
 //   coins    d_A, d_B (bits), U, V (uniform on -80..80), the noise tiles' permutations and a filler call's pad, from

@@ -1,8 +1,14 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Aesop.BuiltinRules
 public import Batteries.Tactic.OpenPrivate
+public import Flock.Draw
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
 import all Init.Data.Array.QSort.Basic
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 
 @[expose] public section
 

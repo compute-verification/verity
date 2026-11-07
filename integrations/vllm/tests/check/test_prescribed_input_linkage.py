@@ -312,7 +312,7 @@ def test_padrev_m0517_under_the_attested_async_scheduler_the_eos_is_at_the_step_
     assert lk0["result"] is False and lk0["unlinked"][0]["kind"] == "eos" and "sampled id 504 at the EOS step 11 (= last step 11 - lag 0)" in lk0["why"]
     # unattested (the header carries no resolved async_scheduling): refused by name, never defaulted to 0 or 1
     lkn = _lk(store, req, {"r0": None}, {0}, lag=None)
-    assert lkn["result"] is False and lkn["unlinked"][0]["kind"] == "eos" and "async_scheduling unattested, RULING 21" in lkn["why"] and "refuse by name" in lkn["why"]
+    assert lkn["result"] is False and lkn["unlinked"][0]["kind"] == "eos" and "async_scheduling unattested)" in lkn["why"] and "refuse by name" in lkn["why"]
     assert lkn["horizon"]["r0"]["eos_of_record"]["lag"] is None and lkn["horizon"]["r0"]["eos_of_record"]["verified"] is False
     # a lag outside {0, 1}: refused by name
     assert "not in {0, 1}" in _lk(store, req, {"r0": None}, {0}, lag=2)["why"]

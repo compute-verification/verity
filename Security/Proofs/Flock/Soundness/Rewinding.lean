@@ -2,6 +2,9 @@ module
 
 public import Proofs.Core.Game.Rewinding
 public import Definitions.Flock.Rewinding
+public import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Algebra.Order.Chebyshev
+import Mathlib.Combinatorics.Enumerative.DoubleCounting
 
 /-!
 # C-Flock's rewinding lemma is Core's: `Rewinding`

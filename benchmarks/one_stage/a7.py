@@ -199,7 +199,8 @@ def lay_out(req: RQ.Requirement, positions, seed: int):
         payload[j] = payload.get(j, 0) | req.values[v] << offset[v]
     for j in set(block.values()):
         freed.setdefault(max(req.last[v] for v, k in block.items() if k == j), set()).add(j)
-    return RQ.Layout(block, offset), RQ.Store(NR, written, {s: frozenset(b) for s, b in freed.items()}, payload)
+    return (RQ.Store.Packing(block, offset),
+            RQ.Store(NR, written, {s: frozenset(b) for s, b in freed.items()}, payload))
 
 
 # --- the canonical commitments ----------------------------------------------------------------------------------------------
@@ -455,7 +456,7 @@ class UnitsLink:
     they are set, the link credits nothing."""
     holds: bool
     req: RQ.Requirement
-    layout: RQ.Layout
+    layout: RQ.Store.Packing
     appends: bytes | None = None
     proved: bool = False
     epsilon: float = 1.0
@@ -984,9 +985,10 @@ def main() -> int:
         print("A7 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str)[:4000])
         return 1
 
-    # the verifier's stratified sample, by its own Lean; each member serves its stratum, --zk
-    p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                "--stratified", str(a.k)], out / "draw.log")
+    # the verifier's stratified sample, by its own Lean on a development challenger's coins; each member serves its
+    # stratum, --zk
+    p = a0.challenger_draw(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+                                    "--stratified", str(a.k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, n_inst, verdicts, statement, sessions, counts, session_roots, opened = [], [], 0, {}, {}, [], {}, {}, {}
