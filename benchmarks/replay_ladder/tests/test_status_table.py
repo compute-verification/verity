@@ -1,11 +1,11 @@
-"""The coverage table's checks, rendering and ladder merge, on a synthetic sidecar."""
+"""The per-model status table's checks, rendering and ladder merge, on a synthetic sidecar."""
 from __future__ import annotations
 
 import copy
 
 import pytest
 
-import coverage_table as C
+import status_table as C
 
 
 def cell(status: str = "representable", *ev: str) -> dict:

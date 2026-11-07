@@ -1,15 +1,17 @@
 """The engine classes: by name, each engine a registration without batch invariance compiles in, and what serving it fixes.
 
 Class G is the one registered: GLM-5.3 at TP8, eager or compiled (vLLM's breakable CUDA graphs over the eager kernels at fixed
-capture sizes, `CLASS_G_EXECUTIONS`), on H200 (`predict.dsa`'s domain), with no prefix cache.  A registration
-states each of its engine limits, at most `CLASS_G_LIMITS`: steps of up to 8,192 tokens and 256 sequences, positions up to 32,768,
-and a long-prefill threshold of at most 256 rows, so each prefill chunk stays on DSA's decode route at 8 heads a rank.  The step
-compiler admits such a registration (`predict.steps.launch_class`), compiles a long prompt as its prefill chunks, each at the
-launch it ran in, and refuses by name, request by request, a launch `predict.dsa` doesn't write: a step past the 2,048 tokens its
-captured all-reduce and cuBLAS routes cover, or a row past the 2,048 keys where DSA's top-k is the identity.
-`verity_vllm.LLM(engine_class="G")` serves it at `CLASS_G_SERVED`, the limits within which every launch is written, and up to its
-256 sequences a step, with `options`; its admission (`engine.class_admission`) refuses as it serves what the compiler would refuse of
-the window: a prompt over the served `max_model_len`, and a request in flight when a Commit window closes.
+capture sizes, `CLASS_G_EXECUTIONS`), on H200 (`predict.dsa`'s domain).  A registration states each of its engine
+limits, at most `CLASS_G_LIMITS`: steps of up to 8,192 tokens and 256 sequences, positions up to 32,768, and a long-prefill
+threshold of at most 256 rows, so each prefill chunk stays on DSA's decode route at 8 heads a rank, and the prefix cache on or off.
+The step compiler admits such a registration (`predict.steps.launch_class`), compiles a long prompt as its prefill chunks, each at
+the launch it ran in, and a prefix-cache hit or a request a Commit window carries as the request's Program after its history, and
+refuses by name, request by request, a launch `predict.dsa` doesn't write: a step past the 2,048 tokens its captured all-reduce and
+cuBLAS routes cover, or a row past the 2,048 keys where DSA's top-k is the identity.  `verity_vllm.LLM(engine_class="G")` serves
+it at `CLASS_G_SERVED`, the limits within which every launch is written, and up to its 256 sequences a step, with `options`, the
+prefix cache off; its admission (`engine.class_admission`) refuses as it serves a prompt over the served `max_model_len`, and a
+request in flight when a Commit window closes, since the served Commit doesn't commit the boundary state a carried request's
+history is opened from.
 """
 from __future__ import annotations
 
