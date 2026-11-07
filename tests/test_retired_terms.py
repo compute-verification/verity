@@ -16,8 +16,8 @@ them are incorrect, never faulty or wrong, while a faulty node, link or device k
 a key that mirrors a Lean name such as `faulty_bits`) are code; the retired-terms table
 (`GLOSSARY.md`) names them. What may stay: the table's own rows (``RETIRED_ROWS``), a spelling baked into a
 record or a digest (``ALLOWED``, one reason each; an entry that matches nothing fails too), and a file whose lines a PR
-already queued on `next` rewrites (``PENDING``), until that PR lands and the rename follows it, or that moves to another
-repository.
+queued on `next` rewrites, or whose messages mirror the Lean's (``PENDING``), until that PR lands or the Lean is renamed,
+and the rename follows it.
 
 The Lean's declaration names get a pass of their own (``LEAN_WORDS``): a name that carries one of the Glossary's older
 names keeps it until it is renamed, and each word's count of names only falls (``RETIRED_NAMES``).
@@ -221,83 +221,25 @@ ALLOWED: dict[str, str] = {
                                                        "which a queued PR on next rewrites; renamed after it lands",
     "no faulty proof block, every one being drawn": "`benchmarks/network_traces/leak_bounds.py`'s docstring: a queued PR on "
                                                     "next rewrites the line beside it; renamed after it lands",
+    "a tied audit no faulty term (its wrong units' outputs are the egress's)": "the network period check's refusal in "
+        "`period_case.py`, which mirrors `NetworkCheck.Period`'s Lean message word for word; renamed with the Lean",
+    "K charges a tied audit no faulty term": "the refusal `test_network_period_protocol.py` expects from Lean "
+                                             "(`NetworkCheck.Period`); renamed with the Lean",
+    "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
+                                                           "names to say it is not the network certifier's name",
+    "where a passive warden only watches": "network steganography's own term, beside the one above",
+    "(the bytes say draw)": "`verity/ml/commitments/domains.py`'s comment over the POUW_*_SAMPLING tags, which names their "
+                            "bytes (`verity/pouw/pearl-c-draw/v1` and the rest)",
 }
 
 PENDING: dict[str, str] = {
-    "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
-    "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
-    "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean after the check window",
-    "integrations/vllm/verity_vllm/pipeline/serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
-    "integrations/vllm/tests/pipeline/test_serve_h1.py": "queued PRs add the term here; the proof-service rename follows them",
-    "verity/ml/commitments/domains.py": "queued PRs add the term here; the proof-service rename follows them",
-    "benchmarks/pouw/served_h1/coins.py": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "verity/ml/circuits/silicon/README.md": "a queued PR on next adds it, naming the block-scaled FP4 path; the rename follows it",
-    "benchmarks/pouw/lowbit_dc/README.md": "a queued PR on next deletes it, with its line naming a production kernel",
-    "verity/core/claims/tests/test_claims_registry.py": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "verity/core/protocols/pouw/dither/PROTOCOL.md": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "Security/Definitions/Nci/Capability/README.md": "its per-block cap q was pending when the accounting vocabulary's rename "
-                                                     "ran; that rename follows",
-    "verity/core/protocols/remote_bandwidth/README.md": "queued PRs rewrite its lines; the proof-service rename follows them",
-    "Security/Proofs/NetworkCertifier/README.md": "#4690 adds lines",
-    "examples/h200/interfaces/README.md": "#4719 rewrites its lines",
-    "examples/h200/README.md": "#4680 rewrites its lines",
-    "benchmarks/stacked_share/README.md": "#4514 rewrites its lines",
-    "integrations/vllm/README.md": "#4773 adds lines",
-    "README.md": "main rewrote its demos' rows, naming verity example, after the demos' words were generated; they follow",
-    "tools/verity/cli/README.md": "main added it, naming verity example, after the demos' words were generated; they follow",
-    "benchmarks/remote_session/README.md": "main rewrote its opening, naming verity example, after the demos' words were "
-                                           "generated; they follow",
-    "verity/README.md": "#4502 rewrites its lines",
-    "verity/core/protocols/network/tests/period_case.py": "#6383 rewrites its docstrings and the rows form's refusals",
-    "verity/core/protocols/network/tests/test_network_period_protocol.py": "#6383 rewrites its docstrings and the rows "
-                                                                           "form's refusals",
-    "verity/core/protocols/pous/README.md": "#4719 rewrites its lines",
-    "verity/core/protocols/remote_bandwidth/PROTOCOL.md": "#4620 rewrites its lines",
-    "verity/ml/windows/interface.py": "#4502 adds lines",
-    "examples/onsite_served/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "Security/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "benchmarks/multi_unit/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "benchmarks/sampling_plan/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/core/protocols/interface/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/core/protocols/pouw/lean/check/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    "verity/ml/definitions/README.md": "queued PRs on next add the protocol vocabulary's retired words here; its rename follows them",
-    ".agents/skills/friction/SKILL.md": "queued PRs on next add the warden here; the network certifier's rename follows them",
-    "AGENTS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "ARCHITECTURE.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/rho/README.md": "queued PRs on next rewrite it",
-    "benchmarks/prove_path/e2e_chains/README.md": "queued PRs on next rewrite lines the training vocabulary's rename touches; it follows them",
-    "benchmarks/network_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/network_traces/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/one_stage/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "benchmarks/pouw/opcode_probe/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
+    "verity/core/protocols/pouw/credit.py": "its messages mirror the Lean's, which a difftest compares; renamed with the Lean",
+    "verity/core/protocols/pouw/tests/test_pouw_credit.py": "its messages mirror the Lean's, which a difftest compares; "
+                                                            "renamed with the Lean",
+    "integrations/vllm/tests/protocols/test_credit_gate.py": "its messages mirror the Lean's, which a difftest compares; "
+                                                             "renamed with the Lean",
     "benchmarks/recursion_e2e/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
     "examples/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "Security/Proofs/Flock/Soundness/ASSUMPTIONS.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "examples/lifecycle/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "examples/vllm/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/difftest/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/primitives/requirement/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/bandwidth/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    ".agents/skills/lean-proofs/SKILL.md": "queued PRs on next rewrite its lines naming named premises; the rename follows them",
-    "verity/core/devices/memory_challenger/README.md": "a queued PR on next adds it, naming the prover's node and site; the rename "
-                                                       "follows it",
-    "verity/core/protocols/certifier/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/certifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/composition/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/pous/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/remote/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/core/protocols/pouw/README.md": "main and queued PRs on next rewrite its lines naming verity example, the honest "
-                                            "prover's GPU effort and block-scaled FP4, or lines beside them; the renames follow",
-    "verity/core/protocols/sampled_proofs/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/ml/flock/live/PROTOCOL.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/ml/flock/verifier/README.md": "queued PRs on next rewrite lines the protocol vocabulary's rename touches; it follows them",
-    "verity/ml/flock/README.md": "a PR on next rewrites the lines beside its unit classes; the rename follows it",
-    "tools/verity/check/README.md": "moves to the infra repository with the check's tooling; renamed there",
-    "benchmarks/README.md": "queued PRs on next add rows that name C-Flock, beside lines the rename touches; it follows them",
-    "benchmarks/unit_block/README.md": "a queued PR on next adds it, naming C-Flock; the rename follows it",
-    "benchmarks/flock_s8_block/README.md": "a queued PR on next adds lines naming C-Flock and the verifier of record; the rename follows it",
-    "verity/core/devices/memory_challenger/lean/README.md": "a queued PR on next adds it, naming C-Flock; the rename follows it",
-    "verity/ml/private_circuits/README.md": "a queued PR on next adds it, naming the netlist; the rename follows it",
 }
 
 
@@ -602,7 +544,7 @@ def test_the_doc_scan_reads_each_form():
                 "```sh\nverity example vllm\n```\n",
         "c.py": '"""A wrong unit and a leg stay in code until PR 2."""',
         "benchmarks/pouw/CHANGELOG.md": "a leg",
-        next(f for f in PENDING if f.endswith(".md")): "a leg",
+        **{f: "a leg" for f in PENDING if f.endswith(".md")},
         GLOSSARY: '| "leg"; a physical block | subprotocol |\nA leg outside the table.\n',
     }
     assert doc_offenders(list(docs), read=docs.__getitem__)[0] == [(GLOSSARY, 2, "leg"),
