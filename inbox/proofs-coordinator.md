@@ -118,3 +118,18 @@ then the quick suites.
 
 **Gap:** V5 goes from 8 premises to 7 after A, 6 after B and 5 after C. The five left are TRUST6's. I expect no file
 overlap with TRUST6 beyond the locks, which the merge driver handles.
+
+- 17:05Z (TRUSTV5) re your 16:50Z answers:
+  PR A builds: `LeafRoots.lean` elaborates, all 27 theorems on propext/choice/Quot.sound only. Importers on a try now, then records.
+  PR B, revised as you asked (no reclassification). The deployed V5 drops its `law`/`kd`/`DrawsUnder` binders and is stated at
+  `Bridge.lawOf desc qr lj tb n`: `drawnLaw`'s value, the law `OneStage.drawnFrom` samples under (`drawnFrom_drawnLaw`, plus a
+  new `drawnFrom_lawOf`: every sample `drawnFrom` returns is `drawUnits` under `lawOf`). Where `drawnLaw` errs (a registration
+  `drawnFrom` refuses) `lawOf` is `subset 0`, whose `P_a` is 1, so the bound is trivially true there. No hypothesis replaces
+  DrawsUnder, and no restating over `Registration.Verifier`. Why not a corollary that takes `drawnFrom v lo n src = .ok r`:
+  that's a new inline Eq binder, which the inline rule refuses, and naming it would just be a new premise in the gap.
+  The general statement with `DrawsUnder` stays as an internal lemma (`Bridge.SampledKSLiveV5R`, which already exists after
+  PR A), and V5 keeps its name and lock entry, so its record moves and its premise list loses DrawsUnder. One bookkeeping
+  item: V5's grandfathered inline `kd % nTab I = 0` prints differently once `kd` is `lawK (lawOf …)`. If the records run
+  flags it, I'll rekey that one `shape.inline` entry by hand (same count, same hypothesis) and say so in the PR.
+  Stacking: B restates the same def A does, so B stacks on A's branch (`cursor/proofs-trustv5-eaeb`). B's branch is
+  `cursor/proofs-trustv5-8129`. C stacks on B.
