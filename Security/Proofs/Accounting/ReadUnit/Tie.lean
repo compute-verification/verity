@@ -81,7 +81,7 @@ theorem ofBits_bit {C : FlockSoundness.Audit.Circuit} (tr : (Verity.Circuit.ofAu
     have : i < 1 := hi
     omega
   subst hi0
-  simp [Verity.Circuit.ofBits, ReadUnit.bit, BitVec.getLsbD_ofBool]
+  simp [Verity.Circuit.ofBits, ReadUnit.bit]
 
 /-- A unit correct in core's view of a game partition is correct in the game's, at its bits. -/
 theorem correct_bits {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n) {u : Fin n}
