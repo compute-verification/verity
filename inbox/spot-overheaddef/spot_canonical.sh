@@ -6,7 +6,9 @@
 # (cursor/proofs-overheaddef-1d19), spot_tp8.sh, gpu-lease and sitecustomize.py (the TP8 shims), and this file.
 #   [HOLD=/workspace/research/holds/glm53-sessions] [DEADLINE=UNIX_TIME] [SERVED_OUT=RUN/out] [OLD=DIR] \
 #     bash "$RESEARCH_RUN_DIR/inputs/spot_canonical.sh"
-# SERVED_OUT skips step 1 and replays against an earlier run's serve (its record arm, OUT/served and engine env); OLD is the
+# SERVED_OUT skips step 1 and replays against an earlier run's serve (its record arm, OUT/served and engine env; REC=ARM_DIR,
+# LOAD=NAME and ENGINE_ENV_FILE=FILE name another layout's, such as a serve_tax arm's, whose replay is then held to the arm's
+# client tokens, and to its logprobs only where SERVED_OUT/served.json says they were written); OLD is the
 # capture removed first when /workspace has under NEED_G (250) GB free.
 # 0. HOLD=FILE: vllm's session job (glm53_sessions.sh) waits while FILE exists. It is written first, then the job waits up to
 #    IDLE_MIN (40) minutes for every GPU to be under 1 GiB used, and FILE is removed when this script exits.
@@ -71,11 +73,12 @@ sys.exit(0 if sum(per) > 0 else 1)
 EOF
 }
 if [ -n "${SERVED_OUT:-}" ]; then
-  R=$SERVED_OUT/pinned/glm53/record
-  [ -f "$R/meta.json" ] && [ -f "$SERVED_OUT/served.json" ] && [ -f "$SERVED_OUT/serve_engine_env.txt" ] \
-    || { echo "canonical: $SERVED_OUT holds no serve (record arm, served.json, serve_engine_env.txt)"; exit 3; }
-  echo "== the serve is $SERVED_OUT's $(date -u +%FT%TZ)"
-  cp -r "$SERVED_OUT/served" "$OUT/served" && cp "$SERVED_OUT/served.json" "$SERVED_OUT/serve_engine_env.txt" "$OUT/" || exit 2
+  R=${REC:-$SERVED_OUT/pinned/glm53/record}; EE=${ENGINE_ENV_FILE:-$SERVED_OUT/serve_engine_env.txt}
+  [ -f "$R/meta.json" ] && [ -f "$R/${LOAD:-saturated}/rep-1/client.jsonl" ] && [ -f "$EE" ] \
+    || { echo "canonical: no serve at $SERVED_OUT (record arm $R with load ${LOAD:-saturated}, engine env $EE)"; exit 3; }
+  echo "== the serve is $R's load ${LOAD:-saturated} $(date -u +%FT%TZ)"
+  cp "$EE" "$OUT/serve_engine_env.txt" || exit 2
+  if [ -f "$SERVED_OUT/served.json" ]; then cp -r "$SERVED_OUT/served" "$OUT/served" && cp "$SERVED_OUT/served.json" "$OUT/" || exit 2; fi
   cp "$SERVED_OUT/topk-serve.json" "$OUT/" 2>/dev/null
 else
 echo "== serve $(date -u +%FT%TZ)"
@@ -112,9 +115,10 @@ print(json.dumps({"requests": len(toks), "tokens": sum(map(len, toks.values())),
 EOF
 fi
 echo "== replay with every hook on $(date -u +%FT%TZ)"
-VERITY_DSA_TOPK_LOG=$OUT/topk-capture ARM=$R LOAD=saturated ENGINE_ENV=$OUT/serve_engine_env.txt HF_HOME=/workspace/hf \
-  KEEP_TENSORS=all LONG=1 GATE_EVERY=${GATE_EVERY:-1} STAGE=${STAGE:-1} DEADLINE=${DEADLINE:-0} \
-  REPLAY_ARGS="--logprobs --against $OUT/served" VENV=$VENV bash "$IN/spot_tp8.sh"
+AGAINST=; [ -f "$OUT/served.json" ] && AGAINST="--logprobs --against $OUT/served"
+VERITY_DSA_TOPK_LOG=$OUT/topk-capture ARM=$R LOAD=${LOAD:-saturated} ENGINE_ENV=$OUT/serve_engine_env.txt HF_HOME=/workspace/hf \
+  KEEP_TENSORS=${KEEP_TENSORS:-all} LONG=${LONG:-1} GATE_EVERY=${GATE_EVERY:-1} STAGE=${STAGE:-1} DEADLINE=${DEADLINE:-0} \
+  REPLAY_ARGS="$AGAINST" VENV=$VENV bash "$IN/spot_tp8.sh"
 rc=$?
 live "$OUT/topk-capture" | tee "$OUT/topk-capture.json" || echo "canonical: the capture's replay rewrote no long top-k row"
 "$PY" - "$OUT" <<'EOF' | tee "$OUT/hooks_match.json"

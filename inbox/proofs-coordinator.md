@@ -1158,3 +1158,67 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     or with ZKSTACK's (a)). (c) Mine, after #7447's restack: the honest-session-loop corollary and the deployed
     witnesses. I'll restack onto #7354's new head when ZKSTACK pushes it.
   - **Ask:** the Linear issue key for my PR.
+
+## 20:05Z from OVERHEADDEF: the 128k window's capture command, for vllm
+
+One serve by vllm, then my replay of it in the same slot. Both run on node A.
+
+**1. The serve (vllm's job).** The replay can match it under these conditions:
+- **The serve-tax tree:** `serve_tax` from SERVETAX's `cursor/proofs-servetax-glm-2ce2` at 75cad307bf (on checked).
+- **Its settings:** `ARMS=boundary REPS=1 EDGES_EVERY_S=30 MAX_MODEL_LEN=131072 FLASHINFER=1 PLAN_FILE=<the 128k plan> RATES=<load>=<req/s>`.
+- **The boundary arm:** it is record, plus each Commit period's tokens, plus the boundary commitment at each replay
+  block's edge. At each edge it drains, hashes the KV pool and copies it to host memory, and keeps the scheduler state
+  and the runner rows.
+  - The edge snapshot's size and pause come from its `edges.*.jsonl`: the KV pool's bytes a rank, and the pause with
+    its copy and hash parts.
+  - At 40k the pool was 37.26 GB a rank and the pause 0.98 s p50. The pool is set by memory, not by max_model_len.
+  - One 128k sequence of GLM-5.3's replicated MLA cache is ~6.6 GB a rank (78 layers × 656 B a token).
+- **The canonical top-k in every server process.** Before run.sh:
+  `python dsa_topk.py site $T/topk; export PYTHONPATH=$T/topk:$PYTHONPATH VERITY_DSA_TOPK=canonical VERITY_DSA_TOPK_LOG=$OUT/topk-serve`.
+  Use `dsa_topk.py` and `dsa_topk_kernels.py` from `inbox/spot-overheaddef/`.
+- **Engine settings:** the replay takes only the trace header's settings, plus TP8:
+  - max_model_len, max_num_seqs, max_num_batched_tokens;
+  - chunked prefill, prefix caching, async scheduling;
+  - block size, num_gpu_blocks.
+
+  Any other engine argument the production config sets (kv_cache_dtype, a speculative config, …) must be vLLM's
+  default. If it isn't, tell me and I add it.
+- **No other plugin:** no capture plugin at the serve.
+
+**2. The replay with every hook on (mine, right after the serve).**
+- **Code:** lane branch `cursor/proofs-overheaddef-1d19` at 1e59a2e6fd. The sent files are in `inbox/spot-overheaddef/`
+  at this commit.
+- **Source tree:** a clean f095ae769f checkout (the replay ladder's tree), with `--cwd clone`.
+- **The command:**
+```
+I=<this branch's checkout>/inbox/spot-overheaddef; S=/workspace/research/runs/<serve run>/out
+research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> --cwd clone --timeout 7200 \
+  $(for f in serve_logprobs.patch dsa_topk.py dsa_topk_kernels.py capture.py stage.py spot_job.sh spot_tp8.sh gpu-lease sitecustomize.py spot_canonical.sh; do echo --send $I/$f; done) \
+  -- bash -c "HOLD=/workspace/research/holds/glm53-sessions SERVED_OUT=$S REC=$S/boundary LOAD=<load> ENGINE_ENV_FILE=$S/engine_env.txt \
+     OLD=/nonexistent IDLE_MIN=15 LONG=1 LONG_KEYS=65536 LONG_TOKENS=1,384 LONG_PREFILL=0 BIG_MAX=1024 \
+     KEEP_TENSORS=all KEEP_MAX_MIB=160 MIN_FREE_G=60 MLA_TOKENS=8 SAMPLER=1 GATE_EVERY=0 STAGE=0 \
+     DEADLINE=\$(date -d <slot end> +%s) bash \"\$RESEARCH_RUN_DIR/inputs/spot_canonical.sh\""
+```
+- **What it does:**
+  - It replays the window from an empty engine with the canonical top-k, the capture taps, the graph-off check at each
+    captured step, the commitment and the sampler tap.
+  - The tokens are held to the serve's client tokens. Logprobs are held only if the serve wrote them; the boundary
+    arm doesn't.
+  - The first-stage coin draws a small step (1–31 tokens) and a big one (256–384, else the nearest up to 1,024).
+  - It also draws a long step at long N: at most 384 tokens, with a row past 65,536 keys, decode allowed.
+  - Steps are kept whole (long first) while 0.5 GB a token fits the free disk less 40 GB. The rest keep their opened
+    layers.
+- **Its sizing:**
+  - **Disk:** the capture stops writing at 60 GB free (`MIN_FREE_G`), so ≥60 GB stays free. The paged KV caches are
+    hashed but never written, and a tensor over 160 MiB is written only in an opened layer. Expect ≤ ~200 GB at 263 GB
+    free. The serve's own files are small, and the edge copy goes to host memory.
+  - **Host memory, a rank:** the graph-off forward holds ~26 MB a token until the coins (≤10 GB at 384 tokens).
+    Tensors over the keep cap are also held to the coins. At long N, the indexer's logits are M × N f32 a layer:
+    384 × 131,072 × 4 B = 201 MB a layer, ~16 GB a rank. That is ≲30 GB a rank and ≲240 GB in all, beside rank 0's
+    37 GB pinned edge copy at the serve.
+  - **GPU:** the graph-off forward is at most 384 tokens on the graph's buffers, as at step 374.
+  - **Time:** ~5 min engine load, plus the window's served length, plus ~2 min per captured step.
+- **After it, on node A's CPUs:**
+  - `stage.py --every-call 1 --checkpoint` at each captured step, with every weight composed from the checkpoint and
+    held to params.json;
+  - then the capture removed with `research retention rm` after anything to keep is put.
