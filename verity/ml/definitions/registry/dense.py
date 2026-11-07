@@ -3,17 +3,10 @@ profile that the fused b1 kernels do NOT cover: the operations a model runs UNFU
 (`ir.ops.rms_norm` / `ir.ops.fused_add_rms_norm` as an ATen chain on an f32 copy), its activation is GeGLU (`_C.gelu_tanh_and_mul`),
 its attention has a logit soft cap (FA2 `Is_softcap`), or its logits are soft-capped (`LogitsProcessor(soft_cap)`).
 
-PROMOTED from `verity_vllm.program.quarantine.dense`: every
-Definition below is the quarantine module's body VERBATIM — same name, same version, same statics, same gates — so the
-specialization ids are those the accepted `GEMMA2_2B-cov_gemma2_2b_b1_c256.r8h` record and the eager Gemma-2 (`profiles.generic`, formerly `gen_dense2_gemma2_2b`)
-Match profile resolve to. The quarantine modules re-export these objects (their difftest adapters, `ALL_DEFINITIONS` and
-`SEMANTIC_ID`s are unchanged). Each section keeps the quarantine module's docstring: the ATen / Triton / CUDA source the body
-follows, the wave-1 exhaustive GPU tables and the pod difftests that are its correspondence evidence (see the `conformance=`
-strings).
-
-Bound as kinds of the pinned `b1-eager-v3` vocabulary (`frontend/rules/vocab.py::_dense_kinds`) and asked for by the op-shaped
-rules of `frontend/rules/vllm_bindings.py` (`WidenBf16ToF32`, `Square`, `MeanDimBI`, `Rsqrt`, `AddScalar`, `AddWidened`, `MulF32`,
-`NarrowF32ToBf16`, `GeluTanhAndMul`, `Bf16ScalarChain`, the softcap role of `UnifiedAttentionWithOutput`). Nothing here names a model.
+Every Definition below keeps the name, version, statics and gates it was first accepted under, so its specialization ids are
+the ones the accepted Gemma-2 records resolve to. Each section's notes give the ATen / Triton / CUDA source the
+body follows, the wave-1 exhaustive GPU tables and the pod difftests that are its correspondence evidence (see the
+`conformance=` strings). A frontend binds them by the operation each computes; nothing here names a model.
 
 Conventions (checked against wave-1's exhaustive GPU tables): every ATen CUDA kernel here converts f32 -> bf16 with the hardware
 `cvt.rn.bf16.f32` (`c10::BFloat16(float)` on sm_80+ is `__float2bfloat16`), so NaN words are 0x7FFF (`F2fpBf16`), not the

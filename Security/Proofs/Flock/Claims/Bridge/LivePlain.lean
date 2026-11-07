@@ -28,7 +28,7 @@ open FlockSoundness FlockSoundness.Game FlockSoundness.Discharge FlockSoundness.
   FlockSoundness.Discharge.Exec Claims.Bridge.Live Claims.Bridge.LiveZk
 
 /-- **flock-verify's verdict as an oracle program**: `Accepts`' setup, then the verifier over `OC`. -/
-def verdictPL (I : Inputs) (t : Transcript) : OC Bool :=
+def verdictPL (I : Inputs) (t : Exec.Transcript) : OC Bool :=
   match setupOf I t.record with
   | .error _ => .ret false
   | .ok (spec, sts) =>
@@ -38,7 +38,7 @@ def verdictPL (I : Inputs) (t : Transcript) : OC Bool :=
         | .error _ => false)
 
 /-- **Against `H`, it is `verifyWith (hOf H)`'s verdict.** -/
-theorem verdictPL_eval (H : Msg → Msg) (I : Inputs) (t : Transcript) :
+theorem verdictPL_eval (H : Msg → Msg) (I : Inputs) (t : Exec.Transcript) :
     ((verdictPL I t).eval H).1 = true ↔ ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧
       _root_.Flock.verifyWith (hOf H) spec (sts.map _root_.Flock.Setup.ofCircuit) t.record t.proofs = .ok () := by
   unfold verdictPL
@@ -58,7 +58,7 @@ theorem verdictPL_eval (H : Msg → Msg) (I : Inputs) (t : Transcript) :
       e | ⟨⟩ <;> simp [OC.eval]
 
 /-- **Against SHA-512, it is flock-verify's acceptance.** -/
-theorem verdictPL_sha (I : Inputs) (t : Transcript) : ((verdictPL I t).eval shaH).1 = true ↔ Accepts I t := by
+theorem verdictPL_sha (I : Inputs) (t : Exec.Transcript) : ((verdictPL I t).eval shaH).1 = true ↔ Accepts I t := by
   rw [verdictPL_eval, hOf_shaH]
   unfold Accepts
   refine exists_congr fun spec => exists_congr fun sts => and_congr_right fun h1 => ?_
@@ -69,7 +69,7 @@ open Classical in
 `liveSession`'s probability that flock-verify accepts the written transcript and `Q` holds. -/
 theorem Pr_acc_plain (nMax : ℕ) (J mPts N : Msg → ℕ) (dg : ByteArray → ByteArray)
     (w : (x : Msg) → Wire nMax (J x) (mPts x)) (I : Msg → Inputs)
-    (wr : (x : Msg) → LiveOutJ (J x) (mPts x) → Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (wr : (x : Msg) → LiveOutJ (J x) (mPts x) → Exec.Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Q : LiveOutJ (J x) (mPts x) → Prop) :
     Pr (fun r : Fin ((liveV nMax J mPts N dg w fun x o => verdictPL (I x) (wr x o)).k x) → LCoin nMax =>
         (run shaH P (liveV nMax J mPts N dg w fun x o => verdictPL (I x) (wr x o)) x ω r).out = .acc ∧
@@ -88,7 +88,7 @@ most the salted session's acceptance against the simulated strategy of `liveStra
 theorem Pr_acc_plain_le {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Nonempty D] [Inhabited D]
     [Inhabited Sl] (nMax : ℕ) (mPts N : Msg → ℕ) (ts : (x : Msg) → List (TabSpec (mPts x)))
     (dg : ByteArray → ByteArray) (w : (x : Msg) → Wire nMax (ts x).length (mPts x)) (I : Msg → Inputs)
-    (wr : (x : Msg) → LiveOutJ (ts x).length (mPts x) → Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
+    (wr : (x : Msg) → LiveOutJ (ts x).length (mPts x) → Exec.Transcript) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω)
     (Q : LiveOutJ (ts x).length (mPts x) → Prop) (A : Model.Arith FlockLevel3.GF128 K) (Hc : List UInt8 → D)
     (E : Merkle.Enc (List FlockLevel3.GF128) D) (Lf : Merkle.Leaf (List FlockLevel3.GF128) Sl D Hc)
     (opn : Array ByteArray → Fin (ts x).length → Model.Opens FlockLevel3.GF128 D × Model.Salts Sl)

@@ -1,4 +1,4 @@
-//! The native tail of a cut IR template (lane flock-ir-lowering): the verifier's own evaluation of the gates that read no
+//! The native tail of a cut IR template: the verifier's own evaluation of the gates that read no
 //! input word (RMSNorm's warp-aggregate sum and row scalar), from the program `verity_flock.ir_lower.tail_program` emits.
 //!
 //! A program is ops `[out slot, primitive id, operand slots...]` (constants `[slot, "Const", value]`) over slots
@@ -296,7 +296,7 @@ fn is_nan(x: u32) -> bool {
     x & 0x7FFF_FFFF > 0x7F80_0000
 }
 
-/// IEEE f32 with the IR's NaN choice (numpy float32 on x86-64, red-team-flock-2 IR5), fixed here rather than left to the
+/// IEEE f32 with the IR's NaN choice (numpy float32 on x86-64), fixed here rather than left to the
 /// compiler's operand order: a NaN operand comes back quieted, `b` when both are NaN if `second` (add, mul) else `a` (div); an
 /// invalid operation gives 0xFFC00000.
 fn ieee(a: u32, b: u32, second: bool, op: fn(f32, f32) -> f32) -> u32 {

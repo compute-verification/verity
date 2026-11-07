@@ -13,9 +13,10 @@ public import Properties.SampledProofs
 `Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.tiedSameB` over three subprotocols, in the order of
 their ids: the inference-only policy (`NciCheck.Protocol.protocol`), PoUW's period credit
 (`PouwCheck.Period.protocol`) and sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
-one-stage v1's audit or the recursive audit, whichever form its params name. The policy's commitment and sampled
-proofs' (one-stage v1's, in both forms) are the run's registration record, and the composite rejects unless both decode
-to one digest (`Core.Composition.strays` over `Core.Remote.tied`);
+one-stage v2's audit or the recursive audit, whichever form its params name. The policy's commitment and sampled
+proofs' (the one-stage registration record, `SampledProofs.OneStage.commitmentOf`, in both forms) are the run's
+registration record, and the composite rejects unless both decode to one digest (`Core.Composition.strays` over
+`Core.Remote.tied`);
 the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
 record its windows name (`Core.Remote.windowRecords`) has that digest too. The policy's check
 (`NciCheck.Protocol.check`) refuses a record whose `program` is not the
@@ -33,7 +34,7 @@ the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size 
   fresh input bits per gate, so the declaration complies (`Nci.Complies Γ α`), and it has a padded
   `(Γ, ⌊αΓ⌋)`-partition when Boolean, its bit-level expansion a padded `(ΓW, ⌊αΓW⌋)`-partition when its gates are 1 to
   `W` bits wide; and the record sampled proofs' case commits to names, by its SHA-512, the program the form its params
-  name verifies the sessions against (`StageHeld`): one-stage v1's verifier's, or in the recursive form the inner
+  name verifies the sessions against (`StageHeld`): one-stage v2's verifier's, or in the recursive form the inner
   statement's, whose one verdict of record V*'s compiled check computes. With one digest for the two records, the
   registered circuit the policy checked and the program sampled proofs verifies have one SHA-512.
 * `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerRemote` reads, `Nci.Complies Γ α d` from
@@ -107,20 +108,22 @@ def CaseHeld (k : Case) : Prop :=
 
 /-- Sampled proofs' case `k` decodes under sampled proofs' own decoders (`VStar.Recursive.Sampled`, whose params name
 the form), and the record it decodes to names, by its SHA-512, the program the named form verifies the sessions against
-(`Properties.SampledProofs.R2`): in the one-stage form, the program of one-stage v1's own verifier; in the recursive
-form, the program of the inner statement's verifier (`VStar.Recursive.Params.base`), the statement whose one verdict of
-record V*'s compiled check computes and whose soundness the recursive audit (`RecursiveAuditC3`) states. -/
+(`Properties.SampledProofs.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
+params, `SampledProofs.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
+(`VStar.Recursive.Params.base`), the statement whose one verdict of record V*'s compiled check computes and whose
+soundness the recursive audit (`RecursiveAuditC3`) states. -/
 def StageHeld (k : Case) : Prop :=
-  (∃ (p : SampledProofs.OneStage.Params) (c : SampledProofs.OneStage.Commitment),
+  (∃ (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
-    SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record p.verifier) ∨
+    SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record p.base.verifier) ∨
   (∃ (q : VStar.Recursive.Params) (c : SampledProofs.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr q) ∧
     SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record q.base.verifier)
 
 /-- What remote's acceptance establishes about its cases `ev`: they are the three subprotocols' cases in order, the
 policy's `kI`, PoUW's period's `kW` and sampled proofs' `kS`; the policy's and sampled proofs' commitments decode,
-each under its own subprotocol's decoder (sampled proofs' is one-stage v1's), to one digest `r`, the run's record's;
+each under its own subprotocol's decoder (sampled proofs' is the one-stage registration record's), to one digest `r`,
+the run's record's;
 every Commit record the
 period's windows name, when they decode, has digest `r` (a period whose windows don't decode is the period's own
 refusal, `PouwCheck.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the

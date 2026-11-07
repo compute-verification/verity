@@ -1,10 +1,19 @@
-"""`pins`: every tracked file that records the sha256 of Lean sources, with the command that regenerates it.
+"""`pins`: every tracked file a command regenerates from the tree, with that command: each pin, a file that records the sha256
+of Lean sources (`PINS`), and each test's fixture (`WRITERS`).
 
-    python tools/verity/check/pins.py            each pin, whether it is stale, and its command
+    python tools/verity/check/pins.py            each pin, whether it is stale, and its command; then each test's fixture
     python tools/verity/check/pins.py --stale    exit 1 listing each stale pin with its command
     python tools/verity/check/pins.py --regen    run each stale pin's command at the root, in order; exit 1 while one is stale
+    uv run python tools/verity/check/pins.py --write PATH...   rewrite each named test's fixture by its test module's
+                                                 ``--write``, at the root; exit 1 when one failed
     python tools/verity/check/pins.py --merged OURS THEIRS [--conflicted PATH...]   regenerate what a merge of THEIRS into
                                                  OURS, under way at the root, wrote by merging text (`merged`)
+
+A test's fixture is a tracked file a test holds the tree to and its test module rewrites from the tree (``python MODULE
+--write``, in the workspace's environment). ``--write PATH`` is the one command that regenerates it, and the test's failure
+names it (`Writer.command`); only the test can tell that its fixture is stale, so ``--stale`` and ``--regen`` leave it alone.
+`tests/test_pins.py` fails on a test module under `WRITER_DIRS` with a ``--write`` that no `Writer` lists, and on a `Writer`
+whose module doesn't name its command.
 
 A pin is written only by its command, never by hand: a hand-written one can record a digest its command doesn't. A pin is
 stale when a file it records has another digest in the tree (or is gone), or, for a `sha256sum` listing, when its command's
@@ -128,6 +137,36 @@ PINS = (
         f"lake env lean NcpCheck.lean > ncp_lean.out) && uv run python {NCP} pin Security/ncp_lean.out Security; "
         f"s=$?; rm -f Security/NcpCheck.lean Security/ncp_lean.out; exit $s", "Security"),
 )
+
+
+@dataclass(frozen=True)
+class Writer:
+    #: the fixture, from the root
+    path: str
+    #: the test module that holds the tree to it and rewrites it from the tree with ``--write``, from the root
+    module: str
+
+    @property
+    def command(self) -> str:
+        """What the test's failure names: the one command that rewrites the fixture."""
+        return f"uv run python tools/verity/check/pins.py --write {self.path}"
+
+
+CIRCUITS_TESTS, VLLM_PROGRAM_TESTS = "verity/ml/circuits/tests/", "integrations/vllm/tests/program/"
+WRITERS = (
+    *(Writer(CIRCUITS_TESTS + f, CIRCUITS_TESTS + m) for f, m in (
+        ("boolean_vectors.json", "test_boolean.py"),
+        ("format_vectors.json", "test_format_spec.py"),
+        ("partition_v2_vectors.json", "test_partition_v2.py"),
+        ("population_recorded.json", "test_population_recorded.py"),
+        ("qcall_vectors.json", "test_qcall_vectors.py"),
+        ("qword_vectors.json", "test_qword_vectors.py"),
+        ("template_instance_vectors.json", "test_template_instance.py"),
+    )),
+    Writer(VLLM_PROGRAM_TESTS + "data/sampling_split_digests.json", VLLM_PROGRAM_TESTS + "test_sampling_split.py"),
+)
+#: the directories whose every test module with a ``--write`` is a `Writer`'s (`tests/test_pins.py`)
+WRITER_DIRS = (CIRCUITS_TESTS, VLLM_PROGRAM_TESTS)
 SETUP = "tools/verity/lean/setup.sh"
 #: tracked files that record Lean sources' digests and are someone else's to keep: the Lean check's locks, and the moves' history
 EXEMPT = re.compile(r"(^|/)lean-audit\.json$|^tools/move/|^archive/")
@@ -185,6 +224,23 @@ def regen(root: Path) -> list[tuple[Pin, list[str]]]:
         if r.returncode:
             print(f"pins: {pin.path}: its command exited {r.returncode}", file=sys.stderr)
     return stale(root)
+
+
+def write(paths: list[str], root: Path) -> int:
+    """`--write`: run each named fixture's test module with ``--write`` at ``root``, in this interpreter, in order; 1 when one
+    failed, 2 when a path is no `Writer`'s fixture (and nothing runs)."""
+    by_path = {w.path: w for w in WRITERS}
+    paths = [os.path.normpath(p) for p in paths]
+    if unknown := [p for p in paths if p not in by_path]:
+        print(f"pins: {', '.join(unknown)}: no test's fixture; --write takes one of {', '.join(by_path)}", file=sys.stderr)
+        return 2
+    rc = 0
+    for w in map(by_path.get, paths):
+        print(f"pins: rewriting {w.path}: python {w.module} --write", flush=True)
+        if r := subprocess.run([sys.executable, w.module, "--write"], cwd=root).returncode:
+            print(f"pins: {w.path}: {w.module} --write exited {r}", file=sys.stderr)
+            rc = 1
+    return rc
 
 
 def git(root: Path, *args: str) -> str:
@@ -359,9 +415,12 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--stale", action="store_true")
     g.add_argument("--regen", action="store_true")
     g.add_argument("--merged", nargs=2, metavar=("OURS", "THEIRS"))
+    g.add_argument("--write", nargs="+", metavar="PATH", help="rewrite these tests' fixtures (`WRITERS`)")
     ap.add_argument("--conflicted", nargs="*", default=[], metavar="PATH", help="--merged: the merge's conflicted paths")
     ap.add_argument("--root", type=Path, default=ROOT)
     a = ap.parse_args(argv)
+    if a.write:
+        return write(a.write, a.root)
     if a.merged:
         rc, doc = merged(a.root, *a.merged, a.conflicted)
         print(json.dumps(doc))
@@ -374,6 +433,8 @@ def main(argv: list[str] | None = None) -> int:
     for pin in PINS:
         s = pin.stale(a.root)
         print(f"{'stale' if s else 'ok   '}  {pin.path}  `{pin.shell(a.root)}`")
+    for w in WRITERS:
+        print(f"test   {w.path}  `{w.command}`")
     return 0
 
 

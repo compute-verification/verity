@@ -1,14 +1,16 @@
-"""The Lean verifier's caps on a V* session's registered reads (`Flock.RecBudget`), for the stagers: a V* session's
+"""The Lean verifier's caps on a recursive session (`Flock.RecBudget`), for the stagers: a V* session's
 ``registered.json`` names at most `MAX_PORTS` ports, each of a tree of at most `MAX_DEPTH` levels (`regs`), and its table
 holds at most `MAX_INSTANCES` instances (`table`); V*'s list at the inner shape holds at most `MAX_STATEMENTS` statements
-(`count`). `verify` refuses a session past any of them, so a stager refuses to write one (`check`), with the verifier's
-message."""
+(`count`), the V* parts the recursion's soundness bound covers; and the inner statement's public file holds at most
+`MAX_INNER_ROWS` instances and shared-row table rows (`inner`). `verify` refuses a session past any of them, so a stager
+refuses to write one (`check`, `check_inner`), with the verifier's message."""
 from __future__ import annotations
 
-MAX_INSTANCES = 65536
-MAX_PORTS = 4096
+MAX_INSTANCES = 4096
+MAX_PORTS = 512
 MAX_DEPTH = 64
-MAX_STATEMENTS = 4096
+MAX_STATEMENTS = 16
+MAX_INNER_ROWS = 131072
 TAIL = "the recursion's call bound covers no more"
 
 
@@ -41,11 +43,27 @@ def count(statements: int) -> str | None:
     """`RecBudget.count` on V*'s list of ``statements`` statements: its refusal, or None."""
     if statements > MAX_STATEMENTS:
         return (f"refused: V*'s list at the verifier's inner shape holds {statements} statements, more than {MAX_STATEMENTS}: "
-                f"{TAIL}")
+                f"the recursion's soundness bound covers at most {MAX_STATEMENTS} V* parts")
+    return None
+
+
+def inner(instances: int, counts: list[int] | None = None) -> str | None:
+    """`RecBudget.innerRows` on the inner statement's public file of ``instances`` instances and, a shared-row file, tables
+    of ``counts`` rows: its refusal, or None."""
+    if instances > MAX_INNER_ROWS:
+        return f"refused: the inner statement's public file holds {instances} instances, more than {MAX_INNER_ROWS}: {TAIL}"
+    if any(r > MAX_INNER_ROWS for r in counts or ()):
+        return f"refused: the inner statement's public file has a shared-row table of more than {MAX_INNER_ROWS} rows: {TAIL}"
     return None
 
 
 def check(registered: dict, unit: str, instances: int) -> None:
     """Raise ValueError with the verifier's refusal of a V* session it would refuse."""
     if why := regs(registered) or table(unit, instances):
+        raise ValueError(why)
+
+
+def check_inner(instances: int, counts: list[int] | None = None) -> None:
+    """Raise ValueError with the verifier's refusal of an inner statement it would refuse."""
+    if why := inner(instances, counts):
         raise ValueError(why)

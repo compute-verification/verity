@@ -465,7 +465,7 @@ PoUW has other guarantees, outside protocol soundness.
 ## The remote protocol in Lean
 
 Remote (`verity/core/protocols/remote`, `Core.Remote.protocol`) is the composite for an auditor with no devices at the
-site. It composes three subprotocols, sampled proofs' one-stage audit (v1), PoUW's period check
+site. It composes three subprotocols, sampled proofs (one-stage v2 or the recursive audit), PoUW's period check
 (`verity/pouw/period/v1`, onsite's work subprotocol too) and the inference-only policy's check (`NciCheck.Protocol`), and
 accepts only when all three accept and the commitment binds them (`Properties.Composition`, proved), and only when the
 policy and the one-stage audit commit to one record and every window of the period names it as its Commit record
@@ -473,9 +473,10 @@ policy and the one-stage audit commit to one record and every window of the peri
 
 - **Guarantees:** the table's sampled-proofs row and PoUW's period guarantee,
   `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, both proved. The composed statement, `Verity.Soundness`, is
-  not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol is one-stage v1, which takes
-  the sessions' verdicts as evidence; v2, which runs `flock-verify --zk` on the sessions' files itself and reads the
-  challenger's signed coins, joins once onsite and remote move to it and the composite switches.
+  not in Lean yet (above), so the two compose by hand. Remote's sampled-proofs subprotocol's one-stage form is v2,
+  which runs `flock-verify --zk` on the sessions' files itself and reads the challenger's signed coins; one-stage v1,
+  which takes the sessions' verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance to
+  `SampledKSLiveV3`'s event.
 - **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`,
   `LinkCRZC`, `TileServiceSound`, `TileDrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,

@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Builds libpouw_harness.so for sm_120a (no GPU needed): the harness's device side, cuBLASLt, the CUTLASS baselines, and the
-# plain NVFP4 and FP8 GEMMs of ../../nvfp4_sm120/nvf4_plain.cu (no CUTLASS).
+# plain NVFP4 and FP8 GEMMs of ../../nvfp4_sm120/nvf4_plain.cu (no CUTLASS). PH_ARCH=sm_90a builds it for the H100 and H200:
+# the device side and cuBLASLt only, since the CUTLASS baselines and the plain GEMMs are sm_120 kernels (bench.py --bridge
+# times the H200's CUTLASS and DeepGEMM through vLLM's and DeepGEMM's own builds).
 #
 #   export POUW_HARNESS_LIB="$(benchmarks/pouw/harness/native/build.sh [OUT_DIR])"
 #       env: POUW_HARNESS_BUILD (the build cache, default native/build), CUDA_HOME, CUTLASS_DIR, JOBS, PH_NO_CUTLASS=1,
+#            PH_ARCH (sm_120a, the default, or sm_90a),
 #            LT2_HOME (a second cuBLASLt's root, include/ and lib64/: also builds libpouw_lt2.so, lt.cu alone against it)
 #
 # The output directory is keyed by a hash of these sources, nvcc's version and the cuBLAS headers' (OUT_DIR overrides it); a
@@ -26,10 +29,16 @@ NVCC_VERSION="$("$NVCC" --version | tail -1)"
 cublas_version() { awk '/^#define CUBLAS_VER_(MAJOR|MINOR|PATCH|BUILD) /{printf "%s%s", s, $3; s="."}' "$1/include/cublas_api.h"; }
 CUBLAS_VERSION="$(cublas_version "$CUDA_HOME")"
 LT2_VERSION="$([[ -n "${LT2_HOME:-}" ]] && cublas_version "$LT2_HOME" || true)"
+PH_ARCH="${PH_ARCH:-sm_120a}"
+case "$PH_ARCH" in
+  sm_120a) ;;
+  sm_90a) PH_NO_CUTLASS=1 ;;
+  *) echo "PH_ARCH is sm_120a or sm_90a, not $PH_ARCH" >&2; exit 2 ;;
+esac
 PLAIN=../../nvfp4_sm120/nvf4_plain  # a unit's path from here, without .cu; mainloop_nvf4.cuh beside it
 [[ -f "$HERE/$PLAIN.cu" && -f "$HERE/${PLAIN%/*}/mainloop_nvf4.cuh" ]] || { echo "no $HERE/$PLAIN.cu or its header" >&2; exit 2; }
 KEY="$(cat "$HERE/build.sh" "$HERE"/*.h "$HERE"/*.cu "$HERE/$PLAIN.cu" "$HERE/${PLAIN%/*}"/*.cuh <("$NVCC" --version) \
-  <(echo "${PH_NO_CUTLASS:-}" "$CUBLAS_VERSION" "${LT2_HOME:-}" "$LT2_VERSION") | sha256sum | cut -c1-16)"
+  <(echo "${PH_NO_CUTLASS:-}" "$CUBLAS_VERSION" "${LT2_HOME:-}" "$LT2_VERSION" "$PH_ARCH") | sha256sum | cut -c1-16)"
 OUT="${1:-$CACHE/$KEY}"
 if [[ -f "$OUT/libpouw_harness.so" && -f "$OUT/build.json" ]] && grep -q "\"key\": \"$KEY\"" "$OUT/build.json"; then
   echo "$OUT/libpouw_harness.so" >&3
@@ -45,8 +54,8 @@ if [[ -z "${PH_NO_CUTLASS:-}" ]]; then
   [[ "$got" == "$CUTLASS_COMMIT" ]] || { echo "CUTLASS at $got, want $CUTLASS_COMMIT ($CUTLASS_TAG)" >&2; exit 2; }
 fi
 
-ARCH=(-gencode arch=compute_120a,code=sm_120a)
-FLAGS=(-O3 -std=c++17 "${ARCH[@]}" -Xcompiler -fPIC --expt-relaxed-constexpr)  # ptxas gets -arch sm_120a -m 64, as pinned
+ARCH=(-gencode "arch=compute_${PH_ARCH#sm_},code=$PH_ARCH")
+FLAGS=(-O3 -std=c++17 "${ARCH[@]}" -Xcompiler -fPIC --expt-relaxed-constexpr)  # ptxas gets -arch $PH_ARCH -m 64, as pinned
 CUT=(-I"$CUTLASS_DIR/include" -I"$CUTLASS_DIR/tools/util/include" -DCUTLASS_ENABLE_TENSOR_CORE_MMA=1)
 
 rm -f "$OUT"/*.o "$OUT/libpouw_harness.so" "$OUT/libpouw_lt2.so" "$OUT/build.json"
@@ -65,12 +74,15 @@ compile() {  # SRC DEF OBJ CUTLASS(0|1): SRC is the unit's path from here withou
   fi
   cp "$o" "$OUT/$obj.o"
 }
-units=("harness - harness 0" "lt - lt 0" "$PLAIN - nvf4_plain 0")
-if [[ -z "${PH_NO_CUTLASS:-}" ]]; then
+units=("harness - harness 0" "lt - lt 0")
+if [[ "$PH_ARCH" == sm_90a ]]; then
+  units+=("cutlass_registry -DPH_NO_PLAIN cutlass_registry 0")
+elif [[ -z "${PH_NO_CUTLASS:-}" ]]; then
+  units+=("$PLAIN - nvf4_plain 0")
   for p in 0 1 2 3 4 5 6; do units+=("cutlass_3x -DPH_PART=$p cutlass_3x_$p 1"); done
   units+=("cutlass_2x -DPH_PART=0 cutlass_2x 1" "cutlass_registry -DPH_PART=0 cutlass_registry 1")
 else
-  units+=("cutlass_registry -DPH_NO_CUTLASS cutlass_registry 0")
+  units+=("$PLAIN - nvf4_plain 0" "cutlass_registry -DPH_NO_CUTLASS cutlass_registry 0")
 fi
 objs=()
 for u in "${units[@]}"; do
@@ -92,9 +104,9 @@ sass() { "$CUDA_HOME/bin/cuobjdump" -sass "$1" | awk '/Function :/{f=$3; next} /
 sass "$OUT/libpouw_harness.so" > "$OUT/sass_mma.tsv"
 "$CUDA_HOME/bin/cuobjdump" -res-usage "$OUT/libpouw_harness.so" > "$OUT/res_usage.txt"
 python3 - "$OUT" "$NVCC" "$CUTLASS_TAG" "$CUTLASS_COMMIT" "${PH_NO_CUTLASS:-}" "$KEY" "$CUBLAS_VERSION" "${LT2_HOME:-}" \
-  "$LT2_VERSION" <<'EOF'
+  "$LT2_VERSION" "$PH_ARCH" <<'EOF'
 import hashlib, json, os, re, subprocess, sys
-out, nvcc, tag, commit, no_cutlass, key, cublas, lt2_home, lt2_version = sys.argv[1:10]
+out, nvcc, tag, commit, no_cutlass, key, cublas, lt2_home, lt2_version, arch = sys.argv[1:11]
 lib = f"{out}/libpouw_harness.so"
 sha = lambda p: hashlib.sha256(open(p, "rb").read()).hexdigest()
 sass: dict = {}
@@ -114,7 +126,7 @@ if lt2_home:
            "cublaslt_sha256": sha(dep)}
 json.dump({"key": key, "lib_sha256": sha(lib),
            "nvcc": subprocess.run([nvcc, "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1],
-           "arch": "sm_120a", "cutlass": None if no_cutlass else {"tag": tag, "commit": commit}, "cublas_headers": cublas,
+           "arch": arch, "cutlass": None if no_cutlass else {"tag": tag, "commit": commit}, "cublas_headers": cublas,
            "lt2": lt2, "sass_mma": sass, "resources": res}, open(f"{out}/build.json", "w"), indent=1)
 EOF
 echo "$OUT/libpouw_harness.so" >&3
