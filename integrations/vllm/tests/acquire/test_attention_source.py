@@ -443,5 +443,6 @@ def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step()
     assert name == "model.layers.0.self_attn/ql" and t.is_contiguous() and torch.equal(t, x) and src._copies == [t]
     src.on_step_begin = AS.AttentionSource.on_step_begin.__get__(src)
     src._pending = src._active = None
+    src.run = AS.RunValues((), {})
     src.on_step_begin()
     assert src._copies == []

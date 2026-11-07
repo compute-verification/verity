@@ -72,13 +72,15 @@ def test_each_run_field_is_one_identity_of_the_step_that_reads_it():
     assert m["query"]["required_families"][-1] == fmt.RUN_FAMILY and fmt.RUN_FAMILY in fmt.FAMILIES
 
 
-def test_a_program_without_run_fields_has_its_manifest_unchanged():
-    """No `run` Input, or one whose fields name no `<op_path>/<member>` (a fold's sampling values, registration's): the same manifest,
-    to the byte, and no `run_values` family anywhere."""
+def test_a_program_without_run_fields_adds_nothing_to_its_manifest():
+    """No `run` Input, or one whose fields name no `<op_path>/<member>` (a fold's sampling values, registration's, prescribed like the
+    weights): no `run_values` row, family or policy line, the same query header and nothing unmodelled."""
     base = _manifest(_program())
     fold = _manifest(_program([("top_p", 1)]))
-    assert json.dumps(base, sort_keys=True) == json.dumps(fold, sort_keys=True)
-    assert fmt.RUN_FAMILY not in json.dumps(base) and base["complete"]
+    assert base["complete"] and fold["unmodelled"] == base["unmodelled"] and fold["query"] == base["query"]
+    for m in (base, fold):
+        assert fmt.RUN_FAMILY not in json.dumps(m)
+        assert not any(f"`{fmt.RUN_PARAM}` field" in p for p in m["query"]["policy"]["protocol_required"])
 
 
 def test_a_run_field_no_step_or_two_steps_read_is_unmodelled_by_name():
