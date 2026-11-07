@@ -61,7 +61,7 @@ import Proofs.Flock.Soundness.Refine.Arith
 /-!
 # A rep returns on its coins alone
 
-The cut's rep (`repCut`), answered by `asksCut` from its first send, returns wherever the coins it draws pass its
+The cut's rep (`repCut`), answered by `asksCut` from its first send, returns wherever the coins it samples pass its
 checks: each phase returns from any source with as many sends as it has. No step reads the source's values, and no
 step needs a run of the session's rep.
 

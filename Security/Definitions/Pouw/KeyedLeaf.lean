@@ -44,7 +44,7 @@ import Mathlib.Topology.Sheaves.Init
 
 A window's lead commits each of its `n` instances (a call's `A` rows, a forward's words) as a keyed leaf
 (`Hash.Keyed`): instance `i`'s public digest is `H(ks ‖ salt ‖ top i)` over its top message `top i`, under the window's
-key `ks` (64 OS bytes) and live salt `salt`. Before the salt is drawn it records the key leaf, the hm96 leaf over `ks`
+key `ks` (64 OS bytes) and live salt `salt`. Before the salt is sampled it records the key leaf, the hm96 leaf over `ks`
 under 192 OS salt bytes `y₀` (`Hm96.leaf` at `x = ks`). What the verifier sees of the window is the key leaf and the
 digests (`view`), and `real` is the probability that a predicate `A` of the view holds, over a uniform `ks` and `y₀`.
 

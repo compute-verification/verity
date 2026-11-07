@@ -11,7 +11,7 @@
 #      LEG_CENSUS=1 (with LEG_DEFS: size each shape only)  LEG_LOWER_REFUSED=1 (with LEG_DEFS: lower a shape the census
 #      refuses, for Flock's own refusal)  LEG_READS=slots|inline (with LEG_DEFS: a unit's MUFU table reads in lookup
 #      slots or inline; unset, its template's own, chunk_rows.reads)
-# Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, draw), the public files and the sessions; never a
+# Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, sample), the public files and the sessions; never a
 # prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts. They are
 # kept however the job ends, a timeout or a cancel included.
 set -uo pipefail

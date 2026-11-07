@@ -6,7 +6,7 @@ public import Properties.NetworkCertifier
 /-!
 # The records check: what acceptance by its Lean code (`NetworkCheck.Records.protocol`) means
 
-`verity/network-records/v3` is the network audit's verifier of record: `audit.py`'s `Audit` over raw, committed and
+`verity/network-records/v3` is the network audit's verifier: `audit.py`'s `Audit` over raw, committed and
 certified records. `AcceptMeans` is what its acceptance establishes about the unit's records, stated over the check's
 inputs (the parameters, the published records, the evidence) and never over its internals: every link-window of the
 unit has exactly one record, complete, and it is the Program's (`ProgramRecords`). `AnswerAcceptMeans` is the same for

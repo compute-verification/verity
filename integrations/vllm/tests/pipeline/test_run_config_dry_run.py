@@ -88,7 +88,7 @@ def test_dry_run_no_laptop_and_skip():
 @pytest.mark.slow
 def test_the_stage_names_without_a_command_run_nothing_and_a_skip_naming_them_is_printed():
     retired = ("root_policy", "wiring", "replay_a", "replay_chain")
-    c = dry("--phase", "cpu")                                         # no --seed: no stage draws a sample
+    c = dry("--phase", "cpu")                                         # no --seed: no stage samples a sample
     assert not set(retired) & set(c)
     c = dry("--phase", "cpu", "--skip", ",".join(retired))
     assert all(c[st][0].startswith("SKIP") for st in retired)

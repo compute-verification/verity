@@ -39,34 +39,34 @@ import Mathlib.Topology.Sheaves.Init
 # A period's credit over the windows served H1's verdict credits (`PouwCheck.Credit.window`), J10-R
 
 `Properties.Pouw.Period.CheckedCreditPeriod` with served H1's verdict on a window, `Credit.window`, in place of
-`protocol.check`, and with the tiles' draw the sampling block's stratified draw: the window's units are one subcircuit
-of the sampling block, their stratum `s_T` of the block's assignment `σ`, and its `k s_T` units are drawn uniformly
+`protocol.check`, and with the tiles' sample the sampling block's stratified sample: the window's units are one subcircuit
+of the sampling block, their stratum `s_T` of the block's assignment `σ`, and its `k s_T` units are sampled uniformly
 inside it, independently of the other strata (`FlockSoundness.Audit.Law.stratified σ k hk`,
 `JointStratified`). The period's population is that stratum's size, `N_p = |stratum σ s_T|` (`tileCount`), and its
-draw size is the block's `k s_T`, read from the block's draw, not chosen here.
+sample size is the block's `k s_T`, read from the block's sample, not chosen here.
 
 * `stratum`, `tileCount`, `tileAt`, `tileDraw`: the sampling block's stratum `s` of `σ` (`Law.stratum`, restated:
-  the law is `security_proofs`', which `security_properties` may not require); its size; its `t`-th unit in ascending
-  order; and the tile stratum's coordinate of the block's draw at a permutation of the stratum, the units of its first
+  the sampling design is `security_proofs`', which `security_properties` may not require); its size; its `t`-th unit in ascending
+  order; and the tile stratum's coordinate of the block's sample at a permutation of the stratum, the units of its first
   `k s_T` images.
 * `TileStratumEscape`, proved (`Proofs.Pouw.PeriodJ10R.Stratum`): the tile coordinate at a uniform permutation misses
   a set `B` of the sampling block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)`,
   which is how `Law.stratified σ k hk`'s coordinate `s_T` misses it (`FlockSoundness.Audit.Law.stratified_proj_escape`,
-  the per-stratum projection of the joint draw; `tileStratumEscape_eq_proj` joins the two). So the period's tile coin
-  is the block's draw restricted to the tile stratum, and the bound below, about the period's game, which draws its
-  permutation uniformly, needs no premise to be about that draw.
+  the per-stratum projection of the joint sample; `tileStratumEscape_eq_proj` joins the two). So the period's tile coin
+  is the block's sample restricted to the tile stratum, and the bound below, about the period's game, which samples its
+  permutation uniformly, needs no premise to be about that sample.
 * `PreDraw`, `Answered`, `WindowAccepts`, `CreditWindows`, `creditDrawn`: `Credit.window`'s 18 inputs, split into what
-  the window commits before its draw coin and the rest; its verdict, an accept being some credited calls; each
-  window's inputs as functions of the period's coins; and the units its draw demands proofs of, as `windowLayout`
-  draws them (`Credit.descriptorDrawn`: `Credit.windowDrawn` at the descriptor's strata and the draw coin).
+  the window commits before its sampling coin and the rest; its verdict, an accept being some credited calls; each
+  window's inputs as functions of the period's coins; and the units its sample demands proofs of, as `windowLayout`
+  samples them (`Credit.descriptorDrawn`: `Credit.windowDrawn` at the descriptor's strata and the sampling coin).
 * `CreditWindows.AcceptedUpTo`, `CreditWindows.prefixLen`, `creditLive`: the prefix before the first refused window
   and its live words, as `Properties.Pouw.Period`'s with `Credit.window`'s verdict.
-* `tileRun`, `tileLayer`: the period's proofs with `Credit.window`'s verdict as every drawn tile's (`Credit.window`
-  gives no partial credit: `proved` holds every drawn unit to one accepted outcome), the `i`-th drawn tile's opening
+* `tileRun`, `tileLayer`: the period's proofs with `Credit.window`'s verdict as every sampled tile's (`Credit.window`
+  gives no partial credit: `proved` holds every sampled proof block to one accepted outcome), the `i`-th sampled tile's opening
   the service's at its window unit (`unitOf` of the tile stratum's unit).
 * `TileDrawIsCoin`, `TileServiceSound`: on every accepted window, `creditDrawn` gives the units of the tile coordinate at
-  the window's draw coin, `k s_T` of them; the service's soundness against `Credit.window`.
-* `RegisteredBeforeDraw`: each window's commitment fixed before its draw coin, `Properties.Pouw.Period`'s form at
+  the window's sampling coin, `k s_T` of them; the service's soundness against `Credit.window`.
+* `RegisteredBeforeDraw`: each window's commitment fixed before its sampling coin, `Properties.Pouw.Period`'s form at
   `PreDraw`. It keeps the window's round coins, so it doesn't order the anchors before the salt (its docstring).
 * `saltOf`, `Place`, `pinnedAt`, `j10rAtCoin`, `SharedNoiseLucks`, `j10rRate`: each window's salt as
   `Credit.window` reads it; a unit's place (its position, its call's first unit, the call's slot and `K`, its tile and
@@ -80,7 +80,7 @@ draw size is the block's `k s_T`, read from the block's draw, not chosen here.
   `CheckedCreditPeriod`'s premises are `CircuitCreditPeriod`'s, which its proof applies at `tileRun` directly.
 
 *What differs from `H1CheckedCreditPeriod`.* The verdict is `Credit.window` (served H1's, 18 JSON inputs), not
-`protocol.check`. The draw is the tile stratum of the sampling block's stratified draw, with `N_p` and `K_d` its size
+`protocol.check`. The sample is the tile stratum of the sampling block's stratified sample, with `N_p` and `K_d` its size
 and `k s_T`, not a `subset:K′` of a fixed population of 144. The unit's noise is J10-R's (`Accounting.TS.J10R`): a
 call's one seed `seed_c` (`callSeed`, of the salt, the call's first unit and its registered roots root(`a/<K>@<s>`)
 and root(`b/<K>`)), each unit's rows and columns read at its blocks (`unitNoise` at `Credit.j10rBlocks`, the
@@ -108,19 +108,19 @@ the same `R × C` words, the live share is `N_live/N_p`: `ρ = 1` when the strat
 
 *The unit.* The statement fixes no unit size: a unit is the `r × c` tile the layout names at its call's full `K`
 (`Place`), and `Cd`'s units are the stratum's. The demo's producer tiles 32 × 32 at `K` = 16,384 (Q, KV, O, up, head)
-and 65,536 (down); such a unit is past C-Flock's `2^27` until `h1zy` has J10-R lanes.
+and 65,536 (down); such a unit is past Flock's `2^27` until `h1zy` has J10-R lanes.
 
 *What it takes that the deployed path doesn't give*, each a named premise.
-* `TileDrawIsCoin`, a code fact once its code exists. The code change: the verifier draws the tiles inside
-  the sampling block's stratified draw, the tiles joining the integrity registration as one subcircuit, and reads
-  `k s_T` from it; today `Credit.window` draws by its own work law (`Credit.law`, one stratum a `K` template, the
-  period's committed `k`). `creditDrawn` is the verifier's own draw (`Credit.windowDrawn`, which `windowLayout` holds
+* `TileDrawIsCoin`, a code fact once its code exists. The code change: the verifier samples the tiles inside
+  the sampling block's stratified sample, the tiles joining the integrity registration as one subcircuit, and reads
+  `k s_T` from it; today `Credit.window` samples by its own work sampling design (`Credit.law`, one stratum a `K` template, the
+  period's committed `k`). `creditDrawn` is the verifier's own sample (`Credit.windowDrawn`, which `windowLayout` holds
   the proofs to), and PouwCheck's `window-drawn` difftest holds it to the Python verifier's `credit._window_drawn`. Its
-  reading of the model's uniform permutation as the draw is exact only when the draw's stream is the live coin's own
+  reading of the model's uniform permutation as the sample is exact only when the sample's stream is the live coin's own
   bits; a stream expanded from the coin by SHA-512 is read as uniform under SHA-512 as a random oracle,
   a named assumption, which this statement then uses.
 * `RegisteredBeforeDraw`, `SaltIsLiveCoin`: as in `H1CheckedCreditPeriod`.
-* `TileServiceSound`: a fact to prove, C-Flock's soundness at each drawn unit under live coins.
+* `TileServiceSound`: a fact to prove, Flock's soundness at each sampled proof block under live coins.
 * `SharedNoiseLucks`: a claim (above). The unit's place (`place`) is a parameter: no Lean function exports the verifier's derivation of a
 unit's call and blocks (`Credit.registeredFile`'s `j10r`).
 * `UnitFixed` (`Accounting.Assumptions.TS`), a named premise, not a code fact: it bounds the play's `fixed` and `folded`
@@ -141,10 +141,10 @@ namespace Properties.Pouw.PeriodJ10R
 open Lean (Json)
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
-/-! ## The sampling block's draw, at the tile stratum -/
+/-! ## The sampling block's sample, at the tile stratum -/
 
 /-- **Stratum `s` of the sampling block**: the units its assignment `σ` puts in `s`, `FlockSoundness.Audit.Law.stratum`
-restated (the law is `security_proofs`', which `security_properties` may not require). -/
+restated (the sampling design is `security_proofs`', which `security_properties` may not require). -/
 def stratum {nB mB : ℕ} (σ : Fin nB → Fin mB) (s : Fin mB) : Finset (Fin nB) := Finset.univ.filter (σ · = s)
 
 /-- **The tile stratum's size**, the period's population `N_p`. -/
@@ -154,19 +154,19 @@ abbrev tileCount {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) : ℕ := (
 noncomputable def tileAt {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) (t : Fin (tileCount σ sT)) : Fin nB :=
   (stratum σ sT).orderEmbOfFin rfl t
 
-/-- **The tile stratum's coordinate of the sampling block's draw** at a permutation `π` of the stratum: the units of
-its first `k s_T` images (`drawOf`'s draws, as units of the block). -/
+/-- **The tile stratum's coordinate of the sampling block's sample** at a permutation `π` of the stratum: the units of
+its first `k s_T` images (`drawOf`'s samples, as units of the block). -/
 noncomputable def tileDraw {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (π : Equiv.Perm (Fin (tileCount σ sT))) : Finset (Fin nB) :=
   Finset.univ.image fun i : Fin (k sT) => tileAt σ sT (π (Fin.castLE (hk sT) i))
 
-/-- **The tile coordinate at a uniform permutation is the stratum's draw**: it misses a set `B` of the sampling
+/-- **The tile coordinate at a uniform permutation is the stratum's sample**: it misses a set `B` of the sampling
 block's proof blocks with the stratum's hypergeometric, `C(n_s − m_s, k_s)/C(n_s, k_s)` for `n_s` the stratum's size and
 `m_s` its proof blocks in `B`, the factor of `s_T` in `FlockSoundness.Audit.Law.stratified_escape`. Proved:
-`SecurityProofs.tileStratumEscape` (`Proofs.Pouw.PeriodJ10R.Stratum`). Its twin on the law's side is
+`SecurityProofs.tileStratumEscape` (`Proofs.Pouw.PeriodJ10R.Stratum`). Its twin on the sampling design's side is
 `Law.stratified_proj_escape`: `Law.stratified σ k hk`'s coordinate `s` misses `B` with the same factor,
 `prCoin (fun ω => Disjoint (ω s).1 B) = C(|stratum σ s| − |B.filter (σ · = s)|, k s) / C(|stratum σ s|, k s)`, and
-`SecurityProofs.tileStratumEscape_eq_proj` equates the two, so the period's tile coin is the block's draw at the tile
+`SecurityProofs.tileStratumEscape_eq_proj` equates the two, so the period's tile coin is the block's sample at the tile
 stratum. -/
 def TileStratumEscape : Prop :=
   ∀ {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB)
@@ -175,14 +175,14 @@ def TileStratumEscape : Prop :=
       (((tileCount σ sT - (B.filter (σ · = sT)).card).choose (k sT) : ℕ) : ℝ) /
         ((tileCount σ sT).choose (k sT) : ℝ)
 
-/-- **A window's coins over the tile stratum**: its rounds' coins, then its draw coin, the tile stratum's permutation
-and the rest of the sampling block's draw `Ξ`. -/
+/-- **A window's coins over the tile stratum**: its rounds' coins, then its sampling coin, the tile stratum's permutation
+and the rest of the sampling block's sample `Ξ`. -/
 abbrev Coin (C Ξ : Type) (m : ℕ) {nB mB : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB) : Type :=
   Paths C m × (Equiv.Perm (Fin (tileCount σ sT)) × Ξ)
 
 /-! ## `Credit.window`'s inputs and verdict -/
 
-/-- **What a window commits before its draw coin**, of `Credit.window`'s inputs: its open root and window record
+/-- **What a window commits before its sampling coin**, of `Credit.window`'s inputs: its open root and window record
 (`window`), the circuit in hex (`descriptor`), its committed values (`entries`, θ's among them by reference), its commit,
 its manifest (`calls`), its served rows (`served`), its salt, its period's committed `k` and its T table rows (`rows`).
 Its pre-draw inputs: the window's commitment, not the registration log, whose θ and builder these only reference. -/
@@ -198,7 +198,7 @@ structure PreDraw where
   rows : Json
 
 /-- **The rest of `Credit.window`'s inputs**: the challenger's key, the auditor's ledger, the pins, the main and
-session records, the round log, the draw (its coin, root and receipts), the proofs and the live evidence. -/
+session records, the round log, the sample (its coin, root and receipts), the proofs and the live evidence. -/
 structure Answered where
   key : Json
   ledger : Json
@@ -215,9 +215,9 @@ def WindowAccepts (r : PreDraw) (e : Answered) : Prop :=
   ∃ got : List ℕ, PouwCheck.Credit.window e.key e.ledger e.pins e.main r.window e.session r.salt r.calls r.served
     r.commit e.rounds e.draw r.descriptor r.entries e.proofs e.live r.k r.rows = .ok got
 
-/-- **The units the window's draw demands proofs of**: `Credit.descriptorDrawn`, the verifier's `Credit.windowDrawn`
-(the draw `Credit.windowLayout` holds the proofs to) over the strata of the descriptor's layout, at the window's root,
-the draw's coin, root and receipts and the period's `k`. The `window-drawn` difftest holds it to the Python verifier's
+/-- **The units the window's sample demands proofs of**: `Credit.descriptorDrawn`, the verifier's `Credit.windowDrawn`
+(the sample `Credit.windowLayout` holds the proofs to) over the strata of the descriptor's layout, at the window's root,
+the sample's coin, root and receipts and the period's `k`. The `window-drawn` difftest holds it to the Python verifier's
 `credit._window_drawn`. -/
 def creditDrawn (r : PreDraw) (e : Answered) : PouwCheck.R (Array ℕ) :=
   PouwCheck.Credit.descriptorDrawn r.window e.draw r.descriptor r.k
@@ -254,9 +254,9 @@ noncomputable def creditLive {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι
 
 /-! ## The period's proofs under `Credit.window` -/
 
-/-- **The period's proofs with `Credit.window`'s verdict**: window `w`'s proof of each drawn tile is accepted exactly
-when `Credit.window` credits window `w` (it gives no partial credit: `Credit.proved` holds every drawn unit to one
-accepted outcome); the `i`-th drawn tile's opening is the service's opening `opened x w u` at its window unit
+/-- **The period's proofs with `Credit.window`'s verdict**: window `w`'s proof of each sampled tile is accepted exactly
+when `Credit.window` credits window `w` (it gives no partial credit: `Credit.proved` holds every sampled proof block to one
+accepted outcome); the `i`-th sampled tile's opening is the service's opening `opened x w u` at its window unit
 `u = unitOf (tileAt σ s_T (drawOf …))`; the tiles' relations and rightness are the instance's. -/
 noncomputable def tileRun {C Ξ V : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ)
@@ -277,12 +277,12 @@ noncomputable def tileLayer {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ
     DrawnLayer C (Equiv.Perm (Fin (tileCount σ sT)) × Ξ) n Cd.rounds (k sT) (Fin (tileCount σ sT)) ℕ (Fin n × ℕ) V :=
   Cd.periodLayer hr (hk sT) (tileRun σ k hk sT unitOf ws opened rel right)
 
-/-- **`Credit.window`'s draw is the tile coordinate of the sampling block's draw**: on every path and every window
-`Credit.window` credits, the units its draw demands proofs of (`creditDrawn`) are the window units (`unitOf`) of the tile
-stratum's coordinate at the window's draw coin (`tileDraw`'s, `drawOf`'s draws), `k s_T` of the stratum's
-`|stratum σ s_T|`. A code fact once its code exists. Code change: the verifier draws the tiles inside the
-sampling block's stratified draw, as one subcircuit of the integrity registration, and reads `k s_T` from it; today
-`Credit.window` draws by its own work law. Where the draw's stream is expanded from the live coin by SHA-512, reading
+/-- **`Credit.window`'s sample is the tile coordinate of the sampling block's sample**: on every path and every window
+`Credit.window` credits, the units its sample demands proofs of (`creditDrawn`) are the window units (`unitOf`) of the tile
+stratum's coordinate at the window's sampling coin (`tileDraw`'s, `drawOf`'s samples), `k s_T` of the stratum's
+`|stratum σ s_T|`. A code fact once its code exists. Code change: the verifier samples the tiles inside the
+sampling block's stratified sample, as one subcircuit of the integrity registration, and reads `k s_T` from it; today
+`Credit.window` samples by its own work sampling design. Where the sample's stream is expanded from the live coin by SHA-512, reading
 it as the uniform permutation uses SHA-512 as a random oracle. -/
 def TileDrawIsCoin {C Ξ : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ)
     (hk : ∀ s, k s ≤ (stratum σ s).card) (sT : Fin mB) (unitOf : Fin nB → ℕ)
@@ -292,8 +292,8 @@ def TileDrawIsCoin {C Ξ : Type} {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (k :
       ∀ u : ℕ, u ∈ d.toList ↔ ∃ i : Fin (k sT), unitOf (tileAt σ sT (drawOf (hk sT) (coinAt x w).2 i)) = u
 
 /-- **The service is sound at `δ_ks` against `Credit.window`**: in every window, `Credit.window` credits it and some
-tile of the stratum whose window unit its draw demanded has an opening that fails its relation, with probability at
-most `δ_ks` over the period's coins. C-Flock's soundness at each drawn unit under live coins is what it needs. -/
+tile of the stratum whose window unit its sample demanded has an opening that fails its relation, with probability at
+most `δ_ks` over the period's coins. Flock's soundness at each sampled proof block under live coins is what it needs. -/
 def TileServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m nB mB n : ℕ} (σ : Fin nB → Fin mB) (sT : Fin mB)
     (unitOf : Fin nB → ℕ) (ws : CreditWindows (Coin C Ξ m σ sT) n)
     (opened : Paths (Coin C Ξ m σ sT) n → Fin n → ℕ → ℕ → V)
@@ -303,9 +303,9 @@ def TileServiceSound {C Ξ V : Type} [Fintype C] [Fintype Ξ] {m nB mB n : ℕ} 
       ∃ t : Fin (tileCount σ sT), unitOf (tileAt σ sT t) ∈ d.toList ∧
         ¬ rel x w t (opened x w (unitOf (tileAt σ sT t)))) ≤ δks
 
-/-- **Each window's commitment is fixed before its draw coin**: `Properties.Pouw.Period.RegisteredBeforeDraw` at
+/-- **Each window's commitment is fixed before its sampling coin**: `Properties.Pouw.Period.RegisteredBeforeDraw` at
 `Credit.window`'s pre-draw inputs (`PreDraw`). It keeps window `w`'s round coins, the salt among them, so it carries
-the commitment before the draw coin and not the order binding needs: H1's anchors (`x`, `sx`, the weight rows, `sw`;
+the commitment before the sampling coin and not the order binding needs: H1's anchors (`x`, `sx`, the weight rows, `sw`;
 J10-R's root(`a/<K>@<s>`) and root(`b/<K>`), which `seed_c` hashes with the salt) committed before the window's salt
 coin, which is released against their root. The check holds a live window to that order: its salt opens on
 `anchoredEpochRoot W X k`, `X` the root of the activations the window committed (`windowAnchors`), and the loop commits
