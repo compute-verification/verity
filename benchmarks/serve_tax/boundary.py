@@ -843,8 +843,30 @@ class Busy:
 
     def total(self, lo: int, hi: int) -> tuple[float, int]:
         """Busy seconds and steps over step indices [lo, hi)."""
-        xs = [s for k, s in self.done.items() if lo <= k < hi]
+        xs = self.steps(lo, hi)
         return sum(xs), len(xs)
+
+    def steps(self, lo: int, hi: int) -> list[float]:
+        """Each step's busy seconds over step indices [lo, hi), in step order."""
+        return [self.done[k] for k in sorted(self.done) if lo <= k < hi]
+
+
+def busy_compare(served: list[float], replayed: list[float], stall: float = 3.0) -> dict[str, Any]:
+    """Two runs' busy seconds over the same steps, step by step: the sums, the per-step ratio's quantiles, and the steps
+    where the replay was over ``stall`` times as busy (a kernel compiled on first use, say) apart."""
+    n = min(len(served), len(replayed))
+    pairs = list(zip(served[:n], replayed[:n], strict=True))
+    ratios = sorted(r / s for s, r in pairs if s > 0)
+    stalls = [(s, r) for s, r in pairs if r > stall * s]
+
+    def q(p: float) -> float | None:
+        return ratios[min(len(ratios) - 1, int(p * len(ratios)))] if ratios else None
+
+    return {"steps": n, "served_s": sum(s for s, _ in pairs), "replayed_s": sum(r for _, r in pairs),
+            "ratio_p10": q(0.1), "ratio_p50": q(0.5), "ratio_p90": q(0.9), "stall_steps": len(stalls),
+            "stall_excess_s": sum(r - s for s, r in stalls),
+            "replayed_s_without_stalls": sum(r for s, r in pairs if r <= stall * s),
+            "served_s_without_stalls": sum(s for s, r in pairs if r <= stall * s)}
 
 
 def busy_runner(runner_cls: Any, busy_of: Callable[[Any], Busy | None]) -> None:

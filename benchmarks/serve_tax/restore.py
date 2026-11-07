@@ -107,6 +107,19 @@ def params(r: dict) -> Any:
                           skip_clone=True, **keep)
 
 
+def warm(eng: Any, requests: list[dict]) -> int:
+    """Serve ``requests`` (the replay block's own prompts and sampling, under other ids) to the end in the engine before
+    the restore, so the kernels serving compiled during its warm-up are compiled here too; the steps it took. The
+    restore then overwrites what they left, which the restored engine's dump checks."""
+    for i, r in enumerate(requests):
+        eng.add_request(f"restore-warm-{i}", {"prompt_token_ids": r["prompt_ids"]}, params(r))
+    steps = 0
+    while eng.has_unfinished_requests():
+        eng.step()
+        steps += 1
+    return steps
+
+
 def by_construction(path: str, served: dict[str, Any], replayed: dict[str, Any]) -> bool:
     """A dump path where the replay differs from serving by construction, read by no engine core: the served engine
     core's process wrapper's own attributes (`EngineCoreProc`: the replay's engine core runs in this process), and each
@@ -173,6 +186,10 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     kv = B.KvPool(runner.kv_caches, len(pool.blocks))
     if kv.layout() != st0["kv_layout"]:
         raise SystemExit("the fresh engine's KV pool is laid out unlike the served one's")
+    if a.warm:
+        t = time.monotonic()
+        out["warm_steps"] = warm(eng, w["arrive"][:a.warm])
+        out["warm_s"] = time.monotonic() - t
 
     torch.cuda.synchronize()
     t = time.monotonic()
@@ -246,7 +263,9 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     out |= {"replay_busy_s": busy_s, "replay_busy_steps": busy_steps, "served_busy_s": srv_edge["since_last"]["busy_s"],
             "served_busy_steps": srv_edge["since_last"]["busy_steps"], "served_wall_s": srv_edge["since_last"]["wall_s"]}
     out["replay_over_served_busy"] = busy_s / out["served_busy_s"] if out["served_busy_s"] else None
-    steps = {r["step"]: r for r in trace.records if r["kind"] == "step"}
+    served_steps_s = srv_edge["since_last"].get("busy_steps_s")
+    out["busy_by_step"] = B.busy_compare(served_steps_s, busy.steps(w["lo"], w["hi"])) if served_steps_s else None
+    steps = {r["step"]: r for r in trace.records if r["kind"] == "step" and w["lo"] <= r["step"] < w["hi"]}
     fp_served = np.load(a.arm_dir / "server" / "edges" / f"edge-{a.to_edge}.fp.npy")
     out |= {"schedule": step_diff(w["steps"], steps), "outputs": B.outputs_diff(w["outputs"], outs),
             "far_edge": {"kv_root_equal": taken["kv"]["root"] == w["state"][a.to_edge]["kv"]["root"],
@@ -278,6 +297,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--kv-dir", type=Path, help="where the served arm wrote the KV pool's bytes (default: its edges/)")
     ap.add_argument("--checkpoint", type=Path)
     ap.add_argument("--eager", action="store_true")
+    ap.add_argument("--warm", type=int, default=0, metavar="N",
+                    help="serve the replay block's first N arrivals, under other ids, before the restore (`warm`)")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if sys.flags.hash_randomization:

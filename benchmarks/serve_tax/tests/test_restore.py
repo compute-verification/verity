@@ -114,3 +114,25 @@ def test_dump_diff_sets_the_differences_by_construction_apart():
     assert not R.dump_diff(served, {**replayed, "core.step": 4})["clean"]
     assert not R.dump_diff({**served, "sched.extra": 1}, replayed)["clean"]
     assert not R.dump_diff(served, {**replayed, "core.extra": 1})["clean"]
+
+
+def test_warm_serves_its_requests_to_the_end_under_other_ids(monkeypatch: pytest.MonkeyPatch):
+    class Eng:
+        def __init__(self) -> None:
+            self.added: list[str] = []
+            self.left = 0
+
+        def add_request(self, rid: str, prompt: dict, params: object) -> None:
+            self.added.append(rid)
+            self.left += 2
+
+        def has_unfinished_requests(self) -> bool:
+            return self.left > 0
+
+        def step(self) -> None:
+            self.left -= 1
+
+    monkeypatch.setattr(R, "params", lambda r: r["sampling"])
+    eng = Eng()
+    assert R.warm(eng, [{"prompt_ids": [1], "sampling": {}}] * 2) == 4
+    assert eng.added == ["restore-warm-0", "restore-warm-1"]

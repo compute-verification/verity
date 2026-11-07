@@ -355,6 +355,14 @@ def test_busy_counts_each_steps_gpu_time_by_the_traces_step_index():
     assert busy.done == {7: 0.5} and len(busy.open) == 1
     busy.reap(wait=True)
     assert busy.total(7, 9) == (0.75, 2) and busy.total(8, 9) == (0.25, 1)
+    assert busy.steps(7, 9) == [0.5, 0.25]
+
+
+def test_busy_compare_sets_the_replays_stalls_apart():
+    c = B.busy_compare([1.0, 1.0, 2.0, 1.0], [1.0, 1.5, 9.0, 1.0, 5.0])
+    assert (c["steps"], c["served_s"], c["replayed_s"], c["stall_steps"], c["stall_excess_s"]) == (4, 5.0, 12.5, 1, 7.0)
+    assert (c["replayed_s_without_stalls"], c["served_s_without_stalls"]) == (3.5, 3.0)
+    assert (c["ratio_p10"], c["ratio_p50"], c["ratio_p90"]) == (1.0, 1.5, 4.5)
 
 
 # ------------------------------------------------------------------------------------------------------- outputs

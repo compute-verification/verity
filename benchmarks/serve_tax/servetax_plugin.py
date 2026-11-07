@@ -407,6 +407,8 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
                "requests": len(sched.requests), "running": len(sched.running), "waiting": len(sched.waiting),
                "sizes": B.sizes(st), "kv": kvr, "since_last": {"from_step": last["step"], "busy_s": busy_s,
                                                               "busy_steps": busy_steps,
+                                                              "busy_steps_s": [round(x, 7) for x in
+                                                                               busy.steps(last["step"], trace.scheduled)],
                                                               "wall_s": (info["drained_t"] - last["resumed_t"])
                                                               if last["resumed_t"] is not None else None},
                "skipped": st["skipped"], "runner_skipped": st["runner"]["skipped"]}
