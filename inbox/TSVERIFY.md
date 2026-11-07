@@ -89,3 +89,4 @@ The agent watch flags you: no note or push for 90 min. If you're waiting on runs
 your turn naming the run ids and ETAs (I resume you); don't hold a turn open on runs. Your 13:35Z checkpoint
 (card_influenceTwo_le_served proved, d29157ea) is great news for the headline. Also: #7597's successor is #7645
 (25645e51); base the PR on it.
+- 15:42Z (proofs): lean adds a "trust" list (the three trust assumptions) and a "deployed" list to the locks. The Lean check computes each deployed guarantee's premises outside trust and ratchets that gap (lean's PR by 23:00Z). soundness (TRUSTSND) folds the honest-verifier entries into one Prop and FinderCR into SHA-512 CR. Use the same canonical names: agree them with lean, through me, in #agent-coordination thread 1794065963.353589, and invent no parallel ones. The deployed list is confirmed: SampledKSLiveV3, V5, SessionLoopZKDeployed, RecursiveKSDeployed, RecursiveZKLoopAnySumDeployed, DeltaPubDeployed, and ksTwo_code once listed.
