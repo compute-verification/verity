@@ -34,7 +34,7 @@ from `RecCoins.check` at a statement of session `j`'s circuit, at each unit wher
   `innerRows_dirs`);
 * `value_tie_residuals`: a `rec-residuals` unit's `v` (`residualsCheck_of_check`, `residuals_of_check`, `innerRows_v`);
 * `value_tie_sparse`: a `rec-sparse` unit's `v` (`sparseCheck_of_check`, `sparse_of_check`, `innerRows_sparse`);
-* `coins_of_session`: where a session accepts and its record draws, the statement setting up a drawn unit's part has
+* `coins_of_session`: where a session accepts and its record samples, the statement setting up a sampled proof block's part has
   the session's circuit and passes check 5 (`FlockC3.PubRows.stmt_of_session`'s argument, at `RecCoins.check`).
 -/
 
@@ -240,8 +240,8 @@ open FlockSoundness.Discharge.ZkReg FlockSoundness.Discharge.ZkExec FlockSoundne
 open FlockSoundness.Discharge.ZkBind FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.DecodeZL
 open FlockSoundness.Discharge.Composed (drawJ partOf)
 
-/-- **A session's statement check 5 accepted**: where the session accepts and its record draws, the statement setting
-up a drawn unit's part has the session's circuit and passes `RecCoins.check`, as `ChecksC3` runs it. -/
+/-- **A session's statement check 5 accepted**: where the session accepts and its record samples, the statement setting
+up a sampled proof block's part has the session's circuit and passes `RecCoins.check`, as `ChecksC3` runs it. -/
 theorem coins_of_session {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit}
     {hscope : Layout.scopeOk c = true} {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
     {tr : Exec.Transcript} (hacc : AcceptsZKR zo.I zo.own tr) {coins : Option Flock.RecCoins.Source}

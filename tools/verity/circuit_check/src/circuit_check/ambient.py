@@ -10,7 +10,7 @@ and of nothing else they could read. Two fresh interpreters lower every target:
              next: a global, a mutable closure, a memo keyed by less than what it caches);
 
 and every text must be one text. In both, each read of the environment (``os.environ``, so ``os.getenv``), of a clock (the
-`time` module's) and each unseeded draw (`random`'s functions and an unseeded `random.Random`, ``os.urandom`` and so
+`time` module's) and each unseeded sample (`random`'s functions and an unseeded `random.Random`, ``os.urandom`` and so
 `secrets`, `numpy.random`'s global functions and an unseeded ``default_rng``) made while a lowering runs is recorded with
 where in this tree's code it was made, and is a failure whatever its value. Not seen: state both interpreters hold alike (a
 file a builder reads, a value an import computed from such state), a perturbation that by chance changes nothing a builder
@@ -77,7 +77,7 @@ def _wrap(owner: Any, name: str, what: str, when: Any = None) -> None:
 
 
 def _install() -> None:
-    """Record the reads (`_note`) of the environment, the clocks and unseeded draws, from here on."""
+    """Record the reads (`_note`) of the environment, the clocks and unseeded samples, from here on."""
     import random
     import time
 
