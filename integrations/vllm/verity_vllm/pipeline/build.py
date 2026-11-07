@@ -312,7 +312,8 @@ def applicability_conditions(profile, applied: dict, attention_impls: dict, expo
         # a request Program built under a declared launch context is reusable only for a batch that co-schedules it the same
         # way (FA3's tile reads the launch's max_seqlen_q).  Key present ONLY when a context was declared: B1 / undeclared identities are unchanged.
         cond["launch_context"] = {"max_seqlen_q_by_step": {str(k): v for k, v in sorted((launch.get("max_seqlen_q_by_step") or {}).items())},
-                                  "conflict": bool(launch.get("conflict")), **({"batch_by_step": {str(k): [list(q) for q in v] for k, v in sorted(launch["batch_by_step"].items())}} if launch.get("batch_by_step") else {})}
+                                  "conflict": bool(launch.get("conflict")), **({"batch_by_step": {str(k): [list(q) for q in v] for k, v in sorted(launch["batch_by_step"].items())}} if launch.get("batch_by_step") else {}),
+                                  **({"chunks": list(launch["chunks"])} if launch.get("chunks") else {})}
     return cond
 
 
@@ -382,7 +383,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                                                          "eager resolver patterns for _temperature_kernel / stochastic _gumbel_sample_kernel"]}}
             raise _Refused()
         # the request's launch batch where the row's kernels read it; the stochastic policy's Definition coverage and launch geometry (S)
-        geo_refusal = ((wrapper == "request" and batch_dispatch and LC.missing_batch(launch, LP, T))
+        geo_refusal = ((wrapper == "request" and batch_dispatch and LC.missing_batch(launch, LP, T)) or LC.bad_chunks(launch, wrapper, LP, T, cached)
                        or sampler_geometry(sampling, target, LP=LP if wrapper == "request" else None, T=T if wrapper == "request" else None))
         if geo_refusal:
             res["unsupported"] = geo_refusal
@@ -488,7 +489,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
                 raise _Refused()
             observe_attention_impls(res["attention_impls_observed"])
             log = TritonLaunchLog()
-            mod, inputs = vm.make_wrapper(wrapper, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos, sampling=sampling, C=C)
+            chunks = list((launch or {}).get("chunks", ()))
+            mod, inputs = vm.make_wrapper(wrapper, model, pos0=pos0, M=M, LP=LP, T=T, eos_id=eos, sampling=sampling, C=C, chunks=chunks)
             ntok = M if wrapper == "step" else LP - C
             if tp > 1:
                 # probe: one meta forward records the rank's collectives in call order -> the PEER INPUTS of the Program (the other
@@ -524,7 +526,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             session: list | None = [] if emit is not None else None
             with _derive_context(vm, cfg, ntok, target, model):
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
-                rep = derive_report(mod, inputs, mode="profile", profile=profile, rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
+                rep = derive_report(mod, inputs, mode="profile", profile=profile, config={"chunks": chunks} if chunks else None,
+                                    rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
                                     check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values),
                                     session=session, dead_free=wrapper == "request" and (tp == 1 or dead_free))
             rep = derived(rep) if target.ir == "boolean" else rep
@@ -718,7 +721,7 @@ class Options:
                                 help="TargetProfile: JSON overrides of the default (e.g. '{\"compute_capability\": [9, 0]}') or a path to a JSON profile")
     device_name: str | None = option("--device-name", default=None,
                                      help="the name the declared target's GPU reports (vLLM's get_device_name, the key of its tuned fused-MoE configs), "
-                                     "answered on a host with no visible GPU; default: the --workload row class's (engine.profiles.devices), "
+                                     "answered on any host; default: the --workload row class's (engine.profiles.devices), "
                                      "which it must agree with")
     sampling: str | None = option("--sampling", default=None,
                                   help="the row's sampling policy: greedy | stoch-t<T>-p<P>[-k<K>] | JSON (must agree with --workload if both)")
@@ -738,7 +741,9 @@ class Options:
                                         "every co-scheduled sequence, per request step -- int N (step 0 = a prefill launch whose longest prompt has N rows), JSON list [n0, n1, ...] "
                                         "(per step), or 'conflict' (requests of this shape are co-scheduled differently: refused under FA3, whose tile reads it; inert under FA2); "
                                         "without batch invariance the batch itself, '{\"batch\": [[[rows, start], ...] per step]}', which every token-count-dependent kernel choice "
-                                        "reads (required then).  Omitted = own rows (a batch of one).  The row derives it from the workload (verity_vllm.pipeline.launch_context) for B >= 2.")
+                                        "reads (required then), with '\"chunks\": [n0, n1, ...]' for a prefill that ran in launches of those rows in turn (the chunked request "
+                                        "wrapper, its steps the chunks then the decodes).  Omitted = own rows (a batch of one).  The row derives it from the workload "
+                                        "(verity_vllm.pipeline.launch_context) for B >= 2.")
 
 
 def main(a: Options) -> int:
