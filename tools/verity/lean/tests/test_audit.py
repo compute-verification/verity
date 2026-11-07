@@ -3909,6 +3909,24 @@ def test_an_assumption_is_listed_by_name_with_its_record():
     assert fails == [] and converted["assumptions"] == pol["assumptions"]
 
 
+def test_a_named_assumption_may_be_declared_in_a_module_under_assumptions_module():
+    """A named assumption is declared in `assumptions_module` or a module under it, so an area whose files the public export
+    copies keeps its own in a module that imports nothing private; one declared in a module beside it is open."""
+    def at(m):
+        return facts(modules=["P", "P.Assumptions", m, "P.Defs", "P.Thms"], pins={"P.t": fact(
+            reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
+                   {"name": "P.Hyp", "module": m, "kind": "def", "hash": "3" * 32}],
+            hyps=[{"binder": "h", "type": "P.Hyp", "closed": True, "named": "P.Hyp", "module": m}])})
+
+    fails, pol = A.judge(POLICY, at("P.Assumptions.Area"), FILES | {"P.Assumptions.Area": "P/Assumptions/Area.lean"},
+                         update=True)
+    assert fails == [] and list(pol["assumptions"]) == ["P.Hyp"]
+    assert pol["guarantees"]["P.t"]["premises"]["assumptions"] == ["P.Hyp"]
+    fails = A.judge(POLICY, at("P.AssumptionsArea"), FILES | {"P.AssumptionsArea": "P/AssumptionsArea.lean"},
+                    update=True)[0]
+    assert "open.unlisted" in [x.code for x in fails]
+
+
 def test_a_guarantee_must_be_a_theorem_with_allowed_axioms():
     assert A.judge(POLICY, facts(pins={"P.t": {"kind": "missing"}}), FILES, update=True)[0] == ["guarantees: P.t is missing"]
     assert A.judge(POLICY, facts(pins={"P.t": fact(kind="def")}), FILES, update=True)[0] == ["guarantees: P.t is a def, not a theorem"]
