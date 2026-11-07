@@ -47,8 +47,8 @@ at copy `j` refine `Hash.EmbeddingRead` (`ReadUnit.GatesRefine`), at the ports t
 `le_pow_depth` and `depth_le` give the tree bounds the read's statements take, for a table of at most `2 ^ 32` rows.
 
 `readUnitDrawn_partsOf` is the read's binding at the parsed file: `Accounting.SecurityProofs.readUnitDrawnCR` at
-`partsOf`, for reads whose ports are copy `j`'s gates, with its gate premise discharged by `gatesRefine_partsOf` at
-every unit.
+`partsOf`, for reads each at one copy's gates in its unit, with its gate premise discharged by `gatesRefine_partsOf` at
+every read.
 -/
 
 @[expose] public section
@@ -110,12 +110,12 @@ theorem gatesRefine_partsOf (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : 
 /-- **A drawn read unit of the parsed circuit file returns its table's row at its index**, but with probability at
 most the layer below's `ε` plus the chance of finding a SHA-512 collision. At the parsed file's partition (`partsOf`),
 let the unit net's rows hold the read's program and compute its reference wherever they hold (`hr`, `hsound`), and let
-each unit's constant gate be registered as 1, among its inputs, and its copy `j`'s read outputs committed. Take reads
-`R` whose units read at the ports through their copy `j`'s gates (`hR`), with tables committed under their roots. Then
-over the outcomes `ω`, a run that accepts while a drawn read unit returns, at an index inside its table, a row other
-than its table's has probability at most `ε`, the layer below's bound on accepting while a drawn read unit is wrong or
-its registered rows fail, plus `E[cost] / 2^256`, where `cost` is what the collision search behind the read's checks
-costs (`Claims.ExpectedCR`). -/
+each unit's constant gate be registered as 1, among its inputs, and each copy's read outputs committed. Take reads `R`,
+each at the ports through one copy's gates in its unit (`hR`), with tables committed under their roots: a unit of
+`units_per_vu` stacked copies holds a read a copy. Then over the outcomes `ω`, a run that accepts while a read of a
+drawn unit returns, at an index inside its table, a row other than its table's has probability at most `ε`, the layer
+below's bound on accepting while a drawn read's unit is wrong or the read's registered rows fail, plus
+`E[cost] / 2^256`, where `cost` is what the collision search behind the reads' checks costs (`Claims.ExpectedCR`). -/
 theorem readUnitDrawn_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc)
     (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ) {run : (List Lin × Lin) × St}
     (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
@@ -128,25 +128,28 @@ theorem readUnitDrawn_partsOf {Ω : Type} [Fintype Ω] [Nonempty Ω] (key : Hash
           Hash.EmbeddingRead.ok Verity.sha512 Verity.sha512 ⟨readDomain fun v => z (hr.φ v), V, fun r => r⟩ key
             (readRoot fun v => z (hr.φ v)) V (readTok fun v => z (hr.φ v))
             (readOpening H (Hash.Tree.depth V) fun v => z (hr.φ v))))
-    {j : ℕ} (hj : j < D.unroll.upv) (consts : Fin (Flock.Bridge.circuitOf D hU n).N → Option Bool)
+    (consts : Fin (Flock.Bridge.circuitOf D hU n).N → Option Bool)
     (hone : ∀ u, consts (Flock.Bridge.constGate D hU n u) = some true)
     (hone_io : ∀ u, Flock.Bridge.constGate D hU n u ∈ (Flock.Bridge.partsOf D hU n).io u)
-    (hcom : ∀ u, ∀ i < 16 * H + 1,
+    (hcom : ∀ u j (hj : j < D.unroll.upv), ∀ i < 16 * H + 1,
       Flock.Bridge.copyGate D hU n u hj (hr.out i) ∈ (Flock.Bridge.partsOf D hU n).committed)
-    (R : ReadUnit.Reads (Flock.Bridge.circuitOf D hU n) n)
-    (hR : ∀ u ∈ R.units, R.port u = readPorts (Flock.Bridge.copyGate D hU n u hj) hr V H)
+    {ι : Type} (R : ReadUnit.Reads (Flock.Bridge.circuitOf D hU n) n ι)
+    (hR : ∀ i ∈ R.reads, ∃ j, ∃ hj : j < D.unroll.upv,
+      R.port i = readPorts (Flock.Bridge.copyGate D hU n (R.unit i) hj) hr V H)
     (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (tr : Ω → (Flock.Bridge.circuitOf D hU n).Transcript)
     (cost : Ω → ℕ) (ε : ℝ) (hcommitted : R.Committed Verity.sha512 Verity.sha512 key)
-    (below : Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧
-      ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) u ∧
-        ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf D hU n) u (R.port u) (R.root u) (R.domain u) (tr ω)))
-        ≤ ε)
+    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+      ¬ ((Flock.Bridge.partsOf D hU n).Correct (tr ω) (R.unit i) ∧
+        ReadUnit.RegisteredRows consts (Flock.Bridge.partsOf D hU n) (R.unit i) (R.port i) (R.root i) (R.domain i)
+          (tr ω))) ≤ ε)
     (hcr : Claims.ExpectedCR (fun m => (Verity.sha512 m).bytes) (R.finder Verity.sha512 key drawn tr cost)) :
-    Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧ R.index u (tr ω) < (R.port u).count ∧
-      (R.port u).hOf (tr ω) ≠ (R.table u (R.index u (tr ω))).row) ≤
-      ε + Claims.Ex (fun ω => (cost ω : ℝ)) / 2 ^ (256 : ℝ) :=
-  Accounting.SecurityProofs.readUnitDrawnCR Verity.sha512 key consts (Flock.Bridge.partsOf D hU n) R acc drawn tr
-    cost ε (fun u hu => (hR u hu).symm ▸ gatesRefine_partsOf key D hU n hr hsound consts u hj (hone u) (hone_io u)
-      (hcom u)) hcommitted below hcr
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧ R.index i (tr ω) < (R.port i).count ∧
+      (R.port i).hOf (tr ω) ≠ (R.table i (R.index i (tr ω))).row) ≤
+      ε + Claims.Ex (fun ω => (cost ω : ℝ)) / 2 ^ (256 : ℝ) := by
+  refine Accounting.SecurityProofs.readUnitDrawnCR Verity.sha512 key consts (Flock.Bridge.partsOf D hU n) R acc drawn
+    tr cost ε (fun i hi => ?_) hcommitted below hcr
+  obtain ⟨j, hj, hp⟩ := hR i hi
+  rw [hp]
+  exact gatesRefine_partsOf key D hU n hr hsound consts (R.unit i) hj (hone _) (hone_io _) (hcom _ j hj)
 
 end Accounting.ReadUnit.Gates

@@ -45,7 +45,8 @@ The binding of table reads at a picked index (`Definitions.Accounting.ReadUnit`)
   row at its index, or SHA-512 collides on what the two checks hashed (`Hash.SecurityProofs.EmbeddingReadBinding`).
 * `readUnitDrawn`: over a run's coins, the run accepts with a drawn read that returns another row than its table's at
   its index, where nothing its check and the table's check hashed collides, with probability at most the layer below's
-  bound: that the run accepts with a drawn read wrong, or its registered rows failing, in the extractor's transcript.
+  bound: that the run accepts with a drawn read's unit wrong, or the read's registered rows failing, in the extractor's
+  transcript. A unit may hold several reads, and a read is drawn when its unit is.
 * `readUnitDrawnCR`: the same with the collision priced through `Claims.ExpectedCR` at the reads' collision finder
   (`Accounting.ReadUnit.Reads.finder`): the layer below's bound plus the finder's expected SHA-512 calls over `2^256`.
 -/
@@ -100,27 +101,28 @@ theorem readUnitBinds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (const
 
 /-- **At an accepted run's drawn reads, each returns its table's row at its index, or SHA-512 collides on what its
 check and the table's hashed**, but with probability at most the layer below's bound. Over the run's coins `Ω`, with its
-acceptance `acc`, its drawn units `drawn` and the extractor's transcript `X`: where each read unit's gates compute its
-reference (`GatesRefine`, a hypothesis), each read's table is committed under its root, and the run accepts with a drawn
-read wrong or its registered rows failing in `X` with probability at most `ε`, it accepts with a drawn read that returns
-another row than its table's at its index, where no two messages the read's check and the table's check hashed collide
-under `H`, with probability at most `ε`. -/
+acceptance `acc`, its drawn units `drawn` and the extractor's transcript `X`: where each read's gates compute its
+reference in its unit (`GatesRefine`, a hypothesis), each read's table is committed under its root, and the run accepts
+with a drawn read's unit wrong or the read's registered rows failing in `X` with probability at most `ε`, it accepts
+with a drawn read that returns another row than its table's at its index, where no two messages the read's check and
+the table's check hashed collide under `H`, with probability at most `ε`. A read is drawn when its unit is. -/
 theorem readUnitDrawn {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
-    (consts : Fin C.N → Option Bool) {n : ℕ} (P : Verity.Partition C n) (R : Reads C n) (acc : Ω → Prop)
-    (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (ε : ℝ)
-    (hgates : ∀ u ∈ R.units, GatesRefine H H key consts P u (R.port u)) (hcommitted : R.Committed H H key)
-    (below : Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧
-      ¬ (P.Correct (X ω) u ∧ RegisteredRows consts P u (R.port u) (R.root u) (R.domain u) (X ω))) ≤ ε) :
-    Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧ R.index u (X ω) < (R.port u).count ∧
-      (R.port u).hOf (X ω) ≠ (R.table u (R.index u (X ω))).row ∧
-        ¬ Hash.CollisionIn H (R.hashedAt H key u (X ω))) ≤ ε := by
+    (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
+    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (ε : ℝ)
+    (hgates : ∀ i ∈ R.reads, GatesRefine H H key consts P (R.unit i) (R.port i)) (hcommitted : R.Committed H H key)
+    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+      ¬ (P.Correct (X ω) (R.unit i) ∧
+        RegisteredRows consts P (R.unit i) (R.port i) (R.root i) (R.domain i) (X ω))) ≤ ε) :
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧ R.index i (X ω) < (R.port i).count ∧
+      (R.port i).hOf (X ω) ≠ (R.table i (R.index i (X ω))).row ∧
+        ¬ Hash.CollisionIn H (R.hashedAt H key i (X ω))) ≤ ε := by
   apply le_trans ?_ below
   apply Claims.Pr_mono
   intro ω hω
-  obtain ⟨hacc, u, hu, hr, hlt, hne, hnc⟩ := hω
-  refine ⟨hacc, u, hu, hr, fun hb => ?_⟩
-  rcases readUnitBinds H H key consts P u (R.port u) (R.root u) (R.domain u) (X ω) (hgates u hr) hb.1 hb.2 _
-      (hcommitted u hr _ hlt) with h | h | h
+  obtain ⟨hacc, i, hi, hd, hlt, hne, hnc⟩ := hω
+  refine ⟨hacc, i, hi, hd, fun hb => ?_⟩
+  rcases readUnitBinds H H key consts P (R.unit i) (R.port i) (R.root i) (R.domain i) (X ω) (hgates i hi) hb.1 hb.2 _
+      (hcommitted i hi _ hlt) with h | h | h
   · exact hne h
   · exact hnc (collisionIn_mono h fun m hm => List.mem_append_left _ hm)
   · exact hnc (collisionIn_mono h fun m hm => List.mem_append_right _ hm)
@@ -130,27 +132,28 @@ layer below's bound plus the reads' collision finder's (`Reads.finder`) expected
 that meets `Claims.ExpectedCR` (`ecr/sha-512`). The finder outputs two messages the drawn reads hashed that collide
 under `H`, if there are two; its cost `cost` is the reader's to state from the adversary it runs. -/
 theorem readUnitDrawnCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
-    (consts : Fin C.N → Option Bool) {n : ℕ} (P : Verity.Partition C n) (R : Reads C n) (acc : Ω → Prop)
-    (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (cost : Ω → ℕ) (ε : ℝ)
-    (hgates : ∀ u ∈ R.units, GatesRefine H H key consts P u (R.port u)) (hcommitted : R.Committed H H key)
-    (below : Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧
-      ¬ (P.Correct (X ω) u ∧ RegisteredRows consts P u (R.port u) (R.root u) (R.domain u) (X ω))) ≤ ε)
+    (consts : Fin C.N → Option Bool) {n : ℕ} {ι : Type} (P : Verity.Partition C n) (R : Reads C n ι)
+    (acc : Ω → Prop) (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (cost : Ω → ℕ) (ε : ℝ)
+    (hgates : ∀ i ∈ R.reads, GatesRefine H H key consts P (R.unit i) (R.port i)) (hcommitted : R.Committed H H key)
+    (below : Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧
+      ¬ (P.Correct (X ω) (R.unit i) ∧
+        RegisteredRows consts P (R.unit i) (R.port i) (R.root i) (R.domain i) (X ω))) ≤ ε)
     (hcr : Claims.ExpectedCR (fun m => (H m).bytes) (R.finder H key drawn X cost)) :
-    Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧ R.index u (X ω) < (R.port u).count ∧
-      (R.port u).hOf (X ω) ≠ (R.table u (R.index u (X ω))).row) ≤
+    Claims.Pr (fun ω => acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧ R.index i (X ω) < (R.port i).count ∧
+      (R.port i).hOf (X ω) ≠ (R.table i (R.index i (X ω))).row) ≤
       ε + Claims.Ex (fun ω => (cost ω : ℝ)) / 2 ^ (256 : ℝ) := by
   classical
-  have hsplit : ∀ ω, (acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧ R.index u (X ω) < (R.port u).count ∧
-      (R.port u).hOf (X ω) ≠ (R.table u (R.index u (X ω))).row) →
-      (acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧ R.index u (X ω) < (R.port u).count ∧
-        (R.port u).hOf (X ω) ≠ (R.table u (R.index u (X ω))).row ∧
-          ¬ Hash.CollisionIn H (R.hashedAt H key u (X ω))) ∨
+  have hsplit : ∀ ω, (acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧ R.index i (X ω) < (R.port i).count ∧
+      (R.port i).hOf (X ω) ≠ (R.table i (R.index i (X ω))).row) →
+      (acc ω ∧ ∃ i ∈ R.reads, R.unit i ∈ drawn ω ∧ R.index i (X ω) < (R.port i).count ∧
+        (R.port i).hOf (X ω) ≠ (R.table i (R.index i (X ω))).row ∧
+          ¬ Hash.CollisionIn H (R.hashedAt H key i (X ω))) ∨
       Hash.CollisionIn H (R.drawnHashed H key drawn X ω) := by
-    rintro ω ⟨hacc, u, hu, hr, hlt, hne⟩
-    by_cases hc : Hash.CollisionIn H (R.hashedAt H key u (X ω))
+    rintro ω ⟨hacc, i, hi, hd, hlt, hne⟩
+    by_cases hc : Hash.CollisionIn H (R.hashedAt H key i (X ω))
     · exact Or.inr (collisionIn_mono hc fun m hm =>
-        List.mem_flatMap.2 ⟨u, Finset.mem_toList.2 (Finset.mem_filter.2 ⟨hu, hr⟩), hm⟩)
-    · exact Or.inl ⟨hacc, u, hu, hr, hlt, hne, hc⟩
+        List.mem_flatMap.2 ⟨i, Finset.mem_toList.2 (Finset.mem_filter.2 ⟨hi, hd⟩), hm⟩)
+    · exact Or.inl ⟨hacc, i, hi, hd, hlt, hne, hc⟩
   have hfind : Claims.Pr (fun ω => Hash.CollisionIn H (R.drawnHashed H key drawn X ω)) ≤
       (R.finder H key drawn X cost).Pr (fun m => (H m).bytes) := by
     unfold Claims.Finder.Pr

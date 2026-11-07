@@ -63,8 +63,8 @@ What a table read's soundness takes of a read unit `u` at a transcript `X`:
   `Accounting.unbound`) has them wherever the openings pin those gates.
 
 `Binds` is what follows: the row `u` returns is its table's row at its index, for every opening of that leaf the
-table's root accepts, or SHA-512 collides on what the two checks hashed. `Reads` collects a circuit's read units with
-their tables, and `Reads.finder` is the collision finder their binding reads `Claims.ExpectedCR` at.
+table's root accepts, or SHA-512 collides on what the two checks hashed. `Reads` collects a circuit's table reads, each
+in its unit with its table, and `Reads.finder` is the collision finder their binding reads `Claims.ExpectedCR` at.
 -/
 
 @[expose] public section
@@ -180,42 +180,44 @@ def Binds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (q : Ports C) (r d
       Hash.CollisionIn G (Hash.RowLeaf.innerHashed G (q.verifier key d) (q.opening X) ++
         Hash.RowLeaf.innerHashed G (q.verifier key d) o₀)
 
-/-- **A circuit's read units**: which units of `n` read a table, each one's ports, and its table: the root, the domain
-id and the opening of each row. -/
-structure Reads (C : Verity.Circuit) (n : ℕ) where
-  units : Finset (Fin n)
-  port : Fin n → Ports C
-  root : Fin n → Verity.Digest
-  domain : Fin n → Verity.Digest
-  table : Fin n → ℕ → Hash.RowLeaf.Opening
+/-- **A circuit's table reads**: the reads `reads`, each in the unit `unit i` of `n`, at its ports, with its table: the
+root, the domain id and the opening of each row. A unit may hold several reads, as a proof block of stacked copies
+holds one a copy. -/
+structure Reads (C : Verity.Circuit) (n : ℕ) (ι : Type) where
+  reads : Finset ι
+  unit : ι → Fin n
+  port : ι → Ports C
+  root : ι → Verity.Digest
+  domain : ι → Verity.Digest
+  table : ι → ℕ → Hash.RowLeaf.Opening
 
 namespace Reads
 
-variable {n : ℕ} (R : Reads C n)
+variable {n : ℕ} {ι : Type} (R : Reads C n ι)
 
 /-- **Each read's table is committed under its root**: the root accepts the table's opening of each of its rows, under
 the hashes `H` and `G` and the hm96 key `key`. -/
 def Committed (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) : Prop :=
-  ∀ u ∈ R.units, ∀ i < (R.port u).count,
-    Hash.RowLeaf.accepts H G ((R.port u).verifier key (R.domain u)) (R.root u) i (R.table u i)
+  ∀ i ∈ R.reads, ∀ k < (R.port i).count,
+    Hash.RowLeaf.accepts H G ((R.port i).verifier key (R.domain i)) (R.root i) k (R.table i k)
 
-/-- The index read `u`'s index gates hold in `X`. -/
-def index (u : Fin n) (X : C.Transcript) : ℕ := (R.port u).tokOf X
+/-- The index read `i`'s index gates hold in `X`. -/
+def index (i : ι) (X : C.Transcript) : ℕ := (R.port i).tokOf X
 
-/-- **What read `u`'s check and its table's check hashed** in `X`, under one hash `H`: the read's opening and its
+/-- **What read `i`'s check and its table's check hashed** in `X`, under one hash `H`: the read's opening and its
 table's opening at the read's index, each checked there. -/
-def hashedAt (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (u : Fin n) (X : C.Transcript) : List Hash.Msg :=
-  Hash.RowLeaf.outerHashed H H ((R.port u).verifier key (R.domain u)) (R.index u X) ((R.port u).opening X) ++
-    Hash.RowLeaf.outerHashed H H ((R.port u).verifier key (R.domain u)) (R.index u X) (R.table u (R.index u X)) ++
-    (Hash.RowLeaf.innerHashed H ((R.port u).verifier key (R.domain u)) ((R.port u).opening X) ++
-      Hash.RowLeaf.innerHashed H ((R.port u).verifier key (R.domain u)) (R.table u (R.index u X)))
+def hashedAt (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (i : ι) (X : C.Transcript) : List Hash.Msg :=
+  Hash.RowLeaf.outerHashed H H ((R.port i).verifier key (R.domain i)) (R.index i X) ((R.port i).opening X) ++
+    Hash.RowLeaf.outerHashed H H ((R.port i).verifier key (R.domain i)) (R.index i X) (R.table i (R.index i X)) ++
+    (Hash.RowLeaf.innerHashed H ((R.port i).verifier key (R.domain i)) ((R.port i).opening X) ++
+      Hash.RowLeaf.innerHashed H ((R.port i).verifier key (R.domain i)) (R.table i (R.index i X)))
 
 open Classical in
-/-- **What the drawn reads hashed** at the outcome `ω`: `hashedAt` for each drawn unit that is a read, in the
+/-- **What the drawn reads hashed** at the outcome `ω`: `hashedAt` for each read whose unit is drawn, in the
 transcript `X ω`. -/
 noncomputable def drawnHashed {Ω : Type} (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (drawn : Ω → Finset (Fin n))
     (X : Ω → C.Transcript) (ω : Ω) : List Hash.Msg :=
-  ((drawn ω).filter (· ∈ R.units)).toList.flatMap fun u => R.hashedAt H key u (X ω)
+  (R.reads.filter (R.unit · ∈ drawn ω)).toList.flatMap fun i => R.hashedAt H key i (X ω)
 
 open Classical in
 /-- **The table reads' collision finder**: on the outcome `ω`, two messages the drawn reads hashed that `H` maps to one
