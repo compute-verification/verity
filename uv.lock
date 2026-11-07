@@ -2632,12 +2632,14 @@ version = "0.1.0"
 source = { editable = "integrations/vllm" }
 dependencies = [
     { name = "numpy" },
-    { name = "research" },
     { name = "verity" },
     { name = "verity-config" },
 ]
 
 [package.optional-dependencies]
+research = [
+    { name = "research" },
+]
 torch = [
     { name = "torch", version = "2.14.0", source = { registry = "https://pypi.org/simple" } },
 ]
@@ -2645,12 +2647,12 @@ torch = [
 [package.metadata]
 requires-dist = [
     { name = "numpy", specifier = ">=1.26" },
-    { name = "research", editable = "tools/research" },
+    { name = "research", marker = "extra == 'research'", editable = "tools/research" },
     { name = "torch", marker = "extra == 'torch'", specifier = ">=2.4" },
     { name = "verity", editable = "." },
     { name = "verity-config", editable = "tools/config" },
 ]
-provides-extras = ["torch"]
+provides-extras = ["torch", "research"]
 
 [[package]]
 name = "z3-solver"
