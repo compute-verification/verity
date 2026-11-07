@@ -45,7 +45,6 @@ import fcntl
 import gc
 import hashlib
 import json
-import os
 import re
 import socket
 import sys
@@ -648,16 +647,20 @@ def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_
     return {"meta": st.meta, "tampered": "o0", "word": 0, "bit": 0}
 
 
+#: `--lock-dir` and `--slots`, which `slot` reads
+SLOTS: dict = {"dir": None, "n": {}}
+
+
 @contextlib.contextmanager
 def slot(phase: str):
-    """With A11_LOCK_DIR=DIR, at most N of the audits sharing DIR in `phase` at once (A11_SLOTS="session=1,lean=3", 1 a phase
-    it doesn't name): a session's prover takes every core, and side by side the sessions' ZK servers and provers, or the Lean
+    """With --lock-dir DIR, at most N of the audits sharing DIR in `phase` at once (--slots session=1,lean=3, 1 a phase it
+    doesn't name): a session's prover takes every core, and side by side the sessions' ZK servers and provers, or the Lean
     verifiers, outgrow the host."""
-    d = os.environ.get("A11_LOCK_DIR")
+    d = SLOTS["dir"]
     if not d:
         yield
         return
-    n = int(dict(x.split("=") for x in os.environ.get("A11_SLOTS", "").split(",") if x).get(phase, 1))
+    n = SLOTS["n"].get(phase, 1)
     Path(d).mkdir(parents=True, exist_ok=True)
     files = [open(Path(d) / f"{phase}.{i}", "a") for i in range(n)]
     try:
@@ -780,7 +783,11 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=0, help="the sessions' base port (default: a free port each)")
     ap.add_argument("--values-only", action="store_true", help="stop after staging values (no registration or proofs)")
+    ap.add_argument("--lock-dir", default=None, help="a directory the audits sharing this host lock their sessions and Lean "
+                                                     "verifies in (`slot`)")
+    ap.add_argument("--slots", default="", help="with --lock-dir, how many at once a phase: session=1,lean=4 (1 a phase unnamed)")
     a = ap.parse_args()
+    SLOTS.update(dir=a.lock_dir, n={k: int(v) for k, v in (x.split("=") for x in a.slots.split(",") if x)})
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     summary: dict = {"row": ROW, "rank": 0, "steps": a.steps, "layers": a.layers, "per_kind": a.per_kind}

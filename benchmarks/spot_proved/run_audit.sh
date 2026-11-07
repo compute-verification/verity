@@ -6,6 +6,8 @@
 #   SP_MODE=audit SP_VALUES=DIR SP_ARGS="--per-kind 2 --tamper none" bash benchmarks/spot_proved/run_audit.sh
 #   (SP_VALUES may be a .tar.gz of one such directory, e.g. sent with --send: "$RESEARCH_RUN_DIR/inputs/values.tar.gz")
 #   SP_MODE=audit SP_SYNTH=LABEL[,LABEL] SP_ARGS=... bash ...  # synth.py's random inputs: a timing run, not served values
+# Audits sharing a pod share its sessions and Lean verifies through a11's slots: SP_ARGS="... --lock-dir /workspace/spot-locks
+# --slots session=1,lean=4".
 set -uo pipefail
 for t in rustup elan uv; do
   case $t in

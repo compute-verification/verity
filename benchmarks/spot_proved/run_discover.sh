@@ -13,19 +13,19 @@ CFG=${CFG:-/workspace/glm53-config}
 from huggingface_hub import snapshot_download
 print(snapshot_download('zai-org/GLM-5.3', revision='aca966e4e02791568aa6a4ced368624b3d897f42', local_dir='$CFG',
       allow_patterns=['*.json', '*.jinja', '*.txt', '*.model', 'tokenizer*']))" || exit 2
-"$PY" "$here/capture.py" site "$OUT/site" >/dev/null || exit 2
-export PYTHONPATH="$OUT/site${PYTHONPATH:+:$PYTHONPATH}"
 CAP=${CAPTURE:-/workspace/spot-capture/$(basename "$D")}; mkdir -p "$CAP"
-export VERITY_SPOT_CAPTURE=$CAP VERITY_SPOT_STEPS=${STEPS:-0,3} VERITY_SPOT_OPEN=${OPEN:-dense:1,moe:1}
+STEPS=${STEPS:-0,3}
+"$PY" "$here/capture.py" site "$OUT/site" --capture "$CAP" --steps "$STEPS" --open "${OPEN:-dense:1,moe:1}" >/dev/null || exit 2
+export PYTHONPATH="$OUT/site${PYTHONPATH:+:$PYTHONPATH}"
 export TORCHINDUCTOR_CACHE_DIR=/workspace/spot-cache/inductor VLLM_CACHE_ROOT=/workspace/spot-cache/vllm TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0
 export VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600 VLLM_ENGINE_ITERATION_TIMEOUT_S=3600 PYTHONHASHSEED=0 TOKENIZERS_PARALLELISM=false
 nvidia-smi --query-gpu=index,name,memory.used --format=csv
 "$PY" "$here/discover.py" --config "$CFG" --out "$OUT" --capture "$CAP" --tp "${TP:-2}" --layers "${LAYERS:-4}" \
-  --steps "$VERITY_SPOT_STEPS" --prompt-len "${PROMPT_LEN:-24,64}" --max-tokens "${MAX_TOKENS:-8}"
+  --steps "$STEPS" --prompt-len "${PROMPT_LEN:-24,64}" --max-tokens "${MAX_TOKENS:-8}"
 rc=$?
-"$PY" "$here/discover.py" --config "$CFG" --out "$OUT" --capture "$CAP" --steps "$VERITY_SPOT_STEPS" --summarize
+"$PY" "$here/discover.py" --config "$CFG" --out "$OUT" --capture "$CAP" --steps "$STEPS" --summarize
 ROOT=$(cd "$here/../.." && pwd)
-for s in ${VERITY_SPOT_STEPS//,/ }; do
+for s in ${STEPS//,/ }; do
   "$PY" "$here/stage.py" --capture "$CAP" --step "$s" \
     --out "$OUT/values-step$s" --per-type "${PER_TYPE:-4}" --of "rehearsal: GLM-5.3's config with dummy weights, ${LAYERS:-4} layers, TP${TP:-2}" \
     --link "none: dummy weights" > "$OUT/stage-step$s.log" 2>&1 || echo "stage step $s failed"

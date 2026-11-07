@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 from collections import Counter
 from pathlib import Path
@@ -38,7 +37,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--config", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--capture", required=True, help="the capture directory (VERITY_SPOT_CAPTURE)")
+    ap.add_argument("--capture", required=True, help="the capture directory, as the site's settings name it")
     ap.add_argument("--tp", type=int, default=2)
     ap.add_argument("--layers", type=int, default=4)
     ap.add_argument("--steps", default="0,3")
@@ -51,9 +50,13 @@ def main() -> int:
     if a.summarize:
         (out / "summary.json").write_text(json.dumps(summarize(Path(a.capture)), indent=1))
         return 0
-    if os.environ.get("VERITY_SPOT_CAPTURE") != a.capture or os.environ.get("VERITY_SPOT_STEPS") != a.steps:
-        raise SystemExit("discover.py: run under VERITY_SPOT_CAPTURE=--capture VERITY_SPOT_STEPS=--steps with capture.py's "
-                         "site on PYTHONPATH (run_discover.sh)")
+    try:
+        import spot_capture
+    except ImportError:
+        raise SystemExit("discover.py: put capture.py's site on PYTHONPATH (run_discover.sh)") from None
+    cfg = spot_capture.config() or {}
+    if cfg.get("capture") != str(Path(a.capture).resolve()) or cfg.get("steps") != sorted({int(s) for s in a.steps.split(",")}):
+        raise SystemExit(f"discover.py: the site's capture settings {cfg} are not --capture {a.capture} --steps {a.steps}")
     import random
 
     from vllm import LLM, SamplingParams

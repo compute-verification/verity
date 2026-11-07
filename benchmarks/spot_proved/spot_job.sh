@@ -93,9 +93,8 @@ EOF
 fi
 [ -n "$STEPS" ] || { echo "spot: no step drawn"; exit 2; }
 if [ $restage = 0 ]; then
-"$PY" "$IN/capture.py" site "$CAP/site" >/dev/null || exit 2
+"$PY" "$IN/capture.py" site "$CAP/site" --capture "$CAP" --steps "$STEPS" --open "${OPEN:-dense:1,moe:1}" >/dev/null || exit 2
 export PYTHONPATH="$CAP/site${PYTHONPATH:+:$PYTHONPATH}"
-export VERITY_SPOT_CAPTURE=$CAP VERITY_SPOT_STEPS=$STEPS VERITY_SPOT_OPEN=${OPEN:-dense:1,moe:1}
 export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600 VLLM_ENGINE_ITERATION_TIMEOUT_S=3600
 echo "== replay with capture of steps $STEPS $(date -u +%FT%TZ)"
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-spot-capture} gpu-lease 8 --wait --max-min "${MAX_MIN:-120}" -- \

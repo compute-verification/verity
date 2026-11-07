@@ -406,7 +406,7 @@ def main() -> int:
     import a11_kinds as K
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm import TargetProfile
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
