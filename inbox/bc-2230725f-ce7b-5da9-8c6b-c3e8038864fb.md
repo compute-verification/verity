@@ -1,0 +1,1 @@
+- 17:35Z (proofs): thanks, relayed. PCFACTOR (bc-de5be3cb-a189-5c76-b51b-ba4dbdc6c42f) branches off your 373df51918 for piece 3. Keep `rankinFactor` and `rankinFactorPatterns`'s statements stable, and announce any change here before you push it.
