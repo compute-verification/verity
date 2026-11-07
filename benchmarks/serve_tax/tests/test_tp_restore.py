@@ -165,7 +165,8 @@ def test_a_production_plans_requests_send_their_own_sampling_and_a_share_of_the_
     assert set(got) == {"seeded", "unseeded"} and 140 < got.count("unseeded") < 260
     assert {T.request_class(sampled, rid, 0.0) for rid in ids} == {"seeded"}
     assert {T.request_class(sampled, rid, 1.0) for rid in ids} == {"unseeded"}
-    assert T.request_class(greedy, ids[0], 0.5) == "greedy" and T.request_class({"prompt_ids": []}, ids[0], 0.5) == "plan"
+    assert T.request_class(greedy, ids[0], 0.5) == "greedy"
+    assert T.request_class(sampled, ids[0], 0.5, "production") == "production"
 
     body = T.own_body(lambda served, r, rid, sampling: {"model": served, "real": sampling}, 0.5)
     seeded = next(rid for rid in ids if T.request_class(sampled, rid, 0.5) == "seeded")

@@ -3,21 +3,22 @@ its second and compared. GLM-5.3 at TP8 is the case it is for; any `serve_tax` m
 
     tp_restore.py preflight --model-id glm53 [--max-model-len N] [--tp N]
     tp_restore.py serve --model-id glm53 --c4 C4 --out OUT --scratch DIR [--rate 10] [--span-s 240]
-                        [--edges-at 120,170,220] [--plan-file PLAN.jsonl] [--unseeded-share 0.5] [--sampling production]
+                        [--edges-at 120,170,220] [--plan-file PLAN.jsonl] [--unseeded-share 0.5] [--sampling own]
                         [--max-model-len 40960] [--tp N] [--long-share 0.05] [--long-tokens 8192,32768]
                         [--saver MODULE:FUNCTION ...]
     tp_restore.py restore --served OUT --scratch DIR --out OUT2 --loader MODULE:FUNCTION [--no-fill] [--rank-map-free]
 
 ``serve`` runs `serve_tax`'s ``record`` arm (vLLM's OpenAI server with the scheduler's step trace), with `tp_edge` as a
 second general plugin. It is pinned: PYTHONHASHSEED=0, request ids not randomized, Inductor's reduction block untimed,
-Model Runner V2. It drives the plan under Poisson arrivals, every request asking for its sampled tokens' logprobs. A
-plan whose requests carry their own sampling (``--plan-file``, the replay ladder's production plan: ShareGPT, multi-turn
-and long prompts, each greedy or at temperature 0.7) sends each request's, the rest of it the server's generation-config
-defaults; ``--unseeded-share`` of the sampled requests go without a seed (`request_class`), so vLLM draws theirs, and
-the rest carry the public seed rule's. Any other plan sends ``--sampling``, where ``production`` sends no sampling
-fields: the generation config's defaults apply (GLM-5.3: temperature 1.0, top-p 0.95) and nothing is seeded. Each
-edge writes under ``--scratch``, because its blocks are tens of GB and stay out of the run's record. OUT gets each
-``edge.json``, the step outputs from the first edge to the last, the client's records and the step trace.
+Model Runner V2. It drives the plan under Poisson arrivals, every request asking for its sampled token's logprob.
+With ``--sampling own`` each request sends the sampling it carries (``--plan-file``, the replay ladder's production
+plan: ShareGPT, multi-turn and long prompts, each greedy or at temperature 0.7), the rest of it the server's
+generation-config defaults; ``--unseeded-share`` of the sampled requests go without a seed (`request_class`), so vLLM
+draws theirs, and the rest carry the public seed rule's. A named ``--sampling`` goes on every request instead, where
+``production`` sends no sampling fields: the generation config's defaults apply (GLM-5.3: temperature 1.0, top-p 0.95)
+and nothing is seeded, so with no greedy or seeded row in a batch vLLM samples with FlashInfer's sampler and the CUDA
+generator. Each edge writes under ``--scratch``, because its blocks are tens of GB and stay out of the run's record. OUT
+gets each ``edge.json``, the step outputs from the first edge to the last, the client's records and the step trace.
 
 ``restore`` builds the served engine again in this process, from the served server's own argv and block count, and:
 - calls ``--loader`` (the scheduler's state and the runner's rows) with the engine core and the first edge's directory
@@ -72,6 +73,8 @@ AUTOTUNE_ENV = "VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR"
 ID = "tpr"
 #: the logprobs every request asks for: its sampled token's (the step trace's sampling record leaves this field out)
 LOGPROBS = 0
+#: ``--sampling`` for each request's own (a production plan's)
+OWN = "own"
 
 
 def client_id(engine_id: str) -> str:
@@ -81,12 +84,12 @@ def client_id(engine_id: str) -> str:
     return m.group(0)
 
 
-def request_class(r: Mapping[str, Any], rid: str, unseeded_share: float) -> str:
-    """A request's sampling class: ``plan`` for a plan without per-request sampling; else ``greedy`` unless the plan
-    samples it, and a sampled one ``unseeded`` when the first byte of its id's SHA-512 falls in ``unseeded_share``,
-    else ``seeded``."""
-    if "sampling" not in r:
-        return "plan"
+def request_class(r: Mapping[str, Any], rid: str, unseeded_share: float, sampling: str = OWN) -> str:
+    """A request's sampling class: under a named ``sampling``, or for a request without its own, that name; else
+    ``greedy`` unless the plan samples it, and a sampled one ``unseeded`` when the first byte of its id's SHA-512 falls
+    in ``unseeded_share``, else ``seeded``."""
+    if sampling != OWN or "sampling" not in r:
+        return sampling
     if not r.get("seeded"):
         return "greedy"
     return "unseeded" if hashlib.sha512(rid.encode()).digest()[0] < 256 * unseeded_share else "seeded"
@@ -131,8 +134,8 @@ def edge_site(site: Path) -> Path:
 
 def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, d: Path, drain_s: float,
           sampling: str, requests: int | None = None, unseeded_share: float = 0.0) -> dict:
-    """`serve_tax.drive_load` under ``sampling`` (one of the corpus's, or ``production``), or each request's own
-    (`own_body`); each request's class goes to ``classes.json``."""
+    """`serve_tax.drive_load` under ``sampling`` (one of the corpus's, or ``production``), or with `OWN` each request's
+    own (`own_body`); each request's class goes to ``classes.json``."""
     C = S.corpus()
     for name, body in SAMPLING.items():
         C.SAMPLING.setdefault(name, body)
@@ -140,8 +143,13 @@ def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, 
     arr = C.traffic.arrivals(plan, rate)
     k = requests or max(1, sum(1 for a in arr if a <= span_s))
     reqs, arr = plan[:k], arr[:k]
+    if sampling == OWN:
+        if any("sampling" not in r for r in reqs):
+            raise SystemExit("the plan's requests carry no sampling of their own: name one with --sampling")
+    else:
+        reqs = [{f: v for f, v in r.items() if f not in ("sampling", "seeded")} for r in reqs]
     ids = [f"{ID}-{r['i']:05d}" for r in reqs]
-    classes = {rid: request_class(r, rid, unseeded_share) for r, rid in zip(reqs, ids)}
+    classes = {rid: request_class(r, rid, unseeded_share, sampling) for r, rid in zip(reqs, ids)}
     (d / "classes.json").write_text(json.dumps(classes))
     real = C.request_body
     C.request_body = own_body(real, unseeded_share)
@@ -654,7 +662,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--span-s", type=float, default=240.0)
     s.add_argument("--requests", type=int)
     s.add_argument("--edges-at", type=lambda x: [float(t) for t in x.split(",")], default=[120.0, 170.0, 220.0])
-    s.add_argument("--sampling", default="production")
+    s.add_argument("--sampling", default=OWN, help=f"{OWN} (each request's), or one of the corpus's, or production")
     s.add_argument("--max-model-len", type=int)
     s.add_argument("--tp", type=int, help="the tensor-parallel size, when not the model's own")
     s.add_argument("--saver", action="append", default=[])
