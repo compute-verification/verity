@@ -74,20 +74,24 @@ def _cut(E: Engine, p: Vec) -> Vec:
     n = len(SIGMA_CUT)
     q = E.op("mul", p, f32_word(200.0))
     ge = E.op("ge", q[np.zeros(n - 1, np.int64)], E.const([f32_word(float(k)) for k in range(1, n)]))
-    oh = E.op("and", cat([E.const([1], 1), ge]), E.op("not", cat([ge, E.const([0], 1)])))
+    lt = E.op("not", ge)
+    oh = cat([lt[[0]], E.op("and", ge[np.arange(n - 2)], lt[np.arange(1, n - 1)]), ge[[n - 2]]])
     return reduce(E, "xorf", E.op("gate", oh, E.const(list(SIGMA_CUT))), [n])
 
 
 def _round_stats(E: Engine, data: Vec, B: int, piv: Vec):
-    """One round's (mass, min, count) over ``data``'s [B] tiles at the pivot: each tile's `tl.sum` of the lanes above it, least
-    lane above it (1.0 if none) and lanes within 1e-9 of that, merged tile by tile as `_update_min_larger_stats` does."""
-    nt = len(data) // B
-    above = E.op("gt", data, piv[np.zeros(len(data), np.int64)])
-    mass_t = tree1d(E, E.op("gate", above, data), nt, B, SPT)
+    """One round's (mass, min, count) over ``data`` in [B] tiles, the lanes past it 0, at the pivot: each tile's `tl.sum` of the
+    lanes above it, least lane above it (1.0 if none) and lanes within 1e-9 of that, merged tile by tile as
+    `_update_min_larger_stats` does.  A padding lane is never above the pivot, which is +0 or more or NaN (a probability, or a
+    rounded point between two), so its terms are constants: 0 to the sum and the count, 1.0 to the min."""
+    L = len(data)
+    nt = -(-L // B)
+    above = E.op("gt", data, piv[np.zeros(L, np.int64)])
+    mass_t = tree1d(E, pad(E, E.op("gate", above, data), [L], nt * B, 0), nt, B, SPT)
     seg = [B] * nt
-    tmin = reduce(E, "nanmin", E.op("sel", above, data, ONE_F), seg)
-    teq = E.op("and", above, E.op("near", data, tmin[np.repeat(np.arange(nt), B)]))
-    tcnt = reduce(E, "iadd", E.op("b2i", teq), seg)
+    tmin = reduce(E, "nanmin", pad(E, E.op("sel", above, data, ONE_F), [L], nt * B, ONE_F), seg)
+    teq = E.op("and", above, E.op("near", data, tmin[np.arange(L) // B]))
+    tcnt = reduce(E, "iadd", pad(E, E.op("b2i", teq), [L], nt * B, 0), seg)
     mass, ml, n = mass_t[[0]], E.const([ONE_F]), E.const([0], CW)
     for t in range(nt):
         tm, tc = tmin[[t]], tcnt[[t]]
@@ -123,25 +127,37 @@ def search(E: Engine, data: Vec, B: int, p: Vec, lo: Vec, hi: Vec):
     raise AssertionError("unreachable")
 
 
+def _bits(E: Engine, z: Vec, nb: int) -> list[Vec]:
+    """Bits 0 .. nb - 1 of each count of z (below 2^nb): bit b is the top bit of the word z << (31 - b)."""
+    y = z
+    for _ in range(32 - nb):
+        y = E.op("shl1", y)
+    bits = [y] * nb
+    for b in range(nb - 1, -1, -1):
+        bits[b] = E.op("top", y)
+        if b:
+            y = E.op("shl1", y)
+    return bits
+
+
 def compact(E: Engine, v: Vec, flag: Vec) -> Vec:
     """The values whose flag is set, in lane order from lane 0, every lane after them 0: each flagged lane moves down by z, the
-    count of unflagged lanes before it, by the stages 1, 2, 4, ...: stage b moves a lane down 2^b when z has bit b.  After stage
-    b a flagged lane j sits at j - (z mod 2^(b+1)), so flagged lanes stay distinct and in order."""
+    count of unflagged lanes before it, by the stages 1, 2, 4, ...: stage b moves a lane down 2^b when z has bit b, and the
+    bits still to come move with it.  After stage b a flagged lane j sits at j - (z mod 2^(b+1)), so flagged lanes stay
+    distinct and in order."""
     V = len(v)
-    z = scan(E, E.op("b2i", E.op("not", flag)), [V])
+    nb = (V - 1).bit_length()
+    bits = _bits(E, scan(E, E.op("b2i", E.op("not", flag)), [V]), nb) if nb else []
     valid = flag
-    s = 1
-    while s < V:
-        last = 2 * s >= V
-        zb = E.op("ibit", z, s)
+    for b in range(nb):
+        s = 1 << b
         j = np.arange(V - s)
-        mv = E.op("and", valid[j + s], zb[j + s])
-        stay = E.op("and", valid, E.op("not", zb))
+        mv = E.op("and", valid[j + s], bits[b][j + s])
+        stay = E.op("and", valid, E.op("not", bits[b]))
         v = put(v, j, E.op("sel", mv, v[j + s], v[j]))
         valid = put(stay, j, E.op("or", mv, stay[j]))
-        if not last:
-            z = put(z, j, E.op("seli", mv, z[j + s], z[j]))
-        s *= 2
+        for k in range(b + 1, nb):
+            bits[k] = put(bits[k], j, E.op("selb", mv, bits[k][j + s], bits[k][j]))
     return E.op("gate", valid, v)
 
 
@@ -183,10 +199,9 @@ def standalone_keep(E: Engine, x: Vec, p: Vec) -> Vec:
     with E.at("compaction"):
         buf = compact(E, probs, out)
     with E.at("outlier search"):
-        ntt = -(-V // BLOCK_TRUNC)
-        res_o = search(E, pad(E, buf, [V], ntt * BLOCK_TRUNC, 0), BLOCK_TRUNC, p, oprob, hi)
+        res_o = search(E, buf, BLOCK_TRUNC, p, oprob, hi)
     with E.at("full search"):
-        res_f = search(E, pad(E, probs, [V], nt * BLOCK, 0), BLOCK, p, lo, hi)
+        res_f = search(E, probs, BLOCK, p, lo, hi)
     with E.at("mask"):
         ob = E.op("gt", so, p)
         piv, ml, n, mass = (E.op("seli" if a.w == CW else "sel", ob, a, b) for a, b in zip(res_o, res_f))
