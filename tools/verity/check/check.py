@@ -119,7 +119,7 @@ each shard runs `suites.py SUITE:K/M@DIGEST --timings` of the planner's partitio
 part of a suite runs it whole (`suites.py`), and that pass is its verdict.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
-tree's own tests (`LINTS`: report-genre names, secret-like literals, blob and data budgets). The groups start only
+tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
 once it passes, so a check that one of them fails ends in seconds, not hours.
 
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
