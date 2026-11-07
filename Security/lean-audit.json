@@ -1593,23 +1593,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Flock.Bridge.DrawsUnder": {
-   "owner": "@proofs",
-   "digest": "4abc5d864ced1e67194111af4d2122149bb5e799458282f37b5c35064bf1204f",
-   "issue": "PRF-164",
-   "due": "2026-11-06"
-  },
   "Flock.Bridge.NotBernoulli": {
    "owner": "@proofs",
    "digest": "7fbb409621af22209f87159630d58bfdb550a9f4402f53926ac16f9a45ad3e4d",
    "issue": "PRF-164",
    "due": "2026-11-06"
-  },
-  "Flock.Bridge.RootFixesDomainL": {
-   "owner": "@proofs",
-   "digest": "4179b593d8cf637861117774e87e259638f7a715249ab6ceb8e20ce826d44e7d",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
   },
   "Flock.Guarantees.FirewallSends": {
    "owner": "@proofs",
@@ -4790,7 +4778,7 @@
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "d4cf700c8e82f916d9ff746f87af1da5ed99c2f36bd3e4007919a398ce232ce8"
+   "unfolded_hash": "e451ab94c1caca97691a703f73ab3c54cb4d54379faad97e2af84ef9ed9b6cfe"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
@@ -14396,9 +14384,7 @@
     "assumptions": [],
     "domain": [],
     "open": [
-     "Flock.Bridge.DrawsUnder",
      "Flock.Bridge.NotBernoulli",
-     "Flock.Bridge.RootFixesDomainL",
      "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
@@ -14413,7 +14399,7 @@
     ]
    },
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "d4cf700c8e82f916d9ff746f87af1da5ed99c2f36bd3e4007919a398ce232ce8"
+   "unfolded_hash": "e451ab94c1caca97691a703f73ab3c54cb4d54379faad97e2af84ef9ed9b6cfe"
   },
   "Flock.SecurityProofs.SampledKSLiveV5Honest": {
    "owner": "@proofs",
@@ -25750,7 +25736,6 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -31403,7 +31388,7 @@
    }
   },
   "Definitions.Core.Interaction": {
-   "digest": "513a50517bc2b55d016f8f9769c11fc3c8d7b45e9ba9e51714416b3b3c98f998",
+   "digest": "3bbfc102386c3db38feec81cd38d887f5382a22f1d3df33a9c78eae5a0e0564c",
    "definitions": {
     "Claims.B": "4fd019056e63b04b42be5f7cab62e91b26792ff23bfe40dfe6a751905512cde8",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -31511,6 +31496,7 @@
     "Claims.ZKmalRx": "6f92524188cb8a3c463b832d63e0b50f302d1257302a1305396544388e01dcdb",
     "Claims.coinSeq": "aef2718cd2a53d2a311bb90edc9fb65614312a27c53c7c0aea27c25766bf217d",
     "Claims.cutMsg": "edd7d23b48394845f984f99ccb09fe2d60271976786d6d64e5d745c7d0554637",
+    "Claims.ecrBound": "5a63f16b03af8221c63e8386dc91653577afde66001257db754f76c01e644288",
     "Claims.findColl": "f39659c01c907985e276f71eb1be0ce57508cddaa28210fb44f7f5293d65bed6",
     "Claims.firstWait": "c099c3fa9797f3ba70c1cb8e96557ce468a145ed4f8583b6c25911886f3e672c",
     "Claims.forkCoins": "db2f393cc10ed952d576ebf88683bb1788fee477410dd5894577a7b4af6ce6c4",
@@ -43474,11 +43460,11 @@
    }
   },
   "Proofs.Flock.Bridge.DrawnLaw": {
-   "digest": "8a03f35cb0586e0a79e9732d38df2307c62d8f2154a885f2a0bc036b14dd467a",
+   "digest": "56d032bce73e79ed3dc9db31d5d898a892ec55867d51a78ff4eaf26cba2ebaec",
    "definitions": {
-    "Flock.Bridge.DrawsUnder": "4abc5d864ced1e67194111af4d2122149bb5e799458282f37b5c35064bf1204f",
     "Flock.Bridge.drawnLaw": "d3d5d8aebbdd734c0b832c56f88c1218c761f8ca6f936cbdc586a2aafd695d3c",
-    "Flock.Bridge.lawK": "ffca002c0ea109c0fd79193088486246f4984aefbf5f8ec79866ea1ad6f46e00"
+    "Flock.Bridge.lawK": "ffca002c0ea109c0fd79193088486246f4984aefbf5f8ec79866ea1ad6f46e00",
+    "Flock.Bridge.lawOf": "14613c7459fe9fce48df0f69ab634c9f80c6d61fba28c6bdc543b73a15d41352"
    }
   },
   "Proofs.Flock.Bridge.Honest": {
@@ -43488,7 +43474,7 @@
    }
   },
   "Proofs.Flock.Bridge.LeafMap": {
-   "digest": "0f5ae6aa9041a62a5fc4b5cbbf62c6486c2b85d10fb32405ec22eb25f4b88cae",
+   "digest": "09656cb005f028e91f2cd9469b5873752d59be876ba64d965cf0f944143043f9",
    "definitions": {
     "Flock.Bridge.LeafMap": "0a88e232ce1777f3467a92829e2745d110fed9641d39664a0ae16c72145de533",
     "Flock.Bridge.LeafMap.cnt": "4c80450caa4a02b1328e30c826541d62f22d7ccf6683d2b256148ba6b691f87b",
@@ -43498,13 +43484,24 @@
     "Flock.Bridge.LeafMap.ofPublic": "23f06b2f5098ac6487a5b9ad7ba5f36b89ae70d3b1352dc047f83efc7d92b5dc",
     "Flock.Bridge.LeafMap.ofTables": "939dcd0362c54339287f953d2f781cd6b0384d4cd4ad59a58caada6178b64920",
     "Flock.Bridge.LeafMap.ref": "c2d536e506762810c5e344a8407a2608495193319e7ae540ae8fa92896cb02a5",
-    "Flock.Bridge.RootFixesDomainL": "4179b593d8cf637861117774e87e259638f7a715249ab6ceb8e20ce826d44e7d",
     "Flock.Bridge.commitDepL": "7d44321223a335c606fcccab445f029f971e9c3f5536b959bc187053e52f8e01",
     "Flock.Bridge.leavesL": "2d15d5d1f58e9ae49330750eb2f173983def48a0d78729ccae5b840cf29ac6e5",
     "Flock.Bridge.pathOfL": "15dc86cd5f624f00053a4dac89fb58464e310d3030929ee14825b610b5b2b73f",
     "Flock.Bridge.portIdxOf": "26853fc00617be1980abc82f5eee1d9f8983df2714b295a2d230a20db0bfa3a3",
     "Flock.Bridge.portsOfL": "ee1b66e2f2d8e3779b1c115777688ff291e97049a377dbe0ccddc9947c240e69",
     "Flock.Bridge.rootsOfL": "f423d067c57d7c79ed02018d140aa95595bd533a560f30b34e11905ba2d79bf8"
+   }
+  },
+  "Proofs.Flock.Bridge.LeafRoots": {
+   "digest": "1c4476319729152db7662e91e3301421291b504a03c0b4ab066bf5d0554e5970",
+   "definitions": {
+    "Flock.Bridge.collPairL": "c0f5b7872a182103529efbe101783d79498c47043c1cd75e6772b5a098a89657",
+    "Flock.Bridge.depthL": "23daf2f184466c1910781e075694a67ec70942ecb5e35046051d89a162931aac",
+    "Flock.Bridge.rootsCollL": "fedd084fd0234beb4cc61986702963063d1624d22b6ce83aadee403319dded30",
+    "Flock.Bridge.rootsCostL": "28bc209b019c45a8a6771ce56d53b48964df11228fa9bf46bb5707d49e16b5be",
+    "Flock.Bridge.rootsFinderL": "8cdafef94880ef39ea70d28d452cf3e006d68b44b2b5d82308f9ec9d85598294",
+    "Flock.Bridge.spineColl": "7b56f6e7addeaa1adc4d5f6c5b40aa1d0ff303d6019ff6fb91130568a0a61b8e",
+    "Flock.Bridge.spineL": "1d54c71606961c82dbe744b9615c2038de02e977ee9a06bb9391764f2e73108b"
    }
   },
   "Proofs.Flock.Bridge.PopMatches": {
@@ -43572,10 +43569,10 @@
    }
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "229b6f1fdd36a8b52635a43000f884c0a3cfe597f0bbd9727d5b5536862f15b1",
+   "digest": "29814612df3bea3452668123982ca3dbe898da781eed4c9fed0b7a295cfdcf50",
    "definitions": {
     "Flock.Bridge.constsOfP": "67a6f5fe088b95efced36467f34ed9d2726e353df637e8a6c4fc2878dd6a6e83",
-    "Flock.Guarantees.SampledKSLiveV5": "1d2c46b46a04d8ce08d26a79a2b08eea4cce6ff5017a7fb1257ecb52630eee96"
+    "Flock.Guarantees.SampledKSLiveV5": "6ec2017c8580caada53572da060dbeb2bba34f25736177bf664afac9b36cf347"
    }
   },
   "Proofs.Flock.Bytes": {
