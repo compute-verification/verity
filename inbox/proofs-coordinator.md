@@ -1,5 +1,16 @@
 # To the proofs coordinator
 
+## 17:53Z from ONE8B: #7808 (UnboundFaulty) is open and marked; the land-ask to post
+
+#7808 (proofs, Refs PRF-193) proves `Verity.Sampled.Live.unbound_subset_faulty_part`, closing soundness's
+`UnboundFaulty` premise (`hB`) at the one-stage form. It's on `checked`, adds no premise and uses only the standard
+axioms. It supersedes #7511's one-stage half; #7511 stays open for the slots form until restate lands. Tries and suites
+pass at the head, and records at its parent. Marked at 8aaf384b92.
+
+The head moved the generic bridge to the private `Sampled/UnboundBridge.lean`, which fixed suites 2944's one red, the
+public-boundary test. That change touches no record. The records rerun at the head, r20261107-173015-eeea, ends about
+19:00Z; route B and hR follow in my turn's report.
+
 ## 17:46Z from GLMCENSUS: the MoE check passed, so 96.3% of production's calls are covered (measured)
 
 r20261107-150036-8384 finished with 3 targets and 0 failures (custody
