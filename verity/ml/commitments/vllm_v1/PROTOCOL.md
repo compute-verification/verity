@@ -121,8 +121,8 @@ A published root is a raw SHA-256 over a tag and fixed-width fields, and wraps t
   integration derives them. Two of them are `/`-joined text: `RUContext.digest`
   (`profile/request/prompt_len/step`) and native-host `_ctx_digest` (`run_id/step=s`). Both are injective only
   because their trailing fields are decimal integers and the profile id is fixed-width hex, so the integration
-  must keep those fields that way. `program` is the first 32 bytes of the Program digest (`commit.scheme.program_field`): for an
-  IR Program, its SHA-512 `codec.program_digest` truncated to 256 bits.
+  must keep those fields that way. `program` is the first 32 bytes of the Program digest (`commit.scheme.program_field`): for a
+  Program, its SHA-512 `codec.program_digest` truncated to 256 bits.
 - **The hm96 context suffix.** Under the opt-in `hm96-sha256/v1` leaves (`verity.ml.commitments.hm96`, §5), native-host
   `ctx` is `SHA-256(run_id/step=s ‖ "/leaf=" ‖ scheme_digest(key))`, with the scheme digest as 32 raw bytes.
   - The committer computes it only for a step whose leaves it salted, so no hm96-bound root sits over unsalted leaves.
@@ -182,17 +182,13 @@ covers a parameter the verifier gets wrong, such as N, the chunk size or the lea
 
 **Python**: `verity_vllm/commit/scheme.py` is the integration's one route to this module. Headers, root bindings,
 tags and the tree walk are imported from here; the position leaf and the level fold keep a prefix-once form over
-these tags, with a pluggable hash for benchmarks. Every committer, the opening verifiers (`hidden_stream.py`,
-`native_host.py`, `native_ranges.py`) and `padding_steps.py` hash through it, and
+these tags, with a pluggable hash for benchmarks. Every committer and the opening verifiers (`hidden_stream.py`,
+`native_host.py`, `native_ranges.py`) hash through it, and
 `hashing.py` / `merkle.py` re-export the id-leaf rules of `verity.ml.commitments.leaves`.
 `integrations/vllm/tests/commit/test_production_vectors.py` checks it against every vector, the weights root included.
 
 **CUDA** (checked against the vectors by the pod-marked `integrations/vllm/tests/commit/test_scheme_cuda.py`):
 
-- `verity_vllm/commit/committer/native_tree.cu`: `fa2h` chunk leaves and the node/lift levels. Words 8 and 9 of its
-  header are hard-wired to 0, so it can only reproduce the legacy-tile chunk vectors.
-- `verity_vllm/commit/committer/hidden_gpu_src/hidden_gpu_tree.cu`: the same chunk-leaf and level kernels, and the
-  same legacy-tile limit.
 - `verity_vllm/acquire/fa2_tap_src/verity_tap.h`: the in-kernel thread-leaf header and SHA-256 (`Verity_sha_ctx`).
 
 The FA3 tap (`fa3_tap_src/verity_tap_fa3.h`) only materialises the stream and does no hashing.
@@ -328,7 +324,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 | width | what |
 |---|---|
 | 64 bytes: computed by the scheme | position, chunk and thread leaves; nodes, lifts and the empty root; `stream_ctx` and `thread_ctx`; every §4 root binding (semantic, step, run, weights, stream, thread), so the step roots a run root folds and the tensor roots a weights root folds; `domain_digest` (§9) |
-| 32 bytes: identity digests from the integration | `program` (an IR Program's SHA-512 digest truncated to 256 bits); `ctx` (context), `geo` (geometry), `layout`, and the integration's `template` and `names` digests, SHA-256 until the re-baseline |
+| 32 bytes: identity digests from the integration | `program` (a Program's SHA-512 digest truncated to 256 bits); `ctx` (context), `geo` (geometry), `layout`, and the integration's `template` and `names` digests, SHA-256 until the re-baseline |
 | variable, unchanged | `query_id` |
 
 **What carries over unchanged:**
@@ -348,8 +344,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 **Not covered.** Capture-v1 id leaves (`leaves.LeafTree`) stay SHA-256; they are a research capture format, not a serving tree.
 
 **What the integration changes at the re-baseline.**
-- The committers hash with SHA-512: the Python `commit.scheme` rules, and the CUDA copies `native_tree.cu`, `hidden_gpu_tree.cu`
-  and the FA2 tap's `Verity_sha_ctx`.
+- The committers hash with SHA-512: the Python `commit.scheme` rules and the FA2 tap's `Verity_sha_ctx`.
 - They match `vectors_sha512.json` byte for byte.
 
 **Vectors.** `vectors_sha512.json`, written by `python -m verity.ml.commitments.vllm_v1.vectors_sha512`, covers:
@@ -381,7 +376,7 @@ Recorded roots don't move. The vLLM integration keeps SHA-256 until the re-basel
 - **What rests on `cr/sha-512`.** Table 1 lists SHA-512 under collision resistance for everything the scheme computes: leaves, nodes,
   lifts, the empty root, the stream and thread contexts, every root binding, and `domain_digest`. Binding a value inside a
   verifier-held domain rests on `cr/sha-512` alone.
-- **What still rests on SHA-256.** The root bindings absorb the integration's identity digests. `program` is an IR Program's SHA-512
+- **What still rests on SHA-256.** The root bindings absorb the integration's identity digests. `program` is a Program's SHA-512
   digest truncated to 256 bits, so which Program a root belongs to rests on `cr/sha-512`. The others are 32-byte SHA-256 digests:
   `ctx` (context), `geo` (geometry) and `layout`, and in the semantic and weights roots `template` and `names`. So which context and
   step a root belongs to rests on SHA-256.

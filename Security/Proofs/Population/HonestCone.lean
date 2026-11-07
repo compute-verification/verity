@@ -1,8 +1,13 @@
 module
 
-public import Proofs.Population.Oblivious
-public import Proofs.Population.Leakage
-public import Proofs.Population.Work
+public import Definitions.Population.Oblivious
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Proofs.Population.Pointer
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Proofs.Population.Oblivious
+import Proofs.Population.Work
 
 /-!
 # The damage theorems need no obliviousness

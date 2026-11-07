@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.Closure
+import Mathlib.Analysis.MeanInequalities
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Windows of calls

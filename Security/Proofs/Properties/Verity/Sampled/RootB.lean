@@ -15,7 +15,7 @@ first opening is of the stream `SampledProofs.Challenger.TREE_SESSION` of the tr
 
 * **The bytes the link answers** (`link_answers`): v2's read of the device's first opening is the read of the release
   log's line opening round 0 of the session stream of the log's one tree (`readLog_round`), and that line is the one
-  `coinTreesOf` takes as that tree's round (`round_zero_unique`, `opened_after`), which the challenger opened after the
+  `coinTreesOf` takes as that tree's round (`opensRound_unique`, `opened_after`), which the challenger opened after the
   SHA-512 of the link's message in v2's record (`checkBlobsAt_link`). So the opening answers that message's SHA-512.
 * **The link's round's mode** (`RoundsReach.stop_modes_reveal`): off the misses, the round the first stop fixes, the
   link's, decodes the message the play reveals for it, the link's message in v2's record at the session's tables
@@ -41,9 +41,11 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 /-! ## The line `coinTreesOf` takes as a tree's round -/
 
 /-- **A release log line opening a round, after the bytes the tree shows**: a coin tree's line opening round `o.round`
-of stream `o.stream` of the tree whose root is `root` (`OpensRound`), whose `after` is `o.after`. -/
+of stream `o.stream` of the tree whose root is `root` (`OpensRound`), whose `after` is `o.after` and whose `n` is
+`o.n`. -/
 def AfterLine (l root : String) (o : TreeOpening) : Prop :=
-  OpensRound l root o.stream o.round ∧ ∃ d, event l = .ok d ∧ getD d "after" = .str o.after
+  OpensRound l root o.stream o.round ∧
+    ∃ d, event l = .ok d ∧ getD d "after" = .str o.after ∧ nat? (getD d "n") = some o.n
 
 /-- Each round a tree of `trees` shows opened is a line of `log` opening it after the bytes the tree shows. -/
 def OpenedAfter (log : List String) (trees : Array LoggedTree) : Prop :=
@@ -126,27 +128,41 @@ theorem opened_after {log : List String} {trees : Array LoggedTree} (h : coinTre
           · obtain ⟨l, hl, hol⟩ := hI _ htmem o ho
             exact ⟨l, List.mem_append_left _ hl, hol⟩
           refine ⟨line, List.mem_append_right _ (List.mem_singleton_self _),
-            ⟨htl, d, hev, by simpa using hopen, by simpa [hroot] using htree, hstream, hkn.1⟩, d, hev, ?_⟩
+            ⟨htl, d, hev, by simpa using hopen, by simpa [hroot] using htree, hstream, hkn.1⟩, d, hev, ?_, hkn.2⟩
           cases hc : getD d "after" <;> rw [hc] at hhex <;> first | rfl | cases hhex
         · cases hr
 
-/-- The first member of `a ++ x :: b` a test passes is `x`, where it passes `x` and no member of `a`. -/
-theorem find?_first {β : Type} {p : β → Bool} {a b : List β} {x : β} (ha : a.countP p = 0) (hx : p x = true) :
-    (a ++ x :: b).find? p = some x := by
-  rw [List.find?_append, List.find?_eq_none.2 (List.countP_eq_zero.1 ha), Option.none_or]
-  simp [hx]
+/-- Two places of a list holding elements `p` accepts, with as many such elements before each, are one place. -/
+theorem eq_of_countP_eq {β : Type} {p : β → Bool} :
+    ∀ {a a' b b' : List β} {x x' : β}, a ++ x :: b = a' ++ x' :: b' → p x = true → p x' = true →
+      a.countP p = a'.countP p → x = x'
+  | [], [], _, _, _, _, h, _, _, _ => by
+    simp only [List.nil_append, List.cons.injEq] at h
+    exact h.1
+  | [], y :: a', _, _, _, _, h, hx, _, hc => by
+    simp only [List.nil_append, List.cons_append, List.cons.injEq] at h
+    obtain ⟨rfl, -⟩ := h
+    simp [hx] at hc
+  | y :: a, [], _, _, _, _, h, _, hx', hc => by
+    simp only [List.nil_append, List.cons_append, List.cons.injEq] at h
+    obtain ⟨rfl, -⟩ := h
+    simp [hx'] at hc
+  | y :: a, y' :: a', _, _, _, _, h, hx, hx', hc => by
+    simp only [List.cons_append, List.cons.injEq] at h
+    obtain ⟨rfl, h⟩ := h
+    rw [List.countP_cons, List.countP_cons] at hc
+    exact eq_of_countP_eq h hx hx' (Nat.add_right_cancel hc)
 
-/-- **Round 0 of a tree's stream has one line**: where `coinTreesOf` accepts the release log `lines`, two of its lines
-opening round 0 of stream `name` of the coin tree whose root is `ρ` are one, the first line opening that stream
-(`coinTreesOf_round`). -/
-theorem round_zero_unique {lines : List String} {trees : Array LoggedTree} (h : coinTreesOf lines = .ok trees)
-    {ρ name l l' : String} (hl : l ∈ lines) (hl' : l' ∈ lines) (ho : OpensRound l ρ name 0)
-    (ho' : OpensRound l' ρ name 0) : l = l' := by
+/-- **Each round of a tree's stream has one line**: where `coinTreesOf` accepts the release log `lines`, two of its
+lines opening round `k` of stream `name` of the coin tree whose root is `ρ` are one, each the line after the `k` lines
+opening that stream (`coinTreesOf_round`). -/
+theorem opensRound_unique {lines : List String} {trees : Array LoggedTree} (h : coinTreesOf lines = .ok trees)
+    {ρ name l l' : String} {k : ℕ} (hl : l ∈ lines) (hl' : l' ∈ lines) (ho : OpensRound l ρ name k)
+    (ho' : OpensRound l' ρ name k) : l = l' := by
   obtain ⟨a, b, he⟩ := List.append_of_mem hl
   obtain ⟨a', b', he'⟩ := List.append_of_mem hl'
-  have e := find?_first (b := b) (coinTreesOf_round h he ho).symm ho.opensLine
-  rw [← he, he', find?_first (coinTreesOf_round h he' ho').symm ho'.opensLine] at e
-  exact (Option.some.inj e).symm
+  exact eq_of_countP_eq (he.symm.trans he') ho.opensLine ho'.opensLine
+    ((coinTreesOf_round h he ho).symm.trans (coinTreesOf_round h he' ho'))
 
 /-! ## The log before the link -/
 
@@ -251,9 +267,9 @@ theorem link_answers {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
   unfold LoggedTree.opening at ho
   have hp := Array.find?_some ho
   simp only [Bool.and_eq_true, beq_iff_eq] at hp
-  obtain ⟨l', hl', hal, d', hev', haft'⟩ := opened_after hct t (by simp) o (Array.mem_of_find?_eq_some ho)
+  obtain ⟨l', hl', hal, d', hev', haft', -⟩ := opened_after hct t (by simp) o (Array.mem_of_find?_eq_some ho)
   rw [hp.1, hp.2] at hal
-  obtain rfl := round_zero_unique hct hlm' hl' hro.1 hal
+  obtain rfl := opensRound_unique hct hlm' hl' hro.1 hal
   obtain ⟨-, -, d, hev, -, aft, haft'', hu⟩ := hro
   obtain rfl : d = d' := Except.ok.inj (hev.symm.trans hev')
   obtain rfl : aft = o.after := Json.str.inj (haft''.symm.trans haft')

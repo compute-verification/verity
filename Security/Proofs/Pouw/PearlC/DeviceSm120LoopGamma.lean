@@ -1,9 +1,16 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceSm120Gamma
-public import Proofs.Pouw.PearlC.CapLoopGamma
-public import Proofs.Pouw.PearlC.ChainCapLoopGamma
-public import Proofs.Pouw.PearlC.UOnlyLoopGamma
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.CapLoopGamma
+import Proofs.Pouw.PearlC.ChainCapLoopGamma
+import Proofs.Pouw.PearlC.UOnlyLoopGamma
 
 /-!
 # γ at the RTX PRO 6000 (sm_120) records at the in-loop prices (staged)

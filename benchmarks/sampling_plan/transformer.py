@@ -4,7 +4,7 @@ reference) or scaled onto one RTX PRO 6000 (the Phase 2 model), every operation 
 The Definition DAG is one server-time block of serving: `requests` requests of `context` positions each (`prompt` given,
 the rest generated greedily, the last one never fed back, so `positions` = context - 1 run), through `layers` pre-norm
 blocks of width `width` (`heads` heads of 64, an MLP of `mlp` with ReLU), learned absolute positions, a byte vocabulary
-and a W8A8 output head. Every op is a unit of one request's (`cuts` puts every subcircuit in the `request` replay domain),
+and a W8A8 output head. Every op is a unit of one request's (`cuts` puts every subcircuit in the `request` replay grain),
 and its units, from the finest up:
 
 - the static matmuls (QKV, the output projection, MLP up and down, the head): `ScaledMmS8Coordinate_v1{K}` on sm_120's
@@ -44,20 +44,20 @@ import json
 import sys
 from dataclasses import asdict, dataclass, replace
 from fractions import Fraction
-from math import ceil, log
+from math import ceil, log, log2
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from inputs import I, KEY, cap, observations  # noqa: E402
+from inputs import CARDS, I, observations  # noqa: E402
 
 from verity.core.protocols.pous import wipe_monitoring
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import Shape, cuts, shape_of  # noqa: E402
 from verity.core.protocols.sampled_proofs.costfit import Fitted, fit  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage.draw import work_k, work_table  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import (Candidate, TensorCommit, CostModel, Objective,  # noqa: E402
-                                                           Plan, ReplayDomain, certify, density_bound, for_target,
+from verity.core.protocols.sampled_proofs.optimize import (Candidate, Commitment, CostModel, Objective,  # noqa: E402
+                                                           Plan, ReplayGrain, certify, density_bound, for_target,
                                                            frontier, ln_upper, row_ands)
 from verity.ml.circuits.codec import descriptor_id  # noqa: E402
 from verity.ml.circuits.defs import bind  # noqa: E402
@@ -161,11 +161,16 @@ def requests_per_block(sequences: int, step_s: float, positions: int, block_s: f
     return round(block_s / step_s * sequences / positions)
 
 
+def _cap(ands: int) -> int:
+    """A statement's units under m = k_log + nbl <= 35 (`int8_llama.cap`)."""
+    return min(1 << max(0, 35 - (ceil(log2(max(ands, 2))) + 1)), 1 << 20)
+
+
 def _counted(s: Shape, memo: dict[str, Shape]) -> Shape:
-    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows (`cap`)."""
+    """`s` credited its ANDs as work (unless it names its own), and its statement cap from its ANDs and rows."""
     if s.id in memo:
         return memo[s.id]
-    out = replace(s, work=s.work or s.ands, cap=cap(s.ands, s.rows),
+    out = replace(s, work=s.work or s.ands, cap=_cap(s.ands + sum(row_ands(r) for r in s.rows)),
                   parts=tuple((_counted(c, memo), k) for c, k in s.parts),
                   ways=tuple((label, tuple((_counted(c, memo), k) for c, k in ps)) for label, ps in s.ways))
     memo[s.id] = out
@@ -346,7 +351,7 @@ class Serving:
     step_s: float | None = None
 
 
-def serve(m: Model, s: Serving) -> tuple[TensorCommit, ...]:
+def serve(m: Model, s: Serving) -> tuple[Commitment, ...]:
     """Every serve-time commitment of the block beside the units' own outputs (which `Candidate.commit_bits` carries):
     the requests' bytes in, the in-flight requests' KV cache at the close (the carried state; also the QKV units'
     outputs, so a copy `overlaps` would price), PoUW's CP-W receipts under h1 (2 (K/32 + m) u32 a 32 x 32 tile, the
@@ -361,26 +366,27 @@ def serve(m: Model, s: Serving) -> tuple[TensorCommit, ...]:
             ("carry", "KV cache of the in-flight requests at the close", m.inflight * m.context * m.kv_bytes),
             ("pouw:h1", "CP-W receipts", m.requests * (m.positions * per_token + m.generate * head)),
             ("bandwidth", "receipts over the audited store", s.audit_passes * s.audit_store / 4096 * 64)]
-    return tuple(TensorCommit(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
+    return tuple(Commitment(scale, tensor, b, cost=b * rate) for scale, tensor, b in rows if b)
 
 
-def costs(m: Model, s: Serving) -> CostModel:
-    """Flock's fitted model (int8_llama's fit) with the commitment rate, the block's serve-time commitments and the
-    `request` replay domain."""
-    obs = observations()
+def costs(m: Model, s: Serving, card: str = "rtx-pro-6000") -> CostModel:
+    """Flock's model fitted on `card`'s observations (`inputs.CARDS`; the RTX PRO 6000's is int8_llama's fit) with the
+    commitment rate, the block's serve-time commitments and the `request` replay grain."""
+    obs = observations(card)
+    key, cpu = CARDS[card]
     fitted = Fitted(fit(obs, "prove", ["one", "ands", "ands*staged", "ands*drawn"]),
                     fit(obs, "verify", ["one", "ands", "ands*staged", "ands*drawn"]),
-                    fit(obs, "stage", ["one", "ands", "ands*staged"]), I["cpu"].value, KEY)
+                    fit(obs, "stage", ["one", "ands", "ands*staged"]), I[cpu].value, key)
     return replace(fitted.model(), commit_per_bit=I["commit_per_byte"].value / 8, serve=serve(m, s),
-                   replay={"request": ReplayDomain(m.requests, s.replay)})
+                   replay={"request": ReplayGrain(m.requests, s.replay)})
 
 
 def candidates(dag: DefinitionGraph, cm: CostModel, objective: Objective, grid: int = 21) -> tuple[list[Candidate], dict]:
-    """`candidates.cuts` on each op, every subcircuit in the `request` replay domain: its alternatives, each its units
+    """`candidates.cuts` on each op, every subcircuit in the `request` replay grain: its alternatives, each its units
     by Definition."""
     out, alts = [], {}
     for op, (root, n) in dag.ops.items():
-        cs, a, _ = cuts(op, root, n, cm, objective, grid=grid, replay=("request", dag.m.requests))
+        cs, a, _ = cuts(op, root, n, cm, objective, grid=grid, grain=("request", dag.m.requests))
         out += cs
         alts[op] = {label: [list(u) for u in units] for label, units in a.items()}
     return out, alts

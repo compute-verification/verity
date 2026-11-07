@@ -1,7 +1,7 @@
 """The streamed-label wipe (experimental): a proof of secure erasure for a memory wipe, run by the memory challenger.
 `PROTOCOL.md` ("The streamed-label wipe") is its specification and states the guarantee.
 
-The memory challenger, the auditor's device on a machine the prover doesn't control, fills every memory tier of one
+The memory challenger, the auditor's device on a machine the developer doesn't control, fills every memory tier of one
 server with labels it derives itself, then reveals `k` indices drawn on live coins after the fill and checks each answer
 against its own derivation, under a deadline per batch.  The labels are the auditor's randomness: the answers are
 checked in the clear, and nothing of the prover's is opened.

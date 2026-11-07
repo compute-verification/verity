@@ -1,7 +1,17 @@
 module
 
-public import Proofs.Flock.Claims.Sampling.Select.Take
 public import SampledProofs.Slots
+public import Aesop.BuiltinRules
+public import Batteries.Data.List.Basic
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.Simps
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Proofs.Flock.Claims.Sampling.Select.Take
 
 @[expose] public section
 

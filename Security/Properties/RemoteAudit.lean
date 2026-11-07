@@ -1,6 +1,7 @@
 module
 
 public import RemoteAudit
+public import RemoteAudit.Session
 
 /-!
 # The remote bandwidth audit's verifier: what its Lean verdicts mean (`RemoteAudit`)

@@ -1,7 +1,13 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
 public import Proofs.Flock.Soundness.Discharge.Layout
+public import Proofs.Flock.Soundness.Discharge.Layout.Site
 public import Proofs.Flock.Soundness.Discharge.Placed
+public import Proofs.Flock.Soundness.Refine.Setup
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
 public import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
 public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 public import Proofs.Flock.Soundness.Discharge.Exec.Rounds

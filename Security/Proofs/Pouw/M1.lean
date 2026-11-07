@@ -1,7 +1,7 @@
 module
 
+import Mathlib.Tactic.Positivity.Finset
 public import Definitions.Pouw.Assumptions.GameStatements
-public import Proofs.Pouw.Prob
 
 /-!
 # Facts about the named instance `D1.m1`

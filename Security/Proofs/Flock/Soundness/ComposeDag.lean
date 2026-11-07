@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.Compose
 public import Proofs.Flock.Soundness.Types.Dag
+import Mathlib.Data.List.GetD
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # A unit's rows in logical order, over the type DAG (verified-lowering phase 1, 1d step 2)

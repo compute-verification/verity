@@ -1,11 +1,9 @@
 module
 
 public import Flock.FV3
-public import PouwCheck.Inputs
 public import PouwCheck.Pass
 public import PouwWindow.Record
 public import PouwWindow.Side
-public import Identity.Domains
 
 /-!
 # A unit's opening (`core_check.py`, "a unit's opening")

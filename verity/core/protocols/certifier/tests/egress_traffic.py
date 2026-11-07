@@ -10,8 +10,9 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Sequence
 
-from verity.core.protocols.certifier import egress as EG, io_tie as IT, warden as W, warden_rows as WR
-from verity.core.protocols.certifier.grid import Certifier, BlockGrid
+from verity.ml.protocols.certifier import egress as EG
+from verity.core.protocols.certifier import io_tie as IT, warden as W, warden_rows as WR
+from verity.core.protocols.certifier.grid import Certifier, Record
 
 #: the token ids' range (GLM's vocabulary), and the bits an id takes
 V = 151_329
@@ -25,7 +26,7 @@ class Served:
     bucket, its n outputs) and response ids, and the network certifier's `fails` frames."""
 
     params: W.WardenParams
-    records: tuple[BlockGrid, ...]
+    records: tuple[Record, ...]
     requests: tuple[EG.Request, ...]
     responses: tuple[tuple[int, ...], ...]
     fails: tuple[bytes, ...]

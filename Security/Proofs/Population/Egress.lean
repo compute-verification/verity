@@ -1,10 +1,11 @@
 module
 
-public import Proofs.Population.Determinacy
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Data.Fintype.BigOperators
-public import Mathlib.Data.Finset.Powerset
+public import Definitions.Population.Dataflow
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Data.Finset.Powerset
+import Mathlib.Data.Fintype.BigOperators
+import Proofs.Population.Determinacy
 
 /-!
 # Non-exfiltration: what the egress can show with at most `m` incorrect proof blocks

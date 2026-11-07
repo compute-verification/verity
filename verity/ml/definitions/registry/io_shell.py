@@ -499,7 +499,8 @@ def round_refuse(S: dict) -> str | None:
 
 
 @composite("SelectCollect", 2, ["V", "C", "KO", "FIRST", "ROUND"], select_collect_sig, refuse=round_refuse,
-           conformance="vLLM's sample at a position and its output ids so far: SelectCollect_v1, at a round")
+           conformance="not-yet-established: vLLM's sample at a position and its output ids so far: SelectCollect_v1, "
+                       "at a round")
 def SelectCollectV2(B, S, x0, best, idx, a):
     """`SelectCollect_v1{V, C, KO, FIRST}`'s body; ``ROUND``, the round of the input-ids table its select is held to, is read
     by no gate."""

@@ -25,16 +25,15 @@ the transcript root with its unit and tile counts.  Pearl-C's also says what it 
 weights were served.  Pearl-C commits one pass per engine step, a step held to what one pass takes (`pouw_pass`), each
 retained in its own directory under ``transcript_dir`` when given.  The audit (sampling tiles, opening
 them) is `verity.core.protocols.pouw.audit`'s, after the run.  Beside sampled proofs the composition asks
-`verity.core.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit; Pearl-C has none, and
-runs beside sampled proofs only in a window whose circuit is cut at its sites (`cuts`).  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
+`verity.ml.protocols.pouw.circuit` (`protocol_options.CIRCUITS`), and only ``ncp-v2`` has a circuit.  Under ``ncp-v2`` each weight's side (its Y strips and c₀) is instead bound to its own
 `NcpWeight_v1` Program call, once per run, and each call to its own `NcpLinear_v1` Program call reading it, their units
 computed natively and committed a leaf per unit (`pouw_native`, `pouw_circuit`); the replay samples each call's units under
 its window's key, regenerates them and checks each against its template (`check.replay.pouw_circuit`).
 Under H1 + fx1 (``eps1-sm120-h1fx1``, `pouw_h1`) on the eager int8_exact row nothing is executed in the linear's place
 (`executes`): the arm serves its own y, and each call is recorded as its own Program, compiled to H1 tile units
-(`verity.core.protocols.pouw.circuit.compile`), with its seed group's roots and its positions.
-Under the lead (``lead-blc4a-t64-rot``, `lead`) on the same arm, the setting ``backend`` (the lead's kernel,
-`lead.LeadBackend`) computes each call's y on its coins, taken after the call's root(A_j), in place of
+(`verity.ml.protocols.pouw.circuit.compile`), with its seed group's roots and its positions.
+Under the lead (``lead-blc4a-t64-rot``, `lead`) on the same arm, the setting ``backend`` (the lead's kernel and
+committer, `lead.LeadBackend`) computes each call's y on its coins, taken after the call's root(A_j), in place of
 the arm's ``scaled_mm`` (`engine.int8_experts.PlainGemm.gemm`). Each engine step's forward is one pass and one window,
 whose salt follows its key's leaf, the weights' root and its call count, and is published at the step's end
 (`lead.LeadRun`).
@@ -55,8 +54,8 @@ from typing import Any
 
 import numpy as np
 from verity.ml.commitments import MerkleTree
-from verity.core.protocols.pouw import circuit as pouw_circuit
-from verity.core.protocols.pouw import schemes as pouw_schemes
+from verity.ml.protocols.pouw import circuit as pouw_circuit
+from verity.ml.protocols.pouw import schemes as pouw_schemes
 from verity.core.protocols.pouw.audit import (
     HM96,
     HM96_WEIGHTS,
@@ -90,9 +89,10 @@ from verity_vllm.protocols.pouw import lead as PL
 from verity_vllm.protocols.interface import Context, Option, Target
 
 NAME = "pouw"
+DEFAULT_SCHEME = "ncp-v1"
 #: PoUW replaces the computation here; POUS wraps it from outside (`protocol_options.SITES`).
 EXECUTES = ("LinearBase.quant_method.apply",)
-#: The schemes this adapter's executor computes. ``ncp-v2`` is NCP-INT as a circuit (`verity.core.protocols.pouw.circuit`): each call is its
+#: The schemes this adapter's executor computes. ``ncp-v2`` is NCP-INT as a circuit (`verity.ml.protocols.pouw.circuit`): each call is its
 #: own `NcpLinear_v1` Program call, reading its weight's `NcpWeight_v1` call (`pouw_circuit`).  Pearl-C on sm_120 and sm_90a
 #: (`pouw_pearl_c_device.SCHEMES`) runs on the device only, through GPU 1's kernel pipeline (settings ``kernel``, ``cubin``).
 #: H1 + fx1 (`pouw_h1.SCHEME`) runs beside the int8_exact arm, which serves y itself; the lead (`lead.SCHEME`)
@@ -108,7 +108,7 @@ QUANT_PARAMS = ("weight_scale", "weight_scale_inv", "input_scale", "weight_zero_
 QUANTIZER = "verity.pouw.symmetric-int7-rowmax-rne-f32/v1"
 KEYS = ("coins", "retain_steps", "transcript_dir", "draws", "tamper", "device", "kernel", "cubin", "schedule", "start_forward",
         "rows", "steps", "runner", "rounds", "challenger", "session", "admission", "gate", "served", "graphs", "period", "unit", "ks",
-        "backend", "draw_session", "commit_record")
+        "backend", "draw_session")
 #: ``ncp-v2``'s negative controls (`Settings.tamper`): a prover that commits and opens one value wrong
 TAMPERS = ("tile", "bias")
 #: where the Commit computes `ncp-v2`'s values: the host (`pouw_native`, the default) or ``cuda``, the serving kernel
@@ -173,8 +173,7 @@ class Settings:
     #: ``decode_query_len`` orders a step's rows, `pouw_h1_requests.batch_order`), whose ``execute_model`` gets each step's
     #: scheduler output, the requests it admits and schedules among it; and the window's round coins, a `LiveRecord` over a
     #: live challenger's round family (`verity.core.protocols.pouw.window.live_challenger`), which opens round s's coin
-    #: after round s's root.  Pearl-C's device path ends each pass at that ``execute_model`` too
-    #: (`pearl_c.passes.hook_steps`), for a caller whose committer patched it before the option's install
+    #: after round s's root
     runner: Any = None
     rounds: Any = None
     #: H1's salt and round coins (``ncp-v2``'s and Pearl-C's salt) from the auditor host's challenger, ``HOST:PORT``
@@ -199,12 +198,10 @@ class Settings:
     #: H1's window Program's tile unit (`pouw_h1_settings.UNITS`; None is v1's) and the K's it records (`pouw_h1_hooks.layers`)
     unit: str | None = None
     ks: tuple[int, ...] | None = None
-    #: the lead's kernel (`lead.LeadBackend`: ``load``, ``call``, ``words``)
+    #: the lead's kernel and committer (`lead.LeadBackend`: ``load``, ``key_leaf``, ``a_root``, ``call``, ``words_root``)
     backend: Any = None
     #: H1's draw session: the gate's reserve answer for the window's draw coin, opened withheld (`pouw_h1_window.DrawSession`)
     draw_session: Mapping[str, Any] | None = None
-    #: H1's Commit record named at the window's close in place of its tap's (`pouw_h1_commit.CommitRecord`), or None
-    commit_record: Any = None
 
     @classmethod
     def of(cls, raw: Mapping[str, Any]) -> Settings:
@@ -243,11 +240,10 @@ class Settings:
             raise ValueError("pouw setting 'start_forward' is a non-negative integer (the salt's SaltWindows.next_forward)")
         backend = raw.get("backend")
         if backend is not None and not all(callable(getattr(backend, f, None)) for f in PL.BACKEND):
-            raise ValueError(f"pouw setting 'backend' is the lead's kernel (`lead.LeadBackend`): "
+            raise ValueError(f"pouw setting 'backend' is the lead's kernel and committer (`lead.LeadBackend`): "
                              f"{', '.join(PL.BACKEND)}")
-        *h1, draw_session, commit_record = PHS.of(raw)
-        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *h1, backend, draw_session,
-                   commit_record)
+        *h1, draw_session = PHS.of(raw)
+        return cls(coins, retain, tdir, draws, tamper, device, *paths, schedule, start, *h1, backend, draw_session)
 
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
@@ -283,12 +279,6 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
 def requires_build(scheme: str, ctx: Context) -> bool:
     """The circuit-backed executor is lowered into the row's Build."""
     return scheme in pouw_circuit.SCHEMES
-
-
-def cuts(scheme: str) -> bool:
-    """Whether a window's circuit can be cut at ``scheme``'s sites, reading the tables each executed call commits in place
-    of its computation (`window_class.PearlTables`): Pearl-C's, whose calls commit their A rows and y."""
-    return scheme in PPD.SCHEMES
 
 
 def keeps_weight_copy(scheme: str, ctx: Context) -> bool:
@@ -393,7 +383,8 @@ class _Run:
         """Commit the transcript: the Merkle root over every tile digest, in unit and tile order (`Prover.prove`'s tree)."""
         if self.leaves:
             epoch = Epoch(Workload(tuple(self.units)), dict(self.weight_roots), self.salt)
-            tree = MerkleTree(transcript_domain(epoch, len(self.leaves)), dict(enumerate(self.leaves)), lambda _: TILE_SCHEMA)
+            tree = MerkleTree(transcript_domain(epoch, len(self.leaves), self.scheme.commitment_hash), dict(enumerate(self.leaves)),
+                              lambda _: TILE_SCHEMA)
             self.commits["transcript_root"] = tree.commitment.root.hex()
         self.commits.update(units=len(self.units), tiles=len(self.leaves))
         if self.settings.transcript_dir:
@@ -448,7 +439,7 @@ class _CircuitRun:
             "calls_root": None, "calls": 0, "start_forward": settings.start_forward}
         self.details: dict[str, Any] = {
             "scheme": scheme, "quantizer": QUANTIZER, "basis": "none", "layers": len(weight_roots),
-            "circuit": "verity.core.protocols.pouw.circuit: each weight's side is its own NcpWeight_v1 Program call, once per run, and each "
+            "circuit": "verity.ml.protocols.pouw.circuit: each weight's side is its own NcpWeight_v1 Program call, once per run, and each "
                        "call its own NcpLinear_v1 Program call reading it, their units computed natively and committed a leaf "
                        "per unit; y served, credited words committed",
             "permutation": PC.kind_of(scheme),
@@ -517,8 +508,9 @@ class _CircuitRun:
 #: The live `ncp-v2` runs by entry, with their sites (the collector's path of each linear -> its ordinal), for the Commit's
 #: replay (`check.replay.pouw_circuit.around`) before the composition closes.
 _CIRCUIT_RUNS: dict[str, tuple[_CircuitRun, dict[str, int]]] = {}
-# The prover's hm96 salt key per entry: its weight trees' salts, drawn afresh by each `commit_weights` (so each install's W,
-# and its salt session, is its own) and read by `install`, never in the record (published commitments without it fail its root check).
+# The prover's hm96 salt key per entry: its weight trees' salts, read by `install`, never in the record (published commitments
+# without it fail its root check). Pearl-C's is drawn afresh by each `commit_weights` (so each install's W, and its salt
+# session, is its own); the others' once a process, one epoch (`commit_weights`).
 _SALT_KEYS: dict[str, bytes] = {}
 
 
@@ -610,19 +602,24 @@ def commit_weights(scheme: str, target: Target) -> dict[str, Any]:
     """The composition's first phase, with the model untouched and no coin opened: every linear layer's int7 weight rows
     committed (`verity.core.protocols.pouw.audit.commit_rows`), as ``{"weight_roots": {id: hex}, "shapes": {id: [n, k]}}``.
     Under H1 and the lead, the int8_exact arm's int8 weight rows as they are served, once a process
-    (`pouw_h1_hooks.committed`)."""
+    (`pouw_h1_hooks.committed`).
+
+    Outside Pearl-C the rows' hm96 key is `_SALT_KEYS[entry]`, drawn from the OS at the entry's first commit and reused by
+    every later commit of its weights for the process's life, which is one epoch (one `Challenger`). The salt is keyed by
+    the weights' root (`audit.salt_of`), so a salt's later windows and the device and host settings must commit the
+    weights to one root. The key is fixed before `install` opens the salt coin, and is never derived from public data."""
     if scheme in (PH.SCHEME, PL.SCHEME):
         ks = Settings.of(target.context.settings_of(NAME)).ks
         return PHK.committed(PHK.layers(target.model, linear_types(), ks, scheme=scheme))
+    entry = f"{NAME}:{scheme}"
     _, layers, shapes = _layers(scheme, target)
     if scheme in PPD.SCHEMES:
         settings = Settings.of(target.context.settings_of(NAME))
-        key = _SALT_KEYS[f"{NAME}:{scheme}"] = PPD.new_salt_key(scheme)
+        key = _SALT_KEYS[entry] = PPD.new_salt_key(scheme)
         roots = PPD.weight_roots(PPD.Kernel.load(settings.kernel, settings.cubin), {w: m.weight for w, m in enumerate(layers)}, scheme,
                                  salt_key=key)
         return {"weight_roots": {str(w): r.hex() for w, r in roots.items()}, "shapes": {str(w): list(v) for w, v in shapes.items()}}
-    key, roots = os.urandom(32), {}
-    _SALT_KEYS[f"{NAME}:{scheme}"] = key
+    key, roots = _SALT_KEYS.setdefault(entry, os.urandom(32)), {}
     for w, layer in enumerate(layers):
         b, _ = quantize(_host(layer.weight))
         roots[str(w)] = commit_rows(weight_binding(w), -2, [b[j].tobytes() for j in range(b.shape[0])], HM96, key,
@@ -695,7 +692,7 @@ def install(scheme: str, target: Target) -> Option:
         for w, layer in enumerate(layers):
             h.wrap(layer.quant_method, "apply", lambda orig, w=w: _executor(run, w))
         if device:
-            PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir, settings.runner)
+            PP.hook_steps(h, run, PPD.CALL_CAPACITY, settings.transcript_dir)
     return Option(name=entry, hooks=h, commits=run.commits, details=run.details, end_pass=run.end_pass if device else None,
                   release=run.finish if session is None else lambda: PHW.finish(run, session))
 
@@ -751,8 +748,7 @@ def _install_h1(entry: str, settings: Settings, target: Target) -> Option:
     run = PH.H1Run(entry, salt, modules, shapes, settings.rows, settings.steps, retain=settings.retain_steps,
                    transcript_dir=settings.transcript_dir, commit=target.context.stage != "capture", rounds=rounds, draw=draw,
                    admission=settings.admission or RQ.ROUND0, coin_source=source, opener=opener, served=settings.served,
-                   session=session.reserved["session"] if session is not None else None, graphs=settings.graphs,
-                   commit_record=settings.commit_record)
+                   session=session.reserved["session"] if session is not None else None, graphs=settings.graphs)
     run.commits.update(weights_root=wroot.hex(), coin_source=source)
     if session is None:
         run.commits.update(coins=commitment.to_json(), salt_opening=opening.to_json())
@@ -776,8 +772,7 @@ def _install_lead(entry: str, settings: Settings, target: Target) -> Option:
         raise ValueError(f"{entry} refused at install: " + "; ".join(off))
     committed = target.weight_commitments.get(entry) or commit_weights(PL.SCHEME, target)
     roots = {int(w): bytes.fromhex(r) for w, r in committed["weight_roots"].items()}
-    run = PL.LeadRun(entry, settings.backend, PL.F.InProcessCertifier(), weights_root(roots),
-                     [(int(m.weight.shape[0]), int(m.weight.shape[1])) for m in layers],
+    run = PL.LeadRun(entry, settings.backend, PL.F.InProcessCertifier(), weights_root(roots), len(layers),
                      rank=target.rank, world=target.context.world)
     for w, layer in enumerate(layers):
         settings.backend.load(w, layer)

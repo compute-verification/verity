@@ -97,7 +97,12 @@ give one partition, named by its digest (`partition_digest`), and `NAME:K/M@DIGE
 partitions otherwise. The guard collects only the part's files (`VERITY_SUITE_PART`). A part's pass is kept under `part_key`, the
 suite's key with the other parts' test files left out (those its files can reach by import kept), and its record names the
 part (`"part"`); a whole suite's pass answers for each of its parts. `combine_parts` joins a suite's part rows into its verdict:
-every K of one partition once, all passed.
+every K of one partition once, all passed. A suite that declares `[tool.verity.tests] parts = M` is in parts by test id instead
+(`id_part_of`), M of them and no other number (exit 2): part K runs the tests whose node id, from the suite's directory, hashes
+to K (`verity_suite_guard.id_part`, the sha256 rule circuit-check shards its targets by), so the parts hold each test the
+suite collects once on every machine, a test file's tests in several parts. Its every test file is collected and the guard
+deselects the other parts' tests; one that holds none of them passes only when the suite collected some (`part_out`), as a
+whole suite that collects none fails. Its key is the suite's with the part (`part_key`), and its share an equal one.
 
 `--per-test-min-s` (or `$VERITY_TEST_CACHE_MIN_S`)
 keeps only passes that took at least that long; `--no-per-test` turns it off; `--fresh` reuses nothing, and names what failed
@@ -296,6 +301,7 @@ class Suite:
     inputs_only: bool = False    # [tool.verity.tests] inputs_only: its dependencies' directories are left out (`inputs_of`)
     worker_gb: float = 0.0       # [tool.verity.tests] worker_gb: one xdist worker's peak, which `--mem-gb` divides (0: unbounded)
     nested: tuple[str, ...] = ()  # the suites under its directory, which its own directory leaves out (`dropped`)
+    parts: int = 0               # [tool.verity.tests] parts: the parts by test id check runs it in (`id_part_of`; 0: whole)
 
 
 def _pyproject(path: str) -> dict:
@@ -420,9 +426,13 @@ def discover() -> list[Suite]:
         project = data.get("project", {})
         name = "repository" if path == "." else _norm(project["name"]) if project else path
         tests = data["tool"].get("verity", {}).get("tests", {})
+        parts = tests.get("parts", 0)
+        if "parts" in tests and (type(parts) is not int or parts < 2):
+            raise ValueError(f"{path}/pyproject.toml: [tool.verity.tests] parts = {parts!r}: the number of parts by test id check "
+                             "runs the suite in is an integer of at least 2; leave it out to run the suite whole")
         suites.append(Suite(name, path, _requires(project, data), tuple(tests.get("inputs", [])), tests.get("parallel", False) is True,
                             tuple(tests.get("artifacts", [])), float(tests.get("timeout_s", 0)), tests.get("inputs_only", False) is True,
-                            float(tests.get("worker_gb", 0))))
+                            float(tests.get("worker_gb", 0)), parts=parts))
     # the repository's own suite keeps every path: its tests (test_repository, test_boundaries, test_doc_paths) read the whole tree
     return [replace(s, nested=tuple(sorted(t.path for t in suites if t.path != s.path and _under(t.path, [s.path]))))
             if s.path != "." else s for s in suites]
@@ -845,13 +855,30 @@ def fetched_fixtures(tree: str, paths: set[str]) -> dict[str, str]:
     return {v: k for v, k in reg.items() if held[v] == "absent"}
 
 
+def fetch_env() -> dict[str, str]:
+    """The fixture fetch's environment, with the store the tests reach: a recorded check's steps and a `research run` carry no
+    store config, only the run's custody key (`$CHECK_STORE_CUSTODY`, `store_custody`), which goes into this subprocess's
+    environment as the tests' own store helpers hand it to theirs (integrations/vllm's `store_io`, Flock's `verifier/ci.py`),
+    when no store config is set here.  Without it the fetch read the public export alone, so a fixture registered since failed
+    its suite before any test, though the tests that read it would have fetched it."""
+    env = SETTINGS.environ()
+    custody = Path(SETTINGS.CHECK_STORE_CUSTODY) if SETTINGS.CHECK_STORE_CUSTODY else None
+    if (custody is None or SETTINGS.RESEARCH_STORE_CONFIG or (Path.home() / ".research" / "store.toml").is_file()
+            or not ((custody / "store.toml").is_file() and (custody / "cred.json").is_file())):
+        return env
+    cred = json.loads((custody / "cred.json").read_text())
+    env["RESEARCH_STORE_CONFIG"] = str(custody / "store.toml")
+    env.update({k: cred[k] for k in ("AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "AWS_SESSION_TOKEN") if cred.get(k)})
+    return env
+
+
 def fetch_fixtures(fixtures: dict[str, str], log: Path) -> set[str]:
-    """Fetch the entries (`research data fetch-fixtures`), its output in `log`; returns the paths that are still missing or
-    different afterwards."""
+    """Fetch the entries (`research data fetch-fixtures`, in `fetch_env`), its output in `log`; returns the paths that are still
+    missing or different afterwards."""
     if not fixtures:
         return set()
     p = subprocess.run([sys.executable, "-m", "research", "data", "fetch-fixtures", "--repo", str(ROOT), "--json", *sorted(fixtures)],
-                       cwd=ROOT, capture_output=True, text=True)
+                       cwd=ROOT, capture_output=True, text=True, env=fetch_env())
     log.write_text(p.stdout + p.stderr)
     try:
         rep = json.loads(p.stdout)
@@ -1618,13 +1645,14 @@ def partition_digest(parts: list[list[str]]) -> str:
 
 @dataclass(frozen=True)
 class Part:
-    """Parts ``ks`` of a suite's test files in ``m`` parts (`partition`)."""
+    """Parts ``ks`` of a suite's test files in ``m`` parts (`partition`), or of its tests by id (``by`` "id", `id_part_of`)."""
     ks: tuple[int, ...]
     m: int
-    files: tuple[str, ...]       # the test files of parts ks, root-relative
+    files: tuple[str, ...]       # the test files of parts ks, root-relative (by id: none, every file is collected)
     every: tuple[str, ...]       # all the suite's test files, which the m parts hold once each
-    digest: str                  # the partition's (`partition_digest`)
-    share: float                 # the files' share of the suite's recorded seconds (`file_costs`)
+    digest: str                  # the partition's (`partition_digest`; by id, `ID_PARTITION`'s for m)
+    share: float                 # the files' share of the suite's recorded seconds (`file_costs`; by id, len(ks) / m)
+    by: str = "file"
 
     @property
     def spec(self) -> str:
@@ -1632,13 +1660,30 @@ class Part:
 
     def row(self) -> dict:
         return {"ks": list(self.ks), "m": self.m, "files": len(self.files), "of": len(self.every), "digest": self.digest,
-                "share": round(self.share, 6)}
+                "share": round(self.share, 6), **({"by": self.by} if self.by != "file" else {})}
+
+
+#: the rule a suite in parts by test id is split by (`id_part_of`), which its parts' digest names
+ID_PARTITION = "sha256 of the node id/v1"
+
+
+def id_part_of(suite: Suite, ks: tuple[int, ...], m: int) -> Part:
+    """Parts ``ks`` of the tests of ``suite``, which declares `parts` = ``m``: the tests whose node id (from the suite's
+    directory) hashes to one of ``ks`` (`verity_suite_guard.id_part`), whatever a timing record says, each part priced at an
+    equal share of the suite's seconds."""
+    if m != suite.parts:
+        raise ValueError(f"{suite.name}: parts of {m}: {suite.path}/pyproject.toml declares [tool.verity.tests] parts = "
+                         f"{suite.parts}, by test id: name its parts {suite.name}:K/{suite.parts}")
+    return Part(tuple(sorted(ks)), m, (), (), _digest({"by": ID_PARTITION, "m": m}), len(ks) / m, "id")
 
 
 def part_of(suite: Suite, ks: tuple[int, ...], m: int, tree: str, cut: list[str], times: dict[str, float]) -> Part:
-    """Parts ``ks`` of ``suite``'s test files (`test_files`) partitioned by ``times`` (`file_times`'s)."""
+    """Parts ``ks`` of ``suite``'s test files (`test_files`) partitioned by ``times`` (`file_times`'s); of its tests by id when it
+    declares `parts` (`id_part_of`)."""
     if any(k > m for k in ks) or len(set(ks)) != len(ks):
         raise ValueError(f"{suite.name}: parts {','.join(map(str, ks))} of {m}: each K once, 1 <= K <= {m}")
+    if suite.parts:
+        return id_part_of(suite, ks, m)
     every = test_files(suite, tree, cut)
     parts = partition(every, times, m)
     cost = file_costs(every, times)
@@ -1664,7 +1709,11 @@ def part_key(suite: Suite, part: Part, keep: set[str] | None, mods: Modules, ids
              args: list[str], deps: dict[str, list] | None) -> str:
     """A part's key: its suite's (`key`) with the suite's directory taken file by file, of its test modules only those ``keep``
     names (`part_reach`; all with ``keep`` None), and the part's files. So it moves with its files, what they reach and the inputs
-    every part shares (conftests, helpers, fixtures, the suite's dependencies), and not with another part's files."""
+    every part shares (conftests, helpers, fixtures, the suite's dependencies), and not with another part's files.  A part by test
+    id: its suite's key and the part, so it moves with every input of the suite."""
+    if part.by == "id":
+        return _digest({"schema": "part-ids/v1", "suite": key(suite, ids, env, args, deps), "ks": list(part.ks), "m": part.m,
+                        "by": part.digest})
     inputs = {p: i for p, i in ids.items() if p != suite.path}
     inputs.update({f: i for f, i in own.items() if keep is None or f in keep or not mods.narrowable(f)})
     blob = json.dumps({"schema": "part/v1", "suite": suite.name, "depth": depth(suite),
@@ -1675,7 +1724,10 @@ def part_key(suite: Suite, part: Part, keep: set[str] | None, mods: Modules, ids
 
 
 def part_context(suite: Suite, part: Part, tree: str, cut: list[str]) -> tuple[Modules, dict[str, str], set[str] | None]:
-    """(the suite's test modules scanned, its own files' object ids as `PerTest` keeps them, ``part``'s `part_reach`)."""
+    """(the suite's test modules scanned, its own files' object ids as `PerTest` keeps them, ``part``'s `part_reach`); none of them
+    for a part by test id, whose key is its suite's whole (`part_key`)."""
+    if part.by == "id":
+        return None, {}, None
     own = {f: i for f, i in own_ids(tree, suite.path).items() if (markdown(suite) or not f.endswith(".md")) and not _under(f, cut)}
     texts = {}
     for f in own:
@@ -1922,9 +1974,9 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     (logs / f"{slug}.part.json").unlink(missing_ok=True)
     if part is not None:
         base = "" if suite.path == "." else suite.path + "/"
-        (logs / f"{slug}.part.json").write_text(json.dumps({"dir": str(ROOT / suite.path), "ks": list(part.ks), "m": part.m,
-                                                            "mine": [f.removeprefix(base) for f in part.files],
-                                                            "every": [f.removeprefix(base) for f in part.every]}))
+        which = ({"by": "id"} if part.by == "id" else
+                 {"mine": [f.removeprefix(base) for f in part.files], "every": [f.removeprefix(base) for f in part.every]})
+        (logs / f"{slug}.part.json").write_text(json.dumps({"dir": str(ROOT / suite.path), "ks": list(part.ks), "m": part.m, **which}))
         env[PART_ENV] = str(logs / f"{slug}.part.json")
     (logs / f"{slug}.reuse.json").unlink(missing_ok=True)
     reads_log = logs / f"{slug}.reads"
@@ -1979,11 +2031,12 @@ def run(suite: Suite, allowed: list[str], args: list[str], logs: Path, workers: 
     sig = signal.Signals(-rc).name if rc < 0 else ""
     timed_out = timeout_s if expired.is_set() else 0.0
     oom = sig == "SIGKILL" and not timed_out and ooms is not None and (oom_kills() or 0) > ooms
-    rep = read_report(report)
-    # 5: nothing left to run: every test's pass reused, or a part with no files or whose every test a selection (`--quick`'s
-    # `-m "not slow"`) leaves out
-    ran_all = rc == 0 or (rc == 5 and (bool(reuse) or (part is not None and (not part.files or "-m" in args or "-k" in args))))
-    rep = rep or {}
+    rep = read_report(report) or {}
+    # 5: nothing left to run: every test's pass reused, a part by file with no files, a part by test id that holds none of the
+    # tests the suite collected (`part_out`: none when it collected none, which fails as the whole suite would), or a part whose
+    # every test a selection (`--quick`'s `-m "not slow"`) leaves out
+    empty = part is not None and ((not part.files) if part.by != "id" else (rep.get("part_out") or 0) > 0)
+    ran_all = rc == 0 or (rc == 5 and (bool(reuse) or empty or (part is not None and ("-m" in args or "-k" in args))))
     reported = bool(rep)
     reads, child_outside, by = {m: set(fs) for m, fs in (rep.get("reads") or {}).items()}, {}, {}
     traced = set(rep["traced"]) if isinstance(rep.get("traced"), list) else None
@@ -2251,7 +2304,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--lean-built", action="store_true", help=f"the Lean verifier is built and `lake` is on the PATH (check's "
                     f"lean-suites step): don't run `lake build` before {', '.join(AFTER_LEAN)}")
     ap.add_argument("--files", metavar="K/M", help="run part K (or parts K1,K2,...) of each named suite's test files in M parts, "
-                    "packed longest first by their recorded seconds (`partition`); a suite named NAME:K/M takes its own")
+                    "packed longest first by their recorded seconds (`partition`), or of its tests by id where it declares "
+                    "[tool.verity.tests] parts = M; every part runs the suite whole; a suite named NAME:K/M takes its own")
     ap.add_argument("--timings", type=Path, metavar="FILE", help="the timing record --files partitions by: JSON {suite name: {test "
                     "file: seconds}} (default: this machine's per-test record, `file_times`)")
     a = ap.parse_args(argv)
@@ -2321,7 +2375,7 @@ def main(argv: list[str] | None = None) -> int:
         if spec := split.get(s):
             ks, m, want = spec
             try:
-                parts[s] = part_of(s, ks, m, tree, cuts[s], timings[s.name] if s.name in timings else file_times(s))
+                parts[s] = part_of(s, ks, m, tree, cuts[s], {} if s.parts else timings[s.name] if s.name in timings else file_times(s))
             except ValueError as e:
                 print(f"suites: {e}", file=sys.stderr)
                 return 2
@@ -2330,6 +2384,8 @@ def main(argv: list[str] | None = None) -> int:
                       f"caller named: their timing records differ, so its files would be others; pass the caller's --timings",
                       file=sys.stderr)
                 return 2
+            if parts[s].ks == tuple(range(1, m + 1)):       # every part is the suite: run whole, its pass answers for each part
+                del parts[s]
     plan, ids_of = [], {}
     meta, lock, provided = metadata() + list(STORE_READS), locked(), set(importlib.metadata.packages_distributions())
     for s in chosen:
@@ -2358,7 +2414,10 @@ def main(argv: list[str] | None = None) -> int:
             state = f"cached from {_since(hit)}" if hit else "not cached"
             print(f"{s.name:28} {s.path:28} {state}\n    inputs: {', '.join(paths)}"
                   + (f"\n    nested suites left out: {', '.join(cuts[s])}" if cuts[s] else ""))
-            if s in parts:
+            if s in parts and parts[s].by == "id":
+                print(f"    part {parts[s].spec} by test id: the tests whose node id hashes to {parts[s].spec.partition('/')[0]}, "
+                      f"every test file collected")
+            elif s in parts:
                 p = parts[s]
                 print(f"    part {p.spec} of partition {p.digest[:12]}: {len(p.files)} of its {len(p.every)} test files, "
                       f"{p.share:.1%} of its recorded seconds:\n      " + "\n      ".join(p.files))

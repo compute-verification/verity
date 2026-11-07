@@ -2,8 +2,6 @@ module
 
 public import Definitions.NetworkCertifier.Assumptions
 public import Mathlib.Data.Set.Card
-public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Algebra.BigOperators.Fin
 
 /-!
 # Theorem 1(b): the counting bound on accepted runs

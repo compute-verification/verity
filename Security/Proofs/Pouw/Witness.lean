@@ -1,7 +1,10 @@
 module
 
+public import Proofs.Pouw.M1
 public import Proofs.Pouw.Milestone
 public import Proofs.Pouw.QTree
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # Satisfiability witnesses and non-vacuity

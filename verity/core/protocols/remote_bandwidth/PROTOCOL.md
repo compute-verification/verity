@@ -17,8 +17,8 @@ pinned by
 checks are the specification of what each zero-knowledge proof block proves on the deployed path (§8). The verifier's
 definition is Lean code, `lean/` (`RemoteAudit`: `verifyWindow`, a window's draw and its openings' checks, and
 `RemoteAudit.Session`, the session's bookkeeping call for call), which `audit.py` mirrors and is held to by
-`lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the verifier of
-record, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
+`lean/tests/`' difftest, comparing every event's result, the outcome and the record. The Lean is the
+verifier, and `audit.py` is the reference that runs beside it (`README.md`). Both refuse a registration that binds PoUW's
 tiles.
 
 ## 1. What an accepted session certifies
@@ -168,7 +168,7 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 - **The prover** is the node. It registers a store and runs chained passes (inference reads every weight block and the
   live KV pages once a decode step, topped up with filler reads). It sends each pass's plan with the root of its
   receipts, and opens what the verifier draws.
-- **The challenger** is the proof service's one challenger (`sampled_proofs.challenger`, on the auditor's host through
+- **The challenger** is the proof system's one challenger (`sampled_proofs.challenger`, on the auditor's host through
   `sampled_proofs.remote` when it is remote). It draws every coin of a session, commits to them before the session,
   and releases each once, after the root the verifier recorded for it, in a release log it signs (`coins.SessionCoins`).
 - **The verifier** is remote. It holds a secret `source` (for the codec seed) and a clock, keeps the record, and checks.
@@ -349,7 +349,7 @@ process ends early, until `--close`. The registry's record holds digests and out
 
 ## 4. The coins and the chained passes
 
-Before a session the challenger draws its coins and commits to them, one epoch of the proof service's live coins
+Before a session the challenger draws its coins and commits to them, one epoch of the proof system's live coins
 (`coins.py`, `sampled_proofs.challenger`), and the verifier holds the commitment before the first coin. The prover
 receives each coin's value as it is released and the commitment only once the session has its outcome:
 
@@ -1040,7 +1040,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
 
 - **Zero knowledge.** Every protocol is zero-knowledge, and an opened block decodes to a KV page,
   which is user data. §6's openings reveal it, so the clear checks are only the specification of what each unit
-  proves. Deployed, each drawn receipt is one proof block that the proof service proves in zero knowledge, and the
+  proves. Deployed, each drawn receipt is one proof block that the proof system proves in zero knowledge, and the
   verifier sees only its verdict. The unit is §6's checks 1–3 and 5 on one opening (and 4 under a registration that
   binds \(z\)), plus the link from the block's payload to the circuit's committed values:
   - *Public*, each of the four kinds the rules allow (protocol structure, outputs, the verifier's coins and draws,

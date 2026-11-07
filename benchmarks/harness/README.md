@@ -34,9 +34,7 @@ included), a wrong type or an unknown GPU id is an error before anything runs. A
 `model_digest` (`presets.local_checkpoint`'s hash of its files but a Hub snapshot's dot-files and Markdown, which no loader
 reads), which a dispatched point recomputes and refuses to run on when it differs.
 
-A sweep is the product of its batches, prompt lengths, traffic shapes and samplings: `greedy`, or `stochastic`
-(temperature 0.8, top-p 0.95). Every request carries its own seed, so a stochastic point's tokens are a function of the
-engine's numerics like a greedy one's.
+A sweep is the product of its batches, prompt lengths and traffic shapes, and every request is sampled greedily.
 
 The engine settings `serving_defaults = true` build every engine as vLLM serves (torch.compile, its CUDA-graph mode and
 capture sizes, no batch invariance: the execution label `compiled` of `verity_vllm.engine.served`), with one Inductor
@@ -91,7 +89,7 @@ export their paths, say), are part of the resolved spec and so of every point's 
 
 ## How a point is timed
 
-1. **Gates before timing.** Every arm runs every point, with the point's sampling, before anything is timed:
+1. **Gates before timing.** Every arm runs every point before anything is timed:
    - `tokens`: an arm with a control must produce the control's tokens exactly. A failure records the first divergent
      request, position and tokens.
    - `kv-pool`: an arm and its control must get the same KV-cache pool, in tokens. vLLM schedules by free KV pages, and

@@ -11,8 +11,8 @@ one integrity profile.
   `Q_template_instances` v0: one unit per instance, no width rule.
 * **One registration** lists every template's roots (ports named `<set>/<port>`), and `leaf_layer` is the SHA-512 of the
   canonical map from set to the SHA-512 of its public file.
-* **One sample, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` draws k units over the whole population,
-  on a development challenger's coins opened after the registration (`a0.challenger_draw`).
+* **One sample, `Subset(k)` over the union.** The verifier's Lean `flock-verify draw` draws k units over the whole
+  population, on a development challenger's coins opened after the registration (`a0.challenger_draw`).
   With `--draw-file` (M0 `serve --draw-file`) each template's server serves its share of that very draw, so the audited
   draw is the verifier's; without it, the Lean draw fixes only how many units fall in each template and each server draws
   a uniform subset of that size, which is still exactly `Subset(k)` over the union (conditioned on the counts, a uniform
@@ -35,7 +35,7 @@ sys.path.insert(0, str(HERE))
 import a0  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 ORDER = ("rmstriton", "gemm2048", "rope", "rmsfused", "silu", "gemm8192")

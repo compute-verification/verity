@@ -53,20 +53,6 @@ reads tie each reader's row to its writer's. One it reads only through input por
 too, but the prover chose its rows: its reads count free, and the count names it (``leak.untied``). PoUW's H1 tiles
 have theirs pinned through ``--registered``, from the window's entries.
 
-A circuit whose program takes values ahead of its templates' parameters (`interface.Registered.values`: a served window's
-H1 tables, or each Pearl+ call's A rows and y, which its proof blocks make where the model makes them) has them registered
-first by an earlier record W (``--tie W``: PoUW H1's registration of the window, fixed before H1's sample coin, or Pearl+'s
-window record of its retained timed rounds, written after the retention and before the verifier's coin), and the window's
-registration, chained right after W, registers each as
-W's entry of it (one-stage's ``outputs``, `tie_of`): H1's table `credit.window_table` of it under ``--tie-prefix``, or
-Pearl+'s by the value's own name. R7 takes its domain and root from W's entry, so the proof blocks read the values at W's
-roots (each pinned at W's entry, `interface.registered_reads`) and nothing of them is registered afresh. Their readers are
-sampled like any other proof block (under ``stratified:K``, a stratum a table), never proved whole as an output class. The
-summary's ``tie`` names W, and for Pearl+'s W what holds its roots to the ones its passes credited: Pearl+'s verdict, the
-prover's development verifier (`PEARL_CREDIT`). Once the records are read and before any proof, a ``TIE`` line and
-``OUT/tie.json`` name W too, with the registration's ``previous`` and whether it is W's digest (``chained``), so an
-audit stopped before its proofs end still says what it was tied to.
-
 The negatives (`negatives` before the sample, a5's after it) cost Lean verifies of their own; ``--skip-negatives`` leaves
 them out of an audit (its summary says so), for a run of several audits of one circuit, which runs them in its first.
 
@@ -78,8 +64,7 @@ quotes the warm's beside it.
     records_audit.py audit --window DIR --law L (--opening FILE --compilers FILE [--repo DIR] | --circuit SHA512) --run HEX \\
         [--template-sets DIR] [--outputs FILE] --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --firewall flock-firewall \\
         --out DIR [--delta D] [--port P] [--ports N] [--forged] [--challenger local|loopback:HOST:PORT|gate:USER@HOST --main FILE] \\
-        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--tie W [--tie-prefix P]] [--skip-negatives] \\
-        [--compose-cache DIR]
+        [--peer NAME --challenger-key RECORD [--gate-key KEY]] [--registered FILE] [--skip-negatives] [--compose-cache DIR]
     records_audit.py warm --window DIR --law L [--template-sets DIR] --compose-cache DIR [--jobs N]
     records_audit.py count --circuit FILE --bits N [--catalog MODULE ...] [--pin NAME=ROOT ...] [--pins FILE ...] [--registration FILE]
     records_audit.py period --window DIR --audit DIR --out FILE [--pin NAME=ROOT ...] [--pins FILE ...]
@@ -157,8 +142,7 @@ import numpy as np
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
-from verity.core.protocols.certifier.ingress_scan import SCAN_STATE  # noqa: E402
-from verity.core.protocols.pouw import credit as CR  # noqa: E402
+from verity.core.protocols.certifier.blocks import SCAN_STATE  # noqa: E402
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, registered as REG, registration as R  # noqa: E402
 from verity.ml.circuits.codec import program_digest  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
@@ -523,56 +507,6 @@ def window_pins(w: Mapping[str, Any], circuit: Mapping[str, Any],
     return {v: e for v, e in values.items() if v in ties}, {v: e for v, e in values.items() if v not in ties}
 
 
-def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
-           prefix: str | None) -> tuple[dict[str, Any], dict[str, dict[str, Any]]]:
-    """The window's tie to ``w`` (``--tie``: W, the earlier registration that registered first the values the circuit's
-    program takes, `interface.Registered.values`): a5's ``tie``, one-stage's ``log`` (W), ``registered`` (each value's
-    words), ``outputs`` (each value W's entry of it) and ``schemas`` (each value's rows, `interface.value_format`), and the
-    pins of the values, each W's entry under the value's name, which `interface.registered_reads` holds to the rows the
-    value's readers read. W names a value under ``prefix``, its descriptor's ``PREFIX``, as its table
-    `credit.window_table` (PoUW H1's registration of the window, each value a Commit table in ``row/v2`` rows), or, with
-    no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
-    ``row-seg/v1`` rows). ``({}, {})`` for a circuit that takes no values with no W. Refused (ValueError) for values
-    without W, W without values, and W registering a value other than once."""
-    reg = IF.declarations(circuit)[2]
-    values = tuple(reg.values) if reg is not None else ()
-    if not values and w is None:
-        return {}, {}
-    if w is None:
-        raise ValueError(f"the circuit takes values {list(values)}, an earlier registration's: tie the audit to it (--tie W, "
-                         "and --tie-prefix P for a W that names its tables under a PREFIX)")
-    if not values:
-        raise ValueError("the audit is tied to an earlier registration (--tie), and the circuit takes no values")
-    entries: dict[str, list[dict[str, Any]]] = {}
-    for e in w.get("registered") or ():
-        entries.setdefault(e.get("value") if isinstance(e, Mapping) else None, []).append(dict(e))
-    pins, outputs, d = {}, {}, R.digest(w)
-    for v in values:
-        name = v if prefix is None else CR.window_table(v, prefix)
-        if len(got := entries.get(name, [])) != 1:
-            raise ValueError(f"the earlier registration registers the circuit's value {v!r} as {name!r} {len(got)} times, "
-                             "not once" + ("" if prefix is not None else " (a W naming its tables under its descriptor's "
-                                                                          "PREFIX, H1's: give --tie-prefix)"))
-        pins[v], outputs[v] = {**got[0], "value": v}, {"record": d, "value": name}
-    return ({"log": [dict(w)], "registered": {v: int(pins[v]["words"]) for v in values}, "outputs": outputs,
-             "schemas": {v: IF.value_format(reg, v)[0] for v in values}}, pins)
-
-
-#: what holds the roots of Pearl+'s window record to the ones its passes credited, which an audit tied to it rests on
-PEARL_CREDIT = ("W's roots are the ones Pearl+'s verdict credits (`served_passes.py verify --tie W`), the prover's "
-                "development verifier: it reads the prover's salt key and opens drawn rows in the clear, values this audit's "
-                "proof hides")
-
-
-def tie_row(tied: Mapping[str, Any]) -> dict[str, Any]:
-    """The audit summary's ``tie`` for a5's ``tie`` (`tie_of`): W's digest and the values tied to it, and for Pearl+'s window
-    record (a W whose window names a Pearl-C scheme) what credits its roots (`PEARL_CREDIT`)."""
-    w = tied["log"][0]
-    scheme = (w.get("window") or {}).get("scheme")
-    pearl = isinstance(scheme, str) and scheme.startswith("pearl-c-")
-    return {"record": R.digest(w), "values": sorted(tied["outputs"]), **({"credited_by": PEARL_CREDIT} if pearl else {})}
-
-
 def committed_activations(w: Mapping[str, Any]) -> dict[str, Any] | None:
     """The per-window values the registration's window commits (``activations``), each refused unless it names its value
     and a root and its domain binds the window's run root (a root committed in another window opens under none of this
@@ -730,8 +664,7 @@ def output_class(circuit: Mapping[str, Any], given: Iterable[Iterable[int]] = ()
     verifier's own, from the circuit's shape) and every unit an uncut registered read of an output port (``o<j>``)
     covers in the circuit record (``registered``'s ``reads``: units ``[at, at + prod(radix))`` of its reader template,
     the population's indices from the templates' order), unless it reads one of the window's ``own`` values
-    (`window_pins`: a tie inside the window, a wired loop's activations; `tie_of`: the earlier registration's values the
-    window's registration reuses, each table's readers a stratum of its own), whose units the sample samples like any other. A
+    (`window_pins`: a tie inside the window, a wired loop's activations), whose units the sample samples like any other. A
     value pinned from outside the window (a served ``out`` that the next step also reads) keeps its units in the class."""
     base, at = {}, 0
     for t, n in circuit["templates"]:
@@ -809,20 +742,12 @@ def audit(a: argparse.Namespace) -> int:
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
         def resolve(t: str) -> Any:
             return sets[t][1] if t in sets else catalog_resolve(t)
-        registration = json.loads((wdir / "registration.json").read_text())
-        own = registration.get("window") or {}
+        own = json.loads((wdir / "registration.json").read_text()).get("window") or {}
         ties, untied = window_pins(own, doc, resolve)
         if twice := sorted((set(ties) | set(untied)) & set(pins)):
             raise ValueError(f"values {twice} are both pinned and the window's own")
         pins |= ties | untied
-        tied, tie_pins = tie_of(doc, json.loads(Path(a.tie_file).read_text()) if a.tie_file else None, a.tie_prefix)
-        if twice := sorted(set(tie_pins) & set(pins)):
-            raise ValueError(f"values {twice} are both pinned and the earlier registration's")
-        pins |= tie_pins
         roots = window_roots(own)
-        for e in registration.get("registered") or ():
-            if e.get("value") in tie_pins and roots.setdefault(e["value"], e["root"]) != e["root"]:
-                raise ValueError(f"the window's registration records two roots for {e['value']!r}")
         reads = IF.registered_reads(doc, mine, pins, registered=REG)
     except (ValueError, KeyError, TypeError) as e:
         row = {"ok": False, "refused": {"records": f"{type(e).__name__}: {e}"}, "seconds": round(time.time() - t0, 1)}
@@ -848,13 +773,7 @@ def audit(a: argparse.Namespace) -> int:
     a.ports = a.ports if a.ports is not None else max(1, len(mine.members))
     a.port = a.port if a.port is not None else free_ports(a.ports)
     a.coins, a.verifier_coins, a.window_root, a.rule = None, not a.challenger, mine.run, a.law
-    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (),
-                             own=set(ties) | set(untied) | set(tie_pins))
-    a.tie = tied
-    if tied:
-        named = {**tie_row(tied), "previous": rec.get("previous"), "chained": rec.get("previous") == R.digest(tied["log"][0])}
-        (out / "tie.json").write_text(json.dumps(named, indent=1, sort_keys=True))
-        print("TIE " + json.dumps(named, sort_keys=True), flush=True)
+    a.outputs = output_class(doc, json.loads(Path(a.outputs).read_text()) if a.outputs else (), own=set(ties) | set(untied))
     if a.forged:
         os.environ["FC_ZK_SELF_CHECK"] = "skip"
     manager, a.coins, finisher = AC.start(a.challenger, mine.run, [0], out / "challenger", a.main, ssh_key=a.gate_key,
@@ -879,8 +798,6 @@ def audit(a: argparse.Namespace) -> int:
                    if {*IF.DECLARED, IF.WINDOW_INGRESS} & set(doc) else leak_count(mine.members, doc.get("external") or (), bits))
     if reads:
         row["registered"] = {"pins": counted, "roots": roots, "members": len(reads)}
-    if tied:
-        row["tie"] = tie_row(tied)
     acts = committed_activations(w)
     if acts is not None:
         row["activations"] = acts
@@ -988,12 +905,6 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's copy of main's first-parent history")
     p.add_argument("--registered", help="the registered values' entries the verifier pinned before the run, {program, "
                    "values} (`pinned`), for a circuit that reads them")
-    p.add_argument("--tie", dest="tie_file", help="the earlier registration W (PoUW H1's of the window, or Pearl+'s window "
-                   "record) that registered first the values the circuit's program takes, which the window's registration "
-                   "registers as W's, chained right after it (`tie_of`); a circuit with values needs it")
-    p.add_argument("--tie-prefix", help="with --tie: W's descriptor's PREFIX, which its tables' names take "
-                   "(`credit.window_table`; h1/ for PoUW H1's window). Without it, W names each value as the circuit does "
-                   "(Pearl+'s)")
     p.add_argument("--skip-negatives", action="store_true", help="no negatives in this audit (module docstring): a run of "
                    "several audits runs them in its first")
     p.add_argument("--compose-cache", help="a5's compose cache, which `warm` filled under this tree and FLOCK_* environment: "

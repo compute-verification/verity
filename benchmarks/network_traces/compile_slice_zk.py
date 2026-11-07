@@ -40,7 +40,7 @@ proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify 
   `--zk`'s shape (`stage`).
 * **The served rows** (`served_rows`): the Commit side registers each unit's window under the run root (a stand-in: the
   partition's digest) before the sample, a row each block of G steps (``--g``, P by default: one ``srv`` row a unit; at
-  G < P the unit is `compile_slice.CompileSliceBlocks_v1`, its rows ``srv0`` …): the served rows, but ``table``'s,
+  G < P the unit is `compile_slice.CompileSliceRowGroups_v1`, its rows ``srv0`` …): the served rows, but ``table``'s,
   which are the schedule its server served (its own rows, the hit taken), so its ``cache`` check alone refuses it.
   Every unit's ``srv`` rows are its window's but ``sixpass-own``'s, which are its own run's.
 * **The bindings**, checked natively by the verifier on the row commitments b‖c the public file holds: each unit's

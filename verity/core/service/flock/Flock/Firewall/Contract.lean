@@ -55,6 +55,7 @@ module
 public import Flock.Canon
 public import Flock.Hm96
 public import Flock.JsonParse
+public import Lean.Data.Json.Printer
 
 @[expose] public section
 set_option backward.privateInPublic true

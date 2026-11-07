@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.IndexedTapes
+public import Definitions.Claims
 
 /-!
 # Claims: the sampling compiler (frozen before any proof work)

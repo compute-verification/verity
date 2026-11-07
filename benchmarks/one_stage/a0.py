@@ -31,7 +31,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
-from verity_numerical.bench.input_sets import InputSet
+from verity_flock.input_sets import InputSet
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC
 from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
@@ -64,13 +64,13 @@ DEV_SCHEME, DEV_FAMILY = "verity/one-stage/dev-draw/v1", "draw"
 
 def challenger_draw(lean: str, args: list[str], law: dict, population: int, after: str | bytes,
                     log: Path) -> subprocess.CompletedProcess:
-    """Lean's draw, ``flock-verify draw ARGS --stream-file F``, on a development challenger's coins (the verifier has none
-    of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`), committed
-    before any coin opens. Its one family holds the coins the draw reads, opened after `after` (the registration's digest)
-    by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in Lean's `Draw.drawOn` layout
-    (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and the segment, from which
-    `coins.challenger_stream` replays F. Its draws show the path, not an auditor's coins: those are `a5_coins`'
-    (`a5.py --challenger`)."""
+    """Lean's draw, ``flock-verify draw ARGS --stream-file F``, on a development challenger's coins (the verifier has
+    none of its own). The challenger is an in-process `LiveChallenger` on its own entropy (`secrets.token_bytes`),
+    committed before any coin opens. Its one family holds the coins the draw reads, opened after `after` (the
+    registration's digest) by `ChallengerCoins`. F holds the bytes `law` reads over `population`, each stream once, in
+    Lean's `Draw.drawOn` layout (`coins.draw_first`'s). ``<log stem>.coins.json`` keeps the challenger's commitment and
+    the segment, from which `coins.challenger_stream` replays F. Its draws show the path, not an auditor's coins: those
+    are `a5_coins`' (`a5.py --challenger`)."""
     reads: list[int] = []
     CC.draw_first(CC.OwnRandomness(lambda n: reads.append(n) or bytes(n)), law, population)
     need = sum(reads)

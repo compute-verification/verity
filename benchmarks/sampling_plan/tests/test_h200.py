@@ -11,6 +11,8 @@ from math import ceil, log
 import pytest
 
 import h200 as H
+import transformer as X
+from inputs import observations
 
 M = H.Shape()
 
@@ -32,9 +34,8 @@ def test_the_units_are_circuits_partition():
 
 def test_windows_draw_k_split_evenly_under_the_cap(plan):
     k = ceil(log(len(plan["windows"]) / H.DELTAS[0]) / H.SHARE)
-    caps = {t.id: t.cap for t in H.templates(M)}
     for w in plan["windows"]:
-        cap = caps[w["template"]]
+        cap = X._cap(w["proved_ands"])
         assert w["k"] >= min(k, w["units"]) and w["k"] % w["tables"] == 0 and w["k"] // w["tables"] <= cap
         assert w["tables"] == ceil(min(k, w["units"]) / cap)
 
@@ -64,6 +65,16 @@ def test_the_frontier_is_monotone_and_the_window_fits(plan):
     assert costs == sorted(costs)
     B = plan["window_blocks"]
     assert plan["cost"]["proving"] / B <= M.block_s < plan["cost"]["proving"] / (B - 1)
+
+
+def test_the_h200_card_prices_the_same_partition_in_its_own_seconds(plan):
+    """`--card h200` fits the deployed prover's sessions on GLM-5.3's proof blocks on one H200: the same windows, each
+    rate it charges positive and not the RTX PRO 6000's; a card the inputs don't hold is refused."""
+    o = H.report(M, H.SHARE, card="h200")
+    assert o["card"] == "h200" and [w["template"] for w in o["windows"]] == [w["template"] for w in plan["windows"]]
+    assert o["rates"]["statement_fixed"] > 0 and o["rates"]["per_and"] > 0 and o["rates"] != plan["rates"]
+    with pytest.raises(ValueError, match="no card"):
+        observations("b200")
 
 
 def test_a_longer_step_lengthens_the_block_not_the_units():

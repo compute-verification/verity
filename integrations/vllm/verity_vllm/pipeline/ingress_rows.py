@@ -25,7 +25,7 @@ LAYOUTS = ("row", "part", "coord", "cols", "slice", "rope", "s8")
 
 def sources(t: str, r: Mapping[str, Any]) -> dict[str, list[int]]:
     """Template ``t``'s input ports on row ``r``, each with the row's argument groups it reads (`LAYOUTS`); a port reading a
-    committed output of the row itself (a part's ``("out", j)``) is none."""
+    committed output of the row itself or an intermediate (a part's ``("out", j)`` or ``("mid", name)``) is none."""
     tp = template(t)
     if tp.layout == "s8":
         return {"x": [0, 1]}

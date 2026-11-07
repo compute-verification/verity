@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.RateAuditPartial
 public import Definitions.Accounting.Assumptions.RateAudit
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The rate audit with partial completion: what an accepted device held and read (trusted)

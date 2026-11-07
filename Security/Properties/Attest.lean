@@ -1,9 +1,10 @@
 module
 
 public import Attest.Period
-public import Properties.Pous.MemoryChallenger
-public import Definitions.Claims
 public import Definitions.Accounting.Assumptions.Parties
+public import Definitions.Claims
+public import Mathlib
+public import Properties.Pous.MemoryChallenger
 
 /-!
 # A party's signed period roots and liveness records: what a period's proof establishes, and what the auditor sees

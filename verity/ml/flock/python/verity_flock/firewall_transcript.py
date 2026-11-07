@@ -1,11 +1,11 @@
 """The ZK server's transcript (``verity/firewall-transcript/v0``): what the inner phase's ZK server (`rec_live.Proxy`) sends
-its challenger (the coin server), in order, each item tagged with the case of the ZK server's contract it falls under, with
+its challenger, in order, each item tagged with the case of the ZK server's contract it falls under, with
 the ZK server's own decision beside it. ``flock-firewall contract`` (``Flock.Firewall.Contract.run`` in the Lean verifier)
 decides the same transcript, held to the verifier's public input (``verity/firewall-public/v0``, `public`), never to
 anything the transcript says of itself; `firewall_agree.py` compares the two.
 
-The recorder watches the ZK server from outside: a coin server that keeps every call made to it (`RecordingCoins`), a salt
-source that keeps every salt it hands out (`Tape`), and every answer the ZK server gives the workers (`InnerRun.handle`). It
+The recorder watches the ZK server from outside: a challenger that keeps every call made to it (`RecordingCoins`), a salt
+source that keeps every salt it hands out (`Tape`), and every answer the ZK server gives the workers (`Session.handle`). It
 splits each call into what the schedule fixes (its shape: ``fixed`` items) and the commitments it carries (``commit``
 items, one a node of a salted top or a message row, each with the message the ZK server's own records say it commits to;
 a round's copies of a level-0 top carry none, Commit committed them), and each coin answer into
@@ -65,8 +65,8 @@ class Tape:
 
 
 class RecordingCoins(RL.CoinServer):
-    """The coin server, keeping every call the ZK server makes to it as it was made (before the coin server judges it); a
-    call the coin server refused also carries its reason (``refused``)."""
+    """The challenger, keeping every call the ZK server makes to it as it was made (before the challenger judges it); a
+    call the challenger refused also carries its reason (``refused``)."""
 
     def __init__(self, rand=None):
         super().__init__(rand) if rand else super().__init__()
@@ -104,10 +104,10 @@ class RecordingCoins(RL.CoinServer):
         return c["coins"]
 
 
-class InnerRun:
-    """One inner run through a ZK server: ``handle`` answers the workers' requests as the ZK server does and keeps what
+class Session:
+    """One inner session through a ZK server: ``handle`` answers the workers' requests as the ZK server does and keeps what
     the transcript needs. ``proxy`` is the ZK server under test (`rec_live.Proxy` or a subclass). The challenger's coins are
-    live, as `rec_live.serve`'s are, unless ``commit``: then it commits to them before the run
+    live, as `rec_live.serve`'s are, unless ``commit``: then it commits to them before the session
     (`rec_live.CoinServer.commit_coins`, each commitment under a salt from ``coin_salt``, the challenger's own, never the
     ZK server's tape). ``coins`` is the challenger under test (`RecordingCoins` or a subclass)."""
 
@@ -141,7 +141,7 @@ class InnerRun:
         return resp
 
     def accepted(self) -> bool:
-        """The ZK server's decision: the session ended with Finish, and the coin server's record says so."""
+        """The ZK server's decision: the session ended with Finish, and the challenger's record says so."""
         return self.coins.end == "finish" and self.proxy.stopped is None
 
     def public(self) -> dict:

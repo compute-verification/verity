@@ -1,5 +1,5 @@
 """Front F6's pinned menu: dp4t's buckets, each at the slots per session B that costs least at its public session count,
-fixed per model (F2's menu, merge thread 1791629248.978729).
+fixed per model (F2's menu).
 
     python -m verity_numerical.bench.unit_costs_menu --inventory unit-costs.json --out DIR [--outer proofs_c3_multiblock.json]
         [--positions proofs-rows/buckets.json]
@@ -24,13 +24,13 @@ log2 D, from proofs' ``vstar_c3.py`` and ``buckets.py`` in VSTAR_DIR (art:4e9ff8
 fits one node, the least public inner + outer hours (ties to the smaller B). Without ``--outer`` it chooses on the public
 inner hours alone, and the output says so. Openings are not batched across sessions.
 
-**One session per shape** (:func:`one_session_per_shape`; top's ruling, merge thread 1791664434.225959): a model's
+**One session per shape** (:func:`one_session_per_shape`): a model's
 entries that share a shape, (slots, bound), all take the largest inner session among them (a smaller entry's units are
 costed in it by the law) and the largest outer proof, and are priced at them. V*'s statements are public, so a shape
 whose entries had different sessions would tell which entry a session holds. B is still chosen per bucket, before the
 shapes are merged.
 
-**Claims per shape** (top, 1791665463.640949): a shape's regions are the largest among its entries (an entry with fewer
+**Claims per shape**: a shape's regions are the largest among its entries (an entry with fewer
 is padded up), its claims 2 + 2 regions, both in ``menu.json``. With ``--outer``, each entry's outer proof gains V*'s
 check of the inner session's two reps' algebra at those claims (:func:`inner_algebra`), which the input's rows leave out,
 and carries V*'s refusal where ``rec_residuals.parts`` refuses the shape.
@@ -51,7 +51,7 @@ import sys
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
-from . import templates as TM
+from verity_flock import subcircuit_templates as TM
 from . import unit_costs_padding as P
 from . import unit_costs_prover as U
 

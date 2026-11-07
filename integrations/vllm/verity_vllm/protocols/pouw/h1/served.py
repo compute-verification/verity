@@ -88,6 +88,7 @@ from __future__ import annotations
 
 import collections
 import contextlib
+import functools
 import hashlib
 import weakref
 from dataclasses import dataclass, field
@@ -99,7 +100,8 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw import weights as Wt
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1tile as HT
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.circuits.program import Program
@@ -108,21 +110,48 @@ from verity_vllm.protocols.pouw import h1 as PH
 from verity_vllm.protocols.pouw.h1 import live as LV
 from verity_vllm.protocols.pouw.h1.public_rows import PublicRows
 from verity_vllm.protocols.pouw.h1 import registered as NR
+from verity_vllm.protocols.pouw.h1 import requests as RQ
 from verity_vllm.protocols.pouw.h1 import tables_device as TD
 from verity_vllm.protocols.pouw.h1.model_key import ModelKey, model_key
-from verity_vllm.protocols.pouw.h1.names import B_NONCE, IDS_NONCE, LIVE_NONCE, NONCE, PREFIX, RECEIPT_NONCE, nonce
 from verity_vllm.protocols.pouw.h1.served_files import FILE, WindowCommitmentEntries, file_name, reads_file, register, trees
-from verity_vllm.protocols.pouw.h1.served_program import (card_arch, declared, declared_layout, descriptor, layout,
-                                                          unit_of, write_program)
+from verity_vllm.protocols.pouw.h1.served_program import (PREFIX, card_arch, declared, declared_layout, descriptor, layout,
+                                                          write_program)
 from verity_vllm.protocols.pouw.h1.words import (EMPTY_ID, chunk_words, ids_words, receipt_words, record_words,
                                                          row_words, zy_words)
 
 #: the rows' format: the tile's port rows
 V2 = G.SCHEMA_V2
+#: the hm96 salt stream's first nonce of the window's registered tables, past every round's and call's tables
+NONCE = RQ.REQUESTS_NONCE + (1 << 42)
+#: ``b/<K>``'s nonces, past every call's two tables: the auditor's registration's (`weights.B_NONCE`)
+B_NONCE = Wt.B_NONCE
+#: round s's input-ids table's nonce is IDS_NONCE + s, past every ``b/<K>``'s
+IDS_NONCE = B_NONCE + (1 << 39)
+#: call c's receipt table's nonce is RECEIPT_NONCE + c, past every round's input-ids table's
+RECEIPT_NONCE = IDS_NONCE + (1 << 38)
+#: the live tables' nonces (`pouw_h1_live.nonce`): requests@0's LIVE_NONCE, round s's slots@<s>'s LIVE_NONCE + 1 + s
+LIVE_NONCE = RECEIPT_NONCE + (1 << 37)
 #: the session round 0's input-ids table binds under in-process coins, where no gate reserved one (such a window credits
 #: nothing)
 LOCAL_SESSION = "in-process"
 DIGEST_TAG = b"verity/pouw/h1/served/v3\0"
+
+
+def nonce(call: int, table: str) -> int:
+    """The salt nonce of call ``call``'s table ``table`` (`h1window.TABLES`): a step's A table of K takes its first call of
+    K's ``a`` nonce, which no other table takes."""
+    return NONCE + 2 * int(call) + HW.TABLES.index(table)
+
+
+def unit_of(name: str | None, tile: tuple[int, int] = PH.TILE) -> Callable[[int], Any] | None:
+    """`declared`'s ``unit`` for the pouw setting ``unit`` ``name`` (`pouw_h1_settings.UNITS`): None for v1 (unset), the
+    default; for ``j10r`` `h1window.tile_unit` over J10-R's `h1tile.PouwH1Tile5`, one noise stream a call, the tile a
+    period's guarantee covers (core's `period_check.COVERED_TILE`)."""
+    if name in (None, "v1"):
+        return None
+    if name == "j10r":
+        return functools.partial(HW.tile_unit, tile=tuple(tile), definition=HT.PouwH1Tile5)
+    raise ValueError(f"no tile unit {name!r}: the pouw setting 'unit' is v1 or j10r")
 
 
 def weights_of(layers: Sequence[Any]) -> dict[int, tuple[np.ndarray, np.ndarray]]:
@@ -380,23 +409,21 @@ class Served:
             if into is not None:
                 into["z"] = later.also().hex()
 
-    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray, out: np.ndarray | None = None,
-                slots: int | None = None) -> np.ndarray:
-        """Call ``call``'s A table's words over the Program's M slots (or the first ``slots``): its rows' int8 ``codes``
-        [m, K] and f32 ``scales`` [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`,
-        n·M leaves), written into ``out`` when given."""
-        return chunk_words(codes, scales, Wt.chunks(call.k), self.m if slots is None else slots, out)
+    def a_words(self, call: Any, codes: np.ndarray, scales: np.ndarray, out: np.ndarray | None = None) -> np.ndarray:
+        """Call ``call``'s A table's words over the Program's M slots: its rows' int8 ``codes`` [m, K] and f32 ``scales``
+        [m], then zero codes of scale 0, each row `weights.chunks` (K) = n leaves (`chunk_words`, n·M leaves), written into
+        ``out`` when given."""
+        return chunk_words(codes, scales, Wt.chunks(call.k), self.m, out)
 
     def _a_rows(self, call: Any, value: str, mine: Sequence[int], codes: np.ndarray, scales: np.ndarray
                 ) -> np.ndarray | None:
         """Write call ``call``'s `a_words` into its step's A table of K ``value`` at its place among ``mine``, the step's
-        calls of K in call order: the whole table once they are all in, else None. The table starts zero, which is
-        `chunk_words`' padding, so each call writes only its rows."""
+        calls of K in call order: the whole table once they are all in, else None."""
         n = Wt.chunks(call.k)
         block = n * self.m
-        table, done = self._a.setdefault(value, (np.zeros((len(mine) * block, call.k // (2 * n) + 2), "<u2"), set()))
+        table, done = self._a.setdefault(value, (np.empty((len(mine) * block, call.k // (2 * n) + 2), "<u2"), set()))
         j = mine.index(call.index)
-        self.a_words(call, codes, scales, table[j * block:j * block + n * len(codes)], len(codes))
+        self.a_words(call, codes, scales, table[j * block:(j + 1) * block])
         done.add(call.index)
         if len(done) < len(mine):
             return None

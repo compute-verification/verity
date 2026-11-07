@@ -680,9 +680,9 @@ theorem wipeAccepts_meets : ∀ (I seed : ByteArray) (k : Lms.PrivateKey), Lms.k
 The run of `runAccepts_meets`: setup's own accepted store (`SetupProtocol.HONEST`: `w = 64`, `c0 = 189`, one segment of
 two 8-byte blocks, its `COMMITMENT` and `ROOT`) read once, under a one-coin tree with an all-zero key and salt, the round
 answered at once with block 0. The kernel evaluates every check on it (`decide +kernel`), SHA-512 trees and the coin's
-HM96 opening included, but `Flock.canonUtf8`'s `Array.qsort`, which it does not unfold (core's sort is well-founded
-and private): the manifest is a flat object whose keys `Json.mkObj` already keeps in order, which `qsort_sorted` leaves
-as they are. The session's signature is `Lms.signAt`'s, verified by `lmsCorrect`, as `wipeAccepts_meets`' is. -/
+HM96 opening included, but `Flock.canon`'s `Array.qsort`, which it does not unfold (core's sort is well-founded and
+private): the manifest is a flat object whose keys `Json.mkObj` already keeps in order, which `qsort_sorted` leaves as
+they are. The session's signature is `Lms.signAt`'s, verified by `lmsCorrect`, as `wipeAccepts_meets`' is. -/
 
 private def jsonLeaf : Json → Bool
   | .null | .bool _ | .num _ | .str _ => true
@@ -803,7 +803,7 @@ private def toyRound : MemoryChallenger.Round := ⟨0, 0, 0, 0, blockDigest toyB
 private def toyOpenings : Array CoinOpening := #[toyCoins.opening 0]
 private def toySigned (pk sig : ByteArray) : SignedSession :=
   ⟨toySessionCommitment, COMPLETE, #[toyRound], LMS, pk, sig⟩
-private def toySession (pk sig : ByteArray) : Run.ChallengerRecord :=
+private def toySession (pk sig : ByteArray) : Run.ChallengePhaseRecord :=
   ⟨toySigned pk sig, toySessionCommitment, toyOpenings⟩
 
 /-- `verdict`'s reasons before the rounds. -/
@@ -893,7 +893,7 @@ private theorem verdict_toy (pk sig m : ByteArray)
   exact rtail_toy
 
 private theorem checkAt_of (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray)
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengerRecord) (sid : ByteArray)
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray)
     (h1 : (pub.blocks == pt.params.blocks) = true) (h2 : (pub.salt.size == Run.SALT) = true)
     (h3 : (digests.size == pt.params.blocks * Merkle.DIGEST) = true)
     (h4 : (Merkle.root (Run.rowLeaves pt.params pub.salt digests) == some pub.root) = true)

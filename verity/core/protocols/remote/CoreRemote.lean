@@ -22,7 +22,7 @@ rejects v1 whatever the subprotocols answer. Pearl+'s check doesn't read the rec
 the ones the record registers is not yet checked.
 
 v0's subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`: the declared
-circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the declared circuit
+circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the registered circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
 subprotocol, and integrity by sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the
@@ -254,16 +254,16 @@ private def readsFile : Json := Json.mkObj [("format", Flock.Registered.FORMAT),
 
 /-- The auditor's challenger, whose signed release the draw's coins come in: an LMS key over SHA-512 at `Lms.deployed`'s
 parameters, the only ones v2 reads a challenger's signatures under (`OneStageZk.KEY_PARAMS`). -/
-private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", Lean.toJson Lms.deployed.H),
-  ("W", Lean.toJson Lms.deployed.W), ("public", String.join (List.replicate 80 "c1"))]), ("label", "draw")]
+private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", 20), ("W", 1),
+  ("public", String.join (List.replicate 80 "c1"))]), ("label", "draw")]
 
 /-- One-stage v2's params: v1's over the log `log`, with `outputs`, the challenger and `W`'s open root as the window's,
 and `proofs`, the circuit and public files' SHA-512s and the verifier's registered file. -/
 private def sampledParams (log : Array Json) (outputs : Option Json) : Json := Json.mkObj ([("anchors", Json.arr #[]),
   ("challenger", challenger), ("delta", "1/10"), ("form", "one-stage"), ("law", law), ("leaf_layer", rep "ee"),
   ("log", Json.arr log), ("parameters", signature), ("partition", partition), ("ports", ports),
-  ("program", jsonOf descriptor), ("proofs", Json.mkObj [("circuit", rep "c0"), ("public", rep "c2"),
-    ("registered", readsFile)]),
+  ("program", jsonOf descriptor),
+  ("proofs", Json.mkObj [("circuit", rep "c0"), ("public", rep "c2"), ("registered", readsFile)]),
   ("query", query), ("registered", Json.mkObj [(PouwCheck.Credit.commitIds 0, 1), (PouwCheck.Credit.commitRows 0 64, 1)]),
   ("scheme", "frame-v3-sha512/hm96-sha512"), ("window_root", rep "0e"), ("work_table", Json.null)] ++
     (outputs.map fun o => [("outputs", o)]).getD [])
@@ -273,8 +273,8 @@ SHA-512 (`proofs`) in place of verdicts, and coins no challenger signed. -/
 private def sampledEvidence (rec : Json) : Json :=
   Json.mkObj [("coins", Json.mkObj []), ("draw", jsonOf r#"{"k":1,"law":"subset","population":1,"units":[0]}"#),
     ("form", "one-stage"), ("instances", 1),
-    ("proofs", Json.mkObj [("sessions", Json.arr #[Json.mkObj [("name", rep "ab"),
-      ("record", rep "c3"), ("reps", Json.mkObj [])]])]),
+    ("proofs", Json.mkObj [("sessions", Json.arr #[Json.mkObj [("name", rep "ab"), ("record", rep "c3"),
+      ("reps", Json.mkObj [])]])]),
     ("proved_units", jsonOf "[0]"), ("receipt", Json.mkObj [("registration", digestOf rec)]),
     ("served", Json.null), ("session_roots", Json.null), ("sessions", Json.arr #[rep "ab"]),
     ("statement", jsonOf r#"{"instances":1}"#)]
@@ -435,6 +435,7 @@ private def creditingOn (window : Json) : Answer :=
 #guard (creditingOn recW).verdict == .reject
 #guard (creditingOn recW).reason ==
   some s!"record: {NciCheck.Protocol.protocolId} committed {digestOf recR}, {PouwCheck.Period.protocolId} committed {digestOf recW}"
+
 
 /-! ## `verity/remote/v1`, the composite of record -/
 

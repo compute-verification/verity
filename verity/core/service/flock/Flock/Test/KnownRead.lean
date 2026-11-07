@@ -11,10 +11,10 @@ words (`fullRows`): refused at another width, or at a bit no computed row reads.
 -/
 module
 
-public import Flock.KnownRead
 public import Flock.JsonParse
-meta import Flock.KnownRead
+public import Flock.KnownRead
 meta import Flock.JsonParse
+meta import Flock.KnownRead
 
 @[expose] public section
 

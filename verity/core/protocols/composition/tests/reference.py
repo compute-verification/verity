@@ -16,22 +16,22 @@ recursive form refused where the case names none of its files, the wipe's
 `verity/remote-bandwidth/p2/v0`) their Python verifiers' answers on small periods of their hooks (`Recorded`,
 `periods.py`). Each subprotocol's own difftest holds its Lean to that Python; this one holds the composition of them.
 
-The trial's rule, onsite's and remote's over their components' statements:
+The trial's rule, onsite's and remote's over their subprotocols' statements:
 
-* a product's fields are its components, and its verifier is the list of their verifiers' actors;
+* a product's fields are its subprotocols, and its verifier is the list of their verifiers' actors;
 * an actor that raises records `Raised`, and what it would have established is missing: whatever reads it waits for it
   forever, so a missing statement fails closed;
-* the product waits for each component's statement (`gather`): a statement with reasons explains nothing, and the epoch
+* the product waits for each subprotocol's statement (`gather`): a statement with reasons explains nothing, and the epoch
   complies only with no reasons.
 
-Reduced to answers: a component that accepts records a statement with no reasons, one that rejects a statement with
+Reduced to answers: a subprotocol that accepts records a statement with no reasons, one that rejects a statement with
 reasons, and one that is undecided no statement yet. `trial_verdict` is that reduction, with one change already made:
-every component's reasons fail the product. Of the components' statements the trial's inference-only check fails the epoch on work's
+every subprotocol's reasons fail the product. Of the subprotocols' statements the trial's inference-only check fails the epoch on work's
 reasons alone (integrity's reach it through them), and space's or communication's reasons only zero their explained usage
 in the balance. The port follows the composition's rule, `verdict`, which changes the reduction in one place more:
 
-* **reject dominates**: in the trial a missing statement leaves the product with no verdict even when another component's
-  statement has failed (`gather` waits on), so a prover could hide a rejection by leaving another component undecided;
+* **any rejection rejects the whole**: in the trial a missing statement leaves the product with no verdict even when another subprotocol's
+  statement has failed (`gather` waits on), so a prover could hide a rejection by leaving another subprotocol undecided;
   here any rejection rejects.
 """
 
@@ -94,14 +94,14 @@ def trial_verdict(verdicts: list[str]) -> str:
 
 
 def verdict(verdicts: list[str]) -> str:
-    """The composition's rule, which the port follows: any rejection rejects, then any undecided component leaves it undecided."""
+    """The composition's rule, which the port follows: any rejection rejects, then any undecided subprotocol leaves it undecided."""
     if REJECT in verdicts:
         return REJECT
     return UNDECIDED if UNDECIDED in verdicts else ACCEPT
 
 
 def fitted_answers(answers: Callable[[], Any]) -> list[tuple[str, dict]]:
-    """The components' answers in ``answers()``, else none when the case doesn't fit the composition."""
+    """The subprotocols' answers in ``answers()``, else none when the case doesn't fit the composition."""
     try:
         out = answers()
     except (Reject, KeyError, TypeError):
@@ -110,13 +110,13 @@ def fitted_answers(answers: Callable[[], Any]) -> list[tuple[str, dict]]:
 
 
 def fitted_verdicts(answers: Callable[[], Any]) -> list[str]:
-    """The components' verdicts in ``answers()``, else none when the case doesn't fit the composition."""
+    """The subprotocols' verdicts in ``answers()``, else none when the case doesn't fit the composition."""
     return [a["verdict"] for _, a in fitted_answers(answers)]
 
 
 @dataclass(frozen=True)
 class Ported:
-    """A component whose port has replaced its stub: its id and its Python's answer to a `serve` case. One that reads
+    """A subprotocol whose port has replaced its stub: its id and its Python's answer to a `serve` case. One that reads
     blobs (`Core.BlobProtocol`) gets the product's under the case's ``blobs``, as bytes."""
 
     id: str
@@ -126,9 +126,9 @@ class Ported:
 
 @dataclass(frozen=True)
 class Recorded:
-    """A component on the cases recorded for it: `cases` holds each kind's case and the answer its Python verifier gave
-    it (`periods.build` fills it), and `answer` is that answer. The composition hands a component the case it was sampled,
-    or one whose commitment is no longer JSON (`bad-hex` under a `0`), which both recorded components refuse with no
+    """A subprotocol on the cases recorded for it: `cases` holds each kind's case and the answer its Python verifier gave
+    it (`periods.build` fills it), and `answer` is that answer. The composition hands a subprotocol the case it was sampled,
+    or one whose commitment is no longer JSON (`bad-hex` under a `0`), which both recorded subprotocols refuse with no
     digest, as they do params that don't decode; any other case is a difference."""
 
     id: str
@@ -178,22 +178,17 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
 
 def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit and
-    public files' SHA-512s, the verifier's registered file or null, and when named the registered circuit record's
-    SHA-512 or null, then v1's params (`decode_params_v2`, which refuses them naming no challenger) with a partition
-    object."""
+    public files' SHA-512s and the verifier's registered file or null, then v1's params (`decode_params_v2`, which
+    refuses them naming no challenger) with a partition object."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
-    digest = lambda x: isinstance(x, str) and len(x) == 128 and all(c in "0123456789abcdef" for c in x)  # noqa: E731
-    _keys(pr, ["circuit", "interface", "public", "registered"] if isinstance(pr, dict) and "interface" in pr
-          else ["circuit", "public", "registered"], "proofs")
+    _keys(pr, ["circuit", "public", "registered"], "proofs")
     for k in ("circuit", "public"):
-        if not digest(pr[k]):
+        if not (isinstance(pr[k], str) and len(pr[k]) == 128 and all(c in "0123456789abcdef" for c in pr[k])):
             raise Reject(f"proofs: {k} is not a SHA-512 digest (128 lowercase hex)")
     if pr["registered"] is not None and not isinstance(pr["registered"], dict):
         raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
-    if pr.get("interface") is not None and not digest(pr["interface"]):
-        raise Reject("proofs: interface is not a SHA-512 digest (128 lowercase hex) or null")
     p = ONE_STAGE.decode_params_v2(rest)
     if p["partition"] is None:
         raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
@@ -294,23 +289,20 @@ def _period_answer(case: str) -> str:
 
 
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each
-#: component's twice, so it is made once a case.
+#: subprotocol's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
 #: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`SampledProofs.OneStageZk`) or the
 #: recursive audit, as the params' form names it; one-stage v1 refused.
 SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
-#: Pearl+'s run verdict, remote's work in its composite of record: no case is recorded for it, so it refuses a
-#: commitment that isn't JSON, as Pearl+'s decoder does, and has no answer to any other case
-PEARL_PLUS = Recorded("verity/pouw/pearl-plus/v1")
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
 #: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
 WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
 
 
 def bind(id: str, digests: list[tuple[str, bytes]]) -> bytes:
-    """`Core.Composition.bind`: SHA-512 over the composition's id, a zero byte and the canonical JSON of the components'
+    """`Core.Composition.bind`: SHA-512 over the composition's id, a zero byte and the canonical JSON of the subprotocols'
     digests in order."""
     body = canonical({"components": [{"commitment": d.hex(), "id": i} for i, d in digests]})
     return hashlib.sha512(id.encode() + b"\0" + body.encode()).digest()
@@ -366,7 +358,7 @@ class Product:
         return out
 
     def run(self, ps, ev, blobs: list[bytes] = ()) -> list[tuple[str, dict]] | str:
-        """`Core.Composition.run`: each component's outcome on its case, those that read blobs on the caller's `blobs`
+        """`Core.Composition.run`: each subprotocol's outcome on its case, those that read blobs on the caller's `blobs`
         (`productB`), or why the cases don't fit the composition."""
         want = [C.id for C in self.components]
         if [i for i, _ in ps] != want:
@@ -380,7 +372,7 @@ class Product:
                 for C, n, k in zip(self.components, ps, ev)]
 
     def binds(self, answers: list[tuple[str, dict]], c: bytes) -> bool:
-        """`Core.Composition.binding id answers = some c`: every component's digest is there, and they bind to `c`."""
+        """`Core.Composition.binding id answers = some c`: every subprotocol's digest is there, and they bind to `c`."""
         if any(a["commitment"] is None for _, a in answers):
             return False
         return bind(self.id, [(i, bytes.fromhex(a["commitment"])) for i, a in answers]) == c
@@ -422,7 +414,7 @@ class Product:
                         check=lambda ps, c, ev: self.check(ps, c, ev, blobs))
 
     def verdicts(self, case: Any) -> list[str]:
-        """The components' verdicts on a case that fits the composition, else none."""
+        """The subprotocols' verdicts on a case that fits the composition, else none."""
         def answers():
             c, blobs = self.split(case)
             return self.run(self.params(c["params"]), self.evidence(P.unhex(c["evidence"])), blobs)
@@ -431,14 +423,14 @@ class Product:
 
 @dataclass(frozen=True)
 class Same(Product):
-    """`Core.Composition.sameB id ss components`: `product`, except that once the cases fit, the components ``same``
+    """`Core.Composition.sameB id ss components`: `product`, except that once the cases fit, the subprotocols ``same``
     (each committing to the run's record) must all have committed to the first one's digest."""
 
     same: tuple = ()
 
     def strays(self, answers: list[tuple[str, dict]]) -> str | None:
-        """`Core.Composition.strays`. A component's answer carries its digest exactly when its commitment decodes and it
-        doesn't reject before; where `committedBy` has a digest the answer doesn't, the component rejects, and so does
+        """`Core.Composition.strays`. A subprotocol's answer carries its digest exactly when its commitment decodes and it
+        doesn't reject before; where `committedBy` has a digest the answer doesn't, the subprotocol rejects, and so does
         the composition."""
         got = [(i, a["commitment"]) for i, a in answers if i in self.same]
         if not got or any(d is None for _, d in got):
@@ -455,7 +447,7 @@ class Same(Product):
         return self.judge(answers, c)
 
     def committed(self, case: Any) -> list[str | None]:
-        """The digests the components ``same`` committed to on a case that fits the composition, else none."""
+        """The digests the subprotocols ``same`` committed to on a case that fits the composition, else none."""
         def answers():
             c, blobs = self.split(case)
             return self.run(self.params(c["params"]), self.evidence(P.unhex(c["evidence"])), blobs)
@@ -464,7 +456,7 @@ class Same(Product):
 
 @dataclass(frozen=True)
 class Tie:
-    """`Core.Composition.Tie`: every value that each component of ``names`` names must be one value, ``what``; each
+    """`Core.Composition.Tie`: every value that each subprotocol of ``names`` names must be one value, ``what``; each
     reads the values it names off its case's commitment and evidence bytes with its function (None: its case doesn't
     decode)."""
 
@@ -472,8 +464,8 @@ class Tie:
     names: tuple = ()
 
     def values(self, ev: list) -> list[tuple[str, bytes]] | None:
-        """Each value the components of ``names`` name on the cases ``ev``, in their order; None when one of them has no
-        case or names no list of values (its case doesn't decode, where it rejects as a component)."""
+        """Each value the subprotocols of ``names`` name on the cases ``ev``, in their order; None when one of them has no
+        case or names no list of values (its case doesn't decode, where it rejects as a subprotocol)."""
         cases: dict = {}
         for k in ev:
             cases.setdefault(k[0], k)
@@ -487,7 +479,7 @@ class Tie:
 
     def strays(self, ev: list) -> str | None:
         """`Core.Composition.Tie.strays`: the first value that isn't the first one, with both; none when they all named
-        it, or when a component names none."""
+        it, or when a subprotocol names none."""
         got = self.values(ev)
         if not got:
             return None
@@ -496,7 +488,7 @@ class Tie:
 
 
 def _commitment_hex(key: str) -> Callable[[bytes, bytes], list[bytes]]:
-    """A component's function naming one value: the hex field ``key`` of its JSON commitment."""
+    """A subprotocol's function naming one value: the hex field ``key`` of its JSON commitment."""
     return lambda c, e: [bytes.fromhex(json.loads(c)[key])]
 
 
@@ -528,35 +520,16 @@ def window_records(commitment: bytes, evidence: bytes) -> list[bytes] | core_che
     return out
 
 
-def run_record(commitment: bytes, evidence: bytes) -> list[bytes] | Reject | None:
-    """`Core.Remote.V1.runRecord`: the digest of the registration record Pearl+'s run is on, its commitment's
-    ``record``, as Pearl+ decodes the commitment (`PouwCheck.PearlPlus.Protocol.commitmentOf`: exactly ``manifests``, a
-    nonempty list, and ``record``, a SHA-512 digest in lowercase hex); else what refused it, or None when it doesn't
-    decode, either of which reads as no value."""
-    try:
-        j = P.canonical_json(commitment)
-        if not isinstance(j, dict) or sorted(j) != ["manifests", "record"]:
-            return None
-        if not isinstance(j["manifests"], list) or not j["manifests"] or not isinstance(j["record"], str):
-            return None
-        record = P.unhex(j["record"])
-    except Reject as e:
-        return e
-    return [record] if len(record) == 64 else None
-
-
 #: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
-#: `Core.Remote.windows`: every window of PoUW's period on the policy's record.
+#: `Core.Remote.windows`: every window of PoUW's period on the policy's record, remote's tie and onsite's.
 WINDOWS = Tie("record", ((INFERENCE_ONLY.id, policy_record), (POUW_PERIOD.id, window_records)))
-#: `Core.Remote.V1.run`: Pearl+'s run on the policy's record.
-RUN = Tie("record", ((INFERENCE_ONLY.id, policy_record), (PEARL_PLUS.id, run_record)))
 
 
 @dataclass(frozen=True)
 class TiedSame(Same):
-    """`Core.Composition.tiedSameB id ss ties components`: `same`, except that when it doesn't reject, the components
+    """`Core.Composition.tiedSameB id ss ties components`: `same`, except that when it doesn't reject, the subprotocols
     of a tie of ``ties`` that didn't all commit to one value reject (`holdTies`)."""
 
     ties: tuple = ()
@@ -573,7 +546,7 @@ class TiedSame(Same):
         return out
 
     def tied(self, case: Any) -> list[tuple[str, bool]]:
-        """On a case whose components fit the composition and whose tied components' commitments all decode, each tie
+        """On a case whose subprotocols fit the composition and whose tied subprotocols' commitments all decode, each tie
         by what it ties, and whether they committed to one value."""
         ev: list = []
 
@@ -587,13 +560,10 @@ class TiedSame(Same):
                 and (got := t.values(ev)) is not None]
 
 
-#: `Core.Remote.V1.protocol`, `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order
-#: of their ids: each one's policy and integrity committing to one registration record, remote's composite of record's
-#: Pearl+ run and every window of its development composite's PoUW period naming the policy's record, and onsite's PoUS
-#: and PoUB-P2 on one store.
-REMOTE_V1 = TiedSame("verity/remote/v1", (INFERENCE_ONLY, PEARL_PLUS, SAMPLED_PROOFS),
-                     (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (RUN,))
+#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: each one's
+#: policy and integrity committing to one registration record, every window of each one's PoUW period naming the
+#: policy's record, and onsite's PoUS and PoUB-P2 on one store (`Core.Onsite.ties`, in its order).
 REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
                   (WINDOWS,))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),
-                  (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (STORE,))
+                  (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (WINDOWS, STORE))

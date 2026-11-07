@@ -7,15 +7,15 @@ one session, since no request is carried across windows. A block holds, of each 
 the template's inference entries, the template's units over the window's m slots. As a Definition the block is the
 window's session (`session`): ``TemplatePopulations_v1`` of each template at its units a slot, one specialized Definition
 a window circuit, and a window is m activations of it. A block class is that Definition, which the report names by its
-SHA-512 (`partition_v2.definition_digest`).
+SHA-512 (`partition_v2.id_digest`).
 
 **Gates** are counted as `NciCheck.Count` counts a block Definition's (``boolGates``,
 `verity/core/protocols/network/nci/lean/NciCheck/Count.lean`): once per specialized Definition, callees first, a
 primitive's from the gate table and a composite's the sum over its nodes of members times the callee's (`gates`). The gate
-table (`gate_table`) gives each primitive its two-input Boolean gates as the census counts work (`census`: an n-input And
-or Xor n - 1, a Not 1, a constant bit or an input 0) through its Boolean version (`definitions.boolean.boolean_version`).
-A primitive with none, or whose Boolean version reaches a primitive that is no gate, is *unpriced*: its activations a
-block are listed apart and its gates are not guessed. circuit-check pins no per-primitive table, so the table counted by is
+table is the one `definitions.boolean.gate_table` gives: each primitive's two-input Boolean gates as the census counts work
+(`census`: an n-input And or Xor n - 1, a Not 1, a constant bit or an input 0) through its Boolean version
+(`definitions.boolean.boolean_version`). A primitive with none, or whose Boolean version reaches a primitive that is no
+gate, is *unpriced*: its activations a block are listed apart and its gates are not guessed. circuit-check pins no per-primitive table, so the table counted by is
 published with the judgment.
 
 **Fresh bits** are B's k (`inference_blocks.budgets`): |in(I) \\ θ|, the circuit's free and ingress input bits at the
@@ -45,17 +45,17 @@ import json
 import os
 import sys
 from collections import Counter
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from verity.ml.circuits import boolean as BL, census as CE, codec, partition_v2 as PV2
+from verity.ml.circuits import codec, partition_v2 as PV2
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.parts import n_members
 from verity.ml.circuits.population import mixed_population_program
 from verity.ml.circuits.program import is_input
-from verity.ml.definitions.boolean import boolean_version
+from verity.ml.definitions.boolean import gate_table
 from verity.ml.windows import interface as IF
 from verity_vllm.config import option
 from verity_vllm.records import block_counts as RBC
@@ -68,7 +68,7 @@ def session(doc: Mapping[str, Any]) -> tuple[Any, int, int]:
     if "blocks" not in doc:
         raise ValueError(f"{doc.get('name')}: the circuit record states no inference blocks")
     units = {t: int(n) for t, n in doc["templates"]}
-    blocks = IF.Blocks.of(doc["blocks"], units, doc["partition"])
+    blocks, _ = IF.Blocks.of(doc["blocks"], units, doc["partition"])
     m, per = blocks.slots, Counter()
     for e in blocks.inference:
         per[e.template] += e.units // m
@@ -87,41 +87,6 @@ def resolve(tid: str) -> Any:
         if errors:
             raise ValueError(f"{e} (registry modules that failed to import: {'; '.join(errors)})") from e
         raise
-
-
-def primitives(fns: Iterable[Any]) -> dict[str, Any]:
-    """The primitives ``fns`` reach that are no input, by descriptor key, each Definition visited once."""
-    out: dict[str, Any] = {}
-    seen: set[int] = set()
-    todo = list(fns)
-    while todo:
-        fn = todo.pop()
-        if id(fn) in seen:
-            continue
-        seen.add(id(fn))
-        if isinstance(fn, PrimitiveDefinition):
-            if not is_input(fn):
-                out[codec.descriptor_id(fn)] = fn
-        else:
-            todo += [nd.fn for nd in fn.body.nodes]
-    return out
-
-
-def gate_table(prims: Mapping[str, Any]) -> tuple[dict[str, int], list[str]]:
-    """Each primitive's two-input Boolean gates (module docstring), and the keys of those it can't price."""
-    table, unpriced, keys, fns = {}, [], [], []
-    for key, p in sorted(prims.items()):
-        try:
-            fns.append(p if BL.is_boolean(p) else boolean_version(p))
-            keys.append(key)
-        except LookupError:
-            unpriced.append(key)
-    for key, got in zip(keys, CE.boolean_gates(fns)):
-        if isinstance(got, str):
-            unpriced.append(key)
-        else:
-            table[key] = got
-    return table, sorted(unpriced)
 
 
 def gates(fn: Any, table: Mapping[str, int], memo: dict[int, tuple[Any, int, Counter]] | None = None) -> tuple[int, Counter]:
@@ -200,7 +165,7 @@ class Day:
         held = (rec, IF.held_params(self.pins, roots))
         if held not in self._fresh:
             self._fresh[held] = fresh(doc, m, self.pins, roots)
-        d = PV2.definition_digest(fn)
+        d = PV2.id_digest(fn)
         c = self._classes.setdefault(d, {"fn": fn, "slots": m, "steps": steps, "fresh": 0, "count": 0})
         c["fresh"], c["count"] = max(c["fresh"], self._fresh[held]), c["count"] + m
         self._windows += 1
@@ -210,7 +175,7 @@ class Day:
         """The public judgment (`records.block_counts`) of the windows added against the declaration ``decl``, and the
         private one: the public one with each class's exact blocks, the day's and its windows."""
         digest, c, k, n = declaration(decl)
-        table, _ = gate_table(primitives(x["fn"] for x in self._classes.values()))
+        table, _ = gate_table(x["fn"] for x in self._classes.values())
         memo: dict = {}
         classes, exact = [], {}
         for d, x in sorted(self._classes.items()):
@@ -280,5 +245,4 @@ def main(a: Options) -> int:
     return 0
 
 
-__all__ = ["Day", "Options", "declaration", "fresh", "gate_table", "gates", "judge", "judgment", "main", "primitives",
-           "session", "write_private"]
+__all__ = ["Day", "Options", "declaration", "fresh", "gates", "judge", "judgment", "main", "session", "write_private"]

@@ -54,9 +54,9 @@ from verity.ml.commitments import Commitment, MerkleTree, Opening
 
 from verity.core.protocols.pouw import audit as au
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
 from verity_config.settings import of
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
@@ -182,10 +182,10 @@ def prove(dump: str | os.PathLike, run: str, t: int = 8, workers: int = 1, schem
     refs = au.tile_refs(s, workload)
     if len(leaves) != 32 * len(refs):
         raise ValueError(f"{len(leaves)} bytes of leaves are not {len(refs)} tile leaves")
-    tree = MerkleTree(au.transcript_domain(epoch, len(refs)), {i: leaves[32 * i:32 * i + 32] for i in range(len(refs))},
+    tree = MerkleTree(au.transcript_domain(epoch, len(refs), s.commitment_hash), {i: leaves[32 * i:32 * i + 32] for i in range(len(refs))},
                       lambda _: au.TILE_SCHEMA)
-    tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, "sha256", public=True)
-    tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, "sha256", public=True)
+    tree_a = au.commit_rows(au.activation_binding(epoch.salt, unit.index), unit.index, rows_a, s.commitment_hash, public=True)
+    tree_b = au.commit_rows(au.weight_binding(unit.weight), -2, rows_b, s.commitment_hash, public=True)
     real = call["real_rows"]
     fmap, done = _pool(workers, max(1, (real + n) // (4 * max(workers, 1))))
     try:

@@ -8,7 +8,7 @@ The remote protocol composes three subprotocols, tied to one record, and accepts
 
 - **integrity**, by sampled proofs' one-stage audit (`verity/core/protocols/sampled_proofs/`): every value the serving
   computes is committed under hiding commitments, live coins sample proof blocks from a sealed sampling block, the
-  prover proves each sampled block with C-Flock `--zk` behind the Lean firewall, and the Lean verifier gives the verdict;
+  prover proves each sampled block with Flock `--zk` behind the Lean firewall, and the Lean verifier gives the verdict;
 - **work**, by proof of useful work (PoUW, `verity/core/protocols/pouw/`), on the served model itself: the endpoint
   serves PoUW's H1, each sampling block's coins come from a session of its own on the challenger's gate, and PoUW's
   piece checks them against that session, the gate's ledger and its pins;
@@ -20,7 +20,7 @@ PoUW's verdict on the served run credits nothing. The challenger's gate holds a 
 run is a development run. And an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case, the form
 remote's PoUW component reads. So the remote verdict can't accept on this run yet, and the run's record stays `pending`.
 
-`example.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
+`demo.toml` records what the demo establishes. Its run is `moved`: it has no passing run of record. Its proof level
 is none. Sampled proofs' guarantee, `Flock.Guarantees.SampledKSLiveV3`, is proved: when the verifier accepts a `--zk`
 session, the committed trace is outside the sampling relation with probability at most δ plus the proof system's
 errors. But the remote protocol has no guarantee in Lean for the demo to instantiate: `Verity.Soundness` is not in Lean
@@ -42,7 +42,7 @@ it serves (`--scheme rows-sha512`), and every closed sampling block is sealed. T
 1. the endpoint, under a GPU lease, with the committer's weights registration before the first request;
 2. greedy requests from the certifier's traffic generator (`serve_load.py --varied`), closed into one sampling block;
 3. sampled proofs on that sampling block: its advice and request Programs, the circuit of the served execution blocks
-   at each class, and the records audit (C-Flock `--zk` on the sampled proof blocks behind the Lean firewall, and the
+   at each class, and the records audit (Flock `--zk` on the sampled proof blocks behind the Lean firewall, and the
    Lean verifier's verdict);
 4. PoUW's piece, and each onsite subprotocol's piece where it has one;
 5. one record of every piece's verdict (`$OUT/record/verdicts.json`), `pending` while any subprotocol is missing.
@@ -89,15 +89,15 @@ doesn't control.
 
 ## Commands
 
-`run.sh` is the one command (`verity example vllm [window|commit|serve] [--dry-run] [FLAG...]`). It starts the run with
+`run.sh` is the one command (`verity demo vllm [window|commit|serve] [--dry-run] [FLAG...]`). It starts the run with
 the run recorder from the tree root, on the node `placement.toml` names, and returns once the run starts. FLAGs go to the
 recorder (`--env MAIN_SHA=SHA`, `--env PP_CHALLENGER=...`); `--dry-run` prints the command.
 
-1. `verity example vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
+1. `verity demo vllm commit`, once per workload: `commit.sh`, the workload's Build and Match of record and a Commit
    that seals its replay bundle, kept on the node and put in the evidence store. `placement.toml`'s `COMMIT_RUN` names
    the Commit whose traced Build the endpoint's Build of record is held to.
-2. `verity example vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
-3. `verity example vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
+2. `verity demo vllm`: `served_verdicts.sh`, the served run through every subprotocol, as above.
+3. `verity demo vllm serve`: the endpoint alone, `serve.sh`, serving until `UNTIL` and sealing each closed sampling
    block in the serve dir, for an audit of one later (`benchmarks/prove_path/run.sh` with `PP_SERVE_RUN`, `PP_WINDOW` and
    `PP_SERVE_ROWS`).
 

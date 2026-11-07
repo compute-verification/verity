@@ -1,4 +1,4 @@
-"""Advice-driven serving-rows windows, for network accounting under arbitrary vLLM usage: a TP rank's window over the Programs a
+"""Advice-driven serving-rows windows, for network certification under arbitrary vLLM usage: a TP rank's window over the Programs a
 registered compiler makes from the advice (everything serving made unpredictable, network-accounting's I1), with the registration
 binding both.
 

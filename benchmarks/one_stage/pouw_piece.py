@@ -6,17 +6,18 @@
                           | --serve-run SERVE_DIR --window K [--pouw DIR --key-sha512 HEX
                                                               --main F --statements F --live-evidence F])
 
-``v1`` is remote's PoUW (`verity/pouw/v1`, `pouw-check`, `PouwCheck/Protocol.lean`): its params the verifier's
-`Params` (``--params``), its commitment the window's registration, one-stage's record (``--registration``, written as
-canonical JSON, whose digest the proof system's answer cites), its evidence the service's answer for it (``--answer``).
-``period`` is onsite's (`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main,
-name}`` (the challenger key it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file
-holds it; its copy of main's first-parent history, ``--main``, one commit a line; the period, ``--name``), its
-commitment the auditor's ledger (``--ledger``, its lines), its evidence ``{pins, windows}`` (the host's pins log,
-``--pins``, its lines; each window's evidence in the close's order, ``--windows``, a JSON list in `credit.PROVED_KEYS`'s
-form). Windows carrying their statements' proof files instead (`credit.PERIOD_KEYS`, the drawn calls' ``statements``
-and the live ``statements``) are put in that form by `proved`: credit's own period reference runs the verifier of
-record on them, and each session's answer is the outcome of each unit it proved, so the Lean judges every one.
+``v1`` is PoUW's window check (`verity/pouw/v1`, `pouw-check`, `PouwCheck/Protocol.lean`), which neither product
+composes since remote's PoUW became its period: its params the verifier's `Params` (``--params``), its commitment the
+window's registration, one-stage's record (``--registration``, written as canonical JSON, whose digest the proof
+system's answer cites), its evidence the service's answer for it (``--answer``). ``period`` is onsite's and remote's
+(`verity/pouw/period/v1`, `pouw-period`, `PouwCheck/Period.lean`): its params ``{key, main, name}`` (the challenger key
+it pins, ``--key``, as `ChallengerKey.to_json` writes it or as the deployment's key file holds it; its copy of main's
+first-parent history, ``--main``, one commit a line; the period, ``--name``), its commitment the auditor's ledger
+(``--ledger``, its lines), its evidence ``{pins, windows}`` (the host's pins log, ``--pins``, its lines; each window's
+evidence in the close's order, ``--windows``, a JSON list in `credit.PROVED_KEYS`'s form). Windows carrying their
+statements' proof files instead (`credit.PERIOD_KEYS`, the drawn calls' ``statements`` and the live ``statements``) are
+put in that form by `proved`: credit's own period reference runs the verifier of record on them, and each session's
+answer is the outcome of each unit it proved, so the Lean judges every one.
 
 The directory, private as `composite.py` reads it (0700, its files 0600: the evidence and params are witness), gets
 ``params.json``, ``commitment.bin`` and ``evidence.json`` (canonical), ``case.json`` (``{params, commitment, evidence,

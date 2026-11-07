@@ -43,7 +43,7 @@
   and free inputs, `free_inputs`) and the network's own terms (`network_terms`), at each δ. With ``--period-answer``
   (certifier/v0's ``network-period check`` answer on the period, a ``certifier.answer.json``, its case
   ``certifier.case.json`` beside it or ``--period-case``) and ``--server``, an accepted report also writes
-  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v1``),
+  ``block.json``: the block record's certifier entry (``legs.certifier`` of ``verity/block-record/v2``),
   `block_certifier.block_leg` of that answer, once the answer is held to this chain (`period_binding`) and is
   ``network-period check``'s own on its case (`decide_period`; `block_entry`).
 * **The network certifier path** (``--job``'s ``path``, `WARDEN`): every step reads an active network certifier's own
@@ -695,7 +695,8 @@ def leak(run: Path, scan: dict | None = None, weights=None) -> dict:
     (`leak_bounds.READINGS`), and beside ε, its scans' δ summed, and its share of ``weights`` (`leak_bounds.WEIGHTS`)."""
     import leak_bounds as LB
     import scan_zk as SZ
-    from verity.core.protocols.certifier import ingress_scan as IS, warden as W
+    from verity.ml.protocols.certifier import ingress_scan as IS
+    from verity.core.protocols.certifier import warden as W
     weights = LB.WEIGHTS if weights is None else weights
     dep = _json(next((p for p in (run / "out" / "deployment.json", run / "deployment.json") if p.is_file()), None))
     v = (_json(run / "end.json") or {}).get("verdict") or {}

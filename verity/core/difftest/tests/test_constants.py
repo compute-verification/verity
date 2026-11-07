@@ -1,6 +1,6 @@
 """`run` draws from its seed and Hypothesis's own constants alone, without Lean. Hypothesis also draws constants it scrapes
 from every local module the process has loaded, so a fixed seed's samples moved with what was imported: the vstar
-difftest's coverage assertion failed when `rec_residuals.py`, which its reference loads, gained literals (#1760). These
+difftest's coverage assertion failed when `rec_residuals.py`, which its reference loads, gained literals. These
 tests pin the hook `run` patches, so a Hypothesis upgrade that moves it, or stops sampling scraped constants, fails here."""
 
 from __future__ import annotations

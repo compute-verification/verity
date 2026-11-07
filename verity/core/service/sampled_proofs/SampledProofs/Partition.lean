@@ -16,10 +16,6 @@ once, where `TemplateQuery.gates` recomputes both per unit.
 module
 
 public import Flock.HmRow
-public import Flock.TemplateQuery
-public import Flock.Draw
-public import Flock.Extract
-public import Flock.Qcall
 public import SampledProofs.Json
 public import SampledProofs.Program
 public import Std.Data.HashMap

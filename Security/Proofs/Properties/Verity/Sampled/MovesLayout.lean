@@ -22,8 +22,8 @@ three sit together inside the writer's output.
   record's `root_B` (`firstStop_rootB`), the link points are the record's (`link_pts`), and the proof files are v2's
   (`proofs_of_sent`).
   The order the record's draw and the first stop take, that the sample's coins precede every opening and that the first
-  opening is the session stream's, comes from v2's order refusal (`OrderHeld`: `freshBefore_verdict`,
-  `linkFirst_verdict`).
+  opening is the session stream's, comes from v2's order refusal, which the sampled verdict passed
+  (`freshBefore_verdict`, `linkFirst_verdict`).
 * **`MovesReach`** (`movesReach_layout`): `ReachesOff.movesOf` at every outcome, at the coupling's cut (v2's read of
   the log is the device's, and v2 draws at the digest `after`, `SampledDigest`), with what it takes of each accepted
   play the cut holds of stated for every tape.
@@ -46,38 +46,6 @@ variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-! ## The digest each opening of a rep stream answers -/
 
-/-- Two places of a list holding elements `p` accepts, with as many such elements before each, are one place. -/
-theorem eq_of_countP_eq {β : Type} {p : β → Bool} :
-    ∀ {a a' b b' : List β} {x x' : β}, a ++ x :: b = a' ++ x' :: b' → p x = true → p x' = true →
-      a.countP p = a'.countP p → x = x'
-  | [], [], _, _, _, _, h, _, _, _ => by
-    simp only [List.nil_append, List.cons.injEq] at h
-    exact h.1
-  | [], y :: a', _, _, _, _, h, hx, _, hc => by
-    simp only [List.nil_append, List.cons_append, List.cons.injEq] at h
-    obtain ⟨rfl, -⟩ := h
-    simp [hx] at hc
-  | y :: a, [], _, _, _, _, h, _, hx', hc => by
-    simp only [List.nil_append, List.cons_append, List.cons.injEq] at h
-    obtain ⟨rfl, -⟩ := h
-    simp [hx'] at hc
-  | y :: a, y' :: a', _, _, _, _, h, hx, hx', hc => by
-    simp only [List.cons_append, List.cons.injEq] at h
-    obtain ⟨rfl, h⟩ := h
-    rw [List.countP_cons, List.countP_cons] at hc
-    exact eq_of_countP_eq h hx hx' (Nat.add_right_cancel hc)
-
-/-- **Each round of a tree's stream has one line**: where `coinTreesOf` accepts the release log `lines`, two of its
-lines opening round `k` of stream `name` of the coin tree whose root is `ρ` are one, each the line after the `k` lines
-opening that stream (`coinTreesOf_round`). -/
-theorem opensRound_unique {lines : List String} {trees : Array LoggedTree} (h : coinTreesOf lines = .ok trees)
-    {ρ name l l' : String} {k : ℕ} (hl : l ∈ lines) (hl' : l' ∈ lines) (ho : OpensRound l ρ name k)
-    (ho' : OpensRound l' ρ name k) : l = l' := by
-  obtain ⟨a, b, he⟩ := List.append_of_mem hl
-  obtain ⟨a', b', he'⟩ := List.append_of_mem hl'
-  exact eq_of_countP_eq (he.symm.trans he') ho.opensLine ho'.opensLine
-    ((coinTreesOf_round h he ho).symm.trans (coinTreesOf_round h he' ho'))
-
 /-- **The line opening a round a tree shows opened is after the opening's bytes**: where `coinTreesOf` accepts the
 release log `lines`, a line of it opening round `k` of stream `name` of a tree `t` of its trees (`OpensRound`) is the
 one line opening that round (`opensRound_unique`), so its `after` is that of the opening `t` shows (`opened_after`). -/
@@ -87,7 +55,7 @@ theorem opening_after {lines : List String} {trees : Array LoggedTree} (hT : coi
     _root_.SampledProofs.getD d "after" = .str o.after := by
   have hp := Array.find?_some ho
   simp only [Bool.and_eq_true, beq_iff_eq] at hp
-  obtain ⟨l', hl', hr', d', hd', ha⟩ := opened_after hT t ht o (Array.mem_of_find?_eq_some ho)
+  obtain ⟨l', hl', hr', d', hd', ha, -⟩ := opened_after hT t ht o (Array.mem_of_find?_eq_some ho)
   rw [hp.1, hp.2] at hr'
   obtain rfl := opensRound_unique hT hl hl' hr hr'
   rw [hd] at hd'
@@ -216,10 +184,10 @@ rounds' empty classes, beside a play that the sampled verdict accepts, that miss
 is the device's, is the writer's at the widened sample, the decoded registration and an outcome whose moves are those
 v2's files decode to (`MovesOf`). It takes, for the record's sample (`recordDraw_firstStop`, at the session tied to v2's
 verifier, `SetsUp.popTied`, at v2's log at its coins, `drawReadAll_coinsRead`, and at v2's hold on the record's draw,
-`drawHeld`), that v2 reads the sample's coins of the family `label` answering `after` (`hN`); that v2's order
-refusal passes (`OrderHeld`), which gives that every release of that family precedes every opening
-(`freshBefore_verdict`) and that the device's log opens the session stream first (`linkFirst_verdict`); and, for the rep
-rounds (`firstStop_reps_verdict`), that the log opens only the record's rounds. That the log has an opening and that its
+`drawHeld`), that v2 reads the sample's coins of the family `label` answering `after` (`hN`), and, for the rep rounds
+(`firstStop_reps_verdict`), that the log opens only the record's rounds. v2's order refusal, which the sampled verdict
+passed, gives that every release of that family precedes every opening (`freshBefore_verdict`) and that the device's
+log opens the session stream first (`linkFirst_verdict`). That the log has an opening and that its
 trees name their streams distinctly come from the verdict (`verdict_opens`, `verdict_nodup`), that each opening of a rep
 stream answers the record's round's digest from v2's read and the record (`rep_answers`), and the session's one link
 round and its `N` live rounds from `Live.rounds_eq`. The roots (`firstStop_rootB`) and the link points (`link_pts`) read
@@ -241,7 +209,6 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
     (ht : TablesSent (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hN : SampleNamed k (CoinTape.run (V.game θ F c) σ o.2).sent label after)
-    (hord : OrderHeld (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log) :
     ∃ (S : Finset (Fin A.n)) (R : A.Reg) (out : LiveOutJ (A.J S R) A.mP), o.1 = (R, S, A.wr S R out) ∧
@@ -249,8 +216,8 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
   subst hrd hD hM
   obtain ⟨ω, pts, hL0, hr⟩ := h
   have hθ := (play_ends V θ F c σ o.2).1
-  have hfirst := linkFirst_verdict hA hθ hv hl hord
-  have hP := freshBefore_verdict hA hθ hv hl hord hN
+  have hfirst := linkFirst_verdict hA hθ hv hl
+  have hP := freshBefore_verdict hA hθ hv hl hN
   have h0r := A.rounds_pos
   obtain ⟨reps, ho, hreps⟩ := firstStop_reps_verdict hA hDg reg record recordDigest rfl rfl rfl ω pts hL0 hr
     hv hn hl ht hfirst hO
@@ -288,9 +255,8 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
 /-- **`MovesReach` at the session's layout** (`couplingTarget_assembled`'s `hM` at these readings, decoders and coin
 map, with `after` the strategy's `afterAt`): `ReachesOff.movesOf` at every outcome, at the cut that v2's check read the
 device's log and that v2 draws at `after` (`SampledDigest`), where what it takes of a play holds of every tape whose
-play the sampled verdict accepts and whose log v2's check read is the device's, v2's family and digest (`hN`) of those
-whose draw answers `after`, and v2's order refusal passing (`OrderHeld`) at every tape whose play the sampled verdict
-accepts. -/
+play the sampled verdict accepts and whose log v2's check read is the device's, and v2's family and digest (`hN`) of
+those whose draw answers `after`. -/
 theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
     (reg : Option Claims.Msg → A.Reg)
@@ -305,8 +271,6 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       SampledDigest k (CoinTape.run (V.game θ F c) σ x).sent after →
         SampleNamed k (CoinTape.run (V.game θ F c) σ x).sent label after)
-    (hord : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
-      OrderHeld (CoinTape.run (V.game θ F c) σ x).sent)
     (hO : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
@@ -315,6 +279,6 @@ theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
         SampledDigest k o.sent after) A rd σ D M
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
   fun _ h ⟨hv, hn, ⟨hl, ht⟩, hd⟩ => h.movesOf hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl ht
-    (hN _ hv hl hd) (hord _ hv) (hO _ hv hl)
+    (hN _ hv hl hd) (hO _ hv hl)
 
 end Verity.Sampled

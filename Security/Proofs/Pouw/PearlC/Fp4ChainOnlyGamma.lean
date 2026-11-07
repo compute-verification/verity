@@ -2,6 +2,7 @@ module
 
 public import Proofs.Pouw.PearlC.Fp4IssueGamma
 public import Definitions.Pouw.Guarantees.PearlC
+public import Proofs.Pouw.Lemmas.PearlC
 
 /-!
 # Pearl-C4's chain-only γ, at any FP32 price and scale path (staged)

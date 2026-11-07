@@ -9,7 +9,7 @@ and the row units (RMSNorm, the quantizer, softmax, the residual add, the gather
 argmax), each id `stub:` until its Definition lands, its ANDs composed from pinned pieces.
 
 **The law is what Lean proves.** Each subcircuit is one sampling block of the block (`IntegrityPeriod`): one C-Flock `--zk`
-session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `Template.cap` drawn units each
+session drawing a uniform `subset:k` of its n units, split over `tables` tables of at most `_cap` drawn units each
 (m = k_log + nbl <= 35). Every subcircuit draws `k = ceil(ln(S/delta)/share)`, so by `IntegrityPeriodLog` each sampling block has
 fewer than `K0 = ln(S/delta) n/k` <= share n units incorrect outside delta (the S sampling blocks of the block split delta), and by
 `IntegrityHorizon` a subcircuit's sampling blocks over any period have fewer than ln(S/delta) n/k in all. The incorrect ANDs beside
@@ -17,13 +17,15 @@ them (`Stratified.harm_bound`, each unit weighted by its ANDs) are informative: 
 (`FlockSoundness.Audit.stratified_isHarmBound_exact`), but no guarantee in the lock composes it with acceptance.
 
 **Cost** is C-Flock's fit (`transformer.costs`: zero-knowledge sessions on sm_120, in RTX PRO 6000 GPU-seconds, taken as
-H200 GPU-seconds), per table `statement_fixed + statement_per_and A` and per drawn unit `(per_and + staged_per_and) A`,
+H200 GPU-seconds; `--card h200`: GLM-5.3's proof blocks proved on one H200 by the deployed prover, in its own
+GPU-seconds), per table `statement_fixed + statement_per_and A` and per drawn unit `(per_and + staged_per_and) A`,
 A a unit's ANDs with its rows' openings (`row_ands`); staging is taken to scale with the drawn units, not n. The fit
 measured units of 5.1e6 to 3.0e7 ANDs, so the row subcircuits' (up to 2e8) are extrapolated. Replaying
 the drawn requests (`REPLAY_BLOCKS` of the block's own run) and committing every unit's outputs (a design rule, not a
 choice) are priced beside the proving, not traded against it.
 
     uv run python benchmarks/sampling_plan/h200.py --out DIR [--share S] [--batch B] [--step-s T] [--tiles] [--pad]
+        [--card h200]
 """
 from __future__ import annotations
 
@@ -37,7 +39,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import transformer as X  # noqa: E402
-from inputs import I, cap  # noqa: E402
+from inputs import CARDS, I  # noqa: E402
 
 from verity.core.protocols.profile import Stratified, Stratum  # noqa: E402
 from verity.core.protocols.sampled_proofs.candidates import shape_of  # noqa: E402
@@ -105,25 +107,6 @@ class Template:
     def proved(self) -> int:
         """A drawn unit's ANDs with its rows' openings, the fit's feature."""
         return self.ands + sum(row_ands(r) for r in self.rows)
-
-    def _part(self, p: int) -> tuple[int, list[int]]:
-        return -(-self.ands // p), [-(-b // p) for b in self.rows]
-
-    @property
-    def parts(self) -> int:
-        """The least number of parts a unit proves in within C-Flock's block (`inputs.cap`), each its share of the ANDs and
-        of every row's bytes: a unit past the block is drawn whole and proved as its parts."""
-        if cap(0, [1] * len(self.rows)) < 1:
-            raise ValueError(f"{self.id}: its {len(self.rows)} rows alone fill a C-Flock block: cut its ports fewer ways")
-        p = 1
-        while cap(*self._part(p)) < 1:
-            p += 1
-        return p
-
-    @property
-    def cap(self) -> int:
-        """A statement's units: its parts' `inputs.cap`, shared among a unit's `parts`."""
-        return max(1, cap(*self._part(self.parts)) // self.parts)
 
 
 def templates(m: Shape, pins: dict[str, int] | None = None, *, tiles: bool = False,
@@ -194,14 +177,14 @@ class Rates:
     commit_per_byte: float
 
     @classmethod
-    def fitted(cls) -> "Rates":
-        cm = X.costs(X.SMALL, X.Serving())
+    def fitted(cls, card: str = "rtx-pro-6000") -> "Rates":
+        cm = X.costs(X.SMALL, X.Serving(), card)
         return cls(cm.statement_fixed, cm.statement_per_and, cm.per_and + cm.staged_per_and,
                    I["commit_per_byte"].value)
 
 
 @dataclass(frozen=True)
-class SamplingBlock:
+class Window:
     """One subcircuit's sampling block of the block: `k` of its units drawn in one session of `tables` tables."""
 
     template: Template
@@ -217,20 +200,20 @@ class SamplingBlock:
         return self.statements + self.drawn
 
 
-def window(t: Template, k: int, windows: int, r: Rates) -> SamplingBlock:
-    """`t`'s sampling block drawing k: its tables (at most `Template.cap` drawn units each, k rounded up to a multiple of them, as
+def window(t: Template, k: int, windows: int, r: Rates) -> Window:
+    """`t`'s sampling block drawing k: its tables (at most `_cap` drawn units each, k rounded up to a multiple of them, as
     `HiddenWindow.hdiv` needs), its expected proving cost, and at each delta `IntegrityPeriodLog`'s K0 (delta split over
     the block's `windows`) and `IntegrityHorizon`'s bound over any number of the subcircuit's sampling blocks."""
-    a, cap = t.proved, t.cap
+    a, cap = t.proved, X._cap(t.proved)
     k = min(t.units, k)
     tables = ceil(k / cap)
     k = min(t.units, tables * ceil(k / tables))
     K0 = {str(d): min(ceil(log(windows / d) * t.units / k), t.units - k + 1) for d in DELTAS}
     pooled = {str(d): min(log(windows / d) * t.units / k, t.units - k + 1) for d in DELTAS}
-    return SamplingBlock(t, k, tables, tables * (r.statement_fixed + r.statement_per_and * a), k * r.per_and * a, K0, pooled)
+    return Window(t, k, tables, tables * (r.statement_fixed + r.statement_per_and * a), k * r.per_and * a, K0, pooled)
 
 
-def plan(ts: list[Template], share: float, r: Rates) -> list[SamplingBlock]:
+def plan(ts: list[Template], share: float, r: Rates) -> list[Window]:
     """Every subcircuit's sampling block at `k = ceil(ln(S/delta)/share)`, delta = 1%: each certifies at most `share` of its
     units incorrect."""
     k = ceil(log(len(ts) / DELTAS[0]) / share)
@@ -242,14 +225,14 @@ def commit_cost(ts: list[Template], r: Rates) -> float:
     return sum(t.units * t.out_bits / 8 for t in ts) * r.commit_per_byte
 
 
-def replay_cost(ws: list[SamplingBlock], m: Shape) -> float:
+def replay_cost(ws: list[Window], m: Shape) -> float:
     """Replaying the drawn units' requests: `REPLAY_BLOCKS` of the block's run, scaled by the expected share of requests
     the draw touches."""
     drawn = sum(w.k for w in ws)
     return REPLAY_BLOCKS * m.block_s * (1 - exp(-drawn / m.batch))
 
 
-def proving(ws: list[SamplingBlock], m: Shape) -> float:
+def proving(ws: list[Window], m: Shape) -> float:
     return sum(w.cost for w in ws) + replay_cost(ws, m)
 
 
@@ -265,21 +248,22 @@ def budget_share(ts: list[Template], m: Shape, r: Rates, gpu_s: float) -> float 
     return hi
 
 
-def window_blocks(ws: list[SamplingBlock], m: Shape) -> int:
+def window_blocks(ws: list[Window], m: Shape) -> int:
     """The least B for which sampling blocks of B blocks prove within their own GPU time. K0 = ln(S/delta) n/k is the same share
-    of a sampling block's units whatever its n, and `Template.cap` reads only a unit's ANDs and rows, so a sampling block over B blocks keeps k, its
+    of a sampling block's units whatever its n, and `_cap` reads only a unit's ANDs, so a sampling block over B blocks keeps k, its
     tables and its cost, and costs a block 1/B of it."""
     return ceil(proving(ws, m) / m.block_s)
 
 
-def informative_ands(ws: list[SamplingBlock], delta: float) -> float:
+def informative_ands(ws: list[Window], delta: float) -> float:
     """Faulty ANDs (`Stratified.harm_bound`, each unit its ANDs): not a Lean guarantee."""
     st = Stratified(tuple(Stratum(w.template.id, w.template.units, w.k) for w in ws))
     return st.harm_bound({w.template.id: float(w.template.ands) for w in ws}, delta)
 
 
-def report(m: Shape, share: float, *, tiles: bool = False, pad: bool = False, servers: int = X.SERVERS) -> dict:
-    r = Rates.fitted()
+def report(m: Shape, share: float, *, tiles: bool = False, pad: bool = False, servers: int = X.SERVERS,
+           card: str = "rtx-pro-6000") -> dict:
+    r = Rates.fitted(card)
     ts = templates(m, tiles=tiles, pad=pad)
     ws = plan(ts, share, r)
     alt = plan(templates(m, tiles=not tiles, pad=pad), share, r)
@@ -294,11 +278,10 @@ def report(m: Shape, share: float, *, tiles: bool = False, pad: bool = False, se
                                                            w.template.units - w.k + 1) for w in ws) for d in DELTAS},
                             "pooled": {str(d): sum(w.pooled[str(d)] for w in ws) for d in DELTAS}})
     return {
-        "shape": asdict(m), "block_s": m.block_s, "share": share, "tiles": tiles, "pad": pad, "units": units,
+        "shape": asdict(m), "block_s": m.block_s, "share": share, "tiles": tiles, "pad": pad, "card": card, "units": units,
         "ands": sum(t.units * t.ands for t in ts), "rates": asdict(r),
         "windows": [{"template": w.template.id, "real": w.template.real, "units": w.template.units, "k": w.k,
-                     "tables": w.tables, "ands": w.template.ands, "rows": list(w.template.rows),
-                     "proved_ands": w.template.proved,
+                     "tables": w.tables, "ands": w.template.ands, "proved_ands": w.template.proved,
                      "statements": w.statements, "drawn": w.drawn, "cost": w.cost, "K0": w.K0, "pooled": w.pooled}
                     for w in ws],
         "cost": {"statements": sum(w.statements for w in ws), "drawn": sum(w.drawn for w in ws),
@@ -314,7 +297,7 @@ def report(m: Shape, share: float, *, tiles: bool = False, pad: bool = False, se
         "informative_ands": {str(d): informative_ands(ws, d) for d in DELTAS},
         "periods": periods,
         "handoff": [{"templates": [[w.template.id, w.template.units]], "law": f"subset:{w.k}", "tables": w.tables,
-                     "cap": w.template.cap, "K0": w.K0} for w in ws],
+                     "cap": X._cap(w.template.proved), "K0": w.K0} for w in ws],
     }
 
 
@@ -322,7 +305,7 @@ def render(o: dict) -> str:
     m, c = o["shape"], o["cost"]
     lines = [f"# The H200 plan: {m['layers']} layers, width {m['width']}, {m['heads']} query heads of {m['head_dim']} "
              f"(MQA, {m['kv_heads']} KV head), MLP {m['mlp']}, V {m['vocab']}, C {m['context']}; a block of "
-             f"{m['batch']:,} requests, {o['block_s']:g} s", "",
+             f"{m['batch']:,} requests, {o['block_s']:g} s; the {o['card']} card's cost model", "",
              f"Every subcircuit's sampling block draws k = ceil(ln(S/1%)/{o['share']:g}) of its units (S = {len(o['windows'])} "
              f"sampling blocks), so each has fewer than K0 = ln(S/delta) n/k units incorrect outside delta (IntegrityPeriodLog), "
              f"and its sampling blocks over any period fewer than that in all (IntegrityHorizon). {o['units']:,} units, "
@@ -370,9 +353,11 @@ def main(argv=None) -> None:
     ap.add_argument("--step-s", type=float)
     ap.add_argument("--tiles", action="store_true")
     ap.add_argument("--pad", action="store_true")
+    ap.add_argument("--card", choices=tuple(CARDS), default="rtx-pro-6000",
+                    help="the cost model's observations (inputs.CARDS); h200: the deployed prover on GLM-5.3's blocks")
     a = ap.parse_args(argv)
     m = replace(Shape(), **{k: v for k, v in (("batch", a.batch), ("step_s", a.step_s)) if v is not None})
-    o = report(m, a.share, tiles=a.tiles, pad=a.pad)
+    o = report(m, a.share, tiles=a.tiles, pad=a.pad, card=a.card)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / "plan.json").write_text(json.dumps(o, indent=1))
     print(render(o))

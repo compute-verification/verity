@@ -2,29 +2,30 @@
 """Cursor's `beforeShellExecution` hook (`.cursor/hooks.json`): refuses shell commands that would print secrets wholesale.
 
 Cursor runs every agent shell command through it, on any VM, so it holds where the redacting `env` (`install.sh`) was never
-installed. A multi-line secret defeats `env | cut -d= -f1`: its later lines print as if they were names, which is how a line
-of the Nebius key reached agents' transcripts at least five times by 6 Oct. Refused, anywhere in the command (pipelines,
+installed. A multi-line secret defeats `env | cut -d= -f1`: its later lines print as if they were names, and so reach an
+agent's transcript. Refused, anywhere in the command (pipelines,
 `$(...)`, `bash -c`, `ssh HOST CMD`, `research pods ssh POD -- CMD`): `env` or `printenv` with nothing to run, `printenv` of a
 secret's name, a bare `set`, `export` or `export -p`, `declare`/`typeset` listing variables, reading `/proc/*/environ`, and
-`tmux show-environment` (`showenv`) with no name or a secret's (11 Oct: piping tmux's global environment through `cut -d= -f1`
-printed the Nebius key's lines again).
+`tmux show-environment` (`showenv`) with no name or a secret's (tmux's global environment through `cut -d= -f1` prints a
+multi-line key's lines too).
 `compgen -e` lists names only and passes. Also refused: full command lines of every process or of any selection beyond one pid
 (`ps aux`, `ps -ef`, `ps -eo args`, `ps -o cmd --ppid N`, `ps -f -u USER`, `/proc/*/cmdline`), where a daemon's or a git child's
-token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into
-`grep`/`rg`, and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
+token can sit in argv; one process (`ps -p PID -o args`), a listing piped straight into a `grep`/`rg` that keeps only matching
+lines (an inverted one, `grep -v`, prints the rest, so `ps -ef | grep -v grep` is refused and `ps -ef | grep -v grep | grep
+NAME` passes), and `pgrep -af PATTERN` pass. Reads Cursor's hook JSON on stdin and prints its verdict as JSON on stdout.
 
-Builds and tests run on our nodes, not on agent VMs (every handle, at Daniel's request, 18 Oct: three OOM kills that day each
-took down every worker on a shared VM). So it refuses, always, a local pytest that names no test file or `-k` selection,
-`lake build|exe`, `cargo build|test|run|check`, nvcc and `circuit-check --all`, pointing to `research run --on auto`; and while
-the VM has less than $AGENT_GUARD_MIN_AVAIL (default 0.25) of its memory available (MemAvailable, or its cgroup's limit less its
-use when that is less) it also refuses the lighter ones: a pytest of named files, `lake env`, the check's suites and `verity
-check`. The same command through `research run`, or over ssh, runs elsewhere and passes; `AGENT_GUARD_LOCAL_OK=1` anywhere in
-the command passes it too.
+Builds and tests run on our nodes, not on agent VMs: on a shared VM one OOM kill takes down every worker on it. So it refuses,
+always, a local pytest that names no test file or `-k` selection, `lake build|exe`, `cargo build|test|run|check`, nvcc and
+`circuit-check --all`, pointing to `research run --on auto`; and while the VM has less than $AGENT_GUARD_MIN_AVAIL (default
+0.25) of its memory available (MemAvailable, or, when that is less, its cgroup's limit less its working set: its use less its
+inactive file cache, which the kernel reclaims on demand) it also refuses the lighter ones: a pytest of named files, `lake env`,
+the check's suites and `verity check`. The same command through `research run`, or over ssh, runs elsewhere and passes;
+`AGENT_GUARD_LOCAL_OK=1` anywhere in the command passes it too.
 
-No tool call may block more than 20 minutes (Daniel, 19 Oct: an agent blocked in one long call looks silent and misses its
-wake-ups). So it refuses a command that plainly would: a `sleep` past BLOCK_CAP_S (`sleep 3000`, `sleep 30m`, `sleep 2h`,
-`sleep infinity`), there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends it sooner or it runs in the
-background (`&`), and `research run --wait-max S` past the cap. A polling loop is judged only by the sleeps it names.
+No tool call may block more than 20 minutes: an agent blocked in one long call looks silent and misses its wake-ups. So it
+refuses a command that plainly would: a `sleep` past BLOCK_CAP_S (`sleep 3000`, `sleep 30m`, `sleep 2h`, `sleep infinity`),
+there or in `bash -c`, `$(...)` or over ssh, unless a `timeout` around it ends it sooner or it runs in the background (`&`), and
+`research run --wait-max S` past the cap. A polling loop is judged only by the sleeps it names.
 
 One agent per checkout (worktree_guard.py): it refuses an agent's branch switch in a worktree another agent owns, and its push of
 a branch registered to another agent.
@@ -51,8 +52,9 @@ import subprocess
 import sys
 import time
 
+from settings import INBOX, INBOX_POLL_S
+
 PATTERN = re.compile(r"KEY|TOKEN|SECRET|PASSW|CREDENTIAL|PRIVATE", re.I)
-INBOX = os.environ.get("AGENT_INBOX", "/tmp/agent-inbox")
 WRAPPERS = {"sudo", "doas", "command", "builtin", "exec", "nohup", "time", "nice", "stdbuf", "timeout", "setsid", "taskset"}
 WRAPPER_ARG_OPTIONS = {"sudo": {"-u", "-g", "-C", "-h", "-p", "-U", "-r", "-t"}, "doas": {"-u", "-C"}, "nice": {"-n"},
                        "timeout": {"-s", "-k", "--signal", "--kill-after"}, "taskset": {"-c", "-p"}}
@@ -69,7 +71,7 @@ REASON = ("this command would print environment variables' values (a multi-line 
           "`cut -d= -f1`) or every process's full command line (tokens sit in some daemons' argv). List variable names with "
           "`compgen -e` (filter with `compgen -e | rg NAME`); check one variable with `[ -n \"${NAME:-}\" ] && echo set`. "
           "List processes with `ps -eo pid,stat,etimes,comm`, or filter full command lines with "
-          "`ps -eo pid,args | grep \"[p]attern\"` or `pgrep -af PATTERN`.")
+          "`ps -eo pid,args | grep \"[p]attern\"` (not `grep -v`, which prints every other line) or `pgrep -af PATTERN`.")
 
 
 def secret(name: str) -> bool:
@@ -164,7 +166,7 @@ def one_pid(args: list[str]) -> bool:
 
 def every_argv(args: list[str]) -> bool:
     """Whether `ps ARGS` prints full command lines of more than one named process: of every process, or of a selection such as
-    `--ppid N`, `-C NAME` or `-u USER` (17 Oct, INF-52: `ps -o pid,etime,cmd --ppid N` printed a git child's token-bearing URL)."""
+    `--ppid N`, `-C NAME` or `-u USER` (`ps -o pid,etime,cmd --ppid N` prints a git child's token-bearing URL)."""
     fmt = next((args[i + 1] for i, a in enumerate(args[:-1])
                 if a == "--format" or re.fullmatch(r"-?[a-zA-Z]*[oO]", a)), None)
     fmt = fmt or next((a.split("=", 1)[1] for a in args if a.startswith("--format=")), None)
@@ -244,13 +246,29 @@ def filter_cmd(words: list[str]) -> bool:
     return bool(words) and os.path.basename(words[0]) in FILTERS
 
 
+def inverted(words: list[str]) -> bool:
+    """Whether a `grep`/`rg` prints the lines that don't match: `-v`, alone or in a cluster such as `-iv`, or `--invert-match`,
+    which GNU grep takes from `--inv` on."""
+    return any(a.startswith("--inv") and "--invert-match".startswith(a) or re.fullmatch(r"-\w*v\w*", a)
+               for a in unwrap(strip_redirections(words))[1:])
+
+
+def filtered(commands: list[tuple[list[str], str]], i: int) -> bool:
+    """Whether command `i` pipes straight into a `grep`/`rg` that keeps only matching lines, read past inverted ones
+    (`ps -ef | grep -v grep | grep NAME`)."""
+    while commands[i][1] == "|" and i + 1 < len(commands) and filter_cmd(commands[i + 1][0]):
+        i += 1
+        if not inverted(commands[i][0]):
+            return True
+    return False
+
+
 def refused_text(text: str) -> bool:
     if ENVIRON.search(text):
         return True
     try:
         commands = words_of(text)
-        return any(refused(w, op == "|" and i + 1 < len(commands) and filter_cmd(commands[i + 1][0]))
-                   for i, (w, op) in enumerate(commands))
+        return any(refused(w, filtered(commands, i)) for i, (w, _) in enumerate(commands))
     except ValueError:                                   # unbalanced quotes: judge the raw text
         return bool(FALLBACK.search(text))
 
@@ -302,8 +320,10 @@ def weight(text: str) -> int:
 
 
 def available() -> tuple[float, float] | None:
-    """(available, total) bytes of this VM's memory: /proc/meminfo's MemAvailable and MemTotal, or this process's cgroup's limit and
-    its headroom where that limit is tighter."""
+    """(available, total) bytes of this VM's memory: /proc/meminfo's MemAvailable and MemTotal, or, where this process's cgroup's
+    limit is tighter, that limit and the lesser of MemAvailable and what the limit leaves over the cgroup's working set. The working
+    set is memory.current less memory.stat's inactive_file, the file cache the kernel reclaims on demand, as container runtimes
+    count it; all of memory.current where memory.stat can't be read."""
     try:
         info = dict(re.findall(r"^(\w+):\s+(\d+) kB", open(os.environ.get("AGENT_GUARD_MEMINFO", "/proc/meminfo")).read(), re.M))
         avail, total = int(info["MemAvailable"]) * 1024, int(info["MemTotal"]) * 1024
@@ -314,7 +334,10 @@ def available() -> tuple[float, float] | None:
         cg = os.environ.get("AGENT_GUARD_CGROUP") or f"/sys/fs/cgroup{rel}"
         limit = open(f"{cg}/memory.max").read().strip()
         if limit != "max" and int(limit) < total:
-            total, avail = int(limit), min(avail, int(limit) - int(open(f"{cg}/memory.current").read()))
+            meminfo_avail, used, total = avail, int(open(f"{cg}/memory.current").read()), int(limit)
+            avail = min(meminfo_avail, total - used)        # stands when memory.stat can't be read
+            cache = int(dict(re.findall(r"^(\w+) (\d+)$", open(f"{cg}/memory.stat").read(), re.M)).get("inactive_file", 0))
+            avail = min(meminfo_avail, total - max(0, used - cache))
     except (OSError, IndexError, ValueError):
         pass
     return avail, total
@@ -323,7 +346,7 @@ def available() -> tuple[float, float] | None:
 def local_work_reason(command: str) -> str | None:
     """Why this command may not run on this VM, or None."""
     w = 0 if LOCAL_OK in command else weight(command)
-    remote = (f"Run it on a node: `research run --on auto -- CMD` (queued onto vy-nebius-2 from this checkout: 4 CPUs, 16 GB "
+    remote = (f"Run it on a node: `research run --on auto -- CMD` (placed in a CPU node's research pool from this checkout: 4 CPUs, 16 GB "
               f"and 60 min unless --cpus, --mem-gb or --timeout say otherwise; add --wait to block until it ends, for at most 20 "
               f"minutes). For a small local run "
               f"you know fits, put {LOCAL_OK} in the command.")
@@ -341,7 +364,7 @@ def local_work_reason(command: str) -> str | None:
             f"tests or a build here: on a VM other agents share, the kernel would OOM-kill some agent's processes. " + remote)
 
 
-#: no tool call may block longer (Daniel, 19 Oct): an agent blocked in one long call looks silent and misses its wake-ups
+#: no tool call may block longer: an agent blocked in one long call looks silent and misses its wake-ups
 BLOCK_CAP_S = 1200
 DURATION = re.compile(r"(\d+(?:\.\d*)?|\.\d+)([smhd]?)")
 UNIT_S = {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}
@@ -438,7 +461,7 @@ def delivery(conversation: str) -> str | None:
 def poll(conversation: str, repo: str) -> bool:
     """Start `inbox.py pull` for agent `conversation` from checkout `repo`, detached, unless one started within the poll
     interval; whether it started one."""
-    every = os.environ.get("AGENT_INBOX_POLL_S", "30")
+    every = INBOX_POLL_S
     if every == "off" or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}", conversation) or not repo:
         return False
     os.makedirs(INBOX, exist_ok=True)
@@ -502,7 +525,8 @@ def main() -> int:
     except Exception:                                   # a bug in the local-work gate must not stop every command
         low = None
     try:
-        low = low or (None if deny or "git" not in command else checkout_reason(command, conversation, cwd))
+        low = low or (None if deny or ("git" not in command and "worktree_guard" not in command)
+                      else checkout_reason(command, conversation, cwd))
     except Exception:                                   # nor one in the checkout guard
         pass
     if deny or low:
@@ -521,7 +545,8 @@ def main() -> int:
             message = None
         try:
             merge_drivers(command, cwd)
-        except Exception as e:                          # nor a merge driver git couldn't set
+        except (OSError, ImportError, SyntaxError, AttributeError,
+                subprocess.SubprocessError) as e:       # nor a merge driver git couldn't set
             print(f"shell_hook: merge drivers not set in {cwd}: {type(e).__name__}: {e}", file=sys.stderr)
         if message:
             note = ("MESSAGE FROM YOUR COORDINATOR, delivered by the shell hook (tools/agent-guard/inbox.py). This command was "

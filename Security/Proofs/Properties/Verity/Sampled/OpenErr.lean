@@ -5,6 +5,7 @@ public import Mathlib.Data.Int.CardIntervalMod
 public import Mathlib.Data.Nat.Dist
 public import Proofs.Flock.Soundness.ZK.RealLeaves
 public import Proofs.Properties.Verity.Sampled.CoinMap
+public import Proofs.Properties.Verity.Sampled.OpenEmpty
 
 /-!
 # Sampled proofs' coupling: one hiding swap per opened leaf
@@ -27,9 +28,10 @@ real leaf's distance from an ideal one, so one hiding swap per opened leaf pays 
   the leaf and the rest of the draw (for hm96's leaves, `Claims.Hm96Hiding` through `ideal_leaf_swap`).
 * **At an opening's node** (`openGap_add_openEmpty_le`): the node's gap plus its empty class is at most its class
   error, wherever every round of the fiber releases some `bits u`.
-* **At the deployed releases** (`injective_roundBits`, `injective_linkBits`, `opened_eq_roundBits`,
-  `openGap_add_openEmpty_le_round`): a round's bits determine its `m` challenges and a link's bits its two rounds', at
-  every `m`, and a draw's first `m` coins are a round's release, so a round's opening is within its class error.
+* **At the deployed releases** (`injective_roundBits`, `injective_linkBits`, `openGap_add_openEmpty_le_round`): a
+  round's bits determine its `m` challenges and a link's bits its two rounds', at every `m`, and a draw's first `m`
+  coins are a round's release (`opened_eq_roundBits`, in `Proofs.Properties.Verity.Sampled.OpenEmpty`), so a round's
+  opening is within its class error.
 -/
 
 @[expose] public section
@@ -677,10 +679,9 @@ theorem injective_roundBits {m : ℕ} : Function.Injective (roundBits e : (Fin m
   funext i
   exact e.injective (List.ofFn_injective (congrFun (List.ofFn_injective h') i))
 
-/-- A round's bits have the same length at every release. -/
-theorem length_roundBits_enc {m : ℕ} (c : Fin m → 𝔽) :
-    (roundBits e c).length = (List.ofFn fun _ : Fin m => 128).sum := by
-  rw [roundBits, List.length_flatten, map_length_roundBits]
+/-- A round's bits are 128 per challenge, under every encoding. -/
+theorem length_roundBits_enc {m : ℕ} (c : Fin m → 𝔽) : (roundBits e c).length = 128 * m := by
+  rw [roundBits, List.length_flatten, map_length_roundBits, List.ofFn_const, List.sum_replicate_nat, Nat.mul_comm]
 
 /-- **A link's bits determine its two rounds' challenges**, at every count `m`: its first round's bits have the same
 length at every release (`length_roundBits_enc`). -/
@@ -688,16 +689,6 @@ theorem injective_linkBits {m : ℕ} : Function.Injective (linkBits e : (Fin 2 �
   intro p p' h
   obtain ⟨h0, h1⟩ := List.append_inj h ((length_roundBits_enc e (p 0)).trans (length_roundBits_enc e (p' 0)).symm)
   exact funext (Fin.forall_fin_two.2 ⟨injective_roundBits e h0, injective_roundBits e h1⟩)
-
-/-- **A draw's first `m` coins are a round's release**: in a block of at least `m` coins, the device releases them as
-the bits of the `m` challenges they encode. -/
-theorem opened_eq_roundBits {block m : ℕ} (hm : m ≤ block) (d : TreeDraw block) :
-    TreeDraw.opened d m = roundBits e fun i => e.symm (Fin.take m hm d.1 i) := by
-  have hr : roundBits e (fun i => e.symm (Fin.take m hm d.1 i)) =
-      (List.ofFn fun i => List.ofFn (Fin.take m hm d.1 i)).flatten :=
-    congrArg List.flatten (congrArg List.ofFn (funext fun i => congrArg List.ofFn (e.apply_symm_apply _)))
-  rw [hr, TreeDraw.opened, ← Fin.ofFn_take_eq_take_ofFn hm]
-  rfl
 
 /-- **At a round's opening**: where the opening releases `m` coins of a block of at least `m`, its gap plus its empty
 class at a round's release is at most its class error (`openGap_add_openEmpty_le`, with `injective_roundBits` and

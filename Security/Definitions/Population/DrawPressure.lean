@@ -1,7 +1,12 @@
 module
 
 public import Definitions.Core.Draw
-public import Definitions.Population.Exfiltration
+public import Mathlib.Data.Fintype.Powerset
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
 
 /-!
 # The deployed draw: `k` of the `n` units, uniformly and without replacement

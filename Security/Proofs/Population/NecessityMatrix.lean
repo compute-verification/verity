@@ -1,8 +1,19 @@
 module
 
-public import Proofs.Population.NecessitySkeleton
-public import Proofs.Population.Transfer
 public import Mathlib.Data.Fintype.Powerset
+public import Definitions.Population.Necessity
+public import Definitions.Population.Oblivious
+public import Mathlib.Data.Fintype.Option
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Proofs.Population.Determinacy
+import Proofs.Population.NecessitySkeleton
+import Proofs.Population.Transfer
+import Proofs.Population.Work
 
 /-!
 # The policy × property matrix: what each policy needs beyond tier 1, and what each property buys

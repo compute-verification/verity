@@ -9,12 +9,11 @@ public import Proofs.Nci.Threads
 
 A set of gates takes at most `2^width` values (`support_le_width`), so `novelInfo ≤ novelReads`
 (`novelInfo_le_novelReads`), with equality when the novel reads are novel input gates, which range freely
-(`novelInfo_eq_novelReads_of_inputs`). So `WeightsSupport` gives `WeightsIncompressible`
-(`weightsIncompressible_of_support`), and the two say the same at a subcircuit whose novel reads are novel input gates
-(`weightsSupport_iff_of_inputs`).
+(`novelInfo_eq_novelReads_of_inputs`). So incompressibility in support form and `WeightsIncompressible` say the same
+at a subcircuit whose novel reads are novel input gates (`weightsSupport_iff_of_inputs`).
 
 Theorem 1's proof reads `novelReads` only through incompressibility and the cap `S`, so it carries over with `novelInfo`
-in its place (`threaded_count`, `threaded_reads_info`). A run of `c` lifts to a run of a declaration that contains it,
+in its place (`threaded_count`, and `Proofs.Nci.Fmt2`). A run of `c` lifts to a run of a declaration that contains it,
 with the baseline at its committed values (`liftRun`), so the piece of `c` inside a set `W` of `d`'s gates reads no more
 information than `W` (`novelInfo_le_of_containment`). Supports multiply at most over a union (`support_union_le`), and a
 function of `k` bits takes at most `2^k` values (`support_le_of_factor`): that bounds a set read by a state and an
@@ -139,14 +138,8 @@ theorem smallInfo_of_small {c : RegisteredCircuit} (θv : c.D.Transcript) {Γ : 
     (hR : Small c Γ S R) : SmallInfo c θv Γ S R :=
   ⟨hR.1, hR.2.1, (novelInfo_le_novelReads c θv R).trans hR.2.2⟩
 
-/-- **Support form gives the width form**: `WeightsSupport` gives `WeightsIncompressible` at the same cap and rates. -/
-theorem weightsIncompressible_of_support {c : RegisteredCircuit} {θv : c.D.Transcript} {T : Threading c} {Γ : ℕ}
-    {S b_w b_a : ℝ} (h : Assumptions.WeightsSupport c θv T Γ S b_w b_a) :
-    Assumptions.WeightsIncompressible c T Γ S b_w b_a := fun R hR =>
-  ((le_novelInfo_iff c θv R _).2 (h R (smallInfo_of_small θv hR))).trans (novelInfo_le_novelReads c θv R)
-
-/-- **Where the two forms agree**: at a subcircuit whose novel reads are novel input gates, `WeightsSupport`'s
-inequality is `WeightsIncompressible`'s. -/
+/-- **Where the two forms agree**: at a subcircuit whose novel reads are novel input gates, the
+inequality in support form is `WeightsIncompressible`'s. -/
 theorem weightsSupport_iff_of_inputs {c : RegisteredCircuit} (θv : c.D.Transcript) (T : Threading c) (b_w b_a : ℝ)
     (R : Finset (Fin c.D.N)) (hU : ∀ g ∈ c.D.into R \ c.θ, c.D.isInput g = true) :
     (2 : ℝ) ^ (b_w * (T.weightsUsed R).card + b_a * ∑ t, (T.threadReads R t).card) ≤
@@ -159,15 +152,6 @@ section Threads
 variable {c : RegisteredCircuit} (T : Threading c) (θv : c.D.Transcript) (Γ : ℕ) (S : ℝ) (d e : ℕ)
 
 end Threads
-
-/-- **Theorem 1 with reads counted by information.** -/
-theorem threaded_reads_info (c : RegisteredCircuit) (θv : c.D.Transcript) (T : Threading c) (Γ : ℕ) (S b_w b_a : ℝ)
-    (d e : ℕ) (hbw : 0 < b_w) (hba : 0 < b_a) (hd : 0 < d) (hT : T.ThreadedInfo θv Γ S d e)
-    (hW : Assumptions.WeightsSupport c θv T Γ S b_w b_a) (R : Finset (Fin c.D.N)) (hR : SmallInfo c θv Γ S R) :
-    b_a * (T.mults R).card ≤ novelInfo c θv R * T.bound S b_w d e :=
-  threaded_count T R hbw hba hd (hT R hR) ((le_novelInfo_iff c θv R _).2 (hW R hR)) hR.2.2
-
-theorem ThreadedReadsInfo : Guarantees.ThreadedReadsInfo := threaded_reads_info
 
 open Classical in
 /-- A run of `C` lifted through `M` to a run of `D`: `b` at the images of `C`'s gates, `θv` elsewhere. -/
@@ -245,28 +229,6 @@ theorem novelInfo_le_of_containment {c d : RegisteredCircuit} (M : Containment c
   refine Real.logb_le_logb_of_le (by norm_num) (Nat.cast_pos.2 (support_pos c θc _)) ?_
   exact_mod_cast support_le_of_containment M hθ hv (emb_into_filter M hθ hW)
 
-theorem ThreadedContainedInfo : Guarantees.ThreadedContainedInfo := by
-  intro c d M θc θv T Γ K b_w b_a dd e hθv hbw hba hdd hT hW W hS
-  obtain ⟨hθ, hv⟩ := hθv
-  obtain ⟨hWc, hΓ, hK⟩ := hS
-  have hinfo := novelInfo_le_of_containment M hθ hv hWc
-  have hPc : (univ.filter fun g => M.emb g ∈ W) ⊆ c.D.computed := fun g hg => by
-    have := (mem_filter.1 (hWc (mem_filter.1 hg).2)).2
-    rw [M.isInput_emb] at this
-    exact mem_filter.2 ⟨mem_univ _, this⟩
-  have hPs : c.D.size (univ.filter fun g => M.emb g ∈ W) ≤ Γ := by
-    refine le_trans ?_ hΓ
-    unfold Circuit.size
-    rw [← card_map ⟨M.emb, M.emb_inj⟩]
-    exact card_le_card fun x hx => by
-      obtain ⟨g, hg, rfl⟩ := mem_map.1 hx
-      exact (mem_filter.1 hg).2
-  calc b_a * ((T.mults (univ.filter fun g => M.emb g ∈ W)).card : ℝ)
-      ≤ novelInfo c θc (univ.filter fun g => M.emb g ∈ W) * T.bound K b_w dd e :=
-        threaded_reads_info c θc T Γ K b_w b_a dd e hbw hba hdd hT hW _ ⟨hPc, hPs, hinfo.trans hK⟩
-    _ ≤ novelInfo d θv W * T.bound K b_w dd e :=
-        mul_le_mul_of_nonneg_right hinfo (le_max_of_le_left (Nat.cast_nonneg _))
-
 theorem InfoOfState : Guarantees.InfoOfState := by
   intro D θv R Sst Sin k f hR hin hf
   have hs : support D θv (D.D.into R \ D.θ) ≤ 2 ^ (k + D.D.width Sin) :=
@@ -277,12 +239,6 @@ theorem InfoOfState : Guarantees.InfoOfState := by
   refine ⟨(support_le_support_into D θv hR (subset_refl R)).trans hs, ?_⟩
   rw [novelInfo_le_iff, ← Nat.cast_add, Real.rpow_natCast]
   exact_mod_cast hs
-
-theorem ThreadedOfState : Guarantees.ThreadedOfState := by
-  intro c d M θc θv T Γ b_w b_a dd e W Sst Sin k f hθ hbw hba hdd hT hW hWΓ hin hf
-  have hK := (InfoOfState d θv W Sst Sin k f hWΓ.1 hin hf).2
-  exact (ThreadedContainedInfo c d M θc θv T Γ _ b_w b_a dd e hθ hbw hba hdd hT hW W ⟨hWΓ.1, hWΓ.2, hK⟩).trans
-    (mul_le_mul_of_nonneg_right hK (le_max_of_le_left (Nat.cast_nonneg _)))
 
 section Feeds
 

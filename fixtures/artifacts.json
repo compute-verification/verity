@@ -176,8 +176,8 @@
   "art:53eee1826c7004daf74b353ccaaef4460ffa9473132f26fcab06ec2905f1e62a": "verity/ml/flock/tests/fixtures/plain-tree",
   "art:2cf0182ca5bd415214ed211025a1d2b53b223540c46779284b49fdd344938798": "verity/ml/flock/tests/fixtures/rec-c3-inner",
   "art:7d947140aaee50e3bb2dc6ea031450acc703fa02ca4d2f209d0d9ea222bf5ceb": "verity/ml/flock/tests/fixtures/rec-coins",
-  "art:22fbef314a3ba3e417b9e49bfa30fe460a364913f1dbcc926768c7a254c5b50c": "verity/ml/flock/tests/fixtures/f1-gate",
   "art:6d14f28a00edc46e3aa4b3432ef2e4b56fbeb9e12e6e0ad4e6179500f18b70b4": "verity/ml/flock/tests/fixtures/rec-links",
+  "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": "verity/ml/flock/tests/fixtures/f1-gate",
   "previous": {
     "art:26b81171153e286b3f5306e767290795def2cdbabfce2acf4608b3ef9ce15f7c": [
       "art:d775cc59e5e058b21c9eac5d748fab785ecd6be184782427bead14eb3cc80811"
@@ -226,13 +226,6 @@
       "art:84471c45417ce1f0da5e1ebcc7c9e65fc15b833357f4ec654ce12037100d7be3",
       "art:97537edaf796edb3ec098d64a39283d2c74040bd06be85375304a5263e6bedc9"
     ],
-    "art:22fbef314a3ba3e417b9e49bfa30fe460a364913f1dbcc926768c7a254c5b50c": [
-      "art:7a85c5c4238b971371cf46c2153b94548a11988891cc4018b196535c3cb92bbb",
-      "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25",
-      "art:c85c00f43f3a827974a253d6998b4ebc76db6edfce4c9b0ed07bce4e98fcbfea",
-      "art:cd6a7a1b0c579c5b4ae3553689e9918cc459822bca72ec74144ba2e79a1410ee",
-      "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073"
-    ],
     "art:2cf0182ca5bd415214ed211025a1d2b53b223540c46779284b49fdd344938798": [
       "art:07b423d36b18d2687c95d8bd95f8fccd8de46848c355a2a1a2b993db1e5354ea",
       "art:1a76e7c297d9a6ba73edb349148885b43becd71723acc2c22c245c6794ccc69b",
@@ -248,6 +241,14 @@
       "art:76a4a543fed5f92fba901007ddfd4e035844421cb3893d243780d2d7c9974e06",
       "art:cb8c701f408b4f005205cfe338da1e14b491c79642c30c455ce8b53522088ddf",
       "art:ff28796246bdf4ea6df75289ccd8d1fddee94ecd17d21ef7b3c009f35bbcc863"
+    ],
+    "art:80d0fa3b94c1d022767ce27f240113d9217adeb1530c4fa0c548639ed41224de": [
+      "art:7a85c5c4238b971371cf46c2153b94548a11988891cc4018b196535c3cb92bbb",
+      "art:b0d3050963bdd8f3ba1a9cf5587f4a6328f703251e4bd90c2f9fdbea0a471d25",
+      "art:c85c00f43f3a827974a253d6998b4ebc76db6edfce4c9b0ed07bce4e98fcbfea",
+      "art:cd6a7a1b0c579c5b4ae3553689e9918cc459822bca72ec74144ba2e79a1410ee",
+      "art:d0158e94e1964b37d698d880ee8c6944f7271b3dcc48bda55ea0741e3e557073",
+      "art:22fbef314a3ba3e417b9e49bfa30fe460a364913f1dbcc926768c7a254c5b50c"
     ]
   }
 }

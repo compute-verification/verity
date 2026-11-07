@@ -1,10 +1,13 @@
 module
 
 public import Definitions.Accounting.Guarantees.Bridges
-public import Proofs.Accounting.Actual.Physical
-public import Proofs.Accounting.Actual.Localization
 public import Definitions.Pouw.Assumptions.Deadline
+public import Proofs.Accounting.Actual.Physical
 public import Proofs.Pouw.Deadline
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.Actual.Confidence
+import Proofs.Accounting.Actual.Localization
 
 /-!
 # B4 and PoUW's row, proved, and the honest clock at `CM_A`

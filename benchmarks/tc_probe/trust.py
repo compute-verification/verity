@@ -381,7 +381,7 @@ def _target_aliases() -> dict[str, Target]:
 
 
 def subjects(name: str) -> Subject:
-    """Resolve a target name (``first-campaign-target/2026-09-21``), a target constant (``FIRST``) or an instruction id."""
+    """Resolve a target name (a key of ``TARGETS``), a target constant (``FIRST``) or an instruction id."""
     aliases = _target_aliases()
     if name in aliases:
         t = aliases[name]

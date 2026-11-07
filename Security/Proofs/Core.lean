@@ -27,9 +27,10 @@ public import Proofs.Core.Round
 public import Proofs.Core.Prims.Round
 public import Proofs.Core.TC
 public import Proofs.Core.Formalism
+public import Proofs.Core.Formalism.Witnesses
 public import Proofs.Core.Expand
-public import Proofs.Core.Padding
 public import Proofs.Core.AndSize
+public import Proofs.Core.ExpandWitnesses
 public import Proofs.Core.Accel.Model
 public import Proofs.Core.Accel.Sheet
 public import Proofs.Core.Accel.Witness

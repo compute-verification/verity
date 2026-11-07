@@ -224,6 +224,8 @@ TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
 # while its agent's `updatedAt` moves (with that still too, the wait is stalled: cancelled and continued)
 STUCK = {"CREATING": 10 * 60, "WAITING_FOR_BACKGROUND_WORK": 2 * 3600}
 GOAL = "run-goal-"              # a goal run's id: the runs endpoint and its stream take only run-<uuid> (400)
+#: the handle a run's sender no route knows is watched under (`ring_run`): its idle and silence ring infra, who finds its owner
+UNOWNED = "infra"
 SUBAGENT = {"tool-call-delta"}          # interaction_update types that report a subagent's progress, not the parent's
 CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothing for {mins} min after {after}, and "
             "cancelled it). Read your inbox and carry on from where you stopped.")
@@ -561,7 +563,8 @@ def handover_note(notes: Path | None, handle: str) -> Path | None:
 # Run on a node over ssh (`python3 - ROOT SINCE`), standard library only: each run under ROOT/runs whose status.json changed at
 # or after SINCE (epoch s) and reads a terminal state, with who sent it (its request's `submitted_by`, else the `--by` its command
 # passes), what it was, and, for one that was cancelled or SIGTERMed, the newest `research cancel` of it in its events.jsonl's last
-# MiB (`cancel_reason`, and `cancelled_by`, the BY of its "(research cancel by BY)"), as one JSON list.
+# MiB (`cancel_reason`, and `cancelled_by`, the BY of its "(research cancel by BY)"), as one JSON list. A run whose status.json
+# changed then but isn't over is listed too, as `live` with only its start and sender: its sender's activity, not an end.
 RUNS_READER = r'''
 import json, os, re, sys
 root, since = sys.argv[1], float(sys.argv[2])
@@ -604,15 +607,19 @@ for n in names:
     if not n.startswith("r") or mtime < since:
         continue
     st = load(p)
-    if st.get("state") not in ("done", "failed", "cancelled"):
-        continue
     tr = st.get("transitions") or [{}]
-    job, req = load(os.path.join(runs, n, "job.json")), load(os.path.join(root, "requests", n, "request.json"))
+    req = load(os.path.join(root, "requests", n, "request.json"))
+    if st.get("state") not in ("done", "failed", "cancelled"):
+        out.append({"run": n, "state": st.get("state"), "live": True, "started": tr[0].get("t_utc"), "mtime": mtime,
+                    "submitted_by": req.get("submitted_by") or ""})
+        continue
+    job = load(os.path.join(runs, n, "job.json"))
     cmd = [str(a) for a in (req.get("command") or (job.get("execution") or {}).get("command") or [])]
     own, comp = job.get("ownership") or {}, job.get("computation") or {}
     by, why = cancel_of(os.path.join(runs, n)) if st.get("state") == "cancelled" or st.get("rc") == 143 else ("", "")
     out.append({"run": n, "state": st.get("state"), "rc": st.get("rc"), "wall_s": st.get("wall_s"),
-                "ended": tr[-1].get("t_utc"), "mtime": mtime, "submitted_by": req.get("submitted_by") or "",
+                "started": tr[0].get("t_utc"), "ended": tr[-1].get("t_utc"), "mtime": mtime,
+                "submitted_by": req.get("submitted_by") or "",
                 "by": cmd[cmd.index("--by") + 1] if "--by" in cmd[:-1] else "", "lane": own.get("lane") or "",
                 "job": own.get("job") or "", "stage": comp.get("stage") or "", "command": " ".join(cmd)[:200],
                 "cancelled_by": by, "cancel_reason": why, "tree": comp.get("tree_sha") or ""})
@@ -670,6 +677,31 @@ def node_runs(cfg: dict, notes: Path | None, node: str, since: float,
     return rows, ""
 
 
+def github_prs(remote: str, env_file: Path, pages: int = 10) -> Callable[[], list[dict]]:
+    """A reader of `remote`'s open PRs on GitHub (`{"branch", "body"}` each, newest first, up to `pages` of 100), with the token
+    `env_file`'s `GH_TOKEN=` line holds, read at each call so a rotated token needs no restart."""
+    m = re.search(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?$", remote)
+    if not m:
+        raise ValueError(f"--git-remote {remote!r} names no GitHub repository")
+
+    def read() -> list[dict]:
+        token = next((v.strip().strip("\"'") for k, _, v in (ln.partition("=") for ln in env_file.read_text().splitlines())
+                      if k.strip().removeprefix("export ").strip() == "GH_TOKEN" and v.strip()), None)
+        if not token:
+            raise ValueError(f"no GH_TOKEN in {env_file}")
+        out: list[dict] = []
+        for page in range(1, pages + 1):
+            req = urllib.request.Request(f"https://api.github.com/repos/{m[1]}/pulls?state=open&per_page=100&page={page}",
+                                         headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
+            with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 (a literal https URL)
+                got = json.loads(r.read())
+            out += [{"branch": (p.get("head") or {}).get("ref") or "", "body": p.get("body") or ""} for p in got]
+            if len(got) < 100:
+                break
+        return out
+    return read
+
+
 def print_runs(nodes: Path, notes: Path | None, hours: float) -> int:
     """`agent_watch.py runs`: each node's runs that ended in the last `hours`, one JSON line each, as the watch would read them."""
     cfg, rc = read_json(nodes), 0
@@ -679,7 +711,8 @@ def print_runs(nodes: Path, notes: Path | None, hours: float) -> int:
             print(why, file=sys.stderr)
             rc = 1
         for row in rows or []:
-            print(json.dumps({"node": node, **row}, sort_keys=True))
+            if not row.get("live"):
+                print(json.dumps({"node": node, **row}, sort_keys=True))
     return rc
 
 
@@ -831,8 +864,11 @@ class Watch:
                  notes: Path | None = None, worker_long_s: float = WORKER_LONG_S, git_remote: str | None = None,
                  nodes: Path | None = None, sh: Callable[[list[str], str | None, float], tuple[int, str, str]] = run_cmd,
                  launcher: Path | None = None, launch: Callable[[list[str], dict[str, str]], tuple[int, str, str]] = run_env,
-                 launch_api: Callable[[str], object] = lambda key: Api(key)):
+                 launch_api: Callable[[str], object] = lambda key: Api(key),
+                 open_prs: Callable[[], list[dict]] | None = None):
         self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
+        self.open_prs, self.prs_read = open_prs, -float("inf")
+        self.pr_branches: dict[str, set[str]] = {}  # agent id (full or short) an open PR's body names -> that PR's branches
         self.notes, self.worker_long_s = notes, worker_long_s
         self.git_remote, self.nodes, self.sh = git_remote, nodes, sh
         self.launch_env, self.launcher, self.launch, self.launch_api = log.with_name("launch.env"), launcher, launch, launch_api
@@ -1396,6 +1432,10 @@ class Watch:
         for agent, d in workers(self.notes, self.log.with_name("workers.d"), self.registry, coords, t).items():
             if agent in listed and d["handle"]:                 # an agent a coordinator launched through the API: it owns it
                 self.owners[agent] = d["handle"]
+            if d["handle"] and (self.children.get(agent) or {}).get("owner"):
+                with self.kids_lock:                            # a stray a note or workers.d now names is its lane's
+                    self.children.pop(agent, None)
+                (self.workers.get(agent) or {}).pop("handle", None)
             w = self.workers.setdefault(agent, {"heard": 0.0})
             w.update(lane=d["lane"] or w.get("lane") or "", handle=d["handle"] or w.get("handle"),
                      heard=max(w["heard"], d["heard"]))
@@ -1411,10 +1451,10 @@ class Watch:
                 continue
             p = c["parent"]
             if p not in parents:
-                parents[p] = self.parent_handle(p, coords)
-            handle = parents[p]
-            if agent in listed and handle:
-                self.owners[agent] = handle
+                parents[p] = self.parent_handle(p, coords) if p else None
+            handle = parents[p] or c.get("owner")
+            if agent in listed and parents[p]:                  # a stray's owner (infra) is never its owner here: it isn't resumed
+                self.owners[agent] = parents[p]
             w = self.workers.setdefault(agent, {"heard": 0.0})
             w.update(parent=p, lane=w.get("lane") or handle or "", handle=w.get("handle") or handle,
                      heard=max(w["heard"], c["t"]), name=w.get("name") or c.get("name") or "")
@@ -1475,6 +1515,25 @@ class Watch:
         if json.dumps([self.workers, self.owners], sort_keys=True) != before:
             self.save()
 
+    def read_prs(self, t: float) -> None:
+        """Every `HEADS_EVERY_S`, the open PRs (`open_prs`, `{"branch", "body"}` each): a push to a PR's branch is the activity of
+        every agent its body names, so a worker on a branch named another way (`cursor/lean-...-fc8d`) isn't judged silent. A
+        failed read keeps the last one."""
+        if self.open_prs is None or t - self.prs_read < HEADS_EVERY_S:
+            return
+        self.prs_read = t
+        try:
+            prs = self.open_prs()
+        except (OSError, ValueError, urllib.error.URLError) as e:
+            self.say("prs", f"open PRs unreadable ({type(e).__name__}: {e}); the last read's PR branches still count", t)
+            return
+        named: dict[str, set[str]] = {}
+        for pr in prs:
+            body, branch = str(pr.get("body") or ""), str(pr.get("branch") or "")
+            for agent in {*AGENT_RE.findall(body), *SHORT_AGENT_RE.findall(body)} if branch else ():
+                named.setdefault(agent, set()).add(branch)
+        self.pr_branches = named
+
     def read_heads(self, t: float) -> None:
         """Every `HEADS_EVERY_S`, Verity's branch heads (`git ls-remote --heads`, the deploy key fixtures_export.sh fetches with):
         a branch whose sha moved, or that appeared, was pushed when the watch saw it; `heads.json` keeps them across restarts."""
@@ -1499,10 +1558,11 @@ class Watch:
 
     def watch_silence(self, known: dict[str, dict], t: float) -> None:
         """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
-        note of its (`note_times`) and no push to its branches (its own, the ones its notes name, every head ending in its
-        id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task` finds for any of these) and
-        no run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from the latest of those, its
-        ACTIVE spell's start and the first heads read; again after a second window, then not until one of those moves. Needs
+        note of its (`note_times`), no push to its branches (its own, the ones its notes name, those of open PRs whose body names
+        it, every head ending in its id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task`
+        finds for any of these) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
+        the latest of those, its ACTIVE spell's start and the first heads read; again after a second window, then not until one
+        of those moves. Needs
         `--notes` and heads read in the last `HEADS_STALE_S`."""
         changed = False
         for agent in [a for a in self.silent if a not in known]:
@@ -1517,6 +1577,7 @@ class Watch:
         for agent, k in sorted(known.items()):
             coord = agent in self.coords
             mine = {*k["branches"], *named.get(agent, ()), *named.get(short_id(agent), ()),
+                    *self.pr_branches.get(agent, ()), *self.pr_branches.get(short_id(agent), ()),
                     *(b for b in heads if b.endswith("-" + agent[-4:]))}
             mine |= {h for h in heads if any(same_task(h, b) for b in mine)}
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
@@ -1637,12 +1698,15 @@ class Watch:
                 continue
             st["nodes"][node], self.learn_left = t, LEARN_PER_READ
             for row in rows:
-                if not isinstance(row, dict) or (key := f"{node}/{row.get('run')}") in st["seen"]:
+                if not isinstance(row, dict):
+                    continue
+                if (by := AGENT_RE.search(str(row.get("submitted_by") or ""))) and (
+                        when := max((x for x in (epoch(row.get("started")), epoch(row.get("ended"))) if x), default=None)):
+                    st["ran"][by[0]] = max(when, st["ran"].get(by[0], 0))
+                if row.get("live") or (key := f"{node}/{row.get('run')}") in st["seen"]:
                     continue
                 st["seen"][key] = t
                 ended = epoch(row.get("ended")) or row.get("mtime") or t
-                if (by := AGENT_RE.search(str(row.get("submitted_by") or ""))) and isinstance(row.get("wall_s"), (int, float)):
-                    st["ran"][by[0]] = max(ended - row["wall_s"], st["ran"].get(by[0], 0))
                 if ended >= st["since"] and (u := self.ring_run(node, row, coords, handles, ended, quiet)):
                     unknown.append(u)
         if unknown:
@@ -1681,7 +1745,8 @@ class Watch:
             kid = self.children.get(agent) or {}
             if kid:
                 kid["t"] = self.clock()             # a worker still sending runs is never forgotten
-        known = agent in coords or agent in self.owners or w.get("handle") or w.get("parent") or kid
+        stray = bool(kid.get("owner")) and not kid.get("parent")     # watched as infra's until a route claims it: still unknown
+        known = agent in coords or agent in self.owners or w.get("parent") or (kid and not stray) or (w.get("handle") and not stray)
         if agent and not known and not lineage(self.registry, coords, agent) and self.learn_left > 0:
             kid = self.learn(agent, coords, self.clock())
         parent = w.get("parent") or kid.get("parent")
@@ -1691,7 +1756,7 @@ class Watch:
             handle, role, name = h, "coordinator", self.names.get(agent, "")
         elif agent in self.owners:                 # an agent a coordinator launched through the API, a relaunched worker
             handle, role, name = self.owners[agent], "worker", self.names.get(agent, "") or str(kid.get("name") or "")
-        elif w.get("handle"):
+        elif w.get("handle") and not stray:
             handle, role, name = w["handle"], "worker", str(w.get("name") or "")
         elif parent and (h := self.parent_handle(parent, coords)):
             handle, role, name = h, "worker", str(w.get("name") or kid.get("name") or self.names.get(agent, ""))
@@ -1719,6 +1784,9 @@ class Watch:
         if role == "unknown":
             print(f"{iso(self.clock())} run ends: {node} {row.get('run')} sent by {sent or row.get('by') or '?'}, which no "
                   "handle owns: recorded for @infra to route", file=sys.stderr, flush=True)
+            if agent and agent not in coords:
+                with self.kids_lock:                # watched as infra's worker until a route claims it (`watch_workers`)
+                    self.children.setdefault(agent, {"parent": "", "name": "", "t": self.clock(), "owner": UNOWNED})
             return {"run": str(row.get("run")), "node": node, "sender": sent or str(row.get("by") or ""), "what": what[:80],
                     "rc": row.get("rc"), "state": row.get("state"), "after": duration(row.get("wall_s")), "at": iso(ended)}
         self.record("run_ended", Run(agent, str(row.get("run")), name), judged=False, handle=handle, role=role, node=node,
@@ -2036,6 +2104,7 @@ class Watch:
                                 "run": "", "since": w["since"], "branches": list(w.get("branches") or []),
                                 "acted": w.get("updated")}
         self.read_heads(t)
+        self.read_prs(t)
         self.watch_silence(known, t)
         self.run_ends(coords, t)
         self.watch_resumes({a["id"]: a for a in agents if a.get("status") != "ARCHIVED"}, judges, live, t)
@@ -2243,6 +2312,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="Verity's remote, for `git ls-remote --heads` (pushes; without it nobody is judged silent)")
     lp.add_argument("--nodes", type=Path, default=Path("/data/agent-watch/nodes.json"),
                     help="the nodes whose ended runs ring their sender's handle (no file: none)")
+    lp.add_argument("--gh-env", type=Path, default=None,
+                    help="a file with a GH_TOKEN= line: --git-remote's open PRs, whose bodies name the agents their pushes count for")
     lp.add_argument("--launcher", type=Path, default=None,
                     help="launch_coordinator.py, for a coordinator's relaunch (default: the --registry checkout's "
                          "infra/cursor/launch_coordinator.py); relaunching also needs launch.env beside --log")
@@ -2273,7 +2344,8 @@ def main(argv: list[str] | None = None) -> int:
             lambda body, t: print(f"dry-run: would publish {len(body)} bytes to {STATUS_TABLE}", file=sys.stderr, flush=True))
     launcher = ns.launcher or (ns.registry.resolve().parents[3] / "infra/cursor/launch_coordinator.py" if ns.registry else None)
     watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, timers=ns.timers, wake=ns.wake, publish=publish, notes=ns.notes,
-                  worker_long_s=ns.worker_long_h * 3600, git_remote=ns.git_remote, nodes=ns.nodes, launcher=launcher)
+                  worker_long_s=ns.worker_long_h * 3600, git_remote=ns.git_remote, nodes=ns.nodes, launcher=launcher,
+                  open_prs=github_prs(ns.git_remote, ns.gh_env) if ns.gh_env and ns.git_remote else None)
     if ns.dry_run:
         watch.launch = lambda argv, env: (print(f"dry-run: {shlex.join(argv)}", file=sys.stderr, flush=True), (1, "", "dry-run"))[1]
         watch.launch_api = lambda key: api

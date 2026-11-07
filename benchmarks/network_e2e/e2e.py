@@ -1,4 +1,4 @@
-"""network-e2e: network accounting end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
+"""network-e2e: network certification end to end on a served model, as one report. A certifier-serve rehearsal's runs (the
 network certifier in front of a served endpoint, `certifier_serve.py`), N2's verdict of record on every link-window and
 the link's network verdict (`LinkWindows.verify` through the proof system's stream, `network_verdict`), every
 link-window's head checks proved by Flock ``prove --zk`` behind the Lean ZK server and held by Lean (`n2_zk.prove`), and
@@ -659,7 +659,7 @@ def markdown(r: dict) -> str:
                f"tokens, EOS {_cell(v.get('eos_token_ids'))}" if v else
                f"{_cell(r.get('tokens'))} tokens a response, {_cell(r.get('requests'))} requests")
     on = r.get("ran") or []
-    lines = [f"# Network accounting end to end: {'OK' if r['ok'] else 'NOT OK'} on "
+    lines = [f"# Network certification end to end: {'OK' if r['ok'] else 'NOT OK'} on "
              f"{', '.join(on[:-1]) + ' and ' + on[-1] if len(on) > 1 else on[0] if on else 'nothing that ran'}"
              + (f" (not run: {', '.join(r['not_run'])})" if r.get("not_run") else ""), "",
              *([f"Not OK: {'; '.join(r['why_not'])}.", ""] if r.get("why_not") else []),

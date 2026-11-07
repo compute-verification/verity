@@ -3,7 +3,7 @@
 A scheme turns one declared matmul's committed operand rows into the checked values of each tile, the tile's
 transcript leaf and the useful output.  Everything else (commitments, the salt, the sample, the openings, the profile) is
 the protocol's, in `audit`, and is the same for every scheme.  Like `verity.ml.commitments.scheme.CommitmentScheme`, a
-scheme is a named, versioned object: its ``name`` is what `verity.core.protocols.pouw.schemes.get` looks up, and its module's docstring and its
+scheme is a named, versioned object: its ``name`` is what `verity.ml.protocols.pouw.schemes.get` looks up, and its module's docstring and its
 pinned vectors under ``tests/vectors`` carry the same string.
 
 Operands are committed as rows along k: ``A`` is ``m x k`` and the weight ``B`` is stored as its ``n`` rows, so a matmul
@@ -105,9 +105,9 @@ class Certificate:
     ``omega`` is Ω*, the largest W_ref over the work the conjecture credits, across the domain (m·k·n for TT, 3·m·k·n for
     TT_NCP); ``gamma = 1 − (1 − gamma0)/omega`` is the conservative reduction (Lean `gammaFromTT`, `gammaFromTTNCP`).  A
     scheme whose conjecture names no target has ``gamma0 = None`` and no gamma.  ``claims`` are `verity.core.claims` ids, or ids
-    in the same format that no render cites yet; ``theorems`` are pinned Lean declarations; ``allowances`` are gaps the
-    scheme admits by design; ``parameters`` are the values the theorems are instantiated at, including the domain bounds
-    their γ holds on."""
+    in the same format that no render cites yet; ``theorems`` are the Lean theorems it rests on, guarantees the lock pins
+    and the lemmas their proofs use; ``allowances`` are gaps the scheme admits by design; ``parameters`` are the values
+    the theorems are instantiated at, including the domain bounds their γ holds on."""
 
     conjecture: str
     gamma0: Fraction | None

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # A single-GPU Commit of record with its sealed replay bundle, the TP1 counterpart of a5_glm53_commit.sh's deferred TP Commit:
-# Llama-3.2-1B bf16 batch-invariant eager on one RTX PRO 6000 (ROW, the example's workload, its file in examples/vllm/workloads/, which
+# Llama-3.2-1B bf16 batch-invariant eager on one RTX PRO 6000 (ROW, the demo's workload, its file in examples/vllm/workloads/, which
 # the integration finds through VERITY_WORKLOADS: the B4 I256/O32 rtxpro6000 workload, prompt lengths 151, 8, 256 and 87), its Build and
-# Match of record and a deferred config-run Commit in one workload dir, then the Commit's C2 replay on CPU. `verity example vllm commit`
+# Match of record and a deferred config-run Commit in one workload dir, then the Commit's C2 replay on CPU. `verity demo vllm commit`
 # (run.sh) starts it where placement.toml's [run.commit] says, with the node's VENV, CUDA_HOME, HF_HOME and LLAMA_ROOT and the workload's
 # ROW, ROLE, REPO and REV as its environment. Needs on the node: those, the taps of record under /workspace/cp (cli.MACHINE) and
 # gpu-lease; the workload leases a GPU only for its Match capture and its Commit's engine (GPU_LEASE, pipeline.gpu_lease).
@@ -17,7 +17,7 @@
 set -uo pipefail
 OUT=${OUT:-${RESEARCH_RUN_DIR:-.}/out}; mkdir -p "$OUT"
 for v in ROW ROLE REPO REV VENV CUDA_HOME HF_HOME LLAMA_ROOT; do
-  [ -n "${!v:-}" ] || { echo "commit.sh: no $v: start it with \`verity example vllm commit\` (examples/vllm/run.sh)"; exit 2; }
+  [ -n "${!v:-}" ] || { echo "commit.sh: no $v: start it with \`verity demo vllm commit\` (examples/vllm/run.sh)"; exit 2; }
 done
 TREE=$PWD
 ROOT=$LLAMA_ROOT
@@ -31,7 +31,7 @@ export PYTHONPATH=$TREE:$TREE/integrations/vllm:$TREE/tools/research/src VERITY_
 export GPU_LEASE=${GPU_LEASE:-gpu-lease} GPU_LEASE_WHO=${GPU_LEASE_WHO:-vllm-llama1b-commit}
 export TRITON_CACHE_DIR=$ROOT/cache/triton VLLM_CACHE_ROOT=$ROOT/cache/vllm
 if grep -q staged_sources "$TREE/integrations/vllm/verity_vllm/commit/committer/native_jit.py"; then
-  export HIDDEN_GPU_BUILD=$ROOT/cache/jit/hidden_gpu NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
+  export NATIVE_COLLECT_BUILD=$ROOT/cache/jit/nc
 fi
 rs() { "$PY" -m research "$@" 2>&1 || research "$@" 2>&1; }
 { id; hostname; git -C "$TREE" rev-parse HEAD 2>/dev/null; echo "row dir $D"; nvidia-smi -L; } | tee "$OUT/machine.txt"

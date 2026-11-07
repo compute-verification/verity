@@ -1,7 +1,12 @@
 module
 
 public import Definitions.Population.LongValue
-public import Proofs.Population.Leakage
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Proofs.Population.Determinacy
+import Proofs.Population.Egress
+import Proofs.Population.Leakage
+import Proofs.Population.Work
 
 /-!
 # Long values buy nothing

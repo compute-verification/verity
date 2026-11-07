@@ -6,9 +6,9 @@ self-delimiting code (`code_v1.py`) under the registered codebook.
 `decode(encode(a)) == a`. `decode` is total: any byte string decodes to one I1 v0 or is refused by name (`V1Error`),
 deterministically, and a string longer than the cap ℓ (`Registered.cap_bits`) is refused unread.
 
-**Certified, 0 bits** (`CertifiedRequests`, from the warden's signed records under design v3; the compile unit holds
-them as witness):
-- the warden's connection ordinals, in the order its own schedule admitted them (`CertifiedRequests.requests`);
+**Certified, 0 bits** (`Record`, from the warden's signed records under design v3; the compile unit holds them as
+witness):
+- the warden's connection ordinals, in the order its own schedule admitted them (`Record.requests`);
 - each request's ingress bytes, an id request's fields (`id_request_fields`): its `user` (I1's id), its `prompt` ids and
   its `max_tokens`; and its release, the bucket a of its connection's last ingress cell (`Request.end`), from which the
   server holds its whole body;
@@ -35,7 +35,7 @@ replayed rows, which recomputes every start and n by vLLM's rules and checks the
 under the cumulative pool bound to the longest cached prefix, and gives `kind`, the canonical `sources`, and the request
 records (the tie: prompt and output lengths against the certified ids, `finish` by the stop rule).
 
-**Sent**, as `window_charge.Advice`s (`residual`), and nothing else:
+**Sent**, as `window_charge.Window`s (`residual`), and nothing else:
 - `arrived`: the replay's decisions, one per open step: whether the next request had arrived.
 - `order`: the order's deviations from release order, as above.
 - `hits`: past the pool bound, every prefix-cache lookup the replay's scheduler reads (`_KV.hit`: each candidate its
@@ -48,6 +48,13 @@ records (the tie: prompt and output lengths against the certified ids, `finish` 
 The resumes and the order of new requests that `derived._walk` would otherwise read are the replay's, so v1 sends none.
 The KV pool's size is registered before the run, never sent: a prover that chose it could declare a bigger pool and buy
 derived hits with it.
+
+**Under the certified tick** (`Registered.tick`, an engine served with ``--admit tick``), the engine adds each request
+once a logical clock has passed its release bucket's close, in release order, and the replay runs that rule from the
+record's `end`s and the registered τ (`replay.replay`'s ``tick``). It asks nothing, so there are no decisions, and v1
+requires the arrival order to be release order, so there are no order entries. The registered caps hold neither
+(`TICK_CAPS`, and a registered book's caps must too), so a window's timing fields code in 0 bits and it sends only its
+hits.
 
 **The windows** (the certifier PROTOCOL's A5: no later than the first window whose rows the value changes). Step s's
 window is the earliest window an output at step s or later is released in (the last window where none follows). An
@@ -82,7 +89,7 @@ import time
 from collections.abc import Callable, Iterator, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, NamedTuple, TypeVar
 
@@ -140,7 +147,7 @@ class Request:
 
 
 @dataclass(frozen=True)
-class CertifiedRequests:
+class Record:
     """The certified record: the requests in the warden's admission order."""
 
     requests: tuple[Request, ...]
@@ -153,13 +160,13 @@ class CertifiedRequests:
             raise V1Error("two requests share an id")
 
 
-def release_order(record: CertifiedRequests) -> list[int]:
+def release_order(record: Record) -> list[int]:
     """The certified reference order: the warden's release order, each request's last ingress cell landing, by
     (`end`, ordinal)."""
     return sorted(range(len(record.requests)), key=lambda k: (record.requests[k].end, k))
 
 
-def arrival_order(advice: I1.Advice, record: CertifiedRequests, row_order: str) -> list[int]:
+def arrival_order(advice: I1.Advice, record: Record, row_order: str) -> list[int]:
     """The engine's arrival order (ordinals) that v1 replays the advice under. FCFS admits new requests in arrival
     order, so it is by first step, and within a step by the scheduling order. Under the scheduler's row order that is
     the step's own. Under the batch order (a stable sort by n) it is the order that puts a request after any request of
@@ -234,7 +241,7 @@ def _topo(after: dict[int, set[int]], key: Callable[[int], int]) -> tuple[list[i
     return out, unique
 
 
-def streams(advice: I1.Advice, record: CertifiedRequests) -> tuple[int, ...]:
+def streams(advice: I1.Advice, record: Record) -> tuple[int, ...]:
     """The order permutation as the I/O tie's egress side reads it (`walk.order` through the arrival order): for each I1
     request q, the warden's ingress ordinal of the stream that carries it."""
     ordinal = {q.id: k for k, q in enumerate(record.requests)}
@@ -251,7 +258,7 @@ class Decoded(NamedTuple):
     arrival: tuple[int, ...]
 
 
-def _deviations(record: CertifiedRequests, arrival: Sequence[int]) -> list[tuple[int, int]]:
+def _deviations(record: Record, arrival: Sequence[int]) -> list[tuple[int, int]]:
     """The permutation from release order to the arrival order, as (position, rank): each arrival that isn't the
     earliest in release order of the requests not yet arrived, and its rank among them."""
     left, out = release_order(record), []
@@ -263,7 +270,7 @@ def _deviations(record: CertifiedRequests, arrival: Sequence[int]) -> list[tuple
     return out
 
 
-def _arrival(record: CertifiedRequests, deviations: Sequence[tuple[int, int]]) -> list[int]:
+def _arrival(record: Record, deviations: Sequence[tuple[int, int]]) -> list[int]:
     """`_deviations`' inverse; refuses a position or rank past the requests left, and a rank of 0."""
     left, out, at = release_order(record), [], dict(deviations)
     if len(at) != len(deviations) or any(not 0 <= p < len(left) or r < 1 for p, r in deviations):
@@ -276,7 +283,7 @@ def _arrival(record: CertifiedRequests, deviations: Sequence[tuple[int, int]]) -
     return out
 
 
-def windows(record: CertifiedRequests, T: int) -> int:
+def windows(record: Record, T: int) -> int:
     """W: the windows the record covers, through its last bucket."""
     return max(max(q.end, *q.release) for q in record.requests) // T + 1
 
@@ -286,7 +293,8 @@ class Registered:
     """What v1 reads besides the string and the record, fixed before the run: the engine's scheduler config, its KV pool
     `num_gpu_blocks` included (public, never in the advice: a prover that set it could buy derived hits with a bigger
     pool), the stop ids, the runner's row order, the window T in buckets, the advice code's codebook (`code_v1.Book`,
-    whose digest the registration holds; None for the uniform book), and ℓ."""
+    whose digest the registration holds; None for the uniform book), ℓ, and the certified tick the engine admits by
+    (`replay.Tick`, its τ the engine class's; None for an engine that admits on arrival)."""
 
     engine: Any  # replay.Engine
     stop_ids: tuple[int, ...]
@@ -294,6 +302,7 @@ class Registered:
     T: int = 600
     book: Any = None
     cap_bits: int = 1 << 23
+    tick: Any = None  # replay.Tick
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "stop_ids", tuple(self.stop_ids))
@@ -302,6 +311,12 @@ class Registered:
             raise V1Error(f"a registration has stop ids, a row order of {ROW_ORDERS} and T ≥ 1")
         if self.book is not None and type(self.book) is not CV.Book:
             raise V1Error(f"a registration's book is a code_v1.Book, not a {type(self.book).__name__}")
+        if self.tick is not None:
+            if type(self.tick) is not R.Tick:
+                raise V1Error(f"a registration's tick is a replay.Tick, not a {type(self.tick).__name__}")
+            if self.book is not None and (self.book.caps.arrived or self.book.caps.order):
+                raise V1Error("under the certified tick the registered book codes no decision and no order entry: its "
+                              "caps' arrived and order are 0")
         if e.max_num_seqs < 1 or e.max_num_batched_tokens < 1 or e.max_model_len < 2 or e.block_size < 1:
             raise V1Error("the engine schedules at least one sequence and token a step")
         if not e.enable_chunked_prefill and e.max_num_batched_tokens < e.max_model_len:
@@ -318,7 +333,7 @@ class Registered:
                         row_order=self.row_order)
 
 
-def _check(record: CertifiedRequests, reg: Registered, engine: Any) -> Any:
+def _check(record: Record, reg: Registered, engine: Any) -> Any:
     """The derived config, once the record and the pool are ones the replay runs to the end on: every output the stop
     rule's, within max_model_len, and the pool holding any one request alone, async's two steps ahead included."""
     cfg = reg.config(engine)
@@ -334,7 +349,7 @@ def _check(record: CertifiedRequests, reg: Registered, engine: Any) -> Any:
 
 # --- the residual ------------------------------------------------------------------------------------------------------
 
-def _ios(record: CertifiedRequests, engine: Any, order: Sequence[int], stops: frozenset[int]) -> list[Any]:
+def _ios(record: Record, engine: Any, order: Sequence[int], stops: frozenset[int]) -> list[Any]:
     out = []
     for k in order:
         q = record.requests[k]
@@ -384,11 +399,12 @@ def _recording() -> Iterator[list[tuple[list[Lookup], Any]]]:
         R._KV.hit, R._Sched.schedule = hit0, schedule0
 
 
-def _replay(record: CertifiedRequests, reg: Registered, engine: Any, order: Sequence[int],
+def _replay(record: Record, reg: Registered, engine: Any, order: Sequence[int],
             bit_of: Callable[[int, int], bool]) -> tuple[Any, list[Decision], list[list[Lookup]]]:
-    """The replay, each decision `bit_of(request, step)`: its steps, its decisions in order, and each executed step's
-    lookups in the order the scheduler read them (`would_admit`'s and the waiting loop's own of one request read once;
-    a `schedule()` that scheduled nothing is no step)."""
+    """The replay, each decision `bit_of(request, step)` (under the certified tick, the tick's rule from each request's
+    `end`, and no decisions): its steps, its decisions in order, and each executed step's lookups in the order the
+    scheduler read them (`would_admit`'s and the waiting loop's own of one request read once; a `schedule()` that
+    scheduled nothing is no step)."""
     ios = _ios(record, engine, order, reg.config(engine).stops)
     decisions: list[Decision] = []
 
@@ -398,7 +414,10 @@ def _replay(record: CertifiedRequests, reg: Registered, engine: Any, order: Sequ
         return b
 
     with _recording() as calls:
-        rp = R.replay(engine, ios, decide=decide)
+        if reg.tick is not None:
+            rp = R.replay(engine, ios, tick=reg.tick, released=[record.requests[k].end for k in order])
+        else:
+            rp = R.replay(engine, ios, decide=decide)
     looks = [[x for k, x in enumerate(ls) if k == 0 or x != ls[k - 1]] for ls, step in calls
              if step is not None and step.rows]
     if len(looks) != len(rp.steps):
@@ -406,7 +425,7 @@ def _replay(record: CertifiedRequests, reg: Registered, engine: Any, order: Sequ
     return rp, decisions, looks
 
 
-def _sent(record: CertifiedRequests, engine: Any, order: Sequence[int], rp: Any,
+def _sent(record: Record, engine: Any, order: Sequence[int], rp: Any,
           looks: Sequence[Sequence[Lookup]]) -> list[tuple[int, int]]:
     """The hits v1 sends, as (step, shortfall): every lookup of a step the no-eviction bound doesn't cover, as the
     longest prefix a cache that never evicts holds less the replay's hit, in whole blocks. The bound is
@@ -443,8 +462,7 @@ def _sent(record: CertifiedRequests, engine: Any, order: Sequence[int], rp: Any,
     return out
 
 
-def _charged(record: CertifiedRequests, reg: Registered, order: Sequence[int], rp: Any,
-             W: int) -> tuple[list[int], list[int]]:
+def _charged(record: Record, reg: Registered, order: Sequence[int], rp: Any, W: int) -> tuple[list[int], list[int]]:
     """A5's windows, as I1's `bits_by_window` charges: each step's, the earliest window an output at that step or later
     is released in (the last window where none follows); and each arrival's ingress window, the earliest of its own
     and every later arrival's last frame's, so that it never decreases where the arrivals deviate from release order."""
@@ -471,9 +489,9 @@ def _charged(record: CertifiedRequests, reg: Registered, order: Sequence[int], r
     return earliest, win
 
 
-def _residual(record: CertifiedRequests, reg: Registered, engine: Any, order: Sequence[int], rp: Any,
+def _residual(record: Record, reg: Registered, engine: Any, order: Sequence[int], rp: Any,
               decisions: Sequence[Decision], looks: Sequence[Sequence[Lookup]], W: int) -> list[Any]:
-    """The windows v1 sends (`window_charge.Advice`). A decision goes to the earlier of its arrival's ingress window
+    """The windows v1 sends (`window_charge.Window`). A decision goes to the earlier of its arrival's ingress window
     and the earliest window that shows its step's rows; an order entry to the earlier of its arrival's ingress window
     and the earliest window that shows the rows of the first step that reads that arrival (a lookup, a decision or its
     admission); and a sent hit's shortfall to the earliest window that shows its step's. Each is nondecreasing in the
@@ -501,17 +519,21 @@ def _residual(record: CertifiedRequests, reg: Registered, engine: Any, order: Se
                 raise V1Error(f"a {field} charged to window {w}, after one charged to window {last}")
             last = w
             {"decision": arrived, "order entry": ranks, "hit": hits}[field][w].append(v)
-    return [CV.Advice(arrived=tuple(a), hits=tuple(h), order=tuple(o)) for a, h, o in zip(arrived, hits, ranks)]
+    return [CV.Window(arrived=tuple(a), hits=tuple(h), order=tuple(o)) for a, h, o in zip(arrived, hits, ranks)]
 
 
 # --- the string --------------------------------------------------------------------------------------------------------
 
 #: v1's caps where the registration gives no book: an order entry ranks one arrival
 CAPS = CV.Caps(order_len=1)
+#: and under the certified tick, where no window holds a decision or an order entry
+TICK_CAPS = replace(CAPS, arrived=0, order=0)
 
 
 def _book(reg: Registered) -> Any:
-    return CV.Book.uniform(CAPS) if reg.book is None else reg.book
+    if reg.book is None:
+        return CV.Book.uniform(CAPS if reg.tick is None else TICK_CAPS)
+    return reg.book
 
 
 def _string(wins: Sequence[Any], reg: Registered) -> tuple[list[int], list[int]]:
@@ -544,7 +566,7 @@ def _parse(data: Any, reg: Registered, W: int) -> list[Any]:
     return _frames(C.BitReader.from_bytes(bytes(data), 8 * len(data)).bits, reg, W, padded=True)
 
 
-def bits_by_window(data: bytes, record: CertifiedRequests, reg: Registered) -> dict[int, int]:
+def bits_by_window(data: bytes, record: Record, reg: Registered) -> dict[int, int]:
     """Each window's charge: its segment's bits, a function of the string alone. They sum to the string's bits less
     padding."""
     return _total(lambda: dict(enumerate(_string(_parse(data, reg, windows(record, reg.T)), reg)[1])))
@@ -552,7 +574,7 @@ def bits_by_window(data: bytes, record: CertifiedRequests, reg: Registered) -> d
 
 # --- I1 from the replay ------------------------------------------------------------------------------------------------
 
-def _advice(record: CertifiedRequests, reg: Registered, cfg: Any, order: Sequence[int], rp: Any) -> I1.Advice:
+def _advice(record: Record, reg: Registered, cfg: Any, order: Sequence[int], rp: Any) -> I1.Advice:
     """I1 v0 from the replayed steps: the batch order, I1's numbering by first row, then the derived rules' walk, which
     must give the replay's every start and n back, and the tie's request fields; each kept output's release from the
     record."""
@@ -620,13 +642,16 @@ def _advice(record: CertifiedRequests, reg: Registered, cfg: Any, order: Sequenc
 
 # --- encode and decode -------------------------------------------------------------------------------------------------
 
-def _residual_of(advice: I1.Advice, record: CertifiedRequests, reg: Registered) -> tuple[list[Any], Any, list[int]]:
+def _residual_of(advice: I1.Advice, record: Record, reg: Registered) -> tuple[list[Any], Any, list[int]]:
     """The windows of the advice's residual, the replay that gives them, and the arrival order."""
     if type(advice) is not I1.Advice:
         raise V1Error(f"v1 encodes an I1 Advice, not a {type(advice).__name__}")
     engine = reg.engine
     _check(record, reg, engine)
     order = arrival_order(advice, record, reg.row_order)
+    if reg.tick is not None and order != release_order(record):
+        raise V1Error("under the certified tick the engine admits in release order, and this advice's arrival order "
+                      "isn't it")
     index = {record.requests[k].id: e for e, k in enumerate(order)}
     first = [-1] * len(order)
     for s, st in enumerate(advice.steps):
@@ -638,13 +663,13 @@ def _residual_of(advice: I1.Advice, record: CertifiedRequests, reg: Registered) 
     return _residual(record, reg, engine, order, rp, decisions, looks, windows(record, reg.T)), rp, order
 
 
-def residual(advice: I1.Advice, record: CertifiedRequests, reg: Registered) -> list[Any]:
-    """The windows `encode` codes (`window_charge.Advice`s: the decisions, the order's deviations and the sent hits):
+def residual(advice: I1.Advice, record: Record, reg: Registered) -> list[Any]:
+    """The windows `encode` codes (`window_charge.Window`s: the decisions, the order's deviations and the sent hits):
     what a codebook is fit on."""
     return _total(lambda: _residual_of(advice, record, reg)[0])
 
 
-def encode(advice: I1.Advice, record: CertifiedRequests, reg: Registered, *, check: bool = True) -> bytes:
+def encode(advice: I1.Advice, record: Record, reg: Registered, *, check: bool = True) -> bytes:
     """The advice's v1 string under the record; refuses an advice v1 can't carry (one whose schedule isn't the
     replay's under its arrival order, whose rows aren't in the registered order, or whose sources aren't the canonical
     ones). `check` decodes the string back and holds it to the advice."""
@@ -667,17 +692,17 @@ def encode(advice: I1.Advice, record: CertifiedRequests, reg: Registered, *, che
     return data
 
 
-def decode(data: bytes, record: CertifiedRequests, reg: Registered) -> I1.Advice:
+def decode(data: bytes, record: Record, reg: Registered) -> I1.Advice:
     """The I1 v0 the string `data` carries under the record, or `V1Error`."""
     return decode_full(data, record, reg).advice
 
 
-def decode_full(data: bytes, record: CertifiedRequests, reg: Registered) -> Decoded:
+def decode_full(data: bytes, record: Record, reg: Registered) -> Decoded:
     """`decode`, with the order the string sends (`Decoded`)."""
     return _total(lambda: _decode(_parse(data, reg, windows(record, reg.T)), record, reg))
 
 
-def decode_bits(bits: Sequence[int], record: CertifiedRequests, reg: Registered) -> I1.Advice:
+def decode_bits(bits: Sequence[int], record: Record, reg: Registered) -> I1.Advice:
     """`decode` of the bit string itself, unpadded: refused unless its windows end exactly at its end."""
     def run() -> I1.Advice:
         if len(bits) > reg.cap_bits:
@@ -697,11 +722,13 @@ def _total(run: Callable[[], T]) -> T:
         raise V1Error(str(e)) from None
 
 
-def _decode(wins: Sequence[Any], record: CertifiedRequests, reg: Registered) -> Decoded:
+def _decode(wins: Sequence[Any], record: Record, reg: Registered) -> Decoded:
     engine = reg.engine
     cfg = _check(record, reg, engine)
     if any(w.resumes or w.lag for w in wins):
         raise V1Error("a window sends resumes or lag bits, which v1 replays or derives")
+    if reg.tick is not None and any(w.arrived or w.order for w in wins):
+        raise V1Error("a window sends decisions or order entries, which the certified tick fixes")
     entries = [(p, idx) for w in wins for p, idx in w.order]
     if any(len(idx) != 1 for _, idx in entries):
         raise V1Error("an order entry ranks one arrival")
@@ -730,15 +757,32 @@ def _decode(wins: Sequence[Any], record: CertifiedRequests, reg: Registered) -> 
 
 # --- from a trace ------------------------------------------------------------------------------------------------------
 
-def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> CertifiedRequests:
+def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> Record:
     """A trace's certified record (`replay.Trace`, clocked, with each request's tokens): each request's certified
     ingress bucket standing for its release a, its ingress time then its engine index for its ordinal, so that the
-    record is in release order, and the trace's release buckets."""
+    record is in release order, and the trace's release buckets. A run under the certified tick (`Trace.releases`) has
+    its releases certified: each request's `end` is its release bucket and its ordinal its release number, and its
+    outputs' buckets are on the certifier run's grid, none before its release; all count from the run's first release
+    bucket."""
     if not trace.clocked():
         raise V1Error("the trace has no clock, so no certified buckets")
-    cert = trace.certified(bucket_s)
+    rel = trace.releases
+    if rel is None:
+        cert = trace.certified(bucket_s)
+        order = sorted(range(len(trace.requests)), key=lambda k: (cert.ingress[k], trace.ingress_t[k], k))
+        end, release = cert.ingress, cert.release
+    else:
+        if rel.tick.bucket_us != round(bucket_s * 1e6):
+            raise V1Error(f"the certified tick's bucket is {rel.tick.bucket_us} µs and the record's {bucket_s} s")
+        if len(set(rel.n)) != len(rel.n):
+            raise V1Error("two requests share a release number")
+        base = min(rel.bucket)
+        order = sorted(range(len(trace.requests)), key=lambda k: rel.n[k])
+        end = [a - base for a in rel.bucket]
+        release = [[max(a, int((t - rel.origin_unix) * 1e6 // rel.tick.bucket_us) - base) for t in ts]
+                   for a, ts in zip(end, trace.output_times())]
     out = []
-    for k in sorted(range(len(trace.requests)), key=lambda k: (cert.ingress[k], trace.ingress_t[k], k)):
+    for k in order:
         io = trace.requests[k]
         if io.tokens is None:
             raise V1Error(f"request {trace.ids[k]}: the trace has no tokens")
@@ -746,12 +790,12 @@ def record_of(trace: Any, stop_ids: Sequence[int], *, bucket_s: float = 0.1) -> 
         if (output[-1] in stop_ids) != io.eos:
             raise V1Error(f"request {trace.ids[k]}: stopped {'on' if io.eos else 'without'} a stop id, its last id "
                           f"{output[-1]}")
-        out.append(Request(trace.ids[k], tuple(io.tokens[:io.prompt_len]), io.max_tokens, output, cert.ingress[k],
-                           tuple(cert.release[k])))
-    return CertifiedRequests(tuple(out))
+        out.append(Request(trace.ids[k], tuple(io.tokens[:io.prompt_len]), io.max_tokens, output, end[k],
+                           tuple(release[k])))
+    return Record(tuple(out))
 
 
-def advice_of(trace: Any, record: CertifiedRequests) -> I1.Advice:
+def advice_of(trace: Any, record: Record) -> I1.Advice:
     """The trace as I1 v0: its rows in the order its runner ran them, I1's numbering by first row, each admitting row's
     hit its start and its sources the canonical ones, and each kept output released in the record's bucket. The trace's
     requests are the record's, by id."""
@@ -794,49 +838,62 @@ def advice_of(trace: Any, record: CertifiedRequests) -> I1.Advice:
 INGRESS = ("client", "warden")
 
 
-def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple[Any, CertifiedRequests, I1.Advice]:
+def _trace(path: str, stop_ids: Sequence[int], ingress: str = "client") -> tuple[Any, Record, I1.Advice]:
     tr = R.read_corpus_trace(path, ingress=ingress)
     rec = record_of(tr, stop_ids)
     return tr, rec, advice_of(tr, rec)
 
 
+def _tick(trace: Any) -> Any:
+    """The certified tick a trace's engine admitted by, None for one that admitted on arrival."""
+    return None if trace.releases is None else trace.releases.tick
+
+
 def windows_of(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client") -> dict[str, Any]:
     """One trace-corpus trace's residual windows (`residual`), as JSON: what the other traces' books are fit on."""
     tr, rec, adv = _trace(path, stop_ids, ingress)
-    wins = residual(adv, rec, Registered(tr.engine, tuple(stop_ids), T=T))
-    return {"trace": label, "windows": [asdict(w) for w in wins]}
+    wins = residual(adv, rec, Registered(tr.engine, tuple(stop_ids), T=T, tick=_tick(tr)))
+    return {"trace": label, "tick": tr.releases is not None, "windows": [asdict(w) for w in wins]}
 
 
 #: the table's registered caps: a window of a full trace sends more decisions, hits and order entries than
 #: `code_v1.Caps`'s defaults
 TABLE_CAPS = CV.Caps(arrived=1 << 20, hits=1 << 20, order=1 << 16, order_len=1)
+#: and under the certified tick
+TICK_TABLE_CAPS = replace(TABLE_CAPS, arrived=0, order=0)
 
 
 def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingress: str = "client",
             book: dict | None = None) -> dict[str, Any]:
     """One trace-corpus trace (`replay.read_corpus_trace`; `ingress` the certified order's stand-in: the client's send,
     or on a `.released` view the warden's release) through v1 under `book` (a `code_v1.Book`'s JSON, fit without this
-    trace) and under the uniform book: each string's charge per window, the order's part of it, and whether it decodes
-    back to the trace's I1 v0; the residual's decisions, order entries and sent hits; the replay's ideal order bits
-    (`replay.order_bits`); and I1 v0's own charge (`advice.bits_by_window`) for that advice."""
+    trace) and under the uniform book: each string's charge per window, the order's part of it and the timing's (the
+    decisions' and the order's: the string's bits less those of its windows without them), and whether it decodes back
+    to the trace's I1 v0; the residual's decisions, order entries and sent hits; the replay's ideal order bits
+    (`replay.order_bits`); and I1 v0's own charge (`advice.bits_by_window`) for that advice. A trace served under the
+    certified tick is registered with its tick (`tick`: its τ)."""
     tr, rec, adv = _trace(path, stop_ids, ingress)
-    row: dict[str, Any] = {"trace": label, "ingress": ingress, "requests": len(rec.requests), "steps": len(adv.steps),
-                           "windows": windows(rec, T), "v0": sum(I1.bits_by_window(adv, T).values())}
-    wins = residual(adv, rec, Registered(tr.engine, tuple(stop_ids), T=T))
-    uniform = CV.Book.uniform(TABLE_CAPS)
+    tick = _tick(tr)
+    row: dict[str, Any] = {"trace": label, "ingress": ingress, "tick": None if tick is None else asdict(tick),
+                           "requests": len(rec.requests), "steps": len(adv.steps), "windows": windows(rec, T),
+                           "v0": sum(I1.bits_by_window(adv, T).values())}
+    wins = residual(adv, rec, Registered(tr.engine, tuple(stop_ids), T=T, tick=tick))
+    uniform = CV.Book.uniform(TABLE_CAPS if tick is None else TICK_TABLE_CAPS)
     books = {"held_out": CV.Book.from_json(book) if book is not None else uniform, "uniform": uniform}
     for name, b in books.items():
-        reg = Registered(tr.engine, tuple(stop_ids), T=T, book=b)
+        reg = Registered(tr.engine, tuple(stop_ids), T=T, book=b, tick=tick)
         t0 = time.monotonic()
         data = encode(adv, rec, reg, check=False)
         t1 = time.monotonic()
         got = decode_full(data, rec, reg)
         by = bits_by_window(data, rec, reg)
-        unordered = sum(_string([CV.Advice(w.arrived, w.hits) for w in wins], reg)[1])
+        unordered = sum(_string([CV.Window(w.arrived, w.hits) for w in wins], reg)[1])
+        untimed = sum(_string([CV.Window(hits=w.hits) for w in wins], reg)[1])
         row[name] = {"bits": sum(by.values()), "by_window": by, "max_window": max(by.values()),
-                     "order_bits": sum(by.values()) - unordered, "bytes": len(data),
-                     "round_trip": got.advice == adv and got.streams == streams(adv, rec), "book": _book(reg).digest(),
-                     "encode_s": round(t1 - t0, 1), "decode_s": round(time.monotonic() - t1, 1)}
+                     "order_bits": sum(by.values()) - unordered, "timing_bits": sum(by.values()) - untimed,
+                     "bytes": len(data), "round_trip": got.advice == adv and got.streams == streams(adv, rec),
+                     "book": _book(reg).digest(), "encode_s": round(t1 - t0, 1),
+                     "decode_s": round(time.monotonic() - t1, 1)}
     row["decisions"] = sum(len(w.arrived) for w in wins)
     row["order_entries"] = sum(len(w.order) for w in wins)
     row["inversions"] = sum(idx[0] for w in wins for _, idx in w.order)
@@ -848,19 +905,21 @@ def measure(label: str, path: str, stop_ids: Sequence[int], T: int = 600, ingres
 
 def render(rows: Sequence[dict[str, Any]], T: int) -> str:
     out = [f"| trace | requests | windows (T = {T}) | I1 v0 | v1 charged, held-out book (total; per window) | of it the "
-           "order | order entries (inversions) | the replay's ideal order bits | decisions | hits sent (short of the "
-           "cached prefix) | v1, uniform book (of it the order) | decode(encode(a)) == a |",
-           "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+           "order | of it the timing (decisions and order) | order entries (inversions) | the replay's ideal order bits | "
+           "decisions | hits sent (short of the cached prefix) | v1, uniform book (of it the order) | "
+           "decode(encode(a)) == a |",
+           "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:
         if "error" in r:
-            out.append(f"| {r['trace']} | error: {r['error']} |||||||||||")
+            out.append(f"| {r['trace']} | error: {r['error']} ||||||||||||")
             continue
         h, u = r["held_out"], r["uniform"]
         per = ", ".join(f"{h['by_window'][w]:,}" for w in sorted(h["by_window"]))
-        out.append(f"| {r['trace']} | {r['requests']} | {r['windows']} | {r['v0']:,} | {h['bits']:,}; {per} | "
-                   f"{h['order_bits']:,} | {r['order_entries']:,} ({r['inversions']:,}) | {r['order_bits_replay']:,} | "
-                   f"{r['decisions']:,} | {r['hits_sent']:,} ({r['hits_short']:,}) | {u['bits']:,} "
-                   f"({u['order_bits']:,}) | {h['round_trip'] and u['round_trip']} |")
+        label = f"{r['trace']} (certified tick)" if r.get("tick") else r["trace"]
+        out.append(f"| {label} | {r['requests']} | {r['windows']} | {r['v0']:,} | {h['bits']:,}; {per} | "
+                   f"{h['order_bits']:,} | {h['timing_bits']:,} | {r['order_entries']:,} ({r['inversions']:,}) | "
+                   f"{r['order_bits_replay']:,} | {r['decisions']:,} | {r['hits_sent']:,} ({r['hits_short']:,}) | "
+                   f"{u['bits']:,} ({u['order_bits']:,}) | {h['round_trip'] and u['round_trip']} |")
     return "\n".join(out) + "\n"
 
 
@@ -881,11 +940,19 @@ def _measure_job(job: tuple) -> dict[str, Any]:
 
 def held_out_books(residuals: Sequence[dict[str, Any]]) -> list[dict | None]:
     """For each trace, the book `code_v1.fit_book` fits on every other trace's windows (None where it has none), as a
-    registration would fix it from history before the run."""
-    runs = [None if "error" in r else [CV.Advice(**w) for w in r["windows"]] for r in residuals]
-    return [None if mine is None else
-            CV.fit_book([w for j, w in enumerate(runs) if j != k and w is not None], TABLE_CAPS).to_json()
-            for k, mine in enumerate(runs)]
+    registration would fix it from history before the run; for a trace under the certified tick, on their hits alone,
+    under `TICK_TABLE_CAPS`."""
+    runs = [None if "error" in r else [CV.Window(**w) for w in r["windows"]] for r in residuals]
+    out: list[dict | None] = []
+    for k, mine in enumerate(runs):
+        others = [w for j, w in enumerate(runs) if j != k and w is not None]
+        if mine is None:
+            out.append(None)
+        elif residuals[k].get("tick"):
+            out.append(CV.fit_book([[CV.Window(hits=x.hits) for x in ws] for ws in others], TICK_TABLE_CAPS).to_json())
+        else:
+            out.append(CV.fit_book(others, TABLE_CAPS).to_json())
+    return out
 
 
 def main(argv: Sequence[str] | None = None) -> int:

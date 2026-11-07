@@ -18,7 +18,7 @@ from typing import Any
 import pytest
 import torch
 
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs.challenger import CoinError
 from verity_vllm.engine import handle
 from verity_vllm.pipeline import cli
@@ -649,7 +649,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     proof blocks open (core's draw from the window's own record: each drawn unit's call's x_q and s_a rows of its row tile,
     at the engine step its step maps to, under the names the Commit acquired them by), byte-equal to what was committed,
     and drops every other value: the other calls' rows and the step's input ids. In process the draw is at the proof
-    service's K on the window's calls_root; on a gate session at its period-open's K on its open root."""
+    system's K on the window's calls_root; on a gate session at its period-open's K on its open root."""
     from tests.commit.test_device_pool import committed
     from tests.pipeline.test_serve_release import _Waits
     from tests.protocols.test_pouw_h1_commit import Committer
@@ -678,7 +678,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     arm.open(0)
     srv.serve(PROMPTS[0], 0)
     pending = arm.close(0)
-    host, _rc, dev = committed(R.NAME, {s: _own_leaves(v, R.ROW_BYTES) for s, v in acquired.items()})
+    host, _rc, dev = committed({s: _own_leaves(v, R.ROW_BYTES) for s, v in acquired.items()})
     released: list[Any] = []
 
     def seal() -> None:
@@ -712,7 +712,7 @@ def test_a_served_window_under_release_after_pouw_releases_exactly_h1s_drawn_rea
     assert want
     out = pending.result()
     assert out["draw"] == {"k": k, "k_from": "period p1's open" if coins == "gate" else
-                           "the proof service's draw_k (in-process coins)", "units": len(units), "reads": len(want),
+                           "the proof system's draw_k (in-process coins)", "units": len(units), "reads": len(want),
                            "bytes": sum(hi - lo for _s, _n, lo, hi in want)}, out["draw"]
 
     kept = SL.leaves_of(dev, sorted(want))

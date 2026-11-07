@@ -34,9 +34,9 @@ from verity.core.protocols.pouw import identifier as I
 from verity.core.protocols.pouw import salt as PS
 from verity.core.protocols.pouw.audit import HM96_WEIGHTS, Epoch, Workload, commit_rows, weight_binding, weights_root
 from verity.core.protocols.pouw.coins import coin_reason
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.protocol import DomainError, Matmul, Shape
-from verity.core.protocols.pouw.schemes import ncp
+from verity.ml.protocols.pouw.schemes import ncp
 from verity.core.protocols.sampled_proofs.one_stage import registration as R
 from verity.core.protocols.sampled_proofs.service import WindowCommitmentRecord
 
@@ -81,7 +81,7 @@ def certifier(windows: int, records: dict[int, bytes] | None = None, clock=lambd
               **kwargs) -> tuple[Proxy, dict[int, bytes]]:
     """The certifier with PoUW's reader and the prover's key, the stream its context, on clock `clock`, handed `records`
     by PoUW window before its first tick (`commit_weights`, signed by the prover), after `windows` certifier windows of
-    ingress ticks, and the salts it sampled by PoUW window: what the prover's server receives in-band."""
+    ingress ticks, and the salts it sampled by PoUW window: what the developer's server receives in-band."""
     drawn: dict[int, bytes] = {}
 
     def source(p: int, n: int) -> bytes:
@@ -583,9 +583,9 @@ def test_a_certified_window_credits_only_units_that_read_its_salt():
     """`unit_reason` refuses the served-zk window's sampled proof block, `Pc8TileSide`, which reads two committed side rows and
     no salt (it declares no port), and passes the compiled Program's H1 tile (`PouwH1Tile`), whose ``salt`` is a coin
     port over the 64-byte salt; anything without a signature is refused."""
-    from verity.core.protocols.pouw.circuit import compile as C
-    from verity.core.protocols.pouw.circuit import h1tile as H
-    from verity.core.protocols.pouw.circuit import pc8
+    from verity.ml.protocols.pouw.circuit import compile as C
+    from verity.ml.protocols.pouw.circuit import h1tile as H
+    from verity.ml.protocols.pouw.circuit import pc8
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
 

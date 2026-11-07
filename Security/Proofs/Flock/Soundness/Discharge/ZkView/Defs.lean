@@ -1,9 +1,28 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Hm.Mask
-public import Proofs.Flock.Verifier.Hash
+public import Definitions.Flock.ZK.RealView
 public import Flock.Zk
 public import Proofs.Flock.Level3.ArithFacts
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+public import Proofs.Flock.Soundness.Discharge.Hm.Hash
+public import Proofs.Flock.Soundness.Discharge.Hm.Mask
+public import Proofs.Flock.Soundness.ZK.AdaptivePrefinal
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import VCVio.Prelude.Core
 public import Proofs.Flock.Soundness.CROnly.ZKKey
 public import Proofs.Flock.Soundness.Headline
 public import Proofs.Flock.Soundness.Registered.Binding

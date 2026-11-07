@@ -2,6 +2,8 @@ module
 
 public import MemoryChallenger.WipeProtocol
 public import Definitions.Accounting.Wipe
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # An accepted wipe meets the survivor bound it publishes

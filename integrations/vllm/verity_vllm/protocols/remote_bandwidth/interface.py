@@ -10,9 +10,9 @@ codec       a region's encoding: payload words in, stored words out, `encode(pay
 receipt     a keyed hash of one block read in a pass, `keyed(seed)(j, block, z)`; `z` is the input a receipt bound to the
             prior tile's output reads (None for receipts that bind only the block)
 registration  putting a block into the store: its bytes are the codec's encoding of a payload a `Source` names; every
-            registration is a record in the store's chain, and `ChainHead.root` commits the chain
-window      the interval of one challenge σ: `begin_window(σ)` ... `end_window()`, which the verifier's boundary
-            message ends (the next window's challenge, or the close after the last)
+            registration is a record in the log, and `Registration.root` commits the log
+window      the interval of one challenge chal_t: `begin_window(chal_t)` ... `end_window()`, which the verifier's
+            boundary message ends (the next window's challenge, or the close after the last)
 pass        one read of the live store: weights, the batch's written KV, and filler to top up, no block twice; its seed
             is chained, seed_j = H(chal_t, j, commitment before it) across windows (the verifier's registration digest
             before the session's first), so pass j's receipts can't start before the pass before it is committed
@@ -23,8 +23,8 @@ commitment  a pass's root, the PoUB driver's: frame-v3-sha512 over leaves of 16 
             hidden as an hm96-sha512/row/v2 leaf under a salt, bound to the pass's seed and the plan's digest (over
             the plan's runs of store indices)
 opening     for a sampled (pass, position): the block's bytes as read, its receipt, its leaf's receipts and salt, the
-            leaf's path to the pass's root and its registration record, from which the verifier recomputes the
-            receipt and checks the decoding
+            leaf's `merkle.Opening` in the pass's tree and its registration record, from which the verifier recomputes
+            the receipt and checks the decoding
 ~~~
 """
 from __future__ import annotations
@@ -151,9 +151,9 @@ class Layout:
 
 
 @dataclass(frozen=True)
-class ChainHead:
-    """The head of the store's chain: ``count`` records and ``root``, the hash chain over them (one link per event: a
-    region, a page's written blocks, a page's return to filler)."""
+class Registration:
+    """The registration log so far: ``count`` records and ``root``, the hash chain over them (one link per registration
+    event: a region, a page's written blocks, a page's return to filler)."""
 
     count: int
     root: bytes
@@ -204,8 +204,8 @@ class BlockOpening:
     """Block ``block`` (region ``region``, tier and kind as read) at position ``position`` of pass ``pass_index``: the
     bytes read, the receipt, the leaf's receipts (up to 16, in plan order) and ``salt``, the registration ``source`` the
     decoding is checked against, and ``leaf``, the leaf's opening in the pass's tree (`merkle.Opening`: the leaf's
-    index, its hidden value `receipts.hidden` of its receipts under its salt, and the driver's path, the leaf's path to
-    its segment's node and then the node's to the pass's root)."""
+    index, its receipts hidden under its salt, `receipts.hidden`, and the driver's path, the leaf's path to its
+    segment's node and then the node's to the pass's root)."""
 
     pass_index: int
     position: int
@@ -240,7 +240,7 @@ class StoreView(Protocol):
 
     def layout(self) -> Layout: ...
 
-    def registration(self) -> ChainHead: ...
+    def registration(self) -> Registration: ...
 
     def begin_window(self, challenge: bytes, registration: bytes | None = None) -> None: ...
 

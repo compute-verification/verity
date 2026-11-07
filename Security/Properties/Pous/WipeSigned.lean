@@ -3,6 +3,7 @@ module
 public import MemoryChallenger.WipeProtocol
 public import Properties.Pous.MemoryChallenger
 public import Definitions.Pous.Model.StreamedWipe
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # An accepted wipe is the memory challenger's own run, and that run is the streamed wipe's accepted session

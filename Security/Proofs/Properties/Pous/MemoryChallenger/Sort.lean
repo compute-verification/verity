@@ -1,8 +1,11 @@
 module
 
-public import Mathlib.Data.List.Perm.Basic
+public import Aesop.BuiltinRules
 public import Batteries.Tactic.OpenPrivate
+public import Mathlib.Tactic.ToDual
 import all Init.Data.Array.QSort.Basic
+import Mathlib.Tactic.Attr.Core
+import Mathlib.Tactic.SplitIfs
 
 /-!
 # `qsort` commutes with a map its order reads through, and keeps every element

@@ -4,7 +4,7 @@ this module to the Lean (`composition/tests/test_registration_difftest.py`).
 
 A deployment's registration is one append-only log of entries, each naming the head of the log before it (`previous`):
 the digest of the log's last entry, or its composite's genesis when the log is empty, so the head names the whole log.
-An entry is one of two kinds:
+An entry is one of three kinds:
 
 * a site entry, the Site's own (`verity.core.site.Entry`, `verity/registration/site/v1`): the sheets, locations and
   links it adds to the Site, its JSON, digest and check the Site's;
@@ -12,7 +12,11 @@ An entry is one of two kinds:
   log (`item_key`): θ, each registered value by its committed root, and the builder B (its digest, its advice's format
   and its public cap ℓ on one declaration's advice, in bits). Registration registers the site, θ and B, not the circuit
   B builds; a subprotocol's Program and parameters, and the proof system, are that protocol's public verifier
-  parameters.
+  parameters;
+* a declaration (`Declaration`, `verity/registration/declaration/v1`): a day's circuit: the day, by its index among
+  the monitoring period's days, its program's digest and its block Definitions by descriptor key. The prover declares
+  one circuit a day, before the day's first coin, so a second declaration of a day is refused (`duplicate-declaration`),
+  and each window's program is its day's (`View.declared`; the sampled-proofs registration record's R2).
 
 ~~~text
 entry digest   SHA-512(format ‖ 0 ‖ canon(entry))                          the entry's format and previous among its keys
@@ -22,8 +26,9 @@ the log        {"composite": "onsite" | "remote", "entries": [ENTRY, ...]}   com
 
 `check` holds each entry to the log before it and raises `Refused` at the first entry that fails, by the first check it
 fails (`REFUSALS`): a site entry by the Site's (`verity.core.site.entry_refusal`), an information entry by `previous`
-and then `duplicate-information`. A component reads its view of an accepted log (`View`): the Site, θ's values
-(`View.value`) and the builder, at the head. Decoding takes exactly what the encoders write and raises `Malformed`
+and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`. A component reads
+its view of an accepted log (`View`): the Site, θ's values (`View.value`), the builder and the days' declared circuits
+(`View.declared`), at the head. Decoding takes exactly what the encoders write and raises `Malformed`
 otherwise; a log or parameters holding a character outside ASCII without DEL are `Malformed` (`ascii`), in
 `Core.canonicalJson`'s words.
 """
@@ -40,8 +45,9 @@ from verity.core.site import Auditor, Malformed
 from verity.core.wire import canonical
 
 INFORMATION = "verity/registration/information/v1"
+DECLARATION = "verity/registration/declaration/v1"
 PROTOCOL = "verity/registration/log/v1"
-REFUSALS = (*S.REFUSALS, "duplicate-information")
+REFUSALS = (*S.REFUSALS, "duplicate-information", "duplicate-declaration")
 
 
 class Refused(Exception):
@@ -68,8 +74,29 @@ class Information:
         return S.tagged(INFORMATION, self.to_json())
 
 
-Entry = S.Entry | Information
-"""An entry of the registration log: the Site's site entry, or an information entry."""
+@dataclass(frozen=True)
+class Declaration:
+    """A day's declared circuit (`Core.Registration.Declared`): the day, by its index among the monitoring period's
+    days, its program's SHA-512 as hex, and its block Definitions by descriptor key; and the head of the log it follows
+    (`previous`, set by `chain`)."""
+
+    day: int
+    program: str
+    blocks: tuple[str, ...] = ()
+    previous: str = ""
+
+    def body(self) -> dict[str, Any]:
+        return {"blocks": list(self.blocks), "day": self.day, "program": self.program}
+
+    def to_json(self) -> dict[str, Any]:
+        return {**self.body(), "format": DECLARATION, "previous": self.previous}
+
+    def digest(self) -> str:
+        return S.tagged(DECLARATION, self.to_json())
+
+
+Entry = S.Entry | Information | Declaration
+"""An entry of the registration log: the Site's site entry, an information entry, or a declaration."""
 
 
 def item_key(item: Mapping[str, Any]) -> str:
@@ -184,7 +211,12 @@ def entry_of(j: Any) -> Entry:
     if fmt == INFORMATION:
         _exactly(j, ["format", "items", "previous"], "an information entry")
         return Information(tuple(item_of(i) for i in _list(j["items"], "items")), _str(j["previous"], "previous"))
-    raise Malformed(f"an entry: format {fmt} is not one of [{S.SITE}, {INFORMATION}]")
+    if fmt == DECLARATION:
+        _exactly(j, ["blocks", "day", "format", "previous", "program"], "a declaration")
+        previous = _hex64(j["previous"], "previous")
+        blocks = tuple(_str(b, "a declaration's block") for b in _list(j["blocks"], "blocks"))
+        return Declaration(_nat(j["day"], "day"), _hex64(j["program"], "program"), blocks, previous)
+    raise Malformed(f"an entry: format {fmt} is not one of [{S.SITE}, {INFORMATION}, {DECLARATION}]")
 
 
 def log_of(j: Any) -> tuple[str, list[Entry]]:
@@ -208,28 +240,35 @@ def site_refusal(auditor: Auditor, composite: str, s: S.Site, head: str, e: S.En
 
 @dataclass(frozen=True)
 class State:
-    """The log so far, folded: its Site, its information items in order, its head and its length."""
+    """The log so far, folded: its Site, its information items in order, its head, its length and its declarations in
+    order."""
 
     site: S.Site
     items: tuple[Mapping[str, Any], ...]
     head: str
     entries: int
+    declared: tuple[Declaration, ...] = ()
 
     def refusal(self, auditor: Auditor, composite: str, e: Entry) -> str | None:
         if isinstance(e, S.Entry):
             return site_refusal(auditor, composite, self.site, self.head, e)
         if e.previous != self.head:
             return "previous"
+        if isinstance(e, Declaration):
+            return "duplicate-declaration" if any(d.day == e.day for d in self.declared) else None
         return None if _nodup([item_key(i) for i in self.items + e.items]) else "duplicate-information"
 
     def add(self, e: Entry) -> State:
         if isinstance(e, S.Entry):
             return replace(self, site=self.site.add(e), head=e.digest(), entries=self.entries + 1)
+        if isinstance(e, Declaration):
+            return replace(self, declared=self.declared + (replace(e, previous=""),), head=e.digest(),
+                           entries=self.entries + 1)
         return replace(self, items=self.items + e.items, head=e.digest(), entries=self.entries + 1)
 
     def view(self) -> View:
         return View(self.site, tuple(dict(i) for i in self.items if i["kind"] == "theta"),
-                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head)
+                    next((dict(i) for i in self.items if i["kind"] == "builder"), None), self.head, self.declared)
 
 
 def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
@@ -244,19 +283,27 @@ def check(auditor: Auditor, composite: str, log: Sequence[Entry]) -> State:
 
 @dataclass(frozen=True)
 class View:
-    """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder."""
+    """What a component reads of an accepted log, at its head: the Site, θ's registered values in order, the builder,
+    and the days' declared circuits in order."""
 
     site: S.Site
     theta: tuple[dict[str, Any], ...]
     builder: dict[str, Any] | None
     head: str
+    declarations: tuple[Declaration, ...] = ()
 
     def value(self, name: str) -> dict[str, Any] | None:
         """θ's registered value `name`."""
         return next((t for t in self.theta if t["value"] == name), None)
 
+    def declared(self, day: int) -> Declaration | None:
+        """Day `day`'s declared circuit, the one declaration of the day in an accepted log; None when it declares none.
+        A window of that day runs its program."""
+        return next((d for d in self.declarations if d.day == day), None)
+
     def to_json(self) -> dict[str, Any]:
-        return {"builder": self.builder, "head": self.head, "site": self.site.to_json(), "theta": list(self.theta)}
+        return {"builder": self.builder, "declarations": [d.body() for d in self.declarations], "head": self.head,
+                "site": self.site.to_json(), "theta": list(self.theta)}
 
 
 # --- the core protocol ------------------------------------------------------------------------------------------------

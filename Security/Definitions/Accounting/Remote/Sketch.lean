@@ -18,13 +18,13 @@ and `Hs`, what SHA-512's outputs are read over, all uniform and independent. The
 candidate seeds (`Session.keys`, any function of the outcome). That they are uniform, whatever the prover's coins and
 the store, is the named premise `Accounting.Assumptions.SketchHashRandom` (`random-oracle`), not the coin type.
 
-**The model's coins** (`ModelCoins`) are the prover's own, the store and every candidate's key: its signs, and the receipt
+**The model's coins** (`Coins`) are the prover's own, the store and every candidate's key: its signs, and the receipt
 hash at its seed as a function (`RateSketch.Oracle`). `Session.coins` reads them off an outcome.
 
-**The devices** are `RateSketch.Device`'s verbatim-sector devices (`rate-sketch-verbatim`), one per candidate: pass
+**The devices** are `RateSketch.Prover`'s verbatim-sector devices (`rate-sketch-verbatim`), one per candidate: pass
 `j`'s candidate `c` runs `device b j η c`, chosen by the prover's coins `b` and the keys `η` of the earlier passes. A
 device obtains the store's sectors only whole and as they are: those it holds on chip when the pass opens and those it
-reads from node memory, takes in over a link, or rebuilds (`Device.obtained`).
+reads from node memory, takes in over a link, or rebuilds (`Prover.obtained`).
 -/
 
 @[expose] public section
@@ -39,9 +39,8 @@ abbrev Key (N m h ks : ℕ) : Type := SketchSigns ks m × Oracle N 0 h Sector (F
 /-- The session's keys: pass `j`'s `G j` candidate seeds'. -/
 abbrev Keys (P N m h ks : ℕ) (G : Fin P → ℕ) : Type := (j : Fin P) → Fin (G j) → Key N m h ks
 
-/-- The model's coins: the prover's own, the registered store, and the keys. Not the live coins (`Verity.Coins`): they
-hold no index draw, and the prover's own coins are among them. -/
-abbrev ModelCoins (β : Type) (P N m h ks : ℕ) (G : Fin P → ℕ) : Type := β × Data N m 0 Sector × Keys P N m h ks G
+/-- The model's coins: the prover's own, the registered store, and the keys. -/
+abbrev Coins (β : Type) (P N m h ks : ℕ) (G : Fin P → ℕ) : Type := β × Data N m 0 Sector × Keys P N m h ks G
 
 /-- A session's outcome: the prover's own coins, the registered store, and `Hs`, what SHA-512's outputs are read
 over. -/
@@ -55,8 +54,8 @@ instance instFintypeKeys (P N m h ks : ℕ) (G : Fin P → ℕ) : Fintype (Keys 
   letI : Fintype (Key N m h ks) := instFintypeKey N m h ks
   exact inferInstance
 
-instance instFintypeModelCoins (β : Type) [Fintype β] (P N m h ks : ℕ) (G : Fin P → ℕ) :
-    Fintype (ModelCoins β P N m h ks G) := by
+instance instFintypeCoins (β : Type) [Fintype β] (P N m h ks : ℕ) (G : Fin P → ℕ) :
+    Fintype (Coins β P N m h ks G) := by
   letI : Fintype (Keys P N m h ks G) := instFintypeKeys P N m h ks G
   exact inferInstance
 
@@ -66,7 +65,7 @@ passes' keys `η`; `keys b D x` is every candidate's key, SHA-512's at its seed,
 the outcome. -/
 structure Session (β Hs : Type) (P N m h S L q ks : ℕ) (G : Fin P → ℕ) where
   device : β → (j : Fin P) → ((i : {i : Fin P // i < j}) → Fin (G i) → Key N m h ks) →
-    Fin (G j) → RateSketch.Device N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32))
+    Fin (G j) → RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32))
   keys : β → Data N m 0 Sector → Hs → Keys P N m h ks G
   kept : Outcome β Hs N m → (j : Fin P) → Fin (G j)
 
@@ -76,12 +75,12 @@ variable {β Hs : Type} {P N m h S L q ks : ℕ} {G : Fin P → ℕ}
 
 /-- The model's coins at an outcome: the prover's own, the store, and the keys SHA-512 gives at the candidate
 seeds. -/
-def coins (A : Session β Hs P N m h S L q ks G) (ω : Outcome β Hs N m) : ModelCoins β P N m h ks G :=
+def coins (A : Session β Hs P N m h S L q ks G) (ω : Outcome β Hs N m) : Coins β P N m h ks G :=
   (ω.1, ω.2.1, A.keys ω.1 ω.2.1 ω.2.2)
 
 /-- Pass `j`'s candidate `c` at the model's coins. -/
-def devAt (A : Session β Hs P N m h S L q ks G) (x : ModelCoins β P N m h ks G) (j : Fin P) (c : Fin (G j)) :
-    RateSketch.Device N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)) :=
+def devAt (A : Session β Hs P N m h S L q ks G) (x : Coins β P N m h ks G) (j : Fin P) (c : Fin (G j)) :
+    RateSketch.Prover N m 0 h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)) :=
   A.device x.1 j (fun i => x.2.2 i.1) c
 
 /-- The blocks whose receipts pass `j`'s candidate `c` gets right at an outcome: its tag is the receipt hash of the

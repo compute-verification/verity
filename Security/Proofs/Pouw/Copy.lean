@@ -2,6 +2,7 @@ module
 
 public import Definitions.Pouw.Assumptions.GameStatements
 public import Proofs.Pouw.Prob
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # R_copy (tt-attacks §6): the bound under Nz, and Nz for independent uniform bits

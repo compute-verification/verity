@@ -36,15 +36,9 @@ reads the level's tops `rec-top-L<l>` at row `i` in instance `i`, every node of 
 -/
 module
 
-public import Flock.Registered
 public import Flock.Firewall
-public import Flock.RecOpening
-public import Flock.RecSparse
 public import Flock.RecVStar
-public import Flock.Verify
 public import Flock.Zk
-public import Flock.Norm
-public import Flock.JsonParse
 
 @[expose] public section
 
@@ -104,13 +98,10 @@ def commitRow (row : Array Nat) (salt : ByteArray) : ByteArray :=
   Hm96.Default512.commitString (Firewall.rowDigest (padTo row (Registered.rowWords row.size 16))) salt
 
 /-- How Flock's plain verifier is told to set the inner statement up, as the verifier holds it
-(`--rec-inner-statement`, `--rec-inner-statement-coins`, `--rec-inner-tables`, `--rec-inner-draw`): the statement id,
-whether it names per-round OS coins (`os`, which `RecSetup.checkForm` refuses: the inner statement is on the challenger's
-coin tree), its lookup tables, and its draw's bytes. `RecSetup.checkForm` holds them to the setup the inner statement's
-files give it. -/
+(`--rec-inner-statement`, `--rec-inner-tables`, `--rec-inner-draw`): the statement id, its lookup tables, and its draw's
+bytes. `RecSetup.checkForm` holds them to the setup the inner statement's files give it. -/
 structure InnerForm where
   statement : String
-  os : Bool
   tables : List (String × ByteArray)
   draw : Option ByteArray
 
@@ -783,26 +774,19 @@ def tablesIn (dir : String) : IO (List (String × ByteArray)) := do
     if (← p.pathExists) then out := out ++ [(t.name, (← IO.FS.readBinFile p))]
   return out
 
-/-- `--rec-inner-statement ID [--rec-inner-statement-coins seed] [--rec-inner-tables DIR] [--rec-inner-draw F]`:
-how Flock's plain verifier is told to set the inner statement up (`InnerForm`), or none. `os` is refused: the inner
-statement is on the challenger's coin tree (`RecVStar.innerTree`), never on per-round OS coins. -/
+/-- `--rec-inner-statement ID [--rec-inner-tables DIR] [--rec-inner-draw F]`: how Flock's plain verifier is told to set
+the inner statement up (`InnerForm`), or none. -/
 def formInput (args : List String) : IO (Except String (Option InnerForm)) := do
   let some s := argOf args "--rec-inner-statement"
-    | return if (argOf args "--rec-inner-statement-coins").isSome || (argOf args "--rec-inner-tables").isSome ||
-          (argOf args "--rec-inner-draw").isSome then
-        .error "--rec-inner-statement-coins, --rec-inner-tables and --rec-inner-draw go with --rec-inner-statement"
+    | return if (argOf args "--rec-inner-tables").isSome || (argOf args "--rec-inner-draw").isSome then
+        .error "--rec-inner-tables and --rec-inner-draw go with --rec-inner-statement"
       else .ok none
-  let os ← match argOf args "--rec-inner-statement-coins" with
-    | none | some "seed" => pure false
-    | some "os" => return .error ("--rec-inner-statement-coins os: refused: the inner statement is on the challenger's " ++
-        "coin tree (RecVStar.innerTree), never on per-round OS coins")
-    | some c => return .error s!"--rec-inner-statement-coins {c}: not seed"
   try
     let tables ← match argOf args "--rec-inner-tables" with
       | some d => tablesIn d
       | none => pure []
     let draw ← (argOf args "--rec-inner-draw").mapM IO.FS.readBinFile
-    return .ok (some ⟨s, os, tables, draw⟩)
+    return .ok (some ⟨s, tables, draw⟩)
   catch e => return .error s!"rec inner statement: {e}"
 
 /-- `--rec-inner-circuit F --rec-inner-public F --rec-inner-partition F --rec-inner-session DIR [--rec-inner-program F]`:

@@ -1,4 +1,4 @@
-"""H1's live tables: the served path's side of `PouwLiveSlots_v2{T}` (`verity.core.protocols.pouw.circuit.live`),
+"""H1's live tables: the served path's side of `PouwLiveSlots_v2{T}` (`verity.ml.protocols.pouw.circuit.live`),
 the proof block that makes each round's served rows m_s a proved value, one ``live@<s>`` a round, each request's cap bound to its
 public max_tokens.
 
@@ -37,8 +37,9 @@ from typing import Any, Sequence
 import numpy as np
 
 from verity.core.protocols.pouw import core_check as CC
-from verity.core.protocols.pouw.circuit import live as L
-from verity.core.protocols.pouw.circuit import live_reads as LR
+from verity.ml.protocols.pouw.circuit import live as L
+from verity.core.protocols.pouw import live_reads as LR
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.commitments import Commitment
@@ -117,8 +118,9 @@ def table(served: Any, run: Any, name: str, r: int, base: int, session: str) -> 
         words, window, bound = slot_words(run.owners.get(r, []), run.rows), served.root, None
     v = value(served, name, r)
     if name == LR.REQUESTS:
-        reg = NR.commit(served.program_digest, v, words, run._key, nonce(base, name, r), True, schema=LR.REQUEST_SCHEMA,
-                        session=bound)
+        ys = NR.salts(run._key, nonce(base, name, r), len(words))
+        reg = G.Registered.commit(served.program_digest, v, words.tolist(), [ys[192 * j:192 * (j + 1)] for j in range(len(words))],
+                                  G.WORD_BITS, LR.REQUEST_SCHEMA, session=bound)
     else:
         reg = served._tree(run, v, words, nonce(base, name, r), window, bound)
     served.live[v] = reg

@@ -80,8 +80,8 @@ theorem sound_of_nontrivial (k : Verity.Registration.Composite) (a : Subprotocol
     (hfail : ∀ o, ¬ V.Holds k θ F c σ a o) (hlt : V.error a θ F c σ < 1) :
     ¬ V.TargetFor (fun _ => True) k a := by
   intro h
-  have h1 := prob_play_eq_one (V.families θ) (V.signer θ) θ F c
-    (fun o => (fun _ : Exchange => True) o ∧ ¬ V.Holds k θ F c σ a o) (fun o _ _ _ => ⟨trivial, hfail o⟩) σ
+  have h1 := prob_play_eq_one (V.families θ) (D := V.signer θ) θ F c
+    (fun o => (fun _ : Exchange => True) o ∧ ¬ V.Holds k θ F c σ a o) (fun o _ => ⟨trivial, hfail o⟩) σ
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le (h θ F c σ)).trans_lt hlt)
 
 section

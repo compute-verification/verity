@@ -17,11 +17,11 @@ block exactly `c` gates, padding included, reading at most `k` fresh input bits.
 input an inference block reads per gate. `CompliesRate c α` is the policy as the verifier's check (`NciCheck`) reads it,
 on a circuit of any widths: inference blocks of at most `c` gates, each reading at most `α` fresh input bits per gate. A
 `(c, k)`-partition complies at rate `k / c`, and an inference block of at most `c` gates at rate `α` reads at most
-`k = α c` fresh input bits. A policy is a condition on declarations that the verifier checks from `D` and `θ` alone
-(`Policy`), a protocol with no rounds of its own. `slowdown policy t` is the factor by which every declaration that
-complies with `policy` and implements `t` is larger than `t`. `Reads c C` is the least total fresh input that the
-inference blocks of a division of `C` into blocks of at most `c` gates read. `CompliesAtMost c k n` is its count form:
-`D` divides into at most `n` proof blocks of a `(c, k)`-partition.
+`k = α c` fresh input bits. `CompliesAtMost c k n` is its count form on a Boolean declaration: `D` divides into at most
+`n` proof blocks of a `(c, k)`-partition. A policy is a condition on declarations that the verifier checks from `D` and
+`θ` alone (`Policy`), a protocol with no rounds of its own. `slowdown policy t` is the factor by which every declaration
+that complies with `policy` and implements `t` is larger than `t`. `Reads c C` is the least total fresh input that the
+inference blocks of a division of `C` into blocks of at most `c` gates read.
 
 The draft's necessary subcomputation of frontier training is an updated matrix multiplication chain (`Chain`): the
 gates where a circuit computes the products, the complete output entries, and the links between consecutive
@@ -45,7 +45,7 @@ def novelReads (d : RegisteredCircuit) (R : Finset (Fin d.D.N)) : ℕ := d.D.wid
 abbrev Policy : Type := RegisteredCircuit → Prop
 
 /-- **The inference-only policy** at `(c, k)`: `d` has a `(c, k)`-partition, its circuit Boolean and divided into
-inference blocks of exactly `c` gates, padding included, each with at most `k` fresh input bits. -/
+inference blocks of at most `c` gates, each with at most `k` fresh input bits. -/
 def Complies (c k : ℕ) : Policy := fun d =>
   ∃ (B : ℕ) (P : Partition d.D B), P.IsCK d c k
 
@@ -153,7 +153,7 @@ noncomputable def spread {n : ℕ} (P : Partition D n) (ℓ : Fin c.L) (t : Fin 
 end Chain
 
 /-- **The slowdown factor for updated matrix multiplications** `F` (the draft's theorem, "Throttling updated matrix
-multiplications"), at rate `α` (under the policy `k / c`), read cap `k`, widths `b_w` of a weight entry and `b_a` of an
+multiplications"), at rate `α`, read cap `k` (the policy's `α Γ`), widths `b_w` of a weight entry and `b_a` of an
 activation entry, and smallest inner dimension `d`:
 `F = 1/(2α) · max_{0<μ<1} min{(1 + √μ)² b_w b_a d / k, √2 (1 + √μ) √(1 − μ) b_a √(b_w / k)}`,
 the maximum written as a supremum. The first term covers inference blocks that complete entries themselves, the second

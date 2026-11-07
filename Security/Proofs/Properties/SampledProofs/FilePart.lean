@@ -1,6 +1,8 @@
 module
 
 public import SampledProofs.FilePart
+public import SampledProofs.Partition
+public import SampledProofs.Program
 
 /-! # The population check pins the public file's units (`SampledProofs.FilePart.check`)
 

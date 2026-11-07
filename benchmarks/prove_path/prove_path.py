@@ -1,4 +1,4 @@
-"""Prove path: a committed run and its advice through the proof system, for network accounting under arbitrary vLLM usage.
+"""Prove path: a committed run and its advice through the proof system, for network certification under arbitrary vLLM usage.
 
 Each window's step units are Programs a registered compiler made from the advice (`pipeline.advice_windows`), not a declared
 workload's. The advice is private: the prover commits I1's canonical encoding under hiding rows (`advice_windows.commit_advice`),

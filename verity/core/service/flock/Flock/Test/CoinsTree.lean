@@ -8,6 +8,7 @@ puts the draw in, and the same canonical bytes (`publicDigest` hashes those).
 module
 
 public import Flock.HmRow
+public import Flock.Statement
 meta import Flock.HmRow
 
 @[expose] public section
@@ -19,7 +20,7 @@ open Lean (Json)
 def specs : List CoinTree.Spec :=
   [⟨#["rep0", "rep1"], 3, 64⟩, ⟨#[], 0, 1⟩, ⟨#["a\"b", "ünï", "x"], 20, 65536⟩]
 
-def coinsAll : List Coins := [.os, .seed] ++ specs.map .tree
+def coinsAll : List Coins := .seed :: specs.map .tree
 
 def helloAt (t : Tags) (c : Coins) (tables : Array String) : String :=
   (helloOf t (ByteArray.mk #[1, 2, 3]) 10 c tables).toOption.getD ""

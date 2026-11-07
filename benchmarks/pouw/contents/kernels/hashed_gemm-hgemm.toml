@@ -1,4 +1,0 @@
-order = 50
-tool = "That GEMM with its windowed receipts and X's tile leaves hashed in its CTAs"
-files = "`hashed_gemm/hgemm.cu`, `hgref.py`, `run.sh`, `summary.py`"
-includes = "`edited_gemm/egemm.cu`, `commit_gpu/commit_gpu.cuh`"

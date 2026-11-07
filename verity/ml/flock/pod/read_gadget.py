@@ -125,8 +125,8 @@ def shape(text: str) -> dict:
 
 def stage(K: int, reads: str, n: int, sets: Path, out: Path) -> dict:
     from verity_numerical.bench import generate as GEN
-    from verity_numerical.bench import templates as TM
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock import subcircuit_templates as TM
+    from verity_flock.input_sets import InputSet
 
     sub = TM.get("gemm-coordinate").bind(K=K, semantics=SEMANTICS)
     path = sets / "sets" / sub.set_name

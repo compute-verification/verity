@@ -11,12 +11,10 @@ import pytest
 pytest.importorskip("torch")
 
 from tests.check.opened import commit_steps
-from verity_vllm.commit import opened as OV
 from verity_vllm.commit import step_rows as R
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.commit.committer import device_pool as DP
 from verity_vllm.commit.committer.host_retention import _HostRanges
-from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES
 
 
 def steps(k: int) -> dict:
@@ -25,19 +23,10 @@ def steps(k: int) -> dict:
             2: [("model.layers.0.mlp.down_proj", bytes(i % 251 for i in range(3000 * k)))]}
 
 
-@pytest.fixture(params=[None, R.NAME], ids=["vllm-v1", R.NAME])
-def cs(request):
-    return request.param
-
-
-def committed(cs, values=None, extra=None):
+def committed(values=None):
     """Steps committed as --retain host keeps them (their blocks, ``host``), then moved into a device pool as --retain device holds them:
-    ``values`` (`commit_steps`' form), else `steps`'; ``extra`` adds members by step."""
-    k = (R.ROW_BYTES if cs else GPU_CHUNK_BYTES) // 256
-    st = dict(values or steps(k))
-    for s, members in (extra or {}).items():
-        st[s] = st[s] + members
-    dev, rc = commit_steps(st, commit_scheme=cs)
+    ``values`` (`commit_steps`' form), else `steps`'."""
+    dev, rc = commit_steps(values or steps(R.ROW_BYTES // 256))
     host = {s: bytes(blk.numpy()) for s, (blk, _u) in dev._gpu_blocks.items()}
     dev.device_pool = DP.DevicePool(sum(len(b) for b in host.values()) + 4096 * len(host), device="cpu")
     for s, (blk, used) in list(dev._gpu_blocks.items()):
@@ -57,8 +46,8 @@ def host_leaf(host, C, s, i):
     return host[s][i * C:(i + 1) * C]
 
 
-def test_the_release_keeps_exactly_the_drawn_leaves_byte_equal_to_host(cs, tmp_path):
-    host, rc, dev = committed(cs)
+def test_the_release_keeps_exactly_the_drawn_leaves_byte_equal_to_host(tmp_path):
+    host, rc, dev = committed()
     C = dev.chunk
     drawn = {0: [1, 2], 2: [0, 5]}
     assert leaf_bytes(dev, 0, 3) == host_leaf(host, C, 0, 3)
@@ -79,8 +68,8 @@ def test_the_release_keeps_exactly_the_drawn_leaves_byte_equal_to_host(cs, tmp_p
     assert sum((tmp_path / "w" / "raw" / f"s{s}.bin").stat().st_size for s in range(3)) == 4 * C
 
 
-def test_a_dropped_leaf_is_refused_by_name_never_replayed(cs, tmp_path):
-    host, rc, dev = committed(cs)
+def test_a_dropped_leaf_is_refused_by_name_never_replayed(tmp_path):
+    host, rc, dev = committed()
     DP.release(dev, {0: [1]})
     SD.dump(dev, rc, tmp_path)
     for com in (dev, SD.load(tmp_path)[0]):
@@ -89,40 +78,15 @@ def test_a_dropped_leaf_is_refused_by_name_never_replayed(cs, tmp_path):
             com.open_range(0, 0, 1)
         with pytest.raises(RuntimeError, match="draw-gated release"):
             com.open_range(1, 0, 1)
-    replay, _ = commit_steps(steps((R.ROW_BYTES if cs else GPU_CHUNK_BYTES) // 256), commit_scheme=cs)
+    replay, _ = commit_steps(steps(R.ROW_BYTES // 256))
     with pytest.raises(RuntimeError, match="draw-gated release"):
         dev.open([(0, 3)], values_from=replay)
     with pytest.raises(KeyError, match="draw-gated release"):
         dev._gpu_blocks[0][0][0:dev.chunk]
 
 
-def test_a_released_window_dumps_slim_to_its_drawn_leaves(cs, tmp_path):
-    C = R.ROW_BYTES if cs else GPU_CHUNK_BYTES
-    host, rc, dev = committed(cs, {0: [("model.embed_tokens", (bytes(range(251)) * (200 * C // 251 + 1))[:200 * C])]})
-    runs = [(3, 6), (100, 101), (199, 200)]
-    DP.release(dev, {0: [i for a, b in runs for i in range(a, b)]})
-    doc = SD.dump(dev, rc, tmp_path / "w")
-    st = doc["steps"][0]
-    assert st["drawn_only"] and st["ranges"] == [[a * C, b * C] for a, b in runs]
-    assert 0 < len(st["nodes"]) < sum(st["levels"]) // 3
-    assert (tmp_path / "w" / "levels" / "s0.bin").stat().st_size == SD._node(dev) * len(st["nodes"])
-    assert not (tmp_path / "w" / "keys.bin").exists() and (st.get("salted") == [list(r) for r in runs]) == bool(cs)
-    store, run = SD.load(tmp_path / "w")
-    assert [s.root for s in run.steps] == [s.root for s in rc.steps]
-    rd = OV.OpenedReader(store, run)
-    for a, b in runs:
-        for lo in range(a, b):
-            for hi in range(lo + 1, b + 1):
-                assert rd(0, "model.embed_tokens", lo * C, hi * C) == host[0][lo * C:hi * C]
-    assert rd(0, "model.embed_tokens", 3 * C + 7, 6 * C - 3) == host[0][3 * C + 7:6 * C - 3]
-    with pytest.raises(RuntimeError, match="draw-gated release"):
-        store.open_range(0, 6, 7)
-    again = SD.dump(store, run, tmp_path / "again")
-    assert again["steps"][0]["nodes"] == st["nodes"] and again["steps"][0]["ranges"] == st["ranges"]
-
-
-def test_a_release_names_only_committed_leaves_and_happens_once(cs):
-    _host, _rc, dev = committed(cs)
+def test_a_release_names_only_committed_leaves_and_happens_once():
+    _host, _rc, dev = committed()
     with pytest.raises(KeyError, match="steps \\[7\\]"):
         DP.release(dev, {7: [0]})
     with pytest.raises(IndexError, match="leaves, not"):
@@ -185,33 +149,14 @@ def test_freed_pieces_coalesce_first_fit():
 
 
 def opts(retention=(), **kw):
-    r = {"retain": "device", "retain_device_gb": 32.0, "retain_exclude": "", "release_after": "pouw_h1", "draws_dir": "",
-         **dict(retention)}
-    return SimpleNamespace(**{"retention": SimpleNamespace(**r), "commit": True, "scheme": R.NAME, "window_gb": 32.0, "seal": True,
-                              **kw})
+    r = {"retain": "device", "retain_device_gb": 32.0, "retain_exclude": "", **dict(retention)}
+    return SimpleNamespace(**{"retention": SimpleNamespace(**r), "commit": True, "scheme": R.NAME, "window_gb": 32.0, **kw})
 
 
 def test_serve_openai_refuses_retain_device_without_the_rows_commit_or_room_for_a_window():
-    from verity_vllm.pipeline import serve_release as SL
+    from verity_vllm.pipeline import serve_seal as SS
 
-    assert SL.retention_refusal(opts()) is None
-    assert "needs the Commit (drop --no-commit)" in SL.retention_refusal(opts(commit=False))
-    assert "is under --window-gb" in SL.retention_refusal(opts(retention={"retain_device_gb": 8.0}))
-    assert SL.retention_refusal(opts(retention={"retain": "host", "retain_device_gb": 1.0, "release_after": ""})) is None
-
-
-def test_a_discarded_window_frees_its_pool_even_when_its_worker_failed(cs):
-    host, _rc, dev = committed(cs)
-
-    def failed():
-        raise RuntimeError("worker failed")
-    dev.wait_absorbed = failed
-    rec = DP.discard(dev, "not sealed: RuntimeError: finalize failed")
-    assert rec["dropped_bytes"] == sum(len(b) for b in host.values()) and rec["kept_bytes"] == 0
-    assert rec["absorb_error"] == "RuntimeError: worker failed"
-    assert dev.device_pool.held == 0 and all(b.retained_bytes == 0 for b, _u in dev._gpu_blocks.values())
-    with pytest.raises(KeyError, match="draw-gated release"):
-        dev._gpu_blocks[2][0][0:dev.chunk]
-    assert DP.discard(dev, "again") is None
-    with pytest.raises(RuntimeError, match="released already"):
-        DP.release(dev, {})
+    assert SS.retention_refusal(opts()) is None
+    assert "needs the Commit (drop --no-commit)" in SS.retention_refusal(opts(commit=False))
+    assert "is under --window-gb" in SS.retention_refusal(opts(retention={"retain_device_gb": 8.0}))
+    assert SS.retention_refusal(opts(retention={"retain": "host", "retain_device_gb": 1.0})) is None

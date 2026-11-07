@@ -29,7 +29,7 @@ verifier the auditor runs (`flock-verify verify --zk` once per V* part with that
   with the part's `--circuit`, `--public`, `--partition`, `--program`, `--registered`, `--rec-inner`, `--rec-part j`,
   `--rec-bindings` and `--rec-rows`, the inner statement's files (`--rec-inner-circuit`, `--rec-inner-public`,
   `--rec-inner-partition`, `--rec-inner-program`, `--rec-inner-statement verity/flock-circuit+plain-leaves
-  --rec-inner-statement-coins os --rec-inner-draw`), `--rec-inner-session`, `--rec-inner-transcript` and
+  --rec-inner-draw`), `--rec-inner-session`, `--rec-inner-transcript` and
   `--rec-inner-registration`, no link table (no `--rec-links`), and one `--session`
   (`partVerdict`, the C-Flock library calls `verifyCmd` makes on that path, as `recursion_e2e`'s lean step runs it); then
   v1's live check (`OneStage.checkLive`: at the coins `OneStage.coinsOf` reads, the challenger's) on one verdict of record (`flock-verify/<session>`), accepted exactly when every part's is, whose units are the
@@ -47,14 +47,15 @@ module
 
 public import CoreProtocol.Blobs
 public import SampledProofs.ChallengerInnerTrees
-public import SampledProofs.OneStageZk
 public import Flock
-import all Lean.Data.Json.Basic
+public import Flock.RecLinkPart
+public import SampledProofs.OneStageZk
 import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
 meta import CoreProtocol.Blobs
 meta import SampledProofs.ChallengerInnerTrees
-meta import SampledProofs.OneStageZk
 meta import Flock
+meta import SampledProofs.OneStageZk
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -254,24 +255,24 @@ def fits (b : ByteArray) (what : String) : V Unit :=
   need (b.size < FIELD_MAX) s!"{what} is 2^56 bytes or more"
 
 /-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`): Flock's plain verifier sets the inner statement
-up as each part's setup is told to (`--statement verity/flock-circuit+plain-leaves --coins os`, the verifier's own
-partition and program, the inner statement's draw, `--stratified` at the population the verifier's partition object and
+up as each part's setup is told to (`--statement verity/flock-circuit+plain-leaves` without `--coins`, as
+`RecDeploy`'s reading of the inner statement sets it up; each part checks the inner session's coins on the challenger's
+coin tree, `RecCoins`), the verifier's own partition and program, the inner statement's draw, `--stratified` at the population the verifier's partition object and
 program give (`85-rec-reprice.sh`'s inner `verify`: the inner session's full draw, `rec_live.full_draw`), no lookup
 tables, registered reads or identifier: `verifyCmd`'s plain path), its scope check passes (`ProvedScope.check`), and it
 carries a draw. The population is `HmRow.stratifiedLaw`'s at `K = 1`, which every nonempty population admits. -/
 def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   let some tags := Flock.Tags.find? INNER_STATEMENT | throw s!"the statement {INNER_STATEMENT} is not known"
-  let coins := Flock.Coins.os
-  let rtags := tags.withCoins coins
+  let coins := Flock.Coins.seed
   let some t := String.fromUTF8? drawB | throw "draw: not UTF-8"
   let draw := some (Flock.norm (← (Flock.JsonParse.parse t).mapError fun e => s!"draw: not JSON: {e}"))
   let partition := some o.partition
   let program := some o.program
   let (_, n) ← Flock.HmRow.stratifiedLaw o.partition o.program 1
-  if !rtags.hm96Rows then
-    throw s!"{rtags.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
+  if !tags.hm96Rows then
+    throw s!"{tags.name}: refused: a statement without hm96-sha512 rows has no draw, and every claim is about a drawn session"
   Flock.RecSetup.checkInner none none (pure (none, none))
-  let (_, sts) ← Flock.Stmt.setupTables rtags circuitB pubB coins 1 [] draw partition program none (some n) none none
+  let (_, sts) ← Flock.Stmt.setupTables tags circuitB pubB coins 1 [] draw partition program none (some n) none none
   for st in sts do
     Flock.checkRegistered st none
     OneStageZk.checkIdentifier st
@@ -279,8 +280,13 @@ def innerOk (o : Own) (circuitB pubB drawB : ByteArray) : V Unit := do
   Flock.RecSetup.checks none none tags [] sts circuitB partition program none none none none
   sts.forM (Flock.RecCoins.check · none (Flock.RecCoins.Source.atC3 none none none) (Flock.RecSetup.c3 none none))
   sts.forM (Flock.RecVStar.checkPubRows · none none none)
-  Flock.ProvedScope.drawLaw false rtags false draw
-  Flock.ProvedScope.check rtags false circuitB pubB [] 1 false false
+  Flock.ProvedScope.drawLaw false tags false draw
+  Flock.ProvedScope.check tags false circuitB pubB [] 1 false false
+
+/-- How each part's setup is told to set the inner statement up (`--rec-inner-statement`, `--rec-inner-draw`), which
+`RecSetup.checkForm` holds to the inner statement's files: no lookup table, at the inner statement's draw `drawB`. -/
+def innerForm (drawB : ByteArray) : Flock.RecCoins.InnerForm :=
+  { statement := INNER_STATEMENT, tables := [], draw := some drawB }
 
 /-- What every part's check reads of the inner session: the inner shape, the inner statement's files (check 5's
 source), what the inner circuit's META binds, the coin server's transcript as `verify` holds it and its link points. -/
@@ -307,7 +313,7 @@ def innerHeld (o : Own) (pr : Proofs) (bs : Core.Blobs) : V InnerHeld := do
   (innerOk o circuitB pubB drawB).mapError (s!"rec inner statement: Flock's plain verifier refuses it: " ++ ·)
   let src : Flock.RecCoins.Source := .files
     { circuit := circuitB, pub := pubB, partition := o.partition, record,
-      form := some { statement := INNER_STATEMENT, os := true, tables := [], draw := some drawB },
+      form := some (innerForm drawB),
       program := some o.program }
   let bound : V (Option String × Option Flock.RecVStar.StackedShape) := do Flock.RecSetup.metaBound (← metaOf circuitB)
   let transcriptB ← bs.get pr.transcript "rec inner transcript"
@@ -340,7 +346,7 @@ def partVerdict (h : InnerHeld) (j : Nat) (p : PartOwn) (s : PartProof) (bs : Co
   let circuitB ← bs.get p.circuit s!"part {j}'s circuit"
   let pubB ← bs.get s.pub s!"part {j}'s public file"
   fits pubB s!"part {j}'s public file"
-  let tags := Flock.Zk.tags (tags0.withCoins coins) (Flock.Zk.maskLogOf circuitB) count
+  let tags := Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) count
   let tables : List (String × ByteArray) := []
   let (registered, complete, known, regParams) ← match p.registered with
     | none => pure (none, false, #[], #[])
@@ -425,8 +431,7 @@ def partSize (j : Nat) (p : PartOwn) (s : PartProof) (bs : Core.Blobs) : V Nat :
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   let circuitB ← bs.get p.circuit s!"part {j}'s circuit"
   let pubB ← bs.get s.pub s!"part {j}'s public file"
-  let tags := Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
-    (Flock.Zk.maskLogOf circuitB) 1
+  let tags := Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1
   let some record := String.fromUTF8? (← bs.get s.record s!"part {j}'s record")
     | throw s!"part {j}'s record is not UTF-8"
   let drawB ← (if tags.hm96Rows then Flock.Witness.recordDraw record else none).mapM canonBytes
@@ -474,8 +479,7 @@ def roundTrips (h : InnerHeld) (o : Own) (pr : Proofs) (bs : Core.Blobs) : V Boo
   let some tags0 := Flock.Tags.find? STATEMENT | throw s!"the statement {STATEMENT} is not known"
   for (p, s) in o.parts.zip pr.parts do
     let circuitB ← bs.get p.circuit "a part's circuit"
-    let tags := Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
-      (Flock.Zk.maskLogOf circuitB) 1
+    let tags := Flock.Zk.tags tags0 (Flock.Zk.maskLogOf circuitB) 1
     let record := (String.fromUTF8? (← bs.get s.record "a part's record")).getD ""
     let draw := if tags.hm96Rows then Flock.Witness.recordDraw record else none
     let drawOk ← match draw with
@@ -657,6 +661,15 @@ def main (args : List String) : IO UInt32 := do
     return if r.toOption.isSome then 0 else 1
   | _ => protocol.main args
 
+/-- The inner session's full draw over `n` units (`rec_live.full_draw`): the stratified law at `K = n`, every unit drawn. -/
+private def fullDrawB (n : Nat) (k : Nat := n) : ByteArray :=
+  let s : Flock.Draw.Stratum := { template := "t", units := #[(0, n)], k := k }
+  let d : Flock.Draw.UnitDraw := { law := .stratified k #[s], population := n, units := Array.range k }
+  d.toJson.compress.toUTF8
+
+-- each part's setup accepts the form `innerHeld` tells it, at its files' units (`checkForm` reads only `n` of them)
+#guard (Flock.RecSetup.checkForm (some (innerForm (fullDrawB 4))) { (default : Flock.Stmt) with n := 4 }).toOption.isSome
+#guard (Flock.RecSetup.checkForm (some (innerForm (fullDrawB 4 3))) { (default : Flock.Stmt) with n := 4 }).toOption.isNone
 #guard lineEnd "ab\ncd".toUTF8 0 == 2
 #guard lineEnd "ab\ncd".toUTF8 3 == 5
 #guard ((metaOf "c x\nMETA {\"a\":1}\nrest".toUTF8).toOption.map (·.compress)) == some "{\"a\":1}"

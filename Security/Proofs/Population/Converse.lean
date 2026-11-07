@@ -1,7 +1,9 @@
 module
 
-public import Proofs.Population.Transfer
 public import Definitions.Population.AddressMap
+public import Proofs.Population.Pointer
+import Mathlib.Tactic.Bound.Init
+import Proofs.Population.Oblivious
 
 /-!
 # The converse: a corruptible address needs the padding's cones

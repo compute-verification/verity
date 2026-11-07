@@ -16,10 +16,10 @@ from __future__ import annotations
 import hashlib
 import random
 
-from verity_vllm.commit import binding as B
+from verity_vllm.commit import binding as B, step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
-CHUNK = 64
+CHUNK = step_rows.ROW_BYTES
 PD = hashlib.sha256(b"program").hexdigest()
 TOPK = 8
 ROWS = {"r0": (0, 100), "r1": (100, 300)}            # token rows of the step (r0 first, r1 second; 300 tokens)
@@ -43,7 +43,7 @@ def step_stream(seed: int = 3) -> list[list[tuple[str, bytes]]]:
 
 
 def commit(stream, **map_kw):
-    c = NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
+    c = NativeHostCommitter(None, run_id="run", hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
     run = c.commit_offline(stream)
     bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=CHUNK, **map_kw)
     return c, run, bmap

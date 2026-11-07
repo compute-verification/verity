@@ -204,7 +204,7 @@ def pin_owner(kind: str, key: str) -> str | None:
     or a piece's, the module that defines the Definition its key names (`named`, `owner`).  None when the key alone names none,
     whatever this process has built: then the pin is in ``pins/`` (`shared_pin`)."""
     if kind == "units":
-        from verity_numerical.bench import templates as TM
+        from verity_flock import subcircuit_templates as TM
 
         return TM.__name__ if key.partition("/")[0] in TM.TEMPLATES else None
     fid = key.partition("{")[0]
@@ -234,14 +234,6 @@ def named(fid: str) -> Any | None:
             return lookup_primitive(DefinitionTable(), fid)
         except (KeyError, ValueError):
             return None
-
-
-def _function_module(d: Any) -> str | None:
-    fields = getattr(d, "__dict__", {})
-    for a in ("build", "body", "evaluate", "fn"):
-        if callable(f := fields.get(a)) and getattr(f, "__module__", None):
-            return f.__module__
-    return None
 
 
 def _top_level_names(path: str) -> set[str]:
@@ -300,7 +292,7 @@ def _index() -> dict[int, tuple[Any, str]]:
                 if isinstance(v, (CompositeDefinition, PrimitiveDefinition)):
                     found.setdefault(id(v), (v, []))[1].append(name)
     for k, (v, mods) in found.items():
-        fm = _function_module(v)
+        fm = CC._function_module(v)
         _INDEX[k] = (v, fm if fm in mods else mods[0])
     return _INDEX
 
@@ -313,7 +305,7 @@ def owner(d: Any) -> str | None:
     if (have := HANDED.get(getattr(d, "id", None))) is not None:
         return have
     e = _index().get(id(d))
-    return e[1] if e is not None and e[0] is d else _function_module(d)
+    return e[1] if e is not None and e[0] is d else CC._function_module(d)
 
 
 __all__ = ["HANDED", "PACKAGES", "PIN_KINDS", "SHARED_PINS", "SUFFIX", "binding_modules", "discover", "load_pins", "named", "owner",

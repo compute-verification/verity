@@ -19,6 +19,7 @@ untraced = [
 # packages and their path dependencies (each lakefile's `[[require]]`).
 inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "verity/core/claims/__init__.py",
           "verity/core/protocols/__init__.py", "verity/core/protocols/pous", "verity/core/protocols/interface",
+          "verity/ml/protocols/__init__.py", "verity/ml/protocols/pous",
           "verity/core/protocols/bandwidth",
           "verity/core/protocols/record.py",
           "verity/core/service/flock", "verity/core/primitives/identity", "verity/core/primitives/randomness",

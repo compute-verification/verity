@@ -1,7 +1,23 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
-public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLig
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # The hiding Ligerito's runs
@@ -336,6 +352,8 @@ theorem queryLevel0_bind {ms : MerkleScheme} {p : LigeritoProof} {lv : Flock.Lev
 
 /-! ## Ligerito under `--zk` -/
 
+-- one proof of several hundred lines down `Zk.ligerito`'s unfolded levels, a `*_bind` step per bind and `rw` and
+-- `omega` on the round indices
 set_option maxHeartbeats 4000000 in
 theorem zk_ligerito_plays : ZkLigeritoPlays := by
   intro ms sch T cap p basisAt zl t t' rec hdim hlv hα1 hk0 hwf h

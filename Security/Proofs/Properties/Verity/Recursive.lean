@@ -238,12 +238,11 @@ theorem part_setup_of_verdict {o : VStar.Recursive.Own} {pr : VStar.Recursive.Pr
   obtain rfl : q.base.circuit = circuitB := Except.ok.inj (hP.circuit.symm.trans hcB)
   obtain rfl : st.pub x ms j = pubB := Except.ok.inj ((get_what hSp).symm.trans hpB)
   obtain ⟨hregC, hregB⟩ := regC_of_part hPR
-  have hhm' : (Flock.Zk.tags (tags0.withCoins (Flock.Coins.tree (Flock.Zk.coinSpec (tags0.tableNames 1))))
-      (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows = true := hhm
+  have hhm' : (Flock.Zk.tags tags0 (Flock.Zk.maskLogOf q.base.circuit) 1).hm96Rows = true := hhm
   have hdraw := hP.draw tags0 recordB record hT hrecB hrec
   rw [if_pos hhm', hrd] at hdraw
   have hins := Part.ins_partRaw (r := xrOf o h w ri) (st := st) (x := x) (ms := ms) (s := j) hh hT hplain
-    hregC hbind hI.circuit hI.pub hI.statement hI.os hI.tables hI.partition hI.program hI.draw (hI.shape h hh)
+    hregC hbind hI.circuit hI.pub hI.statement hI.tables hI.partition hI.program hI.draw (hI.shape h hh)
     hI.registration hI.links hP.form rfl hP.partition hP.program hP.registered hP.bindings hdraw rfl hSr hSt hSrows
   obtain ⟨-, hbset, hregs, -, hfull⟩ := baseSetup_of_build (tags0 := tags0) (circuitB := q.base.circuit)
     (pubB := st.pub x ms j) (draw := some d) (partition := some po.partition) (program := some po.program)
@@ -771,8 +770,8 @@ theorem sampledProofsRecursive_nontrivial (q : Dep) (V : Vocab d α) (k : Verity
       q.errAt V S collOf dColl nI vS δs lam := by
   intro h
   have h1 : Game.prob (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ = 1 :=
-    prob_play_eq_one (V.families θ) (V.signer θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
-      (fun _ _ _ _ => ⟨trivial, hbad⟩) σ
+    prob_play_eq_one (V.families θ) (D := V.signer θ) θ F c (fun o => True ∧ ¬ V.Holds k θ F c σ .sampled o)
+      (fun _ _ => ⟨trivial, hbad⟩) σ
   rw [Dep.errAt, if_pos hcr] at h
   exact lt_irrefl (1 : ℝ≥0∞) ((h1.symm.trans_le h).trans_lt hlt)
 

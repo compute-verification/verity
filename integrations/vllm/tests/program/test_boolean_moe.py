@@ -418,6 +418,28 @@ def test_the_sigmoid_routers_word_views() -> None:
     st = {"E": 256, "TOPK": 8, "SCALE": 2.5, "KERNEL": "block"}
     assert SW.boolean_version(bind(M.MoeRouterSigmoidBias, **st)).id == "MoeRouterSigmoidBias_v2{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}"
     assert TR.word_of(bind(BM.MoeRouterSigmoidBias, **st)).id == bind(M.MoeRouterSigmoidBias, **st).id
+    assert (SW.boolean_version(bind(M.MoeRouterSigmoidBiasSlots, **st)).id
+            == "MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}")
+    assert TR.word_of(bind(BM.MoeRouterSigmoidBiasSlots, **st)).id == bind(M.MoeRouterSigmoidBiasSlots, **st).id
+
+
+@pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
+@pytest.mark.parametrize("E_, TOPK", [(8, 2), (16, 8)])
+def test_the_router_slots_are_the_routers_words(kernel, E_, TOPK) -> None:
+    """`MoeRouterSigmoidBiasSlots_v1` returns `MoeRouterSigmoidBias_v1`'s words in its order, slot k's weight and id each a field
+    (a row of a unit) of its own."""
+    st = {"E": E_, "TOPK": TOPK, "SCALE": 2.5, "KERNEL": kernel}
+    x, b = _router_rows(E_, 300, 0x5E)
+    slots, router = bind(M.MoeRouterSigmoidBiasSlots, **st), bind(M.MoeRouterSigmoidBias, **st)
+    assert slots.signature()[1] == Tuple(*[F32] * TOPK, *[I32] * TOPK)
+    np.testing.assert_array_equal(_rows(E.evaluate_batch(slots, x, b), len(x)), _rows(E.evaluate_batch(router, x, b), len(x)))
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("kernel", M.ROUTER_KERNELS)
+def test_the_router_slots_on_bits(kernel) -> None:
+    """`MoeRouterSigmoidBiasSlots_v2` at 8 experts and 2 slots is its word view on the kernel tests' rows."""
+    _agree2(bind(BM.MoeRouterSigmoidBiasSlots, E=8, TOPK=2, SCALE=2.5, KERNEL=kernel), _router_rows(8, 300, 0x5C))
 
 
 @pytest.mark.slow

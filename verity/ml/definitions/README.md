@@ -4,7 +4,8 @@ The Definitions of the kernels served models run: each kernel vLLM launches (a G
 sampling, a training step's optimizer) written as a composite Definition over the primitives of `verity.ml.circuits.ops`,
 gate for gate what the kernel computes on the GPU, together with its Boolean version, the fast evaluators that reproduce
 it, and the partition of a served Program into proof blocks. The integrations (`integrations/vllm/`) build served
-Programs from these Definitions.
+Programs from these Definitions. The terms and the front doors (building, evaluating, checking, regenerating pins) are
+[`verity.ml.circuits`](../circuits/README.md)'s.
 
 No verifier reads this package, so it is off the soundness path: a verifier holds a Program and the semantics in
 `verity.ml.circuits`, never this code.
@@ -30,8 +31,6 @@ is_boolean(bits), Program(bits).gates
 # (True, 785666): the same function as And/Xor/Not gates on bits
 ```
 
-Building the Boolean version takes a few seconds and about 1.6 GB.
-
 ## The registry
 
 `registry/` holds one module per kernel family, each registering its Definitions in `verity.ml.circuits.defs.REGISTRY`
@@ -40,10 +39,10 @@ their Boolean versions in the matching `boolean_*` modules. `value_inputs` holds
 brings (a norm's epsilon, the softmax scale, a softcap) as an input value rather than a static. A module's docstring lists
 its Definitions with their signatures.
 
-- `registry.catalog.load()` imports every registry module and returns `(REGISTRY, errors)`. A module that fails to import
-  is named in `errors`, never read as "not registered". Consumers that resolve a Definition by id go through it, so a new
-  module's Definitions resolve everywhere, not only where someone imported the module.
-- Each Definition module has two sidecars beside it: `<module>.circuit-check.py`, the small bindings `circuit-check`
+- `registry.catalog.load()`, the Definition catalog, imports every registry module and returns `(REGISTRY, errors)`. A
+  module that fails to import is named in `errors`, never read as "not registered". Consumers that resolve a Definition by
+  id go through it, so a new module's Definitions resolve everywhere, not only where someone imported the module.
+- Each Definition module has its binding file beside it, `<module>.circuit-check.py`, the small bindings `circuit-check`
   checks it at, and `<module>.circuit-check.json`, its lowering pins (`tools/verity/circuit_check/`).
 - `tests/test_catalog.py` checks what the catalog loads.
 
@@ -82,7 +81,7 @@ declines that input, and the reference computes it.
 
 ## Other modules
 
-- `replay`: replays a recorded flat body over new arguments, the body builder of a derived Program's function. It is
+- `replay`: replays a recorded flat body over new arguments, which writes the body of a derived Program's function. It is
   torch-free.
 - `evidence`: the ids that conformance texts, provenance records and refusals cite, read from `evidence.json` and keyed by
   the capture, probe or rule they identify.

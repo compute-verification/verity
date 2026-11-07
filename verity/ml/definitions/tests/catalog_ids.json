@@ -993,6 +993,8 @@
 "MoeRouterProbs_v2",
 "MoeRouterSelect_v1",
 "MoeRouterShift_v1",
+"MoeRouterSigmoidBiasSlots_v1",
+"MoeRouterSigmoidBiasSlots_v2",
 "MoeRouterSigmoidBias_v1",
 "MoeRouterSigmoidBias_v2",
 "MoeRouterSigmoidIn_v1",

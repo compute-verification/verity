@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.Soundness.Discharge.Exec.Decode
 public import Proofs.Flock.Soundness.Discharge.Exec.Live
 public import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # The salted table's verdict at flock-verify's acceptance (the verdict part of `Decodes`)
