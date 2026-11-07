@@ -46,7 +46,7 @@ import Proofs.Flock.Claims.Sampling.Runs
 # The sampling extractor's expected reruns
 
 `E_runs_exp`: **`ExtractRunsExpLe`** at the claims block's extractor `E`, at every decoder, at
-`1 + k + k²·(1 + n_PU·m′·k′)`, when the draw precedes the sessions (`DrawFixed`). Each wait amortizes against the
+`1 + k + k²·(1 + n_PU·m′·k′)`, when the sample precedes the sessions (`DrawFixed`). Each wait amortizes against the
 acceptance probability it waits on (`waitRuns_exp`, `accExp_le`):
 
 * the judged run accepts with probability `ε`, and the outer wait then makes `k/ε` reruns in expectation;
@@ -130,7 +130,7 @@ theorem outer_runs_le_sum {R γ β : Type} (H : Msg → Msg) (run : R → Trace)
   simp only [RP.eval, List.length_nil, Nat.add_zero, Nat.cast_add, Nat.cast_list_sum, List.map_map]
   exact add_le_add le_rfl (List.sum_le_sum fun jo _ => hB jo)
 
-/-- **One wait and a body at each kept run, in expectation**: over the wait's `K` draws (each `f` of a uniform `D'`)
+/-- **One wait and a body at each kept run, in expectation**: over the wait's `K` samples (each `f` of a uniform `D'`)
 and the bodies' coins `X`, the reruns are at most the wait's expected reruns and its kept runs' weights `G`, when each
 body averages at most `G` of its run, at every position. -/
 theorem level_ex {D' R X : Type} [Fintype D'] [Nonempty D'] [Fintype X] [Nonempty X] (H : Msg → Msg)
@@ -188,7 +188,7 @@ section RunsExp
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- A checked unit's waits' reruns at coins `r` and its `E^rep` coins `ρ`: Flock's `m′` waits of `K′` draws, fresh on
+/-- A checked unit's waits' reruns at coins `r` and its `E^rep` coins `ρ`: Flock's `m′` waits of `K′` samples, fresh on
 the unit's rounds. -/
 noncomputable def unitWaits (D : Deploy Coin Col T) (x : Msg) (run' : (Fin (D.V.k x) → Coin) → Trace) (u : ℕ)
     (r : Fin (D.V.k x) → Coin) (ρ : D.UnitCoins x) : ℝ :=
@@ -429,7 +429,7 @@ theorem E_runs_le_outer (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List
       simp only [RP.eval, Nat.cast_zero, zero_add, le_refl]
 
 omit [DecidableEq Col] [Zero Col] in
-/-- **`ExtractRunsExpLe` at the sampling extractor**, at every decoder, when the draw precedes the sessions: at most
+/-- **`ExtractRunsExpLe` at the sampling extractor**, at every decoder, when the sample precedes the sessions: at most
 `1 + k + k²·(1 + n_PU·m′·k′)` reruns in expectation. -/
 theorem E_runs_exp (H : Msg → Msg) (D : Deploy Coin Col T) (hdraw : DrawFixed D) (decode : List (ℕ × Col) → List T) :
     ExtractRunsExpLe H (E D decode)

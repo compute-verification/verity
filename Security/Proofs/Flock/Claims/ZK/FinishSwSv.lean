@@ -38,7 +38,7 @@ import Proofs.Flock.Claims.ZK.PiopSrcSv
 /-!
 # The switched source's switched vectors
 
-`FinishSrc`'s `repCut_fw` asks of its source, at the firewall's zerocheck and lincheck, the switched vectors of the
+`FinishSrc`'s `repCut_fw` asks of its source, at the ZK server's zerocheck and lincheck, the switched vectors of the
 claims (`hpiop`'s second conjunct). At the switched prover's source (`swSrcE`) they are the honest source's: the
 switched pre-final view moves only pads, masked values and `Y₁`, and its `ŝ` (`ν + maskHom` at the mask slot) and region
 claims read the witness and the mask slot alone.

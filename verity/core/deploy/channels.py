@@ -370,7 +370,7 @@ class Tee:
 
 class Adversary:
     """`pipe` with what it sends tampered with, from its frame numbered `after` on (0 counts the handshake's), each frame
-    by `seed`'s draws in turn: dropped (`drop`), one byte flipped (`corrupt`), held back until the next frame has gone
+    by `seed`'s samples in turn: dropped (`drop`), one byte flipped (`corrupt`), held back until the next frame has gone
     (`reorder`, or until the run has nothing else to do), or delayed by `delay_ns` (`delay`, on a `MemoryPipe`). `events`
     lists what it did to which frame."""
 

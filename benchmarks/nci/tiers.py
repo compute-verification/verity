@@ -23,7 +23,7 @@ proved.
   The novel intake is line rate or, under network accounting, side channels plus certified timing plus the declared
   computation's novel intake, alpha F under the inference-only policy once the count check is in the ZK flow.
 * 1/rho_NCI: the declared computation trains at the thread bound, rho_T = b_a / (alpha Lambda(K)) declared gates per
-  counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum law rho_PS when no dark
+  counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum rule rho_PS when no dark
   compute can sum the inference blocks' partial sums. The residual reads them on the server for free; unmonitored compute
   reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
   reads 2 b_p bits, and the developer relays only as many partial sums as buy more gates of the registered circuit than

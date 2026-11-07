@@ -2,7 +2,7 @@
 period's salted roots committed before any coin is read, K of its execution phases sampled, only those registered and
 proved, the sample of record the Lean verifier's on the coins the sample read (`lean_draw`, stood in here by the sampler
 `coins.OwnRandomness` that `test_coins` holds byte for byte to Lean's `Flock.Draw.drawOn`), and what the sample
-established stated as faulty proof blocks at δ."""
+established stated as incorrect proof blocks at δ."""
 from __future__ import annotations
 
 import itertools
@@ -96,7 +96,7 @@ def test_the_period_draw_commits_every_root_before_it_reads_a_coin(tmp_path):
 
 
 def test_all_draws_every_window_and_reads_no_coin(tmp_path, lean_draw):
-    """K = n leaves nothing to sample: no coin is read, no Lean draw runs, and the sample of record is every window."""
+    """K = n leaves nothing to sample: no coin is read, no Lean sample runs, and the sample of record is every window."""
     run, coins = Run(tmp_path), Coins()
     openings = committed(run)
     drawn = run.lw.period_draw(run.stream, roots(run, openings), None, coins)
@@ -155,7 +155,7 @@ def test_a_prover_that_proves_another_k_subset_is_refused_by_name(tmp_path, k):
 
 
 def test_a_lean_that_refuses_or_draws_otherwise_refuses_the_link_by_name(tmp_path, monkeypatch):
-    """An honest period, proved: the verdict refuses it by name where the Lean can't draw on its coins, draws other
+    """An honest period, proved: the verdict refuses it by name where the Lean can't sample on its coins, samples other
     windows than the sample object lists, or answers with a sample that isn't subset:K over the period's windows."""
     run = Run(tmp_path)
     openings = committed(run)
@@ -177,7 +177,7 @@ def test_a_lean_that_refuses_or_draws_otherwise_refuses_the_link_by_name(tmp_pat
 
 
 def test_lean_draw_runs_flock_verify_draw_on_the_coins(tmp_path, monkeypatch):
-    """`lean_draw` runs the Lean verifier of record (`proofs.executable`) as ``draw --population n --k k
+    """`lean_draw` runs the Lean verifier (`proofs.executable`) as ``draw --population n --k k
     --stream-file F``, F the coins, and returns its one ``DRAW`` object; a failed run, no ``DRAW`` line or one that
     isn't JSON is a refusal, and so is a Lean that can't be built."""
     monkeypatch.undo()
