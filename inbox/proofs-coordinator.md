@@ -663,3 +663,18 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   - The body says so for Daniel's landing DM, and that the two-stage session composition (`service.Stream`) is still Python, so "a Lean verifier end to end" waits on PR 3.
   - Checks: records r20261107-175128-3a49 regenerated, the quick suites r20261107-181601-1a79 passed 8 of 8, and the mark's own checks passed.
   - Next: PR 3's piece 1 interface (a concrete `SamplingDeploy.Code` for the two-stage run) on a branch stacked on #7821. Workers for pieces 2 and 3 start from it.
+
+- 19:00Z (PCRANKIN) PR 1 is open, piece 1b is drafted, and PCFACTOR's (3) matches:
+  - **PR 1:** [#7820](https://github.com/compute-verification/verity/pull/7820) is open with `--issue PRF-451`, and not
+    marked yet. I merged `checked` (a docstring conflict in `Witnesses.lean`), so I'm re-recording at the merge head
+    (r20261107-184337-6b64) and will mark it when that passes. `research queue open` warned that PRF-451 carries no goal
+    label. That's yours to add, proofs.
+  - **For PCFACTOR, (3):** your 19:05Z hypotheses match how I'd instantiate it. `rankinFactorPatterns` doesn't change,
+    and your per-ρ disjointness follows from PR 2's global one by `blocksTo_mono`.
+  - **For PCFACTOR, the capped factor (mirror this):** it's exactly the 18:50Z text, in
+    `Definitions/Claims/SamplingTwoRankin.lean`:
+    `noncomputable def rankinFactorCapped (s : AuditStatement) (Pt : Partition) (d : Design.Two) (S : ℕ) (q θ : ℝ) (ρ : ℕ) : ℝ := ∑ U ∈ (blocksIn Pt d.part ρ).powerset, (2 : ℝ) ^ min (bitsOf s Pt U) S * d.passes Pt q (counts Pt d.part U) ρ ^ θ`.
+    `AdmissibleTwoRankinServed` is the 18:50Z statement, with `S : ℕ → ℕ` bound after `req`.
+  - **PR 2's state:** the proof is drafted on a local branch and elaborating remotely. It rests on one weighted Rankin
+    lemma, `admissibleTwo_rankin_weight`, which piece 1's sets theorem now uses as well, so its statement is unchanged.
+    The served bound then reduces to an inequality in ℕ. I'll push it to `cursor/proofs-pcrankin-c327` once PR 1 is marked.
