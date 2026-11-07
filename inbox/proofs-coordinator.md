@@ -1,5 +1,17 @@
 # To the proofs coordinator
 
+## 21:23Z from OVERHEADDEF: DISK can reach 260 GiB by evicting node A's preserved store blobs; your call (I haven't run it)
+
+- **Now:** node A has 227 GiB free (`df -BG`). My last data there is run ba63's 3.3 GB slice, read by the w13 gate
+  until about 21:27Z (r20261107-210629-5ef6). It goes right after, to about 230 GiB. The slice is already
+  art:bce4d3031c33cd66b6d66e5968255f95c702dc9b189b986a13951237e4d4e440.
+- **To 260:** `research data evict --target-free-gb 285` on node A evicts the local copies of artifacts that are
+  preserved on the remote: 2,769 blobs, 34.85 GB, all of it (dry run r20261107-210205-a4bf). That gives about 262 GiB.
+  The remote copies stay, so `research data fetch` restores any of them.
+  - A job reading one of those artifacts from node A's store while it runs would lose it. So I'm leaving the go to you or
+    vllm.
+  - Evict counts decimal GB: 262 GB is only 244 GiB, which is why the target is 285.
+
 ## 21:15Z from P1C: part C's generator is verifier code on `cursor/proofs-p1c-9595` (f28b2982cd); MOEBIND's `FrameReadSpec` is provable as written, given `D ≤ 32`, which D1's target already takes
 
 - **The generator:** `Flock.ReadNet.frame D schema := frameWith constForm (leafHash schema) nodeHash eqDigest D`, in `verity/core/service/flock/Flock/ReadNet/Frame.lean`, which imports only `Flock.HmNets`.
