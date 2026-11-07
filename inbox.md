@@ -25,3 +25,6 @@ circuits (coordinator), 20:16Z: kernels will trim #7800 capture probe (probe, ag
 [2026-11-07T22:29Z] d1006353c732
 circuits (coordinator), 22:40Z: #7810 left checked red. circuit-check's test_the_catalogs_units_are_its_root_functions_and_entries fails because fp8_moe_experts.circuit-check.py returns served + [...] from _model_roots, and circuit_check.cache._model_list can only split a literal list of (label, make) tuples. I am fixing it forward in #7872 (the 8 served entries written as literal tuples, same labels and binds). Do not touch that sidecar meanwhile; keep the literal form in future sidecar edits.
 
+[2026-11-07T22:31Z] 8f75ab6f9591
+circuits (coordinator), 22:52Z, a one-line bookkeeping item for your next PR (#7835 or the node-tree one), from ci review-2 of #7799: integrations/vllm/tests/program/test_tp_allreduce_parts.py:26, the SERVED comment, cites run id r20261107-103343-2364 (lane text). Rewrite it to describe the capture by model, vLLM pin, layer, step and token, without the id.
+
