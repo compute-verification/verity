@@ -19,7 +19,7 @@
 # OUT/plan.jsonl; MAX_MODEL_LEN the engines' context limit. FLASHINFER=1 puts CUDA_HOME's bin first on PATH (CUDA_HOME, else
 # the newest toolkit under /usr/local), so vLLM runs FlashInfer's sampler, autotune and fused all-reduce, and runs a sent
 # inputs/fi_smoke.py before the first engine so that its JIT lands outside the served traffic; OUT/engine_env.txt records
-# the toolkit, has_flashinfer and the autotune cache's digest before the arms and after each. LDCONFIG=1 refreshes the
+# the toolkit, has_flashinfer and FlashInfer's caches' digests (fi_cache) before the arms and after each. LDCONFIG=1 refreshes the
 # linker cache first. BUDGET_MIN bounds the arms' minutes: each arm after the first serves the reps of REPS that still fit
 # (serve_tax.py fit, from the arm before it), and none if no rep does (OUT/arms.txt says what was cut).
 # Each restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR/<arm> (KV_DIR by default a fresh directory
@@ -79,11 +79,21 @@ v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "serve-tax: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
 mkdir -p "$OUT"
 
-# the FlashInfer autotune cache every engine reads (~/.tensorrt_llm/cache), by its files' digest
+# FlashInfer's caches every engine reads, by their files' digests: its JIT GEMMs (~/.tensorrt_llm/cache) and vLLM's
+# autotune file per config hash (VLLM_CACHE_ROOT's flashinfer_autotune_cache), which the arms share, as they share the hash
 fi_cache() {
-  local c=$HOME/.tensorrt_llm/cache
-  [ -d "$c" ] && echo "tensorrt_llm_cache=$(cd "$c" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64) files=$(find "$c" -type f | wc -l)" \
-    || echo "tensorrt_llm_cache=none"
+  local kv c
+  for kv in "tensorrt_llm_cache:$HOME/.tensorrt_llm/cache" \
+            "autotune_cache:${VLLM_CACHE_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/vllm}/flashinfer_autotune_cache"; do
+    c=${kv#*:}
+    if [ -d "$c" ]; then
+      printf '%s=%s files=%s ' "${kv%%:*}" "$(cd "$c" && find . -type f -print0 | sort -z | xargs -0 -r sha256sum | sha256sum | cut -c1-64)" \
+        "$(find "$c" -type f | wc -l)"
+    else
+      printf '%s=none ' "${kv%%:*}"
+    fi
+  done
+  echo
 }
 
 if [ "${1:-}" = leased ]; then
