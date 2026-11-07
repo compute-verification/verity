@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.KS.PlainClash0JK
 public import Proofs.Flock.Claims.KS.PlainClashLaterK
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
 
 /-!
 # The later levels' entries and clash, draw half, at the parsed record

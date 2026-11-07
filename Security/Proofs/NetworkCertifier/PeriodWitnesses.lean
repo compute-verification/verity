@@ -3,6 +3,7 @@ module
 public import Proofs.NetworkCertifier.Witnesses
 public import Proofs.NetworkCertifier.WitnessToys
 public import Proofs.NetworkCertifier.Assumptions.SampledCode
+import Proofs.Flock.Claims.Witnesses.Meets
 
 /-!
 # The monitoring period's honest and nontrivial lemmas

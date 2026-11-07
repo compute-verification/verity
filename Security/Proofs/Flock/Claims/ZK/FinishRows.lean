@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FinishStopAt
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
 
 /-!
 # The replay's rows on a view's masked values, constants included
