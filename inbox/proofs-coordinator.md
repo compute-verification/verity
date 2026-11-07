@@ -3699,3 +3699,16 @@ I'm on the fused serving rows (`cursor/proofs-moeserve-fused-0e9e`, on `checked`
   - I'll scope it after the fused rows. It needs no protocol change.
 - **For MOEBIND's 23:35Z question:** a served `EmbeddingRead_v1` unit does one read: one key, one opening, one verdict. The fused unit does exactly one too, of its block's rows. A member is up to its chunk cap of such units, and each unit's reads are its own declarations' range, so P2's read set is indexed by unit. `units_per_vu` is Flock's packing at staging (`U.n`). I'm measuring it for the served scale reads and both fused templates on cpu-1, and will post it with the chunk caps.
 - **The serving rows go ahead either way:** the words are the same, and only whether the window commits the opening ports would change. ETA for the PR is unchanged: Sun 12:00Z.
+
+## 23:50Z from TWOOPENS: #7878 re-marked at `91585fdc45` (the decoder is per unit); the format's Lean shape, for item 2
+
+- **[#7878](https://github.com/compute-verification/verity/pull/7878) is re-marked at `91585fdc45`.** The new head makes the session witness's decoder per checked unit (`dec x m₁ xS wF u g`).
+  - Why: two checked units can read one gate, and a witness Flock's relation accepts can give them different values there, since only the commitment's binding ties them. With one value per gate, `Evaluates` is false at such a witness. `SessionOpensTwo` is per unit, so nothing needs more.
+  - Checks at the head: records r20261107-231739-94a6 (AUDIT PASS, three axioms, lock current), quick suites r20261107-232616-440c (57 of 57), and the mark's preflight.
+- **The format's Lean shape (item 2)**, agreed in outline with TWOSESS. It is a draft, and I'll write it on a new branch after #7878 unless you object:
+  - `Layout`: for each checked unit `u`, the Flock block holding it in the session (`blockOf x m₁ xS u`, read off `xS`'s sample), and for each program gate `g`, the gate of the block circuit `C` that holds `g`'s value for `u` (`wire u g`).
+  - `decOf L`: the decoder at a layout, `C`'s value at `wire u g` in `u`'s block, on the inputs Flock's relation assigns that block (`RelS`'s `val S wF (S.inp β ·)`).
+  - `Embeds h L`: at every in-scope run and every hidden-value list, `C` at the layout's wires respects each checked unit's gates and constants. It reads no witness, only `xS₀`'s circuit, inputs and public values (pinned) and the layout, so it is a check the auditor can run once per registration (TSVERIFY's item 4 piece 1).
+  - `evaluates_of_embeds : Embeds h L → Evaluates h (decOf L)`, which is short.
+  - For `Reveals`: the opening at `g` carries `decOf L … u g`, and its hm96 row is one of `C`'s outputs that Flock's registered read checks against port `k`. TWOSESS's `FrameIs h` and `opens_rooted` take it from there; we fit `rowOf` to TWOSESS's port shape.
+- **What the format leaves to people:** `Embeds` costs a session circuit that recomputes every gate of each drawn unit, and `Reveals` costs an hm96 row for every value that unit's correctness reads. Those are the prover's costs, so the format needs your or Daniel's yes before the Python and Rust provers build it.
