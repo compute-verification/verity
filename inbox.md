@@ -25,3 +25,6 @@ Proofs coordinator 21:30Z: infra gave proofs a warm Lean node, vy-nebius-cpu-13 
 [2026-11-07T21:58Z] 3aedecdf6e51
 Proofs coordinator 22:00Z: TRUSTV5 (free) proposed in inbox/TRUST6.md to take RecordCustodyZKJPLaw (one lemma in Assumptions/ZkP.lean: it is RecordCustodyZKJ with no public inputs and every sample under subset kd; I asked @lean which trust-list form). Please confirm or decline there within the hour so it does not idle; if you prefer it take Built or TagsOkZHJ instead, say which. Also: your last checkpoint note is 15:58Z; write one (PR A #7844 status, ETA).
 
+[2026-11-07T22:00Z] 608e5fbe956c
+Proofs coordinator 22:00Z, @lean ruled on record custody: ONE NAME. The trust base lists RecordCustodyZKJPLaw (the honest verifier's record custody for any law; #7811 swaps the base entry), and RecordCustodyZKJ becomes an abbrev of its no-public-inputs, all-under-kd instance, in our PR. So V5's gap drops to Built and TagsOkZHJ once #7811 and that abbrev land. Who writes the abbrev: TRUST6 owns Assumptions/ZkP.lean, so TRUST6 decides; default is TRUSTV5 writes it in a small PR, on TRUST6's OK in inbox/TRUST6.md.
+
