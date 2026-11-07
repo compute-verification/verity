@@ -1,1 +1,77 @@
 - 18:16Z (proofs): add to your map. lean's PRF-452: the lock run's Proofs build is bounded by a 239-module import chain, 224 of it in Proofs/Flock (Claims/KS and the Recursion sequences), at about 6 s a module. Under 15 min needs about 140 (note:lean/20261107T1805Z-report-proof-check-fast-measure). Size how much your layered target shortens it, and which sequences can become siblings. Inbox: this file on cursor/verity-proofs-84b5.
+- 18:20Z (proofs): Daniel approves the 4-layer shape and wants it FASTER, with each layer implemented separately, its own security proof, and maximally clean interfaces. I ran the import map myself (/tmp/depmap.py on checked, output below). Use it, verify it, and spend your time on the classification (real use of recursion or misplaced utility, per layer) and the migration order. Please move your deadline to 20:00Z (12 PM PST); a partial answer is fine. Interface Lean code is a separate worker's (SPOTIFACE).
+```
+one-stage V3 (Bridge/Refused): 1048 transitive modules, 21 recursion modules
+     Security/Proofs/Flock/VBridge/Algebra/ToVStar.lean
+     Security/Proofs/Flock/VBridge/OfVStar.lean
+     verity/core/service/flock/Flock/RecVStar.lean
+     verity/core/service/flock/VStar/Algebra.lean
+     verity/core/service/flock/VStar/Cap.lean
+     verity/core/service/flock/VStar/Cli.lean
+     verity/core/service/flock/VStar/Compose.lean
+     verity/core/service/flock/VStar/Holo.lean
+     ...
+templated V5 (Bridge/V5/Accepted): 1174 transitive modules, 23 recursion modules
+     Rec/SetupValues.lean
+     Security/Proofs/Flock/Recursive/VStarCheck.lean
+     Security/Proofs/Flock/VBridge/Algebra/ToVStar.lean
+     Security/Proofs/Flock/VBridge/OfVStar.lean
+     verity/core/service/flock/Flock/RecVStar.lean
+     verity/core/service/flock/VStar/Algebra.lean
+     verity/core/service/flock/VStar/Cap.lean
+     verity/core/service/flock/VStar/Cli.lean
+     ...
+two-stage ksTwo_code (SamplingGeneric/TwoCode): 1580 transitive modules, 95 recursion modules
+     Rec/Abort.lean
+     Rec/AbortFork.lean
+     Rec/AbortWait.lean
+     Rec/BadLin.lean
+     Rec/BindsDeployed.lean
+     Rec/BitsLin2.lean
+     Rec/BoundAccepts.lean
+     Rec/BoundBridge.lean
+     ...
+generic compiler (Definitions/Claims/SamplingGeneric): 11 transitive modules, 0 recursion modules
+SPOT instance (SamplingGeneric/Instance): 1142 transitive modules, 73 recursion modules
+     Rec/Abort.lean
+     Rec/AbortFork.lean
+     Rec/AbortWait.lean
+     Rec/BadLin.lean
+     Rec/BitsLin2.lean
+     Rec/BoundAccepts.lean
+     Rec/BoundBridge.lean
+     Rec/BoundDeploy.lean
+     ...
+ZK session loop (SessionLoop): 1413 transitive modules, 23 recursion modules
+     Rec/Assumptions/LoopFixture.lean
+     Rec/DeployInputs.lean
+     Security/Proofs/Flock/VBridge/Algebra/ToVStar.lean
+     Security/Proofs/Flock/VBridge/OfVStar.lean
+     verity/core/service/flock/Flock/RecVStar.lean
+     verity/core/service/flock/VStar/Algebra.lean
+     verity/core/service/flock/VStar/Cap.lean
+     verity/core/service/flock/VStar/Cli.lean
+     ...
+Flock KS (MaskedKS): file not found (None)
+--- SPOT/Flock files importing recursion directly (non-recursion files):
+   Security/Proofs/Flock.lean -> RecGeneric
+   Bridge/Honest.lean -> Parse
+   Bridge/V5/Accepted.lean -> SetupValues
+   Bridge/V5/Honest.lean -> Parse
+   C3.lean -> Accepts, Range, Shape, Statements
+   C3/Compose/Family.lean -> VStarCheck
+   C3/Compose/HoloSparseWords.lean -> Range
+   C3/Compose/HoloStreamSizes.lean -> Shape
+   C3/Compose/RsFacts.lean -> Shape
+   C3/Opening/SessionParts.lean -> ToVStar
+   C3/PubRows/Shape.lean -> Shape
+   C3/RegLevels/ROpensPR.lean -> Statements, Shape
+   C3/RegLevels/StackedCoins.lean -> RecVStar
+   C3/RegLevels/TopHold.lean -> RecVStar
+   C3/Reps/AtList.lean -> Shape
+   C3/Reps/HAlgRows.lean -> Shape
+   C3/Reps/RoundLinks.lean -> Shape
+   C3/Sparse/PubChecked.lean -> Range
+   C3/Sparse/SessionReg.lean -> Shape
+   Claims.lean -> InnerAccepts, InnerAcceptsKS, DeployInputs, DeployOuter, Deploy, ComposeParts, DeployComplete, DeployScope, DeployFacts, DeploySessions, DeployScopeRuns, DeployMargin, DeployPremises, DeployHonest, DeployZK, Seq, SeqSim, SeqSession, SeqPrefix, SeqCap, SeqKey, SeqDeploy, DeployStop, SeqStop, SeqDeployStop, RecSystem, VStar, VStarBound, BoundDeploy, BoundDeployE, FlockKSDeployE, ConflictTiedE, RepErase, CallsBridgeE, PlainKSAbortFails, BoundRun, BoundForks, PlainKSAbortDeployed, BindsDeployed, BoundAccepts, BoundRoute, BoundBridge, LastBindsEC, BoundRouteCols, BoundWeight, BoundMerged, BoundRouteMerged, BoundMergedLin, BoundRouteMergedLin, KSLin2, KSLinks, BitsLin2, BoundRouteKSLin2, SetupCalls, KSLin2Deployed, KSLin2Plain, LamDeployed, FlockKSLin, CapLink, CapLinkRd, LastBindsDeployed, LastColsDeployed, RepFramesBind, RepFramesFields, RepFramesLig, RepOpenings, RepBindProof, CallsBridge, LogWalk, DecodeLog, VerdictLog, CallsAgree, CallsAgreeE, LastColsE, CallsOfProofs, LastBindsClosed, KSLin2PlainClosed, VStarParts, VStarPartsHolo, DeployReg, VStarPartsSparse, VStarLinks, PartsVStar, VStarBDeploy, KSLin2Staged, LayoutBDeployed, VStarCross, DeployChecked, DeployLayout, SchedCount, InnerForm, SchedDense, LayoutBCap, LayoutBTops, SetupTagged, RowsCover, CapPorts, TopsStaged, FinOpen, RecRecord, RecOpen, OpenedPlain, OpenedDecode, VerdictRowD, SlotsCommit, SlotsCheck, OpensReads, RoundWords, CoinTie, CoinPos, CapOpens, TopsOpens, PartAccepts, VStarPartsB, PartsCompose, NextCs, NextShaRep, NextJ, NextP, NextSha, NextShaS17, NextShaDec, NextS, NextR, DecodeTiesVals, DecodeTiesW, DecodeTies, VerdictRows, RecordCanon, VerdictRowG, VerdictRowE, VerdictRowR, VerdictParts, NextRHonest, NextRFits, NextRShaped, NextRSetup, NextRRep, NextRSession, NextRRows, NextRCoins, NextRTables, ResAccepts, RowSlots, FinalPiece, VerdictPieces, OpenPieces, NextRCounts, VerdictRowDPieces, VerdictRun, VerdictAssembly, DecodeAt, CapPieces, DeployedR, RestFinal, RestLens, RestLive, RestRead, RestReadR, RestReadsAt, RestElemR, RestOpenedSized, RestVerdictBases, RestVerdictCustody, VerdictRowDCoin, VerdictRowRDeployed, VerdictRowDCover, NonVacuous, VerdictRowEAcc, VerdictRowEAccR, PartAcceptsPin, PartAcceptsSetup, OpenLowerJointV, VerdictRowEJoint, VerdictRowEFree, VerdictRowEBytes, VPiecesDeployed, VerdictRowL, RoundCounts, VerdictTargetL, NonVacuousRows, VerdictLoop, LastBindsR, KSLin2R, RoundSizes, LayoutBAcc, LastCallsR, CallsLe, CallsRep, CallsTop, CallsDecision, CallsR, CallsClosed, VerdictRowDTie, InnerAtCoins, InnerSetupSame, InnerExtras, VVTieOf, ResTieVV, RowDLevels, RowDAccept, OpenLowerDeployed, CapLower, ResLowerDeployed, HonestVerdictFinal, LastSharedR, LastFilesR, KSFlockLinR, VerdictFramed, RestVerdictBasesHold, DecompBDeployed, VerdictRowRDep, HonestIVStarR, HonestPartsR, HonestRepR, HonestAccR, HonestPartsLayR, VStarWit, VStarBuild, VStarTrace, HpLast, VStarTraceOk, VStarNets, VStarDeployed, HpEarly, SlotsOk, HpEarlyTrace, VStarFit, VStarHh, VStarPorts, VStarPin, VStarHonest, VStarCap0, VStarCapL
+```
