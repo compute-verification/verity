@@ -20,6 +20,8 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
 | `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
 | `restore-unseeded` | `restore` with requests that carry no seed, as production clients send | `restore` |
+| `tokens-only` | each Commit period's tokens committed as `tokens` commits them, without the tick | `record` |
+| `boundary` | the boundary commitment at each replay block's edge, as a server would take it: drained, the KV pool hashed by the row-table kernels under a fresh key and copied to host memory, the scheduler's state and each rank's runner rows and generators taken and kept | `tokens-only` |
 
 `replay.py` replays one load of a `record` arm in this process under its recorded schedule (each request added before
 the step it arrived before), compiled or eager, and counts the step rows and tokens that differ from the served ones.
@@ -57,6 +59,24 @@ client raises its open-file limit to the hard limit first.
 
 On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b`, the last two read from their pinned
 snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
+
+The production tax serves the replay ladder's production plan (`benchmarks/replay_ladder/prod_plan.py`: ShareGPT,
+multi-turn and 8k-32k-token prompts, half of them sampled at temperature 0.7 under the public seed rule, each stopping at
+its end of text or its cap), sent as `plan.jsonl` or named by `PLAN_FILE`, with FlashInfer on:
+
+~~~text
+research run --on NODE --source . --cwd source --send C4.json.gz --send plan.jsonl [--send fi_smoke.py] \
+  --env MODEL_ID=glm53 --env 'ARMS=compiled record tokens-only boundary' --env RATES=light=R1,medium=R2,saturated=R3 \
+  --env EDGES_EVERY_S=30 --env KV_COPY=first --env MAX_MODEL_LEN=40960 --env FLASHINFER=1 --env CUDA_HOME=DIR \
+  --env BUDGET_MIN=M -- bash benchmarks/serve_tax/run.sh
+~~~
+
+At TP > 1 the boundary arm's engine core drains and takes its own state, and each rank takes its part where it lies
+through `collective_rpc` (`boundary.rank_pool` once, `boundary.rank_take` at each edge): its KV pool hashed and, on the
+ranks `KV_COPY` names, copied to pinned host memory, then its runner rows and generators, all kept in the rank's process
+until the next edge. Every rank hashes under the edge's one key, so ranks that hold the same bytes give the same root, and
+the edge's record says whether all did. Each load's `meta.json` has the GPUs' busy seconds over it (`gpu`: NVML's
+utilization integrated), and `table.md` lays them out per thousand output tokens beside each arm's edges.
 
 ## What it writes
 
