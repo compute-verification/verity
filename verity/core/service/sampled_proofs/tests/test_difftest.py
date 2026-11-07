@@ -682,11 +682,11 @@ def check(p: dict, c: tuple[dict, bytes], e: dict) -> tuple:
 
 
 def covered_params(j) -> dict:
-    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and a bernoulli law at 0 < p < 1 refused (`service.count_varies`)."""
+    """`OneStage.paramsOfJson`: `decode_params` (`paramsParsed`), and every bernoulli law refused, at any p
+    (`service.bernoulli`)."""
     p = decode_params(j)
-    if service.count_varies(p["law"]):
-        raise D.Reject("the law is bernoulli at 0 < p < 1, which the sampled audit's soundness statement doesn't cover "
-                       "(its drawn count varies)")
+    if service.bernoulli(p["law"]):
+        raise D.Reject(service.BERNOULLI)
     return p
 
 
@@ -1256,8 +1256,8 @@ def _receipt(rec, challenger: str, received: str) -> dict:
 def run(j):
     """`Run.run`: a `Stream`'s run of one registration from its public check through its verdict, the pieces above in its
     order. `register`: `check_public` on the values and declared items, the population, R1-R7 under
-    `service.selection_law` over it (a rate law's count of none or more than N: `rate`), a sampling design whose sampled count varies
-    (`service.count_varies`: `shapes`), a program whose units read stratum by stratum are not its N in order
+    `service.selection_law` over it (a rate law's count of none or more than N: `rate`), a bernoulli sampling design at
+    any p (`service.bernoulli`: `bernoulli`), a program whose units read stratum by stratum are not its N in order
     (`partition.in_order`: `population-order`), and the receipt; `select`: a closure map refused (`closure`), then the
     sample from the source's bytes (`select`), the challenger's coins with their evidence when it read any (`_coins_hold`:
     code `coins`; a `coin_source` other than the challenger is refused up front: the verifier samples no coins of its
@@ -1311,8 +1311,8 @@ def run(j):
     codes = _registration({**p, "law": law}, rec)
     if codes:
         return {"codes": list(codes), "step": "register"}
-    if service.count_varies(law):
-        return {"codes": ["shapes"], "step": "register"}
+    if service.bernoulli(law):
+        return {"codes": ["bernoulli"], "step": "register"}
     if not P.in_order(p["program"], p["query"], n):
         return {"codes": ["population-order"], "step": "register"}
     receipt = _receipt(rec, j["challenger"], j["received"])
@@ -3839,7 +3839,7 @@ def test_the_runs_hello_and_its_one_tree(pieces, name, change, code):
 
 
 def test_the_select_piece_draws_every_rule(pieces):
-    """One sample under each rule `select_draw` samples (the stream's run refuses a Bernoulli law at 0 < p < 1 and a closure
+    """One sample under each rule `select_draw` samples (the stream's run refuses a Bernoulli sampling design and a closure
     map before it), on a partition whose `PAIR` stratum is two ranges apart, Lean's the Python's whole: `All` every unit,
     reading no coins, and each sampling design's sample (a work sampling design's with its closure) reading them,
     each stratum's count its k, which the sampled runs reach only probably, and a rate law's a subset's of its count over
@@ -4316,16 +4316,17 @@ def test_the_record_is_compared_field_by_field(pieces):
 
 
 def _v1_audit(kind: str, s: Setup = SETUPS[3], p: str = "1/1") -> dict:
-    """One valid v1 audit of `s` under a sampling design of `kind` (a Bernoulli one at `p`, which a run refuses at 0 < p < 1), its
-    verdicts accepting."""
-    law = {"law": "bernoulli", "p": p} if kind == "bernoulli" else {"k": 3, "law": kind}
+    """One valid v1 audit of `s` under a sampling design of `kind` (a Bernoulli one at `p`, which a run refuses, or `all`,
+    the sampling design All names: `subset` over every unit), its verdicts accepting."""
+    law = ({"law": "bernoulli", "p": p} if kind == "bernoulli" else {"k": s.population, "law": "subset"} if kind == "all"
+           else {"k": 3, "law": kind})
     table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
     table = {t: w for t, w in table.items() if t in s.templates} if kind == "work" else None
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF, work_table=table)
     params = {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": [], "partition": None, "ports": s.ports,
               "program": s.desc, "query": s.query, "registered": None, "scheme": SCHEME, "work_table": table}
-    evidence = {"session_roots": dict(ROOTS), "statement": {"instances": 3},
+    evidence = {"session_roots": dict(ROOTS), "statement": {"instances": s.population if kind == "all" else 3},
                 "verdicts": {"lean": {"accepted": True, "digest": "aa" * 64, "of_record": True},
                              "upstream": {"accepted": True, "of_record": False}}}
     return _json({"evidence": evidence, "params": params, "record": rec})
@@ -4342,7 +4343,7 @@ def test_the_run_reaches_every_step(pieces):
     v2 = _v2_audit(REGISTERED_SETUPS[0], REGISTERED_SETUPS[0].values[1])
     v2["evidence"]["verdicts"]["upstream"] = {"accepted": True, "of_record": False}
     seen = []
-    laws = ("subset", "bernoulli", "stratified", "work")
+    laws = ("subset", "stratified", "work")
     for i, a in enumerate([*(_v1_audit(k) for k in laws), *(_v1_audit(k, SETUPS[2]) for k in laws), v2]):
         _, case = _from_challenger(_run_case(a, "", 2, ["credited"]), random.Random(f"run/{i}"))
         other = {**case["verdicts"]["lean"], "sessions": RUN_SESSIONS[::-1]}
@@ -4361,7 +4362,7 @@ def test_the_run_reaches_every_step(pieces):
         for own in ("verifier", "os", ""):
             kind, why = D.replay(RUN, {**case, "coin_source": own}, pieces)
             assert kind == "reject" and "the verifier draws no coins of its own" in why, (own, kind, why)
-    assert seen == ["accept", "register", "register", "deliver", "outcome", "reject", "select", "select", "select"] * 9
+    assert seen == ["accept", "register", "register", "deliver", "outcome", "reject", "select", "select", "select"] * 7
 
 
 def test_a_two_stage_run_reaches_every_step(pieces):
@@ -4558,26 +4559,23 @@ def _ran(pieces, case: dict) -> dict:
     return out
 
 
-def test_the_run_refuses_a_count_that_varies(pieces):
-    """A registration whose sampling design samples a count that varies, a Bernoulli one at 0 < p < 1, is refused at its registration
-    (`shapes`), Lean's the Python's whole: its sessions would set up tables
-    of different shapes. At p = 0 or 1, and under subset, stratified and work, the run goes on; R1-R7 come first."""
+def test_the_run_refuses_a_bernoulli_law(pieces):
+    """A registration under a Bernoulli sampling design is refused at its registration at any p (`bernoulli`,
+    `Draw.bernoulli`), Lean's the Python's whole: at 0 < p < 1 its sessions would set up tables of different shapes, and at
+    p = 0 the stream would accept having verified nothing; R1-R7 come first. Under subset, stratified, work and All the run
+    goes on to accept."""
     source = hashlib.shake_256(b"run").hexdigest(600)
-    seen = []
-    for s, p in [(SETUPS[3], "1/2"), (SETUPS[3], "2/3"), (SETUPS[3], "2/4"), (SETUPS[2], "1/2"), (SETUPS[3], "0/1"),
-                 (SETUPS[3], "1/1"), (SETUPS[3], "3/3"), (SETUPS[2], "0/1")]:
+    for s, p in [(SETUPS[3], "0/1"), (SETUPS[3], "0/4"), (SETUPS[3], "1/1"), (SETUPS[3], "3/3"), (SETUPS[3], "1/2"),
+                 (SETUPS[3], "2/3"), (SETUPS[2], "0/1"), (SETUPS[2], "1/1"), (SETUPS[2], "1/2")]:
         case = _run_case(_v1_audit("bernoulli", s, p), source, 2, ["credited"])
-        for changed in (case, {**case, "record": {**case["record"], "previous": "11" * 64}}):
-            out = _ran(pieces, changed)
-            seen.append((p, out.get("codes") or out["symbol"]))
-    assert [c for _, c in seen[0:8:2]] == [["shapes"]] * 4
-    assert all(c != ["shapes"] for _, c in seen[8::2]) and all(c != ["shapes"] for _, c in seen[1::2])
+        assert _ran(pieces, case) == {"codes": ["bernoulli"], "step": "register"}, p
+        out = _ran(pieces, {**case, "record": {**case["record"], "previous": "11" * 64}})
+        assert out["step"] == "register" and out["codes"] != ["bernoulli"], (p, out)
     for kind in ("subset", "stratified", "work"):
         assert _ran(pieces, _from_challenger(_run_case(_v1_audit(kind), "", 2, ["credited"]),
-                                             random.Random(kind))[1])["symbol"] == "accept"
-    assert service.count_varies({"law": "bernoulli", "p": "1/2"})
-    assert not any(service.count_varies(law) for law in ({"law": "bernoulli", "p": "0/1"}, {"law": "bernoulli", "p": "1/1"},
-                                                         {"k": 2, "law": "subset"}, {"k": 2, "law": "work"}))
+                                             random.Random(kind))[1])["symbol"] == "accept", kind
+    every = {**_run_case(_v1_audit("all"), "", 2, ["credited"]), "rule": {"rule": "all"}}
+    assert _ran(pieces, every)["symbol"] == "accept"
 
 
 def test_the_run_refuses_a_closure_map(pieces):
@@ -4593,20 +4591,27 @@ def test_the_run_refuses_a_closure_map(pieces):
         assert _ran(pieces, _from_challenger(case, random.Random(n))[1])["symbol"] == "accept"
 
 
-def _covered_case(kind: str) -> tuple[dict, dict, dict]:
-    """An accepted v1 audit of `SETUPS[3]` under `kind` (`bernoulli` at 1/2, or `work`), as params, record and evidence,
-    its sample a work sample's with a closure when `kind` is `closure`."""
+def _covered_case(kind: str, p: str = "1/2") -> tuple[dict, dict, dict]:
+    """An honest v1 audit of `SETUPS[3]` under `kind`, as params, record and evidence: `bernoulli` at `p`, `subset`,
+    `stratified`, `work`, `all` (the sampling design the stream's All rule names, `subset` over every unit), or `closure`,
+    a work sample that carries a closure."""
     s = SETUPS[3]
-    law = {"law": "bernoulli", "p": "1/2"} if kind == "bernoulli" else {"k": 3, "law": "work"}
-    table = None if kind == "bernoulli" else {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}}
+    n = s.population
+    law = ({"law": "bernoulli", "p": p} if kind == "bernoulli" else service.selection_law(service.All(), n) if kind == "all"
+           else {"k": 2, "law": "subset"} if kind == "subset" else {"k": 3, "law": "work" if kind == "closure" else kind})
+    table = {PAIR.id: 2, TRIPLE.id: {"floor": 1, "work": 1}} if law["law"] == "work" else None
     mine = DR.derive(s.program, s.query, law, table)
     rec = R.record(s.program, s.query, law, SCHEME, [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports],
                    WINDOW, leaf_layer=LEAF, work_table=table)
-    units = [1, 2, 4] if kind == "bernoulli" else sorted(
-        u for st_ in mine["strata"] for u in [u for lo, hi in st_["units"] for u in range(lo, hi)][:st_["k"]])
-    d = {**mine, "population": s.population, "units": units}
+    if law["law"] == "bernoulli":
+        units = {Fraction(0): [], Fraction(1): list(range(n))}.get(Fraction(p), [1, 2, 4])
+    elif law["law"] == "subset":
+        units = list(range(law["k"]))
+    else:
+        units = sorted(u for st_ in mine["strata"] for u in [u for lo, hi in st_["units"] for u in range(lo, hi)][:st_["k"]])
+    d = {**mine, "population": n, "units": units}
     if kind == "closure":
-        d["closure"] = [u for u in range(s.population) if u not in units][:1]
+        d["closure"] = [u for u in range(n) if u not in units][:1]
     proved = DR.proved(d)
     evidence = {"draw": d, "instances": len(proved), "proved_units": proved,
                 "receipt": R.receipt(rec, "v", received=RECEIVED), "served": None, "session_roots": None,
@@ -4640,9 +4645,22 @@ def test_the_audit_refuses_what_soundness_does_not_cover(server, server_v2):
         out = server_v2.exchange(_json(v2))
         assert out["verdict"] == "reject" and out["reason"].startswith(stage), (kind, out)
         assert "soundness statement doesn't cover" in out["reason"], (kind, out)
-    params, rec, evidence = _covered_case("work")
-    case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
-    assert D.replay(ONE_STAGE, case, server)[0] == "accept"
+        if kind == "bernoulli":
+            for p in ("0/1", "0/4", "1/1", "3/3", "2/3"):
+                law = {"law": "bernoulli", "p": p}
+                one, two = {**case, "params": {**params, "law": law}}, {**v2, "params": {**v2["params"], "law": law}}
+                out = server.exchange(one)
+                assert out == answer(one) | {"reason": out["reason"]}, (p, out)
+                assert out["verdict"] == "reject" and out["reason"] == "params: " + service.BERNOULLI, (p, out)
+                out = server_v2.exchange(_json(two))
+                assert out["verdict"] == "reject" and out["reason"] == "params: " + service.BERNOULLI, (p, out)
+    for kind in ("subset", "stratified", "work", "all"):
+        params, rec, evidence = _covered_case(kind)
+        case = _json({"commitment": _hex(rec), "evidence": _hex(evidence), "params": params})
+        assert D.replay(ONE_STAGE, case, server)[0] == "accept", kind
+        two = {**v2, "params": {**v2["params"], "law": params["law"], "work_table": params["work_table"]}}
+        out = server_v2.exchange(_json(two))
+        assert not (out["reason"] or "").startswith("params: "), (kind, out)
 
 
 def test_the_run_refuses_a_population_out_of_order(pieces):
