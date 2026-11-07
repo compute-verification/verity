@@ -1,4 +1,4 @@
-"""Coverage campaign harness (D87): seeded workload draws, the step-indexed arrival loop, the control-run step expectation."""
+"""Coverage campaign harness (D87): seeded workload samples, the step-indexed arrival loop, the control-run step expectation."""
 from __future__ import annotations
 
 import json
@@ -14,7 +14,7 @@ REPO = Path(__file__).resolve().parents[2]
 
 
 # ---------------------------------------------------------------------------------------------------------
-# draws
+# samples
 # ---------------------------------------------------------------------------------------------------------
 
 

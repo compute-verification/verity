@@ -196,7 +196,7 @@ def words(x: np.ndarray, w: np.ndarray, r: np.ndarray, product: str) -> np.ndarr
 
 def probe(N: int, eps: float, seed: int) -> dict[str, Any]:
     """Rows and one weight row on which each alternative's words differ from `DsaRMSNorm_v1`'s in PER_ALT columns of its own.  Rows
-    at served scales, drawn BATCH at a time (at most POOL), in order: a row whose r differs (any row, for a product order), then
+    at served scales, sampled BATCH at a time (at most POOL), in order: a row whose r differs (any row, for a product order), then
     every free column with a weight in PROBE_W at which the two bf16 words differ, the first such weight taken.  The r of the two
     models are a few f32 ulps apart and x and w carry 8 significant bits, so about one such row in eight has a column at all.  A weight
     changes only its column's words and r only its row's, so the targets hold together; the other columns keep a served weight."""

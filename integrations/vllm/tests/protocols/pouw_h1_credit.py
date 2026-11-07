@@ -1,12 +1,12 @@
 """Core credit's statement steps over a served H1 window with receipts on (SERVEH1): `pouw_h1_gpu.py --credit`'s check.
 
-A window's ``receipt@<c>``, ``pub@<c>`` and ok rows are bound only where credit verifies a drawn call's statement
+A window's ``receipt@<c>``, ``pub@<c>`` and ok rows are bound only where credit verifies a sampled call's statement
 (`credit._verified`): on the ``--registered`` file credit builds itself from the descriptor and the window's entries
 (`credit.registered_file`: port o0 at the call's registered receipt table, ``pub`` and o1 at rows of known content
 credit computes), then `credit._proved` and `credit._registration` over the outcomes. `verdict` runs those steps, after
 `credit._a_link` and (with the Commit) `credit._arow`, as `credit._window` orders them, over the window's own evidence.
 
-The verifier of record is a stand-in (`StandIn`), as in core's `test_pouw_credit_statements.py`: there is no Flock
+The verifier is a stand-in (`StandIn`), as in core's `test_pouw_credit_statements.py`: there is no Flock
 proof of a served K = 4096 unit here. A session's "proof" is the prover's openings of each sampled proof block's ``pub``, o0 and
 o1 rows (each row's b || c, its path and, for o0, its salt) from the prover's own tables (`Prover`). The stand-in
 accepts a session only when each opening verifies against the root credit's file gives that port, at the row the file
@@ -115,12 +115,12 @@ def of_run(h1: Any, served: Any) -> Window:
                   h1.session or SV.LOCAL_SESSION)
 
 
-#: ``(call, A [M, K] s8, B [N, K] s8)``: a drawn call's operands, as the serving GPU held them
+#: ``(call, A [M, K] s8, B [N, K] s8)``: a sampled call's operands, as the serving GPU held them
 Operands = Callable[[int], tuple[np.ndarray, np.ndarray]]
 
 
 class StandIn:
-    """The stand-in verifier of record (the module docstring): `__call__` is `credit._verified`'s ``run``."""
+    """The stand-in verifier (the module docstring): `__call__` is `credit._verified`'s ``run``."""
 
     def __init__(self, w: Window, operands: Operands):
         self.w, self.operands = w, operands
@@ -195,7 +195,7 @@ def _fields(words: Any) -> tuple[bytes, int, tuple[bytes, bytes], tuple[int, tup
 
 
 def statements(w: Window, units: list[int], to: Path) -> tuple[list[dict], dict[str, str]]:
-    """The prover's statements of ``units`` (one a drawn call, its session's openings from the prover's tables) under
+    """The prover's statements of ``units`` (one a sampled call, its session's openings from the prover's tables) under
     ``to``, and the period-open's circuit files (``{k<K>: SHA-512}``) of the stand-in's circuit files."""
     files, out, by_call = {}, [], {}
     for u in sorted(units):
@@ -221,7 +221,7 @@ def statements(w: Window, units: list[int], to: Path) -> tuple[list[dict], dict[
 
 
 def verdict(w: Window, units: list[int], operands: Operands) -> dict[str, Any]:
-    """Credit's steps over ``w``, ``units`` drawn: ``{step: None or (code, why)}`` in `credit._window`'s order, the first
+    """Credit's steps over ``w``, ``units`` sampled: ``{step: None or (code, why)}`` in `credit._window`'s order, the first
     refusal stopping the rest, and ``accepted`` when none refused."""
     out: dict[str, Any] = {"a_link": CR._a_link(w.rounds, w.entries, len(w.layout["calls"]))}
     if w.commit is not None and out["a_link"] is None:

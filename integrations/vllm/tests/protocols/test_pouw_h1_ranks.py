@@ -1,7 +1,7 @@
 """`protocol_options.pouw_h1_ranks`: a window split over two ranks (pipeline stages, or tensor-parallel ranks through
 `install`), each rank's calls recorded where its linears are and the window held whole beside the scheduler, commits what
 one process serving the same linears commits: the same calls at the same positions, the same tables, round roots, coins,
-calls root and draw root."""
+calls root and sample root."""
 from __future__ import annotations
 
 import hashlib

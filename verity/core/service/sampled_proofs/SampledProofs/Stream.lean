@@ -1,7 +1,7 @@
 /-
 # The proof system's stream: its own rules (`service._Control`)
 
-What `service.Stream` decides of each op on its own, around the checks whose verifiers of record are their own pieces
+What `service.Stream` decides of each op on its own, around the checks whose verifiers are their own pieces
 (`Service.checkPublic`, `Registration.check`, `Select.select`, `Select.selectSecond`, `Draw.checkDraw`,
 `Service.checkVerdicts`, `Record.record`, `Run.run`): the failure budget, the registrations open at once, the epoch's salt
 and registration deadline, and each registration's once-only orders (sampled, under a two-stage rule its interior
@@ -17,7 +17,7 @@ and an op that reads an entry the state doesn't hold is an error. As JSON:
 * `salted_at`, the salt's release or null; `ended`, null or the late registration's readings `{received_at, salted_at}`;
 * `halted`, null or the cause of the halt of the stream's operator (`Fleet`, R5-all);
 * `entries`, in order, each `{order, registration, draw, proved, drawn_at, delivered, session, final}`: `draw`
-  null until drawn, then with `proved` and `drawn_at`, and `session` null or the covered draws of the session over it.
+  null until sampled, then with `proved` and `drawn_at`, and `session` null or the covered samples of the session over it.
   Under a two-stage rule an entry adds `interior`, its interior registration's token, once registered, then `second`,
   the second stage's sample's token, once sampled; no other entry has either.
 
@@ -28,7 +28,7 @@ An op is an object with `op` and the fields it reads:
 * `select` `{order, registration, checks, draw, proved, at}`, the first stage under a two-stage rule;
 * `interiors` `{order, registration, draw, checks, interior}` and `second` `{order, registration, draw, interior,
   checks, second}`, a two-stage rule's interior registration and second stage;
-* `session` `{draws}`, each draw `[order, registration, draw]`;
+* `session` `{draws}`, each sample `[order, registration, draw]`;
 * `deliver` `{order, registration, draw, sessions, now}` (with `second` under a two-stage rule), and `deliver_session`
   `{stream, draws, sessions, now}`;
 * `outcome` `{order, registration, draw, now, verdicts, accepted}`;
@@ -46,7 +46,7 @@ own interior registration. The proof deadline counts from the first stage.
 isn't an integer. Readings are the challenger's clock: a JSON number, kept as written (so the state gives it back as Python
 wrote it) and read as the double nearest it (`PyJson.nearest`, so a Python float reads back exactly), with Python's float
 arithmetic. `checks` are the checks' codes, or null where they pass; `verdicts` the verdicts' hold's codes or null;
-`accepted` the audit records' and the run's verdict; `proved` the draw's proved units' count; `sessions` the delivered
+`accepted` the audit records' and the run's verdict; `proved` the sample's proved units' count; `sessions` the delivered
 session records' SHA-512.
 
 A decision is `{"refused": codes}`, `{"pending": true}`, `{"ok": value}`, or `{"unchecked": field}` where the op passes
@@ -119,7 +119,7 @@ def Params.ofJson (j : Json) : V Params := do
   let .str stream := getD j "stream" | throw "stream is the stream's digest"
   return { budget, rounds, registrationDeadline := rd, proofDeadline := pd, stream, twoStage }
 
-/-- A covered draw: its registration's order (none where it isn't a natural number) and token, and the draw's token. -/
+/-- A covered sample: its registration's order (none where it isn't a natural number) and token, and the sample's token. -/
 abbrev Covered := Option Nat × String × String
 
 def covered? : Json → Option Covered
@@ -309,7 +309,7 @@ def finish (e : Entry) (sym : String) : M Unit := do
   put { e with final := true }
   modify fun s => { s with failures := s.failures + (if sym == ACCEPT then 0 else 1), opened := s.opened.erase e.order }
 
-/-- `Stream._late`: past the proof deadline from the draw of the session's first round (its own, alone). -/
+/-- `Stream._late`: past the proof deadline from the sample of the session's first round (its own, alone). -/
 def late (p : Params) (e : Entry) (now : Float) : M Bool := do
   let first ← match e.session.bind (·[0]?) with
     | some (some o, _, _) => held o

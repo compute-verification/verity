@@ -13,10 +13,10 @@ every product, is a reference, not an answer.
 ## PoUW in the remote protocol
 
 The remote protocol, for an auditor with no devices at the datacenter, composes three subprotocols: sampled proofs'
-one-stage audit, PoUW's period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
+one-stage audit, PoUW's credit period check, `PouwCheck.Period.protocol` (`verity/pouw/period/v1`), as onsite does, and the
 inference-only policy's check (`Core.Remote.components` in `verity/core/protocols/remote/CoreRemote.lean`, id
 `verity/remote/v0`). It accepts only when every subprotocol accepts its own case, its commitment binds the
-subprotocols' commitments, the policy and the one-stage audit committed to one record, and every window of the period
+subprotocols' commitments, the policy and the one-stage audit committed to one record, and every execution phase of the credit period
 names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
 (`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
 (`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
@@ -36,7 +36,7 @@ The verifier is Lean, the source of truth for what PoUW checks: three Lake packa
 - `lean/window` (`pouw_window`): what an execution phase registers and makes public: its grid level, its sample size K′, its
   fixed length, its committed entries and side trees, and its round coins (`PouwWindow.Grid`, `PouwWindow.Draw`,
   `PouwWindow.Length`, `PouwWindow.Public`, `PouwWindow.Entry`, `PouwWindow.Side`, `PouwWindow.Rounds`).
-- `lean/commit` (`pouw_commit`): PoUW's commitments: tagged bindings, frames, rows, epoch coins and samples, all SHA-512.
+- `lean/commit` (`pouw_commit`): PoUW's commitments: tagged bindings, frames, rows, execution-phase coins and samples, all SHA-512.
 
 The Python modules of the same names (`core_check.py`, `credit.py`, `window.py`, `coins.py`, `audit.py`) are their
 references, held to them by the difftests (`lean/check/tests`, `lean/window/tests`, `lean/commit/tests`).
@@ -45,7 +45,7 @@ the challenger's entropy, which the Lean reads from the operating system. `RECOR
 setting it to `"python"` is the one line that undoes it.
 
 An **execution phase** is the served steps one commitment covers (PoUW's older name, "commit period"). The code and the
-Lean call it a window (`window.py`, `PouwWindow`, `credit.window`), and keep the name until a format version. In one
+Lean call it an execution phase (`window.py`, `PouwWindow`, `credit.window`), and keep the name until a format version. In one
 execution phase:
 
 1. The weights' root binds every weight's committed rows, and a credit period's open signs it.
@@ -58,7 +58,7 @@ execution phase:
 5. Each sampled proof block is proved in zero knowledge over the circuit its tile template pins (`PouwCheck.Tile`), and
    opened against the committed entries (`PouwCheck.Opening`).
 6. `PouwCheck.check` gives the verdict. A served execution phase is credited only if every step accepts. A credit period
-   (the code's period, `credit.period_credit`) is the execution phases between an open, which signs the weights' root and
+   (the code's credit period, `credit.period_credit`) is the execution phases between an open, which signs the weights' root and
    commits the circuit files, and a close; it counts only closed and complete.
 
 How it is run: the difftests run the Lean against the Python on generated cases
@@ -150,5 +150,5 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
   `lean/window/README.md` map each Lean module to its Python.
 - `dither/`: Dither, experimental, with its `PROTOCOL.md`.
-- `tests/`: the package's suite, with the schemes' and the window's pinned vectors under `tests/vectors`.
+- `tests/`: the package's suite, with the schemes' and the execution phase's pinned vectors under `tests/vectors`.
   `benchmarks/pouw/` is the measuring side; nothing here imports it.

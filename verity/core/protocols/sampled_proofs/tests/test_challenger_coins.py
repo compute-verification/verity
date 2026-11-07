@@ -1,7 +1,7 @@
 """A sample's coins from the auditor's challenger (`coins.ChallengerCoins`): the stream is one family's coins opened after
 the prover's commitment, concatenated in order, extended with the family's next coins, each checked against the
 challenger's commitment before its bytes are used; the verifier replays it from the record (`challenger_stream`,
-`read_reason`) against the roots the challenger's signed log shows. A bad opening, a commitment drawn twice, coins the
+`read_reason`) against the roots the challenger's signed log shows. A bad opening, a commitment sampled twice, coins the
 log doesn't show released after the commitment, coins of another commitment and a coin opened but not read are refused,
 in process, over a served challenger, and through the proof system's `Stream.select`; and the Lean verifier's
 run refuses an outcome whose coins' evidence fails (`Stream.outcome(coins=...)`)."""
@@ -113,7 +113,7 @@ def test_the_verifier_refuses_coins_other_than_those_released_after_the_commitme
 
 
 def test_a_commitment_is_drawn_once_and_a_read_needs_one():
-    """A second draw for the same commitment would take the family's later coins, which the prover could pick among:
+    """A second sample for the same commitment would take the family's later coins, which the prover could pick among:
     refused. A read before any commitment opens nothing."""
     _, coins = _coins()
     with pytest.raises(C.CoinError, match="only after the prover's commitment"):
@@ -162,7 +162,7 @@ def test_a_served_challengers_coins_replay_against_its_signed_log(tmp_path, sign
 
 def test_the_proof_system_draws_from_the_challengers_coins_after_the_receipt():
     """`Stream.select` with the coins as its `coins`, committed to the registration's digest after its receipt: the
-    draw both verifiers agree on, from bytes the verifier replays from the record. Without the commitment the
+    sample both verifiers agree on, from bytes the verifier replays from the record. Without the commitment the
     select reads no coin."""
     from test_service import _ports, _record, _stream
 
@@ -256,9 +256,9 @@ def assert_only_honest_coins_accepted(outcomes) -> None:
 
 def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_after_the_registration(
         tmp_path, signer, monkeypatch):  # noqa: F811
-    """On a stream drawing from the challenger (which its digest names), every outcome's run
-    by the verifier (`Run.run`) checks the draw's coins: with their evidence for the registration's window
-    (`window_root`) it accepts the honest draw, and it rejects, failing `run` with the select step's `coins`, each of
+    """On a stream sampling from the challenger (which its digest names), every outcome's run
+    by the verifier (`Run.run`) checks the sample's coins: with their evidence for the registration's window
+    (`window_root`) it accepts the honest sample, and it rejects, failing `run` with the select step's `coins`, each of
     `coin_outcomes`' other cases (a prover picking the window among them). A sampler beside the challenger's coins, and
     evidence for a sample that read none, are refused."""
     import test_remote

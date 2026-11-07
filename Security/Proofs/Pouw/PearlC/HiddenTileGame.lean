@@ -8,7 +8,7 @@ public import Proofs.Core.Game
 # The hidden audit's open obligation from what a proof system gives per tile
 
 `tileProofSoundAll_of_tileGame`: a hidden audit whose class is `BoundedByInduced Cls`, with a `TileGame` for every tile
-of every in-domain workload, meets `TileProofSoundAll` at `δzk`. Per draw `i`, a tile that is neither good nor blank has
+of every in-domain workload, meets `TileProofSoundAll` at `δzk`. Per sample `i`, a tile that is neither good nor blank has
 its verdict accept only on a run in `Bad` (`TileGame.prob_le`); and the batch prover, read at position `i`, does no
 better than some strategy it induces on that tile's game, which is in `Cls` (core's `ProbBatchInduced`).
 -/

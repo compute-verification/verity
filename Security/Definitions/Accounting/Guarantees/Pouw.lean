@@ -23,7 +23,7 @@ namespace Accounting.Guarantees
 open Accounting Pouw
 
 /-- **PoUW's guarantee is the compute guarantee.** Under EndToEnd's hypotheses (TT among them), for any run on any
-device whose compute audit realizes PoUW's game at price `p`, with at least one draw of the game's coins and the device's
+device whose compute audit realizes PoUW's game at price `p`, with at least one sample of the game's coins and the device's
 oracle queries over the compute window at most `2^64`, the compute audit has its guarantee at certificate
 `(1 − g)(1 − εs)·W` (`g = reductionGap g₀ Ωmax`) and error `(1 − εs)^t + δ(q, N)`, where `q` is the device's oracle
 rate times the compute window's length. -/

@@ -110,7 +110,7 @@ def test_top_k_row_is_refused_before_export(tmp_path):
 
 
 def test_unseeded_stochastic_row_is_refused(tmp_path):
-    """No declared seed -> vLLM draws one at random: the RNG stream is not a Program input; refused, never built."""
+    """No declared seed -> vLLM samples one at random: the RNG stream is not a Program input; refused, never built."""
     pol = sampling_policy('{"temperature": 0.8, "top_p": 0.95, "seeded": false}', None)
     assert pol["kind"] == "stochastic" and pol["seeded"] is False
     res = run(str(tmp_path / "b"), 1, 8, "b1-eager-v3", "gloo", wrapper="request", LP=8, T=4, sampling=pol)

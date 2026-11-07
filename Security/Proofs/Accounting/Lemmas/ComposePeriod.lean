@@ -28,7 +28,7 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-- **The period's budget from its windows'.** For a period of `n` windows of one circuit of `M` rounds over `N` tiles,
 any play (`WindowPlay`: each window's live tiles and split stages chosen after the earlier windows' coins), share
-weights `w live` at each window's live tiles `live`, costs `a, b` and `K` draws a window: if every window's one round
+weights `w live` at each window's live tiles `live`, costs `a, b` and `K` samples a window: if every window's one round
 (`serviceGame`) has its saving per unit of detection bounded by `Λ` (`RoundGame.BudgetAt`), whatever the past, then so
 has the period's game (`periodGame`). With `budget_tail` at `n` rounds, an accepted period's total share is below
 `Λ·ln(1/δ_s)` except with probability `δ_s`. -/

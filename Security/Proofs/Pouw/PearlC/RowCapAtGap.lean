@@ -21,11 +21,11 @@ TT_OUT per tile at `ρr`, through (C2) at `ρr`:
 * **The tolerant audit** (`…Tol`, `GGapSampledTol`): the same g from the same premises when the audit accepts a sampled tile
   over its inert-work bound and credits it nothing. The strict forms are its case `u 0 = ε_s`, `u x = 1` otherwise
   (`gapSampled_of_tol`).
-* **The audit drawn as the run draws** (`pearlCSampledDrawDevRev1RowCapAtTol`, `GGapSampledDrawTol`): each transcript drawn
+* **The audit sampled as the run samples** (`pearlCSampledDrawDevRev1RowCapAtTol`, `GGapSampledDrawTol`): each transcript sampled
   by its records' tickets (`pearlCDrawRev1`), at the same g, since a declaration consistent with a tile weighs it at most
   its credited rows' `W_ref` (`pearlCDrawRev1_le`, `wrefRowRev1_le`).
-* **GLM-5.3's down projection on the H100 record**, `m × 6144 × 256` at any `m`, `ρ = 1/400`, `ρr = 1/100`, drawn as
-  the run draws, from `TTOutTilePearlCH100Rev1` at 1/100, C1 and C3 (`pearlCSampledH100v1RowSeedRowCap100_6144x256Tol`),
+* **GLM-5.3's down projection on the H100 record**, `m × 6144 × 256` at any `m`, `ρ = 1/400`, `ρr = 1/100`, sampled as
+  the run samples, from `TTOutTilePearlCH100Rev1` at 1/100, C1 and C3 (`pearlCSampledH100v1RowSeedRowCap100_6144x256Tol`),
   and its code form (`-h3`) with C1-h3 and C5 (`pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol`), both at the
   deployed table `u 0 = ε_s`, `u x = 1` otherwise (`GGapSampledDrawTolThreshold`): `ω = 25210/25137` and
   `g = 32437/2521000` (1.28667%), with the error at the `m·N` rows; the forms without `Tol` are the audit that accepts
@@ -192,7 +192,7 @@ theorem pearlCDrawRev1_nonneg (d : PearlCDevice) (hbf : 0 ≤ d.prices.bf16) (L 
   positivity
 
 /-- **A consistent declaration weighs a tile at most its credited rows' `W_ref`**: with the declared kept width within
-the unit's `k` (`32·G` dividing `k > 0`) and the declared credited rows passing Π's rules, the draw's weight under rev1
+the unit's `k` (`32·G` dividing `k > 0`) and the declared credited rows passing Π's rules, the sample's weight under rev1
 is at most `wrefDevRev1` times the tile's share of its passing rows and columns. -/
 theorem pearlCDrawRev1_le (d : PearlCDevice) (hadd : 0 ≤ d.prices.add) (hbf : 0 ≤ d.prices.bf16)
     (sem : PearlCSem Q R S) (L : Layout) (g : ℕ) (dc : Decl) (act : Codes)
@@ -369,7 +369,7 @@ theorem pearlCSampledDevRev1KRowCapAt (CM : CostModel Q R S) (d : PearlCDevice) 
     field_simp
     ring
 
-/-- **The row-seeded TT_OUT per audit tile at both caps gives `GGapSampledDrawTol`**, the audit drawn by rev1's tickets
+/-- **The row-seeded TT_OUT per audit tile at both caps gives `GGapSampledDrawTol`**, the audit sampled by rev1's tickets
 (`pearlCDrawRev1`), at `γ = 1 − (399/400)·(1 − ρr)/((1 − ρ)·ω)` where `wrefDevRev1 = ω·(1 − ρ)·creditDevRev1`
 (`gapSampledDrawTol`): a consistent declaration weighs a tile at most its credited rows' `W_ref`
 (`pearlCDrawRev1_le`), which is `ω` times its credit. -/
@@ -456,7 +456,7 @@ theorem wrefDevRev1_h100_n6144k256 (m : ℕ) : wrefDevRev1 devH100 ⟨m, 6144, 2
 variable (CM : CostModel Q R S) {sem sem' semC : PearlCSem Q R S}
 
 /-- **GLM-5.3's down projection, `m × 6144 × 256` at any `m`, on the H100 record with per-row seeds per audit tile, the
-tile cap 1/400 and the row cap 1/100, under the tolerant audit drawn as the run draws, at the deployed table**
+tile cap 1/400 and the row cap 1/100, under the tolerant audit sampled as the run samples, at the deployed table**
 (`pearlCDrawRev1`, the records' tickets; `u 0 = ε_s`, `u x = 1` otherwise), from `TTOutTilePearlCH100Rev1` at 1/100, C1
 and C3: `g = 1 − (399/400)·(99/100)/((399/400)·ω) = 32437/2521000` (1.28667%) at `ω = 25210/25137`, with the error at
 the `m·N` rows. -/
@@ -473,7 +473,7 @@ theorem pearlCSampledH100v1RowSeedRowCap100_6144x256Tol (m : ℕ)
       (by norm_num)
       (ttOutTileRowSeed_of_ttOutTile hTT hN hCM devH100_rowLocal (by norm_num) devH100_add devH100_bf16))
 
-/-- **GLM-5.3's down projection on the H100 record under the audit drawn as the run draws that accepts only checked
+/-- **GLM-5.3's down projection on the H100 record under the audit sampled as the run samples that accepts only checked
 tiles**: `pearlCSampledH100v1RowSeedRowCap100_6144x256Tol`'s case (`gapSampledDraw_of_threshold`),
 `g = 32437/2521000` (1.28667%), with the error at the `m·N` rows. -/
 theorem pearlCSampledH100v1RowSeedRowCap100_6144x256 (m : ℕ)
@@ -485,7 +485,7 @@ theorem pearlCSampledH100v1RowSeedRowCap100_6144x256 (m : ℕ)
   gapSampledDraw_of_threshold (pearlCSampledH100v1RowSeedRowCap100_6144x256Tol CM m hTT hN hCM)
 
 /-- **The code-form seed (`-h3`) of `pearlCSampledH100v1RowSeedRowCap100_6144x256Tol`**, the served record
-`pearl-c-h100-v1-h3` at a census k, adding C1-h3 and C5: under the tolerant audit drawn as the run draws, at the
+`pearl-c-h100-v1-h3` at a census k, adding C1-h3 and C5: under the tolerant audit sampled as the run samples, at the
 deployed table, `g = 32437/2521000` (1.28667%), with the error at the `m·N` rows. -/
 theorem pearlCSampledH100v1RowSeedCodeRowCap100_6144x256Tol {π : Layout → Q ≃ Q} (m : ℕ)
     (hTT : TTOutTilePearlCH100Rev1 CM sem (1 / 100)) (hN : RowSeedNoise sem sem') (hC : CodeSeedNoise sem' semC π)

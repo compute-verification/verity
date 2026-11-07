@@ -368,7 +368,7 @@ theorem l0_loop (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Rea
   have hWC : ∀ p e, p < ops.length → e < loopNr x p → e < 65536 →
       (wordsAt x (ops.map fun q => ZKMal.CoinLayer.rd q.2) p)[e]! = Masked.ligCoin (finCoins x ops) p e :=
     fun p e hp he hc => words_slot hF.1 hp he hc
-  -- the draws
+  -- the samples
   have hdraws : ((LeanRelease.ofLoop Masked.dataE (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src)
       (realOf src)).drawsAt x (ν, t) (2 * j.val + r.val)) = q.draws := by
     obtain ⟨-, hq', -⟩ := hRep

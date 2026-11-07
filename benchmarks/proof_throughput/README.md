@@ -26,7 +26,7 @@ stratified sampling design the Lean verifier's soundness covers:
    by `gpu-lease` (the kernel-engineering skill's sharing rule), with live coins from a loopback `flock-circuit serve`
    on the challenger's keyed coin tree (`FC_COINS=tree`, `serve --tree-from`: `70-class-sweep.sh` gives the server its own
    challenger and accepts the point only if the challenger's audit holds every session's record to its release log, which the
-   bundle carries). The server samples each session's B units at its Register by the verifier's law (`serve --draw-law`,
+   bundle carries). The server samples each session's B units at its Register by the verifier's sampling design (`serve --draw-law`,
    `law.json`: core's `one_stage.draw.derive` of `stratified:B` over the population's program and its
    `Q_template_instance` partition), and the session proves those units only. ZK is off. The statement gives every
    coordinate its own rows (`FLOCK_OWN_ROWS=1`), x included: the verifiers refuse a plain statement whose public file shares

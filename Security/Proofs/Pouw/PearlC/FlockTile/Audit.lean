@@ -4,9 +4,9 @@ public import Definitions.Pouw.PearlC.FlockTile.Audit
 public import Proofs.Pouw.PearlC.FlockTile.Bridge
 
 /-!
-# C-Flock's hidden audit: a `TileGame` per drawn tile
+# Flock's hidden audit: a `TileGame` per sampled tile
 
-The TileRead session, C-Flock's `HiddenAudit` value over it and its two open obligations are in
+The TileRead session, Flock's `HiddenAudit` value over it and its two open obligations are in
 `Definitions.Pouw.PearlC.FlockTile.Audit`. Here: `TileReadSession.tileGame`, a `TileGame` for every tile of every
 in-domain workload, from `TileReadSound` (T3, giving `bad_le`) and `TileReadBinds` (the binding, giving
 `good_of_accept`).
