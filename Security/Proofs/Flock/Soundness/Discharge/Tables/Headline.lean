@@ -1,6 +1,12 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Tables.Session
+public import Proofs.Flock.Soundness.Binding.RowsX
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Discharge.Exec.BindingE2EL
+import Proofs.Flock.Soundness.Discharge.Exec.Headline
+import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
 
 /-!
 # The headline at the executable, for sessions of `J` tables

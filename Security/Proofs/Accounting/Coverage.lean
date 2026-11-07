@@ -1,7 +1,9 @@
 module
 
 public import Definitions.Accounting.Guarantees.Coverage
-public import Proofs.Core.Game.Prob
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Proofs.Core.Game.Prob
 
 /-! `Nci.SecurityProofs.CapabilityFloor : Nci.Guarantees.CapabilityFloor`: below `min Lc Tmax`, a computation in `𝒜`
 has no covered structure (each costs at least `Lc`), so its success there is among coverage's uncovered successes below

@@ -4,7 +4,7 @@ PoUW's served H1 + fx1 and J10-R receipts in compiled vLLM, on int8-exact Llama-
 against stock vLLM int8. Each arm replaces the int8-exact linear with kernels that serve y and, from the same operands,
 compute the window's tables, seeds and receipts. An arm is gated in its own run before it is timed: its roots, receipts
 and z against its CPU twin and the Definition (`h1tile.reference` and `h1tile.j10r_reference`,
-`verity/core/protocols/pouw/circuit/h1tile.py`). Nothing a verifier runs reads this directory.
+`verity/ml/protocols/pouw/circuit/h1tile.py`). Nothing a verifier runs reads this directory.
 
 The arms' names (`dither`, `dither-1s`, `dither-a`, ...) are identifiers the runs' records carry. What they serve are
 H1's and J10-R's folds, not Dither, PoUW's no-fold design (`verity/core/protocols/pouw/dither/`).
@@ -34,7 +34,7 @@ docstring lists every arm and flag, and `settings.py` every variable they read (
 ## What the rest of the tree reads
 
 - `h1u.cu`: the proof-block kernels: H1 + fx1's seeds and proof blocks, the one-stream `kh_one`, and J10-R's (`kh_seeds_j10r`, `kh_units_multi_j10r`). `benchmarks/pouw/served_h1` and `benchmarks/torch_gpu/j10r_sm90`
-  build it, and `verity/core/protocols/pouw/circuit/h1device.py` states the domain it serves on sm_90.
+  build it, and `verity/ml/protocols/pouw/circuit/h1device.py` states the domain it serves on sm_90.
 - `j10r_ws.py`: a J10-R call's workspace, sized from the loaded build's own flags (`workspace_bytes`).
 - `j10r_units.py`: J10-R's proof blocks on the host, each receipt bit for bit `h1tile.j10r_reference`'s.
 - `forms.py`: every arm's form label, from one table (`form_of`).
@@ -59,9 +59,6 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
 - `hb_side.py` (`dither-hb`), `hb_one.py` (`dither-1s-hb`) and `hb_peel.py` (`dither-1s-hbp`'s gate): those windows with
   `h1u.cu`'s proof blocks in place of `h1r.cu`'s or `h1o.cu`'s. `hb_sbench.py` and `hb_served.sh` run `sbench.py` with
   them on an H200 or a B200, building on a CPU node first.
-- `j10served.py`, `j10rtx.py` and `j10hb.py`: the one-stream arms against their twins on J10's banded noise, served on
-  an H200 or a B200 (through `hb_sbench.py`) and at kernel level on the RTX PRO 6000 and on an H200 or a B200. They are
-  measured only: nothing in them is served or credited.
 
 ## Kernels
 
@@ -80,10 +77,9 @@ Each arm's module patches vLLM before `sbench.py` builds the arm's engine.
   its kernel to its reference on a full served step, then times it, on one leased RTX PRO 6000. `wrapcheck.py` holds the
   wrap correction to H1V3 on the CPU before `sbench.sh` asks for a GPU.
 - The references the gates hold kernels to, beside the Definition: `h1v3_ref.py` (H1V3 itself, from the tree on
-  `PYTHONPATH`), `h1v3_ca.py` (the unpeeled one-stream proof block), and `j10r_ca.py`, `j10b_ref.py` and `j10ca_ref.py`
-  (J10-R's call-scale noise, J10's banded noise and credit's banded reference).
+  `PYTHONPATH`).
 - `job.sh`: libraries built on a CPU node, then kernel benches on a leased H200 or B200, one mode a run: `hb_kbench.py`
-  (checked after by `verify.py`), `h1bench.py`, `h1ubench.py`, `h1zbench.py` (against `h1zref.cu`), `j10hb.py`,
+  (checked after by `verify.py`), `h1bench.py`, `h1ubench.py`,
   `unitsbench.py`, `hb_prof.py` under ncu, and `benchmarks/pouw`'s partials tests on each build.
 - `kbench.sh` (`kbench.py`): the honest linear against vLLM's int8 GEMM and cuBLASLt on an RTX PRO 6000. `dmmsweep.py`:
   dither-a's GEMM configs at the decode shapes, each gated before it is timed. `native.sh` (`native.py`): vLLM serving the

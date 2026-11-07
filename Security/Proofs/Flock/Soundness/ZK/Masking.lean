@@ -1,8 +1,8 @@
 module
 
-public import Proofs.Flock.Soundness.NovelBasis
-public import Mathlib.LinearAlgebra.Lagrange
-public import Mathlib.GroupTheory.Index
+public import Proofs.Flock.Soundness.ListSize
+import Proofs.Flock.Soundness.NovelBasis
+import VCVio.Prelude.Core
 
 /-!
 # Zero knowledge: masked and padded openings are uniform

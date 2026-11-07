@@ -31,6 +31,7 @@ ml = ["verity/ml/{circuits,definitions,commitments,crypto,randomness,windows,ker
 # PoUW: the integrity profile, the protocol, and its part of the security analysis (the accounting it reads is `needed`)
 pouw = [
     "verity/core/protocols/{profile.py,pouw}",
+    "verity/ml/protocols/pouw",
     "Security/*/Pouw{,.lean}",
     "Security/Proofs/Properties/Pouw{,.lean}",
 ]
@@ -43,12 +44,13 @@ firewall = [
 ]
 vllm = ["integrations/vllm"]
 # what the public side shares: the one challenge derivation, the one signature scheme, the Python held to each Lean, the
-# deployment's configuration, and the two lemmas public proofs import from private areas
+# deployment's configuration, and what public proofs import from private areas: two lemmas, and Bits' layout as the
+# claims' program, which the bridge reads
 shared = [
     "verity/core/primitives/{randomness,lms}",
     "verity/core/difftest",
     "tools/config",
-    "Security/Properties/SampledProofs/Draw.lean",
+    "Security/Properties/SampledProofs/{Draw,Bits}.lean",
     "Security/Proofs/Properties/RemoteAudit/Sort.lean",
     # the second stage's law (`SecondMisses`), which the public sampling proofs import: an entry of its own, apart from
     # Draw.lean's
@@ -68,6 +70,7 @@ benchmarks = [
 [private]
 protocols = [
     "verity/core/protocols/{pous,bandwidth,remote_bandwidth,certifier,network}",
+    "verity/ml/protocols/{pous,certifier}",
     "Security/*/{Nci,NciDesc}{,.lean}",
     "Security/Proofs/Properties/Nci{,.lean}",
     "verity/core/primitives/identity",
@@ -84,6 +87,13 @@ team = [
     ".agents",
     ".cursor",
     "{inbox,notes,lanes}",
+    # vLLM's pod scripts and tests that run or read the team's run and store tool (`research`)
+    "integrations/vllm/verity_vllm/ops/{epoch_row,pod_bootstrap}.sh",
+    "integrations/vllm/tools/topp_pin_gpu.sh",
+    "integrations/vllm/tests/ops/test_{epoch_row,pod_bootstrap}.py",
+    "integrations/vllm/tests/lint/test_merge_allowlist.py",
+    "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools}.py",
+    "integrations/vllm/tests/regression/test_attempt_resolution.py",
 ]
 
 # Each entry: globs exported only as far as public files need them, the public groups whose files may pull them in

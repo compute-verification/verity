@@ -9,7 +9,7 @@ import random
 from pathlib import Path
 from typing import NamedTuple
 
-from verity.ml.circuits.silicon.silicon import Term
+from verity.ml.circuits.silicon.term import Term
 from verity_numerical.reference.hawkeye_close import E_ZERO, Gfloat, is_finite_bf16, is_finite_fp32
 
 ROOT = Path(__file__).resolve().parents[4]

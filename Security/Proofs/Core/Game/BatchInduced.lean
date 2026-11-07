@@ -1,6 +1,11 @@
 module
 
-public import Proofs.Core.Game.Prob
+public import Definitions.Core.Game
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Data.Finset.Max
+import Proofs.Core.Game.Basic
+import Proofs.Core.Game.Prob
 
 /-!
 # One game of a batch, for a strategy whose induced strategies are in a class

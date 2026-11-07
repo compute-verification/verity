@@ -1137,7 +1137,7 @@ def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], la
     return reg
 
 
-def block_of(reg: Mapping[str, Any], index: int) -> tuple[int, int]:
+def position_of(reg: Mapping[str, Any], index: int) -> tuple[int, int]:
     """A sampled proof block's ``(slot, layout unit)``: index ``slot * units_per_slot + unit``."""
     return divmod(int(index), int(reg["units_per_slot"]))
 
@@ -1174,7 +1174,7 @@ def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], i
         bad["step:root"] = "its commitment does not hold the registered step root"
     if len(doc["units"]) != 1:
         return {**bad, "step:units": f"{len(doc['units'])} units, not the one drawn proof block"}
-    unit, (slot, lu) = doc["units"][0], block_of(reg, index)
+    unit, (slot, lu) = doc["units"][0], position_of(reg, index)
     c = unit["coords"]
     outs = {s["unit"] for r in unit["rows"] if r["kind"] == "out"
             for s in ([r["slot"]] if r["slot"] is not None else [q["slot"] for q in r.get("reads") or () if q["kind"] == "step"])}

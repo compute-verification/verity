@@ -90,7 +90,7 @@ The statement's form is the causal game, the committed files, one fixed extracto
 * **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
   components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
-  at onsite PoUS and PoUB-P2 on one store and at remote every window of PoUW's period on the record, `AcceptTied`'s),
+  every window of PoUW's period on the record and at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s),
   and `a`'s compiled component's acceptance of its own case. The device's log as each component's check read it
   (`coinsRead`) is the targets' to bind to the device's whole log (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
@@ -161,10 +161,10 @@ def tied : Verity.Registration.Composite → List String
   | .onsite => Onsite.tied
   | .remote => Remote.tied
 
-/-- The ties of composite `k`: at onsite, PoUS and PoUB-P2 on one store; at remote, every window of PoUW's period on
-the policy's record. -/
+/-- The ties of composite `k`: at both, every window of PoUW's period on the policy's record; at onsite, also PoUS and
+PoUB-P2 on one store. -/
 def ties : Verity.Registration.Composite → List Composition.Tie
-  | .onsite => [Onsite.store]
+  | .onsite => Onsite.ties
   | .remote => [Remote.windows]
 
 /-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
@@ -222,8 +222,8 @@ def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : 
 
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
 accepted composition of `k`'s components on the blobs sent, whose record subprotocols (`tied k`) committed to one
-record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at onsite, PoUS and PoUB-P2 on one store; at
-remote, every window of PoUW's period on the policy's record) each named one value (`Properties.Composition.Tied`). -/
+record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at both, every window of PoUW's period on the
+policy's record; at onsite, also PoUS and PoUB-P2 on one store) each named one value (`Properties.Composition.Tied`). -/
 def SameAccepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧ ∃ pub prof,
     Properties.Composition.SameAccepted (verifier k).id (tied k) (s.components k) ps c ev pub prof ∧
@@ -907,8 +907,8 @@ def NetworkCertifierSound (k : Verity.Registration.Composite) : Prop := V.Target
 def WipeSound (k : Verity.Registration.Composite) : Prop := V.Target k .wipe
 
 /-- **Subprotocol `a`'s honest lemma at the deployment**: at registered files, the deployment's honest prover meets
-`a`'s claim at composite `k` on almost every play. Each subprotocol's piece proves its own (sampled proofs from
-`Flock.Bridge.card_wrong_lt_of_relS_honest`; the others from their owners' `_honest` lemmas). -/
+`a`'s claim at composite `k` on almost every play. No theorem proves it for any subprotocol: the soundness theorem
+takes it as a hypothesis, one per subprotocol (`Proofs.Properties.Verity.Soundness`). -/
 def HonestHolds (k : Verity.Registration.Composite) (a : Subprotocol) : Prop :=
   ∀ (θ : ByteArray) (F : Array ByteArray) (c : ByteArray), V.Registered θ F →
     Game.prob (fun o => ¬ V.Holds k θ F c (V.honest θ F c) a o) (V.game θ F c) (V.honest θ F c) = 0

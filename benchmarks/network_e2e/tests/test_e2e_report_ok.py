@@ -92,7 +92,7 @@ def test_the_advised_report_isnt_ok_on_an_unbound_advice_and_its_title_says_what
     assert r["negatives"]["late"]["refused"] is True
     md = e2e.markdown(r)
     assert md.splitlines()[0] == (
-        "# Network accounting end to end: NOT OK on the rehearsal's own check and the I/O tie (`io_tie`'s reference in "
+        "# Network certification end to end: NOT OK on the rehearsal's own check and the I/O tie (`io_tie`'s reference in "
         "the clear, on stand-ins) (not run: N2's verdicts of record, the proofs (n2_zk, held by Lean), the advice, "
         "these runs' and rebuilt from their certified I/O, the prove path, of these runs, the negatives registry)")
     assert "**drop**: NOT refused by nothing (not proved); the rehearsal's own check refused it for " \

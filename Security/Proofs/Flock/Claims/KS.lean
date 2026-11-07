@@ -3,7 +3,7 @@ module
 public import Proofs.Flock.Claims.KS.Wait
 public import Proofs.Flock.Claims.KS.Fork
 public import Proofs.Flock.Claims.KS.Flock
-public import Proofs.Flock.Claims.KS.Game
+public import Proofs.Flock.Claims.Bridge
 public import Proofs.Flock.Claims.KS.Deploy
 public import Proofs.Flock.Claims.KS.Range
 public import Proofs.Flock.Claims.KS.Joint

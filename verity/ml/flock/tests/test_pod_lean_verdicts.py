@@ -352,7 +352,7 @@ def _challenger(d: Path, opens: list[tuple[str, int]], session: str = "s", close
 
 def test_a_firewalled_oprove_composes_over_the_record_its_coin_servers_logged(tmp_path, capsys):
     """The run's record is the challenger's ``rec-run.jsonl``, event for event: oprove's staging, each part's open as its
-    coin server logged it at the Hello, the close; the parts compose over it."""
+    challenger logged it at the Hello, the close; the parts compose over it."""
     binary, h = _composer(tmp_path, 3)
     parts = {"L0": 0, "alg-p0": 1, "cap": 2}
     for p, j in parts.items():
@@ -389,7 +389,7 @@ def test_the_staged_shared_set_names_the_inner_program_and_the_link_table(tmp_pa
 
 
 def test_a_second_session_logged_for_a_part_does_not_compose(tmp_path, capsys):
-    """A part's coin server that answered two Hellos logged both, and the composition refuses the retry."""
+    """A part's challenger that answered two Hellos logged both, and the composition refuses the retry."""
     binary, h = _composer(tmp_path, 2)
     parts = {"L0": 0, "cap": 1}
     for p, j in parts.items():
@@ -454,7 +454,7 @@ def test_a_part_given_other_shared_files_than_the_staged_ones_does_not_compose(t
 
 
 def test_a_forgery_is_composed_over_its_own_coin_servers_opens_in_its_parts_place(tmp_path, capsys):
-    """A forgery's coin server logs into a record of its own, so the honest run's stays one session a part; its
+    """A forgery's challenger logs into a record of its own, so the honest run's stays one session a part; its
     composition is over the run's record with its part's opens replaced by the forgery's, so it is refused by the
     forgery's own verdict, not by a session the record lacks."""
     binary, h = _composer(tmp_path, 2)
@@ -510,7 +510,7 @@ def test_a_wired_run_without_its_link_table_does_not_compose(tmp_path, capsys):
 
 
 def test_a_forged_inner_keeps_its_parts_honest_opens(tmp_path, capsys):
-    """A forged inner (85's NEG_INNER) is verified over each part's honest session, with no coin server of its own: its
+    """A forged inner (85's NEG_INNER) is verified over each part's honest session, with no challenger of its own: its
     composition is over the challenger's record as logged, and Lean refuses it for the part that reads the coin."""
     binary, h = _composer(tmp_path, 2)
     parts = {"L0": 0, "alg-p0": 1}
@@ -530,7 +530,7 @@ def test_a_forged_inner_keeps_its_parts_honest_opens(tmp_path, capsys):
 
 
 def test_a_staged_forgery_without_its_own_record_fails(tmp_path, capsys):
-    """A staged forgery proved on its own coin server must have that server's record: without it there is nothing to
+    """A staged forgery proved on its own challenger must have that challenger's record: without it there is nothing to
     compose it over, which is no refusal by Lean, and the step fails."""
     binary, h = _composer(tmp_path, 2)
     parts = {"L0": 0, "cap": 1}

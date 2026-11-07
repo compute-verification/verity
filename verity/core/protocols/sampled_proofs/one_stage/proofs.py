@@ -30,7 +30,8 @@ peak), then O(proof) a session: so a protocol verifies one statement a stratum, 
 The one-stage audit's v2 (`V2`, `SampledProofs.OneStageZk`) runs this verifier inside the audit's own Lean, on the files
 as content-addressed blobs: `check_v2` hands it v1's inputs with the verdicts replaced by the files' digests
 (`evidence_v2`) and the files themselves, and `verdicts_v2` is that run's verdicts alone, which the difftest holds to
-`verify`'s.
+`verify`'s. `order_why` mirrors its refusal of a challenger release log out of the order the sample, then the link,
+then the other rounds (`OneStageZk.orderHeld`).
 
 Building takes the lock `verifier.BUILD_LOCK` takes: Lake builds the flock package in place for `sampled-proofs-verifier`
 too, and two builds at once would rewrite one module's C under each other.
@@ -48,6 +49,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+from ..challenger import SAMPLE_LINK_FIRST, sample_link_first
+from .registration import digest as registration_digest
 from .verifier import BUILD_LOCK, CORE
 from .verifier import PACKAGE as V2_PACKAGE
 
@@ -63,6 +66,12 @@ _CHUNK = 1 << 24
 SCOPE_WHY = ("a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns the "
              "outputs)")
 TABLES_WHY = "a shared-row public file (header shared_rows) under --zk"
+#: `OneStageZk.NO_ROW_WHY` and `WIDE_WHY` (`template_why`), v2's refusals of the unit template
+NO_ROW_WHY = "the circuit's units_per_vu is 0: a template instance of no unit, a proof block of no gate"
+WIDE_WHY = ("a template instance returns more than 262144 bits (16 per output leaf of its units_per_vu units): past "
+            "the widest size class")
+#: `OneStageZk.UNIT_CLASS_MAX`: the widest public size class of a proof block's outputs, in bits
+UNIT_CLASS_MAX = 262144
 
 
 class LeanError(RuntimeError):
@@ -161,6 +170,27 @@ def ks_form_why(circuit: Path, public: Path) -> str | None:
     return None
 
 
+def template_why(circuit: Path) -> str | None:
+    """`OneStageZk.templateOk`'s refusals on the circuit file's head, with its reasons: a template instance of no unit
+    (META's ``units_per_vu`` is 0), else one returning more than `UNIT_CLASS_MAX` bits (16 per entry of META's
+    ``leaves_out`` over its ``units_per_vu`` units); None when neither applies or the head is not in that form. v2
+    refuses each session of such a circuit with that reason, so `verify` turns a session Lean accepts into one rejected
+    with it."""
+    head = _unit_head(circuit)
+    if head is None:
+        return None
+    meta, _ = head
+    leaves, upv = meta.get("leaves_out", []), meta.get("units_per_vu")
+    if not (isinstance(leaves, list) and isinstance(upv, int)):
+        return None
+    if upv == 0:
+        return NO_ROW_WHY
+    if 16 * sum(len(leaves[u]) if u < len(leaves) and isinstance(leaves[u], list) else 0 for u in range(upv)) \
+            > UNIT_CLASS_MAX:
+        return WIDE_WHY
+    return None
+
+
 def _refusal(why: str) -> str:
     return f"refused: {why}: a statement form the soundness proof does not cover"
 
@@ -193,7 +223,7 @@ def population_why(indices: Sequence[int], strata: Sequence[tuple[str, Sequence[
 
 def proved_units(public: Path, session: Path) -> tuple[int, ...]:
     """The global proof blocks a session proved: the public file's proof block indices (``units.indices``) of the instances its record
-    drew (``unit_draw.units``), ascending. Read only off a session the verifier accepted."""
+    sampled (``unit_draw.units``), ascending. Read only off a session the verifier accepted."""
     indices = _header(public)["units"]["indices"]
     drawn = json.loads((session / "session.json").read_text())["unit_draw"]["units"]
     return tuple(sorted(indices[i] for i in drawn))
@@ -210,13 +240,15 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     None and the program reads registered values, `reads_registered`; ``circuit``: the circuit file is not the
     committed one; ``proof``: a file is missing or the verifier's answer is not one verdict a session naming the
     partition object's program; ``form``: the verifier accepted a session whose files `ks_form_why` refuses). A session
-    the verifier rejects is a finding, not a refusal.
+    the verifier rejects is a finding, not a refusal, and so is one it accepts on a circuit `template_why` refuses,
+    rejected with that reason as v2 rejects it.
 
     With `strata`, the registration's over `program` and the partition's query (`partition.strata`), the statement is
-    the one-stage audit's, whose public file holds the whole population: a session the verifier accepts is rejected with
-    `population_why`'s reason where the public file's units are not that population in order, as the v2 audit's own
-    run rejects it (`SampledProofs.FilePart.check`). Without it (a statement of some of a population's proof blocks, as
-    the certifier's) the public file's units are the verifier's own.
+    the one-stage audit's, whose public file holds the whole population: a session the verifier accepts on a circuit
+    `template_why` passes is rejected with `population_why`'s reason where the public file's units are not that
+    population in order, as the v2 audit's own run rejects it, last (`SampledProofs.FilePart.check`). Without it (a
+    statement of some of a population's proof blocks, as the certifier's) the public file's units are the verifier's
+    own.
 
     The ``registered`` refusal is the verifier's own: without ``--registered``, Lean refuses a statement's registered
     reads only where its public file, which the prover writes, names them (`Registered.check`), and doesn't read a
@@ -256,6 +288,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
     want = partition.get("program")
     accepted = any(v.get("accepted") is True for v in lines)
     form = ks_form_why(proof.circuit, proof.public) if accepted else None
+    template = template_why(proof.circuit) if accepted else None
     population = (population_why(_header(proof.public)["units"]["indices"], strata)
                   if accepted and strata is not None else None)
     out = []
@@ -264,6 +297,8 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
         if ok and form is not None:
             return None, ("form", f"the verifier of record accepted session {s}, whose files its mirror refuses "
                                   f"(`ks_form_why`): {form}")
+        if ok and template is not None:
+            ok, why = False, template
         if ok and population is not None:
             ok, why = False, population
         if ok and v.get("program_sha512") != want:
@@ -292,6 +327,18 @@ def v2_executable() -> Path:
     if p.returncode != 0:
         raise LeanError(f"lake build {V2_EXE} in {V2_PACKAGE} failed ({p.returncode}):\n{p.stdout[-2000:]}{p.stderr[-2000:]}")
     return V2_PACKAGE / ".lake" / "build" / "bin" / V2_EXE
+
+
+def order_why(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Mapping[str, Any]) -> str | None:
+    """`OneStageZk.orderHeld`'s refusal, with its reason: the challenger session's release log in v1's `evidence`
+    (``coins``' ``session``'s ``log``), after its head, not the sample, then the link, then the other rounds
+    (`challenger.sample_link_first`) at the parameters' challenger family (`params`' ``challenger``'s ``label``) and the
+    registration `record`'s digest; None when it is. `check_v2` answers it under ``proofs:`` before any session's record
+    is read, once the log's coin trees parse (`challenger.coin_trees_of`), which it refuses first."""
+    log = evidence["coins"]["session"]["log"]
+    if sample_link_first(params["challenger"]["label"], bytes.fromhex(registration_digest(record)), log[1:]):
+        return None
+    return f"coins: {SAMPLE_LINK_FIRST}"
 
 
 def _canonical(x: Any) -> bytes:
@@ -348,11 +395,13 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     registration `record`, and v1's `evidence` with its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`,
     under the evidence's ``sessions``); the outcome line. `params` must name the auditor's challenger and its window
     (``challenger``, ``window_root``), whose signed release in the evidence's ``coins`` the draw reads: v2 refuses
-    parameters naming none. The evidence names one session (v2 refuses none or several), whose record must be on the one
-    coin tree that release log shows the challenger sampled and opened, its link opened after the roots of exactly
-    `STATEMENT`'s one table, its ``root_B`` of the length the statement fixes (`challenger.sessions_tree_reason`,
+    parameters naming none. The evidence names one session (v2 refuses none or several). That release log must release
+    the sample, then the link, then the other rounds (`challenger.sample_link_first`, `order_why`), and the session's
+    record must be on the one coin tree it shows the challenger sampled and opened, its link opened after the roots of
+    exactly `STATEMENT`'s one table, its ``root_B`` of the length the statement fixes (`challenger.sessions_tree_reason`,
     `challenger.LINK_ROOT_LEN`), the program's proof blocks must be `record`'s population in order (`partition.in_order`), and the public file's header
-    must be `record`'s (`registration.matches_public`), before the session is verified."""
+    must be `record`'s (`registration.matches_public`), its ``units.indices`` the population's units in order, before
+    the session is verified."""
     pr, blobs = evidence_v2(proof, evidence["sessions"])
     p2 = {**params, "proofs": {"circuit": circuit_sha512, "public": public_sha512, "registered": registered}}
     e2 = {k: v for k, v in evidence.items() if k != "verdicts"} | {"proofs": pr}
@@ -368,6 +417,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
         raise LeanError(f"{V2_EXE} check answered no line (exit {p.returncode}): {p.stderr[-400:]}") from None
 
 
-__all__ = ["EXE", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "V2", "V2_EXE", "Finding", "LeanError", "Proof",
-           "check_v2", "evidence_v2", "executable", "file_sha512", "ks_form_why", "population_why", "proved_units",
-           "reads_registered", "v2_executable", "verdicts_v2", "verify"]
+__all__ = ["EXE", "NO_ROW_WHY", "PACKAGE", "SCOPE_WHY", "STATEMENT", "TABLES_WHY", "UNIT_CLASS_MAX", "V2", "V2_EXE",
+           "WIDE_WHY", "Finding", "LeanError", "Proof", "check_v2", "evidence_v2", "executable", "file_sha512",
+           "ks_form_why", "order_why", "population_why", "proved_units", "reads_registered", "template_why",
+           "v2_executable", "verdicts_v2", "verify"]

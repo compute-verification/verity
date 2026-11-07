@@ -239,7 +239,7 @@ def _later_row_off(c: CS.Case) -> list:
 
 @pytest.mark.parametrize("which, G", [("synth", 2), ("asynth", 2)])
 def test_the_served_rows_in_blocks(request, which, G):
-    """At G < P the unit is CompileSliceBlocks_v1{…, G}: ``srv`` is P / G rows, each the block `served_rows.block_bits`
+    """At G < P the unit is CompileSliceRowGroups_v1{…, G}: ``srv`` is P / G rows, each the block `served_rows.block_bits`
     registers, and step u is checked against row u // G. The circuit is its reference on the honest run, a row of the
     last block served otherwise and (AS = 1) the batch in another order than the slots, and its ANDs are the G = P
     unit's."""
@@ -249,7 +249,7 @@ def test_the_served_rows_in_blocks(request, which, G):
     st = CS.with_block(x.st, G)
     S = SimpleNamespace(**st)
     names = CS.srv_names(S)
-    assert CS.unit(**st).id.startswith("CompileSliceBlocks_v1{") and CS.unit(**st).id.endswith(f",G={G}}}")
+    assert CS.unit(**st).id.startswith("CompileSliceRowGroups_v1{") and CS.unit(**st).id.endswith(f",G={G}}}")
     assert CS.row_names(S) == ("pub", "adv", "cert", *names, "cin", "cout", "wit") and len(names) == x.S.P // G
     honest = CS.case(S, x.sl, BOOK)
     assert honest.verdict == CS.ACCEPT and honest.steps == CS.case(x.S, x.sl, BOOK).steps

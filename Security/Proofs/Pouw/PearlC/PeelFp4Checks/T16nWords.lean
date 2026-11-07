@@ -1,6 +1,8 @@
 module
 
 public import Proofs.Pouw.PearlC.PeelFp4Checks.Defs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
 
 /-! # `test-16-nvfp4`: `P_A,i`, `P_B,j` and each cell's `uWord?` (`PeelFp4Checks`, which joins them) -/
 

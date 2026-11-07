@@ -1,7 +1,7 @@
 module
 
-public import Batteries.Tactic.OpenPrivate
 public import Proofs.Properties.RemoteAudit.Sort
+import Batteries.Tactic.OpenPrivate
 import all Init.Data.Array.QSort.Basic
 
 /-!

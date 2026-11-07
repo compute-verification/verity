@@ -1,5 +1,5 @@
 """Vectorized ``hm96`` hiding leaves (``verity.ml.commitments.hm96``, spec ``PROTOCOL.md`` beside it): one instance's tree leaves
-over many unsalted leaf digests at once.  ``tests/commit/test_hiding.py`` pins it to the reference and its vectors.
+over many unsalted leaf digests at once.  ``tests/test_hiding.py`` pins it to the reference and its vectors.
 
 Each leaf gets fresh salt bytes from the OS generator (one call per ``leaves`` call), which the caller retains: a leaf opens
 with its value and its salt.  ``M_key * y`` gathers the instance's byte tables (per salt byte position, the XOR of the columns

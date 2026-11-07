@@ -11,10 +11,10 @@ and `in_place.py`, which `tests/test_boundaries.py` lists), the audit's Lean ver
 
 **Run:** `uv run tools/verity/check/suites.py benchmarks/remote_session` runs both processes over a loopback, the driver's
 reference (`CpuBackend`) as the prover's backend, and the Lean line test where `lake` is. `run.sh` is the GPU run, one
-side a machine: `ROLE=verifier` on a machine the prover doesn't control and `ROLE=prover` on the prover's, with no
+side a machine: `ROLE=verifier` on a machine the developer doesn't control and `ROLE=prover` on the developer's, with no
 default (`ROLE=both` runs the two on one machine, a test of the scripts that audits nothing).
 
-- `verifier.py`: the verifier's process. It runs the Lean verifier of record, `remote-audit-verifier` (`lean_verifier.py`),
+- `verifier.py`: the verifier's process. It runs the Lean verifier, `remote-audit-verifier` (`lean_verifier.py`),
   beside `audit.AuditRun`, and refuses a run where the two differ.
 - `prover.py`: the prover's process; its GPU backend is `device.py` with `session.cu` (which includes
   `benchmarks/codec_tensor/reader.cu`), `inplace.py` reads vLLM's tensors in place, and `serve.py` serves vLLM as the prover.

@@ -10,8 +10,8 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 `Prog.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
 honest transcript fails its openings check, so the headline the executable instantiates is e2e-exec's salted, one-table
 form at flock-verify's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
-`hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with R11 discharged up to R11b (`hdec`, the decoder right at
-the law's draws, `DecodesOn`).
+`hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with the refinement discharged up to the decoder (`hdec`, the
+decoder right at the law's draws, `DecodesOn`).
 
 `flock_headline_exec` instantiates it at the production program `Placed.keyProg c hU n` (the circuit's program on Δ's
 source keys), its returned outputs' bits for the program's outputs (`Layout.outsOf`), and the one-table plan of the
@@ -74,12 +74,12 @@ noncomputable abbrev tablesAt : Finset (Fin n) → Reg → TabSpec mPts := fun S
 /-- **The headline at the executable.** Let `I` be a verify command's inputs (one table) whose one circuit file parses
 to an untyped circuit `c` (`hc`, `ht`) and whose public file loads to `pub` with no shared-row tables (`hpt`, as
 the circuit prover's per-instance public files load, under `@967b8d06` too, whose tag allows them), and let the
-challenger write draw `S` as the JSON `dj S` (`x₀` one draw it sets up). Let the verifier draw the units with
-`Flock.Draw.drawOS`'s stratified law on a byte source A3 makes uniform, and let each draw's session be the challenger's
-one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K`
-wrong units of the production program `Placed.keyProg c hU n`, at the simulated prover's committed values (1 on the
-constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability at most
-`miss(K) + ε_ks + δ_link`.
+challenger write draw `S` as the JSON `dj S` (`x₀` one draw it sets up). Let the units be sampled with
+`Flock.Draw.drawWith`'s stratified law on the challenger's coins, a byte source A3 makes uniform, and let each draw's
+session be the challenger's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify
+accepts with at least `K` wrong units of the production program `Placed.keyProg c hU n`, at the simulated prover's
+committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
+at most `miss(K) + ε_ks + δ_link`.
 
 Its hypotheses, past the session's inputs:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOk c = true`: a check that runs on the parsed circuit, that the

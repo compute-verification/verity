@@ -32,6 +32,7 @@ from verity.ml.definitions.numerics import _jit
 
 HERE = Path(__file__).resolve().parent
 CPP_SRC = HERE / "cpp" / "rms_triton_model.cpp"
+SOURCES = (CPP_SRC,)
 LIB = _jit.lib_path("librms_triton_model.so")          # build product (the _jit cache, outside the checkout), compiled on first use
 
 TABLE_N = 1 << 23
@@ -83,20 +84,13 @@ _lib = None
 
 def build(force: bool = False) -> Path:
     """Compile cpp/rms_triton_model.cpp; atomic publish + builder lock (``_jit``): concurrent first users never dlopen a partial file."""
-    return _jit.atomic_build(LIB, [CPP_SRC], lambda out: _jit.cxx_compile(out, CPP_SRC, cwd=CPP_SRC.parent), force=force)
-
-
-def _load() -> ctypes.CDLL:
-    try:
-        return ctypes.CDLL(str(build()))
-    except OSError:  # a stale or foreign-platform .so (e.g. copied from another machine): rebuild here
-        return ctypes.CDLL(str(build(force=True)))
+    return _jit.atomic_build(LIB, SOURCES, lambda out: _jit.cxx_compile(out, CPP_SRC, cwd=CPP_SRC.parent), force=force)
 
 
 def lib() -> ctypes.CDLL:
     global _lib
     if _lib is None:
-        _lib = _load()
+        _lib = _jit.load(build, SOURCES)
         _lib.rms_triton_rows.restype = None
         _lib.rms_triton_rows.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_int, ctypes.c_float,
                                          ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
