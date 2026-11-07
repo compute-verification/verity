@@ -103,7 +103,6 @@ untraced = [
     "tests/program/test_derived_rows.py",
     "tests/program/test_gemm_target_correspondence.py",
     "tests/program/test_jit_build_dir.py",
-    "tests/program/test_padded_commit_tiny.py",
     "tests/program/test_twins.py",
     "tests/properties/test_glm53_bf16_gemm_capture.py",
     "tests/protocols/remote_bandwidth/test_remote_session.py",
