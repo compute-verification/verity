@@ -12,8 +12,8 @@ directory its files go to, ``window_s``, and a true value for each change), ever
 
 and with ``edges`` (seconds after the first request whose id holds ``edge_tag``) every engine core takes a replay block's
 boundary state at each edge (`edges_of`, `boundary.Edges`): it drains, takes the state between two steps, and goes on.
-Each edge's record (`edges.PID.jsonl`: the drain, the pause and its parts, the KV pool's root, sizes, the GPU's busy time
-since the last edge), its `boundary.dump_core` and block fingerprints (``edges/``) and its state (``kv_dir``/edge-K.state.pkl)
+Each edge's record (`edges.PID.jsonl`: the drain, the pause and its parts, the KV pool's root, sizes, and unless ``busy``
+is false the GPU's busy time each step since the last edge), its `boundary.dump_core` and block fingerprints (``edges/``) and its state (``kv_dir``/edge-K.state.pkl)
 are written off the engine loop, and the KV pool's bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv. From the
 first edge ``save_kv`` names to the last edge, each step's sampled tokens and their logprobs' bits go to
 ``edges/outputs.PID.jsonl``.
@@ -363,7 +363,7 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
     t = clock()
     kv.take()
     record({"hash_build_s": clock() - t})
-    busy = B.Busy(lambda: torch.cuda.Event(enable_timing=True), first=trace.scheduled)
+    busy = B.Busy(lambda: torch.cuda.Event(enable_timing=True), first=trace.scheduled) if cfg.get("busy", True) else None
     runner._verity_busy = busy
     active = [False]
     last = {"step": trace.scheduled, "resumed_t": None}
@@ -396,19 +396,20 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
         t4 = clock()
         kvr = kv.take(host)
         t5 = clock()
-        busy.reap(wait=True)
         fp = kvr.pop("fingerprint")
         st["kv"] = kvr
-        busy_s, busy_steps = busy.total(last["step"], trace.scheduled)
+        busy_s = busy_steps = busy_steps_s = None
+        if busy is not None:
+            busy.reap(wait=True)
+            busy_s, busy_steps = busy.total(last["step"], trace.scheduled)
+            busy_steps_s = [round(x, 7) for x in busy.steps(last["step"], trace.scheduled)]
         rec = {"edge": k, "next_step": trace.scheduled, "at_s": at[k], "drained_unix": time.time() - (clock() - info["drained_t"]),
                "drain_s": info["drained_t"] - info["due_t"], "drain_calls": info["drain_calls"], "sync_s": t1 - t0,
                "state_s": t2 - t1, "dump_s": t3 - t2, "write_wait_s": t4 - t3, "kv_s": t5 - t4,
                "pause_s": t5 - info["drained_t"], "pause_production_s": (t5 - info["drained_t"]) - (t3 - t2) - (t4 - t3),
                "requests": len(sched.requests), "running": len(sched.running), "waiting": len(sched.waiting),
                "sizes": B.sizes(st), "kv": kvr, "since_last": {"from_step": last["step"], "busy_s": busy_s,
-                                                              "busy_steps": busy_steps,
-                                                              "busy_steps_s": [round(x, 7) for x in
-                                                                               busy.steps(last["step"], trace.scheduled)],
+                                                              "busy_steps": busy_steps, "busy_steps_s": busy_steps_s,
                                                               "wall_s": (info["drained_t"] - last["resumed_t"])
                                                               if last["resumed_t"] is not None else None},
                "skipped": st["skipped"], "runner_skipped": st["runner"]["skipped"]}

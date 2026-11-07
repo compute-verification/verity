@@ -109,6 +109,7 @@ def test_only_the_restore_arms_take_edges_and_only_restore_dumps_there(tmp_path:
            for a in ("restore-base", "restore-pause", "restore")}
     assert "edges_s" not in cfg["restore-base"] and cfg["restore-pause"]["edges_s"] == [180.0, 360.0]
     assert [S.ARMS[a].edge_dump for a in ("restore-pause", "restore")] == [False, True]
+    assert [S.ARMS[a].edge_busy for a in ("restore-pause", "restore", "restore-unseeded")] == [False, True, True]
     assert {S.ARMS[a].parent for a in ("restore-pause", "restore")} == {"restore-base"}
     assert S.ARMS["restore-unseeded"].sampling == S.UNSEEDED and S.ARMS["restore-unseeded"].edges
     m = S.MODELS["moonlight"]

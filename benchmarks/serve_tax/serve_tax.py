@@ -86,10 +86,12 @@ class Arm:
     #: the corpus's sampling (`corpus.SAMPLING`) and whether each request asks for its sampled tokens' logprobs
     sampling: str = "greedy"
     logprobs: bool = False
-    #: a replay block's boundary state taken at each of ``--edges-s`` (`servetax_plugin.edges_of`), and whether each edge
-    #: also dumps every leaf of the engine core's state for the restore's check (`boundary.dump_core`)
+    #: a replay block's boundary state taken at each of ``--edges-s`` (`servetax_plugin.edges_of`), whether each edge
+    #: also dumps every leaf of the engine core's state for the restore's check (`boundary.dump_core`), and whether each
+    #: step's GPU busy time is timed for the replay's comparison (`boundary.Busy`)
     edges: bool = False
     edge_dump: bool = True
+    edge_busy: bool = True
 
 
 ARMS = {
@@ -104,7 +106,8 @@ ARMS = {
     "restore-base": Arm("record", "+ seeded sampling, each sampled token's logprob returned", plugin=("record",),
                         sampling="seeded", logprobs=True),
     "restore-pause": Arm("restore-base", "+ a replay block's boundary state taken at each edge (drained, copied, hashed, "
-                         "kept)", plugin=("record",), sampling="seeded", logprobs=True, edges=True, edge_dump=False),
+                         "kept), as a server would: no leaf dump, no per-step timing", plugin=("record",), sampling="seeded",
+                         logprobs=True, edges=True, edge_dump=False, edge_busy=False),
     "restore": Arm("restore-base", "+ a replay block's boundary state taken at each edge (drained, copied, hashed, kept) "
                    "and every leaf of the engine core's state dumped there for the restore's check",
                    plugin=("record",), sampling="seeded", logprobs=True, edges=True),
@@ -359,7 +362,7 @@ def run(a: argparse.Namespace) -> int:
             raise SystemExit(f"arm {a.arm} takes the boundary state at --edges-s S,S,...")
         edges = {"edges_s": [float(x) for x in a.edges_s.split(",")], "edge_tag": f"-{next(iter(rates))}1-",
                  "save_kv": [int(x) for x in a.save_kv.split(",")], "kv_dir": str(Path(a.kv_dir) / a.arm) if a.kv_dir else None,
-                 "dump": arm.edge_dump}
+                 "dump": arm.edge_dump, "busy": arm.edge_busy}
     meta = {"schema": SCHEMA, "arm": a.arm, "what": arm.what, "parent": arm.parent, "model_id": a.model_id,
             "model": f"{model.repo}@{model.revision}", "checkpoint": str(checkpoint), "server_argv": argv[1:],
             "plugin": list(arm.plugin), "tick": tick, "window_s": a.window_s, "kv_window_s": a.kv_window_s, "rates": rates, "reps": a.reps, "plan": a.plan,

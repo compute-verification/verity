@@ -881,17 +881,20 @@ class Busy:
             e.record()
             self.open.append((*self.current, e))
             self.current = None
+        self.reap()
 
     def reap(self, wait: bool = False) -> None:
-        keep = []
+        """The open steps' times, oldest first, up to the first whose end hasn't happened (all of them, waiting, with
+        ``wait``): one stream's events complete in order, so the open list stays a few steps long."""
+        n = 0
         for step, a, b in self.open:
-            if wait or b.query():
-                if wait:
-                    b.synchronize()
-                self.done[step] = a.elapsed_time(b) / 1e3
-            else:
-                keep.append((step, a, b))
-        self.open = keep
+            if wait:
+                b.synchronize()
+            elif not b.query():
+                break
+            self.done[step] = a.elapsed_time(b) / 1e3
+            n += 1
+        del self.open[:n]
 
     def total(self, lo: int, hi: int) -> tuple[float, int]:
         """Busy seconds and steps over step indices [lo, hi)."""

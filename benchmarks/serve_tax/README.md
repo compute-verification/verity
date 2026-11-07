@@ -15,8 +15,8 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 | `tokens` | each window's tokens, 4 bytes each, committed in `rows-sha512` rows off the engine loop | `tick` |
 | `kv` | the whole paged KV pool hashed in place on a side stream at each window edge | `tokens` |
 | `restore-base` | seeded sampling (the corpus's `seeded`), each sampled token's logprob returned | `record` |
-| `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept | `restore-base` |
-| `restore` | `restore-pause` and every leaf of the engine core's state dumped at each edge, for the restore's check | `restore-base` |
+| `restore-pause` | a replay block's boundary state taken at each edge: the engine loop drained, the KV pool copied to host and hashed, the scheduler's, block pool's, model runner's and generators' state captured, and kept, as a server would | `restore-base` |
+| `restore` | `restore-pause` with every leaf of the engine core's state dumped at each edge and each step's GPU busy time timed, for the restore's check | `restore-base` |
 | `restore-unseeded` | `restore` with requests that carry no seed, as production clients send | `restore` |
 
 `replay.py` replays one load of a `record` arm in this process under its recorded schedule (each request added before

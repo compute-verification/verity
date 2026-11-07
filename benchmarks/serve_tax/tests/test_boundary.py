@@ -350,7 +350,15 @@ def test_busy_counts_each_steps_gpu_time_by_the_traces_step_index():
         busy.started(16)
         clock[0] = t1
         busy.sampled()
+    made[3].done = True
+    busy.reap()
+    assert busy.done == {} and len(busy.open) == 2
     made[1].done = True
+    busy.reap()
+    assert busy.done == {7: 0.5, 8: 0.25} and busy.open == []
+    made[3].done = False
+    busy.done.clear()
+    busy.open = [(7, made[0], made[1]), (8, made[2], made[3])]
     busy.reap()
     assert busy.done == {7: 0.5} and len(busy.open) == 1
     busy.reap(wait=True)
