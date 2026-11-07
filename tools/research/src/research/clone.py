@@ -22,17 +22,36 @@ import sys
 import tempfile
 from pathlib import Path
 
+
+def _lean_driver(flag: str = "") -> str:
+    """tools/verity/lean/merge.py's driver for the mode ``flag`` names, as its `driver` writes it (a test holds the two equal):
+    origin/main's copy of tools/verity/lean when the repository has that ref, else the worktree's.  Git runs a driver from the
+    worktree of the side merged into, so an old branch merging main would otherwise merge main's records by its own older
+    rules; a path base_drivers made absolute runs as it is.  The copy is extracted once per origin/main commit, into
+    <git common dir>/lean-merge/<sha>/ (`.ok` once whole), by the call that takes `<sha>.lock` (mkdir), which also keeps only
+    the two newest; a call that finds the lock taken runs a temporary copy of its own rather than wait on it."""
+    tree = "git archive \"$s\" -- tools/verity/lean ':(exclude)tools/verity/lean/tests' 2>/dev/null | tar -x -C"
+    return (f"m=tools/verity/lean/merge.py; f=$m; d=; case $m in /*) ;; *) if s=$(git rev-parse -q --verify "
+            f"'origin/main^{{commit}}') && g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && "
+            f"mkdir -p \"$b\"; then c=$b/$s; if [ ! -f \"$c/.ok\" ]; then if mkdir \"$c.lock\" 2>/dev/null; then "
+            f"[ -f \"$c/.ok\" ] || {{ rm -rf \"$c\" && mkdir \"$c\" && {tree} \"$c\" 2>/dev/null && [ -f \"$c/$m\" ] && "
+            f": >\"$c/.ok\"; }}; ls -t \"$b\" | grep -E '^[0-9a-f]{{40,64}}$' | tail -n +3 | while read -r o; do "
+            f"rm -rf \"$b/$o\" \"$b/$o.lock\"; done; rmdir \"$c.lock\"; elif d=$(mktemp -d) && {tree} \"$d\" 2>/dev/null && "
+            f"[ -f \"$d/$m\" ]; then f=$d/$m; fi; fi; [ -f \"$c/.ok\" ] && f=$c/$m; fi;; esac; "
+            f"python3 \"$f\" {flag}%O %A %B %P; r=$?; [ -z \"$d\" ] || rm -rf \"$d\"; exit $r")
+
+
 #: git's merge drivers for `lean-audit.json`, `.lean` files, lakefiles, pyprojects, the fixture map and the vLLM lints' allowlists
 #: (`.gitattributes`), set in every run clone and for every git a gate runs (research.gates): a clone's config holds it only
 #: after `merge.py --install`, and without it git
-#: merges a record line by line (the queue's own clone, a fresh VM's checkout); a tree from before the tools/verity move has it
-#: at tools/lean/merge.py.  Here, not in gates, because the suites that read clone.py (vllm's, evaluate's) don't read gates.py
+#: merges a record line by line (the queue's own clone, a fresh VM's checkout).  Here, not in gates, because the suites that
+#: read clone.py (vllm's, evaluate's) don't read gates.py
 RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarantees, reads and dependencies (tools/verity/lean/merge.py)",
-                 "merge.lean-audit.driver": 'f=tools/verity/lean/merge.py; [ -f "$f" ] || f=tools/lean/merge.py; python3 "$f" %O %A %B %P',
+                 "merge.lean-audit.driver": _lean_driver(),
                  "merge.lean-imports.name": ".lean: each side's imports (tools/verity/lean/merge.py)",
-                 "merge.lean-imports.driver": "python3 tools/verity/lean/merge.py --lean %O %A %B %P",
+                 "merge.lean-imports.driver": _lean_driver("--lean "),
                  "merge.lakefile-lists.name": "lakefile.toml: each side's requires and roots (tools/verity/lean/merge.py)",
-                 "merge.lakefile-lists.driver": "python3 tools/verity/lean/merge.py --lakefile %O %A %B %P",
+                 "merge.lakefile-lists.driver": _lean_driver("--lakefile "),
                  "merge.fixture-map.name": "fixtures/artifacts.json: each side's fixtures (tools/verity/check/merge_map.py)",
                  "merge.fixture-map.driver": "python3 tools/verity/check/merge_map.py %O %A %B %P",
                  "merge.vllm-allowlist.name": "the vLLM lints' allowlists and dead-code keep map: each side's entries "
@@ -40,9 +59,9 @@ RECORD_DRIVER = {"merge.lean-audit.name": "lean-audit.json: each side's guarante
                  "merge.vllm-allowlist.driver": "python3 integrations/vllm/tests/lint/merge_allowlist.py %O %A %B %P",
                  "merge.lean-caps.name": "tests/test_lean_packages.py: each side's change to the ratchet caps "
                                          "(tools/verity/lean/merge.py)",
-                 "merge.lean-caps.driver": "python3 tools/verity/lean/merge.py --caps %O %A %B %P",
+                 "merge.lean-caps.driver": _lean_driver("--caps "),
                  "merge.pyproject-test-lists.name": "pyproject.toml: each side's [tool.verity.tests] lists (tools/verity/lean/merge.py)",
-                 "merge.pyproject-test-lists.driver": "python3 tools/verity/lean/merge.py --pyproject %O %A %B %P"}
+                 "merge.pyproject-test-lists.driver": _lean_driver("--pyproject ")}
 
 
 CWD_CLONE = "clone"

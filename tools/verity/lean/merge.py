@@ -20,7 +20,8 @@ is recomputed from the merged definitions (`audit.module_digest`). A side writte
 (`pins`) is read under today's names (`audit.as_guarantees`), and a side whose `reads` groups still list their readers
 (`audit.READER_KEYS`) is read without them, so a branch from before the lock dropped them merges with one from after.
 
-The merge never refuses: lock files never conflict on merge. What the build determines is the records
+The merge refuses only where it can't vouch for itself (the guards below): otherwise lock files never conflict on merge.
+What the build determines is the records
 `check.py --update` writes from it, which the lock run after landing rewrites on the merged tree whenever they differ
 (`audit.RECORD_DIFFERENCE`, `audit.regenerated`): a guarantee's record (signature, named assumptions, type hash: restated
 on both sides, the merged tree's statement decides it), each `reads` group (which definitions the guarantees read, and
@@ -45,15 +46,26 @@ the merged commit judges.
 
 Every entry taken from one side where the sides disagree is named on stderr, one line per key. A side that is not a
 record (not JSON, not an object, or holding both `pins` and `guarantees`) is the other side's record, named; only when
-neither side is one does the merge leave git's text merge of the file, as a conflict. Exit 0: merged, the record written
-to OURS. Exit 1: neither side a record. A merged record is a candidate, never a verdict: `check`'s Lean audit rebuilds
-every record of the merged tree and fails on any difference, as for any record; the lock run after landing regenerates
-the records, and the landing DM shows each one that changed against `main`.
+neither side is one, or a guard below refuses, does the merge leave git's text merge of the file, as a conflict. Exit 0: merged, the record written
+to OURS. Exit 1: neither side a record, or a guard refused. A merged record is a candidate, never a verdict: `check`'s Lean
+audit rebuilds every record of the merged tree and fails on any difference, as for any record; the lock run after landing
+regenerates the records, and the landing DM shows each one that changed against `main`.
 
 Git runs a driver from the worktree of the side merged into, so a branch whose checkout took older merge rules would merge
-`main`, or another branch, by those (`deferred`): when `origin/main` has changed this file or `check.py` since the checkout took
-them, and the checkout neither edited them nor committed a `merge.py` of its own, this file runs `origin/main`'s copy of its
-directory instead and says so on stderr. `research queue` runs the drivers of the tip it merges onto already (`base_drivers`).
+`main` by those: an older copy that merged `main` into an old branch collapsed `Security`'s 1,316 `reads` groups to one. The
+command `--install` registers (`driver`, the one `research.clone.RECORD_DRIVER` holds) runs `origin/main`'s copy of this
+directory wherever the repository has that ref, and the worktree's otherwise; a path already absolute (`research queue`'s
+`base_drivers`, the drivers of the tip it merges onto) runs as given. Three guards leave git's conflict, saying why on
+stderr, where a merge could lose what this copy doesn't know, and they are the one case where a conflict beats the merge:
+a conflict is seen and resolved, while a silent loss lands.
+
+- A side's lock is in a `format` newer than this copy's `FORMAT` (`check.py` writes its own, held equal to this one): merge
+  `main`'s `tools/verity/lean` first.
+- Git runs the worktree's own copy while the side `git merge` merges in (`GITHEAD_<commit>`) has `merge.py` changes this
+  checkout lacks (`stale`).
+- The merged record drops more than half of a side's entries in a section (the `reads` groups, the guarantees, any
+  section's keys or items) that the base doesn't account for, as the other side's removal of an entry the base had
+  (`losses`).
 
 The layer rules (`layers`), which two branches that each widen a layer for a guarantee both change, merge field by field: `imports`
 and `except` as lists, `why` as a list of its `; ` clauses (`layers`). Every list of names (the roots, `meaning`, `proved_in`,
@@ -128,10 +140,11 @@ DEEPER = {"shape[inline]"}
 #: the witness rule's sections, merged entry by entry with theirs' value where the sides disagree (`judged`)
 JUDGED = {"unwitnessed", "witnesses"}
 MISSING = object()
-#: the landed drivers a checkout's older one defers to (`deferred`), and the files whose history decides that: this file and
-#: the `check.py` it loads
-MAIN = "origin/main"
-RULES = ("tools/verity/lean/merge.py", "tools/verity/lean/check.py")
+#: the newest lock `format` this file merges: bump it with `check.py`'s `FORMAT`, which writes it, so a copy older than a
+#: lock leaves it to git's conflict
+FORMAT = 1
+#: this directory, from the top of the worktree; the registered drivers run `origin/main`'s copy of it (`driver`)
+DIR = "tools/verity/lean"
 #: sections an entry sits in at most one of (`exclusive`), by the section holding them (None: the record): a claim is
 #: witnessed, excused or generic, and a premise is a named assumption, a domain hypothesis or open
 EXCLUSIVE = (("claims", ("witnesses", "not", "generic")), (None, ("assumptions", "domain", "open")))
@@ -994,51 +1007,96 @@ def load(path: Path) -> dict:
     return doc
 
 
-def deferred(argv: list[str]) -> int | None:
-    """Run the driver ``argv`` names with `MAIN`'s copy of this directory when git runs this file from its worktree, unedited,
-    and `MAIN` has changed the merge rules (`RULES`) since this checkout took them while the checkout committed no `merge.py`
-    of its own: that run's exit status, else None, and this file merges. Git runs a driver from the worktree of the side
-    merged into, so a branch that merges another into an older checkout would merge by the rules that checkout took: one from
-    before `held` applies a side's drop of `shape.inline` premises the merged tree still prints, and that tree's records fail
-    `guarantees.inline-hypothesis`. Without `MAIN` (a test's repository) this file merges, and a copy outside the worktree
-    (the one this runs, and those `research queue`'s `base_drivers` runs, the drivers of the tip it merges onto) never
-    defers."""
+def driver(flag: str = "", where: str = DIR) -> str:
+    """The command git runs for a driver whose mode ``flag`` names (`--caps `...): `origin/main`'s copy of ``where`` (this
+    directory from the top of the worktree, where git runs drivers) when the repository has that ref, else the worktree's.
+    `origin/main`'s copy is at least as new as any branch's, and the worktree's is the branch merged into's. A path made
+    absolute (`research queue`'s `base_drivers`) runs as it is. `git archive` extracts the copy once per `origin/main`
+    commit, into `<git common dir>/lean-merge/<sha>/` (`.ok` once whole), in the call that takes `<sha>.lock` (mkdir, so
+    concurrent calls don't both write it), which also removes all but the two newest; a call that finds the lock taken
+    runs a temporary copy of its own rather than wait on a lock its holder may never release."""
+    m, tree = f"{where}/merge.py", f"git archive \"$s\" -- {where} ':(exclude){where}/tests' 2>/dev/null | tar -x -C"
+    return (f"m={m}; f=$m; d=; case $m in /*) ;; *) if s=$(git rev-parse -q --verify "
+            f"'origin/main^{{commit}}') && g=$(git rev-parse --git-common-dir) && b=$(cd \"$g\" && pwd)/lean-merge && "
+            f"mkdir -p \"$b\"; then c=$b/$s; if [ ! -f \"$c/.ok\" ]; then if mkdir \"$c.lock\" 2>/dev/null; then "
+            f"[ -f \"$c/.ok\" ] || {{ rm -rf \"$c\" && mkdir \"$c\" && {tree} \"$c\" 2>/dev/null && [ -f \"$c/$m\" ] && "
+            f": >\"$c/.ok\"; }}; ls -t \"$b\" | grep -E '^[0-9a-f]{{40,64}}$' | tail -n +3 | while read -r o; do "
+            f"rm -rf \"$b/$o\" \"$b/$o.lock\"; done; rmdir \"$c.lock\"; elif d=$(mktemp -d) && {tree} \"$d\" 2>/dev/null && "
+            f"[ -f \"$d/$m\" ]; then f=$d/$m; fi; fi; [ -f \"$c/.ok\" ] && f=$c/$m; fi;; esac; "
+            f"python3 \"$f\" {flag}%O %A %B %P; r=$?; [ -z \"$d\" ] || rm -rf \"$d\"; exit $r")
 
-    def git(*args: str) -> subprocess.CompletedProcess:
-        return subprocess.run(["git", *args], capture_output=True)
-    top = git("rev-parse", "--show-toplevel")
-    if top.returncode or (Path(top.stdout.decode().strip()) / "tools" / "verity" / "lean").resolve() != HERE:
+
+def stale() -> str | None:
+    """Why this copy mustn't merge, or None: git runs the worktree's own copy (what `driver` falls back to without
+    `origin/main`, or what an older registered command runs) while a side `git merge` merges in, which git names to its
+    drivers as `GITHEAD_<commit>` (`settings.merged_in`), has `merge.py` changes this checkout lacks, so its records may
+    hold what this copy can't merge. Git names that side only in `git merge` and `git pull`: `merge-tree`, a rebase and a
+    cherry-pick merge as before, and a copy outside the worktree was chosen by whoever ran it, as was one of `merge.py` and
+    `check.py` alone (a test's), which has no `settings.py`."""
+    if not (HERE / "settings.py").is_file() or not (heads := A.sibling("settings").merged_in()):
         return None
-    tip = git("rev-parse", "-q", "--verify", f"{MAIN}^{{commit}}").stdout.decode().strip()
-    if (not tip or git("diff", "--quiet", "HEAD", "--", *RULES).returncode
-            or not git("rev-list", "-n1", tip, "^HEAD", "--", *RULES).stdout.strip()
-            or git("rev-list", "-n1", "HEAD", f"^{tip}", "--", RULES[0]).stdout.strip()):
+
+    def git(*args: str) -> str:
+        r = subprocess.run(["git", *args], capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    if not (top := git("rev-parse", "--show-toplevel")) or (rel := os.path.relpath(HERE, top)).startswith(".."):
         return None
-    ls = git("ls-tree", "-z", tip, "--", f"{Path(RULES[0]).parent}/").stdout
-    with tempfile.TemporaryDirectory(prefix="lean-merge-driver-") as tmp:
-        for e in filter(None, ls.split(b"\0")):
-            meta, path = e.decode().split("\t", 1)
-            if meta.split()[1] == "blob":
-                (out := Path(tmp) / path).parent.mkdir(parents=True, exist_ok=True)
-                out.write_bytes(git("cat-file", "blob", meta.split()[2]).stdout)
-        print(f"merge.py: merging with {MAIN}'s drivers ({tip[:10]}), which changed the merge rules since this checkout "
-              f"took them", file=sys.stderr)
-        return subprocess.run([sys.executable, str(Path(tmp) / RULES[0]), *argv]).returncode
+    me = f"{Path(rel).as_posix()}/merge.py"
+    mine = git("hash-object", "--", str(HERE / "merge.py"))
+    for commit, name in sorted(heads.items()):
+        theirs = git("rev-parse", "-q", "--verify", f"{commit}:{me}")
+        if theirs and theirs != mine and git("rev-list", "-n1", commit, "^HEAD", "--", me):
+            return (f"the side merged in, {name} ({commit[:10]}), has {me} {theirs[:10]}, with changes this checkout's "
+                    f"{mine[:10]} lacks, and git ran this checkout's copy: `git merge --abort`, `git fetch origin main`, "
+                    f"register the drivers that run origin/main's copy (`python3 {me} --install`), and merge again")
+    return None
+
+
+def losses(base: dict, ours: dict, theirs: dict, merged: dict) -> list[str]:
+    """Each section of which ``merged`` drops more than half of a side's entries (a map's keys, a list's items) that the
+    base doesn't account for. The base accounts for an entry it had that the other side removed; an entry of an `EXCLUSIVE`
+    group of sections is kept wherever in the group the merge put it."""
+    group = {s: g for parent, g in EXCLUSIVE if parent is None for s in g}
+
+    def held(rec: dict, k: str) -> set:
+        out = set()
+        for s in group.get(k, (k,)):
+            v = rec.get(s)
+            out |= set(v) if isinstance(v, dict) else {json.dumps(i, sort_keys=True) for i in v} if isinstance(v, list) else set()
+        return out
+    out = []
+    for side, rec, other in (("ours", ours, theirs), ("theirs", theirs, ours)):
+        for k, v in rec.items():
+            if not isinstance(v, (dict, list)) or not v:
+                continue
+            have = set(v) if isinstance(v, dict) else {json.dumps(i, sort_keys=True) for i in v}
+            gone = have - held(merged, k) - (held(base, k) - held(other, k))
+            if 2 * len(gone) > len(have):
+                out.append(f"{k}: the merge keeps {len(have) - len(gone)} of {side}' {len(have)}, losing {len(gone)} the base "
+                           f"doesn't account for ({', '.join(sorted(gone)[:3])}{', ...' if len(gone) > 3 else ''})")
+    return out
+
+
+def conflict(base: Path, ours: Path, theirs: Path, path: Path, why: str) -> int:
+    """Leave ``path`` to git's text merge, written to OURS, saying ``why`` on stderr: exit 1, which git reports as a
+    conflict."""
+    ours.write_text(lean(base, ours, theirs, ())[0])
+    print(f"merge.py: {path}: {why}: left to git's merge, as a conflict", file=sys.stderr)
+    return 1
 
 
 def install(repo: Path) -> None:
-    """Register the driver in ``repo``'s git config, as this file's path from the top of the worktree (git runs drivers
-    there)."""
+    """Register the drivers in ``repo``'s git config: `driver`'s command for this directory's path from the top of the
+    worktree (git runs drivers there)."""
     top = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], cwd=repo, capture_output=True, text=True,
                               check=True).stdout.strip())
-    driver = f"python3 {Path(os.path.relpath(HERE / 'merge.py', top)).as_posix()} %O %A %B %P"
-    for name, what, argv in ((NAME, "lean-audit.json: each side's guarantees, reads and dependencies", driver),
-                             (LEAN, ".lean: each side's imports", driver.replace(" %O", " --lean %O")),
-                             (LAKEFILE, "lakefile.toml: each side's requires and roots", driver.replace(" %O", " --lakefile %O")),
-                             (PYPROJECT, "pyproject.toml: each side's [tool.verity.tests] lists",
-                              driver.replace(" %O", " --pyproject %O")),
+    where = Path(os.path.relpath(HERE, top)).as_posix()
+    for name, what, argv in ((NAME, "lean-audit.json: each side's guarantees, reads and dependencies", driver("", where)),
+                             (LEAN, ".lean: each side's imports", driver("--lean ", where)),
+                             (LAKEFILE, "lakefile.toml: each side's requires and roots", driver("--lakefile ", where)),
+                             (PYPROJECT, "pyproject.toml: each side's [tool.verity.tests] lists", driver("--pyproject ", where)),
                              (CAPS, "tests/test_lean_packages.py: each side's change to the ratchet caps",
-                              driver.replace(" %O", " --caps %O"))):
+                              driver("--caps ", where))):
         for k, v in (("name", f"{what} (tools/verity/lean/merge.py)"), ("driver", argv)):
             subprocess.run(["git", "config", f"merge.{name}.{k}", v], cwd=repo, check=True)
         print(f"merge.py: merge.{name}.driver = {argv} (in {top})")
@@ -1078,10 +1136,10 @@ def main(argv: list[str]) -> int:
         return 0
     if len(a.files) not in (3, 4):
         ap.error("name BASE OURS THEIRS [PATH], or --install, or --normalize FILE...")
-    if (rc := deferred(argv)) is not None:
-        return rc
     base, ours, theirs = a.files[:3]
     path = a.files[3] if len(a.files) == 4 else ours
+    if why := stale():
+        return conflict(base, ours, theirs, path, why)
     if a.lean or a.lakefile or a.caps or a.pyproject:
         text, left = (lakefile if a.lakefile else caps if a.caps else pyproject if a.pyproject else lean)(base, ours, theirs)
         ours.write_text(text)
@@ -1097,10 +1155,11 @@ def main(argv: list[str]) -> int:
         except (ValueError, AttributeError, TypeError) as e:
             bad[name] = f"{name} is not a record ({e})"
     if "ours" in bad and "theirs" in bad:
-        ours.write_text(lean(base, ours, theirs, ())[0])
-        print(f"merge.py: {path}: neither side is a record ({bad['ours']}; {bad['theirs']}): left to git's merge, as a "
-              f"conflict", file=sys.stderr)
-        return 1
+        return conflict(base, ours, theirs, path, f"neither side is a record ({bad['ours']}; {bad['theirs']})")
+    if newer := [f"{n} is lock format {f!r}" for n, d in docs.items()
+                 if not (isinstance(f := d.get("format", 0), int) and not isinstance(f, bool) and f <= FORMAT)]:
+        return conflict(base, ours, theirs, path, f"{'; '.join(newer)}, which this merge.py (format {FORMAT}) doesn't know: "
+                        f"merge main's {DIR} first, or merge with that of the branch that made it, then merge again")
     why: list[str] = []
     candidate: list[str] = []
     if "ours" in bad or "theirs" in bad:
@@ -1113,9 +1172,12 @@ def main(argv: list[str]) -> int:
         try:
             merged, clashes = merge(docs.get("base", {}), docs["ours"], docs["theirs"], candidate)
             why += clashes
-        except Exception as e:  # noqa: BLE001  (the driver never refuses: theirs stands as the candidate)
+        except Exception as e:  # noqa: BLE001  (a merge that fails doesn't refuse: theirs stands as the candidate)
             merged, candidate = docs["theirs"], []
             why.append(f"the merge failed ({type(e).__name__}: {e}): took theirs")
+        if lost := losses(docs.get("base", {}), docs["ours"], docs["theirs"], merged):
+            return conflict(base, ours, theirs, path, "the merged record loses most of a section, which a conflict shows "
+                            "where a merge would drop it silently: " + "; ".join(lost))
     for w in why:
         print(f"merge.py: {path}: {w}", file=sys.stderr)
     for c in dict.fromkeys(candidate):
