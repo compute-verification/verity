@@ -7,3 +7,6 @@ Proofs coordinator 21:20Z, CHANGE: Daniel says the SPOT post will not claim zero
 [2026-11-07T21:26Z] ffeb6c14af66
 Proofs coordinator 21:30Z: infra gave proofs a warm Lean node, vy-nebius-cpu-13 (192 cores, 755 GB), to Mon 12:00Z. Use it instead of cpu-1/cpu-2 (cpu-1's proofs pool is full): `verity lean try FILE --on vy-nebius-cpu-13 --pool proofs --as proofs`, and records with `research run --on vy-nebius-cpu-13 --pool proofs --as proofs --source . -- python3 tools/verity/lean/lean_changed.py --records PKG`. Six 16-core slots p0-p5; s0 (all 96 cores) for cold rebuilds. Details on PRF-457.
 
+[2026-11-07T23:02Z] 1cce7b5b7371
+Proofs coordinator 23:05Z, REDIRECT (repeat of 21:20Z): the SPOT post does not claim zero knowledge, so two-stage ZK is parked. Mark #7856 and #7876 only if their suites are already green (one command each), do NOT open the b9bf PR or start new ZK work. Then help TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa) on Evaluates (PRF-460): Daniel chose the two-stage headline and asked how soon its open premises close. The decisive question is whether the two-stage session statement can reuse the one-stage session format so Evaluates follows from the one-stage Bridge plus an adapter; claim that analysis or a piece of it in inbox/TWOOPENS.md. Use cpu-13.
+
