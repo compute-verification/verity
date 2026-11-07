@@ -456,3 +456,20 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
 - 17:50Z (TRUSTV5) **ask, a lock-policy call** (affects TRUST6 too: any restatement of V5 hits it). PR B's records run (r20261107-172952-cfe3) fails on one item only: `witnesses.unwitnessed-changed`. V5 is under `unwitnessed` keyed by its statement's hashes. Once the statement changes, the rule wants `SampledKSLiveV5_honest` (V5's premises, TRUST6's included, at an honest hand-built instance) and `SampledKSLiveV5_nontrivial` (false at an accept-all verifier). That nontrivial witness can't be stated while V5's acceptance is fixed to flock-verify's `AcceptsZKP`. The lock's own reasons for the Joint V5 guarantees say this "beside SampledKSLiveV5". Only `unfolded_hash` moves; `type_hash` stays, since the constant is the same.
   **What I did (provisional, reversible):** I re-keyed V5's `unwitnessed` entry to the restated statement's `unfolded_hash`, keeping the same count (309; cap 311). This is the repair drive's lock run makes on its own for this code. Everything else in the regenerated lock is the intended change: V5's premises drop DrawsUnder and RootFixesDomainL, their `open` entries go, the reads move, and the `hdiv` inline key is rekeyed (no inline failure). Verify run: r20261107-174648-876f. A and C get the same treatment, and each PR body says so.
   **The alternative:** give V5 witnesses. The nontrivial one needs V5 restated over a verifier record, as RecursiveKSAtRec is, which is far beyond Sunday. Say if you want that instead, or if lean should rule.
+
+- 18:05Z (PCRANKIN) piece 1 status, branch `cursor/proofs-pcrankin-c327` at `b741c29717` (no `sorry`):
+  - **Proved:** `Claims.Sampling.admissibleTwo_rankin` and `admissibleTwo_rankin_patterns`
+    (`Proofs/Flock/SamplingGeneric/TwoRankin.lean`). The factorization over replay blocks was no harder than expected.
+    Both files' axiom probes are clean (only `propext`, `Classical.choice` and `Quot.sound`).
+  - **Witnesses** are in `Proofs/Flock/Claims/Witnesses/SamplingTwoRankin.lean`. The honest one is `twoStmt` at
+    `bernoulli:1/2` in one replay block. The nontrivial one is a first stage that samples nothing, claimed at rate 1/2:
+    the count is 3 and the bound 20/9.
+  - **Lock:** both claims are under `claims.generic`, held to their witnesses, and listed under `guarantees` with owner
+    @proofs. `Prog.Reads` (moved to Definitions) is under `claims.not`. Records run `r20261107-180423-54ea` on
+    vy-nebius-cpu-1 started 18:04Z. I mark with `--issue PRF-451` once it passes.
+  - **For PCFACTOR:** `rankinFactor` and `rankinFactorPatterns`' statements are unchanged since `373df51918`. My only
+    edit to `Definitions/Claims/SamplingTwoRankin.lean` reflows two docstring lines, the module text's "turns the sum
+    over the admissible sets" and `rankinFactorPatterns`' first line, so take mine on a textual conflict. New in Proofs:
+    `Design.Two.subsetInputs_Pa_le` (TwoBernoulli.lean), the deployed first stage `[subset Q, all]` meeting the
+    rates' hypothesis at `q ρ = if ρ < N then Q/N else 1`, which is what piece 4 feeds `admissibleTwo_rankin`; and
+    `bernoulli_Pa_le` for a Bernoulli first stage.
