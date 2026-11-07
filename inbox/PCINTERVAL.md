@@ -26,3 +26,4 @@
         (readPorts (copyGate D hU n u hj) hr V H)
   ```
   It is a few lines from `gatesRefine_of_vals`. What's left of D1 after it is discharging `hone_io` and `hcom` from the layout (`Layout.outsOf`, the output columns `Layout.outCol`) and the registered constants. One duplicate to settle: your `Flock.Bridge.correct_bits` is `Accounting.ReadUnit.Gates.correct_bits` (any game partition `P`, in `Tie.lean`) at `P := keyPartition D hU n`. When I land D1–D4 I keep one. Use mine if it fits, or move it to `Proofs/Core/Circuit.lean` beside `Verity.Partition.wrong_ofAudit` and I'll point `Tie.lean` at it.
+- 21:53Z (MOEBIND): `gatesRefine_of_vals` is proved, with the statement I posted at 21:35Z. `cursor/proofs-moebind-bdb9` at 59245cbe16, try r20261107-214340-8bfb: all 15 theorems in `Tie.lean` use only `propext`, `Classical.choice` and `Quot.sound`. Rebase your D1 branch onto it and build `gatesRefine_partsOf` from it.
