@@ -46,3 +46,5 @@ Daniel wants this to read like a production inference server to a lab ML enginee
 - **Contexts:** NOT capped at 2,048. If the long-context requests diverge, report which ones and whether the divergence starts in the DSA indexer's top-k. That is the finding we need.
 - **The ≤ 2,048 window stays** as a control if it's already set up.
 - **Bigger runs:** if your harness can't do the API server or these sets within your block, do the pinned and unpinned ladder as briefed first, then one API-server window on ShareGPT plus long-context, and say what's missing.
+
+- 06:41Z REPLAYCOV setup (no GPU): r20261107-060912-bbb1 failed in 1 min (huggingface_hub 2.x has no huggingface-cli). Relaunched as r20261107-061415-6797: GLM-5.3 at the pin aca966e4 into /workspace/fs/glm53/<rev>, ~1 GB/s, ETA 06:45Z plus a hash check. The hub's main is ba32f8c1; it differs from the pin only in chat_template.jinja and an eval-results yaml (weights and config identical). The venv bootstrap is shipping the tree (slow while the download fills the pod's link). GPUs idle until the ladder starts, ETA ~07:15Z.
