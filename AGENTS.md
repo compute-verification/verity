@@ -161,7 +161,7 @@ suite, test, target and step's real verdict. What gates, what may stay red and w
 `tools/verity/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
 which drive takes a failure as not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
 fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs after
-landing on `checked`'s tip, where a red reverts its culprit at once and holds the PRs touching its inputs until it passes.
+landing on `checked`'s tip, where a red holds the PRs touching its inputs until it passes.
 
 A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
 unchanged.
@@ -170,12 +170,16 @@ A part's verdict is reused while a hash of its declared inputs, the base image a
 docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
 only fully checked commits: drive lands `next`'s longest reviewed prefix on `checked`, and its low-risk members (no Lean, lock or
 soundness-path change: drive.toml's `lowrisk_excludes`) on their ready mark alone, runs the full check on its tip itself,
-and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate; a red step's culprit is
-reverted on `checked` (how a PR lands: the team skill). A ready mark admits a PR: the sync's own merge onto `next` (a
-conflict, drive.toml's `landing_gates`) is the only check before it joins, and a body naming no live goal draws a warning,
-never a refusal. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on
-`checked`'s tip (its lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only
-to a commit whose records are the regenerated ones and whose gated steps all passed on it.
+and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate (how a PR lands: the
+team skill). A red's culprit is the one landing whose change touches what its failure names (its files, the files declaring
+a Lean declaration it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it
+forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
+rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
+is the only check before it joins, and a body naming no live goal draws a warning, never a refusal. A Markdown file over its
+cap (`tests/test_repository.py`) is a warning too: drive lands the change and tells its owner, who trims it in their next PR.
+A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s tip (its
+lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit whose
+records are the regenerated ones and whose gated steps all passed on it.
 
 ## Lean
 

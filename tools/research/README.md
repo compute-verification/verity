@@ -132,8 +132,8 @@ and fast-forwards to the longest prefix that passed.
 
 `research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
 worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
-refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the markdown caps
-among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
+refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the repository's
+lints) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
 `tools/verity/check/train.sh BRANCH MACHINE` checks it (`auto`: the node
 `check.py --slots` picks), and `research merge BRANCH` lands it.
 

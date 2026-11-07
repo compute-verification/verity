@@ -33,7 +33,7 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    none: REASON` line (`goal_gate`; the goals as this machine last read them
                                                    when the page can't be read, said in one line), and (the records gate,
                                                    `RecordsGate`: the lock run after its landing regenerates the records, and
-                                                   a failure there reverts it) when the head changes a Lean lock against the
+                                                   a failure there blames it) when the head changes a Lean lock against the
                                                    landing branch that no records run or Lean check passed, of the head or of
                                                    a commit whose files of the package and the
                                                    packages it requires (tests and docs aside), lean-toolchain and the Lean
@@ -43,7 +43,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    the fix, a head that conflicts with a
                                                    fresh `next` outside the pins (naming the paths), contains an
                                                    open PR that isn't admitted (naming it), fails a landing gate of drive.toml at `main` (with
-                                                   the gate's fix), or, merged onto `next` in a temporary worktree, fails `pins.py
+                                                   the gate's fix; a warn gate's failure is printed as a warning and refuses
+                                                   nothing), or, merged onto `next` in a temporary worktree, fails `pins.py
                                                    --stale`, tests/test_module_strings.py, test_pins.py, test_doc_paths.py,
                                                    test_repository.py, tools/research/tests/test_pythonpath.py, or `pytest
                                                    --collect-only` in a suite
@@ -72,7 +73,8 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    naming each key, unless every key it sets has main's value.  Before it syncs,
                                                    the tick refuses, with the fix, a name its flags use that doesn't exist
                                                    (`drive_names`: the landing branch and drive's push to it, each machine of
-                                                   `on`, each landing gate at `main`); the effective flags print once a tick.
+                                                   `on`, each landing and warn gate at `main`); the effective flags print once
+                                                   a tick.
                                                    --priority-file PATH: drive's priority list, the landing order: PR numbers
                                                    separated by spaces or commas, first to land first, each in its first place
                                                    (`priority_list`), read again at each sync (`Queue.priority`): no file is an
@@ -182,10 +184,11 @@ pin, a module string naming a module only an unlanded PR adds, a workspace membe
 a row another queued PR refits away (an error at collection), one lane's unlanded branch carried in two PRs, a merge of `next`
 that carries a PR's head the PR no longer lands (closed, rebuilt without it, or withdrawn: `stale_carried`, after `old_next` for
 one closed unlanded; the sync leaves such a head off `next` too), and a failure of
-`tests/test_repository.py` (a Markdown cap, a report-genre name), which the preflight runs too, as it runs the landing gates the
-sync would (on the head; the sync, on its merge onto `next`).  A Lean change can pass its own Lean check and break a module
+`tests/test_repository.py` (a report-genre name), which the preflight runs too, as it runs the landing gates the sync would (on
+the head; the sync, on its merge onto `next`); a warn gate's failure (a Markdown file over its cap) it prints as a warning.  A
+Lean change can pass its own Lean check and break a module
 another PR on `next` owns (a changed signature, dropped premises, a dropped import), which drive's lock run finds only after it
-lands, reverting it; the preflight builds those modules (`LakeBuild`), from a machine without a warm Lean tree on the first node of
+lands, blaming it; the preflight builds those modules (`LakeBuild`), from a machine without a warm Lean tree on the first node of
 `PREFLIGHT_LEAN_ON` that starts the build, whatever the tier, and refuses a head whose modules no node can build.  A head whose lock, merged onto `next` by
 `tools/verity/lean/merge.py`, drops a `shape.inline` premise or a `shape.frozen` key that `next`'s unchanged statements still need
 (a lock regenerated on an older tree) fails that lock run too; the preflight names each such entry (`lock_drops`), and the sync
@@ -199,7 +202,7 @@ merges onto, as the sync's clone defines them (`base_drivers`): a branch's older
 the mark admits the PR, and the sync's merge onto `next` is the only check after it (see `next`).
 
 Records gate.  The lock run after a landing regenerates the records of the locks it changed, and what it can't regenerate fails
-it, which reverts the culprit; so the gate refuses nothing.  `ready` (and `judge`) warn, naming each package and the run that
+it, a red whose culprit is fixed forward or reverted; so the gate refuses nothing.  `ready` (and `judge`) warn, naming each package and the run that
 would record it, when a head's change against the landing branch (drive.toml's `land_into` at `main`: `checked`, else `main`)
 touches a `lean-audit.json` and the store holds no records run or Lean check of that head that passed the package on its lock,
 nor of a commit whose inputs for the package are the head's (its files and those of the packages it requires, tests and docs
@@ -242,11 +245,14 @@ one hold holds only itself and what contains it and the members that were above 
 which files conflict and which queued PRs touched them; while its head stays, later syncs try it, and the PRs that contain it,
 above everything else, whatever the priority list would say, so a sync with nothing new keeps `next`.  So is a PR
 a landing gate refuses (drive.toml's `landing_gates` at
-`main`, `gate_refusal`) on its merge onto `next` (`tools/verity/check/gates/markdown_caps.py`: one it puts over a cap),
+`main`, `gate_refusal`) on its merge onto `next`,
 with the gate's fix, and a PR whose lock merge drops an entry `next`'s statements still need (`lock_drops`), naming each:
 each PR the sync merges is judged, a new one or one merged again above a
 dropped or moved member, never one in the prefix it keeps, so a refusal never rebuilds what `next` keeps; a merge
-with the message, tree and parent tree of one judged under the same `main` takes that verdict (`Queue._gated`).  A PR whose
+with the message, tree and parent tree of one judged under the same `main` takes that verdict (`Queue._gated`).  The warn
+gates (drive.toml's `warn_gates`: `tools/verity/check/gates/markdown_caps.py`, a Markdown file a merge puts over its cap) judge
+the same merge and keep nothing out: what one says is kept (the state's `warned`, by PR and head) and drive tells the PR's
+owner once a head (`Driver.tell_warned`), who fixes it in their next PR.  A PR whose
 merge a gate can't judge (it exits neither 0 nor 1, as the unread gate does while no facts of the Lean it reads are published) isn't
 left out: it waits, recorded (the state's `waiting`) with its mark kept, as the PRs that contain it do, and each sync tries it
 again; a gate that refuses it as well leaves it out.  A ready mark
@@ -283,7 +289,7 @@ move on `next`.  The preflight merges no move PR's head, and notes rather than r
 Landing.  `drive` (`research.drive`) is the loop's tick that needs no agent: it lands `next`'s reviewed prefix, a Lean change
 as any other, by a fast-forward of `checked` (no new merge commit), commits the lock records a lock run regenerates after a
 Lean change, and checks `checked` after each landing,
-reverting on `checked` what that check fails, and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
+naming the culprit of what that check fails (fixed forward, else reverted on `checked`), and fast-forwarding `main` to each commit whose check passed every step on the merge gate; it tells
 `CI` what it refuses.  A push refused because `checked` moved leaves it alone; drive's next tick takes the new `checked` only
 if drive wrote it, and otherwise holds and rings `CI` and `TOP` (`Driver._unwritten`).  A PR landed on `checked` stays open on GitHub until `main` reaches it, and no sync admits it again.  What reaches
 `main` and changes what a guarantee says sends the spec-change DM of what changed (`spec_alert`).
@@ -689,7 +695,7 @@ class Rules:
 #: drive's ways of landing (`DriveFlags.land`): `check`, which landed trains on their own check, was deleted with
 #: its code
 LANDINGS = ("review",)
-#: a landing gate's path (`DriveFlags.landing_gates`)
+#: a landing or warn gate's path (`DriveFlags.landing_gates`, `DriveFlags.warn_gates`)
 GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
 #: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
@@ -729,6 +735,9 @@ class DriveFlags:
     #: scripts a PR passes to be admitted (`gate_refusal`: its head at the ready mark's preflight, its merge onto `next` at the
     #: sync), each by its path from the repository's root, run as it is at `main`; drive's landing runs none
     landing_gates: tuple[str, ...] = ()
+    #: scripts run where and as the landing gates are, whose refusal keeps no PR out: the ready mark prints it as a warning, and
+    #: the sync admits the PR and keeps it for drive to tell its owner once a head (`Driver.tell_warned`)
+    warn_gates: tuple[str, ...] = ()
     #: every sync, members with a land verdict go below those waiting for one (`Driver._lift`), so a member waiting for its
     #: review holds only itself
     verdict_first: bool = True
@@ -854,13 +863,14 @@ class DriveFlags:
             if not isinstance(doc["after_landing_no_cache"], bool):
                 raise bad("after_landing_no_cache", "true or false")
             got["after_landing_no_cache"] = doc["after_landing_no_cache"]
-        if "landing_gates" in doc:
-            v = doc["landing_gates"]
-            if not (isinstance(v, list) and all(isinstance(x, str) and GATE_PATH_RE.fullmatch(x) and ".." not in x.split("/")
-                                                for x in v)):
-                raise bad("landing_gates", "a list of Python scripts by their path from the repository's root, as "
-                                           "[\"integrations/x/tools/gate.py\"]")
-            got["landing_gates"] = tuple(v)
+        for k in ("landing_gates", "warn_gates"):
+            if k in doc:
+                v = doc[k]
+                if not (isinstance(v, list) and all(isinstance(x, str) and GATE_PATH_RE.fullmatch(x) and ".." not in x.split("/")
+                                                    for x in v)):
+                    raise bad(k, "a list of Python scripts by their path from the repository's root, as "
+                                 "[\"integrations/x/tools/gate.py\"]")
+                got[k] = tuple(v)
         for k in ("stale_days", "stale_close_days"):
             if k in doc:
                 if type(doc[k]) is not int or doc[k] < 0:
@@ -975,7 +985,7 @@ def drive_names(q: "Queue", flags: DriveFlags, push: bool = True) -> None:
     """Refuse a tick, with each fix, when a name drive's flags use doesn't exist (the queue's clone just fetched): the landing
     branch (`Queue.into`) on origin; with ``push``, that drive's credential may push it (`git push --dry-run` of the branch to
     itself: GitHub asks for write access to the repository before it answers, though a ruleset is judged only at a real push);
-    each machine of `on` (`drive_machines`; `auto` is train.sh's); and each landing gate's script at `main`."""
+    each machine of `on` (`drive_machines`; `auto` is train.sh's); and each landing and warn gate's script at `main`."""
     main, missing = "refs/remotes/origin/main", []
     into = q.into
     if q._remote(q.workdir, "ls-remote", "--exit-code", "origin", f"refs/heads/{into}", ok=(0, 2)).returncode:
@@ -997,22 +1007,32 @@ def drive_names(q: "Queue", flags: DriveFlags, push: bool = True) -> None:
                 missing.append(f"machine {m!r} of `on` doesn't resolve ({refused.get(m) or 'not in machines.toml or machines.d'}): "
                                f"register it (`research pods register {m} ...`), or remove it from `on` in {DRIVE_FLAGS} (or "
                                "drive's --on)")
-    for g in flags.landing_gates:
-        if _git(q.workdir, "cat-file", "-e", f"{main}:{g}", check=False).returncode:
-            missing.append(f"landing gate {g} isn't at `main`: land it first, or remove it from `landing_gates` in {DRIVE_FLAGS}")
+    for key, kind in (("landing_gates", "landing gate"), ("warn_gates", "warn gate")):
+        for g in getattr(flags, key):
+            if _git(q.workdir, "cat-file", "-e", f"{main}:{g}", check=False).returncode:
+                missing.append(f"{kind} {g} isn't at `main`: land it first, or remove it from `{key}` in {DRIVE_FLAGS}")
     if missing:
         raise QueueError("drive's flags name what doesn't exist, so this tick does nothing: " + "; ".join(missing))
 
 
-#: how long a landing gate may run before it counts as unable to judge (`run_gate`)
+#: how long a landing or warn gate may run before it counts as unable to judge (`run_gate`)
 GATE_TIMEOUT_S = 600
 #: the fix items of a gate's failure a refusal quotes
 GATE_FIX_LINES = 15
-#: the most landing-gate verdicts the queue's state keeps for one `main` (`Queue._gated`), the newest
+#: the most gate verdicts the queue's state keeps for one `main` and one kind of gate (`Queue._gated`), the newest
 GATE_VERDICTS = 1000
+#: what the ready mark's preflight says after a warn gate's failure (`Preflight._gates`)
+WARN_GATE_SAYS = "A warn gate refuses nothing: drive lands the PR and tells its owner, who fixes it in their next PR"
 #: the most merges' records the queue's state keeps (`Queue._merge`), the most recently used: a few hundred bytes each, and a
 #: sync merges a few hundred times
 MERGES = 2000
+
+
+def kept_verdicts(state: dict, key: str, main: str, gates: tuple[str, ...]) -> dict[str, list[str]]:
+    """The gate verdicts the queue's state keeps under ``key`` (`Queue._gated`), while `main` and ``gates`` are those they were
+    reached under; else none."""
+    cache = state.get(key) or {}
+    return (cache.get("of") or {}) if (cache.get("main"), cache.get("gates")) == (main, list(gates)) else {}
 
 
 def flags_at(repo: Path, ref: str) -> DriveFlags:
@@ -1021,21 +1041,21 @@ def flags_at(repo: Path, ref: str) -> DriveFlags:
     return DriveFlags.parse(r.stdout, f"{DRIVE_FLAGS} at {ref}") if r.returncode == 0 else DriveFlags()
 
 
-def gates_at(repo: Path, ref: str) -> tuple[str, ...]:
-    """drive.toml's `landing_gates` at ``ref``; none when ``ref`` has no drive.toml (QueueError when it isn't TOML or the gates
-    are malformed).  Only that key is read: a branch's older code reads `main`'s drive.toml here (the ready mark's preflight),
-    and a key added since must not stop it running the gates."""
+def gates_at(repo: Path, ref: str, key: str = "landing_gates") -> tuple[str, ...]:
+    """drive.toml's ``key`` (`landing_gates` or `warn_gates`) at ``ref``; none when ``ref`` has no drive.toml (QueueError when it
+    isn't TOML or the gates are malformed).  Only that key is read: a branch's older code reads `main`'s drive.toml here (the
+    ready mark's preflight), and a key added since must not stop it running the gates."""
     r = _git(repo, "show", f"{ref}:{DRIVE_FLAGS}", check=False)
     if r.returncode:
         return ()
     source = f"{DRIVE_FLAGS} at {ref}"
     try:
-        gates = tomllib.loads(r.stdout).get("landing_gates")
+        gates = tomllib.loads(r.stdout).get(key)
     except tomllib.TOMLDecodeError as e:
         raise QueueError(f"{source}: not TOML: {e}") from None
     if gates is None:
         return ()
-    return DriveFlags.parse(f"landing_gates = {json.dumps(gates)}\n", source).landing_gates
+    return getattr(DriveFlags.parse(f"{key} = {json.dumps(gates)}\n", source), key)
 
 
 def into_at(repo: Path, ref: str) -> str:
@@ -1080,8 +1100,8 @@ def holders_at(repo: Path, ref: str) -> dict[str, str]:
 
 
 def run_gate(repo: Path, main: str, head: str, path: str) -> tuple[int | None, str]:
-    """The landing gate ``path`` as it is at ``main`` (so the change it judges can't weaken it), run as `python3 PATH MAIN HEAD
-    --json` in ``repo``: (its exit, its output), or (None, why it didn't run)."""
+    """The landing or warn gate ``path`` as it is at ``main`` (so the change it judges can't weaken it), run as `python3 PATH
+    MAIN HEAD --json` in ``repo``: (its exit, its output), or (None, why it didn't run)."""
     r = _git(repo, "show", f"{main}:{path}", check=False)
     if r.returncode:
         return None, f"{path} isn't at `main` {main[:12]}"
@@ -1120,12 +1140,13 @@ def write_scripts(repo: Path, scripts: dict[str, str], dest: Path) -> Path:
 
 def gate_refusal(repo: Path, main: str, head: str, gates: Iterable[str],
                  run: Callable[[Path, str, str, str], tuple[int | None, str]] = run_gate,
-                 onto: str | None = None) -> tuple[list[str], list[str]]:
-    """What the landing ``gates`` say of ``head`` against ``main`` (each judges the change from their merge base): (each failure,
-    with its fix and how to run the gate; each gate that couldn't judge, with why).  ``head`` is a PR's head, or with ``onto``
-    its merge onto that branch, as the sync judges it: what the members below add counts too (a merge can take
-    a file over its cap with the members below it, though its head alone is under).  A gate exits 0 to pass, and 1 with
-    `--json`'s `{"failures": [{"why": ..., "fix": [...]}]}` to fail; anything else is unable to judge."""
+                 onto: str | None = None, kind: str = "landing gate") -> tuple[list[str], list[str]]:
+    """What ``gates``, each a ``kind`` (a landing gate, or a warn gate, whose failure refuses nothing), say of ``head`` against
+    ``main`` (each judges the change from their merge base): (each failure, with its fix and how to run the gate; each gate
+    that couldn't judge, with why).  ``head`` is a PR's head, or with ``onto`` its merge onto that branch, as the sync judges
+    it: what the members below add counts too (a merge can take a file over its cap with the members below it, though its
+    head alone is under).  A gate exits 0 to pass, and 1 with `--json`'s `{"failures": [{"why": ..., "fix": [...]}]}` to
+    fail; anything else is unable to judge."""
     what, merged = (head[:12], "") if onto is None else (f"its merge onto `{onto}` ({head[:12]})", f" on its merge onto `{onto}`")
     rerun = "in the branch" if onto is None else f"on the branch merged with `origin/{onto}`"
     refused, unjudged = [], []
@@ -1140,10 +1161,10 @@ def gate_refusal(repo: Path, main: str, head: str, gates: Iterable[str],
                             for f in json.loads(out)["failures"]]
         if not failures:
             why = out if rc is None else f"exit {rc}" + (f": {out}" if rc != 1 else ": no failure it names")
-            unjudged.append(f"the landing gate {path} can't judge {what} on `main` {main[:12]} ({why.strip()[-400:]})")
+            unjudged.append(f"the {kind} {path} can't judge {what} on `main` {main[:12]} ({why.strip()[-400:]})")
             continue
         for why, fix in failures:
-            refused.append(f"the landing gate {path} at `main` {main[:12]}{merged}: {why}" + "".join(f"; {x}" for x in fix)
+            refused.append(f"the {kind} {path} at `main` {main[:12]}{merged}: {why}" + "".join(f"; {x}" for x in fix)
                            + f" (`python3 {path} origin/main HEAD` {rerun} runs it)")
     return refused, unjudged
 
@@ -1179,7 +1200,7 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 
 
 #: the analysis tree: a Lean change only here that touches no lock and no spec (`LEAN_SPEC`) is proofs, checked by the
-#: after-landing run, a failure reverting it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
+#: after-landing run, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
 #: grader, the certifier program, the inference-only check, the remote audit's verifier), and a lock run follows its landing
 LEAN_PROOFS_TREE = "Security/"
 #: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions and Models libraries, and the Lake files of
@@ -1195,8 +1216,8 @@ def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
     guarantee's statement nor a definition it reads reaches `main` without its record (the after-landing lean-audit,
     `--no-regenerate`, fails on a record difference), or a Lean source outside `LEAN_PROOFS_TREE` of a Lake package that has a
     lock, Lean that runs as code, whose lock (its `verifier.allow` among them) would go stale the same way.  A change to
-    `Security/`'s other Lean alone is proofs: no lock run follows it, and the after-landing lean-audit reverts it on a
-    failure."""
+    `Security/`'s other Lean alone is proofs: no lock run follows it, and a failure of the after-landing lean-audit blames
+    it."""
     files = changed(repo, base or f"{commit}^1", commit)
     if any(Path(f).name == LEAN_LOCK or f.endswith(LEAN_SOURCES) and f.startswith(LEAN_SPEC) for f in files):
         return True
@@ -2322,18 +2343,18 @@ class Queue:
         return not _git(self.workdir, "merge-base", "--is-ancestor", ancestor, commit, check=False).returncode
 
     def _gated(self, main: str, gates: tuple[str, ...], tip: str, commit: str, pr: PR, before: dict[str, list[str]],
-               verdicts: dict[str, list[str]]) -> tuple[list[str], list[str]]:
-        """`gate_refusal` of ``commit``, ``pr``'s merge onto ``tip``, or the refusals ``before`` (the last syncs' verdicts under
-        this `main` and these gates) holds for a merge with the same message, tree and parent tree: a lift or a moved member
-        merges every member above it again, and those whose members below are the same set have the same trees, each ~15 s of
-        gates.  The gates read only `main`, the merge's trees and message, and the members below, each judged at its own merge.
-        What the gates say goes into ``verdicts``; a gate that couldn't judge is never kept."""
+               verdicts: dict[str, list[str]], kind: str = "landing gate") -> tuple[list[str], list[str]]:
+        """`gate_refusal` of ``commit``, ``pr``'s merge onto ``tip``, by ``gates`` (each a ``kind``), or the refusals ``before``
+        (the last syncs' verdicts under this `main` and these gates) holds for a merge with the same message, tree and parent
+        tree: a lift or a moved member merges every member above it again, and those whose members below are the same set have
+        the same trees, each ~15 s of gates.  The gates read only `main`, the merge's trees and message, and the members below,
+        each judged at its own merge.  What the gates say goes into ``verdicts``; a gate that couldn't judge is never kept."""
         trees = _out(self.workdir, "rev-parse", f"{tip}^{{tree}}", f"{commit}^{{tree}}").split()
         key = hashlib.sha256("\0".join([*trees, _message(pr)]).encode()).hexdigest()
         if key in before:
             verdicts[key] = before[key]
             return list(before[key]), []
-        refused, unjudged = gate_refusal(self.workdir, main, commit, gates, onto=self.branch)
+        refused, unjudged = gate_refusal(self.workdir, main, commit, gates, onto=self.branch, kind=kind)
         if not unjudged:
             verdicts[key] = refused
         return refused, unjudged
@@ -2456,9 +2477,11 @@ class Queue:
         conflicts: dict[str, dict] = {}
         waits: dict[str, dict] = {}
         gates = gates_at(self.workdir, main) if order[k:] else ()
-        cache = state.get("gate_verdicts") or {}
-        before = (cache.get("of") or {}) if (cache.get("main"), cache.get("gates")) == (main, list(gates)) else {}
-        verdicts: dict[str, list[str]] = {}
+        warns = gates_at(self.workdir, main, "warn_gates") if order[k:] else ()
+        before, verdicts = kept_verdicts(state, "gate_verdicts", main, gates), {}
+        warn_before, warn_verdicts = kept_verdicts(state, "warn_verdicts", main, warns), {}
+        open_heads = {p.number: p.head for p in open_prs}
+        warned = {n: w for n, w in (state.get("warned") or {}).items() if open_heads.get(int(n)) == w["head"]}
         merged = False
         if tip != main:                                         # the moves among the members `next` keeps
             self._moves = queue_log(self.workdir, tip)[1]
@@ -2505,6 +2528,12 @@ class Queue:
             if commit is None:
                 refuse(n, why)
                 continue
+            if warns:
+                said, unjudged = self._gated(main, warns, tip, commit, e.pr, warn_before, warn_verdicts, kind="warn gate")
+                if said:
+                    warned[str(n)] = {"head": e.pr.head, "why": " | ".join(said), "handle": self.handle(e.pr)}
+                if unjudged:
+                    self.log(f"research queue: #{n} at {e.pr.head[:8]}: {' | '.join(unjudged)}; a warn gate keeps no PR out")
             tip = commit
             members.append(Member(n, e.pr.head, e.pr.owner or "", commit))
             if e.pr.move:
@@ -2520,16 +2549,20 @@ class Queue:
         self.log(f"research queue: `{self.branch}` at {tip[:12]}: {len(members)} PR(s) above `{self.into}`"
                  + (f", kept {k}, merged {len(members) - k}" if members else "")
                  + (f", merges reused for {self._merges_reused}" if self._merges_reused else "")
-                 + (f", gates' verdicts reused for {reused}" if (reused := len(verdicts.keys() & before.keys())) else "")
+                 + (f", gates' verdicts reused for {reused}" if (reused := len(verdicts.keys() & before.keys())
+                                                                  + len(warn_verdicts.keys() & warn_before.keys())) else "")
                  + (" (dry run: not pushed)" if dry_run else ""))
         if not dry_run:
             state["conflicts"], state["waiting"] = conflicts, waits
             state["moves_made"] = {k: v for k, v in self._made.items() if k in self._used}
             moves = {mv.commit for mv in self._moves}
             state["restacks"] = {k: v for k, v in self._restacks.items() if k in self._used or k.rpartition(":")[2] in moves}
-            if gates:
-                newest = {**{h: v for h, v in before.items() if h not in verdicts}, **verdicts}
-                state["gate_verdicts"] = {"main": main, "gates": list(gates), "of": dict(list(newest.items())[-GATE_VERDICTS:])}
+            for key, gs, kept, new in (("gate_verdicts", gates, before, verdicts), ("warn_verdicts", warns, warn_before,
+                                                                                   warn_verdicts)):
+                if gs:
+                    newest = {**{h: v for h, v in kept.items() if h not in new}, **new}
+                    state[key] = {"main": main, "gates": list(gs), "of": dict(list(newest.items())[-GATE_VERDICTS:])}
+            state["warned"] = warned
             self._keep_merges(state)
             self.save_state(state)
         return members, entries
@@ -3572,7 +3605,7 @@ def own_change(repo: Path, base: str, head: str) -> str | None:
 
 #: the invariant tests the preflight runs on the merged tree, from the root, each a common way a train breaks: a module string
 #: naming a module only an unlanded PR adds, stale Lake pins, a doc path, a workspace member without its REAL_ROOTS entry, and
-#: `check`'s preflight-lints on test_repository.py (a skill over the Markdown cap, a report-genre name)
+#: `check`'s preflight-lints on test_repository.py (a report-genre name)
 PREFLIGHT_TEST_PATHS = ("tests/test_module_strings.py", "tests/test_pins.py", "tests/test_doc_paths.py",
                         "tests/test_repository.py", "tools/research/tests/test_pythonpath.py")
 
@@ -4205,7 +4238,8 @@ class Preflight:
     reaches, or `pytest --collect-only` in a suite whose inputs
     the change touches (`touched_suites` with `LocalSuites`, from `next` to the merged tree), or the merged tree's `uv sync --locked`
     finds its lock stale; (c) contains another open PR's head that isn't admitted (no ready mark at that head, held, or no
-    owner), naming each; (d) fails one of drive.toml's `landing_gates` at `main` (`_gates`), with the gate's fix; or (e) merged
+    owner), naming each; (d) fails one of drive.toml's `landing_gates` at `main` (`_gates`, which logs what its `warn_gates`
+    say as warnings), with the gate's fix; or (e) merged
     onto `next`, breaks the build of a Lean module that is or imports, transitively, a module it changes, in that module's package
     or one requiring it by path (`lean_graph`), built by ``lean`` (`LakeBuild`, on a node's warm Lean tree) within `lean_s`, naming the
     module, its first error and the PR on `next` that owns it (`touched_by`), or for a module of its own, those that changed what it
@@ -4414,15 +4448,18 @@ class Preflight:
     def _gates(self, pr: PR, notes: list[str]) -> list[str]:
         """(d): what drive.toml's `landing_gates` at `main` refuse (`gate_refusal`).  A gate that can't judge is a note: the sync
         that would merge the head onto `next` runs the gates again, leaves out a head they refuse, and holds one they can't
-        judge waiting, its mark kept, until a sync's gates can."""
+        judge waiting, its mark kept, until a sync's gates can.  What its `warn_gates` say is logged as a warning and refuses
+        nothing: the sync admits the head, and drive tells its owner."""
         main = _out(self.repo, "rev-parse", "refs/queue/preflight/main")
         try:
-            gates = gates_at(self.repo, main)
+            gates, warns = gates_at(self.repo, main), gates_at(self.repo, main, "warn_gates")
         except QueueError as e:
             notes.append(f"no landing gate run ({e})")
             return []
         refused, unjudged = gate_refusal(self.repo, main, pr.head, gates)
         notes += unjudged
+        for why in gate_refusal(self.repo, main, pr.head, warns, kind="warn gate")[0]:
+            self.log(f"research queue: preflight: warning: #{pr.number} at {pr.head[:12]}: {why}. {WARN_GATE_SAYS}")
         return refused
 
     def _merged(self, pr: PR, base: str, tree: str, onto: str, notes: list[str], members: list[Member] | None = None) -> list[str]:
@@ -4632,7 +4669,7 @@ RECORDS_COMMAND = ("research run --on auto --mem-gb 32 --max-min 120 --project v
                    "'lean-audit/*' -- python3 tools/verity/lean/lean_changed.py --records {pkg} --update")
 #: why `RecordsGate` warns and never refuses, which each of its warnings says
 RECORDS_AFTER_LANDING = ("the lock run after its landing regenerates the records, and what it can't regenerate fails that run, "
-                         "which reverts the PR")
+                         "a red whose culprit, the PR, is fixed forward or reverted")
 #: where a records run keeps, under its `--out`, PKG's record `--update` wrote when it differs from the commit's lock (each
 #: package's, PKG's and a requirer's, is also under `record/<path>/`)
 RECORD_KEPT = "record/" + LEAN_LOCK

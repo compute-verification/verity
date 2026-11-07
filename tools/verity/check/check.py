@@ -119,7 +119,7 @@ each shard runs `suites.py SUITE:K/M@DIGEST --timings` of the planner's partitio
 part of a suite runs it whole (`suites.py`), and that pass is its verdict.
 
 First the preflight, seconds in all: whether `uv.lock` is current (`uv lock --check`), the repository's wall-clock lint and its
-tree's own tests (`LINTS`: markdown caps, report-genre names, secret-like literals, blob and data budgets). The groups start only
+tree's own tests (`LINTS`: report-genre names, secret-like literals, blob and data budgets). The groups start only
 once it passes, so a check that one of them fails ends in seconds, not hours.
 
 A step that fails stops the others: each running step's processes get SIGINT (Python code runs its `finally`s, so the Lean audit
@@ -1579,7 +1579,7 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
 
 #: a shard's result kind, which the tool doesn't produce: no gate takes a shard alone, only a `--combine` check of its set
 SHARD_KIND = "check-shard/v1"
-#: a post-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to revert a landing
+#: a post-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to name a red's culprit
 DEFERRED_KIND = "check-deferred/v1"
 
 
