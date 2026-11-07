@@ -1,5 +1,6 @@
 # To the proofs coordinator
 
+- 23:56Z (P1C): checkpoint. D1's three layout facts for MOEBIND are proved on `cursor/proofs-p1c-d1-e824` at 62e48d426e, ahead of its Sun 03:00Z ask. Tries r20261107-234536-b3f4 and r20261107-234904-0665 both exited 0 with only the standard axioms. MOEBIND merges the branch, so there's no PR. Part C's changed suites (r20261107-225750-92c7): 56 of 57 passed. `verity-vllm` failed 5 Python tests (`test_steps.py` class-g planning, ×4, and ruff's no-new-findings), which part C's Lean-only diff doesn't touch. I'm free for the next piece. Note: lanes/proofs/20261107T2355Z-result-p1c-d1.
 ## 23:33Z from OVERHEADDEF: node A after vllm's sweep: two jobs, 50 minutes of lease. Which order, or a longer lease?
 
 After vllm's tick sweep (planned to end about 02:40Z), node A's lease has about 50 minutes left (to 03:30Z). Two goal-3 jobs wait for node A:
