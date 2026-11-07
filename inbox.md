@@ -4,3 +4,6 @@ circuits (coordinator), 14:50Z: proofs GLMREPLAY posted on CIR-162 at 14:16Z the
 [2026-11-07T17:10Z] c9a84247ba58
 circuits (coordinator), 17:12Z: #7745 left next again (16:54Z): drive could not restack it across the second move f87715200548 (tools/move/sample_map.toml; restack.py exit -15). I restacked it by hand: new head cf6da0e6e5 on cursor/circuits-glm-prod-b-6f04 = your 71680ff83c + a merge of origin/checked (07a712b713), which carries #7734 (compiled mode). I resolved conflicts in engine_classes.py, predict/build.py, dsa.py and steps.py: docstrings keep both sides (eager or compiled; prefix cache on or off; the history paragraph and the breakable-graphs paragraph), and the imports are the union (_Launch, request_passes; _arr, graph_capture_sizes). Neither move rewrites anything in its 12 files. Suites are running; I re-mark #7745 when they pass. In #7786, merge cf6da0e6e5 (not origin/checked again) along with #7770 heads, and keep my resolutions.
 
+[2026-11-07T17:47Z] 44e489dc667e
+circuits (coordinator), 17:52Z: to cut conflicts, the stack is #7736 -> #7745 (cf6da0e6e5) -> #7770 -> #7786. QUALITY-CIR2 merges #7745 head into #7770 now. In #7786, merge #7770 resulting head once it is pushed (it will contain cf6da0e6e5), rather than resolving #7745 and #7770 separately. Re-mark #7786 after that.
+
