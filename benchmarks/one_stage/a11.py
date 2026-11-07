@@ -653,7 +653,7 @@ SLOTS: dict = {"dir": None, "n": {}}
 
 @contextlib.contextmanager
 def slot(phase: str):
-    """With --lock-dir DIR, at most N of the audits sharing DIR in `phase` at once (--slots session=1,lean=3, 1 a phase it
+    """With --lock-dir DIR, at most N of the audits sharing DIR in `phase` at once (--slots session=1,lean=4, 1 a phase it
     doesn't name): a session's prover takes every core, and side by side the sessions' ZK servers and provers, or the Lean
     verifiers, outgrow the host."""
     d = SLOTS["dir"]
@@ -735,7 +735,8 @@ def live(fn, registry):
 
 def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tuple[dict, dict, dict]:
     """`save_values`' directory read back: the staged kinds among ``lowers``, each unit decoded from ``units.json`` and bound
-    again from the registry, refused unless it encodes as the decoded one; ``per_kind``: each kind's first that many units."""
+    again from the registry, refused unless it encodes as the decoded one; ``per_kind``: each kind's first that many units
+    (a kind saved with more loads only those, and says so)."""
     from verity.ml.circuits.codec import decode_program
     from verity.ml.definitions.registry.catalog import load as load_registry
     registry = load_registry()[0]
@@ -752,7 +753,9 @@ def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tupl
             raise SystemExit(f"{f}: the registry's {unit.id} is not the saved {s['unit']}")
         z = np.load(d / f"{f}.npz")
         n = min(s["n"], per_kind or s["n"])
-        rows_of_kind[f] = {**s, "n": n, "unit": unit, "rows_spec": K.rows_of(unit),
+        if n < s["n"]:
+            print(f"load-values {f}: the first {n} of its {s['n']} saved units (--per-kind {per_kind})", flush=True)
+        rows_of_kind[f] = {**s, "n": n, "saved": s["n"], "unit": unit, "rows_spec": K.rows_of(unit),
                            "rows": {k[2:]: z[k][:n] for k in z.files if k.startswith("i.")},
                            "outs": {k[2:]: z[k][:n] for k in z.files if k.startswith("o.")}}
     return staged, rows_of_kind, {"from": {x: doc.get(x) for x in ("values", "steps", "layers", "per_kind")}, "weights": doc["weights"]}
@@ -769,7 +772,8 @@ def main() -> int:
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
     ap.add_argument("--out", required=True)
-    ap.add_argument("--per-kind", type=int, default=8, help="units staged per kind (at most the statement cap)")
+    ap.add_argument("--per-kind", type=int, default=8, help="units staged per kind (at most the statement cap); with "
+                    "--load-values, each kind's first that many saved units")
     ap.add_argument("--steps", default="1,0", help="steps to take a kind's Call from, in preference order")
     ap.add_argument("--layers", default="0,3")
     ap.add_argument("--only", default=None, help="comma-separated kinds")
@@ -1045,7 +1049,8 @@ def main() -> int:
         tcheck = V.check(trec, tprog, tq, tlaw, a0.SCHEME, twant, leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
         with slot("session"):
             trecord, tlive = a0.session(a.bin, tst_d, tn, "subset:2", session_port(a.port, len(members) + 1), tdir / "session", zk=True)
-        tlean = a0.lean_verify(a.lean, tst_d, tn, tdir / "session", zk=True)
+        with slot("lean"):
+            tlean = a0.lean_verify(a.lean, tst_d, tn, tdir / "session", zk=True)
         tm0 = ((trecord or {}).get("verdict") or {})
         neg[f"wrong-output-word ({tm['kind']})"] = {
             "refused": a0.lean_refused(tlean) and tm0.get("accepted") is not True, "registration_ok": tcheck.ok,
