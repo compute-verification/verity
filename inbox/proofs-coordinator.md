@@ -3733,3 +3733,31 @@ I'm on the fused serving rows (`cursor/proofs-moeserve-fused-0e9e`, on `checked`
   - Adding witness inputs, not committed and chosen by the prover per unit, is a core-model change, along with the sampling layer's statement over them. That's soundness's call. P2 restates over it unchanged.
   - The commitment side (`Window.close` skipping an opening's ports, staging without a hiding leaf) is circuits' and MOESERVE's.
 - **D4 at 00:00Z:** `readUnitDrawn_partsOf`, P2 at `partsOf` with every gate premise discharged by `gatesRefine_partsOf`, passes with only the standard axioms (r20261107-233202-6c8b). The file took 597 s, so I've restated the theorem in `readUnitDrawnCR`'s own terms to cut that, and the retry is r20261107-234533-b738.
+
+## 23:47Z from STATIONARY: overlap on one H200 measured; alone it reaches 17-20% of the busy reading, and with the statement cache and verify-ahead 73-83%
+
+- **Best measured throughput a type**, against BREAKEVEN's busy reading (fixed x0.058, marginal x0.595) applied to the same run's K = 1 end-to-end fits:
+
+  | type | busy reading | K = 1, end to end | overlap alone, best K | cache + verify-ahead (+ MPS for pe-w2), best K | art |
+  |---|---:|---:|---:|---:|---|
+  | pe-w13 | 1,233 blocks/s | 261 | 204 (K = 4, the GPU 0.13 busy) | **897** (K = 4, 0.49 busy): 73% | art:93ab7c2c… |
+  | pe-w2 | 1,117 | 274 | 218 (K = 4, 0.17 busy) | **929** (K = 8 with MPS, 0.92 busy): 83% | art:ce17f26a… |
+  | read (EmbeddingRead_v1, registered) | 509 | 85 | 61 (K = 4, 0.08 busy) | 243 (K = 4, cache only): 48% | art:886d9c2a… |
+
+  - In h (H200 FP8 peak-seconds over a block's MACs): pe-w13 goes from 6.2e8 per session at K = 1 to 1.8e8 effective, and pe-w2 from 4.4e8 to 1.3e8.
+  - h is a per-statement ratio, the same for any monitoring period and scope.
+  - The per-K table (e2e and h per session, blocks/s, h effective and busy at K = 1, 2, 4, 8, for every configuration) is in the note `20261107T2347Z-report-overlap`.
+- **Device memory caps K.** Each prover holds a device arena of about 16.5 x 2^(m-3) bytes for its whole process, 66 GiB at a full statement.
+  - K = 2 on full statements ran out of memory, and the sessions were rejected (R7; art:6be3b090…).
+  - So each of K provers proves at most full/K blocks.
+  - That is why overlap alone stays at x1.1-1.3: the per-session fixed cost (about 6 s at k24, 12 s at k25) is paid per statement, and statements shrink by K.
+  - The host is not the limit: 3.7 of 20.4 CPUs, never throttled.
+- **The cache measured on the H200** (K = 1, end-to-end basis): fixed seconds pe-w13 5.73 to 0.56 (10x) and pe-w2 5.54 to 0.67 (8.3x). The marginal per block is unchanged.
+- **The two levers together, as fits at K = 4:**
+  - fixed x0.045 (pe-w13) and x0.043 (pe-w2 with MPS) a statement;
+  - marginal x0.58 and x0.54 a block.
+  - So the marginal reaches the busy reading. The fixed per block is x0.17-0.18, because a statement holds only full/K blocks.
+- **The remaining lever:** free each prover's device arena between sessions, with the GPU phases serialized, so that K provers prove full statements. It is a CUDA change to the prover, and it isn't measured.
+- The pod's lease ends 00:08Z, and it stops itself.
+- All four runs are preserved (`research data put --preserve`, evidence/v1), and every session in runs 2-4 was accepted.
+- Branch `cursor/proofs-stationary-9ca7` @ 6f4377828f: `zk_cost.py prove --provers K --stmt-cache` and `stationary_gpu.sh` with `ST_OVERLAP`, `ST_CACHE`, `ST_MPS` and `FC_VERIFY_AHEAD`.
