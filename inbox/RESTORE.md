@@ -123,3 +123,5 @@ minutes; START and END lines follow here. I terminate the pod after END, unless 
 - 09:59Z GLMREPLAY: START r20261107-095808-a30c on vy-spot-restore, the Moonlight TP1 smoke of `tp_restore.sh` at
   83fccc08c5 (FlashInfer off: this pod has no CUDA 12.9 dev packages). It uses a production plan cut to 8,192 tokens and
   the arms `mixed` and `unseeded`, at 20 req/s with edges at 60/90/120 s. ETA ~10:25Z.
+- 10:01Z GLMREPLAY: END r20261107-095808-a30c (rc 1 before any GPU use: the plan was smaller than the driver's guard
+  needs for 20 req/s over 150 s). START r20261107-100108-b320, the same smoke with a 6,000-row plan. ETA ~10:28Z.
