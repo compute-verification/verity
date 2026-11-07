@@ -589,8 +589,9 @@ mod tests {
         a.ahead().draw(&[(a.level0_id(), 4), (first, 3), (second, 2), (second + 1, 2)], &mut |s| pinned += s.len());
         assert_eq!(pinned, (4 + 3 + 2 + 2) * SALT_BYTES, "every tree read ahead is pinned before a sample takes it");
         assert_eq!(*a.level0(4), *b.level0(4));
-        assert_eq!(*a.take(first, 3), *b.take(b.next_id(), 3));
-        assert_eq!(a.expand(second, 2), b.expand(b.next_id(), 2));
+        let (b1, b2) = (b.next_id(), b.next_id());
+        assert_eq!(*a.take(first, 3), *b.take(b1, 3));
+        assert_eq!(a.expand(second, 2), b.expand(b2, 2));
         assert_eq!(a.ahead().untaken(), 1, "the tree no sample took");
         assert_eq!(a.take(second + 1, 5).len(), 5 * SALT_BYTES, "a sample at another size reads its own");
         let os = LeafSalts::for_seed(&ProverSeed::from_os());
