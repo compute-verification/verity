@@ -1,5 +1,5 @@
-"""The repository suite's bookkeeping tests (`BOOKKEEPING`) report what they find as a `Bookkeeping` warning and pass
-(Daniel, 6 Nov 2026): the tree stays landable, and a later PR fixes the finding.  Bookkeeping is what can be put right after
+"""The repository suite's bookkeeping tests (`BOOKKEEPING`) report what they find as a `Bookkeeping` warning and pass:
+the tree stays landable, and a later PR fixes the finding.  Bookkeeping is what can be put right after
 landing without any claim being false meanwhile: lane names in code text, retired terms, dead doc paths, naming conventions,
 stale allowlist entries, Markdown over its cap.  A scan's own tests (that it reads each form) stay plain tests and fail, and
 so does a bookkeeping test that raises anything but a failed check (its scan broke), and anything that can make a claim false

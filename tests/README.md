@@ -29,8 +29,8 @@ reports a change that grows a list or adds a finding to a file it touches.
 ## Bookkeeping
 
 `conftest.py`'s `BOOKKEEPING` names the tests whose findings warn (a `Bookkeeping` warning in pytest's summary) and pass:
-lane text, retired terms, doc paths, Lean and CLI naming, provider names, stale allowlist entries and Markdown caps
-(Daniel, 6 Nov). A scan's own tests, and a listed test that raises anything but a failed check, still fail.
+lane text, ruff's lint, retired terms, doc paths, Lean and CLI naming, provider names, stale allowlist entries and
+Markdown caps. A scan's own tests, and a listed test that raises anything but a failed check, still fail.
 `test_bookkeeping.py` holds the list to the tree.
 
 ~~~sh

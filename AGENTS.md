@@ -146,8 +146,7 @@ wait on the event or inject the clock; `tests/test_no_wall_clock.py`, its except
 deleted, not rerun. A test that adds more than about a minute to `check` says in its docstring what it catches that a
 cheaper test can't.
 
-Bookkeeping warns and a later PR fixes it (Daniel, 6 Nov): what can be put right after landing without any claim being
-false meanwhile. The root suite's bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc
+Bookkeeping warns and a later PR fixes it: what can be put right after landing without any claim being false meanwhile. The root suite's bookkeeping tests (`BOOKKEEPING` in `tests/conftest.py`: lane text, retired terms, doc
 paths, naming, stale allowlists, Markdown caps) and ruff's style findings warn. Ruff's errors, a crashed scan and
 everything that can make a claim false or can't be undone still fail.
 
