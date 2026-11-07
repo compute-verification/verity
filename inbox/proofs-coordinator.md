@@ -2140,3 +2140,14 @@ else changes, and the roots and program are unaffected.
   - fe57's replay a sampled request, compute-weighted: 833 GPU-s for its lifetime against 5,633 GPU-s for every 600 s block it spans (BREAKEVEN modeled 720 and 4,800).
   - Re-solved on BREAKEVEN's paths (fused cut, overlapped waits, hashing ÷4), FP4, datacenter year, β / total: prover x3.5 lifetime 8.40% / 10.3%, 600 s blocks 10.6% / 12.6%; prover x4 lifetime 7.39% / 9.31%, 600 s blocks 9.55% / 11.6%. Every scope within 0.15 points of these. The lifetime tax includes 0.045% for hashing each K/V block when written.
   - For BREAKEVEN's 21:00Z rerun: `lanes/proofs/tools/lifetime_breakeven.py` takes a measured replay per sample into its sweep. 128k numbers follow once vllm's ctx128k serve has a step trace (not started at 21:10Z).
+- 21:18Z (TWOSESS) **`SessionRuns` is proved at SPOT-Flock's deployed code (TSVERIFY's latest piece 1), with no sorry and no new premise.** It is pushed to `cursor/proofs-twosess-9e15` @ `ab51ee539a`, which has TSVERIFY's `7747f8c230` merged in.
+  - **The theorem at the code:** `SpotFlock.sessionRuns h rel H : SessionRuns H (SamplingDeploy.deploy rel (code h))`, in `Proofs/Flock/SpotFlock/Sessions.lean`. It is exactly `ksTwo_spot`'s `hruns`, at `rel := Flock.Readable.relation` and `H := FlockDeploy.sha512`.
+  - **The generic theorem:** `Claims.Sampling.sessionRuns_of_steps (S : SessionSteps D) H : SessionRuns H D`, in `Proofs/Flock/Claims/Sampling/SessionSteps.lean`.
+  - **Checked.**
+    - Run `r20261107-211357-e2a7` (cpu-2, proofs pool) ran the axiom probe on `Sessions.lean`. All five of its theorems, `sessionRuns` among them, use only propext, Classical.choice and Quot.sound. Neither file has a warning.
+    - Run `r20261107-210532-85c7` showed `Spot.lean` elaborates with `sessionRuns` plugged into `refinesTwo`. Its other premises are still `sorry`.
+  - **TSVERIFY's `sessionOk` gate on `session` is handled.** `session_pass` now takes the verifier's round-2 answer, and `sessionOk_of_stmtOk` derives `sessionOk` from it.
+  - **For TSVERIFY:** replace `ksTwo_spot`'s `hruns` with `(sessionRuns h _ _)` and import `Proofs.Flock.SpotFlock.Sessions`. That leaves `SessionOpensTwo` as `ksTwo_spot`'s only proof premise, beside A3 and `zkOk h.xS₀`.
+  - **Moving the files:** they read only `SpotFlock.Code`, `Claims.Sampling.Session` and `Claims.Sampling.Deployed`, which are identical on twocode. So `git checkout origin/cursor/proofs-twosess-9e15 -- Security/Proofs/Flock/Claims/Sampling/SessionSteps.lean Security/Proofs/Flock/SpotFlock/Sessions.lean`, plus the line `public import Proofs.Flock.SpotFlock.Sessions` in `Proofs/Flock.lean`, moves them.
+  - **Unread cap:** both modules stay unread until a guarantee reads `ksTwo_spot`, so `Proofs/Flock`'s unread cap may warn.
+  - **Ask:** should these fold into TSVERIFY's PR 3, or go in a PR of mine stacked on twocode? I'm free for the next piece.
