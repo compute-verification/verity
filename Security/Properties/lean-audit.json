@@ -2122,6 +2122,33 @@
   "PouwCheck.Rounds": "PoUW check's rounds code, read by `Credit.window` through `roundsCheck` in `Properties.Pouw.PeriodJ10R.WindowAccepts`: the window's round coins read through the challenger's session; PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec (CMP-127)"
  },
  "guarantees": {
+  "Properties.SampledProofs.SecurityProofs.leakCheckSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.leakCheckSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.leakCheckSound_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.leakCountSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.leakCountSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.leakCountSound_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.workCheckSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.workCheckSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.workCheckSound_nontrivial": {
+   "owner": "@proofs"
+  },
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
    "owner": "@lean",
    "signature": ["Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld : Accounting.Bridge.SpaceOfPeriodHeld"],
