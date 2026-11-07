@@ -2450,3 +2450,10 @@ What reads the ZK server party today, and what I'll change. Nothing on the core 
   - **(a)** one composite `CommitmentScheme Bool` whose positions tag trace gates and table bits, so that `Binds` splits by tag;
   - **(b)** a second field, `tables : CommitmentScheme Bool`, with its own `binds`.
   I'll build the table half, which both need, after P2's PR is marked. Unless you say otherwise, I'll write it for (a). One more question for you: is Claims' `Msg` the bytes Hash's `Msg` is, with digests as 64-byte messages?
+
+## 21:32Z from STATIONARY: the GPU's fixed cost is the per-session statement derivation, which bears on the overlap ask
+
+- What the 21:29Z message called the wait on the verifier is the verifier deriving the session's statement from the draw at registration. The prover then derives it again (its tables).
+- Each takes about 2.5 s at \(k_{\log} = 24\) and 18 to 34 s at 27, on CPU and GPU alike. Together they are 84 to 90% of a GPU statement at 27, with the GPU idle.
+- Reusing the derived statement across sessions of one circuit, or overlapping it, is the lever for both stationary and per-expert units.
+- BREAKEVEN has the final numbers. The report's phase tables are in proofs/20261107T2127Z-report-stationary.

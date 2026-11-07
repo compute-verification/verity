@@ -49,3 +49,26 @@
     - The ZK server's per-session work grows with the unit's description, and the GPU idles while it waits: 6 s a session at k_log 24, 15 to 20 s at 26.
   - M = 8 for w13 and 16 for w2 are proving on node A now. The report (proofs/<ts>-report-stationary) has the final tables.
 - 21:25Z (proofs) Daniel, 1:02 PM PST: (1) **world year is the headline again**, conditional on vllm's VLLM-228 checks at 22:30Z (all 7 traces at 0 bits with the tick, and the verifier bound to the prefix-cache recompute); prepare both and lead with world year. (2) **The post won't claim zero knowledge**: no ZK in captions, tables or trust lists. (3) 'Sampled proofs' becomes **SPOT** everywhere (RENAME does the docs now and the code move after Sunday); say SPOT in new prose.
+
+- 21:32Z (STATIONARY → BREAKEVEN) **Final weights-stationary numbers (proofs/20261107T2127Z-report-stationary): on the H200, plan m = 4 a block, not the cap. At m = 4, h a row is \(2.5 \times 10^{9}\) for w13 and \(1.1 \times 10^{9}\) for w2.**
+  - The H200 rows are dev arm, end to end, at a full \(2^{35}\)-bit statement (the card's convention), weight and scale reads included (the card's).
+  - World year, the rows whose proving costs 1% of its served compute at the H200's peak, comes first:
+
+    | form | world year: rows a 1% | h, full | gain |
+    |---|---|---|---|
+    | w13 per-expert | \(2.2 \times 10^{15}\) | \(3.5 \times 10^{9}\) | 1× |
+    | `st-w13` m = 4 | \(3.0 \times 10^{15}\) | \(2.5 \times 10^{9}\) | 1.4× |
+    | `st-w13` m = 8 (cap) | \(2.0 \times 10^{15}\) | \(3.9 \times 10^{9}\) | 0.9× |
+    | w2 per-expert | \(2.0 \times 10^{15}\) | \(2.9 \times 10^{9}\) | 1× |
+    | `st-w2` m = 4 | \(5.2 \times 10^{15}\) | \(1.1 \times 10^{9}\) | 2.6× |
+    | `st-w2` m = 8 | \(4.4 \times 10^{15}\) | \(1.3 \times 10^{9}\) | 2.2× |
+    | `st-w2` m = 16 (cap) | \(2.4 \times 10^{15}\) | \(2.4 \times 10^{9}\) | 1.2× |
+
+  - A month is 1/12 of the world-year column, and the census datacenter's year \(2.7 \times 10^{-4}\) of it.
+  - **Why the cap loses: each session derives its statement from the draw twice, on the host, in time that grows with the unit.**
+    - First the verifier at registration (the prover's whole wait), then the prover (its tables).
+    - Each is about 2.5 s at \(k_{\log} = 24\) and 18 to 34 s at 27, and barely depends on the blocks.
+    - At \(k_{\log} = 27\) the two are 84 to 90% of a GPU statement, with the GPU idle.
+  - **Without that fixed cost (reuse across sessions, or overlap), the marginal h a row is** \(7.0 \times 10^{8}\) for `st-w13` m = 4 (1.7×) and \(2.5 \times 10^{8}\) for `st-w2` m = 8 (3.5×), against \(1.2 \times 10^{9}\) and \(8.7 \times 10^{8}\) per-expert.
+  - **CPU (cpu-2, the prover's own seconds):** the gain is 2.0× and 3.4× for w13 at m = 4 and 8, and 3.2×, 5.5× and 5.4× for w2 at m = 4, 8 and 16.
+  - The m that served batches give is unchanged from 20:31Z: plan about 80 to 260 an expert a step at the census's load, of which a block takes min(m, 4) on GPU today.
