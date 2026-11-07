@@ -3,7 +3,9 @@ values at the model's served statics, staged for Flock as a ``verity/flock-circu
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS` or `PARTS` at its statics (each type's defaults are its model's: GLM-5.3's at TP8,
                            s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192
-    N     N1,N2,...        with a type of `UNITS`, several statements on one built circuit, each count's in OUT's ``{n}``
+    N     N1,N2,...        with a type of `UNITS`, several statements on one built circuit, each count's in OUT's ``{n}``;
+                           ``half`` and ``full`` (a window type's) the counts that fill half and all of a MAX_STATEMENT_BITS
+                           statement on the built circuit
     --public-weights       a `UNITS` type's weight row ``w`` as public input ports (`UnitStager`'s ``public_inputs``, each leaf in
                            its own u16 words) instead of a row hashed in the circuit, on the same values: the price of the block
                            with its weight row's in-circuit opening removed, the in-circuit share a registered weight encoding
@@ -61,6 +63,7 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
 
+import contextlib
 import gc
 import hashlib
 import json
@@ -102,6 +105,8 @@ from verity.ml.windows import interface as WI
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): `class_statement.stage` cuts a PARTS type's
 #: N to the most instances under it
 MAX_STATEMENT_BITS = 1 << 35
+#: counts a type of `UNITS` resolves on its built circuit: a statement of MAX_STATEMENT_BITS, and half of one
+SIZES = ("half", "full")
 
 
 def bf16(v: np.ndarray) -> np.ndarray:
@@ -441,31 +446,35 @@ def main() -> None:
     public, packed = "--public-weights" in sys.argv, "--packed" in sys.argv
     if packed and not public:
         raise SystemExit("stage.py: --packed lays out --public-weights' ports")
-    spec, ns = args[0], [int(x) for x in args[1].split(",")]
-    if len(ns) > 1 and "{n}" not in args[2]:
+    spec, counts = args[0], args[1].split(",")
+    if len(counts) > 1 and "{n}" not in args[2]:
         raise SystemExit("stage.py: several counts take an OUT naming each count's directory with {n}")
+    sized = [x for x in counts if x in SIZES]
+    ns = [int(x) for x in counts if x not in SIZES]
     outs = [Path(args[2].format(n=n)) for n in ns]
-    n, out = ns[0], outs[0]
     t0 = time.time()
     name, u, S = parse(spec)
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
     if isinstance(u, Part):
         if public:
             raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")
-        if len(ns) > 1:
+        if len(counts) > 1 or sized:
             raise SystemExit(f"stage.py: {name} is a class of PARTS, staged one count a run")
+        n, out = ns[0], outs[0]
         rec = stage_part(name, u, S, tag, n, out, t0)
         (out / "pin.txt").write_text(rec["circuit_sha512"])
         (out / "stage.json").write_text(json.dumps(rec, indent=1))
         print(json.dumps(rec), flush=True)
         return
     d = u.definition(S)
-    rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
-    rows, twin = u.draw(S, max(ns), rng)
+    seed = int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little")
+    rows, twin = u.draw(S, max(ns, default=1), np.random.default_rng(seed))
     t_draw = time.time() - t0
     unit_rows, ports = u.rows, None
     if public and not u.rows:
         raise SystemExit(f"stage.py: --public-weights is for a type with a weight row, not {name}")
+    if sized and (public or u.rows):
+        raise SystemExit(f"stage.py: {'/'.join(SIZES)} counts are for a type of UNITS on the window interface's rows, not {name}")
     if public:
         (w,) = [r for r in u.rows if r[0] == "w"]
         unit_rows = tuple(r for r in u.rows if r[0] != "w")
@@ -481,17 +490,24 @@ def main() -> None:
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
     if name in CENSUS:
         gc.disable()
-    circuit = outs[0] / "circuit.txt"
+    circuit = Path(args[2].format(n="-circuit")) / "circuit.txt" if sized else outs[0] / "circuit.txt"
     stager = CS.UnitStager(d, f"unit/served-{tag}", in_rows, out_rows, ports, circuit=circuit, packed=packed)
     t_built = time.time() - t0
+    if sized:
+        per = (1 << stager.meta["k_log"]) // (stager.meta.get("vus_per_block") or 1)
+        full = max(1, MAX_STATEMENT_BITS // per)
+        ns = [{"full": full, "half": max(1, full // 2)}.get(x) or int(x) for x in counts]
+        outs = [Path(args[2].format(n=n)) for n in ns]
+        rows, twin = u.draw(S, max(ns), np.random.default_rng(seed))
     for n, out in zip(ns, outs):
         t1 = time.time()
+        out.mkdir(parents=True, exist_ok=True)
         got = stager.stage({r: v[:n] for r, v in rows.items()}, out, salt_key)
         for port, want in (twin or {}).items():
             have = np.asarray(got["outs"][port], dtype=np.uint16)[:, :want.shape[1]]
             if not np.array_equal(have, want[:n]):
                 raise AssertionError(f"{tag}: the circuit's {port} is not the twin's on {int((have != want[:n]).any(1).sum())} instances")
-        if out != outs[0]:
+        if out / "circuit.txt" != circuit:
             (out / "circuit.txt").unlink(missing_ok=True)
             os.link(circuit, out / "circuit.txt")
         pin = stager.pin
@@ -510,6 +526,11 @@ def main() -> None:
                            "total": round(t_built + time.time() - t1, 1)}, "maxrss_gb": gb()}
         (out / "stage.json").write_text(json.dumps(rec, indent=1))
         print(json.dumps(rec), flush=True)
+    if sized:
+        circuit.unlink()
+        for empty in (circuit.parent, circuit.parent.parent):
+            with contextlib.suppress(OSError):
+                empty.rmdir()
 
 
 if __name__ == "__main__":
