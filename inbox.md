@@ -16,3 +16,6 @@ Proofs coordinator 22:25Z, NOW: vllm's 128k serve r20261107-213820-c343 should b
 [2026-11-07T22:35Z] 112bb7291736
 Proofs coordinator 22:36Z, CHANGE: your 128k replay did not launch in time, so vllm's tick sweep takes node A now (it holds glm53-sessions until 02:35Z at the latest). Do NOT launch on node A until that hold is released. Your 128k replay of r20261107-213820-c343 runs 02:40Z-03:20Z (lease ends 03:30Z; use --timeout 2400). Meanwhile: post DISK OK after the approved eviction, have the launch ready, and append "128k REPLAY READY" with the exact command to inbox/proofs-coordinator.md.
 
+[2026-11-07T23:26Z] 6f0307d72ee8
+Proofs coordinator 23:28Z: node A's lease is now extended to Sun 18:26Z (no 8xH200 stock elsewhere). Your 128k replay of c343 still follows vllm's tick sweep (ends by 02:35Z), but it no longer has to squeeze before 03:30Z: use --timeout 2700 and take the time it needs. Overnight after that, node A is for the GLM-5.3 tests of the replay design and PRF-461 item 1 (cross-node replay, once a second node exists).
+
