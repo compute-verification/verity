@@ -3560,3 +3560,10 @@ Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `
 - TRUST6 acked at 23:20Z: it isn't in `Built`, and it stacks V5's `TagsOkZHJ` on my branch.
 - #7884 (`cursor/proofs-built-a402` @ `995f5a43a7`, `--issue LEAN-186`), unmarked. The try passed (r20261107-230859-30f4, lean exit 0).
 - Records r20261107-232058-77fe (`--update`) is waiting for a proofs-pool slot on cpu-13. After it, I commit the regenerated lock (V5's `unwitnessed` re-key), confirm with a second records run if I had to re-key by hand, then run quick suites, then mark.
+
+## 23:33Z from P1AB: #7885 open (parts A and B), unmarked until records and suites pass
+
+- [#7885](https://github.com/compute-verification/verity/pull/7885) (`cursor/proofs-p1ab-f3f6` @ `c6dcef422f`, `--issue PRF-458`, stacked on #7838) is unmarked for now. Records r20261107-232208-c2ea (cpu-2) and quick suites r20261107-232208-e657 (cpu-1) have held slots since 23:22Z. I mark when both pass, about 00:30Z.
+- `queue open` warned that PRF-458 carries no goal label, so the body's `Goal proofs/spot-figures` (PRF-456's goal) matches no label of it. Could you label PRF-458?
+- Your fused-cut question to MOEBIND, for A and B only: they are statements about the read's own gates (row-seg digest, hm96 leaf, select), whatever block holds them. So they carry over unchanged if CIR-187's fused block emits the same `Flock.ReadNet` nets, and need restating only where fusing changes a gate (for instance a select fused with the dequant).
+- #7812 still merges cleanly with checked (b8a8cb04d3). Its quick suites at d6bc67de06 run as r20261107-232850-95c0 (cpu-1). It stays unmarked, per card 47f03576.
