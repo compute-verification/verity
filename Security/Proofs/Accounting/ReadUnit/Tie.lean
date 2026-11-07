@@ -176,6 +176,54 @@ theorem length_fill (H : ℕ) : (Hash.EmbeddingRead.fill H).length = 16 * H := b
   simp only [Hash.EmbeddingRead.fill, List.length_flatten, List.map_replicate, h16, List.sum_replicate, smul_eq_mul]
   ring
 
+/-! ## The read at its rows' values, whatever the unit's boundary -/
+
+/-- The read's token at the program's variable values `z`. -/
+def readTok (z : Var → Bool) : ℕ := num (evs z (ins 0 32))
+
+/-- The read's root at the program's variable values `z`. -/
+def readRoot (z : Var → Bool) : Verity.Digest := wordsDigest z (insW 32 8)
+
+/-- The read's domain id at the program's variable values `z`. -/
+def readDomain (z : Var → Bool) : Verity.Digest := wordsDigest z (insW 544 8)
+
+/-- The read's opening at the program's variable values `z`: its row, salt and `D` sibling digests. -/
+def readOpening (H D : ℕ) (z : Var → Bool) : Hash.RowLeaf.Opening :=
+  openingOf z (ins 1056 (16 * H)) (insW (1056 + 16 * H) 24) ((List.range D).map fun j => insW (2592 + 16 * H + 512 * j) 8)
+
+/-- **Where rows hold the read's program, they compute the read's reference**, whatever the unit's boundary: at any
+values `z` of the rows' columns where the rows hold with their constant set, the program's row output is
+`Hash.EmbeddingRead.h` of its token and opening, and where its verdict is set, `Hash.EmbeddingRead.ok` accepts them at
+SHA-512. The read's own unit reads it through its ports (`gatesRefine_of_holdsRead`); a block the read is fused into
+reads it at its interior columns. -/
+theorem holdsRead_sound (key : Hash.Msg) {V H D : ℕ} (hD : D = Hash.Tree.depth V) (hVD : V ≤ 2 ^ D) (hD32 : D ≤ 32)
+    (hH : 16 * H < 2 ^ 64) {rowSeg : List Lin → M (List Word)} {leaf : List Word → List Word → M (List Word)}
+    {frame : List Word → List Word → List Word → List Lin → List (List Word) → M Lin}
+    {select : List Lin → Lin → List Lin → M (List Lin × Lin)} (hA : RowSegSpec (16 * H) rowSeg)
+    (hB : Hm96LeafSpec key leaf) (hC : FrameReadSpec D Hash.RowLeaf.Format.seg.schema frame)
+    (hS : SelectSpec V select) {R : FlockSoundness.Rows} {N : ℕ}
+    (hr : HoldsRead R N ((readProg D H rowSeg leaf frame select).run St.empty).2
+      (((readProg D H rowSeg leaf frame select).run St.empty).1.1 ++
+        [((readProg D H rowSeg leaf frame select).run St.empty).1.2]))
+    (z : Fin R.w → Bool) (hsat : R.Sat z) (h1 : z R.one = true) :
+    evs (fun v => z (hr.φ v)) ((readProg D H rowSeg leaf frame select).run St.empty).1.1 =
+        Hash.EmbeddingRead.h V H (readTok fun v => z (hr.φ v)) (readOpening H D fun v => z (hr.φ v)) ∧
+      (ev (fun v => z (hr.φ v)) ((readProg D H rowSeg leaf frame select).run St.empty).1.2 = true →
+        Hash.EmbeddingRead.ok Verity.sha512 Verity.sha512 ⟨readDomain fun v => z (hr.φ v), V, fun r => r⟩ key
+          (readRoot fun v => z (hr.φ v)) V (readTok fun v => z (hr.φ v)) (readOpening H D fun v => z (hr.φ v))) := by
+  have hrun : (readProg D H rowSeg leaf frame select).run St.empty =
+      (readNet D rowSeg leaf frame select (ins 0 32) (insW 32 8) (insW 544 8) (ins 1056 (16 * H))
+        (insW (1056 + 16 * H) 24) ((List.range D).map fun j => insW (2592 + 16 * H + 512 * j) 8)).run
+        ((input (readIn H D)).run St.empty).2 :=
+    rfl
+  have hst := hr.rows z hsat h1
+  rw [hrun] at hst ⊢
+  exact (readNet_sound key hD hVD hD32 hH hA hB hC hS (ins 0 32) (insW 32 8) (insW 544 8) (ins 1056 (16 * H))
+    (insW (1056 + 16 * H) 24) ((List.range D).map fun j => insW (2592 + 16 * H + 512 * j) 8)
+    ((input (readIn H D)).run St.empty).2).2 _ hst (length_ins 0 32) (shaped_insW 32 8) (shaped_insW 544 8)
+    (length_ins 1056 (16 * H)) (shaped_insW _ 24) (by simp)
+    (fun s hs => by obtain ⟨j, -, rfl⟩ := List.mem_map.1 hs; exact shaped_insW _ 8)
+
 /-! ## The tie -/
 
 /-- **The read's gates refine its reference, where its rows hold the read's program.** Let unit `u` of the game
@@ -221,29 +269,16 @@ theorem gatesRefine_of_holdsRead (key : Hash.Msg) {V H D : ℕ} (hD : D = Hash.T
     exact hconsts _ hone_io true hone
   have hin : ∀ v < readIn H (Hash.Tree.depth V), z (hr.φ v) = ReadUnit.bit X (I.wire (hr.φ v)) := fun v hv =>
     hnot _ (Or.inl (hr.input v hv))
-  let z' : Var → Bool := fun v => z (hr.φ v)
-  have hst : stHolds z' ((readProg (Hash.Tree.depth V) H rowSeg leaf frame select).run St.empty).2 :=
-    hr.rows z hsat hz1
-  have hrun : (readProg (Hash.Tree.depth V) H rowSeg leaf frame select).run St.empty =
-      (readNet (Hash.Tree.depth V) rowSeg leaf frame select (ins 0 32) (insW 32 8) (insW 544 8) (ins 1056 (16 * H))
-        (insW (1056 + 16 * H) 24) ((List.range (Hash.Tree.depth V)).map fun j => insW (2592 + 16 * H + 512 * j) 8)).run
-        ((input (readIn H (Hash.Tree.depth V))).run St.empty).2 :=
-    rfl
-  have hsem := (readNet_sound key rfl hVD hD32 hH hA hB hC hS (ins 0 32) (insW 32 8) (insW 544 8) (ins 1056 (16 * H))
-    (insW (1056 + 16 * H) 24) ((List.range (Hash.Tree.depth V)).map fun j => insW (2592 + 16 * H + 512 * j) 8)
-    ((input (readIn H (Hash.Tree.depth V))).run St.empty).2).2 z' (by rw [← hrun]; exact hst) (length_ins 0 32)
-    (shaped_insW 32 8) (shaped_insW 544 8) (length_ins 1056 (16 * H)) (shaped_insW _ 24) (by simp)
-    (fun s hs => by obtain ⟨j, -, rfl⟩ := List.mem_map.1 hs; exact shaped_insW _ 8)
-  rw [← hrun] at hsem
-  obtain ⟨hh, hok⟩ := hsem
-  set run := (readProg (Hash.Tree.depth V) H rowSeg leaf frame select).run St.empty with hout
+  obtain ⟨hh, hok⟩ := holdsRead_sound key rfl hVD hD32 hH hA hB hC hS hr z hsat hz1
+  set z' : Var → Bool := fun v => z (hr.φ v)
+  set run := (readProg (Hash.Tree.depth V) H rowSeg leaf frame select).run St.empty
   have hlen1 : run.1.1.length = 16 * H := by
     have := congrArg List.length hh
     rw [length_evs] at this
     rw [this]
     unfold Hash.EmbeddingRead.h
     split
-    · simp [openingOf, length_evs, length_ins]
+    · simp [readOpening, openingOf, length_evs, length_ins]
     · exact length_fill H
   have hob : ∀ j (hj : j < 16 * H + 1),
       ReadUnit.bit X (I.wire (hr.out j)) = ev z' ((run.1.1 ++ [run.1.2])[j]'(by simp [hlen1]; omega)) := by
@@ -265,14 +300,13 @@ theorem gatesRefine_of_holdsRead (key : Hash.Msg) {V H D : ℕ} (hD : D = Hash.T
     intro k m hk f hf
     rw [flatten_insW]
     exact hbits k (64 * m) hk f hf
-  have htok : (readPorts I hr V H).tokOf X = num (evs z' (ins 0 32)) :=
+  have htok : (readPorts I hr V H).tokOf X = readTok z' :=
     congrArg num (hbits 0 32 (by omega) (readPorts I hr V H).tok fun i => by simp [readPorts])
-  have hroot : (readPorts I hr V H).rootOf X = wordsDigest z' (insW 32 8) :=
+  have hroot : (readPorts I hr V H).rootOf X = readRoot z' :=
     congrArg ReadUnit.digestOf (hwords 32 8 (by omega) (readPorts I hr V H).root fun i => rfl)
-  have hdomain : (readPorts I hr V H).domainOf X = wordsDigest z' (insW 544 8) :=
+  have hdomain : (readPorts I hr V H).domainOf X = readDomain z' :=
     congrArg ReadUnit.digestOf (hwords 544 8 (by omega) (readPorts I hr V H).domain fun i => rfl)
-  have hopen : (readPorts I hr V H).opening X = openingOf z' (ins 1056 (16 * H)) (insW (1056 + 16 * H) 24)
-      ((List.range (Hash.Tree.depth V)).map fun j => insW (2592 + 16 * H + 512 * j) 8) := by
+  have hopen : (readPorts I hr V H).opening X = readOpening H (Hash.Tree.depth V) z' := by
     have e1 : ReadUnit.bits X (readPorts I hr V H).row = evs z' (ins 1056 (16 * H)) :=
       hbits 1056 (16 * H) (by omega) (readPorts I hr V H).row fun i => rfl
     have e2 : ReadUnit.bits X (readPorts I hr V H).salt = evs z' (insW (1056 + 16 * H) 24).flatten :=
