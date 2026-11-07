@@ -20,11 +20,11 @@ namespace Flock.Firewall.Skeleton
 
 open Flock Transcript Finish
 
-/-- Coin `i` of the phase, counted from `1` over every coin it draws: distinct, neither `0` nor `1` (the circuit fold
+/-- Coin `i` of the phase, counted from `1` over every coin it samples: distinct, neither `0` nor `1` (the circuit fold
 divides by `1 + r`), and Rust's `Recorder`'s, so both sides fold the circuit on the same coins. -/
 def coin (i : Nat) : F128 := ⟨0x5eed0000 + i.toUInt64, 0x123456789abcdef0⟩
 
-/-- The rounds recorded so far, each its framed bytes and coin count, and the count of coins drawn. -/
+/-- The rounds recorded so far, each its framed bytes and coin count, and the count of coins flipped. -/
 abbrev RecM := StateT (Array (ByteArray × Nat) × Nat) V
 
 /-- **The recording `Asks`**: each round kept with its coin count (its squeeze header's last eight bytes), answered by

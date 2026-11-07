@@ -46,7 +46,7 @@ def test_period0_is_five_real_legs_and_a_wipe_elsewhere() -> None:
 
 def test_integrity_bounds_are_the_profiles_count_bound() -> None:
     """The integrity line at δ is `profile.Stratified`'s count bound (Lean's `countBound`): the largest K with
-    miss(K) ≥ δ, so at miss = δ exactly (one of 100 units drawn, 99 wrong) it is 99, where the copy this replaced said 98."""
+    miss(K) ≥ δ, so at miss = δ exactly (one of 100 units sampled, 99 wrong) it is 99, where the copy this replaced said 98."""
     at = _load("block-record-r1-window10")["legs"]["integrity"]["at"]
     assert (at["1/100"]["value"], at["1/1000000"]["value"]) == (68, 192)
     q = {"symbol": "integrity bound", "value": 0, "unit": "wrong units", "of": 100, "drawn": 1}

@@ -5,7 +5,7 @@ cost at the store's size.
 
 - **fixture**: `serve.fixture()` regenerated and held to `FIXTURE_SHA512`; then for each of its two chained passes, on
   the device: each block's π (`Pass.partials`), σ read in chunks of 1, 3, 5 and 33 blocks, y, and the root (each pass's
-  seed from the one before's root); with `--lib`, the toy's store decoded layer by layer through the staging decode
+  seed from the one before's root); with `--lib`, the toy's store decoded layer by layer through the store's load
   (`stage.decode_layer`) with the pass attached, the units no layer reads then read alone, and the root.
 - **random**: `--random` units of random C* on the device against the CPU reference (`p2.Sketcher`): σ of a seeded
   sample of units from their blocks' π, every y from the device's σ, and the root (`receipts.tree`) under random salts.

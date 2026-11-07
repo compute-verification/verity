@@ -1571,7 +1571,7 @@ def test_an_event_the_verifiers_answer_differently_is_refused_as_disagreement(mo
 
 
 def test_an_append_is_answered_with_its_coin_and_a_root_message_is_applied_in_order():
-    """`Verifier.append` answers an append's message with its first index and its coin, drawn then, once: the same
+    """`Verifier.append` answers an append's message with its first index and its coin, flipped then, once: the same
     root sent again draws none and is the session's `coin` rejection.  `Verifier.root`: a message's releases, then
     its root with its plan change and its step; a plan that still holds a block the message released, or one
     appended by no message, is the session's `plan` rejection, a root with no step or one not above the last pass's

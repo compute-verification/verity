@@ -59,8 +59,8 @@ Its two lemmas:
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
   completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
-  the findings of its run of C-Flock's verifier (`WindowProved`) and the statement's public file holding the drawn
-  unit's row commitments (`WindowOpened`, whose header line `commitments` reads through C-Flock's JSON parser, which no proof
+  the findings of its run of Flock's verifier (`WindowProved`) and the statement's public file holding the sampled
+  proof block's row commitments (`WindowOpened`, whose header line `commitments` reads through Flock's JSON parser, which no proof
   here evaluates, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
 * nontrivial: `linkWindowAcceptMeans_nontrivial`, that a verifier accepting every link-window doesn't have the property
   (`LinkWindowAcceptMeansBy`, which is the property at the verdict, `linkWindowAcceptMeans_by`): it accepts a warden

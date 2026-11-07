@@ -229,7 +229,7 @@ private def readsFile : Json := Json.mkObj [("format", Flock.Registered.FORMAT),
     ("leaves", x.getObjValD "leaves"), ("reads", Json.arr #[Json.null]), ("root", x.getObjValD "root"),
     ("value", x.getObjValD "value"), ("words", x.getObjValD "words")])))]
 
-/-- The auditor's challenger, whose signed release the draw's coins come in: an LMS key over SHA-512 at `Lms.deployed`'s
+/-- The auditor's challenger, whose signed release the sample's coins come in: an LMS key over SHA-512 at `Lms.deployed`'s
 parameters, the only ones v2 reads a challenger's signatures under (`OneStageZk.KEY_PARAMS`). -/
 private def challenger : Json := Json.mkObj [("key", Json.mkObj [("H", 20), ("W", 1),
   ("public", String.join (List.replicate 80 "c1"))]), ("label", "draw")]
@@ -306,7 +306,7 @@ private def grantedOf (rec : Json) (e : SampledProofs.OneStageZk.Evidence) : Arr
   e.sessions.map fun s => (s!"flock-verify/{s.name}", Json.mkObj [("accepted", true), ("of_record", true),
     ("registered", Json.mkObj reads), ("session", s.name)])
 
-/-- Sampled proofs with its draw's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
+/-- Sampled proofs with its sample's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
 and digest, and in the one-stage form the check `OneStageZk.checkBlobsAt` ends in, v1's `check` on the verdicts the
 sessions' run gives (`grantedOf`); the recursive form refused. -/
 private def proved : Core.Protocol where

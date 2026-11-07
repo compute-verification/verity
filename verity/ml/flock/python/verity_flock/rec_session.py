@@ -10,7 +10,7 @@ circuits' share of the lincheck's fold, as a round of its own after z_partial (`
 **The relay** (`Relay`) passes every request to the proxy except each rep's round that absorbs z_partial and squeezes r′. That
 round reaches the proxy as two: z_partial's frames ending in a squeeze of no coins, then a round that absorbs h's 64 elements
 and squeezes r′. h is computed between them, at the rep's fold points (`rec_algebra.fold_points`, from the coins the prover
-has had: they are sampled before z_partial). So the challenger draws r′ after the ``c_k`` of z_partial and of h, on the rep's
+has had: they are sampled before z_partial). So the challenger samples r′ after the ``c_k`` of z_partial and of h, on the rep's
 one coin stream, and the prover gets r′ as its round's answer and never sees h.
 
 **h** (`hidden_fold`) is `Stmt.partialRanges` (``Flock/Statement.lean``) on the hidden circuits' ranges alone: per range, its
@@ -462,8 +462,8 @@ def serve(listen: str, out: Path, statement: dict, circuit: Path, hidden: Sequen
           tree: CT.Spec | None = None, source: RL.TreeSource | None = None) -> dict:
     """One session on ``listen``, held to the statement's holo schedule (`rec_live.schedule_for`, written to
     ``out/schedule.json`` first), through a `Relay` whose h is the ``hidden`` circuits' fold in ``circuit``; written into
-    ``out`` (`Relay.write`), or, when it stops, the coin server's records alone (`rec_live.write_stopped`). ``tree``: every
-    coin of the session, the relay's sparse and stacked phases' too, is the challenger's coin tree of that spec, drawn by
+    ``out`` (`Relay.write`), or, when it stops, the challenger's live-coin part's records alone (`rec_live.write_stopped`). ``tree``: every
+    coin of the session, the relay's sparse and stacked phases' too, is the challenger's coin tree of that spec, sampled by
     ``source`` at ``Hello`` (`rec_live.CoinServer`); the prover runs under ``FC_COINS=tree``. ``sparse``: the bucket's `rec_sparse.Shape`,
     whose sparse phase (`Relay.sparse_phase`, on ``workers`` processes) the one hidden circuit's entries run. ``stacked``
     (with ``sparse``): flock-circuit, which opens R at the sparse claims (`Relay.stacked_phase`, under ``out/stacked``;

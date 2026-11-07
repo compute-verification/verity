@@ -11,15 +11,15 @@ import Proofs.Flock.SamplingGeneric.TwoCount
 # Serve-time interiors recover compute credit, at the proof-block grain
 
 `RTwo` reads no replay block's interior (`Claims.Sampling.rTwo_congr`), so with interiors committed after the replay
-draw compute credit is not certified (`deferred_not_credited`). Here, what recovers it and at what grain.
+sample compute credit is not certified (`deferred_not_credited`). Here, what recovers it and at what grain.
 
 * `Prog.Checked`: the gates a proof block's check reads besides its interior: those of it that it commits
   (`Prog.Boundary` at the proof block) and those outside it that its gates read. Its interior it reads nowhere
   (`Boundary.core`, `correct_refIn_iff`).
 * `OpensChecked`: at every gate of a replay block's interior that a check of a proof block inside it reads, the
   serve-time trace opens the interior value the footprint is read at.
-* `footprint_eq_counts_faulty`: there the footprint is the faulty set's counts per cell, the incorrect proof blocks on
-  the values serving committed, so `RTwo` at such an interior puts the faulty set's counts in `M̄_δ`
+* `footprint_eq_counts_faulty`: there the footprint is the incorrect set's counts per cell, the incorrect proof blocks on
+  the values serving committed, so `RTwo` at such an interior puts the incorrect set's counts in `M̄_δ`
   (`counts_faulty_mem`): the compute bound reads the work the prover could have skipped, at the two-stage design's
   acceptance probability. The interior is not the relation's to pick: a compiler that opens each sampled replay block's
   interior against serve-time roots and checks the proof blocks there supplies it under binding; that compiler's
@@ -29,8 +29,8 @@ draw compute credit is not certified (`deferred_not_credited`). Here, what recov
   proof blocks' boundaries, the one-stage registration's values, and none finer; a serve-time commitment of only the
   replay blocks' boundaries certifies only replay-block correctness (`rTwo_congr`).
 * At `notNotTwo` (`served_credited`): `fullW` opens gate `1`, which proof block `{1}` commits inside replay block
-  `{1, 2}`'s interior, so it opens what the checks read and its faulty set's counts are in `M̄_δ` at every `δ < 1`;
-  `lateW` opens no value there, so no interior agrees with it, and its faulty set's counts are in no `M̄_δ` at `δ ≥ 0`.
+  `{1, 2}`'s interior, so it opens what the checks read and its incorrect set's counts are in `M̄_δ` at every `δ < 1`;
+  `lateW` opens no value there, so no interior agrees with it, and its incorrect set's counts are in no `M̄_δ` at `δ ≥ 0`.
 -/
 
 @[expose] public section
@@ -113,7 +113,7 @@ theorem wrongIn_eq_inter_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {
     rintro ⟨u, r, hu, hr, hc⟩
     exact hf ⟨u, hu, (hiff v hv u r hu hr).1 hc⟩
 
-/-- **The footprint at an interior serving opened is the faulty set's counts.** -/
+/-- **The footprint at an interior serving opened is the incorrect set's counts.** -/
 theorem footprint_eq_counts_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement}
     {Pt Pρ : Partition} {w : Wit} {ι : ℕ → ℕ → Bool} (hι : OpensChecked H Cm s Pt Pρ w ι) :
     footprint H Cm s Pt Pρ w ι = counts Pt Pρ (faulty H Cm s Pt w) := by
@@ -122,7 +122,7 @@ theorem footprint_eq_counts_faulty {H : Msg → Msg} {Cm : CommitmentScheme Bool
   unfold footprint counts
   rw [wrongIn_eq_inter_faulty (hι ρ), Finset.inter_comm]
 
-/-- **Compute credit over serve-time interiors**: a footprint in `M̄_δ` at an interior serving opened puts the faulty
+/-- **Compute credit over serve-time interiors**: a footprint in `M̄_δ` at an interior serving opened puts the incorrect
 set's counts, the incorrect proof blocks on the values serving committed, in `M̄_δ`. -/
 theorem counts_faulty_mem {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {Pt : Partition}
     {d : Design.Two} {w : Wit} {δ : ℝ} {ι : ℕ → ℕ → Bool} (hι : OpensChecked H Cm s Pt d.part w ι)
@@ -215,8 +215,8 @@ theorem lateW_served_Pa (H : Msg → Msg) :
   rw [h1, h2, h3, mul_zero]
 
 /-- **Serve-time interiors recover compute credit** at `notNotTwo`, where `RTwo` takes both traces
-(`deferred_not_credited`): `fullW`, which opens what the proof blocks' checks read, has its faulty set's counts in
-`M̄_δ` at every `δ < 1`; no interior agrees with `lateW`, which skipped gate `1`, and its faulty set's counts are in no
+(`deferred_not_credited`): `fullW`, which opens what the proof blocks' checks read, has its incorrect set's counts in
+`M̄_δ` at every `δ < 1`; no interior agrees with `lateW`, which skipped gate `1`, and its incorrect set's counts are in no
 `M̄_δ` at `δ ≥ 0`. -/
 theorem served_credited (H : Msg → Msg) :
     OpensChecked H notNotCm notNotStmt notNotPt notNotPρ fullW (fun _ _ => false) ∧
