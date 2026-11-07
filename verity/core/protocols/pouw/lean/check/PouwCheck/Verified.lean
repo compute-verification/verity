@@ -5,12 +5,12 @@ public import PouwCheck.Lanes
 /-!
 # A served window's statements verified (`credit._verified`)
 
-The verifier of record of a window's statements, which `credit.window` and `credit.period_credit` take each drawn
-unit's proof outcome from (`credit._lean_verified`, through `pouw-check-difftest`'s `credit-verified`), with
+The verifier of a window's statements, which `credit.window` and `credit.period_credit` take each sampled
+proof block's proof outcome from (`credit._lean_verified`, through `pouw-check-difftest`'s `credit-verified`), with
 `credit._verified` the Python reference the difftest (`tests/test_verified_difftest.py`) holds to it, string for string.
 
-A window's evidence carries its statements, one a call with a drawn unit (`STATEMENT_KEYS`: the call, the paths of its
-circuit file and its public file, and its sessions' directories), never a verdict. The C-Flock verifier of record
+A window's evidence carries its statements, one a call with a sampled proof block (`STATEMENT_KEYS`: the call, the paths of its
+circuit file and its public file, and its sessions' directories), never a verdict. The Flock verifier
 (`flock-verify verify --zk`) runs outside this process, so `verified` is asked twice:
 
 * with no answers (`runs` null), it names each verifier run (`asks`): in statement order, up to the first statement a
@@ -23,18 +23,18 @@ circuit file and its public file, and its sessions' directories), never a verdic
   rejected refuses the window whole (`failed`: no partial credit, and no retry), a session that opened its call's public
   table or the window's ok rows (`OK_PORT`, o1) anywhere but at the `--registered` file's value and root refuses it
   (`registration`), and so does one that proved a unit of another call (`proof`). Each unit an accepted session proved
-  is one outcome (`credit.PROOF_KEYS`), which `Credit.window` then holds to the draw and the window's registration.
+  is one outcome (`credit.PROOF_KEYS`), which `Credit.window` then holds to the sample and the window's registration.
 
 Before any run: the circuit files' form (`FILES_FORM`, `filesRefusal`), the statements' form (`STATEMENTS_FORM`, each
-call one of the window's), one statement a call (a retry never reproves), a statement only for a call with a drawn unit,
+call one of the window's), one statement a call (a retry never reproves), a statement only for a call with a sampled proof block,
 a committed circuit file for its K (`noStatementFiles`), and the call's `--registered` file (its refusals,
 `registration`). Every refusal is (code, why), the first rule the input breaks, with Python's words.
 
 **The lanes form** (`PouwCheck.Lanes`): the window's statements may be its lanes evidence (`Lanes.LANES_KEYS`), whose
-statements are call statements and drawn leaves' (`Lanes.leafStatement?`), at the Ks the circuit files commit as
-`lane<K>` and `combine<K>`. Each drawn lanes-form leaf's runs follow the call statements' (`Lanes.leafAsks`, under the
-window's draw), each against its own leaf Program; their sessions are judged by `Lanes.judged`, and once all have
-accepted, the produced record's checks (`Lanes.outcomes`) give each drawn leaf its one outcome.
+statements are call statements and sampled leaves' (`Lanes.leafStatement?`), at the Ks the circuit files commit as
+`lane<K>` and `combine<K>`. Each sampled lanes-form leaf's runs follow the call statements' (`Lanes.leafAsks`, under the
+window's sample), each against its own leaf Program; their sessions are judged by `Lanes.judged`, and once all have
+accepted, the produced record's checks (`Lanes.outcomes`) give each sampled leaf its one outcome.
 -/
 
 @[expose] public section
@@ -111,9 +111,9 @@ structure Ask where
 /-- `credit._asks`: the verifier runs in statement order up to the first statement a check before the verifier refuses,
 and that refusal (none when every statement passes them), each run's partition object `partitionOf` the descriptor's.
 Over the window's circuit (its descriptor's SHA-512 `program`, and `shape` and `layout`, `shapeOf` and `layoutOf` of
-its Program), its registered `entries`, open root `window`, drawn `units`, `steps` rounds, Program salt `salt` and
-draw `draw`. `statements` is a list of call statements, or the lanes evidence (`Lanes.LANES_KEYS`) whose `statements`
-hold call statements and drawn leaves'; each drawn leaf's runs (`Lanes.leafAsks`) follow the call statements'. -/
+its Program), its registered `entries`, open root `window`, sampled `units`, `steps` rounds, Program salt `salt` and
+sample `draw`. `statements` is a list of call statements, or the lanes evidence (`Lanes.LANES_KEYS`) whose `statements`
+hold call statements and sampled leaves'; each sampled leaf's runs (`Lanes.leafAsks`) follow the call statements'. -/
 def asks (statements files : Json) (program : String) (shape : Shape) (layout entries : Json) (window : String)
     (units : List Nat) (steps : Nat) (salt : String) (draw : Json) :
     R (Array Ask × Array Lanes.LeafAsk × Option (String × String)) := do
@@ -182,8 +182,8 @@ def finding (f : Json) : R Finding := do
     throw ("error", "credit-verified: a finding is not {session, accepted, why, program, registered, units}")
 
 /-- `credit._verified`'s judgment of the verifier's answers `runs` (one an `asks` run, in its order, as far as the
-caller ran them): each drawn unit's outcome `{unit, verdict, program, registered}`, else the refusal of the first answer
-that credits nothing, then `asks`' own refusal, then (with drawn leaves' runs) `Lanes.outcomes`. An answer is
+caller ran them): each sampled proof block's outcome `{unit, verdict, program, registered}`, else the refusal of the first answer
+that credits nothing, then `asks`' own refusal, then (with sampled leaves' runs) `Lanes.outcomes`. An answer is
 `{"error": why}` (the verifier could not run), `{"refused": [code, why]}` (it refused the statement) or
 `{"findings": [...]}` (`finding`, one a session). -/
 def judge (statements files : Json) (program : String) (shape : Shape) (layout entries : Json) (window : String)
@@ -249,7 +249,7 @@ def judge (statements files : Json) (program : String) (shape : Shape) (layout e
 
 /-- `credit-verified`: on `{statements, files, descriptor, entries, window, units, steps, salt, draw, runs}` (the
 window's statements, its period's committed circuit files, its descriptor in hex, its registered entries, its open root,
-its drawn units, its rounds, its Program salt and its draw), with `runs` null, `{"run": [...]}`, the verifier runs
+its sampled proof blocks, its rounds, its Program salt and its sample), with `runs` null, `{"run": [...]}`, the verifier runs
 `asks` names (`Ask.toJson`, then `Lanes.LeafAsk.toJson`), or the verdict when it names none; with `runs` the answers, the verdict: `{"outcomes": [...]}` (`judge`)
 or `{"refused": [code, why]}` (as `refusal` writes it). -/
 def verified (j : Json) : R Json := do

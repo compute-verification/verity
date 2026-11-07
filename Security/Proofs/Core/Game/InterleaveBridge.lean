@@ -6,7 +6,7 @@ public import Proofs.Core.Game.TwoRun
 # A play advanced between stops, on coins supplied from outside
 
 A strategy `σ` of a causal game `g` (`Verity.Game`) is turned into a strategy of another game whose moves interleave with
-coins, a C-Flock game (`FlockSoundness.Game`) among them, by simulating `σ`: the simulation holds a tape of `g` and a
+coins, a Flock game (`FlockSoundness.Game`) among them, by simulating `σ`: the simulation holds a tape of `g` and a
 position on it, and walks `σ`'s play to the next node where one of a family of cuts (`DigestCut`) fixes a message (a
 stop). There the other game's move is read off the most likely message at each cut fixed there (`revealMode`), and its
 coin is written into the tape at the stop before the walk goes on. This module is that simulation on `g`'s side, at

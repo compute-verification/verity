@@ -3,14 +3,14 @@ module
 public import SampledProofs.WiresSound
 
 /-!
-The wire check on the drawn units alone: a reader unit is faulty in the wired flattening when its outputs are not its
+The wire check on the sampled proof blocks alone: a reader unit is faulty in the wired flattening when its outputs are not its
 Definition's on its inputs, its wired rows being its writers' committed output rows. So a wired row that is not its
-writer's row makes its reader faulty, and drawing that reader catches it: the verifier holds the wired rows of the units it
-draws, never every unit's (`Summary.drawnOk`).
+writer's row makes its reader faulty, and sampling that reader catches it: the verifier holds the wired rows of the units it
+samples, never every unit's (`Summary.drawnOk`).
 
-`Summary.rowsAt` gives a drawn unit's wired rows and their writers from the wires alone, in work proportional to the wires
-and the unit's rows (`Wire.rowsAt`). `drawnOk_iff`: the drawn check accepts exactly when every reader row the expanded
-wires cover (`checkRef`'s entries) whose unit is drawn is its writer's row, `same` being the comparison of two rows' public
+`Summary.rowsAt` gives a sampled proof block's wired rows and their writers from the wires alone, in work proportional to the wires
+and the unit's rows (`Wire.rowsAt`). `drawnOk_iff`: the sampled check accepts exactly when every reader row the expanded
+wires cover (`checkRef`'s entries) whose unit is sampled is its writer's row, `same` being the comparison of two rows' public
 strings (`b ‖ c`) the leaf layer binds.
 -/
 
@@ -29,7 +29,7 @@ def Wire.rowsAt (w : Wire) (tid : String) (u : Nat) : List ((String × Nat) × (
 def Summary.rowsAt (s : Summary) (tid : String) (u : Nat) : List ((String × Nat) × (String × Int × String)) :=
   s.wires.flatMap (·.rowsAt tid u)
 
-/-- **The drawn check**: every wired row of every drawn unit `(template, unit)` is its writer's row (`same`). -/
+/-- **The sampled check**: every wired row of every sampled proof block `(template, unit)` is its writer's row (`same`). -/
 def Summary.drawnOk (s : Summary) (same : (String × Nat × String × Nat) → (String × Int × String) → Bool)
     (drawn : List (String × Nat)) : Bool :=
   drawn.all fun (tid, u) => (s.rowsAt tid u).all fun ((p, r), wr) => same (tid, u, p, r) wr
@@ -71,8 +71,8 @@ theorem mem_rowsAt {w : Wire} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0) {t
     simp only [hcnd, ↓reduceIte, Nat.add_sub_cancel_left, List.mem_map, List.mem_range]
     exact ⟨i % w.cuts, hm, by rw [hdm]⟩
 
-/-- **The drawn check is the reference's on the drawn units**: it accepts exactly when every reader row the expanded
-wires cover whose unit is drawn is its writer's row. -/
+/-- **The sampled check is the reference's on the sampled proof blocks**: it accepts exactly when every reader row the expanded
+wires cover whose unit is sampled is its writer's row. -/
 theorem drawnOk_iff {c : Wiring} {S : Summary} (h : check c = .ok S)
     (same : (String × Nat × String × Nat) → (String × Int × String) → Bool) (drawn : List (String × Nat)) :
     S.drawnOk same drawn = true ↔
@@ -89,10 +89,10 @@ theorem drawnOk_iff {c : Wiring} {S : Summary} (h : check c = .ok S)
 /-! ## JSON: the `wires_drawn` and `wires_drawn_unrolled` pieces
 
 An instance is `{"templates", "cuts", "wires", "drawn", "reads", "writes"}`: the first three as the `wires` piece's;
-`drawn` the drawn units `[tid, unit]` (repeats counted once); `reads` the public strings of reader rows,
+`drawn` the sampled proof blocks `[tid, unit]` (repeats counted once); `reads` the public strings of reader rows,
 `[tid, unit, port, row, s]`; `writes` those of writer output rows, `[tid, unit, out, s]` (the first of a repeated row
 counts). A wired row is its writer's when both strings are given and equal. The output is the `wires` piece's refusal,
-or `{"ok": true, "accepted", "checked", "bad"}`: the drawn units' wired rows checked, and the ones that are not their
+or `{"ok": true, "accepted", "checked", "bad"}`: the sampled proof blocks' wired rows checked, and the ones that are not their
 writer's, sorted. -/
 
 open Lean (Json toJson)
@@ -134,7 +134,7 @@ def drawnJson (accepted : Bool) (rows : List (Key × (String × Int × String)))
   Json.mkObj [("ok", true), ("accepted", accepted), ("checked", toJson rows.length),
     ("bad", Json.arr (bad.map keyJson).toArray)]
 
-/-- The `wires_drawn` piece: `check`, then `Summary.drawnOk` on the drawn units. -/
+/-- The `wires_drawn` piece: `check`, then `Summary.drawnOk` on the sampled proof blocks. -/
 def pieceDrawn (j : Json) : Except String Json := do
   let (c, drawn, same) ← drawnInstance j
   match check c with
@@ -143,7 +143,7 @@ def pieceDrawn (j : Json) : Except String Json := do
     let rows := drawn.flatMap fun (t, u) => (s.rowsAt t u).map fun ((p, r), wr) => (((t, u, p, r) : Key), wr)
     return drawnJson (s.drawnOk same drawn) rows same
 
-/-- The `wires_drawn_unrolled` piece: `checkRef`, then every expanded entry whose unit is drawn. -/
+/-- The `wires_drawn_unrolled` piece: `checkRef`, then every expanded entry whose unit is sampled. -/
 def pieceDrawnRef (j : Json) : Except String Json := do
   let (c, drawn, same) ← drawnInstance j
   match checkRef c with

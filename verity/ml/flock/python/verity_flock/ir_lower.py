@@ -319,7 +319,7 @@ _PIECE_ANDS: dict[str, int] = {}
 
 
 def _piece_ands(prim) -> int:
-    """The ANDs of ``prim``'s piece on free operands (none for a primitive C-Flock has no piece for, which no unit holding it
+    """The ANDs of ``prim``'s piece on free operands (none for a primitive Flock has no piece for, which no unit holding it
     lowers past), each primitive id lowered once. A piece that lowers only on a constant operand (a rotation by a constant
     count, which is wiring) can't be lowered on free ones, and states its ANDs as its ``ands`` attribute instead."""
     if prim.id not in _PIECE_ANDS:
