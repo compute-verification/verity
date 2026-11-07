@@ -69,8 +69,8 @@ outside this lint's files, before and after, and a PR whose (file, rule) count g
 a finding moved to another function passes both. A renamed file keeps its findings, but the repository lint reads no history,
 so its entries move with it (`python3 tests/lint/test_repo_ruff.py --move OLD NEW`, in the same change): a rename that leaves
 them behind fails, naming each entry and that command. A file the PR doesn't touch is never linted, and only a run's top
-merge is: one that lands below a run's tip, with others in one landing, is held only by the repository's lints and their
-lists. If ruff can't run where the check runs the gate, the gate can't judge, and its step fails.
+merge is: one that lands below a run's tip, with others in one landing, is checked only by the repository's lints against
+their lists. If ruff can't run where the check runs the gate, the gate can't judge, and its step fails.
 It holds direct environment reads the same way, so that configuration is read in one place.
 `tests/lint/test_repo_env_reads.py` counts each tracked `*.py` file's reads (`os.environ[...]`, `.get`, `.setdefault`, a
 `.pop` whose value is used, an `in` test, `os.getenv`, through any alias) outside `integrations/vllm/` (P07 is its settings

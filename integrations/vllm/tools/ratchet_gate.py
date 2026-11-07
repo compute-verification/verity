@@ -78,8 +78,8 @@ catch (every outcome is recorded): the fix is to re-raise, record the outcome, o
 A rename must move the file's entry (``python3 tests/lint/test_<slug>.py --move OLD NEW``), as for ruff.
 
 Only the top change is linted: a branch's own commits before marking, the tip's merge in the after-landing run, so a merge
-that lands below a run's tip, with others in one landing, is never linted here (the repository's lints still hold its files
-to their lists).  Its findings and sites are counted with the lints, configs and pin its own base has when that base holds
+that lands below a run's tip, with others in one landing, is never linted here (the repository's lints still check its files
+against their lists).  Its findings and sites are counted with the lints, configs and pin its own base has when that base holds
 BASE (the merge below it, whose merges below may change a lint: the lints it landed with), else with BASE's (a branch's
 merge base, an older `main`), so a PR that adds a site a lint landed below it counts fails at its own merge, not later in
 the whole-tree run of a change that touches a lint.
