@@ -1876,8 +1876,12 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits", "Properties.SampledProofs.Second",
-    "Properties.SampledProofs.Interval"],
+   "except": [
+    "Properties.SampledProofs.Draw",
+    "Properties.SampledProofs.Bits",
+    "Properties.SampledProofs.Second",
+    "Properties.SampledProofs.Interval"
+   ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.CertifierNetwork": {
@@ -7607,6 +7611,12 @@
    "type_hash": "4eda244e871db8f10d252cf426606eb73ab8ae55c86ca35968158571dee735d5",
    "unfolded_hash": "d54ce5e55b0eb1169fa600b83cb1082b8a79773f6cbacd24e520c08181762100"
   },
+  "Properties.SampledProofs.SecurityProofs.boundLnBoundSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.boundLnUpperSound": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
    "owner": "@proofs",
    "signature": ["Properties.SampledProofs.SecurityProofs.designWellFormed : Properties.SampledProofs.DesignWellFormed"],
@@ -7632,6 +7642,24 @@
    },
    "type_hash": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119",
    "unfolded_hash": "e44586bf18963ce99c0fc55d9d547d505a5cc576f2a2c6905df554be71464de2"
+  },
+  "Properties.SampledProofs.SecurityProofs.expLowerSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.expUpperSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.lnUpperSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.powLowerSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.powUpperSound": {
+   "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.secondMisses": {
    "owner": "@proofs",
