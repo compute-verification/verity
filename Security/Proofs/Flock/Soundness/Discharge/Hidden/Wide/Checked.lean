@@ -1,13 +1,26 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The widened statements, with flock-verify's own count of units
 
 `Wide/Defs.lean`'s six statements take `0 < st.c.upv` as a hypothesis: the unit range's `g · upv` slots are a power of
 two only when the unit returns the outputs, so nothing else refuses a tail with no unit in a template instance.
-`HmRow.check` refuses `units_per_vu = 0` (PROTOCOL.md §16.10, D8; `setupHidden_upv_pos`), so these are the same
+`HmRow.check` refuses `units_per_vu = 0` (`Flock.HmRow`, D8; `setupHidden_upv_pos`), so these are the same
 statements without that hypothesis, each the conclusion of its `Wide/Defs.lean` statement under the same remaining
 conditions.
 -/

@@ -1,7 +1,15 @@
 module
 
+public import Definitions.Flock.Defs
+public import Definitions.Flock.LigeritoPad
+public import Mathlib.CategoryTheory.Category.Basic
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Compose
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Inner
 public import Proofs.Flock.Soundness.SoundnessPad
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.LigeritoDecode
 
 /-!
 # C-Flock ZK's masked Ligerito level 0 (live/PROTOCOL.md §1, §4, §7)
@@ -149,7 +157,7 @@ structure Pads0 (np e : ℕ) where
 /-- A round polynomial whose coefficients are forms. -/
 abbrev QuadL (K : Type) (np : ℕ) := LinK K np × LinK K np × LinK K np
 
-/-- `from(msg, s)` (§13.2) on forms. -/
+/-- `from(msg, s)` (`Flock.Ligerito`) on forms. -/
 def fromMsgL {np : ℕ} (m : LinK K np × LinK K np) (s : LinK K np) : QuadL K np := (m.1, s + m.2, m.2)
 
 /-- `q(x) = q₀ + q₁·x + q₂·x²` on forms. -/

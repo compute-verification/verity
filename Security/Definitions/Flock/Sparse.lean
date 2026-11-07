@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.Piop
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Hidden unit circuits: L4′ with h, and the sparse phase H1–H4
@@ -40,7 +42,7 @@ structure HoloLcOut (F : Type) (m n : ℕ) where
   ts : Fin n → F
   h : Fin 64 → F
 
-/-- **The lincheck with hidden units** (§10 with L4′): `lincheck` on the public part `S`, with the prover's `h` after
+/-- **The lincheck with hidden units** (`Flock.Piop` with L4′): `lincheck` on the public part `S`, with the prover's `h` after
 `z_partial` and the check `Σ_s (folded[s] + h[s])·z_partial[s] = claim`. -/
 def holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
     Game (Option (HoloLcOut F S.m (S.kLog - 6))) := do

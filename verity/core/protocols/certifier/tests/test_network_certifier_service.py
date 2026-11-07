@@ -334,15 +334,15 @@ def test_the_unit_is_each_ends_head_check(tmp_path):
     assert wide.head_key(1) == (9, 8, 0) and wide.head_key(0) == (9, 4, 0)
 
 
-def test_the_proof_unit_is_the_registered_template(tmp_path):
+def test_the_proof_block_is_the_registered_template(tmp_path):
     """The proof block a proof's circuit lowers has the registered proof block's id, signature and descriptor id, so the
     registered query names it as its template; it is bound without tracing, since each gate's expansion traces the head
     check (`head_check.expand`, minutes), which the proving run (`benchmarks/network_traces/n2_zk.py`) lowers and checks
     against the IR reference."""
     lw = Run(tmp_path).lw
-    assert lw.proof_unit.id == lw.unit.id and lw.proof_unit.signature() == lw.unit.signature()
-    assert codec.descriptor_id(lw.proof_unit) == codec.descriptor_id(lw.unit) == P.template_id(lw.unit)
-    assert lw.proof_unit.defn is not lw.unit.defn and lw.partition is lw._partition
+    assert lw.proof_block.id == lw.unit.id and lw.proof_block.signature() == lw.unit.signature()
+    assert codec.descriptor_id(lw.proof_block) == codec.descriptor_id(lw.unit) == P.template_id(lw.unit)
+    assert lw.proof_block.defn is not lw.unit.defn and lw.partition is lw._partition
 
 
 def test_n2s_program_reads_no_registered_value(tmp_path):
@@ -686,11 +686,11 @@ WARDEN_DIGEST = bytes(range(64))
 
 
 def test_a_warden_link_holds_both_heads_to_the_wardens_digest_and_reads_no_sync(tmp_path):
-    """A warden link (`WardenProfile`) is the plain proof block on the warden's records: its public items are
-    `PUBLIC_WARDEN` and its charge 0, a window whose two records the warden certified under its parameters digest is
-    accepted with no sync declared, by the Lean's verdict of record, the Python beside it and the in-the-clear check
-    alike, and a window whose egress record was certified under the certifier's digest instead is a reject. It takes no
-    occupancy profile, and its two ends are one grid."""
+    """A network certifier link (`WardenProfile`) is the plain proof block on the network certifier's records: its
+    public items are `PUBLIC_WARDEN` and its charge 0, a window whose two records the network certifier certified under
+    its parameters digest is accepted with no sync declared, by the Lean's verdict of record, the Python beside it and
+    the in-the-clear check alike, and a window whose egress record was certified under the certifier's digest instead is
+    a reject. It takes no occupancy profile, and its two ends are one grid."""
     run = Run(tmp_path)
     run.lw = lw = replace(run.lw, occupancy=(None, None), warden=SVC.WardenProfile(3, WARDEN_DIGEST))
     run.stream = lw.stream(budget=8, delta=DELTA, challenger="challenger-test", coins=lambda n: b"\x07" * n,

@@ -69,7 +69,7 @@
   "handles": [
     {
       "handle": "infra",
-      "holder": "the infra coordinator (bc-5a69647d-04f7-5d94-9ff1-56593e2e1037)",
+      "holder": "bc-5a69647d-04f7-5d94-9ff1-56593e2e1037",
       "remit": "Machines and task infra: utilization, the scheduler, buying compute, alerts, and one API for agents' jobs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-infra",
       "usergroup": "S0CA15YVA0P",
@@ -100,12 +100,12 @@
     },
     {
       "handle": "proofs",
-      "holder": "the proofs coordinator (bc-a26cefd0-716d-595d-bf02-8f8a47a711bd, generation 4, up 17:33Z on 19 Oct)",
+      "holder": "bc-a26cefd0-716d-595d-bf02-8f8a47a711bd",
       "lineage": [
         "bc-8f4b652b"
       ],
-      "remit": "Proofs: Lean, red team, C-Flock, proof-system sweeps, consolidation and the merge trains.",
-      "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (proof)",
+      "remit": "C-Flock, its guarantees (recursion's knowledge soundness, the ZK server's zero knowledge), sampled proofs, red team, proof-system sweeps.",
+      "charter": "PRF-282 and proofs' goals on the Goals page: proofs/recursion-knowledge-sound, proofs/zero-knowledge, proofs/zero-knowledge-any-worker",
       "usergroup": "S0CAGBJTJF4",
       "retired_usergroups": [
         "S0C5Q6KJZTQ"
@@ -120,6 +120,7 @@
         "verity/",
         "verity/core/protocols/sampled_proofs/",
         "benchmarks/one_stage/",
+        "benchmarks/serve_tax/",
         "benchmarks/live_challenger/",
         "benchmarks/commitments/",
         "benchmarks/multi_unit/",
@@ -129,6 +130,7 @@
         "benchmarks/proof_throughput/",
         "benchmarks/flock_s8_block/",
         "benchmarks/sampling_plan/",
+        "benchmarks/spot_figures/",
         "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
         "Security/Definitions/Hash/",
         "Security/Proofs/Hash/",
@@ -150,9 +152,9 @@
     },
     {
       "handle": "circuits",
-      "holder": "the circuits coordinator (bc-21f3d3de-28db-5e5d-964b-d357187449aa)",
-      "remit": "Circuits of real workloads: the vLLM integration, the epoch run, sm_120 GEMM, TP2.",
-      "charter": "/cursor/stores/bc-36415049-30db-4fff-a34b-81f0afc0124d/docs/restructure/ (circuit)",
+      "holder": "bc-21f3d3de-28db-5e5d-964b-d357187449aa",
+      "remit": "Circuits of real workloads: each served model's circuit, its capture and commitments, the primitives' Definitions and circuit-check.",
+      "charter": "note:circuits-charter",
       "usergroup": "S0CA15ZF6CX",
       "retired_usergroups": [
         "S0C5U3LHMFT"
@@ -161,13 +163,13 @@
       "owns": [
         "integrations/",
         "benchmarks/served_units/",
+        "benchmarks/unit_block/",
         "benchmarks/served_commit/",
         "benchmarks/g2/",
         "tools/verity/circuit_check/",
         "benchmarks/native_peak/",
         "benchmarks/tc_probe/",
         "benchmarks/tc_probe_fp4/",
-        "benchmarks/load_time/",
         "benchmarks/bool_build_cost/",
         "benchmarks/f32_exhaustive/",
         "verity/ml/circuits/ops/",
@@ -209,8 +211,8 @@
     },
     {
       "handle": "compute-accounting",
-      "holder": "the compute-accounting coordinator (bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef): the served path's interfaces with circuits, kernels and vllm, the stranded-branch landing, and anything else; the research work is @compute-research's",
-      "remit": "Proof of useful work: verity/core/protocols/pouw, its schemes and their runs.",
+      "holder": "bc-1f5fcd84-768c-5ac6-a73e-0e3a950e61ef",
+      "remit": "PoUW, its schemes and runs; served-path compute accounting (H200 share, credit in AND gates); its interfaces with circuits, kernels, vllm.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAB8FRE6R",
       "retired_usergroups": [
@@ -219,6 +221,7 @@
       "linear": "CMP",
       "owns": [
         "verity/core/protocols/pouw/",
+        "verity/ml/protocols/pouw/",
         "Security/Definitions/Pouw/",
         "Security/Proofs/Pouw/",
         "Security/Definitions/Nci.lean",
@@ -231,6 +234,7 @@
         "benchmarks/ppl/",
         "benchmarks/nci/",
         "benchmarks/int8_class_rate/",
+        "benchmarks/tensor_duty/",
         "benchmarks/unit_lowering/",
         ".agents/skills/kernel-engineering/",
         "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
@@ -295,18 +299,20 @@
     },
     {
       "handle": "compute-research",
-      "holder": "compute-accounting's research lane (bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac): the machine model (W1 and the device records), the Lean accounting statements (NCI, DeclaredCircuitRequirement) and their red and blue teams, and PoUW's protocol statements (period, salt, credit form)",
-      "remit": "The machine model, the Lean accounting statements (NCI and the rest) and their red and blue teams, and PoUW's protocol statements.",
+      "holder": "bc-ebc09a9a-ce64-52b5-b3b6-2c8862c7e9ac",
+      "remit": "PoUW's lead scheme and Lean statements, weights hardened against matmul shortcuts, silicon logging and its forcing margin, machine model.",
       "charter": "note:compute-accounting/20261019T2230Z-report-lane-split",
       "usergroup": "S0CBZ2L8542",
+      "linear": "CMP",
+      "linear_label": "lane:compute-research",
       "owns": [
         "verity/hardware/"
       ]
     },
     {
       "handle": "memory-accounting",
-      "holder": "the memory-accounting coordinator (bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3)",
-      "remit": "Proof of useful space: verity/core/protocols/pous, its Lean package and its runs.",
+      "holder": "bc-d7be0308-38ba-5176-93d1-9169ce7d6cd3",
+      "remit": "Memory accounting: PoUS, PoUB (the bandwidth audits) and secure erasure, the memory challenger, their Lean and their runs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAJE0SREV",
       "retired_usergroups": [
@@ -334,6 +340,7 @@
         "verity/core/devices/memory_challenger/",
         "verity/core/protocols/bandwidth/",
         "verity/core/protocols/pous/",
+        "verity/ml/protocols/pous/",
         "verity/core/protocols/remote_bandwidth/",
         "verity/core/primitives/requirement/",
         "Security/Definitions/Accounting/Bandwidth.lean",
@@ -361,7 +368,7 @@
         "Security/Definitions/Accounting/Requirement.lean",
         "Security/Definitions/Accounting/Responder.lean",
         "Security/Definitions/Accounting/Window.lean",
-        "Security/Definitions/Accounting/Assumptions/EncodeChain.lean",
+        "Security/Proofs/Accounting/Lemmas/EncodeChain.lean",
         "Security/Definitions/Accounting/Assumptions/RateAudit.lean",
         "Security/Definitions/Accounting/Assumptions/RateAuditDeployed.lean",
         "Security/Definitions/Accounting/Assumptions/Remote.lean",
@@ -413,7 +420,7 @@
     },
     {
       "handle": "network-accounting",
-      "holder": "the network-accounting coordinator (bc-5c916421-64a5-5c38-94ba-2e28fe629237)",
+      "holder": "bc-5c916421-64a5-5c38-94ba-2e28fe629237",
       "remit": "Network accounting: the network certifier (verity/core/protocols/certifier) and its timing-channel proofs.",
       "charter": "note:20260930T1740Z-handoff-from-pous-charter-pouw",
       "usergroup": "S0CAGBGSPCJ",
@@ -424,6 +431,7 @@
       "owns": [
         "verity/core/protocols/network/",
         "verity/core/protocols/certifier/",
+        "verity/ml/protocols/certifier/",
         "verity/core/devices/certifier/",
         "Security/Definitions/NetworkCertifier/",
         "Security/Proofs/NetworkCertifier/",
@@ -448,7 +456,7 @@
     },
     {
       "handle": "console",
-      "holder": "Daniel's desktop agent (f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc), on his laptop beside the console's dev server: it reads its Slack inbox whenever Daniel opens it, so asks queue there, and nothing wakes it (Daniel, 2026-10-16 2:37 PM PDT)",
+      "holder": "f7772a12-d61f-4bbb-8c4f-e79e8d6d30dc",
       "remit": "The live console and docs site: panels, formats, frontends, and what agents publish to them.",
       "charter": "Daniel, 2026-10-11 (via top)",
       "usergroup": "S0CAAA80KGT",
@@ -457,8 +465,20 @@
       ]
     },
     {
+      "handle": "dashboard",
+      "holder": "4d92fa93-101a-42e1-8282-d4a998892829",
+      "remit": "Daniel's dashboards on the console: the Goals page and live plots of running experiments. Asks wait until Daniel opens it; nothing wakes it.",
+      "charter": "Daniel, 2026-11-02 11:24 AM PST",
+      "linear": "CON",
+      "examples": [
+        "How do I put my goals on Daniel's Goals page?",
+        "How do I publish a live plot of my runs to the console?"
+      ],
+      "usergroup": "S0CEC206YBW"
+    },
+    {
       "handle": "ci",
-      "holder": "the ci coordinator (bc-8d3a66f8-f3da-5dae-9fb0-4a5b381b3d4e)",
+      "holder": "bc-8d3a66f8-f3da-5dae-9fb0-4a5b381b3d4e",
       "remit": "Open PRs: shepherds each to a passing check and into the merge trains.",
       "charter": "Daniel, 2026-10-01 10:56 AM PDT (leads get handles); named ci, not pr-captain (Daniel, 1:07 PM PDT)",
       "usergroup": "S0C93AFCRT8",
@@ -490,7 +510,7 @@
     },
     {
       "handle": "lean",
-      "holder": "the lean coordinator (bc-cfe6af97-18be-5d48-90c9-a9de869d43e5)",
+      "holder": "bc-cfe6af97-18be-5d48-90c9-a9de869d43e5",
       "remit": "Lean: the Lean audit and its tooling; a change to a Lean guarantee DMs Daniel when it lands.",
       "charter": "Daniel, 2026-10-01 10:18 AM PDT",
       "usergroup": "S0C93AE54K0",
@@ -516,7 +536,7 @@
     },
     {
       "handle": "comms",
-      "holder": "the comms coordinator (bc-e6e381a1-2be0-5d80-819c-c2bf4d318fee)",
+      "holder": "bc-e6e381a1-2be0-5d80-819c-c2bf4d318fee",
       "remit": "Agent-to-agent messages: research msg, the names directory, routing, and its traffic.",
       "charter": "Daniel, 2026-10-01 9:12 AM PDT",
       "usergroup": "S0C8PTRMVV5",
@@ -543,7 +563,7 @@
     },
     {
       "handle": "top",
-      "holder": "the admin, Daniel's coordinator (bc-af075d78-d5b9-590b-acbb-eb47d6f88f39)",
+      "holder": "bc-af075d78-d5b9-590b-acbb-eb47d6f88f39",
       "remit": "Top-level: Daniel's coordinator across every lead.",
       "charter": "Daniel",
       "usergroup": "S0C977GL9R7",
@@ -556,7 +576,6 @@
       ],
       "owns": [
         "AGENTS.md",
-        "README.md",
         "ARCHITECTURE.md",
         "GLOSSARY.md",
         ".agents/skills/",
@@ -572,7 +591,7 @@
     },
     {
       "handle": "vllm",
-      "holder": "the vLLM coordinator (bc-eb1d6598-b608-5bc3-8420-9ed89a1d49ab, generation 4, up 17:38Z on 19 Oct)",
+      "holder": "bc-eb1d6598-b608-5bc3-8420-9ed89a1d49ab",
       "remit": "The vLLM integration: what the served model runs under verification, and its hookup to the protocols.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C954BELSW",
@@ -580,6 +599,7 @@
         "verity/ml/windows/",
         "integrations/vllm/",
         "examples/vllm/",
+        "benchmarks/replay_determinism/",
         "ruff.toml"
       ],
       "linear": "VLLM",
@@ -599,7 +619,7 @@
     },
     {
       "handle": "benchmarks",
-      "holder": "the benchmarks coordinator (bc-7449b20e-c769-56a1-9ba2-ceacd3cecfc9)",
+      "holder": "bc-7449b20e-c769-56a1-9ba2-ceacd3cecfc9",
       "remit": "Benchmarks: the overhead and throughput measurements across proof systems, and the tables rendered from them.",
       "charter": "Daniel, 2026-10-13 (a new slice, in architecture's rollout)",
       "usergroup": "S0C9ZLL7T88",
@@ -608,6 +628,7 @@
         "benchmarks/harness/",
         "benchmarks/overhead/",
         "benchmarks/recursion_e2e/",
+        "benchmarks/recursion_figures/",
         "benchmarks/specs/",
         "infra/cluster/kinds/benchmarks.toml",
         "benchmarks/judge.py",
@@ -627,7 +648,7 @@
     },
     {
       "handle": "kernels",
-      "holder": "the kernels coordinator (bc-0104b328-7489-5a12-a90e-2a15e14ff08a), a new slice launched from top's charter",
+      "holder": "bc-0104b328-7489-5a12-a90e-2a15e14ff08a",
       "remit": "Fast commitment kernels: one GPU library for every served-path commitment, its vLLM integration, the commit-overhead benchmark.",
       "charter": "Daniel, 2026-10-17 10:46 PM PDT (a new slice, via top); renamed from @hash by Daniel, 2026-10-18 9:40 AM PDT",
       "usergroup": "S0CAYGG5BDW",
@@ -649,14 +670,15 @@
     },
     {
       "handle": "training",
-      "holder": "Daniel's training agent (bc-b43da88b-5d25-4463-9b8c-da4df6f84207), named 'training'",
+      "holder": "bc-b43da88b-5d25-4463-9b8c-da4df6f84207",
       "remit": "Training compute and scaling laws: Daniel's training agent, for scaling-law questions.",
       "charter": "Daniel, 2026-10-18 (via top, COMM-44)",
       "usergroup": "S0CA9EAFKED",
       "linear": "TRN",
       "owns": [
         "benchmarks/rho/",
-        "benchmarks/circuit_properties/"
+        "benchmarks/circuit_properties/",
+        "benchmarks/training_slowdown/"
       ],
       "branch_suffixes": [
         "4207"
@@ -671,9 +693,11 @@
     },
     {
       "handle": "soundness",
-      "holder": "the soundness coordinator (bc-d2745108-9b89-5c53-8137-de8e75809c4d), a new slice launched from top's charter, split from proofs to own the Full proofs project",
+      "holder": "bc-d2745108-9b89-5c53-8137-de8e75809c4d",
       "remit": "The one soundness theorem: Verity.Soundness over the compiled verifier, every subprotocol it rests on, and their composition.",
       "charter": "Daniel, 2026-10-26 10:04 AM PDT (pull the full proofs in; a new slice, via top, split from proofs at its worker cap)",
+      "linear": "PRF",
+      "linear_label": "lane:soundness",
       "owns": [
         "verity/core/protocols/onsite/",
         "verity/core/protocols/remote/"

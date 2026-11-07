@@ -13,14 +13,6 @@ from verity.ml.circuits.types import Array
 PARAMS, RET = [Array(2, BL.BIT)], Array(1, BL.BIT)
 
 
-@pytest.fixture
-def collector():
-    was = gc.isenabled()
-    gc.enable()
-    yield
-    (gc.enable if was else gc.disable)()
-
-
 def test_a_trace_runs_with_the_collector_off_and_leaves_it_as_it_was(collector) -> None:
     seen = []
 

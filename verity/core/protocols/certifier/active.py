@@ -97,7 +97,7 @@ one registration of p, made within the deadline after p's work. `check_salts` is
 ingress record holds exactly one salt frame of p, the placeholder's, and the revealed salt has `salt_bits` bits.
 
 **The reveal over the network** (`Proxy(challenger_key=…, signer=…)`, both or neither). Deployed, the certifier runs on
-the link, off the prover's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
+the link, off the developer's node, and the auditor's challenger on an auditor host. With the keys, `reveal` and
 `committed` take the challenger's `request`: its LMS signature under `challenger_key`, the key the auditor's
 deployment record (never the prover's configuration) registered for it, over `reveal_request_message(signer.key_id,
 run_id, ingress link, p, registration.digest, SALT_KIND or WEIGHTS_KIND)`, where `run_id` is the 32 bytes the proxy
@@ -549,8 +549,8 @@ def id_request(*, model: str, user: str, prompt: Sequence[int], max_tokens: int,
     eight (six decimals), `model` and `user` each in `ID_NAME_BYTES`, and each prompt id in its own `ID_FIELD_BYTES`.
     No field straddles a frame: spaces (JSON's whitespace) before one that would move it, with its key, to the next.
     At 4096-byte frames every field but the prompt's is in the first frame. `offset` is the request's first byte's
-    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the warden's cells
-    (`warden.cells`, which carry the bytes alone)."""
+    place in its first frame's payload: LENGTH's 4 bytes on the active certifier's link, 0 in the network certifier's
+    cells (`warden.cells`, which carry the bytes alone)."""
     if offset not in (0, LENGTH.size):
         raise ValueError(f"an id request starts its first frame's payload at 0 or {LENGTH.size}, not {offset!r}")
     if not prompt or isinstance(prompt, (str, bytes)):

@@ -20,7 +20,7 @@ SHARED = LAYOUTS / "families-shared-1024b.layout.json", "15fd14be19dea4d4d70b187
 #: art:a61d745f…'s file, today's ``families/v1`` layout, whose gathers re-commit their parts' bytes, and its sha256
 TODAY = LAYOUTS / "families-today.layout.json", "c3f312ce597f368cb01b7db9c8298fff1c9613d7bf90907d7e72a45190a1e175"
 #: commit_slots' interface fixture: its "layout" is ``slots._layout_json(slots.edge_layout())``
-EDGE = Path(__file__).resolve().parents[4] / "benchmarks" / "torch_gpu" / "commit_slots" / "fixtures" / "commit-slots-v1.json"
+EDGE = Path(__file__).resolve().parents[0] / "fixtures" / "commit-slots-v1.json"
 
 DIGESTS = {
     "edge": "eea4be19ce407d924d0ebe1c20eb42d9e050076898ca4a7d8ed2e8c3c7053168"

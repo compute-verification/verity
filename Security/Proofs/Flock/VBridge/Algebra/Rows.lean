@@ -1,6 +1,13 @@
 module
 
 public import Proofs.Flock.VBridge.Algebra.Build
+public import Batteries.Data.List.Basic
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import VCVio.Prelude.Core
 
 /-!
 # When `verifierRows` returns

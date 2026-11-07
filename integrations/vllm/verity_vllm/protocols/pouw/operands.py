@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 from verity.core.protocols.pouw.protocol import Context as UnitContext
-from verity.core.protocols.pouw.schemes import ncp
+from verity.ml.protocols.pouw.schemes import ncp
 
 _INV63 = np.float32(1.0) / np.float32(63.0)
 _M32 = 0xFFFFFFFF

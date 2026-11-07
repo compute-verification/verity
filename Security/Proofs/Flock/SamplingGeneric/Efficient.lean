@@ -607,7 +607,7 @@ theorem slot_exp_le (hS : L.Sessions H) {x : Msg} (s : AuditStatement)
         Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ) ≤ L.es x := by
   have he0 : 0 ≤ L.es x := maxBelow_nonneg _ _
   have hres := Ex_resample (fun d => L.selRounds x (L.slotSel x i) (forkOn (L.stage2 x) r d))
-    (selRounds_resample hS (L.slotSel x i) r) fun d =>
+    (selRounds_resample hS.toRunsFixed (L.slotSel x i) r) fun d =>
       (if (run H P L.V x ω (forkOn (L.stage2 x) r d)).out = .acc then (1 : ℝ) else 0) *
         Ex fun ρ : L.BlockEC x => L.slotRuns H x s (run H P L.V x ω) i (forkOn (L.stage2 x) r d) ρ
   beta_reduce at hres

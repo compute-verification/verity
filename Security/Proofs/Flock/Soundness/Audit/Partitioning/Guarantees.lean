@@ -154,7 +154,7 @@ replay unit escapes its two stages independently of the others. For `p < 1` that
 
 This is variant (a) of `Audit.TwoStage`: every commitment, the replay units' roots and every proof unit's, comes before
 the one nested draw, so `nested` is a one-stage law over the proof units. Under variant (b), where the prover commits a
-drawn replay unit's interior after the first stage, the escape is `effEscape` over the replay units, not `ψ`. -/
+drawn replay unit's interior after the first stage, the escape is `effAcceptProb` over the replay units, not `ψ`. -/
 def NestedEscape : Prop :=
   ∀ (R N k a b : ℕ) [NeZero b] (hk : k ≤ N), a ≤ b → ∀ B : Finset (Fin (R * N)),
     ((nested R N k a b hk).escape B).toReal =

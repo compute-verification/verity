@@ -76,8 +76,8 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
 1. **Setup phase**, once, before any coin. It fixes the public parameters (the protocol and its version, the sampling
    design and δ, the size classes, the inference-only policy's c and k, the advice length ℓ_a, and each subprotocol's
    public Program and parameters, by digest), the registered information θ (for example the weights) and the registered
-   compiler B. It fixes no circuit. The Lean (`Verity.Declaration`, `Verity.Committed`) still states the older shape, a
-   circuit with a partition committed beside it.
+   compiler B. It fixes no circuit: in the Lean (`Verity.RegisteredCircuit`, `Compiler.run`), D, θ, 𝓘 and the proof
+   blocks are B's output on the log's θ and the advice; the committed trace is `Verity.Committed`.
 2. **Execution phase** j. The hardware runs, and the developer commits every value it computes under hiding commitments
    in SHA-512 trees: the committed trace.
 3. **Verification phase** j, one per execution phase (`ARCHITECTURE.md`, "How an audit works"):
@@ -88,7 +88,7 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
       same statement can prove that every inference block has c gates and reads at most k bits outside θ, which is the
       inference-only policy's check.
    2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
-   3. The developer proves each sampled proof block with C-Flock `--zk` behind the ZK server, and the Lean verifier
+   3. The developer proves each sampled proof block with Flock `--zk` behind the ZK server, and the Lean verifier
       `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment and its sampled
       proofs and receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
@@ -238,11 +238,10 @@ The time credit adds the data sheet's rates.
 ### 4. The inference-only policy
 
 **Establishes.** The registered circuit divides into inference blocks of at most Γ gates, each reading at most α_f
-fresh bits per gate, anything outside the registered information θ (`Nci.Complies Γ α_f`); and θ is registered
-information. A partition meeting that is, once padded, a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋, or
-k = ⌊α_f·Γ·W⌋ for the bit-level expansion at Γ·W gates,
+fresh bits per gate, anything outside the registered information θ (`Nci.CompliesRate Γ α_f`); and θ is registered
+information. On a Boolean circuit such a partition is a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
-expansion meets it at Γ·W gates. The Lean slowdown bound `DampenerRemote` instead takes `Complies` as a hypothesis.
+expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerRemote` takes `Nci.CompliesRate Γ α_f` of d.
 
 **How it is checked.**
 
@@ -265,7 +264,7 @@ is the deployment's; that the registered roots bind their data (`Nci.Assumptions
 for its tie to one registration. Nothing about learning: the policy restricts the shape of the registered circuit, and
 part 6's premises say why that shape trains little.
 
-**Lean, and how it discharges `Complies`, link by link.**
+**Lean, and how it discharges `CompliesRate`, link by link.**
 
 1. *Remote's verdict means the policy accepted the same registration.* **Open**: remote doesn't run the policy, and no
    composite rule ties the policy's registration to the one sampled proofs and PoUW bind. The composition's proved
@@ -275,18 +274,18 @@ part 6's premises say why that shape trains little.
    is a proof lemma (`Security/Proofs/Nci/Cover/Checked.lean`), not a locked property, and the policy's check has no
    `AcceptMeans`: **open** as a property. θ's provenance: `NciCheck.Properties.SecurityProofs.BaselineProvenance`,
    **proved**.
-3. *A compliance verdict of `Desc.evaluate` ⇒ `Nci.Complies Γ α_f` of the laid-out registered circuit (a `Verity.Declaration`), on every
+3. *A compliance verdict of `Desc.evaluate` ⇒ `Nci.CompliesRate Γ α_f` of the laid-out `Verity.RegisteredCircuit`, on every
    expansion:*
    `NciCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
-   is the definition's), **proved**. `Witnessed` yields exactly `DampenerRemote`'s hypothesis `Complies Γ α d`, so for
-   the Lean bound only links 1 and 2 remain open.
-4. *`Complies` ⇒ the padded (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
+   is the definition's), **proved**; `refines` bounds the unrolled check's blocks by (Γ, α_f·Γ). `DampenerRemote`
+   takes `CompliesRate Γ α_f d`, what this verdict gives: links 1 and 2 are open.
+4. *`CompliesRate` ⇒ the (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
    bit-level expansion `Nci.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
    is open with links 1 and 2.
 5. *A block's effective fresh input:* k plus k_F, the bits faulty proof blocks inject into it, plus k_a, the advice bits
    its structure depends on. Sampled proofs bound the faulty proof blocks and the advice's length is public, but no
    statement bounds either per inference block yet: **open**.
-6. *The displayed bound reading the result instead of assuming `Complies`:* **open** (part 6).
+6. *The displayed bound reading the result instead of assuming `CompliesRate`:* **open** (part 6).
 
 ### 5. The monitoring period
 
@@ -359,9 +358,9 @@ block can import information, spending its fresh bits, or reconstruct it, spendi
 - So verified work does little learning, and learning at scale has to run on the uncredited capacity, which PoUW keeps
   small.
 
-The per-block cap is about h·(k + c/g) weighted weight-uses, h the price of fresh weights the description premise lets a
-block hold (not a storage bound) and g the gates a use's certified upstream computation takes. When reconstructing that
-computation would expose updated weights priced above h, the cap falls to h·k.
+The per-block cap is about k + c/g served uses, g the gates a use's certified upstream computation takes. When
+reconstructing that computation would expose updated weights priced above h, the price of fresh weights the description
+premise lets a block hold (not a storage bound), the cap falls to k.
 
 **Assumes.** The learning rows of the table above, the hardware rows, and parts 1 to 5. Further premises can strengthen
 the local bound (an activation price, a joint price, a recoverable source), each a new hypothesis to earn;
@@ -370,8 +369,8 @@ the local bound (an activation price, a joint price, a recoverable source), each
 **Lean.**
 
 - The local bounds' caps `Nci.Guarantees.HeldBudget` (or, statistically, `Nci.Guarantees.StatHeldBudget`),
-  `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and
-  `Nci.Guarantees.WeightedProductCap`, and the floor `Nci.Guarantees.CapabilityFloor`: **proved**
+  `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates` and `Nci.Guarantees.RecomputeByState`, and the
+  floor `Nci.Guarantees.CapabilityFloor`: **proved**
   (`Security/Proofs/Nci/Capability/`, `Security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
   structure and bound is surveyed in `Security/Definitions/Nci/Capability/README.md`.
 - Their premises, `Nci.Assumptions.CoversEfficientMethods`, `Nci.Assumptions.DescriptionHard` (or
@@ -387,10 +386,10 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 | Piece | Lean declaration | Lock | End to end |
 |---|---|---|---|
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
+| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the draw missing `m` faulty blocks with probability at most `(1 − q)^m` and a drawn faulty block undetected with probability at most `ks t`, and each declared run within `Throttled`'s bound | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
+| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each declared run within `Throttled`'s bound | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
 
 `DampenerRemote` is the older threaded slowdown bound, ρ = max(1, 1/(s + x/MFU₀)) over the thread structure
@@ -421,8 +420,8 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
   with a rule tying its registration to the one sampled proofs and PoUW bind; the policy's check accepting as a
-  property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading the
-  result instead of assuming `Complies`.
+  property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading a
+  verdict's rate.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
   its check inside the ZK server is open.
 - **The utilization policy.** Nothing bounds the free share f over every accepted run.
@@ -450,7 +449,7 @@ Each is a named `Prop` in a lock's `assumptions` (`Security/lean-audit.json`, an
 for the `Properties.*` ones), one line in plain words, except `CoinsConfidential` (prose only). These are the named `Prop`s the statements above
 read; each theorem's full hypotheses are its Lean, among them `TagsOkZHJ`, `Built`, `StrictCR.Finder.CR`,
 `DrawnLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads), and the local bounds' structural
-hypotheses `HeldPriceAtMost`, `SlotsRead`, `OverlapWeights` and `RequiresState`.
+hypotheses `HeldPriceAtMost`, `OverlapWeights` and `RequiresState`.
 
 Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
@@ -460,7 +459,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 - `Verity.Recursive.LiveCoins` (`live-verifier`), in the recursive form: each part's record holds the live run's coins.
 - `FlockSoundness.Assumptions.TableCRZAt` (`cr/sha-512`) and `FlockSoundness.Discharge.ZkLink.LinkCRZC`
   (`ecr/sha-512`): SHA-512 is collision resistant for the prover's table and link finders. The lock names the table
-  finders' premise `TableCRZAt`; the statement reads it through its abbreviation `TableCRZ`.
+  finders' assumption `TableCRZAt`; the statement reads it through its abbreviation `TableCRZ`.
 - `trusted-host` (`Verity.Assumptions.TrustedHost`, `Security/Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
   on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost` itself.
@@ -510,8 +509,9 @@ The slowdown, `DampenerRemote`:
 - `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
   rebuilds the weights it uses from fewer bits than their width. It is the older form, which the local bounds below
   replace (`Security/README.md`, part 2).
-- `Nci.Complies` (`Security/Definitions/Nci.lean`): the registration meets the inference-only policy, in its older form.
-  `DampenerRemote` takes it as a hypothesis; part 4 is what discharges it once its open links close.
+- `Nci.CompliesRate Γ α` (`Security/Definitions/Nci.lean`), the policy: inference blocks of at most Γ gates, each
+  reading at most α fresh bits per gate. `DampenerRemote` takes it as a hypothesis; part 4 is what discharges it once
+  its open links close.
 
 The local bounds (part 6):
 
@@ -524,20 +524,21 @@ The local bounds (part 6):
 ## Results per monitoring period
 
 These figures come from a third route, neither part 6's displayed bound nor `DampenerRemote`: the slowdown
-calculator's partial-sum route. The calculator is `benchmarks/rho` (`verity bench rho`).
+calculator, `benchmarks/rho` (`verity bench rho`).
 Its `periods.py` gives the slowdown bound for monitoring periods of a week, a month and a year, over one datacenter
 (`reference-h200`, 12,500 HGX nodes) and all compute (`world-h200`), at the remote scenario `reference-remote-h200`
 (`uv run python benchmarks/rho/periods.py --scenario reference-remote-h200`):
 
 | Over | Week | Month | Year | Range (week, month, year) | Worst corner |
 |---|---|---|---|---|---|
-| one datacenter | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
-| the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
+| one datacenter | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
+| the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.8 | 1 |
 
 - **What the figures mean.** Each figure is the hardware multiple over the reference training algorithm at its MFU,
   MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
-- **Their status.** They are draft and their premises contested. They come from the calculator's partial-sum route, not
-  from part 6's local bounds.
+- **Their status.** Draft. `output-premise` (`draft:E1-Prop6b`) sets them, `reference-remote-h200-pouw`'s and
+  `reference-remote-h200-sampled`'s at inference blocks of 2·10⁷ fresh bits, contested at its premise
+  `draft:E1-output-premise`. `cover` sets `reference-remote-h200-elementary`'s 1, contested via `output-premise`.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to
   98%).
 - **Their range.** The range takes each parameter to either end of its plausible range; the worst corner takes them all
@@ -551,14 +552,14 @@ Its `periods.py` gives the slowdown bound for monitoring periods of a week, a mo
 runs remote's sampled-proofs half for real, and the vLLM demo runs both halves on one served run, PoUW's as a
 development run:
 
-- `verity example lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
+- `verity demo lifecycle` (`examples/lifecycle/README.md`): the remote composite stepped through one monitoring period
   on CPU in about 2 s: hardware registration, registration, declarations, live samples, each declaration's verdict and the
   period's accounting, with every deviation it lists refused by name. Its prover is a labelled stand-in for C-Flock, and
   its verdict is the composition's Python mirror over per-declaration stand-ins for its subprotocols, not `remote
   check`. It runs; nothing about it is proved.
 
-- `verity example h200` (`examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
-  are sampled by one live coin, each is proved by C-Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
+- `verity demo h200` (`examples/h200/README.md`): a fixed attention shape committed on one H200. Eight proof blocks
+  are sampled by one live coin, each is proved by Flock `--zk` and accepted by the Lean verifier, and a flipped bit is
   refused. At an 8-block sample, that allows at most 43.77% incorrect proof blocks at δ = 1%. It runs, at proof level
   none, and isn't placed: its Lean verifier ran beside the prover. On a CPU at a small shape, run
   `uv run python examples/h200/run.py --out /tmp/e2e` (`--tamper l1.wup` must exit 3).

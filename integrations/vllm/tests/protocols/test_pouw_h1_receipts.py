@@ -22,7 +22,7 @@ import torch
 
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import leaf_lanes as LL
-from verity.core.protocols.pouw.circuit import h1zy as Z
+from verity.ml.protocols.pouw.circuit import h1zy as Z
 from verity_vllm.protocols.pouw.h1 import prover as PV
 from verity_vllm.protocols.pouw.h1 import receipts as RC
 from verity_vllm.protocols.pouw.h1 import registered as NR

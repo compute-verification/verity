@@ -2,7 +2,7 @@
 ``COORDS``): a ``MoeExpertFp8Gemm(W)_v1{N}`` row is N units of its Definition at N = 1, unit n reading the row's leading operands
 whole and ``w[:, n, :]``, ``ws[:, n // G, :]`` of every expert, its output port the row's output word n; a
 ``FlashInferFp8Linear_v1{K,N}`` row likewise, unit n reading the bf16 row whole (each unit quantises it itself), ``w[n]`` and
-``ws[n // 128]``.  The units cover the row's outputs with nothing left over (N units under one index entry, unit n's output
+``ws[n // 128]`` (its parts, which quantise it once: `test_serving_rows_flashinfer_parts`).  The units cover the row's outputs with nothing left over (N units under one index entry, unit n's output
 port word n) and compute them: the coordinate Definition on each unit's committed rows is the row's Definition's word n."""
 from __future__ import annotations
 
@@ -136,7 +136,7 @@ def test_flashinfer_s_linear_is_its_n_coordinates_each_quantising_the_row(monkey
     """N = 200 spans a whole 128-wide weight block and a partial one, so the units read both of ``ws``'s rows."""
     assert SRW.COORDS["FlashInferFp8Linear_v1"] == {"E": 1, "G": FP8_BLOCK}
     spec, T = descriptor_id(linear(FN)), descriptor_id(linear(1))
-    assert SRW.unit_templates(spec) == ((spec, 1), (T, FN))
+    assert SRW.unit_templates(spec)[:2] == ((spec, 1), (T, FN))
     boolean = SRW.template(descriptor_id(bind(BDG.FlashInferFp8LinearV2, K=FK, N=1)))
     assert (boolean.layout, boolean.word, boolean.packed) == ("coord", T, (16, 8, 32, 16))
     rng = np.random.default_rng(5)

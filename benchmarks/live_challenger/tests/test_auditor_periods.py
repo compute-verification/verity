@@ -259,7 +259,7 @@ def test_an_end_after_its_periods_close_leaves_the_close_and_the_ledger_standing
 
 
 def test_a_period_open_commits_its_cap_and_circuit_and_the_gate_reserves_no_window_past_the_cap(host, signer):
-    """`CircuitWorkPeriod` reads both, committed before window 0's first coin; a reserve
+    """`CircuitWorkMonitoringPeriod` reads both, committed before window 0's first coin; a reserve
     counts toward the cap from its entry on, opened or not."""
     opened = ok(admin(host, signer, f"period-open --name k1 --lane kernels --cap 2 --circuit {'ab' * 64}"))
     assert (opened["body"]["cap"], opened["body"]["circuit"]) == (2, "ab" * 64)

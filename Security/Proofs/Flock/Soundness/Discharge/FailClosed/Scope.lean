@@ -1,11 +1,26 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
 public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Event
-public import Proofs.Flock.Soundness.Discharge.Hidden.Facts
-public import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
-public import Proofs.Flock.Soundness.ExecSetup
-public import Flock.ProvedScope
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.ParseCommit
+import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.ParseStmt
 
 /-!
 # What the verifier accepts: `Accepts` and its statement check
@@ -32,7 +47,7 @@ check is `ProvedScope.checkP` (`ScopeP`, `VerifiesP`): it refuses hidden outputs
 
 `Checks` is `verifyCmd`'s call `ProvedScope.check tags zk circuitB pubB tables count publicInputs.isSome
 registered.isSome` argument for argument. `tags` is `Inputs.tags` without `--zk` and `zkTags` under it (`--statement`'s,
-after `withCoins`, then `Zk.tags` at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The
+with `Zk.tags` at `maskLogOf circuitB` and `count`, on the coin tree of `tableNames count`). The
 circuit, public file and tables are the bytes `verifyCmd` sets the session up from, and `count` is `--session-tables`.
 The public-inputs flag is `false`: with `--public-inputs` the check refuses every session, and without it `buildSession`
 passes `setupTables` no public input words, the setup `Accepts` models. The registered flag `reg` is whether the verifier

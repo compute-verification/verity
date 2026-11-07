@@ -5,6 +5,7 @@ public import Proofs.Properties.Pous.RunAt
 public import Proofs.Properties.Pous.MemoryChallenger
 public import Proofs.Properties.CertifierDevice.Lms
 public import Mathlib.Tactic.SplitIfs
+public import Proofs.Core.QSort
 import all Init.Data.Array.QSort.Basic
 import all Init.Data.String.Defs
 import all Lean.Data.Json.Basic
@@ -15,7 +16,6 @@ import all Init.Data.List.Control
 import all Init.Data.Range.Basic
 import all Init.Data.Int.Repr
 import all Init.Data.Repr
-public import Proofs.Core.QSort
 
 /-!
 # Proofs of PoUS's and the wipe's component statements (`Properties.Pous.Component`)
@@ -803,7 +803,8 @@ private def toyRound : MemoryChallenger.Round := ⟨0, 0, 0, 0, blockDigest toyB
 private def toyOpenings : Array CoinOpening := #[toyCoins.opening 0]
 private def toySigned (pk sig : ByteArray) : SignedSession :=
   ⟨toySessionCommitment, COMPLETE, #[toyRound], LMS, pk, sig⟩
-private def toySession (pk sig : ByteArray) : Run.Session := ⟨toySigned pk sig, toySessionCommitment, toyOpenings⟩
+private def toySession (pk sig : ByteArray) : Run.ChallengePhaseRecord :=
+  ⟨toySigned pk sig, toySessionCommitment, toyOpenings⟩
 
 /-- `verdict`'s reasons before the rounds. -/
 private def rpre (schemes : Schemes) (trusted : List ByteArray) (s : SignedSession) (c : SessionCommitment) :
@@ -892,7 +893,7 @@ private theorem verdict_toy (pk sig m : ByteArray)
   exact rtail_toy
 
 private theorem checkAt_of (schemes : Schemes) (pt : Run.Point) (trusted : List ByteArray)
-    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.Session) (sid : ByteArray)
+    (pub : SetupProtocol.Public) (digests : ByteArray) (r : Run.ChallengePhaseRecord) (sid : ByteArray)
     (h1 : (pub.blocks == pt.params.blocks) = true) (h2 : (pub.salt.size == Run.SALT) = true)
     (h3 : (digests.size == pt.params.blocks * Merkle.DIGEST) = true)
     (h4 : (Merkle.root (Run.rowLeaves pt.params pub.salt digests) == some pub.root) = true)
