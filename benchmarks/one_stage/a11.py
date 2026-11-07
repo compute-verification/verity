@@ -698,9 +698,9 @@ def live(fn, registry):
     return registry[name].bind(**{k: static(v) for k, v in fn.bindings.items()})
 
 
-def load_values(d: Path, lowers: list[str]) -> tuple[dict, dict, dict]:
+def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tuple[dict, dict, dict]:
     """`save_values`' directory read back: the staged kinds among ``lowers``, each unit decoded from ``units.json`` and bound
-    again from the registry, refused unless it encodes as the decoded one."""
+    again from the registry, refused unless it encodes as the decoded one; ``per_kind``: each kind's first that many units."""
     from verity.ml.circuits.codec import decode_program
     from verity.ml.definitions.registry.catalog import load as load_registry
     registry = load_registry()[0]
@@ -716,9 +716,10 @@ def load_values(d: Path, lowers: list[str]) -> tuple[dict, dict, dict]:
         if unit.id != s["unit"] or enc(unit) != enc(defs[s["unit"]]):
             raise SystemExit(f"{f}: the registry's {unit.id} is not the saved {s['unit']}")
         z = np.load(d / f"{f}.npz")
-        rows_of_kind[f] = {**s, "unit": unit, "rows_spec": K.rows_of(unit),
-                           "rows": {k[2:]: z[k] for k in z.files if k.startswith("i.")},
-                           "outs": {k[2:]: z[k] for k in z.files if k.startswith("o.")}}
+        n = min(s["n"], per_kind or s["n"])
+        rows_of_kind[f] = {**s, "n": n, "unit": unit, "rows_spec": K.rows_of(unit),
+                           "rows": {k[2:]: z[k][:n] for k in z.files if k.startswith("i.")},
+                           "outs": {k[2:]: z[k][:n] for k in z.files if k.startswith("o.")}}
     return staged, rows_of_kind, {"from": {x: doc.get(x) for x in ("values", "steps", "layers", "per_kind")}, "weights": doc["weights"]}
 
 
@@ -762,7 +763,7 @@ def main() -> int:
     lowers = [f for f, r in kinds.items() if (r.get("outcome") == "lowers" or f in tries) and (not a.only or f in a.only.split(","))]
     summary["tried"] = sorted(tries & set(lowers))
     if a.load_values:
-        staged, rows_of_kind, notes = load_values(Path(a.load_values), lowers)
+        staged, rows_of_kind, notes = load_values(Path(a.load_values), lowers, a.per_kind)
         summary["values_from"] = {"dir": a.load_values, **notes["from"]}
         weights_notes = notes["weights"]
         print(f"A11 values loaded: {sorted(rows_of_kind)}", flush=True)
