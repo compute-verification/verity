@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.SamplingTwoServed
+public import Definitions.Claims.SamplingServed
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
@@ -13,8 +13,8 @@ Take a first stage that misses each set `T` of replay blocks with probability at
 independent catches at rates `q_ρ ≤ 1` would: a Bernoulli first stage (`bernoulli:NUM/DEN`) at `q_ρ = NUM/DEN`, or the
 deployed uniform `Q`-subset of `N` replay blocks with every input replay block, at `Q/N` and `1`. Then the acceptance
 probability at a set `T`'s counts is `P̄_a ≤ ∏_ρ (1 − q_ρ(1 − e_ρ(T)))` (`Design.Two.passes`), each factor reading only
-`T`'s proof blocks in `ρ` (`blocksIn`). Rankin's bound `1[δ < P̄_a] ≤ (P̄_a/δ)^θ`, at any `θ ≥ 0`, turns the sum over the
-admissible sets into a sum over every set, which factors over the replay blocks:
+`T`'s proof blocks in `ρ` (`blocksIn`). Rankin's bound `1[δ < P̄_a] ≤ (P̄_a/δ)^θ`, at any `θ ≥ 0`, turns the sum over
+the admissible sets into a sum over every set, which factors over the replay blocks:
 
 * `rankinFactor`: `G_ρ(θ) = Σ_{U ⊆ ρ} 2^{b(U)} (1 − q_ρ(1 − e_ρ(U)))^θ`.
 * `AdmissibleTwoRankin`: `Σ_{T admissible} 2^{b(T)} ≤ δ^{−θ} ∏_ρ G_ρ(θ)`.
@@ -45,8 +45,8 @@ noncomputable def Design.Two.passes (d : Design.Two) (Pt : Partition) (q : ℝ) 
 noncomputable def rankinFactor (s : AuditStatement) (Pt : Partition) (d : Design.Two) (q θ : ℝ) (ρ : ℕ) : ℝ :=
   ∑ U ∈ (blocksIn Pt d.part ρ).powerset, (2 : ℝ) ^ bitsOf s Pt U * d.passes Pt q (counts Pt d.part U) ρ ^ θ
 
-/-- **Rankin's patterns' factor of replay block `ρ`** at rate `q` and `θ`, under a split `req` of the served outputs into
-requests: over the patterns `c = (r ↦ lightOf |r| U_r)` of the sets `U` of `ρ`'s proof blocks,
+/-- **Rankin's patterns' factor of replay block `ρ`** at rate `q` and `θ`, under a split `req` of the served outputs
+into requests: over the patterns `c = (r ↦ lightOf |r| U_r)` of the sets `U` of `ρ`'s proof blocks,
 `Σ_c 2^{Σ_r bits(c r)} · max_{U ⊆ ρ of pattern c} (1 − q(1 − e_ρ(U)))^θ`. -/
 noncomputable def rankinFactorPatterns (s : AuditStatement) (Pt : Partition) (d : Design.Two) {R : Type} [Fintype R]
     [DecidableEq R] (req : Fin s.prog.outs.length → R) (q θ : ℝ) (ρ : ℕ) : ℝ :=

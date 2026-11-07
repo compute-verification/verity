@@ -83,6 +83,9 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    on the session's coins (`runs`); and a witness in `Arg`'s relation reveals openings under which its proof block is
    correct (`opens`). A run with two sampled sessions meets it (`Witness.SamplingGeneric.twoSessions_meets`).
 6. **The claims** of a compiled verifier (`Compiled.KS`, `Compiled.KSCount`, `Compiled.Bits`, `Compiled.Efficient`);
+   its completeness (`Compiled.Complete`, of its reference prover at its error), with its contract over the proof
+   system's honest prover (`Compiled.CompleteSessions`: each sampled session is that prover's run, the run accepts when
+   its sessions do, they are the first `K` slots', and the error covers `K` sessions' errors);
    its committed form (`Compiled.KSReg`): the incorrect set of the committed trace (`Freg` at `regVal`, the plurality of
    what the prover's runs' extractions open at its tape, a definition nobody runs, fixed before the window's coins), not
    the extracted one, so its sampling term is the acceptance probability `P_a(Freg)` a monitoring period's pooling
@@ -96,7 +99,8 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    router puts each round in its part, each session's rounds and simulator coins are its slot's, an honest trace's
    session witnesses are in `A`'s relation, and the reference prover sends the composed prover's messages.
 7. **The compiler's statements** (`CompilerKS`, `CompilerKSReg`, `CompilerKSCount`, `CompilerBits`,
-   `CompilerEfficient`, `CompilerZK`): each claim of every compiled verifier that meets the contract, from `Arg`'s.
+   `CompilerEfficient`, `CompilerZK`, `CompilerComplete`): each claim of every compiled verifier that meets the
+   contract, from `Arg`'s.
 8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at the record's deployed decoder (`D.decode`), its assemble step counted
    (`flockAssemble`), its shape the numbers it reads (its coins' and `N₀`), its errors Flock's; `FlockArgKS` says that
    `Flock.KS` is its `Arg.KS`, so `FlockKS` and `FlockKSReg` are `CompilerKS` and `CompilerKSReg` at Flock. They take
@@ -559,6 +563,41 @@ def KSReg (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
         Pr (fun p : Ω × (Fin (L.V.k x) → Coin) => (run H P L.V x p.1 p.2).out = .acc ∧
           L.Freg H P x p.1 ∉ s.design.M (L.part s) δ) ≤ δ + L.εreg H x P
 
+/-! ### Completeness -/
+
+/-- **Complete**, on the statements in scope, when no proof block is faulty (`Sampling.Complete`, generic): the
+reference prover is accepted with probability at least `1 − δ_c` at every tape. -/
+def Complete (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
+  Claims.Complete H L.V L.P (Rhon H L.commit L.parse L.partition) L.Scope (L.δc H)
+
+/-- **The completeness contract** at `H`, over `A`'s honest prover `PA` on tapes `Ω`, the statements it serves
+(`ScopeA`) and its error `δA`: the generic forms of the facts `Claims.Sampling`'s completeness reads of the deployed
+record's reference prover (named in brackets). On a statement in scope, at a witness with no incorrect proof block:
+
+* `honest` (`HonestSessions`): at coins that sample `u`, `u`'s session is the run of `A`'s honest prover, at a statement
+  `A` serves, with as many rounds as the session, and a witness in `A`'s relation, on the session's coins (`coinsOf`),
+  wherever the coins off the session's rounds are fixed;
+* `accepts` (`AcceptsSessions`): the run accepts when every sampled proof block's session that shows accepts;
+* `among` (`SessionsAmong`): every sampled proof block's session is the session of the block sampled at a slot below
+  `K x`: at `K = n_PU` by the contract's `slots`, and at `K = 1` where one session proves every sampled block;
+* `err`: the compiled error is nonnegative and at least `K x` times each such session's error, capped at `1`. -/
+structure CompleteSessions (H : Msg → Msg) (L : Compiled Coin A) {Ω : Type} (PA : A.W → Prover Ω)
+    (ScopeA : Msg → Prop) (δA : Msg → ℝ) (K : Msg → ℕ) : Prop where
+  honest : ∀ x w, L.Scope x → Rhon H L.commit L.parse L.partition x w → ∀ (ω : L.Tape) r u, u ∈ L.checked x r →
+    ∃ (xS : Msg) (wS : A.W) (ωS : Ω), ScopeA xS ∧ A.R xS wS ∧ A.V.k xS = (L.rounds x u).card ∧
+      ∀ r' : Fin (L.V.k x) → Coin, (∀ t ∉ L.rounds x u, r' t = r t) →
+        L.session x u (run H (L.P w) L.V x ω r').seen =
+          some (xS, (run H (PA wS) A.V xS ωS (L.coinsOf x u xS r')).seen)
+  accepts : ∀ x w, L.Scope x → Rhon H L.commit L.parse L.partition x w → ∀ (ω : L.Tape) r,
+    (∀ u ∈ L.checked x r, ∀ xS vS, L.session x u (run H (L.P w) L.V x ω r).seen = some (xS, vS) → vS.out = .acc) →
+      (run H (L.P w) L.V x ω r).out = .acc
+  among : ∀ x w, L.Scope x → Rhon H L.commit L.parse L.partition x w → ∀ (ω : L.Tape) r u, u ∈ L.checked x r →
+    ∃ p < K x, ∃ u', (L.checked x r)[p]? = some u' ∧
+      L.session x u (run H (L.P w) L.V x ω r).seen = L.session x u' (run H (L.P w) L.V x ω r).seen
+  err : ∀ x, 0 ≤ L.δc H x ∧ ∀ w (ω : L.Tape) r u xS vS, Rhon H L.commit L.parse L.partition x w →
+    u ∈ L.checked x r → L.session x u (run H (L.P w) L.V x ω r).seen = some (xS, vS) →
+      K x * min 1 (δA xS) ≤ L.δc H x
+
 end Compiled
 
 /-! ### The masked compiled verifier -/
@@ -759,6 +798,14 @@ public outcome, relative to the published leaf layer, at the composed simulator 
 def CompilerZK : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : ZkArg Coin) (L : ZkCompiled Coin A)
     (H : Msg → Msg), A.ZK H → L.ZkSessions H → L.ZK H
+
+/-- **The sampled compiler preserves completeness**: every compiled sampled verifier that meets the contract and the
+completeness contract over a proof system for proof blocks whose honest prover is complete is complete at its error. -/
+def CompilerComplete : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
+    (H : Msg → Msg) (Ω : Type) [Nonempty Ω] (PA : A.W → Prover Ω) (ScopeA : Msg → Prop) (δA : Msg → ℝ)
+    (K : Msg → ℕ), Claims.Complete H A.V PA A.R ScopeA δA → L.Sessions H → L.CompleteSessions H PA ScopeA δA K →
+      L.Complete H
 
 /-! ## 8. Flock -/
 

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Bridge.LeafMap
+public import Proofs.Flock.Bridge.LeafRoots
 public import Proofs.Flock.Bridge.Draw
 public import Proofs.Flock.Bridge.DrawnLaw
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
@@ -20,10 +21,12 @@ holds at every `own`:
 * the program `Placed.keyProgP`, whose proof blocks read the gates of their keys with public inputs, its outputs
   `Layout.outsOfP`, the binding `ZkHidden.rsZHJP`, the session's tables `planZHJP` and its simulator `simZJA` at
   flock-verify's acceptance at `own` (`AcceptsZKP`, through `decodesZCJH_custodyP`);
-* the sampling design `law` the verifier samples under, sampling `kd` proof blocks (`Bridge.DrawsUnder`): the registration's law object
-  expanded over the strata of the registration's layout, else the sampling design it parses to (`Bridge.drawnLaw`: `Draw.deriveLaw`
-  over `Partition.strata`, else `Draw.flockLaw`, as `OneStage.drawnFrom` samples, `Bridge.drawnFrom_drawnLaw`), and no
-  Bernoulli law (`Bridge.NotBernoulli`). At `PopMatches` it is on those strata (`Bridge.LawOn` at `Bridge.nsOf`,
+* the sampling design `law` the verifier samples under, sampling `kd` proof blocks (`Bridge.lawOf`, `kd` its `Bridge.lawK`): the
+  registration's law object expanded over the strata of the registration's layout, else the sampling design it parses to
+  (`Bridge.drawnLaw`: `Draw.deriveLaw` over `Partition.strata`, else `Draw.flockLaw`, as `OneStage.drawnFrom` samples,
+  `Bridge.drawnFrom_drawnLaw` and `Bridge.drawnFrom_lawOf`), and `subset 0` at a registration that names none; and no
+  Bernoulli law (`Bridge.NotBernoulli`). `Bridge.SampledKSLiveV5R` states the bound at any `law` the verifier samples
+  under (`Bridge.DrawsUnder`). At `PopMatches` it is on those strata (`Bridge.LawOn` at `Bridge.nsOf`,
   `Bridge.lawOn_drawsUnder`): `subset kd` (`All` is `subset n`), or `stratified K` or `work K` over them. The verifier
   samples under it from its own bytes (`Bridge.execSel`, `SampledProofs.Draw.drawUnits` on one stream), and `δ` is that
   sampling design's own miss of a set `B` of proof blocks (`P_a(B)` of `designOf (oneStageOf law)` on `partOf P κ ns`), not a
@@ -199,20 +202,12 @@ def _root_.Flock.Bridge.TransportsLiveV5 : Prop :=
       ∃ d : Claims.Msg, Cd.Opens Claims.Sampling.sha512Msg roots ⟨Bridge.posOf Cc g, vb.bit (vb.val o) g, d⟩ = true
 
 open Classical in
-/-- **`SampledKSLiveV2` at the verifier's public inputs, with or without shared rows, under the sampling design the verifier samples
-under from the registration**: flock-verify `--zk --public-inputs` at `own` accepts and the committed trace fixed at
-registration, read as the sampling witness of the session's statement at the constants `constsOfP` (the constant, the
-zero and every proof block's public input bits) and the sampling design's design (`oneStageOf law`), is outside `RelS` at `δ`, at
-the deployed commitment at the public file's leaf map, with probability at most `δ + ε_ks + ε_bind`. `δ` is not a
-parameter: it is the sampling design's own probability of sampling no proof block of a set `B`, `P_a(B)` of its design on
-`partOf P κ ns` at the strata `ns` of the registration's layout (`nsOf`). At `subset kd` and the first `K₀` proof blocks
-it is `C(n − K₀, kd)/C(n, kd)` (`Bridge.pa_subset_range`), and under `All`, whose sampling design is `subset n`, it is `0` at any
-`B` holding a proof block (`Bridge.pa_all`). Its named assumptions are V2's, with `live-verifier` at `own` and the sampling design
-(`RecordCustodyZKJPLaw`). The sampling design is the one the verifier samples under from the registration's law object and work table
-(`Bridge.DrawsUnder`), on its layout's strata at `PopMatches` (`Bridge.lawOn_drawsUnder`), and no Bernoulli law
-(`Bridge.NotBernoulli`), though `Draw.flockLaw` parses one. The link finders are charged `t'` per run (`cTZC`), one
-run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`. -/
-def SampledKSLiveV5 : Prop :=
+/-- **`SampledKSLiveV5` under the roots guard**: V5's bound without its `ecr/sha-512` term at the roots finder, at
+registrations whose roots at the public file's leaf map fix their domains (`Bridge.RootFixesDomainL`), at any sampling
+design `law` the verifier samples under from the registration (`Bridge.DrawsUnder`). V5 adds that term in place of the
+guard (`Bridge.le_add_ecrBoundL`) and states the bound at `Bridge.lawOf`, and `SampledKSLiveV5Accepted` reads the guard
+off `verify --zk`'s acceptance. -/
+def _root_.Flock.Bridge.SampledKSLiveV5R : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
     (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
@@ -286,9 +281,104 @@ def SampledKSLiveV5 : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
+open Classical in
+/-- **`SampledKSLiveV2` at the verifier's public inputs, with or without shared rows, under the sampling design the verifier samples
+under from the registration**: flock-verify `--zk --public-inputs` at `own` accepts and the committed trace fixed at
+registration, read as the sampling witness of the session's statement at the constants `constsOfP` (the constant, the
+zero and every proof block's public input bits) and the sampling design's design (`oneStageOf law`), is outside `RelS` at `δ`, at
+the deployed commitment at the public file's leaf map, with probability at most `δ + ε_ks + ε_bind`. `δ` is not a
+parameter: it is the sampling design's own probability of sampling no proof block of a set `B`, `P_a(B)` of its design on
+`partOf P κ ns` at the strata `ns` of the registration's layout (`nsOf`). At `subset kd` and the first `K₀` proof blocks
+it is `C(n − K₀, kd)/C(n, kd)` (`Bridge.pa_subset_range`), and under `All`, whose sampling design is `subset n`, it is `0` at any
+`B` holding a proof block (`Bridge.pa_all`). Its named assumptions are V2's, with `live-verifier` at `own` and the sampling design
+(`RecordCustodyZKJPLaw`). The sampling design is the one the verifier samples under from the registration's law object and work table
+(`Bridge.lawOf`: every sample `OneStage.drawnFrom` draws is under it, `Bridge.drawnFrom_lawOf`), with no hypothesis that
+the registration names one: at a registration that names none, which the verifier refuses, `lawOf` is `subset 0`, which
+samples no proof block, so `δ` is 1. It is on its layout's strata at `PopMatches` (`Bridge.lawOn_drawsUnder`), and no
+Bernoulli law (`Bridge.NotBernoulli`), though `Draw.flockLaw` parses one. The link finders are charged `t'` per run
+(`cTZC`), one run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`. No hypothesis is taken on the
+registration's roots: two ports with one root and different domains are a SHA-512 collision that recomputing the roots finds, so the
+bound carries `ecr/sha-512`'s term at that finder (`Bridge.rootsFinderL`, no coins, `Bridge.rootsCostL` SHA-512 calls),
+at least 1 at a registration whose roots expose one and `rootsCostL / 2^256` at any other. -/
+def SampledKSLiveV5 : Prop :=
+  ∀ (n : ℕ) (Reg : Type)
+    (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
+    (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
+    (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
+    (hscope : Discharge.Layout.scopeOkH D.unroll = true)
+    (_hrows : Bridge.RowsOk D.unroll)
+    (_hdup : Flock.Registered.dupName D.unroll = none)
+    -- the statement's descriptor, and the registration's query, whose population is the game's n proof blocks in order
+    (desc : Claims.Msg) (qr : Lean.Json) (_hpop : Bridge.PopMatches desc qr n)
+    -- the registration's law object and work table
+    (lj : Lean.Json) (tb : Option Lean.Json),
+    -- the sampling design the verifier samples under from them, sampling kd proof blocks, and that it is no Bernoulli law
+    let law := Bridge.lawOf desc qr lj tb n
+    let kd := Bridge.lawK law
+    ∀ (hb : Bridge.NotBernoulli law) (hdiv : kd % nTab I = 0)
+    (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
+    (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
+    (wr : (S : Finset (Fin n)) → (R : Reg) →
+      LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length (mPtsOf D.unroll.g (kd / nTab I)) → Discharge.Exec.Transcript)
+    (dg : ByteArray → ByteArray) (N : ℕ)
+    -- the verifier's operating-system bytes, and A3
+    (Ω : Type) [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ) (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256)
+    (_hA3 : Assumptions.UniformRandomBytes Lb src)
+    -- the verify command's tags, and live-verifier at `own` and the sampling design
+    (hTags : TagsOkZHJ I)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr
+      fun _ => law)
+    (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
+    (_hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
+    -- the proof blocks whose miss is `δ`
+    (B : Finset ℕ)
+    (τ : Strategy (auditLive (Bridge.execSel (n := n) src law n) Reg (liveOfZJ dg (planZHJP dj y₀) N wr)))
+    (qF qS : ℝ)
+    -- what the sampling statement carries and `RelS` doesn't read
+    (q : Claims.Sampling.Query),
+    let L := Bridge.execSel (n := n) src law n
+    let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
+    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub).bindingZ
+      (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt hD) hscope hU hpi hpub)
+    let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
+      (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt hD) law kd hdiv dj y₀ wr _ hTags hCust
+        (Bridge.lawSized_size (Bridge.lawSized_lawOf desc qr lj tb n hb) hCust.2)) τ
+    let Xr := XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw
+    -- the deployed commitment's layout: the game's rows, read off the circuit file, at the public file's leaf map
+    let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
+    let Lm := Bridge.LeafMap.ofPublic D.unroll pub n
+    let rows : Fin Cc.N → Option Bridge.RowAt := fun g =>
+      (Discharge.HiddenExec.rowOfHP D.unroll hU n pi (Discharge.Layout.outsOfP D.unroll hU n pi) g).map fun r =>
+        ⟨r.2.1.val, Lm.ref r.2.1.val r.1.val, Discharge.Layout.portRowW D.unroll r.2.1, r.2.2.val⟩
+    let roots := Bridge.rootsOfL D.unroll Lm
+    let Cd := Bridge.commitDepL Cc rows D.unroll Lm roots
+    -- the circuit's constants and every proof block's public input bits, public
+    let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOfP D.unroll hU n pi pub g
+    -- the sampling design's design, the registration's strata, and the sampling design's own miss of `B`
+    let r := Properties.SampledProofs.oneStageOf law
+    let ns := Bridge.nsOf desc qr
+    let δ : ℝ := (Bridge.designOf r).Pa (Bridge.partOf P κ ns) B
+    -- cr/sha-512 for the knowledge finders of each table the prover's session runs
+    (∀ ω j, TableCRZ execArith hs512 (planZHJP dj y₀ (L.draw ω) (reg σ)) j
+      (zcStrat execArith hs512 (planZHJP dj y₀) (cont σ ω)) qF qS) →
+    -- ecr/sha-512 for the prover's link finders
+    LinkCRZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw M t' →
+    prob (fun o => LiveAcceptsZKP I own o ∧
+        ¬ Claims.Sampling.RelS Claims.Sampling.sha512Msg Cd δ (Bridge.stmtOf P κ r desc q roots) (Bridge.partOf P κ ns)
+          (Bridge.witDep Cc Cd Claims.Sampling.sha512Msg roots Xr))
+        (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤
+      ENNReal.ofReal δ +
+        ksAvgStrictZ (planZHJP dj y₀) L k qF qS (reg σ) +
+        ENNReal.ofReal ((∑ p : vb.Pos,
+            (Fintype.card (ΩcZ execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
+          (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ)) +
+        Claims.ecrBound Claims.Sampling.sha512Msg (Bridge.rootsFinderL D.unroll Lm) (Bridge.rootsCostL D.unroll Lm)
+
 /-- **V5's assembly**: canonical transport at public inputs and M1's core over `RightRegZc` turn `EndToEndHiddenV5` at
-the incorrect proof blocks into `SampledKSLiveV5`: outside `RelS` at `δ`, the incorrect proof blocks' `P_a` is at most `δ`. -/
+the incorrect proof blocks into `SampledKSLiveV5R`: outside `RelS` at `δ`, the incorrect proof blocks' `P_a` is at most `δ`. -/
 def _root_.Flock.Bridge.AssemblyTargetV5 : Prop :=
-  Bridge.TransportsLiveV5 → Bridge.FaultyRightTargetC → Bridge.EndToEndHiddenV5 → SampledKSLiveV5
+  Bridge.TransportsLiveV5 → Bridge.FaultyRightTargetC → Bridge.EndToEndHiddenV5 → Bridge.SampledKSLiveV5R
 
 end Flock.Guarantees
