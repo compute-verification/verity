@@ -300,15 +300,36 @@ theorem sound_hashUint (tag : List UInt8) (head : List (List Byte)) (x : List Li
 
 /-! ## The leaf -/
 
-theorem FRAME_length : FRAME.length = 33 := by decide +kernel
+/-- A string's UTF-8 byte count from its characters: a literal's then reduces by `simp`, where `decide` can't see
+`String.toUTF8`'s body from a module. -/
+theorem utf8ByteSize_eq_sum (s : String) : s.utf8ByteSize = (s.toList.map Char.utf8Size).sum := by
+  rw [← String.ofList_toList (s := s)]
+  generalize s.toList = l
+  induction l with
+  | nil => simp
+  | cons c l ih =>
+    rw [String.ofList_cons, String.utf8ByteSize_append, String.utf8ByteSize_singleton, ih]
+    simp
+
+theorem length_utf8 (s : String) : s.toUTF8.data.toList.length = (s.toList.map Char.utf8Size).sum := by
+  rw [Array.length_toList, ByteArray.size_data, String.toUTF8_eq_toByteArray, String.size_toByteArray,
+    utf8ByteSize_eq_sum]
+
+theorem FRAME_length : FRAME.length = 33 := by
+  rw [FRAME, List.length_append, length_utf8]
+  simp [Char.utf8Size]
 
 theorem LEAF_eq : LEAF = Hash.utf8 "leaf" := rfl
 
 theorem NODE_eq : NODE = Hash.utf8 "node" := rfl
 
-theorem LEAF_length : LEAF.length = 4 := by decide +kernel
+theorem LEAF_length : LEAF.length = 4 := by
+  rw [LEAF, length_utf8]
+  simp [Char.utf8Size]
 
-theorem NODE_length : NODE.length = 4 := by decide +kernel
+theorem NODE_length : NODE.length = 4 := by
+  rw [NODE, length_utf8]
+  simp [Char.utf8Size]
 
 theorem bytesV_single (z : Var → Bool) (b : Byte) : bytesV z [b] = [byteV z b] := rfl
 
@@ -481,7 +502,7 @@ theorem sound_nodeHash (n : ℕ) (domain : List Word) (level : Byte) (index : Li
   rw [bytesV_msgData, ← frame_eq]
   simp only [List.cons_append, List.nil_append, List.map_cons, List.map_nil, bytesV_bytesW z hd.2,
     bytesV_bytesW z hls.2, bytesV_bytesW z hrs.2, bytesV_uintBytes, bytesV_single, ← bytes_wordsDigest z hd,
-    ← bytes_wordsDigest z hls, ← bytes_wordsDigest z hrs, hL, hR, uint_eq, NODE_eq] <;> rfl
+    ← bytes_wordsDigest z hls, ← bytes_wordsDigest z hrs, hL, hR, uint_eq, NODE_eq]
 
 /-! ## The climb -/
 
