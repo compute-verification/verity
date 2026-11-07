@@ -4,9 +4,9 @@ public import Proofs.Flock.SpotFlock.Numbers
 public import Proofs.Flock.SamplingGeneric.TwoDeployed
 
 /-!
-# SPOT-Flock's two-stage contract at its deployed code
+# SPOT[Flock]'s two-stage contract at its code
 
-`SpotFlock.sessionsTwo_spot`: the two-stage compiler's contract (`CompiledTwo.Sessions`) at the deployed two-stage code
+`SpotFlock.sessionsTwo_spot`: the two-stage compiler's contract (`CompiledTwo.Sessions`) at SPOT[Flock]'s two-stage code
 (`SpotFlock.code h`), Flock's masked record and SHA-512, the `sessions` of L3's two-stage refinement. It is
 `SamplingDeploy.sessionsTwo_compiled` at the code's facts:
 
@@ -25,7 +25,7 @@ namespace SpotFlock
 
 variable (h : Held)
 
-/-- **SPOT-Flock's two-stage contract at its deployed code**, from A3 at the coins' bytes and the sessions' openings. -/
+/-- **SPOT[Flock]'s two-stage contract at its code**, from A3 at the coins' bytes and the sessions' openings. -/
 theorem sessionsTwo_spot (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
