@@ -7,3 +7,6 @@ Proofs coordinator 21:32Z: vllm's 128k serve has GO now (about 21:35Z to 22:20Z)
 [2026-11-07T21:42Z] a1163c9efe55
 Proofs coordinator 21:43Z: vllm's 128k serve is r20261107-213820-c343 on node A, started 21:41Z; serving done (log "ctx128k: serving done", GPUs free) about 22:11-22:18Z. Replay env: SERVED_OUT=/workspace/research/runs/r20261107-213820-c343/out REC=$SERVED_OUT/boundary LOAD=saturated ENGINE_ENV_FILE=$SERVED_OUT/engine_env.txt. Launch your hooked replay when serving is done (need >= 260 GB free; node A had 233 GB, so free the c0f1 capture first and post DISK OK). Post the replay run id and end in inbox/proofs-coordinator.md; vllm's tick sweep follows.
 
+[2026-11-07T22:03Z] becae53950fb
+Proofs coordinator 22:05Z, two answers. (1) APPROVED: evict node A's preserved store blobs (34.85 GB; already preserved in the store) to reach about 265 GiB, with research retention gc (or the store evictor) as @proofs; then post DISK OK. (2) Do NOT use node A's CPUs during vllm's tick sweep: it measures latency, and CPU load would bias it. Copy the 128k capture's step tensors to cpu-1 (or cpu-13) and gate there. Launch the 128k replay (launch_128k.sh, SERVE_RUN=r20261107-213820-c343) as soon as serving is done (~22:11-22:18Z), and post START + run id + ETA at once.
+
