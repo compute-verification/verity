@@ -245,6 +245,7 @@ theorem foldr_keepStep (l : List (String × Json)) :
   | cons x xs ih =>
     obtain ⟨hs, ho⟩ := ih
     simp only [List.foldr_cons]
+    generalize List.foldr keepStep (∅, #[]) xs = acc at hs ho ⊢
     unfold keepStep
     split
     · rename_i h
@@ -254,13 +255,12 @@ theorem foldr_keepStep (l : List (String × Json)) :
         by_cases hk : x.1 = k
         · subst hk; simp [h]
         · simp [hk]
-      · rw [ho, keepLast, if_pos h]
+      · simp [ho, keepLast, h]
     · rename_i h
       rw [hs] at h
       refine ⟨fun k => ?_, ?_⟩
       · simp only [Std.HashSet.contains_insert, hs, List.any_cons]
-      · simp only [Array.toList_push, List.reverse_append, ho, keepLast, h]
-        simp
+      · simp [Array.toList_push, ho, keepLast, h]
 
 theorem keepLast_of_pairwise {l : List (String × Json)} (h : l.Pairwise (fun a b => a.1 ≠ b.1)) :
     keepLast l = l := by
@@ -365,8 +365,9 @@ theorem any_groupBy (b : Array (String × Json)) (k : String) (P : Json → Bool
     rw [List.foldl_cons, ih, Std.HashMap.getElem?_insert]
     by_cases hk : k' = k
     · subst hk
-      simp [Array.any_push, Bool.or_assoc]
-    · simp [hk, Ne.symm hk]
+      simp [Bool.or_assoc]
+    · rw [beq_false_of_ne (Ne.symm hk)]
+      simp [hk]
 
 /-- `sameDict`, each key's values in `b` a hash lookup. -/
 def sameDictFast (a b : Array (String × Json)) : Bool :=
@@ -382,10 +383,6 @@ def sameDictFast (a b : Array (String × Json)) : Bool :=
   obtain ⟨k, v⟩ := x
   dsimp only
   rw [any_groupBy]
-  congr 1
-  funext y
-  obtain ⟨k', v'⟩ := y
-  rfl
 
 /-- `matchesPublic` on `byPortFast` and `sameDictFast`: linear in the registration's roots, up to the lookups. -/
 def matchesPublicFast (rec scheme roots domains population : Json) : Check := Id.run do
