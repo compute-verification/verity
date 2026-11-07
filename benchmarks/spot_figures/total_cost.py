@@ -30,7 +30,10 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
 * `every_block` (C): serving commits every proof block's outputs, and the audit samples them one-stage; its tax is a
   lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits by
   the same count, which Lean states for two-stage only; infiltration is its write form (the K incorrect blocks the plan
-  detects, each the widest block's bits) and skipped work the work target's plan.
+  detects, each the widest block's bits) and skipped work the work target's plan.  Lean checks each of its designs
+  (`plancheck`, unless `run`'s `lean` is off): a point's `lean` says it did, its exfiltration plots the bits Lean
+  certifies (at least the planner's), and a refused design is an error.  A point without a design (the trivial bound,
+  or a count of every proof block, which samples none) has `lean` None.
 
 Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
@@ -58,6 +61,7 @@ from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
+from verity.core.protocols.sampled_proofs import plancheck
 from verity.core.protocols.sampled_proofs.optimize import Cell, leak_count, two_stage_design, two_stage_price
 from verity.ml.circuits.partition_v2 import unit_class
 
@@ -316,12 +320,30 @@ def _plan(row: dict | None) -> dict | None:
     return None if row is None else f1._plan(row)
 
 
+def lean_one_stage(m: f1.Model, leak: dict, work: dict) -> tuple[bool | None, bool | None, float]:
+    """Lean's check (`plancheck`) of the every-block line's one-stage designs at one budget, `f1.point`'s `leak` and
+    `work`: whether it checked the leak design and the work design, and the exfiltration count to plot, the bits Lean
+    certifies rounded up to a float where it checked the leak design and the planner's elsewhere.  A point at the
+    trivial bound, or whose count is every proof block (which samples none), has no design to check (None); a design Lean
+    refuses is an error."""
+    designs = {}
+    if not leak["capped"] and leak_count(m.dot, leak["bound"]) < m.dot.units:
+        designs["leak"] = plancheck.leak_design(m.dot, leak["bound"], m.delta)
+    if not work["capped"]:
+        designs["work"] = plancheck.work_design(m.dot_work, work["bound"], m.delta)
+    got = dict(zip(designs, plancheck.check(list(designs.values()))))
+    if ("leak" in got and got["leak"] is None) or got.get("work") is False:
+        raise plancheck.LeanError(f"Lean refuses the planner's one-stage design at {m.scope.name}: {designs}")
+    count = plancheck.upper(got["leak"]) if "leak" in got else leak["bound"]
+    return ("leak" in got) or None, ("work" in got) or None, count
+
+
 def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
     exfiltration, which of the count and the served bits binds, the requests a registration samples and its cap (`REG`),
     and the computed share of its design's proving.  A two-stage line's `form` and its registration's replay blocks
-    (`span`) come with it."""
-    name, m, g, budget, computed, form, span = job
+    (`span`) come with it; with `lean`, Lean's check of a one-stage line's designs (`lean_one_stage`)."""
+    name, m, g, budget, computed, form, span, lean = job
     served = f1.served_total(m)
     if name == "every_block":
         total_bits = m.scope.requests * sum(c.n * c.bits for c in m.cells)
@@ -329,11 +351,16 @@ def _point(job: tuple) -> dict:
         work = f1.point(m, "one-stage", "work", budget)
         written = total_bits if leak["row"] is None else min(m.dot.out_bits * leak_count(m.dot, leak["bound"]),
                                                              total_bits)
-        return {"exfiltration": {"y": min(leak["bound"], served), "count": leak["bound"],
-                                 "binds": "served" if served <= leak["bound"] else "count", "plan": _plan(leak["row"])},
-                "infiltration": {"y": written, "plan": _plan(leak["row"])},
+        count, checked = leak["bound"], {"leak": {}, "work": {}}
+        if lean:
+            on_leak, on_work, count = lean_one_stage(m, leak, work)
+            checked = {"leak": {"lean": on_leak}, "work": {"lean": on_work}}
+        return {"exfiltration": {"y": min(count, served), "count": count,
+                                 "binds": "served" if served <= count else "count", "plan": _plan(leak["row"]),
+                                 **checked["leak"]},
+                "infiltration": {"y": written, "plan": _plan(leak["row"]), **checked["leak"]},
                 "skipped_work": {"y": work["bound"], "binds": "trivial" if work["capped"] else "count",
-                                 "plan": _plan(work["row"])}}
+                                 "plan": _plan(work["row"]), **checked["work"]}}
     row = two_stage_design(g.cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
                            served=m.served, union=form == "patterns", registration=span)
     return {"exfiltration": {"y": min(row["bound"], served), "count": row["bound"],
@@ -486,10 +513,11 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 
 
 def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-        workers: int = 1) -> dict:
-    """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes."""
+        workers: int = 1, lean: bool = True) -> dict:
+    """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes, with
+    Lean checking the one-stage line's designs unless `lean` is off."""
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
-        return _run(model_name, scope_names, request, pool.map if pool else map)
+        return _run(model_name, scope_names, request, pool.map if pool else map, lean)
 
 
 def _lines(model_name: str, request: str) -> tuple:
@@ -513,7 +541,7 @@ def _lines(model_name: str, request: str) -> tuple:
     return sc, c, cuts, confs, inputs, lines, computed
 
 
-def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each) -> dict:
+def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each, lean: bool) -> dict:
     sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request)
     tax = taxes(spot_cards.load("serve_tax", model_name), tuple(confs))
     part, fill, h = lines["tokens"]
@@ -534,7 +562,7 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             g = None if name == "every_block" else grain(m, name, layers, boundary, tokens)
             span = 0.0 if g is None or conf.registration is None else (
                 g.replay_blocks * registration_gpu_seconds(conf.registration, c) / s.gpu_seconds)
-            plans.append((s, name, conf, [(name, m, g, beta * s.gpu_seconds, computed[name], conf.form, span)
+            plans.append((s, name, conf, [(name, m, g, beta * s.gpu_seconds, computed[name], conf.form, span, lean)
                                           for beta in betas]))
         bases[s.name] = base
     points = iter(list(each(_point, [job for *_, jobs in plans for job in jobs])))
@@ -544,8 +572,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             rows = [p[panel] for p in pts]
             series[panel].append({"scope": s.name, "config": name, "beta": betas,
                                   "x": [tax[name]["tax"] + b for b in betas], "y": [r["y"] for r in rows],
-                                  **{k: [r[k] for r in rows] for k in ("binds", "count", *REG, "computed_proving")
-                                     if k in rows[0]},
+                                  **{k: [r[k] for r in rows]
+                                     for k in ("binds", "count", *REG, "computed_proving", "lean") if k in rows[0]},
                                   "plan": [r["plan"] for r in rows]})
     out_scopes = {s.name: {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
                            "gpu_seconds": s.gpu_seconds, "requests": s.requests,
@@ -559,6 +587,7 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                          "gpu_seconds": registration_gpu_seconds(r, c),
                          "requests": per_gpu_s * registration_gpu_seconds(r, c)} for r, label in REGISTRATIONS.items()}
     out = {"schema": SCHEMA, "model": model_name, "request": request, "overhead": h, "registrations": registrations,
+           "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK)} if lean else None,
            "overhead_label": sc["proof_overhead"]["value"]["label"], "betas": betas, "budgets": c["budgets"].value,
            "served_bits_request": c["served_bits"].value, "footprint_bits": [c["served_bits"].value, boundary],
            "configurations": {n: conf.__dict__ | {"panels": list(conf.panels), "overhead": lines[n][2],
@@ -594,7 +623,7 @@ def _bound(line: tuple, scale: float, beta: float) -> float:
     name, i, (tb, fl, oh), s, computed, conf, gpu_s = line
     m = f1.model(i, tb, s, oh * scale, fl)
     g = Grain(m.replay.replay_blocks, m.cells, m.replay.cost, m.served)
-    job = (name, m, g, beta * s.gpu_seconds, computed, conf.form, g.replay_blocks * gpu_s / s.gpu_seconds)
+    job = (name, m, g, beta * s.gpu_seconds, computed, conf.form, g.replay_blocks * gpu_s / s.gpu_seconds, False)
     return _point(job)["exfiltration"]["y"]
 
 

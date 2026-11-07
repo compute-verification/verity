@@ -13,6 +13,7 @@ arithmetic. These properties say what a check that passes establishes, against t
 * `LeakCheckSound`: when `leakBound d` returns `v`, sampling the design's `units` units independently with probability
   `num / den` (`Law.bernoulli`) certifies at most `v` bits at `delta`, every unit exporting at most `width` bits
   (`CertifiesLeak`).
+* `LeakCountSound`: there, more than `count` incorrect units escape that sampling with probability below `delta`.
 * `WorkCheckSound`: when `checkWork d` accepts, every assignment of units to the design's strata, each unit sampled
   independently with its stratum's probability (`Law.bernoulliOf`), meets the target: every set of incorrect units doing
   work at least `target` escapes with probability at most `delta` (`MeetsTarget`).
@@ -32,6 +33,13 @@ certifies at most `v` bits at `delta`. -/
 def LeakCheckSound : Prop :=
   ∀ (d : Leak) (v : ℚ), leakBound d = some v →
     ∃ _ : NeZero d.den, CertifiesLeak (Law.bernoulli d.units d.num d.den) (fun _ => d.width) d.delta v
+
+/-- **The leak check certifies its count**: a design `leakBound` answers has `den > 0`, and more than `count` incorrect
+units escape its Bernoulli sampling with probability below `delta`, the count a write bound of `width · count` bits
+reads. -/
+def LeakCountSound : Prop :=
+  ∀ (d : Leak) (v : ℚ), leakBound d = some v →
+    ∃ _ : NeZero d.den, (Law.bernoulli d.units d.num d.den).miss (d.count + 1) < ENNReal.ofReal d.delta
 
 /-- **The work check is sound**: a design `checkWork` accepts has `den > 0`, and however `n` units are assigned to its
 strata, sampling each with its stratum's probability meets the target `target` at `delta`. -/

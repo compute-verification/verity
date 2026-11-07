@@ -1,6 +1,7 @@
 module
 
 public import Properties.SampledProofs.PlanCheck
+import Proofs.Flock.Soundness.Audit.Law
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Exfil.Bernoulli
 import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Laws
 import Mathlib.Analysis.Complex.ExponentialBounds
@@ -8,7 +9,7 @@ import Mathlib.Analysis.Complex.ExponentialBounds
 /-!
 # The planner's checker is sound
 
-`Properties.SampledProofs.LeakCheckSound` and `WorkCheckSound`, from four facts about `SampledProofs.PlanCheck`'s
+`Properties.SampledProofs.LeakCheckSound`, `LeakCountSound` and `WorkCheckSound`, from four facts about `SampledProofs.PlanCheck`'s
 arithmetic:
 
 * `expSum_cast`, `expCovers_sound`: `expSum x N` is the exponential series' partial sum, at most `e^x` for `x ≥ 0`
@@ -18,7 +19,7 @@ arithmetic:
 * `locBits_le_upper`: `locBits n K ≤ locBitsUpper n K`, with `log₂ e ≤ log2eUp` from `ln 2 > 0.6931471803`;
 * `rateCovers_sound`: a design's `rateCovers` gives `(1 − num/den)^(count + 1) < delta`, since `1 − q < e^{−q}`.
 
-The leak check is then `bern_certifies`, and the work check the per-unit escape `∏ (1 − q_u) ≤ e^{−λ ∑ w_u / C}`.
+The leak check is then `bern_certifies`, its count `bern_miss_lt`, and the work check the per-unit escape `∏ (1 − q_u) ≤ e^{−λ ∑ w_u / C}`.
 Each check passes at a design the planner emits (`_honest`), and each conclusion fails at a design a check accepting
 everything would pass (`_nontrivial`).
 -/
@@ -221,6 +222,35 @@ theorem leakCheckSound : LeakCheckSound := by
   push_cast
   linarith
 
+/-- Independent samples at `num / N` let more than `K` units escape with at most `(1 − num/N)^(K + 1)`. -/
+theorem bern_miss_lt {n num N K : ℕ} [NeZero N] (h : num ≤ N) {δ : ℝ}
+    (hesc : (1 - (num : ℝ) / N) ^ (K + 1) < δ) : (Law.bernoulli n num N).miss (K + 1) < ENNReal.ofReal δ := by
+  have hN : (0 : ℝ) < N := by exact_mod_cast Nat.pos_of_ne_zero (NeZero.ne N)
+  have ht0 : 0 ≤ 1 - (num : ℝ) / N := by
+    rw [sub_nonneg, div_le_one hN]
+    exact_mod_cast h
+  have ht1 : 1 - (num : ℝ) / N ≤ 1 := by
+    have : 0 ≤ (num : ℝ) / N := by positivity
+    linarith
+  have hδ : 0 < δ := lt_of_le_of_lt (pow_nonneg ht0 _) hesc
+  have hbig : ∀ B : Finset (Fin n), K + 1 ≤ B.card →
+      (Law.bernoulli n num N).escape B ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) := by
+    intro B hB
+    rw [ENNReal.le_ofReal_iff_toReal_le (ne_top_of_le_ne_top ENNReal.one_ne_top (Law.escape_le_one _ B))
+      (pow_nonneg ht0 _), FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_escape_toReal h]
+    exact pow_le_pow_of_le_one ht0 ht1 hB
+  have hmiss_le : (Law.bernoulli n num N).miss (K + 1) ≤ ENNReal.ofReal ((1 - (num : ℝ) / N) ^ (K + 1)) :=
+    iSup₂_le fun B hB => hbig B hB
+  exact lt_of_le_of_lt hmiss_le ((ENNReal.ofReal_lt_ofReal_iff hδ).2 hesc)
+
+theorem leakCountSound : LeakCountSound := by
+  intro d v h
+  unfold leakBound at h
+  split_ifs at h with hc
+  obtain ⟨hden, hnum, hrate⟩ := hc
+  have : NeZero d.den := ⟨hden⟩
+  exact ⟨inferInstance, bern_miss_lt hnum (rateCovers_sound hden hnum hrate)⟩
+
 /-! ## The work check -/
 
 theorem lamOf_none {den : ℕ} {C : ℚ} : ∀ {ss : List Rate}, lamOf den C ss = none →
@@ -230,7 +260,7 @@ theorem lamOf_none {den : ℕ} {C : ℚ} : ∀ {ss : List Rate}, lamOf den C ss 
     intro s hs hsn
     by_cases hr : r.num < den ∧ 0 < r.work
     · simp [lamOf, hr] at h
-    · rw [lamOf, if_neg hr] at h
+    · simp only [lamOf, hr, ↓reduceIte] at h
       rcases List.mem_cons.1 hs with rfl | hs
       · by_contra hw; exact hr ⟨hsn, lt_of_not_ge hw⟩
       · exact lamOf_none h s hs hsn
@@ -346,6 +376,24 @@ theorem leakCheckSound_nontrivial :
   have : (0 : ℝ) ≤ H := Nat.cast_nonneg H
   push_cast at hℓ
   linarith
+
+/-- The leak check passes at the design that samples every proof block, which certifies no incorrect one. -/
+theorem leakCountSound_honest :
+    (leakBound { units := 64, width := 1, num := 1, den := 1, count := 0, delta := 1 / 100 }).isSome = true := by
+  decide +kernel
+
+/-- A unit never sampled always escapes: the count's conclusion fails where a check accepting everything would pass. -/
+theorem leakCountSound_nontrivial :
+    ∀ _ : NeZero (1 : ℕ), ¬ (Law.bernoulli 1 0 1).miss (0 + 1) < ENNReal.ofReal ((1 / 2 : ℚ) : ℝ) := by
+  intro _ h
+  have he := Law.escape_le_miss (Law.bernoulli 1 0 1) (K := 0 + 1) (B := {0}) (by simp)
+  have h1 : ((Law.bernoulli 1 0 1).escape {0}).toReal = 1 := by
+    rw [FlockSoundness.Audit.Partitioning.SecurityProofs.Exfil.bern_escape_toReal (Nat.zero_le _)]
+    simp
+  have hlt := lt_of_le_of_lt he h
+  have := (ENNReal.toReal_lt_toReal (ne_top_of_lt hlt) ENNReal.ofReal_ne_top).2 hlt
+  rw [h1, ENNReal.toReal_ofReal (by norm_num)] at this
+  norm_num at this
 
 /-- The work check passes at a planner's design: two strata at rates proportional to their work. -/
 theorem workCheckSound_honest :
