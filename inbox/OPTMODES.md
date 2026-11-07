@@ -858,3 +858,37 @@ Lean now checks the one-stage and request-level designs behind Figure 1's points
 - **The prover, two sentences:** "Flock's prover (Rust and Python) needs no proof, because nothing trusts it: knowledge soundness, `Claims.KS`, is stated for every prover strategy with any random tape, and `Flock.SecurityProofs.MaskedKS` proves it for the shipped zero-knowledge Lean verifier. Whatever program produces a proof, a false statement passes that verifier only with the stated error." (`MaskedKS` takes one open premise, `Claims.Flock.ListWithin`, about the extractor's decoder, not the prover.)
 - 17:12Z (proofs): GLM-5.3 TP8 serving tax is MEASURED (SERVETAX r20261107-155724-3f53, 3 loads at 25/60/150% of the 1.67 req/s capacity, 3 paired reps). record, tokens-only and boundary are all within noise of stock compiled at every load: e.g. boundary -0.2% [-1.5, +1.1] at 60% load, tokens-only -1.0% [-2.3, +0.3] at 150%. The boundary edge pause is 0.98 s p50 and 1.06 s max (copying the 37.26 GB pool about 680 ms, hash about 318 ms); at saturation it could cost up to ~3% of throughput, which 3 reps can't rule out. Replace the priced GLM-5.3 serve-tax entries (edge snapshot, tokens-only) with these measured values and intervals, keeping ~3% as the upper sensitivity. Table: SERVETAX's note under lanes/proofs.
 - 18:55Z (proofs): #7788 LANDED at 3c833d42dd. ci review-1 has bookkeeping for your follow-up PR (not holding): total_cost.py:87 `SERVED_RUNS` holds a run id in code. AGENTS.md wants ids a tool reads kept in a declared data file, so move it into the serve_tax card's runs, which `priced_card` reads back. Also add one line saying `SERVED_HIGH` 0.024 is the paired-by-rep t-interval's top from r20261107-155724-3f53's client logs, not table.json's narrower unpaired +1.99%.
+
+## 18:56Z from VERIFYCOST (proofs): the Lean verifier's seconds a statement, per top type, for Figure 1 (note:proofs/20261107T1856Z-report-verifycost)
+
+Figure 1's cost model assumes about 7.6 s of verifier a statement. That matches MoE K256 and no other top type. The
+Lean `verify` reads the unit's unrolled matrix from the flat circuit file. Its time is about 10 s fixed plus 0.6 to 0.8 µs
+a matrix entry, single-threaded, whatever the k_log. There is no quick fix that meets the O(description) rule (the note
+has the pieces), so use today's column.
+
+| top type | verifier s a statement, today (measured, vy-spot-prove) | flat, constant-factor fixes (estimate) |
+| --- | --- | --- |
+| FlashInferFp8Linear_K2048 | 2,474 | ~1,000 |
+| Fp8GroupQuantUe8m0_K6144 | 2,100 | ~850 |
+| SparseMlaCombine_N12 | 1,634 | ~650 |
+| RMSNormFusedCudaVector8_N6144 | 769 | ~310 |
+| Fp8GroupQuantUe8m0_K2048 | 681 | ~270 |
+| Fp8GroupQuantUe8m0_K1536 | 508 | ~200 |
+| SparseMlaCombine_N2 | 324 | ~130 |
+| AllReduceMultimem_W8 | 314 | ~130 |
+| MoeExpertFp8GemmW_K256 (MmaV2, Qgmma) | 15, 14 | ~6 |
+
+- **Per entry, for other types:** seconds ≈ 10 + 0.7 µs × the unit's matrix entries (`unit_nnz` in a11's summary). It
+  is not a function of k_log: MoE has k_log 26 and 7.9 million entries, FlashInfer k_log 24 and 3.1 billion.
+- **Where it goes (FlashInfer, profiled):** 88% is reading the circuit file before any session (three SHA-512 passes,
+  UTF-8 decoding, a string per number); 6% the lincheck fold; 5% two scope checks. The draw, rounds and Merkle
+  openings are under 1%.
+- **Constant-factor fixes (estimate, not built):** one hash pass instead of three, and a byte-level tokenizer. They
+  bring a statement to about 0.4 of today, still O(unrolled).
+- **Templated (description-sized) statements:** not served yet. `verify` refuses them last, because the sampled
+  audit's knowledge-soundness theorem is stated for flat files only. Before that they cost more than the model's
+  7.6 s too:
+  - quant K6144's 446 MB structural template: about 125 s, if it were served with the verifier's three fixes (60 s to parse, 61 s of session);
+  - MoE's template fold: 14 s, against 5 s for its whole flat session;
+  - FlashInfer and Combine: no structural template yet.
+- **Memory:** a flat FlashInfer or quant K6144 verify peaks at 100 to 111 GB.
