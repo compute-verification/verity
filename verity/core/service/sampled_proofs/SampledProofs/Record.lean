@@ -366,8 +366,9 @@ theorem any_groupBy (b : Array (String × Json)) (k : String) (P : Json → Bool
     by_cases hk : k' = k
     · subst hk
       simp [Bool.or_assoc]
-    · rw [beq_false_of_ne (Ne.symm hk)]
-      simp [hk]
+    · have h1 : (k' == k) = false := beq_false_of_ne hk
+      have h2 : (k == k') = false := beq_false_of_ne (Ne.symm hk)
+      simp [h1, h2]
 
 /-- `sameDict`, each key's values in `b` a hash lookup. -/
 def sameDictFast (a b : Array (String × Json)) : Bool :=
