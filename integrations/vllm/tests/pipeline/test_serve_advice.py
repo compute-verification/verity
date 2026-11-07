@@ -35,8 +35,6 @@ from verity_vllm.pipeline.serve_admit import Delta
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered, compile_steps
 
-pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
-
 C = ADV.registered_compiler("test-compiler", "ab" * 64)
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,

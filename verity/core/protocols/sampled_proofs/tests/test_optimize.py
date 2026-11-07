@@ -3,7 +3,8 @@ bound, `Achievability`'s rates at zero statement cost, the frontier under Flock'
 between a partition and a covering, serving's commitment (per proof block, and the fixed serve-time total with its overlaps), the
 weight classes' weights, the sensitivity queries, and the two-stage design: its exfiltration bound against the
 admissible sets' count enumerated and the adversary's best attack at scale, uncapped and capped at the bits a replay
-block serves, its proving price, and the width-stratified design against the uniform one."""
+block serves, its proving price with its statements a replay block's or a registration's padded to its public cap, and the
+width-stratified design against the uniform one."""
 
 from __future__ import annotations
 
@@ -25,10 +26,11 @@ from verity.core.protocols.sampled_proofs.optimize import (HM96_ANDS, PROVING_ON
                                                            for_budget, for_target, frontier,
                                                            grain_costs, grain_optimum, leak_count, leak_draws, ln_bound,
                                                            ln_upper, loc_bits, max_harm, max_harm_check, met_replay,
-                                                           needs_benchmark, overlaps, perturb, pinned_ands, replay_cost,
-                                                           row_ands, sensitivity, sqrt_grain, template_cost, touched,
-                                                           two_stage_design, two_stage_exfil, two_stage_price, weigh,
-                                                           work_law)
+                                                           needs_benchmark, overlaps, perturb, pinned_ands,
+                                                           OVERFLOW, registration_cap, replay_cost, row_ands,
+                                                           sensitivity, sqrt_grain, template_cost, touched,
+                                                           two_stage_design, two_stage_exfil, two_stage_price,
+                                                           two_stage_statements, weigh, work_law)
 from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX
 
 SLACK = 1 + 2.0 ** -18
@@ -677,6 +679,71 @@ def test_a_sampled_replay_block_proves_each_stratums_k_in_its_types_statements()
     assert two_stage_price(cells, {0: 5}) == (5.0, 4.0 + 3.0, 7.0 + 10.0 + 6.0)
     assert two_stage_price(cells, {0: 20}) == (10.0, 8.0 + 6.0, 14.0 + 20.0 + 6.0)
     assert two_stage_price(cells, {0: 1}) == pytest.approx((1.0, 0.8 + 0.6, 1.4 + 8.0 + 1.2))
+
+
+def test_a_registrations_cap_is_past_its_sample_but_for_the_overflow():
+    """The registration's public cap K0: the binomial count it samples is past it with probability at most `OVERFLOW`
+    (summed exactly), at least one, at most the registration, and within a few of the least such cap."""
+    def tail(n: int, q: float, j: int) -> float:
+        return fsum(exp(lgamma(n + 1) - lgamma(i + 1) - lgamma(n - i + 1) + i * log(q) + (n - i) * log1p(-q))
+                    for i in range(j, n + 1))
+
+    n = 4000
+    for sampled in (1e-6, 0.02, 1.0, 33.0, 600.0):
+        top = registration_cap(sampled, n)
+        assert 1 <= top <= n and tail(n, sampled / n, top + 1) <= OVERFLOW
+        least = next(j for j in range(n) if tail(n, sampled / n, j + 1) <= OVERFLOW)
+        assert top - max(1, least) <= max(3, 0.15 * least), (sampled, top, least)
+    assert registration_cap(0.0, n) == 0 and registration_cap(5.0, 3) == 3
+
+
+def test_a_registrations_statements_are_padded_to_its_cap_and_paid_whatever_it_samples():
+    """A type's registration statements hold K0 sampled replay blocks' blocks, split into sessions of at most its cap
+    padded to one size, their fixed costs and padded blocks paid by each registration and so over its Q sampled replay
+    blocks; a type takes them only where they cost less than its own, and without a registration it never does."""
+    cells = [Cell(8, 16.0, prove=1.0, fixed=10.0, cap=4), Cell(2, 16.0, prove=3.0, fixed=6.0, cap=4)]
+    for k in ({0: 1}, {0: 5}, {0: 20}):
+        assert two_stage_price(cells, k, 0.5, 0.0) == two_stage_price(cells, k)
+    own = [r["prove"] for r in two_stage_statements(cells, {0: 1})]
+    assert own == pytest.approx([0.8 + 8.0, 0.6 + 1.2])
+    for sampled in (0.02, 1.0, 100.0, 1e4):
+        top = registration_cap(sampled, 1e6)
+        for c, taken, mine, r in zip(cells, (0.8, 0.2), own, two_stage_statements(cells, {0: 1}, sampled / 1e6, 1e6)):
+            blocks = ceil(top * taken - 1e-9)
+            sessions = ceil(blocks / c.cap)
+            shared = (sessions * c.fixed + sessions * ceil(blocks / sessions) * c.prove) / sampled
+            assert r["shared"] == (shared < mine) and r["prove"] == pytest.approx(min(shared, mine))
+            assert r["padding"] == (pytest.approx(shared - sessions * c.fixed / sampled - taken * c.prove)
+                                    if r["shared"] else 0.0)
+    assert not any(r["shared"] for r in two_stage_statements(cells, {0: 1}, 0.02 / 1e6, 1e6))
+    assert all(r["shared"] for r in two_stage_statements(cells, {0: 1}, 1e4 / 1e6, 1e6))
+
+
+def test_a_registration_shares_statements_at_its_own_q():
+    """With a registration of many replay blocks, the design spends at most the budget at the most q it pays for, its
+    proving `two_stage_price`'s at that q and its cap the registration's; its types' statements shared, it samples
+    more replay blocks and bounds less than a statement per sampled replay block.  A registration of none, or too few
+    to pay for its padding, is that design."""
+    delta, replay_blocks, budget = 2.0 ** -20, 10 ** 8, 1e7
+    cells = [Cell(10 ** 5, 16.0, prove=1e-3, fixed=5.0, cap=1024, commit_bytes=2.0),
+             Cell(4, 131072.0, prove=1e-3, fixed=5.0, cap=4, commit_bytes=2.0 ** 14)]
+    kw = {"budget": budget, "replay": 1.0, "boundary": 1e5, "h": 1e-6}
+    alone = two_stage_design(cells, replay_blocks, delta, **kw)
+    assert alone["shared"] == alone["padding"] == 0.0 and alone["registration_cap"] == 0
+    assert two_stage_design(cells, replay_blocks, delta, registration=0.0, **kw) == alone
+    few = two_stage_design(cells, replay_blocks, delta, registration=10.0, **kw)
+    assert few["shared"] == 0.0 and (few["q"], few["bound"]) == (alone["q"], alone["bound"])
+    shared = two_stage_design(cells, replay_blocks, delta, registration=10 ** 4, **kw)
+    q, sampled = shared["q"], shared["registration_sample"]
+    assert sampled == pytest.approx(q * 10 ** 4) and shared["registration_cap"] == registration_cap(sampled, 10 ** 4)
+    strata = [replace(c, stratum=0 if c.bits <= shared["merged"] else 131072) for c in cells]
+    assert shared["prove"] == pytest.approx(shared["replay_sample"] * two_stage_price(strata, shared["k"], q,
+                                                                                      10 ** 4)[2])
+    assert shared["total"] <= budget * (1 + 1e-12) and shared["shared"] == 1.0 and 0 < shared["padding"] < 0.01
+    over = q * (1 + 1e-6)
+    assert over * (1.0 + 1e-6 * sum(c.n * c.commit_bytes for c in cells)
+                   + two_stage_price(strata, shared["k"], over, 10 ** 4)[2]) > (budget - 1e5) / replay_blocks
+    assert q > alone["q"] and shared["bound"] < alone["bound"]
 
 
 def test_the_width_stratified_design_beats_the_uniform_one_when_proving_costs():

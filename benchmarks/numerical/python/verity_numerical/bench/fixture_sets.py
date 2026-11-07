@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from verity_numerical.bench import generate as G
-from verity_numerical.bench import templates as TM
+from verity_flock import subcircuit_templates as TM
 
 FIXTURES = Path(__file__).resolve().parents[5] / "verity" / "ml" / "flock" / "tests" / "fixtures" / "synthetic_sets"
 #: the provenance fields a run fills in, cleared in a committed set

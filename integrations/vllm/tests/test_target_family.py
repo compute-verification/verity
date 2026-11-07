@@ -145,7 +145,7 @@ def test_cli_fails_by_name_with_rc_3_and_writes_the_record(tmp_path):
     bs = tmp_path / "build_summary.json"
     bs.write_text(json.dumps({"step": {"target": {"compute_capability": [9, 0]}}}))
     out = tmp_path / "target_family.json"
-    env = {**os.environ, "PYTHONPATH": os.pathsep.join(filter(None, [str(TREE), str(TREE / "vllm-poc"), os.environ.get("PYTHONPATH")]))}
+    env = {**os.environ, "PYTHONPATH": f"{TREE}:{TREE / 'vllm-poc'}"}
     env.pop("TARGET_FAMILY_WAIVER", None)
     r = subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", "target-family", "--row", ROW_L40S, "--stages", "build", "--no-device",
                         "--build-summary", str(bs), "--out", str(out)], capture_output=True, text=True, env=env, cwd=TREE)
@@ -169,7 +169,6 @@ def test_the_row_runs_the_preflight_before_build_and_canary_waives_by_name(tmp_p
     seen = []
     for step in ("precheck_identity", "shape", "admission", "build", "match"):
         monkeypatch.setattr(r, step, lambda step=step: seen.append(step))
-    monkeypatch.setattr(r, "release_line", lambda fallback: (f"UNRELEASED|commit=unknown tree={r.tree}{fallback}", "-"))
     monkeypatch.setattr(r, "target_family", lambda *a, out: seen.append(("target_family", r.stages, a)) or
                         (3, "PRECHECK_FAIL_TARGET_FAMILY: Build target 9.0 != row family 8.9"))
     assert r.run() == 3

@@ -1,13 +1,15 @@
 """The review landing onto `checked` (drive.toml's `land_into`: `main` holds only tested commits).  A
 landing fast-forwards `checked`, never `main`; `main` is fast-forwarded only to a commit of `checked` whose after-landing run
-passed every step on the merge gate; a red run moves nothing on `main`, and its culprit is reverted on `checked`.  A job off
-the gate (drive's policy, policy.toml's `off_gate`: circuit-check) runs in that run and reverts its culprit, but holds no promotion."""
+passed every step on the merge gate; a red run moves nothing on `main`, and its culprit, unless fixed forward in time, is
+reverted on `checked`.  A job off the gate (drive's policy, policy.toml's `off_gate`: circuit-check) runs in that run and names
+its culprit as any red does, but holds no promotion."""
 from __future__ import annotations
 
 import json
 
 import pytest
 
+import research.drive as D
 from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, TAIL
 from research.queue import DriveFlags, QueueError
 from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _rings, _subject
@@ -75,6 +77,9 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
     h.tick()
     (ring,) = _rings(h)
     assert "suite pkg is red on `checked`" in ring and "Culprit: #2" in ring, ring
+    assert _checked(world) == tip and _main(world) == main
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
@@ -181,9 +186,12 @@ def _circuit_red(h: Review, tmp_path) -> None:
     h.evidence = [_steps_run(tmp_path, "r-post-0", {**{s: "passed" for s in GATED}, "circuit-check": "failed"})]
 
 
-def test_a_red_circuit_check_reverts_its_culprit_on_checked_at_once_and_holds_no_promotion(world, monkeypatch, tmp_path):
-    """A marked fix holds no revert, a red circuit-check's as every other: it runs only after landing, so each landing on its
-    red goes unchecked, and the ring says no PR touching its inputs lands until it passes."""
+def test_a_red_circuit_check_names_its_culprit_holds_no_promotion_and_its_revert_waits_for_a_marked_fix(world, monkeypatch,
+                                                                                                         tmp_path):
+    """circuit-check runs only after landing, so each landing on its red goes unchecked: its ring says no PR touching its inputs
+    lands until it passes, and `main` moves all the same.  Its culprit is fixed forward or reverted as every red's is: a fix
+    marked (here one saying `fixes step circuit-check`) holds the revert past `FIX_FORWARD_S`, and once it is ejected the next
+    tick reverts it on `checked`."""
     h = _gated(world, monkeypatch)
     tip = _landed(h, {"pkg/x.circuit-check.py": "X = 1\n"})
     world.gh.put(9, world.change({"c.txt": "9\n"}), body="Lane `lane-9`. fixes step circuit-check")
@@ -191,7 +199,13 @@ def test_a_red_circuit_check_reverts_its_culprit_on_checked_at_once_and_holds_no
     h.tick()
     (ring,) = [p for p in h.posts if "Culprit: #1" in p]
     assert "step circuit-check is red on `checked`" in ring and ring.endswith(
-        "Drive reverts #1 now, and lands no PR touching circuit-check's inputs until it passes on `checked`."), ring
+        "or drive reverts #1 then. No PR touching circuit-check's inputs lands until it passes on `checked`."), ring
+    assert _checked(world) == _main(world) == tip
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
+    assert _checked(world) == tip and any("culprit #1 isn't reverted: #9 at " in x for x in world.logs), world.logs
+    world.gh.ready.discard((9, world.gh.prs[9].head))
+    h.tick()
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and h.posted[-1][0] == reverted
     assert any("#1 reverted on `checked`: step circuit-check is red" in p for p in h.posts), h.posts

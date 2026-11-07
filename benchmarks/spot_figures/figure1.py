@@ -36,8 +36,8 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   designs with each request charged at most the bits it serves (the `served_bits` input: every one of its tokens
   served as the token select's output word), in `two_stage_exfil`'s sets' form (`card_influenceTwo_le_served_min`),
   which still counts which of a request's proof blocks are incorrect, and never above the scope's served bits
-  (`card_influenceTwo_le_min`), or its patterns' form (no lemma states it yet), which counts a request's sets of more
-  than its served bits once, at most the served bits too (`card_influenceTwo_le_two_pow_outs`).  `CAP_STATUS`,
+  (`card_influenceTwo_le_min`), or its patterns' form (`card_influenceTwo_le_patterns`), which counts a request's sets
+  of more than its served bits once, at most the served bits too (`card_influenceTwo_le_two_pow_outs`).  `CAP_STATUS`,
   `SERVED_STATUS` and `OUTS_STATUS` say what each rests on.
 * `one-stage`: every proof block sampled uniformly, each sampled one's request replayed.  Its serve-time commitment,
   every proof block's outputs, is outside the budget, and the output gives its share of compute (`serve_hash_share`).
@@ -95,7 +95,7 @@ TWO_STAGE = {"two-stage": (True, None), "two-stage-uniform": (False, None), "two
              "two-stage-capped-uniform": (False, "sets"), "two-stage-patterns": (True, "patterns"),
              "two-stage-patterns-uniform": (False, "patterns")}
 #: what each served-output cap's form rests on
-CAP_STATUS = {"sets": "card_influenceTwo_le_served_min", "patterns": "no lemma states it yet"}
+CAP_STATUS = {"sets": "card_influenceTwo_le_served_min", "patterns": "card_influenceTwo_le_patterns"}
 #: what puts the sets' form at most the scope's served bits: the influence set is a set of served outputs
 SERVED_STATUS = "card_influenceTwo_le_min"
 #: what puts the patterns' form there: on any statement the influence set has at most 2^|outs| members
@@ -200,6 +200,10 @@ def cards(model: str = "GLM-5.3", request: str = "census") -> dict[str, InputCar
                                         f"{ADVERSARY} {CENSUS_WORLD}: tokens a request"),
         "datacenter_gpus": InputCard(dc["machines"] * dc["gpus_per_machine"], "GPU", "modeled",
                                      f"{DEPLOYMENTS} {DATACENTER}"),
+        "datacenter_machines": InputCard(dc["machines"], "machine", "modeled", f"{DEPLOYMENTS} {DATACENTER}"),
+        "machine_gpus": InputCard(dc["gpus_per_machine"], "GPU", "modeled",
+                                  f"{DEPLOYMENTS} {DATACENTER}: a machine's GPUs"),
+        "window": InputCard(dc["window_s"], "s", "modeled", f"{DEPLOYMENTS} {DATACENTER}: the audit window"),
         "peak_flops": InputCard(peak["flop_per_second"], "FLOP/s", "modeled",
                                 f"{HARDWARE} {PEAK}, the H200's dense FP8 peak: {peak['sources'][0]['label']}"),
         "h100_hour_flop": InputCard(census["h100_hour_flop"], "FLOP", "modeled",

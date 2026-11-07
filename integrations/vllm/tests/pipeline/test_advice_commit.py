@@ -86,7 +86,6 @@ def test_advice_over_the_registered_cap_is_refused(run_a):
     assert reg["compiler"]["cap_bits"] == 8 * len(run_a["data"])
 
 
-@pytest.mark.usefixtures("code_versions_stood_in")
 def test_the_default_compiler_digest_is_64_bytes():
     c = ADV.registered_compiler()
     assert c.inner.name == ADV.COMPILER and len(bytes.fromhex(c.digest)) == 64 and len(bytes.fromhex(c.inner.digest)) == 64

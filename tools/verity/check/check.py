@@ -1585,7 +1585,7 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
 
 #: a shard's result kind, which the tool doesn't produce: no gate takes a shard alone, only a `--combine` check of its set
 SHARD_KIND = "check-shard/v1"
-#: a post-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to revert a landing
+#: a post-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to name a red's culprit
 DEFERRED_KIND = "check-deferred/v1"
 
 

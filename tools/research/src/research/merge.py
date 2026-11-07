@@ -22,7 +22,7 @@ reading the shards itself (`shard_set`), finds them a passing check of that clea
 commit's own `tools/verity/check/`, every part once, every job its `ci.toml` puts on the gate, no step failed) and the combine's
 steps theirs; a shard alone passes nothing.  A job off the gate (drive's policy, policy.toml's `off_gate`: circuit-check,
 ratchet-gate) is required of no check, whole or sharded, and a recorded check doesn't run it: it runs after landing, in drive's after-landing run, and its red
-there reverts its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
+there names its culprit.  With a usable remote the catalog's attempts are refreshed first, so an attempt
 recorded on another machine counts.  Refused as well: a
 target checkout that is not on BRANCH or has tracked changes, and a REF the target has moved past (the target's tip is not an
 ancestor of REF) unless merging REF leaves REF's own tree (`tree_identical`: what the target gained is in REF already, as when a
@@ -215,7 +215,7 @@ def declared_jobs(repo: Path, commit: str) -> list[str] | str:
     """The names of the jobs ``commit``'s own `tools/verity/check/ci.toml` declares that are on the merge gate (every job but
     those ``commit``'s drive policy, `policy.toml`, names in `off_gate`, or its ci.toml marks `gate = false`), or why they
     can't be read.  A job off the gate (circuit-check, ratchet-gate) runs after landing, in drive's after-landing run, whose red
-    reverts its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
+    names its culprit; no check needs it to pass a merge, and a recorded check doesn't run it."""
     from . import policy
 
     pol = policy.at(repo, commit)

@@ -2,7 +2,8 @@
 `main` after; `test_drive_checked.py` has `land_into = "checked"`, where `main` moves only to a checked commit, and
 `test_drive_locks.py` the lock run after a Lean landing).  A tick lands `next`'s longest prefix whose every member has a land
 verdict at its head by a reviewer who isn't its owner, a Lean change as any other; the after-landing run checks `main`, and
-its failure reverts what it implicates once `main` passed that step before, bisecting when several PRs are implicated."""
+its failure names the one landing it implicates once `main` passed that step before, to be fixed forward or reverted
+`FIX_FORWARD_S` after; several implicated are each rung, and none is reverted."""
 from __future__ import annotations
 
 import contextlib
@@ -162,8 +163,9 @@ def test_a_reviewed_prefix_lands_and_awaits_the_after_landing_run_of_every_step(
 def test_the_next_after_landing_run_launches_before_the_sync_of_the_tick_its_predecessor_ended_in(world, monkeypatch, tmp_path,
                                                                                                   ended):
     """The sync takes most of a tick, and an after-landing run launched only after it left `main`'s tip unchecked that long
-    each time a run ended.  The tick that reads the end launches the next before the sync, once its reverts are pushed, so the
-    next run of a red one checks its culprit's revert; and launches it once: what lands in that tick waits for the run after."""
+    each time a run ended.  The tick that reads the end launches the next before the sync, once the reverts due are pushed
+    (a red's culprit named in that tick has `FIX_FORWARD_S` to be fixed forward first), and launches it once: what lands in
+    that tick waits for the run after."""
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"} if ended == "red" else
                                  {"a.txt": "1\n"}))
@@ -185,8 +187,8 @@ def test_the_next_after_landing_run_launches_before_the_sync_of_the_tick_its_pre
         h.run_state["r-post-0"] = ("done", 0, None)
         h.evidence = [_steps_run(tmp_path, "r-post-0", {s: "passed" for s in h.posted[0][1].split(",")})]
     assert h.tick().startswith("landed #3"), world.logs
-    first = _git(world.origin, "rev-parse", "main^1")                  # below #3's landing: #2's, or #1's revert above it
-    assert _subject(world, first).startswith('Revert "Queue: #1' if ended == "red" else "Queue: #2"), _subject(world, first)
+    first = _git(world.origin, "rev-parse", "main^1")                  # below #3's landing: #2's, #1 not reverted yet
+    assert _subject(world, first).startswith("Queue: #2"), _subject(world, first)
     assert calls == [first, "sync"] and [c for c, *_ in h.posted[1:]] == [first], (calls, world.logs)
     assert h.postland()["run"]["tip"] == first and h.postland()["pending"][-1] == _main(world) != first
 
@@ -853,26 +855,38 @@ def _red_landing(world, monkeypatch, tmp_path, before=lambda h: None) -> tuple[R
     return h, tip
 
 
-def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_and_reverts_it_at_once(world, monkeypatch,
-                                                                                                        tmp_path):
+def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_and_reverts_it_two_hours_on_with_no_fix(
+        world, monkeypatch, tmp_path):
     """Without a culprit, PRs keep landing on a `main` whose after-landing runs all fail, each failure going to ci alone.
-    Drive names the one landing whose change touches the failing test, rings its lane with the suite's owner in one post
-    (neither ci nor top) with the run and the first error line, and reverts it in the same tick, telling the same two; the
-    next run checks the revert."""
+    Drive names the one landing whose change touches the failing test and rings its lane with the suite's owner in one post
+    (neither ci nor top), with the run, the first error line and the time by which to fix it forward.  No tick before
+    `FIX_FORWARD_S` has passed since the naming reverts it, each logging why; the first after, with no fix marked, reverts it
+    and tells the same two, and the next run checks the revert."""
     h, tip = _red_landing(world, monkeypatch, tmp_path)
     (ring,) = _rings(h)
     assert ring.startswith("@lane-2 @pkg-owner queue: suite pkg is red on `main`") and "(run r-post-0)" in ring, ring
     assert "@ci" not in ring and "@top" not in ring, ring
     assert "failed tests/test_x.py::test_y" in ring and "NameError: name '_once' is not defined" in ring, ring
     assert "Culprit: #2 (its change touches pkg/tests/test_x.py), of the 3 landing(s)" in ring, ring
-    assert ring.endswith("Drive reverts #2 now."), ring
-    assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2
+    due = time.strftime("%H:%M", time.gmtime(h.clock + D.FIX_FORWARD_S))
+    assert ring.endswith(f"Fix it forward by {due} UTC: mark a fix (a new head of #2, a PR whose body names #2 or says "
+                         "`fixes suite pkg`, or one whose change touches what failed), or drive reverts #2 then."), ring
+    r = h.postland()["red"]["suite pkg"]
+    assert r["culprit"][0] == 2 and r["named_at"] == h.clock and not r.get("reverted"), r
+    assert any(f"suite pkg's culprit #2 isn't reverted: 120 min are left to fix it forward, until {due} UTC" in x
+               for x in world.logs), world.logs
+    h.clock += D.FIX_FORWARD_S - 1
+    h.tick()
+    assert _main(world) == tip and not [p for p in h.posts if "reverted" in p] and len(h.posted) == 1, world.logs
+    h.clock += 1
+    h.tick()
     main = _main(world)
     assert _git(world.origin, "rev-parse", f"{main}^") == tip                            # one revert on top of the landing
     assert "pkg/tests/test_x.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", main)
     (post,) = [p for p in h.posts if "reverted" in p]
     assert post.startswith("@lane-2 @pkg-owner queue: #2 reverted on `main`: suite pkg is red on `main`"), post
-    assert post.endswith("#2 is its culprit (its change touches pkg/tests/test_x.py). Fix and re-mark"), post
+    assert post.endswith("#2 is its culprit (its change touches pkg/tests/test_x.py), and 2 h after it was named no fix of "
+                         "it is marked. Fix and re-mark"), post
     assert "@ci" not in post and "@top" not in post, post
     assert h.posted[-1][0] == main and h.launched == []                                  # the next run checks the new tip
     h.tick()
@@ -882,6 +896,23 @@ def test_an_after_landing_failure_rings_its_culprits_lane_and_the_suites_owner_a
     (h.evidence[0] / "suites-lean.json").write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "passed"}]))
     h.tick()
     assert h.postland()["verified"] == main and not h.postland()["red"] and h.postland()["green"]["suite pkg"] == main
+
+
+def test_a_red_named_by_a_drive_before_named_at_has_its_two_hours_from_the_first_tick_that_reads_it(world, monkeypatch,
+                                                                                                     tmp_path):
+    """A red record a drive without `named_at` wrote, its culprit unreverted, would be reverted by the first tick of a drive
+    that has it, however long its lane had been fixing it: it is taken as named at that tick."""
+    h, tip = _red_landing(world, monkeypatch, tmp_path)
+    state = h.q.load_state()
+    del state["drive"]["postland"]["red"]["suite pkg"]["named_at"]
+    h.q.save_state(state)
+    h.clock += 10 * D.FIX_FORWARD_S
+    h.tick()
+    r = h.postland()["red"]["suite pkg"]
+    assert r["named_at"] == h.clock and not r.get("reverted") and _main(world) == tip, world.logs
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
+    assert h.postland()["red"]["suite pkg"]["reverted"] == h.clock and _git(world.origin, "rev-parse", "main^") == tip
 
 
 def _two_shards(world, monkeypatch, tmp_path) -> tuple[Review, str, list[str], Path]:
@@ -926,10 +957,10 @@ def _suite_failed(tmp_path: Path, rid: str, test: str | None = None, running: bo
 def test_a_shard_whose_failure_names_nothing_runs_again_once_elsewhere_ringing_infra_then_is_red(world, monkeypatch, tmp_path,
                                                                                                  first, again):
     """A failure naming no failing test and no error line (a kill, a crash with no output) may be its machine's, and its
-    culprit, named by the suite's declared inputs alone, would be reverted at once.  Its shard runs again once instead, stopped
-    if it still runs, on the machines of `on` it didn't run on, as it was launched, and `INFRA` is rung with the run, its
-    machine and what failed: nothing is red or reverted.  The rerun's pass passes the shard; failing so again, it is red and
-    its culprit is reverted, and the shard runs no third time."""
+    culprit, named by the suite's declared inputs alone, would be rung to fix what it didn't break.  Its shard runs again once
+    instead, stopped if it still runs, on the machines of `on` it didn't run on, as it was launched, and `INFRA` is rung with
+    the run, its machine and what failed: nothing is red.  The rerun's pass passes the shard; failing so again, it is red and
+    its culprit named, and the shard runs no third time."""
     h, tip, machines, shard1 = _two_shards(world, monkeypatch, tmp_path)
     h.run_state["r-post-2"] = ("running", None, None, "suite pkg", "m2") if first == "running" else ("done", 1, None, None, "m2")
     h.evidence = [shard1, _suite_failed(tmp_path, "r-post-2", running=first == "running")]
@@ -955,19 +986,19 @@ def test_a_shard_whose_failure_names_nothing_runs_again_once_elsewhere_ringing_i
     (ring,) = _rings(h)
     assert f"suite pkg is red on `main` {tip[:12]} (run r-post-1 r-post-3): its log has no error line" in ring, ring
     assert "Culprit: #2 (its change touches suite pkg's declared inputs)" in ring, ring
-    assert _git(world.origin, "rev-parse", "main^") == tip and _subject(world, "main").startswith('Revert "Queue: #2'), world.logs
+    assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2 and _main(world) == tip, world.logs
 
 
 def test_a_shard_failure_naming_a_failing_test_is_red_at_once_and_runs_its_shard_no_more(world, monkeypatch, tmp_path):
     """Only a failure that names nothing runs its shard again: one naming its failing test is red in the tick that reads it,
-    its culprit reverted, and `INFRA` hears nothing."""
+    its culprit named, and `INFRA` hears nothing."""
     h, tip, _, shard1 = _two_shards(world, monkeypatch, tmp_path)
     h.run_state["r-post-2"] = ("done", 1, None, None, "m2")
     h.evidence = [shard1, _suite_failed(tmp_path, "r-post-2", test="tests/test_x.py::test_y")]
     h.tick()
     (ring,) = _rings(h)
     assert "suite pkg is red on" in ring and "failed tests/test_x.py::test_y" in ring and "Culprit: #2" in ring, ring
-    assert _subject(world, "main").startswith('Revert "Queue: #2') and not [p for p in h.posts if p.startswith("@infra")]
+    assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2 and not [p for p in h.posts if p.startswith("@infra")]
     assert [kw.get("shard") for c, _, kw in h.posted if c == tip] == [None, "1/2", "2/2"], h.posted
 
 
@@ -1033,6 +1064,8 @@ def test_ratchet_gate_judges_above_the_last_tip_its_gate_passed_at_while_verifie
     pl = h.postland()
     assert pl["verified"] == verified and pl["red"]["suite pkg"]["culprit"][0] == 2, world.logs
     assert pl["ratchet_judged"] == {"tip": t1, "base": verified, "failed": []}
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
     assert _subject(world, "main").startswith('Revert "Queue: #2'), world.logs
     t2, _, kw = h.posted[-1]
     assert t2 == _main(world) != t1 and kw["base"] == verified == h.postland()["verified"] and kw["ratchet_base"] == t1
@@ -1063,6 +1096,8 @@ def test_after_a_red_ratchet_gate_whose_culprit_was_reverted_the_gate_judges_abo
     pl = h.postland()
     assert pl["red"]["step ratchet-gate"]["culprit"][:1] == [2] and pl["verified"] == verified, world.logs
     assert pl["ratchet_judged"] == {"tip": tip, "base": verified, "failed": [merge2]}
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
     revert = _main(world)
     assert _git(world.origin, "rev-parse", f"{revert}^") == tip
     assert f"This reverts commit {merge2}" in _git(world.origin, "log", "-1", "--format=%B", revert)
@@ -1101,10 +1136,14 @@ def test_ratchet_gates_base_falls_back_to_verified_unless_the_judged_tip_lies_on
 
 
 @pytest.mark.parametrize("fix", ["names-the-culprit", "fixes-suite", "touches-the-failure", "new-head"])
-def test_a_named_culprit_with_a_marked_fix_is_reverted_in_the_tick_that_names_it(world, monkeypatch, tmp_path, fix):
-    """A fix (a ready PR whose body names the culprit or says `fixes suite NAME`, or whose change touches what the failure
-    named, or a new head of the culprit) marked before its red is named holds no revert: while it waited, PRs landed on a
-    red the failure's owners alone were told of.  Each body case changes an unrelated file, so only its body could count."""
+def test_a_marked_fix_holds_its_reds_revert_while_it_stays_marked_and_once_ejected_past_two_hours_the_culprit_is_reverted(
+        world, monkeypatch, tmp_path, fix):
+    """A fix (a PR whose body names the culprit or says `fixes suite NAME`, or whose change touches what the failure named, or
+    a new head of the culprit) marked ready at its head holds the culprit's revert past `FIX_FORWARD_S`, each tick logging
+    which fix holds it; once it is ejected (its mark at that head no longer `true`), the next tick reverts the culprit.  Each
+    body case changes an unrelated file, so only its body could count."""
+    n = 2 if fix == "new-head" else 9
+
     def mark(h):
         if fix == "new-head":
             world.gh.put(2, world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}))
@@ -1115,34 +1154,48 @@ def test_a_named_culprit_with_a_marked_fix_is_reverted_in_the_tick_that_names_it
                          body="Lane `lane-9`. " + ("FIXES suite pkg: test_y." if fix == "fixes-suite" else "Fixes #2's test."))
 
     h, tip = _red_landing(world, monkeypatch, tmp_path, before=mark)
-    r = h.postland()["red"]["suite pkg"]
-    assert r["culprit"][0] == 2 and r["reverted"], r
+    assert h.postland()["red"]["suite pkg"]["culprit"][0] == 2
+    for _ in range(2):
+        h.clock += D.FIX_FORWARD_S
+        h.tick()
+        assert _main(world) == tip and not h.postland()["red"]["suite pkg"].get("reverted"), world.logs
+    assert any(f"suite pkg's culprit #2 isn't reverted: #{n} at {world.gh.prs[n].head[:8]}" in x
+               and x.endswith("which fixes it, is marked ready at its head") for x in world.logs), world.logs
+    world.gh.ready.discard((n, world.gh.prs[n].head))
+    h.tick()
+    assert h.postland()["red"]["suite pkg"]["reverted"] == h.clock, world.logs
     assert _git(world.origin, "rev-parse", "main^") == tip and any("#2 reverted on `main`" in p for p in h.posts), h.posts
-    assert not any("a fix is marked" in x for x in world.logs), world.logs
 
 
-def test_a_fix_that_landed_while_the_red_run_ran_holds_no_revert(world, monkeypatch, tmp_path):
-    """#9, `fixes suite pkg`, lands while the run that finds #2 red runs: #2 is reverted in the tick that names it all the
-    same, on top of #9, and the next run checks both."""
+def test_a_fix_that_landed_holds_the_revert_until_a_run_holding_it_is_red_again(world, monkeypatch, tmp_path):
+    """#9, `fixes suite pkg` in its body, lands while the run that finds #2 red runs: the next run checks it, and while that
+    runs #9 holds #2's revert past `FIX_FORWARD_S`.  That run red in suite pkg again, #9 fixed nothing: #2 is reverted in the
+    tick that reads it, on top of #9."""
     def land_fix(h):
-        world.gh.put(9, world.change({"elsewhere.txt": "9\n"}))
-        world.gh.prs[9] = Q.PR(9, world.gh.prs[9].head, "fixes suite pkg", "Lane `lane-9`.")
+        world.gh.put(9, world.change({"elsewhere.txt": "9\n"}), body="Lane `lane-9`. Fixes suite pkg: test_y.")
         h.review(9)
         assert h.tick().startswith("landed #9"), world.logs
         fixed.append(_main(world))
 
     fixed: list[str] = []
     h, tip = _red_landing(world, monkeypatch, tmp_path, before=land_fix)
+    assert [c for c, *_ in h.posted] == [tip, fixed[0]], world.logs                 # the next run checks #9
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
+    assert _main(world) == fixed[0] and not h.postland()["red"]["suite pkg"].get("reverted"), world.logs
+    h.run_state["r-post-1"] = ("done", 1, None)
+    h.evidence = [_failed_run(tmp_path / "again", "tests/test_x.py::test_y", "tests/test_x.py:2")]
+    h.tick()
     main = _main(world)
     assert _git(world.origin, "rev-parse", f"{main}^") == fixed[0] and any("#2 reverted on `main`" in p for p in h.posts), h.posts
-    assert h.posted[-1][0] == main and len(h.posted) == 2, world.logs
+    assert h.postland()["red"]["suite pkg"]["seen"] == fixed[0] and h.posted[-1][0] == main, world.logs
 
 
 def test_an_unrelated_pr_that_names_the_red_suite_is_no_fix_of_it(world, monkeypatch, tmp_path):
-    """A fix of a red (`Driver._fixes`) holds the after-landing run for it (`_fix_wait`).  Counting any ready PR whose body
-    names the suite would let a suite called `research` be
-    held for good by whatever PR mentions research: neither the name nor `suite research` without `fixes` is a fix.  The
-    culprit is reverted at once, a fix or not."""
+    """A fix of a red (`Driver._fixes`) holds the after-landing run for it (`_fix_wait`) and its culprit's revert
+    (`_revert_reds`).  Counting any ready PR whose body names the suite would let a suite called `research` be held for good
+    by whatever PR mentions research: neither the name nor `suite research` without `fixes` is a fix, so the culprit is
+    reverted once `FIX_FORWARD_S` passed."""
     _owning(world, {"lane-2": [], "ci": ["tools/research/"]})
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"a.txt": "1\n"}))
@@ -1163,6 +1216,8 @@ def test_an_unrelated_pr_that_names_the_red_suite_is_no_fix_of_it(world, monkeyp
     h.tick()
     (ring,) = _rings(h)
     assert "suite research is red" in ring and "Culprit: #2" in ring, ring
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
     assert _git(world.origin, "rev-parse", "main^") == tip and any("#2 reverted on `main`" in p for p in h.posts), h.posts
     r, own = h.postland()["red"]["suite research"], lambda: {"docs/notes.txt"}
     assert h.d._fixes("suite research", r, world.gh.prs[9], own) is None
@@ -1172,8 +1227,8 @@ def test_an_unrelated_pr_that_names_the_red_suite_is_no_fix_of_it(world, monkeyp
 
 
 def _one_red(world, monkeypatch, tmp_path, before=lambda h: None) -> tuple[Review, str]:
-    """#1 breaks suite pkg and lands; its after-landing run `r-post-0` fails once ``before`` ran, and the tick that reads it
-    names #1 its culprit and reverts it."""
+    """#1 breaks suite pkg and lands; its after-landing run `r-post-0` fails once ``before`` ran, the tick that reads it
+    names #1 its culprit, and the first tick `FIX_FORWARD_S` later reverts it."""
     _registry(world, "lane-1")
     h = Review(world, monkeypatch)
     world.gh.put(1, world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}))
@@ -1185,6 +1240,8 @@ def _one_red(world, monkeypatch, tmp_path, before=lambda h: None) -> tuple[Revie
     h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
     h.tick()
     assert h.postland()["red"]["suite pkg"]["culprit"][0] == 1
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
     return h, tip
 
 
@@ -1323,9 +1380,10 @@ def test_a_red_after_landing_run_runs_on_and_is_cancelled_only_with_its_circuit_
     assert h.cancelled == [] and h.postland()["run"]["ids"] == ["r-post-0"]
     (ring,) = _rings(h)
     assert "suite pkg is red" in ring and "Culprit: #1" in ring and "Not run (a cancel stopped them): lean-agreement" in ring
-    assert _git(world.origin, "rev-parse", "main^") == tip                                      # reverted as the run runs on
+    h.clock += D.FIX_FORWARD_S
     h.tick()
     assert h.cancelled == [] and len(_rings(h)) == 1             # rung once
+    assert _git(world.origin, "rev-parse", "main^") == tip                                      # reverted as the run runs on
     steps |= {s: "passed" for s in AFTER_LANDING if s not in TAIL and s not in steps}
     steps["lean-suites"] = "failed"
     (run / "steps.jsonl").write_text("".join(json.dumps({"step": k, "status": v}) + "\n" for k, v in steps.items()))
@@ -1408,10 +1466,11 @@ def test_a_healthy_after_landing_run_under_way_is_not_an_alarm(world, monkeypatc
     assert alarm.startswith("@ci @top queue: ") and "its run r-post-0" in alarm and "red: nothing named red" in alarm, alarm
 
 
-def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_broke_it(world, monkeypatch, tmp_path):
-    """Reverting every landing a failure's files reach took innocent PRs with the culprit: each step of the bisection checks one
-    landing's commit and reads the failed suite alone, and only the first landing that fails it is rung and reverted, in the
-    tick the bisection ends.  Landing goes on meanwhile: the bisection checks fixed commits."""
+def test_an_after_landing_failure_several_prs_touch_rings_each_ones_lane_with_ci_and_top_and_reverts_none(world, monkeypatch,
+                                                                                                           tmp_path):
+    """Reverting every landing a failure's files reach takes innocent PRs with the culprit, and bisecting them held a run per
+    landing.  A failure several landings touch names no culprit: each one's lane is rung with `CI` and `TOP` in one post,
+    naming them all, and none is reverted, however long the red stands."""
     _registry(world, "lane-1", "lane-2")
     h = Review(world, monkeypatch)
     world.gh.put(1, h1 := world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}))
@@ -1421,119 +1480,20 @@ def test_an_after_landing_failure_several_prs_touch_is_bisected_to_the_one_that_
         h.review(n)
     assert h.tick().startswith("landed #3")
     tip = _main(world)
-    one, two = _git(world.origin, "rev-parse", "main^1^1"), _git(world.origin, "rev-parse", "main^1")
     h.run_state["r-post-0"] = ("done", 1, None)
     h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    world.gh.put(4, world.change({"c.txt": "4\n"}))
-    h.review(4)
-    out = h.tick()
-    assert out.startswith("landed #4"), out
-    assert h.posted[1] == (one, "lean-suites", {"agreement": False, "no_cache": False, "circuit_cache": False,
-                                                   "no_regenerate": True, "base": _git(world.origin, "rev-parse", f"{one}^1")})
-    assert h.posted[2][0] == _main(world)                                        # #4's after-landing run
+    h.tick()
     (ring,) = _rings(h)
-    assert "#1 #2 each touch it" in ring and "drive bisects them" in ring, ring
-    h.run_state["r-post-1"] = ("done", 1, None)                                  # another suite failed there: pkg passed
-    h.evidence = [_steps_run(world.tmp, "r-post-1", {"lean-suites": "failed"})]
-    (h.evidence[0] / "suites-lean.json").write_text(json.dumps([{"name": "pkg", "suite": "pkg", "status": "passed"},
-                                                                 {"name": "other", "suite": "other", "status": "failed"}]))
+    to = ring.split(" queue: ")[0].split()
+    assert to[:2] == ["@lane-1", "@lane-2"] and {"@ci", "@top"} <= set(to), ring
+    assert "#1 #2 each touch it (3 landing(s) since `main`" in ring, ring
+    assert "so drive names no culprit and reverts none of them: find which broke it, and fix it forward." in ring, ring
+    r = h.postland()["red"]["suite pkg"]
+    assert r["culprit"] is None and [c[0] for c in r["candidates"]] == [1, 2] and "bisect" not in h.postland(), r
+    assert [c for c, *_ in h.posted] == [tip], "no run of a landing's own commit"
+    h.clock += 2 * D.FIX_FORWARD_S
     h.tick()
-    assert h.posted[3][0] == two and _main(world) != tip
-    h.run_state["r-post-3"] = ("done", 1, None)
-    h.evidence = [_failed_run(world.tmp / "r3", "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()
-    assert "bisect" not in h.postland()
-    (ring,) = [p for p in h.posts if "Culprit: #2, by bisection" in p]
-    assert ring.startswith("@lane-2 queue: suite pkg is red") and "passes on #1's landing" in ring, ring
-    main = _main(world)
-    revert = _git(world.origin, "rev-list", "--first-parent", "--reverse", f"{tip}..main").split()[-1]
-    assert _subject(world, revert).startswith('Revert "Queue: #2')
-    assert _git(world.origin, "show", f"{main}:pkg/tests/test_x.py") == "def test_y():\n    pass"
-    (post,) = [p for p in h.posts if "reverted" in p]
-    assert post.startswith("@lane-2 queue: #2 reverted on `main`"), post
-
-
-def _bisecting(world, monkeypatch, tmp_path, revert: bool = False, inner_revert: bool = False) -> tuple[Review, str]:
-    """#1 and #2 both change the failing test's file and land with #3; the after-landing run fails there, and drive bisects them
-    (its first run, `r-post-1`, of #1's landing).  With ``revert``, a hand revert lands on `main` first; with ``inner_revert``,
-    #2's own branch reverts one of its commits."""
-    _registry(world, "lane-1", "lane-2")
-    h = Review(world, monkeypatch)
-    if revert:
-        _git(world.dev, "fetch", "-q", "origin")
-        _git(world.dev, "checkout", "-q", "--detach", "origin/main")
-        _git(world.dev, "commit", "-q", "--allow-empty", "-m", f"Revert \"x\"\n\nThis reverts commit {_main(world)}.")
-        _git(world.dev, "push", "-q", "origin", "HEAD:refs/heads/main")
-    world.gh.put(1, h1 := world.change({"pkg/tests/test_x.py": "def test_y():\n    pass\n"}))
-    h2 = world.change({"pkg/tests/test_x.py": "def test_y():\n    assert False\n"}, base=h1)
-    if inner_revert:
-        h2 = world.change({"c.txt": "2\n"}, base=h2)
-        _git(world.dev, "revert", "--no-edit", "HEAD")
-        h2 = _git(world.dev, "rev-parse", "HEAD")
-        _git(world.dev, "push", "-q", "origin", f"{h2}:refs/dev/{h2}")
-    world.gh.put(2, h2)
-    world.gh.put(3, world.change({"b.txt": "3\n"}))
-    for n in (1, 2, 3):
-        h.review(n)
-    assert h.tick().startswith("landed #3"), world.logs
-    tip = _main(world)
-    h.run_state["r-post-0"] = ("done", 1, None)
-    h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
-    h.tick()
-    return h, tip
-
-
-def test_a_bisection_run_lost_past_the_bound_runs_once_more_then_ends_reverting_nothing(world, monkeypatch, tmp_path):
-    """A run whose state can't be read counted as running for ever: while a bisection is open nothing lands, and ci's baseline
-    was refused, so `next` stopped until someone edited drive's state by hand."""
-    from research.drive import LOST_AFTER_S
-
-    h, tip = _bisecting(world, monkeypatch, tmp_path)
-    assert len(h.posted) == 2
-    h.run_state["r-post-1"] = ("unknown", None, None)
-    h.tick()
-    assert len(h.posted) == 2
-    h.clock += LOST_AFTER_S + 1
-    h.tick()
-    assert len(h.posted) == 3 and h.posted[2][0] == h.posted[1][0]       # the same landing once more
-    h.run_state["r-post-2"] = ("unknown", None, None)
-    h.clock += LOST_AFTER_S + 1
-    out = h.tick()
-    assert "bisect" not in h.postland() and _main(world) == tip, out
-    (post,) = [p for p in h.posts if "ended twice" in p]
-    assert post.startswith("@ci queue:") and "(lost)" in post and "Reverted nothing" in post, post
-
-
-def test_a_bisection_run_fails_a_landing_only_on_a_failed_step_it_bisects(world, monkeypatch, tmp_path):
-    """Any run that wasn't clean marked its landing bad, so an exit 0 whose records couldn't be read, or a failure in another
-    step (setup, an older tree's ci.toml), reverted an innocent PR."""
-    h, tip = _bisecting(world, monkeypatch, tmp_path)
-    h.run_state["r-post-1"] = ("done", 0, None)
-    h.evidence = []                                                         # exit 0, its steps.jsonl unread
-    h.tick()
-    assert len(h.posted) == 3 and h.posted[2][0] == h.posted[1][0] and h.postland()["bisect"]["bad"] == 2
-    h.run_state["r-post-2"] = ("done", 2, None)
-    h.evidence = [_steps_run(world.tmp, "r-post-2", {"setup": "failed"})]
-    h.tick()
-    assert "bisect" not in h.postland() and _main(world) == tip and not [p for p in h.posts if "reverted" in p]
-    (post,) = [p for p in h.posts if "ended twice" in p]
-    assert "neither passing nor failing pkg" in post, post
-
-
-def test_a_bisection_with_a_revert_among_its_landings_reverts_nothing(world, monkeypatch, tmp_path):
-    """A revert inside the range means a landing's commit isn't what `main` ran: bisecting it could blame the wrong PR."""
-    h, tip = _bisecting(world, monkeypatch, tmp_path, revert=True)
-    assert "bisect" not in h.postland() and len(h.posted) == 1 and _main(world) == tip
-    (post,) = [p for p in h.posts if "a revert lies in" in p]
-    assert "Reverted nothing" in post, post
-
-
-def test_a_revert_inside_a_prs_own_branch_still_bisects(world, monkeypatch, tmp_path):
-    """Any `This reverts commit` in the range's history stopped the bisection, a PR's own revert of its own commit included:
-    every red whose batch held such a PR named no culprit and reverted nothing."""
-    h, tip = _bisecting(world, monkeypatch, tmp_path, inner_revert=True)
-    assert h.postland()["bisect"] and len(h.posted) == 2, world.logs
-    assert not [p for p in h.posts if "a revert lies in" in p]
+    assert _main(world) == tip and not [p for p in h.posts if "reverted" in p] and len(_rings(h)) == 1, world.logs
 
 
 def test_a_landing_that_does_not_compile_lands_what_is_below_the_pr_that_broke_it(world, monkeypatch):
@@ -1976,3 +1936,38 @@ def test_a_merge_of_main_into_a_verdicted_head_lands_on_its_verdict_and_a_real_c
     assert any(s.startswith(f"research queue: #1 at {one[:8]} takes the `reviewed` labels at {old[1][:8]}") for s in world.logs)
     out = h.tick()
     assert out.startswith(f"nothing reviewed lands: #2 at {two[:8]}") and "no land verdict" in out, out
+
+
+def test_a_refusing_warn_gate_lands_the_pr_and_tells_its_owner_once_a_head_while_a_landing_gate_still_refuses(world,
+                                                                                                             monkeypatch):
+    """A warn gate (drive.toml's `warn_gates`) judges each PR's merge onto `next` as a landing gate does, and keeps no PR out:
+    drive lands the PR and tells its owner and ci what the gate said, once a head, for the owner to fix in their next PR.  A
+    landing gate's refusal still keeps its PR off `next`."""
+    from test_queue import GATE
+
+    _registry(world, "lane-1", "lane-2")
+    _move_main(world, {Q.DRIVE_FLAGS: 'landing_gates = ["gates/g.py"]\nwarn_gates = ["gates/w.py"]\n', "gates/g.py": GATE,
+                       "gates/banned.txt": "bad.txt\n", "gates/w.py": GATE.replace("gates/banned.txt", "gates/warned.txt"),
+                       "gates/warned.txt": "warn.txt\n"})
+    main = _main(world)
+    h = Review(world, monkeypatch)
+    world.gh.put(1, h1 := world.change({"warn.txt": "1\n"}))
+    world.gh.put(2, world.change({"bad.txt": "2\n"}))
+    h.review(2)
+    h.tick()
+    assert world.on_next(h.q) == [1], world.logs
+    assert h.q.load_state()["conflicts"]["2"]["why"].startswith(f"the landing gate gates/g.py at `main` {main[:12]} "), world.logs
+
+    def warned() -> list[str]:
+        return [p for p in h.posts if "lands all the same" in p]
+
+    assert warned() == [f"@lane-1 @ci queue: #1 at {h1[:8]} lands all the same, as a warn gate keeps no PR out: the warn gate "
+                        f"gates/w.py at `main` {main[:12]} on its merge onto `next`: touches warn.txt; delete warn.txt (`python3 "
+                        "gates/w.py origin/main HEAD` on the branch merged with `origin/next` runs it). Fix it in your next PR"]
+    h.tick()
+    assert len(warned()) == 1, "once a head"
+    world.gh.put(1, h1 := world.change({"warn.txt": "1, again\n"}))
+    h.review(1)
+    assert h.tick().startswith("landed #1"), world.logs
+    assert len(warned()) == 2 and warned()[1].startswith(f"@lane-1 @ci queue: #1 at {h1[:8]} lands all the same"), h.posts
+    assert world.on_next(h.q) == [] and _subject(world, "main").startswith("Queue: #1")
