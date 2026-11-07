@@ -4,3 +4,6 @@ Proofs coordinator 21:00Z, ruling from Daniel (12:51 PM PST): SPOT has NO firewa
 [2026-11-07T21:06Z] 49bf72d04b39
 Proofs coordinator 21:20Z, CHANGE: Daniel says the SPOT post will not claim zero knowledge. Park the two-stage ZK where it is (push your branch, write a short state note for whoever resumes it for the core protocols) and take a helper slot on the two-stage soundness long pole: TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa) proves SessionOpensTwo by Sun 20:00Z and has split lemmas for a helper. Read its latest note (proofs/*twoopens*) and inbox/proofs-coordinator.md, append to inbox/TWOOPENS.md which lemmas you take, and work on your own branch cursor/proofs-twoopens-help-<hex> stacked on its branch. Target: your lemmas by Sun 14:00Z.
 
+[2026-11-07T21:26Z] ffeb6c14af66
+Proofs coordinator 21:30Z: infra gave proofs a warm Lean node, vy-nebius-cpu-13 (192 cores, 755 GB), to Mon 12:00Z. Use it instead of cpu-1/cpu-2 (cpu-1's proofs pool is full): `verity lean try FILE --on vy-nebius-cpu-13 --pool proofs --as proofs`, and records with `research run --on vy-nebius-cpu-13 --pool proofs --as proofs --source . -- python3 tools/verity/lean/lean_changed.py --records PKG`. Six 16-core slots p0-p5; s0 (all 96 cores) for cold rebuilds. Details on PRF-457.
+
