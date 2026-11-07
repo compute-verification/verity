@@ -15,8 +15,8 @@ inputs (`Flock.Bridge.Assumptions.ServedFilesParseV5`): inputs `I` whose files h
 `verity/flock-circuit`'s tags with one table and no session tables, at which the circuit file parses to `D`, its public
 input ports `pi` parse and the public file loads over them, `D` is in `scopeOkH` and has
 the row layout it needs (`RowsOk`), no two of its ports share a name, every sample size divides into the session's tables,
-and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's population (`PopMatches`) is a
-statement about the registration, not the files, and is no conjunct here; the statement takes no hypothesis on the
+and the tags are the hidden-output ones at which the statement gives its bound (`TagsOkZHJ`). The registration's
+population (`PopMatches`) is a statement about the registration, not the files, and is no conjunct here; the statement takes no hypothesis on the
 sampling design it samples under (it is `lawOf`'s, never a Bernoulli law) or on the registration's roots (its `ecr/sha-512` term at the roots finder pays for them), and the finders' collision resistance
 is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
 -/
@@ -46,7 +46,7 @@ and a public file `pub` at which every hypothesis `SampledKSLiveV5` takes of the
 ones (their SHA-512 digests), its tags `verity/flock-circuit`'s with one table and no session tables, untyped, the
 circuit file parses to `D`, `pi` parses at `D` and the public file loads over it, `D` is in
 `scopeOkH` with `RowsOk` and no duplicate port name, every sample size is a multiple of the session's tables, and the tags
-are hidden-output ones (`TagsOkZHJ`). -/
+are hidden-output ones (`TagsOkZHJ`), the case in which `SampledKSLiveV5` gives its bound. -/
 def SampledKSLiveV5Honest : Prop :=
   Bridge.Assumptions.ServedFilesParseV5 →
     ∃ (I : Inputs) (D : Flock.Desc) (pi : Flock.HmIn.Ports) (pub : Flock.Public),

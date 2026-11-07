@@ -48,7 +48,8 @@ canonical transport at public inputs (`transportsLiveV5`), M1's core (`faultyRig
 (`endToEndHiddenV5_of`, from `openingsCanonV5`) plugged in. `Flock.SecurityProofs.SampledKSLiveV5 :
 Flock.Guarantees.SampledKSLiveV5`: that bound under the roots guard, with `ecr/sha-512`'s term at the roots finder in place
 of the guard (`Bridge.le_add_ecrBoundL`), at the sampling design `Bridge.lawOf` names, which the verifier samples under
-(`Bridge.lawOf_cases`) or is `subset 0`, whose `δ` is 1 (`Bridge.pa_partOf_subset`).
+(`Bridge.lawOf_cases`) or is `subset 0`, whose `δ` is 1 (`Bridge.pa_partOf_subset`); at tags outside `TagsOkZHJ`,
+probability 0, since passing `Flock.KsScope.check` gives them (`Bridge.tagsOkZHJ_of_ksScope`).
 -/
 
 @[expose] public section
@@ -58,12 +59,37 @@ theorem Flock.Bridge.sampledKSLiveV5R : Flock.Bridge.SampledKSLiveV5R :=
   Flock.Bridge.assemblyTargetV5 Flock.Bridge.transportsLiveV5 Flock.Bridge.faultyRightTargetC
     (Flock.Bridge.endToEndHiddenV5_of Flock.Bridge.openingsCanonV5)
 
+/-- **`verify --zk`'s form check passes only at hidden-output tags**: `Flock.KsScope.check` refuses first at tags that
+`tagsWhy` names, so passing it gives `TagsOkZHJ`. -/
+theorem Flock.Bridge.tagsOkZHJ_of_ksScope {I : FlockSoundness.Discharge.Exec.Inputs} {count : ℕ}
+    {draw : Option Lean.Json}
+    (h : Flock.KsScope.check (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.publicFile I.tables count draw =
+      .ok ()) :
+    FlockSoundness.Discharge.ZkHidden.TagsOkZHJ I := by
+  have ht : Flock.KsScope.tagsWhy (FlockSoundness.Discharge.ZkExec.zkTags I) = none := by
+    unfold Flock.KsScope.check Flock.KsScope.checkOf at h
+    cases hw : Flock.KsScope.tagsWhy (FlockSoundness.Discharge.ZkExec.zkTags I) with
+    | some w => simp [hw] at h
+    | none => rfl
+  obtain ⟨-, h2, h3, h4⟩ := Flock.KsScope.tagsWhy_none ht
+  exact ⟨(FlockSoundness.Discharge.ZkExec.zkTags_hiddenOutputs I).symm.trans h2,
+    (FlockSoundness.Discharge.ZkExec.zkTags_retainRounds I).symm.trans h3,
+    (FlockSoundness.Discharge.ZkExec.zkTags_merkleLeaf I).symm.trans h4⟩
+
 /-- **The sampled audit's knowledge soundness, live, at the verifier's public inputs, with or without shared rows**
 (`Flock.Guarantees.SampledKSLiveV5`). -/
 theorem Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5 := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup desc qr hpop lj tb law kd hdiv dj S₀ d₀ y₀ wr dg
-    N Ω _ _ Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows roots Cd κ r ns δ
-    hTab hLink
+    N Ω _ _ Lb src hA3 hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q
+  split
+  swap
+  · next hTags =>
+    refine nonpos_iff_eq_zero.1 ((FlockSoundness.Game.prob_mono (q := fun _ => False) (fun o ho => ?_) _ τ).trans
+      (FlockSoundness.Game.prob_false _ τ).le)
+    obtain ⟨-, -, _, _, hk⟩ := ho
+    exact hTags (Flock.Bridge.tagsOkZHJ_of_ksScope hk)
+  rename_i hTags
+  intro L P vb σ Xr Cc Lm rows roots Cd κ r ns δ hTab hLink
   rcases Flock.Bridge.lawOf_cases desc qr lj tb n with hlaw | h0
   · exact Flock.Bridge.le_add_ecrBoundL (FlockSoundness.Game.prob_le_one _ _ τ) fun hroots =>
       Flock.Bridge.sampledKSLiveV5R n Reg I own ht D hD hU pi hpi pub hpub hscope hv2 hdup hroots desc qr hpop lj tb law
