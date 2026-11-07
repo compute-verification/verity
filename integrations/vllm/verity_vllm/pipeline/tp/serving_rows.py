@@ -115,7 +115,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
     of record (`rank_replay.load`: refused unless of record and this rank's), from the worker's commit state."""
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import driver as SR
-    from verity_vllm.pipeline import expert_tables as ET
+    from verity_vllm.pipeline import expert_rows as EX
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
 
@@ -129,7 +129,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
                            committed=OC.OpenedReader(st["com"], rc), weights=SR.model_weights_provider(st["weights"], p.index.prefix),
                            manifest=RR.manifest_of_rank(st.get("manifest_doc"), rank), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
                            run=request.get("run"), row=request.get("row"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
-                           committer=request.get("committer"), tables=ET.of_request(request.get("tables"), rank),
+                           committer=request.get("committer"), tables=EX.of_request(request.get("tables"), rank),
                            workers=1,   # vLLM's TP workers are daemonic: no process pool under them
                            tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
                            index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
@@ -149,13 +149,12 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
     opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a `weights_of_record.CheckpointIndex`;
     without one, only the tensors the bundle carries; ``weights``, tests, replaces them), each on the window's first read of it
     (`cpu_replay.OnRead`), and every value read through an opening verified against the rank's root.  ``tables``: the per-expert
-    cut's tables committed under the committer's key and registration (`expert_tables.of_request`)."""
+    cut's tables committed under the committer's key and registration (`expert_rows.of_request`)."""
     from types import SimpleNamespace
-
-    from verity_vllm.pipeline import expert_tables as ET
 
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.pipeline import cpu_replay as CPU
+    from verity_vllm.pipeline import expert_rows as EX
     from verity_vllm.pipeline import replay_bundle as RB
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import c2 as C2
@@ -197,7 +196,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
                            row=ctx.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": pair, "source": ctx.get("code")}, workers=workers, tp=tp,
                            index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp, b["manifest_sha256"]),
-                           binding=binding, transfer_gates=transfer_gates, tables=ET.of_request(tables, rank))
+                           binding=binding, transfer_gates=transfer_gates, tables=EX.of_request(tables, rank))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -322,7 +321,7 @@ class Options:
     workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")
     tables_key: str | None = option("--tables-key", default=None, help="the committer's key file its per-expert tables are registered under")
     tables: str | None = option("--tables", default=None,
-                                help="the per-expert tables' registration (tp-register-tables --out), {rank} its rank's")
+                                help="the per-expert tables' registration (records.expert_tables), {rank} its rank's")
 
 
 def main(o: Options) -> int:

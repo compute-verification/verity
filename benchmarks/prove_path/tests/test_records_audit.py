@@ -499,10 +499,10 @@ def test_an_expert_tables_registration_is_a_pin_as_written():
     words = {label: rng.integers(0, 256, (E, N, K), dtype=np.uint8), label + "_scale_inv": rng.random((E, 1, 1), dtype=np.float32)}
 
     def registration(rank: int) -> dict:
-        prog, nonce = ET.program("test/model", "abc", 2, rank, "model."), ET.nonces([p for ts in tables.values() for _b, p, _w, _n in ts], rank)
+        prog, nonce = ET.program("test/model", "abc", 2, rank, "model."), ET.nonces(tables, [f for f, _s, _b in fields], rank)
         values = {p: e for f, shape, _b in fields for p, e in ET.entries(prog, words[f], shape, tables[f], bytes(32), nonce).items()}
-        return json.loads(json.dumps({"format": ET.FORMAT, "program": prog, "repo": "test/model", "revision": "abc", "world": 2,
-                                      "rank": rank, "prefix": "model.", "blocks": {"w13": 2}, "values": values}))
+        return json.loads(json.dumps({"schema": ET.SCHEMA, "program": prog, "repo": "test/model", "revision": "abc", "world": 2,
+                                      "rank": rank, "prefix": "model.", "blocks": {"w13": 2}, "values": values, "nonces": nonce}))
 
     one, zero = registration(1), registration(0)
     assert set(RA.pinned(one)) == set(one["values"]) and len(one["values"]) == N // 2 + 1

@@ -26,6 +26,7 @@
  "verity.ml.definitions.registry.boolean_flashmla.circuit-check#_model_roots:FlashMlaDecode_v2": 4.6,
  "verity.ml.definitions.registry.boolean_sparse_mla_split.circuit-check#_model_roots:SparseMlaSplitPart_v2": 4.59,
  "verity.ml.definitions.registry.boolean_mhc.circuit-check#_model_roots:MhcPostPreTf32_v2": 4.39,
+ "verity.ml.definitions.registry.dead_free.circuit-check#_model_roots:GumbelTopPTokenSelect_v3-glm53": 4.37,
  "verity.ml.definitions.registry.torch_optim.circuit-check#_boolean_roots": 4.09,
  "verity.ml.definitions.registry.boolean_flashmla.circuit-check#_model_roots:FlashMlaSplit_v2": 3.93,
  "<registered>:7": 3.86,

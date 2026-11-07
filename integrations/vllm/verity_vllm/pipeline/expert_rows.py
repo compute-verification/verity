@@ -16,8 +16,8 @@ rows, ``H = 2 K / G``).  Its parameter is ``weights/<label>@<H>/b<b>/table`` (`t
 that the record declares as a table (`interface.Table`), with its root and domain id table reads of ``in1`` and ``in2`` and its
 row, salt and path an opening at the key ``in0`` that the verdict ``o1`` holds (`declarations`).  The committer commits each
 table the window reads from the weights it serves, under its key at the program and nonce its registration names
-(`expert_tables`, `commit_tables`), so the window's root of a table is the registered one exactly when it serves the registered
-rows, and its openings are of that root.
+(`records.expert_tables`, `committer`, `commit_tables`), so the window's root of a table is the registered one exactly when it
+serves the registered rows, and its openings are of that root.
 
 A pair is a pair row; its layer is the op_path of the router row its expert id reads, its slot k the id's place among the
 router's ids, and its token that router row.  Units go layer by layer, the layers in the order they first appear: a read's
@@ -35,6 +35,7 @@ import json
 import re
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -45,6 +46,7 @@ from verity_vllm.check import weights_of_record as WR
 from verity_vllm.pipeline import slice_rows as SL
 from verity_vllm.pipeline.serving_templates import EXPERTS, template
 from verity_vllm.program.compact import runs_from_file_items
+from verity_vllm.records import expert_tables as XT
 
 Row = tuple[str, Any, dict, dict]
 _LAYER = re.compile(r"\.layers\.(\d+)\.")
@@ -325,8 +327,8 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
                   committer: Mapping[str, Any]) -> dict[str, Any]:
     """Each table the window's reads read, committed from the weights served (each layer's stack as ``slices`` reads it,
     `serving_rows._slices`; `table_words`) as core's ``registered.Registered`` of ``hm96-sha512/row-seg/v1`` rows with its rows
-    held, under ``committer``'s secret ``key`` at the ``program`` and ``nonces`` its registration names (`expert_tables.committer`),
-    by parameter.  Refused for a table the registration names no nonce for."""
+    held, under ``committer``'s secret ``key`` at the ``program`` and ``nonces`` its registration names (`committer`), by
+    parameter.  Refused for a table the registration names no nonce for."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
     from verity_vllm.protocols.pouw.h1 import registered as H1R
 
@@ -341,7 +343,7 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
         arg, held = ARGS[plan.family[t]][2 if what == "w" else 3], None
         for at, _n, b, param, _leaves in plan.tables(t):
             if param not in nonces:
-                raise ValueError(f"{param}: the committer's registration names no nonce for the table (expert_tables)")
+                raise ValueError(f"{param}: the committer's registration names no nonce for the table (records.expert_tables)")
             x = rs[plan.units[t][at][0]]
             g = json.dumps(x[2]["args"][arg])
             if held is None or held[0] != g:
@@ -349,6 +351,28 @@ def commit_tables(plan: Plan, store: Any, weights: Callable, arrivals: Mapping[s
             out[param] = H1R.commit(committer["program"], param, table_words(held[1], what, E, N, K, G_, n, b), key,
                                     int(nonces[param]), keep_rows=True, schema=G.SCHEMA_SEG)
     return out
+
+
+def committer(reg: XT.ExpertTables, key: bytes) -> dict[str, Any]:
+    """A window's committer's tables (`serving_rows.after_commit`'s ``tables``) from its registration ``reg``: its secret
+    ``key``, the rank's program and each table's nonce, as the registration names them."""
+    if not isinstance(key, bytes) or len(key) != 32:
+        raise ValueError("a table's salts are drawn under the committer's 32-byte key")
+    return {"key": key, "program": reg.program, "nonces": dict(reg.nonces)}
+
+
+def of_request(spec: Mapping[str, Any] | None, rank: int = 0) -> dict[str, Any] | None:
+    """`committer` of a serving-rows request's ``tables``, ``{"key": FILE, "registration": FILE}`` (``{rank}`` in the
+    registration's path its rank's), or None without one."""
+    if not spec:
+        return None
+    if not spec.get("key"):
+        raise ValueError("a tables registration is read under its committer's key file (--tables-key)")
+    where = str(spec["registration"]).format(rank=rank)
+    reg = XT.ExpertTables.of(json.loads(Path(where).read_text()), where)
+    if reg.rank != int(rank):
+        raise ValueError(f"{where}: the tables registration of rank {reg.rank}, not of rank {rank}")
+    return committer(reg, Path(spec["key"]).read_bytes())
 
 
 def _digest_words(b: bytes) -> np.ndarray:
