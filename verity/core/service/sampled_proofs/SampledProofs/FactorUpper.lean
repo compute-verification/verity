@@ -211,7 +211,7 @@ precision `p`. -/
 def readGroups (cs : List Cell) (reads : List (List (Nat × Nat))) (S p : Nat) : List Group :=
   (keysOf cs reads).map fun k =>
     let n := countIn (reads.getD k.1 []) k.2
-    ⟨k.1, n, k.2, (cs.getD k.1 default).rate, lnUpper n p, lnLower n p, lnUpper (S / k.2) p,
+    ⟨k.1, n, k.2, (cs.getD k.1 default).rate, lnUpper n p, lnLower n p, lnUpper ((S / k.2 : Nat) : Rat) p,
       lnFactLower (S / k.2) p⟩
 
 /-- The replay block's groups. -/
@@ -314,7 +314,7 @@ def lightPatterns (L : Ln2) (gs : List (Group × Rat)) (S p : Nat) : Option Rat 
   else
     match lse (gs.map fun x => x.1.lnN + x.2) p, lseLower (gs.map fun x => x.1.lnNLo + x.2) p with
     | some lW, some lWLo =>
-      omin prod ((lnHead (S / bmin) (lnUpper (S / bmin) p) (lnFactLower (S / bmin) p) lW lWLo p).map
+      omin prod ((lnHead (S / bmin) (lnUpper ((S / bmin : Nat) : Rat) p) (lnFactLower (S / bmin) p) lW lWLo p).map
         ((S : Rat) * L.up + ·))
     | _, _ => prod
 
