@@ -53119,7 +53119,7 @@
    }
   },
   "VStarRecursive.Protocol": {
-   "digest": "9deece932f7af84685308c8bd96a15a696c4275b1ad65e95e055c16775deb3ae",
+   "digest": "c7ce0e049b257534be1296ca75f548d53fc45b4d4996e096281522bf2d137d41",
    "definitions": {
     "VStar.Recursive.Evidence": "a17492dffbdb429d61649d16045eb6fdd665be45ec350cfce4d689ea194aed47",
     "VStar.Recursive.Evidence.base": "ba0fe67895d453c2a8624e80ec2f8cce8a0a5d278e76f5e1abd614b4d334daf5",
@@ -53141,6 +53141,7 @@
     "VStar.Recursive.Own.program": "402eb05f034b89f904a0ae804d9153429a63294ea1b83a5bdc11719a486eff1a",
     "VStar.Recursive.Own.pub": "6e065fd248540f5546728a5b055af1db43c8259a2fdd67f2ba837a5a5cb643a1",
     "VStar.Recursive.Own.registration": "517d9b9b4a2f51dddf9606c7265f9dac1dc9bb39a0753a3a40dde370348f1a0d",
+    "VStar.Recursive.PROTOCOL": "9d943c4be2ddd7e6503b4b54185fe3b9c34b6aeb1a0de06720f8db2221f15939",
     "VStar.Recursive.Params": "8e69a5f95eecd48b47968b23cc651696d6cdee0ee66ccde309327cd6345f8204",
     "VStar.Recursive.Params.base": "b1e90e92745c91abc1533c169d9195a812b7244a819cec649153259bae0aa531",
     "VStar.Recursive.Params.own": "22671db69954dd4fb354c3165737685ca4b94f54a0372d91710fb794a66a4332",
@@ -53174,8 +53175,6 @@
     "VStar.Recursive.lineEnd": "08f3f8a6ca79ec9bca18488856b517e63e59d445c0c104326b8a1e6e81bb0634",
     "VStar.Recursive.metaOf": "b1cd47a27ca618b941c7a55749e37e8fc56eed12c7ef8d76c4aa12f9c9f9fe81",
     "VStar.Recursive.need": "e7bbdffdbbf61828d6e4cae5344342cf93a279518aabe5cc4bd6bd9c1156ce99",
-    "VStar.Recursive.ownOf": "e9c5f487957ab06baa7790fec82c4a6fca8be39ee840152bd3783e43380187a7",
-    "VStar.Recursive.paramsOfJson": "0ce3bbac96b75e63a7e99533d757da428435261fa0fbf9efaca4b1f81e125469",
     "VStar.Recursive.partJson": "452868b110da42c2a36e59b70306043f4419be7f0168553f4b3e15d6a62ae991",
     "VStar.Recursive.partSize": "bba29da2eb4498c27560023d6477c2156c8d12efbab323ce500575ffed313d4e",
     "VStar.Recursive.partVerdict": "62b8bc46c0a61b8fe7722abdb0e5debf39a7d0a867656ff2dbd17244e2cf19c4",
@@ -53191,28 +53190,25 @@
     "VStar.Recursive.unitsOf": "1ac56180a10b3f59a7a09fd66c857197d7d0f96081cd0bf29a99269ba5c857be",
     "VStar.Recursive.verdictJson": "36196006852daa8ae850e68a0972813fb8100fd755dc7d86ddfac3c3b54cfb7a",
     "VStar.Recursive.verdicts": "106e3052b4f3b605e3c0d310cf1a45264809cea5a3bf4bb6dbba260780601117",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.digest?": "e4effda05fb899cdbeac0022a7a62680bc0da32178cd4bb5eb8c0311a504e4bd",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.digestOf": "f46d435b2fde345172ee5bea4d6948dec6ce2e8c96f420b7330c0ad7e5bb128f",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.exactly": "e08bfee7bc64d3f15f227341e36a8d587f03604c5f07411fa29b7db8e4757b67",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.jsonBlob": "6f8e9fb8ffa84e5477f396939d92ce6a6e9341e213e26df3718b14b136b1d9ba",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.objOrNull": "0e719dbf38d6f6d012f16cd6d54d6643495cf92ba92637719777a62741c7a4dc",
-    "_private.VStarRecursive.Protocol.0.VStar.Recursive.partOwnOf": "4dffda17f37c43ab28616023ba798292103f2c7308219f9a51c229a2a4c90e51",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.partProofOf": "92d9f050ca81c6bb47119cdfc2623535f5bc24e214f17f0a632cbb3d12a4b60b",
     "_private.VStarRecursive.Protocol.0.VStar.Recursive.without": "e2879b3c2871574cfbe19031f9caeece45e8e1bd54ea26ae2049eaa9af1cb652"
    }
   },
   "VStarRecursive.Sampled": {
-   "digest": "042884269b08f982528e2e6c15575831825da93ddcd15bb06bf7b8c69e1f38a1",
+   "digest": "b5a5083726a7527c3374fb6f49c33fcdd87f2a57595b4967039e896acc52c4a1",
    "definitions": {
     "VStar.Recursive.Sampled.Evidence": "773222f174c37c1a8da5a8a315176d9bf1de857ca1bab671afff8aa526efb36a",
     "VStar.Recursive.Sampled.ONE_STAGE": "38de5ee291b3ce3bc8d92944644a4311dc9b5c9c7af11099f319cedb5e1c63c4",
     "VStar.Recursive.Sampled.PROTOCOL": "864b6227a733d9017c62194051f38742936289e55ac9dca64a27de2a06d978f2",
     "VStar.Recursive.Sampled.Params": "726b5a58f298d6c8fa1c639f2df84f6fdce45463f56cbc9ad3a1d1d25079a255",
     "VStar.Recursive.Sampled.RECURSIVE": "0e0f5176c046495c1e5c505a4aafca31c82848dd35b65af82d5b2b79a1a02fbf",
-    "VStar.Recursive.Sampled.V1_REFUSED": "40b96b16e756c26560aaf0e1c6e46088f059a46508f12a97188c6077e49545d6",
+    "VStar.Recursive.Sampled.RECURSIVE_REFUSED": "a1868671be3991355c7045f8afa7d51c4c6aa5e335c99fd70e97020cb7b49364",
+    "VStar.Recursive.Sampled.V1_REFUSED": "0dad753025e3f977b4a0adbb41fb98a91f60216860a7195583fe92ee97c0ff61",
     "VStar.Recursive.Sampled.checkBlobs": "474842daf760fb18672b94479839ebc4f51afc86fa1132dca3f47717cf671dd5",
     "VStar.Recursive.Sampled.evidenceOf": "88bd2c64e1baa85d0faa51caf939fa621c22747b8f714328bfb10a7d221a1c25",
-    "VStar.Recursive.Sampled.paramsOfJson": "ca29ef89fd6cdf6f01156870c4ecc7309f8c617c4df0f77077998f73b2aecdf3",
+    "VStar.Recursive.Sampled.paramsOfJson": "0bb0c39e892e96fa21a082a73481f67850802ce698afcf9cc395bf5e0bda1b17",
     "VStar.Recursive.Sampled.protocol": "a1cd446b5b7abc0706b1b18ae82358f15591b7b19b7daa20fbe34bf334b7c46b",
     "_private.VStarRecursive.Sampled.0.VStar.Recursive.Sampled.split": "6762f31881ea4bfd9c522b84bfc6c8127b65d4b14476b95bbf176923c5929528"
    }
