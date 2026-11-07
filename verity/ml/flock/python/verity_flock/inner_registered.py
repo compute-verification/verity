@@ -26,7 +26,7 @@ past the description's, which no instance reads (refused: the registration's row
 (`REGISTRATION`, beside ``circuit.txt``), whose ``registered`` entries are every value registered at staging (``prog``
 when `register` is given the statement's program and partition object; candidate 3's stacked table R's top,
 `verity_flock.rec_session.stage_stacked`). Its ``program``, ``query`` and ``partition`` are the partition object's that
-META names (``program_sha512``, ``partition``), its law one-stage's ``stratified`` over the population, its scheme the
+META names (``program_sha512``, ``partition``), its sampling design one-stage's ``stratified`` over the population, its scheme the
 statement's (`circuit.SCHEME`), no served roots (the inner tables' are committed in the session), and its window
 ``stand-in``: it depends on the circuit and the registration's salts alone. META's ``registration`` (`REGISTRATION_KEY`)
 is the record's digest (one-stage ``registration.digest``), so the circuit's SHA-512, the statement digest the prover
@@ -140,7 +140,7 @@ def meta(stage: Path) -> dict:
 
 def registration_record(program, partition: Mapping, entries: Sequence[Mapping]) -> dict:
     """The circuit registration over ``program`` (a core ``Program``) and its ``verity/partition/v1`` object ``partition``,
-    registering ``entries`` (`Registered.entry`): one-stage ``registration.record`` with the law ``stratified`` over the
+    registering ``entries`` (`Registered.entry`): one-stage ``registration.record`` with the sampling design ``stratified`` over the
     population, the statement's scheme, no served roots and the `WINDOW` (the module docstring)."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
 

@@ -1,6 +1,6 @@
 """The proof system: the Spec's types, the public-items rule, and a Stream's register, select, deliver and outcome over
 the one-stage audit, with a stub verifier, a challenger of the test's own (`fake_challenger`) and an injected clock. A
-stream asked to draw from coins other than a challenger's refuses: the verifier draws no coins of its own."""
+stream asked to sample from coins other than a challenger's refuses: the verifier flips no coins of its own."""
 
 from __future__ import annotations
 
@@ -54,7 +54,7 @@ class Clock:
 
 class _Bytes(T.ChallengerCoins):
     """A select-only test's bytes, read as a challenger's coins: no session opens them, so a run of the verifier on a
-    draw from them has no evidence and refuses it."""
+    sample from them has no evidence and refuses it."""
 
     def __init__(self, source) -> None:
         super().__init__(None)
@@ -154,7 +154,7 @@ def test_a_stream_draws_no_coins_of_its_own():
     """A stream whose selection reads coins takes only the auditor's challenger's (`coins.ChallengerCoins`): asked for
     none, the operating system's bytes as the Lean reads them (`verifier.coins`), or any other source of bytes, it
     refuses (`NO_OWN_COINS`), and a salt from any coins but a challenger's is refused the same way before a byte is read.
-    A stream that reads no coins (`All`, or one a sampler draws for) needs none."""
+    A stream that reads no coins (`All`, or one a sampler samples for) needs none."""
     for coins in (None, V.coins, lambda n: b"\x07" * n, random.Random(0).randbytes):
         for spec in (_spec(), _spec(S.Law("bernoulli:1/2"))):
             with pytest.raises(ValueError) as e:
@@ -319,7 +319,7 @@ def test_one_stage_refusals_come_through_register():
 
 
 def test_a_law_whose_count_varies_is_refused_at_register():
-    """A Bernoulli sampling design at 0 < p < 1 draws a count that varies, so one registration's sessions would set up tables of
+    """A Bernoulli sampling design at 0 < p < 1 samples a count that varies, so one registration's sessions would set up tables of
     different shapes: `register` refuses it (`shapes`) after R1-R7, and logs nothing. At p = 0 or 1 it registers."""
     for p in ("1/2", "2/3", "2/4"):
         stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
@@ -332,8 +332,8 @@ def test_a_law_whose_count_varies_is_refused_at_register():
 
 
 def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():
-    """`rate:1/3:2` draws `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each registration's N, so
-    a registration padded tenfold (N = 60 for 6) draws K = 20 and every proof block is still drawn with probability K/N ≥ 1/3,
+    """`rate:1/3:2` samples `subset:K` at K = ⌈N/3⌉ rounded up to a multiple of its 2 tables over each registration's N, so
+    a registration padded tenfold (N = 60 for 6) samples K = 20 and every proof block is still sampled with probability K/N ≥ 1/3,
     where `subset:2` falls to 2/60. The sample, the Lean verifier's sample of record and the outcome's run (`verifier.run`,
     which an accept needs) are a subset's of K."""
     for n, k in ((6, 2), (60, 20)):
@@ -348,8 +348,8 @@ def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_p
 
 
 def test_a_rate_count_its_tables_dont_divide_rounds_up_and_one_past_n_is_refused():
-    """A rate's ⌈q·N⌉ rounds up to the next multiple of its tables: `rate:1/3:4` over 20 proof blocks draws 8 (not 7) and
-    `rate:1/5:4` over 12 draws 4 (not 3), and a record that names the unrounded count fails R1. A count past N (`rate:9/10:4`
+    """A rate's ⌈q·N⌉ rounds up to the next multiple of its tables: `rate:1/3:4` over 20 proof blocks samples 8 (not 7) and
+    `rate:1/5:4` over 12 samples 4 (not 3), and a record that names the unrounded count fails R1. A count past N (`rate:9/10:4`
     over 6 proof blocks, 8) is refused at register (`rate`) before R1-R7 and logs nothing. A rate is 0 < NUM <= DEN over T >= 1
     tables, in ASCII digits."""
     for text, n, k in (("rate:1/3:4", 20, 8), ("rate:1/5:4", 12, 4)):
@@ -620,10 +620,10 @@ def test_a_sampler_draws_instead_and_is_held_to_the_law():
 
 
 def test_each_outcome_is_the_lean_runs_from_the_receipt_through_the_verdict(monkeypatch):
-    """A one-stage outcome on a draw from the coins is the verifier's run (`verifier.run`, the Lean's `Run.run`)
-    from the registration, the bytes the draw read, the sessions and the verdicts: one run per outcome, agreeing on an
-    accepted and a rejected round. A run the Python doesn't make alike (here, a draw said to read one byte more) rejects
-    the round, its audit record failing `run`; a sampler's draw isn't run."""
+    """A one-stage outcome on a sample from the coins is the verifier's run (`verifier.run`, the Lean's `Run.run`)
+    from the registration, the bytes the sample read, the sessions and the verdicts: one run per outcome, agreeing on an
+    accepted and a rejected round. A run the Python doesn't make alike (here, a sample said to read one byte more) rejects
+    the round, its audit record failing `run`; a sampler's sample isn't run."""
     run, ran = S.V.run, []
 
     def spy(python, *a, **kw):
@@ -684,7 +684,7 @@ NEXT = {u: [(u + 1) % 6] for u in range(6)}
 def test_a_closure_map_is_refused_before_any_coin_is_read():
     """A closure map widens a work sample to a set whose size varies with the sample, which the sampled audit's soundness
     statement doesn't cover: `select` refuses any, empty or not, under any sampling design (`closure`), before any coin
-    is read, so the sample drawn after the refusals is the one a fresh stream on the same challenger draws, and it is
+    is read, so the sample sampled after the refusals is the one a fresh stream on the same challenger samples, and it is
     accepted."""
     stream = _stream()
     reg = stream.register(_record(), _ports(6))
@@ -706,7 +706,7 @@ def test_a_closure_map_is_refused_before_any_coin_is_read():
 @pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
-    draws the same proof blocks."""
+    samples the same proof blocks."""
     table = WORK if text.startswith("work") else None
     for seed in range(8):
         stream = _stream(_spec(S.Law(text), public=(*RECORD_ITEMS, STRATUM)), coins=random.Random(seed).randbytes)

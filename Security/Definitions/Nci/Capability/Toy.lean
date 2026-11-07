@@ -19,7 +19,7 @@ its one unregistered input bit); `R2` puts each in its own. One counted product 
 at gate `2`; its use is the one consumer of `K`, whose region and required gate are the token. The item `Y p` is the
 product's value at gate `2` priced `p`, and `Y2 p` its value at both gates `2` and `3`. The decoder `M` has programs of
 four lengths, and compresses: it describes `11`, the value of gates `2` and `3` when the token is set, in one bit, and
-every other two-bit string in three. The run distribution `μ` draws the token uniformly.
+every other two-bit string in three. The run distribution `μ` samples the token uniformly.
 -/
 
 @[expose] public section
@@ -160,7 +160,7 @@ def M : Decoder Unit where
 /-- The inputs with the token `b` and every other gate `1`. -/
 def tok (b : Bool) : C.Transcript := fun g => if g = 1 then BitVec.ofBool b else 1
 
-/-- The run distribution: the token drawn uniformly. -/
+/-- The run distribution: the token sampled uniformly. -/
 noncomputable def μ : PMF C.Transcript := (PMF.uniformOfFintype Bool).map tok
 
 /-- The product's value at both gates computing it, the source the toy recovers. -/

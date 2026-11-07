@@ -39,9 +39,6 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its ou
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
 | `slowdown.py` | the bracket per row; `python benchmarks/nci/slowdown.py [--calibration ID] [--row ID]` |
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
-| `covering_priced.py` | Kimi K2's slowdown under the covering bound's forms (one cost, two costs, a price per weight, the priced additive form) at bf16, FP8 and FP4, from per-class weight prices; `python benchmarks/nci/covering_priced.py [--prices FILE.json] [--dgrad]`; `--baselines [--prices FILE.json ...]` gives the priced form's gain over the uniform form under each `c_w` a registration (the weights alone, or with the optimizer state) makes selectable, per price source |
-| `prices_olmoe.json` | a price file for `covering_priced.py --prices`: per-role prices of an updated weight measured on OLMoE-1B-7B-0924's checkpoints (AdamW, 64 experts, top-8), the routed experts (`mlp_in`, `mlp_out`) apart from a dense MLP (`dense_mlp_in`, `dense_mlp_out`); its `about`, `runs` and `method` say how |
-| `prices_olmo2.json` | a price file for `covering_priced.py --prices`: per-class prices of an updated weight measured on OLMo-2 7B and 13B at early, mid and late stage 1, theta's forward codes (`points`) and with its fp32 master (`points_optimizer`), and the theta-selectable tiers over the block matrices; its `about` and `runs` say how |
 | `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` rho's `multiple_bound` takes); `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
@@ -102,7 +99,7 @@ R \;=\; \frac{1}{g}\,\min_A \frac{\text{slowdown}_A}{m_A}.
 - \(m_A(C) = C_{\text{ref}}(L_A(C))/C\) is \(A\)'s compute multiplier: the compute the reference recipe needs to reach the
   held-out loss \(A\) reaches with compute \(C\), divided by \(C\). It is the compute-equivalent gain (`davidson-2023-ceg/1`),
   with the reference and the test set made explicit. The reference is a compute-optimal dense AdamW Transformer (`hoffmann-2022-chinchilla/1`), with
-  \(C_{\text{ref}}(L)\) from a Chinchilla-form law (`besiroglu-2024-chinchilla-replication/2`).
+  \(C_{\text{ref}}(L)\) from a Chinchilla-form sampling design (`besiroglu-2024-chinchilla-replication/2`).
 - \(g\) is algorithmic progress in the base recipe (architecture, data, optimizer, allocation) since the last pretrain. It
   applies with or without the policy, so the talk shows it and then brackets it. Loss-based estimates put it near 2.5x
   per year, range 1.1-5x (`ho-2024-algorithmic-progress/3`, `gundlach-2025-origin/14`, `whitfill-2025-selection-bias/1`).
@@ -165,7 +162,7 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   result is labeled `fit` (one block holds the whole computation), `shard` (slices split the state) or `decode-shard`
   (each slice reads a whole description and decodes its part). One sequential chain of blocks is assumed. The
   constructions are analytic; none has been run.
-- `chain` is the partial-sum law, `Nci.SecurityProofs.IncompressibleContainedTraining`:
+- `chain` is the partial-sum rule, `Nci.SecurityProofs.IncompressibleContainedTraining`:
   \(\text{slowdown} \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
   with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumption is that
   one chain of the reference training algorithm's circuit is incompressible at \(b_w\) and \(b_a\)
@@ -200,7 +197,7 @@ additions are left to another block.
 `--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
 4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier
 `train.compute_multiplier`, and gives each recipe's multiplier over its slowdown, \(m/\text{slowdown}\): a ceiling from
-the partial-sum law and the attack's from the construction. The attacker picks the best recipe.
+the partial-sum rule and the attack's from the construction. The attacker picks the best recipe.
 
 The invariant `lower <= upper` is tested on every row. The two caps on threading and token rates exist because rows
 violated it without them, so a violation means a row's inputs break the theorem. A tight bracket settles a row; a wide
@@ -230,7 +227,7 @@ What registered hardware computes is one circuit, built by appending as it strea
 red teams' top attack, recommitting θ partway through, is closed by that: nothing computed under monitoring ever enters
 θ, so a run of any length is charged inside the one circuit. Any later re-registration channel would reopen the attack,
 so it would have to be slow and priced. A proposed rule puts every multiplication in a public matmul template, which
-would let the partial-sum law apply to the registered circuit directly rather than to one contained recipe. The proposed evidence carries the round-2 red team's verdicts. Render the index
+would let the partial-sum rule apply to the registered circuit directly rather than to one contained recipe. The proposed evidence carries the round-2 red team's verdicts. Render the index
 for the full map.
 
 ## What the literature says now
@@ -248,7 +245,7 @@ All values below are from `parameters.json`; render the index for the findings b
   - So `U`, the description of the update, sits at or below `K` for every demonstrated post-training method except
     full-weight training. At a 1T MoE, though, decoding seeds costs steps × parameters, and that is what binds.
 - **Activations set the floor.**
-  - Production systems send 8-bit activations across parallel links. The one boundary test in training is stable only
+  - Serving systems send 8-bit activations across parallel links. The one boundary test in training is stable only
     from about 4.4 bits (`b_a.activation/boundary-training`).
   - Retrained bottlenecks cut the bits a token carries across a shard boundary by 2–4x. One preprint claims 100x, and
     its matched-token replication loses 14–15% in loss at only 8x (`activation.boundary_bits/d7168`).

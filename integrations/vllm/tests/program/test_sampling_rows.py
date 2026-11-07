@@ -144,7 +144,7 @@ def _e_of(s: int) -> int:
 def test_nv_log1pf_true_rz_vs_the_rn_model_the_one_differing_word_is_positive_and_the_lane_domain_has_none():
     """What the scan established: the constructed pair where RN and RZ give DIFFERENT log1pf
     words is a = +0.49999997 (0x3EFFFFFF) -- RN(1 + a) = 1.5 exactly (the 0.75 * 2 selector boundary), RZ = 1.5 - ulp -- and it is the
-    only such word in fp32; a Gumbel draw never forms it (the lane feeds -u).  In the lane's domain the single word where the
+    only such word in fp32; a Gumbel sample never forms it (the lane feeds -u).  In the lane's domain the single word where the
     selector itself moves (0xBE800001: RN(1 + a) = 0.75 exactly) yields the same log1pf word on both paths."""
     a = LOG1PF_ONLY_DIFFERING_WORD
     rz, rn = SP.nv_log1pf(a), sampling_twins.nv_log1pf_v1_model(a)
@@ -325,7 +325,7 @@ def test_the_registry_keeps_one_gumbel_chain_at_version_1_and_its_evaluator_is_t
     assert [n for n in SP.__all__ if n.endswith(("V2", "_v2"))] == ["GumbelNoiseLaneV2"], SP.__all__   # the GPU-NaN logs' lane
     assert SP.GumbelNoiseLane.evaluate(942961759, 17) == SP.noise_lane(942961759, 17)
     assert bind(SP.GumbelSelectF32, V=64).id.startswith("GumbelSelectF32_v1")
-    # a lane whose draw is the finding's boundary draw (u < 2^-25, 0.9 % of a 2^16-lane row is NOT expected: ~3e-8 per lane) still
+    # a lane whose sample is the finding's boundary sample (u < 2^-25, 0.9 % of a 2^16-lane row is NOT expected: ~3e-8 per lane) still
     # evaluates identically under both adds -- searched, and asserted when found
     for key in range(200):
         u = SR.DR.as_f32(SR.rand_row(key, 1 << 16))

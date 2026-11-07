@@ -146,7 +146,7 @@ def FullFill (c : Y → Fin K → A) : {n : ℕ} → RoundGame (Noise K ρ ν Y)
       ∀ ω, FullFill c (next ω)
 
 /-- **A spot-checked filler window**: each round's coins are the round's noise and the verifier's uniform cell; the
-round's share is the short share of the words `W`, fixed before them, and it passes only where the drawn cell's
+round's share is the short share of the words `W`, fixed before them, and it passes only where the sampled cell's
 check does. -/
 def SpotFill (c : Y → Fin K → A) : {n : ℕ} → RoundGame (Noise K ρ ν Y × (ρ × ν)) n → Prop
   | _, .done => True
@@ -189,8 +189,8 @@ def FullPinnedFill (F : D → C → τ → V) : {n : ℕ} → RoundGame C n → 
       ∀ c, FullPinnedFill F (next c)
 
 /-- **A spot-checked window of pinned receipts**: each round's coins are its live coins and the verifier's uniform tile,
-drawn after the receipts are committed; the committed data and receipts are any functions of the live coins, the
-round's share is their wrong share, and it passes only where the drawn tile's committed receipt is the recomputed
+sampled after the receipts are committed; the committed data and receipts are any functions of the live coins, the
+round's share is their wrong share, and it passes only where the sampled tile's committed receipt is the recomputed
 one. -/
 def SpotPinnedFill (F : D → C → τ → V) : {n : ℕ} → RoundGame (C × τ) n → Prop
   | _, .done => True

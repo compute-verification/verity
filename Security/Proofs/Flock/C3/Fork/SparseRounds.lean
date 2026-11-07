@@ -20,7 +20,7 @@ import VCVio.Prelude.Core
 The two coin bounds `sparse_sound` (`C3/Fork/Sparse.lean`) chains, and the algebra they rest on:
 
 * `value_drawFin_le`: Schwartz–Zippel per `drawFin` coin. A nonzero vector's multilinear extension at `n` fresh coins,
-  drawn one at a time, is zero with probability at most `n/|F|`: each coin folds the lowest bit, and a nonzero pair
+  flipped one at a time, is zero with probability at most `n/|F|`: each coin folds the lowest bit, and a nonzero pair
   `(u(2b), u(2b+1))` folds to zero at one coin at most.
 * `value_degRounds_le`: `degRounds`' round step. A round's polynomial sums to the claim by construction
   (`g(0) + g(1) = claim` in characteristic 2), so on a false claim it differs from the true one, of degree `k + 1` in the

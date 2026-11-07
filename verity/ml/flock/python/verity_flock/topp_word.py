@@ -243,3 +243,18 @@ def count(V: int, p: int | None = None, splits: int | None = None) -> Counter:
     sv = E.free(1) if splits is None else E.const([splits])
     keep_word(E, E.free(V), pv, sv)
     return E.counts
+
+
+_ANDS: dict[int, int] = {}
+
+
+def ands(V: int) -> int:
+    """The circuit's ANDs at ``V`` lanes, p and splits free: every piece instance :func:`count` counts times its variant's ANDs.
+    Seconds at V = 16, about a minute at a served vocabulary."""
+    if V not in _ANDS:
+        built: dict = {}
+        for (_path, name, key) in (c := count(V)):
+            if (name, key) not in built:
+                built[(name, key)] = build(name, key).counts()["ands"]
+        _ANDS[V] = sum(n * built[(name, key)] for (_path, name, key), n in c.items())
+    return _ANDS[V]

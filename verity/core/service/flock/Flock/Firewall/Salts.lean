@@ -3,7 +3,7 @@
 
 Every hm96 row leaf whose `b ‖ c` or root goes public is the ZK server's. The serving stack hands the server each row's
 unsalted 64-byte digest `x`, and the server derives the leaf's 192-byte salt from its own 64-byte key `k`, the commit
-session `s` it draws once every digest of the session is in, the table `j` and the leaf index `i` (`saltOf`):
+session `s` it samples once every digest of the session is in, the table `j` and the leaf index `i` (`saltOf`):
 
     y = SHA-512(k ‖ L ‖ s ‖ be32 j ‖ be64 i ‖ 0) ‖ SHA-512(… ‖ 1) ‖ SHA-512(… ‖ 2),   L = SHA-512("verity/zk-server/value-salt/v1\0")
 
@@ -204,7 +204,7 @@ def RECORD_TAG_BYTES : Nat := 64
 def TableRef.bytes (r : TableRef) : ByteArray :=
   r.s ++ be32 r.j.toUInt32 ++ r.t.dom ++ be64 r.t.n.toUInt64 ++ ByteArray.mk #[r.t.schema.toUInt8] ++ r.root ++ r.tag
 
-/-- A commit session the service opened: its draw, and each of its tables with the root it answered, in table order. -/
+/-- A commit session the service opened: its sample, and each of its tables with the root it answered, in table order. -/
 structure Opened where
   s : ByteArray
   tables : Array (Table × ByteArray)
@@ -309,7 +309,7 @@ def readsOf (k : ByteArray) (regs : Array ByteArray) (trees : Array (String × T
 
 /-! ### The key -/
 
-/-- **The salt key in `path`**, exactly its 64 bytes. With `create`, where `path` does not exist, 64 bytes drawn from the
+/-- **The salt key in `path`**, exactly its 64 bytes. With `create`, where `path` does not exist, 64 bytes sampled from the
 operating system, in a file created there that its owner alone may read and write, set so before the key is written. -/
 def loadKey (path : System.FilePath) (create : Bool) : IO (Except String ByteArray) := do
   if (← path.pathExists) then
