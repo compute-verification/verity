@@ -1,6 +1,6 @@
-"""The proof system's own run of C-Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
+"""The proof system's own run of Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
 session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, its `x` row and
-output row registered too, proved by C-Flock in one loopback session under a subset sample of 16
+output row registered too, proved by Flock in one loopback session under a subset sample of 16
 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
 file are the fixture's `stage/`, the ones
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
@@ -214,9 +214,9 @@ def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-
 @lean
 @pytest.mark.slow
 def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_rows(fx):
-    """The honest session's draw is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
+    """The honest session's sample is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
     the registered root; its shared-row public file is in the form `SampledKSLiveV5` covers, so the verifier accepts it
-    and it proves the drawn proof blocks."""
+    and it proves the sampled proof blocks."""
     got, why = _verify(fx, fx / "session")
     assert why is None, why
     (f,) = got
@@ -325,7 +325,7 @@ def _same(v1, v2):
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (accepted at its shared rows, proving its drawn proof blocks), a session
+    the files as blobs: on the honest session (accepted at its shared rows, proving its sampled proof blocks), a session
     whose proof bytes were tampered with (record kept or rehashed), and the honest session without the verifier's
     registered file, its finding is `verify`'s, reason and proof blocks included."""
     for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),

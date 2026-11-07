@@ -11,7 +11,7 @@ public import Proofs.Flock.Bridge.FaultyRightC
 (`openedOf C κ val`) and any openings `opens` of the circuit's gates that hold at the constants `κ` fix and wherever
 `val` opens a value: a unit there is wrong in the transcript, or one of its committed inputs and outputs (`io`) is not
 opened to its value. Either way its lowered gates `unitGates P u` are correct in `progOf C κ` at no interior values
-(`not_correct_of_unbound`). A wrong unit is `correct_of_progCorrect`'s converse. A gate the constants fix is an input
+(`not_correct_of_unbound`). An incorrect proof block is `correct_of_progCorrect`'s converse. A gate the constants fix is an input
 opened to its constant, and a gate `val` opens is opened to its value, so the gate `opens` misses has no value at its
 position: on the unit's boundary (`boundary_posOf`) the unit commits none, and read by one of the unit's gates
 (`exists_lower_reads`) it is no constant (`const_pos`), so the unit reads none.

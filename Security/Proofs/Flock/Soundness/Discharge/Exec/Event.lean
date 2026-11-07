@@ -9,18 +9,18 @@ public import Proofs.Flock.Soundness.Audit.OneStage
 # flock-verify's acceptance, as an event of the audit
 
 `Prog.flock_headline` bounds an event of the audit as Lean defines it, whose outcome is that audit's verdict and the
-draw. What the verifier of record decides is flock-verify's verdict on the session directory a run leaves: the record the coin
-server wrote (`session.json`) and the proof file it received for each table's rep. This file states that verdict as an
+sample. What the verifier decides is flock-verify's verdict on the session directory a run leaves: the record the challenger's
+live-coin part wrote (`session.json`) and the proof file it received for each table's rep. This file states that verdict as an
 event, on an audit whose outcome carries the transcript.
 
 * `Inputs`: what `flock-verify verify` reads besides the session directory, its flags' values.
 * `Transcript`: the session directory, the record's text and the proof files in `spec.repStreams` order.
 * `Accepts I t`: flock-verify's verdict on `t` (`Main.verifyCmd`, an `hm96Rows` statement): the session's statement set
-  up from the inputs and the record's draw (`Stmt.setupTables`), and `Flock.verify` accepting the record and proofs
+  up from the inputs and the record's sample (`Stmt.setupTables`), and `Flock.verify` accepting the record and proofs
   against it. `verifyCmd` refuses more: a keyed coin tree's reused key (`CoinTree.checkFresh`), which only shrinks the
-  event. A run of several sessions sets each drawn session up at its own draw.
-* `auditLive L Reg live`: the audit as it runs, the registration, then the verifier's draw, then the live session
-  `live S R` that ends in the transcript, and its outcome the registration, the draw and the transcript.
+  event. A run of several sessions sets each sampled session up at its own sample.
+* `auditLive L Reg live`: the audit as it runs, the registration, then the verifier's sample, then the live session
+  `live S R` that ends in the transcript, and its outcome the registration, the sample and the transcript.
 * `ExecRefines`: the open refinement at one strategy pair, the probability that flock-verify accepts in the live
   audit is at most the probability that the audit as Lean defines it accepts, plus a live event `bad` (for `bad = ⊥`,
   the skeleton's `hExec`).
@@ -57,7 +57,7 @@ structure Transcript where
   record : String
   proofs : Array ByteArray
 
-/-- A record's `unit_draw`, when it is a draw (not absent, not null), rebuilt (`Flock.norm`): `Main.recordDraw`, which
+/-- A record's `unit_draw`, when it is a sample (not absent, not null), rebuilt (`Flock.norm`): `Main.recordDraw`, which
 the executable's root module defines and no library exports. -/
 def recordDraw (record : String) : Option Json :=
   match Flock.JsonParse.parse record with
@@ -68,12 +68,12 @@ def recordDraw (record : String) : Option Json :=
   | .error _ => none
 
 /-- The session's statement flock-verify sets up for a record: `Main.buildSession` on an `hm96Rows` statement, at the
-record's draw. -/
+record's sample. -/
 def setupOf (I : Inputs) (record : String) : Flock.V (Flock.SessionSpec × Array Flock.Stmt) :=
   Flock.Stmt.setupTables I.tags I.circuitFile I.publicFile I.coins I.count I.tables (recordDraw record) I.partition I.program
     I.work I.stratified I.closure
 
-/-- **flock-verify accepts the transcript**: the session's statement sets up from the inputs and the record's draw,
+/-- **flock-verify accepts the transcript**: the session's statement sets up from the inputs and the record's sample,
 and `Flock.verify` accepts the record and the proof files against each table's statement. -/
 def Accepts (I : Inputs) (t : Transcript) : Prop :=
   ∃ spec sts, setupOf I t.record = .ok (spec, sts) ∧
@@ -81,8 +81,8 @@ def Accepts (I : Inputs) (t : Transcript) : Prop :=
 
 variable {n : ℕ} {Reg : Type}
 
-/-- **The audit as it runs**: the prover registers `R`; the verifier draws `S` by `L`; the live session `live S R`
-(the prover against the challenger) ends in the session directory. Output: the registration, the draw and the
+/-- **The audit as it runs**: the prover registers `R`; the verifier samples `S` by `L`; the live session `live S R`
+(the prover against the challenger) ends in the session directory. Output: the registration, the sample and the
 transcript. -/
 def auditLive (L : Law n) (Reg : Type) (live : Finset (Fin n) → Reg → Game Transcript) :
     Game (Reg × Finset (Fin n) × Transcript) :=
