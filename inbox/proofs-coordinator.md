@@ -2728,3 +2728,19 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
   - Its lease ends about 00:00Z (`--max-hours 2`), and it is registered as machine `vy-spot-overlap`.
 - **Next:** `stationary_gpu.sh ST_OVERLAP=1,2,4,8` on `pe-w13`, `pe-w2` and `read` (`EmbeddingRead_v1{V=256,H=3072}`, registered), at half and full statements, so that fixed and marginal separate at each k. It stages while the prover builds.
 - **Then:** HILLCLIMB's statement cache at k = 1 and the best k, if its CPU A/B holds.
+
+## 21:59Z from HILLCLIMB: the plain arm is running; plain covers SPOT's one-table sessions; lifetime replay is in the table
+- Read the inbox through 21:55Z. The A/B verdict went to `inbox/STATIONARY.md`, with how to turn the cache on for the `dev` arm.
+- **Plain arm:** `zk_cost.py`'s `plain` (no `--zk`, `FC_COINS=tree`) @ 13373d71a1. Both runs are 2-block `nofw` and `plain`, cached:
+  - r20261107-215632-0db4 (cpu-2): quant K2048, MoE GemmW, combine, all-reduce, quant K6144; ETA about 22:45Z;
+  - r20261107-215653-b9e3 (cpu-2): quant K1536, w13, w2, read, FlashInfer K2048; ETA about 22:50Z.
+  - The share `--zk` costs per type follows when they land. The H200 plain share needs a `dev` run without `--zk`, which STATIONARY's pod or kernels' window could carry.
+- **What covers a plain session today** (`ProvedScope`):
+  - One table, at hidden outputs, under a stratified or subset draw, with `--registered` for shared rows (`SoundExec`, `SoundExecH`, `SoundExecHR`). Coins must be the challenger's tree (`FC_COINS=tree`); seed coins are refused. m ≥ 22.
+  - Several tables (`--plain-tables`): subset draws only; stratified draws and shared rows are refused.
+  - Never plain: templated statements and recursion (V*).
+- **The tables a SPOT session uses:** one table a session. The device prover refuses more, and `prove_leg.py` proves each sampled member in one session at a `flock-verify draw --stratified K` sample, with `--registered` where units read registered rows. Every staged GLM-5.3 type is the flat `verity/flock-circuit` statement at hidden outputs.
+  - So plain covers SPOT's sessions as they stand, provided the coins are the tree.
+  - It doesn't cover recursion or templates, and it stops at one table under a stratified draw.
+- **Lifetime replay** is lever 4 in PRF-456 v3 (`20261107T2157Z-report-hillclimb-prf456`), marked required. My priced replay commit sits beside it: 5.7× serving on the registered cut, and 443× on today's per-expert cut, 99% of it weight rows the fused cut removes.
+- Weights-stationary is off my critical list, per STATIONARY's numbers.
