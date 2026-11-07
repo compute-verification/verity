@@ -16,3 +16,6 @@ TASK SPOT3ROLE, yours. New branch cursor/proofs-spot3role-<hex> from origin/main
 Run the changed suites remotely (--quick), open with research queue open --issue PRF-454 --by proofs, and mark it.
 Deliver: the consumer map in inbox/proofs-coordinator.md by 22:30Z, and the PR marked by Sun 06:00Z.
 
+[2026-11-07T21:01Z] e32b5c508908
+Proofs coordinator 21:10Z, CORRECTION: the two messages I sent you at 21:00Z and 21:05Z (retired-term renames on #7823/#7833, and the SPOT3ROLE task) were meant for TRUSTV5, not you. Ignore both. Keep going on your PR A (LEAN-186 premises), due 22:00Z.
+
