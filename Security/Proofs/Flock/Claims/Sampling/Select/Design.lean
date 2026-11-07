@@ -5,9 +5,9 @@ import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
 /-!
-# The design the draw runs is well formed (`Properties.SampledProofs.DesignWellFormed`)
+# The design the sample runs is well formed (`Properties.SampledProofs.DesignWellFormed`)
 
-* `parseDesign_k`: a law `parseDesign` writes names a `k` of at least one, where it names one.
+* `parseDesign_k`: a sampling design `parseDesign` writes names a `k` of at least one, where it names one.
 * `derive_bounds`, `deriveWork_wf`, `workTable_floor`: the expansions' refusals: `1 ≤ k ≤ N`, a floor of at least one
   per stratum, and some work.
 * `strataOf_pos`, `partition_covered`: every stratum of an evaluated query has a unit: `TemplateQuery.evaluate` refuses
@@ -31,7 +31,7 @@ theorem getD_k (v : Json) (m : ℕ) : getD (Json.mkObj [("law", v), ("k", Lean.t
 
 theorem getD_p (v : Json) : getD (Json.mkObj [("law", "bernoulli"), ("p", v)]) "k" = Json.null := (rfl)
 
-/-- **A law `parseDesign` writes names `k ≥ 1`**, where it names a `k`: `subset:K`, `stratified:K` and `work:K` at
+/-- **A sampling design `parseDesign` writes names `k ≥ 1`**, where it names a `k`: `subset:K`, `stratified:K` and `work:K` at
 `K ≥ 1`, and a Bernoulli law none. -/
 theorem parseDesign_k (t : String) (named : Json) (h : Select.parseDesign t = .ok named) (k : ℕ)
     (hk : nat? (getD named "k") = some k) : 1 ≤ k := by
@@ -397,7 +397,7 @@ theorem partition_covered (d : Program) (query : Lean.Json) (rs : Array Flock.Te
 
 /-! ## The design -/
 
-/-- **The population's first stage is well formed over its strata**: the law the draw samples, over strata of sizes
+/-- **The population's first stage is well formed over its strata**: the sampling design the sample samples, over strata of sizes
 `ns` summing to `n`, each of at least one unit. -/
 theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.Law) (parsed : Flock.Draw.Law) (S : Array (String × Array (ℕ × ℕ)))
@@ -443,7 +443,7 @@ theorem first_wf (rule : Select.Rule) (d : Program) (query : Json) (table : Opti
         rw [totalWork_eq] at htot
         exact Nat.pos_of_ne_zero (by simpa [Function.comp_def] using htot)
 
-/-- **The design the draw runs is well formed on the partition it runs over**
+/-- **The design the sample runs is well formed on the partition it runs over**
 (`Properties.SampledProofs.DesignWellFormed`). -/
 theorem designWellFormed : DesignWellFormed := by
   intro rule d query table l D hl hD

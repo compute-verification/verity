@@ -9,16 +9,16 @@ import Proofs.Flock.Soundness.Game.Expect
 # Public wires: the constant and the zero are the statement's, not the prover's
 
 The link theorem's value layer (`Xplur`) is the plurality of a trial's readings at each commit string. On the constant
-and on the statement's zero, that plurality is the prover's only in form. Every satisfying message of every drawn unit's
+and on the statement's zero, that plurality is the prover's only in form. Every satisfying message of every sampled proof block's
 table decodes the constant to 1 (`UnitPlace.decode_one`) and the zero to 0 (its forced-zero rows). So the committed
 transcript here is `Xpub ones zeros vals`: 1 on `ones`, the gates the units' constants read; 0 on `zeros`, the statement's
 zero; and `vals` elsewhere.
 
-* `linkEvB_of_pub`: at a drawn unit, when the public wires decode to their values in every satisfying message of its
+* `linkEvB_of_pub`: at a sampled proof block, when the public wires decode to their values in every satisfying message of its
   table (`PubDecodes`), the link event at `Xpub ones zeros vals` is the link event at `vals`. So the link theorem's bound holds
   unchanged for `Xpub ones zeros Xplur` (`flock_batched_linkSoundE_pub`), and with it the count curve and the drawn-unit
   bound (`flock_batched_count_public`, `flock_batched_drawn_public`).
-* `pubDecodes_of_place`: `PubDecodes` for the decoder that reads each drawn unit from its place. Two facts about the
+* `pubDecodes_of_place`: `PubDecodes` for the decoder that reads each sampled proof block from its place. Two facts about the
   statement suffice:
   - `ConstCols`: only a unit's constant column sits on a gate of `ones`. No input column of a unit reads a constant,
     which is a fact of the circuit's wiring.
@@ -84,7 +84,7 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : Law n}
 
-/-- **The public wires decode to their values**: every message packing a satisfying witness of a drawn unit's table
+/-- **The public wires decode to their values**: every message packing a satisfying witness of a sampled proof block's table
 decodes, on the unit's committed wires, each gate of `ones` to 1 and each gate of `zeros` outside `ones` to 0. -/
 def PubDecodes (decode : DecoderB (C := C) (Reg := Reg) plan tab) (ones zeros : Finset (Fin C.N)) : Prop :=
   ∀ S R u, u ∈ S → ∀ M : Message 𝔽 (tabOf plan tab S R u).sch.k0 (tabOf plan tab S R u).sch.level₀.logCols,
@@ -93,7 +93,7 @@ def PubDecodes (decode : DecoderB (C := C) (Reg := Reg) plan tab) (ones zeros : 
         (tabOf plan tab S R u).sch.level₀.logCols M) →
     ∀ g ∈ P.io u, (g ∈ ones → decode S R u M g = true) ∧ (g ∉ ones → g ∈ zeros → decode S R u M g = false)
 
-/-- **The link event at the public transcript is the link event at `vals`**, at a drawn unit whose table's satisfying
+/-- **The link event at the public transcript is the link event at `vals`**, at a sampled proof block whose table's satisfying
 messages decode the public wires to their values: a wire that decodes differently from `Xpub ones zeros vals` is not a
 public wire, so it decodes differently from `vals`. -/
 theorem linkEvB_of_pub {decode : DecoderB (C := C) (Reg := Reg) plan tab} {ones zeros : Finset (Fin C.N)}
@@ -110,8 +110,8 @@ theorem linkEvB_of_pub {decode : DecoderB (C := C) (Reg := Reg) plan tab} {ones 
     · rw [Xpub_of_mem_zeros hg1 hg0]; exact h0 hg1 hg0
     · rw [Xpub_of_not_mem hg1 hg0]; exact heq
 
-/-- **The link term is monotone in the link event**: if at every drawn unit the link event at `Xc'` implies the one at
-`Xc`, every bound on the link term at `Xc` bounds it at `Xc'`. -/
+/-- **The binding error is monotone in the link event**: if at every sampled proof block the link event at `Xc'` implies the one at
+`Xc`, every bound on the binding error at `Xc` bounds it at `Xc'`. -/
 theorem linkSoundE_mono {decode : DecoderB (C := C) (Reg := Reg) plan tab}
     {Xc Xc' : (R : Reg) → Cont L Reg (batchedSession H E plan) R → (Fin C.N → Bool)} {k : ℕ} (hk : 1 ≤ k)
     (hr : ∀ S R j, rateB (plan S R) j k < 1) (hlow : P.LoweringSoundB plan tab decode)
@@ -182,7 +182,7 @@ theorem flock_batched_count_public (ones zeros : Finset (Fin C.N)) (hpub : P.Pub
     (P.flock_batched_linkSoundE_pub H E plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht) K σ).trans_eq
     (by rw [P.linkBoundCR_eq H E plan tab vb hCR])
 
-/-- **Drawn units at the public transcript**: `flock_batched_drawn_linked` with the committed transcript 1 on `ones`,
+/-- **Sampled proof blocks at the public transcript**: `flock_batched_drawn_linked` with the committed transcript 1 on `ones`,
 0 on `zeros` and the plurality elsewhere, when the public wires decode to their values. -/
 theorem flock_batched_drawn_public (ones zeros : Finset (Fin C.N)) (hpub : P.PubDecodes plan tab decode ones zeros)
     (hlow : P.LoweringSoundB plan tab decode)
@@ -199,15 +199,15 @@ theorem flock_batched_drawn_public (ones zeros : Finset (Fin C.N)) (hpub : P.Pub
     (P.flock_batched_linkSoundE_pub H E plan tab vb ones zeros hpub hlow hk hRw hM hρ hr ht) σ).trans_eq
     (by rw [P.linkBoundCR_eq H E plan tab vb hCR])
 
-/-! ## The public wires from the drawn units' places -/
+/-! ## The public wires from the sampled proof blocks' places -/
 
-/-- **Only a unit's constant column sits on a gate of `ones`**, at every drawn unit's place: no input column of a unit
+/-- **Only a unit's constant column sits on a gate of `ones`**, at every sampled proof block's place: no input column of a unit
 reads a constant, and a unit's constant is outside it. A fact of the circuit's wiring. -/
 def ConstCols (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) (ones : Finset (Fin C.N)) : Prop :=
   ∀ S R u (h : u ∈ S) (c : Fin (place S R u h).R.w), (place S R u h).inst.wire c ∈ ones →
     c = (place S R u h).R.one
 
-/-- **`ConstCols` for one constant gate**: when every drawn unit's constant column sits on the gate `one`, no other column
+/-- **`ConstCols` for one constant gate**: when every sampled proof block's constant column sits on the gate `one`, no other column
 does, since an instance shares a gate only between input columns. -/
 theorem constCols_singleton (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) (one : Fin C.N)
     (h : ∀ S R u (hu : u ∈ S), (place S R u hu).inst.wire (place S R u hu).R.one = one) :
@@ -219,7 +219,7 @@ theorem constCols_singleton (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf p
   · simp only [Rows.one] at h2
     omega
 
-/-- **The zero's columns carry 0**, at every drawn unit's place: a column on a gate of `zeros` carries 0 in every witness
+/-- **The zero's columns carry 0**, at every sampled proof block's place: a column on a gate of `zeros` carries 0 in every witness
 satisfying the table's statement. These are the forced-zero rows, which the verifier's Δ copies to the slot inputs that
 read the zero. -/
 def ZeroCols (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) (zeros : Finset (Fin C.N)) : Prop :=
@@ -227,7 +227,7 @@ def ZeroCols (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).
     ∀ z : Witness (tabOf plan tab S R u).S.m, (tabOf plan tab S R u).S.Satisfies z →
       (tabOf plan tab S R u).S.block z (place S R u h).o ((place S R u h).col c) = 0
 
-/-- **The public wires decode to their values from the drawn units' places**: a committed wire of a drawn unit is one of
+/-- **The public wires decode to their values from the sampled proof blocks' places**: a committed wire of a sampled proof block is one of
 its columns; on a gate of `ones` that column is the constant's, which a satisfying witness holds at 1, and on a gate of
 `zeros` it carries 0. -/
 theorem pubDecodes_of_place (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u)

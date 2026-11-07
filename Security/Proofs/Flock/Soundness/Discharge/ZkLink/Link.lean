@@ -12,28 +12,28 @@ import Proofs.Flock.Soundness.Game.Seq
 /-!
 # `δ_link` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
 
-`zk_flock_count_execOS_m1` leaves the link term as the named hypothesis `BindSound δ_link`. It is discharged here in the
+`zk_flock_count_execOS_m1` leaves the binding error as the named hypothesis `BindSound δ_link`. It is discharged here in the
 shape of `Audit.Partition.flock_batched_linkSoundE`, for the protocol as Lean defines it at the interactive-oracle layer
 (`sessionZK`), under expected-time collision resistance of SHA-512 for an explicit finder
 (`Assumptions.SHA512CRExpected`):
 
 * **The binding** (`ValueBindingZ`): `Audit.Partition.ValueBinding` for `--zk` tables. A message that packs a witness
-  satisfying a drawn unit's statement opens the commit string of each of the unit's wires to a value whose commitment is
+  satisfying a sampled proof block's statement opens the commit string of each of the unit's wires to a value whose commitment is
   the registered one and whose bit on the wire is the decoded one; two openings of one commit string with different values
   give a collision of `Hc`.
-* **Readings** (`readsZ`): on a draw, the values that drawn units reading a commit string open it to, from every padded
+* **Readings** (`readsZ`): on a sample, the values that sampled proof blocks reading a commit string open it to, from every padded
   witness near their table's level-0 oracle that satisfies the statement. At this layer the oracle is the prover's
-  `Commit` message, so a draw fixes it: the prover's strategy on the draw is deterministic.
-* **The trial** for a commit string `c` is a draw that reads `c`, uniform among such draws, at cost `t'` (one run of the
+  `Commit` message, so a sample fixes it: the prover's strategy on the sample is deterministic.
+* **The trial** for a commit string `c` is a sample that reads `c`, uniform among such samples, at cost `t'` (one run of the
   prover's `Commit`, and the decoding of its oracles). **The value layer** (`XplurZ`) is the plurality of the trial's
   single readings at each commit string. **The finder** is `LinkFinder.finderG` on the trial; its successes output
   collisions (`outZ_spec`), so under A2 the trial's link mass at `c` is at most `2t'/2^256 + 1/(eM)` (`trialZ_mass_le`).
 
-The link event at a drawn unit gives a reading other than the plurality at some commit string, whatever the session's
+The link event at a sampled proof block gives a reading other than the plurality at some commit string, whatever the session's
 coins (`linkEvZK_le_psi`, with `prob_out_le`: a table's output oracle is the one `Commit` sent). So
 (`zk_linkSoundE`)
 $$\delta_{\rm link}\le Q_s\Big(\frac{2t'}{2^{256}}+\frac{1}{eM}\Big),\qquad Q_s=\sum_c\pi_c,$$
-with `π_c` the probability that a draw reads `c`. At M0 (`flock_batched_linkSoundE`) the extraction from accepted reruns
+with `π_c` the probability that a sample reads `c`. At M0 (`flock_batched_linkSoundE`) the extraction from accepted reruns
 adds `k/(eR_w)` and the factor `1/(1 − ρ)`; here extraction is the oracle itself. A2 is asked of one prover at a time
 (`LinkCRZ`), and the bound is `⊤` at any other (`linkBoundZ`).
 
@@ -97,7 +97,7 @@ variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
 /-- **The binding of wires to registered commit strings for `--zk` tables** (`Audit.Partition.ValueBinding`'s form,
-over `TabZK` plans). Each wire is held by a commit string (`pos`). A message that packs a witness satisfying drawn unit
+over `TabZK` plans). Each wire is held by a commit string (`pos`). A message that packs a witness satisfying sampled proof block
 `u`'s table's statement opens the commit string of each of `u`'s wires: the opening's commitment is the string registered
 at `R` (`cs`), and its value's bit on the wire is the decoded one. Two openings of one string with different values give
 a collision of `Hc` (`collide`). -/
@@ -133,17 +133,17 @@ attribute [instance] ValueBindingZ.finPos ValueBindingZ.decPos ValueBindingZ.fin
 variable {L : Law n} {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : ValueBindingZ A P planZ tab decode Hc) (R : Reg) (τ : Cont L Reg (batchedSessionZK A planZ) R)
 
-/-- The level-0 oracles the prover's `Commit` sends on draw `ω`. -/
+/-- The level-0 oracles the prover's `Commit` sends on sample `ω`. -/
 noncomputable abbrev oraclesω (ω : L.Ω) : Fin (planZ (L.draw ω) R).length → Oracle F :=
   (zkStrat A planZ (τ ω)).1
 
-/-- Drawn unit `u` reads commit string `c`. -/
+/-- Sampled proof block `u` reads commit string `c`. -/
 def ReadsZ (u : Fin n) (c : vb.Pos) : Prop := ∃ g ∈ P.io u, vb.pos g = c
 
-/-- A draw reads commit string `c`. -/
+/-- A sample reads commit string `c`. -/
 def ReadsDrawZ (c : vb.Pos) (ω : L.Ω) : Prop := ∃ u ∈ L.draw ω, ReadsZ A P planZ tab vb u c
 
-/-- **On draw `ω`, commit string `c` opens to `v` by the opening `o`**: a drawn unit that reads `c` opens it so from a
+/-- **On sample `ω`, commit string `c` opens to `v` by the opening `o`**: a sampled proof block that reads `c` opens it so from a
 padded witness near its table's oracle that satisfies the statement. -/
 def OpensAtZ (ω : L.Ω) (c : vb.Pos) (v : vb.Val) (o : vb.Opening) : Prop :=
   ∃ u ∈ L.draw ω, ReadsZ A P planZ tab vb u c ∧
@@ -154,21 +154,21 @@ def OpensAtZ (ω : L.Ω) (c : vb.Pos) (v : vb.Val) (o : vb.Opening) : Prop :=
       o = vb.opening (L.draw ω) R u M c ∧ vb.val o = v
 
 open Classical in
-/-- **The readings of commit string `c`** on draw `ω`. -/
+/-- **The readings of commit string `c`** on sample `ω`. -/
 noncomputable def readsZ (ω : L.Ω) (c : vb.Pos) : Finset vb.Val :=
   Finset.univ.filter fun v => ∃ o, OpensAtZ A P planZ tab vb R τ ω c v o
 
-/-- The draws that read `c`. -/
+/-- The samples that read `c`. -/
 abbrev ΩcZ (L : Law n) (c : vb.Pos) : Type := {ω : L.Ω // ReadsDrawZ A P planZ tab vb c ω}
 
 open Classical in
 noncomputable instance instFintypeΩcZ (L : Law n) (c : vb.Pos) : Fintype (ΩcZ A P planZ tab vb L c) := Subtype.fintype _
 
-/-- **The trial for commit string `c`**: a draw that reads `c`, uniform among such draws. -/
+/-- **The trial for commit string `c`**: a sample that reads `c`, uniform among such samples. -/
 noncomputable abbrev trialZ (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] : Game (ΩcZ A P planZ tab vb L c) :=
   Game.draw (ΩcZ A P planZ tab vb L c)
 
-/-- What a trial reads at `c`: the readings of its draw. -/
+/-- What a trial reads at `c`: the readings of its sample. -/
 noncomputable def rdZ (c : vb.Pos) (w : ΩcZ A P planZ tab vb L c) : Finset vb.Val :=
   readsZ A P planZ tab vb R τ w.1 c
 
@@ -229,7 +229,7 @@ theorem outZ_spec (c : vb.Pos) (x : ΩcZ A P planZ tab vb L c × List (ΩcZ A P 
 /-! ## The link mass at one commit string -/
 
 open Classical in
-/-- **The link event's trace at commit string `c`**: draw `ω` reads a value other than the plurality there. -/
+/-- **The link event's trace at commit string `c`**: sample `ω` reads a value other than the plurality there. -/
 noncomputable def psiZ (c : vb.Pos) (ω : L.Ω) : ℝ :=
   if ∃ v ∈ readsZ A P planZ tab vb R τ ω c, v ≠ XvalZ A P planZ tab vb R τ c then 1 else 0
 
@@ -257,7 +257,7 @@ theorem readsZ_eq_empty {c : vb.Pos} {ω : L.Ω} (h : ¬ ReadsDrawZ A P planZ ta
   exact h ⟨u, hu, hrd⟩
 
 /-- **A2 for one prover's link finders** (`Assumptions.SHA512CRExpected`): at the registration `R` and the prover's
-continuation `τ`, for the finder built for each commit string a draw can read, at cost `t'` per trial. As at M0
+continuation `τ`, for the finder built for each commit string a sample can read, at cost `t'` per trial. As at M0
 (`Audit.Partition.LinkCR`), A2 is asked only of the finders of the prover it bounds. -/
 def LinkCRZ (M : ℕ) (t' : ℝ) : Prop :=
   ∀ (c : vb.Pos) (_ : Nonempty (ΩcZ A P planZ tab vb L c)), Assumptions.SHA512CRExpected Hc
@@ -296,7 +296,7 @@ theorem trialZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : 
   rw [expect_const] at hmass
   exact hmass
 
-/-- **The link mass at `c`, over the draw**: the probability that a draw reads a value other than the plurality at `c`
+/-- **The link mass at `c`, over the sample**: the probability that a sample reads a value other than the plurality at `c`
 is at most `π c` times the trial's bound. -/
 theorem drawZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     (hCR : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), Assumptions.SHA512CRExpected Hc
@@ -335,7 +335,7 @@ theorem drawZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : v
 /-! ## The link theorem -/
 
 omit [Fintype K] in
-/-- **The link event leaves a trace**: if drawn unit `u`'s table's oracle is `CommittedPad` but every satisfying padded
+/-- **The link event leaves a trace**: if sampled proof block `u`'s table's oracle is `CommittedPad` but every satisfying padded
 witness near it decodes, on `u`'s wires, differently from the value layer, then some commit string reads a value other
 than its plurality. -/
 theorem linkEvZK_le_psi {ω : L.Ω} {u : Fin n} (hu : u ∈ L.draw ω)
@@ -376,7 +376,7 @@ noncomputable def linkBoundZ (M : ℕ) (t' : ℝ) (R : Reg) (τ : Cont L Reg (ba
 the binding of wires to commit strings (`ValueBindingZ`): at every prover whose explicit finder of each commit string
 satisfies A2 at cost `t'` per trial (`LinkCRZ`),
 $$\delta_{\rm link}\le Q_s\Big(\frac{2t'}{2^{256}}+\frac{1}{eM}\Big),$$
-with `Q_s = Σ_c π_c` the expected number of commit strings the drawn units read and `M` the finder's further trials. At
+with `Q_s = Σ_c π_c` the expected number of commit strings the sampled proof blocks read and `M` the finder's further trials. At
 any other prover the bound is `⊤` (`linkBoundZ`). -/
 theorem zk_linkSoundE (hlow : LoweringSoundZK A P planZ tab decode) {M : ℕ} (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisZK (L := L) A P planZ tab decode (fun R τ => XplurZ A P planZ tab vb R τ) hlow).BindSound
@@ -430,7 +430,7 @@ variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
-/-- **The `--zk` count curve at the live draw, every table at M1's parameters, `δ_link` under A2**
+/-- **The `--zk` count curve at the live sample, every table at M1's parameters, `δ_link` under A2**
 (interactive-oracle layer): with the committed transcript the plurality value layer (`XplurZ`) of a binding of wires to
 registered commit strings (`ValueBindingZ`),
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + 2^-203 + Q_s·(2t'/2^256 + 1/(eM))` at every prover whose link finders

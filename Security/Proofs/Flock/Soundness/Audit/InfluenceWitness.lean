@@ -17,10 +17,10 @@ met, together. `W.lemma47`'s conclusion is also not trivial; the others show onl
   the same value on `D`. `W.count` is the count `card_delivered_le` gives.
 * `Gen.harm_witness`: the hypotheses of `card_influenceSet_le_harm` hold on any partition and law, with the exits as
   separators and `hb u = card (exits {u})` (`Gen.exits_card_le`).
-* `A.influence`, `A.accepts`: a law that draws nothing, a session that always accepts and the honest committed
+* `A.influence`, `A.accepts`: a sampling design that samples nothing, a session that always accepts and the honest committed
   transcript meet `KnowledgeSound 0`, `BindSound 0` and `AnchorsSound 0`, so `audit_influence` applies, and the audit
   accepts with probability `1`.
-* `Two.influence`, `Two.accepts`: the same for the two-stage audit. `W`'s partition refines itself, both stages draw
+* `Two.influence`, `Two.accepts`: the same for the two-stage audit. `W`'s partition refines itself, both stages sample
   nothing, and `KnowledgeSound 0`, `BindSound 0` and `AnchorsSound₂ 0` hold, so `twoStage_influence` applies, and the
   audit accepts with probability `1`.
 * `Ex.exfil`: `audit_exfiltration`'s hypotheses hold together, for a one-bit message, with `A`'s audit at `0`, `Gen`'s
@@ -139,7 +139,7 @@ theorem wrong_sub (Z : Fin C.N → Bool) (h1 : Z 1 = false) (h2 : Z 2 = true) : 
 def X : Fin C.N → Bool := ![false, false, true, false]
 def Y : Fin C.N → Bool := ![false, false, true, true]
 
-/-- **Lemma 4.7 is not vacuous**: two different transcripts, each with a wrong unit, agree on the delivered wire. -/
+/-- **Lemma 4.7 is not vacuous**: two different transcripts, each with an incorrect proof block, agree on the delivered wire. -/
 theorem lemma47 : X 2 = Y 2 ∧ X ≠ Y ∧ P.wrong X ≠ ∅ := by
   refine ⟨P.outputs_eq_of_separates hK hD hsep (inputs X rfl) (inputs Y rfl) (wrong_sub X rfl rfl)
     (wrong_sub Y rfl rfl) ?_ 2 (by simp [D]), ?_, ?_⟩
@@ -243,7 +243,7 @@ open W
 /-- `W`'s partition refines itself: each unit is its own replay unit. -/
 def r : P.Refines P := ⟨id, fun g => by simp⟩
 
-/-- Both stages draw nothing. -/
+/-- Both stages sample nothing. -/
 def L : Law 2 := { Ω := Unit, draw := fun _ => ∅ }
 
 def L₂ : Fin 2 → Law 2 := fun _ => L

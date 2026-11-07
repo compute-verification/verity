@@ -53,16 +53,16 @@ The public-inputs flag is `false`: with `--public-inputs` the check refuses ever
 passes `setupTables` no public input words, the setup `Accepts` models. The registered flag `reg` is whether the verifier
 holds `--registered F`: `Scope` and `ScopeZ` are the check without it, `ScopeR` and `ScopeZR` the check with it, which
 `VerifiesR` and `VerifiesZKR` pair with the registered check `AcceptsR` and `AcceptsZKR` model. A session's verdict is `verifyCmd`'s `setupOf` at the record's `recordDraw` (the check
-requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then `ProvedScope.drawLaw` on a drawn
-session's draw, `verify` or `Zk.verify`, the check, and last `ProvedScope.drawLaw` on a session without a draw. So a session
+requires `hm96Rows`): `setupTables`, under `--zk` `Zk.shapeOk` on every table, then `ProvedScope.drawLaw` on a sampled
+session's sample, `verify` or `Zk.verify`, the check, and last `ProvedScope.drawLaw` on a session without a sample. So a session
 `verifyCmd` accepts satisfies `Verifies` without `--registered` and `VerifiesR` with it (under `--zk`, `VerifiesZK` and
 `VerifiesZKR`). `verifyCmd` refuses more, which only shrinks the
-event: a draw by a law no soundness claim draws by (`ProvedScope.drawLaw`: a bernoulli or work draw, or a subset draw
-without `--zk` or `--plain-tables` at public outputs, or under `--plain-tables` a stratified draw), a session without a draw (every claim's record hypothesis reads the record's draw), registered reads (`checkRegistered`:
+event: a sample by a sampling design no soundness claim samples by (`ProvedScope.drawLaw`: a bernoulli or work sample, or a subset sample
+without `--zk` or `--plain-tables` at public outputs, or under `--plain-tables` a stratified sample), a session without a sample (every claim's record hypothesis reads the record's sample), registered reads (`checkRegistered`:
 a header naming registered values without `--registered`; with it, `Registered.check` needs a shared-row public file,
 which the check passes only at hidden outputs and `hm96-sha512/v1` leaves, where `VerifiesR` and `VerifiesZKR` model the
 registered check), a coin-tree
-key an earlier session of the run used, and a session file it cannot read. Each drawn session of a run is set up at its own draw,
+key an earlier session of the run used, and a session file it cannot read. Each sampled session of a run is set up at its own sample,
 and the draw-less setup, one statement, once.
 -/
 
