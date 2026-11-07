@@ -1019,10 +1019,6 @@
   }
  },
  "unwitnessed": {
-  "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
-   "type_hash": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64",
-   "unfolded_hash": "6da2b5031a2332a1f1f3f65e8b350af5f57bc95da5a06cb59a1bd045fc58a89c"
-  },
   "Accounting.SecurityProofs.Bridge.SpaceOfPeriodHeld": {
    "type_hash": "244896e8069c5fc7458985bb6a8bd223c15a40c28381c6930a8edda81523f263",
    "unfolded_hash": "bda88e46f7ad051190ff0ca6f12a2802ba39b83a2d5c88e6925fade635854044"
@@ -1055,6 +1051,7 @@
    "type_hash": "bd3cbe5d8c70108d7019cd861258345913eaed5d00114443d813668b395edfe2",
    "unfolded_hash": "b688d3cdc94be6a2dbd630c2222347e7d857758aebe1c9cec900ad2257953a8b"
   },
+  "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "33f7abc2366880d43c453c6ef7f93c829313485d13e4d3112049d6c68e127c27",
   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": {
    "type_hash": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39",
    "unfolded_hash": "29fd4ee360ee2aa46333b340ecb9fcb1b8d6a5ba19141543012574d4775e7e44"
@@ -1114,6 +1111,12 @@
   "NciCheck.Properties.SecurityProofs.DescWitnesses": {
    "type_hash": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b",
    "unfolded_hash": "411b39e73316c5efe2044c66f5607e5fe9bf9c611a1c0603c8cdf0609638d528"
+  },
+  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
+   "missing": "honest",
+   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov",
+   "unfolded_hash": "a3542435ff54bd5938833681b1cd6a586be267227fc78d1af103b0ee506a8a80"
   },
   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
    "type_hash": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea",
@@ -1397,6 +1400,12 @@
    "type_hash": "30fd4da534ba9d9d1ac4d9f139c2caddb9c8062ac8d56b30d9bd1695fec59b6a",
    "unfolded_hash": "886e1a4446361385b29acb248b94643c3c24993a290636bea27053884eb7dc11"
   },
+  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
+   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
+   "missing": "honest",
+   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld",
+   "unfolded_hash": "be489eaff119bd8d9a10805374ef0eb7dedfd507fd72cd3bee7c56da645a6ce8"
+  },
   "Properties.Pouw.Credit.SecurityProofs.epsAtSound": {
    "type_hash": "9cdd4feb03ed39b17cc2290c38f6aa3b4bde712d77a7e4f22a57da8a746332a6",
    "unfolded_hash": "4d6ca0d165dc6a4581fbbf48c670e1e6887a45e0d7f9439256bb3947fa78b51b"
@@ -1448,6 +1457,10 @@
   "Properties.Pouw.PeriodJ10R.SecurityProofs.h1J10RCheckedCreditPeriod": {
    "type_hash": "4271b69b424ca1a5e9ef6c4d6854c39ebe1a149b1d6d22f08374a1ca2f7a443f",
    "unfolded_hash": "bcbba2fabc11e88d77c3f5df6fd6e24d3c0c1dbfc536474fdc66e3dfa762462a"
+  },
+  "Properties.Pouw.PeriodJ10RStrata.SecurityProofs.h1J10RCheckedCreditPeriodStrata": {
+   "type_hash": "2a583093791e59e038a09a992ae9548be6ba1604e3a8b0fcc5e580fbafbe9b64",
+   "unfolded_hash": "6da2b5031a2332a1f1f3f65e8b350af5f57bc95da5a06cb59a1bd045fc58a89c"
   },
   "Properties.Pouw.Served.SecurityProofs.servedFreed": {
    "type_hash": "503b5b4232f83c7d7559aac6b44b71c1ac7d87dfd10390aa9784221d73009c89",
@@ -1529,6 +1542,18 @@
    "type_hash": "106f9eeb8a719c5b3bdc75b1580cd548d065c3f5d3b7d429eb3709f3b281ee09",
    "unfolded_hash": "4090f0b7b95f9743bbc8620c008f55a6955bdb34c1be55efa032c1332fd2a98c"
   },
+  "Properties.Remote.SecurityProofs.acceptComplies": {
+   "type_hash": "ef95cc7750100d943f75d3094ed74952a8c0428b1777f2562a2075e8f326e9d0",
+   "missing": "honest",
+   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
+   "unfolded_hash": "23d8e90dec9e6c2f39406846c5360e18ad2fe6f68612f81940bba72450a01fbc"
+  },
+  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
+   "type_hash": "cb787233027c149c9cf3d23cbc2485781bdead41db68164723913059c512cde4",
+   "missing": "honest",
+   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
+   "unfolded_hash": "1cbdf00ba5dbe5e7e90c3c839923b6104892a82cc56f463e2667e0cf2b29c167"
+  },
   "Properties.RemoteAudit.Line.SecurityProofs.lineHeld": {
    "type_hash": "869ce854c6e28bbfab9afec70664c0ff52cb2e286516fc98f0886488f20e2951",
    "unfolded_hash": "b65d52df519b37adb74e6f1d1332a9eb51b0fb18d82efd523b06d3fa26562928"
@@ -1572,6 +1597,14 @@
   "Properties.RemoteAudit.Shared.sessionDrawsRecords": {
    "type_hash": "065919af943ec94c405062fd23a3454f46e6dbfaaa8ab906f3ec0b37ec0f9773",
    "unfolded_hash": "0a576e28cac3f465d357deb52f962aff65e18f6825120c7ad81cc320632cd1ff"
+  },
+  "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
+   "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
+   "unfolded_hash": "811e4c9c86efe74e50d7f8d6d0f361a3a3277b35c3bc48bfc42a707448949ae9"
+  },
+  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
+   "type_hash": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9",
+   "unfolded_hash": "2659f85f3c83b418933a8c3b39219163303da4f757f87e7a0b330fc4cae0125e"
   },
   "Properties.RemoteAudit.acceptChecksOpenings": {
    "type_hash": "d58f00149a369b5ec1020e9aea876e2297ca72f1b599e37357479afaffadf1ad",
@@ -1701,39 +1734,6 @@
   "Properties.SampledProofs.noAcceptAfterHalt": {
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
    "unfolded_hash": "e414354acd8918255fe2888c376780bcd6dd97919b29cea4883bfb2faffcf306"
-  },
-  "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "33f7abc2366880d43c453c6ef7f93c829313485d13e4d3112049d6c68e127c27",
-  "Properties.Pouw.Credit.SecurityProofs.drawWithheld": {
-   "type_hash": "6152a3b687292021ad36f2f033cc7bde1de4f226b727c5a7c6db429a576518d4",
-   "missing": "honest",
-   "why": "an honest instance is a whole credited window: an auditor ledger whose LMS-signed open trustedSessionOf accepts, the challenger session's files, a canonical Commit record and a live draw coin opened under that session's commitment; no proof builds those yet (Pouw.Check.acceptedDraw, Pouw.Commit.drawCoinAccepts and Pouw.LiveSalt's guarantees, which read the same session, are unwitnessed), and drawSession_honest proves the one step DrawWithheld adds accepts every trusted session the ledger opens withheld",
-   "unfolded_hash": "be489eaff119bd8d9a10805374ef0eb7dedfd507fd72cd3bee7c56da645a6ce8"
-  },
-  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
-   "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
-   "missing": "honest",
-   "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov",
-   "unfolded_hash": "a3542435ff54bd5938833681b1cd6a586be267227fc78d1af103b0ee506a8a80"
-  },
-  "Properties.Remote.SecurityProofs.acceptComplies": {
-   "type_hash": "ef95cc7750100d943f75d3094ed74952a8c0428b1777f2562a2075e8f326e9d0",
-   "missing": "honest",
-   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
-   "unfolded_hash": "23d8e90dec9e6c2f39406846c5360e18ad2fe6f68612f81940bba72450a01fbc"
-  },
-  "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
-   "type_hash": "cb787233027c149c9cf3d23cbc2485781bdead41db68164723913059c512cde4",
-   "missing": "honest",
-   "why": "its honest case, remote's check accepting one run, needs the composite's check past parsing: each subprotocol's decoder reads its bytes through `Lean.Json.parse`, which is `partial`, so no proof evaluates it on a literal. PRF-299 brings the check factored past parsing and the reachability lemma by Tue 3 Nov; meanwhile `Properties.Remote.SecurityProofs.acceptInferenceOnly_honest` proves the tie on an honest run's one record",
-   "unfolded_hash": "1cbdf00ba5dbe5e7e90c3c839923b6104892a82cc56f463e2667e0cf2b29c167"
-  },
-  "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
-   "type_hash": "fbb79296c2d8d010361458fbbc8255129c234ad59ad8deaca1e560a9a4eca738",
-   "unfolded_hash": "811e4c9c86efe74e50d7f8d6d0f361a3a3277b35c3bc48bfc42a707448949ae9"
-  },
-  "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
-   "type_hash": "e5be3f448a3a0cd511b5b692cd03aa865fa570e659e621fe25464cc53f957dd9",
-   "unfolded_hash": "2659f85f3c83b418933a8c3b39219163303da4f757f87e7a0b330fc4cae0125e"
   }
  },
  "layers": {
@@ -12473,9 +12473,11 @@
    }
   },
   "Definitions.Core.Interaction": {
-   "digest": "992fcc2ad8bc5d86695552e10f4e6f12f9ce3fe77a47e39ee76985593139b73f",
+   "digest": "523f9c3a54369bc5ced4fc8454d35c99753feb926d5da8ba198dc2c03c88d5e9",
    "definitions": {
     "Claims.Collision": "c9aa38dcdefc9acdf1e2b55b91bd771bda4cbf43d796761cda34074058a3c4da",
+    "Claims.Ex": "c2c94d12b1a732e69312adbfd75898bd82844441f36c75ab6c132a808e7f85ff",
+    "Claims.ExpectedCR": "83125752f67066703612e6c2f5f7f9a3da5f44b0db4f4072efface41ec981eaf",
     "Claims.Finder": "2c5c863ab2f4038487d9df359f7002207b9f7e4c49ed437cfe2437a71f7cbe32",
     "Claims.Finder.Pr": "dd2f1f6763dbbdfbcda827509bf2c4748a5dc264d47bce6f0137c160acfc4f9c",
     "Claims.Finder.S": "504b05057f5366f634351cdff7ea218ad75f23f52c3151b5e5d6bfd6aa89143c",
@@ -21030,7 +21032,7 @@
    }
   },
   "Properties.Verity.Game": {
-   "digest": "40d2c9a77f9cec67f81074d642c05609f38e278482d95efa2cfcc20a26a556cc",
+   "digest": "efe129ae12079b077258852fcad7fffe7b5bc15e1280e27c51e8ed5ac8499399",
    "definitions": {
     "Verity.Accepts": "6c0663c3c95468dc13caa2e322143cfcb5ed525dca7ac3344068832b989b44fc",
     "Verity.CaseAccepts": "d574aee73191736a313149fad36c27733d05c003e2fa4edfabedc5b64a00d4ae",
@@ -21109,9 +21111,9 @@
     "Verity.TreeOpenable": "5eda18360f1488996b766de65947617b9e00356925effafc445a48a21669d608",
     "Verity.TreeSample": "79fa9c5673525eabcdd4c63f045415fa5d2fac82689029540788fd77f64e3d71",
     "Verity.TreeSpecOk": "666190d9707826c4245f369aa14ce49eaef4fc1789e996351240e99eddde8012",
-    "Verity.Vocab": "63b4a90b789f90c1313a950ff2fe16114ec7fc79e0f95bf1440f71eca81ca579",
+    "Verity.Vocab": "91edc0d723be122a15f37a5af82b80aa0c08e64d819de830fcbae1ca3330c0e8",
     "Verity.Vocab.BandwidthAuditSound": "c95bfe02effacf053a9585f0acb0ab353f98eeb5651de3b9d85cf6ce7995aedc",
-    "Verity.Vocab.FinderCR": "ac9a385f70101635417ebdbe596771e472e1860e4bd509cdea565732da998e91",
+    "Verity.Vocab.FinderCR": "edaced35a3cbb1f7a3749d5c50cb3ad2a2e14f7ef6d00c633e9cbb3520429084",
     "Verity.Vocab.Holds": "4d3122b84d73fce763002a7789f07051de1e31d9c17e2739703ebb25cc8f884e",
     "Verity.Vocab.InferenceOnlySound": "17ab737f5a566f68df77a0c6ef91e28ab70fe325e5aa76663f784535a99206b5",
     "Verity.Vocab.Logged": "e17d736e0f3016e0383e66eba5b8b455bcd85f47e2d3c3dfde28546c9ad33c53",
@@ -21137,10 +21139,9 @@
     "Verity.Vocab.coinsRead": "4685228eafa3be069cda8671b29cbb04b681563fc26521a450a0d4f8ca8a93d4",
     "Verity.Vocab.computed": "9ef4e592b84b4f2c90140b00185eac91673904a65fc712357d84adc010dc3f5e",
     "Verity.Vocab.cost": "2b3a9189ceef4cbfba41bd1d075d240edc8535646e1695ef0db59ac2183a89a0",
-    "Verity.Vocab.crBound": "74aa58ee95cf7fc690e6f74bd055cb09bd0e7dc8421f89d2a66ed18a70a75302",
     "Verity.Vocab.declaration": "3da67f0b7917249b8ba094df175105f966b13d7d54293bd47a1ee253f2a04e22",
-    "Verity.Vocab.delta": "a80b56339beded001974f4b14454f57aae570b22a497ff72abdec590c3f4b3e0",
-    "Verity.Vocab.epsForge": "edee5c6aeecfb26ad74297992a3ce742f671377f3f48e2ebc128fad5299a65e1",
+    "Verity.Vocab.delta": "ac5cc3e6c1e677f7e95c97f9583b60858582c62a387d6212b911c45ae47d512c",
+    "Verity.Vocab.epsForge": "9602025e65b6bbc43d42f2ae619a350b0784b61c466f19b0c51edf992e8c2348",
     "Verity.Vocab.error": "709161bd52cb309a0f20ef6bf4ecdc1a71237d4190fefd23ce89aecdcd6cf3a1",
     "Verity.Vocab.extract": "b3226dbee8cbe254ad0761819df4eab2e21c3698f567dd20c40d2262537383af",
     "Verity.Vocab.families": "95b15c713d97bc8b92462692de0abfd12afbffa89a44ebd2ed0aef2c2edc70a7",
@@ -21153,7 +21154,7 @@
     "Verity.Vocab.game": "5555cfde862b4e5d93f93531ab8540632b7426c6627229134f018b54c4ddbcdf",
     "Verity.Vocab.gates": "67a05766f43aceb66f0e75048ea36586dd141f565fc7a66a72eec77e2dd4a21d",
     "Verity.Vocab.live": "55f1dec1cd2cf5b78c1f2695dc4c9bcb20e62ccf679ba884d413f1b19b1477e9",
-    "Verity.Vocab.loss": "0b0b11d4d32dce8ab332737209bfd0b4427c2cc48b29b8a176d731bddf627f42",
+    "Verity.Vocab.loss": "31de34ba7081fd3560f6c1d644a68fa0e0b49c07ef97bcf349d375306dc15fc7",
     "Verity.Vocab.partsOf": "5728bd0b422dc9e4441cf5ce87844ab3ea5afba460c5ba0a1c8494ea3e3208c1",
     "Verity.Vocab.place": "9f601a7df601a6557d20343914d1889a26f8d56e31f7d90c78cf5e9ccd67a611",
     "Verity.Vocab.programDigest": "ef47573aafa35b4f48c60c503073f169702cdd2a5ab6e15e7a43f9049453c32d",
@@ -21206,7 +21207,7 @@
    }
   },
   "Properties.Verity.Idle": {
-   "digest": "1a1a115bd86aaa2addc5fea3c750ca69d59cc6e951d293ac657865b3155fd03a",
+   "digest": "0a2968b61e07fa325c882042c8e82a71d2e33ac8a81339173c31935b9d9a0dbc",
    "definitions": {
     "Verity.Idle.blocks": "ebe95418157ad28d48d4083579d9136b28c17e127cab37e3ebeaae215a85d361",
     "Verity.Idle.device": "1a01ab3a6064792afb1b2d5d70af0e09f5deea7bd52dd6afbb39e1b3e0d9dd67",
@@ -21220,7 +21221,7 @@
     "Verity.Idle.signer": "a824eca6c17fecbad2c40282c4c889c335f4fc96dd8eedfb48ed8c267ab4273a",
     "Verity.Idle.step": "736cbc3dbe0dc77af7dadee980cf76b3e0cb9fb0397e9fe292f1d333b2a8471a",
     "Verity.Idle.unbounded": "11556337337fea0ed4400347b0458ffbe449cde8674e00615a9772052a0e7920",
-    "Verity.Idle.vocab": "f678259c6a974f9f228335052191f5fb4d8b78910e719bf61fb893aa6d07ee76",
+    "Verity.Idle.vocab": "211657d5a4ff4b83bb32d19c5707396d5ce8c6fdf605bb880f54b1bb3ff5ca4c",
     "Verity.Idle.wipe": "b9a8631533e1d657520f239e0895202ded8108d1aad9aea210a31bd3ebf6c5a7",
     "Verity.Idle.world": "6518042e9261acab95d8699c13317744c700812b1e2cedcb2a2376552c600139"
    }
