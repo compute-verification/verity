@@ -3,6 +3,21 @@
  "proved_in": ["Proofs"],
  "assumptions_module": "Definitions.Assumptions",
  "assumptions": {
+  "FlockSoundness.Assumptions.SHA512CRExpected": {
+   "owner": "@proofs",
+   "digest": "f0b159e63eca73831a6d80d1bbecd21b85472aae5e120138cda49f579ab7fa4d"
+  },
+  "FlockSoundness.Assumptions.SHA512CRStrict": {
+   "owner": "@proofs"
+  },
+  "FlockSoundness.Assumptions.UniformRandomBytes": {
+   "owner": "@proofs",
+   "digest": "d22db3c9f03458b981022d3f6e219b5d207f217b92e7d48dd370f7ebcc0c6c19"
+  },
+  "FlockSoundness.Assumptions.UniformRandomBytesTest": {
+   "owner": "@proofs",
+   "digest": "fa42afaba1b547936b644d070e6094891520ef243e3e61e6286f9ac311dc307d"
+  },
   "Nci.Cut.Assumptions.Exports": {
    "owner": "@training",
    "digest": "45a66575def5bbb4d3ab2a6da56b3ea9c3cddd5d096fbf156665d789e887c161"
@@ -1707,18 +1722,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "FlockSoundness.Assumptions.LinkCRAt": {
-   "owner": "@proofs",
-   "digest": "54f1596725c64b488d92de3b28e1b65bd106b82fb7340d6e295841ea82416c30",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Assumptions.LinkCRZCAt": {
-   "owner": "@proofs",
-   "digest": "4d260e2bc700709383db0595b199c6ff3798e35dc9a90ba9a906092eec9df1e8",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "FlockSoundness.Assumptions.RecordCustodyExec": {
    "owner": "@proofs",
    "digest": "9aaf647d65d56a4c584fe7f90319613b4e47f457a9de6f115e9f6716727e2645",
@@ -1728,36 +1731,6 @@
   "FlockSoundness.Assumptions.RecordCustodyExecH": {
    "owner": "@proofs",
    "digest": "2b581007e257e45addde73c07a010d1e95af41af45d6112b37d315dca5a1577b",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Assumptions.SHA512CRExpected": {
-   "owner": "@proofs",
-   "digest": "f0b159e63eca73831a6d80d1bbecd21b85472aae5e120138cda49f579ab7fa4d",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Assumptions.TableCRAt": {
-   "owner": "@proofs",
-   "digest": "20a3b540bd59c19a57e0358913aaef55d38bab3da8552fa3c6eb6bed1e4e4f72",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Assumptions.TableCRZAt": {
-   "owner": "@proofs",
-   "digest": "c682643ee00b008e6e50867741b22ae66fe4dc13c14f59c6208e32fa256813cd",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Assumptions.UniformRandomBytes": {
-   "owner": "@proofs",
-   "digest": "d22db3c9f03458b981022d3f6e219b5d207f217b92e7d48dd370f7ebcc0c6c19",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Assumptions.UniformRandomBytesTest": {
-   "owner": "@proofs",
-   "digest": "fa42afaba1b547936b644d070e6094891520ef243e3e61e6286f9ac311dc307d",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1848,12 +1821,6 @@
   "FlockSoundness.Discharge.DecodeZLJ.RecordsLiveJ": {
    "owner": "@proofs",
    "digest": "f6818a158985af9d677dd1e573b4ce28b6ecf6f56f5904e43ca56963798f46e3",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.Exec.SessCRL": {
-   "owner": "@proofs",
-   "digest": "1f634678bbbf41c49601f77365aa9d14b1c76a0722ba5de99ede0af834bc7c8b",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -1953,24 +1920,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "FlockSoundness.Discharge.ZkLink.LinkCRZC": {
-   "owner": "@proofs",
-   "digest": "53137b003de91081ca7cc4de88ee4dd541309df80380fd581caa72169165a282",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.ZkLink.RowsCRZC": {
-   "owner": "@proofs",
-   "digest": "d69d9104fd9b0e3fa05a2fb6db64a56a7bc3e35a07b536104ceaf1f1c4fce171",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.Discharge.ZkLink.SessCRZ": {
-   "owner": "@proofs",
-   "digest": "099b3ba6e78fe8bc2dee72339ce94c921f82e9d236514b36c8341a028d1d6cfc",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "FlockSoundness.Discharge.ZkReg.OwnReadsH": {
    "owner": "@proofs",
    "digest": "d4108f6682768fb7c01ce66683efd88edba9d74b34d8e9f81e94d2139b976867",
@@ -1980,12 +1929,6 @@
   "FlockSoundness.Discharge.ZkReg.OwnReadsHJ": {
    "owner": "@proofs",
    "digest": "e9aeedec7fad74902c6d756469f6931815c8b93e9b49fb3395f722b292580164",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "FlockSoundness.StrictCR.Finder.CR": {
-   "owner": "@proofs",
-   "digest": "4234584c8c100c10bc25e561da0e248d6b2c394ea401c2310eac1fcb610131e6",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
