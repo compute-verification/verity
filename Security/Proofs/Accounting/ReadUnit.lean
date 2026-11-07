@@ -38,17 +38,17 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # Read units bind to their tables' rows
 
-The cut's binding at its read units (`Definitions.Accounting.ReadUnit`), each read's gate refinement
+The binding of table reads at a picked index (`Definitions.Accounting.ReadUnit`), each read's gate refinement
 (`Accounting.ReadUnit.GatesRefine`) a hypothesis:
 
-* `readUnitBinds`: at a transcript where a read unit is correct, its registered rows hold and its index is the router's,
-  it returns its table's row at the router's index, or SHA-512 collides on what the two checks hashed
+* `readUnitBinds`: at a transcript where a read unit is correct, its registered rows hold and its index is its
+  picker's, it returns its table's row at the picked index, or SHA-512 collides on what the two checks hashed
   (`Hash.SecurityProofs.EmbeddingReadBinding`).
 * `readUnitDrawn`: over a run's coins, the run accepts with a drawn read that returns another row than its table's at
-  the router's index, where nothing its check and the table's check hashed collides, with probability at most the layer
+  the picked index, where nothing its check and the table's check hashed collides, with probability at most the layer
   below's bound: that the run accepts with a drawn read wrong, or its registered rows failing, in the extractor's
   transcript.
-* `readUnitDrawnCR`: the same with the collision priced through `Claims.ExpectedCR` at the cut's collision finder
+* `readUnitDrawnCR`: the same with the collision priced through `Claims.ExpectedCR` at the reads' collision finder
   (`Accounting.ReadUnit.Reads.finder`): the layer below's bound plus the finder's expected SHA-512 calls over `2^256`.
 -/
 
@@ -81,10 +81,10 @@ open Accounting.ReadUnit
 
 variable {C : Verity.Circuit}
 
-/-- **A read unit returns its table's row at the router's index**: at a transcript `X` where unit `u` is correct, its
-registered rows hold for the table under the root `r` and the domain id `d`, and its index gates hold the bits of the
-router's gates `idx`, the read's gate refinement (`GatesRefine`, a hypothesis) makes the row it returns the table's row
-at the router's index, for every opening of that leaf the root accepts, or `H` or `G` collides on what the read's check
+/-- **A read unit returns its table's row at the picked index**: at a transcript `X` where unit `u` is correct, its
+registered rows hold for the table under the root `r` and the domain id `d`, and its index gates hold the bits of its
+picker's gates `idx`, the read's gate refinement (`GatesRefine`, a hypothesis) makes the row it returns the table's row
+at the picked index, for every opening of that leaf the root accepts, or `H` or `G` collides on what the read's check
 and the opening's hashed. -/
 theorem readUnitBinds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (consts : Fin C.N → Option Bool) {n : ℕ}
     (P : Verity.Partition C n) (u : Fin n) (q : Ports C) (idx : Fin 32 → Fin C.N) (r d : Verity.Digest)
@@ -100,21 +100,21 @@ theorem readUnitBinds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (const
     obtain ⟨-, -, hlt, -⟩ := h₀
     exact hlt
   rw [hh, htok]
-  exact Hash.SecurityProofs.EmbeddingReadBinding H G (dense d q.count) key r q.count q.words (num (bits X idx))
+  exact Hash.SecurityProofs.EmbeddingReadBinding H G (q.domainAt d) key r q.count q.words (num (bits X idx))
     (q.opening X) hok' o₀ hlt h₀
 
-/-- **At an accepted run's drawn reads, each returns its table's row at the router's index, or SHA-512 collides on what
+/-- **At an accepted run's drawn reads, each returns its table's row at the picked index, or SHA-512 collides on what
 its check and the table's hashed**, but with probability at most the layer below's bound. Over the run's coins `Ω`, with
 its acceptance `acc`, its drawn units `drawn` and the extractor's transcript `X`: where each read unit's gates compute its
 reference (`GatesRefine`, a hypothesis), each read's table is committed under its root, an accepted run's drawn reads are
-wired to the router in `X`, and the run accepts with a drawn read wrong or its registered rows failing in `X` with
-probability at most `ε`, it accepts with a drawn read that returns another row than its table's at the router's index,
+wired to their pickers in `X`, and the run accepts with a drawn read wrong or its registered rows failing in `X` with
+probability at most `ε`, it accepts with a drawn read that returns another row than its table's at the picked index,
 where no two messages the read's check and the table's check hashed collide under `H`, with probability at most `ε`. -/
 theorem readUnitDrawn {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} (P : Verity.Partition C n) (R : Reads C n) (acc : Ω → Prop)
     (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (ε : ℝ)
     (hgates : ∀ u ∈ R.units, GatesRefine H H key consts P u (R.port u)) (hcommitted : R.Committed H H key)
-    (hwired : ∀ ω, acc ω → ∀ u ∈ drawn ω, u ∈ R.units → Wired (R.port u) (R.route u) (X ω))
+    (hwired : ∀ ω, acc ω → ∀ u ∈ drawn ω, u ∈ R.units → Wired (R.port u) (R.pick u) (X ω))
     (below : Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧
       ¬ (P.Correct (X ω) u ∧ RegisteredRows consts P u (R.port u) (R.root u) (R.domain u) (X ω))) ≤ ε) :
     Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧ R.index u (X ω) < (R.port u).count ∧
@@ -125,21 +125,21 @@ theorem readUnitDrawn {Ω : Type} [Fintype Ω] (H : Hash.Msg → Verity.Digest) 
   intro ω hω
   obtain ⟨hacc, u, hu, hr, hlt, hne, hnc⟩ := hω
   refine ⟨hacc, u, hu, hr, fun hb => ?_⟩
-  rcases readUnitBinds H H key consts P u (R.port u) (R.route u) (R.root u) (R.domain u) (X ω) (hgates u hr) hb.1 hb.2
+  rcases readUnitBinds H H key consts P u (R.port u) (R.pick u) (R.root u) (R.domain u) (X ω) (hgates u hr) hb.1 hb.2
       (hwired ω hacc u hu hr) _ (hcommitted u hr _ hlt) with h | h | h
   · exact hne h
   · exact hnc (collisionIn_mono h fun m hm => List.mem_append_left _ hm)
   · exact hnc (collisionIn_mono h fun m hm => List.mem_append_right _ hm)
 
-/-- **At an accepted run's drawn reads, each returns its table's row at the router's index**, but with probability at
-most the layer below's bound plus the cut's collision finder's (`Reads.finder`) expected SHA-512 calls over `2^256`, at
+/-- **At an accepted run's drawn reads, each returns its table's row at the picked index**, but with probability at
+most the layer below's bound plus the reads' collision finder's (`Reads.finder`) expected SHA-512 calls over `2^256`, at
 a finder that meets `Claims.ExpectedCR` (`ecr/sha-512`). The finder outputs two messages the drawn reads hashed that
 collide under `H`, if there are two; its cost `cost` is the reader's to state from the adversary it runs. -/
 theorem readUnitDrawnCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg → Verity.Digest) (key : Hash.Msg)
     (consts : Fin C.N → Option Bool) {n : ℕ} (P : Verity.Partition C n) (R : Reads C n) (acc : Ω → Prop)
     (drawn : Ω → Finset (Fin n)) (X : Ω → C.Transcript) (cost : Ω → ℕ) (ε : ℝ)
     (hgates : ∀ u ∈ R.units, GatesRefine H H key consts P u (R.port u)) (hcommitted : R.Committed H H key)
-    (hwired : ∀ ω, acc ω → ∀ u ∈ drawn ω, u ∈ R.units → Wired (R.port u) (R.route u) (X ω))
+    (hwired : ∀ ω, acc ω → ∀ u ∈ drawn ω, u ∈ R.units → Wired (R.port u) (R.pick u) (X ω))
     (below : Claims.Pr (fun ω => acc ω ∧ ∃ u ∈ drawn ω, u ∈ R.units ∧
       ¬ (P.Correct (X ω) u ∧ RegisteredRows consts P u (R.port u) (R.root u) (R.domain u) (X ω))) ≤ ε)
     (hcr : Claims.ExpectedCR (fun m => (H m).bytes) (R.finder H key drawn X cost)) :
@@ -167,7 +167,7 @@ theorem readUnitDrawnCR {Ω : Type} [Fintype Ω] [Nonempty Ω] (H : Hash.Msg →
     have h' : ∃ x ∈ R.drawnHashed H key drawn X ω, ∃ y ∈ R.drawnHashed H key drawn X ω,
         Hash.Collision (fun m => (H m).bytes) x y := ⟨x, hx, y, hy, hxy⟩
     refine ⟨h'.choose, h'.choose_spec.2.choose, ?_, h'.choose_spec.2.choose_spec.2⟩
-    simp only [Reads.finder, dif_pos h']
+    simp [Reads.finder, h']
   exact (Claims.Pr_mono hsplit).trans ((pr_or_le _ _).trans
     (add_le_add (readUnitDrawn H key consts P R acc drawn X ε hgates hcommitted hwired below) (hfind.trans hcr)))
 

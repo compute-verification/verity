@@ -81,7 +81,7 @@ the lock's `layers` lists what they may import:
   audits); `JointPeriod` and `JointBridge` (a period audited by every subprotocol, and each subprotocol's per-period
   guarantee read as its account); `JointLive` (a period as a causal game, its claims on a fixed extractor's values);
   `JointBlocks` and `Wipe` (server blocks, each opened by a memory wipe, and the streamed-label wipe on the device
-  model); `ReadUnit` (a unit that returns one row of a registered table at an index another unit computes, and what
+  model); `ReadUnit` (a unit that returns one row of a registered table at an index another unit picks, and what
   binds it to that row).
 * **Each audit's game.** The compute audit: `Pouw` and `PouwWork` (PoUW's game, and its work on one node of the actual
   circuit), `Compose` and `ComposePeriod` (PoUW as a compile pass over a registered circuit, over one execution phase
