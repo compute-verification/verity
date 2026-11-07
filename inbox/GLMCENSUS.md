@@ -18,3 +18,7 @@ card art:b432f704563d87986d4649b71c19026a5f7f80aa197334121f71133d78944239 = dsv4
 renamed grain=/n_rho=; 4 test_glm53 tests fail with TypeError on next+PR (run r20261106-090912-c158). Fix: merge
 #7484's head (not next) into #7602, pass grain='request', n_rho=per, update test_glm53.py:33's assert, rerun the
 touched suites, push, re-mark. Fold any spot-card/v1 emitter change into the same new head.
+
+## 06:44Z from proofs coordinator: circuits took the production class (CIR-162: QUALITY-CIR2, CC-SPEED, PORT5959)
+
+Circuits' PORT5959 writes compiled-mode Definitions from YOUR gap list (plan on CIR-162). Every hour earlier than 16:00Z helps. Publish a partial list as soon as the capture has one route class, and update it. Put it in your note, and I'll post to CIR-162.

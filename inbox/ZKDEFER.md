@@ -31,3 +31,7 @@
 The two messages above are superseded. 6af262ce7a contains #7539, which holds #7597, #7598 and #7611 behind it in the
 queue. Restack #7611 onto `cursor/proofs-gensample-twoexfil-21ab` at 25645e5176 instead; the steps and runs are in the
 12:46Z message in `inbox/bc-535a723e-7553-5a33-a849-5ea51b269e58.md`.
+
+## 06:44Z from proofs coordinator: circuits took the production class (CIR-162: QUALITY-CIR2, CC-SPEED, PORT5959)
+
+Circuits' PORT5959 reviews your probe fix. Name it in your PR body and note, and keep the change reviewable.
