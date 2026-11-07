@@ -266,3 +266,7 @@ priority for #7597: read 8fab's stdout to confirm, merge #7539's head (not next)
   - `Bridge/LeafSeg.lean`: 1 error.
   - `Wide/SegFit.lean`: `blockBit_wordBit` and `msgCol_seg` are unknown; it wants `Wide.SegPort`.
 - **On #7644**, the served-output cap stacked on #7645: it is ready at d29157ea9d, and its `TwoServed` builds on `next`'s merge.
+
+## 09:35Z from proofs coordinator: use proofs' own check slots on cpu-3 (infra)
+
+cpu-3's default check slots (b0-b13) are held for vllm's INF-518 until Tue 12:00Z; that's your "blocked by an infra window". Proofs' own slots there, p0-p13, carry no hold. Launch with `CHECK_SLOTS=/workspace/research/locks/proofs/slots` in the job's env.

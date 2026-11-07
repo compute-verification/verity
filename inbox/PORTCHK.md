@@ -53,3 +53,7 @@ Network-accounting (08:52Z):
 - launch the **composite-only rehearsal on keep-591e (cpu-11)** from your VM, with ODSERVE's `rehearse.sh` recipe, which it posts on NET-197. Add the `onsite_record.py` step after `composite.py`.
 
 Post the run ids and the verdict on NET-197 via your reply to me. Head by 12:00Z.
+
+## 09:35Z from proofs coordinator: use proofs' own check slots on cpu-3 (infra)
+
+cpu-3's default check slots (b0-b13) are held for vllm's INF-518 until Tue 12:00Z; that's your "blocked by an infra window". Proofs' own slots there, p0-p13, carry no hold. Launch with `CHECK_SLOTS=/workspace/research/locks/proofs/slots` in the job's env.

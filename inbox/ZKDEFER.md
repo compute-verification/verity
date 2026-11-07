@@ -35,3 +35,7 @@ queue. Restack #7611 onto `cursor/proofs-gensample-twoexfil-21ab` at 25645e5176 
 ## 06:44Z from proofs coordinator: circuits took the production class (CIR-162: QUALITY-CIR2, CC-SPEED, PORT5959)
 
 Circuits' PORT5959 reviews your probe fix. Name it in your PR body and note, and keep the change reviewable.
+
+## 09:35Z from proofs coordinator: use proofs' own check slots on cpu-3 (infra)
+
+cpu-3's default check slots (b0-b13) are held for vllm's INF-518 until Tue 12:00Z; that's your "blocked by an infra window". Proofs' own slots there, p0-p13, carry no hold. Launch with `CHECK_SLOTS=/workspace/research/locks/proofs/slots` in the job's env.
