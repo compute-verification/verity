@@ -25,7 +25,7 @@ How tight the bound is (`optimize.two_stage_exfil`'s figure, at the points the m
 namespace Properties.SampledProofs
 
 open Claims.Sampling
-open _root_.SampledProofs.FactorUpper (Cell Params countIn lnFactorUpper lnFactorUpperPatterns)
+open _root_.SampledProofs.FactorUpper (Cell Params chords countIn lnFactorUpper lnFactorUpperPatterns)
 
 /-- **`cs` covers replay block `ρ`'s cells**: one cell per stratum of the proof-block partition, each with, for every
 width `b`, at least as many proof blocks committing `b` bits as cell `(ρ, t)` has, and a second stage's `k` at most the
@@ -64,5 +64,44 @@ def FactorUpperPatternsSound : Prop :=
       (∀ r r', r ≠ r' →
         Disjoint (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r) (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r')) →
       rankinFactorPatterns s Pt d req (P.q : ℝ) (P.θ : ℝ) ρ ≤ Real.exp (v : ℝ)
+
+/-! ## The witnesses' replay blocks
+
+The guarantees' witnesses (`Properties.SampledProofs.SecurityProofs`) read these: a replay block with no proof blocks,
+where each factor is `1`, a replay block of two one-bit proof blocks, and a deployed-shaped cell list. -/
+
+namespace FactorUpperWitness
+
+/-- A partition with no proof blocks. -/
+def emptyPart : Partition := ⟨[]⟩
+
+/-- A one-gate statement. -/
+def emptyStmt : AuditStatement := ⟨[], ⟨[.input], [0]⟩, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
+
+/-- A two-stage design over `emptyPart`. -/
+def emptyDesign : Design.Two := ⟨emptyPart, ⟨[]⟩, []⟩
+
+/-- The deployed-shaped replay block: one stratum of 64 proof blocks of 16 bits, `k = 4`. -/
+def honestCells : List Cell := [⟨4, [(64, 16)]⟩]
+
+/-- `q = 1/2`, `θ = 1`, the chords `optimize.CHORDS` and precision `32`. -/
+def honestParams : Params := ⟨1 / 2, 1, chords, 32⟩
+
+/-- Two input gates, both returned. -/
+def pairProg : Prog := ⟨[.input, .input], [0, 1]⟩
+
+/-- The program, sampled `all`. -/
+def pairStmt : AuditStatement := ⟨[], pairProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
+
+/-- One stratum of two proof blocks, `{0}` and `{1}`. -/
+def pairPart : Partition := ⟨[[[[0], [1]]]]⟩
+
+/-- Both proof blocks in one replay block, sampled `bernoulli:1/2`, and `k = 1`. -/
+def pairDesign : Design.Two := ⟨⟨[[[[0, 1]]]]⟩, ⟨[.bernoulli 1 2]⟩, [1]⟩
+
+/-- `pairDesign`'s replay block: one stratum of two proof blocks committing one bit each, `k = 1`. -/
+def pairCells : List Cell := [⟨1, [(2, 1)]⟩]
+
+end FactorUpperWitness
 
 end Properties.SampledProofs

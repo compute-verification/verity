@@ -29,16 +29,9 @@ theorem factorUpperPatternsSound : FactorUpperPatternsSound := FactorUpperProof.
 
 section Witnesses
 
+open FactorUpperWitness
+
 namespace FactorUpperProof
-
-/-- A partition with no proof blocks. -/
-def emptyPart : Partition := ⟨[]⟩
-
-/-- A one-gate statement. -/
-def emptyStmt : AuditStatement := ⟨[], ⟨[.input], [0]⟩, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
-
-/-- A two-stage design over `emptyPart`. -/
-def emptyDesign : Design.Two := ⟨emptyPart, ⟨[]⟩, []⟩
 
 theorem emptyPart_covers (ρ : ℕ) : Covers emptyStmt emptyPart emptyDesign ρ [] :=
   ⟨rfl, fun t c h => by simp at h⟩
@@ -67,27 +60,6 @@ theorem emptyPart_rankinFactorPatterns (q θ : ℝ) (ρ : ℕ) :
 theorem exp_neg_one_lt_one : Real.exp (-1) < 1 :=
   calc Real.exp (-1) < Real.exp 0 := Real.exp_lt_exp.2 (by norm_num)
     _ = 1 := Real.exp_zero
-
-/-- The deployed-shaped replay block: one stratum of 64 proof blocks of 16 bits, `k = 4`. -/
-def honestCells : List Cell := [⟨4, [(64, 16)]⟩]
-
-/-- `q = 1/2`, `θ = 1`, the chords `optimize.CHORDS` and precision `32`. -/
-def honestParams : Params := ⟨1 / 2, 1, chords, 32⟩
-
-/-- Two input gates, both returned. -/
-def pairProg : Prog := ⟨[.input, .input], [0, 1]⟩
-
-/-- The program, sampled `all`. -/
-def pairStmt : AuditStatement := ⟨[], pairProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
-
-/-- One stratum of two proof blocks, `{0}` and `{1}`. -/
-def pairPart : Partition := ⟨[[[[0], [1]]]]⟩
-
-/-- Both proof blocks in one replay block, sampled `bernoulli:1/2`, and `k = 1`. -/
-def pairDesign : Design.Two := ⟨⟨[[[[0, 1]]]]⟩, ⟨[.bernoulli 1 2]⟩, [1]⟩
-
-/-- `pairDesign`'s replay block: one stratum of two proof blocks committing one bit each, `k = 1`. -/
-def pairCells : List Cell := [⟨1, [(2, 1)]⟩]
 
 theorem pair_cell : cell pairPart pairDesign.part 0 0 = {0, 1} := by decide
 
