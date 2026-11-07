@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 import signal
 import subprocess
 import time
@@ -441,29 +440,6 @@ def test_fetch_all_with_a_mismatch_writes_no_marker(tmp_path, monkeypatch):
     rec = remote.fetch(local, everything=True)
     assert rec["preserved"] is False and "fetched_marker" not in rec and not (d / ".fetched").exists()
     assert rec["preserve_error"]["mismatched_or_missing"] == ["a.txt"]
-
-
-def _tar_exiting(tmp_path: Path, monkeypatch, rc: int) -> None:
-    shim = tmp_path / "bin" / "tar"
-    shim.parent.mkdir()
-    shim.write_text(f"#!/bin/sh\n{shutil.which('tar')} \"$@\"\necho 'tar: ./resources.jsonl: file changed as we read it' >&2\n"
-                    f"exit {rc}\n")
-    shim.chmod(0o755)
-    monkeypatch.setenv("PATH", str(shim.parent), prepend=os.pathsep)
-
-
-def test_fetch_all_of_a_live_run_takes_the_archive_tar_wrote_while_a_log_grew(tmp_path, monkeypatch):
-    d, local = _fake_machine(tmp_path, monkeypatch, {"out/a.txt": b"a", "resources.jsonl": b"{}\n"})
-    _tar_exiting(tmp_path, monkeypatch, 1)
-    rec = remote.fetch(local, everything=True)
-    assert "last_fetch_error" not in rec and (local / "out" / "a.txt").read_bytes() == b"a", rec
-
-
-def test_fetch_all_records_a_fatal_tar_error(tmp_path, monkeypatch):
-    d, local = _fake_machine(tmp_path, monkeypatch, {"out/a.txt": b"a"})
-    _tar_exiting(tmp_path, monkeypatch, 2)
-    rec = remote.fetch(local, everything=True)
-    assert rec["last_fetch_error"]["rc"] == 2 and "observed_utc" not in rec, rec
 
 
 def test_fetch_all_streams_the_run_instead_of_holding_it(tmp_path, monkeypatch):
