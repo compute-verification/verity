@@ -127,7 +127,7 @@ class Served:
 def serve(e, ios, times, seed: int, *, gated: bool = True) -> Served:
     """Serve the plan in simulated physical time through the replay's engine loop (`replay.drive`). Release i is
     certified at times[i], its record reaches the gate up to 20 ms later and the request the engine up to 250 ms later,
-    watermark line t comes up to 60 ms after bucket t closes, and each step takes 15 to 45 ms, all drawn from `seed`.
+    watermark line t comes up to 60 ms after bucket t closes, and each step takes 15 to 45 ms, all sampled from `seed`.
     With `gated`, the gate stands in front of the scheduler and the loop waits while it isn't ready; without, each
     request is added when it reaches the engine."""
     rng = random.Random(seed)

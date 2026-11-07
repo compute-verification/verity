@@ -40,7 +40,7 @@ At the family, `VStarFamily.own` is `ownOf` at each statement and `VStarFamily.s
 
 The tops (`rec-top-L<l>`) are no commit strings: a RecOpen instance reads its level's tops at the row
 `first[rep] + (pos >> (d − c))` (`TopValue.position`, `rec_outer.py:150-151,224,236`) of the query position `pos`, which
-the verifier's query coins draw after the cap's round, so no digest the round's commitment fixes is registered at a top
+the verifier's query coins sample after the cap's round, so no digest the round's commitment fixes is registered at a top
 row and `VCommits` cannot hold there.
 -/
 
@@ -215,7 +215,7 @@ theorem skOf_congr {S : ℕ} (Vs : Fin S → VStmt) {own own' : Fin S → Array 
     exact ⟨key _ _ (h j) _ _ _, key _ _ (fun q => (h j q).symm) _ _ _⟩
   · exact iff_of_false (inr_not_mem_skOf g) (inr_not_mem_skOf g)
 
-/-- **U4's pass, port by port**: `fullMiss` finds nothing where every unit reading a round's commitment is drawn in
+/-- **U4's pass, port by port**: `fullMiss` finds nothing where every unit reading a round's commitment is sampled in
 full. -/
 theorem fullMiss_eq_none {own : Array Registered.Port} {d : Flock.Draw.UnitDraw} :
     Registered.fullMiss own d = none ↔
@@ -229,7 +229,7 @@ theorem fullMiss_eq_none {own : Array Registered.Port} {d : Flock.Draw.UnitDraw}
       Bool.not_eq_true', not_and, Bool.not_eq_false, true_implies]
   · simp [hc]
 
-/-- **U4's pass on a parsed draw**: `checkFull` passes where `fullMiss` finds nothing. -/
+/-- **U4's pass on a parsed sample**: `checkFull` passes where `fullMiss` finds nothing. -/
 theorem checkFull_ok_iff {own : Array Registered.Port} {dj : Lean.Json} {d : Flock.Draw.UnitDraw}
     (hd : Flock.Draw.UnitDraw.ofJson dj = .ok d) :
     Registered.checkFull (some own) (some dj) = .ok () ↔ Registered.fullMiss own d = none := by
@@ -242,7 +242,7 @@ theorem checkFull_ok_iff {own : Array Registered.Port} {dj : Lean.Json} {d : Flo
   | none => exact iff_of_true rfl rfl
   | some _ => exact iff_of_false (fun h => by cases h) (fun h => by cases h)
 
-/-- **U4 at `ownOf` from the verifier's U4**: where a session's reads file has `ownOf`'s message-round ports, a draw
+/-- **U4 at `ownOf` from the verifier's U4**: where a session's reads file has `ownOf`'s message-round ports, a sample
 that passes U4 on it passes U4 on `ownOf`'s, whose ports are all message-round ports. -/
 theorem checkFull_of_msgPorts {own own' : Array Registered.Port} {dj : Lean.Json} {d : Flock.Draw.UnitDraw}
     (hd : Flock.Draw.UnitDraw.ofJson dj = .ok d) (hm : ∀ p ∈ own', isMsg p = true)
@@ -310,7 +310,7 @@ theorem skOf_zs (hown : F.HOwn) (R : Reg) (ω : L.Ω) (t : List (Cm × (ℐ).Coi
 
 /-- **`VBridgeRead` at `own`, `sel` and `bc`**: `vbridgeRead_of_family` where the family's commit strings are
 `skOf`'s at `own` and `sel`, its digests `cmtOf`'s at `bc cOf`, and its messages `dec`'s; `HCommits` from `PubCommits`
-(`hCommits_of`), `VDecodesRead` from `dec` (`vDecodesRead_of`), and `VFullRead` from V*'s full draw
+(`hCommits_of`), `VDecodesRead` from `dec` (`vDecodesRead_of`), and `VFullRead` from V*'s full sample
 (`vFullRead_of`). -/
 theorem vbridgeRead_of_rounds (dg : ByteArray → ByteArray) (N k Rw : ℕ) {GS : Flock.RecAlgebra.GfS}
     {gs : Array (Array ℕ × Array ℕ × Array ℕ)} (hst : F.HStruct GS gs) (hsh : F.HShape dg N k Rw GS)

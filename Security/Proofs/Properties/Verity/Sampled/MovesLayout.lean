@@ -18,14 +18,14 @@ three sit together inside the writer's output.
 * **`MovesOf` at a witness** (`ReachesOff.movesOf`): the rep rounds (`firstStop_reps_verdict`) fix the outcome as the
   writer's; the trace's first stop fixes a cut (`firstStop_fixes`), the link points are released after a log `L₀` in
   order (`firstStop_order`), and that release is the log's first opening (`firstOpened_link`). Then the record decodes
-  to the session's draw file at the sample (`recordDraw_firstStop`), the roots decoded at the first stop are the
+  to the session's sample file at the sample (`recordDraw_firstStop`), the roots decoded at the first stop are the
   record's `root_B` (`firstStop_rootB`), the link points are the record's (`link_pts`), and the proof files are v2's
   (`proofs_of_sent`).
-  The order the record's draw and the first stop take, that the sample's coins precede every opening and that the first
+  The order the record's sample and the first stop take, that the sample's coins precede every opening and that the first
   opening is the session stream's, comes from v2's order refusal, which the sampled verdict passed
   (`freshBefore_verdict`, `linkFirst_verdict`).
 * **`MovesReach`** (`movesReach_layout`): `ReachesOff.movesOf` at every outcome, at the coupling's cut (v2's read of
-  the log is the device's, and v2 draws at the digest `after`, `SampledDigest`), with what it takes of each accepted
+  the log is the device's, and v2 samples at the digest `after`, `SampledDigest`), with what it takes of each accepted
   play the cut holds of stated for every tape.
 -/
 
@@ -183,7 +183,7 @@ attribute [local irreducible] Live.rounds Live.N in
 rounds' empty classes, beside a play that the sampled verdict accepts, that misses nowhere and whose log v2's check read
 is the device's, is the writer's at the widened sample, the decoded registration and an outcome whose moves are those
 v2's files decode to (`MovesOf`). It takes, for the record's sample (`recordDraw_firstStop`, at the session tied to v2's
-verifier, `SetsUp.popTied`, at v2's log at its coins, `drawReadAll_coinsRead`, and at v2's hold on the record's draw,
+verifier, `SetsUp.popTied`, at v2's log at its coins, `drawReadAll_coinsRead`, and at v2's hold on the record's sample,
 `drawHeld`), that v2 reads the sample's coins of the family `label` answering `after` (`hN`), and, for the rep rounds
 (`firstStop_reps_verdict`), that the log opens only the record's rounds. v2's order refusal, which the sampled verdict
 passed, gives that every release of that family precedes every opening (`freshBefore_verdict`) and that the device's
@@ -253,9 +253,9 @@ theorem ReachesOff.movesOf {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
 
 /-- **`MovesReach` at the session's layout** (`couplingTarget_assembled`'s `hM` at these readings, decoders and coin
 map, with `after` the strategy's `afterAt`): `ReachesOff.movesOf` at every outcome, at the cut that v2's check read the
-device's log and that v2 draws at `after` (`SampledDigest`), where what it takes of a play holds of every tape whose
+device's log and that v2 samples at `after` (`SampledDigest`), where what it takes of a play holds of every tape whose
 play the sampled verdict accepts and whose log v2's check read is the device's, and v2's family and digest (`hN`) of
-those whose draw answers `after`. -/
+those whose sample answers `after`. -/
 theorem movesReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : ByteArray}
     {k : Verity.Registration.Composite} {A : Live} (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
     (reg : Option Claims.Msg → A.Reg)

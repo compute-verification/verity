@@ -19,14 +19,14 @@ request's Program is built at its launch context, which the advice fixes, and th
 
 - R3: a derived split count. The served engine runs every top-p launch at the registered split count, so the compiler emits the
   constant form ("splits": registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)) at any top_p.
-- R2: a request whose unit (LP, T, policy, seed, id, C), rows or discarded rows differ when its advice is compiled alone (its rows
-  renumbered, its own release buckets): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
+- R2: a request whose unit (LP, T, policy, seed, id, C, prefill chunks), rows or discarded rows differ when its advice is compiled
+  alone (its rows renumbered, its own release buckets): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
   another request's KV is kept when its tokens are checked equal (through each run, the source's certified prompt equals the
   request's), since that KV is then a function of the request's own prompt, given (a) and (b) on the units that computed it.
   Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused. In class G a
   unit also holds its launch context, the advice's schedule of the steps its rows ran in, never a batch-mate's value: R2 is then
   the request compiled alone at the same launch context, so the unit is compared apart from its launch (alone each row is a launch
-  of its own), with its rows and its discarded rows.
+  of its own), with its prefill chunks, its rows (each chunk one) and its discarded rows.
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a `prefix` behind no checked
   hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
@@ -240,7 +240,7 @@ def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[Any, dict, i
 
 
 def _unit(u: Any) -> tuple:
-    return (u.LP, u.T, u.policy, u.seed, u.id, u.C)
+    return (u.LP, u.T, u.policy, u.seed, u.id, u.C, u.chunks)
 
 
 def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], compiled: Any,
@@ -275,7 +275,8 @@ def check_compiled(registered: Any, advice: Any, ingress: Mapping[str, Any], com
             checked.add(r)
         a = alone.requests[k]
         if _unit(a) != _unit(u):
-            raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C) = {_unit(a)}, in its batch {_unit(u)}")
+            raise BatchDependent(f"request {r}: compiled alone it's (LP, T, policy, seed, id, C, chunks) = {_unit(a)}, in its batch "
+                                 f"{_unit(u)}")
         mine = [(rr.start, rr.n, rr.samples) for rows in compiled.steps for rr in rows if rr.request == r]
         theirs = [(start, n, m) for rows in alone.steps for req, start, n, m in rows if req == k]
         if mine != theirs:

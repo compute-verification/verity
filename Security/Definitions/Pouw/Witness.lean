@@ -53,7 +53,7 @@ over these definitions, and `Proofs.Pouw.DitherWitness` proves every premise of
   cost (a free guess). No law reads an answer's output, so answers are free.
 * `twNF`, `twRound`: the witness protocol, a no-fold round with two words (`n = 2`, `n' = nb = L = 1`). The noise is
   the word: word `i` is the dither's `d i`, one of 16 values, so a guessed word passes its check with probability
-  `p = 1/16`. The check draws one of the two words (`s = 1`). The root is transparent: root cell `i` is word `i`
+  `p = 1/16`. The check samples one of the two words (`s = 1`). The root is transparent: root cell `i` is word `i`
   reduced into `Fin 17` (`dec`), and a cell opens where its root cell reads back as the word (`enc`). There is no
   oracle (`Orc = Unit`), so the commitment is perfectly binding.
 * The period (`twPd`): credited use `hon = (4, 4, 2)`, two honest sampling blocks whose commit phase commits the zero
@@ -303,7 +303,7 @@ theorem card_nonconst_const {X α : Type} {f : X → Fin 2 → Fin 1 → Fin 1 �
     exact h (by rw [hf x y])
   rw [this, card_empty, Nat.cast_zero]
 
-/-- A constant program: it outputs `v` at no use and no calls. No cell of its output varies, so no law charges it. -/
+/-- A constant program: it outputs `v` at no use and no calls. No cell of its output varies, so no sampling design charges it. -/
 noncomputable def constAlg {I O : Type} (v : O) : TAlg I O where
   run _ := v
   use _ _ := 0
@@ -335,7 +335,7 @@ theorem card_ans : Nat.card (Fin 1 → Word × Unit) = 4294967296 := by
   simp [Nat.card_eq_fintype_card, ZMod.card]
 
 /-- Sampling block `b`'s honest answer: the checked word, from the state after the block's work, at the block's own
-check coin among the period's. It outputs neither words nor a root, so no law charges it. -/
+check coin among the period's. It outputs neither words nor a root, so no sampling design charges it. -/
 noncomputable def hAnswer (b : Fin 2) : TAlg (Unit × TTr × (Fin 2 → TDraw × Fin 2)) (Fin 1 → Word × Unit) where
   run p := fun _ => (p.2.1 (p.2.2 b).2 0 0, ())
   use _ _ := 0

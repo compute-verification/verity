@@ -9,8 +9,8 @@ public import Proofs.Core.Game.Prob
 
 At a fixed strategy a play's coins are a tree: each coin's value picks the play after it. `Tape g s` holds, at each
 coin, a value and the coins of the play after every value, a finite type whose uniform law gives the play's output the
-law `prob` reads (`prob_eq_prCoin`): the coins of the plays a tape doesn't enter are independent of the ones it does.
-So a finder or a forger built from a strategy draws one tape and reads the play on it (`Tape.out`), and an event of the
+sampling design `prob` reads (`prob_eq_prCoin`): the coins of the plays a tape doesn't enter are independent of the ones it does.
+So a finder or a forger built from a strategy samples one tape and reads the play on it (`Tape.out`), and an event of the
 play that implies the finder's success is at most as likely as that success (`prob_le_ofReal_pr`). The play on a tape
 is a run of the game (`Tape.reaches_out`), so a property of every run holds of it.
 -/

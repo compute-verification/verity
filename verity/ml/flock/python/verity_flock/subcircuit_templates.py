@@ -38,12 +38,12 @@ that has a kernel: ``AttentionHead_v3`` as ``Attention_v3{NH=1, KVH=1}`` (a batc
 vLLM step ``AmpereBF16TcDot16_v1``; it and core's ``_v2`` evaluate the same function (``tc_dot_total`` on
 ``AMPERE_BF16_M16N8K16``), so both evaluate through core's ``_v2`` (tested on sampled inputs).
 
-Sampling (:meth:`Subcircuit.draw`): draw ``j`` of a synthetic set reads each port's words from the counter stream
+Sampling (:meth:`Subcircuit.draw`): sample ``j`` of a synthetic set reads each port's words from the counter stream
 ``key.stream((port, j), ...)`` of ``verity.ml.randomness`` (SHA-512 counter mode, index-addressable), four bytes per word, so
-draw ``j`` is computable from (key, j) alone in any language.  A BF16 word from 32 bits ``r``: sign ``r & 1``, mantissa
+sample ``j`` is computable from (key, j) alone in any language.  A BF16 word from 32 bits ``r``: sign ``r & 1``, mantissa
 ``(r >> 1) & 0x7F``, exponent field ``c - h + ((r >> 8) & 0xFFFF) mod (2h + 1)`` for the port's window (centre ``c``,
 half-width ``h`` chosen per sample from the port's classes by ``key.uniform(len, ("class", port, j))``), replaced by an edge
-word (``+-0``, ``+-`` smallest subnormal, ``+-1``) ``EDGES[(r >> 29) mod 6]`` when ``(r >> 24) & 0x1F == 0``.  GEMM draws
+word (``+-0``, ``+-`` smallest subnormal, ``+-1``) ``EDGES[(r >> 29) mod 6]`` when ``(r >> 24) & 0x1F == 0``.  GEMM samples
 share their activation row in tiles of ``tile`` (the shape serving uses): ``x`` and its class are sampled at ``j // tile``.
 """
 from __future__ import annotations
@@ -73,7 +73,7 @@ class Port:
 
 @dataclass(frozen=True)
 class Draw:
-    """One synthetic draw: its input words per port, the statics that vary per instance, and what ``index.json`` records."""
+    """One synthetic sample: its input words per port, the statics that vary per instance, and what ``index.json`` records."""
 
     inputs: dict[str, np.ndarray]
     instance_statics: dict[str, int]
@@ -525,7 +525,7 @@ ATTN_SEMANTICS = {
 
 
 def attention_head(D: int, BN: int, T: Any = "1:512", semantics: str = "sm80.fa2.bf16") -> Subcircuit:
-    """One attention head, ``T`` per instance (the key count, from ``len(k) / D``); ``T`` here is the synthetic draw's range
+    """One attention head, ``T`` per instance (the key count, from ``len(k) / D``); ``T`` here is the synthetic sample's range
     ``lo:hi`` (uniform per sample).  ``sm80.fa2.bf16``: FA2 (``AttentionHead_v3``, evaluated as ``Attention_v3{NH=1, KVH=1}``);
     ``sm90.fa3.bf16``: FA3 on the H100's wgmma step (``AttentionHead_v2{DOT=HopperBF16WgmmaDot16, INV=Fa3InvSum}``, evaluated as
     ``Attention_v2{NH=1, KVH=1}``)."""
