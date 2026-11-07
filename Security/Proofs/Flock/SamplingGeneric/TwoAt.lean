@@ -89,22 +89,27 @@ theorem pr_call {Ω : Type} [Fintype Ω] {L : ℕ} {b : Ω → Fin L → Fin 256
 
 theorem firstFixed_atOrder : FirstFixed (c.atOrder j) L₁ (bytesFirst c L₁ j b₁) := by
   intro x r e
-  simp only [bytesFirst, forkOn, Code.atOrder, mem_filter, mem_univ, true_and, lt_irrefl, if_false]
+  have h : (j x).first ∉ (univ.filter fun t => (j x).first < t : Finset (Fin (c.V.k x))) :=
+    fun h => lt_irrefl _ (mem_filter.1 h).2
+  change b₁ x (if (j x).first ∈ (univ.filter fun t => (j x).first < t : Finset (Fin (c.V.k x))) then e (j x).first
+    else r (j x).first) = b₁ x (r (j x).first)
+  simp only [h, ↓reduceIte]
 
 theorem bytesFixedTwo_atOrder :
     BytesFixedTwo (c.atOrder j) L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂) := by
   intro x u
   have hlt := (j x).lt
-  refine ⟨fun t ht => ?_, fun r d => ⟨?_, ?_⟩⟩
-  · simp only [Code.atOrder, mem_filter, mem_univ, true_and] at ht ⊢
-    exact hlt.trans ht.2
-  · have : (j x).first ∉ (c.atOrder j).rounds x u := by
-      simp only [Code.atOrder, mem_filter, not_and, not_lt]
-      exact fun _ => hlt.le
-    simp only [bytesFirst, forkOn, if_neg this]
-  · have : (j x).second ∉ (c.atOrder j).rounds x u := by
-      simp only [Code.atOrder, mem_filter, lt_irrefl, and_false, not_false_eq_true]
-    simp only [bytesSecond, forkOn, if_neg this]
+  have h₁ : (j x).first ∉ ((c.rounds x u).filter fun t => (j x).second < t) :=
+    fun h => absurd (mem_filter.1 h).2 (not_lt.2 hlt.le)
+  have h₂ : (j x).second ∉ ((c.rounds x u).filter fun t => (j x).second < t) :=
+    fun h => lt_irrefl _ (mem_filter.1 h).2
+  refine ⟨fun t ht => mem_filter.2 ⟨mem_univ _, hlt.trans (mem_filter.1 ht).2⟩, fun r d => ⟨?_, ?_⟩⟩
+  · change b₁ x (if (j x).first ∈ ((c.rounds x u).filter fun t => (j x).second < t) then d (j x).first
+      else r (j x).first) = b₁ x (r (j x).first)
+    simp only [h₁, ↓reduceIte]
+  · change b₂ x (if (j x).second ∈ ((c.rounds x u).filter fun t => (j x).second < t) then d (j x).second
+      else r (j x).second) = b₂ x (r (j x).second)
+    simp only [h₂, ↓reduceIte]
 
 theorem bytesUniform_atOrder (h : CallsUniform L₁ b₁) : BytesUniform (c.atOrder j) L₁ (bytesFirst c L₁ j b₁) := by
   intro x q
@@ -114,14 +119,14 @@ theorem bytesUniform_atOrder (h : CallsUniform L₁ b₁) : BytesUniform (c.atOr
 
 theorem secondUniform_atOrder (h : CallsUniform L₂ b₂) : SecondUniform (c.atOrder j) L₂ (bytesSecond c L₂ j b₂) := by
   intro x r q
-  have hin : (j x).second ∈ (c.atOrder j).stage2 x := by
-    simp only [Code.atOrder, mem_filter, mem_univ, true_and]
-    exact (j x).lt
+  have hin : (j x).second ∈ (univ.filter fun t => (j x).first < t : Finset (Fin (c.V.k x))) :=
+    mem_filter.2 ⟨mem_univ _, (j x).lt⟩
   change Pr (fun e : Fin (c.V.k x) → FlockDeploy.Coin =>
-    q (b₂ x (forkOn ((c.atOrder j).stage2 x) r e (j x).second))) = Pr q
-  simp only [forkOn, if_pos hin]
-  rw [Claims.SamplingGeneric.Pr_pi_eval_dep (E := fun _ => FlockDeploy.Coin) (j x).second fun a => q (b₂ x a)]
-  exact pr_call (h x) q
+    q (b₂ x (if (j x).second ∈ (univ.filter fun t => (j x).first < t : Finset (Fin (c.V.k x))) then e (j x).second
+      else r (j x).second))) = Pr q
+  simp only [hin, ↓reduceIte]
+  exact (Claims.SamplingGeneric.Pr_pi_eval_dep (E := fun _ => FlockDeploy.Coin) (j x).second
+    fun a => q (b₂ x a)).trans (pr_call (h x) q)
 
 /-! ## Knowledge soundness at the round order -/
 
@@ -219,7 +224,7 @@ def toyCode : Code where
   wit _ _ _ := ⟨[]⟩
 
 /-- The toy's round order: round `0`, then round `1`. -/
-def toyOrder (x : Msg) : Order (toyCode.V.k x) := ⟨⟨0, by decide⟩, ⟨1, by decide⟩, by decide⟩
+def toyOrder (x : Msg) : Order (toyCode.V.k x) := ⟨⟨0, Nat.zero_lt_two⟩, ⟨1, Nat.one_lt_two⟩, Nat.zero_lt_one⟩
 
 /-- The toy's byte map, which reads no bytes. -/
 def toyBytes (x : Msg) : FlockDeploy.Coin → Fin ((fun _ : Msg => 0) x) → Fin 256 := fun _ i => i.elim0
@@ -238,8 +243,8 @@ theorem uniformRandomBytes_of_subsingleton {Ω : Type} [Fintype Ω] [Nonempty Ω
     have h2 : Finset.univ.filter E = Finset.univ :=
       Finset.filter_true_of_mem fun f _ => by rwa [Subsingleton.elim f (t (Classical.arbitrary Ω))]
     rw [h1, h2, Finset.card_univ, Finset.card_univ,
-      ENNReal.div_self (by simp [Fintype.card_ne_zero]) (ENNReal.natCast_ne_top _),
-      ENNReal.div_self (by simp [Fintype.card_ne_zero]) (ENNReal.natCast_ne_top _)]
+      ENNReal.div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero) (ENNReal.natCast_ne_top _),
+      ENNReal.div_self (Nat.cast_ne_zero.2 Fintype.card_ne_zero) (ENNReal.natCast_ne_top _)]
   · have h1 : Finset.univ.filter (fun ω => E (t ω)) = ∅ :=
       Finset.filter_false_of_mem fun ω _ hω => h (by rwa [Subsingleton.elim (t ω) (t (Classical.arbitrary Ω))] at hω)
     have h2 : Finset.univ.filter E = ∅ :=
@@ -266,14 +271,18 @@ theorem sampledKSTwo_honest :
         (fun _ => none) (fun _ _ _ => []) := by
   refine ⟨callsUniform_toy, callsUniform_toy, ?_, ?_, fun _ _ _ _ _ _ _ => rfl, ?_, ?_, ?_⟩
   · intro x s _ _ hx
-    exact absurd hx (by simp [Code.atOrder, toyCode])
+    change (none : Option AuditStatement) = some s at hx
+    simp at hx
   · intro x Ω P ω r hacc
-    exact absurd hacc (by rw [show (toyCode.atOrder toyOrder).V = rejV2 from rfl, run_rejV2_out]; simp)
+    exact absurd ((run_rejV2_out FlockDeploy.sha512 P x ω r).symm.trans hacc) (by simp)
   · intro x Ω P ω r u ⟨p, hp⟩
-    exact absurd hp (by simp [deploy, deployOf, codeTwo, Code.atOrder, toyCode])
+    change ([] : List ℕ)[p.val]? = some u at hp
+    simp at hp
   · intro x u v xS vS hs
-    exact absurd hs (by simp [codeTwo, Code.atOrder, toyCode])
+    change (none : Option (Msg × Seen)) = some (xS, vS) at hs
+    simp at hs
   · intro x s Pt d Ω P ω r u xS vS wF hx
-    exact absurd hx (by simp [deploy, deployOf, codeTwo, Code.atOrder, toyCode])
+    change (none : Option AuditStatement) = some s at hx
+    simp at hx
 
 end SamplingDeploy
