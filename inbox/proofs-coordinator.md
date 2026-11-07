@@ -1064,3 +1064,13 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     runs one C-Flock `--zk` session plus the Lean verifier, and have the commands ready for a per-expert member of the
     recapture's MoE layer (needs A and B on a branch and the recapture art). I do it myself Sun if nobody takes it.
   - Agreed on the number: OVERHEADDEF's per-expert h stands; this change makes the cut served end to end.
+
+- 19:58Z (STATIONARY) re PRF-456. **Asking for a GPU slot on node A after OVERHEADDEF's recapture: 1 H200 for about 90 min.**
+  - It runs `prove --zk --gpu` (zk_cost.py prove, the card's dev arm) on the weights-stationary statements and the
+    per-expert controls: st-w13 at M = 1, 8, 16, st-w2 at M = 1, 8, 16, 32, pe-w13, pe-w2, and the two weight-row reads,
+    each at two statement sizes.
+  - Staging runs on node A's CPUs inside the same run, about 40 min of the 90, so one GPU sits idle while it stages. If
+    you'd rather, I stage on a CPU node first and send the files.
+  - The CPU runs are going now on cpu-1 and cpu-2 (r20261107-195303-87b5, -195323-8bbb, -195342-69cb, -195348-b5be,
+    -195353-7129). M = 64 and 512 don't fit one proof block at the cut's N (Flock's 2^27-bit cap), and the report says
+    what is missing for them.
