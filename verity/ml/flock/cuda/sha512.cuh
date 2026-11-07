@@ -38,9 +38,20 @@ __device__ __forceinline__ void s512_pad_block(uint64_t st[8], uint64_t len) {
     s512_compress(st, w);
 }
 
-// leaf_size % 128 == 0: a warp owns 32 consecutive leaves and, per 128-byte chunk (one SHA-512 block), stages the chunk of
+// the last block of a message of `len` bytes whose 0x80 left no room for the length (len % 128 > 111)
+__device__ __forceinline__ void s512_len_block(uint64_t st[8], uint64_t len) {
+    uint64_t w[16];
+#pragma unroll
+    for (int j = 0; j < 16; j++) w[j] = 0;
+    w[15] = len * 8;
+    s512_compress(st, w);
+}
+
+// leaf_size % 16 == 0: a warp owns 32 consecutive leaves and, per 128-byte chunk (one SHA-512 block), stages the chunk of
 // each of its leaves into shared memory with coalesced 16-byte loads (33-word stride: conflict-free), then lane l
-// compresses its own leaf's block. The padding block is a constant.
+// compresses its own leaf's block. A tail of r = leaf_size % 128 bytes is staged the same way, zero past r, and its block
+// takes the padding: 0x80 opens word r/8, and the bit length is word 15 (r <= 111) or a last block of its own. With no
+// tail the padding block is a constant.
 __global__ void sha512_staged_merkle_leaves(const uint8_t* __restrict__ data, uint8_t* tree, long long num_leaves, int leaf_size) {
     extern __shared__ uint32_t sw512[];
     int wid = threadIdx.x >> 5, lane = threadIdx.x & 31;
@@ -50,15 +61,17 @@ __global__ void sha512_staged_merkle_leaves(const uint8_t* __restrict__ data, ui
     long long myleaf = warp0 + lane;
     uint64_t st[8];
     s512_iv(st);
-    int nchunks = leaf_size >> 7;
-    for (int c = 0; c < nchunks; c++) {
+    int nchunks = leaf_size >> 7, r = leaf_size & 127;
+    for (int c = 0; c < nchunks + (r != 0); c++) {
+        const int bytes = c < nchunks ? 128 : r, pad = c < nchunks ? 16 : r >> 3;
 #pragma unroll
         for (int it = 0; it < 8; it++) {
             int idx = it * 32 + lane;
             int piece = idx >> 3, off = idx & 7;
             long long leaf = warp0 + piece;
             uint4 v = make_uint4(0, 0, 0, 0);
-            if (leaf < num_leaves) v = *(const uint4*)(data + leaf * (long long)leaf_size + (long long)c * 128 + off * 16);
+            if (leaf < num_leaves && off * 16 < bytes)
+                v = *(const uint4*)(data + leaf * (long long)leaf_size + (long long)c * 128 + off * 16);
             uint32_t* d = s + piece * 33 + off * 4;
             d[0] = v.x; d[1] = v.y; d[2] = v.z; d[3] = v.w;
         }
@@ -66,13 +79,16 @@ __global__ void sha512_staged_merkle_leaves(const uint8_t* __restrict__ data, ui
         if (myleaf < num_leaves) {
             uint64_t w[16];
 #pragma unroll
-            for (int j = 0; j < 16; j++) w[j] = s512_be(s[lane * 33 + 2 * j], s[lane * 33 + 2 * j + 1]);
+            for (int j = 0; j < 16; j++)
+                w[j] = j == pad ? 0x8000000000000000ull : s512_be(s[lane * 33 + 2 * j], s[lane * 33 + 2 * j + 1]);
+            if (c == nchunks && r <= 111) w[15] = (uint64_t)leaf_size * 8;
             s512_compress(st, w);
         }
         __syncwarp();
     }
     if (myleaf >= num_leaves) return;
-    s512_pad_block(st, (uint64_t)leaf_size);
+    if (r == 0) s512_pad_block(st, (uint64_t)leaf_size);
+    if (r > 111) s512_len_block(st, (uint64_t)leaf_size);
     s512_out(st, tree + myleaf * 64);
 }
 
@@ -266,7 +282,7 @@ struct Hm96Guard {
 };
 
 inline void launch_merkle512(const uint8_t* d_data, uint8_t* d_tree, long long num_leaves, int leaf_size, int tpb = 256) {
-    if (leaf_size % 128 == 0 && ((uintptr_t)d_data & 15) == 0) {
+    if (leaf_size % 16 == 0 && ((uintptr_t)d_data & 15) == 0) {
         int wpb = tpb >> 5;
         long long warps = (num_leaves + 31) / 32;
         long long blocks = (warps + wpb - 1) / wpb;
