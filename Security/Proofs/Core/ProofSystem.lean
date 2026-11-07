@@ -11,7 +11,7 @@ At the plain sample the interface is the interaction model's own forms: `PExtrac
 `PrBad`, `RunFn.B` is `B`, so KS with `B`'s term alone is `Claims.KS` (`ProofSystem.ks_iff_claims`, `ks_iff_inner`).
 Against aborting provers `PrBadOn` at `E^rep` is `Inner.PrBadAbort` and `B`'s term is `PrBAbort`'s, so KS there is
 `Inner.KSAbort` (`prBadOn_abort`, `ksAbort_iff_inner`). Zero knowledge statement by statement is `ZKmalRx`
-(`ZkSystem.zk_iff`).
+(`ZkProofSystem.zk_iff`).
 
 KS gives KS against aborting provers when the extractor reruns the judged sample once and reads only its view, and only
 at terms an abort doesn't shrink (`ProofSystem.ksAbort_of_viewOnly`). At `B`'s term it doesn't follow: an aborted run
@@ -189,7 +189,7 @@ theorem ProofSystem.ksAbort_of_viewOnly (H : Msg → Msg) (S : ProofSystem Coin 
 end Abort
 
 /-- **Zero knowledge statement by statement is `ZKmalRx`**, the masked prover's tape indexed by the statement. -/
-theorem ZkSystem.zk_iff {Coin W : Type} (H : Msg → Msg) (O : ZkSystem Coin W) :
+theorem ZkProofSystem.zk_iff {Coin W : Type} (H : Msg → Msg) (O : ZkProofSystem Coin W) :
     O.ZK H ↔ ∀ t, 0 < t → ∀ δ₁ : ℝ≥0, O.Hides H δ₁ →
       ZKmalRx O.Nonce O.Rest H O.kZK O.Pz O.R (O.Sim t) (O.εzk t δ₁) (O.γzk t) := by
   constructor
