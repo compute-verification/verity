@@ -1,12 +1,12 @@
 # p2_stage: the store's load
 
 The simplest exact path from the P2-encoded weights store to the W8A8 GEMM on one H200: decode a
-layer's matrix with memory-accounting's P2 decode, unchanged, into a plaintext staging buffer, then run the exact GEMM
+layer's matrix with memory-accounting's P2 decode, unchanged, into a plaintext load buffer, then run the exact GEMM
 on that buffer.
 
 - `layout.py`: where a layer's matrices lie in the store (`StoreLayout`), read by `store_layout` from the store's
   layout JSON (memory-accounting's `p2_v1/store.py layout`, or its toy's `toy.json`): each tensor from a label boundary,
-  zero past its end, and at its `staging_offset` in its layer's staging buffer. `Weights` is the plaintext, the seeded
+  zero past its end, and at its `staging_offset` in its layer's load buffer. `Weights` is the plaintext, the seeded
   weights stream (`e2e_h200.served_weights`), and `payloads` lays it out as the store's W. `check_blocks` holds
   rows to it by P2's reference decode of one label (`p2_v1/store.py`'s `decode_block`), the check's ground truth.
   `open_store` takes the store: memory-accounting's encoded store (`p2_v1/store.py encode`'s segment files, read by
@@ -20,10 +20,10 @@ on that buffer.
 - `gemm.py`: the GEMM's check. `twin` checks every output word by an independent exact path, and `definition_words`
   evaluates `ScaledMmS8Coordinate_v1{K, GEMM_SM90_S8}` on samples.
 - `layer.py`: the GPU driver for one layer (the fixture's toy, encode a development store across leases, stage, gemm at
-  each batch M). Every staged tensor is held to the stream's bytes and to the weights manifest's SHA-256 (the digests
+  each batch M). Every loaded tensor is held to the stream's bytes and to the weights manifest's SHA-256 (the digests
   memory-accounting held W to). `check.py` runs on the CPU afterwards: every label of the layer against the reference,
   and the samples against the Definition.
-- `full.py`: the whole store a step: every tensor of the 52 layers and the head staged one at a
+- `full.py`: the whole store a step: every tensor of the 52 layers and the head loaded one at a
   time from the store's segment files (each held to its SHA-512), the last timed decode of each held to the weights
   manifest's SHA-256, the step's decode summed tensor by tensor with the peak HBM, then one layer's exact GEMM by
   `int_mm.linear` against the twin. `check.py --sample N` checks N blocks of every tensor of the store

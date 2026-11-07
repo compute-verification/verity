@@ -22,13 +22,13 @@ round's place in the rep given by the coins before it:
   binding behind the stream's domain frame (`Sched.rounds_two`, `head_encs`), and releases the binding with its pads
   root (`roundFree_zcHead_out`); the switched session sends the domain frame, the binding at the views' level-0 cap and
   the pads commitment's root, and `r_skip`'s squeeze (`Loop.enc_zcBind`). The two caps are one tree of `linkIn`
-  (`Loop.cap_zcBind`), and the two roots one tree of the frame's draws (`Loop.root_zcBind`), where the rows fix the
+  (`Loop.cap_zcBind`), and the two roots one tree of the frame's samples (`Loop.root_zcBind`), where the rows fix the
   switched views' pads leaves (`Loop.swSrcE_padLeaf`).
 * **`LeanRelease.release_sched_openBind`**: the opening's binding after the algebraic phase, at `Masked.repSlot` `0`
   (`LeanRelease.release_sched_openBind_pf`).
 * **`LeanRelease.release_sched_l0`**: level 0's rounds `1` to `k0 + 3` (`LeanRelease.L0Sent.release`, and at `k0 + 3`
   `ρ_1`'s squeeze alone, `LeanRelease.release_on` at no frames), at `Masked.repSlot` `i`, where `vs`'s level-0 values
-  are the firewall's (`Loop.L0Fixed`; `LeanRelease.release_sched_l0_pf`).
+  are the ZK server's (`Loop.L0Fixed`; `LeanRelease.release_sched_l0_pf`).
 * **`LeanRelease.release_sched_close`**: level 0's closing round, at `Masked.repSlot` `k0 + 4`: `release_sched_lig`
   there, the cut opening's body from that round on being the frame's scheduled round, its closing label ending level
   0's phase.
@@ -176,9 +176,9 @@ theorem swSrcE_padLeaf (vs : finS.SwVals) (x : Msg) (w : Flock.Wit) (ν : finS.N
 
 set_option maxHeartbeats 1000000 in
 /-- **The switched session's pads root at rep stream `2i + r` is the frame's**: where the rows hold at its base and the
-frame draws the tape's pads (`Loop.RepSrc`), the pads commitment of the switched source's rep is the masked prover's on
+frame samples the tape's pads (`Loop.RepSrc`), the pads commitment of the switched source's rep is the masked prover's on
 the tape's pads (`Masked.padsTreeCut_srcV`, its leaves the views', `swSrcE_padLeaf`), whose root is that of the frame's
-draws (`padsRoot_tapeOfDraws`). -/
+samples (`padsRoot_tapeOfDraws`). -/
 theorem root_zcBind (vs : finS.SwVals) {L₀ : LeanRelease Flock.Wit Tp}
     {src : Msg → Flock.Wit → Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray)} {x : Msg} {w : Flock.Wit}
     (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
@@ -629,7 +629,7 @@ theorem release_sched_openBind (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock
   release_sched_openBind_pf vs L₀ src real hreal wk hR hSv hSc hS ν t κ m₀ ρ₀ ops hTV hpos hlt hl hok href hv j r hn
 
 /-- **Level 0's rounds**: at rep stream `2j + r`'s level-0 round `i`, `1 ≤ i ≤ k0 + 3` (`Masked.repSlot` `i`; at
-`k0 + 3`, `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`), the release of the
+`k0 + 3`, `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the ZK server's (`Loop.L0Fixed`), the release of the
 worker's round is the switched session's message without its leading domain frame. -/
 theorem release_sched_l0 (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))

@@ -25,11 +25,11 @@ equation is asked there only, as `FinalRoundEq` asks its own:
 * **`LeanRelease.liveSchedAt_ofLoopLink`**: `LiveSched`'s equation after one history (`LeanRelease.LiveSchedAt`;
   `LiveSched` is it after every history, `LeanRelease.liveSched_iff`), from `TakesValsAt` at that history alone, at
   `SessionLoopZKDeployed`'s premises on the session, the statement and the loop's inputs, where the rows hold at `vs`
-  (`Loop.RowsOK`) and its level-0 words are the firewall's own (`Loop.L0Fixed`). The history stands at a round of some
+  (`Loop.RowsOK`) and its level-0 words are the ZK server's own (`Loop.L0Fixed`). The history stands at a round of some
   rep `2j + r` before its inner proof's (`sched_slot`), which is its first (`release_sched_zcBind`), in its PIOP
   (`roundFrames_piop`), in the ring switch from its rank check's (`release_sched_switch`), the opening's binding
   (`release_sched_openBind`), level 0's (`release_sched_l0`, `release_sched_close`) or Ligerito's past it
-  (`release_sched_lig`). No round frees a level-0 word, so level 0's release is the firewall's body whatever the worker
+  (`release_sched_lig`). No round frees a level-0 word, so level 0's release is the ZK server's body whatever the worker
   sends, and the switched message's is `vs`'s: `L0Fixed` is what equates them.
 * **`LeanRelease.liveSchedOwn_ofLoopLink`**: for every worker `wk` and every `vs` it takes at its own histories
   (`TakesValsOwn`), `LiveSchedOwn` holds: `liveSchedAt_ofLoopLink` at each. A worker that takes no such `vs`'s values
@@ -170,7 +170,7 @@ theorem liveSched_iff (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
   Iff.rfl
 
 /-- **`LiveSched` after one history, from the worker's free words there**: at `SessionLoopZKDeployed`'s release and
-premises (as in `liveSchedOwn_ofLoopLink`), where the rows hold at `vs` and its level-0 words are the firewall's own
+premises (as in `liveSchedOwn_ofLoopLink`), where the rows hold at `vs` and its level-0 words are the ZK server's own
 (`Loop.L0Fixed`), after any history at which the worker's free words are `vs`'s (`Loop.TakesValsAt`), `LiveSched`'s
 equation holds there. The release at round `n` reads the worker's round `n`; the frame's state before it reads the
 history only through `live` and the coins. -/
@@ -254,8 +254,8 @@ theorem liveSchedAt_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE
 loop's own tables, `real = Loop.realOf src`), at its premises on the session (`Tables`, `TapeOK`), the statement (in the
 masked verifier's scope, under the relation, served by the loop) and the loop's inputs (`Loop.Src`), every worker `wk`
 whose free words are `vs`'s values at its own histories (`Loop.TakesValsOwn`), where the rows hold at `vs`
-(`Loop.RowsOK`) and its level-0 words are the firewall's own (`Loop.L0Fixed`: no round frees a level-0 word, so the
-release there is the firewall's body whatever the worker sends), meets `LiveSchedOwn` at `vs`: `liveSchedAt_ofLoopLink`
+(`Loop.RowsOK`) and its level-0 words are the ZK server's own (`Loop.L0Fixed`: no round frees a level-0 word, so the
+release there is the ZK server's body whatever the worker sends), meets `LiveSchedOwn` at `vs`: `liveSchedAt_ofLoopLink`
 at each own history. -/
 theorem liveSchedOwn_ofLoopLink (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals)
     (L₀ : LeanRelease Flock.Wit
@@ -301,7 +301,7 @@ theorem liveSchedOwn_honestVals
 
 /-- **`LiveSched` at the honest worker and values**: `liveSchedAt_ofLoopLink` after every history, at which the honest
 worker takes the honest values (`Loop.takes_honestVals_ofLoopLink`), where the rows hold (`Loop.rowsOK_honestVals`) and
-the level-0 words are the firewall's own (`Loop.l0Fixed_honestVals`). -/
+the level-0 words are the ZK server's own (`Loop.l0Fixed_honestVals`). -/
 theorem liveSched_honestVals
     (L₀ : LeanRelease Flock.Wit
       ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))

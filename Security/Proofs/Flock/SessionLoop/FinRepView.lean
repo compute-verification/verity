@@ -61,10 +61,10 @@ namespace Flock.Firewall.Finish
 
 open Flock
 
-/-- The firewall's proof file is the session's encoder's. -/
+/-- The ZK server's proof file is the session's encoder's. -/
 theorem encZk_view (sh : Shape) (p : Zk.ZkProof) : encZk sh p = FlockSoundness.Discharge.ZkView.encZk sh p := rfl
 
-/-- The firewall's file shape is the session's. -/
+/-- The ZK server's file shape is the session's. -/
 theorem shapeZk_view (st : Setup) (sch : Flock.Schedule) (n : ℕ) : shapeZk st sch n = FlockComplete.shapeZk st sch n := rfl
 
 end Flock.Firewall.Finish

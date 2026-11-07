@@ -83,7 +83,7 @@ theorem sched_slot_at {real : ℕ → V (Tab × Array ByteArray)} {x : Msg} (hx 
     exact y.wf.1.hk6
   obtain ⟨N, hN⟩ : ∃ N, N = FlockComplete.piopRoundsZk spec (Masked.stsOf x)[k / 2]! +
       (y.sch.k0 + 7 + 11 * (y.sch.levels.size - 1)) := ⟨_, rfl⟩
-  -- the rep's own table, `tabOfLevel0` at a drawn level 0, and its bounds
+  -- the rep's own table, `tabOfLevel0` at a sampled level 0, and its bounds
   obtain ⟨g, d, l, hl, htr⟩ := hR k tr hr hreal
   obtain ⟨hts, hsch⟩ := Count.tabOfLevel0_sched htr
   have htsch : tr.sch = y.sch := by

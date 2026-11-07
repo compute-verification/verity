@@ -20,7 +20,7 @@ what `RefSession.SwVals` reads, once each pad index has one round that frees it.
   whose answers open the coins' first `n` (`FreedAt`), where there is one.
 * **`Loop.vsOf L bx`**: at a statement the loop serves (`Loop.Serves`) and a witness at which its rows hold
   (`Loop.RowsOK`), `Loop.vsServed L bx`: at each pad index, `freeWord`'s word where the frame frees one there; at
-  `final_c`'s index the c_eval of the round-1c values at the coins' zerocheck point (`zcE`), as the firewall's finish
+  `final_c`'s index the c_eval of the round-1c values at the coins' zerocheck point (`zcE`), as the ZK server's finish
   computes it; at every other index the table's own value (`Table.vals`). Elsewhere the tables' own values
   (`honestVals`). The choice reads only the statement and the witness. `vsOf` is a proof device: no guarantee's
   statement reads it.
@@ -110,7 +110,7 @@ noncomputable def vsOfWord (bx : AlgWorker L) (x : Msg) (w : Flock.Wit) (ν : Co
 /-- **The values a pad-blind worker of the algebraic phase supplies where the loop serves the statement**: at each pad
 index the frame frees, the word `bx` frees there at the history whose answers open the coins' prefix (`freeWord`); at
 `final_c`'s index the c_eval `Σ_i λ_i(z)·r1c_i` of the round-1c values at the rep's zerocheck point (`zcE`), as the
-firewall's finish computes it (`Flock.dot`, `Flock.lagrange`); at every other index the table's own value
+ZK server's finish computes it (`Flock.dot`, `Flock.lagrange`); at every other index the table's own value
 (`vsOfWord`). -/
 noncomputable def vsServed (bx : AlgWorker L) : (CoinLayer.session loopNr Masked.dataE).SwVals :=
   fun x w ν c s j r wt u V i =>

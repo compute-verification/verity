@@ -35,13 +35,13 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.ZK.CutPrefix
 
 /-!
-# The rep from a source that misses the firewall at `final_c`
+# The rep from a source that misses the ZK server at `final_c`
 
-`repCut_fw` takes a source whose masked values below `zp 64` are the firewall's. Here the source may differ at
+`repCut_fw` takes a source whose masked values below `zp 64` are the ZK server's. Here the source may differ at
 `final_c`'s pad (`lay.fc`): the PIOP reads `mk lay.fc` only into the zerocheck proof it returns (`zerocheckCut_fc`), the
 replay reads that proof's `finalC` only into its constraints (`replay_ok_fc`), and Ligerito and the constraints do not
-read it. So where the firewall's rep returns, the rep from the source runs through its PIOP, Ligerito opening, replay and
-constraints with the firewall's coins and logs, and its first inner body, `label LABEL_INNER ‖ absorbF finalC`, carries
+read it. So where the ZK server's rep returns, the rep from the source runs through its PIOP, Ligerito opening, replay and
+constraints with the ZK server's coins and logs, and its first inner body, `label LABEL_INNER ‖ absorbF finalC`, carries
 the source's `masked lay.fc` (`repCut_fw_inner`).
 
 * `zerocheckCut_fc`, `lincheckCut_fc`, `piopCut_fc_go`: the PIOP at masked values that differ at `fc` alone.
@@ -225,10 +225,10 @@ theorem innerCut_first (coin : ℕ → ℕ → F128) {n : ℕ} (lay : Zk.PadLayo
 /-! ## The rep -/
 
 set_option maxHeartbeats 2000000 in
-/-- **The rep from a source that misses the firewall at `fc` reaches its inner proof**: answered by `asksCut` from the
-log `l`, where the firewall's rep returns, a source that holds what the firewall computes below `zp 64` but at `fc`
-(`hmk`), with `repCut_fw`'s `hpiop` and `hlig` and no `hinner`, runs its PIOP (the firewall's, its zerocheck proof's
-`finalC` the source's `masked lay.fc`) and its Ligerito opening at the firewall's logs, with the inner proof's first
+/-- **The rep from a source that misses the ZK server at `fc` reaches its inner proof**: answered by `asksCut` from the
+log `l`, where the ZK server's rep returns, a source that holds what the ZK server computes below `zp 64` but at `fc`
+(`hmk`), with `repCut_fw`'s `hpiop` and `hlig` and no `hinner`, runs its PIOP (the ZK server's, its zerocheck proof's
+`finalC` the source's `masked lay.fc`) and its Ligerito opening at the ZK server's logs, with the inner proof's first
 round below `n`; stopped there, the rep from the source sends the inner proof's first frame, at the source's
 `masked lay.fc`. -/
 theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm : st.merkle = MerkleScheme.hm96Sha512)
@@ -301,7 +301,7 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
     rw [throw_run_go] at h'
     cases h'
   obtain ⟨inner, t₈, l₈, h₈, -⟩ := run_bind_ok hc
-  -- the firewall's inner proof drew its first coin, so that round is below `n`
+  -- the ZK server's inner proof drew its first coin, so that round is below `n`
   have hl₄n : l₄.size < n := by
     unfold FlockComplete.innerP at h₈
     try dsimp only at h₈
@@ -323,7 +323,7 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
     try dsimp only
     rw [FlockComplete.Replay.bind_go h₃]
     rfl
-  -- the PIOP: the firewall's at the source made the firewall's at `fc`, then the source's
+  -- the PIOP: the ZK server's at the source made the ZK server's at `fc`, then the source's
   have hPC' := piopCut_fw coin n st _ g _
     { src with masked := fun i => if i = (Zk.PadLayout.new st.m st.kLog sch.k0).fc then
         vals[(Zk.PadLayout.new st.m st.kLog sch.k0).fc]! + pads.h[(Zk.PadLayout.new st.m st.kLog sch.k0).fc]!
@@ -337,7 +337,7 @@ theorem repCut_fw_inner (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (hm
     hn hpiop hP
   have hPC := piopCut_fc_go _ st _ src _ _ _ extras prior words (by exact Nat.le_refl _)
     (fun i hi => by simp only [if_neg hi]) hPC'
-  -- Ligerito: the source's opening is the firewall's
+  -- Ligerito: the source's opening is the ZK server's
   have h₄' := h₄
   rw [← hm] at h₄'
   have hL : ((FlockComplete.ligeritoCut (FlockComplete.asksCut coin n) (Hashes.ofSha512 Sha512.hash) st.merkle sch T

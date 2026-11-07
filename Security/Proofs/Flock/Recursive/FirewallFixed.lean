@@ -5,7 +5,7 @@ public import Proofs.Flock.Recursive.FirewallAdaptive
 /-!
 # The live firewall at a worker whose requests are fixed
 
-A worker that sends a fixed list of requests, its `i`-th request the list's `i`-th whatever the firewall answered
+A worker that sends a fixed list of requests, its `i`-th request the list's `i`-th whatever the ZK server answered
 (`fun h => reqs[h.length]?`), runs the live session (`FirewallAny.liveOut`) on those requests, each with the next salts
 it reads from the list. By `FirewallAny.liveOut_any`, whether that session finishes depends on the requests and how many
 salts each reads, never on the salts' values, so one evaluation at one salt list decides it at every list of that

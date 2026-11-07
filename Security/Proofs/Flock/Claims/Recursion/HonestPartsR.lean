@@ -93,7 +93,7 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 
 /-- **Part `s`'s circuit accepts on an accepted run at `deployRec`**, with V\*'s staging (`showsPart`, `cmtTr`):
-`partAccepts_of_run` at `stagedB_deployRec_part`, wherever the reader `untr` reads the coin server's transcript back
+`partAccepts_of_run` at `stagedB_deployRec_part`, wherever the reader `untr` reads the challenger's live-coin part's transcript back
 (`ReadsBackB`, which `readsBack_recTr` gives at `recRead`) and the layout's holdings pin its rounds (`HeldB`). -/
 theorem partAccepts_run_deployRec {W Col T : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W)
     (ivScope : Msg → Bool) (b : Brings) (untr : TrReader) (DO : Claims.Flock.Deploy Coin Col T)

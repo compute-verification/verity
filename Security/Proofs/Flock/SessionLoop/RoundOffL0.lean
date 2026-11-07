@@ -10,7 +10,7 @@ public import Proofs.Flock.SessionLoop.SchedUnrefused
 # A rep's level-0 rounds past the binding
 
 `LiveSched`'s equation at rep stream `2j + r`'s level-0 rounds `1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`; at `k₀ + 3`,
-`ρ_1`'s squeeze alone), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`): the release of the worker's
+`ρ_1`'s squeeze alone), where `vs`'s level-0 values are the ZK server's (`Loop.L0Fixed`): the release of the worker's
 round is the switched session's message without its leading domain frame.
 
 * **`LeanRelease.release_sched_l0_st`**: where no refusal shows by the round. The frame releases body `i` at the
@@ -43,7 +43,7 @@ open FlockSoundness.Refine (Frame encs)
 
 open Loop Ranked in
 /-- **Level 0's rounds past the binding, where no refusal shows**: at rep stream `2j + r`'s level-0 round
-`1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`) and no refusal
+`1 ≤ i ≤ k₀ + 3` (`Masked.repSlot` `i`), where `vs`'s level-0 values are the ZK server's (`Loop.L0Fixed`) and no refusal
 shows by the round, the release of the worker's round is the switched session's message without its leading domain
 frame: body `i` at the rep's pads, the tape's packed table and extra lanes, the basis of the switched source's vectors
 and the opened coins from the binding on. -/
@@ -265,7 +265,7 @@ theorem release_sched_l0_st (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wi
       exact lt_of_lt_of_le he (by decide))
 
 /-- **Level 0's rounds**: at rep stream `2j + r`'s level-0 round `i`, `1 ≤ i ≤ k0 + 3` (`Masked.repSlot` `i`; at
-`k0 + 3`, `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`), the release of the
+`k0 + 3`, `ρ_1`'s squeeze alone), where `vs`'s level-0 values are the ZK server's (`Loop.L0Fixed`), the release of the
 worker's round is the switched session's message without its leading domain frame. The round is past the rep's PCS
 round and before its `β` round, where no refusal shows (`unrefused_sched`), so it is `release_sched_l0_st`'s. -/
 theorem release_sched_l0_pf (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)

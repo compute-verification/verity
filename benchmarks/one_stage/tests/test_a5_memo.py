@@ -1,6 +1,6 @@
 """a5's memo (`a5_memo.memo`), each of the one-stage verifier's pure checks asked once per input. Under it a5's negatives
-on the challenger's coins, each its own `service.Stream` on the honest draw's bytes (`a5_coins.Replay`) registering the
-same record, reuse the registration's checks and draw, and each outcome is the one it has without the memo, refused at
+on the challenger's coins, each its own `service.Stream` on the honest sample's bytes (`a5_coins.Replay`) registering the
+same record, reuse the registration's checks and sample, and each outcome is the one it has without the memo, refused at
 the Lean run's select (`coins`); a changed registration or copy (a root, a root's domain, the ports bound to another run,
 a program of one proof block fewer) is checked again and refused as before; a verdict the Lean refused is never kept, and
 a hit is a copy. A toy window of two templates."""
@@ -85,8 +85,8 @@ def _asked(monkeypatch) -> Counter:
 
 
 def _negatives() -> dict[str, dict]:
-    """a5's negatives on the challenger's coins: each its own stream on the honest draw's bytes, registering the same record
-    (in its window), drawing, and its outcome with its evidence. -> by name: accepted, the Lean run's side, the record."""
+    """a5's negatives on the challenger's coins: each its own stream on the honest sample's bytes, registering the same record
+    (in its window), sampling, and its outcome with its evidence. -> by name: accepted, the Lean run's side, the record."""
     out = {}
     for name, (coins, window) in NEGATIVES.items():
         s = S.Stream(SPEC, WINDOW, budget=1, delta=0.5, challenger="a5 memo test, challenger", coins=AC.Replay(READ),

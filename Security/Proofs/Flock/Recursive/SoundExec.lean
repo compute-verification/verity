@@ -18,12 +18,12 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Game.Prob
 
 /-!
-# The recursive audit at C-Flock's compiled inner protocol
+# The recursive audit at Flock's compiled inner protocol
 
 `RecursiveSound` and `RecursiveRanRegistered` take the inner protocol's soundness as a hypothesis (`InnerSound I εin`)
-over an abstract `I`. At C-Flock's inner protocol that hypothesis can't hold as stated, since SHA-512 is inside the
+over an abstract `I`. At Flock's inner protocol that hypothesis can't hold as stated, since SHA-512 is inside the
 inner protocol; what holds is its fork form, proved (`Recursion.flock_inner_sound_compiled`). These are the two
-guarantees at the inner protocol the verifier of record runs, with that hypothesis gone:
+guarantees at the inner protocol the verifier runs, with that hypothesis gone:
 
 * `Flock.Guarantees.RecursiveSoundExec` (retired from the lock: see `RecursiveKS`): `RecursiveSound` at `innerAt T CT st` (`flockInnerCL` at the executable's
   arithmetic and SHA-512 with plain leaves, on the class, regions and schedule of `execClassAt st`), with no
@@ -50,14 +50,14 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **The recursive audit is sound at C-Flock's compiled inner protocol.** `RecursiveSound` at `I := innerAt T CT st`,
-the inner protocol the verifier of record runs on the inner statement `st` (C-Flock's compiled table at the executable's
+/-- **The recursive audit is sound at Flock's compiled inner protocol.** `RecursiveSound` at `I := innerAt T CT st`,
+the inner protocol the verifier runs on the inner statement `st` (Flock's compiled table at the executable's
 arithmetic, SHA-512 with plain leaves, the class, regions and schedule of `execClassAt st`, under the schedule `(T, CT)`
 with live coins), with the inner protocol's soundness proved rather than taken, and no A3. For every prover `σ`, given
 V*'s bridge (`Flock.Assumptions.VBridge`), one of five holds:
 
 * `RecursiveSound`'s registrant fork (`regFinder`), round fork (`RoundFork`) or session fork (`SessionFork`);
-* an inner fork (`InnerForkRec` at `clashPickCL`): at some draw and round, two continuations of `σ` after its round
+* an inner fork (`InnerForkRec` at `clashPickCL`): at some sample and round, two continuations of `σ` after its round
   commitment whose inner transcripts, decoded from V*'s layers, play the compiled table to outcomes that clash, a
   collision of SHA-512 at an outcome the fork reaches;
 * $$\Pr[\text{Lean's verifier accepts } st \wedge \text{every session of V* accepts} \wedge \neg\,\text{the hidden
@@ -86,7 +86,7 @@ def RecursiveSoundExec : Prop :=
       rateZ (ZkHidden.planZHJ (Reg := Reg') (zs R ω t R₂ j).dj (zs R ω t R₂ j).y₀ S' R') i k ≤ ρ)
     -- the recursive prover
     (σ : Strategy (recGame L Reg (innerAt T CT st) Cm fun R ω t => outerV (zs R ω t) dg N))
-    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the firewall's
+    -- the hidden circuit's statement, the messages V*'s layers hold, the rounds' commit strings, the ZK server's
     -- commitments and the messages they open to, and V*'s bridge
     (x : Reg → L.Ω → (innerAt T CT st).Stmt) (wmsg : ((j : Fin S) → (Vs j).Bits) → List (innerAt T CT st).Msg)
     (Sk : ℕ → (j : Fin S) → Finset (PosK (Vs j).c (Vs j).hU (Vs j).nv))
@@ -116,7 +116,7 @@ noncomputable def rowCommit (i : ℕ) :
   Flock.SecurityProofs.regRowCommit (fun b : ByteArray => b.data.toList)
     (fun _ _ h => ByteArray.ext (Array.toList_inj.1 h)) i
 
-/-- **The recursive audit ran the registered private circuit, at C-Flock's compiled inner protocol.**
+/-- **The recursive audit ran the registered private circuit, at Flock's compiled inner protocol.**
 `RecursiveRanRegistered` at `I := innerAt T CT st`, as `RecursiveSoundExec` is `RecursiveSound` there, with the
 registration the executable's: on its hypotheses, with no `InnerSound` and no A3, the private circuit's rows `p`
 registered at the port `rt` as the verifier checks a registered read (`rowCommit`, whose binding is proved, so no
@@ -146,7 +146,7 @@ def RecursiveRanRegisteredExec : Prop :=
     (rt : Flock.Registered.Port) (p : ℕ → ByteArray)
     (op₀ : ℕ → Flock.Registered.Port × ByteArray × ByteArray × ByteArray)
     (_hreg : ∀ i, (rowCommit i).Opens rt (p i) (op₀ i))
-    -- a private circuit's statement at a draw; the rows an accepted run read, and the rows and openings of `rt` it
+    -- a private circuit's statement at a sample; the rows an accepted run read, and the rows and openings of `rt` it
     -- carries
     (stmt : (ℕ → ByteArray) → L.Ω → (innerAt T CT st).Stmt)
     (reads : Reg × L.Ω × List (Cm × (innerAt T CT st).Coin) × (Reg₂ × VRec Vs Reg' dg N) → ℕ → Prop)
@@ -182,7 +182,7 @@ open Game Audit Exec Refine Model ZkSession ZkLink ZkExec Composed ZkReg
 open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
-/-- **The recursive audit is sound at C-Flock's compiled inner protocol.** -/
+/-- **The recursive audit is sound at Flock's compiled inner protocol.** -/
 theorem RecursiveSoundExec : Flock.Guarantees.RecursiveSoundExec := by
   intro nT r T CT _ _ n L Reg Cm S Vs Reg' Reg₂ st zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr
   by_cases hacc : AcceptsStmt st
@@ -202,7 +202,7 @@ theorem RecursiveSoundExec : Flock.Guarantees.RecursiveSoundExec := by
 theorem rowCommit_binding (i : ℕ) : (Flock.Guarantees.rowCommit i).Binding :=
   regRowCommit_binding _ _ i
 
-/-- **The recursive audit ran the registered private circuit, at C-Flock's compiled inner protocol.** -/
+/-- **The recursive audit ran the registered private circuit, at Flock's compiled inner protocol.** -/
 theorem RecursiveRanRegisteredExec : Flock.Guarantees.RecursiveRanRegisteredExec := by
   intro nT r T CT _ _ n L Reg Cm S Vs Reg' Reg₂ st zs dg N k Rw M hk hRw hM ρ hρ hr σ x wmsg Sk cmt msg hbr
     rt p op₀ hreg stmt reads row op hop hx
