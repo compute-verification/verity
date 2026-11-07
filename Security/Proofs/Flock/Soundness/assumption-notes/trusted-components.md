@@ -9,7 +9,7 @@ These are not assumptions of the theorem, but the verdict still depends on them.
     closure into an empty environment (`leanchecker --fresh`).
     Both use Lean's own kernel; an independent one (nanoda, lean4lean) would remove this trust.
   - Numeric checks use `decide +kernel`, which is kernel evaluation. The development never uses `native_decide`.
-- **Lean's compiler, runtime and the C compiler, for the running binary.** Only the Lean verifier runs in production;
+- **Lean's compiler, runtime and the C compiler, for the running binary.** Only the Lean verifier runs in an audit;
   upstream's Rust verifier is a cross-check (the agreement job), not a second verifier. Proofs are about Lean
   definitions, not machine code.
   - **Mitigation:** the agreement tests of `verity/ml/flock/verifier/README.md`. The Rust implementation must reach the same verdict on the corpus
