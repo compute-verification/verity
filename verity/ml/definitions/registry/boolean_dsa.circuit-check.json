@@ -1,5 +1,9 @@
 {
  "definitions": {
+  "DsaMqaLogitsQ_v1{H=16,D=32}": {
+   "and": 12096,
+   "type": "afaef430ce23bfe65e2fc035e7c01430d3f01cba66b8bdcfec02170502f01d5cac23a12850f981b4935fb3e6dbcf5ff82fdb91e543aa77ea7911c1f8eb478bf2"
+  },
   "DsaTopKShortRow_v2{TOPK=16}": {
    "and": 469,
    "type": "8790a48daadc23fa42f57a70ee70e74233e7c75b3c951317f923fa2066179fed4695f29209cf1b6268a93864bdf5d8d80a5323ed03791fd6ad154c8e5d5fa982"
