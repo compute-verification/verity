@@ -1,8 +1,39 @@
 module
 
-public import Mathlib
 public import Definitions.Accounting.Carrier
-public import Proofs.Accounting.Requirement
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Requirement
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A pass's credit against its tiles of the declared circuit
@@ -24,8 +55,9 @@ variable {G : Type} [DecidableEq G]
 /-- **A pass's credit is at most a tile's bits for each of its tiles of `W`**, at a step whose memory map and plan hold
 `W`'s credited blocks, whose reads from incomplete blocks lie in one block a group, and whose plan's blocks are at
 distinct positions of the pass's layout `lay`. -/
-theorem credit_le_tiles {K : Type} [DecidableEq K] {N T M : ℕ} (W : Wiring G) (e : Execution G) (ℓ : Layout G)
-    (σ : Store) (plan : Finset ℕ) (grp : G → K) (t : ℕ) (addr : ℕ → Fin T × Fin M) (lay : Fin N ↪ Fin T × Fin M)
+theorem credit_le_tiles {K : Type} [DecidableEq K] {N T M : ℕ} (W : Wiring G) (e : Execution G)
+    (ℓ : Store.Placement G) (σ : Store) (plan : Finset ℕ) (grp : G → K) (t : ℕ) (addr : ℕ → Fin T × Fin M)
+    (lay : Fin N ↪ Fin T × Fin M)
     (hS : StoreMatches W e ℓ σ 32768 t) (hP : PlanMatches W e ℓ plan 32768 t)
     (hO : OneBlockEach ℓ grp (reads W e t \ creditedReads W e ℓ t))
     (hinj : Set.InjOn addr ↑plan) (hrange : ∀ b ∈ plan, addr b ∈ Set.range lay) :

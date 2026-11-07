@@ -1,8 +1,12 @@
 module
 
-public import Proofs.Pous.Statements
-public import Proofs.Pous.Graded.Theorem
-public import Proofs.Pous.Chain.Family
+public import Definitions.Pous.Guarantees
+public import Proofs.Pous.Chain.Flat
+public import Proofs.Pous.Graded.Tail
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Chain.Family
+import Proofs.Pous.Graded.Theorem
 
 /-!
 # The band store with up to `t` late rounds

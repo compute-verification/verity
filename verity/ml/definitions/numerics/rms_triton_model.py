@@ -73,7 +73,7 @@ CUDA_VARIANTS = {
 CUDA_KERNEL = {
     "source": "csrc/libtorch_stable/layernorm_kernels.cu::vllm::rms_norm_kernel<c10::BFloat16, VEC_SIZE=8, NUM_DIMS=2, HasWeight=true> (vLLM d9105ea8)",
     "entry": "torch.ops._C.rms_norm(out, x, w, eps)  -- not launched by the pinned profile's engine (every RMSNorm call carries a residual "
-             "or goes to the Triton kernel); modelled as the third rms_norm variant of numerics.md",
+             "or goes to the Triton kernel); modelled as the third rms_norm variant",
     "launch": "grid = rows, block = min(n_cols / 8, 1024) threads (192 for n_cols 1536), one 8-vector per thread per iteration",
     "reduction": "FFMA chain per vector (element order), cub WarpReduce shfl_down tree (1,2,4,8,16), cub BlockReduce<1024> warp aggregates added sequentially",
     "scalar_ops": "IEEE div.rn.f32 (MUFU.RCP + FFMA refinement + FCHK), FADD eps, rsqrt.approx.f32 -> MUFU.RSQ with 2^24 / 2^12 range scaling",
@@ -97,12 +97,8 @@ def lib() -> ctypes.CDLL:
                                          ctypes.c_int]
         _lib.rms_cuda_rows.restype = None
         _lib.rms_cuda_rows.argtypes = _lib.rms_triton_rows.argtypes
-        _lib.rms_mufu_sqrt_words.restype = None
-        _lib.rms_mufu_sqrt_words.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
-        _lib.rms_mufu_rsq_words.restype = None
-        _lib.rms_mufu_rsq_words.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
         _lib.rms_rsqrt_words.restype = None
-        _lib.rms_rsqrt_words.argtypes = _lib.rms_mufu_rsq_words.argtypes
+        _lib.rms_rsqrt_words.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
         _lib.rms_div_full_words.restype = None
         _lib.rms_div_full_words.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_long, ctypes.c_void_p]
     return _lib
@@ -154,23 +150,6 @@ class RmsTables:
         if delta.min() < -128 or delta.max() > 127:
             raise ValueError("deltas do not fit int8")
         return lzma.compress(delta.astype(np.int8).tobytes(), preset=9 | lzma.PRESET_EXTREME)
-
-
-def mufu_sqrt(x: np.ndarray, tables: RmsTables) -> np.ndarray:
-    x = np.ascontiguousarray(x, dtype=np.float32).view(np.uint32)
-    y = np.empty_like(x)
-    lib().rms_mufu_sqrt_words(x.ctypes.data, y.ctypes.data, x.size, tables.sqrt.ctypes.data)
-    return y.view(np.float32)
-
-
-def mufu_rsq(x: np.ndarray, tables: RmsTables) -> np.ndarray:
-    """The bare ``MUFU.RSQ`` (``rsqrt.approx.ftz.f32``): subnormal inputs flush to zero -> +inf."""
-    if tables.rsq is None:
-        raise ValueError("no MUFU.RSQ table loaded")
-    x = np.ascontiguousarray(x, dtype=np.float32).view(np.uint32)
-    y = np.empty_like(x)
-    lib().rms_mufu_rsq_words(x.ctypes.data, y.ctypes.data, x.size, tables.rsq.ctypes.data)
-    return y.view(np.float32)
 
 
 def rsqrt_f32(x: np.ndarray, tables: RmsTables) -> np.ndarray:

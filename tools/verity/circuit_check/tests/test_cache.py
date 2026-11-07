@@ -316,9 +316,10 @@ def _set_pin(root: Path, key: str, counts: dict | None) -> None:
         p.write_text(json.dumps({"pieces": {key: counts}}))
 
 
-def _tree(tmp_path: Path) -> Path:
+def _tree(tmp_path: Path, extra: dict[str, str] | None = None) -> Path:
+    """A git repository at ``tmp_path`` holding `FILES` and ``extra`` (by path; ``extra`` wins)."""
     subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
-    for rel, text in FILES.items():
+    for rel, text in {**FILES, **(extra or {})}.items():
         p = tmp_path / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(text.lstrip("\n"))

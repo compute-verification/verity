@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.Soundness.ExecDrawOS
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The executable Bernoulli draw escapes no more often than the model's

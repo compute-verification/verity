@@ -1,6 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.FlockLinked
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Public wires: the constant and the zero are the statement's, not the prover's

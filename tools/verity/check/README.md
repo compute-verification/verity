@@ -22,10 +22,11 @@ applies `main`'s allowances the same way.
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
 merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
 checks `checked`'s tip, and doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
-`lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run. A red
-`circuit-check` reverts its culprit at once and lands no PR touching its inputs until it passes; a red `ratchet-gate` reverts
-its culprit as any other after-landing red does. `circuit-check` goes back on the gate once `circuit-check --all` fits inside
-the rest of the check; `ratchet-gate` is in no shard plan, and reports without blocking a merge.
+`lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run's preflights and
+`lean-agreement`, not its `ratchet-gate`. A red `circuit-check` or `ratchet-gate` reverts its culprit at once, as every
+after-landing red does, and while `circuit-check` is red no PR touching its inputs lands. `circuit-check` goes back on the gate
+once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no shard plan, and reports without blocking
+a merge.
 
 ## Suites and reuse
 
@@ -44,6 +45,12 @@ a tree and a timing record give one partition, named by its digest. A part's key
 files left out (`part_key`), so an edit to one file reruns its part alone, and the join of a suite's parts (`combine_parts`:
 every K once, of one partition, all passed) is the suite's verdict. The check splits a suite measured past `shards.SPLIT_S`
 (15 min; `--split-s`) into ceil(seconds / threshold) parts, and its shards partition by the timings the plan carries.
+A suite whose long tests share few files declares `[tool.verity.tests] parts = P` instead and runs in P parts by test id
+(`suites.id_part_of`): part K collects every file and runs the tests whose node id hashes to K (sha256, as circuit-check
+shards its targets), so the parts are one on every machine whatever its timing record. A part's key is the suite's with the
+part, and its parts join as a split suite's do. `ci.toml`'s plans name a lean suite's parts (`lean-suites:SUITE:K/P`, as
+`lean-audit:PKG` names a package) to spread it over shards, each of which runs `lean-build` beside them, and a check that holds
+every part runs the suite whole.
 
 Passes travel between machines as verdict packs (`verdicts.py`). The Lean audit and `circuit-check` reuse their own verdicts
 the same way, each keyed on what it reads. A nightly uncached run must agree with the cached ones. A disagreement means some
@@ -109,8 +116,9 @@ in `ci.toml`, as drive's after-landing run checks it; `--kind preflight` is the 
 `--changed BASE` keeps the tasks whose inputs the change from BASE's merge-base with HEAD touches, by `suites.py --changed`'s
 rule for a suite and by input paths for the rest, and the tasks they depend on. `--circuit-shards M` splits circuit-check into M
 tasks (default: its ci.toml `shards`, or ceil(seconds / S) when `--costs` gives `circuit-check` more seconds than those cover).
-A suite whose cost is past `--split-s` seconds (default `shards.SPLIT_S`, 15 min) is listed in M = ceil(cost / S) parts by test
-file (at most one per file), each priced at its files' share of the suite's cost. The lister's own caches and `--gather`'s
+A suite that declares `[tool.verity.tests] parts = P` is listed in its P parts by test id, each at 1/P of its cost; another whose
+cost is past `--split-s` seconds (default `shards.SPLIT_S`, 15 min) in M = ceil(cost / S) parts by test file (at most one per
+file), each priced at its files' share of the suite's cost. The lister's own caches and `--gather`'s
 recorded checks measure a suite on other machines than the executor's worker slots, where it can take several times as long, so
 the executor lists with `--costs` from `costs` over the graph it ran last; then each part is about S of the executor's seconds.
 The
@@ -121,7 +129,7 @@ timing record it is of), and each task is:
 
 | Field | What it is |
 | --- | --- |
-| `id` | the shard planner's part (`shards.py`): `pytest:SUITE` or `lean-suites:SUITE` (`suites.AFTER_LEAN`, which read the verifier's build), `pytest:SUITE:K/M` for part K of a split suite, `lean-audit:PKG`, `circuit-check:K/M`, or a job's name |
+| `id` | the shard planner's part (`shards.py`): `pytest:SUITE` or `lean-suites:SUITE` (`suites.AFTER_LEAN`, which read the verifier's build), `pytest:SUITE:K/M` for part K of a split suite (by test file, or by test id where it declares `parts`), `lean-audit:PKG`, `circuit-check:K/M`, or a job's name |
 | `kind` | `suite`, `lean-package`, `circuit-check`, `build` (`lean-build`, `flock-circuit-build`) or `step` (another job, run whole: `flock-rust-tests`, `lean-unit-cut`, `lean-agreement`, `lean-changed`, `ratchet-gate`) |
 | `argv`, `cwd` | the command `check.py` builds for that part alone (`check.groups`), with `<tree>`, `<cache>`, `<out>` and `<python>` for the tree, the check's cache, the run's output directory and the interpreter; `argv` is null where check can't run it on this tree |
 | `reason` | null, or why `argv` is null: one starting `skipped:` is a skip, any other a failure |
@@ -190,6 +198,16 @@ on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red jo
 but doesn't hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
 body) lands from `next` too: drive regenerates it on the tip below it and lands it only if `move_check.py` certifies it there
 (`verity check move BASE HEAD`), running both scripts as `checked` has them.
+
+## The public boundary
+
+The public monorepo is exported one way from this repository. `public_boundary.toml` is the decided list of what it holds.
+`public_boundary.py` reads what each public file needs (Lean imports, Lake requires, Python imports and dependencies, anchored
+paths, commands) and fails on an edge into a file the export doesn't copy that `public_boundary_allowed.txt` doesn't list; the
+list only shrinks (`tests/test_public_boundary.py`). `public_export.py DEST` is the export's dry run: the public set as one
+commit of fresh history, its manifests pruned to what it copies, the leftovers a public reader shouldn't meet counted by area,
+and the third-party pins; with `--build` (a node's work: `research run`), each Lake package's `lake build`, the workspace's
+`uv sync` and the licenses of what they fetched. It publishes nothing.
 
 ## Settings
 

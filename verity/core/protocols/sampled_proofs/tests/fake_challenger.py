@@ -7,7 +7,8 @@ seeded entropy whose record is signed under the pinned key (`test_remote.PINNED`
 own opens for `WINDOW`, withheld (the verifier takes only a withheld session's coins, `challenger.withheld_on`), and
 ends once the draw is read, as a served session's would (`remote.open_session`, `remote.close_session`). `evidence(digest)` is then `coins.coins_reason`'s evidence for the draw after `digest`.
 `Stream` is a `service.Stream` over one, as a deployment drives it: `register` names the window, `select` commits the
-coins to the registration's digest first, and `outcome` hands the verifier the draw's evidence."""
+coins to the registration's digest first (a second stage's to the interior registration's), and `outcome` hands the
+verifier the draw's evidence (a two-stage sample's, both stages')."""
 
 from __future__ import annotations
 
@@ -93,17 +94,30 @@ class Stream(S.Stream):
         self.fake = coins if isinstance(coins, Challenger) else None
         super().__init__(spec, unit, coins=coins, **kwargs)
 
-    def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], **kwargs: Any) -> S.Registration:
+    def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
+                 **kwargs: Any) -> S.WindowCommitmentRecord:
         return super().register(record, ports, **{"window_root": WINDOW["root"], **kwargs})
 
-    def select(self, registration: S.Registration, **kwargs: Any) -> S.Draw:
+    def register_interiors(self, draw: S.Draw, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]],
+                           **kwargs: Any) -> S.WindowCommitmentRecord:
+        return super().register_interiors(draw, record, ports, **{"window_root": WINDOW["root"], **kwargs})
+
+    def select(self, registration: S.WindowCommitmentRecord, **kwargs: Any) -> S.Draw:
         if self.fake is not None and bytes.fromhex(registration.digest) not in self.fake.sessions:
             self.fake.commit(bytes.fromhex(registration.digest))
         return super().select(registration, **kwargs)
 
+    def _evidence(self, registration: S.WindowCommitmentRecord) -> dict[str, Any] | None:
+        after = bytes.fromhex(registration.digest)
+        return self.fake.evidence(registration.digest) if self.fake and after in self.fake.sessions else None
+
     def outcome(self, draw: S.Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 coins: Mapping[str, Any] | None = _NONE, **kwargs: Any) -> S.Outcome | S.Pending:
+        """A two-stage sample's evidence is both stages': the first stage's after the registration, the second's
+        (`interior_coins`) after the interior registration."""
+        first = draw.replay_sample or draw
         if coins is Stream._NONE:
-            after = bytes.fromhex(draw.registration.digest)
-            coins = self.fake.evidence(draw.registration.digest) if self.fake and after in self.fake.sessions else None
+            coins = self._evidence(first.registration)
+        if draw.replay_sample is not None:
+            kwargs.setdefault("interior_coins", self._evidence(draw.registration))
         return super().outcome(draw, verdicts, statement, coins=coins, **kwargs)

@@ -2,9 +2,10 @@
 
 A *twin* re-implements one registered composite (`verity/ml/definitions/registry/b1.py`) for speed — numpy over whole operands,
 or the C++ models of `cpp/` through ctypes — and is admissible only where its output words are IDENTICAL to
-`verity.ml.circuits.evaluate.evaluate_call` on the registered body.  A twin never redefines a body: where it cannot be exact it
-declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation (`covers`).  Twins
-are core `verity.ml.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the reference by core `self_check`:
+`verity.ml.circuits.evaluation.reference.evaluate_call` on the registered body.  A twin never redefines a body: where it
+cannot be exact it declines the input (`Declined`, the gate path is the fallback) or does not claim the specialisation
+(`covers`).  Twins are core `verity.ml.circuits.evaluation` kernels (`KERNEL`) of their Definitions, checked against the
+reference by core `self_check`:
 
     covers(spec, KERNEL)                   # None when a twin claims spec (e.g. `Gemm_v1{K=576,N=960}`), else why not
     words = instance(spec, KERNEL)(*args, **spec.statics)
@@ -14,7 +15,7 @@ are core `verity.ml.circuits.evaluation` kernels (`KERNEL`) of their Definitions
                                            # carry the same values); returns the output encodings as uint64.
     uv run verity-vllm twins --check --log LOG --snapshots DIR --profile P --seed S --out twins.json   (`program.twins_check`)
 
-Twins (twin_id -> registered body it reproduces; see `out/capture/reports/h4_twins.md` for the reduction orders):
+Twins (twin_id -> the registered body it reproduces, and how it computes it):
     gemm.bf16.tc_chain.v1        Gemm_v1              tc_model.cpp `gemm_model` (one ascending k16 chain per coordinate,
                                                       zero accumulator, RNE to bf16); coordinates with a non-finite
                                                       operand or result re-evaluated with the registered primitives

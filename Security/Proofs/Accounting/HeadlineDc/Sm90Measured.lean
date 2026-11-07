@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Accounting.HeadlineDc.Sm90
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # The H200's headline on its measured vector

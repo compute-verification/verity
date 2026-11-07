@@ -25,7 +25,7 @@ challenger refuses entropy no claim instance names (`served_claim`, `NO_CLAIM`),
 
 Timing is a trust assumption, not a check.  `after` binds an opening to the root the verifier recorded, but can't show
 the coin was released after it: that rests on the challenger releasing coin i only once it has received root i.  The
-challenger is auditor-trusted, the auditor's device on a machine the prover doesn't control, under the named assumption
+challenger is auditor-trusted, the auditor's device on a machine the developer doesn't control, under the named assumption
 `trusted-host`.  The record keeps the release order with its own time (`LiveRecord.log`).
 
 **A withheld session** (`remote.open_session(..., withhold=True)`, the auditor's choice, its ledger open's body
@@ -95,9 +95,9 @@ can't log (`flock_live::run_record`); `RunRecord` is the same record in memory.
 **The auditor's ledger** names the one challenger session each window's coins come from (`audited_session`).  The
 auditor (`benchmarks/live_challenger/auditor.py` on the challenger's host, run by the host's operator) appends a signed
 entry, under the
-challenger's key, when a lane reserves a window (its request, start and expiry), when it opens the reserved session for
-the window's root, before its first coin, and when the session ends; a window gets one session.  A lane's period is two
-more entries, its `period-open` and `period-close`:
+challenger's key, when a prover reserves a window (its request, start and expiry), when it opens the reserved session for
+the window's root, before its first coin, and when the session ends; a window gets one session.  A prover's period is two
+more entries, its `period-open` and `period-close`, which name the prover in their body's `lane`:
 
     entry   = {body, kind, prev, schema, seq, session, sig}        seq from 0; prev: SHA-512 of the previous line (128
                                                                    zeros first); schema v1 or v2, no v1 after a v2
@@ -107,6 +107,7 @@ more entries, its `period-open` and `period-close`:
     end     = body {closed, files, record_leaf, commitment, refused_hellos, complete, ...}    files: each file's SHA-512
     period  = body {period, lane, ...} (session null); a close lists its windows as {root, session, complete}, root
               null for a reserve never opened
+    declaration = body {by, [for], blocks, day, declared_utc, pinned, program} (session null)
     message = SHA-512([LEDGER_ROLE] || I || [identity_digest_sha512(LEDGER_TAGS[schema], entry without sig)])
 
 each entry a record entry (`verity.core.protocols.record`, `Core.Record`), each line as the auditor writes it
@@ -121,16 +122,25 @@ too): each
 entry chained and signed at strictly increasing leaves of the key (a ledger restored with its key's state forks at a
 reused leaf), a reserve first in its session and expiring its minutes after its start, one open a root and a session,
 binding its session's reserve and carrying its request after the first reserve, one end a session after its open, each
-record's leaf between its session's open and end and no entry's, and every period's close listing exactly its lane's
+record's leaf between its session's open and end and no entry's, and every period's close listing exactly its prover's
 windows, counted at their reserves.  The window's session must be
 opened under v2, ended and closed, its end naming its record's leaf and commitment and how many hellos it refused, and
 sealing the session's record, close, release log and refused hellos; then its record names the open's host and is
 signed at that leaf over that commitment, its signed close names the ledger's session id, and its release log and
 refused hellos are the ones the end sealed (`session_named`).  A ledger older than the window's end is refused, as is a
-window it opens no session for, so one session's coins pass for one window only.  Infra publishes the ledger's heads;
+window it opens no session for, so one session's coins pass for one window only.  The auditor host's operator publishes
+the ledger's heads;
 `ledger_head` checks each, refuses any two that don't extend one another, and takes the longest.  Every entry is under
 the one pinned key, so a ledger whose key changes is refused: no entry, signed under the old key, hands the ledger to a
 new one.  `ledger_line` writes an entry as the auditor does.
+
+**A lane's day** is a UTC day, numbered from 1970-01-01 (`day_of`), and its program is the one the lane's `declaration`
+entry names for it: its program's SHA-512 and its blocks' descriptor keys, declared at `declared_utc`, the challenger's
+own clock, for that day or a later one.  A lane declares a day once.  Once a lane has declared, each later `open` of its
+windows (the window's registration, before its first coin) is on a day it declared earlier: its `started_utc`'s, the
+challenger's clock too, so the ledger orders a day's declaration before every coin of the day.  `_days` checks both in a
+second pass over the entries the first accepted; a lane that never declares opens as before.  `declared_day` is what a
+per-day check reads of the ledger: the day of the window's open and the lane's declarations before it.
 
 **A window counts toward its period** only when it proves the circuit the period's open committed (`credited_session`):
 the period's `circuit` is the registered circuit's SHA-512 (`circuit_of`), and the verifier holds the descriptor of the
@@ -138,12 +148,12 @@ circuit the window's sessions prove, its canonical JSON without annotations (the
 check is one SHA-512 over the descriptor, never a walk over the circuit it unrolls to (`circuit_reason`).  A window in
 no period, in a period that committed no circuit, or whose descriptor hashes to another circuit counts toward none.
 
-**A session runs main's code** only when the host's pins log records its pin (`pinned_session`, RT4-INT-40).  The open's
+**A session runs main's code** only when the host's pins log records its pin (`pinned_session`).  The open's
 `pinned` is the commit the host's tree was pinned to.  The host keeps an append-only pins log, a line per pin as the
 auditor writes it (`pin_line`):
 
     pin     = {commit, main, pinned_utc}        commit: the pin; main: the origin/main commit whose history held it
-                                                 when vy-challenger-pin pinned it (each 40 lowercase hex)
+                                                 when the host was pinned to it (each 40 lowercase hex)
     open    = body {..., pinned, pins: {lines, sha512}}        the pins log as it stood when the gate admitted the open
 
 and each open seals the log as it stood (`pins_seal`), under the open's signature.  The session counts only when the
@@ -169,10 +179,12 @@ records leaves the host, so the signed close covers them:
 `after` is the round's message's SHA-512 (the record's ``msg_sha512``), and for the link points (stream ``session``,
 round 0) the SHA-512 of the link's ``root_F`` and each table's ``root_B`` (`link_after`).  `released_roots_of` reads past
 these lines (`tree_line`), `coin_trees_of` reads them, and `session_tree_reason` holds a session's record to them: its
-``coin_tree`` a tree the log shows sampled, its link points and every round's coins that tree's logged openings.
-`sessions_tree_reason` holds an audit's sessions to them, one tree a session and every tree a session's, so no statement's
-coins are flipped twice.  The tree's root and key leave at ``Hello``, as C-Flock's coin server releases them, so its
-unopened coins rest on the tree's hm96 hiding.
+``coin_tree`` a tree the log shows sampled, its link's ``root_b`` keys exactly its session's tables (`LINK_TABLES`), each
+entry the length its table's statement fixes (`LINK_ROOT_LEN`, refused before the hash so the hashed message parses one
+way), its link points and every round's coins that tree's logged openings.  `sessions_tree_reason` holds an audit's sessions to
+them, one tree a session and every tree a session's, so no statement's coins are flipped twice.  `sample_link_first`
+holds the log's order: the sample, then the link, then the other rounds.  The tree's root and key leave at ``Hello``, as
+C-Flock's coin server releases them, so its unopened coins rest on the tree's hm96 hiding.
 
 The first client is PoUW's live window (`verity.core.protocols.pouw.window`, "Live windows"): its salt, its sample and
 its round coins, round r's opened after round r's root.  The module reads only the standard library,
@@ -188,9 +200,9 @@ import os
 import re
 import string
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, NamedTuple
 
@@ -249,6 +261,10 @@ TREE_SPEC_FORM = (f"a coin tree's spec is {{block, rounds_log, scheme, streams}}
 NO_TREE = "its coin tree is none the challenger's release log shows it sampled"
 SHARED_TREE = "its coin tree is another session's"
 UNUSED_TREE = "a tree no session records is a second sample, and each session's coins are flipped once"
+#: Lean `Challenger.SAMPLE_LINK_FIRST`: the refusal of a release log out of the order `sample_link_first` holds it to
+SAMPLE_LINK_FIRST = ("the challenger's release log is not the sample, then the link, then the other rounds: a coin of the "
+                     "sample is released after a coin tree's round is opened, or the first round opened is not a "
+                     f"tree's {CT.SESSION} stream, the link points")
 CLOSE_FORM = ("a challenger close record is {chain, ended, lines, session, signature}: a 64-byte chain and a signature in "
               "lowercase hex, how the session ended (null when its client closed it), the release log's line count, "
               f"1 to {MAX_LOG_LINES}, and a session id of at most {MAX_SESSION_ID} ASCII letters, digits, '-', '.' and '_'")
@@ -265,6 +281,7 @@ LEDGER_ROLE = "verity/challenger-auditor-record/v1"
 LEDGER_TAGS = {LEDGER_SCHEMA_V1: "verity/challenger-auditor/entry/v1", LEDGER_SCHEMA: "verity/challenger-auditor/entry/v2"}
 PERIOD_KINDS = ("period-open", "period-close")
 SESSION_KINDS = ("reserve", "open", "end")
+DECLARATION = "declaration"
 #: the request a reserve records and its session's open carries
 RESERVED = ("by", "for", "peer", "scheme", "epoch", "families", "minutes")
 #: a reserve's most minutes
@@ -274,6 +291,15 @@ RECORD_FILE, CLOSE_FILE, HELLOS_FILE = "record.json", "challenger.json", "hellos
 SEALED_FILES = (RECORD_FILE, CLOSE_FILE, LOG_FILE, HELLOS_FILE)
 #: an auditor's ledger line's most characters: its signature at W = 1, H = 30 is 70928 hex digits
 MAX_LEDGER_LINE = 1 << 18
+#: the most refused hellos a session's evidence holds
+MAX_HELLOS = 1 << 20
+#: the most lines an auditor's ledger holds: each is signed at its own leaf of the challenger's key, of which a key at the
+#: deployed parameters (`lms.DEPLOYED`) has 2^20
+MAX_LEDGER_LINES = 1 << 20
+#: the most lines a host's pins log holds
+MAX_PINS = 1 << 20
+#: the longest path a coin opening holds: the depth of a layout of `MAX_COINS` coins
+MAX_PATH = (MAX_COINS - 1).bit_length()
 _ZERO = core_record.ZERO
 _LEDGER_ROOT = re.compile(r"[0-9a-f]{128}")
 _LEDGER_HEX = re.compile(r"(?:[0-9a-f]{2})+")
@@ -289,8 +315,9 @@ LEDGER_FORM = ("an auditor's ledger line is an entry {body, kind, prev, schema, 
                "key (key_sha512) and in v2 its opener (by, and for when opened for a lane); kind reserve, its body the "
                "window's request; kind end, its body whether its client closed the session (closed), the SHA-512 of each "
                "file the session left (files) and in v2 the leaf its record was signed at, if any; kind period-open, its "
-               "period, lane and key_sha512; or kind period-close, its period, lane, windows ({complete, root, session} "
-               "each, root null for a reserve never opened) and whether all are complete")
+               "period, lane and key_sha512; kind period-close, its period, lane, windows ({complete, root, session} "
+               "each, root null for a reserve never opened) and whether all are complete; or kind declaration, its body "
+               "a lane's day and the program it declared")
 END_FORM = ("a window's end names the leaf its record was signed at (record_leaf), its commitment's root (commitment), how "
             "many hellos it refused (refused_hellos) and seals " + ", ".join(SEALED_FILES))
 HEADS_FORM = "the auditor's published heads are a list of ledgers, each its lines"
@@ -886,6 +913,16 @@ def link_after(root_f: bytes, root_b: dict[str, bytes]) -> bytes:
 
 TREE_RECORD_FORM = ("its record names no coin_tree, link {points, root_b, root_f} and streams [{stream, rounds: [{coins, "
                     "msg_sha512, n}]}] in lowercase hex, as a --zk session's record does")
+# The link points are opened after every ``root_b`` entry (`link_after`) and C-Flock reads only the session's tables'
+# (S5), so a key of no table, or a table without its key, would let the prover pick a table's ``root_B`` after them.
+LINK_TABLES = "its link's root_b keys are not exactly its session's tables"
+# `link_after` hashes ``root_F`` and each table's ``root_B`` in table name order with no length prefix. A table's
+# ``root_B`` is its proof's level-0 cap, 2^cap0 digests of its Merkle scheme at its statement's m, so its statement fixes
+# its length. Refusing any other length before the hash is what makes the message parse one way: the ``root_B``s are its
+# last bytes, each of its table's length in table order, and ``root_F`` is the rest. Without it one message could read
+# as other roots.
+LINK_ROOT_LEN = ("its link's root_b for a table is not the length its statement fixes for that table's root_B "
+                 "(2^cap0 digests)")
 
 
 def _record_coins(cs: Any) -> bytes | None:
@@ -894,13 +931,16 @@ def _record_coins(cs: Any) -> bytes | None:
     return b"".join(bytes.fromhex(c) for c in cs)
 
 
-def session_tree_reason(trees: dict[str, LoggedTree], record: Any) -> str | None:
-    """Why `record`, a ``--zk`` session's record (its ``session.json``), doesn't show its coins to be ones the
-    challenger's release log shows it released (`trees`, `coin_trees_of`'s); None when it does.  Its ``coin_tree`` must
-    be one the log shows sampled, its key, nonce, root and spec; its link points (``link.points``, in order) that tree's
-    ``session`` round 0, opened after the roots its link commits (`link_after` of ``link.root_f`` and ``link.root_b``);
-    and each round ``k`` of each of its ``streams`` that tree's round ``k`` of the stream, its ``n`` coins opened after
-    its message (``msg_sha512``) and whose SHA-512 is its ``coins``' (`coins_digest`)."""
+def session_tree_reason(trees: dict[str, LoggedTree], tables: Mapping[str, int | None], record: Any) -> str | None:
+    """Why `record`, a ``--zk`` session's record (its ``session.json``) on the tables `tables`, each with the byte
+    length its statement fixes for its ``root_B`` (None where the caller set up no statement), doesn't show its coins
+    to be ones the challenger's release log shows it released (`trees`, `coin_trees_of`'s); None when it does.  Its
+    ``coin_tree`` must be one the log shows sampled, its key, nonce, root and spec; its link's ``root_b`` keys exactly
+    `tables` (`LINK_TABLES`), each entry its table's length (`LINK_ROOT_LEN`), checked before the hash below so that the
+    message it hashes parses one way; its link points (``link.points``, in order) that tree's ``session`` round 0,
+    opened after the roots its link commits (`link_after` of ``link.root_f`` and ``link.root_b``); and each round ``k``
+    of each of its ``streams`` that tree's round ``k`` of the stream, its ``n`` coins opened after its message
+    (``msg_sha512``) and whose SHA-512 is its ``coins``' (`coins_digest`)."""
     ct = record.get("coin_tree") if isinstance(record, dict) else None
     t = trees.get(ct["root"]) if isinstance(ct, dict) and type(ct.get("root")) is str else None
     if t is None:
@@ -910,10 +950,14 @@ def session_tree_reason(trees: dict[str, LoggedTree], record: Any) -> str | None
     link, streams = record.get("link"), record.get("streams")
     if not isinstance(link, dict) or not isinstance(link.get("root_b"), dict) or type(link.get("points")) is not list:
         return TREE_RECORD_FORM
+    if sorted(link["root_b"]) != sorted(tables):
+        return LINK_TABLES
     root_f, root_b = _hex(link.get("root_f")), {k: _hex(v) for k, v in link["root_b"].items()}
     points = _record_coins([c for p in link["points"] for c in (p if type(p) is list else [None])])
     if root_f is None or None in root_b.values() or points is None or type(streams) is not list:
         return TREE_RECORD_FORM
+    if any(n is not None and len(root_b[table]) != n for table, n in tables.items()):
+        return LINK_ROOT_LEN
     o = t.opening(CT.SESSION, 0)
     if o is None or (o.n, o.after, o.coins) != (len(points) // 16, link_after(root_f, root_b).hex(),
                                                  hashlib.sha512(points).hexdigest()):
@@ -932,15 +976,16 @@ def session_tree_reason(trees: dict[str, LoggedTree], record: Any) -> str | None
     return None
 
 
-def sessions_tree_reason(trees: dict[str, LoggedTree], records: Sequence[tuple[str, Any]]) -> str | None:
-    """Why the ``--zk`` sessions `records`, each its name and its record, don't show their coins to be the ones the
-    challenger's release log shows it sampled and opened (`trees`, `coin_trees_of`'s), one tree a session; None when
-    they do.  In order, each session's coins must be its tree's (`session_tree_reason`), a tree no earlier session's
-    (`SHARED_TREE`); and every tree the log shows must be a session's (`UNUSED_TREE`), so no statement's coins are
-    flipped twice."""
+def sessions_tree_reason(trees: dict[str, LoggedTree],
+                         records: Sequence[tuple[str, Mapping[str, int | None], Any]]) -> str | None:
+    """Why the ``--zk`` sessions `records`, each its name, its tables with their ``root_B`` lengths
+    (`session_tree_reason`'s) and its record, don't show their coins to be the ones the challenger's release log shows
+    it sampled and opened (`trees`, `coin_trees_of`'s), one tree a session; None when they do.  In order, each
+    session's coins must be its tree's (`session_tree_reason`), a tree no earlier session's (`SHARED_TREE`); and every
+    tree the log shows must be a session's (`UNUSED_TREE`), so no statement's coins are flipped twice."""
     used: list[str] = []
-    for name, record in records:
-        why = session_tree_reason(trees, record)
+    for name, tables, record in records:
+        why = session_tree_reason(trees, tables, record)
         root = record["coin_tree"]["root"] if why is None else None
         if why is None and root in used:
             why = SHARED_TREE
@@ -951,6 +996,55 @@ def sessions_tree_reason(trees: dict[str, LoggedTree], records: Sequence[tuple[s
         return (f"the challenger's release log shows {len(trees)} coin trees and the sessions use {len(used)}: "
                 f"{UNUSED_TREE}")
     return None
+
+
+def _root_names(line: str, label: str, root: bytes) -> bool:
+    """Whether release log line `line` shows family `label` and root `root`, as `released_roots_of` reads a root line
+    (Lean `Challenger.rootOf line = some (label, root)`); False where the line doesn't parse."""
+    try:
+        doc = _event(line)
+    except CoinError:
+        return False
+    return (isinstance(doc, dict) and doc.get("label") == label and type(doc.get("root")) is str
+            and _hex(doc["root"]) == root)
+
+
+def open_line(line: str) -> bool:
+    """Whether release log line `line` opens a coin tree's round: an event whose ``event`` is `OPEN_EVENT`."""
+    try:
+        doc = _event(line)
+    except CoinError:
+        return False
+    return isinstance(doc, dict) and doc.get("event") == OPEN_EVENT
+
+
+def link_line(line: str) -> bool:
+    """Whether release log line `line` opens a round of a coin tree's stream ``session`` (`coin_tree.SESSION`), the
+    stream a session's link points are opened from."""
+    return open_line(line) and _event(line).get("stream") == CT.SESSION
+
+
+def sample_link_first(label: str, after: bytes, log: Sequence[str]) -> bool:
+    """**The sample, then the link, then the other rounds**, in the release log's lines `log` after its head (Lean
+    `Challenger.sampleLinkFirst`). Read as `released_roots_of` reads them, a coin tree's line aside (`tree_line`) and
+    the rest in pairs, a root's line and its coin's release: no coin of family `label` whose root's line names `after`
+    is released after a line opening a coin tree's round (`open_line`), and the first such line opens the stream
+    ``session`` (`link_line`), whose first round is the link points. A coin tree's own line may come anywhere. In v2's
+    one-stage audit `label` is the parameters' challenger family and `after` the registration's digest, so the coins so
+    released are the sample's, and v2 refuses a log out of this order (`SAMPLE_LINK_FIRST`)."""
+    opened, pending = False, None
+    for line in log:
+        if tree_line(line):
+            if not opened and open_line(line) and not link_line(line):
+                return False
+            opened = opened or open_line(line)
+        elif pending is None:
+            pending = line
+        else:
+            if opened and _root_names(pending, label, after):
+                return False
+            pending = None
+    return True
 
 
 def _period(s: Any) -> bool:
@@ -1000,7 +1094,8 @@ def leaf_of(sig: Any) -> int:
 
 
 def lane_of(e: dict) -> str:
-    """A reserve's or an open's prover: the lane vy-admin reserved or opened it for (`for`), else its requester (`by`)."""
+    """A reserve's or an open's prover: the one the auditor's operator reserved or opened it for (`for`), else its
+    requester (`by`)."""
     return e["body"].get("for") or e["body"]["by"]
 
 
@@ -1031,6 +1126,15 @@ def later(t: Any, minutes: int) -> str | None:
     return f"{d.year:04d}-{d.month:02d}-{d.day:02d}T{d.hour:02d}:{d.minute:02d}:{d.second:02d}Z"
 
 
+def day_of(t: Any) -> int | None:
+    """The UTC day of `t` (`later`'s form): the days from 1970-01-01 to its date, a natural number; None when `t` isn't
+    such a time or falls before 1970."""
+    if type(t) is not str or later(t, 0) != t:
+        return None
+    d = (date(int(t[:4]), int(t[5:7]), int(t[8:10])) - date(1970, 1, 1)).days
+    return d if d >= 0 else None
+
+
 def cap_of(v: Any) -> int:
     """A period's cap: the most windows it may hold, a positive integer; ValueError otherwise."""
     if type(v) is not int or not CAP[0] <= v <= CAP[1]:
@@ -1049,7 +1153,9 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
     plus its minutes; one `open` a root, whatever its period label, in canonical lowercase, and after the first reserve
     each open binds its session's reserve (`reserve`, its seq), carries its request, is by its prover and falls inside its
     minutes and before its period's close; one `end` a session, after its `open`, and a v2 end's `record_leaf` between its
-    session's open and end and no entry's or other record's; periods as `verify_periods` checks them. Returns root ->
+    session's open and end and no entry's or other record's; periods as `verify_periods` checks them; and then each
+    lane's days (`_days`): each `declaration` v2 and of its form, one a lane's day, and once a lane has declared, each
+    later open of it on a day it declared earlier. Returns root ->
     {"reserve" (None for a one-step open), "open", "end" or None}: S is the open's `session`, R its root; raises
     ValueError at the first entry that fails. It reads one head: a verifier takes the operator's newest published head,
     and refuses
@@ -1059,8 +1165,9 @@ def verify_ledger(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes],
 
 def verify_periods(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]) -> dict[str, dict]:
     """The ledger's periods once `verify_ledger` passes: period -> {"lane", "open", "close" (None while open), "windows":
-    [session, ...], "cap", "circuit"}. A period's name is used once; a lane has one period open at a time; its windows are
-    exactly the reserves (and one-step v2 opens) whose prover is its lane (`lane_of`) between its period-open and its
+    [session, ...], "cap", "circuit"}, "lane" being the period's prover. A period's name is used once; a prover has one
+    period open at a time; its windows are exactly the reserves (and one-step v2 opens) whose prover (`lane_of`) is the
+    period's, between its period-open and its
     period-close, counted at the reserve, so a reserve that expired unopened is one, at most its `cap` (a positive
     integer, with `circuit` committed beside it before window 0's first coin; both None only for a period opened before
     they were required, which a reader of the cap refuses), and the close lists each of them, in order, with its root
@@ -1086,6 +1193,7 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
     periods: dict[str, dict] = {}
     current: dict[str, str] = {}
     reserves: dict[str, dict] = {}
+    es: list[dict] = []
     prev, last, v2, two_step = _ZERO, -1, False, False
 
     def join(i: int, lane: str | None, session: str) -> str | None:
@@ -1107,7 +1215,8 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
         v2 = v2 or e["schema"] == LEDGER_SCHEMA
         kind = e.get("kind")
         period_kind = kind in PERIOD_KINDS
-        if (e.get("session") is not None if period_kind else type(e.get("session")) is not str) or type(e.get("body")) is not dict:
+        if ((e.get("session") is not None if period_kind or kind == DECLARATION else type(e.get("session")) is not str)
+                or type(e.get("body")) is not dict):
             raise ValueError(f"entry {i}: a session's entry has a session, a period's none, and each a body")
         q = leaf_of(e.get("sig"))
         if not verify(ledger_message(I, e), bytes.fromhex(e["sig"])):
@@ -1200,15 +1309,54 @@ def _verify(lines: list[bytes], I: bytes, verify: Callable[[bytes, bytes], bool]
                     raise ValueError(f"entry {i}: period {name}'s close doesn't list exactly its windows and their outcomes")
                 p["close"] = e
                 del current[lane]
-        else:
+        elif kind != DECLARATION:
             raise ValueError(f"entry {i}: kind {kind!r}")
+        es.append(e)
         leaves.add(q)
         prev, last = core_record.prev_of(ln), q
     if reused := sorted(leaves & set(records)):
         raise ValueError(f"entry {records[reused[0]]}: record leaf {reused[0]} is also an entry's")
+    _days(es)
     return ({root: {"reserve": (reserves.get(w["open"]["session"]) or {}).get("entry"), "open": w["open"], "end": w["end"]}
              for root, w in windows.items()},
             {name: {k: p[k] for k in ("lane", "open", "close", "windows", "cap", "circuit")} for name, p in periods.items()})
+
+
+DECLARATION_FORM = ("a declaration is v2 and names its prover, its program (a SHA-512 in lowercase hex), its blocks (a "
+                    "list of strings), the pinned commit and a day no earlier than its declared_utc's")
+
+
+def _declaration(b: dict) -> bool:
+    """A declaration's body: its prover's names, its program's SHA-512 and its blocks' keys, the commit the challenger
+    ran, and a natural `day` no earlier than the day of `declared_utc` (`day_of`)."""
+    blocks, at = b.get("blocks"), day_of(b.get("declared_utc"))
+    return (_period(b.get("by")) and ("for" not in b or _period(b["for"])) and _digest_hex(b.get("program"))
+            and type(blocks) is list and all(type(k) is str for k in blocks) and _digest_hex(b.get("pinned"), 40)
+            and _nat(b.get("day")) and at is not None and at <= b["day"])
+
+
+def _days(es: list[dict]) -> None:
+    """`_verify`'s second pass, over the entries its first accepted: each declaration v2 and of its form
+    (`DECLARATION_FORM`), and a lane's day declared once; once a lane has declared, each later open of it on a day it
+    declared earlier, its `started_utc`'s (`day_of`)."""
+    declared: set[tuple[str, int]] = set()
+    for i, e in enumerate(es):
+        b = e["body"]
+        if e["kind"] == DECLARATION:
+            if e["schema"] != LEDGER_SCHEMA or not _declaration(b):
+                raise ValueError(f"entry {i}: {DECLARATION_FORM}")
+            lane = lane_of(e)
+            if (lane, b["day"]) in declared:
+                raise ValueError(f"entry {i}: lane {lane} declares day {b['day']} twice")
+            declared.add((lane, b["day"]))
+        elif e["kind"] == "open" and any(lane == lane_of(e) for lane, _ in declared):
+            day, lane = day_of(b.get("started_utc")), lane_of(e)
+            if day is None:
+                raise ValueError(f"entry {i}: session {e['session']}'s open names no day (started_utc), and its lane "
+                                 f"{lane} declares its days")
+            if (lane, day) not in declared:
+                raise ValueError(f"entry {i}: session {e['session']} opens on day {day}, which its lane {lane} hasn't "
+                                 "declared")
 
 
 def ledger_text(entry: dict) -> str:
@@ -1253,7 +1401,7 @@ def _ledger_entry(line: Any) -> dict | None:
     if kind in SESSION_KINDS:
         if not _session_id(e["session"]):
             return None
-    elif kind in PERIOD_KINDS:
+    elif kind in PERIOD_KINDS or kind == DECLARATION:
         if e["session"] is not None:
             return None
     else:
@@ -1262,7 +1410,7 @@ def _ledger_entry(line: Any) -> dict | None:
         ok = ((_window(b.get("window")) if v2 else _v1_window(b.get("window"))) and _host(b.get("host"))
               and _digest_hex(b.get("pinned"), 40) and _digest_hex(b.get("key_sha512"))
               and (not v2 or type(b.get("by")) is str and type(b.get("for", "")) is str))
-    elif kind == "reserve":
+    elif kind in ("reserve", DECLARATION):
         ok = True
     elif kind == "end":
         files = b.get("files")
@@ -1376,6 +1524,29 @@ def _audited(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> tu
         raise CoinError(f"the auditor's ledger's period {name}, which holds session {s}, commits no cap or circuit")
     return Audited(s, o["body"]["host"], lane_of(o), dict(b["files"]), b["record_leaf"], b["commitment"],
                    b["refused_hellos"], o["body"]["pinned"], name, p["cap"], p["circuit"]), o["body"]
+
+
+def declared_day(ledger: Any, window: Any, key: ChallengerKey, verify: Verify) -> dict:
+    """Lean `Challenger.declaredDay`: the day the auditor's ledger `ledger` (its lines) opens window `window`
+    (``{root}``) on under the pinned key `key`, the UTC day of its v2 open's `started_utc` (`day_of`), and the
+    declarations its lane signed before that open, each ``{blocks, day, program}``: ``{"day", "declarations"}``, what a
+    per-day check holds the window's program to.  Raises `CoinError` naming why when the ledger is refused
+    (`audited_session`'s check), opens no session for the window, or opens it on no day."""
+    if not _window(window):
+        raise CoinError(f"the window's identity is malformed: {WINDOW_FORM}")
+    windows, _ = _checked(ledger, key, verify)
+    w = windows.get(window["root"])
+    if w is None:
+        raise CoinError("the auditor's ledger opens no challenger session for this window")
+    o = w["open"]
+    day = day_of(o["body"].get("started_utc")) if o["schema"] == LEDGER_SCHEMA else None
+    if day is None:
+        raise CoinError(f"the auditor's ledger opens this window's session {o['session']} on no day: its open is not v2 "
+                        "or names no started_utc of 1970 or later")
+    lane = lane_of(o)
+    mine = [e["body"] for e in map(_ledger_entry, ledger)
+            if e["kind"] == DECLARATION and e["seq"] < o["seq"] and lane_of(e) == lane]
+    return {"day": day, "declarations": [{"blocks": b["blocks"], "day": b["day"], "program": b["program"]} for b in mine]}
 
 
 def ledger_head(heads: Any, key: ChallengerKey, verify: Verify) -> list[str]:
@@ -1536,15 +1707,15 @@ def pins_reason(session: str, opened: dict, pins: Any) -> str | None:
     n = seal["lines"]
     if len(pins) < n:
         return (f"the host's pins log has {len(pins)} lines, fewer than the {n} the open of session {session} sealed: "
-                "take infra's newest published pins log")
+                "take the auditor host's operator's newest published pins log")
     if log_digest(pins[:n]) != seal["sha512"]:
         return (f"the host's pins log is not the one the open of session {session} sealed: its first {n} lines were "
                 "edited or rewritten")
     pinned = opened.get("pinned")
     if pinned not in commits[:n]:
         return (f"session {session} ran commit {pinned}, which the host's pins log doesn't record as a commit of main's "
-                "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
-                "window there")
+                "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
+                "rerun the window there")
     return None
 
 
@@ -1561,7 +1732,7 @@ def first_parent_reason(session: str, pinned: Any, main: Any) -> str | None:
         return (f"session {session} ran commit {pinned}, which the host's pins log records but which is not on main's "
                 "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                 "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-                "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+                "commit on main's first-parent line (with its pin command) and rerun the window there")
     return None
 
 
@@ -1849,7 +2020,8 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "DESCRIPTOR_FORM", "END_FORM", "HEADS_FORM", "HELLOS_FILE", "HELLOS_FORM", "KEY_FORM", "KEY_RECORD_FORM", "KEY_RECORD_SCHEMA",
            "LEDGER_FORM", "LEDGER_ROLE", "LEDGER_SCHEMA", "LEDGER_SCHEMA_V1", "LEDGER_TAGS", "LOG_FILE", "LOG_FORM",
            "LOG_MALFORMED", "LOG_TAG", "LiveChallenger", "LiveCommitment", "LiveOpening", "LiveRecord", "MAX_COINS",
-           "MAIN_FORM", "MAX_LEDGER_LINE", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
+           "MAIN_FORM", "MAX_HELLOS", "MAX_LEDGER_LINE", "MAX_LEDGER_LINES", "MAX_LOG_LINE", "MAX_LOG_LINES", "MAX_PATH",
+           "MAX_PINS", "MAX_SESSION_ID", "MINUTES", "NO_AUDIT", "NO_CLOSE",
            "NO_MAIN", "NO_PINS", "NO_RECORD", "OPENING_FORM", "PERIOD_KINDS", "PINS_FORM", "PUBLIC_BYTES", "RECORD_FILE",
            "RUN_KIND", "RunRecord",
            "RECORD_FORM", "RECORD_ROLE",
@@ -1860,7 +2032,7 @@ __all__ = ["Audited", "BINDING", "CAP", "CIRCUIT", "CLOSE_FILE", "CLOSE_FORM", "
            "order_reason", "record_many", "record_message", "record_reason", "released_roots_of", "root_of",
            "session_named", "session_of", "trusted_commitment", "trusted_reason", "trusted_session_of", "verify_ledger",
            "verify_periods", "withheld_on", "write_record",
-           "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS", "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT", "SHARED_TREE",
-           "TREE_EVENT", "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE", "LoggedTree", "TreeOpening",
-           "coin_trees_of", "coins_digest", "link_after", "session_tree_reason", "sessions_tree_reason", "tree_line",
-           "tree_spec_reason"]
+           "LINK_ROOT_LEN", "LINK_TABLES", "MAX_BLOCK", "MAX_ROUNDS_LOG", "MAX_TREE_COINS", "MAX_TREE_LINES", "NO_TREE", "OPEN_EVENT",
+           "SAMPLE_LINK_FIRST", "SHARED_TREE", "TREE_EVENT", "TREE_RECORD_FORM", "TREE_SPEC_FORM", "UNUSED_TREE",
+           "LoggedTree", "TreeOpening", "coin_trees_of", "coins_digest", "link_after", "link_line", "open_line",
+           "sample_link_first", "session_tree_reason", "sessions_tree_reason", "tree_line", "tree_spec_reason"]

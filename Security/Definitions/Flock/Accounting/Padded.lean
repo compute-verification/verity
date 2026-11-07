@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.Accounting.Bound
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The bound with a padded level 0 (C-Flock ZK)

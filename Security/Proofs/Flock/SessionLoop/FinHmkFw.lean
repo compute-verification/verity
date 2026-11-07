@@ -64,7 +64,7 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops)
     {s0 : _} {spec : SessionSpec} (hsx : FlockDeploy.setupOf true x = some (s0, spec, Masked.stsOf x))
@@ -199,7 +199,7 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
   have hxe : (_root_.Flock.Firewall.Finish.claimsOf q.xs).map (·.x) = extras.map (·.x) := by
     rw [_root_.Flock.Firewall.Finish.claimsOf_map_x, hxs]
   rw [_root_.Flock.Firewall.Finish.repFwC_claims_x _ _ _ _ _ _ _ _ _ hxe] at hrun'
-  rw [hk2, hkr, hsch, htp, hex, hlp] at hrun'
+  rw [hk2, hkr, hsch, htp] at hrun'
   have he : (FlockDeploy.tabsOf (Masked.stsOf x))[j.val]!.extra (Masked.ptsE (finCoins x ops) spec) = .ok extras :=
     hext
   -- below `zp 64` but at `final_c`, from the history
@@ -209,8 +209,8 @@ theorem swSrcE_hmk_fw (vs : finS.SwVals)
   obtain ⟨t₄, L, hp4, hLs, hcut⟩ := Masked.swSrcE_repCut_fc_v x hx w hR t (finCoins x ops) hA (refK x) s0 spec hsx
     j r extras he (vs x w ν (finCoins x ops) (finS.seenOf x t)) q
     (fun k hk' hne => hmkV k (by rw [hLy]; exact hk') (by rw [hLy]; exact hne)) tb.st hst _ tb.g hg tb.cm0.toC
-    ic'.toC (fun l => _root_.Flock.Firewall.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)) hsalt rfl hl hl0
-    hrun'
+    ic'.toC tb.extra tb.lanePad hex hlp
+    (fun l => _root_.Flock.Firewall.Finish.saltAt (q.hiSalts.getD (l - 1) ByteArray.empty)) hsalt rfl hl hl0 hrun'
   -- at the switched cut's commitments
   have hE' := repCut_eraseZ (FlockComplete.asksCut (Masked.ligCoin (finCoins x ops)) L.size)
     (_root_.Flock.Hashes.ofSha512 _root_.Flock.Sha512.hash) tb.st (Masked.zkTab x j).sch r.val
