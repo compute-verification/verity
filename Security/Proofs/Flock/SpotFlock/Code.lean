@@ -17,7 +17,7 @@ these definitions from the premises it names, and nothing here imports a proof.
 **The auditor's copies** (`Held`), fixed before the run and never the prover's: the registration's program (its
 descriptor's bytes and gates), the statement's partition query, the two-stage registration the samples read (`RegTwo`)
 and its proof-block query, the second stage's count per stratum, the registered reads the session must open against at
-a run's roots and interior roots (`registered`), a reference session statement (`xS₀`), whose Flock round count and
+a run's roots and interior roots (`registered`), a reference session statement (`xS₀`) in Flock's masked scope, whose Flock round count and
 table shapes are every session's, and the commitment's layout and the reference prover's framing (`frame`, a code whose verifier and samples
 are unread).
 
@@ -56,11 +56,19 @@ open Lean (Json)
 
 /-! ## The auditor's copies and the run's statement -/
 
+/-- **A session's statement is in Flock's masked scope**, decided (`FlockDeploy.ZkIn`): it sets up with `1` to `200`
+tables at at most two link points, each at an `m` from `25` to `35` and of a shape in `Stmt.InRange`. -/
+def zkOk (xS : Msg) : Bool :=
+  match FlockDeploy.setupOf true xS with
+  | some (_, spec, sts) => 0 < sts.size && sts.size ≤ 200 && spec.points ≤ 2 &&
+      sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
+  | none => false
+
 /-- **A two-stage registration's copies, as the auditor holds them**: the program's descriptor (`desc`) and gates
 (`prog`), the statement's partition query (`query`), the two-stage registration (`reg`) and the proof-block query its
 interior registration is over (`blockQuery`), the second stage's count per stratum (`k`), the registered reads a session
-opens against at a run's roots and interior roots (`registered`), a reference session statement (`xS₀`), and the
-commitment's layout and the reference prover's framing (`frame`). -/
+opens against at a run's roots and interior roots (`registered`), a reference session statement (`xS₀`) in Flock's
+masked scope (`xS₀_ok`), and the commitment's layout and the reference prover's framing (`frame`). -/
 structure Held where
   desc : Msg
   prog : Prog
@@ -70,6 +78,7 @@ structure Held where
   k : List ℕ
   registered : List Msg → List (ℕ × List Msg) → ByteArray
   xS₀ : Msg
+  xS₀_ok : zkOk xS₀ = true
   frame : Code
 
 /-- **The run's statement**: the roots the boundary values are committed under. -/
@@ -170,14 +179,6 @@ def shapeOf (xS : Msg) : List ℕ :=
   match FlockDeploy.setupOf true xS with
   | some (_, _, sts) => sts.toList.map (·.m)
   | none => []
-
-/-- **A session's statement is in Flock's masked scope**, decided (`FlockDeploy.ZkIn`): it sets up with `1` to `200`
-tables at at most two link points, each at an `m` from `25` to `35` and of a shape in `Stmt.InRange`. -/
-def zkOk (xS : Msg) : Bool :=
-  match FlockDeploy.setupOf true xS with
-  | some (_, spec, sts) => 0 < sts.size && sts.size ≤ 200 && spec.points ≤ 2 &&
-      sts.toList.all fun st => 25 ≤ st.m && st.m ≤ 35 && st.c.kLog ≤ 27 && st.regions.size ≤ 1024 && spec.mPts ≤ 64
-  | none => false
 
 /-! ## What the verifier evaluates -/
 

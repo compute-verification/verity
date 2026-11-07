@@ -19,7 +19,7 @@ public import Proofs.Flock.Claims.Sampling.KS
 * `regMatchesTwo`: the registration is the statement's two-stage design (`RegMatchesTwo` at `SpotFlock.code h`), since
   the design evaluates only where the replay layout's slots are its cells.
 * `sessionsIn`: every session is in Flock's masked scope with at most the code's tables and the reference statement's
-  shapes (`SessionsIn`'s clauses at `SpotFlock.code h`), where the reference statement is in scope.
+  shapes (`SessionsIn`'s clauses at `SpotFlock.code h`), since the reference statement is in scope (`Held.xS₀_ok`).
 -/
 
 @[expose] public section
@@ -381,9 +381,9 @@ theorem regMatchesTwo :
 /-! ## The sessions are in scope -/
 
 /-- **Every session is in Flock's masked scope** at SPOT-Flock's code (`SessionsIn`'s clauses, `FlockDeploy.ZkIn`
-unfolded): with at most the code's tables and the reference statement's shapes, where the reference statement is in
-scope. -/
-theorem sessionsIn (h₀ : zkOk h.xS₀ = true) :
+unfolded): with at most the code's tables and the reference statement's shapes, the reference statement being in
+scope (`Held.xS₀_ok`). -/
+theorem sessionsIn :
     ∀ x u v xS vS, (code h).session x u v = some (xS, vS) →
       (∃ s spec sts, FlockDeploy.setupOf true xS = some (s, spec, sts) ∧ 0 < sts.size ∧ sts.size ≤ 200 ∧
         spec.points ≤ 2 ∧
@@ -400,9 +400,9 @@ theorem sessionsIn (h₀ : zkOk h.xS₀ = true) :
         simp only [sessionOk, Bool.and_eq_true, beq_iff_eq] at hs
         exact hs
       · cases hv
-        exact ⟨h₀, rfl⟩
+        exact ⟨h.xS₀_ok, rfl⟩
     · cases hv
-      exact ⟨h₀, rfl⟩
+      exact ⟨h.xS₀_ok, rfl⟩
   obtain ⟨s, spec, sts, hset, h1, h2, h3, h4⟩ := zkOk_sound hok.1
   refine ⟨⟨s, spec, sts, hset, h1, h2, h3, h4, ?_⟩, hok.2⟩
   change sts.size ≤ (shapeOf h.xS₀).length
