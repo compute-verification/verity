@@ -18,7 +18,8 @@ disagreements, errors and first failures, and the recorded ops no type reads.
   or FlashInfer's MNNVL one (its received row the same on every rank; a call on NCCL's route is counted, not staged), an
   unbiased bf16 cuBLAS GEMM's token
   row (``aten::mm`` against a bf16 weight's transposed view) at the route its call's M rows take (a call past
-  ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), and FA3's split combine per (token, head). Instances are sampled from it
+  ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), the router's grouped top-k, ``silu_and_mul`` and ``moe_sum`` per row,
+  and FA3's split combine per (token, head). Instances are sampled from it
   by the capture's coins, ``--per-type`` of each type.
 * **Match gate.** Each sampled instance's Definition is evaluated on the captured inputs and must return the captured outputs
   bit for bit (completeness, not soundness: an instance that disagrees is reported and not staged).
@@ -335,6 +336,68 @@ def moe_args(cap: Capture, r: int, e: dict, j: int, col: int) -> list:
     return [A[t], As[t], np.array([ex], np.uint64), *g, B[:, col:col + 1, :], Bs[:, col // 128:col // 128 + 1, :]]
 
 
+def router_instances(cap: Capture, unstaged: dict | None = None):
+    """`_moe_C::grouped_topk` per token row on `MoeRouterSigmoidBias_v1` (one group, sigmoid scores, the selection bias, the
+    routed scaling inside), at the kernel its launch takes at its rows; any other configuration is counted in ``unstaged``."""
+    from verity.ml.definitions.registry import moe as M
+    unstaged = {} if unstaged is None else unstaged
+    for r in cap.ranks:
+        for e in cap.events[r]:
+            if e["op"] != "_moe_C::grouped_topk" or not cap.opened(e, weights=True):
+                continue
+            a, sc = e["in"], e["in"]["scores"]
+            rows, E, topk = sc["shape"][0], sc["shape"][-1], int(a["topk"])
+            kernel = M.router_kernel(E, rows, topk)
+            got = (a.get("n_group"), a.get("topk_group"), a.get("renormalize"), a.get("scoring_func"), sc["dtype"])
+            if got != (1, 1, True, 1, "torch.float32") or a["bias"].get("dtype") != "torch.float32" or kernel is None:
+                rec = unstaged.setdefault(f"MoeRouter_E{E}", {"population": 0, "calls": [], "why": (
+                    "grouped_topk off MoeRouterSigmoidBias_v1's form: (n_group, topk_group, renormalize, scoring_func, "
+                    "scores dtype) must be (1, 1, True, 1, float32) with a float32 bias, at a launch router_kernel pins")})
+                rec["population"] += cap.real_rows(r, rows)
+                rec["calls"].append({"rank": r, "seq": e["seq"], "args": [*got[:4], sc["dtype"], kernel]})
+                continue
+            scale = float(a["routed_scaling_factor"]).hex()
+            label = f"MoeRouterSigmoidBias_E{E}_TOPK{topk}_{kernel}"
+            block = f'MoeRouterSigmoidBias_v1{{E={E},TOPK={topk},SCALE={{"f64":"{scale}"}},KERNEL="{kernel}"}}'
+            for (t,) in cap.cells(label, (r, e["seq"]), cap.real_rows(r, rows)):
+                yield (label, block, (r, e["seq"], t),
+                       lambda r=r, a=a, t=t: [cap.tensor(r, a["scores"])[t], cap.tensor(r, a["bias"]).reshape(-1)],
+                       lambda r=r, e=e, t=t: [cap.tensor(r, e["out"]["ret0"])[t], cap.tensor(r, e["out"]["ret1"])[t]])
+
+
+def silu_mul_instances(cap: Capture):
+    """`_C::silu_and_mul` per row on `SiluMul_v2`: the MoE's (a row a token and slot) and the dense MLPs'."""
+    for r in cap.ranks:
+        for e in cap.events[r]:
+            if e["op"] != "_C::silu_and_mul" or not cap.opened(e):
+                continue
+            x, y = e["in"]["input"], e["out"]["result"]
+            I = x["shape"][-1] // 2
+            if x["dtype"] != "torch.bfloat16" or y["shape"][-1] != I:
+                raise LookupError(f"silu_and_mul (seq {e['seq']}): input {x['dtype']} {x['shape']}, result {y['shape']}")
+            label = f"SiluMul_I{I}"
+            for (t,) in cap.cells(label, (r, e["seq"]), cap.real_rows(r, x["shape"][0])):
+                yield (label, f"SiluMul_v2{{I={I}}}", (r, e["seq"], t),
+                       lambda r=r, x=x, t=t: [cap.tensor(r, x)[t]], lambda r=r, y=y, t=t: [cap.tensor(r, y)[t]])
+
+
+def moe_sum_instances(cap: Capture):
+    """`_moe_C::moe_sum` per token row on `MoeSum_v1`: the sum over its slots of the w2 launch's weighted rows."""
+    for r in cap.ranks:
+        for e in cap.events[r]:
+            if e["op"] != "_moe_C::moe_sum" or not cap.opened(e):
+                continue
+            x, y = e["in"]["input"], e["out"]["output"]
+            if x["dtype"] != "torch.bfloat16" or len(x["shape"]) != 3 or e["in"].get("expert_map") is not None:
+                raise LookupError(f"moe_sum (seq {e['seq']}): input {x['dtype']} {x['shape']}, an expert map "
+                                  f"{e['in'].get('expert_map') is not None}; MoeSum_v1 sums every slot of a bf16 row")
+            rows, topk, H = x["shape"]
+            label = f"MoeSum_TOPK{topk}_H{H}"
+            for (t,) in cap.cells(label, (r, e["seq"]), cap.real_rows(r, rows)):
+                yield (label, f"MoeSum_v1{{TOPK={topk},H={H}}}", (r, e["seq"], t),
+                       lambda r=r, x=x, t=t: [cap.tensor(r, x)[t]], lambda r=r, y=y, t=t: [cap.tensor(r, y)[t]])
+
+
 def aligned(cap: Capture, op: str):
     """The calls of ``op`` in the opened layers, the i-th of each rank together (TP ranks run the same calls in order)."""
     per = {r: [e for e in cap.events[r] if e["op"] == op and cap.opened(e)] for r in cap.ranks}
@@ -637,7 +700,7 @@ def gate_instance(spec, key, args_of, want_of, full_gates: int) -> tuple[dict, d
 #: gated (`op_coverage`)
 GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm", "moe_launch",
              "vllm::flashinfer_trtllm_fused_allreduce_norm", "vllm::all_reduce", "_C::fused_add_rms_norm", "_vllm_fa3_C::fwd",
-             "fa3_sparse_mla", "aten::mm"}
+             "fa3_sparse_mla", "aten::mm", "_moe_C::grouped_topk", "_C::silu_and_mul", "_moe_C::moe_sum"}
 _EVERY: dict = {}
 
 
@@ -794,8 +857,8 @@ def main() -> int:
     unstaged: dict[str, dict] = {}
     sources = [quant_instances(cap), fp8_linear_instances(cap), moe_instances(cap, profile),
                fused_ar_norm_instances(cap), allreduce_instances(cap, unstaged), cublas_instances(cap, profile, unstaged),
-               fused_add_rms_norm_instances(cap),
-               mla_combine_instances(cap), mla_split_part_instances(cap)]
+               fused_add_rms_norm_instances(cap), router_instances(cap, unstaged), silu_mul_instances(cap),
+               moe_sum_instances(cap), mla_combine_instances(cap), mla_split_part_instances(cap)]
     for src in sources:
         try:
             for inst in src:

@@ -153,9 +153,9 @@ def test_capture_site_writes_the_nodes_tree_into_its_settings(tmp_path, monkeypa
 
 def test_op_coverage_lists_ops_inside_an_ungated_op_and_not_inside_a_gated_one(monkeypatch) -> None:
     stage = _stage(monkeypatch)
-    ev = [{"seq": 0, "op": "vllm::moe_forward_shared", "parent": None}, {"seq": 1, "op": "_moe_C::grouped_topk", "parent": 0},
+    ev = [{"seq": 0, "op": "vllm::moe_forward_shared", "parent": None}, {"seq": 1, "op": "_moe_C::moe_align_block_size", "parent": 0},
           {"seq": 2, "op": "moe_launch", "parent": 0}, {"seq": 3, "op": "vllm::all_reduce", "parent": None},
           {"seq": 4, "op": "symm_mem::multimem_all_reduce_", "parent": 3}, {"seq": 5, "op": "aten::copy_", "parent": 4}]
     gated, other = stage.op_coverage(_Cap([0, 1], {0: ev, 1: ev}, {}))
     assert gated == {"moe_launch": 2, "vllm::all_reduce": 2}
-    assert other == {"_moe_C::grouped_topk": 2, "vllm::moe_forward_shared": 2}
+    assert other == {"_moe_C::moe_align_block_size": 2, "vllm::moe_forward_shared": 2}
