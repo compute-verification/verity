@@ -6,9 +6,9 @@ public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.Sampling.ProgReads
 
 /-!
-# SPOT-Flock's session opens each checked proof block at its replay block
+# SPOT[Flock]'s session opens each checked proof block at its replay block
 
-`sessionOpensTwo h`: `Claims.SamplingGeneric.SessionOpensTwo` at the deployed two-stage code (`code h`), Flock's
+`sessionOpensTwo h`: `Claims.SamplingGeneric.SessionOpensTwo` at SPOT[Flock]'s two-stage code (`code h`), Flock's
 masked record and SHA-512, from what one session statement establishes (`StmtOpens h`).
 
 **The run** (`run_seenAt`). An accepted run of `V h` answered rounds 0 and 1 with their coins and round 2 with nothing,
@@ -174,7 +174,7 @@ theorem pin_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : st
               refine ⟨s, it, w, w₀, ?_, ?_, ?_, ?_, hpin, hreg⟩ <;> first | rfl | assumption
 
 /-- **The checked units** of a run whose statement decodes: the second stage's on the coins of rounds 0 and 1. -/
-theorem checked_eq (x : Msg) {st : Stmt} (hst : decode x = some st) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
+theorem checked_eq (x : Msg) {st : Roots} (hst : decode x = some st) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
     (code h).checked x r = h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (src (r ⟨1, one_lt_k h x⟩)) := by
   have hr : reg h x = some h.reg := by simp [SpotFlock.reg, hst]
   show Option.getD (Option.map _ (reg h x)) [] = _
@@ -201,7 +201,7 @@ def StmtOpens : Prop :=
           (q.1 = iroots x (seenAt m₀ m₁ xS c₀ c₁ rest) ρ → ι q.2.pos = q.2.val)) →
         s.prog.Correct (s.prog.refIn rb val ι) b
 
-/-- **SPOT-Flock's session opens each checked proof block at its replay block**: `SessionOpensTwo` at the deployed
+/-- **SPOT[Flock]'s session opens each checked proof block at its replay block**: `SessionOpensTwo` at SPOT[Flock]'s
 two-stage code, from `StmtOpens`. -/
 theorem sessionOpensTwo (hs : StmtOpens h) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
@@ -290,7 +290,7 @@ theorem stmtOpens (hw : WitOpens h) : StmtOpens h := by
   · obtain ⟨q, hq, hop, hr, hpos, hval⟩ := (hcov g hg).2 hi
     rw [ite_eq_right hi, ite_eq_right hi, hval, ← hpos, (hv q hq hop).1 hr]
 
-/-- **`SessionOpensTwo` at the deployed two-stage code from the witness's values.** -/
+/-- **`SessionOpensTwo` at SPOT[Flock]'s two-stage code from the witness's values.** -/
 theorem sessionOpensTwo_of_wit (hw : WitOpens h) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots :=
@@ -360,13 +360,13 @@ theorem witOpens (dec : Dec) (hd : Decodes h dec) (hr : Reveals h dec) : WitOpen
       hr x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb g hg
     exact ⟨q, hq, hop, hroot.trans (ite_eq_right hi), hpos, congrArg some hval.symm⟩
 
-/-- **`SessionOpensTwo` at the deployed two-stage code from a decoder** that `Decodes` and `Reveals`. -/
+/-- **`SessionOpensTwo` at SPOT[Flock]'s two-stage code from a decoder** that `Decodes` and `Reveals`. -/
 theorem sessionOpensTwo_of_dec (dec : Dec) (hd : Decodes h dec) (hr : Reveals h dec) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots :=
   sessionOpensTwo_of_wit h (witOpens h dec hd hr)
 
-/-- **`SessionOpensTwo` at the deployed two-stage code from a decoder** whose values evaluate each checked unit
+/-- **`SessionOpensTwo` at SPOT[Flock]'s two-stage code from a decoder** whose values evaluate each checked unit
 (`Evaluates`) and that the reveal opens (`Reveals`). -/
 theorem sessionOpensTwo_of_eval (dec : Dec) (he : Evaluates h dec) (hr : Reveals h dec) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
