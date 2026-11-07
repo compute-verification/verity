@@ -3,6 +3,7 @@ values at the model's served statics, staged for Flock as a ``verity/flock-circu
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS` or `PARTS` at its statics (each type's defaults are its model's: GLM-5.3's at TP8,
                            s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192
+    N     N1,N2,...        with a type of `UNITS`, several statements on one built circuit, each count's in OUT's ``{n}``
     --public-weights       a `UNITS` type's weight row ``w`` as public input ports (`UnitStager`'s ``public_inputs``, each leaf in
                            its own u16 words) instead of a row hashed in the circuit, on the same values: the price of the block
                            with its weight row's in-circuit opening removed, the in-circuit share a registered weight encoding
@@ -58,8 +59,10 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
 
+import gc
 import hashlib
 import json
+import os
 import resource
 import sys
 import time
@@ -121,6 +124,7 @@ class Unit:
     draw: Callable[[dict, int, np.random.Generator], tuple[dict[str, np.ndarray], object]]
     defaults: dict
     macs: Callable[[dict], int] | None = None
+    io: Callable[[object], tuple[list, list]] | None = None
 
 
 def _fp8_coord_draw(S: dict, n: int, rng: np.random.Generator):
@@ -225,6 +229,56 @@ UNITS: dict[str, Unit] = {
     "pe-w2": _window(lambda S: bind(BM.MoeExpertFp8BlockGemmWV4, **S, DOT=BG.HopperE4m3QgmmaDot32),
                      {"K": 256, "N": 32, **_GEMM_ST, "SWAP": True}, lambda S: S["K"] * S["N"]),
 }
+
+_EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
+_WGMMA = '{"fn":"HopperBF16WgmmaDot16_v1"}'
+_TREE = "[[[[[[0,[1,2]],3],5],6],4],7]"
+#: registered types the census names by descriptor id and no type above stages, each with its multiply-adds a block
+CENSUS: dict[str, tuple[str, int]] = {
+    "ar-multimem": (f"AllReduceMultimem_v1{{WORLD=8,SIZE=3072,TREES=[{','.join([_TREE] * 8)}],FTZ=false}}", 0),
+    "mla-split-part": ('SparseMlaSplitPart_v1{T=64,DR=64,DV=512,BN=64,DOT=' + _WGMMA
+                       + ',INV={"fn":"Fa3InvSum_v1"},SCALE={"f64":"0x1.0000000000000p-4"}}', 69632),
+    "gq-k6144": ("Fp8GroupQuantUe8m0_v1{K=6144,G=128}", 0),
+    "residual-add": ("ResidualAdd_v1{N=6144}", 0),
+    "gq-k2048": ("Fp8GroupQuantUe8m0_v1{K=2048,G=128}", 0),
+    "gq-k1536": ("Fp8GroupQuantUe8m0_v1{K=1536,G=128}", 0),
+    "fi-linear-k2048": ("FlashInferFp8Linear_v1{K=2048,N=1}", 2048),
+    "dsa-norm-n2048": (f"DsaRMSNorm_v1{{N=2048,EPS={_EPS}}}", 0),
+    "mla-combine": ('SparseMlaCombine_v1{NSPLIT=5,DV=512,INV={"fn":"Fa3InvSum_v1"}}', 0),
+    "ar-residual-mnnvl": ("AllReduceResidualMnnvl_v1{WORLD=8,N=3072,SHOT=1}", 0),
+    "fi-linear-k6144": ("FlashInferFp8Linear_v1{K=6144,N=1}", 6144),
+    "dsa-norm-n512": (f"DsaRMSNorm_v1{{N=512,EPS={_EPS}}}", 0),
+    "rmsnorm-mnnvl": (f"RmsNormMnnvl_v1{{N=6144,SHOT=1,CLUSTER=8,EPS={_EPS},FMA=true}}", 0),
+    "cublas-splitk-f32": (f"CublasSplitKGemmF32Out_v1{{K=6144,N=1,SPLIT_K=3,DOT={_WGMMA}}}", 6144),
+    "bgemm-k512": (f"BatchedGemm_v1{{B=1,K=512,N=1,DOT={_WGMMA}}}", 512),
+    "sm-fp8-k1536": ("ScaledMmFp8BlockSharedScale_v1{K=1536,N=1,G=128}", 1536),
+    "fi-linear-k256": ("FlashInferFp8Linear_v1{K=256,N=1}", 256),
+    "gq-k256": ("Fp8GroupQuantUe8m0_v1{K=256,G=128}", 0),
+}
+
+
+def _census_fn(spec: str):
+    from verity_vllm.pipeline import serving_rows as SRW
+
+    return SRW.template(spec).fn
+
+
+def _census_io(fn) -> tuple[list, list]:
+    """A V2 row per parameter and per output, as `one_stage/m1_unit.py` stages a census row."""
+    params, ret = fn.signature()
+    n_out = len(ret.fields) if hasattr(ret, "fields") else 1
+    return [(p, V2, sum(t.leaf_widths()), [p]) for p, t in params], [(V2, (j,)) for j in range(n_out)]
+
+
+def _census(spec: str, macs: int) -> Unit:
+    """A census type whole, on N(0, 1) words rounded to bf16 by truncation in every row (`m1_unit.bf16_rows`), no twin."""
+    def draw(S, n, rng):
+        return {p: (rng.standard_normal((n, b // 16)).astype(np.float32).view(np.uint32) >> 16).astype(np.uint16)
+                for p, _s, b, _ps in _census_io(_census_fn(spec))[0]}, None
+    return Unit(lambda S: _census_fn(spec), (), draw, {}, lambda S: macs, _census_io)
+
+
+UNITS.update({name: _census(spec, macs) for name, (spec, macs) in CENSUS.items()})
 
 
 @dataclass(frozen=True)
@@ -353,13 +407,19 @@ def main() -> None:
     public, packed = "--public-weights" in sys.argv, "--packed" in sys.argv
     if packed and not public:
         raise SystemExit("stage.py: --packed lays out --public-weights' ports")
-    spec, n, out = args[0], int(args[1]), Path(args[2])
+    spec, ns = args[0], [int(x) for x in args[1].split(",")]
+    if len(ns) > 1 and "{n}" not in args[2]:
+        raise SystemExit("stage.py: several counts take an OUT naming each count's directory with {n}")
+    outs = [Path(args[2].format(n=n)) for n in ns]
+    n, out = ns[0], outs[0]
     t0 = time.time()
     name, u, S = parse(spec)
     tag = f"{name}-" + "-".join(f"{k.lower()}{v}" for k, v in sorted(S.items()))
     if isinstance(u, Part):
         if public:
             raise SystemExit(f"stage.py: --public-weights is for a type of UNITS, not {name}")
+        if len(ns) > 1:
+            raise SystemExit(f"stage.py: {name} is a class of PARTS, staged one count a run")
         rec = stage_part(name, u, S, tag, n, out, t0)
         (out / "pin.txt").write_text(rec["circuit_sha512"])
         (out / "stage.json").write_text(json.dumps(rec, indent=1))
@@ -367,7 +427,7 @@ def main() -> None:
         return
     d = u.definition(S)
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
-    rows, twin = u.draw(S, n, rng)
+    rows, twin = u.draw(S, max(ns), rng)
     t_draw = time.time() - t0
     unit_rows, ports = u.rows, None
     if public and not u.rows:
@@ -383,28 +443,39 @@ def main() -> None:
         in_rows, out_rows = [(r, schema, 16 * rows[r].shape[1], list(ps)) for r, schema, ps in unit_rows], [(V2, (0,))]
         twin = {"o0": twin}
     else:
-        in_rows, out_rows = WI.unit_rows(d)
+        in_rows, out_rows = (u.io or WI.unit_rows)(d)
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
-    got = CS.stage_unit(d, f"unit/served-{tag}", in_rows, out_rows, rows, out, salt_key, public_inputs=ports, packed=packed)
-    for port, want in (twin or {}).items():
-        have = np.asarray(got["outs"][port], dtype=np.uint16)[:, :want.shape[1]]
-        if not np.array_equal(have, want):
-            raise AssertionError(f"{tag}: the circuit's {port} is not the twin's on {int((have != want).any(1).sum())} instances")
-    text = (out / "circuit.txt").read_text()
-    pin = FC.digest(text)
-    (out / "pin.txt").write_text(pin)
-    meta = got["meta"]
-    rec = {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id,
-           "in_rows": [[r, s, b] for r, s, b, _ in in_rows], "public_inputs": sorted(ports or {}), "packed": packed, "ands": got["ands"],
-           "unit_nnz": got["unit_nnz"],
-           "k_log": meta["k_log"], "unit_log": meta.get("unit_log"), "vus_per_block": meta.get("vus_per_block"),
-           "row_schemas": meta.get("row_schemas"), "circuit_bytes": len(text), "circuit_sha512": pin,
-           "class_sha512": FC.class_digest(text), "inst_bytes": (out / "inst.bin").stat().st_size,
-           "pub_bytes": (out / "pub.bin").stat().st_size, "macs": u.macs(S) if u.macs else None,
-           "twin": twin and {"agrees": True, "instances": n, "ports": sorted(twin), "first": int(next(iter(twin.values()))[0, 0])},
-           "seconds": {"draw": round(t_draw, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
-    (out / "stage.json").write_text(json.dumps(rec, indent=1))
-    print(json.dumps(rec), flush=True)
+    if name in CENSUS:
+        gc.disable()
+    circuit = outs[0] / "circuit.txt"
+    stager = CS.UnitStager(d, f"unit/served-{tag}", in_rows, out_rows, ports, circuit=circuit, packed=packed)
+    t_built = time.time() - t0
+    for n, out in zip(ns, outs):
+        t1 = time.time()
+        got = stager.stage({r: v[:n] for r, v in rows.items()}, out, salt_key)
+        for port, want in (twin or {}).items():
+            have = np.asarray(got["outs"][port], dtype=np.uint16)[:, :want.shape[1]]
+            if not np.array_equal(have, want[:n]):
+                raise AssertionError(f"{tag}: the circuit's {port} is not the twin's on {int((have != want[:n]).any(1).sum())} instances")
+        if out != outs[0]:
+            (out / "circuit.txt").unlink(missing_ok=True)
+            os.link(circuit, out / "circuit.txt")
+        pin = stager.pin
+        (out / "pin.txt").write_text(pin)
+        meta = got["meta"]
+        rec = {"unit": name, "statics": S, "tag": tag, "n": n, "definition": d.id,
+               "in_rows": [[r, s, b] for r, s, b, _ in in_rows], "public_inputs": sorted(ports or {}), "packed": packed,
+               "ands": got["ands"], "unit_nnz": got["unit_nnz"],
+               "k_log": meta["k_log"], "unit_log": meta.get("unit_log"), "vus_per_block": meta.get("vus_per_block"),
+               "row_schemas": meta.get("row_schemas"), "circuit_bytes": circuit.stat().st_size, "circuit_sha512": pin,
+               "class_sha512": stager.class_sha512, "inst_bytes": (out / "inst.bin").stat().st_size,
+               "pub_bytes": (out / "pub.bin").stat().st_size, "macs": u.macs(S) if u.macs else None,
+               "twin": twin and {"agrees": True, "instances": n, "ports": sorted(twin),
+                                 "first": int(next(iter(twin.values()))[0, 0])},
+               "seconds": {"draw": round(t_draw, 1), "built": round(t_built, 1), "round": round(time.time() - t1, 1),
+                           "total": round(t_built + time.time() - t1, 1)}, "maxrss_gb": gb()}
+        (out / "stage.json").write_text(json.dumps(rec, indent=1))
+        print(json.dumps(rec), flush=True)
 
 
 if __name__ == "__main__":
