@@ -1,6 +1,6 @@
 """A vLLM general plugin that records one replayed step's interior, per TP rank, in an engine that serves with CUDA graphs.
 
-    python capture.py site SITE --capture DIR --steps s[,s2] [--open dense:1,moe:1] [--mla-tokens 8] [--keep all]
+    python capture.py site SITE --capture DIR --steps s[,s2] [--open dense:1,moe:1] [--mla-tokens 8] [--keep all [--keep-steps s,...]]
     PYTHONPATH=SITE <a vLLM engine>
 
 Registered as a ``vllm.general_plugins`` entry point (`site` writes the dist-info, and the capture's settings into
@@ -28,7 +28,7 @@ extra forward writes the same KV values to the same slots, so the step and every
 
 Each recorded tensor is hashed when recorded; its bytes are held in memory until the coins have opened layers, and only the
 opened layers' tensors are written, once each, under ``DIR/rank<r>/blobs/<sha512>`` (``--keep all`` writes every one as
-it is recorded). ``DIR/rank<r>/step<s>/ops.jsonl`` lists
+it is recorded, at every step or at the ``--keep-steps``). ``DIR/rank<r>/step<s>/ops.jsonl`` lists
 the events in order. ``step<s>/meta.json`` holds the step (tokens, padding, graph mode, the scheduled requests and their
 token counts), the check, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
 ``params.json``, which gives each parameter a recorded op read (its shape, dtype and SHA-512 over its bytes). Every
@@ -87,7 +87,8 @@ class _State:
         self.used_params: set[str] = set()
         self.seen: set[str] = set()
         self.pending: dict[str, bytes] = {}
-        self.keep_all = cfg["keep"] == "all"
+        self.keep = cfg["keep"]
+        self.keep_steps = None if cfg.get("keep_steps") is None else set(cfg["keep_steps"])
         self.events: list[dict] = []
         self.piece = -1
         self.parents: list[int] = []
@@ -102,6 +103,11 @@ class _State:
 
     def root(self) -> Path:
         return self.dir / f"rank{self.rank}"
+
+    @property
+    def keep_all(self) -> bool:
+        """Whether this step writes every recorded tensor: ``--keep all``, at the ``--keep-steps`` (default every step)."""
+        return self.keep == "all" and (self.keep_steps is None or self.step in self.keep_steps)
 
 
 S: _State | None = None
@@ -681,10 +687,12 @@ def main(argv: list[str]) -> int:
     s.add_argument("--open", default="dense:1,moe:1", help="how many layers of each kind the coins open, KIND:N,...")
     s.add_argument("--mla-tokens", type=int, default=8, help="a sparse MLA call's tokens whose gathered KV rows are recorded")
     s.add_argument("--keep", choices=("opened", "all"), default="opened", help="all: write every recorded tensor")
+    s.add_argument("--keep-steps", help="with --keep all, the steps that write every tensor (default: every step); the "
+                   "others write the opened layers'")
     a = ap.parse_args(argv)
     cfg = {"capture": str(Path(a.capture).resolve()), "steps": sorted({int(x) for x in a.steps.split(",") if x.strip()}),
            "open": {k: int(n) for k, n in (x.split(":") for x in a.open.split(",") if x)}, "mla_tokens": a.mla_tokens,
-           "keep": a.keep}
+           "keep": a.keep, "keep_steps": None if a.keep_steps is None else sorted({int(x) for x in a.keep_steps.split(",") if x.strip()})}
     print(site(a.dir, cfg))
     return 0
 

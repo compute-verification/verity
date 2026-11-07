@@ -17,7 +17,8 @@
 #    overrides it.
 # 2. replay.py replays the window from an empty engine, served as recorded, with capture.py loaded in every worker
 #    (REPLAY_ARGS are added to its arguments): those steps' interiors are recorded and committed, the coins drawn after the
-#    root open layers, and the opened layers' tensors are written, or every recorded tensor with KEEP_TENSORS=all
+#    root open layers, and the opened layers' tensors are written, or every recorded tensor with KEEP_TENSORS=all at the
+#    KEEP_STEPS (default: the drawn steps, long first, while they fit the disk at GB_PER_TOKEN)
 #    (/workspace/spot-capture/<run>, outside OUT, which custody uploads; MIN_FREE_G=40 is the free space it wants). The
 #    graph-off forward holds the step's tensors in host memory until the coins: about 10 GB a rank at 384 tokens.
 # 3. GATE_EVERY=N runs stage.py's match gate on N instances of every call of every type at each step, the long step first,
@@ -110,9 +111,27 @@ EOF
   STEPS=$("$PY" -c "import json; p = json.load(open('$OUT/first_stage.json'))['steps']; print(','.join(dict.fromkeys(str(p[k]) for k in ('long', 'big', 'small') if k in p)))")
 fi
 [ -n "$STEPS" ] || { echo "spot: no step drawn"; exit 2; }
+if [ "${KEEP_TENSORS:-opened}" = all ] && [ -z "${KEEP_STEPS:-}" ] && [ -f "$OUT/first_stage.json" ]; then
+  # whole steps in the order drawn (long, big, small) while about GB_PER_TOKEN (0.24: 30 MB a token on each of 8 ranks)
+  # a token fits the free space less 40 GB; the others keep the opened layers'
+  KEEP_STEPS=$("$PY" - "$OUT/first_stage.json" "$free" "$STEPS" <<'EOF'
+import json, os, sys
+fs, free, steps = json.load(open(sys.argv[1])), float(sys.argv[2]), sys.argv[3].split(",")
+tok = {str(fs["steps"][k]): fs["tokens"][k] for k in fs["steps"]}
+per, left, keep = float(os.environ.get("GB_PER_TOKEN", "0.24")), free - 40, []
+for s in steps:
+    if tok.get(s, 0) * per <= left:
+        keep.append(s)
+        left -= tok.get(s, 0) * per
+print(",".join(keep))
+EOF
+)
+  echo "spot: steps kept whole: ${KEEP_STEPS:-none} (${free}G free)"
+  [ -n "$KEEP_STEPS" ] || KEEP_TENSORS=opened
+fi
 if [ $restage = 0 ]; then
 "$PY" "$IN/capture.py" site "$CAP/site" --capture "$CAP" --steps "$STEPS" --open "${OPEN:-dense:1,moe:1}" \
-  --keep "${KEEP_TENSORS:-opened}" >/dev/null || exit 2
+  --keep "${KEEP_TENSORS:-opened}" ${KEEP_STEPS:+--keep-steps "$KEEP_STEPS"} >/dev/null || exit 2
 export PYTHONPATH="$CAP/site${PYTHONPATH:+:$PYTHONPATH}"
 export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0 VLLM_EXECUTE_MODEL_TIMEOUT_SECONDS=3600 VLLM_ENGINE_ITERATION_TIMEOUT_S=3600
 echo "== replay with capture of steps $STEPS $(date -u +%FT%TZ)"
