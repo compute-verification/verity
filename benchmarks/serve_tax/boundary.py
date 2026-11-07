@@ -20,7 +20,9 @@ and nothing is scheduled meanwhile, so nothing is on the GPU and the host has ev
 - the process's random generators (`rng_state`), which unseeded requests draw from.
 
 `restore` puts each back into a fresh engine core. `dump` renders the live state, and more (every attribute the walk
-reaches, captured or not), as comparable leaves, so that what a restore missed shows in `diff`.
+reaches, captured or not), as comparable leaves, so that what a restore missed shows in `diff`. `save_edge` and
+`load_edge` do the same through files at any tensor-parallel degree: the engine core's part in one file, and each rank's
+runner rows and generators in its own (`save_rank`, `load_rank`, run on every rank by ``collective_rpc``).
 """
 from __future__ import annotations
 
@@ -34,6 +36,7 @@ import pickle
 import re
 from collections import Counter, deque
 from collections.abc import Callable, Iterable
+from pathlib import Path
 from typing import Any, NamedTuple
 
 SCHEMA = "verity-bench/serve-tax/boundary/v0"
@@ -384,20 +387,26 @@ COORD_SKIP = ("block_pool", "single_type_managers", "kv_cache_config")
 MANAGER_SKIP = ("block_pool", "kv_cache_spec", "_null_block")
 
 
-def capture(core: Any) -> dict[str, Any]:
-    """The boundary state of a drained engine core (nothing in its batch queue)."""
+def capture(core: Any, runner: bool = True) -> dict[str, Any]:
+    """The boundary state of a drained engine core (nothing in its batch queue); with ``runner`` false, without the
+    model runner's rows and the process's generators, which `save_rank` takes on each rank."""
     if getattr(core, "batch_queue", None):
         raise RuntimeError(f"{len(core.batch_queue)} batches in flight: drain before the boundary state is taken")
-    sched, kvm, pool, runner = parts(core)
+    sched = core.scheduler
+    kvm = sched.kv_cache_manager
     coord = kvm.coordinator
     sa, ss = attrs(sched)
     ka, ks = attrs(kvm, KVM_SKIP)
     ca, cs = attrs(coord, COORD_SKIP)
     managers = [attrs(m, MANAGER_SKIP) for m in coord.single_type_managers]
-    return {"schema": SCHEMA, "requests": pickle_requests(sched.requests.values(), {"block_hasher": core.request_block_hasher}),
-            "scheduler": sa, "kv_manager": ka, "coordinator": ca, "managers": [m[0] for m in managers],
-            "pool": pool_state(pool), "runner": runner_state(runner), "rng": rng_state(),
-            "skipped": {"scheduler": ss, "kv_manager": ks, "coordinator": cs, "managers": [m[1] for m in managers]}}
+    st = {"schema": SCHEMA, "requests": pickle_requests(sched.requests.values(), {"block_hasher": core.request_block_hasher}),
+          "scheduler": sa, "kv_manager": ka, "coordinator": ca, "managers": [m[0] for m in managers],
+          "pool": pool_state(kvm.block_pool),
+          "skipped": {"scheduler": ss, "kv_manager": ks, "coordinator": cs, "managers": [m[1] for m in managers]}}
+    if runner:
+        st["runner"] = runner_state(parts(core)[3])
+        st["rng"] = rng_state()
+    return st
 
 
 def rng_state() -> dict[str, Any]:
@@ -435,10 +444,13 @@ def set_rng(st: dict[str, Any]) -> None:
 
 
 def restore(core: Any, st: dict[str, Any]) -> list[str]:
-    """``st`` (`capture`'s) into a fresh engine core of the served configuration; the runner paths it couldn't place."""
+    """``st`` (`capture`'s) into a fresh engine core of the served configuration; the runner paths it couldn't place
+    (none when ``st`` holds no runner, whose rows `load_rank` puts back on each rank)."""
     if getattr(core, "batch_queue", None):
         raise RuntimeError("a fresh engine core has nothing in flight")
-    sched, kvm, pool, runner = parts(core)
+    sched = core.scheduler
+    kvm = sched.kv_cache_manager
+    pool = kvm.block_pool
     if sched.requests:
         raise RuntimeError(f"the engine core holds {len(sched.requests)} requests already: not fresh")
     reqs = {r.request_id: r for r in unpickle_requests(st["requests"], {"block_hasher": core.request_block_hasher})}
@@ -455,7 +467,9 @@ def restore(core: Any, st: dict[str, Any]) -> list[str]:
         put_attrs(m, s, deref)
     if set(sched.requests) != set(reqs):
         raise RuntimeError("the scheduler's requests are not the boundary state's")
-    missing = put_runner(runner, st["runner"])
+    if "runner" not in st:
+        return []
+    missing = put_runner(parts(core)[3], st["runner"])
     set_rng(st["rng"])
     return missing
 
@@ -463,10 +477,48 @@ def restore(core: Any, st: dict[str, Any]) -> list[str]:
 def sizes(st: dict[str, Any]) -> dict[str, int]:
     """Each part of a boundary state's size in bytes (pickled; the runner's leaves by their content)."""
     out = {k: len(pickle.dumps(st[k], protocol=pickle.HIGHEST_PROTOCOL))
-           for k in ("scheduler", "kv_manager", "coordinator", "managers", "pool", "rng")}
+           for k in ("scheduler", "kv_manager", "coordinator", "managers", "pool", "rng") if k in st}
     out["requests"] = len(st["requests"])
-    out["runner"] = sum(nbytes(s) for _k, s in st["runner"]["leaves"].values())
+    if "runner" in st:
+        out["runner"] = sum(nbytes(s) for _k, s in st["runner"]["leaves"].values())
     return out
+
+
+# ------------------------------------------------------------------ a drained edge's state as files, at any TP degree
+
+def save_rank(worker: Any, edge_dir: str) -> int:
+    """One rank's model-runner rows and random generators to ``edge_dir``/rank-R.pkl; its bytes. ``worker`` is the
+    rank's worker or its wrapper, as ``collective_rpc`` hands it, so this runs unchanged on every rank."""
+    data = pickle.dumps({"runner": runner_state(worker.model_runner), "rng": rng_state()},
+                        protocol=pickle.HIGHEST_PROTOCOL)
+    (Path(edge_dir) / f"rank-{worker.rank}.pkl").write_bytes(data)
+    return len(data)
+
+
+def load_rank(worker: Any, edge_dir: str) -> list[str]:
+    """`save_rank`'s file into this rank's runner and generators; the runner paths it couldn't place."""
+    st = pickle.loads((Path(edge_dir) / f"rank-{worker.rank}.pkl").read_bytes())
+    missing = put_runner(worker.model_runner, st["runner"])
+    set_rng(st["rng"])
+    return missing
+
+
+def save_edge(core: Any, edge_dir: str | Path) -> dict[str, Any]:
+    """A drained engine core's state beyond the KV pool to ``edge_dir``: the scheduler's, KV manager's and block pool's
+    (state.pkl) and each rank's (`save_rank`); the bytes of each. The KV pool's bytes are the caller's to take."""
+    edge_dir = Path(edge_dir)
+    data = pickle.dumps(capture(core, runner=False), protocol=pickle.HIGHEST_PROTOCOL)
+    (edge_dir / "state.pkl").write_bytes(data)
+    return {"state": len(data), "ranks": core.model_executor.collective_rpc(save_rank, args=(str(edge_dir),))}
+
+
+def load_edge(core: Any, edge_dir: str | Path) -> dict[str, Any]:
+    """`save_edge`'s files into a fresh engine core of the served configuration, before its first step and before or
+    after its KV pool's bytes are loaded (neither reads the other)."""
+    edge_dir = Path(edge_dir)
+    restore(core, pickle.loads((edge_dir / "state.pkl").read_bytes()))
+    missing = core.model_executor.collective_rpc(load_rank, args=(str(edge_dir),))
+    return {"requests": len(core.scheduler.requests), "runner_paths_missing": missing}
 
 
 # ------------------------------------------------------------------------------------------------------ dump and diff

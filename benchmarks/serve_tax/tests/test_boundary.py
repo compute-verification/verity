@@ -387,6 +387,67 @@ def test_logprob_bits_are_the_float32_patterns():
     assert B.logprob_bits(lp) == np.array([-0.5, -1.25], dtype=np.float32).view(np.uint32).tolist()
 
 
+class Rank:
+    def __init__(self, rank: int) -> None:
+        self.rank, self.model_runner = rank, NS(req_states=RequestState(), model=object())
+
+
+class Executor:
+    """A stand-in executor whose ``collective_rpc`` calls the function on each rank's worker, as vLLM's do."""
+
+    def __init__(self, ranks: int) -> None:
+        self.workers = [Rank(i) for i in range(ranks)]
+
+    def collective_rpc(self, fn, args=()):
+        return [fn(w, *args) for w in self.workers]
+
+
+class Held:
+    class Request:
+        """A request pickle finds by its qualified name, under the type name `boundary.ref_of` reads."""
+
+        def __init__(self, rid: str, n: int, hasher) -> None:
+            self.request_id, self.num_computed_tokens, self._block_hasher = rid, n, hasher
+
+
+def edge_core(pool: Pool, ranks: int = 2) -> NS:
+    manager = NS(block_pool=pool, req_to_blocks=defaultdict(list))
+    kvm = NS(block_pool=pool, coordinator=NS(block_pool=pool, single_type_managers=[manager]), kv_cache_config=object())
+    return NS(scheduler=NS(requests={}, running=[], waiting=deque(), kv_cache_manager=kvm),
+              request_block_hasher=lambda r: [], batch_queue=None, model_executor=Executor(ranks))
+
+
+def test_save_edge_and_load_edge_carry_the_engine_core_and_each_ranks_rows(tmp_path):
+    pytest.importorskip("numpy")
+    served = edge_core(served_pool())
+    req = Held.Request("r1", 5, served.request_block_hasher)
+    s = served.scheduler
+    s.requests["r1"] = req
+    s.running.append(req)
+    s.kv_cache_manager.coordinator.single_type_managers[0].req_to_blocks["r1"] = [s.kv_cache_manager.block_pool.blocks[i]
+                                                                                 for i in (1, 3)]
+    for w in served.model_executor.workers:
+        w.model_runner.req_states.req_id_to_index["r1"] = w.model_runner.req_states.free_indices.pop()
+        w.model_runner.req_states.inner.seeds_set[w.rank] = True
+    sizes = B.save_edge(served, tmp_path)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["rank-0.pkl", "rank-1.pkl", "state.pkl"]
+    assert sizes["state"] == (tmp_path / "state.pkl").stat().st_size and len(sizes["ranks"]) == 2
+
+    fresh = edge_core(Pool(8))
+    assert B.load_edge(fresh, tmp_path) == {"requests": 1, "runner_paths_missing": [[], []]}
+    f = fresh.scheduler
+    back = f.requests["r1"]
+    assert f.running == [back] and back.num_computed_tokens == 5 and back._block_hasher is fresh.request_block_hasher
+    pool = f.kv_cache_manager.block_pool
+    assert f.kv_cache_manager.coordinator.single_type_managers[0].req_to_blocks["r1"] == [pool.blocks[1], pool.blocks[3]]
+    assert B.pool_state(pool) == B.pool_state(s.kv_cache_manager.block_pool)
+    assert [w.model_runner.req_states.inner.seeds_set for w in fresh.model_executor.workers] == [
+        [True, False, False, False], [False, True, False, False]]
+    assert [w.model_runner.req_states.req_id_to_index for w in fresh.model_executor.workers] == [{"r1": 0}] * 2
+    with pytest.raises(RuntimeError, match="not fresh"):
+        B.load_edge(fresh, tmp_path)
+
+
 def test_rng_state_puts_back_what_the_next_draws_read():
     np = pytest.importorskip("numpy")
     import random
