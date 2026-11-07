@@ -85,16 +85,6 @@
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
    "why": "The protocol accepts: the event the statement conditions on."
   },
-  "Verity.Circuit.BitFaninPos": {
-   "owner": "@soundness",
-   "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e",
-   "why": "A scope: the policy's bit-level clause speaks of a declaration whose computed gates of positive width read one of positive width, the case whose expansion is Boolean."
-  },
-  "Verity.Circuit.Boolean": {
-   "owner": "@soundness",
-   "digest": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
-   "why": "A scope: the inference-only policy's partition clause speaks of a Boolean declaration; remote's policy reads word-level Programs, so the clause is conditional, never refused."
-  },
   "Verity.Vocab.ComponentBound": {
    "owner": "@soundness",
    "digest": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5",
@@ -709,6 +699,18 @@
   "Properties.SampledProofs.ExpectsV2": {
    "owner": "@proofs",
    "digest": "b08414bd9dec813a42882d6240f9915f337fdfb0c6d29367cbd7fef7cacfb9a3",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Verity.Circuit.BitFaninPos": {
+   "owner": "@soundness",
+   "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
+  "Verity.Circuit.Boolean": {
+   "owner": "@soundness",
+   "digest": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -6669,13 +6671,15 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Verity.Circuit.BitFaninPos", "Verity.Circuit.Boolean"],
+    "domain": [],
     "open": [
      "NciCheck.Properties.Divides",
      "NciCheck.Properties.Expands",
      "NciCheck.Properties.LaysOut",
      "NciCheck.Properties.Names",
-     "NciCheck.Properties.Parses"
+     "NciCheck.Properties.Parses",
+     "Verity.Circuit.BitFaninPos",
+     "Verity.Circuit.Boolean"
     ],
     "reads": []
    },
@@ -6690,13 +6694,15 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["Verity.Circuit.BitFaninPos", "Verity.Circuit.Boolean"],
+    "domain": [],
     "open": [
      "NciCheck.Properties.Divides",
      "NciCheck.Properties.Expands",
      "NciCheck.Properties.LaysOut",
      "NciCheck.Properties.Names",
-     "NciCheck.Properties.Parses"
+     "NciCheck.Properties.Parses",
+     "Verity.Circuit.BitFaninPos",
+     "Verity.Circuit.Boolean"
     ],
     "reads": []
    },
