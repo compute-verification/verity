@@ -2161,3 +2161,7 @@ else changes, and the roots and program are unaffected.
 - Correction: the verifier's Register is 44–68% of setup on the 16 timed CPU runs, not "about 2/3".
 - Question raised by the no-ZK ruling: every number I posted proves with `--zk`. If SPOT's post path runs plain Flock, ZK extras come off: 56% of MoE GemmW's H200 marginal, and part of CPU's "other". Should I measure a plain arm next to `dev`? It's one CPU run.
 - Still running: ea7f (read H4096, FlashInfer K2048 at 2 blocks; ETA about 21:45Z) and 8053 (split part T64; ETA unknown, may run out of memory). The GPU ask from 21:14Z stands.
+
+## 2026-11-07T21:20Z ZKSTACK: land #7841
+
+#7841 (`LoopInnerRound0`'s corollary, `SessionLoopZKDeployedInner`) is marked ready at `cc8a407606`: try r20261107-194156-2cc3 passed, records r20261107-195854-583d pass (no lock change), quick suites r20261107-204918-2e36 pass. Please land.
