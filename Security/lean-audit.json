@@ -3834,7 +3834,8 @@
    "Claims.RecGeneric.CompositionKS": "Claims.RecGeneric.compositionKS",
    "Claims.RecGeneric.CompilerKS": "Claims.RecGeneric.compilerKS",
    "Claims.SamplingGeneric.CompilerComplete": "Claims.SamplingGeneric.compilerComplete",
-   "Claims.Guarantees.InfluenceTwoPatterns": "Claims.SecurityProofs.InfluenceTwoPatterns"
+   "Claims.Guarantees.InfluenceTwoPatterns": "Claims.SecurityProofs.InfluenceTwoPatterns",
+   "Claims.Sampling.AdmissibleTwoRankinServed": "Claims.Sampling.admissibleTwo_rankin_served"
   }
  },
  "witnesses": {
@@ -4186,6 +4187,10 @@
   "Claims.SecurityProofs.InfluenceTwoPatterns": {
    "honest": ["Claims.Witness.SamplingGeneric.influenceTwoPatterns_honest"],
    "nontrivial": "Claims.Witness.SamplingGeneric.influenceTwoPatterns_nontrivial"
+  },
+  "Claims.Sampling.admissibleTwo_rankin_served": {
+   "honest": ["Claims.Witness.SamplingGeneric.rankinTwoServed_honest"],
+   "nontrivial": "Claims.Witness.SamplingGeneric.rankinTwoServed_nontrivial"
   }
  },
  "unwitnessed": {
@@ -11310,6 +11315,9 @@
    "type_hash": "908065535cee3e925c20acb6561f5090342d4209d8c1dca96e7ef332323f0ed6",
    "unfolded_hash": "6315393c49acb737231a9b83b1aa947168f66f52bbe394c270841c274b481bcd"
   },
+  "Claims.Sampling.admissibleTwo_rankin_served": {
+   "owner": "@proofs"
+  },
   "Claims.Sampling.decoder_meets_plain": {
    "owner": "@proofs",
    "signature": [
@@ -12958,6 +12966,12 @@
     "reads": []
    },
    "type_hash": "aa786fb3b173acba0bfa0faf7c22fa8e979ccaa5c13b533c6ed312e26af03202"
+  },
+  "Claims.Witness.SamplingGeneric.rankinTwoServed_honest": {
+   "owner": "@proofs"
+  },
+  "Claims.Witness.SamplingGeneric.rankinTwoServed_nontrivial": {
+   "owner": "@proofs"
   },
   "Claims.Witness.SamplingGeneric.rankinTwo_honest": {
    "owner": "@proofs",
@@ -26178,7 +26192,8 @@
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
