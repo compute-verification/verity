@@ -60,13 +60,13 @@ import Proofs.Flock.VBridge.Family.Lig
 
 At a dense inner statement where the last step reads and the base checks hold, the record value the verdict reads
 (`jAt`) decodes at the setup SHA-512 gives (`decode_at`, `TargetDecode` with `At` unfolded), with no JSON
-premise: the verifier keeps the public header and the draw normalized, so both are well-formed (`unitDraw_of`,
+premise: the verifier keeps the public header and the sample normalized, so both are well-formed (`unitDraw_of`,
 `draw_wf`), and the statement's coin tree is its coins' (`setupOne_stmt`), none at `.seed` (`tree?_none`). `jAt` is the reader's record (`recJ`) with its digests and coins
 substituted, so it is alike the honest record whose rounds hold the fill's coins (`same_coinSubJ`, with the fill finding
 a coin wherever `liveOf` reads, `fill_of_live`), and an honest record of a one-table statement decodes
 (`decodeJ_same`). What `decodeJ_same` asks:
 
-* **The statement** (`dense_stmt`): one table, no coin tree, a non-empty Σ, a printable draw that decodes to the
+* **The statement** (`dense_stmt`): one table, no coin tree, a non-empty Σ, a printable sample that decodes to the
   statement's instances, two link points, at most 1024 regions, and a `fast100` schedule.
 * **The link's `root_B`** is round 0's level-0 nodes joined, which the first proof's cap is, so it is non-empty (the
   `shaped` base check).
@@ -108,8 +108,8 @@ theorem foldl_append_pos {l : List ByteArray} {b : ByteArray} (hb : b ∈ l) (h 
 
 /-! ## The statement -/
 
-/-- **The inner statement is drawn**: the plain verifier sets an inner statement the reader accepts up at a draw
-(`checkForm_ok`: a draw of every one of the files' units). -/
+/-- **The inner statement is sampled**: the plain verifier sets an inner statement the reader accepts up at a sample
+(`checkForm_ok`: a sample of every one of the files' units). -/
 theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.accepts (readOf r) = true)
     {s : FlockDeploy.Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : FlockDeploy.setupOf false r.w.inner = some (s, spec, sts)) : s.read.draw.isSome = true := by
@@ -147,7 +147,7 @@ theorem inner_drawn {x : Msg} {r : XR} (hr : readX x = some r) (ha : RecScope.ac
   rfl
 
 /-- **What the record needs of a dense inner statement**: the plain verifier sets it up as one table, with no coin
-tree, a non-empty Σ, a printable draw that decodes to its instances, two link points, at most 1024 regions and a
+tree, a non-empty Σ, a printable sample that decodes to its instances, two link points, at most 1024 regions and a
 `fast100` schedule. -/
 theorem dense_stmt {xo : Msg} {sto : Claims.Recursion.CompiledStatement}
     (hst : parse xo = some sto) (hf : Claims.Recursion.Form.Dense sto.form) {s : FlockDeploy.Ins}

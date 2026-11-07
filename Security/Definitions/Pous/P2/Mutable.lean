@@ -6,7 +6,7 @@ public import Definitions.Pous.P2.Rounds
 # The mutable store: versioned, coin-keyed blocks and the snapshot an audit window reads (trusted)
 
 PoUS as an obligation keeps the device's memory full of P2 encodings of the weights while the prover serves. Each block
-is encoded under the key pair of its tag `salt ‖ block ‖ version ‖ coin`, the coin drawn by the memory challenger, and a
+is encoded under the key pair of its tag `salt ‖ block ‖ version ‖ coin`, the coin flipped by the memory challenger, and a
 block re-encoded later gets a fresh tag. In the ring model (`ringRO`) the store's oracle is the ring's labeling and one
 key pair per tag (`Oracle w p T`).
 

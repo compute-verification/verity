@@ -5,9 +5,9 @@ one compression short, or an output row of two ports, it is refused, and so are 
 tail stage returning the outputs (both in `scopeOkI`, which `ProvedScope.check` admits under hidden outputs). A
 shared-row public file in the form `SampledKSLiveV5` covers (two input ports' tables, its circuit's public input ports
 parsing, the file loading over them, no two roots one) passes `sharedWhy` and the whole check; one whose circuit's
-public input ports do not parse, one that does not load and a per-instance file are refused. At one table any draw
-passes `drawWhy`; at more, a subset draw whose `k` the tables divide passes, and a draw of `k` they don't divide, a draw
-that does not parse and no draw are refused.
+public input ports do not parse, one that does not load and a per-instance file are refused. At one table any sample
+passes `drawWhy`; at more, a subset sample whose `k` the tables divide passes, and a sample of `k` they don't divide, a sample
+that does not parse and no sample are refused.
 -/
 module
 

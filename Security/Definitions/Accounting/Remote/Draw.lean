@@ -181,7 +181,7 @@ def below (δ P : ℝ) (u : Pous.Bits 512) : Prop := P ≤ δ ∨ Pous.bitsVal u
 /-- A session's coins: the other coins and window `t`'s openings coin. -/
 abbrev Coins (n κ : ℕ) (X : Type) : Type := X × (Fin n → Pous.Bits κ)
 
-/-- A session of `n` windows of at most `m` receipts, window `t` drawing `min(s_t, U_t)` of its `U_t`. -/
+/-- A session of `n` windows of at most `m` receipts, window `t` sampling `min(s_t, U_t)` of its `U_t`. -/
 structure Session (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) where
   /-- Window `t`'s receipt count `U_t`. -/
   size : Fin n → Coins n κ X → Fin (m + 1)
@@ -191,7 +191,7 @@ structure Session (n m : ℕ) (s : Fin n → ℕ) (κ : ℕ) (X : Type) where
 /-- `audit.pooled`'s budget: `S·(1 − δ^(1/S))` (`-expm1(log δ / S)·S`). -/
 noncomputable def budget (S : ℕ) (δ : ℝ) : ℝ := S * (1 - δ ^ ((S : ℝ)⁻¹))
 
-/-- The pooled bound of windows of sizes `U` drawing `d`: the most `Σ_t f_t·U_t` over the shares `f` with
+/-- The pooled bound of windows of sizes `U` sampling `d`: the most `Σ_t f_t·U_t` over the shares `f` with
 `0 ≤ f_t ≤ 1 − d_t/U_t` and `Σ_t d_t·f_t ≤ budget (Σ_t d_t) δ`. -/
 noncomputable def pooled (n : ℕ) (U d : Fin n → ℕ) (δ : ℝ) : ℝ :=
   sSup ((fun f : Fin n → ℝ => ∑ t, f t * U t) ''

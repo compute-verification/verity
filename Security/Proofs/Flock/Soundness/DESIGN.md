@@ -164,13 +164,13 @@ adopted form is "fill and decode"; it is proved (`Knowledge.lean`).
   output them.
 - **Binding to registered data.** Given the registrant's opening `(W, R)`, the extracted rows equal `W` wherever the
   statement links the root, or tree binding and then Halevi–Micali binding give a SHA-512 collision.
-- **Sampled audits need the link term `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
+- **Sampled audits need the binding error `δ_link` as well** (the lifetime-soundness desk study, §2 and §3).
   - Its collision finder runs the extractor, so the extractor's run count enters the collision-resistance bound.
   - The analysis is below.
 - **Risks:** `ValueBinding` until the `hm96` layout; bridging CompPoly, ArkLib and `Model` for the efficient decoder.
   It is classical only (§9).
 
-**The link term: expected-time collision resistance, of record.** The audit's value layer rests on
+**The binding error: expected-time collision resistance, of record.** The audit's value layer rests on
 `ASSUMPTIONS.md` A2. One audit's knowledge-plus-link term, of record, under strict-time collision resistance alone
 (proved), and, for comparison, under a random oracle. $Q_s$ is the expected number of commit strings the sampled proof blocks
 read, at most the $N_s$ leaves under the serving roots, $N_0 = 2^{21}$ the level-0 codeword length (m = 33), and $t$
@@ -298,15 +298,15 @@ is written so that these slot in without restructuring:
 
 - the prover's randomness becomes an extra input of the reference prover;
 - masks are extra messages or extra committed columns in the existing phases;
-- salted leaves change only the Merkle layer.
+- hiding leaves change only the Merkle layer.
 
 **The reference prover:**
 
-- The production prover (Rust and CUDA) cannot run in Lean, so a slow, spec-level Lean reference prover stands in for
+- The Rust and CUDA prover cannot run in Lean, so a slow, spec-level Lean reference prover stands in for
   it. It is a deterministic function of (statement, witness, prover randomness, verifier coins).
 - **Its theorems:** completeness (the Lean verifier accepts its honest output), and zero knowledge (the simulator
   theorem, over uniform prover randomness).
-- **Differential tests** tie production to it byte for byte: on the same inputs, seeds and coins, the production prover
+- **Differential tests** tie the Rust and CUDA prover to it byte for byte: on the same inputs, seeds and coins, the Rust and CUDA prover
   must emit exactly its messages, which pins down mask placement.
 - **Still trusted:** that equivalence beyond the tested inputs, and the quality of the operating system's randomness (A3,
   which the leaf salts read directly) and of ChaCha's (the masks and padding).
@@ -335,7 +335,7 @@ We follow the staging and vocabulary, and differ where the setting does.
 | **1d** constraint system against semantics | The constraint system is equivalent to the VM's semantics | No VM: 1d is the lowering theorem, that the block R1CS (`Flock.Statement`) is satisfied exactly by correct evaluations of the named circuit. | Differs in content, not intent: "the circuit is the meaning". Circuit against hardware is checked by capture replay, outside formal scope. |
 | **1e** glue, and ZK if intended | One theorem, including zero knowledge | One theorem from the verifier's acceptance to "the committed values satisfy the named circuit", for the compiled protocol. Zero knowledge is proved separately (§6). | Follows. **Recursion caveat:** triggered only by the recursion track. Its outer proof must be knowledge-sound (§3), and every part inside it verified. |
 | **2** verifier implementation | The implemented verifier (Rust, Solidity, …) matches the Stage-1 protocol | `Flock.Verify` refines `Model`: if it accepts, the model accepts. | Differs: a Lean-to-Lean refinement; the compiler and runtime are trusted, mitigated by agreement tests (`assumption-notes/trusted-components.md`). |
-| **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems, tied to production by byte-for-byte differential tests (§6). | **Deliberately different: the production prover is not proved.** Untested equivalence is trusted; its failures cost liveness, not soundness. |
+| **3** prover implementation | The prover implementation is proved complete, and zero-knowledge if intended | A Lean reference prover with completeness and zero-knowledge theorems, tied to the Rust and CUDA prover by byte-for-byte differential tests (§6). | **Deliberately different: the Rust and CUDA prover is not proved.** Untested equivalence is trusted; its failures cost liveness, not soundness. |
 
 **Stating soundness.** a16z's concrete levels are 100 bits as the bare minimum and 128 bits as standard practice. We
 target 2^-128, and state the number the way the stages suggest:
@@ -529,7 +529,7 @@ If real concurrency is ever needed:
 - **Strategies, not `value`.** `value` can exceed every strategy's `prob` when a branch has no strategy. So the audit
   theorems take per-strategy hypotheses and give per-strategy conclusions (`Game/Prob.lean`), as `table_sound_exec`
   does.
-- **Knowledge soundness and the link term.** Halevi–Micali leaves open to essentially any value, so a unit is incorrect
+- **Knowledge soundness and the binding error.** Halevi–Micali leaves open to essentially any value, so a unit is incorrect
   relative to a committed trace defined by extraction. A sampled incorrect proof block is charged to one of two named events:
   extraction fails, or it disagrees with the trace (`cover`, from `correct_congr`). The oracle layer is the special
   case where the registration is the trace (`Partition.oracle`).

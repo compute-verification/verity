@@ -47,10 +47,10 @@ import Proofs.NetworkCertifier.SampledLeak
 /-!
 # The leak bound at the registration's values
 
-`RAcc` pins the circuit's inputs to the trace's committed values, and holds every faulty proof block's committed gate as
+`RAcc` pins the circuit's inputs to the trace's committed values, and holds every incorrect proof block's committed gate as
 advice. At a registered input that is a free input:
 
-* in a faulty proof block, the gate is held (`FaultyGate`: an input is on its proof block's boundary), so its input
+* in an incorrect proof block, the gate is held (`FaultyGate`: an input is on its proof block's boundary), so its input
   value is never read;
 * in any other proof block, the proof block is correct on its committed values, so the trace opens the gate
   (`val_some_of_input`) and its value there is the opened one (`traceVal_of_val`);

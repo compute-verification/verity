@@ -15,7 +15,7 @@
                    HB_H1U's), whose z is today's A B^T from the same stream, so y is today's; gated by hb_peel.py
                    (`dither_one.check` with z held to A B^T, y equal to today's on every call) on the same four captures
                    and a fifth, the flipped xa (hb_peel.install), and its tokens must equal exact's: the gate's, and every decode rep's (else exit 4 after the reps).
-                   The gate's tokens come from the same generation run first with the window disarmed: in one stream
+                   The gate's tokens come from the same generation run first with the execution phase disarmed: in one stream
                    the control serves y from the poisoned slot and both faults move y by design, so the armed
                    generation's tokens can't be exact's; the checks read the armed generation's captures.
     dither-1s-hbk  dither-1s-hbp on the unit's K split (an h1u.cu build with H1U_KSPLIT, from the .so HB_H1U_KSPLIT names):
@@ -76,7 +76,7 @@ def build(arm: str, scratch, gpu_mem: float):
 
 
 def clean_gate_tokens(llm) -> None:
-    """While the window is armed (the gate's generation), `llm.generate` runs the same generation disarmed first and
+    """While the execution phase is armed (the gate's generation), `llm.generate` runs the same generation disarmed first and
     returns its outputs, then the armed one, whose captures the checks read."""
     gen, win = llm.generate, llm.dither_win
 
