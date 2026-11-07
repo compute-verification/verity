@@ -13,9 +13,10 @@ disagreements, errors and first failures, and the recorded ops no type reads.
   is held to its SHA-512 name when read, and every opened parameter to its SHA-512 in ``params.json`` and ``commit.json``.
 * **Population.** A proof block type's instances are the recorded calls of its kernel in the opened layers, on every rank,
   over the step's real tokens: a group quant's token row, a FlashInfer FP8 linear's (token, output column) when the call has
-  fewer than 32 rows (the op's FlashInfer branch), a routed MoE w2 launch's (slot, output column), a fused allreduce + RMSNorm's
-  token for its residual half-rows and its norm, a plain allreduce's (token, half-row) on symm-mem's multimem route (its
-  received row the same on every rank; a call on NCCL's route is counted, not staged), an unbiased bf16 cuBLAS GEMM's token
+  fewer than 32 rows (the op's FlashInfer branch), an MoE w13 or routed w2 launch's (slot, output column), a fused allreduce +
+  RMSNorm's token for its residual half-rows and its norm, a plain allreduce's (token, half-row) on symm-mem's multimem route
+  or FlashInfer's MNNVL one (its received row the same on every rank; a call on NCCL's route is counted, not staged), an
+  unbiased bf16 cuBLAS GEMM's token
   row (``aten::mm`` against a bf16 weight's transposed view) at the route its call's M rows take (a call past
   ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), and FA3's split combine per (token, head). Instances are sampled from it
   by the capture's coins, ``--per-type`` of each type.
@@ -267,13 +268,16 @@ def fp8_linear_instances(cap: Capture):
                        + [cap.tensor(r, e["out"]["ret0"])[t, col:col + 1]])
 
 
-def moe_w2_instances(cap: Capture, profile):
+def moe_instances(cap: Capture, profile):
+    """A block-FP8 `fused_moe_kernel` launch's (token, slot) pairs: the w13 launch (`MoeExpertFp8Gemm`, A one row a token) and
+    the w2 launch with the routed weight (`MoeExpertFp8GemmW`, A one row a pair)."""
     from verity_vllm.program.frontend import targets as T
     for r in cap.ranks:
         for e in cap.events[r]:
-            if e["op"] != "moe_launch" or not cap.opened(e, weights=True) or not e["in"].get("mul_routed_weight"):
+            if e["op"] != "moe_launch" or not cap.opened(e, weights=True):
                 continue
             a, cfg = e["in"], e["in"]["config"]
+            routed = bool(a.get("mul_routed_weight"))
             E, N, K = a["B"]["shape"]
             S = a["A"]["shape"][0]
             G = a.get("block_shape", [128, 128])[1]
@@ -283,18 +287,23 @@ def moe_w2_instances(cap: Capture, profile):
             why = T.moe_fp8_tuned_tile_refusal(profile, bm, bn, kb, warps, swap)
             if why:
                 raise LookupError(f"moe_launch (seq {e['seq']}): {why}")
-            spec = T.moe_expert_fp8_gemm_spec(profile, E, K, 1, G, kb, swap, BM=bm, BN=bn, WARPS=warps, routed=True)
+            spec = T.moe_expert_fp8_gemm_spec(profile, E, K, 1, G, kb, swap, BM=bm, BN=bn, WARPS=warps, routed=routed)
             topk = a["topk_weights"]["shape"][1]
             dot = re.search(r"DOT=(\w+?)Dot", spec.id)
-            label = f"MoeExpertFp8GemmW_K{K}_{'swap' if swap else 'noswap'}_{dot[1] if dot else 'dot'}"
-            for j, col in cap.cells("MoeExpertFp8GemmW", (r, e["seq"]), cap.real_rows(r, S), N):
+            kind = "MoeExpertFp8GemmW" if routed else "MoeExpertFp8Gemm"
+            label = f"{kind}_K{K}_{'swap' if swap else 'noswap'}_{dot[1] if dot else 'dot'}"
+            for j, col in cap.cells(kind, (r, e["seq"]), cap.real_rows(r, S) * (1 if routed else topk), N):
                 yield (label, spec, (r, e["seq"], j, col),
                        lambda r=r, e=e, j=j, col=col: moe_args(cap, r, e, j, col),
                        lambda r=r, e=e, j=j, col=col, topk=topk, N=N: [cap.tensor(r, e["out"]["C"]).reshape(-1, topk, N)[j // topk, j % topk, col:col + 1]])
 
 
 def moe_args(cap: Capture, r: int, e: dict, j: int, col: int) -> list:
+    """Pair j's operands: its A row (the w13 launch reads token j // top_k's), its expert, the w2 launch's routed weight, and
+    weight column `col` with its scale block."""
     a = e["in"]
+    routed = bool(a.get("mul_routed_weight"))
+    t = j if routed else j // a["topk_weights"]["shape"][1]
     A, As = cap.tensor(r, a["A"]), cap.tensor(r, a["A_scale"])
     B, Bs = cap.tensor(r, a["B"]), cap.tensor(r, a["B_scale"])
     ids = cap.tensor(r, a["expert_ids"]).reshape(-1)
@@ -304,8 +313,8 @@ def moe_args(cap: Capture, r: int, e: dict, j: int, col: int) -> list:
         sorted_ids = cap.tensor(r, a["sorted_token_ids"]).reshape(-1)
         p = int(np.nonzero(sorted_ids == j)[0][0])
         ex = int(ids[p // a["config"]["BLOCK_SIZE_M"]])
-    g = cap.tensor(r, a["topk_weights"]).reshape(-1)[j]
-    return [A[j], As[j], np.array([ex], np.uint64), np.array([g]), B[:, col:col + 1, :], Bs[:, col // 128:col // 128 + 1, :]]
+    g = [np.array([cap.tensor(r, a["topk_weights"]).reshape(-1)[j]])] if routed else []
+    return [A[t], As[t], np.array([ex], np.uint64), *g, B[:, col:col + 1, :], Bs[:, col // 128:col // 128 + 1, :]]
 
 
 def aligned(cap: Capture, op: str):
@@ -353,10 +362,16 @@ def fused_ar_norm_instances(cap: Capture):
 
 
 def allreduce_route(cap: Capture, e0: dict) -> str:
-    """The communicator a plain allreduce ran on, from what the recorder saw inside it: symm-mem's multimem op, else one no
-    dispatcher sees (pynccl's NCCL call, past `tp_allreduce.SYMM_MEM_MAX_BYTES`)."""
+    """The communicator a plain allreduce ran on: symm-mem's when the recorder saw its multimem op inside the call. Neither
+    FlashInfer's MNNVL kernel nor NCCL is an op the recorder sees, so a call without one took the route
+    `CudaCommunicator.all_reduce` tries first for its bytes: FlashInfer's (``fi_ar_comm``) within `tp_allreduce.FI_MAX_BYTES`,
+    else NCCL's."""
+    from verity.ml.definitions.registry.tp_allreduce import FI_MAX_BYTES
     kids = {x["op"] for x in cap.events[cap.ranks[0]] if x.get("parent") == e0["seq"]}
-    return "symm_mem_comm" if any("multimem" in k for k in kids) else "pynccl_comm"
+    if any("multimem" in k for k in kids):
+        return "symm_mem_comm"
+    T, H = e0["in"]["tensor"]["shape"]
+    return "fi_ar_comm" if T * H * 2 <= FI_MAX_BYTES else "pynccl_comm"
 
 
 def same_on_every_rank(cap: Capture, calls: dict, t: int, sl: slice) -> np.ndarray:
@@ -370,8 +385,8 @@ def same_on_every_rank(cap: Capture, calls: dict, t: int, sl: slice) -> np.ndarr
 
 
 def allreduce_instances(cap: Capture, unstaged: dict | None = None):
-    """A plain allreduce's (token, half-row) on symm-mem's multimem route. A call on another route is counted in
-    ``unstaged`` under its label, with why, and the step's other calls are still staged."""
+    """A plain allreduce's (token, half-row) on symm-mem's multimem route or FlashInfer's MNNVL one. A call on NCCL's is
+    counted in ``unstaged`` under its label, with why, and the step's other calls are still staged."""
     from verity.ml.definitions.registry import tp_allreduce as AR
     W = len(cap.ranks)
     unstaged = {} if unstaged is None else unstaged
@@ -383,6 +398,15 @@ def allreduce_instances(cap: Capture, unstaged: dict | None = None):
         T, H = shape
         half = H // 2
         route, rows = allreduce_route(cap, e0), cap.real_rows(cap.ranks[0], T)
+        if route == "fi_ar_comm":
+            shot = AR.mnnvl_shot(T, H, W)
+            for t in range(rows):
+                for c in range(2):
+                    sl = slice(c * half, (c + 1) * half)
+                    yield (f"AllReduceMnnvl_W{W}_S{shot}", f"AllReduceMnnvl_v1{{WORLD={W},N={half},SHOT={shot}}}", (e0["seq"], t, c),
+                           lambda calls=calls, t=t, sl=sl: [np.stack([cap.tensor(r, calls[r]["in"]["tensor"])[t, sl] for r in cap.ranks])],
+                           lambda calls=calls, t=t, sl=sl: [same_on_every_rank(cap, calls, t, sl)])
+            continue
         if route != "symm_mem_comm":
             rec = unstaged.setdefault(f"AllReduceNccl_W{W}", {"population": 0, "calls": [], "why": (
                 f"vllm::all_reduce on {route}: no Definition models NCCL's all-reduce at world {W} on this GPU "
@@ -591,7 +615,8 @@ def gate_instance(spec, key, args_of, want_of, full_gates: int) -> tuple[dict, d
                 "trace": traceback.format_exc()[-800:]}, None
 
 
-#: the recorded ops some population reads; every other recorded op is listed by ``--every-call`` as not gated
+#: the recorded ops some population reads; every other recorded op no such op encloses is listed by ``--every-call`` as not
+#: gated (`op_coverage`)
 GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm", "moe_launch",
              "vllm::flashinfer_trtllm_fused_allreduce_norm", "vllm::all_reduce", "_C::fused_add_rms_norm", "_vllm_fa3_C::fwd",
              "fa3_sparse_mla", "aten::mm"}
@@ -682,14 +707,28 @@ def every_call(cap: Capture, pops: dict, a) -> dict:
                                    agree=sum(g["agree"] is True for g in gs), disagree=sum(g["agree"] is False for g in gs),
                                    errors=sum(g["agree"] is None for g in gs) - len(not_kept), not_kept=len(not_kept),
                                    failures=bad[:8] + not_kept[:2])
-    ops: dict[str, int] = {}
-    for r in cap.ranks:
-        for e in cap.events[r]:
-            if e.get("parent") is None and (cap.whole or e.get("layer") in cap.layers):
-                ops[e["op"]] = ops.get(e["op"], 0) + 1
-    rep["gated_ops"] = {k: v for k, v in sorted(ops.items()) if k in GATED_OPS}
-    rep["not_gated_ops"] = {k: v for k, v in sorted(ops.items()) if k not in GATED_OPS}
+    rep["gated_ops"], rep["not_gated_ops"] = op_coverage(cap)
     return rep
+
+
+def op_coverage(cap: Capture) -> tuple[dict[str, int], dict[str, int]]:
+    """The step's recorded ops, nested ones included, that some population reads, and those that none reads and no op it
+    reads encloses (an op inside an ungated one, such as the router's top-k inside the MoE block, is listed itself)."""
+    gated: dict[str, int] = {}
+    other: dict[str, int] = {}
+    for r in cap.ranks:
+        by_seq = {e["seq"]: e for e in cap.events[r]}
+        for e in cap.events[r]:
+            if not (cap.whole or e.get("layer") in cap.layers):
+                continue
+            x, inside = by_seq.get(e.get("parent")), False
+            while x is not None and not inside:
+                inside, x = x["op"] in GATED_OPS, by_seq.get(x.get("parent"))
+            if e["op"] in GATED_OPS:
+                gated[e["op"]] = gated.get(e["op"], 0) + 1
+            elif not inside:
+                other[e["op"]] = other.get(e["op"], 0) + 1
+    return dict(sorted(gated.items())), dict(sorted(other.items()))
 
 
 def main() -> int:
@@ -698,7 +737,8 @@ def main() -> int:
     ap.add_argument("--step", type=int, required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--per-type", type=int, default=8)
-    ap.add_argument("--types", default=None, help="comma-separated labels (default: every type found)")
+    ap.add_argument("--types", default=None,
+                    help="comma-separated labels (default: every type found); with --every-call, label prefixes")
     ap.add_argument("--cc", default="9.0", help="the serving GPUs' compute capability (the MoE launches' e4m3 step)")
     ap.add_argument("--full-gates", type=int, default=4_000_000)
     ap.add_argument("--of", default="", help="what the replay block is (window.json)")
@@ -728,7 +768,7 @@ def main() -> int:
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {}}
     pops: dict[str, list] = {}
     unstaged: dict[str, dict] = {}
-    sources = [quant_instances(cap), fp8_linear_instances(cap), moe_w2_instances(cap, profile),
+    sources = [quant_instances(cap), fp8_linear_instances(cap), moe_instances(cap, profile),
                fused_ar_norm_instances(cap), allreduce_instances(cap, unstaged), cublas_instances(cap, profile, unstaged),
                fused_add_rms_norm_instances(cap),
                mla_combine_instances(cap), mla_split_part_instances(cap)]
@@ -742,6 +782,8 @@ def main() -> int:
         if "why" in rec:
             report["types"][label] = {**rec, "staged": False}
     if a.every_call:
+        if a.types:
+            pops = {k: v for k, v in pops.items() if k.startswith(tuple(a.types.split(",")))}
         rep = every_call(cap, pops, a)
         rep["population_errors"] = report.get("population_errors", [])
         rep["unstaged"] = unstaged
