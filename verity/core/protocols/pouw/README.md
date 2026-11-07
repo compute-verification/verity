@@ -6,7 +6,9 @@ committed, noised checked values. An accepted run establishes a credited size S 
 behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof system registers each execution phase, samples
 its proof blocks with the challenger's coins, proves them in zero knowledge (Flock `--zk`) and verifies them; PoUW
 states what each execution phase commits, the Program each sampled proof block must pass, and what the outcome credits.
-It carries no policy parameter: it surfaces the ε at δ its sample established.
+It carries no policy parameter: it surfaces the ε at δ its sample established. A scheme must leave the useful work at
+least half of the honest prover's GPU effort (AGENTS.md, "PoUW is mostly useful work"): the trivial PoUW, which hashes
+every product, is a reference, not an answer.
 
 ## PoUW in the remote protocol
 
@@ -70,16 +72,17 @@ each check of a served execution phase through the Lean and its Python reference
 A scheme turns one registered matrix product's committed operand rows into each tile's checked values, its leaf and its
 useful output; everything else (commitments, salt, sample, openings) is the protocol's and the same for every scheme.
 
-- **Pearl-C** (`pearl-c-h100-v0`, `pearl-c-h100-v1`, `pearl-c-sm120-v1`, and their `-h3` forms, `schemes/pearl_c.py`):
-  Pearl's FP8 (E4M3) proof of useful work, the GEMM-based scheme Pearl publishes (`pearl-fp8-v4`,
-  `schemes/pearl_kw.py`), adopted as a PoUW scheme, with its noisy clean-up pinned bit for bit so that the useful output
-  is a checked value. It runs on the H100 and on the RTX PRO 6000 Blackwell (sm_120). The `-h3` forms hash with SHA-512
-  throughout, and h3 is the default wherever a hashing format or tree hash goes unnamed. The others (h0, taken by name)
-  keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with TurboSHAKE128 leaves and SHA-256 trees.
-- **Pearl-C4** (`pearl-c-nvfp4-v0`, `schemes/pearl_c4.py`): Pearl-C with the FP8 product replaced by sm_120's
-  block-scaled FP4, NVFP4 only.
-- **NCP** (`ncp-v1`, `schemes/ncp.py`): noise-cancelling polarization over int7 activations, on SHA-256 trees (its
-  `commitment_hash`: its tile digests are 32 bytes).
+- **Pearl-C** (`pearl-c-h100-v0`, `pearl-c-h100-v1`, `pearl-c-sm120-v1`, and their `-h3` forms,
+  `verity/ml/protocols/pouw/schemes/pearl_c.py`): Pearl's FP8 (E4M3) proof of useful work, the GEMM-based scheme Pearl
+  publishes (`pearl-fp8-v4`, `verity/ml/protocols/pouw/schemes/pearl_kw.py`), adopted as a PoUW scheme, with its noisy
+  clean-up pinned bit for bit so that the useful output is a checked value. It runs on the H100 and on the RTX PRO 6000
+  Blackwell (sm_120). The `-h3` forms hash with SHA-512 throughout, and h3 is the default wherever a hashing format or
+  tree hash goes unnamed. The others (h0, taken by name) keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with
+  TurboSHAKE128 leaves and SHA-256 trees.
+- **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/ml/protocols/pouw/schemes/pearl_c4.py`): Pearl-C with the FP8 product
+  replaced by sm_120's block-scaled FP4, NVFP4 only.
+- **NCP** (`ncp-v1`, `verity/ml/protocols/pouw/schemes/ncp.py`): noise-cancelling polarization over int7 activations, on
+  SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.
 
 Each scheme module's docstring states its steps and roundings, with pinned vectors under `tests/vectors`.
@@ -123,7 +126,8 @@ and `prf/sha-512` (`verity.core.claims`).
 ## Core API
 
 ~~~python
-from verity.core.protocols.pouw import audit, core_check, credit, schemes, verifier, window
+from verity.core.protocols.pouw import audit, core_check, credit, verifier, window
+from verity.ml.protocols.pouw import schemes
 
 scheme = schemes.get("pearl-c-sm120-v1-h3")                 # a configured PoUWScheme
 root = audit.weights_root(weight_roots)                    # the weights' root a credit period's open signs
@@ -136,10 +140,11 @@ k = window.k_prime(eps, delta, work.credited, work.n, tile_work)   # K′, the s
 
 ## Where things are
 
-- `protocol`, `schemes/`: the `PoUWScheme` interface and the named schemes.
-- `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`: the
-  Python references the Lean is held to, and the reference rules not yet ported.
-- `circuit/`: PoUW as `verity.ml.circuits` Programs: the tile and lane Definitions, the compile pass over a served Program
+- `protocol`: the `PoUWScheme` interface.
+- `audit`, `coins`, `salt`, `window`, `core_check`, `credit`, `identifier`, `registration`, `weights`, `operands`,
+  `live_reads`: the Python references the Lean is held to, and the reference rules not yet ported.
+- `verity/ml/protocols/pouw/`, the prover's, which core doesn't import: the named schemes (`schemes/`) and `circuit/`,
+  PoUW as `verity.ml.circuits` Programs: the tile and lane Definitions, the compile pass over a served Program
   (`compile`) and the sampling plan (`plan`). Each Definition has its `circuit-check` sidecar.
 - `lean/check`, `lean/commit`, `lean/window`: the Lean verifier, each with its difftest; `lean/check/README.md` and
   `lean/window/README.md` map each Lean module to its Python.

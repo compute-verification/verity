@@ -1,6 +1,6 @@
 """Pearl-C4's reference replay of a device run's own transcript under the work law (`clear_work.audit`), with
 Pearl-C4's domain and debit (`schemes.pearl_c4`).  It opens rows and words and recomputes them in the clear, so its
-ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PROTOCOL.md), never the protocol's
+ACCEPT is replay-verified (development shortcut; the protocol's check is a ZK proof, PouwCheck), never the protocol's
 verdict.
 
 **The dump** (`write_dump`) is what a timed call emits, as the device holds it after the call: A's rows (BF16, row-major,
@@ -54,9 +54,9 @@ from verity.ml.commitments import Commitment, MerkleTree, Opening
 
 from verity.core.protocols.pouw import audit as au
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape, tagged
-from verity.core.protocols.pouw.schemes import get
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import get
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
 from verity_config.settings import of
 
 # the work law and the clear audit are a reference tool's (benchmarks/pouw/clear), imported by name
@@ -77,7 +77,7 @@ SHORTCUTS = (
     "the transcript tree over the tile leaves and the records (row_passes and R1 per row) are computed on the host after "
     "timing",
     "verify opens the drawn tiles' rows and words and recomputes them in the clear: its ACCEPT is replay-verified "
-    "(development shortcut; the protocol's check is a ZK proof, PROTOCOL.md)",
+    "(development shortcut; the protocol's check is a ZK proof, PouwCheck)",
 )
 
 

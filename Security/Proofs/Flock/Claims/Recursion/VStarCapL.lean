@@ -261,6 +261,8 @@ theorem roundRows_cap_take {I : InnerRec} {x : Msg} {w : Claims.Flock.Wit} {ρ :
 
 /-! ## The cap's port `top` -/
 
+-- one proof of over a hundred lines: `portWords` unfolded at the cap's rows, `rw`, `simp` and `omega` on the instance
+-- and row indices
 set_option maxHeartbeats 1000000 in
 /-- **Level `topsBefore k + e + 1`'s cap reads, at instance `j / R · n + t`, stream round `j`'s top-`e` row `t`**, at
 the fitted port inputs: at stream round `j < 2R` (round `k = j % R` of rep `j / R`) whose `e`-th top has `n` nodes,

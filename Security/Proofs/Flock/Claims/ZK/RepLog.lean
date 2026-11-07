@@ -458,6 +458,7 @@ theorem piopCut_logs (st : Setup) (lay : Zk.PadLayout) (src : RepSrc) (cap root 
   obtain ⟨ss, T, sws⟩ := r
   exact (logS _).pure _
 
+-- `ligeritoCut`'s unfolded run with its loops (`forIn_loopR`), the invariant checked at each step with `omega`
 set_option maxHeartbeats 1000000 in
 /-- **The cut's Ligerito opening keeps the invariant**, given `2`, `n + 1` and every level's `q + 1` at most `B`. -/
 theorem ligeritoCut_logs (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit) (b : Array F128)

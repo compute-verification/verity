@@ -12,12 +12,10 @@ public import Proofs.Pouw.Eps1
 public import Proofs.Pouw.Dither
 public import Proofs.Pouw.DitherWitness
 public import Proofs.Pouw.DitherInstance
-public import Proofs.Pouw.DitherSelected
+public import Proofs.Pouw.SakLb
 public import Proofs.Pouw.Dimension.CausalProofs
 public import Proofs.Pouw.Dimension.EmbedProofs
 public import Proofs.Pouw.Dimension.ForestProofs
-public import Proofs.Pouw.Dimension.Fp8MmaProofs
-public import Proofs.Pouw.Dimension.H100CiteProofs
 public import Proofs.Pouw.Dimension.H100DenseProofs
 public import Proofs.Pouw.Dimension.H100FloorProofs
 public import Proofs.Pouw.Dimension.H100FragProofs
@@ -32,7 +30,6 @@ public import Proofs.Pouw.Dimension.MixingProofs
 public import Proofs.Pouw.Dimension.OpenPipeProofs
 public import Proofs.Pouw.Dimension.PipeProofs
 public import Proofs.Pouw.Dimension.Proofs
-public import Proofs.Pouw.Dimension.RouteUPipeProofs
 public import Proofs.Pouw.Dimension.RouteUProofs
 public import Proofs.Pouw.Exact
 public import Proofs.Pouw.Fp8Atom.Checks
@@ -52,7 +49,6 @@ public import Proofs.Pouw.Fp8Atom.H1TProofs
 public import Proofs.Pouw.Fp8Atom.H1TRunningProofs
 public import Proofs.Pouw.Fp8Atom.H1TShiftStaging
 public import Proofs.Pouw.Fp8Atom.H1TSliceProofs
-public import Proofs.Pouw.Fp8Atom.H1TTileProofs
 public import Proofs.Pouw.Fp8Atom.Proofs
 public import Proofs.Pouw.FpG1
 public import Proofs.Pouw.FpG1.H1
@@ -154,6 +150,8 @@ public import Proofs.Pouw.PearlC.TileCapRev1Gamma
 public import Proofs.Pouw.PearlC.TileCircuit
 public import Proofs.Pouw.PearlC.TileValues
 public import Proofs.Pouw.PearlC.TileGamma
+public import Proofs.Pouw.PearlC.TileGammaTol
+public import Proofs.Pouw.PearlC.TileDrawGamma
 public import Proofs.Pouw.PearlC.TileUOnlyGamma
 public import Proofs.Pouw.PearlC.UOnlyGamma
 public import Proofs.Pouw.PearlC.UOnlyLoopGamma
@@ -172,6 +170,7 @@ public import Proofs.Pouw.PearlC.RowStats
 public import Proofs.Pouw.PearlC.PeelExists
 public import Proofs.Pouw.PearlC.PeelExists4
 public import Proofs.Pouw.PearlC.TileCheckWords
+public import Proofs.Pouw.PearlC.TileCheckWordsRev1
 public import Proofs.Pouw.Pool
 public import Proofs.Pouw.PoolWitness
 public import Proofs.Pouw.Prob
@@ -182,7 +181,6 @@ public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Pouw.RelativeSecurityFork
 public import Proofs.Pouw.RelativeSecurityGuarantees
 public import Proofs.Pouw.RelativeSecurityJ10R
-public import Proofs.Pouw.SakLb
 public import Proofs.Pouw.Sampling
 public import Proofs.Pouw.Sanity
 public import Proofs.Pouw.ServedFreed
@@ -191,9 +189,14 @@ public import Proofs.Pouw.ServedWork
 public import Proofs.Pouw.ServedWork.Honest
 public import Proofs.Pouw.SteinerRigidity
 public import Proofs.Pouw.Theorem1
-public import Proofs.Pouw.TileBound.AlignedExact
+public import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+public import Mathlib.Tactic
+public import Mathlib.Data.Fintype.BigOperators
+public import Mathlib.Data.Rat.Cast.Order
 public import Proofs.Pouw.TileBound.Fp8
-public import Proofs.Pouw.TileBound.Fp8Depth
+public import Definitions.Pouw.TileBound.Defs
+public import Mathlib.Tactic.IntervalCases
+public import Definitions.Pouw.TileBound.Fp8Defs
 public import Proofs.Pouw.TileBound.Proofs
 public import Proofs.Pouw.TileBound.WinogradStrassen
 public import Proofs.Pouw.TileBound.Witness

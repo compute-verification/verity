@@ -2,10 +2,11 @@
 what they find next time); both stamp last_success_at in the cache.
 
 - `watchdog` (every 5 minutes): a person's chat post that rang someone and has no 👀 and no lane reply after REMIND_S rings
-  again; after ESCALATE_S with no lane reply it rings the admin and says so in the thread; in the run that falls in
-  DAILY_AT, a list of the chat threads still open goes to the admin's inbox.  And `stall`: an event published STALL_S ago
-  or more with no message done by the consumer since rings STALL_TO (at most hourly), since health's other numbers can't
-  show it; and
+  again, urgent, as every doorbell it rings is (a person is waiting): the names of its routing line, else the rule's;
+  when that line sent it to the person's usual lane, the admin is rung as well, once; after ESCALATE_S with no lane reply
+  it rings the admin and says so in the thread; in the run that falls in DAILY_AT, a list of the chat threads still open
+  goes to the admin's inbox.  And `stall`: an event published STALL_S ago or more with no message done by the consumer
+  since rings STALL_TO (at most hourly), since health's other numbers can't show it; and
   `canary`, each hour, publishes a synthetic event that only the consumer can stamp done, so `stall` has one to judge.
 - `reconcile` (every 10 minutes): each chat and ask channel's last hour.  A person's post that should ring someone and has
   neither a routing line nor a doorbell in any inbox is enqueued again, keyed on its channel and ts, so a second pass
@@ -14,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from .consumer import ASK_CHANNELS, is_line_for
+from .consumer import ASK_CHANNELS, is_line_for, line_names
 from .deps import (
     CANARY_SENT,
     DEAD,
@@ -34,7 +35,8 @@ RECONCILE_S, SETTLE_S = 3600, 120                                # its window, a
 OLDEST_TTL_S = 30 * 60                                           # reconcile's finding, unrefreshed for this long, is unknown
 DAILY_AT = (16, 0)                                               # UTC hour and minute: 9 AM PDT; the run within 5 minutes after
 EVERY_S = 5 * 60                                                 # the watchdog's schedule (vercel.json)
-REMINDER = "no 👀 or lane reply in 15 min"
+REMINDER = "no :eyes: or lane reply in 15 min"                 # a shortcode: Slack may read an emoji back as one
+LANE_QUIET = "no answer in 15 min from @{lane}, their usual lane"   # the admin's reminder for a post sent to a person's usual lane
 ESCALATION = "no lane reply in 60 min"
 ESCALATED = "router: no lane has replied in 60 min; sent to @top"
 DAILY_HEAD = "from watchdog, chat threads still open (daily):"
@@ -85,8 +87,9 @@ def watchdog(deps: Deps) -> dict:
     rs, api, now = deps.rs, deps.slack, deps.clock()
     reg, ids = chats(deps)
     handles = {h["handle"] for h in reg["handles"]}
-    counts, still_open = {"reminded": 0, "escalated": 0}, []
+    counts, still_open = {"reminded": 0, "escalated": 0, "lane_unanswered": 0}, []
     for ch in ids:
+        key = rs.key_of(reg, ch)
         for thread in threads(deps, ch, now - WINDOW_S):
             root = thread[0]["ts"]
             for p in (m for m in thread if by_person(deps, m, reg)):
@@ -101,15 +104,23 @@ def watchdog(deps: Deps) -> dict:
                     if not any(rs.ours(m, reg) and m.get("username") == "router" and (m.get("text") or "").startswith(ESCALATED)
                                for m in later):
                         lines = rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), names=["top"],
-                                           reminder=ESCALATION)
+                                           reminder=ESCALATION, urgent=True)
                         if any("NOT RUNG" in s for s in lines):
                             continue                                       # the line would stop the next run's try
                         api.call("chat.postMessage", channel=ch, thread_ts=root, username="router", text=ESCALATED,
                                  unfurl_links="false")
                         counts["escalated"] += 1
                 elif not any(r.get("name") == "eyes" for r in p.get("reactions") or []):
-                    rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), reminder=REMINDER)
+                    line = next((m for m in thread if is_line_for(m, p["ts"], reg, rs)), None)
+                    names = line_names(line, reg) if line else None
+                    rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), names=names, reminder=REMINDER,
+                               urgent=True)
                     counts["reminded"] += 1
+                    lane = rs.usual_lane(p, reg, key)
+                    if lane and names and lane in names and rs.CHAT_WATCHER not in names:
+                        lines = rs.deliver(api, reg, rs.Routes(), ch, msg, now=now, log=_Log(deps), names=[rs.CHAT_WATCHER],
+                                           reminder=LANE_QUIET.format(lane=lane), urgent=True)
+                        counts["lane_unanswered"] += any(": rang" in s for s in lines)
     if _daily_due(now):
         counts["daily"] = daily(deps, reg, still_open, now)
     counts["canary"] = canary(deps, now)
@@ -206,7 +217,8 @@ def doorbells(deps: Deps, reg: dict, routes, oldest: float) -> set[tuple[str | N
 
 def should_ring(deps: Deps, p: dict, thread: list[dict], reg: dict, chat: bool, routes) -> bool:
     """Whether the consumer leaves a record of `p`: a routing line (an unaddressed post) or a doorbell for a lane it names
-    that has an inbox.  A quiet post naming no one, or one naming only people, leaves none."""
+    that has an inbox (or whose route couldn't be read, so may have one).  A quiet post naming no one, or one naming only
+    people, leaves none."""
     rs = deps.rs
     others = [m for m in thread if m is not p]
     if chat:
@@ -217,7 +229,8 @@ def should_ring(deps: Deps, p: dict, thread: list[dict], reg: dict, chat: bool, 
         if not targets:
             return not rs.is_quiet(p.get("text") or "")
     humans, author = rs.people_names(reg), rs.poster(p, reg)
-    return any(n not in humans and n != author and not rs.unreachable(n, *routes.resolve(n)) for n in targets)
+    return any(n not in humans and n != author and (not rs.unreachable(n, *routes.resolve(n)) or routes.unread(n))
+               for n in targets)
 
 
 def reconcile(deps: Deps) -> dict:

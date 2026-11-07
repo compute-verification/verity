@@ -267,6 +267,7 @@ theorem sharedRows_spec {tags : Flock.Tags} {c : Flock.Circuit} {header : Lean.J
        subst h0
        exact ‹¬ _ = true› (Array.contains_eq_true_of_mem hx))
 
+-- `walk_step` down `Flock.HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **A shared-row file's tables are one per port, none empty** (`HmRow.loadPublic`, `sharedRows_spec`). -/
 theorem loadPublic_counts {tags : Flock.Tags} {c : Flock.Circuit} {file : ByteArray} {pop : Flock.Public}

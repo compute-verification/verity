@@ -50,9 +50,11 @@ def tree(tmp_path: Path) -> Path:
     (t / "lean" / "P" / "lakefile.toml").write_text('name = "P"\n')
     (t / "lean" / "P" / "lean-audit.json").write_text("{}\n")
     (t / "lean" / "P" / "P.lean").write_text("theorem t : True := trivial\n")
-    # its own `verity`, without the twins `check.PREBUILD` loads, so a run's prebuild builds nothing
-    (t / "verity").mkdir()
-    (t / "verity" / "__init__.py").write_text("")
+    # its own `verity`, whose twins (`check.PREBUILD`) build nothing
+    (t / "verity" / "ml" / "definitions" / "numerics").mkdir(parents=True)
+    for d in ("verity", "verity/ml", "verity/ml/definitions", "verity/ml/definitions/numerics"):
+        (t / d / "__init__.py").write_text("")
+    (t / "verity/ml/definitions/numerics/twins.py").write_text("def preload():\n    return {}\n")
     _git(t, "init", "-q")
     _git(t, "add", "-A")
     _git(t, "commit", "-q", "-m", "tree")

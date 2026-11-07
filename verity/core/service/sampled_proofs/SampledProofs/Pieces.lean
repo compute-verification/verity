@@ -46,19 +46,22 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`Challenger`): a coin commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`.
 * `challenger_key`, `challenger_record`, `challenger_trusted`: the challenger's signed record (`ChallengerRecord`): the
   verifier's key and a record as `from_json` reads them, with `record_message`, and `trusted_reason`.
-* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_head`, `challenger_session`,
-  `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its close as `from_json`
-  reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the auditor's ledger;
-  `ledger_head`, the ledger's published heads; `trusted_session_of` and `credited_session`, a window counted toward its
+* `challenger_close`, `challenger_released`, `challenger_ledger`, `challenger_day`, `challenger_head`,
+  `challenger_session`, `challenger_credited`, `challenger_pinned`: the challenger's session (`ChallengerSession`): its
+  close as `from_json` reads it, with `close_message`; `log_chain` and `released_roots_of`; `audited_session`, the
+  auditor's ledger; `declared_day`, a window's day and its lane's declarations before it; `ledger_head`, the ledger's
+  published heads; `trusted_session_of` and `credited_session`, a window counted toward its
   period's circuit, each over `pinned_session`: a session from a commit the host's pins log records and the auditor's
   first-parent list of main holds.
 * `challenger_read`, `challenger_draw_coins`, `challenger_within`: a draw's coins from one challenger family
   (`ChallengerCoins`): `read_reason`, the bytes a draw read against its segment, `coins_reason`, against the segment
   and the session the auditor's ledger opens for the verifier's window (`trusted_session_of`), and `coins_within`, the
   sizes the evidence holds against v2's limits.
-* `challenger_coin_trees`, `challenger_session_trees`: a `--zk` session's coins (`ChallengerTrees`): the coin trees a
-  release log shows the challenger sampled and opened (`coin_trees_of`), and an audit's session records, each on its
-  tables with their `root_B` lengths, held to them, one tree a session (`sessions_tree_reason`).
+* `challenger_coin_trees`, `challenger_session_trees`, `challenger_sample_link_first`: a `--zk` session's coins
+  (`ChallengerTrees`): the coin trees a release log shows the challenger sampled and opened (`coin_trees_of`), an
+  audit's session records, each on its tables with their `root_B` lengths, held to them, one tree a session
+  (`sessions_tree_reason`), and the log's order, the sample, then the link, then the other rounds
+  (`sample_link_first`).
 * `challenger_inner_trees`: a recursive session's inner coins (`ChallengerInnerTrees`): `rec_live`'s coin server
   records held to the trees a release log shows, one tree a session, every opening read (`rec_live.tree_held_reason`).
 * `wires`, `wires_unrolled`: a window circuit's wires checked at the size of their description (`Wires.check`) and by
@@ -627,11 +630,13 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_order", Challenger.orderPiece), ("challenger_key", Challenger.keyPiece),
    ("challenger_record", Challenger.recordPiece), ("challenger_trusted", Challenger.trustedPiece),
    ("challenger_close", Challenger.closePiece), ("challenger_released", Challenger.releasedPiece),
-   ("challenger_ledger", Challenger.ledgerPiece), ("challenger_head", Challenger.headPiece),
+   ("challenger_ledger", Challenger.ledgerPiece), ("challenger_day", Challenger.dayPiece),
+   ("challenger_head", Challenger.headPiece),
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece), ("challenger_within", Challenger.withinPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
+   ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
    ("challenger_inner_trees", Challenger.innerTreesPiece),
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef)]

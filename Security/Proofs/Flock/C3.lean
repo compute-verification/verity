@@ -77,7 +77,6 @@ public import Proofs.Flock.C3.Reps.ResRead
 public import Proofs.Flock.C3.Reps.RoundLinks
 public import Proofs.Flock.C3.Reps.RoundOfHolo
 public import Proofs.Flock.C3.Reps.RoundReads
-public import Proofs.Flock.C3.Reps.RoundSel
 public import Proofs.Flock.C3.Reps.SentKeys
 public import Proofs.Flock.C3.Reps.SrcOK
 public import Proofs.Flock.C3.Reps.SrcOpens
@@ -88,7 +87,6 @@ public import Proofs.Flock.C3.Reps.TsRead
 public import Proofs.Flock.C3.Reps.Vals
 public import Proofs.Flock.C3.Reps.WRead
 public import Proofs.Flock.C3.Reps.WithReads
-public import Proofs.Flock.C3.Sparse.HCols
 public import Proofs.Flock.C3.Sparse.HeldStages
 public import Proofs.Flock.C3.Sparse.MsgsLayers
 public import Proofs.Flock.C3.Sparse.MsgsRead
@@ -98,7 +96,6 @@ public import Proofs.Flock.C3.Sparse.PubTie
 public import Proofs.Flock.C3.Sparse.Read
 public import Proofs.Flock.C3.Sparse.SessionAt
 public import Proofs.Flock.C3.Sparse.SessionReg
-public import Proofs.Flock.C3.Sparse.SessionZero
 public import Proofs.Flock.C3.Sparse.Src
 public import Proofs.Flock.C3.Sparse.SrcLayer
 public import Proofs.Flock.C3.Sparse.SrcSessions
@@ -107,6 +104,8 @@ public import Proofs.Flock.C3.VStarList.Accepts
 public import Proofs.Flock.C3.VStarList.Range
 public import Proofs.Flock.C3.VStarList.Shape
 public import Proofs.Flock.C3.VStarList.Statements
+public import Proofs.Flock.Recursive.PartTie
+public import Proofs.Flock.Recursive.HPortTie
 import Mathlib.Tactic.Echelon.Zsqrtd
 import Mathlib.Tactic.NormNum.Irrational
 import Mathlib.Tactic.NormNum.IsCoprime

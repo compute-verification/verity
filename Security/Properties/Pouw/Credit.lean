@@ -60,10 +60,10 @@ at least ε of the credited work with probability at most δ.
 
 The draw is the one `PouwCheck.workUnits` runs: `Flock.Draw.stratified` over the strata `law` gives, stratum `i` drawing
 `Flock.Draw.subset` of its `k_i` units from its own stream of `need` bytes (`drawnOn`). The streams are modelled as
-independent and uniform, as `Properties.Served.DrawMissesSubset` and `Claims.Sampling.live_work_miss_le` model them:
-the service derives stratum `i`'s stream as `stream key ["draw", template] need`, its label distinct for each stratum
-(the templates are distinct, `StrataTile`), and these are that derivation in the random-oracle model. They add no named
-assumption: the probability is over the streams' bytes.
+independent and uniform, as `Properties.Served.DrawMissesSubset` models them: the service derives stratum `i`'s stream
+as `stream key ["draw", template] need`, its label distinct for each stratum (the templates are distinct,
+`StrataTile`), and these are that derivation in the random-oracle model. They add no named assumption: the probability
+is over the streams' bytes.
 -/
 
 @[expose] public section
@@ -93,9 +93,9 @@ def creditedWork (layout : Json) (got served : List ℕ) : ℕ :=
 credit reports: wherever `strata` accepts a layout with strata `ss`, `law` puts them under `work:K`, and
 `kPrime ε δ C W 1` (`W` the strata's work) answers `K′ ≤ K`, the draw over uniform streams (`drawnOn`) draws no unit of a
 set `B` whose units do at least `ε·C` of the work (`unitWork`) with probability at most `δ`. The streams are independent
-and uniform, as `Properties.Served.DrawMissesSubset` and `Claims.Sampling.live_work_miss_le` model them: the service
-derives stratum `i`'s as `stream key ["draw", template] need`, its label distinct for each stratum, and this is that
-derivation in the random-oracle model. -/
+and uniform, as `Properties.Served.DrawMissesSubset` models them: the service derives stratum `i`'s as
+`stream key ["draw", template] need`, its label distinct for each stratum, and this is that derivation in the
+random-oracle model. -/
 def WorkDrawMisses : Prop :=
   ∀ (layout : Json) (ss : Array Flock.Draw.WorkStratum) (K : ℕ) (strata : Array Flock.Draw.Stratum) (eps δ : ℚ)
     (C k' : ℕ),

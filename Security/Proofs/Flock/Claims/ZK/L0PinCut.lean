@@ -73,7 +73,7 @@ return, which is what this feeds.
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace FlockComplete.RankAt
 
@@ -83,6 +83,7 @@ section Asks
 
 variable (coin : ℕ → ℕ → F128) (n L : ℕ)
 
+-- `sim_walk` down `ligeritoCut`'s unfolded run, a step lemma per call
 set_option maxHeartbeats 1000000 in
 theorem ligeritoCut_grows (h : ByteArray → ByteArray) (ms : MerkleScheme) (sch : Schedule) (T : F128) (cm0 : Commit)
     (b : Array F128) (lay : Zk.PadLayout) (src : RepSrc) :

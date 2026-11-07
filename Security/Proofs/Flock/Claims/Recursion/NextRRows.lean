@@ -74,6 +74,7 @@ section Walk
 
 open FlockSoundness.Refine FlockSoundness.Discharge.Exec
 
+-- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **A session has at most `Tags.MAX_TABLES` tables, and its spec names one per statement**, at any public input
 words. -/

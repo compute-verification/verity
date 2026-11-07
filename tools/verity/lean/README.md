@@ -17,6 +17,8 @@ the same way, a `module`'s from the private part holding its proofs. The only pa
 after the facts and the replay, the tests' under `runs` (each deciding only its own pass), in a sandbox where the machine
 allows one; a test's data generator is the repository's code and runs outside it.
 
+A run keeps the facts only gzipped (`facts.json.gz`; `stored_facts` reads an older `facts.json` too).
+
 ~~~text
 bash tools/verity/lean/setup.sh PKG                      elan, PKG's lean-toolchain, its pinned dependencies, Mathlib's cache when
                                                   Mathlib is a dependency, and main's cached build of PKG (below)
@@ -35,6 +37,8 @@ python tools/verity/lean/check.py --lift LIFTS.json PKG  write each guarantee {"
                                                   `"beside": M` names); then build and run
                                                   `--update --moved LIFTS.json.moved.json PKG` (below)
 python tools/verity/lean/upstream.py PKG [--lean]        what the pinned dependencies prove about PKG's watched statements
+python tools/verity/lean/unread.py --out DIR --build     the Lean nothing reads; lean-audit runs its ratchet on the
+                                                  audits' facts (its docstring: the seeds, the caps, the Properties gap)
 python tools/verity/lean/merge.py --install              once per clone: git merges lean-audit.json with merge.py (below)
 ~~~
 
@@ -103,7 +107,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   and no hypothesis is `False` (`vacuous_meets`). A closed `def C : Prop` proved of every instance goes under
   `claims.generic` with its guarantee, which reads only the claims and Core and skips `shape` and the inline rule;
 - a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses of the form `witness_failures`
-  states, or an `unwitnessed` entry, which only shrinks (`witness_failures`);
+  states, or an `unwitnessed` entry, which only shrinks (`witness_failures`); `nontrivial` is one theorem or a list,
+  each past the first in the exclusion form and dropping a premise no earlier one drops;
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
@@ -130,7 +135,7 @@ passes, 1 when one fails, and 2 on a usage error or a refusal.
 
 A package that pins ArkLib (`Security/Proofs`, and `Security`, which audits it beside itself) is refused, exit 2, on a
 machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgroup), by `check.py` and the fast path
-alike; the refusal prints the fast path's `research run --on …` line (`ON_NODE`). `VERITY_LEAN_MEM_FLOOR_GIB` sets
+alike; the refusal prints the fast path's `research run --on auto …` line (`ON_NODE`). `VERITY_LEAN_MEM_FLOOR_GIB` sets
 another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`, so the build of a package that pins Mathlib
 or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, from the
 process's own cgroup, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
@@ -348,10 +353,10 @@ statement change. Any other lift prints in full: a `G` whose value differs from 
 theorem's binders into `G`, which the record's `assumptions` would lose. The landing DM reads only the records, so it
 still lists a lifted guarantee as changed.
 
-`four_names` lists the namespace roots (`["Nci", "NetTiming"]`) whose guarantees are all in the four-name form: each is
-`X.SecurityProofs.G : X.Guarantees.G` (universe parameters aside), with `G` a definition of a `Guarantees` module, and the
-audit fails on any other guarantee under a listed root. A package's owner adds its root once every guarantee there is
-lifted, or no longer a guarantee.
+`four_names` lists the root of each of the lock's guarantees (`["Nci", "NetTiming", …]`), and each is `X.SecurityProofs.G
+: X.Guarantees.G` (universe parameters aside), `G` a definition of a `Guarantees` module, but a witness, a frozen guarantee,
+a generic claim's (`claims.generic`: stated as its claim) and one `four_names_except` holds ({G: why not yet}). An entry
+there in the form, frozen, a witness, a generic claim's or gone fails.
 
 `check.py --lift LIFTS.json PKG` writes lifts into the four-name form: `def G : Prop` in the spec module, and
 `theorem X.SecurityProofs.G : X.Guarantees.G := @X.t` beside the proof or in the module `"beside": M` names (`check.py`'s

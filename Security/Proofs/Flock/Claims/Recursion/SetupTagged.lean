@@ -127,6 +127,8 @@ theorem untagged_of_tag {t : String} (ht : 8 ≤ t.toUTF8.data.toList.length ∧
   simp
 
 set_option linter.unusedTactic false in
+-- `Stmt.setupHiddenWith`'s unfolded do-block taken a bind at a time (`ebind_ok'`), each poisoned call refuted where it
+-- occurs
 set_option maxHeartbeats 4000000 in
 /-- **A hidden-output setup refuses on an oracle refusing its `σ` input.** -/
 theorem setupHiddenWith_poison {p : ByteArray → Bool} {h : ByteArray → ByteArray} {sig : String}
@@ -154,6 +156,8 @@ theorem mapM_range_ne_ok {α : Type} {n : ℕ} (hn : 0 < n) {f : ℕ → Flock.V
   | error e => rw [h0] at h; cases h
   | ok a => exact hf a h0
 
+-- `Stmt.setupTablesWith`'s unfolded do-block taken a bind at a time (`ebind_ok'`), each poisoned call refuted where it
+-- occurs
 set_option maxHeartbeats 4000000 in
 /-- **A session of hidden-output tables refuses on an oracle refusing their `σ` input**: one table's setup is
 `setupHiddenWith`, and several tables' first is. -/

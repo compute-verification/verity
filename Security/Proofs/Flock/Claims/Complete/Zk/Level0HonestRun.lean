@@ -114,6 +114,8 @@ theorem HRuns.ends {p : LigeritoProof} {L : ℕ} {β : Type} {y : LP PS β} {c c
       (Ext p st' → Xb b → pcur st = c → t = tm → J (tw st) → J' b (tw st')) :=
   ⟨(h.1 st t l b st' t' l' hl e).2.2.2, h.2 st t l b st' t' l' hl e⟩
 
+-- one proof of a few hundred lines running `ligeritoPZk` against the masked model's `FinalZ`, `rw` and `omega` on the
+-- round indices at each step
 set_option maxHeartbeats 4000000 in
 /-- **The honest masked Ligerito meets the masked model's final identity**: at a `--zk` schedule, as rep `rep < 2`, on
 a table `tb` and weights `b` of `2^n` entries whose level-0 commitment has `tb`'s padded rows (`encodeRowsZk`), with a

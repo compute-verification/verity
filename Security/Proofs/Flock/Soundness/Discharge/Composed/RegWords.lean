@@ -73,6 +73,7 @@ theorem whole_push {out : Array Flock.Region} {r : Flock.Region} (h1 : ∀ x ∈
   · exact h1 x hx
   · exact h2
 
+-- `split` at every branch of `HmRow.regions`' unfolded do-block, a bind step per region
 set_option maxHeartbeats 2000000 in
 /-- **`HmRow.regions`' regions are whole-word** once the output is the unit's and the circuit untyped: each port's
 "digest p" (`Layout.hmFree`) and the unit's "out" (`Circuit.outRegion`). -/

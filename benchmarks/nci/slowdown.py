@@ -53,13 +53,6 @@ INPUTS = {
     "flops_per_token": "the reference circuit's work per token",
 }
 
-CHAIN = {
-    "kappa": "share of the reference circuit's work in one chain's products, 2 flops each: a forward path of updated "
-             "matrix multiplications linked by injective maps",
-    "d": "the chain's smallest inner dimension",
-    "path": "the multiplications the chain runs through, per layer",
-}
-
 THREAD_THEOREM = "Nci.SecurityProofs.ThreadedTraining"
 CHAIN_THEOREM = "Nci.SecurityProofs.IncompressibleContainedTraining"
 

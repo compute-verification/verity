@@ -75,7 +75,7 @@ namespace Claims.ZKMal
 open Claims Finset
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-! ## Lemma C from world `W₀` -/
 

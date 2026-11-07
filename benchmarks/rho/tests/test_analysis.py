@@ -149,7 +149,7 @@ def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_rho(name)
     assert rate == pytest.approx(math.fsum(fam.combined.overhead.rates().values()))
     assert r.lo == pytest.approx(max(1.0, 1 / rate))
     assert all(t.ceiling >= min(r.lo, 1 / rate) * (1 - 1e-9) for t in terms)
-    assert any(t.name == "dark" for t in terms) == (r.scenario.context.fleet.eps_dark > 0)
+    assert any(t.name == "dark" for t in terms) == (r.scenario.context.fleet.eps_unreg > 0)
 
 
 def test_results_are_cached_per_registry_and_override():

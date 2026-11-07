@@ -132,6 +132,16 @@ def test_run_requires_separator_and_command(tmp_path):
     assert not list(tmp_path.iterdir())
 
 
+def test_run_refuses_an_id_the_store_would_refuse(tmp_path, capsys):
+    """r20261103-225039-run1 ran, then its attempt and its out/coin.json were never published (`not a run id`)."""
+    for bad in ("r20261103-225039-run1", "r20261103-225039-ABCD", "run1"):
+        assert main(["run", "--runs-dir", str(tmp_path), "--id", bad, "--no-sampler", "--", "true"]) == 2
+        assert "is not a run id" in capsys.readouterr().err
+    assert not list(tmp_path.iterdir())
+    assert main(["run", "--runs-dir", str(tmp_path), "--id", "r20261103-225039-a1b2", "--no-sampler", "--", "true"]) == 0
+    assert (tmp_path / "r20261103-225039-a1b2" / "job.json").is_file()
+
+
 def test_remote_requires_project_and_listed_machine(tmp_path, capsys, monkeypatch):
     monkeypatch.setenv("RESEARCH_MACHINES", str(tmp_path / "machines.toml"))
     assert main(["run", "--runs-dir", str(tmp_path / "runs"), "--on", "pod-x", "--", "true"]) == 2
@@ -413,9 +423,12 @@ def test_on_auto_sizes_a_suites_run_of_named_suites_from_their_declared_worker_g
             (["--max-min", "30"], ["python3", "tools/verity/check/suites.py", "vllm"], (None, 32, 1800)),
             ([], [*suites, "verity-core"], (None, None, 3600)),               # 30 min and the sync: the kind's hour
             # all 3 suites side by side on 4 jobs: (300 + 14400 + 1800) / 4 + the longest, 14400, + the sync (INF-98)
-            ([], [*suites, "--quick"], (None, 32, 19140)),       # in whole minutes
+            ([], [*suites, "--quick"], (None, 72, 19140)),       # in whole minutes; 2 x 4 workers x 9 GB beside serial suites
             # the 2 the change touches, as the checkout's suites.py --list says: (14400 + 1800) / 8 + 14400 + 600
-            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 64, 17040)),
+            (["--cpus", "8"], [*suites, "--changed", "main", "--quick"], (8, 144, 17040)),
+            # the lane run `research queue ready` names, suites.py inside a shell string: sized as the same run is
+            (["--cpus", "8"], ["bash", "-lc", "uv sync -q --all-packages --extra torch-cpu && uv run tools/verity/check/suites.py "
+                                              "--changed main --quick"], (8, 144, 17040)),
             ([], [*suites, "--changed=nothing"], (None, None, None)),
             ([], [*suites, "--changed", "broken"], (None, None, None)),     # suites.py can't say: the kind's size
             ([], [*suites, "repository"], (None, None, None)),

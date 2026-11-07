@@ -130,6 +130,7 @@ variable {tags : Tags} {cf pf : ByteArray} {coins : Coins} {count : ℕ} {tables
   {stratified : Option ℕ} {closure : Option (Std.HashMap ℕ (Array ℕ))} {publicInputs : Option ByteArray}
   {spec : SessionSpec} {sts : Array Stmt} {st : Stmt}
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 4000000 in
 /-- **`Stmt.setupH`'s statements satisfy `Counts`.** -/
 theorem setupH_counts (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st) : Counts st := by
@@ -162,6 +163,7 @@ theorem hmOutC_g {tags : Tags} {cf : ByteArray} {tables : List (String × ByteAr
     obtain ⟨ls, hls⟩ := hm_parse_check_any hp
     exact g_of_range (c := c₀) hls hr hk hcnt
 
+-- `walk_step` down `Stmt.setupHidden`'s unfolded do-block with a sample and without, a goal per branch
 set_option maxHeartbeats 8000000 in
 /-- **`Stmt.setupHidden`'s statements satisfy `Counts`**, at any public input words. -/
 theorem setupHidden_counts
@@ -176,6 +178,7 @@ theorem setupHidden_counts
     have hg := hmOutC_g (by with_reducible assumption) hr hki hcnt
     exact ⟨rfl, rfl, rfl, hk.2, hg.1, hg.2⟩
 
+-- `walk_step` down `Stmt.setupTables`' unfolded do-block, a goal per branch
 set_option maxHeartbeats 8000000 in
 /-- **Every statement `Stmt.setupTables` returns satisfies `Counts`**, at any public input words: the plain path
 refuses them, and the hidden path passes them to `Stmt.setupHidden` (`setupHidden_counts`). -/
@@ -400,17 +403,38 @@ theorem budget_table_ok {n : RecVStar.Inner} {sts : Array Stmt} (h : RecBudget.t
   · first | cases hj' | simp [throw, throwThe, MonadExceptOf.throw] at hj'
   · omega
 
+/-- `RecBudget.statements` at an inner shape where `RecVStar.statements` returns a list has passed both its checks. -/
+theorem budget_statements_split {n : RecVStar.Inner} {ss : Array VStar.Stmt}
+    (h : RecBudget.statements (some n) = .ok ()) (hss : RecVStar.statements n = .ok ss) :
+    RecBudget.count ss.size = .ok () ∧ RecBudget.recorded (RecBudget.recordedCalls n ss) = .ok () := by
+  unfold RecBudget.statements at h
+  dsimp only at h
+  rw [hss] at h
+  dsimp only at h
+  cases hc : RecBudget.count ss.size with
+  | error e => rw [hc] at h; simp [bind, Except.bind] at h
+  | ok u => rw [hc] at h; exact ⟨rfl, h⟩
+
 /-- **`RecBudget.statements` at an inner shape**: V\*'s list there, where `RecVStar.statements` returns one, holds at
 most `RecBudget.MAX_STATEMENTS = 16` statements. -/
 theorem budget_statements_ok {n : RecVStar.Inner} {ss : Array VStar.Stmt}
     (h : RecBudget.statements (some n) = .ok ()) (hss : RecVStar.statements n = .ok ss) :
     ss.size ≤ RecBudget.MAX_STATEMENTS := by
   have hS : RecBudget.MAX_STATEMENTS = 16 := rfl
-  unfold RecBudget.statements at h
-  dsimp only at h
-  rw [hss] at h
-  dsimp only at h
+  have h := (budget_statements_split h hss).1
   unfold RecBudget.count at h
+  split at h
+  · first | cases h | simp [throw, throwThe, MonadExceptOf.throw] at h
+  · omega
+
+/-- **`RecBudget.statements` at an inner shape**: V\*'s list there, where `RecVStar.statements` returns one, records at
+most `2^32` hm96 calls (`RecBudget.recordedCalls`). -/
+theorem budget_recorded_ok {n : RecVStar.Inner} {ss : Array VStar.Stmt}
+    (h : RecBudget.statements (some n) = .ok ()) (hss : RecVStar.statements n = .ok ss) :
+    RecBudget.recordedCalls n ss ≤ 2 ^ 32 := by
+  have hS : RecBudget.MAX_RECORDED = 2 ^ 32 := rfl
+  have h := (budget_statements_split h hss).2
+  unfold RecBudget.recorded at h
   split at h
   · first | cases h | simp [throw, throwThe, MonadExceptOf.throw] at h
   · omega

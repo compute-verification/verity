@@ -1,0 +1,16 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "design",
+ "model": null,
+ "status": "modeled",
+ "provisional": false,
+ "source": "the figures' parameters: δ is the evasion threshold (a bound holds unless the adversary evades detection with probability above δ), the budgets are the curves' shares of the scope's GPU-seconds spent on replays, interior commitments and proofs, the overheads span the x-axis, and serving commits a token id as a u32",
+ "runs": [],
+ "owner": "@proofs",
+ "value": {
+  "delta": 0.01,
+  "budgets": [0.001, 0.01, 0.1],
+  "overheads": [1.0, 1e14],
+  "token_bytes": 4
+ }
+}

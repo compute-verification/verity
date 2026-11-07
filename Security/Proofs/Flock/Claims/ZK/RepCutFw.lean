@@ -58,7 +58,7 @@ record's sizes, and its inner proof where the firewall's did (`innerP_cut_fw`). 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace FlockComplete.CutFree
 
@@ -76,6 +76,8 @@ theorem ligeritoConstraints_sizes {lay : Zk.PadLayout} {rec : Zk.L0Rec} {lg : Li
     simp only [Bool.or_eq_true, bne_iff_ne, ne_eq, not_or, not_not, decide_eq_true_eq, not_lt] at hc
     exact ⟨hc.1.1, hc.1.2, hc.2⟩
 
+-- one proof of about a hundred lines down `repCut`'s unfolded run against the ZK server's, `rw` and `obtain` on each
+-- step
 set_option maxHeartbeats 4000000 in
 /-- **The cut rep returns where the firewall's did**: answered by `asksCut` at replies with its coins, where the
 firewall's rep at SHA-512 returned from the empty transcript and `l`, the cut's rep at SHA-512 from any source,

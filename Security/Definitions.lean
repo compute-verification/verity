@@ -4,6 +4,7 @@ public import Definitions.Core
 public import Definitions.Core.Formalism.Instances
 public import Definitions.Core.Accel
 public import Definitions.Core.Assumptions.Accel
+public import Definitions.Core.Assumptions.DeviceFigures
 public import Definitions.Core.Blocks
 public import Definitions.Core.DeviceFigures
 public import Definitions.Core.Site
@@ -18,9 +19,9 @@ public import Definitions.Nci.Dark
 public import Definitions.Nci.Packed
 public import Definitions.Nci.Covering
 public import Definitions.Nci.Capability
+public import Definitions.Nci.Cut
 public import Definitions.Nci.Formalism
 public import Definitions.Nci.Formalism.Instances
-public import Definitions.Nci.Cut
 public import Definitions.Pous
 public import Definitions.Pous.Guarantees.StreamedWipeFamily
 public import Definitions.Pous.Guarantees.StreamedWipeReads
@@ -40,6 +41,7 @@ public import Definitions.Accounting
 public import Definitions.Population
 public import Definitions.Claims
 public import Definitions.Claims.Recursion
+public import Definitions.Claims.RecursionGeneric
 public import Definitions.Claims.RecursionLin
 public import Definitions.Claims.Sampling
 public import Definitions.Claims.SamplingGeneric

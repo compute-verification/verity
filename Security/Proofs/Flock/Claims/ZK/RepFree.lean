@@ -54,7 +54,7 @@ from a log of the same size, with a log of the same size, whatever values either
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace FlockComplete.CutFree
 
@@ -412,6 +412,7 @@ theorem fw_runL_bind {R : α → β → Prop} {S : γ → δ → Prop} {x : LP P
 
 /-! ## The Ligerito opening -/
 
+-- `ligeritoPZk`'s and `ligeritoCut`'s unfolded runs taken together, a `*_bind` step per bind on both sides
 set_option maxHeartbeats 4000000 in
 /-- **The cut's Ligerito opening returns where the firewall's did**: answered by `asksCut` from logs of one size, where
 the masked opening (`ligeritoPZk`, every nonce `0`) returns, the opening from any source returns, with a log of the

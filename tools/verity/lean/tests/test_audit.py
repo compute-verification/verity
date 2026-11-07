@@ -2,6 +2,7 @@
 installed (the fixture package passes clean and fails each check once a violation is added)."""
 from __future__ import annotations
 
+import gzip
 import hashlib
 import importlib.util
 import json
@@ -29,7 +30,7 @@ def sha(s: str) -> str:
 
 #: the functions whose failures make up a report, and where in what each returns its failures are (None: all of it)
 EMITTERS = {"judge": 0, "unreported": None, "dropped": None, "verifier_failures": None, "claim_failures": None,
-            "witness_failures": None, "inline_failures": 0, "assumption_records": 2, "shape": None, "spec_reads": None, "tree_failures": None, "scans": None, "listings": 0, "dependency_scans": 0,
+            "witness_failures": None, "four_name_failures": None, "inline_failures": 0, "assumption_records": 2, "shape": None, "spec_reads": None, "tree_failures": None, "scans": None, "listings": 0, "dependency_scans": 0,
             "assign": 1, "proved": 0, "replay_step": 0, "tests": 0, "run_paths": None}
 
 
@@ -109,11 +110,66 @@ def test_four_names_holds_the_guarantees_under_the_roots_it_lists_to_the_four_na
             "P.SecurityProofs.V": lifted("P.SecurityProofs.V", "P.Guarantees.V", binders=" (n : Nat)", args=" n"),
             "P.SecurityProofs.X": lifted("P.SecurityProofs.X", "P.Guarantees.Y"),
             "Q.u": fact(signature="Q.u : True", hyps=[], reads=[])}
-    policy = POLICY | {"four_names": ["P"], "guarantees": {n: {"owner": "@lean"} for n in pins}}
+    policy = POLICY | {"four_names": ["P", "Q"], "guarantees": {n: {"owner": "@lean"} for n in pins},
+                       "four_names_except": {"Q.u": "waits for its lift"}}
     fails, _ = A.judge(policy, facts(pins=pins), FILES, update=True)
     assert [f.split(" is a guarantee")[0] for f in fails] == [
         f"four names: P.{n}" for n in ("SecurityProofs.V", "SecurityProofs.W", "SecurityProofs.X", "t")]
     assert A.judge(POLICY | {"guarantees": policy["guarantees"]}, facts(pins=pins), FILES, update=True)[0] == []
+
+
+def four_named_pins(**more) -> dict:
+    """Facts for the four-name rule alone: `P.SecurityProofs.G`, in the form, and ``more`` ({name: signature}), not."""
+    pins = {"P.SecurityProofs.G": fact(signature="P.SecurityProofs.G : P.Guarantees.G", hyps=[], reads=[])
+            | {"lift": {"head": "P.Guarantees.G", "module": "P.Guarantees"}}}
+    return {"pins": pins | {n: fact(signature=s, hyps=[], reads=[]) for n, s in more.items()}}
+
+
+def test_four_names_lists_the_root_of_every_guarantee():
+    """A lock that lists `four_names` lists every namespace root its guarantees are under, so a new area's guarantees are
+    held to the four-name form from its first one; the failure names the fix."""
+    f = four_named_pins(**{"Q.u": "Q.u : True"})
+    policy = {"four_names": ["P"], "guarantees": dict.fromkeys(f["pins"], {"owner": "@lean"})}
+    fails = A.four_name_failures(policy, f)
+    assert [(x.code, x.entry) for x in fails] == [("four-names.root", "Q")]
+    assert "add Q to it, and state each guarantee under it as `X.SecurityProofs.G : X.Guarantees.G`" in fails[0]
+    assert A.four_name_failures(policy | {"four_names": ["P", "Q"], "shape": {"frozen": {"Q.u": "frozen: open"}}}, f) == []
+    assert A.four_name_failures({"guarantees": policy["guarantees"]}, f) == [], "a lock without `four_names` holds none"
+
+
+def test_a_four_names_exception_goes_once_it_holds_nothing():
+    """`four_names_except` holds a guarantee that isn't in the four-name form yet, and only shrinks: an entry for one in the
+    form, one frozen or a witness, and one that is no guarantee, each fails until it goes."""
+    f = four_named_pins(**{"P.t": "P.t : True", "P.w": "P.w : True"})
+    policy = {"four_names": ["P"], "guarantees": dict.fromkeys(f["pins"], {"owner": "@lean"}),
+              "four_names_except": {"P.t": "waits for its lift"}, "shape": {"frozen": {"P.w": "frozen: open"}}}
+    assert A.four_name_failures(policy, f) == []
+    stale = A.four_name_failures(policy | {"four_names_except": {"P.t": "waits", "P.SecurityProofs.G": "waits",
+                                                                 "P.w": "waits", "P.gone": "waits"}}, f)
+    assert [(x.code, x.entry) for x in stale] == [("four-names.stale", n) for n in ("P.SecurityProofs.G", "P.w", "P.gone")]
+    assert [str(x).split(", which is ")[1] for x in stale] == ["in the four-name form: remove the entry",
+                                                              "a witness, frozen or a generic claim: remove the entry",
+                                                              "no guarantee of this lock: remove the entry"]
+    assert [x.entry for x in A.four_name_failures(policy | {"four_names_except": {}}, f)] == ["P.t"]
+
+
+def test_four_names_leaves_a_generic_claims_guarantee_to_the_claims_rule():
+    """A guarantee `claims.generic` lists is stated as its claim (`theorem g : C`, `generic_failures`), which the four-name
+    form can't be, so the four-name rule holds it to nothing, and an exception for it is stale."""
+    f = four_named_pins(**{"P.g": "P.g : P.C"})
+    policy = {"four_names": ["P"], "guarantees": dict.fromkeys(f["pins"], {"owner": "@lean"}),
+              "claims": {"generic": {"P.C": "P.g"}}}
+    assert A.four_name_failures(policy, f) == []
+    assert [x.entry for x in A.four_name_failures(policy | {"claims": {}}, f)] == ["P.g"]
+    stale = A.four_name_failures(policy | {"four_names_except": {"P.g": "waits for its lift"}}, f)
+    assert [(x.code, x.entry) for x in stale] == [("four-names.stale", "P.g")]
+
+
+def test_each_four_names_exception_gives_its_reason():
+    f = four_named_pins(**{"P.t": "P.t : True"})
+    policy = {"four_names": ["P"], "guarantees": dict.fromkeys(f["pins"], {"owner": "@lean"})}
+    for bad in ({"P.t": ""}, {"P.t": None}, ["P.t"]):
+        assert [x.code for x in A.four_name_failures(policy | {"four_names_except": bad}, f)] == ["four-names.except-form"]
 
 
 def test_a_recorded_package_passes_and_its_record_is_the_statement():
@@ -734,6 +790,35 @@ def test_the_sha256_hash_is_expr_hash_s_equivalence(tmp_path):
     assert got["a"] == got["b"] == got["c"] != got["d"] and len(got["a"]) == 64 and not (tmp_path / "canon.jsonl").exists()
 
 
+def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, monkeypatch):
+    """A recorded run publishes the work directory, where `Facts.lean`'s document is hundreds of MB for `Security`: it is
+    kept there only as `facts.json.gz`, its bytes gzipped with no timestamp (equal facts are equal bytes, which the store
+    keeps once), and the facts the audit judges are that document's. A `.gz` an earlier run left is gone before it runs."""
+    doc = {"pins": {"C.g": {"kind": "theorem", "reads": [{"name": "C.d"}]}}, "modules": ["C"], "note": "é"}
+    written = json.dumps(doc, ensure_ascii=False).encode()
+
+    def program(argv, cwd, log):
+        assert argv[:3] == ["lake", "env", "facts"] and not (tmp_path / A.FACTS).exists()
+        config = json.loads(Path(argv[3]).read_text())
+        Path(config["out"]).write_bytes(written)
+        Path(config["canon"]).write_text("".join(json.dumps(r) + "\n" for r in ({"id": "pin:C.g", "canon": "g"},
+                                                                             {"id": "read:C.d", "canon": "d"})))
+        return 0, ""
+
+    monkeypatch.setattr(A, "facts_program", lambda pkg: "facts")
+    monkeypatch.setattr(A, "run", program)
+    (tmp_path / A.FACTS).write_bytes(b"stale")
+    facts = A.facts_of(tmp_path, {"roots": ["C"]}, tmp_path)
+    kept = tmp_path / A.FACTS
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["facts-config.json", "facts.json.gz"]
+    assert gzip.decompress(kept.read_bytes()) == written and kept.read_bytes()[4:8] == bytes(4), "no timestamp"
+    assert A.stored_facts(kept) == doc and facts["note"] == "é"
+    assert facts["pins"]["C.g"]["type_sha256"] == hashlib.sha256(b"g").hexdigest()
+    assert facts["pins"]["C.g"]["reads"][0]["sha256"] == hashlib.sha256(b"d").hexdigest()
+    (tmp_path / "facts.json").write_bytes(written)
+    assert A.stored_facts(tmp_path / "facts.json") == doc, "an older run's plain facts.json still reads"
+
+
 SHAPE_SPEC = """namespace Control
 def verify (x : Nat) : Bool := x % 2 == 0
 structure Sess where
@@ -1153,7 +1238,9 @@ def test_naming_the_anonymous_instances_keeps_their_names_and_the_record(tmp_pat
                         (10, "instInhabitedFinOfNatNat_control"))]
     record = (pkg / A.POLICY).read_text()
     def facts():
-        return sorted(i["name"] for i in json.loads((tmp_path / "out" / "audit-control" / "facts.json").read_text())["instances"])
+        work = tmp_path / "out" / "audit-control"
+        assert not (work / "facts.json").exists(), "the facts are kept only gzipped"
+        return sorted(i["name"] for i in A.stored_facts(work / A.FACTS)["instances"])
     names = facts()
     named = audit(name=True)
     assert len(named["named_instances"]) == 4
@@ -3386,6 +3473,117 @@ def test_a_nontrivial_witness_may_negate_what_the_guarantee_unfolds_to():
     assert witness_codes(*witnessed(g, nontrivial=ks_all)) == []
     other = {"body": wbody("P.Other", negated=True) | {"chain": ["P.Other", "P.Unrelated"]}}
     assert witness_codes(*witnessed(g, nontrivial=other)) == ["witnesses.nontrivial-form"]
+
+
+def wnot(inner):
+    """A `¬ P …` conjunct of a statement's conclusion, as `Facts.lean`'s `conclusionOf` reports it."""
+    return {"head": "Not", "defs": [], "refl": False, "assumed": False, "negated": True, "inner": inner}
+
+
+def further(*lemmas, guarantee=None, **over):
+    """(policy, facts) of `witnessed`'s `P.sound` (its premises `P.Hyp` and `P.Compiled`), each part overridden by
+    ``guarantee`` and ``over``, whose `nontrivial` lists `P.sound_nontrivial` and then each of ``lemmas`` ((name, its
+    facts)), every one a listed guarantee."""
+    pol, f = witnessed(guarantee, **over)
+    pins = f["pins"] | {n: fact(hyps=[]) | p for n, p in lemmas}
+    return ({**pol, "guarantees": {n: {"owner": "@lean"} for n in pins},
+             "witnesses": {"P.sound": {"honest": ["P.sound_honest"],
+                                       "nontrivial": ["P.sound_nontrivial", *(n for n, _ in lemmas)]}}},
+            facts(pins=pins, own_modules=sorted(WOWN)))
+
+
+def test_a_guarantee_may_list_further_nontrivial_witnesses_each_dropping_another_premise():
+    """`nontrivial` is one theorem or a list of them (a network guarantee's rows and clock clauses, each with an exclusion
+    lemma and a `Wf` negation). The first is held to the guarantee's kind as ever; each after it, whatever the kind, is in the
+    exclusion form at an explicit instance, (the other premises hold) ∧ ¬ (a named premise) ∧ ¬ (the conclusion), drops
+    a premise no earlier one drops, builds its instance and takes only listed assumptions. Every listed name is a witness,
+    held to neither `shape` nor `four_names`, and a list counts as the `nontrivial` half an `unwitnessed` entry would
+    exempt."""
+    no_compiled = ("P.sound_compiled", {"body": wbody("And", conclusion=[wnot("P.Compiled"), wk("P.Hyp"),
+                                                                          wnot("P.Holds")])})
+    no_hyp = ("P.sound_hyp", {"body": wbody("And", conclusion=[wk("P.Compiled"), wnot("P.Hyp"), wnot("P.Holds")])})
+    pol, f = further(no_compiled, no_hyp)
+    assert A.witness_failures(pol, f, WOWN) == []
+    assert A.claim_witnesses(pol) == {"P.sound_honest", "P.sound_nontrivial", "P.sound_compiled", "P.sound_hyp"}
+    assert [x.entry for x in A.judge({**pol, "four_names": ["P"]}, f, FILES)[0] if x.code == "four-names"] == ["P.sound"]
+    assert witness_codes(*witnessed()) == []
+    assert witness_codes({**witnessed()[0], "witnesses": {"P.sound": {"honest": ["P.sound_honest"],
+                                                                      "nontrivial": ["P.sound_nontrivial"]}}},
+                         witnessed()[1]) == []
+    for bad in ([], ["P.sound_nontrivial", 3], {"P.sound_nontrivial": 1}):
+        shaped = {**pol, "witnesses": {"P.sound": {**pol["witnesses"]["P.sound"], "nontrivial": bad}}}
+        assert A.witness_failures(shaped, f, WOWN) == [
+            "witnesses: witnesses[P.sound] is {honest: [theorem], nontrivial: theorem or [theorem, …], kind: acceptance "
+            "or exclusion (optional)}"]
+
+    accept_all = ("P.sound_again", {"body": wbody("P.Holds", negated=True)})
+    assert A.witness_failures(*further(accept_all), WOWN) == [
+        "witnesses: P.sound_again does not state that P.sound's bound fails at an explicit circuit: one conjunct of its "
+        "conclusion is `¬ C …` with C one of P.Holds, and it negates nothing",
+        "witnesses: P.sound_again drops no premise of P.sound: each further nontrivial lemma states, at an explicit "
+        "circuit, (each other premise holds) ∧ ¬ (the dropped premise) ∧ ¬ (the bound), one conjunct `¬ P …` with P one "
+        "of P.Compiled, P.Hyp; a bare `¬ bound` reads none"]
+    holds = ("P.sound_holds", {"body": wbody("And", conclusion=[wnot("P.Compiled"), wk("P.Hyp")])})
+    assert witness_codes(*further(holds)) == ["witnesses.nontrivial-form"]
+    others = ("P.sound_others", {"body": wbody("And", conclusion=[wnot("P.Compiled"), wnot("P.Holds")])})
+    assert witness_codes(*further(others)) == ["witnesses.nontrivial-premises"]
+
+    again = ("P.sound_compiled2", no_compiled[1])
+    assert A.witness_failures(*further(no_compiled, again), WOWN) == [
+        "witnesses: P.sound_compiled2, P.sound's `nontrivial` witness 3, drops only P.Compiled, already dropped by "
+        "P.sound_compiled: each further nontrivial lemma drops a premise of P.sound that no earlier one drops, so each "
+        "shows another premise matters; drop one of P.Hyp in P.sound_compiled2 instead, or remove it from "
+        "witnesses[P.sound].nontrivial"]
+    assert A.witness_failures(*further(no_compiled, no_hyp, again), WOWN)[0].endswith(
+        "every premise is dropped already, so remove it from witnesses[P.sound].nontrivial")
+    both = ("P.sound_both", {"body": wbody("And", conclusion=[wnot("P.Compiled"), wnot("P.Hyp"), wnot("P.Holds")])})
+    assert witness_codes(*further(no_compiled, both)) == []
+
+    ranges = ("P.sound_ranges", no_compiled[1] | {"body": no_compiled[1]["body"] | {"binders": ["∀"]}})
+    assert witness_codes(*further(ranges)) == ["witnesses.instance-binders"]
+    takes = ("P.sound_takes", no_compiled[1] | {"hypotheses": [{"binder": "hc", "type": "P.Compiled c", "closed": False}]})
+    assert witness_codes(*further(takes)) == ["witnesses.nontrivial-assumes"]
+    unlisted = further(no_compiled)
+    unlisted[0]["guarantees"].pop("P.sound_compiled")
+    assert witness_codes(*unlisted) == ["witnesses.unlisted-witness"]
+
+    h = f["pins"]["P.sound"]["type_sha256"]
+    half = {"type_hash": h, "missing": "nontrivial", "why": "the clock clause's Wf negation"}
+    assert witness_codes({**pol, "unwitnessed": {"P.sound": half}}, f) == []
+    assert A.unwitnessed_kept({**pol, "unwitnessed": {"P.sound": half}}, f, {}) == {}
+    assert A.renamed_witnesses({"witnesses": {"P.a": {"honest": ["P.a_h"], "nontrivial": ["P.a_n", "P.a_m"]}}},
+                               {"P": "Q"}) == {"witnesses": {"Q.a": {"honest": ["Q.a_h"], "nontrivial": ["Q.a_n", "Q.a_m"]}}}
+
+
+def test_an_exclusion_theorems_further_nontrivial_witness_drops_another_premise_than_the_first():
+    """At an exclusion theorem the first `nontrivial` lemma drops a premise too, and a further one that drops only the
+    same premise is a repeat."""
+    cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
+    covers = {"binder": "hc", "type": "P.Covers", "closed": True, "named": "P.Covers", "module": "P.Assumptions"}
+    g = {"reads": [cover], "premises": [COMPILED, {"binder": "hc", "head": "P.Covers", "module": "P.Assumptions"}],
+         "hypotheses": [covers],
+         "body": wbody("LE.le", binders=["∀", "→", "→"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
+    beats = {"body": wbody("And", conclusion=[wk("P.Compiled"), wnot("P.Covers"), wnot("LE.le")])}
+    uncompiled = {"body": wbody("And", conclusion=[wnot("P.Compiled"), wnot("LE.le")]), "hypotheses": [covers]}
+    pol, f = further(("P.sound_uncompiled", uncompiled), guarantee=g, nontrivial=beats)
+    pol["assumptions"] = {**pol["assumptions"], "P.Covers": {"owner": "@network-accounting"}}
+    assert A.witness_failures(pol, f, WOWN) == []
+    pol, f = further(("P.sound_uncovered", beats), guarantee=g, nontrivial=beats)
+    pol["assumptions"] = {**pol["assumptions"], "P.Covers": {"owner": "@network-accounting"}}
+    assert witness_codes(pol, f) == ["witnesses.nontrivial-repeat"]
+    assert "already dropped by P.sound_nontrivial" in A.witness_failures(pol, f, WOWN)[0]
+
+
+def test_a_premise_free_guarantee_lists_no_further_nontrivial_witness():
+    """A premise-free exclusion theorem's one `nontrivial` lemma is the bare `¬ bound`, and a further one drops a premise
+    like any other, so with none to drop it fails."""
+    cover = {"name": "P.Covering.load", "module": "P.Covering", "kind": "def", "hash": "6" * 32}
+    g = {"reads": [cover], "premises": [], "hypotheses": [],
+         "body": wbody("LE.le", binders=["∀", "∀"], conclusion=[wk("LE.le", ["P.Covering.load"])])}
+    bare = {"body": wbody("LE.le", negated=True, conclusion=[wnot("LE.le")])}
+    assert witness_codes(*witnessed(g, nontrivial=bare)) == []
+    assert witness_codes(*further(("P.sound_tighter", bare), guarantee=g, nontrivial=bare)) == \
+        ["witnesses.nontrivial-drops"]
 
 
 def test_an_assumption_is_listed_by_name_with_its_record():

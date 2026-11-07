@@ -2,7 +2,6 @@ module
 
 public import Proofs.Flock.Claims.KS.PlainAccPrR
 public import Proofs.Flock.Claims.KS.PlainRCapPrefix
-public import Proofs.Flock.Claims.Recursion.KSLin2E
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -35,6 +34,14 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.PlainRConflict
+public import Proofs.Flock.Claims.Recursion.TopsOpens
+public import Proofs.Flock.Claims.Recursion.LastColsE
+public import Proofs.Flock.Claims.Recursion.ConflictTiedE
+public import Proofs.Flock.Claims.Recursion.LastBindsEC
+public import Proofs.Flock.Claims.Recursion.CallsAgree
+public import Proofs.Flock.Claims.Recursion.VStarCross
+public import Proofs.Flock.Claims.Recursion.SetupCalls
+public import Proofs.Flock.Claims.Recursion.PartAccepts
 
 /-!
 # `KSFlockLin` at the deployed reader's bound record (U3)

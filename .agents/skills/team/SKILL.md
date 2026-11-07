@@ -53,8 +53,9 @@ AGENTS.md states the code's layout and rules. This skill states how the team tha
   queue link N --issue KEY`), or `none:REASON`. The issue carries the label of the goal it serves (its id on the Goals
   page), which `open` writes as `Goal <id>`. It marks it ready at its head, `research queue ready N --mark --by LANE`. A
   body with neither a `Goal <id>` line naming a live goal nor `Issue: none: REASON` gets a warning from both, never a
-  refusal (fix it with `research queue edit N --body-file F`). A push makes a new head, which needs a
-  new mark and a new review. `research queue status` says what each PR waits for and
+  refusal (fix it with `research queue edit N --body-file F`). A new head needs a new mark and a new review unless
+  its own diff, whitespace too, is unchanged (`git patch-id --verbatim`), as after merging `main`.
+  `research queue status` says what each PR waits for and
   lists the PRs naming no issue. The mark admits a PR: the sync's own merge onto `next` is the only check before it joins,
   so a conflict there or a Markdown file over its cap (`landing_gates`) keeps it out, as a `hold` label does; a
   PR from a fork, or by an author outside the organization but for the team's Apps and Daniel, is refused at its mark and at
@@ -135,8 +136,9 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
   (`claude-opus-5-5-<effort>`; `inherit` runs it at your own effort), a standing request for every agent here: `max` for
   the hardest conceptual work, `xhigh` for conceptually heavy work, `high` for slightly heavy work, `medium` for routine
   execution, `low` for trivial lookups.
-- **Reach a running subagent** on your VM through its next shell command, since it never rereads a shared file mid-run:
-  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'`. Agents on other VMs: through their coordinator on Slack.
+- **Reach a running agent** on any VM through its shell commands, since it never rereads a shared file mid-run:
+  `python3 tools/agent-guard/inbox.py send AGENT_ID --text '…'` from a checkout pushes to origin's `inbox/AGENT_ID`, and
+  its shell hook delivers it within about a minute (`--local`: a subagent on your VM, at once).
 - **Stay reachable.** Push and write a one-line checkpoint note at least every 60 minutes; when you'd wait on a run, end
   your turn naming its id and ETA, and your launcher resumes you. The control pod's agent watch flags a stalled or
   stopped agent and an out-of-memory kill. A worker resumed twice, whose base branch is gone, or silent past the watch's
@@ -156,23 +158,21 @@ does no lane work. Launching, handing over and archiving coordinators: `infra/cu
 - **Research velocity comes first.** Be generous with what lands and cut ceremony: propose cutting any gate, review or
   step that slows landing without catching real errors, and fix what breaks later. Our machines are research
   infrastructure; don't mimic deployment settings.
-- **Waiting is a bug.** A step you repeat that makes you wait more than about 10 minutes is friction even when it never
-  fails: fix it at the source, or take it to its owner that day with its numbers (minutes a wait, waits a day). Push
-  back the same way, through your coordinator, on a rule that costs velocity, Daniel's included. A slow loop's owner
-  fixes it ahead of other work.
-- **Make every decision yourself except claims and Daniel's own clicks.** What a guarantee says or rests on, and what
-  only an account he holds can do (the GitHub organization's admin, billing, the Nebius and Cloudflare consoles), go to
-  Daniel through your coordinator, with your recommendation. Keys and access between our own machines and accounts are
-  the lanes' call, set up with the machine's owner and no ask: this is a simulation, so it needn't be perfect. Spend is
-  its lead's call. A change that crosses owners goes
-  to the other owner, and the coordinator settles a disagreement. Fix what's in your way at the source when the fix is
-  yours, and record each ruling you get (the friction skill).
+- **Waiting is a bug** (AGENTS.md, Working principles): fix a repeated wait of over about 10 minutes at the source, or
+  take it to its owner that day with its numbers.
+- **Don't wait for Daniel: decide and act.** A claim (what a guarantee says or rests on) goes on its ask page decided
+  provisionally, for him to review or reverse (the asking-daniel skill). A click only his account can make (the GitHub
+  organization's admin, billing, the Nebius and Cloudflare consoles, his Cursor settings) gets a way around it where one
+  exists, else a blocking card. Keys and access between our own machines and accounts are the lanes' call, set up with
+  the machine's owner and no ask: this is a simulation, so it needn't be perfect. Spend is its lead's call. A change
+  that crosses owners goes to its other owner, and the coordinator settles a disagreement. Fix what's in your way at the
+  source when the fix is yours, and record each ruling you get (the friction skill).
 - **Each lead owns its areas' size.** top's hourly consolidation reading tracks `main`'s size. A PR that adds code says
   in its body what it deletes or unifies, or why nothing can go.
 - **Parked work gets done.** A lead starts each Backlog or Todo issue worth doing on its own worker and closes the rest
   with a reason. Being busy is no reason to park one. Set more goals, not fewer.
 - **An issue tracks an ask; only its outcome answers it.** Daniel's asks carry `asker:daniel`, have a worker within the
-  hour, and only he parks them (the coordinating skill); the Linear audit rings each that breaks this, hourly, with @top.
+  hour, and only he parks them (the coordinating skill); the Linear audit rings its lane every 12 hours while one breaks this.
   A hand operation done twice, and each incident, gets a class-fix issue filed `--asker daniel` (his standing ask) with
   a worker that hour: the lead builds or staffs the fix rather than repeating the operation.
 - **A ruling rolls out in the change that records it**, as AGENTS.md says; when code must change first, the ruling's

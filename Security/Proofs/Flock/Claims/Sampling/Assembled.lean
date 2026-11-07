@@ -47,8 +47,7 @@ import Mathlib.Topology.Sheaves.Init
 hash `H`, the conjunction of the sampling claims below but `ZK`, reading of `F` only Flock's KS there and its decoder's
 `ListWithin` and step count at a polynomial. Its instances: `sampling_assembled` at the untrimmed masked record
 `FlockDeploy.deployZk rel`, with `ZK`; `sampling_assembled_plain` at the trimmed plain record
-`FlockDeploy.deployPlainTrim rel`, where Flock's plain KS is stated (at SHA-512, `sampling_assembled_plain_sha512`,
-`Sampling.AssembledPlain`). At the masked record, the claims are:
+`FlockDeploy.deployPlainTrim rel`, where Flock's plain KS is stated. At the masked record, the claims are:
 
 * `Complete` and `ZK`: hypotheses;
 * `ScopeMatches`, from the deployed design's well-formedness (`scopeMatches_of`, `designWellFormed`) where the scope

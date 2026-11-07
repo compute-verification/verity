@@ -4,7 +4,6 @@ public import Proofs.Flock.Verifier
 public import Proofs.Flock.Level3
 public import Proofs.Flock.Soundness
 public import Proofs.Flock.EndToEnd
-public import Proofs.Flock.EndToEnd.Window
 public import Proofs.Flock.EndToEndDrawn
 public import Proofs.Flock.EndToEndHidden
 public import Proofs.Flock.EndToEnd.Period
@@ -20,6 +19,7 @@ public import Proofs.Flock.ZeroKnowledgeHidden
 public import Proofs.Flock.Masked
 public import Proofs.Flock.SessionLoop
 public import Proofs.Flock.SessionLoop.Fill
+public import Proofs.Flock.ZkAny.DeferLoop
 public import Proofs.Flock.Recursive
 public import Proofs.Flock.RecGeneric
 public import Proofs.Flock.C3
@@ -38,6 +38,7 @@ public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs
 public import Proofs.Flock.SamplingBoundary
 public import Proofs.Flock.SamplingScope
+public import Proofs.Flock.ZkAny
 
 /-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
 

@@ -88,12 +88,12 @@ def test_unmonitored_is_the_algorithm_alone():
     no protocol gives `max(1, μ)` for the attack, 1 for the reference's own family, and the reference's time."""
     r = evaluate_named(REG, "unmonitored-h200-kimi")
     f0 = r.scenario.context.fleet
-    mfu = f0.eps_dark * f0.dark_mfu + (1 - f0.eps_dark) * f0.mfu_train
+    mfu = f0.eps_unreg * f0.dark_mfu + (1 - f0.eps_unreg) * f0.mfu_train
     assert r.scenario.mfu == pytest.approx(mfu)
     for f in r.families:
         mu = f.profile.efficiency
         assert math.isclose(f.combined.padded, mu) and math.isclose(f.best_attack.padded, mu / mfu)
-        assert f.lo == pytest.approx(multiple_bound(mfu, f0.eps_dark / mu, (1 - f0.eps_dark) / mu))
+        assert f.lo == pytest.approx(multiple_bound(mfu, f0.eps_unreg / mu, (1 - f0.eps_unreg) / mu))
         assert f.attack == pytest.approx(max(1.0, mu))
     s = r.scenario
     assert r.lo == r.attack == 1.0 and math.isclose(s.seconds(r.attack), s.reference / (mfu * s.total_phi))
@@ -121,7 +121,7 @@ def test_admitting_weaker_statuses_never_lowers_the_guarantee(name):
 
 def test_a_scenario_reads_its_own_tables_and_not_the_others():
     keys = reads(REG, "reference-onsite-h200")
-    assert "fleet.world-h200.eps_dark" in keys and "regime.onsite.k_wipe" in keys and "units.gates_per_flop" in keys
+    assert "fleet.world-h200.eps_unreg" in keys and "regime.onsite.k_wipe" in keys and "units.gates_per_flop" in keys
     assert not any(k.startswith(("fleet.world-nvl72.", "model.kimi-k2.")) for k in keys)
 
 
@@ -183,6 +183,6 @@ def test_the_time_to_the_target_is_the_overhead_times_the_references_time():
     r = evaluate_named(REG, "reference-onsite-h200")
     s = r.scenario
     f, loc = s.context.fleet, s.context.location
-    total = f.count * loc.phi / (1 - f.eps_dark)
+    total = f.count * loc.phi / (1 - f.eps_unreg)
     assert s.total_phi == pytest.approx(total)
     assert s.seconds(r.lo) == pytest.approx(r.lo * s.context.units.gates(s.run.target(s.model)) / (s.mfu * total))

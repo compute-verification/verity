@@ -56,6 +56,11 @@ def CompliesRate (c : ℕ) (α : ℝ) : Policy := fun d =>
   ∃ (n : ℕ) (P : Partition d.D n),
     ∀ u, d.D.size (P.gates u) ≤ c ∧ (novelReads d (P.gates u) : ℝ) ≤ α * d.D.size (P.gates u)
 
+/-- **At most `n` `(c, k)`-inference blocks**: `d`'s operation gates divide into at most `n` proof blocks of a
+`(c, k)`-partition (`Verity.Partition.IsCK`). -/
+def CompliesAtMost (c k n : ℕ) : Policy := fun d =>
+  ∃ B ≤ n, ∃ P : Partition d.D B, P.IsCK d c k
+
 /-- `Reads_c(C)`: the least total fresh input that the inference blocks of a division of `C` into blocks of at most `c`
 gates read. -/
 noncomputable def Reads (c : ℕ) (C : RegisteredCircuit) : ℕ :=

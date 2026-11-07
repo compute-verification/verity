@@ -337,7 +337,7 @@ class IngressTie:
         return bind(_UNIT, **dict(zip(_STATICS, self.key)))
 
     @cached_property
-    def proof_unit(self):
+    def proof_block(self):
         """The proof block a proof's circuit lowers: `unit` with its gate the Definition it names (`head_check.expand`,
         a `ValueError` for an unpinned size class)."""
         return bind(_PROOF_UNIT, **dict(zip(_STATICS, self.key)))

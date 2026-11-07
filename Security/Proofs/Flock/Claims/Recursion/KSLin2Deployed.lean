@@ -1,7 +1,12 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.BoundDeployOuter
 public import Proofs.Flock.Claims.Recursion.BoundRouteKSLin2
+public import Proofs.Flock.Claims.KS.ZkOuter
+public import Proofs.Flock.Claims.Recursion.DeployLayout
+public import Proofs.Flock.Claims.Recursion.BoundRouteCols
+public import Proofs.Flock.Claims.Recursion.LastBindsDeployed
+public import Proofs.Flock.Claims.Recursion.BoundWeight
+public import Proofs.Flock.Claims.Recursion.PlainKSAbortDeployed
 public import Proofs.Flock.Claims.Recursion.LastColsDeployed
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic

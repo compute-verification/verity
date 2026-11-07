@@ -46,7 +46,7 @@ open Game Composed ZkView Model Flock ZkEveryCoin ZkLink
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- A table's prover randomness with its hidden leaves' salts, at coin vector `c`. -/
 abbrev RandAt (C : CoinedSetup) (c : CoinsZK C.Rest) : Type := (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt)

@@ -117,6 +117,7 @@ theorem take_range_map {α : Type} (f : ℕ → α) {j k : ℕ} (hj : j ≤ k) :
     ((List.range k).map f).take j = (List.range j).map f := by
   rw [← List.map_take, List.take_range, Nat.min_eq_left hj]
 
+-- one proof of over a hundred lines down `piopFw`'s unfolded run at level 0, `rw`, `dsimp` and `norm_num` on each step
 set_option maxHeartbeats 1000000 in
 /-- **Level 0's values from the firewall's run**: where `repFwC`, answered by `asksCut coin n` at replies `resp` whose
 coins are `coin`'s, returns, and its PIOP ends at round `p₀` having switched to the basis `b`, its proof's
