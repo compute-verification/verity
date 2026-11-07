@@ -24,7 +24,7 @@ def stand_in(name: str) -> dict:
     return json.loads((FIXTURES / f"{name}.json").read_text())
 
 
-@pytest.mark.parametrize("name", ["m1", "m2", "m1-week", "m1-key-open"])
+@pytest.mark.parametrize("name", ["m1", "m2", "m1-week"])
 def test_stand_ins_hold_their_rules(name):
     assert P.check(stand_in(name), LOCK) == []
 
@@ -83,19 +83,14 @@ def broken(name: str, edit) -> list[str]:
     ("m1-week", lambda r: r["periods"]["week"]["node"].update(rule="run-to-period"), "periods.week.node is proved by run"),
     ("m1-week", lambda r: r["periods"]["month"]["node"].update(rule="per-phase"), "its rule makes it scaled by run-to"),
     ("m2", lambda r: r["periods"]["rules"]["world"].update(sources=[]), "which the record's rules don't give"),
+    ("m2", lambda r: r["periods_tight"]["week"]["world"]["per_phase"].update(rule="datacenter"),
+     "periods_tight.week.world.per_phase"),
     ("m1-week", lambda r: r["verdicts"]["the network certifier"].update(verdict="reject"), "network certifier's verdict"),
     ("m1-week", lambda r: r["periods"]["run"].update(statement="NetTiming.Guarantees.Other"), "the lock doesn't hold"),
     ("m2", lambda r: r["bound"].update(phases=1), "over m = 1"),
     ("m2", lambda r: r["bound"]["of_record"].update(K=r["bound"]["K"]), "isn't K"),
-    ("m2", lambda r: r["bound"]["of_record"].pop("tight"), "states no tight rule"),
-    ("m2", lambda r: r.update(periods_tight=r["periods"]), "has periods_tight"),
-    ("m2", lambda r: r["periods"].update(conditional_on=["certifier-key"]), "periods is conditional on ['certifier-key']"),
-    ("m1-key-open", lambda r: (r["periods"].pop("conditional_on"), r["bound"]["of_record"].pop("conditional_on")),
-     "periods.run is proved, and the network certifier's verdict is not established"),
-    ("m1-key-open", lambda r: r["verdicts"]["the network certifier"].update(answer="reject"), "its answer reject"),
-    ("m1-key-open", lambda r: r["verdicts"]["the network certifier"].update(open=[]), "network certifier's verdict"),
-    ("m1-key-open", lambda r: r["verdicts"]["the network certifier"]["open"].append("auditor-listing"),
-     "open ['certifier-key', 'auditor-listing']"),
+    ("m2", lambda r: r["periods_tight"].update(conditional_on=[]), "periods_tight is conditional on []"),
+    ("m2", lambda r: r.pop("periods_tight"), "has no periods_tight"),
     ("m2", lambda r: r["bound"].update(notes=[]), "overcount note"),
     ("m2", lambda r: r.update(format="verity/onsite-network-record/v0"), "not verity/onsite-network-record/v1"),
 ])
@@ -109,16 +104,12 @@ def test_tables(tmp_path):
     week = next(x for x in md.splitlines() if x.startswith("| week"))
     node, dc, world = week.split(" | ")[1:4]
     assert node.startswith(f"**proved** (`{STATEMENT}`)") and dc.startswith("**scaled** (datacenter)")
-    assert world.startswith("**scaled** (world)") and "× the served model's" in world
-    assert "Note: a known overcount" in md and "ℓ_a = ['8,388,608']" in md and "How it tightens:" in md
-    assert "conditional" not in md.split("## K of record")[1].split("## Rules")[0]
+    assert world.startswith("**scaled** (world)")
+    assert "## The tight K, conditional" in md and "Note: a known overcount" in md and "ℓ_a = ['8,388,608']" in md
     md2 = P.markdown(stand_in("m2"))
     assert "over one phase **scaled** (per-phase)" in md2
-    md3 = P.markdown(stand_in("m1-key-open"))
-    grid = md3.split("## K of record")[1].split("## Rules")[0]
-    assert "**proved**" not in grid and f"**conditional** (`{STATEMENT}`, on certifier-key)" in grid
-    assert "**scaled** (world; conditional on certifier-key)" in grid
-    assert "not established, its Lean answer accept, open ['certifier-key']" in md3
+    tight = md2.split("## The tight K, conditional")[1].split("## Rules")[0]
+    assert "**proved**" not in tight and "**conditional**" in tight
 
 
 def test_main_refuses_a_broken_record(tmp_path, capsys):

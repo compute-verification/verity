@@ -11,12 +11,9 @@ reason, where one differs. The run's own cell is proved; its K/m over one execut
 (``bound.phases``), else scaled by ``per-phase``; a period's node cell is proved only where the run's own period
 (``bound.period_s``) covers it, else scaled by ``run-to-period``; the datacenter's and the world's, and their per-phase
 figures, are scaled by ``datacenter`` and ``world``. A proved cell carries no rule and its statement is in the lock; a
-scaled cell's rule is in the record's ``rules`` with its sources. While a check or a premise is open the figure of record
-charges ℓ_a + 1 for each tied audit, the record says only how it tightens (``of_record.tight``), and no tighter figure
-is beside it. Where the grid is conditional (``periods.conditional_on``: an open premise no charge covers, or the
-coins), every cell is rendered conditional on those names, a proved one never as proved; a proved cell needs the network
-certifier's verdict to accept, or its Lean answer to accept with every premise its verdict leaves open in the grid's
-conditions.
+scaled cell's rule is in the record's ``rules`` with its sources. ``periods_tight`` (the tight K, where the figure of
+record charges ℓ_a + 1 for each tied audit while a check or a premise is open) is rendered as conditional on what is
+open, never as proved.
 """
 from __future__ import annotations
 
@@ -77,32 +74,30 @@ def check(rec: Mapping[str, Any], lock: Mapping[str, Any] | None = None) -> list
     open_ = list(fig["open"])
     if fig["K"] != b["K"] + (sum(fig["advice"]["bits_per_phase"]) if open_ else 0):
         why.append(f"of_record.K {fig['K']} isn't K {b['K']} plus ℓ_a + 1 for each tied audit while {open_} is open")
-    if open_ and not fig.get("tight"):
-        why.append(f"of_record is the conservative figure while {open_} is open, and states no tight rule")
+    net = (rec.get("verdicts") or {}).get("the network certifier", {}).get("verdict")
+    grids = {"periods": (rec["periods"], fig["K"])}
     if "periods_tight" in rec:
-        why.append("the record has periods_tight, a tighter figure beside the figure of record")
-    grid = rec["periods"]
-    cond = list(grid.get("conditional_on", []))
-    if cond != list(fig.get("conditional_on", [])):
-        why.append(f"periods is conditional on {cond}, and the figure of record on {fig.get('conditional_on', [])}")
-    v = (rec.get("verdicts") or {}).get("the network certifier", {})
-    unproved = None if v.get("verdict") == "accept" or (
-        v.get("answer") == "accept" and v.get("open") and set(v["open"]) <= set(cond)) else (
-        f"{v.get('verdict')} (its answer {v.get('answer')}, open {v.get('open')}; the cells conditional on {cond})")
-    run = grid["run"]
-    if run["phases"] != m or Fraction(run["seconds"]) != period_s or run["bits"] != fig["K"]:
-        why.append(f"periods.run is {run['bits']} bits over {run['phases']} phases of {run['seconds']} s, and the "
-                   f"bound {fig['K']} over m = {m} of {period_s} s")
-    for path, (how, rule) in expected(grid, m, period_s).items():
-        c, at = cell_at(grid, path), f"periods.{path}"
-        if (c.get("how"), c.get("rule")) != (how, rule):
-            why.append(f"{at} is {c.get('how')} by {c.get('rule')}, and its rule makes it {how} by {rule}")
-        elif how == "proved" and unproved:
-            why.append(f"{at} is proved, and the network certifier's verdict is {unproved}")
-        elif how == "proved" and lock is not None and not locked(lock, c["statement"]):
-            why.append(f"{at} is proved by {c['statement']}, which the lock doesn't hold")
-        elif how == "scaled" and not (grid["rules"].get(rule) or {}).get("sources"):
-            why.append(f"{at} is scaled by {rule}, which the record's rules don't give with its sources")
+        grids["periods_tight"] = (rec["periods_tight"], b["K"])
+        if not open_ or rec["periods_tight"]["conditional_on"] != open_:
+            why.append(f"periods_tight is conditional on {rec['periods_tight']['conditional_on']}, and what is open "
+                       f"is {open_}")
+    elif fig["K"] != b["K"]:
+        why.append("K of record isn't the tight K, and the record has no periods_tight")
+    for name, (grid, K) in grids.items():
+        run = grid["run"]
+        if run["phases"] != m or Fraction(run["seconds"]) != period_s or run["bits"] != K:
+            why.append(f"{name}.run is {run['bits']} bits over {run['phases']} phases of {run['seconds']} s, and the "
+                       f"bound {K} over m = {m} of {period_s} s")
+        for path, (how, rule) in expected(grid, m, period_s).items():
+            c, at = cell_at(grid, path), f"{name}.{path}"
+            if (c.get("how"), c.get("rule")) != (how, rule):
+                why.append(f"{at} is {c.get('how')} by {c.get('rule')}, and its rule makes it {how} by {rule}")
+            elif how == "proved" and net != "accept":
+                why.append(f"{at} is proved, and the network certifier's verdict is {net}")
+            elif how == "proved" and lock is not None and not locked(lock, c["statement"]):
+                why.append(f"{at} is proved by {c['statement']}, which the lock doesn't hold")
+            elif how == "scaled" and not (grid["rules"].get(rule) or {}).get("sources"):
+                why.append(f"{at} is scaled by {rule}, which the record's rules don't give with its sources")
     return why
 
 
@@ -114,61 +109,54 @@ def delta(terms: list[Mapping[str, Any]]) -> str:
     return " + ".join(f"{t['symbol']} {t['value']}" if "value" in t else f"{t['times']:,} {t['symbol']}" for t in terms)
 
 
-def label(c: Mapping[str, Any], cond: list[str]) -> str:
-    on = ", ".join(cond)
+def label(c: Mapping[str, Any], conditional: bool) -> str:
     if c["how"] == "scaled":
-        return f"**scaled** ({c['rule']}{f'; conditional on {on}' if cond else ''})"
-    return f"**conditional** (`{c['statement']}`, on {on})" if cond else f"**proved** (`{c['statement']}`)"
+        return f"**scaled** ({c['rule']})"
+    return "**conditional**" if conditional else f"**proved** (`{c['statement']}`)"
 
 
-def weights(c: Mapping[str, Any]) -> str:
-    share = c["share"]
-    out = f"{share:.3g} of the weights" if share < 1 else f"{share:.3g} × the weights"
-    return out + (f" ({c['share_served']:.3g} × the served model's)" if "share_served" in c else "")
+def weights(share: float) -> str:
+    return f"{share:.3g} of the weights" if share < 1 else f"{share:.3g} × the weights"
 
 
-def entry(c: Mapping[str, Any], cond: list[str]) -> str:
+def entry(c: Mapping[str, Any], conditional: bool) -> str:
     one = c["per_phase"]
-    return (f"{label(c, cond)}: K {bits(c['bits'])} bits, {weights(c)}; δ_net "
-            f"{delta(c['delta_net'])}{' (vacuous)' if c['vacuous'] else ''}<br>a phase: {label(one, cond)} "
-            f"K {bits(one['bits'])} bits, {weights(one)}")
+    return (f"{label(c, conditional)}: K {bits(c['bits'])} bits, {weights(c['share'])}; δ_net "
+            f"{delta(c['delta_net'])}{' (vacuous)' if c['vacuous'] else ''}<br>a phase: {label(one, conditional)} "
+            f"K {bits(one['bits'])} bits, {weights(one['share'])}")
 
 
-def grid_md(grid: Mapping[str, Any]) -> list[str]:
-    run, cond = grid["run"], list(grid.get("conditional_on", []))
-    L = [f"The run: {label(run, cond)}: K {bits(run['bits'])} bits over its {run['phases']} execution phases "
-         f"({run['seconds']} s), δ_net {delta(run['delta_net'])}; over one phase {label(run['per_phase'], cond)} "
+def grid_md(grid: Mapping[str, Any], conditional: bool = False) -> list[str]:
+    run = grid["run"]
+    L = [f"The run: {label(run, conditional)}: K {bits(run['bits'])} bits over its {run['phases']} execution phases "
+         f"({run['seconds']} s), δ_net {delta(run['delta_net'])}; over one phase {label(run['per_phase'], conditional)} "
          f"K {bits(run['per_phase']['bits'])} bits.", "",
          "| period | " + " | ".join(COLUMNS.values()) + " |", "|---" * (len(COLUMNS) + 1) + "|"]
-    L += [f"| {p} (the node's phases: {grid[p]['phases']:,}) | " + " | ".join(entry(grid[p][c], cond)
+    L += [f"| {p} (the node's phases: {grid[p]['phases']:,}) | " + " | ".join(entry(grid[p][c], conditional)
                                                                             for c in COLUMNS) + " |" for p in PERIODS]
     return L
 
 
 def markdown(rec: Mapping[str, Any]) -> str:
-    b, a, o = rec["bound"], rec["advice_charge"], rec["of_record"]
-    fig, p, net = b["of_record"], rec["periods"], rec["verdicts"]["the network certifier"]
-    cond = list(p.get("conditional_on", []))
-    said = net["verdict"] if net["verdict"] == "accept" else (
-        f"{net['verdict']}, its Lean answer {net.get('answer')}, open {net.get('open')}")
+    b, a = rec["bound"], rec["advice_charge"]
+    fig, p = b["of_record"], rec["periods"]
     L = [f"# The onsite record of `{rec['run']}` per monitoring period", "",
-         f"The run is {'of record' if o['holds'] else 'not of record'} (every verdict accepts: {o['holds']}; missing "
-         f"{o['missing']}, not accepting {o['not_accepting']}, not established {o.get('not_established', [])}). The "
-         f"network certifier: {said}. m = {b['phases']} execution phases of {p['phase_s']} s, the run's period "
-         f"{b['period_s']} s. K of record {fig['K']:,} bits; the tight K {b['K']:,} (`{b['statement']}`) is no "
-         f"figure while anything is open; open: {fig['open'] or 'nothing'}.", "",
+         f"The run is {'of record' if rec['of_record']['holds'] else 'not of record'} (every verdict accepts: "
+         f"{rec['of_record']['holds']}; missing {rec['of_record']['missing']}, not accepting "
+         f"{rec['of_record']['not_accepting']}). The network certifier: {rec['verdicts']['the network certifier']['verdict']}. "
+         f"m = {b['phases']} execution phases of {p['phase_s']} s, the run's period {b['period_s']} s. "
+         f"K of record {bits(fig['K'])} bits, the tight K {bits(b['K'])} (`{b['statement']}`); open: "
+         f"{fig['open'] or 'nothing'}.", "",
          f"The advice: ℓ_a = {[bits(x) for x in a['cap']['ell_a']]} bits, the registered cap, is the charge's upper "
          f"bound; K of record charges ℓ_a + 1 for each tied audit, {[bits(x) for x in fig['advice']['bits_per_phase']]} "
-         f"a phase, while anything is open, beside ℓ_{{a,j}}, the tied audits' free inputs: "
+         f"a phase, while anything is open. The tight K's ℓ_{{a,j}}: "
          f"{[bits(x) for x in a['charged']['bits_per_phase']]} a phase, {a['charged']['share']:.3g} of the tight K.", ""]
-    L += [f"Note: {n}" for n in b["notes"]]
-    if fig.get("tight"):
-        L += [f"How it tightens: {fig['tight']}"]
-    L += ["", "## K of record", ""]
-    if cond:
-        L += [f"Every cell is conditional on {', '.join(cond)}: a cell marked conditional is proved once each holds, "
-              "and a scaled one is scaled from it.", ""]
-    L += grid_md(p) + ["", "## Rules", ""]
+    L += [f"Note: {n}" for n in b["notes"]] + ["", "## K of record", ""] + grid_md(p)
+    if "periods_tight" in rec:
+        cond = ", ".join(rec["periods_tight"]["conditional_on"])
+        L += ["", "## The tight K, conditional", "", f"A cell marked conditional is proved only once each of {cond} holds "
+              "(the figure of record's open checks and premises).", ""] + grid_md(rec["periods_tight"], True)
+    L += ["", "## Rules", ""]
     for name, r in p["rules"].items():
         src = "; ".join(s if isinstance(s, str) else f"{s['file']} `{s['id']}` {json.dumps(s['read'])}" for s in r["sources"])
         L.append(f"- **{name}**: {r['rule']}. Sources: {src}.")

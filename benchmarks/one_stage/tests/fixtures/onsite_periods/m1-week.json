@@ -30,25 +30,10 @@
     "wires-fit",
     "session-wires",
     "free-count",
-    "tied-padding-reads",
-    "padding-out-of-free",
-    "session-tags",
     "held-performed",
-    "rows-state-held",
-    "rows-prog-wired",
-    "rows-ties-ordered",
-    "shared-roots-parsed",
-    "reg-opens-at",
-    "certifiers-open",
-    "windows-placed",
-    "tied-exposed",
-    "wrong-bounds",
-    "schedules-held",
-    "schedules-covered",
-    "sampled-leg-bridge",
-    "NetTiming.SecurityProofs.PeriodTiedCount"
-   ],
-   "tight": "how the figure tightens, each in place of the figure of record and never beside it: to ℓ_a + 1 in place of each tied audit's ℓ_{a,j}, once a general cut lemma bounding a tied audit's leak by ℓ_a + 1 is in the lock and a check verifying that cut has run on the period's case, so the run's record, written again from its OUT, moves to it without re-serving; and to K alone, once padding-out-of-free is discharged in the lock (the period check refusing a tied audit's padding reads, and the unread-column lemma) and nothing else is open. Until then the record states no figure of either"
+    "circuit-held",
+    "sampled-leg-bridge"
+   ]
   },
   "period_s": "630000",
   "phases": 1,
@@ -56,10 +41,11 @@
  },
  "format": "verity/onsite-network-record/v1",
  "of_record": {
-  "holds": true,
-  "missing": [],
-  "not_accepting": [],
-  "not_established": []
+  "holds": false,
+  "missing": [
+   "onsite"
+  ],
+  "not_accepting": []
  },
  "periods": {
   "month": {
@@ -107,13 +93,11 @@
      "how": "scaled",
      "rule": "datacenter",
      "share": 0.015177275077985941,
-     "share_served": 5.309803195366554,
      "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
      "vacuous": false
     },
     "rule": "datacenter",
     "share": 0.0758863753899297,
-    "share_served": 26.549015976832766,
     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
     "vacuous": false
    },
@@ -160,13 +144,11 @@
      ],
      "how": "proved",
      "share": 1.2141820062388753e-06,
-     "share_served": 0.0004247842556293243,
      "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
      "vacuous": false
     },
     "rule": "run-to-period",
     "share": 6.0709100311943765e-06,
-    "share_served": 0.002123921278146621,
     "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
     "vacuous": false
    },
@@ -216,13 +198,11 @@
      "how": "scaled",
      "rule": "world",
      "share": 22.523354263410564,
-     "share_served": 7879.845217518505,
      "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
      "vacuous": true
     },
     "rule": "world",
     "share": 112.61677131705282,
-    "share_served": 39399.22608759252,
     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
     "vacuous": true
    }
@@ -322,14 +302,12 @@
     ],
     "how": "proved",
     "share": 1.2141820062388753e-06,
-    "share_served": 0.0004247842556293243,
     "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
     "vacuous": false
    },
    "phases": 1,
    "seconds": "630000",
    "share": 1.2141820062388753e-06,
-   "share_served": 0.0004247842556293243,
    "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
    "vacuous": false
   },
@@ -378,13 +356,11 @@
      "how": "scaled",
      "rule": "datacenter",
      "share": 0.015177275077985941,
-     "share_served": 5.309803195366554,
      "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
      "vacuous": false
     },
     "rule": "datacenter",
     "share": 0.015177275077985941,
-    "share_served": 5.309803195366554,
     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
     "vacuous": false
    },
@@ -431,12 +407,10 @@
      ],
      "how": "proved",
      "share": 1.2141820062388753e-06,
-     "share_served": 0.0004247842556293243,
      "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
      "vacuous": false
     },
     "share": 1.2141820062388753e-06,
-    "share_served": 0.0004247842556293243,
     "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
     "vacuous": false
    },
@@ -486,13 +460,11 @@
      "how": "scaled",
      "rule": "world",
      "share": 22.523354263410564,
-     "share_served": 7879.845217518505,
      "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
      "vacuous": true
     },
     "rule": "world",
     "share": 22.523354263410564,
-    "share_served": 7879.845217518505,
     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
     "vacuous": true
    }
@@ -542,13 +514,11 @@
      "how": "scaled",
      "rule": "datacenter",
      "share": 0.015177275077985941,
-     "share_served": 5.309803195366554,
      "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
      "vacuous": false
     },
     "rule": "datacenter",
     "share": 0.774041028977283,
-    "share_served": 270.7999629636942,
     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
     "vacuous": false
    },
@@ -595,13 +565,11 @@
      ],
      "how": "proved",
      "share": 1.2141820062388753e-06,
-     "share_served": 0.0004247842556293243,
      "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
      "vacuous": false
     },
     "rule": "run-to-period",
     "share": 6.192328231818264e-05,
-    "share_served": 0.02166399703709554,
     "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
     "vacuous": false
    },
@@ -651,13 +619,603 @@
      "how": "scaled",
      "rule": "world",
      "share": 22.523354263410564,
-     "share_served": 7879.845217518505,
      "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
      "vacuous": true
     },
     "rule": "world",
     "share": 1148.6910674339388,
-    "share_served": 401872.1060934437,
+    "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+    "vacuous": true
+   }
+  }
+ },
+ "periods_tight": {
+  "conditional_on": [
+   "free",
+   "circuit",
+   "wires-fit",
+   "session-wires",
+   "free-count",
+   "held-performed",
+   "circuit-held",
+   "sampled-leg-bridge"
+  ],
+  "month": {
+   "datacenter": {
+    "bits": 666437500,
+    "delta_net": [
+     {
+      "symbol": "eps",
+      "value": "15625/262144"
+     },
+     {
+      "symbol": "ε_ks",
+      "times": 62500
+     },
+     {
+      "symbol": "ε_bind",
+      "times": 62500
+     },
+     {
+      "symbol": "ε_tap",
+      "times": 62500
+     }
+    ],
+    "how": "scaled",
+    "per_phase": {
+     "bits": 133287500,
+     "delta_net": [
+      {
+       "symbol": "eps",
+       "value": "3125/262144"
+      },
+      {
+       "symbol": "ε_ks",
+       "times": 12500
+      },
+      {
+       "symbol": "ε_bind",
+       "times": 12500
+      },
+      {
+       "symbol": "ε_tap",
+       "times": 12500
+      }
+     ],
+     "how": "scaled",
+     "rule": "datacenter",
+     "share": 1.926777513057847e-05,
+     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+     "vacuous": false
+    },
+    "rule": "datacenter",
+    "share": 9.633887565289234e-05,
+    "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+    "vacuous": false
+   },
+   "node": {
+    "bits": 53315,
+    "delta_net": [
+     {
+      "symbol": "eps",
+      "value": "5/1048576"
+     },
+     {
+      "symbol": "ε_ks",
+      "times": 5
+     },
+     {
+      "symbol": "ε_bind",
+      "times": 5
+     },
+     {
+      "symbol": "ε_tap",
+      "times": 5
+     }
+    ],
+    "how": "scaled",
+    "per_phase": {
+     "bits": 10663,
+     "delta_net": [
+      {
+       "symbol": "eps",
+       "value": "1/1048576"
+      },
+      {
+       "symbol": "ε_ks",
+       "times": 1
+      },
+      {
+       "symbol": "ε_bind",
+       "times": 1
+      },
+      {
+       "symbol": "ε_tap",
+       "times": 1
+      }
+     ],
+     "how": "proved",
+     "share": 1.5414220104462775e-09,
+     "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+     "vacuous": false
+    },
+    "rule": "run-to-period",
+    "share": 7.707110052231388e-09,
+    "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+    "vacuous": false
+   },
+   "phases": 5,
+   "seconds": 2592000,
+   "world": {
+    "bits": 989005459135,
+    "delta_net": [
+     {
+      "symbol": "eps",
+      "value": "92751145/1048576"
+     },
+     {
+      "symbol": "ε_ks",
+      "times": 92751145
+     },
+     {
+      "symbol": "ε_bind",
+      "times": 92751145
+     },
+     {
+      "symbol": "ε_tap",
+      "times": 92751145
+     }
+    ],
+    "how": "scaled",
+    "per_phase": {
+     "bits": 197801091827,
+     "delta_net": [
+      {
+       "symbol": "eps",
+       "value": "18550229/1048576"
+      },
+      {
+       "symbol": "ε_ks",
+       "times": 18550229
+      },
+      {
+       "symbol": "ε_bind",
+       "times": 18550229
+      },
+      {
+       "symbol": "ε_tap",
+       "times": 18550229
+      }
+     ],
+     "how": "scaled",
+     "rule": "world",
+     "share": 0.028593731279418843,
+     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+     "vacuous": true
+    },
+    "rule": "world",
+    "share": 0.14296865639709422,
+    "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+    "vacuous": true
+   }
+  },
+  "phase_s": "630000",
+  "rules": {
+   "datacenter": {
+    "rule": "the node's times the census's reference datacenter's machines, one network certifier on each machine's uplink",
+    "sources": [
+     {
+      "file": "benchmarks/census/deployments.json",
+      "id": "dc-12500-machines-600s",
+      "read": {
+       "machines": 12500
+      },
+      "sha512": "a1039be812784311caf6ac34b51444b9abda3c1e40bd4fd674d26b6bf70050896155626e40a3d5fb9d04b1b8f656dd66c62794c88ce21a127c1ce9614a1307b3"
+     }
+    ]
+   },
+   "per-phase": {
+    "rule": "the run's K and eps over one of its m execution phases, K/m: their average, which no statement bounds a phase by where m exceeds 1",
+    "sources": [
+     "bound: the run's K and eps over its m execution phases"
+    ]
+   },
+   "run-to-period": {
+    "rule": "the run's per execution phase times the period's execution phases, ⌈seconds / (T·τ)⌉, each as the run's at its load: ℓ_{a,j}, k_{skip,j} and the jitter scale with the phases, and k_sched and k_fail, ⌈log2(cap_c + 1)⌉ each a connection, with the connections, at the schedule's lanes · T a phase",
+    "sources": [
+     "bound: the run's K and eps over its m execution phases",
+     "pieces/certifier/case.json params.schedule: an execution phase's T buckets of τ"
+    ]
+   },
+   "world": {
+    "rule": "the node's times the world's links: the adversary resource model's compute over its monitoring period, at an H100-equivalent's FLOP/s, in machines of the reference datacenter's GPUs, rounded up, one network certifier on each",
+    "sources": [
+     {
+      "file": "benchmarks/census/adversary.json",
+      "id": "world-inference-2027",
+      "read": {
+       "flop_per_s_per_h100": 2000000000000000.0,
+       "monitoring_period_s": 31536000,
+       "total_flop": 9.36e+30
+      },
+      "sha512": "32ad3ba0c17d2d58c94fad3a4aa04ae6082af30c0fceaac5821153a85963d2efeef3fe44f45a72e20e2229c780bdd7c8ec8f89fa8ed24c10fa5d5ea2641ca427"
+     },
+     {
+      "file": "benchmarks/census/deployments.json",
+      "id": "dc-12500-machines-600s",
+      "read": {
+       "gpus_per_machine": 8
+      },
+      "sha512": "a1039be812784311caf6ac34b51444b9abda3c1e40bd4fd674d26b6bf70050896155626e40a3d5fb9d04b1b8f656dd66c62794c88ce21a127c1ce9614a1307b3"
+     }
+    ]
+   }
+  },
+  "run": {
+   "bits": 10663,
+   "delta_net": [
+    {
+     "symbol": "eps",
+     "value": "1/1048576"
+    },
+    {
+     "symbol": "ε_ks",
+     "times": 1
+    },
+    {
+     "symbol": "ε_bind",
+     "times": 1
+    },
+    {
+     "symbol": "ε_tap",
+     "times": 1
+    }
+   ],
+   "how": "proved",
+   "per_phase": {
+    "bits": 10663,
+    "delta_net": [
+     {
+      "symbol": "eps",
+      "value": "1/1048576"
+     },
+     {
+      "symbol": "ε_ks",
+      "times": 1
+     },
+     {
+      "symbol": "ε_bind",
+      "times": 1
+     },
+     {
+      "symbol": "ε_tap",
+      "times": 1
+     }
+    ],
+    "how": "proved",
+    "share": 1.5414220104462775e-09,
+    "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+    "vacuous": false
+   },
+   "phases": 1,
+   "seconds": "630000",
+   "share": 1.5414220104462775e-09,
+   "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+   "vacuous": false
+  },
+  "week": {
+   "datacenter": {
+    "bits": 133287500,
+    "delta_net": [
+     {
+      "symbol": "eps",
+      "value": "3125/262144"
+     },
+     {
+      "symbol": "ε_ks",
+      "times": 12500
+     },
+     {
+      "symbol": "ε_bind",
+      "times": 12500
+     },
+     {
+      "symbol": "ε_tap",
+      "times": 12500
+     }
+    ],
+    "how": "scaled",
+    "per_phase": {
+     "bits": 133287500,
+     "delta_net": [
+      {
+       "symbol": "eps",
+       "value": "3125/262144"
+      },
+      {
+       "symbol": "ε_ks",
+       "times": 12500
+      },
+      {
+       "symbol": "ε_bind",
+       "times": 12500
+      },
+      {
+       "symbol": "ε_tap",
+       "times": 12500
+      }
+     ],
+     "how": "scaled",
+     "rule": "datacenter",
+     "share": 1.926777513057847e-05,
+     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+     "vacuous": false
+    },
+    "rule": "datacenter",
+    "share": 1.926777513057847e-05,
+    "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+    "vacuous": false
+   },
+   "node": {
+    "bits": 10663,
+    "delta_net": [
+     {
+      "symbol": "eps",
+      "value": "1/1048576"
+     },
+     {
+      "symbol": "ε_ks",
+      "times": 1
+     },
+     {
+      "symbol": "ε_bind",
+      "times": 1
+     },
+     {
+      "symbol": "ε_tap",
+      "times": 1
+     }
+    ],
+    "how": "proved",
+    "per_phase": {
+     "bits": 10663,
+     "delta_net": [
+      {
+       "symbol": "eps",
+       "value": "1/1048576"
+      },
+      {
+       "symbol": "ε_ks",
+       "times": 1
+      },
+      {
+       "symbol": "ε_bind",
+       "times": 1
+      },
+      {
+       "symbol": "ε_tap",
+       "times": 1
+      }
+     ],
+     "how": "proved",
+     "share": 1.5414220104462775e-09,
+     "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+     "vacuous": false
+    },
+    "share": 1.5414220104462775e-09,
+    "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+    "vacuous": false
+   },
+   "phases": 1,
+   "seconds": 604800,
+   "world": {
+    "bits": 197801091827,
+    "delta_net": [
+     {
+      "symbol": "eps",
+      "value": "18550229/1048576"
+     },
+     {
+      "symbol": "ε_ks",
+      "times": 18550229
+     },
+     {
+      "symbol": "ε_bind",
+      "times": 18550229
+     },
+     {
+      "symbol": "ε_tap",
+      "times": 18550229
+     }
+    ],
+    "how": "scaled",
+    "per_phase": {
+     "bits": 197801091827,
+     "delta_net": [
+      {
+       "symbol": "eps",
+       "value": "18550229/1048576"
+      },
+      {
+       "symbol": "ε_ks",
+       "times": 18550229
+      },
+      {
+       "symbol": "ε_bind",
+       "times": 18550229
+      },
+      {
+       "symbol": "ε_tap",
+       "times": 18550229
+      }
+     ],
+     "how": "scaled",
+     "rule": "world",
+     "share": 0.028593731279418843,
+     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+     "vacuous": true
+    },
+    "rule": "world",
+    "share": 0.028593731279418843,
+    "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+    "vacuous": true
+   }
+  },
+  "year": {
+   "datacenter": {
+    "bits": 6797662500,
+    "delta_net": [
+     {
+      "symbol": "eps",
+      "value": "159375/262144"
+     },
+     {
+      "symbol": "ε_ks",
+      "times": 637500
+     },
+     {
+      "symbol": "ε_bind",
+      "times": 637500
+     },
+     {
+      "symbol": "ε_tap",
+      "times": 637500
+     }
+    ],
+    "how": "scaled",
+    "per_phase": {
+     "bits": 133287500,
+     "delta_net": [
+      {
+       "symbol": "eps",
+       "value": "3125/262144"
+      },
+      {
+       "symbol": "ε_ks",
+       "times": 12500
+      },
+      {
+       "symbol": "ε_bind",
+       "times": 12500
+      },
+      {
+       "symbol": "ε_tap",
+       "times": 12500
+      }
+     ],
+     "how": "scaled",
+     "rule": "datacenter",
+     "share": 1.926777513057847e-05,
+     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+     "vacuous": false
+    },
+    "rule": "datacenter",
+    "share": 0.000982656531659502,
+    "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+    "vacuous": false
+   },
+   "node": {
+    "bits": 543813,
+    "delta_net": [
+     {
+      "symbol": "eps",
+      "value": "51/1048576"
+     },
+     {
+      "symbol": "ε_ks",
+      "times": 51
+     },
+     {
+      "symbol": "ε_bind",
+      "times": 51
+     },
+     {
+      "symbol": "ε_tap",
+      "times": 51
+     }
+    ],
+    "how": "scaled",
+    "per_phase": {
+     "bits": 10663,
+     "delta_net": [
+      {
+       "symbol": "eps",
+       "value": "1/1048576"
+      },
+      {
+       "symbol": "ε_ks",
+       "times": 1
+      },
+      {
+       "symbol": "ε_bind",
+       "times": 1
+      },
+      {
+       "symbol": "ε_tap",
+       "times": 1
+      }
+     ],
+     "how": "proved",
+     "share": 1.5414220104462775e-09,
+     "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+     "vacuous": false
+    },
+    "rule": "run-to-period",
+    "share": 7.861252253276016e-08,
+    "statement": "NetTiming.Guarantees.PeriodLeakAccepted",
+    "vacuous": false
+   },
+   "phases": 51,
+   "seconds": 31536000,
+   "world": {
+    "bits": 10087855683177,
+    "delta_net": [
+     {
+      "symbol": "eps",
+      "value": "946061679/1048576"
+     },
+     {
+      "symbol": "ε_ks",
+      "times": 946061679
+     },
+     {
+      "symbol": "ε_bind",
+      "times": 946061679
+     },
+     {
+      "symbol": "ε_tap",
+      "times": 946061679
+     }
+    ],
+    "how": "scaled",
+    "per_phase": {
+     "bits": 197801091827,
+     "delta_net": [
+      {
+       "symbol": "eps",
+       "value": "18550229/1048576"
+      },
+      {
+       "symbol": "ε_ks",
+       "times": 18550229
+      },
+      {
+       "symbol": "ε_bind",
+       "times": 18550229
+      },
+      {
+       "symbol": "ε_tap",
+       "times": 18550229
+      }
+     ],
+     "how": "scaled",
+     "rule": "world",
+     "share": 0.028593731279418843,
+     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
+     "vacuous": true
+    },
+    "rule": "world",
+    "share": 1.4582802952503608,
     "statement": "the sum over links of each link's statement, each at δ / links: our composition, which no Lean statement covers",
     "vacuous": true
    }
