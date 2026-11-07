@@ -107,14 +107,15 @@ def params(r: dict) -> Any:
                           skip_clone=True, **keep)
 
 
-def warm(eng: Any, requests: list[dict]) -> int:
+def warm(eng: Any, core: Any, requests: list[dict]) -> int:
     """Serve ``requests`` (the replay block's own prompts and sampling, under other ids) to the end in the engine before
-    the restore, so the kernels serving compiled during its warm-up are compiled here too; the steps it took. The
-    restore then overwrites what they left, which the restored engine's dump checks."""
+    the restore, so the kernels serving compiled during its warm-up are compiled here too; the steps it took. Under async
+    scheduling the engine core has scheduled a batch past the last finish, so it steps on until its batch queue is
+    empty. The restore then overwrites what they left, which the restored engine's dump checks."""
     for i, r in enumerate(requests):
         eng.add_request(f"restore-warm-{i}", {"prompt_token_ids": r["prompt_ids"]}, params(r))
     steps = 0
-    while eng.has_unfinished_requests():
+    while eng.has_unfinished_requests() or getattr(core, "batch_queue", None):
         eng.step()
         steps += 1
     return steps
@@ -188,7 +189,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         raise SystemExit("the fresh engine's KV pool is laid out unlike the served one's")
     if a.warm:
         t = time.monotonic()
-        out["warm_steps"] = warm(eng, w["arrive"][:a.warm])
+        out["warm_steps"] = warm(eng, core, w["arrive"][:a.warm])
         out["warm_s"] = time.monotonic() - t
 
     torch.cuda.synchronize()

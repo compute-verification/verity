@@ -3,9 +3,9 @@
 # `indepSample`, `subsetSample`), the detection-pressure module `DrawPressure` moves to `SamplePressure`, and their
 # lemmas follow. A slowdown task's `draw` (`Accounting.Slowdown.Task.draw`) keeps its name here: the coverage floor's
 # guarantees read it, so its rename changes Security's lock record, which a pure move keeps byte for byte, and it goes
-# in an ordinary change with that record. Only these files are renamed: the population's under either name of its area
-# (`security_areas_map.toml` moves `Population` to `SampledProofs`), so the map renames the same declarations before
-# and after that move. `Population.Exfil.Draw`, a
+# in an ordinary change with that record. Only these files are renamed: the population's, at their paths before
+# `security_areas_map.toml` moves `Population` to `SampledProofs` (`rename.py` refuses a path no file matches, so the map
+# can't name them under both). `Population.Exfil.Draw`, a
 # second `Draw` beside the core's `Verity.Draw`, goes in its dedupe, and `Pouw.Window.subsetDraw` is the PoUW window's.
 # Declarations keep their place in the locks' records: `rename.py --moves` prints the renames that `check.py --update
 # --moved` takes.
@@ -14,9 +14,7 @@
 
 [[words_in]]
 files = ["Security/Definitions/Population.lean", "Security/Definitions/Population/*.lean",
-         "Security/Proofs/Population.lean", "Security/Proofs/Population/*.lean",
-         "Security/Definitions/SampledProofs.lean", "Security/Definitions/SampledProofs/*.lean",
-         "Security/Proofs/SampledProofs.lean", "Security/Proofs/SampledProofs/*.lean"]
+         "Security/Proofs/Population.lean", "Security/Proofs/Population/*.lean"]
 [words_in.words]
 "uniformDraw" = "uniformSample"
 "sum_missing_uniformDraw" = "sum_missing_uniformSample"

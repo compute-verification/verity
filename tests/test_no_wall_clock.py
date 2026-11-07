@@ -46,7 +46,6 @@ ALLOWED: dict[str, str] = {
         "a GPU timing script (not collected) that measures int8_exact decode TPOT, batched against the reference; no test reads it",
     "integrations/vllm/tests/program/beyond_gemm.py": "a GPU probe script (not collected) that reports its own wall time",
     "integrations/vllm/tests/program/crosscheck.py::main": "the cross-check script's summary line reports its wall time; no test runs main",
-    "integrations/vllm/tests/program/padded_commit_tiny.py": "records build/commit timings in its row; test_padded_commit_tiny asserts none of them",
     "integrations/vllm/tests/protocols/h1_zy_gpu.py::wall":
         "the GPU timing script (not collected) records each arm's seconds from launch to every result on the host; no test reads them",
     "integrations/vllm/tests/protocols/local_gate.py::_now":
