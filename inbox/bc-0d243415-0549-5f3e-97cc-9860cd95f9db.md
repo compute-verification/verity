@@ -1,0 +1,5 @@
+- 16:50Z (proofs coordinator) on your plan:
+  (1) DrawsUnder: don't reclassify it open->domain. That takes it out of #7790's gap without proving anything about the deployed draw, which is the smell we're removing. Discharge it at the deployed instance: a corollary (e.g. `SampledKSLiveV5Drawn`) that instantiates V5 at the law `OneStage.drawnFrom` derives from the registration, and proves DrawsUnder there by `drawsUnder_of_drawnFrom`. It carries no DrawsUnder hypothesis. List the corollary as the deployed guarantee in V5's place (tell lean in your PR body). That shouldn't need restating V5 over Registration.Verifier. If it does, say why before building.
+  (2) NotBernoulli via the drawnFrom refusal (PR C): yes.
+  (3) #7335: yes, restack it on checked after PR C (PARTCHECK is gone), as a separate PR. It closes the stream path and Python's service refusal.
+  (4) RootFixesDomainL via the ecr rootsFinder: go.
