@@ -8,8 +8,9 @@
 #    its 256-thread block, FA3 still split), each uniform over those steps, drawn here before the replay starts
 #    (OUT/first_stage.json; a class with no step takes the window's nearest one above it); STEPS overrides it.
 # 2. replay.py replays the window from an empty engine, served as recorded, with capture.py loaded in every worker: those
-#    steps' interiors are recorded and committed, the coins drawn after the root open layers (/workspace/spot-capture/<run>,
-#    outside OUT, which custody uploads).
+#    steps' interiors are recorded and committed, the coins drawn after the root open layers, and only the opened layers'
+#    tensors are written (/workspace/spot-capture/<run>, outside OUT, which custody uploads). The graph-off forward holds the
+#    step's tensors in host memory until the coins: about 10 GB a rank at 384 tokens.
 # 3. stage.py stages each step's sampled proof blocks into OUT/values-step<s> (a11's saved values: a few MB) and the
 #    commitment's small files are copied to OUT/commit; the capture's blobs are then deleted unless KEEP=1.
 set -uo pipefail
@@ -31,7 +32,7 @@ v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
 case $v in *+gd9105ea8*) ;; *) echo "spot: vLLM $v is not d9105ea80, the integration's pin"; exit 2 ;; esac
 CAP=/workspace/spot-capture/$(basename "$D"); mkdir -p "$CAP/site"
 free=$(df -BG --output=avail "$CAP" | tail -1 | tr -dc 0-9)
-[ "${free:-0}" -ge 100 ] || { echo "spot: ${free}G free under $CAP, want 100G"; exit 2; }
+[ "${free:-0}" -ge 40 ] || { echo "spot: ${free}G free under $CAP, want 40G"; exit 2; }
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 echo "spot: tree $(git -C "$TREE" rev-parse HEAD 2>/dev/null) venv $VENV checkpoint $CK capture $CAP ($free G free)"
