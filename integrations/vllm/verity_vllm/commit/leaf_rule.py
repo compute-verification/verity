@@ -43,7 +43,7 @@ class LeafSchemeRule:
         if self.hiding is None:
             return b""
         if step not in self._salts:
-            raise RuntimeError(f"step {step}: its leaves were not salted, and an {NAME} root binds salted leaves only (host path)")
+            raise RuntimeError(f"step {step}: its leaves were not salted, and an {NAME} root binds hiding leaves only (host path)")
         return b"/leaf=" + self.hiding.digest
 
     def _salted(self, step: int, leaves: list[bytes]) -> list[bytes]:

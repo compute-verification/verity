@@ -15,8 +15,8 @@ here, and its theorem is below it.
   model session's acceptance of every table (`modelSession`, the tables concurrently through `batch`) against the
   simulated prover `simSession`, whenever every table's decoder is right (`DecodesTable`, one per table).
 * `SessionBLModel`: the salted session on the tables `ts` is `modelSession`'s.
-* `ExecRefinesTables`: R11 for any plan, `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL … plan)) (simAuditJ …)`
-  given `DecodesOnJ`.
+* `ExecRefinesTables`: the refinement for any plan,
+  `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL … plan)) (simAuditJ …)` given `DecodesOnJ`.
 * `HeadlineTables`: `Prog.flock_headline_live_on` with `plan S R` of any length `J`, at the live stratified draw.
 * `HeadlineTablesSubset`: the same at the live subset draw, with count curve `C(n − K, kd) / C(n, kd)`; flock-verify
   takes no other draw at `J > 1`.
@@ -64,7 +64,7 @@ def SessionBLModel : Prop :=
 theorem sessionBL_model : SessionBLModel :=
   fun A H E Lf ts => sessionBL_eq_modelSession A H E Lf ts
 
-/-- **R11 for sessions of `J` tables.** -/
+/-- **The refinement for sessions of `J` tables.** -/
 def ExecRefinesTables : Prop :=
   ∀ {D Sl : Type} [Nonempty D] [Inhabited D] [Inhabited Sl] {mPts n : ℕ} {Reg : Type} (H : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))

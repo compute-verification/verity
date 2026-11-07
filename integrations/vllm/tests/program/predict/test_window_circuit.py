@@ -32,7 +32,7 @@ from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.window_circuit import CLASS_OF_RECORD, Grain, WindowClass, class_circuit, window_circuit
 from verity_vllm.records import weights_registration as WRG
 
-from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.core.protocols.pouw import audit as AU
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -166,7 +166,7 @@ def test_the_class_of_record_takes_both_windows_to_its_one_class_circuit(monkeyp
     reg = S._registered()
     for window, placed in ((THREE, [(0, 1), (0, 2), (16, 31)]), (EIGHT, [(0, 1)] * 4 + [(16, 17)] * 4)):
         assert window_circuit(reg, S.compile_steps(reg, *S._session(*window)), CLASS_OF_RECORD, placed=placed) == "the class circuit"
-    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True)] * 2
+    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True, None)] * 2
 
 
 def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
@@ -180,7 +180,7 @@ def test_a_request_anchored_at_16_with_64_outputs_is_expressible(monkeypatch):
     compiled = S.compile_steps(reg, *S._session(*window))
     assert [(u.LP, u.T + 1) for u in compiled.requests if u is not None] == [(1, 64)]
     assert window_circuit(reg, compiled, CLASS_OF_RECORD, placed=[(16, 59)]) == "the class circuit"
-    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True)]
+    assert calls == [(CLASS_OF_RECORD, None, WC._GRAIN, WC.NAME, True, None)]
 
 
 def test_the_description_grows_with_the_class_programs_nodes_not_its_slots():

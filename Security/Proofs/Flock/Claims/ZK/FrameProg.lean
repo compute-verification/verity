@@ -1,8 +1,41 @@
 module
 
 public import Proofs.Flock.Claims.ZK.FrameReal
-public import Proofs.Flock.Claims.ZK.FrameSched
 public import Proofs.Flock.Claims.ZK.FrameState
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.FramePass
+import Proofs.Flock.Claims.ZK.FramePlan
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The loop's frame state is the deployed frame's check's (`ProgChecks`)
@@ -1838,10 +1871,10 @@ theorem loop_round_in_plan (T : CoinLayer.TableData)
     | error e => rw [hh] at hv; cases hv
     | ok hl' =>
       rw [hh] at hv
-      obtain ⟨s', spec', sts', ct, hs', hc, hok, hle⟩ := helloChkAt_ok hh
-      rw [hx] at hs'
+      obtain ⟨spec', sts', ct, hs', hc, hok, hle⟩ := helloChkAt_ok hh
+      rw [sessOf_flock hx] at hs'
       simp only [Option.some.injEq, Prod.mk.injEq] at hs'
-      obtain ⟨rfl, rfl, rfl⟩ := hs'
+      obtain ⟨rfl, rfl⟩ := hs'
       rcases Nat.lt_or_ge (roundsOf spec sts).sum q with hlt' | hge
       · obtain ⟨S, S', _, hO, hhe⟩ := coinVerdict_ok hv
         simp only [List.length_cons] at hq
@@ -1852,7 +1885,7 @@ theorem loop_round_in_plan (T : CoinLayer.TableData)
         exact empty_not_stream hok hst
       · apply hne
         unfold lastOf
-        rw [hx]
+        rw [sessOf_flock hx]
         simp only [hc, hok, ↓reduceIte]
         rw [plan_size, hq]
         omega

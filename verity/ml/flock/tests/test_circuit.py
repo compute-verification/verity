@@ -13,9 +13,9 @@ from verity_flock import tail as TL
 from verity_flock.gf2 import Circuit, const_bits
 
 pytest.importorskip("verity_numerical")
-from verity_numerical.bench import templates as TM  # noqa: E402
+from verity_flock import subcircuit_templates as TM  # noqa: E402
 from verity_numerical.bench.generate import generate  # noqa: E402
-from verity_numerical.bench.input_sets import InputSet  # noqa: E402
+from verity_flock.input_sets import InputSet  # noqa: E402
 
 
 def _set(sid: str, n: int, tmp_path):

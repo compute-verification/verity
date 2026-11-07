@@ -2,7 +2,8 @@
 `reference` on bodies in the schema and on each way out of it (other padding among them), the statics it refuses, the
 Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network certifier's scan
 state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
-bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`)."""
+bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`; `SelectCollect_v2` v1 at a
+round)."""
 from __future__ import annotations
 
 import json
@@ -12,7 +13,7 @@ import numpy as np
 import pytest
 from verity_vllm.program.predict import scan_state as SS
 
-from verity.core.protocols.certifier import ingress_scan as IS
+from verity.ml.protocols.certifier import ingress_scan as IS
 from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.registry import boolean_io_shell as BX
 from verity.ml.definitions.registry import io_shell as X
@@ -282,6 +283,22 @@ def test_a_select_collected_and_the_last_ones_entry_are_the_combine_then_the_col
                     (X.SelectEntry, {"V": 200, "C": 64, "KO": 2, "FIRST": True, "IDB": 17, "NP": 4, "STOP": (1, 1)})):
         with pytest.raises(ValueError, match="refuses this binding"):
             bind(fn, **bad)
+
+
+def test_a_select_collected_at_a_round_is_v1_under_another_id():
+    """`SelectCollect_v2{..., ROUND}` is `SelectCollect_v1`'s body at every round, its id the round's, and refuses a round that
+    isn't a natural number or a binding v1 refuses."""
+    at = {"V": 200, "C": 64, "KO": 3, "FIRST": False}
+    v1, r1, r3 = bind(X.SelectCollect, **at), bind(X.SelectCollectV2, **at, ROUND=1), bind(X.SelectCollectV2, **at, ROUND=3)
+    assert len({v1.id, r1.id, r3.id}) == 3 and r3.id.endswith("ROUND=3}")
+
+    def shape(d):
+        return [(n.form, n.fn.id, [a.refs.to_json() for a in n.args], n.out) for n in d.body.nodes], d.body.ret.to_json()
+
+    assert shape(r1) == shape(r3) == shape(v1) and r3.signature() == v1.signature()
+    for bad in ({**at, "ROUND": -1}, {**at, "ROUND": True}, {**at, "ROUND": 1.0}, {**at, "V": 1, "C": 1, "ROUND": 0}):
+        with pytest.raises(ValueError, match="refuses this binding"):
+            bind(X.SelectCollectV2, **bad)
 
 
 @pytest.mark.parametrize("st", [SMALL, {"MODEL": MODEL, "LP": 2, "V": V}], ids=["small", "served"])

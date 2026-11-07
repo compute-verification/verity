@@ -1,9 +1,25 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
 public import Proofs.Flock.Soundness.Assumptions.Zk
-import all Lean.Data.Json.Basic
+public import Proofs.Flock.Soundness.Discharge.Composed.SoundJ
 import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.TagsJ
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # `zk_session_soundJ` at the coin server's custody
@@ -37,6 +53,7 @@ open scoped ENNReal
 
 variable {n : ℕ} {Reg : Type}
 
+-- `walk_step` down the unfolded do-block of `ofJson`, the sample's decoder, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- What `UnitDraw.ofJson` returns: its units are the `units` field's, it has no closure without a `closure` key, and a
 `subset k` draw has `k` units. -/

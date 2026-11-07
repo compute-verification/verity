@@ -1,0 +1,502 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "workload",
+ "model": "DeepSeek-V4-Pro",
+ "status": "modeled",
+ "provisional": true,
+ "source": "art:a2ebc12a49cd2fee9c90ea0e19fe85e9dc3a3cec25e1b723648f62b49d81ac27: benchmarks/one_stage/block_census.py over DeepSeek-V4-Pro's TP8 B1 Build of record (H200 eager, block FP8 with MXFP4 routed experts, 256 prompt tokens, 32 output tokens, greedy), every rank and step, by `dsv4_spot_card.py` over `dsv4_card.card` (art:c59a2b3a1ffdf1037a4bffbc6d68bde6cf8d6fc62107bb9bcfece01ba388ebac); block counts, MACs, output bits and k_log from the Build's Program rows, ANDs an upper-bound estimate (m1_families --estimate). The MoE experts have no proof-block cut on main: their Marlin W4A16 matmuls (MarlinMoeExpertGemm_v1, MarlinMoeExpertGemmW_v1; C-Flock has no piece for their E2m1/E8m0 leaves) are 39% of the circuit's MACs, so they and the two other gap matmuls (ScaledMmFp8BlockGrouped_v1, GemmF32Out_v1) are `modeled` strata at the coordinate grain they would take (50.2% of the served MACs), and the cut strata hold 46.3%: the provable share. The other 18 gap Definitions (mHC, FlashMLA, the MLA compressors, the hash router, MoE align, TokenSelect and others) are left out of strata at row grain and counted in served_macs_per_token (3.5% of it). Const32[...] rows (820,936 prefill and 151,280 decode over the request; constants that bind no Definition, which block_census lists as gaps) are separated out: no stratum, no MACs. The weights' bytes from integrations/vllm/manifests/checkpoints.json, role DSV4_PRO; its parameters the hub's safetensors metadata at that revision (b5968e91), each E2m1 weight one parameter and the F8_E8M0 scales not counted, as the hub counts them",
+ "runs": [
+  "r20261106-065841-a4d9",
+  "r20261021-161703-abfb",
+  "r20261020-154507-f208"
+ ],
+ "owner": "@proofs",
+ "value": {
+  "ranks": 8,
+  "device": "H200",
+  "request": {
+   "prefill": 256,
+   "decode": 32
+  },
+  "tokens": 287,
+  "weights_bytes": 864738705373,
+  "params": 1598839674782,
+  "strata": [
+   {
+    "block": "FlashInferFp8Linear_v1{K=7168,N=1}",
+    "kind": "FlashInferFp8Linear_v1",
+    "per_token": 148433.61672473868,
+    "macs": 7168,
+    "out_bits": 16,
+    "in_bits": 173824,
+    "ands": 25731965,
+    "k_log": 26
+   },
+   {
+    "block": "FlashInferFp8Linear_v1{K=2048,N=1}",
+    "kind": "FlashInferFp8Linear_v1",
+    "per_token": 377831.0243902439,
+    "macs": 2048,
+    "out_bits": 16,
+    "in_bits": 49664,
+    "ands": 7352045,
+    "k_log": 24
+   },
+   {
+    "block": "ScaledMmFp8BlockSharedScale_v1{K=7168,N=1,G=128}",
+    "kind": "DeepGemmFp8Linear_v1",
+    "per_token": 1225774.3832752614,
+    "macs": 7168,
+    "out_bits": 16,
+    "in_bits": 118272,
+    "ands": 2040941,
+    "k_log": 24
+   },
+   {
+    "block": "FlashInferFp8Linear_v1{K=1536,N=1}",
+    "kind": "FlashInferFp8Linear_v1",
+    "per_token": 431806.8850174216,
+    "macs": 1536,
+    "out_bits": 16,
+    "in_bits": 37248,
+    "ands": 5514053,
+    "k_log": 24
+   },
+   {
+    "block": "ScaledMmFp8BlockSharedScale_v1{K=2048,N=1,G=128}",
+    "kind": "DeepGemmFp8Linear_v1",
+    "per_token": 3120152.975609756,
+    "macs": 2048,
+    "out_bits": 16,
+    "in_bits": 33792,
+    "ands": 583181,
+    "k_log": 23
+   },
+   {
+    "block": "ScaledMmFp8BlockSharedScale_v1{K=1536,N=1,G=128}",
+    "kind": "DeepGemmFp8Linear_v1",
+    "per_token": 3565889.1149825784,
+    "macs": 1536,
+    "out_bits": 16,
+    "in_bits": 25344,
+    "ands": 437405,
+    "k_log": 23
+   },
+   {
+    "block": "CublasSplitKGemmF32Out_v1{K=7168,N=1,SPLIT_K=2,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "kind": "CublasSplitKGemmF32Out_v1",
+    "per_token": 226521.64459930314,
+    "macs": 7168,
+    "out_bits": 32,
+    "in_bits": 229376,
+    "ands": 3689238,
+    "k_log": 25
+   },
+   {
+    "block": "LlBf16DotprodGemm_v1{N=1,K=7168,BS=256,VEC=8,FMA=1}",
+    "kind": "LlBf16DotprodGemm_v1",
+    "per_token": 20240.94773519164,
+    "macs": 0,
+    "out_bits": 32,
+    "in_bits": 229376,
+    "ands": 32460288,
+    "k_log": 26
+   },
+   {
+    "block": "CublasSplitKGemmF32Out_v1{K=7168,N=1,SPLIT_K=4,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "kind": "CublasSplitKGemmF32Out_v1",
+    "per_token": 167151.05226480836,
+    "macs": 7168,
+    "out_bits": 32,
+    "in_bits": 229376,
+    "ands": 3690946,
+    "k_log": 25
+   },
+   {
+    "block": "CublasSplitKGemmF32Out_v1{K=7168,N=1,SPLIT_K=3,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "kind": "CublasSplitKGemmF32Out_v1",
+    "per_token": 162698.25783972125,
+    "macs": 7168,
+    "out_bits": 32,
+    "in_bits": 229376,
+    "ands": 3690092,
+    "k_log": 25
+   },
+   {
+    "block": "FlashInferFp8Linear_v1{K=384,N=1}",
+    "kind": "FlashInferFp8Linear_v1",
+    "per_token": 377831.0243902439,
+    "macs": 384,
+    "out_bits": 16,
+    "in_bits": 9312,
+    "ands": 1378571,
+    "k_log": 22
+   },
+   {
+    "block": "ScaledMmFp8BlockSharedScale_v1{K=384,N=1,G=128}",
+    "kind": "DeepGemmFp8Linear_v1",
+    "per_token": 3120152.975609756,
+    "macs": 384,
+    "out_bits": 16,
+    "in_bits": 6336,
+    "ands": 109409,
+    "k_log": 22
+   },
+   {
+    "block": "CublasSplitKGemmF32Out_v1{K=7168,N=1,SPLIT_K=5,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "kind": "CublasSplitKGemmF32Out_v1",
+    "per_token": 40703.10801393728,
+    "macs": 7168,
+    "out_bits": 32,
+    "in_bits": 229376,
+    "ands": 3691800,
+    "k_log": 25
+   },
+   {
+    "block": "CublasSplitKGemm_v1{K=7168,N=1,SPLIT_K=5,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "kind": "CublasSplitKGemm_v1",
+    "per_token": 15360.0,
+    "macs": 7168,
+    "out_bits": 16,
+    "in_bits": 229376,
+    "ands": 3691877,
+    "k_log": 25
+   },
+   {
+    "block": "Gemm_v2{K=7168,N=1,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "kind": "Gemm_v2",
+    "per_token": 14414.494773519164,
+    "macs": 7168,
+    "out_bits": 16,
+    "in_bits": 229376,
+    "ands": 3688461,
+    "k_log": 25
+   },
+   {
+    "block": "AllReduceMultimem_v1{WORLD=8,SIZE=3584,TREES=[[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7],[[[[[[0,[1,2]],3],5],6],4],7]],FTZ=false}",
+    "kind": "AllReduceMultimem_v1",
+    "per_token": 1755.4285714285713,
+    "macs": 0,
+    "out_bits": 57344,
+    "in_bits": 458752,
+    "ands": 20923392,
+    "k_log": 27
+   },
+   {
+    "block": "Fp8GroupQuantUe8m0_v1{K=7168,G=128}",
+    "kind": "DeepGemmFp8Linear_v1",
+    "per_token": 870.5783972125436,
+    "macs": 0,
+    "out_bits": 59136,
+    "in_bits": 114688,
+    "ands": 30169552,
+    "k_log": 26
+   },
+   {
+    "block": "Dsv4InvRopeQuantHead_v1{CHUNKS=4,QG=128,ROPE=64}",
+    "kind": "Dsv4InvRopeQuantHead_v1",
+    "per_token": 7808.0,
+    "macs": 0,
+    "out_bits": 4224,
+    "in_bits": 10240,
+    "ands": 3361500,
+    "k_log": 23
+   },
+   {
+    "block": "MoeSum_v1{TOPK=6,H=3584}",
+    "kind": "MoeSum_v1",
+    "per_token": 976.0,
+    "macs": 0,
+    "out_bits": 57344,
+    "in_bits": 344064,
+    "ands": 18640384,
+    "k_log": 27
+   },
+   {
+    "block": "MoeRouterSqrtSoftplus_v1{E=384,SCALE={\"f64\":\"0x1.4000000000000p+1\"}}",
+    "kind": "MoeRouterSqrtSoftplus_v1",
+    "per_token": 464.0,
+    "macs": 0,
+    "out_bits": 384,
+    "in_bits": 24576,
+    "ands": 23599487,
+    "k_log": 26
+   },
+   {
+    "block": "TritonBlockRMSNorm_v1{N=1536,BLOCK=2048,WARPS=8,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}",
+    "kind": "TritonBlockRMSNorm_v1",
+    "per_token": 488.0,
+    "macs": 0,
+    "out_bits": 24576,
+    "in_bits": 49152,
+    "ands": 14297008,
+    "k_log": 25
+   },
+   {
+    "block": "AllReduceMnnvl_v1{WORLD=8,N=3584,SHOT=1}",
+    "kind": "AllReduceMnnvl_v1",
+    "per_token": 212.57142857142858,
+    "macs": 0,
+    "out_bits": 57344,
+    "in_bits": 458752,
+    "ands": 28259840,
+    "k_log": 27
+   },
+   {
+    "block": "SiluMulClamp_v1{I=384,LIMIT={\"f64\":\"0x1.4000000000000p+3\"}}",
+    "kind": "SiluMulClamp_v1",
+    "per_token": 3416.0,
+    "macs": 0,
+    "out_bits": 6144,
+    "in_bits": 12288,
+    "ands": 1148928,
+    "k_log": 23
+   },
+   {
+    "block": "Fp8GroupQuantUe8m0_v1{K=2048,G=128}",
+    "kind": "DeepGemmFp8Linear_v1",
+    "per_token": 435.2891986062718,
+    "macs": 0,
+    "out_bits": 16896,
+    "in_bits": 32768,
+    "ands": 8619872,
+    "k_log": 25
+   },
+   {
+    "block": "Fp8GroupQuantUe8m0_v1{K=1536,G=128}",
+    "kind": "DeepGemmFp8Linear_v1",
+    "per_token": 435.2891986062718,
+    "macs": 0,
+    "out_bits": 12672,
+    "in_bits": 24576,
+    "ands": 6464904,
+    "k_log": 24
+   },
+   {
+    "block": "ResidualAdd_v1{N=7168}",
+    "kind": "ResidualAdd_v1",
+    "per_token": 488.0,
+    "macs": 0,
+    "out_bits": 114688,
+    "in_bits": 229376,
+    "ands": 5404672,
+    "k_log": 26
+   },
+   {
+    "block": "TritonBlockRMSNorm_v1{N=512,BLOCK=2048,WARPS=8,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}",
+    "kind": "TritonBlockRMSNorm_v1",
+    "per_token": 488.0,
+    "macs": 0,
+    "out_bits": 8192,
+    "in_bits": 16384,
+    "ands": 4775260,
+    "k_log": 24
+   },
+   {
+    "block": "EmbeddingShard_v1{VS=16160,H=1,START=0}",
+    "kind": "EmbeddingShard_v1",
+    "per_token": 7168.0,
+    "macs": 0,
+    "out_bits": 16,
+    "in_bits": 258592,
+    "ands": 258713,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingShard_v1{VS=16160,H=1,START=16160}",
+    "kind": "EmbeddingShard_v1",
+    "per_token": 7168.0,
+    "macs": 0,
+    "out_bits": 16,
+    "in_bits": 258592,
+    "ands": 258713,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingShard_v1{VS=16160,H=1,START=32320}",
+    "kind": "EmbeddingShard_v1",
+    "per_token": 7168.0,
+    "macs": 0,
+    "out_bits": 16,
+    "in_bits": 258592,
+    "ands": 258713,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingShard_v1{VS=16160,H=1,START=48480}",
+    "kind": "EmbeddingShard_v1",
+    "per_token": 7168.0,
+    "macs": 0,
+    "out_bits": 16,
+    "in_bits": 258592,
+    "ands": 258713,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingShard_v1{VS=16160,H=1,START=64640}",
+    "kind": "EmbeddingShard_v1",
+    "per_token": 7168.0,
+    "macs": 0,
+    "out_bits": 16,
+    "in_bits": 258592,
+    "ands": 258713,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingShard_v1{VS=16160,H=1,START=80800}",
+    "kind": "EmbeddingShard_v1",
+    "per_token": 7168.0,
+    "macs": 0,
+    "out_bits": 16,
+    "in_bits": 258592,
+    "ands": 258713,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingShard_v1{VS=16160,H=1,START=96960}",
+    "kind": "EmbeddingShard_v1",
+    "per_token": 7168.0,
+    "macs": 0,
+    "out_bits": 16,
+    "in_bits": 258592,
+    "ands": 258713,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingShard_v1{VS=16160,H=1,START=113120}",
+    "kind": "EmbeddingShard_v1",
+    "per_token": 7168.0,
+    "macs": 0,
+    "out_bits": 16,
+    "in_bits": 258592,
+    "ands": 258713,
+    "k_log": 25
+   },
+   {
+    "block": "Fp8GroupQuantUe8m0_v1{K=384,G=128}",
+    "kind": "DeepGemmFp8Linear_v1",
+    "per_token": 435.2891986062718,
+    "macs": 0,
+    "out_bits": 3168,
+    "in_bits": 6144,
+    "ands": 1616226,
+    "k_log": 22
+   },
+   {
+    "block": "Dsv4CompressorScore_v1{W=1024}",
+    "kind": "Dsv4CompressorScore_v1",
+    "per_token": 240.0,
+    "macs": 0,
+    "out_bits": 32768,
+    "in_bits": 65536,
+    "ands": 842752,
+    "k_log": 24
+   },
+   {
+    "block": "FlashMlaGatherRow_v1{DN=448,DR=64,QT=64}",
+    "kind": "FlashMlaGatherRow_v1",
+    "per_token": 490.5365853658537,
+    "macs": 0,
+    "out_bits": 8192,
+    "in_bits": 4664,
+    "ands": 407680,
+    "k_log": 22
+   },
+   {
+    "block": "Dsv4CompressorScore_v1{W=512}",
+    "kind": "Dsv4CompressorScore_v1",
+    "per_token": 248.0,
+    "macs": 0,
+    "out_bits": 16384,
+    "in_bits": 32768,
+    "ands": 421376,
+    "k_log": 23
+   },
+   {
+    "block": "RMSNormCudaVector8_v1{N=7168,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"},BLOCK=896}",
+    "kind": "RMSNormCudaVector8_v1",
+    "per_token": 0.8641114982578397,
+    "macs": 0,
+    "out_bits": 114688,
+    "in_bits": 229376,
+    "ands": 66667664,
+    "k_log": 27
+   },
+   {
+    "block": "Dsv4MlaCompressC4_v1{ROWS=4,D=512,QB=64,EPS={\"f64\":\"0x1.0c6f7a0b5ed8dp-20\"}}",
+    "kind": "Dsv4MlaCompressC4_v1",
+    "per_token": 0.8362369337979094,
+    "macs": 0,
+    "out_bits": 4672,
+    "in_bits": 141312,
+    "ands": 48787884,
+    "k_log": 27
+   },
+   {
+    "block": "MoeAlignRanks_v1{E=384,P=6,BM=8}",
+    "kind": "MoeAlignRanks_v1",
+    "per_token": 52.710801393728225,
+    "macs": 0,
+    "out_bits": 384,
+    "in_bits": 576,
+    "ands": 20160,
+    "k_log": 22
+   },
+   {
+    "block": "MoeAlignBlocks_v1{P=6,BM=8}",
+    "kind": "MoeAlignBlocks_v1",
+    "per_token": 52.710801393728225,
+    "macs": 0,
+    "out_bits": 224,
+    "in_bits": 576,
+    "ands": 16421,
+    "k_log": 22
+   },
+   {
+    "block": "MarlinMoeExpertGemmW_v1{E=384,K=384,N=7168,TK=64,TN=128,GRID=528,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "kind": "MarlinMoeExpertGemmW_v1",
+    "per_token": 20987904.0,
+    "macs": 384,
+    "out_bits": 16,
+    "modeled": true
+   },
+   {
+    "block": "MarlinMoeExpertGemm_v1{E=384,K=7168,N=768,TK=64,TN=128,GRID=528,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "kind": "MarlinMoeExpertGemm_v1",
+    "per_token": 2005812.6271777004,
+    "macs": 7168,
+    "out_bits": 16,
+    "modeled": true
+   },
+   {
+    "block": "ScaledMmFp8BlockGrouped_v1{H=2,K=4096,N=1024,G=128}",
+    "kind": "ScaledMmFp8BlockGrouped_v1",
+    "per_token": 999424.0,
+    "macs": 4096,
+    "out_bits": 16,
+    "modeled": true
+   },
+   {
+    "block": "MarlinMoeExpertGemm_v1{E=384,K=7168,N=768,TK=128,TN=64,GRID=264,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "kind": "MarlinMoeExpertGemm_v1",
+    "per_token": 242891.37282229966,
+    "macs": 7168,
+    "out_bits": 16,
+    "modeled": true
+   },
+   {
+    "block": "GemmF32Out_v1{K=7168,N=2048,DOT={\"fn\":\"HopperBF16WgmmaDot16_v1\"}}",
+    "kind": "GemmF32Out_v1",
+    "per_token": 438428.98954703833,
+    "macs": 7168,
+    "out_bits": 32,
+    "modeled": true
+   }
+  ],
+  "served_macs_per_token": 62606354239.33101,
+  "boundaries": {
+   "every_block": 124697467.65156795
+  }
+ },
+ "art": "art:e46c139862436ebb9f7babaf69cba16207fefa876eb7c5d8fbe1fdf1dd01e489"
+}

@@ -85,9 +85,12 @@ SETTINGS: dict[str, Setting] = _declare(
     S("CHECK_SLOT_MEM_GB", str, "", WHERE, "the GB the check slot gives the run it holds (slot.py sets it): circuit-check's "
       "budget and the suites' jobs", "it sizes how much runs at once, never what a step computes"),
     S("CHECK_SLOT_RANK", str, "", WHERE, "the rank `slot.py --rank` orders priority waiters by: drive's after-landing run's "
-      "(`research.drive.POSTLAND_SLOT_RANK`), none for its Lean checks", "placement: the order drive's checks take slots in"),
+      "and lock run's (`research.drive.POSTLAND_SLOT_RANK`), none for a hand `train.sh`", "placement: the order drive's checks "
+      "take slots in"),
     S("CHECK_STORE_CUSTODY", str, None, WHERE, "the recording run's custody dir, which check gives its steps in place of the "
       "RESEARCH_* that named the store (`store_io`)", "where the store's key is, not what a step computes"),
+    S("RESEARCH_STORE_CONFIG", str, None, WHERE, "the evidence store's config: set, the suites' fixture fetch uses it, not the "
+      "run's custody key (`suites.fetch_env`)", "which store serves a fetch; every byte is checked against its id"),
     # ---- the Lean slots (lean_slot.py)
     S("LEAN_SLOT", str, None, WHERE, "the Lean audit slot this process holds, POOL/I (lean_slot.py sets it)",
       "placement: the slot held"),
@@ -108,6 +111,8 @@ SETTINGS: dict[str, Setting] = _declare(
       "and inputs (a local recorded run's launcher sets it)", "each is found by its sha256 in the pin"),
     S("PYTHONPATH", str, "", VALUE, "where Python imports from: check hands its steps the entries inside this tree"),
     S("PATH", str, "", WHERE, "where programs are", "which tools a suite finds is keyed (`suites.TOOLS`), their versions pinned"),
+    S("CUDA_VISIBLE_DEVICES", str, None, VALUE, "the GPUs a step may use: set and empty, none (`research run` hides gpu-lease's), "
+      "so the GPU tests skip; check passes it to its steps and `suites.gpus` keys on it"),
     S("UV", str, None, WHERE, "the uv that `uv run` runs under, which the preflight's `uv lock --check` uses",
       "pod_setup.sh pins its version, which the preflight checks"),
     S("VIRTUAL_ENV", str, None, WHERE, "the virtualenv `uv run` put first on the PATH, which a planning process drops",

@@ -18,18 +18,19 @@ of its imports as their parts there have them (each import's own task replayed i
 toolchain's and the fetched packages') at the private level. A declaration's axiom set takes an imported declaration's
 from its module's record where the task read one, and otherwise walks its body as the parts have it: a theorem whose proof
 only an absent private part holds counts as an axiom, so the task fails rather than miss one. An env module's declarations
-take theirs from the env's record, which every task reads at `families.lean_env.AXIOMS` (`runners/lean_env.py` writes
-it): a record of another env than the package's (`env_key`), or one that lacks an env module the replay imported or
-names other bytes for it than this worker's (`env_digests`), is an error. A declaration that uses an axiom outside
-`STANDARD` fails the task.
+take theirs from the env's record, which every task reads where `families.lean_env.read` puts it (`runners/lean_env.py`
+writes it): a record of another env than the package's (`families.lean_env.env_key`), or one that lacks an env module the
+replay imported or names other bytes for it than this worker's (`env_digests`), is an error. A declaration that uses an
+axiom outside `STANDARD` fails the task.
 
 The `lean` env on a worker: the toolchain of the package's `lean-toolchain` (elan's), and for a package that fetches
 packages (Mathlib, ArkLib and the rest) its `.lake/packages` at its manifest and toolchain (`lean_audit.deps_key`), made once
 per worker under `lean-env/` in the check's cache (`fetched_dir`): a copy of the check's warm dependencies
 (`lean_audit.WarmDeps`) when the worker has them, else what `setup.sh` makes in the package (the pinned bundle and Mathlib's
-cache). Only the compile runs the module's code, inside `sandbox.sh` where the worker has it. An env that can't be made, a
-part of it a compile misses, a part of an import the task didn't read and a crashed tool are errors; a module that doesn't
-compile, a declaration the kernel rejects or whose axioms are outside `STANDARD`, and a timeout are fails."""
+cache), and topped up from each warm copy the check gives back after (`_top_up`). Only the compile runs the module's code,
+inside `sandbox.sh` where the worker has it. An env that can't be made, a part of it a compile misses, a part of an import
+the task didn't read and a crashed tool are errors; a module that doesn't compile, a declaration the kernel rejects or
+whose axioms are outside `STANDARD`, and a timeout are fails."""
 from __future__ import annotations
 
 import fcntl
@@ -45,7 +46,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from .. import ROOT, contract
-from ..families.lean_env import AXIOMS as ENV_RECORD
+from ..families import lean_env as env_family
 from ..families.lean_module import la
 from ..graph import LOG
 from . import Timeout, call
@@ -58,6 +59,8 @@ STANDARD = ("Classical.choice", "Quot.sound", "propext")
 #: sandbox.sh's invocation (its header), probed as check.py's `sandboxed()` probes it: check.py isn't among a task's inputs,
 #: so the runner doesn't load it
 UNSHARE = ["unshare", "--user", "--map-root-user", "--mount", "--net", "--pid", "--fork", "--kill-child"]
+#: beside a worker's fetched packages once they're made: {"key": their `deps_key`, "warm": the `_stamp` of the warm copy they
+#: last took what they lacked from, null when the worker kept none}
 READY = ".ready"
 #: `lean`'s error for an import whose parts among the reads lack the level it's imported at
 MISSING = re.compile(r"missing (?:IR )?data file for module (\S+)")
@@ -112,27 +115,82 @@ def fetched_dir(k: str) -> Path:
 
 
 def packages(pkg: Path, work: Path) -> Path | None:
-    """``pkg``'s fetched packages on this worker (its `.lake/packages`), made once per manifest and toolchain; None when it
-    fetches none."""
+    """``pkg``'s fetched packages on this worker (its `.lake/packages`), made once per manifest and toolchain and topped up
+    each time the check's warm copy of them changes; None when it fetches none."""
     if (k := la.deps_key(pkg)) is None:
         return None
-    home = fetched_dir(k)
-    if (home / READY).is_file():
+    home, warm = fetched_dir(k), la.WarmDeps(la.COMMON.cache_dir() / "lean-deps")
+    if (r := _ready(home)) is not None and r.get("warm", ()) == _stamp(warm.store / k):
         return home
     with _locked(env_dir() / f"{k}.lock"):
-        if not (home / READY).is_file():
-            _prepare(pkg, k, home, work)
+        if (r := _ready(home)) is None:
+            _prepare(pkg, k, home, work, warm)
+        elif r.get("warm", ()) != _stamp(warm.store / k):
+            _top_up(pkg, k, home, warm)
     return home
 
 
-def _prepare(pkg: Path, k: str, home: Path, work: Path) -> None:
+def _stamp(warm: Path) -> list[int] | None:
+    """The inode and mtime of the warm copy at ``warm``, which each give-back (a build's tree moved there, its mtime set)
+    and restore (a bundle unpacked there) changes; None when the worker keeps none or a check holds it. Under the warm
+    copy's lock nothing moves it between the two calls; outside it, a copy taken between them raises."""
+    if not warm.is_dir():
+        return None
+    st = warm.stat()
+    return [st.st_ino, st.st_mtime_ns]
+
+
+def _ready(home: Path) -> dict | None:
+    """``home``'s `READY` record: None when ``home`` isn't made, and {} for one that holds the deps key alone, as this runner
+    wrote it before it topped up (`_mark` replaces it whole, and nothing here removes one)."""
+    if not (f := home / READY).is_file():
+        return None
+    text = f.read_text()
+    return json.loads(text) if text.startswith("{") else {}
+
+
+def _mark(home: Path, k: str, stamp: list[int] | None) -> None:
+    tmp = home / f"{READY}.tmp"
+    tmp.write_text(json.dumps({"key": k, "warm": stamp}) + "\n")
+    os.replace(tmp, home / READY)
+
+
+def _top_up(pkg: Path, k: str, home: Path, warm: la.WarmDeps) -> None:
+    """Add to ``home`` what the warm copy holds of each fetched package's `.lake` (its builds) and ``home`` lacks. A Lean
+    check gives back what its build compiled, the modules its package imports, so a copy made from one check's tree can
+    lack modules another package's importers need. Nothing in ``home`` is replaced or removed: tasks may be reading it."""
+    with warm._lock(k):
+        if (stamp := _stamp(warm.store / k)) is not None:
+            for n in fetched(pkg):
+                _add_missing(warm.store / k / n / ".lake", home / n / ".lake")
+    _mark(home, k, stamp)
+
+
+def _add_missing(src: Path, dst: Path) -> None:
+    """Copy each file and symlink under ``src`` that ``dst`` lacks to its place there, whole before it appears."""
+    for top, dirs, files in os.walk(src):
+        here = dst / os.path.relpath(top, src)
+        for name in (*files, *(d for d in dirs if os.path.islink(os.path.join(top, d)))):
+            s, t = os.path.join(top, name), here / name
+            if os.path.lexists(t):
+                continue
+            here.mkdir(parents=True, exist_ok=True)
+            tmp = here / f".{name}.tmp"
+            tmp.unlink(missing_ok=True)
+            if os.path.islink(s):
+                os.symlink(os.readlink(s), tmp)
+            else:
+                shutil.copy2(s, tmp)
+            os.replace(tmp, t)
+
+
+def _prepare(pkg: Path, k: str, home: Path, work: Path, warm: la.WarmDeps) -> None:
     tmp = home.with_name(f".{k}.tmp")
     shutil.rmtree(tmp, ignore_errors=True)
     shutil.rmtree(home, ignore_errors=True)
     home.parent.mkdir(parents=True, exist_ok=True)
-    warm = la.WarmDeps(la.COMMON.cache_dir() / "lean-deps")
     with warm._lock(k):
-        if (warm.store / k).is_dir():
+        if (stamp := _stamp(warm.store / k)) is not None:
             shutil.copytree(warm.store / k, tmp, symlinks=True)
     if not tmp.is_dir():
         if (pkg / ".lake" / "packages").exists():
@@ -148,7 +206,7 @@ def _prepare(pkg: Path, k: str, home: Path, work: Path) -> None:
         if (tmp / n / ".git").exists():
             call(["git", "-C", str(tmp / n), "update-index", "-q", "--refresh"], work, tmp)
     os.replace(tmp, home)
-    (home / READY).write_text(k + "\n")
+    _mark(home, k, stamp)
 
 
 def program(name: str, tc: Path, work: Path) -> Path:
@@ -175,12 +233,6 @@ def program(name: str, tc: Path, work: Path) -> Path:
 
 #: the schema of the lean env's record (`runners/lean_env.py`)
 ENV_SCHEMA = "verity-lean-env-axioms/v1"
-
-
-def env_key(pkg: Path) -> str:
-    """The env ``pkg`` compiles in, as `families/lean_env.py` groups packages: its `lean_audit.deps_key`, or its
-    toolchain's line when it fetches no package."""
-    return la.deps_key(pkg) or (pkg / "lean-toolchain").read_text().strip()
 
 
 def env_libs(pkg: Path, tc: Path, deps: Path | None) -> list[Path]:
@@ -346,12 +398,14 @@ def run(task: dict, work: Path) -> dict:
         tc = toolchain(pkg, work)
         deps = packages(pkg, work)
         replay = program("Replay", tc, work)
-        key, record = env_key(pkg), work / ENV_RECORD
+        if (env_read := env_family.read(task)) is None:
+            raise ValueError("the task reads no lean env's axioms")
+        key, record = env_family.env_key(pkg), work / env_read[1]
         head = env_header(record)
     except (EnvError, Timeout) as e:
         return {"status": "error", "detail": {"error": f"the lean env: {type(e).__name__}: {e}"}}
     except (OSError, ValueError) as e:
-        return {"status": "error", "detail": {"error": f"the lean env's record ({ENV_RECORD}): {type(e).__name__}: {e}"}}
+        return {"status": "error", "detail": {"error": f"the lean env's record: {type(e).__name__}: {e}"}}
     if head.get("schema") != ENV_SCHEMA or head.get("env") != key:
         return {"status": "error", "detail": {"error": f"the lean env's record is of env {head.get('env')!r} "
                                                        f"({head.get('schema')}), and {v['package']} compiles in {key!r} "

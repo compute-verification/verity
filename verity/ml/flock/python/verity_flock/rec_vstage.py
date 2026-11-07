@@ -12,7 +12,7 @@ With each level, that level's committed tops are staged too, every node held at 
     python -m verity_flock.rec_vstage stage-links CIRCUIT INST LINKS OUT [--forge link]
 
 ``stage`` refuses an inner session whose record holds no sample (`rec_live.inner_draw`, exit 2): the verifier refuses every
-session over it (`RecSetup.innerDrawn`), so the coin server answers ``Register`` with the verifier's full draw
+session over it (`RecSetup.innerDrawn`), so the challenger answers ``Register`` with the verifier's full draw
 (``rec_live --draw``).
 
 **The verifier's side** reads the inner session's public record and the inner statement, never the prover's records: the
@@ -137,12 +137,12 @@ def _stream(public: dict, rep: int) -> list[dict]:
 
 
 def rep_coins(public: dict, rep: int) -> list[list[int]]:
-    """A rep's coins by round, as the coin server issued them."""
+    """A rep's coins by round, as the challenger issued them."""
     return [[G.of_hex(c) for c in r["coins"]] for r in _stream(public, rep)]
 
 
 def link_points(public: dict) -> list[list[str]]:
-    """The link points the coin server drew (``points × m`` coins), one list of ``m`` a point."""
+    """The link points the challenger drew (``points × m`` coins), one list of ``m`` a point."""
     spec, flat = public["hello"]["link"], public["link"]["points"]
     if len(flat) != spec["points"] * spec["m"]:
         raise ValueError(f"{len(flat)} link coins for {spec['points']} points of {spec['m']}")
@@ -217,7 +217,7 @@ def _sparse_stream(public: dict, rep: int) -> list[dict]:
 
 def sparse_reps(public: dict, private: dict, vf: SimpleNamespace, sp, rng: dict) -> list[tuple]:
     """Each rep's sparse phase (`rec_live.sparse_rounds` at the bucket's `rec_sparse.Shape` ``sp``, T = 1) as the session holds
-    it, per rep ``(coins, messages)``: its coins from the coin server's record of its stream (v2's round, which samples none,
+    it, per rep ``(coins, messages)``: its coins from the challenger's record of its stream (v2's round, which samples none,
     skipped), the inner points from the rep's coins (`rec_sparse.inner_points`) and the slots' layout factors from META's
     range ``rng`` of the hidden circuit (`rec_sparse.layout_factors`), all public; its messages the prover's rows of its
     rounds, h its rep's h round's, and the registered claim its claim round's, the last (the prover's ``Σ_p eq(ζ_p, p) u_p``,
@@ -248,7 +248,7 @@ def sparse_reps(public: dict, private: dict, vf: SimpleNamespace, sp, rng: dict)
 def sparse_messages(program: str, public: dict, private: dict, sp) -> tuple[dict, dict]:
     """The sparse streams' message rounds as `messages` registers them, port ``<p>`` as ``rec-sparse-<p>`` and ``claim``, the
     claim round's, as ``rec-claim`` (`rec_sparse.registrations`' values; row r rep r's), with the verifier's own entries:
-    ``rec-claim``'s rows are the ones the coin server's ``c_k`` commit, which RecSparse and R's opening both read."""
+    ``rec-claim``'s rows are the ones the challenger's ``c_k`` commit, which RecSparse and R's opening both read."""
     from .rec_outer import CLAIM_VALUE
 
     names = [nm for nm, _ in SP.message_ports(sp)][1:]
@@ -297,7 +297,7 @@ def opening_messages(public: dict, private: dict, sh: A.Shape, program: str) -> 
     """R's registered opening's messages (`messages`), port ``m<i>`` reading ``rec-opening-c<i>``: round i of
     `rec_algebra.rounds` at the opening-only shape ``sh`` (``Flock/RecOpening.lean``'s ``rounds``, which its unit's row ports
     follow: each claim's ring switch, then Ligerito's), the i-th round of ``stacked/rep0`` that commits a message. Each must sit
-    at a round `rec_live.stacked_rounds` absorbs a message in, so that the coin server recorded its ``c_k`` before it flipped
+    at a round `rec_live.stacked_rounds` absorbs a message in, so that the challenger recorded its ``c_k`` before it flipped
     that round's coins and every later one."""
     stream = f"{RL.STACKED}/rep0"
     ks = sorted(r["k"] for r in public["rounds"] if r["stream"] == stream and r["commits"])

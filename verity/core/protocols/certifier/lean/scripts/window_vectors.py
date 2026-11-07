@@ -5,7 +5,7 @@
 
 Writes `DIR/window/instances.jsonl`, one instance per line as `NetworkCertifier.WindowCharge.WindowDifftest.rawOfJson`
 reads it, and `DIR/window/python.jsonl`, the same line's results from the checkout's
-`verity.core.protocols.certifier.window_charge`: `reference_window` window by window from the instance's carry, each
+`verity.ml.protocols.certifier.window_charge`: `reference_window` window by window from the instance's carry, each
 window's charge and the carry it passes on, up to and including the first it refuses (`steps`), and the windows' charges
 chained from the book's first carry (its priors, run 0 and no order entry yet), or none when one refuses (`charges`).
 The Lean audit runs `WindowDifftestMain.lean` on both files (`runs` in `lean-audit.json`, which pins their SHA-256), and
@@ -33,7 +33,7 @@ from pathlib import Path
 
 import verity.core.protocols.certifier
 from verity.core.protocols.certifier.arith_encode import MAX_TOTAL, RUNS
-from verity.core.protocols.certifier.window_charge import (GAP_CAP, HIT_CAP, INDEX_CAP, WindowBook, WindowCarry, _bins,
+from verity.ml.protocols.certifier.window_charge import (GAP_CAP, HIT_CAP, INDEX_CAP, WindowBook, WindowCarry, _bins,
                                                            reference_window)
 
 COUNT = 4_000

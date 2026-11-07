@@ -8,7 +8,7 @@ public import Definitions.Pouw.Dither
 The onsite protocol (`Core.Onsite.components`: the network certifier's period check beside PoUW's) accepts a
 monitoring period when both its checks do:
 
-* **the work check** `vw`: the proof service's verdict on the transcript alone (the sampling blocks' instances,
+* **the work check** `vw`: the proof system's verdict on the transcript alone (the sampling blocks' instances,
   commitments and answers), which reads no device: the served check, whose remote form is
   `Definitions.Pouw.Assumptions.OnsiteFreed.RemoteWorkFloor`;
 * **the network certifier's check** `vn`: its verdict on the transcript and the certifier's signed readings of the
