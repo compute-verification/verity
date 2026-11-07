@@ -136,27 +136,27 @@ noncomputable def simCoinsEquiv {WA WB : Type} (T₀ : Claims.ZKMal.SeqTape) (c 
   | n + 1 => Equiv.prodCongr (simCoinsEquiv T₀ c NB ΩB Q CB progB go x n) (Equiv.refl (CB n))
 
 /-- Where a layout's sessions start reads only its rounds, whatever its witnesses. -/
-theorem start_eq_of {W WS T W' WS' T' : Type} (L : Claims.ZKMal.RunParts W WS T) (L' : Claims.ZKMal.RunParts W' WS' T')
+theorem start_eq_of {W WS T W' WS' T' : Type} (L : Claims.ZKMal.Layout W WS T) (L' : Claims.ZKMal.Layout W' WS' T')
     (hk : L.k₀ = L'.k₀) (hn : L.n = L'.n) : L.start = L'.start := by
   funext x j
   induction j with
   | zero => exact congrFun hk x
-  | succ j ih => simp only [Claims.ZKMal.RunParts.start, ih, hn]
+  | succ j ih => simp only [Claims.ZKMal.Layout.start, ih, hn]
 
 /-- **The simulator reads no witness, whatever its type**: after `nilSim`, the sessions of two layouts in turn
 (`iterSimG`) send one program at the coins `simCoinsEquiv` gives, at the same statements' programs `progB` and the same
 places to go on. -/
 theorem iterSimG_seq_prog {W WS W' WS' : Type} (T₀ : Claims.ZKMal.SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB]
-    [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (L : Claims.ZKMal.RunParts W WS (T₀.N × T₀.Ω))
-    (L' : Claims.ZKMal.RunParts W' WS' (T₀.N × T₀.Ω)) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
+    [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] (L : Claims.ZKMal.Layout W WS (T₀.N × T₀.Ω))
+    (L' : Claims.ZKMal.Layout W' WS' (T₀.N × T₀.Ω)) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
     (progB : (n : ℕ) → Claims.Msg → List (Claims.Msg × Claims.Msg) → CB n →
       Claims.SP (List (Claims.Msg × Claims.Out)))
     (go go' : ℕ → Claims.Msg → List (Claims.Msg × Claims.Out) → Bool) (hgo : go = go') (x : Claims.Msg) :
     ∀ (n : ℕ) (s : SimCoins CB n),
-      (Claims.ZKMal.iterSimG T₀ c NB ΩB (Claims.ZKMal.RunParts.seq T₀ c NB ΩB L) nilSim (fun j _ => CB j) progB go
-          n).prog x (simCoinsEquiv T₀ c NB ΩB (Claims.ZKMal.RunParts.seq T₀ c NB ΩB L) CB progB go x n s) =
-        (Claims.ZKMal.iterSimG T₀ c NB ΩB (Claims.ZKMal.RunParts.seq T₀ c NB ΩB L') nilSim (fun j _ => CB j) progB go'
-          n).prog x (simCoinsEquiv T₀ c NB ΩB (Claims.ZKMal.RunParts.seq T₀ c NB ΩB L') CB progB go' x n s) := by
+      (Claims.ZKMal.iterSimG T₀ c NB ΩB (Claims.ZKMal.Layout.seq T₀ c NB ΩB L) nilSim (fun j _ => CB j) progB go
+          n).prog x (simCoinsEquiv T₀ c NB ΩB (Claims.ZKMal.Layout.seq T₀ c NB ΩB L) CB progB go x n s) =
+        (Claims.ZKMal.iterSimG T₀ c NB ΩB (Claims.ZKMal.Layout.seq T₀ c NB ΩB L') nilSim (fun j _ => CB j) progB go'
+          n).prog x (simCoinsEquiv T₀ c NB ΩB (Claims.ZKMal.Layout.seq T₀ c NB ΩB L') CB progB go' x n s) := by
   subst hgo
   intro n
   induction n with
@@ -172,7 +172,7 @@ def nilP : Ctx → Claims.Prover (Unit × Unit) := fun _ => ⟨fun _ _ _ => .ret
 
 /-- **The statements as a layout**: no first part, then statement `j` at the public context `pc`, for `kS (stmt j pc)`
 rounds, with the witness `wit j` of the honest context. -/
-def lay (kS : Claims.Msg → ℕ) (pc : Pub) : Claims.ZKMal.RunParts Ctx WS (Unit × Unit) where
+def lay (kS : Claims.Msg → ℕ) (pc : Pub) : Claims.ZKMal.Layout Ctx WS (Unit × Unit) where
   k₀ _ := 0
   n _ j := kS (V.stmt j pc)
   xs _ j _ := V.stmt j pc
@@ -186,7 +186,7 @@ tape. -/
 noncomputable def prover {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
     (kS : Claims.Msg → ℕ) (PS : WS → Claims.Prover (NB × ΩB)) (pc : Pub) (x : Ctx) :
     Claims.Prover (Claims.Sampling.unitTape.at 0 NB ΩB V.m) :=
-  ((V.lay kS pc).prover nilP PS V.m x).comap (Claims.ZKMal.RunParts.flatten Claims.Sampling.unitTape 0 NB ΩB V.m)
+  ((V.lay kS pc).prover nilP PS V.m x).comap (Claims.ZKMal.Layout.flatten Claims.Sampling.unitTape 0 NB ΩB V.m)
 
 /-- **The statements' simulator** at the public context `pc`: statement `j`'s simulator `Sim` on the coins `CB j`, in
 turn, going on where the transcript before it does. -/
@@ -194,7 +194,7 @@ noncomputable def sim (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [
     (Sim : Claims.Simulator) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] (pc : Pub) :
     Claims.Simulator :=
   Claims.ZKMal.iterSimG Claims.Sampling.unitTape 0 NB ΩB
-    (Claims.ZKMal.RunParts.seq Claims.Sampling.unitTape 0 NB ΩB (V.lay kS pc)) nilSim (fun j _ => CB j)
+    (Claims.ZKMal.Layout.seq Claims.Sampling.unitTape 0 NB ΩB (V.lay kS pc)) nilSim (fun j _ => CB j)
     (fun j _ _ => Claims.ZKMal.progOf Sim (CB j) (V.stmt j pc))
     (fun j x => Claims.ZKMal.goesOn ((V.lay kS pc).start x j)) V.m
 
@@ -203,7 +203,7 @@ noncomputable def coinsE (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB
     (kS : Claims.Msg → ℕ) (Sim : Claims.Simulator) (CB : ℕ → Type) [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
     (pc : Pub) : SimCoins CB V.m ≃ (V.sim NB ΩB kS Sim CB pc).C [] :=
   simCoinsEquiv Claims.Sampling.unitTape 0 NB ΩB
-    (Claims.ZKMal.RunParts.seq Claims.Sampling.unitTape 0 NB ΩB (V.lay kS pc)) CB
+    (Claims.ZKMal.Layout.seq Claims.Sampling.unitTape 0 NB ΩB (V.lay kS pc)) CB
     (fun j _ _ => Claims.ZKMal.progOf Sim (CB j) (V.stmt j pc))
     (fun j x => Claims.ZKMal.goesOn ((V.lay kS pc).start x j)) [] V.m
 
@@ -257,7 +257,7 @@ theorem zkmalAt_prover {NB ΩB : Type} [Fintype NB] [Nonempty NB] [Fintype ΩB] 
     (fun j x => Claims.ZKMal.goesOn ((V.lay kS pc).start x j)) 0 0 g (fun j => εS (V.stmt j pc))
     (Claims.ZKMal.zkmalAt_public H 0 nilP _ [] (fun _ => .ret []) fun _ _ _ _ _ => rfl)
     (fun j hj _ _ => hB j hj)
-    (fun j hj => Claims.ZKMal.RunParts.relOnAt_of Claims.Sampling.unitTape 0 NB ΩB (V.lay kS pc) H _ _ R []
+    (fun j hj => Claims.ZKMal.Layout.relOnAt_of Claims.Sampling.unitTape 0 NB ΩB (V.lay kS pc) H _ _ R []
       fun _ hw _ _ _ => hw j hj)
     (fun _ _ _ _ _ _ _ _ => rfl) (by simp) (fun j _ => hε _) hg
   simp only [Nat.cast_zero, zero_add] at h
