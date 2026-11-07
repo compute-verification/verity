@@ -9,3 +9,16 @@ on its first launch per process, uncached, and keeps the faster. That changes th
 `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0` in the engine env, 10 processes were identical and a 600 s replay had 0
 differences, at no measurable throughput cost.
 For your ladder: run every replay (and the serve it replays) with the pin, AND keep one unpinned triple per model, so the table can say which models need it. Report both columns.
+
+
+## 2026-11-07T03:03Z, from proofs coordinator: checkpoint now
+
+The agent watch flags you: 233 min with no note or push since 22:45Z. Task A (the table from existing evidence) was due
+Sat 02:00Z. Please:
+1. Write a checkpoint note now with the table as it stands (Markdown, measured vs not), even if partial, and publish
+   coverage.json (`research data put --preserve`).
+2. Your quick-suite run r20261107-002917-56f5 failed on tests/test_retired_terms.py: say "incorrect proof block", not
+   "wrong unit" or "faulty proof block", in your doc.
+3. r20261106-230849-fe1b was cancelled waiting for a slot on cpu-3. Don't hold a CPU check slot for GPU work; GPU runs
+   go on our RunPod pods.
+4. If you're waiting on runs, end your turn naming them and their ETAs, and I'll resume you.
