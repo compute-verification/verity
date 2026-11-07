@@ -7,7 +7,7 @@ public import Proofs.Flock.Soundness.Discharge.Tables.Sim
 # Flock's live session as a public-coin verifier
 
 `liveSession dg J mPts N` (`Discharge.Tables.Sim`) is the live game the old end-to-end theorems run: `Commit`'s roots,
-the two link points, at most `N` rounds on the `2J` rep streams (each round's `n` coins drawn after its bytes), then the
+the two link points, at most `N` rounds on the `2J` rep streams (each round's `n` coins flipped after its bytes), then the
 proof files. This file runs it as a `Claims.Verifier` and transports `Claims.run`'s probabilities to it.
 
 * `LCoin nMax`: a round's coin, `nMax` field elements. A round of `n ≤ nMax` coins reads the first `n`; the link points
@@ -27,11 +27,11 @@ proof files. This file runs it as a `Claims.Verifier` and transports `Claims.run
 **The correspondence.** The old games average over each `coin` node's own type (`prob`, `expect`) against a
 `Strategy`, a move at each `send` node that may read every earlier move and coin. `Claims.run H P* (liveV …) x ω r`
 averages over `r : Fin (N x + 2) → LCoin nMax`, the tape `ω` fixed. Round `j`'s message `a_j` is `P*.next x hist ω`;
-its decoding is the move (`Wire`), and its reply carries the coin the session draws next: Commit's the link points, a
+its decoding is the move (`Wire`), and its reply carries the coin the session samples next: Commit's the link points, a
 submission's its `n` coins, the proof files' the decision, which is `d x` on the outcome, its `H` queries the verifier's
 log. `P*` sees every earlier reply, so the decoded strategy (`stratG`) reads exactly what a `Strategy` reads, and the
-coin law (`Coins.ex_playOn`) gives each coin uniform, independent, after the message it answers. A stop (`none`) leaves
-the later round coins unread. The round digest `roundOf dg` computes is the coin server's, not an oracle query.
+coin distribution (`Coins.ex_playOn`) gives each coin uniform, independent, after the message it answers. A stop (`none`) leaves
+the later round coins unread. The round digest `roundOf dg` computes is the challenger's live-coin part's, not an oracle query.
 -/
 
 @[expose] public section

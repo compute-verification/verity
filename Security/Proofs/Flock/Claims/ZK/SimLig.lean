@@ -1196,7 +1196,7 @@ theorem simLig_of_fields (hood : LigOodE) (hmsg : LigMsgE) (hsum : LigSumsE) (hy
 /-! ### The out-of-domain sample
 
 The deployed source's masked value at `lgOod 0` is the cut's clear value there plus the tape's pad
-(`srcE_masked_pad_L`). The clear value is `Σ_y eqAt(z, y)·word(y)` at the drawn point `z` (`Composed.honestAt_lgOod`),
+(`srcE_masked_pad_L`). The clear value is `Σ_y eqAt(z, y)·word(y)` at the sampled point `z` (`Composed.honestAt_lgOod`),
 which is the executable's `mleF` of the packed trace at `zS` (`ligOodE`). -/
 
 section Ood

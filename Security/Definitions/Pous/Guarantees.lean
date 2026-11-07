@@ -77,7 +77,7 @@ of `220·2384` bits (64 KB) per segment, 14.4 MB. The salt is 24 bytes, and segm
 
 Scope: the ideal two-permutation model only. Lean does not prove anything about a concrete permutation (no Keccak or
 other instantiation of `P` or `Π₂`), decode cost, the wall-clock-to-`Q` calibration, authentication, accounting or
-fresh setup. As for every `Meets` here, `W` is fixed before the primitives are drawn. -/
+fresh setup. As for every `Meets` here, `W` is fixed before the primitives are sampled. -/
 
 /-- **Unconditional (no hypothesis): P3 with a concrete `H`, 64 KB labels, one segment (14.4 MB).**
 `p3SchemeC 2384 B(220, 12)` meets the requirement with sequential reveal, `D = 10` rounds, `Q = 2^20` queries per
@@ -131,7 +131,7 @@ ways, so `D` and `Q` count `Π₂^{±1}` calls. `H` is the overwrite chain on `�
 
 Scope: the ideal-permutation model only. Lean does not prove anything about a concrete permutation, decode cost, the
 wall-clock-to-`Q` calibration, authentication, accounting or fresh setup. As for every `Meets` here, `W` is fixed
-before `Π₂` is drawn, and the salt is a parameter every statement quantifies over. The band needs in-degree `d ≥ D`:
+before `Π₂` is sampled, and the salt is a parameter every statement quantifies over. The band needs in-degree `d ≥ D`:
 with `d + 1 ≤ D` it is broken (`BandGapAttack`, proved as `band_gap_attack`). -/
 
 /-- **Unconditional: the band scheme at 64 KiB.** For every in-degree `d ≥ 5` and salt, `chainBand (2^9) d` (512
@@ -530,11 +530,11 @@ def BackgroundRebuildExcluded : Prop :=
             ((Pous.BandChain.chainBand (2 ^ 9) d 524288 512 dom).enc W π ()).2 i)
         ≤ (2⁻¹ : ℝ≥0∞) ^ 128
 
-/-! ### The continuous audit, time-averaged, with arrivals drawn by the memory challenger
+/-! ### The continuous audit, time-averaged, with arrivals sampled by the memory challenger
 
 Red team: needed. The memory challenger of `ContinuousAudit`,
-unchanged, run on arrivals it draws itself: one coin per slot of one unit
-(`Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals drawn by the memory challenger"). Arrivals queue
+unchanged, run on arrivals it samples itself: one coin per slot of one unit
+(`Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals sampled by the memory challenger"). Arrivals queue
 behind an open round (rule 1). The memory is read at every idle slot, not only at send times, and the bound is
 normalized by the expected number of challenges `λT`, not the realized one. -/
 

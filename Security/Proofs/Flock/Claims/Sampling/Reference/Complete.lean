@@ -46,14 +46,14 @@ import VCVio.Prelude.Core
 reference prover on a statement Flock's verifier serves and a witness in its relation. Four facts about the record's
 verifier and reference prover, each a hypothesis to discharge at the deployment:
 
-* `CheckedLe`: on a statement in scope, the draw checks at most `n_PU` units; from `DrawSlots`
+* `CheckedLe`: on a statement in scope, the sample checks at most `n_PU` units; from `DrawSlots`
   (`checkedLe_of_slots`).
 * `HonestSessions`: at an honest witness and coins that check `u`, `u`'s session is the run of Flock's reference prover
   (`D.flock.P`) on a statement in Flock's scope and a witness in its relation, on `u`'s own rounds (an injective map of
   Flock's) with the coins off them fixed.
 * `AcceptsSessions`: at an honest witness, the run accepts when every checked unit's session accepts.
 * `SessionsAmong K`: every checked unit's session is the session of the unit checked at a slot below `K x`; at
-  `K = n_PU` from `CheckedLe` (`sessionsAmong_nPU`), and at `K = 1` when one session proves every drawn unit.
+  `K = n_PU` from `CheckedLe` (`sessionsAmong_nPU`), and at `K = 1` when one session proves every sampled proof block.
 
 With `DrawFixed` (the checked units don't read their sessions' coins), each slot `p` rejects with probability at most
 its session's Flock error: resampling the slot's session rounds (`Ex_resample`) leaves the slot's unit and statement
@@ -73,13 +73,13 @@ open Claims Claims.Sampling Finset Properties.SampledProofs Properties.SampledPr
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **The draw checks at most the proof units**: on a statement in scope, at every coins, at most `n_PU` checked
+/-- **The sample checks at most the proof blocks**: on a statement in scope, at every coins, at most `n_PU` checked
 units. -/
 def CheckedLe (D : Deploy Coin Col T) : Prop := ∀ x, Scope D x → ∀ r, (D.checked x r).length ≤ nPU D x
 
 omit [Nonempty Coin] [Inhabited Coin] in
-/-- **The deployed draw checks at most the proof units**: `Slots.select`'s checked units are among the layout's, and a
-refused draw checks each once (`size_checked_le`, `size_allSlots`). -/
+/-- **The deployed sample checks at most the proof blocks**: `Slots.select`'s checked units are among the layout's, and a
+refused sample checks each once (`size_checked_le`, `size_allSlots`). -/
 theorem checkedLe_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : CheckedLe D := by
   rintro x ⟨s, Pt, hx, hP, -⟩ r
   obtain ⟨rule, d, query, table, cm, l, L, bytes, -, hl, hshape, -, -, hch⟩ := h x s Pt hx hP
@@ -96,7 +96,7 @@ theorem checkedLe_of_slots (D : Deploy Coin Col T) (h : DrawSlots D) : CheckedLe
   · exact (size_allSlots l).le
 
 /-- **At the reference prover, a checked unit's session is Flock's reference prover's run**: on a statement in scope,
-at a witness with no faulty unit and coins `r` that check `u`, a statement `xS` in Flock's scope, a witness `wF` in its
+at a witness with no incorrect proof block and coins `r` that check `u`, a statement `xS` in Flock's scope, a witness `wF` in its
 relation, a Flock tape `ωF` and an injective map `emb` of Flock's rounds into `u`'s, such that at coins agreeing with
 `r` off `u`'s rounds, `u`'s session is `D.flock.P wF`'s run on `xS` at the coins `emb` reads. -/
 def HonestSessions (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
@@ -109,7 +109,7 @@ def HonestSessions (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
           D.session x u (run H (D.P w) D.V x ω r').seen =
             some (xS, (run H (D.flock.P wF) D.flock.V xS ωF fun i => r' (emb i)).seen)
 
-/-- **The run accepts when its sessions do**: on a statement in scope, at a witness with no faulty unit, the reference
+/-- **The run accepts when its sessions do**: on a statement in scope, at a witness with no incorrect proof block, the reference
 prover's run accepts when every checked unit's session that shows accepts. -/
 def AcceptsSessions (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ x w, Scope D x → Rhon H D.commit D.parse D.partition x w → ∀ (ω : D.Tape) (r : Fin (D.V.k x) → Coin),
@@ -221,7 +221,7 @@ theorem Pr_slot_le (H : Msg → Msg) (D : Deploy Coin Col T) (hF : Claims.Flock.
 
 /-- **The checked units' sessions are the first `K x` slots'**: on a statement in scope, at an honest witness, every
 checked unit's session at the reference prover is the session of the unit checked at a slot below `K x`. At `K = n_PU`
-it holds of every draw that checks at most `n_PU` units (`sessionsAmong_nPU`); one session that proves every drawn unit
+it holds of every sample that checks at most `n_PU` units (`sessionsAmong_nPU`); one session that proves every sampled proof block
 has it at `K = 1`. -/
 def SessionsAmong (H : Msg → Msg) (D : Deploy Coin Col T) (K : Msg → ℕ) : Prop :=
   ∀ x w, Scope D x → Rhon H D.commit D.parse D.partition x w → ∀ (ω : D.Tape) (r : Fin (D.V.k x) → Coin) u,

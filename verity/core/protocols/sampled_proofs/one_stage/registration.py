@@ -11,7 +11,7 @@
 * **Digest.** `SHA-512("verity/registration/v1\\0" || canon(record))`.
 * **Rule.** Everything a sampled proof block's statement can depend on is fixed by the record, or by objects the verifier already
   holds, before the sample. The verifier checks R1-R6 (`check`) against its own copies, writes a `receipt` with its own
-  clock, and only then draws.
+  clock, and only then samples.
 * **The checks** (`check`): the record has exactly these keys, and
   - R1: the format and protocol are these, the sampling design is the verifier's own expanded over its program and query
     (`draw.derive`, with its own work table for `work`) as canonical bytes, and `window.kind` is `served` or `stand-in`;
@@ -57,7 +57,7 @@
 * **Declared day** (`day`, `declarations`): the prover declares one circuit a day, before the day's first coin, in the
   registration log (`verity/registration/declaration/v1`, `verity.core.protocols.registration`). The verifier passes
   the window's day, by its index among the monitoring period's days on its own clock, and the declarations of the log
-  it holds when it draws (its view's `declarations`: `{"day", "program", "blocks"}` each). R2 refuses a day with no
+  it holds when it samples (its view's `declarations`: `{"day", "program", "blocks"}` each). R2 refuses a day with no
   declaration (`R2-undeclared`), a day declared twice (`R2-declared-twice`, which the log's own check refuses as
   `duplicate-declaration`), and a record whose program is not the day's declared one (`R2-declared`), as R2's Lean does
   (`SampledProofs.Registration.declaredCode`), which `verifier.check` runs beside it.

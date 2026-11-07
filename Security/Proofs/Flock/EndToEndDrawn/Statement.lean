@@ -18,13 +18,13 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# C-Flock's one-stage audit, end to end, at the drawn units (trusted)
+# Flock's one-stage audit, end to end, at the sampled proof blocks (trusted)
 
-`EndToEndDrawn` is `EndToEnd`'s statement with its event at the drawn units: flock-verify accepts and some drawn unit is
+`EndToEndDrawn` is `EndToEnd`'s statement with its event at the sampled proof blocks: flock-verify accepts and some sampled proof block is
 wrong, in place of "at least `K₀` units are wrong". Its proof is
 `Flock.SecurityProofs.EndToEndDrawn : Flock.Guarantees.EndToEndDrawn`.
 
-C-Flock's definitions are still in its proofs package, so this module imports
+Flock's definitions are still in its proofs package, so this module imports
 `Proofs.Flock.Soundness.Discharge.Composed.DrawnJ`, and `Models.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEndDrawn` does.
 -/
@@ -40,26 +40,26 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 open Classical in
-/-- **C-Flock's one-stage audit, end to end, at the drawn units.** As in `EndToEnd`: the prover registers `R`; the
-verifier draws a `kd`-subset of the `n` proof units from its operating system's bytes (`Law.execOS` on the byte source
-`src`); one `--zk` session of `J = nTab I` tables proves the drawn units, `kd / J` in each; and
+/-- **Flock's one-stage audit, end to end, at the sampled proof blocks.** As in `EndToEnd`: the prover registers `R`; the
+verifier samples a `kd`-subset of the `n` proof blocks from its operating system's bytes (`Law.execOS` on the byte source
+`src`); one `--zk` session of `J = nTab I` tables proves the sampled proof blocks, `kd / J` in each; and
 `flock-verify verify --zk --session-tables J` reads the session's record. Then for every live prover `τ`,
-$$\Pr[\text{flock-verify accepts} \wedge \text{some drawn unit is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
+$$\Pr[\text{flock-verify accepts} \wedge \text{some sampled proof block is wrong}] \le \varepsilon_{ks} + \delta_{link},$$
 with "wrong" `EndToEnd`'s (`wrongRegZ`, against the public file, in the committed transcript fixed at registration), and
-`ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's draw. The bound has no miss term, so it holds whatever
+`ε_ks`, `δ_link` `EndToEnd`'s terms, averaged over the verifier's sample. The bound has no miss term, so it holds whatever
 the verifier's bytes: it needs no A3.
 
 Its named assumptions, each a hypothesis:
 * `live-verifier` (`Assumptions.Zk.RecordCustodyZKJ`, with A6 `uniform/flock-coin-server` for its coins): the record
-  `flock-verify` reads is the one the coin server wrote for the live session, and its draw file the one
-  `flock-verify draw` printed for the verifier's own draw;
+  `flock-verify` reads is the one the challenger's live-coin part wrote for the live session, and its sample file the one
+  `flock-verify draw` printed for the verifier's own sample;
 * `cr/sha-512` (`Assumptions.SHA512CRStrict`, through `TableCRZ`) for the knowledge finders of each table of the
   prover's session, at budgets `qF` (rewinding) and `qS` (self-clash);
 * `ecr/sha-512` (A2, `Assumptions.SHA512CRExpected`, through `LinkCRZC`) for the prover's link finders.
 
 The rest are the verify command's tags (`TagsOkZJ`), an untyped statement whose outputs are public, the bound's numeric
-conditions, and `EndToEnd`'s reference setup `y₀`: table 0's, at the session's link points, at some draw `d₀`, which
-every draw flock-verify accepts gives (`Flock.SecurityProofs.EndToEnd_refSetup`), at any number of tables. -/
+conditions, and `EndToEnd`'s reference setup `y₀`: table 0's, at the session's link points, at some sample `d₀`, which
+every sample flock-verify accepts gives (`Flock.SecurityProofs.EndToEnd_refSetup`), at any number of tables. -/
 def EndToEndDrawn : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     -- the session's statement: its circuit, which the verifier parses, and its public file
@@ -67,9 +67,9 @@ def EndToEndDrawn : Prop :=
     (c : Flock.Circuit) (hc : HmRow.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     (pub : Public) (hpub : HmRow.loadPublic (zkTags I) c I.publicFile = .ok pub) (hpt : pub.tables = none)
     (hscope : Discharge.Layout.scopeOk c = true)
-    -- the law: a `kd`-subset of the `n` units, split evenly over the session's tables
+    -- the sampling design: a `kd`-subset of the `n` units, split evenly over the session's tables
     (kd : ℕ) (hdiv : kd % nTab I = 0)
-    -- the record: the draw file at each draw, and the session at each draw and registration
+    -- the record: the sample file at each sample, and the session at each sample and registration
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZJ (inputsJ I 0) (mPtsOf c.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
