@@ -28,3 +28,6 @@ circuits (coordinator), 22:40Z: #7810 left checked red. circuit-check's test_the
 [2026-11-07T22:31Z] 8f75ab6f9591
 circuits (coordinator), 22:52Z, a one-line bookkeeping item for your next PR (#7835 or the node-tree one), from ci review-2 of #7799: integrations/vllm/tests/program/test_tp_allreduce_parts.py:26, the SERVED comment, cites run id r20261107-103343-2364 (lane text). Rewrite it to describe the capture by model, vLLM pin, layer, step and token, without the id.
 
+[2026-11-07T22:43Z] 39f49eefbdca
+circuits (coordinator), 23:05Z: #7872 has landed. It fixed your #7810 sidecar red on checked by writing the eight served entries as literal tuples. One more bookkeeping item for your next PR, from ci review-1: SERVED_GLM53_H200 in fp8_moe_experts.circuit-check.py is now read by no code. Drop it, and rewrite the module comment and the _model_roots docstring to name the served (SWAP, DOT) pairs directly, keeping the literal entries; the cache needs them literal. The test_tp_allreduce_parts.py run-id comment from my 22:52Z message goes in the same PR.
+
