@@ -15,7 +15,7 @@ The kinds:
 * `low-comm`: `full` with an outer sync every `sync_every` steps of compressed pseudo-gradients (DiLoCo, SparseLoCo,
   DeMo).
 * `partial`: a subset trained (a frozen prefix, a share of the experts), the rest registered.
-* `distill`: `full` on a teacher's outputs, the teacher's forward registered work.
+* `distill`: `full` on a teacher's outputs, the teacher's forward registered.
 * `nci`: any algorithm of the `benchmarks/nci` library (`benchmarks/nci/algorithms.json`) from its traits; `nci:<id>` names one with no
   table.
 
@@ -379,7 +379,7 @@ class Partial(Premises):
 class Distill(Premises):
     """The model trained in full on a teacher's outputs: its next-token distributions (pretraining distillation, reaching
     only targets above the teacher's loss) or its sampled traces (in place of RL). The state is the student's, as
-    `Full`'s. A `teacher` run online is registered work: its forward adds `overhead · 2 N_teacher` gates per token and no
+    `Full`'s. A `teacher` run online is in the registered circuit: its forward adds `overhead · 2 N_teacher` gates per token and no
     counted products. A sunk teacher (none) adds nothing. Its shape fields are `Full`'s, with the teacher's outputs as
     data: `data_tokens_per_token` data tokens per token trained (a sunk teacher's distributions)."""
 
