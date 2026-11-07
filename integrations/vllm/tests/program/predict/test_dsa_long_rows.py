@@ -194,10 +194,13 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     then every layer's latent rows, index-K slots and scales so far, out-ports `edge.kv`, `edge.ik`, `edge.iks` and `edge.last`,
     while B's index-K history stays its own unread Inputs; the idle window passes A's fields through to its own edge, and the
     third reads them as A's history, `edge.ik` and `edge.iks` one field each. Each window's `run` holds the orders of the rows it
-    computes. What no cheaper test can: that a window's edges carry a request past INDEX_TOPK whole, through a window it idles in."""
+    computes, and the advice's side (`pipeline.edge.fields`) holds each port's members as each window's Program returns them. What
+    no cheaper test can: that a window's edges carry a request past INDEX_TOPK whole, through a window it idles in."""
     from verity.ml.circuits.types import field_types
+    from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
     from verity_vllm.program.predict.steps import Registered, compile_steps
+    from verity_vllm.program.workload import EDGE_PORTS
     from tests.program.predict.test_steps import CACHE_ON
     hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
     reg = _class_g(tmp_path, engine=CACHE_ON, model={"hf_config": hf})
@@ -226,6 +229,9 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     assert wls[1].edge.outs == wls[2].edge.ins and [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [
         ["prefix", "prefix_ik", "prefix_iks", "last_token"], ["prefix", "last_token"]]
     assert wls[2].edge.outs == wls[2].edge.ins[:1] == wls[3].edge.ins, "the idle window hands A's fields on as they came in"
+    for adv, wl in ((out, wls[1]), (idle, wls[2]), (into, wls[3])):
+        assert E.fields(adv, TOPK) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
+                                       for p, g in EDGE_PORTS}, "the advice's side holds the fields the Program's edge returns"
     rids = {w: [r.request_id for r in wls[w].requests] for w in (2, 3)}
     for w, held in ((2, [2, 1, 1, 2]), (3, [1, 1, 1, 1])):
         params = dict(wls[w].fn.signature()[0])
