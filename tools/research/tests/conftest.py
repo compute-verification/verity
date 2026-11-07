@@ -62,6 +62,11 @@ def _isolated_store(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("RESEARCH_ROUTES_URL", f"file://{tmp_path_factory.mktemp('routes') / 'absent'}")
     # ... nor does `research run --on auto` read the nodes' cores and pools over ssh (research.auto): unread, it queues on node 2
     monkeypatch.setattr("research.auto._reach", _unreachable)
+    # ... nor does a read of the Goals page send a site key this machine holds (research.goals.READ_KEY), nor fall back on this
+    # machine's copy of the page (research.queue.GOALS_CACHE, which drive's priority list reads too; goals_page.serve sets its own)
+    goals = tmp_path_factory.mktemp("goals")
+    monkeypatch.setattr("research.goals.READ_KEY", goals / "absent-goals.key")
+    monkeypatch.setattr("research.queue.GOALS_CACHE", goals / "cache" / "goals.json")
 
 
 def _unreachable(name: str) -> list[str]:
