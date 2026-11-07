@@ -7,8 +7,9 @@ from typing import Any, Callable
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The relation over 20 keys selecting 16 (b = 5 index bits, 27 high bits required zero; reaches `DsaTopKOneHot_v1` and
-    `DsaTopKVerdict_v1`), and the canonical row's check at the same statics (reaches `DsaTopKAscending_v1`); the Waksman read at small statics shaped as GLM-5.3's (an odd N, K = N - 1), with a pick (N 6, K 3),
-    and its index routing; and one switch at GLM-5.3's row width (576 bf16), the network's unit."""
+    `DsaTopKVerdict_v1`), and the canonical row's check at the same statics (reaches `DsaTopKAscending_v1`); the Waksman read at
+    small statics shaped as GLM-5.3's (an odd N, K = N - 1), with a pick (N 6, K 3), and its index routing; and one switch at
+    GLM-5.3's row width (576 bf16), the network's unit."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import boolean_dsa_topk
 
