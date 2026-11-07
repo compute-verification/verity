@@ -13,8 +13,7 @@ session's release log in v2's evidence, after its head, passes `sampleLinkFirst`
 and the registration's digest (`SampledProofs.OneStageZk.orderHeld`):
 
 * **v2's refusal** (`checkBlobsAt_orderHeld`, `orderHeld_ok`): v2's check accepts only where its order refusal passed,
-  and that refusal's scan is `sampleLinkFirst` (`sampleLinkFirst_check`). At the sampled verdict that is `OrderHeld`
-  (`orderHeld_verdict`).
+  and that refusal's scan is `sampleLinkFirst` (`sampleLinkFirst_check`).
 * **On v2's read, then on the device's log** (`sampleLinkFirst_logged`): v2's read of those lines is in order
   (`sampleLinkFirst_readLog`), and the device's log has the read's frames and answers (`ofV2_frames`), which are all
   `SampleLinkFirst` reads (`sampleLinkFirst_congr`).
@@ -39,16 +38,6 @@ open SampledProofs.Challenger
 open Properties.Challenger (Draws)
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
-
-/-- **v2's order refusal passes** on what the prover sent: where v2's case in it decodes and its parameters name the
-challenger's family `label`, the challenger session's release log in v2's evidence, after its head, passes
-`sampleLinkFirst` at `label` and the registration's digest. v2 refuses every other log
-(`SampledProofs.OneStageZk.orderHeld`), so the sampled verdict gives it (`orderHeld_verdict`). -/
-def OrderHeld (s : Verity.Sent) : Prop :=
-  ∀ (p : _root_.SampledProofs.OneStageZk.Params) (c : _root_.SampledProofs.OneStage.Commitment)
-    (e : _root_.SampledProofs.OneStageZk.Evidence) (key : ChallengerKey) (label : String) (lines : List String),
-    caseOf s = .ok (p, c, e) → p.base.challenger = some (key, label) → linesOf e = .ok lines →
-      sampleLinkFirst label c.digest lines.tail = true
 
 /-- **Where v2's check accepts, its order refusal passed** (`SampledProofs.OneStageZk.orderHeld`). -/
 theorem checkBlobsAt_orderHeld {p : _root_.SampledProofs.OneStageZk.Params}
@@ -105,22 +94,6 @@ theorem orderHeld_ok {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.Sa
   cases _root_.SampledProofs.Challenger.sampleLinkFirst label c.digest lines.tail
   · intro h; cases h
   · intro _; rfl
-
-/-- **At the sampled verdict, v2's order refusal passes**: where `A` is the session v2 sets up on the parameters and the
-sampled verdict accepts, v2's check accepted at the coins it read (`case_drew`), so its order refusal passed
-(`checkBlobsAt_orderHeld`) on the one case what the prover sent decodes to (`caseOf_of`). -/
-theorem orderHeld_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
-    {F : Array ByteArray} {A : Live} {x : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ)
-    (hv : V.Verdict k .sampled x) : OrderHeld x.sent := by
-  subst hθ
-  obtain ⟨p', hp', -⟩ := hA.params
-  obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hp, hc, hev, -, -, pub, prof, hck⟩ :=
-    case_drew hv.2.1 hp' (verdict_case hv)
-  intro p₁ c₁ e₁ key label lines h₁ hch hl
-  have hcs := (caseOf_of hv.2.1 hcase hp hc hev).symm.trans h₁
-  simp only [Except.ok.injEq, Prod.mk.injEq] at hcs
-  obtain ⟨rfl, rfl, rfl⟩ := hcs
-  exact orderHeld_ok (checkBlobsAt_orderHeld hck) hch hl
 
 /-- **v2's read of releases has their frames and the bytes they answered.** -/
 theorem ofV2_frames :
