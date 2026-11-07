@@ -48,12 +48,20 @@ def drawnLaw (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n :
   let parsed ← SampledProofs.Draw.flockLaw (SecurityProofs.lawObj lj derived) n
   SampledProofs.OneStage.coveredLaw (derived.getD parsed)
 
+/-- `OneStage.coveredLaw` refuses a Bernoulli sampling design. -/
+theorem coveredLaw_bernoulli (a b : ℕ) :
+    SampledProofs.OneStage.coveredLaw (.bernoulli a b) =
+      .error "the law is bernoulli, which the sampled audit's soundness statement doesn't cover" :=
+  rfl
+
 /-- `OneStage.coveredLaw` passes exactly the sampling designs that are no Bernoulli law, as they are. -/
 theorem coveredLaw_ok {l law : Flock.Draw.Law} (h : SampledProofs.OneStage.coveredLaw l = .ok law) :
     law = l ∧ NotBernoulli l := by
-  cases l <;> first
-    | exact ⟨(Except.ok.inj h).symm, fun _ _ h' => by cases h'⟩
-    | exact Except.noConfusion h
+  cases l
+  case bernoulli a b =>
+    rw [coveredLaw_bernoulli] at h
+    cases h
+  all_goals exact ⟨(Except.ok.inj h).symm, fun _ _ h' => by cases h'⟩
 
 /-- **The units a sampling design samples**: a subset sampling design's `k`, a stratified or work sampling design's strata's `k`s summed; none for a Bernoulli
 law, whose count the coins set. -/

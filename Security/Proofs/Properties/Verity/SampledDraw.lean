@@ -287,7 +287,12 @@ theorem drawnFrom_ok {v : _root_.SampledProofs.Registration.Verifier} {law : Lea
         _root_.SampledProofs.Draw.drawUnits l n src) = _ at h
       refine ⟨derived, fl, rfl, rfl, ?_⟩
       revert h
-      cases derived.getD fl <;> intro h <;> first | exact h | exact Except.noConfusion h
+      cases derived.getD fl
+      case bernoulli a b =>
+        intro h
+        change Except.error _ = _ at h
+        cases h
+      all_goals intro h; exact h
 
 theorem eq_of_bne_ite {a b : Array ℕ} {s : String} {rest : Option String}
     (h : (if (a != b) = true then some s else rest) = none) : a = b := by
