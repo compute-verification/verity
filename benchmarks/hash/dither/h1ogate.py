@@ -1,4 +1,4 @@
-"""`h1o.cu`'s forms of a served call's units at kernel level, on a synthetic Llama-3.1-8B window: `h1o_unitss` (a unit
+"""`h1o.cu`'s forms of a served call's units at kernel level, on a synthetic Llama-3.1-8B execution phase: `h1o_unitss` (a unit
 a block of six warps, `h1s_unit`), `h1o_unitsb` (a unit a block of five, `h1b_unit`) and `h1o_units` (a unit a warp,
 `h1r_unit<2>`), the first two with the credited peel (`split-cpeel`, `block-cpeel`: z = A B^T from the noised
 stream's O, DITHER_PEEL=1), and those two again as the kernels `h1o_init` gives the maximum shared-memory carveout
@@ -14,7 +14,7 @@ through `dither_one.check`, then timed against each other.
           (this source's h1tile unless DITHER_H1V3_TREE names a tree); the control refused and every fault conforming (`gate_verdict`; the
           perturbed noised word must move z and y in its cell, peeled too); wb's density and the xa entries (A = 127
           and b = 1) as the run reads them; the occupancy calculator's blocks an SM for each units kernel
-    time  per form, at m = 32: the window's 4 NL calls in model order (A table and units) as one CUDA graph, their units
+    time  per form, at m = 32: the execution phase's 4 NL calls in model order (A table and units) as one CUDA graph, their units
           launches alone as another, and each site's units alone, replayed between CUDA events with the forms interleaved;
           each over block's (else the first form's) as time_over_base
 

@@ -87,7 +87,7 @@ def SpareCapacityAtDeadline : Prop :=
 
 /-- **Pearl-C's sampled audit by the deadline.** `GγSampled` and an honest clock give, for every in-domain workload,
 adversary, timed run and deadline `td`, every run spending at most `T` after the salt's release and by `td` with at most
-`q` oracle calls, and every draw weighted by the tiles' `W_ref`: the audit accepts a transcript received by `td` while
+`q` oracle calls, and every sample weighted by the tiles' `W_ref`: the audit accepts a transcript received by `td` while
 `T` is below `1 − γ` of the claimed work less `ε_s` of the layout's with probability at most `(1 − ε_s)^t + η(q, N)`. -/
 def PearlCSampledByDeadline : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : PearlC.CostModel Q R S)

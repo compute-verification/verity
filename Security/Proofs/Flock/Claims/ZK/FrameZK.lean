@@ -59,7 +59,7 @@ This file states the bound there with `ProgChecks` as a conclusion, its premises
 * **`Flock.zk_server_lean_ofLoop`**: `Flock.zk_server_lean_loop` at `ofLoop`, at `Loop.progOf` and `Loop.freshOf`,
   with no `ProgReads`, and `ProgChecks` at `ofLoop`, at every `x` the loop serves. Beyond `zk_server_lean_loop`'s other premises it reads the
   tables `real` answers being the session loop's own (`Count.RealTabs`: `Finish`'s `level0` request, `tabOfLevel0` at a
-  level 0 `Level0.ofDraws` drew) and `L₀`'s round at the inner proof's round 0 being the firewall's own at some
+  level 0 `Level0.ofDraws` drew) and `L₀`'s round at the inner proof's round 0 being the ZK server's own at some
   `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched` on its finish's round 0, at the inner
   proof's label).
 -/
@@ -170,7 +170,7 @@ namespace LeanRelease
 open Loop in
 /-- **`ProgChecks` at the loop's own frames, its sizes checked** (`ofLoop_progChecks`, its premises `hS`, `hP` and
 `hRow` from `Session.sizesOk` at the setup): from the check, the rep's own tables where `real` answers the loop's (`hR`)
-and `L₀`'s round at the inner proof's round 0 the firewall's own at some `final_c'` (`hL0`). -/
+and `L₀`'s round at the inner proof's round 0 the ZK server's own at some `final_c'` (`hL0`). -/
 theorem ofLoop_progChecks_sizes (T : ZKMal.CoinLayer.TableData)
     (L₀ : LeanRelease Flock.Wit
       ((ZKMal.CoinLayer.session loopNr T).refP.Nonce × (ZKMal.CoinLayer.session loopNr T).refP.Rand))
@@ -225,7 +225,7 @@ here, at every `x` the loop
 serves (`Loop.Serves`: its `Hello` leaves, so the setup's sizes pass `Session.sizesOk`). In `ProgReads`' place it reads
 the tables `real` answers being the session loop's own
 (`hRt`, `Count.RealTabs`: `Finish`'s `level0` request) and `L₀`'s round at the inner proof's round 0 being the
-firewall's own at some `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched`). The
+ZK server's own at some `final_c'` (`hL0`: the loop's frame releases that round itself, `Frame.innerSched`). The
 transport's other trusts
 (`LinkRoundEq`, `FinalRoundEq`, `LiveRoundEq`, `FillRoundEq`) and the tables' side are `zk_server_lean_loop`'s. -/
 theorem Flock.zk_server_lean_ofLoop

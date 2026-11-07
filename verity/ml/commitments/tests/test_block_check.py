@@ -2,7 +2,7 @@
 checks (`verity.core.protocols.remote_bandwidth.codec`, `receipts`, `audit`'s trees and `merkle.verify_opening`) on random
 openings at p512/k2 and p1024/k3/masked, appended and registered, and names the check each wrong opening fails: a tampered
 block, a payload not the committed one or not the committed KV, a word at or above p, a wrong append coin, a wrong receipt
-leaf, salt or path, a plan without the block at the drawn position, a receipt the pass's tree commits but the block doesn't
+leaf, salt or path, a plan without the block at the sampled position, a receipt the pass's tree commits but the block doesn't
 give. The Boolean unit equals its reference on toy blocks with those negatives, and the parts equal theirs at the deployed
 fields and cost the gates pinned here."""
 from __future__ import annotations
@@ -188,7 +188,7 @@ def _cases(rng: random.Random, S, encode) -> list[tuple[str, SimpleNamespace, di
 
 
 def _committed_wrong(o: SimpleNamespace, row: bytes) -> dict:
-    """The opening of a pass whose receipt tree commits ``row`` as the drawn leaf: its path holds, its receipt isn't the
+    """The opening of a pass whose receipt tree commits ``row`` as the sampled leaf: its path holds, its receipt isn't the
     block's."""
     rows = list(o.rows)
     rows[o.c] = row

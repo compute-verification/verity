@@ -27,15 +27,15 @@ import Proofs.Flock.Soundness.Game.Union
 /-!
 # Proof of the joint stratified bound, per sampling block and pooled over a period
 
-* `Flock.SecurityProofs.JointStratified`: if the sampling block's wrong units `B` are in the confidence set
+* `Flock.SecurityProofs.JointStratified`: if the sampling block's incorrect proof blocks `B` are in the confidence set
   (`δ ≤` their escape), they are within the one budget (`StratifiedBlock.within_of_le`), so the event is empty.
-  Otherwise an accepted sampling block outside the budget has a drawn unit wrong, at most `ε_ks + ε_bind`
-  (`StratifiedBlock.accepted_drawnWrong_le`), or its draw misses `B`, at most `B`'s escape `< δ` under A3
+  Otherwise an accepted sampling block outside the budget has a sampled proof block wrong, at most `ε_ks + ε_bind`
+  (`StratifiedBlock.accepted_drawnWrong_le`), or its sample misses `B`, at most `B`'s escape `< δ` under A3
   (`StratifiedBlock.drawMiss_le`).
-* `Flock.SecurityProofs.JointStratifiedHorizon`: a run in which every sampling block is accepted and the wrong units are
-  not within the period's budget either has a sampling block accepted with a drawn unit wrong, at most
-  `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every draw misses with the product of the escapes below `δ` (else the
-  wrong units would be within the budget, `Stratified.within_of_le`), at most `δ` by `period_prod`.
+* `Flock.SecurityProofs.JointStratifiedHorizon`: a run in which every sampling block is accepted and the incorrect proof blocks are
+  not within the period's budget either has a sampling block accepted with a sampled proof block wrong, at most
+  `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every sample misses with the product of the escapes below `δ` (else the
+  incorrect proof blocks would be within the budget, `Stratified.within_of_le`), at most `δ` by `period_prod`.
 -/
 
 @[expose] public section
@@ -140,11 +140,11 @@ theorem JointStratifiedHorizon : Flock.Guarantees.JointStratifiedHorizon := by
   have hs : PeriodGood (fun t => (W t).game) (fun t τ => t < T ∧ cr t τ) 0 T s :=
     periodGood_mono _ T 0 s (fun j τ _ hj hcr => ⟨by omega, hcr⟩)
       (periodGood_of_plays (fun t => (W t).game) cr T 0 s fun t τ hp => And.intro (hT t τ hp) (hL t τ hp))
-  -- some sampling block accepted with a drawn unit wrong
+  -- some sampling block accepted with a sampled proof block wrong
   have hA := period_union (fun t => (W t).game) (StratifiedBlock.record W)
     (fun r => r.accepted ∧ r.drawnWrong) (fun t τ => t < T ∧ cr t τ) (fun t => (W t).epsKs + (W t).link)
     (fun t τ hτ => (W t).accepted_drawnWrong_le τ hτ.2.1 hτ.2.2) T 0 s hs
-  -- every draw misses, with the product of the escapes below `δ`
+  -- every sample misses, with the product of the escapes below `δ`
   have hB := period_prod (fun t => (W t).game) (StratifiedBlock.record W) (fun r => ¬ r.drawnWrong)
     BlockRec.escape (fun t τ => t < T ∧ cr t τ)
     (fun t τ hτ => ⟨(W t).ideal.escape ((W t).wrongSet τ),

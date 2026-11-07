@@ -1,6 +1,6 @@
 """The sampled run's Hello on its record: one keyed coin tree, `coin-tree/hm96-sha512/v2`, over every coin of the run.
 
-At the run's round 0 the challenger answers the prover's Hello with the tree's root and key, over the selection draw's
+At the run's round 0 the challenger answers the prover's Hello with the tree's root and key, over the selection sample's
 stream (or streams) first and then each session slot's streams, in session order. This is the Python of the Lean's
 `SampledProofs.Hello`, which runs Flock's own record checks (`Flock.CoinTree`: R7 with the prover's nonce,
 `checkRecord`, `checkFresh`) at run scope.
