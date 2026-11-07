@@ -14,8 +14,8 @@ masked record and SHA-512, from what one session statement establishes (`StmtOpe
 **The run** (`run_seenAt`). An accepted run of `V h` answered rounds 0 and 1 with their coins and round 2 with nothing,
 so the verifier's check of the session's statement passed there (`stmtOk h x m₁ xS c₀ c₁`, at the round-1 message
 `m₁`, the round-2 message `xS` and the coins `c₀`, `c₁` of rounds 0 and 1), and its transcript is `seenAt` of them.
-Its session is `xS` and the transcript from round 3 on, the interior roots are those `m₁` states, and its checked units
-are the second stage's on `c₀` and `c₁` (`checked_eq`).
+The check puts `xS` in scope (`sessionOk_of_stmtOk`), so its session is `xS` and the transcript from round 3 on, the
+interior roots are those `m₁` states, and its checked units are the second stage's on `c₀` and `c₁` (`checked_eq`).
 
 **The statement** (`StmtOpens h`): with no run and no coin beyond `c₀` and `c₁`, a session statement that the verifier's
 check passes, at a Flock witness in its relation, reveals for each unit the two stages check openings under which its
@@ -35,8 +35,8 @@ statement's relation says of its circuit), and the reveal opens each decoded val
 the roots its gate is committed under (`Reveals`, what the commitment's layout and the reveal say of the witness).
 `Decodes` follows from `Evaluates`, that the decoded values evaluate each of the unit's gates on the decoded values of
 the gates it reads (`decodes_of_evaluates`, by `Prog.correct_of_eval`), which is what a session circuit that computes
-the unit's gates gives. Neither holds of every `h`: both need the session statement's composition and its witness's encoding, which `h.frame`
-and `stmtOk` leave open.
+the unit's gates gives. Neither holds of every `h`: both need the session statement's composition and its witness's
+encoding, which `h.frame` and `stmtOk` leave open.
 -/
 
 @[expose] public section
@@ -126,6 +126,16 @@ theorem run_seenAt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω :
   rw [hm', hacc]
   rfl
 
+/-- A session statement the verifier's check passes is in scope. -/
+theorem sessionOk_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ xS c₀ c₁ = true) :
+    sessionOk h xS = true := by
+  unfold stmtOk at hok
+  cases hs : parse h x with
+  | none => simp [hs] at hok
+  | some s =>
+    simp only [hs, Bool.and_eq_true] at hok
+    exact hok.1.2
+
 /-- **The checked units** of a run whose statement decodes: the second stage's on the coins of rounds 0 and 1. -/
 theorem checked_eq (x : Msg) {st : Stmt} (hst : decode x = some st) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
     (code h).checked x r = h.reg.checked (units (base h) x) (src (r ⟨0, k_pos h x⟩)) (src (r ⟨1, one_lt_k h x⟩)) := by
@@ -164,7 +174,9 @@ theorem sessionOpensTwo (hs : StmtOpens h) :
   have hseen' : (run FlockDeploy.sha512 P (deploy _root_.Flock.Readable.relation (code h)).V x ω r).seen =
       seenAt m₀ m₁ xS' (r ⟨0, k_pos h x⟩) (r ⟨1, one_lt_k h x⟩) rest := hseen
   rw [hseen'] at hsess ⊢
-  have hxS : some (xS', (⟨rest, .acc⟩ : Seen)) = some (xS, vS) := hsess
+  have hxS : (if sessionOk h xS' then some (xS', (⟨rest, .acc⟩ : Seen)) else some (h.xS₀, refusedSeen)) =
+      some (xS, vS) := hsess
+  rw [ite_eq_left (sessionOk_of_stmtOk h hok)] at hxS
   obtain ⟨hxx, -⟩ := Prod.mk.inj (Option.some.inj hxS)
   rw [← hxx] at hck
   have hx' : parse h x = some s := hx
