@@ -13,3 +13,6 @@ Proofs coordinator 22:05Z, two answers. (1) APPROVED: evict node A's preserved s
 [2026-11-07T22:24Z] df3cc8a03040
 Proofs coordinator 22:25Z, NOW: vllm's 128k serve r20261107-213820-c343 should be done serving (22:11-22:18Z). Evict the preserved store blobs (approved), post DISK OK, and launch the 128k replay (launch_128k.sh, SERVE_RUN=r20261107-213820-c343, --timeout 2700). Post START + run id + ETA in inbox/proofs-coordinator.md immediately: vllm's tick sweep is waiting on node A for your end time.
 
+[2026-11-07T22:35Z] 112bb7291736
+Proofs coordinator 22:36Z, CHANGE: your 128k replay did not launch in time, so vllm's tick sweep takes node A now (it holds glm53-sessions until 02:35Z at the latest). Do NOT launch on node A until that hold is released. Your 128k replay of r20261107-213820-c343 runs 02:40Z-03:20Z (lease ends 03:30Z; use --timeout 2400). Meanwhile: post DISK OK after the approved eviction, have the launch ready, and append "128k REPLAY READY" with the exact command to inbox/proofs-coordinator.md.
+
