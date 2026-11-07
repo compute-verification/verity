@@ -1615,12 +1615,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Flock.Bridge.DrawsUnder": {
-   "owner": "@proofs",
-   "digest": "4abc5d864ced1e67194111af4d2122149bb5e799458282f37b5c35064bf1204f",
-   "issue": "PRF-164",
-   "due": "2026-11-06"
-  },
   "Flock.Bridge.NotBernoulli": {
    "owner": "@proofs",
    "digest": "7fbb409621af22209f87159630d58bfdb550a9f4402f53926ac16f9a45ad3e4d",
@@ -4850,7 +4844,7 @@
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "ee0db7bef8f62988e714272c5a3994f66cfae7a1ab619db57382a30dd1f3167d"
+   "unfolded_hash": "e451ab94c1caca97691a703f73ab3c54cb4d54379faad97e2af84ef9ed9b6cfe"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
@@ -14619,7 +14613,6 @@
     "assumptions": [],
     "domain": [],
     "open": [
-     "Flock.Bridge.DrawsUnder",
      "Flock.Bridge.NotBernoulli",
      "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
@@ -14635,7 +14628,7 @@
     ]
    },
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "ee0db7bef8f62988e714272c5a3994f66cfae7a1ab619db57382a30dd1f3167d"
+   "unfolded_hash": "e451ab94c1caca97691a703f73ab3c54cb4d54379faad97e2af84ef9ed9b6cfe"
   },
   "Flock.SecurityProofs.SampledKSLiveV5Honest": {
    "owner": "@proofs",
@@ -24896,7 +24889,7 @@
    "Pouw.SecurityProofs.OnsiteFreed_honest": "completeness: OnsiteFreed's honest witness: every premise, RemoteWorkFloor from WorkSound's conclusion, OutsourceWithinEgressPeriod from the per-program premise and CertifiedImport from ImportWithinCertifier among them, holds at the toy instance (Definitions.Pouw.Witness), the bound is below 1, and the onsite verdict accepts the honest prover, which exchanges nothing, so OnsiteFreed is not vacuous.",
    "Pouw.SecurityProofs.OnsiteFreed_nontrivial": "lemma: OnsiteFreed's nontrivial witness, in the Lean check's three-part form: at the toy instance with a work check that accepts everything, every premise of OnsiteFreed but RemoteWorkFloor holds, RemoteWorkFloor fails (the quiet prover exchanges nothing, is accepted and spends 0 < F) and the conclusion fails; a counterexample about no protocol function.",
    "Flock.SecurityProofs.DeltaPubDeployed": "frozen (no-function): a fact about SampledKSLivePub's error, not a run of a Lean function: at the deployment's parameters (k = ⌈2^24/e⌉, ρ = 1/2, M = Rw = 2^192, budgets q_F = 2(t' + v), q_S = t' + v and link cost t' + v per run for t', v ≤ 2^80, at most 2^40 committed wires, K₀ ≤ n ≤ K₀·kd) the rate hypothesis holds and deltaPub < 1; it reads DeltaPubDeployed (Security/Proofs/Flock/Bridge/PublicDeployed.lean), so the lock records its text.",
-   "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the law the verifier draws under from the registration (DrawsUnder: drawnLaw, deriveLaw over Partition.strata, else flockLaw), no Bernoulli law (NotBernoulli), which PopMatches puts on its layout's strata (LawOn, lawOn_drawsUnder), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
+   "Flock.SecurityProofs.SampledKSLiveV5": "frozen (no-function): SampledKSLiveV2 at flock-verify --zk --public-inputs under the law the verifier draws under from the registration (lawOf: drawnLaw, deriveLaw over Partition.strata, else flockLaw, and subset 0 where it names none), no Bernoulli law (NotBernoulli), which PopMatches puts on its layout's strata (LawOn, lawOn_drawsUnder), proved by its own assembly at keyProgP, with delta the law's own miss of a set of proof blocks; it reads SampledKSLiveV5 (Security/Proofs/Flock/Bridge/V5/Statement.lean), the sampled statement at the public file's leaf map and the constants constsOfP (each proof block's public input bits), under RecordCustodyZKJPLaw (RecordCustodyZKJP at the registration's law), so the lock records its text, and it takes the shape when that statement moves into a Guarantees module of the spec.",
    "Flock.SecurityProofs.SampledKSLiveV5Honest": "frozen (no-function): the honest witness of SampledKSLiveV5, not a run of a Lean function: from one named premise, ServedFilesParseV5 (that the served registered --zk session art:88544efa's files, pinned by SHA-512, parse to a descriptor in scopeOkH with distinct port names whose public input ports parse and whose public file loads over them, as runs r20261027-025931-f22c and r20261027-114351-93be evaluated), every hypothesis that statement takes of the files holds there (Built, RowsOk, TagsOkZHJ, untyped tags, the parse, the public input ports, the public file, scopeOkH, dupName, the draw sizes' divisibility); it reads SampledKSLiveV5Honest (Security/Proofs/Flock/Bridge/V5/Honest.lean), so the lock records its text.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound": "frozen (no-function): It is stated over an arbitrary registered circuit (Verity.RegisteredCircuit) with a training class's counted operations, a partition (Verity.Partition) whose units S are the serving blocks and a (c, k)-partition of inference blocks refining it (Verity.Partition.IsCK, Verity.Partition.Refines), and takes the serving blocks' sizes, the per-block caps, the operations' bodies and their overlap, and the uncertified caps as named premises about it (Security/Definitions/Accounting/ServingBlocks.lean), not a function's acceptance; it is Theorem 3 per serving block, summed through Verity.SecurityProofs.ServingBlockSum and Verity.SecurityProofs.InferenceCap, with what a serving block's own cap leaves charged to its unregistered inputs (omega_max mu k_S), and Layer 2's envelopes supply its premises.",
    "Accounting.SecurityProofs.ServingBlocks.ServingBlockBoundRemote": "frozen (no-function): Like Accounting.SecurityProofs.ServingBlocks.ServingBlockBound, it is stated over an arbitrary declaration, its counted operations and partitions under named premises about them, not a function's acceptance; it keeps only the inference cap, the remote case.",
@@ -26033,8 +26026,9 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -43779,11 +43773,11 @@
    }
   },
   "Proofs.Flock.Bridge.DrawnLaw": {
-   "digest": "8a03f35cb0586e0a79e9732d38df2307c62d8f2154a885f2a0bc036b14dd467a",
+   "digest": "56d032bce73e79ed3dc9db31d5d898a892ec55867d51a78ff4eaf26cba2ebaec",
    "definitions": {
-    "Flock.Bridge.DrawsUnder": "4abc5d864ced1e67194111af4d2122149bb5e799458282f37b5c35064bf1204f",
     "Flock.Bridge.drawnLaw": "d3d5d8aebbdd734c0b832c56f88c1218c761f8ca6f936cbdc586a2aafd695d3c",
-    "Flock.Bridge.lawK": "ffca002c0ea109c0fd79193088486246f4984aefbf5f8ec79866ea1ad6f46e00"
+    "Flock.Bridge.lawK": "ffca002c0ea109c0fd79193088486246f4984aefbf5f8ec79866ea1ad6f46e00",
+    "Flock.Bridge.lawOf": "14613c7459fe9fce48df0f69ab634c9f80c6d61fba28c6bdc543b73a15d41352"
    }
   },
   "Proofs.Flock.Bridge.Honest": {
@@ -43888,10 +43882,10 @@
    }
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "73244b1ce13f062ecb198db76a48216e1fbc1de22303416c47cf9a40106d852f",
+   "digest": "29814612df3bea3452668123982ca3dbe898da781eed4c9fed0b7a295cfdcf50",
    "definitions": {
     "Flock.Bridge.constsOfP": "67a6f5fe088b95efced36467f34ed9d2726e353df637e8a6c4fc2878dd6a6e83",
-    "Flock.Guarantees.SampledKSLiveV5": "db2cdb8cc2b34d9f9a347904dc8fe6466878ac1442a10ca6096d8eb3b63cc0d7"
+    "Flock.Guarantees.SampledKSLiveV5": "6ec2017c8580caada53572da060dbeb2bba34f25736177bf664afac9b36cf347"
    }
   },
   "Proofs.Flock.Bytes": {
