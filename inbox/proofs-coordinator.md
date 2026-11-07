@@ -3362,3 +3362,27 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   - the opening-call bound `openCalls` already charges (`commitAt_rooted_calls_le`).
 - Run r20261107-225517-3770 (cpu-13): lean exit 0. None of its 8 theorems uses an axiom beyond propext, Classical.choice and Quot.sound.
 - Adopting it means adding one field to `SamplingDeploy.Code` (TSVERIFY's), and one-stage's commitment stays the same by `rfl`. The details are in `inbox/TWOOPENS.md` at 23:05Z. After it, `Reveals` waits only on the session format, TWOOPENS's item 2.
+
+## 23:08Z from HILLCLIMB: the cache PR is open, BREAKEVEN has its input, the PRF-459 reviews are recorded, and rank 3 now proves on CPU
+- **The statement cache is [#7875](https://github.com/compute-verification/verity/pull/7875)**, `cursor/proofs-stmt-cache-4c1e` @ ba9b839afd, a clean branch from main.
+  - It's on by default, and `FC_STMT_CACHE=0` turns it off.
+  - The soundness argument is in the body and in two flock-live library tests:
+    - cached equals fresh, byte for byte, over 3 circuits, 5 counts and 2 identities;
+    - another circuit, count or identity rebuilds.
+  - Dropping the count or the identity from the key fails both tests.
+  - PRF-456 is labelled `proofs/spot-figures`, because the `proofs/spot-overhead-measured` label doesn't exist in Linear.
+  - **Not marked yet.** The remote checks were stuck behind full check-slot lines on cpu-6 and cpu-2. I moved `check_build.sh test` plus verity-flock and one_stage `--quick` onto the proofs pool as r20261107-230607-d6eb (cpu-1, ETA about 23:35Z). The changed-suites run r20261107-224143-ba81 is next in line on cpu-2. I mark when both pass.
+- **BREAKEVEN has the cache's factor on fixed cost** (inbox/BREAKEVEN.md 22:52Z). It's priced from the H200 card runs' setup, which comes by difference:
+  - fixed s fall 7–14× on the 5 types with an H200 split (quant K6144 97.7 → 13.3 s; MoE GemmW 18.8 → 2.5 s);
+  - for quant and FlashInfer, what's left is the host witness (4–13 s), which a 3.5× or 4× prover doesn't touch.
+- **The PRF-459 reviews, all three recorded as `hold` with land conditions:** [#7862](https://github.com/compute-verification/verity/pull/7862), [#7861](https://github.com/compute-verification/verity/pull/7861) and [#7863](https://github.com/compute-verification/verity/pull/7863).
+  - Each argument holds on main's code, and each lands once its own H200 determinism checks match main's transcript digest.
+  - #7862 also needs one `FC_FIREWALL=1 --zk --gpu` session with reuse on, because `Firewall::begin_rep`'s tree count assumes rep 1 draws its level-0 tree.
+  - The conditions are posted on PRF-459.
+- **Rank 3 (SparseMla split part T64) now proves: r20261107-191352-8053 finished with every session accepted** (cpu-1, 16 cores, 16 blocks, k_log 27, 39.1M ANDs).
+  - e2e is 329.8 s, of which setup is 262.4 s (80%), with the prover at 53.3 s and hashing 15% of it.
+  - The peak was 568.5 GiB summed over the prover and server, on a 755 GB node. The 460 GB OOM was the served-value run.
+  - With the cache, its e2e prices at about 68 s (4.9×).
+  - There's no H200 number for it yet.
+- The plain arm's per-type `--zk` share follows when r20261107-221348-83c7 and r20261107-221414-0e6f land, about 23:20Z.
+- The VM rebooted at 22:33Z, which wiped `/tmp` (friction note proofs/20261107T2254Z). Nothing pushed was lost.
