@@ -18,8 +18,12 @@
    "declarations": 54
   },
   "Proofs/Flock": {
-   "modules": 192,
-   "declarations": 1467
+   "modules": 237,
+   "declarations": 1782
+  },
+  "Proofs/Nci": {
+   "modules": 1,
+   "declarations": 4
   },
   "Proofs/NetworkCertifier": {
    "modules": 3,
