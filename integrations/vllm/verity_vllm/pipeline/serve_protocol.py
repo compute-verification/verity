@@ -11,7 +11,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from verity.core.protocols.certifier import active as A, io_tie as IT, release as REL
+from verity_vllm import ports
 from verity_vllm.engine.served_seed import DEFAULT_SEED, seeded
 from verity_vllm.pipeline.serve_commit import SAMPLING_FIELDS
 
@@ -243,7 +243,7 @@ class IdsProtocol:
     http = False
 
     def __init__(self, force_include_usage: bool = False, *, payload: int = ID_PAYLOAD, base: PlainProtocol | None = None) -> None:
-        IT.id_event(0, payload)
+        ports.io_tie().id_event(0, payload)
         self.payload = payload
         self.base = VllmProtocol(force_include_usage) if base is None else base
 
@@ -255,6 +255,7 @@ class IdsProtocol:
         """Whether `request` (its head and body as the server read them) is an id request as the network certifier forwards it:
         without the release headers it puts on the server's copy (`release.with_release`), exactly `active.id_request`
         of its own fields in the scan's B = P + 9-byte cells, from their first byte (``offset`` 0)."""
+        A, REL = ports.active(), ports.release()
         head, _, body = request.partition(b"\r\n\r\n")
         line, *fields = head.split(b"\r\n")
         kept = b"".join(f + b"\r\n" for f in fields
@@ -285,6 +286,7 @@ class IdsProtocol:
         return self.base.max_tokens(req, max_model_len, prompt_len, defaults)
 
     def events(self, *, token_ids: list[int] | None, **_: Any) -> bytes:
+        IT = ports.io_tie()
         return b"".join(IT.id_event(int(t), self.payload) for t in token_ids or ())
 
     def response(self, **kw: Any) -> str:
