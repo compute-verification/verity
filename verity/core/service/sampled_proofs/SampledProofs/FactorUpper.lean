@@ -6,14 +6,16 @@ public import SampledProofs.Interval
 # Rankin's factor, bounded above (`SampledProofs.FactorUpper`)
 
 Rankin's bound on the two-stage count (`Claims.Sampling.AdmissibleTwoRankin`) multiplies one factor per replay block,
-`G_ρ(θ) = Σ_{U ⊆ ρ} 2^{b(U)} (1 − q(1 − e_ρ(U)))^θ` (`Claims.Sampling.rankinFactor`), and its patterns' form one patterns'
-factor (`rankinFactorPatterns`). Neither is evaluated directly: a replay block holds up to `10^11` proof blocks. This
-module bounds each above, in exact arithmetic, from the replay block's cells (`Cell`: the second stage's `k` and its
-proof blocks by committed bits), and returns `ln` of the bound, which `G_ρ` itself, as large as `2^{10^13}`, can't be:
+`G_ρ(θ) = Σ_{U ⊆ ρ} 2^{b(U)} (1 − q(1 − e_ρ(U)))^θ` (`Claims.Sampling.rankinFactor`), and its patterns' form one
+patterns' factor (`rankinFactorPatterns`). Neither is evaluated directly: a replay block holds up to `10^11` proof
+blocks. This module bounds each above, in exact arithmetic, from the replay block's cells (`Cell`: the second stage's
+`k` and its proof blocks by committed bits), and returns `ln` of the bound, which `G_ρ` itself, as large as
+`2^{10^13}`, can't be:
 
 * `lnFactorUpper cs P`: at least `ln G_ρ(θ)` (`Properties.SampledProofs.FactorUpperSound`);
-* `lnFactorUpperPatterns cs S P`: at least `ln` of the patterns' factor, when at most one request, serving `S` bits,
-  reads the replay block's proof blocks (`FactorUpperPatternsSound`).
+* `lnFactorUpperPatterns cs reads N S P`: at least `ln` of the patterns' factor, when at most `N` requests read the
+  replay block's proof blocks, each serving `S` bits and reading at most `reads`, and no two read one proof block
+  (`FactorUpperPatternsSound`).
 
 The bound is `optimize.two_stage_exfil`'s, term by term:
 
@@ -25,10 +27,11 @@ The bound is `optimize.two_stage_exfil`'s, term by term:
    `e^{−θ(a_j + s_j y(U))}` is a product over `U`'s proof blocks, and the sum over `U` a product over the groups of
    proof blocks of one cell and width (`Group`), `∏_g (1 + 2^{b_g} w_g)^{n_g}`;
 3. a set meeting a cell sampled whole passes with probability `1 − q`;
-4. in the patterns' form, a set of at least `S` bits serves at most `2^S` outputs and has
-   `y ≥ y_S = min_g r_g max(1, S/b_g)` (`Form.heavy`), and the sets of at most `S` bits are summed (`lightPatterns`) by
-   the least of three bounds: each group's sets of at most `⌊S/b_g⌋` of its proof blocks, `Σ_{1≤j≤m} C(n, j) x^j`,
-   bounded by `C(n, j) ≤ n^j/j!` and Stirling's `ln m! ≥ m ln m − m + ½ ln(2πm)` (`lnHead`); `2^S (∏_v (1 + w_v) − 1)`;
+4. in the patterns' form, `y(U) ≥ Σ_r y(U_r)` over the requests, so each chord's weight is a product over them, and the
+   sum over patterns `(1 + Light + Heavy)^N` (`requestFac`): a request's set of at least `S` bits serves at most `2^S`
+   outputs and has `y ≥ y_S = min_g r_g max(1, S/b_g)` (`heavyY`, a breakpoint), and its sets of at most `S` bits are
+   summed (`lightPatterns`) by the lesser of two bounds: each group's sets of at most `⌊S/b_g⌋` of its proof blocks,
+   `Σ_{1≤j≤m} C(n, j) x^j`, bounded by `C(n, j) ≤ n^j/j!` and Stirling's `ln m! ≥ m ln m − m + ½ ln(2πm)` (`lnHead`);
    and `2^S Σ_{1≤j≤S/b_min} W^j/j!`, `W = Σ_v w_v`.
 
 Every quantity is carried as an upper bound on its logarithm, and a factor `1 + L` as bounds on both `ln(1 + L)` and
@@ -160,20 +163,26 @@ structure Cell where
   parts : List (Nat × Nat)
   deriving Repr, Inhabited
 
+/-- The proof blocks of `parts` committing `b` bits. -/
+def countIn (parts : List (Nat × Nat)) (b : Nat) : Nat := ((parts.filter fun x => x.2 == b).map Prod.fst).sum
+
 /-- The cell's proof blocks, `n`. -/
 def Cell.size (c : Cell) : Nat := (c.parts.map Prod.fst).sum
 
 /-- The cell's proof blocks committing `b` bits. -/
-def Cell.count (c : Cell) (b : Nat) : Nat := ((c.parts.filter fun x => x.2 == b).map Prod.fst).sum
+def Cell.count (c : Cell) (b : Nat) : Nat := countIn c.parts b
+
+/-- The rate `k/n` the second stage samples the cell's proof blocks at, `none` when it samples it whole (`k ≥ n`). -/
+def Cell.rate (c : Cell) : Option Rat := if c.size ≤ c.k then none else some ((c.k : Rat) / (c.size : Rat))
 
 /-- `l` without repeats, each kept at its last place. -/
 def dedup : List Nat → List Nat
   | [] => []
   | x :: xs => if xs.contains x then dedup xs else x :: dedup xs
 
-/-- **A group**: `n` proof blocks committing `b` bits each, in a cell whose second stage samples each at rate `k/n_t`
-(`rate`), `none` when the cell is sampled whole (`k ≥ n_t`); with the logarithms its sums read, computed once:
-`lnNLo ≤ ln n ≤ lnN`, and at `m = ⌊S/b⌋`, `lm ≥ ln m` and `lf ≤ ln m!`. -/
+/-- **A group**: `n` proof blocks committing `b` bits each, in a cell whose second stage samples each at rate `rate`,
+`none` when it samples the cell whole; with the logarithms its sums read, computed once: `lnNLo ≤ ln n ≤ lnN`, and at
+`m = ⌊S/b⌋`, `lm ≥ ln m` and `lf ≤ ln m!`. -/
 structure Group where
   n : Nat
   b : Nat
@@ -188,13 +197,18 @@ structure Group where
 def Group.of (n b : Nat) (rate : Option Rat) (S p : Nat) : Group :=
   ⟨n, b, rate, lnUpper n p, lnLower n p, lnUpper (S / b) p, lnFactLower (S / b) p⟩
 
-/-- The cell's groups, one per width, each nonempty. -/
-def Cell.groups (c : Cell) (S p : Nat) : List Group :=
-  let r : Option Rat := if c.size ≤ c.k then none else some ((c.k : Rat) / (c.size : Rat))
-  ((dedup (c.parts.map Prod.snd)).filter fun b => 0 < c.count b).map fun b => Group.of (c.count b) b r S p
+/-- The groups of `parts` at `rate`, one per width, each nonempty. -/
+def groupsAt (parts : List (Nat × Nat)) (rate : Option Rat) (S p : Nat) : List Group :=
+  ((dedup (parts.map Prod.snd)).filter fun b => 0 < countIn parts b).map fun b =>
+    Group.of (countIn parts b) b rate S p
 
 /-- The replay block's groups. -/
-def groupsOf (cs : List Cell) (S p : Nat) : List Group := cs.flatMap (Cell.groups · S p)
+def groupsOf (cs : List Cell) (S p : Nat) : List Group := cs.flatMap fun c => groupsAt c.parts c.rate S p
+
+/-- The groups of what one request reads, `reads[t]`'s `(count, bits)` in stratum `t`, at the rates of the replay
+block's cells. -/
+def readGroups (cs : List Cell) (reads : List (List (Nat × Nat))) (S p : Nat) : List Group :=
+  (cs.zip reads).flatMap fun x => groupsAt x.2 x.1.rate S p
 
 /-! ## The parameters -/
 
@@ -214,6 +228,11 @@ def chords : List Rat := [0, 1 / 256, 1 / 16, 1 / 4, 1, 2, 3, 4, 5, 6, 8]
 def increasing : List Rat → Bool
   | x :: y :: ys => decide (x < y) && increasing (y :: ys)
   | _ => true
+
+/-- `ys` with `y` in its place, unless it is one of them. -/
+def insertY (y : Rat) : List Rat → List Rat
+  | [] => [y]
+  | x :: xs => if y < x then y :: x :: xs else if y = x then x :: xs else x :: insertY y xs
 
 /-- The parameters the bound is computed at: `0 ≤ q ≤ 1`, `θ ≥ 0`, and breakpoints increasing from `0`. -/
 def Params.valid (P : Params) : Bool :=
@@ -249,6 +268,16 @@ def chordsOf (q : Rat) (p : Nat) : List Rat → List (Rat × Rat)
 def lnPassWhole (q θ : Rat) (p : Nat) : Option Rat :=
   if θ = 0 then some 0 else if q < 1 then some (θ * lnUpper (1 - q) p) else none
 
+/-- **The bound from its sums**: `ln(1 + Σ e^T)` over the terms `T`, at least the factor's logarithm when, at every
+slope `s`, `e^{term s}` is at least the sum over the nonempty patterns of the sets avoiding the cells sampled whole of
+`2^{bits} e^{−θ s y}`, `y` the least `y(U)` of the pattern, and `e^{whole}` at least the sum over the patterns meeting
+them of `2^{bits} (1 − q)^θ`: each such `y` is on a chord, `h(y) ≥ a_j + s_j y`, or past the last breakpoint,
+`h(y) ≥ h(y_J)`. -/
+def bound (P : Params) (term : Rat → Option Rat) (whole : Option Rat) : Option Rat :=
+  let chordTerms := (chordsOf P.q P.pθ P.ys).filterMap fun c => (term c.1).map (-(P.θ * c.2) + ·)
+  let tail := P.ys.getLast?.bind fun y => (term 0).map (-(P.θ * hLower P.q y P.pθ) + ·)
+  lse (0 :: chordTerms ++ [tail, whole].filterMap id) P.p
+
 /-! ## The sums over sets -/
 
 /-- `(1 + 2^b w)^n` at `w = e^{lw}`: a group's sum over its sets of `2^{b(U)} ∏_{v∈U} w`. -/
@@ -268,101 +297,90 @@ group `g` at weight `w = e^{lw}`, `∏_g (1 + 2^{b_g} w_g)^{n_g} − 1`. -/
 def lightSets (L : Ln2) (gs : List (Group × Rat)) (p : Nat) : Option Rat :=
   (Fac.prod (gs.map fun x => wholeFac L x.1 x.2 p) p).l
 
-/-- **The light sets' sum**: at least `ln Σ_{∅ ≠ U, b(U) ≤ S} 2^{b(U)} ∏_{v∈U} w_v`, the least of: the product of the
-groups' capped sums (`cappedFac`); `2^S (∏_v (1 + w_v) − 1)`; and, `b_min` the narrowest group's bits,
-`2^S Σ_{1≤j≤S/b_min} W^j/j!` at `W = Σ_v w_v`, a set of at most `S` bits holding at most `S/b_min` proof blocks. -/
+/-- **The light sets' sum**: at least `ln Σ_{∅ ≠ U, b(U) ≤ S} 2^{b(U)} ∏_{v∈U} w_v`, the lesser of: the product of the
+groups' capped sums (`cappedFac`); and, `b_min > 0` the narrowest group's bits, `2^S Σ_{1≤j≤S/b_min} W^j/j!` at
+`W = Σ_v w_v`, a set of at most `S` bits holding at most `S/b_min` proof blocks. -/
 def lightPatterns (L : Ln2) (gs : List (Group × Rat)) (S p : Nat) : Option Rat :=
-  let cap := (S : Rat) * L.up
   let prod := (Fac.prod (gs.map fun x => cappedFac L x.1 x.2 S p) p).l
-  let grow := ((Fac.prod (gs.map fun x => (Fac.one x.2 p).pow x.1.n x.1.lnN p) p).l).map (cap + ·)
   let bmin := (gs.map fun x => x.1.b).foldl min (S + 1)
-  let head : Option Rat :=
-    if bmin = 0 then prod
-    else
-      match lse (gs.map fun x => x.1.lnN + x.2) p, lseLower (gs.map fun x => x.1.lnNLo + x.2) p with
-      | some lW, some lWLo =>
-        (lnHead (S / bmin) (lnUpper (S / bmin) p) (lnFactLower (S / bmin) p) lW lWLo p).map (cap + ·)
-      | _, _ => none
-  omin prod (omin grow head)
+  if bmin = 0 then prod
+  else
+    match lse (gs.map fun x => x.1.lnN + x.2) p, lseLower (gs.map fun x => x.1.lnNLo + x.2) p with
+    | some lW, some lWLo =>
+      omin prod ((lnHead (S / bmin) (lnUpper (S / bmin) p) (lnFactLower (S / bmin) p) lW lWLo p).map
+        ((S : Rat) * L.up + ·))
+    | _, _ => prod
 
-/-- **The two forms**: the sets' factor `G_ρ`, or the patterns' at a request serving `S` bits. -/
-inductive Form where
-  | sets
-  | patterns (S : Nat)
-  deriving Repr, Inhabited
+/-- The groups sampled at a rate, each with its rate, and the groups sampled whole. -/
+def split (gs : List Group) : List (Group × Rat) × List Group :=
+  (gs.filterMap fun g => g.rate.map (g, ·), gs.filter fun g => g.rate.isNone)
 
-/-- The `S` the form's groups read: `0` in the sets' form. -/
-def Form.served : Form → Nat
-  | .sets => 0
-  | .patterns S => S
+/-! ## Rankin's factor -/
 
-/-- The form's sum over sets of the groups' proof blocks, each group at its weight's logarithm. -/
-def Form.light (F : Form) (L : Ln2) (gs : List (Group × Rat)) (p : Nat) : Option Rat :=
-  match F with
-  | .sets => lightSets L gs p
-  | .patterns S => lightPatterns L gs S p
-
-/-- The form's factor of a group at weight `1`: every set of it, or its sets of at most `S` bits. -/
-def Form.fac (F : Form) (L : Ln2) (g : Group) (p : Nat) : Fac :=
-  match F with
-  | .sets => wholeFac L g 0 p
-  | .patterns S => cappedFac L g 0 S p
-
-/-- At least `ln Σ_{U meets I} c(U)` over the sets meeting the cells sampled whole (`inf`), `c(U)` the form's charge:
-`∏_{F} (1 + L_g) (∏_{I} (1 + L_g) − 1)`, and in the patterns' form also `2^S 2^{|F|} (2^{|I|} − 1)`. -/
-def Form.whole (F : Form) (L : Ln2) (fin inf : List Group) (p : Nat) : Option Rat :=
-  let byGroup := (Fac.prod (inf.map (F.fac L · p)) p).l.map
-    ((Fac.prod (fin.map (F.fac L · p)) p).f + ·)
-  match F with
-  | .sets => byGroup
-  | .patterns S =>
-    let nI := (inf.map Group.n).sum
-    let count := ((fin.map Group.n).sum : Rat) * L.up
-    omin byGroup (((Fac.one 0 p).pow nI (lnUpper nI p) p).l.map (S * L.up + count + ·))
-
-/-- At least `ln(2^S e^{−θ h(y_S)})`, the sets of at least `S` bits, in the patterns' form, when the groups hold at
-least `S` bits: `y_S = min_g r_g max(1, S/b_g)` over the groups not sampled whole (and of nonzero bits, when `S > 0`),
-and `h(∞)` when there is none. -/
-def Form.heavy (F : Form) (L : Ln2) (gs : List Group) (P : Params) : Option Rat :=
-  match F with
-  | .sets => none
-  | .patterns S =>
-    if (gs.map fun g => g.n * g.b).sum < S then none
-    else
-      let ys := gs.filterMap fun g =>
-        if g.b = 0 ∧ 0 < S then none else g.rate.map fun r => r * max 1 ((S : Rat) / (g.b : Rat))
-      let cap := (S : Rat) * L.up
-      match ys with
-      | y :: ys => some (cap - P.θ * hLower P.q (ys.foldl min y) P.pθ)
-      | [] => (lnPassWhole P.q P.θ P.p).map (cap + ·)
-
-/-! ## The bound -/
-
-/-- **At least `ln` of the form's factor**: `ln(1 + Σ e^T)` over the terms `T`, each at least the logarithm of a sum
-over the nonempty sets: one per chord, the tail past the last breakpoint, the sets meeting a cell sampled whole, and the
-patterns' heavy sets. `none` when the parameters are not valid. -/
-def lnFactorUpperOf (F : Form) (cs : List Cell) (P : Params) : Option Rat :=
+/-- **At least `ln G_ρ(θ)`**, Rankin's factor of the replay block with cells `cs` (`Claims.Sampling.rankinFactor`):
+at slope `s`, the sets' sum at `w = e^{−θ s r}`, and the sets meeting a cell sampled whole,
+`(1 − q)^θ ∏_{F} (1 + 2^b)^n (∏_{I} (1 + 2^b)^n − 1)`. `none` when the parameters are not valid. -/
+def lnFactorUpper (cs : List Cell) (P : Params) : Option Rat :=
   if P.valid then
     let L := Ln2.of P.p
-    let gs := groupsOf cs F.served P.p
-    let fin := gs.filterMap fun g => g.rate.map (g, ·)
-    let inf := gs.filter fun g => g.rate.isNone
-    let chordTerms := (chordsOf P.q P.pθ P.ys).filterMap fun c =>
-      (F.light L (fin.map fun x => (x.1, -(P.θ * c.1 * x.2))) P.p).map (-(P.θ * c.2) + ·)
-    let tail := match P.ys.getLast? with
-      | some y => (F.light L (fin.map fun x => (x.1, 0)) P.p).map (-(P.θ * hLower P.q y P.pθ) + ·)
-      | none => none
+    let (fin, inf) := split (groupsOf cs 0 P.p)
     let whole := if inf.isEmpty then none
-      else oadd (lnPassWhole P.q P.θ P.p) (F.whole L (fin.map Prod.fst) inf P.p)
-    let terms := chordTerms ++ [tail, whole, F.heavy L gs P].filterMap id
-    lse (0 :: terms) P.p
+      else oadd (lnPassWhole P.q P.θ P.p) ((Fac.prod (inf.map (wholeFac L · 0 P.p)) P.p).l.map
+        ((Fac.prod (fin.map fun x => wholeFac L x.1 0 P.p) P.p).f + ·))
+    bound P (fun s => lightSets L (fin.map fun x => (x.1, -(P.θ * s * x.2))) P.p) whole
   else none
 
-/-- **At least `ln G_ρ(θ)`**, Rankin's factor of the replay block with cells `cs` (`Claims.Sampling.rankinFactor`). -/
-def lnFactorUpper (cs : List Cell) (P : Params) : Option Rat := lnFactorUpperOf .sets cs P
+/-! ## The patterns' factor -/
 
-/-- **At least `ln` of the patterns' factor** of the replay block with cells `cs`, its proof blocks read by at most one
-request, serving `S` bits (`Claims.Sampling.rankinFactorPatterns`). -/
-def lnFactorUpperPatterns (cs : List Cell) (S : Nat) (P : Params) : Option Rat := lnFactorUpperOf (.patterns S) cs P
+/-- The least `y` of a request's heavy set avoiding the cells sampled whole, `y_S = min_g r_g max(1, S/b_g)` over the
+groups (of nonzero bits, when `S > 0`); `none` when the groups hold fewer than `S` bits, so that there is none. -/
+def heavyY (fin : List (Group × Rat)) (S : Nat) : Option Rat :=
+  if (fin.map fun x => x.1.n * x.1.b).sum < S then none
+  else
+    match fin.filterMap fun x => if x.1.b = 0 ∧ 0 < S then none else some (x.2 * max 1 ((S : Rat) / (x.1.b : Rat))) with
+    | [] => none
+    | y :: ys => some (ys.foldl min y)
+
+/-- **A request's factor at slope `s`**, `θs = θ s`: `1 + Σ_{A light} 2^{b(A)} e^{−θ s y(A)} + 2^S e^{−θ s y_S}`, over
+its classes avoiding the cells sampled whole: none, light, heavy. -/
+def requestFac (L : Ln2) (fin : List (Group × Rat)) (yS : Option Rat) (θs : Rat) (S p : Nat) : Fac :=
+  let light := lightPatterns L (fin.map fun x => (x.1, -(θs * x.2))) S p
+  let l := lse ([light, yS.map fun y => (S : Rat) * L.up - θs * y].filterMap id) p
+  ⟨lnOnePlus l p, l⟩
+
+/-- At least `ln` of the patterns' count meeting a cell sampled whole, `N` requests in all: with `T` a request's classes
+meeting one (`2^S` heavy, the light sets meeting one `∏_{F} (1 + L_g) (∏_{I} (1 + L_g) − 1)`) and `A` all its classes,
+the lesser of `N T A^{N−1}` (one of the requests meets one) and `A^N`. -/
+def touchCount (L : Ln2) (fin : List (Group × Rat)) (inf : List Group) (yS : Option Rat) (N S p : Nat) :
+    Option Rat :=
+  if N = 0 then none
+  else
+    let finF := Fac.prod (fin.map fun x => cappedFac L x.1 0 S p) p
+    let infF := Fac.prod (inf.map (cappedFac L · 0 S p)) p
+    let heavy : Option Rat :=
+      if ((fin.map Prod.fst ++ inf).map fun g => g.n * g.b).sum < S then none else some ((S : Rat) * L.up)
+    let lA := (lse ([some (finF.f + infF.f), heavy, yS.map fun _ => (S : Rat) * L.up].filterMap id) p).getD 0
+    (lse ([infF.l.map (finF.f + ·), heavy].filterMap id) p).map fun lT =>
+      min (lnUpper N p + lT + (N - 1 : Nat) * lA) (N * lA)
+
+/-- **At least `ln` of the patterns' factor** of the replay block with cells `cs`
+(`Claims.Sampling.rankinFactorPatterns`), its proof blocks read by at most `N` requests, each serving `S` bits and
+reading at most `reads[t]`'s `(count, bits)` in stratum `t`, no two reading one proof block: as `y(U) ≥ Σ_r y(U_r)`, a
+chord's weight is a product over the requests, and the sum over the patterns of the sets avoiding the cells sampled
+whole `(requestFac)^N − 1`, with `y_S` a breakpoint so that a heavy request's weight is `h(y_S)`'s; and the patterns
+meeting one are `touchCount`, at `(1 − q)^θ`. -/
+def lnFactorUpperPatterns (cs : List Cell) (reads : List (List (Nat × Nat))) (N S : Nat) (P : Params) :
+    Option Rat :=
+  if P.valid then
+    let L := Ln2.of P.p
+    let (fin, inf) := split (readGroups cs reads S P.p)
+    let yS := heavyY fin S
+    let lnN := lnUpper N P.p
+    let whole := if inf.isEmpty then none else oadd (lnPassWhole P.q P.θ P.p) (touchCount L fin inf yS N S P.p)
+    let P' := match yS with
+      | some y => if ({ P with ys := insertY y P.ys } : Params).valid then { P with ys := insertY y P.ys } else P
+      | none => P
+    bound P' (fun s => ((requestFac L fin yS (P.θ * s) S P.p).pow N lnN P.p).l) whole
+  else none
 
 end SampledProofs.FactorUpper
