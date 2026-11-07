@@ -51,9 +51,15 @@ def sha512_file(path: Path) -> str:
     return hashlib.sha512(path.read_bytes()).hexdigest()
 
 
+def environ(env: dict | None) -> dict:
+    """This process's environment with ``env`` over it, a None value removing its variable (flock-circuit takes the host's
+    witness when FC_HOST_WITNESS is set at all)."""
+    return {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
+
+
 def run(cmd: list[str], log: Path, env: dict | None = None, timeout: float = 3600) -> subprocess.CompletedProcess:
     t = time.time()
-    p = subprocess.run(cmd, capture_output=True, text=True, env={**os.environ, **(env or {})}, timeout=timeout)
+    p = subprocess.run(cmd, capture_output=True, text=True, env=environ(env), timeout=timeout)
     log.write_text(f"$ {' '.join(cmd)}\n# rc {p.returncode} in {time.time() - t:.1f} s\n--- stdout\n{p.stdout}\n--- stderr\n{p.stderr}")
     return p
 
@@ -196,12 +202,13 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     `draw_file`: the server serves the verifier's own sample from that file (`--draw-file`) instead of sampling one. `zk`: both
     sides run the masked protocol (`--zk`); without it the Lean verifier accepts a subset sample at hidden outputs and one table
     (`Flock.ProvedScope`). `env`: added to
-    both sides' environment (a firewalled prover's, `firewall_env`). `prove_timeout`: the prover's limit in seconds."""
+    both sides' environment (a prover's, `prover_env`), a None value removing its variable. `prove_timeout`: the prover's
+    limit in seconds."""
     out.mkdir(parents=True, exist_ok=True)
     d = st["dir"]
     tables = d / "tables"
     zf = ["--zk"] if zk else []
-    senv = {**os.environ, **(env or {})}
+    senv = environ(env)
     ch = None
     if senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree"):
         from verity_flock import challengers as CH
@@ -253,6 +260,19 @@ def firewall_env(st: dict) -> dict:
     `lean_verify` verifies under, and the statement's partition and program."""
     args = [x for k in ("partition", "program") if st.get(f"{k}_file") for x in (f"--{k}", str(st[f"{k}_file"]))]
     return {"FC_FIREWALL_STATEMENT": STATEMENT_ID, "FC_FIREWALL_HELLO_ARGS": " ".join(args)}
+
+
+#: a `--zk` session's prover with no ZK server, as SPOT[Flock]'s proof server runs it: `flock-circuit prove --zk` itself,
+#: its witness built where the prover builds it (`zk_cost.py`'s `dev` arm, which Figure 1 prices)
+DIRECT = {"FC_FIREWALL": "0", "FC_HOST_WITNESS": None}
+
+
+def prover_env(firewall: str | None, st: dict) -> dict:
+    """A `--zk` session's prover environment: behind the ZK server's send check when ``firewall`` names Lean's
+    `flock-firewall` (the core protocols' path), else `DIRECT`."""
+    if firewall:
+        return {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": firewall, **firewall_env(st)}
+    return dict(DIRECT)
 
 
 def lean_verify(lean: str, st: dict, n: int, out: Path, zk: bool = False, log: str = "lean-verify",
