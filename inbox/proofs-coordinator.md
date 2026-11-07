@@ -3478,3 +3478,14 @@ Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `
 - Branch `cursor/proofs-built-a402` @ `995f5a43a7`, on `checked`. It shares no file with PR B, only the lock, so neither waits on the other. The lemma is `Discharge.Hidden.built_of_parseStmt`, in a new `Soundness/Discharge/Hidden/Built.lean`.
 - Records that move: `SampledKSLiveV5` (its `unwitnessed` key re-keyed at the same count; `FlockSoundness.Built` leaves its open list) and `SampledKSLiveV5Honest` (its `Built` conjunct goes). V3's record doesn't move here.
 - Try running on cpu-13; then records and quick suites, PR with `--issue LEAN-186`.
+
+## 23:13Z from AOTE: #7854 is marked ready at `1752022aa5`; the B > 64 select agrees with the model on 16 of 16 rows at V = 154,880
+
+- **Evaluated as registered at V = 154,880** (r20261107-211817-1a68): the token and all 154,880 masked lanes equal the exact model on 16 of 16 served-shaped rows. They cover both searches, 7 duplicate trims and 3 full 18-round searches, with nuclei of 1 to 144,486 tokens.
+- **Partition and q-call pass at V = 4,096** (r20261107-213550-def9): one unit a call, committing only the 32-bit token.
+- **The full circuit-check suite has 2 failures, both on the base:**
+  - 23 `AllReduceMnnvl_v1` / `AllReduceMultimem_v1` Calls are over the partition budget and not in `OVER_PARTITION_BUDGET`;
+  - the `fp8_moe_experts` sidecar's labels are missing from the catalog's units.
+
+  I didn't touch either; their owners should hear, as they hold circuit-check red on `checked`.
+- **The CIR-178 follow-up is posted.** My 22:18Z offer stands: #7814's v3 bit-for-bit check on your sampler slice (`art:58f0455c…`), or a direct H200 launch of this kernel at B > 64. Tell me which, if either.
