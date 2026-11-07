@@ -217,6 +217,197 @@ def checksFast (reg receipt draw law : Json) (units : Array Int) (provedUnits : 
   funext reg receipt draw law units provedUnits instances digest served sessionRoots sessionRegistered
   simp only [checks, checksFast, find?_byPort]
 
+/-- A root's port with the root, for a root whose port is a string. -/
+def portOf (r : Json) : Option (String × Json) :=
+  match getD r "port" with
+  | .str p => some (p, r)
+  | _ => none
+
+/-- The entries whose key no later entry repeats, in order: what `byPort` keeps of its `(port, root)` pairs. -/
+def keepLast : List (String × Json) → List (String × Json)
+  | [] => []
+  | x :: xs => if xs.any (·.1 == x.1) then keepLast xs else x :: keepLast xs
+
+/-- `byPortFast`'s step, from the last pair back: a pair whose key is not yet kept is kept. -/
+def keepStep (x : String × Json) (acc : Std.HashSet String × Array (String × Json)) :
+    Std.HashSet String × Array (String × Json) :=
+  if acc.1.contains x.1 then acc else (acc.1.insert x.1, acc.2.push x)
+
+/-- `byPort` in one pass from the last root back, the ports already kept a hash set. -/
+def byPortFast (rec : Json) : Array (String × Json) :=
+  (((match getD rec "roots" with | .arr rs => rs | _ => #[]).filterMap portOf).foldr keepStep ({}, #[])).2.reverse
+
+theorem foldr_keepStep (l : List (String × Json)) :
+    (∀ k, (l.foldr keepStep ({}, #[])).1.contains k = l.any (·.1 == k)) ∧
+    (l.foldr keepStep ({}, #[])).2.toList.reverse = keepLast l := by
+  induction l with
+  | nil => simp [keepLast]
+  | cons x xs ih =>
+    obtain ⟨hs, ho⟩ := ih
+    simp only [List.foldr_cons]
+    unfold keepStep
+    split
+    · rename_i h
+      rw [hs] at h
+      refine ⟨fun k => ?_, ?_⟩
+      · rw [hs]
+        by_cases hk : x.1 = k
+        · subst hk; simp [h]
+        · simp [hk]
+      · rw [ho, keepLast, if_pos h]
+    · rename_i h
+      rw [hs] at h
+      refine ⟨fun k => ?_, ?_⟩
+      · simp only [Std.HashSet.contains_insert, hs, List.any_cons]
+      · simp only [Array.toList_push, List.reverse_append, ho, keepLast, h]
+        simp
+
+theorem keepLast_of_pairwise {l : List (String × Json)} (h : l.Pairwise (fun a b => a.1 ≠ b.1)) :
+    keepLast l = l := by
+  induction l with
+  | nil => rfl
+  | cons x xs ih =>
+    rw [List.pairwise_cons] at h
+    have hx : xs.any (·.1 == x.1) = false := by
+      rw [List.any_eq_false]
+      intro y hy
+      simpa using (h.1 y hy).symm
+    rw [keepLast, hx, ih h.2]
+    rfl
+
+theorem keepLast_filter (a rest : List (String × Json)) (p : String) (r : Json) :
+    keepLast (a ++ (p, r) :: rest) = keepLast (a.filter (fun q => q.1 != p) ++ (p, r) :: rest) := by
+  induction a with
+  | nil => simp
+  | cons y a ih =>
+    by_cases hy : y.1 = p
+    · have hany : (a ++ (p, r) :: rest).any (·.1 == y.1) = true := by simp [hy]
+      rw [List.cons_append, keepLast, if_pos hany, ih, List.filter_cons, if_neg (by simp [hy])]
+    · have hc : (a ++ (p, r) :: rest).any (·.1 == y.1)
+          = (a.filter (fun q => q.1 != p) ++ (p, r) :: rest).any (·.1 == y.1) := by
+        rw [Bool.eq_iff_iff]
+        simp only [List.any_eq_true, List.mem_append, List.mem_cons, List.mem_filter, beq_iff_eq, bne_iff_ne, ne_eq]
+        constructor
+        · rintro ⟨z, hz, hzy⟩
+          refine ⟨z, ?_, hzy⟩
+          rcases hz with hz | hz
+          · exact Or.inl ⟨hz, by rw [hzy]; exact hy⟩
+          · exact Or.inr hz
+        · rintro ⟨z, hz, hzy⟩
+          refine ⟨z, ?_, hzy⟩
+          rcases hz with hz | hz
+          · exact Or.inl hz.1
+          · exact Or.inr hz
+      rw [List.filter_cons, if_pos (by simp [hy]), List.cons_append, List.cons_append, keepLast, keepLast, hc, ih]
+
+theorem foldl_byPort (l : List Json) (acc : Array (String × Json))
+    (h : acc.toList.Pairwise (fun a b => a.1 ≠ b.1)) :
+    (l.foldl (fun (acc : Array (String × Json)) r => match getD r "port" with
+      | .str p => (acc.filter fun (q : String × Json) => q.1 != p).push (p, r)
+      | _ => acc) acc).toList = keepLast (acc.toList ++ l.filterMap portOf) := by
+  induction l generalizing acc with
+  | nil => simp [keepLast_of_pairwise h]
+  | cons r l ih =>
+    simp only [List.foldl_cons]
+    split
+    · rename_i p hp
+      have hr : portOf r = some (p, r) := by simp [portOf, hp]
+      have nd : ((acc.filter fun (q : String × Json) => q.1 != p).push (p, r)).toList.Pairwise
+          (fun a b => a.1 ≠ b.1) := by
+        rw [Array.toList_push, Array.toList_filter, List.pairwise_append]
+        refine ⟨h.filter _, List.pairwise_singleton _ _, ?_⟩
+        intro a ha b hb
+        rw [List.mem_singleton] at hb
+        subst hb
+        rw [List.mem_filter] at ha
+        simpa using ha.2
+      rw [ih _ nd]
+      simp only [List.filterMap_cons, hr, Array.toList_push, Array.toList_filter, List.append_assoc,
+        List.singleton_append]
+      exact (keepLast_filter _ _ p r).symm
+    · rename_i hp
+      have hr : portOf r = none := by
+        unfold portOf
+        split
+        · rename_i p hp'
+          exact absurd hp' (hp p)
+        · rfl
+      rw [ih _ h]
+      simp only [List.filterMap_cons, hr]
+
+@[csimp] theorem byPort_eq_byPortFast : @byPort = @byPortFast := by
+  funext rec
+  unfold byPort byPortFast
+  generalize (match getD rec "roots" with | .arr rs => rs | _ => #[]) = rs
+  apply Array.toList_inj.mp
+  rw [← Array.foldl_toList, foldl_byPort _ _ (by simp), Array.toList_reverse, ← Array.foldr_toList,
+    Array.toList_filterMap, (foldr_keepStep _).2]
+  simp
+
+/-- Each key's values in `b`, in order. -/
+def groupBy (b : Array (String × Json)) : Std.HashMap String (Array Json) :=
+  b.foldl (fun m kv => m.insert kv.1 ((m[kv.1]?.getD #[]).push kv.2)) {}
+
+theorem any_groupBy (b : Array (String × Json)) (k : String) (P : Json → Bool) :
+    ((groupBy b)[k]?.getD #[]).any P = b.any (fun kv => k == kv.1 && P kv.2) := by
+  unfold groupBy
+  rw [← Array.foldl_toList, ← Array.any_toList]
+  suffices h : ∀ (l : List (String × Json)) (m : Std.HashMap String (Array Json)),
+      ((l.foldl (fun m kv => m.insert kv.1 ((m[kv.1]?.getD #[]).push kv.2)) m)[k]?.getD #[]).any P
+        = ((m[k]?.getD #[]).any P || l.any (fun kv => k == kv.1 && P kv.2)) by
+    simpa using h b.toList {}
+  intro l
+  induction l with
+  | nil => intro m; simp
+  | cons kv l ih =>
+    obtain ⟨k', v'⟩ := kv
+    intro m
+    rw [List.foldl_cons, ih, Std.HashMap.getElem?_insert]
+    by_cases hk : k' = k
+    · subst hk
+      simp [Array.any_push, Bool.or_assoc]
+    · simp [hk, Ne.symm hk]
+
+/-- `sameDict`, each key's values in `b` a hash lookup. -/
+def sameDictFast (a b : Array (String × Json)) : Bool :=
+  let g := groupBy b
+  a.size == b.size && a.all fun (k, v) => (g[k]?.getD #[]).any fun v' => jeq v v'
+
+@[csimp] theorem sameDict_eq_sameDictFast : @sameDict = @sameDictFast := by
+  funext a b
+  dsimp only [sameDict, sameDictFast]
+  congr 1
+  congr 1
+  funext x
+  obtain ⟨k, v⟩ := x
+  dsimp only
+  rw [any_groupBy]
+  congr 1
+  funext y
+  obtain ⟨k', v'⟩ := y
+  rfl
+
+/-- `matchesPublic` on `byPortFast` and `sameDictFast`: linear in the registration's roots, up to the lookups. -/
+def matchesPublicFast (rec scheme roots domains population : Json) : Check := Id.run do
+  let reg := byPortFast rec
+  let regRoots := reg.map fun (p, r) => (p, getD r "root")
+  let regDomains := reg.map fun (p, r) => (p, getD r "domain")
+  let mut c : Check := {}
+  if !jeq scheme (getD rec "scheme") then
+    c := c.fail "scheme" (obj [("registered", getD rec "scheme"), ("public", scheme)])
+  if !sameDictFast regRoots (entries roots) then
+    c := c.fail "roots" (obj [("registered", obj regRoots.toList), ("public", roots)])
+  if !sameDictFast (reg.map fun (p, _) => (p, getD domains p)) regDomains then
+    c := c.fail "domains" (obj [("registered", obj regDomains.toList), ("public", domains)])
+  if !jeq population (getD rec "population") then
+    c := c.fail "population" (obj [("registered", getD rec "population"), ("public", population)])
+  return c
+
+@[csimp] theorem matchesPublic_eq_matchesPublicFast : @matchesPublic = @matchesPublicFast := by
+  funext rec scheme roots domains population
+  unfold matchesPublic matchesPublicFast
+  rw [byPort_eq_byPortFast, sameDict_eq_sameDictFast]
+
 /-- The profile's draw of the law a draw names (`audit.profile`): a work law is the stratified law at its sizes. -/
 def profileDraw (law : Json) : Option Core.SamplingDesign :=
   match getD law "law" with
