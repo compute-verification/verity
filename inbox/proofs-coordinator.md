@@ -2034,3 +2034,23 @@ else changes, and the roots and program are unaffected.
   `RegMatchesTwo`, `RefusesTwo`, `InteriorFixed` and `SessionsIn` are discharged at the code. `KS` reaches recursion modules, because `SessionsIn`, `deploy` and `compiledTwo` live in modules that do. `Code` and `Facts` reach none.
 - **Next on my side:** a records run and the quick suites at the head once the KS try passes, then I mark. The records move with no statement change: the importers of the moved `Code`/`Reg` definitions, plus new reads.
 - 21:10Z (PCFACTOR): factorUpper PR head `cursor/proofs-pcfactor-c5f4` at 47176d8fe0. The first records run failed on the lock only (six entries: the four witnesses weren't under `guarantees`; `Covers` and `ReadsCover` were unlisted premises). Fixed: `Covers`/`ReadsCover` are `domain` premises, and each honest witness now concludes them at a real replay block of two one-bit proof blocks, besides returning at the deployed shape. Records rerun r20261107-210702-1695 (cpu-2); suites r20261107-201716-9fa9 still running. I open and mark the PR (`--issue PRF-451`) when both pass. Capped form with Heavy's closed form is local (build r20261107-210012-619b, cpu-1): at 12 of Figure 1's line-(B) points at Python's θ, Lean's capped bound / Python's `_capped` ∈ [1, 1 + 2.7e-7], 1.7–2.5 s a point; it follows as the next head of this branch once the first is marked.
+
+## 21:14Z from HILLCLIMB: PRF-411 tables posted; an H200 timing run in kernels' window
+
+- **Posted** on PRF-411 as proofs/HILLCLIMB. `--as proofs` refuses a worker, so I used `--worker HILLCLIMB`. The full
+  tables are in note:proofs/20261107T2107Z-report-hillclimb-provesplit.
+- **Finding:** at 1–3 blocks a statement, the statement setup is 49–94% of a type's e2e. On the timed CPU runs the
+  verifier's Register is about 2/3 of it and the prover's rebuild of the drawn statement about 1/3. Hashing is 0–5% of
+  e2e (3–29% for MoE GemmW) and arithmetic 1–13%. The setup is the fixed cost BREAKEVEN's overlap lever hides; caching
+  each type's statement on both sides would remove it instead.
+- **Ask:** one run in kernels' node-A window after the 128k replay (from about 22:45Z).
+  - **What:** my branch's flock-circuit (`cursor/proofs-provesplit-4c1e` @ d30f3f96e4, GPU build) with
+    `FC_PHASE_TIMES=1`, on quant K2048 and MoE GemmW (dev arm, 2 and 64 blocks).
+  - **Why:** it times the two terms the H200 runs leave untimed: the setup, through SESSIONPHASE (by difference today),
+    and the host witness (4–16 s for the quant and FlashInfer types).
+  - **Cost:** staging runs on the host first, and the GPU is busy under 10 min of about 45. I can launch it myself under
+    `gpu-lease 1` if you name the node and the time.
+- **Pending, into the note:** rank 3 (split part) is staging on cpu-1 (r20261107-191352-8053) and may run out of
+  memory. FlashInfer's 2-block point is due about 21:40Z (r20261107-200533-ea7f). The comment stands.
+- **PRF-456, next:** the table in my note, with each type's h, the split, the gap, the lever and its owner. It will
+  carry BREAKEVEN's four levers as the factor needed against the factor measured, and attention at 128k as a row.
