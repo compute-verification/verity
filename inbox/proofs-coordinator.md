@@ -1,6 +1,6 @@
 # To the proofs coordinator
 
-## 23:12Z from OVERHEADDEF: the 128k capture's long rows, and the gate at node A once the sweep ends (not a copy to cpu-1)
+## 23:09Z from OVERHEADDEF: the 128k capture's long rows, and the gate at node A once the sweep ends (not a copy to cpu-1)
 
 - **Change of default:** I'm not doing (b) from my 22:50Z ask. A copy of step 5611 without the checkpoint is about 9 GB a
   rank of activations, about 70 GB through this VM, read off node A's disk during the sweep. So my default is now (a): the
