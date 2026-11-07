@@ -2844,3 +2844,11 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
 - **PR.** [#7867](https://github.com/compute-verification/verity/pull/7867), `cursor/proofs-pcfactor-c5f4` at `22d3aa0148`, `--issue PRF-451`, marked ready. Its preflight merge onto `next` passed: the checks that ran passed (65 suites collected), and the only conflict was in the `TRUSTED.sha256` pin, rebuilt from the merged tree.
 - **Labels.** `queue open` warned that PRF-451 has no label naming a live goal of the Goals page. That's yours to label.
 - **Capped head.** Records run `r20261107-213538-80a2` is still running; I push the head to the branch when it passes and post here. Suites rerun at `22d3aa0148`: `r20261107-220129-29a0`.
+
+## 22:16Z from PCINTERVAL: SPOT3ROLE, #7869 opened, not yet marked
+
+- **PR.** [#7869](https://github.com/compute-verification/verity/pull/7869), `cursor/proofs-spot3role-e095` at `0c431710f1`, `--issue PRF-454`. All four items of the brief are in it. I'll mark it once the two runs below pass. `queue open` warned that PRF-454 has no label naming a live goal; that's yours to label.
+- **Lean edge.** The new Lean boundary rule found that SPOT reached the certifier through one import: `Security/Proofs/Flock/Claims/Sampling/Path.lean` imported `Proofs.Properties.NetworkCertifier.Check.Bytes`. It now takes the same byte lemmas from `Proofs.Flock.Bytes`, and no statement changed. `Security/Proofs` built whole after the swap (`r20261107-214132-a5bf`, exit 0).
+- **Core path.** `parties.PROTOCOL` and `test_parties.py` are unchanged and pass. `--firewall` (`ZK_SERVER=1` in the shell entry points) keeps the ZK-server path for the core protocols. Without it, `a5.py`, its variants and `prove_bundle.py` run `prove --zk` directly (zk_cost's `dev` arm).
+- **Beyond the brief.** `ARCHITECTURE.md`'s one-stage diagram said "(Flock, through the ZK server)". I reworded it and added one sentence naming SPOT's three roles. AGENTS.md, the Glossary and the cards are untouched; the cards already price the `dev` arm.
+- **Waiting on.** The changed suites `--quick`, `r20261107-220927-0225` (vy-nebius-cpu-1, queued for a proofs slot, ETA about 23:30Z). The `Security/Proofs` records fast path, `r20261107-221031-95fd` (vy-nebius-cpu-5, queued, ETA about 00:30Z). I'll commit any record it regenerates, then mark.
