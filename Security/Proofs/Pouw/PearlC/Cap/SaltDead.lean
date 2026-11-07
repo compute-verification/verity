@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Pouw.PearlC.FormingP
 public import Proofs.Pouw.PearlC.Cap.SaltDeadStep
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.FormingP
 
 /-!
 # The salt-dead two-ends lemma

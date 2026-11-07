@@ -1,8 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Registered.Defs
-public import Proofs.Flock.Soundness.Binding.Weights
 public import Proofs.Flock.Soundness.StrictCR
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Binding.Weights
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Registered reads bind the registrant's rows, under `cr/sha-512`

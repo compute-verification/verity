@@ -142,7 +142,7 @@ class Datacenter:
         out.update({d.name: d for d in self.fabric})
         return out
 
-    def block_of(self, device: str) -> Zone | None:
+    def zone_of(self, device: str) -> Zone | None:
         return next((b for b in self.blocks if device in b), None)
 
     def block(self, name: str) -> Zone:
@@ -151,25 +151,25 @@ class Datacenter:
     @property
     def boundary(self) -> list[LinkEntry]:
         """The links with exactly one end in a block, or with ends in two blocks."""
-        return [l for l in self.links if self.block_of(l.a) is not self.block_of(l.b)]
+        return [l for l in self.links if self.zone_of(l.a) is not self.zone_of(l.b)]
 
     def uncovered_links(self) -> list[LinkEntry]:
         """The links outside every block with no trusted device at either end (a switch-to-switch fabric link, an outside
         host's link to a switch), where two machines the auditor doesn't control meet with no certifier between them.
         The network certifiers cover every link when this is empty."""
         devices = self.devices
-        inside = lambda l: self.block_of(l.a) is not None and self.block_of(l.a) is self.block_of(l.b)  # noqa: E731
+        inside = lambda l: self.zone_of(l.a) is not None and self.zone_of(l.a) is self.zone_of(l.b)  # noqa: E731
         return [l for l in self.links if not inside(l)
                 and not any(devices[e].trusted for e in (l.a, l.b) if e in devices)]
 
     def port(self, a: str, b: str) -> Port | None:
         """The certifier port a hop from device `a` to device `b` passes, if the hop crosses a boundary at a certifier."""
         devices = self.devices
-        if self.block_of(a) is self.block_of(b):
+        if self.zone_of(a) is self.zone_of(b):
             return None
-        if devices[b].kind == "certifier" and self.block_of(a) is not None:
+        if devices[b].kind == "certifier" and self.zone_of(a) is not None:
             return Port(b, "egress")
-        if devices[a].kind == "certifier" and self.block_of(b) is not None:
+        if devices[a].kind == "certifier" and self.zone_of(b) is not None:
             return Port(a, "ingress")
         return None
 
@@ -188,12 +188,12 @@ class Datacenter:
     def uplink(self, certifier: str) -> LinkEntry:
         """The link between a certifier and the block it watches."""
         return next(l for l in self.links if certifier in (l.a, l.b)
-                    and self.block_of(l.b if l.a == certifier else l.a) is not None)
+                    and self.zone_of(l.b if l.a == certifier else l.a) is not None)
 
     def watched(self, port: Port) -> Zone:
         """The block whose boundary `port` watches."""
         l = self.uplink(port.certifier)
-        return self.block_of(l.b if l.a == port.certifier else l.a)
+        return self.zone_of(l.b if l.a == port.certifier else l.a)
 
     def validate(self) -> list[str]:
         """Every way the declaration falls short of the model; empty when it is an instance of it."""
@@ -267,7 +267,7 @@ class Fleet:
         for l in self.links:
             unknown = [end for end in (l.a, l.b) if end not in merged.devices]
             problems += [f"inter-datacenter link {l.a}-{l.b} names an unknown device {end!r}" for end in unknown]
-            if unknown or merged.block_of(l.a) is merged.block_of(l.b):
+            if unknown or merged.zone_of(l.a) is merged.zone_of(l.b):
                 continue
             if merged.port(l.a, l.b) is None and merged.port(l.b, l.a) is None:
                 problems.append(f"inter-datacenter link {l.a}-{l.b} passes no certifier (coverage)")

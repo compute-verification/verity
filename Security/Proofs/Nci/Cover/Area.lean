@@ -1,11 +1,17 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.Order.GroupWithZero.Basic
-public import Mathlib.Data.Finset.Prod
+public import Definitions.Nci.Assumptions.Cover
 public import Mathlib.Tactic.Positivity
-public import Mathlib.Tactic.Ring
 public import Proofs.Nci.Cover.Charge
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.Positivity.Finset
+import Mathlib.Tactic.Ring.RingNF
+import Proofs.Nci.Cover.Paths
 
 /-!
 # The cover theorem: a block's products, by area

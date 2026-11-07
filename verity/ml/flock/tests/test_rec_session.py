@@ -5,7 +5,7 @@ verifier's record has h in a round of its own after z_partial's coinless one on 
 `rec_vstage` stages the holo algebra from that record, with h read from the session's rows, and it holds (Lean's fold of
 the fixture, `fixtures/inner_claims.json`, split as public comb + h). The stacked table's stream, as candidate 3's
 opening-only prover sends it (``flock-circuit stacked``), is held to `rec_live.schedule_for`'s, and the relay runs each
-rep's sparse phase (`rec_sparse.prove`) on the coin server's coins, which `rec_vstage` reads back and stages as RecSparse. That the verifier's public comb plus h is Lean's own
+rep's sparse phase (`rec_sparse.prove`) on the challenger's coins, which `rec_vstage` reads back and stages as RecSparse. That the verifier's public comb plus h is Lean's own
 full fold (``InnerFold.lean --hide``) is the pod's (``pod/88-rec-c3-inner.sh``, `check_fold`)."""
 from __future__ import annotations
 
@@ -189,7 +189,7 @@ def _client(addr: str, rec: dict, tree: dict | None = None) -> list:
 
 @pytest.fixture(scope="module")
 def served(tmp_path_factory):
-    """`rec_session.serve` on loopback, its coin server returning the fixture's recorded coins in the order the prover's
+    """`rec_session.serve` on loopback, its challenger returning the fixture's recorded coins in the order the prover's
     rounds drew them (z_partial's coinless round draws none), and the fake prover's answers."""
     assert (SET / "stage" / "circuit.txt").is_file(), (
         f"{SET} is not fetched: `uv run research data fetch-fixtures verity/ml/flock/tests/fixtures/hidden-outputs`")
@@ -233,7 +233,7 @@ def _rep(record: dict, stream: str) -> list[dict]:
 
 def test_the_prover_sees_its_own_session_and_the_verifier_h_in_its_own_round(served):
     """The prover's every round is answered with its recorded coins, and ``prover/session.json`` is its session (each
-    round's message, coin count and coins), what upstream's replay checks its proofs against. The coin server's record has
+    round's message, coin count and coins), what upstream's replay checks its proofs against. The challenger's record has
     the holo schedule: z_partial's round with a ``c_k`` and no coins, then h's round with a ``c_k`` and r′, on the same
     stream; its h is the hidden circuits' fold at the rep's fold points, which the fixture's coins give."""
     out, summary, got, rec = served
@@ -515,7 +515,7 @@ def test_the_stacked_stream_is_held_to_the_schedule_the_opening_only_prover_runs
 
 def test_rs_top_is_registered_at_staging_and_meta_binds_its_registration(tmp_path):
     """The hole the registration closes: R is built from the hidden circuit after the coins that fix its opening point, and
-    its root reaches the coin server only at ``stacked/rep0``'s binding round. So R's top is registered with the statement
+    its root reaches the challenger only at ``stacked/rep0``'s binding round. So R's top is registered with the statement
     at staging (`rec_live.register_top`, `inner_registered.bind`): one more registered value, ``stacked``, of the circuit
     registration, the ``verity/registration/v2`` record one-stage ``registration.record`` writes over the partition object
     META names (one-stage's ``stratified`` law, the statement's scheme, no roots, window ``stand-in``), beside the other
@@ -744,7 +744,7 @@ def sparse_session(tmp_path_factory):
 
 def test_the_relay_runs_each_reps_sparse_phase_after_both_reps_on_the_coin_servers_coins(sparse_session):
     """At the prover's Finish the relay opens each rep's sparse stream as its child at its end and runs `rec_sparse.prove`
-    there (h the rep's, entries the hidden circuit's), each message a round of its own on the coin server's coins: the
+    there (h the rep's, entries the hidden circuit's), each message a round of its own on the challenger's coins: the
     record is `schedule_for(..., sparse=)`'s, both reps' rounds before either sparse stream's; `rec_vstage.sparse_reps`
     reads back from the public record and the prover's rows the coins and messages the relay ran (v2's coinless round
     skipped), which the reference accepts; the prover's own record holds only its reps. Entries that are not h's circuit

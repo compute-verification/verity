@@ -2,6 +2,8 @@ module
 
 public import Definitions.Core.Game.Batch
 public import Definitions.Flock.Game.Lock
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # C-Flock's game vocabulary is Core's: `Batch`

@@ -1,7 +1,7 @@
 """Pearl-C4's reference replay on real activations (CPU; a development shortcut: the protocol's check is a ZK proof,
-PROTOCOL.md), per linear of a `pearlc_capture.py` directory: X, the linear's input rows (float32 holding BF16 exactly),
+PouwCheck), per linear of a `pearlc_capture.py` directory: X, the linear's input rows (float32 holding BF16 exactly),
 and its weight W (the model's BF16 safetensors); or of an `fp4_v3_real.capture` npz file (X and W of each linear as
-float32 holding BF16), judged in the clear as the scheme (`verity.core.protocols.pouw.schemes.pearl_c4`) judges a unit:
+float32 holding BF16), judged in the clear as the scheme (`verity.ml.protocols.pouw.schemes.pearl_c4`) judges a unit:
 
 * admission per row of X and of W (`row_passes`, D-NF), over the full k and over the split unit, and the rows with a
   non-finite word (D-SB rejects the transcript);
@@ -34,9 +34,9 @@ from types import SimpleNamespace
 
 import numpy as np
 from verity.core.protocols.pouw.protocol import Context, Matmul, Shape
-from verity.core.protocols.pouw.schemes import pearl_c4 as F
-from verity.core.protocols.pouw.schemes import pearl_c_work as W
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c4 as F
+from verity.ml.protocols.pouw.schemes import pearl_c_work as W
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 from verity_config.settings import of
 
 settings = of(__file__)
@@ -182,7 +182,7 @@ def tile(job: Job, name: str, t: int) -> dict:
     if fast:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import f1_fast
-    s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None)
+    s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None, hashing="h0")
     unit = Matmul(0, Shape(m, k_unit, n), 0)
     lab = lambda part: hashlib.sha256(f"pearl-c4-real/{name}/{t}/{part}".encode()).digest()  # noqa: E731
     noise = s.noise(Context(lab("salt"), unit, lab("root_a"), lab("root_b")))

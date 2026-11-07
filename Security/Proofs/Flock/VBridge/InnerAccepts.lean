@@ -1,8 +1,10 @@
 module
 
 public import Proofs.Flock.Recursive.Target
-public import Proofs.Flock.Soundness.Discharge.Exec.Tables
-public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 
 /-!
 # VBridge G: the compiled inner verifier accepts from both reps' accepting runs

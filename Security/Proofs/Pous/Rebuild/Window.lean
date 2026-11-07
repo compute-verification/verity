@@ -1,7 +1,9 @@
 module
 
 public import Definitions.Pous.Accounting.Rebuild
-public import Proofs.Pous.Chain.Flat
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pous.Chain.Flat
 
 /-!
 # The rebuild cost and the graded window

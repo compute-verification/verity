@@ -1,7 +1,6 @@
 module
 
 public import Proofs.Nci.Capability.Budgets
-public import Proofs.Nci.Capability.Incidence
 public import Proofs.Nci.Capability.Dependency
 public import Proofs.Nci.Capability.Witnesses
 
@@ -11,8 +10,7 @@ public import Proofs.Nci.Capability.Witnesses
 Each local bound of `Definitions.Nci.Guarantees.Capability`, proved over the vocabulary of `Definitions.Nci.Capability`:
 
 * `Budgets`: `HeldBudget`, `StatHeldBudget`, `RecoveredBudget`;
-* `Incidence`: `IncidenceCap`, `OperandCapSeparate`, `OperandCapJoint`;
-* `Dependency`: `ImportOrRecompute`, `RecomputeByGates`, `RecomputeByState`, `WeightedProductCap`;
+* `Dependency`: `ImportOrRecompute`, `RecomputeByGates`, `RecomputeByState`;
 * `Items`: what they share about what a block holds;
 * `Witnesses`: each bound's honest and nontrivial witnesses at the toy circuit.
 

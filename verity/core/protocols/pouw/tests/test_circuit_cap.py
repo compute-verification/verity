@@ -1,4 +1,4 @@
-"""Pearl-C's per-tile cap on a circuit (`verity.core.protocols.pouw.circuit.cap`) against the scheme's replay: a word's flags and later
+"""Pearl-C's per-tile cap on a circuit (`verity.ml.protocols.pouw.circuit.cap`) against the scheme's replay: a word's flags and later
 +0 promotions are `pearl_c_debit.word_debit`'s, its C̃ `pearl_c.chain`'s, and only the exact certificates pass; a tile's
 verdict is rev1's capOK (`pearlCTilesDevRev1`) on `chain_debit` and `debit_units` against the device's `cap` times
 `credit_of`, on random tiles and adversarial ones (zero rows, absorbed groups, a total cancelled to zero, refused rows,
@@ -29,13 +29,13 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.silicon import fp32
 from verity.ml.randomness import derive
-from verity.core.protocols.pouw.circuit import cap, pc8, plan
-from verity.core.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import cap, pc8, plan
+from verity.ml.protocols.pouw.circuit import leaves as L
 from verity.core.protocols.pouw.protocol import DomainError, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 
 FINITE = [c for c in range(256) if c not in (0x7F, 0xFF)]
 SMALL = [c for c in FINITE if c & 0x7F < 0x10]                     # E4M3 subnormals and the smallest normals
@@ -208,7 +208,7 @@ def _rev1_cap(dev: str, k: int, n: int, rho: int, rows: int, cols: int) -> Fract
     """ρ·creditDevRev1·tileShare: the device's `cap` (ρ = 1/rho here) times `credit_of` (rev1's credit), at an m that
     cancels."""
     d, m = replace(DEVICES[dev], cap=Fraction(1, rho)), 64
-    return d.cap * C.PearlC(forming="v1", device=d).credit_of(Shape(m, k, n)) * rows * cols / (m * n)
+    return d.cap * C.PearlC(forming="v1", device=d, hashing="h0").credit_of(Shape(m, k, n)) * rows * cols / (m * n)
 
 
 def _reference(dev: str, k: int, n: int, rho: int, ac, bc, ok, sd) -> bool:
@@ -506,7 +506,7 @@ def test_the_served_shape_takes_the_schemes_row_cap():
     1,024 at ρr = ρ (400), as `PearlC.row_cap_at`; `pearl-c-sm120-v1-h3` at ρ (1,000); -h0, which caps the tile alone,
     is v1 and refuses k = 256.  A per-row cap without the cap, or not 1/RHOR, is refused; v1's Programs are unchanged."""
     h100, sm120 = DEVICES["h100"], DEVICES["sm120"]
-    h3, h0 = C.PearlC(forming="v1", device=h100, hashing="h3"), C.PearlC(forming="v1", device=h100)
+    h3, h0 = C.PearlC(forming="v1", device=h100, hashing="h3"), C.PearlC(forming="v1", device=h100, hashing="h0")
     for scheme, k, rr in ((h3, 256, 100), (h3, 1024, 400), (C.PearlC(forming="v1", device=sm120, hashing="h3"), 1024, 1000),
                           (h0, 1024, None)):
         shape = cap.served(scheme, Shape(64, k, 6144))

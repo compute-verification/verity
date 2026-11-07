@@ -1,7 +1,9 @@
 module
 
 public import Definitions.Core.Decisive
-public import Mathlib.Order.ConditionallyCompleteLattice.Basic
+public import Mathlib.Order.Lattice.Nat
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # A batch of decisive games reads as no other list of games

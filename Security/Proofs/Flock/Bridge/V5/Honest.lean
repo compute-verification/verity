@@ -17,9 +17,9 @@ inputs (`Flock.Bridge.Assumptions.ServedFilesParseV5`): inputs `I` whose files h
 `D`'s proof block is built (`Built`), its public input ports `pi` parse and the public file loads over them, `D` is in `scopeOkH` and has
 the row layout it needs (`RowsOk`), no two of its ports share a name, every draw size divides into the session's tables,
 and the tags are the ones the statement takes (`TagsOkZHJ`). The registration's roots (`RootFixesDomainL`), its
-population (`PopMatches`) and its law on its layout's strata (`LawOn`) are statements about the registration, not the
-files, and are no conjunct here; the finders' collision resistance is no hypothesis either: the statement takes it as
-`TableCRZ` and `LinkCRZC`.
+population (`PopMatches`), the law the verifier draws under from it (`DrawsUnder`) and that it is no Bernoulli law
+(`NotBernoulli`) are statements about the registration, not the files, and are no conjunct here; the finders' collision
+resistance is no hypothesis either: the statement takes it as `TableCRZ` and `LinkCRZC`.
 -/
 
 @[expose] public section
@@ -57,7 +57,7 @@ def SampledKSLiveV5Honest : Prop :=
       Flock.hexOf (Flock.Sha512.hash I.publicFile) =
         "6bea4647565a87a873bc66670482ec0cdb86c4424d061ccb03354b81ec55cbe302564836f08c4a9757085746f6000b904657749c2f84b028fe56fde816c26dd1" ∧
       I.tags.typed = false ∧
-      Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D ∧ Built D.unroll.unit ∧
+      Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D ∧ Built D.unroll.unit ∧
       Flock.HmIn.parse D.unroll = .ok pi ∧
       Flock.HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub ∧
       Discharge.Layout.scopeOkH D.unroll = true ∧ Bridge.RowsOk D.unroll ∧
@@ -79,7 +79,7 @@ theorem Flock.SecurityProofs.SampledKSLiveV5Honest : Flock.Guarantees.SampledKSL
   have hsc' : Discharge.Layout.scopeOkH D.unroll = true := by
     rw [← FlockSoundness.Discharge.FailClosed.scopeOkH_eq]
     exact hsc
-  refine ⟨Flock.Bridge.servedIV5 cf pf, D, pi, pub, rfl, rfl, rfl, hcf, hpf, ht, hD', ?_, hpi, hpub', hsc',
+  refine ⟨Flock.Bridge.servedIV5 cf pf, D, pi, pub, rfl, rfl, rfl, hcf, hpf, ht, Flock.Desc.parseStmt_of_parse hD', ?_, hpi, hpub', hsc',
     Flock.Bridge.rowsOk_of_scopeOkH hsc', hdup, ?_, rfl, rfl, rfl⟩
   · exact FlockC3.VStarList.built_of_parse
       (FlockSoundness.Discharge.Hidden.parse_untyped ((zkTags_typed _).trans ht) (Flock.Desc.parse_flat hD')).1
