@@ -23,7 +23,7 @@ composite accepts only when every subprotocol accepts.
 
 The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
 accepts, at most the profile's count of proof blocks are incorrect. Its top statement is Flock's
-`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
+`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/ScopeGate.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
 covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
