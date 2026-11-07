@@ -46,13 +46,13 @@ def _id(name: str, **statics: object) -> str:
 
 
 def workload_phi(row: str, case: str) -> Phi:
-    """The φ of a workload row of record (`workloads/<row>.json`), its checkpoint's config.json the package's pinned copy
-    (`hf_configs/<case>.config.json`), as `score.phi_of` makes it."""
-    from verity_vllm.config import WORKLOADS, RowEngine
+    """The φ of a workload row of record (`config.row_file`, fetched when absent), its checkpoint's config.json the package's
+    pinned copy (`hf_configs/<case>.config.json`), as `score.phi_of` makes it."""
+    from verity_vllm.config import RowEngine, row_file
     from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 
     from . import score as S
-    w = json.loads((WORKLOADS / f"{row}.json").read_text())
+    w = json.loads(row_file(row).read_text())
     home = Path(tempfile.mkdtemp(prefix="step-needs-hf-"))
     cp = Path(S.hf_config_path(str(home), w["model"], RowEngine.of(w).revision))
     cp.parent.mkdir(parents=True, exist_ok=True)
