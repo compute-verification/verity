@@ -35,7 +35,8 @@ The rank's manifest may require `run` values of an indexer layer's rows past IND
 `topk_indices_buffer` are copied after `_sparse_indexer_and_attn` returns and committed as their Waksman settings at the step's
 end, under the manifest's names (`commit.committer.run_values`; `own_names`, `targets_at`).  Only the rows `forward_mqa` attended are
 read: past them are a CUDA-graph launch's padding, whose positions are stale and whose indices the indexer never wrote, and a
-dense-MHA prefill's rows, which have at most INDEX_TOPK keys.  Nothing more is committed.
+dense-MHA prefill's rows, which have at most INDEX_TOPK keys.  A committer that never ends its sources' steps (`ends_source_steps`
+false: `hooks_only`, a plugin) is refused for such a manifest, naming the fields.  Nothing more is committed.
 """
 from __future__ import annotations
 
@@ -168,6 +169,10 @@ class AttentionSource:
             if (tl := call_tap(r)) is not None:
                 self.boundaries.setdefault((int(r.get("engine_step", r.get("step"))), *tl), []).append(r)
         self.run = RunValues(identities, {CM.at_layer(routes.site["module"], i): i for i in self.layers})
+        if self.run.names and not getattr(com, "ends_source_steps", False):
+            raise ValueError(f"attention: committer {getattr(com, 'name', type(com).__name__)} never ends a source's step (on_step_end), "
+                             f"where the manifest's run values are committed: {sorted(self.run.names)[:3]} (of {len(self.run.names)}) "
+                             f"would be missing; commit them with native_collect_v2b")
         self.own_names = self.run.names
         self._copies: list[Any] = []
         self._hooks = Hooks()

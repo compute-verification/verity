@@ -13,6 +13,7 @@ from __future__ import annotations
 __models__ = ("zai-org/GLM-5.3",)
 
 import copy
+import re
 import types
 from collections import Counter
 from typing import Any
@@ -40,10 +41,11 @@ BY_ARGUMENT = {tid: arg for arg, tid in AS.ARGUMENTS.items()}
 
 class AttnRun(Run):
     """`Run` with the attention source attached, recording each step's bound copies, the committer's acquire/flush order and what
-    every layer computed."""
+    every layer computed.  A test that ends the source's steps (`on_step_end`) does it itself, as the collecting committer would."""
 
     def __init__(self, target: bool = True, identities: tuple[dict[str, Any], ...] = ()) -> None:
         super().__init__(target)
+        self.com.ends_source_steps = True
         self.att = AS.AttentionSource(self.com, self.src, identities)
         self.src.attention = self.att
         self.att.install()
@@ -449,6 +451,23 @@ def test_a_cuda_graph_launchs_padding_rows_at_a_required_position_commit_nothing
     name = D.run_field(layer, 3)
     layout = {"fields": [{"name": name, "offset": 0, "leaves": waksman_switches(4, 2)}]}
     assert [t.tolist() for n, t in r.rec[1] if n == name] == [D.run_bits(layout, {(layer, 3): topk[0, :2].tolist()}, 2)]
+
+
+def test_a_committer_that_never_ends_its_sources_steps_is_refused_a_manifest_with_run_values():
+    """`run` values are committed when a step's sources end (`on_step_end`), which only the collecting committer does: on any other
+    (`hooks_only`, a plugin) they would be missing from the step, so the source refuses the manifest naming them, and attaches
+    without them."""
+    from verity_vllm.commit.committer.native_collect import NativeCollectCommitter
+    from verity_vllm.commit.committer.native_host import NativeHostCommitter
+    assert NativeCollectCommitter.ends_source_steps and not NativeHostCommitter.ends_source_steps
+    layer = sorted(INDEXER)[0]
+    r = Run()
+    try:
+        with pytest.raises(ValueError, match=re.escape(D.run_field(layer, 3))):
+            AS.AttentionSource(r.com, r.src, (run_row(1, layer, 3, 2),))
+        assert AS.AttentionSource(r.com, r.src, ()).own_names == frozenset()
+    finally:
+        r.src.uninstall()
 
 
 def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step():
