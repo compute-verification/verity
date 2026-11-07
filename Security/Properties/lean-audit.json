@@ -1050,6 +1050,14 @@
   "Verity.soundness_of_upFront": {
    "honest": ["Verity.soundness_of_upFront_honest"],
    "nontrivial": "Verity.soundness_of_upFront_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.factorUpperSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.factorUpperSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound_nontrivial"
   }
  },
  "unwitnessed": {
@@ -8812,6 +8820,12 @@
     ]
    },
    "type_hash": "7be5722effd046f635964f023dca25c90e739fb055dc677bb81837a5fcb7709d"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
+   "owner": "@proofs"
   }
  },
  "shape": {
@@ -10095,6 +10109,14 @@
    },
    "Properties.RemoteAudit.Subprotocol.SecurityProofs.lineHeldAtSubprotocol": {
     "function": "RemoteAudit.Protocol.check",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.factorUpperSound": {
+    "function": "SampledProofs.FactorUpper.lnFactorUpper",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
+    "function": "SampledProofs.FactorUpper.lnFactorUpperPatterns",
     "outcome": "accept"
    }
   },
