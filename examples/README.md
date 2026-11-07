@@ -40,7 +40,7 @@ A demo stands on two independent axes, and its `demo.toml` gives each. `run` is 
 | --- | --- | --- |
 | `moved` | its workload, placement and commands, and no end-to-end run yet | none |
 | `runs` | an end-to-end run: a run of record on its hardware, or a CPU test that runs it with stand-ins | a run of record (`runs`: `rYYYYMMDD-HHMMSS-xxxx` or `art:` ids), or a CPU test in a suite that runs it (`tests`: `PATH::NAME`) |
-| `placed` | a run of record where the auditor's parties run on machines the prover doesn't control | a run on a placement that puts every auditor role (`verifier`, `challenger`, `certifier`, `memory_challenger`) on `auditor-host`, and none of the prover's |
+| `placed` | a run of record where the auditor's parties run on machines the developer doesn't control | a run on a placement that puts every auditor role (`verifier`, `challenger`, `certifier`, `memory_challenger`) on `auditor-host`, and none of the developer's |
 
 `proof` is how far its guarantee is proved: a proof needs no run, and a run needs no proof.
 

@@ -459,7 +459,7 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 - `Verity.Recursive.LiveCoins` (`live-verifier`), in the recursive form: each part's record holds the live run's coins.
 - `FlockSoundness.Assumptions.TableCRZAt` (`cr/sha-512`) and `FlockSoundness.Discharge.ZkLink.LinkCRZC`
   (`ecr/sha-512`): SHA-512 is collision resistant for the prover's table and link finders. The lock names the table
-  finders' premise `TableCRZAt`; the statement reads it through its abbreviation `TableCRZ`.
+  finders' assumption `TableCRZAt`; the statement reads it through its abbreviation `TableCRZ`.
 - `trusted-host` (`Verity.Assumptions.TrustedHost`, `Security/Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
   on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost` itself.

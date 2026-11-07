@@ -52,8 +52,8 @@ ideal-permutation model only, and none bounds an adversary at the reference `Π�
   else. The memory challenger issues `k` uniform block indices, all at once or one at a time. Each answer is due within
   the deadline, so the responder is `(D, Q)`-bounded, with no outside help. Whenever a challenge arrives the adversary's
   state is at most `ρ|C|` bits; `W` and `pp` are free.
-- **Deployment: help is accounted, not excluded.** No guarantee assumes trusted prover hardware,
-  so nothing attests the prover's machine and nothing asks that its responder be isolated. The game's "no outside
+- **Deployment: help is accounted, not excluded.** No guarantee assumes trusted developer hardware,
+  so nothing attests the developer's machine and nothing asks that its responder be isolated. The game's "no outside
   help" is read through the help-accounted row of console's actual-circuit model, the model a certificate cites under
   the id `perfect-isolation` (kept from the earlier model, since certificates pin it): on PoUS's challenge schedule,
   some challenge tick `t_j` has `mem_X(t_j) + 2^e·h ≥ S` for the audited location `X`, where `h` is the help `X`
@@ -434,7 +434,7 @@ prior content through the wipe had no room for the labels. The reference is `str
 game in `Security/Definitions/Pous/Model/StreamedWipe.lean`), both proved (`Security/Proofs/Pous/StreamedWipe/`), where
 `PousStreamedWipe.honest_accepts` shows the server that keeps every label accepted on every run.
 
-**Labels and coins.** The memory challenger, the auditor's device on a machine the prover doesn't control, derives every
+**Labels and coins.** The memory challenger, the auditor's device on a machine the developer doesn't control, derives every
 label itself, under a key fresh for each server and each wipe:
 
 ~~~text

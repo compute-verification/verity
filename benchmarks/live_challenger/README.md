@@ -14,7 +14,7 @@ verifier reads them.
 - `publish.sh` puts the host's pins log, ledger, model registry and every ended session into the evidence store; the control
   pod runs it on a loop.
 - `run.sh` is a development session: `serve.py` as a `research run` on another machine, which tunnels its port to the
-  prover's machine (`PEER`). It needs `PORT`, `SCHEME`, `FAMILIES`, `SESSION` and `PEER`, so it runs through
+  developer's machine (`PEER`). It needs `PORT`, `SCHEME`, `FAMILIES`, `SESSION` and `PEER`, so it runs through
   `research run ... -- bash benchmarks/live_challenger/run.sh` (its header has the full command), not bare
   `verity bench live_challenger`.
 

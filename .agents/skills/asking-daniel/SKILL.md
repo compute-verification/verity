@@ -57,7 +57,7 @@ The design that meets every design rule in AGENTS.md (everything zero-knowledge,
 proof), priced even when it's the expensive one, and which option below it is. Or the rule that makes it impossible.
 ## Options
 ### A. <label> (recommended)
-What changes (the exact new statement or premise in LaTeX), what it costs, what it unblocks, what risk it takes on,
+What changes (the exact new statement or assumption in LaTeX), what it costs, what it unblocks, what risk it takes on,
 how reversible it is.
 ### B. <label>
 ...
@@ -76,7 +76,7 @@ Links: notes (GitHub research-notes URLs), PRs, branches, Lean declarations, run
 Plain English first, then the math, every term and symbol defined on first use: Daniel knows the field, not this week's
 codenames (a red-team round, a row number, a worker). About 400 to 900 words, one screen of options, detail behind links.
 A correction or new data edits the page in place, with a dated line under "Updates since the card", never an addendum in
-the thread. A claim ask shows the statement or premise as it would enter the lock, in LaTeX, with its Lean name. Price the
+the thread. A claim ask shows the statement or assumption as it would enter the lock, in LaTeX, with its Lean name. Price the
 design the rules want, not just tweaks to today's.
 
 ## Post it

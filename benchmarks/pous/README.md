@@ -171,7 +171,7 @@ allows for.
 `wipe_resume/` runs the red team's resume attack (art:7617c8017e80) on both wipes, on CPU. `pi2_state_attack.py` rebuilds
 band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the
 `D = 5` read deadline. `resume.py` adapts the attack to the streamed wipe, which the prover can't evaluate without `K`, and runs
-it next to honest, naive-cheat and broken-premise provers (`K` on the prover's node, an undeclared tier), all judged by the
+it next to honest, naive-cheat and broken-premise provers (`K` on the developer's node, an undeclared tier), all judged by the
 Lean verdict and `streamed_wipe.verdict`. It writes `resume.json` and fails if any prover ends other than expected:
 
 ~~~bash

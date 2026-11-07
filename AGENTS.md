@@ -80,7 +80,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
   and Duo receipts, PoUW's per-step keyed u32 mul/xor/rotl folds over committed accumulator words, which bind under the
-  named premise H-μ⁺, not yet in a lock.
+  assumption H-μ⁺ (`Accounting.Assumptions.TS.OperandHMu`).
 - **Live coins only.** No Fiat–Shamir, except at two rates where live coins are impractical: PoUB's pass seeds
   inside an execution phase, from its live challenge and the previous pass's root; and PoUW's
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the execution
@@ -100,9 +100,9 @@ The rules in force, each stated as itself; the friction skill has the standing r
   useful work near 1% of that effort, is ruled out as an answer; it stays on main only as a reference. Pearl+ is held
   to the same floor.
 - **Auditor-trusted devices.** The network certifiers and memory challengers sign what they see; what they sign is
-  witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the prover doesn't
-  control, never a process on the prover's node, and trust in it and its host is the named assumption `trusted-host`.
-  Nothing the prover runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
+  witness and never reaches the auditor in the clear. Each is the auditor's hardware on a machine the developer doesn't
+  control, never a process on the developer's node, and trust in it and its host is the named assumption `trusted-host`.
+  Nothing the developer runs or hosts is trusted. "Network certifier" is its one name, never "warden" or "tap".
 - **The audited hardware is untrusted, and so is its vendor.** No guarantee rests on a GPU attesting its own
   SKU, firmware or clocks. Hardware constants (f_max, peak rates) come from the data sheet under two or three readings,
   and later from a separate physical calibration. A device's capacity is an assumed bound on its true peak compute
