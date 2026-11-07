@@ -44,7 +44,7 @@ when:
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover,
   beyond what it finds on the base's own tree, with the base's lists: a violation the tree below already holds isn't the
   change's, so it passes, naming the change that added each one's line (``git blame --first-parent`` on the base: ``#N``
-  for a queue merge), whose own merge the source checks below refuse.  In a temporary worktree of the change's top, each
+  for a queue merge), whose own merge the source checks below fail.  In a temporary worktree of the change's top, each
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
@@ -60,9 +60,8 @@ allowlist, and every change is judged by it: in the ``*.py`` files it touches un
 no more ``noqa`` comments (``# noqa``, ``# noqa: CODE``, a file's ``# ruff: noqa``) than it removes.  A line is matched by its stripped text, codes included, so one
 that moves with its code counts as kept, and deleting a stale ``noqa`` pays for a new one.
 
-The top change's Python is linted too (drive lands before the suites run, so a new finding would land and be reverted),
-when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the change
-adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
+The top change's Python is linted too, when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the
+change adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
 under the base's root ``ruff.toml``, as it is before the change and after it, and the change fails when any (file, rule) count
 grows, naming each new finding ``file:line RULE message``.  (file, rule) is the repository's ruff lint's key too, so a
 finding moved within its file passes both.  A renamed file's before is its old path's (``git diff -M``), so a move keeps its
@@ -78,11 +77,12 @@ reads it would exempt doesn't count): the fix is the area's settings registry.  
 catch (every outcome is recorded): the fix is to re-raise, record the outcome, or narrow the handler.
 A rename must move the file's entry (``python3 tests/lint/test_<slug>.py --move OLD NEW``), as for ruff.
 
-Only the top change is linted: a PR's own commits at the preflight, its merge onto `next` at the sync, where the members below
-were linted at their own merges.  Its findings and sites are counted with the lints, configs and pin its own base has when
-that base holds BASE (its merge onto `next`, whose members below may change a lint: the lints it lands with), else with
-BASE's (a preflight's merge base, an older `main`), so a PR that adds a site a lint queued below it counts is refused at
-its own merge, not found later by the whole-tree run of a change that touches a lint.
+Only the top change is linted: a branch's own commits before marking, the tip's merge in the after-landing run, so a merge
+that lands below a run's tip, with others in one landing, is never linted here (the repository's lints still hold its files
+to their lists).  Its findings and sites are counted with the lints, configs and pin its own base has when that base holds
+BASE (the merge below it, whose merges below may change a lint: the lints it landed with), else with BASE's (a branch's
+merge base, an older `main`), so a PR that adds a site a lint landed below it counts fails at its own merge, not later in
+the whole-tree run of a change that touches a lint.
 
 A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
 by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
@@ -92,25 +92,29 @@ Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR 
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
-and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head (or,
-at the sync, its merge onto `next`, each member below judged again) as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
-sync onto `next` leaves the PR out).  The lints run on the Python that runs it, and ruff (the ruff lints, and the source lint)
+and BASE's move_check).  Nothing runs it before a PR lands: it is the check's ``ratchet-gate`` step
+(``tools/verity/check/check.py``'s ``ratchet_gate``, ci.toml's job), off the merge gate (policy.toml's ``off_gate``), which
+drive's after-landing run of `checked`'s tip runs as ``ratchet_gate.py BASE TIP`` with BASE's copy of this file, which no
+change it judges can weaken, BASE a commit below the tip that drive sends (``check.py`` says which).  Each `Queue: #N` merge
+above BASE is judged against the one below it, so a failure names its PR, which drive takes as the red's culprit.  The red
+never holds `main`, and drive never reverts its culprit (drive.toml's ``warn_steps``): it rings the culprit's owner, who
+fixes it forward in their next PR.  The lints run on the Python that runs it, and ruff (the ruff lints, and the source lint)
 on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv run --offline --with`` makes from uv's cache,
-else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A sync gates each PR on its merge onto
-`next`, which holds every PR below it, so each change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default
-``~/.cache/verity/ratchet-gate``; empty: none), keyed by this file's bytes and the change's commits, which are all it reads, and
-BASE too for a verdict that reads it (a failed change's exemptions run BASE's move_check): a sync of N PRs judges each change
-once, not N times, and once `main` moves an untouched or passed change is still not judged again.  The source checks' findings
+else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A run judges every change above its BASE,
+and runs overlap (a rerun of one tip, a later tip's run whose BASE lies below changes an earlier run judged), so each
+change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default ``~/.cache/verity/ratchet-gate``; empty: none; the check's
+step keeps it in the check's cache), keyed by this file's bytes and the change's commits, which are all it reads, and BASE
+too for a verdict that reads it (a failed change's exemptions run BASE's move_check): N runs over a change judge it once,
+not N times, and once BASE moves an untouched or passed change is still not judged again.  The source checks' findings
 are kept beside the verdict under BASE's key (they run BASE's lints and config), and apply to the top change only, so a member
 below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  A change's
 judgement reads only its own commits (and BASE), so the changes the cache doesn't hold are judged at once, each in a forked
 process of its own, its worktree and ruff cache with it, up to ``$RATCHET_GATE_JOBS`` at a time (default the lesser of 16 and
-this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  Before marking
-a branch, run
-``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
-(with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the host), which the
-sync takes as a refusal: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose ``failures`` name
-each failing change's top ``commit``.
+this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  Before
+marking a branch, run ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes,
+1 when one fails (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the
+host), which fails the check's step: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose
+``failures`` name each failing change's top ``commit``.
 """
 from __future__ import annotations
 
@@ -1118,9 +1122,9 @@ def judge(c: Change, base: str) -> None:
 
 
 def lints_at(c: Change, base: str) -> str:
-    """Where the source checks read their lints for ``c``: its own base when that holds BASE (its merge onto `next`, whose
-    members below may change a lint, so these are the lints that land with it), else BASE (a branch's preflight, whose merge
-    base is an older `main`).  A member below that makes a lint count more is counted against the PR that adds a site to it,
+    """Where the source checks read their lints for ``c``: its own base when that holds BASE (a merge on the train, whose
+    merges below may change a lint, so these are the lints it landed with), else BASE (a branch's own commits, whose merge
+    base is an older `main`).  A merge below that makes a lint count more is counted against the PR that adds a site to it,
     rather than found later by the whole-tree run of a change that touches a lint."""
     if c.lo != base and subprocess.run(["git", "merge-base", "--is-ancestor", base, c.lo], capture_output=True).returncode == 0:
         return c.lo
