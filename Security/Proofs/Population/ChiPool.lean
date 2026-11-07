@@ -16,11 +16,11 @@ commitment, so a cheater does harm in those `Δ` windows as well. `tail_cum` alo
   every window leaks at most `ℓ`. With `Δ = 0` it is `cum` (`cumLag_zero`).
 * `tail_cumLag`: under detection pressure `κ` the probability that what leaves through the halt reaches `x` is at most
   `exp (-κ (x - (1 + Δ) ℓ))`, for every adaptive strategy and every horizon.
-* `draw_tail_cumLag`, **the cheating pool under the deployed draw**: `k` of the `n` units drawn without replacement
+* `draw_tail_cumLag`, **the cheating pool under the deployed sample**: `k` of the `n` units sampled without replacement
   (`drawPressure`, `κ = k/n`). With probability at least `1 - δ` the harm through the halt is below
   `(1 + Δ) ℓ + (n/k) ln (1/δ)`.
 * `ex_cumUpToLag`, `draw_ex_cumUpToLag`, **the rate form**: through the halt the `j`-th detection triggers, at most
-  `j (ℓ + 1/κ) + Δ ℓ` leaves on average, which is `j (ℓ + n/k) + Δ ℓ` under the deployed draw.
+  `j (ℓ + 1/κ) + Δ ℓ` leaves on average, which is `j (ℓ + n/k) + Δ ℓ` under the deployed sample.
 -/
 
 @[expose] public section
@@ -121,7 +121,7 @@ theorem ex_cumUpToLag [Fintype Ω] [DecidableEq Ω] {μ : Ω → ℝ} (hμ : IsD
     _ = Δ * ℓ + ex μ n (A.cumUpTo n j h) := ex_add_const hμ _ _
     _ ≤ j * (ℓ + 1 / κ) + Δ * ℓ := by linarith [ex_cumUpTo hμ hκ hP hL n j h]
 
-/-- **The cheating pool under the deployed draw**: `0 < k ≤ n`, each window as in `drawPressure` and leaking at most
+/-- **The cheating pool under the deployed sample**: `0 < k ≤ n`, each window as in `drawPressure` and leaking at most
 `ℓ`, and the halt `Δ` windows after the first caught window's commitment. With probability at least `1 - δ` the harm
 through the halt is below `(1 + Δ) ℓ + (n/k) ln (1/δ)`, for every adaptive strategy, every horizon `N` and every
 history `h`. -/
@@ -141,7 +141,7 @@ theorem draw_tail_cumLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy 
   rw [prob_congr (E' := fun cs => ¬x ≤ A.cumLag Δ N h cs) fun cs => not_le.symm, prob_not hμ]
   linarith
 
-/-- **The rate form under the deployed draw**: through the halt the `j`-th detection triggers, `Δ` windows after it, at
+/-- **The rate form under the deployed sample**: through the halt the `j`-th detection triggers, `Δ` windows after it, at
 most `j (ℓ + n/k) + Δ ℓ` leaves on average. -/
 theorem draw_ex_cumUpToLag {n k : ℕ} (hk : 0 < k) (hkn : k ≤ n) {A : Strategy (Verity.Draw.Subset n k)}
     (B : List (Verity.Draw.Subset n k) → Finset (Fin n)) (w : Fin n → ℝ) (hw : ∀ u, w u ≤ 1)

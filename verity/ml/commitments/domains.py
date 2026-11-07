@@ -13,7 +13,7 @@ Code reads a separator from here or from the Lean, never as a literal of its own
 module and the Lean equal, entry for entry; refuses a literal of the table in the code of a protocol that reads it (its
 ``READERS``, PoUW first); and refuses an entry that nothing reads and whose bytes appear nowhere else. The entries under
 "Not yet read from here" are other protocols' separators, listed so that each has one name before its owner's code
-switches to reading it. C-Flock's statement versions keep their tags in `Flock.Tags`, one structure per version.
+switches to reading it. Flock's statement versions keep their tags in `Flock.Tags`, one structure per version.
 """
 
 # PoUW: the protocol and its identifier
@@ -56,7 +56,7 @@ POUW_PERIOD_SIDE_DOMAIN_B = "verity/pouw/window/side-domain-b/v1"
 POUW_ROUND_NOISE = "verity/pouw/round-noise/v1"
 POUW_PUBLIC_ROW_SALT = "verity/pouw/public-row-salt/v1"
 
-# PoUW: sampling (the bytes say draw)
+# PoUW: sampling (the bytes say sample)
 POUW_AUDIT_KEY = "verity/pouw/audit/v1"
 POUW_PEARL_C_SAMPLING = "verity/pouw/pearl-c-draw/v1"
 POUW_PEARL_C_SAMPLING_AFTER = "verity/pouw/pearl-c/draw-after/v1"
@@ -168,7 +168,7 @@ RANDOMNESS_SHARD = "verity/randomness/shard/v2"
 RANDOMNESS_DERIVE_V1 = "verity/randomness/derive/v1"
 RANDOMNESS_STREAM_V1 = "verity/randomness/stream/v1"
 
-# Shared: sampled proofs' one-stage statement, registrations and partitions; C-Flock's public inputs and descriptors
+# Shared: sampled proofs' one-stage statement, registrations and partitions; Flock's public inputs and descriptors
 ONE_STAGE_PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 ONE_STAGE_PROTOCOL_V2 = "verity/sampled-proofs/one-stage/v2"
 ONE_STAGE_SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
@@ -238,7 +238,7 @@ REGISTERED_READS_V1 = "verity/registered-reads/v1"
 REGISTRATION_RECEIPT = "verity/registration-receipt/v1"
 REGISTRATION_PRODUCED = "verity/registration/produced/v1"
 
-# Not yet read from here: C-Flock and the firewall
+# Not yet read from here: Flock and the ZK server
 COIN_COMMIT_SHA256 = "coin-commit/sha256/v1"
 FIREWALL_RECORD = "firewall/v0"
 FLOCK_CIRCUIT_BLOCK_COVER = "flock-circuit/unit-cover/v0"

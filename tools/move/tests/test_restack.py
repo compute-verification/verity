@@ -435,3 +435,18 @@ def test_a_result_without_a_list_of_pins_runs_none(repo):
     on(repo, "pr", ("edit", {"README.md": "readme 2\n"}))
     r = RS.restack("pr", "move", cwd=str(repo))
     assert r["status"] == "clean" and "pins" not in [s["step"] for s in r["steps"]], r
+
+
+def test_dropping_a_scratch_worktree_never_fails_on_what_git_leaves(repo):
+    """A scratch worktree the script left a read-only directory in, which `git worktree remove` can't empty, still goes and
+    the clone forgets it: the restack's result is already read, so its cleanup fails nothing."""
+    wt = repo.parent / "scratch"
+    git(repo, "worktree", "add", "--detach", "-q", str(wt), "main")
+    stuck = wt / "cache" / "deep"
+    stuck.mkdir(parents=True)
+    (stuck / "f").write_text("x")
+    os.chmod(stuck, 0o555)
+    os.chmod(wt / "cache", 0o555)
+    RS.drop_worktree(str(wt), str(repo))
+    assert not wt.exists()
+    assert str(wt) not in git(repo, "worktree", "list")

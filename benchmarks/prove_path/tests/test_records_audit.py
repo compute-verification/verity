@@ -13,7 +13,7 @@
   (`declared_count`); the audit counts a record that lists its members and declares its window's ingress so too, and
   prints the window figure beside the run figure with its premise;
 * a circuit reading registered values is audited against the entries the verifier pinned, each under its own domain
-  (`pinned`), and refused before any draw without them, a record that lists its members (a served window's) as one that
+  (`pinned`), and refused before any sample without them, a record that lists its members (a served window's) as one that
   states them;
 * a window's audit is one compute audit of the network certifier's period (`period`), its scan state's reads registered;
 * `source` and the negatives refuse what the records don't bind, and `fixed_before_draw` refuses advice re-committed after
@@ -490,7 +490,7 @@ def test_a_listed_records_registered_weight_reads_are_audited_and_counted_as_a_s
     window reads its model's weights: the verifier's window takes it, each member's ``--registered`` file is the one the
     stated record of the same window makes, and its count is the stated record's, the reads registered where the verifier
     pinned the parameter at the root the window's registration records. Without a pin the audit refuses the window before
-    any draw; the count names the parameter ``unpinned`` and counts its reads free, as it does for a pin of another root
+    any sample; the count names the parameter ``unpinned`` and counts its reads free, as it does for a pin of another root
     or a registration that records none."""
     law = D.parse_law(LAW)
     stated, listed = _registered(tmp_path / "s"), _registered(tmp_path / "l", listed=True)

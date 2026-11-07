@@ -1,5 +1,5 @@
 /-
-The claims' partition of a C-Flock circuit file, and the check that the registration's population is the file's units in
+The claims' partition of a Flock circuit file, and the check that the registration's population is the file's units in
 order (`Flock.Bridge.partOf` at the file's key program, `Placed.keyProg`):
 
 * **The file's units.** The key program is `n` units of the circuit's template instance rows (the unit net's rows stacked

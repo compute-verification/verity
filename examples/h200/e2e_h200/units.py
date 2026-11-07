@@ -21,14 +21,14 @@ Definition where it exists, else the lane's reference), until the replay lane ad
   ``QkSoftmaxPvPad_v1{T, K, D, DOT}`` (``fused`` ``pv``): the first's row, then the second's of it;
 * ``Bf16AddRow_v2{N}``: ``Bf16Add_v2`` a word; ``Argmax_v2{V}``: `argmax_row`;
 * ``AllGather_v1{WORLD, N}``: the copy of its parts' rows. Its parts and its output are the same table bytes here, so its
-  replay only restates them; the commit holds both, and a drawn gather opens its own rows against the step's root.
+  replay only restates them; the commit holds both, and a sampled gather opens its own rows against the step's root.
 
 A unit's inputs are read from the committed tables (an earlier op's row, an earlier step's K or V row) and the registered
 weights (`weights.Weights`, from the generator, not the store, so a wrong decode shows as a mismatch). Row b of a step is
 slot ``slots[b]`` at its own position p; its attention reads the slot's K and V rows committed at positions 0 .. p, each at
 the step and row the slot ran it (`Replayer.history`), never the live cache.
 
-A `Subcircuit` joins the step's integrity registration as one more execution phase, drawn with the step's families: PoUW's
+A `Subcircuit` joins the step's integrity registration as one more execution phase, sampled with the step's families: PoUW's
 per-call-noise tiles (`percall`) plug in as ``MODULE:FACTORY`` (`load_subcircuit`, ``run.py --subcircuit``).
 """
 from __future__ import annotations
@@ -471,7 +471,7 @@ class Replayer:
 
     def draw(self, step: int, k: int, seed: bytes, only: Callable[[Family], bool] = lambda f: True) -> list[Unit]:
         """``k`` units of every family of ``step`` (or of those ``only`` keeps), replayed: a FIXTURE coin per family, until
-        the sampling plan draws from live coins (`replay.draw`)."""
+        the sampling plan samples from live coins (`replay.draw`)."""
         batch = self.steps[step].batch
         units = []
         for fam in self.families(step):

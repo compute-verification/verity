@@ -56,7 +56,7 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : Finset (Fin n) → Reg → ByteArray → (Fin 1 → Cap D)) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify accepts at `own`, at the law's draws** (`DecodesOn` at
+/-- **The decoder is right on the sessions flock-verify accepts at `own`, at the sampling design's samples** (`DecodesOn` at
 `AcceptsP I own`). -/
 def DecodesOnP (L : Law n) : Prop :=
   ∀ ω R, Decodes (fun (caps : Fin 1 → Cap D) pend os => tableOutL H E Lf (caps 0) pend os)
@@ -107,7 +107,7 @@ variable {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
 
 /-- **The headline at the executable at the verifier's public inputs, for one-table sessions**
 (`Prog.flock_headline_live_onX` at `AcceptsP I own`): against any live prover `τ`, flock-verify accepts at `own` with
-at least `K` wrong units of the simulated prover's committed values with probability at most
+at least `K` incorrect proof blocks of the simulated prover's committed values with probability at most
 `miss(K) + ε_ks + δ_link`, under `Prog.flock_headline_live_onX`'s hypotheses with `hdec` at `own` (`DecodesOnP`). -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_onXP
     {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}

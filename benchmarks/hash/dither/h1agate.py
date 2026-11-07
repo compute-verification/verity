@@ -46,7 +46,7 @@ T, MX = 64, 72
 
 
 class Calls:
-    """The 128 calls' operands and the A tables' window and step buffers."""
+    """The 128 calls' operands and the A tables' execution-phase and step buffers."""
 
     def __init__(self, lib: H1C, st: Step, dev, mx: int = MX):
         self.lib, self.st, self.L = lib, st, len(st.lin)

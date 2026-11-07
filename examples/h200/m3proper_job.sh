@@ -2,8 +2,8 @@
 # M3 proper on the H200. PHASE=commit writes a new salt secret (~/.local/state/m3proper-1de3, 0600,
 # never under $OUT, kept by `research keep`) and m3draw's roots.json for f3ca's prompts and flags. PHASE=replay re-runs
 # under it with kv_reads' KeepingDriver for inputs/blocks.json's slots, holds every root to inputs/roots.json and leaves
-# the drawn slots' rows beside the secret (m3bundle.py's input). The card is leased for the run only.
-# PHASE=replay (inputs roots.json, step-registration.json, draw.json) keeps the drawn slots beside the secret; PHASE=build
+# the sampled slots' rows beside the secret (m3bundle.py's input). The card is leased for the run only.
+# PHASE=replay (inputs roots.json, step-registration.json, draw.json) keeps the sampled slots beside the secret; PHASE=build
 # (receipt.json, weights-open.json besides) writes the step tree to $OUT/tree on the CPU (m3bundle.py).
 #   research run --on H200_NODE --project verity --source . --cwd source --timeout 5400 --env PHASE=commit \
 #     -- bash examples/h200/m3proper_job.sh
