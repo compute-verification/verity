@@ -1603,12 +1603,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Flock.Bridge.NotBernoulli": {
-   "owner": "@proofs",
-   "digest": "7fbb409621af22209f87159630d58bfdb550a9f4402f53926ac16f9a45ad3e4d",
-   "issue": "PRF-164",
-   "due": "2026-11-06"
-  },
   "Flock.Guarantees.FirewallSends": {
    "owner": "@proofs",
    "digest": "562df1c19fb3ddb0861a89b741ca695aa0276bfceb9fef4fd2a682c6041393cb",
@@ -4798,7 +4792,7 @@
   },
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "ee0db7bef8f62988e714272c5a3994f66cfae7a1ab619db57382a30dd1f3167d"
+   "unfolded_hash": "2cef56057778acdc6f45bac893af4b09b610e4748b7ce4e28da13568d411f849"
   },
   "Flock.SecurityProofs.SamplingClaimsStated": {
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
@@ -14504,8 +14498,6 @@
     "assumptions": [],
     "domain": [],
     "open": [
-     "Flock.Bridge.DrawsUnder",
-     "Flock.Bridge.NotBernoulli",
      "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
@@ -14520,7 +14512,7 @@
     ]
    },
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "ee0db7bef8f62988e714272c5a3994f66cfae7a1ab619db57382a30dd1f3167d"
+   "unfolded_hash": "2cef56057778acdc6f45bac893af4b09b610e4748b7ce4e28da13568d411f849"
   },
   "Flock.SecurityProofs.SampledKSLiveV5Honest": {
    "owner": "@proofs",
@@ -25857,7 +25849,6 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
@@ -43577,18 +43568,17 @@
    }
   },
   "Proofs.Flock.Bridge.Draw": {
-   "digest": "0fe8bb8c24958b6ed4c1b02b461c502bcd635b88ddf410e85fac0beed796ebf8",
+   "digest": "46a30f5b59576bf55e932db2cb7c1906f0f578e3d61c14d96aa816455b446af6",
    "definitions": {
     "Flock.Bridge.LawOn": "7c7fa64502d20482a017e00e936e8d89230c941423cb231994d664f0fc712217",
-    "Flock.Bridge.NotBernoulli": "7fbb409621af22209f87159630d58bfdb550a9f4402f53926ac16f9a45ad3e4d",
     "Flock.Bridge.StrataOn": "9e321e9e08db693606ee76a41d9c53de59f3b86d75d13e40de5bd27350e5fa72",
     "Flock.Bridge.execSel": "db8d3f279a350b20f68e198a385a9d61bc0e566793c825e71dd7ac2d41f37111"
    }
   },
   "Proofs.Flock.Bridge.DrawnLaw": {
-   "digest": "56d032bce73e79ed3dc9db31d5d898a892ec55867d51a78ff4eaf26cba2ebaec",
+   "digest": "834fb2bb70ac08eae10ca7044d3fa9f383f0a6c916c29d6e9e74b74df9737f33",
    "definitions": {
-    "Flock.Bridge.drawnLaw": "d3d5d8aebbdd734c0b832c56f88c1218c761f8ca6f936cbdc586a2aafd695d3c",
+    "Flock.Bridge.drawnLaw": "b36ef4961e14d28153be129668f248312136bfee959f7a87fb7770e510684891",
     "Flock.Bridge.lawK": "ffca002c0ea109c0fd79193088486246f4984aefbf5f8ec79866ea1ad6f46e00",
     "Flock.Bridge.lawOf": "14613c7459fe9fce48df0f69ab634c9f80c6d61fba28c6bdc543b73a15d41352"
    }
@@ -43695,10 +43685,10 @@
    }
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "73244b1ce13f062ecb198db76a48216e1fbc1de22303416c47cf9a40106d852f",
+   "digest": "6182a92d7d38cd92b51293d4bc88ce61f55a51f27f9f85ee79816aec7177c506",
    "definitions": {
     "Flock.Bridge.constsOfP": "67a6f5fe088b95efced36467f34ed9d2726e353df637e8a6c4fc2878dd6a6e83",
-    "Flock.Guarantees.SampledKSLiveV5": "db2cdb8cc2b34d9f9a347904dc8fe6466878ac1442a10ca6096d8eb3b63cc0d7"
+    "Flock.Guarantees.SampledKSLiveV5": "73fec3f1b3ea36119889e5cfa00ec09db31e77262fa051bdb6dfef4c777f5537"
    }
   },
   "Proofs.Flock.Bytes": {
@@ -52243,7 +52233,7 @@
    }
   },
   "SampledProofs.OneStage": {
-   "digest": "f1f20cb94c21d23c968d0730875633c33bc48dfa7184fbfc2f09630c9383b6b9",
+   "digest": "41b145f6a57280fbe7c42f4c53f89bb9a67b018df6cb81ebc85321cad79a42d0",
    "definitions": {
     "SampledProofs.OneStage.Commitment": "d744e6fb2fdff36157845bc9fb3224434ff1f62fc26396f87b4393a0af67c01b",
     "SampledProofs.OneStage.Commitment.digest": "8f1997edbf41ef170699331a03a0ea01ec0eeefb3a34a36d521c4eb1673c6f01",
@@ -52276,7 +52266,8 @@
     "SampledProofs.OneStage.coinsReason": "06f595594a26a862521dcb12bf59f4c6ab32602e8a5d0ba12d090ee2dd219929",
     "SampledProofs.OneStage.coinsWhy": "9e4020e0d3e33c40662296c74109dff3a31450e1821626e9dad9eb13c5983f77",
     "SampledProofs.OneStage.commitmentOf": "124a0eb79c0dd6d728fec03c50da31c189e52493604951ab1ba14152710d51de",
-    "SampledProofs.OneStage.drawnFrom": "5f45f7613fc94b625b270bde7b3ba35bcdabc5f11e2f0efe6c775b0e9202b753",
+    "SampledProofs.OneStage.coveredLaw": "75220c7dd374315abc3f1142c7e1575f25b0960b7ebb8b287832d8f29457fbcc",
+    "SampledProofs.OneStage.drawnFrom": "702fc1b9d4299e3f61f2bd4deb99cb66ce9198baf297ecc1bec9813f47c9f000",
     "SampledProofs.OneStage.evidenceOf": "6a88106022c8b07ec26d00d29753dfc81f71cc21756b8a4d32802b44a8f14a00",
     "SampledProofs.OneStage.evidenceParsed": "a449e63206bb91d6d937a037002e302dfd38d6ebe6433f7fcedf051f9cd3d644",
     "SampledProofs.OneStage.paramsOfJson": "eb0d1903ac9d06f34b776012524afbf4238ba55660dce074e9318674830827f9",
