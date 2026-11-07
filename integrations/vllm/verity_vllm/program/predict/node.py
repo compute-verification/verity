@@ -35,7 +35,7 @@ from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
 
 from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder
-from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, launch_batch, launch_rows
+from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, in_launch, launch_batch, launch_rows, reads_run, wrapper_keys
 from .phi import Phi
 
 
@@ -188,6 +188,9 @@ def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | N
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     phis = [Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": r}}) for r in range(world)]
     nets = [decoder(p, M, pos0 + M if wrapper == "step" else int(LP) + int(T)) for p in phis]
+    if any(reads_run(net, wrapper_keys(wrapper, M, LP, T)) for net in nets):
+        raise Unexpressible("vocabulary cannot express: a node Program whose rows read more than INDEX_TOPK keys (each rank's top-k "
+                            "order is its own `run` input, which its rank Program reads: `build.build_program`)")
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
     passes = [n] + [1] * (events - 1)
@@ -237,11 +240,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     models = []
     for r in range(world):
         model = nets[r].model(B, W[r], peers[r])
-        if batch is not None:
-            if not getattr(model, "reads_launch", False):
-                raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance, {len(phi.requests)} "
-                                    f"requests), whose kernel choices the {nets[r].model_class} decoder reads at its own rows")
-            model.launch = model.launch.with_batch(batch)
+        in_launch(model, batch, nets[r].model_class, note=f", {len(phi.requests)} requests")
         if wrapper == "request" and isinstance(model, _Model):
             model.ctx = launch_rows(phis[r], LP, T)
         models.append(model)

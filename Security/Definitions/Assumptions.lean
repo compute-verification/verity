@@ -130,3 +130,18 @@ def EfficiencyFloor (methods : Set Run) (M : Verity.Decoder (List Bool)) (c : �
     ENNReal.ofReal p * honestCost methods ℓ ℓstar ≤ (r.d.D.computed.card : ℝ≥0∞)
 
 end Nci.Formalism.Assumptions
+
+/-!
+## PoUW's hashless cost models
+
+A PoUW guarantee bounds its event together with no SHA-512 collision among the inputs the run hashed (`Pouw.Breaks`).
+A model whose programs hash nothing never breaks, and the guarantees that drop the break from their event take it.
+-/
+
+namespace Pouw
+
+/-- The model's programs hash nothing, so no run breaks. -/
+def CostModel.Hashless {Q R S : Type} (CM : CostModel Q R S) : Prop :=
+  ∀ (prog : CM.Prog) (H : Q → R) (U : Workload) (act : ℕ → Mat) (σ : State) (s : S), CM.hashed prog H U act σ s = []
+
+end Pouw

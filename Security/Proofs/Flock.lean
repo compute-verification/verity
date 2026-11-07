@@ -18,6 +18,7 @@ public import Proofs.Flock.SoundAtBridge
 public import Proofs.Flock.ZeroKnowledgeHidden
 public import Proofs.Flock.Masked
 public import Proofs.Flock.SessionLoop
+public import Proofs.Flock.SessionLoop.InnerDeployed
 public import Proofs.Flock.SessionLoop.Fill
 public import Proofs.Flock.ZkAny.DeferLoop
 public import Proofs.Flock.Recursive

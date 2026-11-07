@@ -207,7 +207,6 @@
     {"file": "verity/ml/flock/cuda_circuit_patch.py", "count": 2},
     {"file": "verity/ml/flock/live/src/bin/flock-ir-block.rs", "count": 1},
     {"file": "verity/ml/flock/live/src/bin/flock-ir-frame.rs", "count": 1},
-    {"file": "verity/ml/flock/tests/test_lean_record_checks.py", "count": 1},
     {"file": "verity/ml/flock/tests/test_lean_witness.py", "count": 2},
     {"file": "README.md", "count": 1},
     {"file": "Security/Definitions/Accounting/Remote/Draw.lean", "count": 1},
@@ -234,6 +233,7 @@
     {"file": "verity/core/protocols/remote/README.md", "count": 1},
     {"file": "verity/core/protocols/onsite/CoreOnsite.lean", "count": 3},
     {"file": "verity/core/protocols/remote/CoreRemote.lean", "count": 3},
+    {"file": "verity/ml/flock/tests/test_lean_record_checks.py", "count": 1},
     {"file": "examples/h200/demo.toml", "count": 2}
   ]
 }

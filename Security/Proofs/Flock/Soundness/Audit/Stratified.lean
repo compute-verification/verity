@@ -138,7 +138,7 @@ variable {n m : ℕ} {σ : Fin n → Fin m} {k : Fin m → ℕ} {hk : ∀ s, k s
 /-- **A wholly wrong floored stratum is caught** (oracle layer): the audit accepts while every unit of stratum `s`
 is wrong with probability at most `ε_ks + δ_link`. -/
 theorem audit_whole_stratum (A : Analysis (Law.stratified σ k hk) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (h : 1 ≤ k s)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (h : 1 ≤ k s)
     (σ' : Strategy (audit (Law.stratified σ k hk) Reg session)) :
     prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.wrong (A.committedOf σ'))
         (audit (Law.stratified σ k hk) Reg session) σ' ≤ εks + δlink := by
@@ -151,7 +151,7 @@ theorem audit_whole_stratum (A : Analysis (Law.stratified σ k hk) Reg session) 
 `ε_ks(σ) + δ_link(σ)`. -/
 theorem extraction_audit_whole_stratum (A : ExtractionAnalysis (Law.stratified σ k hk) Reg session)
     {εks δlink : (R : Reg) → Cont (Law.stratified σ k hk) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (h : 1 ≤ k s)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (h : 1 ≤ k s)
     (σ' : Strategy (audit (Law.stratified σ k hk) Reg session)) :
     prob (fun o => o.1 = true ∧ Law.stratum σ s ⊆ A.wrong (A.committedOf σ'))
         (audit (Law.stratified σ k hk) Reg session) σ' ≤ εks (reg σ') (cont σ') + δlink (reg σ') (cont σ') := by

@@ -664,7 +664,7 @@ FLOCK_LOCK = {"verity/core/service/flock/lean-audit.json": "{}\n"}
 
 
 def test_every_lean_change_but_proofs_is_one_a_lock_run_follows_whatever_its_title(world, monkeypatch):
-    """A "two demos" title exempts no Lean change.  The spec (Lean under `Security/Definitions/`, `Security/Models.lean` and
+    """A "two demos" title exempts no Lean change.  The spec (Lean under `Security/Definitions/`, `Security/Definitions.lean` and
     `Security/`'s Lake files: what the guarantees' statements read), every lock and Lean that runs as code (outside `Security/`,
     in a package with a lock: Flock's verifier) are Lean changes (`queue.lean_change`) in a two-demos PR too, which a lock
     run follows on `checked`: with no regenerated lock commit after them, they leave a record stale for the after-landing
@@ -676,7 +676,7 @@ def test_every_lean_change_but_proofs_is_one_a_lock_run_follows_whatever_its_tit
                  2: {"Security/Definitions/X.lean": "def x := 1\n"},
                  3: {"pkg/lean-audit.json": "{}"},
                  4: {"Security/Proofs/Y.lean": "theorem Y : True := trivial\n"},
-                 5: {"Security/Models.lean": "import Definitions.X\n"},
+                 5: {"Security/Definitions.lean": "import Definitions.X\n"},
                  6: {"Security/lakefile.toml": "name = \"security\"\n"},
                  7: {"Security/lean-toolchain": "leanprover/lean4:v4.0.0\n"},
                  8: {"verity/core/service/flock/Flock/X.lean": "def x := Nat.gcd 4 6\n"}}

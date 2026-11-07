@@ -803,14 +803,16 @@ def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the
 
 
 def test_bookkeeping_files_a_premise_on_the_locks_default_issue_and_its_guarantees_first_owner():
-    """An unlisted premise is filed on the lock's `open_default_issue` when it gives one, else `BOOKKEEPING_ISSUE`, due on the run's date;
-    its owner is its guarantees' (the first, of several), and an entry whose guarantees name no owner gets `BOOKKEEPING_OWNER`."""
+    """An unlisted premise is filed on the lock's `open_default_issue`, due on the run's date; its owner is its guarantees'
+    (the first, of several), and an entry whose guarantees name no owner gets the lock's `default_owner`. Neither lives in
+    the code: a lock that gives no `open_default_issue` gets the premise listed without one, a lock that passes its checks
+    (so `main` stays green), and the warning asks the next PR for it."""
     now = sounded(owners=("@zed", "@amy"))
-    lock = {**POLICY, "assumptions": {}, "guarantees": {"P.t": {"owner": "@zed"}, "P.u": {"owner": "@amy"}},
-            "open_default_issue": "LEAN-200"}
+    guarantees = {"P.t": {"owner": "@zed"}, "P.u": {"owner": "@amy"}}
+    lock = {**POLICY, "assumptions": {}, "guarantees": guarantees, "open_default_issue": "LEAN-200", "default_owner": "@lean"}
     ticket = A.bookkeeping_ticket(lock, "2026-11-14")
     assert ticket == {"issue": "LEAN-200", "due": "2026-11-14", "owner": "@lean"}
-    assert A.bookkeeping_ticket(POLICY, "2026-11-14")["issue"] == "LEAN-186"
+    assert A.bookkeeping_ticket(POLICY, "2026-11-14") == {"due": "2026-11-14"}
     fails = A.judge(lock, now, FILES)[0]
     fixed = A.repaired(lock, now, FILES, fails, ticket)
     assert {k: v for k, v in fixed["open"]["P.Sound"].items() if k != "digest"} == {
@@ -825,6 +827,19 @@ def test_bookkeeping_files_a_premise_on_the_locks_default_issue_and_its_guarante
     assert A.judge(fixed, sounded(), FILES)[0] == []
     for bad in ("", 7, ["LEAN-1"]):
         assert "open.default-issue-form" in {f.code for f in A.judge(lock | {"open_default_issue": bad}, now, FILES)[0]}
+    for bad in ("", "lean", 7):
+        assert "open.default-owner-form" in {f.code for f in A.judge(lock | {"default_owner": bad}, now, FILES)[0]}
+
+    bare = {**POLICY, "assumptions": {}, "guarantees": guarantees}
+    ticket = A.bookkeeping_ticket(bare, "2026-11-14")
+    fails = A.judge(bare, now, FILES)[0]
+    fixed = A.repaired(bare, now, FILES, fails, ticket)
+    assert {k: v for k, v in fixed["open"]["P.Sound"].items() if k != "digest"} == {"owner": "@amy", "due": "2026-11-14"}
+    assert A.judge(fixed, now, FILES)[0] == []
+    assert ("bookkeeping: P.Sound (@amy): listed under `open` without an issue, due 2026-11-14, since the lock gives no "
+            "`open_default_issue`: the next PR gives it one (open.unlisted)") in A.bookkeeping_warnings(fails, fixed, ticket)
+    assert A.judge({**fixed, "open": {"P.Sound": fixed["open"]["P.Sound"] | {"issue": "lean-1"}}}, now, FILES)[0][0].code \
+        == "open.form", "an issue, when given, is a Linear key"
 
 
 def bookkeeping_audit(tmp_path, monkeypatch, lock: dict, now: dict, replayed=()):
@@ -854,8 +869,9 @@ def test_an_audit_under_the_flag_writes_the_repaired_lock_and_what_else_fails_st
     """`audit(bookkeeping=DUE)`: a package that fails only on bookkeeping passes with the repaired lock beside its report
     (`regenerated`, which drive commits) and its warnings (`bookkeeping`), and its own lock untouched; the same package fails
     without the flag. What the flag never repairs still fails under it: an axiom beyond the standard three (`sorryAx`), a
-    `native_decide` (`Lean.ofReduceBool`), a replay the kernel rejects, and a malformed lock."""
-    lock = {**POLICY, "assumptions": {}, "shape": {"frozen": {"P.t": "frozen: open"}}}
+    `native_decide` (`Lean.ofReduceBool`), a replay the kernel rejects, and a malformed lock. A lock that gives no
+    `open_default_issue` passes too, the premise listed without one and a warning saying so."""
+    lock = {**POLICY, "assumptions": {}, "shape": {"frozen": {"P.t": "frozen: open"}}, "open_default_issue": "LEAN-186"}
     pkg, audit = bookkeeping_audit(tmp_path, monkeypatch, lock, sounded())
     before = (pkg / A.POLICY).read_text()
     plain, _ = audit()
@@ -868,6 +884,11 @@ def test_an_audit_under_the_flag_writes_the_repaired_lock_and_what_else_fails_st
     fixed = json.loads((work / A.POLICY).read_text())
     assert fixed["open"]["P.Sound"]["issue"] == "LEAN-186" and fixed["open"]["P.Sound"]["due"] == "2026-11-14"
     assert "bookkeeping: P.Sound (@lean): listed under `open` on LEAN-186, due 2026-11-14 (open.unlisted)" in rep["bookkeeping"]
+    (sub := tmp_path / "issueless").mkdir()
+    _, audit_bare = bookkeeping_audit(sub, monkeypatch, {k: v for k, v in lock.items() if k != "open_default_issue"}, sounded())
+    rep, work = audit_bare("2026-11-14")
+    assert "bookkeeping_left" not in rep and "issue" not in json.loads((work / A.POLICY).read_text())["open"]["P.Sound"]
+    assert any(w.startswith("bookkeeping: P.Sound (@lean): listed under `open` without an issue") for w in rep["bookkeeping"])
     for name, now, replayed, broken in (
             ("sorry", sounded(offenders=[{"name": "P.t", "axioms": ["sorryAx"]}]), (), lock),
             ("native_decide", sounded(offenders=[{"name": "P.t", "axioms": ["Lean.ofReduceBool"]}]), (), lock),
@@ -2003,7 +2024,7 @@ def test_a_premise_the_lock_does_not_list_fails():
     digest = pol["assumptions"]["P.Hyp"]["digest"]
     assert A.judge({**pol, "assumptions": {}}, f, FILES)[0] == [
         "assumptions: P.Hyp is a premise of P.t, an assumption the lock doesn't list; run `check.py --update` to add it "
-        "with its guarantees' owner and commit the record (Daniel's DM shows it when it lands), or write \"P.Hyp\": "
+        "with its guarantees' owner and commit the record (the landing message shows it), or write \"P.Hyp\": "
         f"{{\"owner\": \"@lean\", \"digest\": \"{digest}\"}} under `assumptions`."]
 
 
@@ -2238,7 +2259,7 @@ def test_a_premise_no_reads_record_holds_is_digested_with_what_it_reads():
     moved = facts(pins={"P.t": pin}, graph=graph, assumption_reads=walk("n + 2"))
     assert A.judge(pol, moved, FILES)[0] == [
         "open: P.Leaves's definition in P.Thms, or a definition it reads, changed; run `check.py --update` and commit "
-        "the record (Daniel's DM shows the change when it lands)"]
+        "the record (the landing message shows the change)"]
     new = A.judge(pol, moved, FILES, update=True)[1]
     assert A.assumption_changes(pol, new) == ["open premise P.Leaves: changed (its statement or a definition it reads)"]
     bare = {**pol, "open": {"P.Leaves": {"owner": "@lean"} | ticket}}
@@ -2967,7 +2988,8 @@ def test_a_guarantee_of_what_an_acceptance_means_has_an_honest_and_a_nontrivial_
         "everything). Each takes no binder over its instance and no hypothesis beyond named assumptions the lock lists: "
         "it builds the instance at the model level (a small hand-built descriptor, not a parsed file), with any one field "
         "that can't be built a named assumption. List both under `guarantees`, and write \"P.sound\": {\"honest\": "
-        "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses` (LEAN-66)"]
+        "[\"P.sound_honest\"], \"nontrivial\": \"P.sound_nontrivial\"} under `witnesses`: a guarantee carries an honest and "
+        "a nontrivial witness"]
     out_of_scope = witnessed(guarantee={"reads": fact()["reads"]})
     assert witness_codes({**out_of_scope[0], "witnesses": {}}, out_of_scope[1]) == []
     assert witness_codes(*out_of_scope) == []
@@ -3617,7 +3639,7 @@ def test_a_witness_constructs_its_instance_and_takes_only_listed_assumptions():
         "witnesses: P.sound_nontrivial, P.sound's `nontrivial` witness, takes 4 `∀` binder(s) before its conclusion: it "
         "ranges over its instance (`∀ inst, …`) instead of constructing it. Build the instance at the model level (a small "
         "hand-built descriptor rather than a parsed file), and isolate any one field that can't be built as a named "
-        "assumption the lock lists (LEAN-66)")
+        "assumption the lock lists: a guarantee carries an honest and a nontrivial witness")
     assert fails[1] == ("witnesses: P.sound_nontrivial, P.sound's `nontrivial` witness, takes (ht : I.tags.typed = false), "
                         "a hypothesis over its own inputs: it assumes nothing beyond named assumptions the lock lists")
     assert witness_codes(*witnessed(honest={"body": wbody("P.Compiled", binders=["∀"])})) == ["witnesses.instance-binders"]
@@ -3636,7 +3658,7 @@ def test_an_honest_witness_at_a_verifier_that_accepts_everything_fails():
     assert A.witness_failures(*witnessed(honest=h200), WOWN) == [
         "witnesses: P.sound_honest, P.sound's `honest` witness, is at a verifier that accepts everything "
         "(P.HonestH200.jointRun.accepts): an honest lemma is at the deployed verifier, and the accept-all one is the "
-        "`nontrivial` lemma's object (LEAN-68's HonestH200)"]
+        "`nontrivial` lemma's object (as `HonestH200`'s honest period, built with `accepts := fun _ _ => True`, was)"]
     assert witness_codes(*witnessed(nontrivial={"accept_all": ["P.RecAt.acceptAll"]})) == []
 
 
@@ -3876,7 +3898,7 @@ def test_an_assumption_is_listed_by_name_with_its_record():
     changed = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
                                              {"name": "P.Hyp", "module": "P.Assumptions", "kind": "def", "hash": "4" * 32}])})
     assert "assumptions: P.Hyp's definition in P.Assumptions changed; run `check.py --update` and commit the record " \
-           "(Daniel's DM shows the change when it lands)" in A.judge(pol, changed, FILES)[0]
+           "(the landing message shows the change)" in A.judge(pol, changed, FILES)[0]
     unread = {**pol, "assumptions": pol["assumptions"] | {"P.Other": {"owner": "@lean", "digest": "0" * 64}}}
     assert A.judge(unread, facts(), FILES)[0] == ["assumptions: P.Other is listed, but no guarantee reads it; remove the entry"]
     assert A.judge(unread, facts(), FILES, update=True)[1]["assumptions"] == pol["assumptions"]
@@ -4455,7 +4477,7 @@ def test_moving_the_proofs_into_another_package_leaves_the_spec_record_as_it_was
     for d in (one, proofs):
         assert unshaped(A.audit(d, out, update=True, replay=False, runs=False, log=lambda *_: None)) == []
     proofs_policy = (proofs / A.POLICY).read_text()
-    assert set(json.loads(proofs_policy)) == {"roots", "dependencies"}
+    assert set(json.loads(proofs_policy)) == {"format", "roots", "dependencies"}
     assert A.main([str(spec), "--update", "--no-replay", "--out", str(out)]) == 0
     assert (proofs / A.POLICY).read_text() == proofs_policy, "the proofs' policy is not the one `--update` writes"
     split, whole = A.load(spec), A.load(one)

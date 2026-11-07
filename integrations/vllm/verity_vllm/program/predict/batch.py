@@ -32,14 +32,18 @@ request's Program is built at its launch context, which the advice fixes, and th
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a history behind no checked
   hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
-  request's partial on the other rank, which the cross-rank transfer must hold request by request. A shared prefix page is
-  no other request's computed value in GP-01: no wire runs from the request that computed it, and every request that reads it
-  reads it as an Input of its own history (`HISTORY_GROUPS`), a committed value the replay binds to the rows that computed it
-  (`check.replay.cached_prefix`). R1 holds that Input the request's own only where its value is a function of the request's own
-  certified inputs: a hit whose tokens R2 checked equal to its prompt through every run (the KV at a position reads every token
-  up to it), or the state a window carries it in with: its own rows and last token at the open, values of the boundary
-  commitment (their opening is the verifier's to check), its advice held by `window_advice.follows` to the state the last window
-  left it in, whose hit, if any, was checked there. Any other history is the batch's, and refused.
+  request's partial on the other rank, which the cross-rank transfer must hold request by request. Its `run` (the Waksman
+  settings of each row past INDEX_TOPK, `dsa.run_field`) is its own too: each field routes the request's own key indices, and its
+  checks (`DsaTopKLongRow`) hold the routed order to the top-INDEX_TOPK set of the request's own logits in ascending index order,
+  the one order those logits fix, so each field is a function of the request's own inputs. No order a kernel or a prover picks
+  passes: a row past INDEX_TOPK is served under `VERITY_DSA_TOPK=canonical` (`dsa.Net` refuses an engine without it). A shared
+  prefix page is no other request's computed value in GP-01: no wire runs from the request that computed it, and every request
+  that reads it reads it as an Input of its own history (`HISTORY_GROUPS`), a committed value the replay binds to the rows that
+  computed it (`check.replay.cached_prefix`). R1 holds that Input the request's own only where its value is a function of the
+  request's own certified inputs: a hit whose tokens R2 checked equal to its prompt through every run (the KV at a position reads
+  every token up to it), or the state a window carries it in with: its own rows and last token at the open, values of the
+  boundary commitment (their opening is the verifier's to check), its advice held by `window_advice.follows` to the state the last
+  window left it in, whose hit, if any, was checked there. Any other history is the batch's, and refused.
 """
 
 from __future__ import annotations
@@ -90,15 +94,17 @@ def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tup
     and its history (`HISTORY_GROUPS`) too where R2 checked it (``checked``: a hit whose tokens are checked equal, or the state a
     Commit window carries it in with); a tensor-parallel rank's `peers_<k>` held by its
     index too, since the node binds each to the same request's partial of collective k on the other rank (`tp_links.json`; GP-01's
-    `request[<id>].peers_<k>`), a value of that request's own inputs on every rank; any other request-local group (`splits`, an
-    unchecked history, `schedule`, or one unknown here) `BATCH`. Its return: each request's outputs held by its index."""
+    `request[<id>].peers_<k>`), a value of that request's own inputs on every rank, and its `run` (R1 of the module docstring); any
+    other request-local group (`splits`, an unchecked history, `schedule`, or one unknown here) `BATCH`. Its return: each request's
+    outputs held by its index."""
     labels: list[Any] = [SHARED] * len(wl.shared_by_request[0])
     for r, sh in zip(wl.requests, wl.shared_by_request):
         groups = r.component.groups
         if len(groups) != len(r.component.params):
             raise BatchDependent(f"request {r.index}: its component names no group for some Input (provenance unknown)")
         mine = OWN_GROUPS + HISTORY_GROUPS * (r.index in checked)
-        labels += [own(r.index) if g in mine or g.startswith("peers_") else BATCH for j, g in enumerate(groups) if j not in set(sh)]
+        labels += [own(r.index) if g in mine or g == "run" or g.startswith("peers_") else BATCH
+                   for j, g in enumerate(groups) if j not in set(sh)]
     return tuple(labels), Fields(tuple(own(r.index) for r in wl.requests))
 
 
