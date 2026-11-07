@@ -1,0 +1,11 @@
+# The spot capture's staging (`stage.py`) on captures its tests write with `capture.py`'s recorder. Not a package: the tests
+# load both scripts from this directory.
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# stage.py binds each block through verity_vllm's serving templates to its registered Definition, which the tests evaluate and
+# hold to the numpy model of FlashInfer's kernel (`tp_allreduce_check`)
+inputs = ["verity/__init__.py", "verity/errors.py", "verity/ml/__init__.py", "verity/ml/circuits", "verity/ml/definitions",
+          "integrations/vllm/verity_vllm"]
