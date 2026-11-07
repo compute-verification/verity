@@ -8,20 +8,19 @@ public import Proofs.Properties.Verity.Sampled.RecordDraw
 The record's draw (`recordDraw_firstStop`) and the first stop (`link_pts`, `firstStop_rootB`) take the order
 `SampleLinkFirst` states on the device's log: no release of a coin of the sample's family after the registration's
 digest follows an opening, and the first opening is of the stream `SampledProofs.Challenger.TREE_SESSION`. It holds
-where v2's case accepts, the log v2's check read is the device's, and the challenger session's release log in v2's
-evidence, after its head, passes `sampleLinkFirst` at the parameters' challenger family and the registration's digest
-(`OrderHeld`):
+where v2's case accepts and the log v2's check read is the device's, since v2's check accepts only where the challenger
+session's release log in v2's evidence, after its head, passes `sampleLinkFirst` at the parameters' challenger family
+and the registration's digest (`SampledProofs.OneStageZk.orderHeld`):
 
-* **v2's refusal** (`orderHeld_verdict`): the sampled verdict gives `OrderHeld`, since v2's check accepts only where its
-  order refusal (`SampledProofs.OneStageZk.orderHeld`) passed (`checkBlobsAt_orderHeld`), and that refusal's scan is
-  `sampleLinkFirst` (`sampleLinkFirst_check`, `orderHeld_ok`).
+* **v2's refusal** (`checkBlobsAt_orderHeld`, `orderHeld_ok`): v2's check accepts only where its order refusal passed,
+  and that refusal's scan is `sampleLinkFirst` (`sampleLinkFirst_check`).
 * **On v2's read, then on the device's log** (`sampleLinkFirst_logged`): v2's read of those lines is in order
   (`sampleLinkFirst_readLog`), and the device's log has the read's frames and answers (`ofV2_frames`), which are all
   `SampleLinkFirst` reads (`sampleLinkFirst_congr`).
 * **At the sampled verdict** (`sampleLinkFirst_verdict`, `freshBefore_verdict`, `linkFirst_verdict`): in the forms the
   record's draw and the first stop take.
 
-`OrderHeld` needs that refusal: nothing else v2 checks gives the order (`reads_interleave`). Besides the chain
+v2's check needs that refusal: nothing else it checks gives the order (`reads_interleave`). Besides the chain
 and the line count its signed close covers, which are the device's for whatever order it released in, v2 reads the
 release log's coin trees' lines apart from its other lines (`coinTreesOf`, `coinTreesOf_filter`) and those others
 apart from the coin trees' (`releasedRootsOf`, `releasedRootsOf_congr`), so it can't tell where a round's opening sits
@@ -39,16 +38,6 @@ open SampledProofs.Challenger
 open Properties.Challenger (Draws)
 
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
-
-/-- **v2's order refusal passes** on what the prover sent: where v2's case in it decodes and its parameters name the
-challenger's family `label`, the challenger session's release log in v2's evidence, after its head, passes
-`sampleLinkFirst` at `label` and the registration's digest. v2 refuses every other log
-(`SampledProofs.OneStageZk.orderHeld`), so the sampled verdict gives it (`orderHeld_verdict`). -/
-def OrderHeld (s : Verity.Sent) : Prop :=
-  ∀ (p : _root_.SampledProofs.OneStageZk.Params) (c : _root_.SampledProofs.OneStage.Commitment)
-    (e : _root_.SampledProofs.OneStageZk.Evidence) (key : ChallengerKey) (label : String) (lines : List String),
-    caseOf s = .ok (p, c, e) → p.base.challenger = some (key, label) → linesOf e = .ok lines →
-      sampleLinkFirst label c.digest lines.tail = true
 
 /-- **Where v2's check accepts, its order refusal passed** (`SampledProofs.OneStageZk.orderHeld`). -/
 theorem checkBlobsAt_orderHeld {p : _root_.SampledProofs.OneStageZk.Params}
@@ -106,22 +95,6 @@ theorem orderHeld_ok {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.Sa
   · intro h; cases h
   · intro _; rfl
 
-/-- **At the sampled verdict, v2's order refusal passes**: where `A` is the session v2 sets up on the parameters and the
-sampled verdict accepts, v2's check accepted at the coins it read (`case_drew`), so its order refusal passed
-(`checkBlobsAt_orderHeld`) on the one case what the prover sent decodes to (`caseOf_of`). -/
-theorem orderHeld_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
-    {F : Array ByteArray} {A : Live} {x : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ)
-    (hv : V.Verdict k .sampled x) : OrderHeld x.sent := by
-  subst hθ
-  obtain ⟨p', hp', -⟩ := hA.params
-  obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hp, hc, hev, -, -, pub, prof, hck⟩ :=
-    case_drew hv.2.1 hp' (verdict_case hv)
-  intro p₁ c₁ e₁ key label lines h₁ hch hl
-  have hcs := (caseOf_of hv.2.1 hcase hp hc hev).symm.trans h₁
-  simp only [Except.ok.injEq, Prod.mk.injEq] at hcs
-  obtain ⟨rfl, rfl, rfl⟩ := hcs
-  exact orderHeld_ok (checkBlobsAt_orderHeld hck) hch hl
-
 /-- **v2's read of releases has their frames and the bytes they answered.** -/
 theorem ofV2_frames :
     ∀ {l l' : List Verity.Release}, List.Forall₂ Binding.Read.Of (l.map Binding.Read.ofV2) l' →
@@ -133,23 +106,23 @@ theorem ofV2_frames :
     simp only [List.map_cons, List.forall₂_cons] at h
     exact .cons ⟨h.1.1, h.1.2.1⟩ (ofV2_frames h.2)
 
-/-- **The device's log is in order where v2's case accepts and its order refusal passes**: where composite `k` accepted
-what the prover sent, v2's case in it accepts at the draw `dr`, the log v2's check read is the device's, and the
-release log's lines after its head pass `sampleLinkFirst` (`OrderHeld`), the device's log releases the sample's coins
-(of `dr`'s family, after `dr`'s digest) before every opening and opens the stream `TREE_SESSION` first. -/
+/-- **The device's log is in order where v2's case accepts**: where composite `k` accepted what the prover sent, v2's
+case in it accepts at the draw `dr` and the log v2's check read is the device's, the device's log releases the sample's
+coins (of `dr`'s family, after `dr`'s digest) before every opening and opens the stream `TREE_SESSION` first, since
+v2's check passed its order refusal (`checkBlobsAt_orderHeld`, `orderHeld_ok`). -/
 theorem sampleLinkFirst_logged {k : Verity.Registration.Composite} {x : Verity.Exchange} {a b e : ByteArray}
     {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
     {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : Draws}
     (hS : Verity.SameAccepts k x.sent) (hcase : V2Case k x.sent a b e)
     (hacc : V2Accepts (_root_.Core.Blobs.ofArray x.sent.blobs) a b e p c ev ξ dr)
-    (hl : Binding.Logged Binding.readsV2 x) (hord : OrderHeld x.sent) :
+    (hl : Binding.Logged Binding.readsV2 x) :
     SampleLinkFirst dr.label dr.after x.log := by
   obtain ⟨lr, hlr⟩ := Option.isSome_iff_exists.1 (logRead_isSome hS hcase hacc)
   have hlog := hl (lr.map Binding.Read.ofV2) (by
     show lr.map Binding.Read.ofV2 ∈ (logRead x.sent).map (·.map Binding.Read.ofV2)
     rw [hlr]
     exact Option.mem_def.2 rfl)
-  obtain ⟨hp, hc, hev, hξ, hdr, -, -, -⟩ := hacc
+  obtain ⟨hp, hc, hev, hξ, hdr, _, _, hck⟩ := hacc
   obtain ⟨key, hch, hafter⟩ := source_of hdr
   obtain ⟨raw, hraw, hrξ⟩ := Properties.Challenger.oneStageZk_reads p c dr hdr ev ξ hξ
   rw [hrξ] at hraw
@@ -164,45 +137,44 @@ theorem sampleLinkFirst_logged {k : Verity.Registration.Composite} {x : Verity.E
   have hR' : readLog dr.label c.digest recs ξ lines = some lr := hR
   rw [hafter]
   exact sampleLinkFirst_congr (ofV2_frames hlog)
-    (sampleLinkFirst_readLog (hord p c ev key dr.label lines hcs hch hL) hR')
+    (sampleLinkFirst_readLog (orderHeld_ok (checkBlobsAt_orderHeld hck) hch hL) hR')
 
-/-- **At the sampled verdict, the device's log is in order where v2's order refusal passes**: where `A` is the session
-v2 sets up on the parameters, the sampled verdict accepts, the log v2's check read is the device's, its order refusal
-passes (`OrderHeld`), and v2 reads the sample's coins of the family `label` answering `after` (`SampleNamed`), the
-device's log is in order at `label` and `after` (`SampleLinkFirst`). -/
+/-- **At the sampled verdict, the device's log is in order**: where `A` is the session v2 sets up on the parameters, the
+sampled verdict accepts, the log v2's check read is the device's, and v2 reads the sample's coins of the family `label`
+answering `after` (`SampleNamed`), the device's log is in order at `label` and `after` (`SampleLinkFirst`). -/
 theorem sampleLinkFirst_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
     {F : Array ByteArray} {A : Live} {x : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ)
-    (hv : V.Verdict k .sampled x) (hl : Binding.Logged Binding.readsV2 x) (hord : OrderHeld x.sent)
+    (hv : V.Verdict k .sampled x) (hl : Binding.Logged Binding.readsV2 x)
     {label : String} {after : ByteArray} (hN : SampleNamed k x.sent label after) :
     SampleLinkFirst label after x.log := by
   subst hθ
   obtain ⟨p', hp', -⟩ := hA.params
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp' (verdict_case hv)
   obtain ⟨rfl, rfl⟩ := hN a b e p c ev ξ dr hcase hacc
-  exact sampleLinkFirst_logged hv.2.1 hcase hacc hl hord
+  exact sampleLinkFirst_logged hv.2.1 hcase hacc hl
 
 /-- **The sample's coins are released before every opening** (`SampleLinkFirst`'s first half, the record's draw's
-form), at the sampled verdict where v2's order refusal passes. -/
+form), at the sampled verdict. -/
 theorem freshBefore_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
     {F : Array ByteArray} {A : Live} {x : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ)
-    (hv : V.Verdict k .sampled x) (hl : Binding.Logged Binding.readsV2 x) (hord : OrderHeld x.sent)
+    (hv : V.Verdict k .sampled x) (hl : Binding.Logged Binding.readsV2 x)
     {label : String} {after : ByteArray} (hN : SampleNamed k x.sent label after) :
     ∀ pre r post, x.log = pre ++ r :: post → ∀ i s n, r.frame = .opening i s n →
       ∀ q ∈ post, ¬ (q.frame = .fresh label ∧ q.answers = after) :=
-  fun pre r post he i s n hr => (sampleLinkFirst_verdict hA hθ hv hl hord hN pre r post he i s n hr).1
+  fun pre r post he i s n hr => (sampleLinkFirst_verdict hA hθ hv hl hN pre r post he i s n hr).1
 
 /-- **The first opening is of the stream `TREE_SESSION`** (`SampleLinkFirst`'s second half, the first stop's form), at
-the sampled verdict where v2's order refusal passes. -/
+the sampled verdict. -/
 theorem linkFirst_verdict {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray}
     {F : Array ByteArray} {A : Live} {x : Verity.Exchange} (hA : SetsUp V θ F A) (hθ : x.params = θ)
-    (hv : V.Verdict k .sampled x) (hl : Binding.Logged Binding.readsV2 x) (hord : OrderHeld x.sent) :
+    (hv : V.Verdict k .sampled x) (hl : Binding.Logged Binding.readsV2 x) :
     ∀ pre r post, x.log = pre ++ r :: post → ∀ i s n, r.frame = .opening i s n →
       (∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') →
         ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some TREE_SESSION := by
   subst hθ
   obtain ⟨p', hp', -⟩ := hA.params
   obtain ⟨a, b, e, p, c, ev, ξ, dr, hcase, hacc⟩ := case_drew hv.2.1 hp' (verdict_case hv)
-  exact fun pre r post he i s n hr => (sampleLinkFirst_logged hv.2.1 hcase hacc hl hord pre r post he i s n hr).2
+  exact fun pre r post he i s n hr => (sampleLinkFirst_logged hv.2.1 hcase hacc hl pre r post he i s n hr).2
 
 /-! ## What v2 reads of the order -/
 
