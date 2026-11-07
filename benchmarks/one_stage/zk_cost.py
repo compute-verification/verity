@@ -76,7 +76,7 @@ S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
 MAX_BITS = 1 << 35
 #: the served types whose proof block is one output coordinate of a dot product, K MACs, and their operands' format
 DOT = {"fp8-coord": "e4m3", "s8-coord": "s8", "moe-w13": "e4m3", "moe-w2": "e4m3", "moe-chunk": "e4m3", "moe-gemmw": "e4m3",
-       "s8-linear": "s8"}
+       "s8-linear": "s8", "pe-w13": "e4m3", "pe-w2": "e4m3"}
 STAGE_PY = REPO / "benchmarks" / "served_units" / "stage.py"
 
 
@@ -214,7 +214,8 @@ def stage_units(a, out: Path) -> list[dict]:
             name = spec.partition(":")[0]
             rec = {"unit": spec, "tag": tag, "c": c, "full": full, "ands": st["ands"], "k_log": st["k_log"],
                    "vus_per_block": st.get("vus_per_block"), "definition": st["definition"], "class": st.get("class"),
-                   "statics": st["statics"], "macs": st["statics"]["K"] if name in DOT else 0, "format": DOT.get(name),
+                   "statics": st["statics"], "macs": st.get("macs") or (st["statics"]["K"] if name in DOT else 0),
+                   "format": DOT.get(name),
                    "stage_s": st["seconds"]["total"], "stage_cpu_s": st["stage_cpu_s"], "maxrss_gb": st["maxrss_gb"],
                    "circuit_sha512": st["circuit_sha512"], "twin": st["twin"]}
             jsonl(out / "records" / "stage.jsonl", rec)
@@ -229,7 +230,8 @@ def stage_units(a, out: Path) -> list[dict]:
                              "pub": str(std / "pub.bin"), "partition": str(part) if part.exists() else None})
             print(f"ZKCOST staged {spec} c={c} (full {full}): {st['ands']} ANDs a unit, k_log {st['k_log']}, "
                   f"{st['definition']}, stage {st['seconds']['total']} s", flush=True)
-    return plan
+    # every type's k = c points first, which overhead fits, then its draws, the larger statements first in each
+    return sorted(plan, key=lambda p: (p["k"] != p["c"], -p["c"]))
 
 
 def stage(a) -> int:

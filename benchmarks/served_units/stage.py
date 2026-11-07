@@ -48,6 +48,12 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
     moe-gemmw   block from all 256 experts' (`fp8_moe_experts`): K = 512 of a w13 coordinate (a middle chunk) and one w2
                 coordinate, on the H200's wgmma step.  `moe-w13` and `moe-w2` are the same products with the expert's rows as
                 the block's inputs instead.
+    router-slots  the MoE cut per expert's blocks, each a whole Definition on the window interface's rows (`interface.unit_rows`:
+    read          a ``row/v2`` row a parameter and one a return field), as `glm53-moe-per-expert` holds them:
+    pe-w13        `MoeRouterSigmoidBiasSlots_v2`; `EmbeddingRead_v1{V, H}` opening a table of V = 256 random rows, one an
+    pe-w2         expert, at a random tok (H = 3072 and 96 are w13's row and scale reads, 4096 and 4 w2's; each staged read is
+                  checked to open, ok = 1 and h the registered row); `MoeExpertFp8BlockGemm_v4{K=6144,N=1}` (w13, mma.sync) and
+                  `MoeExpertFp8BlockGemmW_v4{K=256,N=32}` (w2, wgmma) on random e4m3 operands and scales.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -75,8 +81,16 @@ from verity_flock import class_statement as CS
 from verity_flock import partition_units as PU
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32
+from verity.ml.commitments import row_table as RT
+from verity.ml.commitments.gates import embedding as EMB
+from verity.ml.commitments.indexed import RangeIndexedDomain
+from verity.ml.commitments.merkle import CommitmentDomain
+from verity.ml.commitments.rowleaf import bit_row
 from verity.ml.definitions.registry import act, b1, dsa, fp8_moe, fp8_moe_experts, moe, ref_prims, sparse_mla
 from verity.ml.definitions.registry import boolean_fp8 as BF
+from verity.ml.definitions.registry import boolean_fp8_moe as BM
+from verity.ml.definitions.registry import boolean_moe as BMOE
+from verity.ml.windows import interface as WI
 
 
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): `class_statement.stage` cuts a PARTS type's
@@ -98,12 +112,15 @@ def words(*parts: np.ndarray) -> np.ndarray:
 @dataclass(frozen=True)
 class Unit:
     """A proof-block type: its Boolean Definition at statics ``S``, its input rows ``(row, schema, params)``, and ``draw(S, n, rng)``:
-    each row's words per input ``(n, words)`` and the served twin's output words ``(n, out_words)``."""
+    each row's words per input ``(n, words)`` and the served twin's output words ``(n, out_words)``. A type with no ``rows``
+    takes the window interface's (`interface.unit_rows`), and its draw's second value maps output rows to the words each
+    must hold (None: no twin); ``macs(S)`` is a block's multiply-adds where they aren't one coordinate's K."""
 
     definition: Callable[[dict], object]
     rows: tuple[tuple[str, str, tuple[str, ...]], ...]
-    draw: Callable[[dict, int, np.random.Generator], tuple[dict[str, np.ndarray], np.ndarray]]
+    draw: Callable[[dict, int, np.random.Generator], tuple[dict[str, np.ndarray], object]]
     defaults: dict
+    macs: Callable[[dict], int] | None = None
 
 
 def _fp8_coord_draw(S: dict, n: int, rng: np.random.Generator):
@@ -141,11 +158,72 @@ def _s8_coord_draw(S: dict, n: int, rng: np.random.Generator):
     return {"x": np.stack(xs), "w": np.stack(ws)}, np.stack(twin)
 
 
+def _bits_words(bits) -> np.ndarray:
+    """A parameter's flat bits in leaf order as its row's u16 words (bit 0 the first word's low bit)."""
+    return np.packbits(np.asarray(bits, np.uint8), bitorder="little").view("<u2")
+
+
+def _read_draw(S: dict, n: int, rng: np.random.Generator):
+    """A table of V random rows of H words, registered one a row (`row_table.commit` under a dense domain, owner -2), opened
+    at a random tok per input."""
+    V, H = S["V"], S["H"]
+    table = rng.integers(0, 1 << 16, (V, H), dtype=np.uint16)
+    dom = CommitmentDomain(rng.bytes(64), -2, RangeIndexedDomain(0, V), hash="sha512")
+    salts = [rng.bytes(EMB.SALT_BYTES) for _ in range(V)]
+    tree = RT.commit(dom, [bit_row((r.tolist(), 16)) for r in table], salts)
+    names = [p for p, _ty in EMB.read(V, H).signature()[0]]
+    rows: dict[str, list] = {p: [] for p in names}
+    toks = rng.integers(0, V, n)
+    for t in toks:
+        p = tree.path(int(t))
+        args = EMB.arguments(V, int(t), tree.root, dom.domain_id, table[t].tolist(), salts[t], [p[k:k + 64] for k in range(0, len(p), 64)])
+        for name, bits in zip(names, args):
+            rows[name].append(_bits_words(bits))
+    return {p: np.stack(v) for p, v in rows.items()}, {"o0": table[toks], "o1": np.ones((n, 1), np.uint16)}
+
+
+def _log_f32(rng: np.random.Generator, lo: float, hi: float, n: int) -> np.ndarray:
+    return np.exp(rng.uniform(np.log(lo), np.log(hi), n)).astype(np.float32)
+
+
+def _template_draw(S: dict, n: int, rng: np.random.Generator, fn) -> dict[str, np.ndarray]:
+    """Random words for each of a per-expert GEMM's or the router's parameters by name: e4m3 operands (no NaN code), log-uniform
+    f32 scales, a routed weight in (0, 1), N(0, 2) logits and N(0, 0.01) biases."""
+    out = {}
+    for p, w in WI.layout(fn).rows:
+        if p in ("xq", "w"):
+            b = rng.integers(0, 256, (n, 2 * w), dtype=np.uint8)
+            b[(b & 0x7F) == 0x7F] ^= 1
+            v = b
+        elif p in ("sx", "ws"):
+            v = _log_f32(rng, *((1e-3, 1e-1) if p == "sx" else (1e-4, 1e-2)), n * w // 2).reshape(n, w // 2)
+        elif p == "g":
+            v = rng.uniform(0.01, 1.0, (n, w // 2)).astype(np.float32)
+        elif p in ("logits", "bias"):
+            v = (rng.standard_normal((n, w // 2)) * (2.0 if p == "logits" else 1e-2)).astype(np.float32)
+        else:
+            raise SystemExit(f"stage.py: no draw for {fn.id}'s parameter {p!r}")
+        out[p] = np.ascontiguousarray(v).view("<u2").reshape(n, w)
+    return out
+
+
+def _window(definition: Callable[[dict], object], defaults: dict, macs: Callable[[dict], int] | None = None) -> Unit:
+    """A whole Definition on the window interface's rows, drawn by `_template_draw`, no twin."""
+    return Unit(definition, (), lambda S, n, rng: (_template_draw(S, n, rng, definition(S)), None), defaults, macs)
+
+
+_GEMM_ST = {"G": 128, "KB": 128}
 UNITS: dict[str, Unit] = {
     "fp8-coord": Unit(lambda S: bind(BF.ScaledMmFp8BlockCoordinateV2, K=S["K"], G=S["G"]),
                       (("x", SEG, ("xq", "sx")), ("w", V2, ("wrow", "sw"))), _fp8_coord_draw, {"K": 6144, "G": 128}),
     "s8-coord": Unit(lambda S: bind(BG.ScaledMmS8Coordinate, K=S["K"], **BG.GEMM_SM120_S8),
                      (("x", SEG, ("x", "sx")), ("w", V2, ("wrow", "sw"))), _s8_coord_draw, {"K": 2048}),
+    "router-slots": _window(lambda S: bind(BMOE.MoeRouterSigmoidBiasSlots, **S), {"E": 256, "TOPK": 8, "SCALE": 2.5, "KERNEL": "block"}),
+    "read": Unit(lambda S: EMB.read(S["V"], S["H"]), (), _read_draw, {"V": 256, "H": 3072}),
+    "pe-w13": _window(lambda S: bind(BM.MoeExpertFp8BlockGemmV4, **S, DOT=BG.HopperE4m3MmaV2Dot32),
+                      {"K": 6144, "N": 1, **_GEMM_ST, "SWAP": False}, lambda S: S["K"] * S["N"]),
+    "pe-w2": _window(lambda S: bind(BM.MoeExpertFp8BlockGemmWV4, **S, DOT=BG.HopperE4m3QgmmaDot32),
+                     {"K": 256, "N": 32, **_GEMM_ST, "SWAP": True}, lambda S: S["K"] * S["N"]),
 }
 
 
@@ -292,6 +370,8 @@ def main() -> None:
     rows, twin = u.draw(S, n, rng)
     t_draw = time.time() - t0
     unit_rows, ports = u.rows, None
+    if public and not u.rows:
+        raise SystemExit(f"stage.py: --public-weights is for a type with a weight row, not {name}")
     if public:
         (w,) = [r for r in u.rows if r[0] == "w"]
         unit_rows = tuple(r for r in u.rows if r[0] != "w")
@@ -299,12 +379,17 @@ def main() -> None:
         ports = {p: {"seed": hashlib.sha256(f"verity/served-units/weights\0{tag}".encode()).hexdigest(),
                      "derivation": "served-units/public-weights"} for p in w[2]}
         tag += "-packed-weights" if packed else "-public-weights"
-    in_rows = [(r, schema, 16 * rows[r].shape[1], list(ps)) for r, schema, ps in unit_rows]
+    if unit_rows:
+        in_rows, out_rows = [(r, schema, 16 * rows[r].shape[1], list(ps)) for r, schema, ps in unit_rows], [(V2, (0,))]
+        twin = {"o0": twin}
+    else:
+        in_rows, out_rows = WI.unit_rows(d)
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
-    got = CS.stage_unit(d, f"unit/served-{tag}", in_rows, [(V2, (0,))], rows, out, salt_key, public_inputs=ports, packed=packed)
-    o0 = np.asarray(got["outs"]["o0"], dtype=np.uint16)
-    if not np.array_equal(o0[:, :twin.shape[1]], twin):
-        raise AssertionError(f"{tag}: the circuit's outputs are not the served twin's on {int((o0[:, :twin.shape[1]] != twin).any(1).sum())} instances")
+    got = CS.stage_unit(d, f"unit/served-{tag}", in_rows, out_rows, rows, out, salt_key, public_inputs=ports, packed=packed)
+    for port, want in (twin or {}).items():
+        have = np.asarray(got["outs"][port], dtype=np.uint16)[:, :want.shape[1]]
+        if not np.array_equal(have, want):
+            raise AssertionError(f"{tag}: the circuit's {port} is not the twin's on {int((have != want).any(1).sum())} instances")
     text = (out / "circuit.txt").read_text()
     pin = FC.digest(text)
     (out / "pin.txt").write_text(pin)
@@ -315,7 +400,8 @@ def main() -> None:
            "k_log": meta["k_log"], "unit_log": meta.get("unit_log"), "vus_per_block": meta.get("vus_per_block"),
            "row_schemas": meta.get("row_schemas"), "circuit_bytes": len(text), "circuit_sha512": pin,
            "class_sha512": FC.class_digest(text), "inst_bytes": (out / "inst.bin").stat().st_size,
-           "pub_bytes": (out / "pub.bin").stat().st_size, "twin": {"agrees": True, "instances": n, "first": int(twin[0, 0])},
+           "pub_bytes": (out / "pub.bin").stat().st_size, "macs": u.macs(S) if u.macs else None,
+           "twin": twin and {"agrees": True, "instances": n, "ports": sorted(twin), "first": int(next(iter(twin.values()))[0, 0])},
            "seconds": {"draw": round(t_draw, 1), "total": round(time.time() - t0, 1)}, "maxrss_gb": gb()}
     (out / "stage.json").write_text(json.dumps(rec, indent=1))
     print(json.dumps(rec), flush=True)
