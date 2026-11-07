@@ -39,9 +39,11 @@ import Mathlib.Topology.Sheaves.Init
 # Read units: one row of a registered table, at an index another unit picks
 
 A read unit is a unit of the circuit that returns one row of a registered table. The table is committed as a frame-v3
-tree of hm96 row leaves (`Hash.RowLeaf`), one leaf per row, and the unit opens the leaf at an index its picker computes:
-gates elsewhere in the circuit whose bits name the row. An expert router picks each expert weight table's row, a
-sparse-attention indexer picks key and value rows, and a token picks its embedding row. The read's reference is
+tree of hm96 row leaves (`Hash.RowLeaf`), one leaf per row, and the unit opens the leaf at the index its index gates
+hold. In the wired flattening those gates are its picker's outputs: an expert router picks each expert weight table's
+row, a sparse-attention indexer picks key and value rows, and a request's token picks its embedding row. A read whose
+wired index row is not its picker's output row is incorrect in the wired flattening (`SampledProofs.Wires.Summary.drawnOk`
+holds the wires of the sampled proof blocks), so the index a correct read uses is its picker's. The read's reference is
 `Hash.EmbeddingRead`: below the table's count it returns the witness row and accepts where the row's leaf opens at the
 index; at or past the count it returns the fill row and accepts.
 
@@ -59,11 +61,10 @@ What a table read's soundness takes of a read unit `u` at a transcript `X`:
 * `RegisteredRows`: `u`'s registered rows hold in `X`: its root and domain id are its table's, its verdict bit is 1, and
   the registered constants among its inputs and outputs hold. A unit bound in `X` under the deployed openings (outside
   `Accounting.unbound`) has them wherever the openings pin those gates.
-* `Wired`: `u`'s index gates hold, in `X`, the bits its picker's gates hold.
 
-`Binds` is what follows: the row `u` returns is its table's row at the picked index, for every opening of that leaf the
+`Binds` is what follows: the row `u` returns is its table's row at its index, for every opening of that leaf the
 table's root accepts, or SHA-512 collides on what the two checks hashed. `Reads` collects a circuit's read units with
-their pickers and tables, and `Reads.finder` is the collision finder their binding reads `Claims.ExpectedCR` at.
+their tables, and `Reads.finder` is the collision finder their binding reads `Claims.ExpectedCR` at.
 -/
 
 @[expose] public section
@@ -167,28 +168,23 @@ structure RegisteredRows (consts : Fin C.N → Option Bool) {n : ℕ} (P : Verit
   ok_eq : q.okOf X = true
   consts_hold : ∀ g ∈ P.io u, ∀ b, consts g = some b → bit X g = b
 
-/-- **The read's index is its picker's** in `X`: its index gates hold the bits the picker's gates `idx` hold (a
-router's output, an indexer's, or a token's). -/
-def Wired (q : Ports C) (idx : Fin 32 → Fin C.N) (X : C.Transcript) : Prop := ∀ i, bit X (q.tok i) = bit X (idx i)
-
-/-- **The read returns its table's row at the picked index** in `X`, for the table under the root `r`, the domain id
-`d` and the hm96 key `key`: for every opening `o₀` the root accepts at the index the picker's gates `idx` hold, the row
-the read returns is `o₀`'s, or `H` or `G` collides on what the read's check and `o₀`'s hashed. -/
-def Binds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (q : Ports C) (idx : Fin 32 → Fin C.N)
-    (r d : Verity.Digest) (X : C.Transcript) : Prop :=
-  ∀ o₀ : Hash.RowLeaf.Opening, Hash.RowLeaf.accepts H G (q.verifier key d) r (num (bits X idx)) o₀ →
+/-- **The read returns its table's row at its index** in `X`, for the table under the root `r`, the domain id `d` and
+the hm96 key `key`: for every opening `o₀` the root accepts at the index the read's index gates hold, the row the read
+returns is `o₀`'s, or `H` or `G` collides on what the read's check and `o₀`'s hashed. -/
+def Binds (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) (q : Ports C) (r d : Verity.Digest) (X : C.Transcript) :
+    Prop :=
+  ∀ o₀ : Hash.RowLeaf.Opening, Hash.RowLeaf.accepts H G (q.verifier key d) r (q.tokOf X) o₀ →
     q.hOf X = o₀.row ∨
-      Hash.CollisionIn H (Hash.RowLeaf.outerHashed H G (q.verifier key d) (num (bits X idx)) (q.opening X) ++
-        Hash.RowLeaf.outerHashed H G (q.verifier key d) (num (bits X idx)) o₀) ∨
+      Hash.CollisionIn H (Hash.RowLeaf.outerHashed H G (q.verifier key d) (q.tokOf X) (q.opening X) ++
+        Hash.RowLeaf.outerHashed H G (q.verifier key d) (q.tokOf X) o₀) ∨
       Hash.CollisionIn G (Hash.RowLeaf.innerHashed G (q.verifier key d) (q.opening X) ++
         Hash.RowLeaf.innerHashed G (q.verifier key d) o₀)
 
-/-- **A circuit's read units**: which units of `n` read a table, each one's ports, its picker's gates, and its table: the
-root, the domain id and the opening of each row. -/
+/-- **A circuit's read units**: which units of `n` read a table, each one's ports, and its table: the root, the domain
+id and the opening of each row. -/
 structure Reads (C : Verity.Circuit) (n : ℕ) where
   units : Finset (Fin n)
   port : Fin n → Ports C
-  pick : Fin n → Fin 32 → Fin C.N
   root : Fin n → Verity.Digest
   domain : Fin n → Verity.Digest
   table : Fin n → ℕ → Hash.RowLeaf.Opening
@@ -203,11 +199,11 @@ def Committed (H G : Hash.Msg → Verity.Digest) (key : Hash.Msg) : Prop :=
   ∀ u ∈ R.units, ∀ i < (R.port u).count,
     Hash.RowLeaf.accepts H G ((R.port u).verifier key (R.domain u)) (R.root u) i (R.table u i)
 
-/-- The index read `u`'s picker's gates hold in `X`. -/
-def index (u : Fin n) (X : C.Transcript) : ℕ := num (bits X (R.pick u))
+/-- The index read `u`'s index gates hold in `X`. -/
+def index (u : Fin n) (X : C.Transcript) : ℕ := (R.port u).tokOf X
 
 /-- **What read `u`'s check and its table's check hashed** in `X`, under one hash `H`: the read's opening and its
-table's opening at the picked index, each checked there. -/
+table's opening at the read's index, each checked there. -/
 def hashedAt (H : Hash.Msg → Verity.Digest) (key : Hash.Msg) (u : Fin n) (X : C.Transcript) : List Hash.Msg :=
   Hash.RowLeaf.outerHashed H H ((R.port u).verifier key (R.domain u)) (R.index u X) ((R.port u).opening X) ++
     Hash.RowLeaf.outerHashed H H ((R.port u).verifier key (R.domain u)) (R.index u X) (R.table u (R.index u X)) ++
