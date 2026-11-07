@@ -61,6 +61,7 @@ GPU=1; [ "${ST_CPU:-0}" = 1 ] && GPU=0
 # CUDA 13.3 unpacked without root, as zk_cost.sh does, then the prover (flock-circuit --features gpu)
 CR=$X/cuda-root; todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3"; seen=
 [ $GPU = 1 ] || todo=
+[ -n "$todo" ] && ! apt-cache show cuda-nvcc-13-3 > /dev/null 2>&1 && [ "$(id -u)" = 0 ] && apt-get update -qq > "$O/apt-update.log" 2>&1
 while [ -n "$todo" ]; do
   set -- $todo; q=$1; shift; todo="$*"
   case " $seen " in *" $q "*) continue ;; esac
