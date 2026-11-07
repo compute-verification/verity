@@ -499,7 +499,7 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
     assert isinstance(c, AW.Capped) and c.name == AW.CAPPED and c.digest == want
     assert c.digest == "2f470d2b6aadc53b707b0bd65820da4c55583eb18667eb3dce128aabb9dddab855473d52af758a630a2958e3555f7cafbc68e9238c0188cd9f8ef551abca2a9a"
     assert ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=8192).digest != want
-    assert ADV.registered_compiler("inner-compiler", "cd" * 64).cap_bits == ADV.CAP_BITS
+    assert ADV.registered_compiler("inner-compiler").cap_bits == ADV.CAP_BITS
 
 
 @pytest.mark.parametrize("cap", [0, 7, True, "8"])
