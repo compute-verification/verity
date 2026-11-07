@@ -172,6 +172,76 @@ def test_install_wraps_once_and_skips_absent_ops():
     assert ns.persistent_topk.real.__name__ == "real"
 
 
+#: the pin's schemas (csrc/libtorch_stable/torch_bindings.cpp), for toy CPU ops of the same names
+SCHEMAS = {
+    "top_k_per_row_prefill": "(Tensor logits, Tensor row_starts, Tensor row_ends, Tensor(a!) indices, int num_rows, "
+                             "int stride0, int stride1, int top_k) -> ()",
+    "top_k_per_row_decode": "(Tensor logits, int next_n, Tensor seq_lens, Tensor(a!) indices, int num_rows, "
+                            "int stride0, int stride1, int top_k) -> ()",
+    "persistent_topk": "(Tensor logits, Tensor lengths, Tensor(a!) output, Tensor workspace, int k, "
+                       "int max_seq_len) -> ()",
+    "cooperative_topk": "(Tensor logits, Tensor lengths, Tensor(a!) output, Tensor workspace, int k, "
+                        "int max_seq_len) -> ()",
+}
+TOY_OUT = {"top_k_per_row_prefill": 3, "top_k_per_row_decode": 3, "persistent_topk": 2, "cooperative_topk": 2}
+
+
+def toy_ops(torch, ns: str, names):
+    """``torch.ops.<ns>`` with toy CPU ops of `SCHEMAS`'s names, each filling its output with 7."""
+    lib = torch.library.Library(ns, "DEF")
+    for name in names:
+        def impl(*args, i=TOY_OUT[name]):
+            args[i].fill_(7)
+        lib.define(name + SCHEMAS[name])
+        lib.impl(name, impl, "CPU")
+    return lib, getattr(torch.ops, ns)
+
+
+def toy_args(torch, name):
+    k, logits = 4, torch.zeros(2, 16)
+    out, lens, ws = torch.zeros(2, k, dtype=torch.int32), torch.zeros(2, dtype=torch.int32), torch.zeros(1)
+    return out, {"top_k_per_row_prefill": (logits, lens, lens, out, 2, 16, 1, k),
+                 "top_k_per_row_decode": (logits, 1, lens.reshape(2, 1), out, 2, 16, 1, k),
+                 "persistent_topk": (logits, lens, out, ws, k, 16),
+                 "cooperative_topk": (logits, lens, out, ws, k, 16)}[name]
+
+
+def test_wrapped_ops_keep_their_overloads_under_a_dispatch_mode(monkeypatch):
+    """A TorchDispatchMode (a capture's recorder) makes torch look the op up as ``torch.ops.<ns>.<name>.default``,
+    which a bare wrapper lacks: the control fails that way, and `install`'s wrappers pass."""
+    torch = pytest.importorskip("torch")
+    from torch.utils._python_dispatch import TorchDispatchMode
+
+    class Seen(TorchDispatchMode):
+        def __init__(self):
+            super().__init__()
+            self.funcs = []
+
+        def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+            self.funcs.append(func)
+            return func(*args, **(kwargs or {}))
+
+    monkeypatch.setattr(dsa_topk, "_capturing", lambda: False)
+    _bare_lib, bare = toy_ops(torch, "dsa_topk_bare", ["persistent_topk"])
+    real = bare.persistent_topk
+    bare.persistent_topk = lambda *a: real(*a)
+    _, args = toy_args(torch, "persistent_topk")
+    with Seen(), pytest.raises(AttributeError, match="default"):
+        bare.persistent_topk(*args)
+
+    _lib, ns = toy_ops(torch, "dsa_topk_toy", dsa_topk.OPS)
+    canon = Recorder()
+    dsa_topk.install(ns, canon)
+    for name in dsa_topk.OPS:
+        out, args = toy_args(torch, name)
+        with Seen() as seen:
+            getattr(ns, name)(*args)
+        fn = getattr(ns, name)
+        assert fn.dsa_topk_canon is canon and seen.funcs == [fn.real.default] and fn.default is fn.real.default
+        assert bool((out == 7).all())
+    assert [r[0] for r in canon.runs] == list(dsa_topk.OPS)
+
+
 def test_register_is_off_unless_asked(monkeypatch):
     calls = []
     monkeypatch.setattr(dsa_topk, "install", lambda *a, **k: calls.append(a))
