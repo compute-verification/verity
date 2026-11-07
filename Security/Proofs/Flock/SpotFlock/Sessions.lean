@@ -82,7 +82,7 @@ noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
     · exact k_of_stmtOk h ‹_›
     · cases hm
   rounds_iff x u t := by
-    have e : ∀ t : Fin (3 + k₀ h), t ∈ ((univ.filter fun t : Fin (3 + k₀ h) => 2 < t.val).filter
+    have e : ∀ t : Fin ((V h).k x), t ∈ ((univ.filter fun t : Fin ((V h).k x) => 2 < t.val).filter
         fun t => (order h x).second < t) ↔ 3 ≤ t.val := fun t => by
       rw [Finset.mem_filter, Finset.mem_filter]
       show (t ∈ univ ∧ 2 < t.val) ∧ 1 < t.val ↔ 3 ≤ t.val

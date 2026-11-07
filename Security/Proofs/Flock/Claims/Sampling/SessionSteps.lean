@@ -113,6 +113,7 @@ theorem stepWith_refused (x : Msg) (v : List Msg → OC Out) (hv : v [[]] = .ret
 
 end Rounds
 
+omit [Fintype Coin] [Nonempty Coin] in
 /-- **Coins that agree below `n`** are the same coins at up to `n` messages. -/
 theorem coins_eq {k n m : ℕ} {r r' : Fin k → Coin} (h : ∀ t : Fin k, t.val < n → r' t = r t) (hm : m ≤ n) :
     (List.range m).map (coinSeq r') = (List.range m).map (coinSeq r) := by
@@ -120,9 +121,9 @@ theorem coins_eq {k n m : ℕ} {r r' : Fin k → Coin} (h : ∀ t : Fin k, t.val
   intro i hi
   rw [List.mem_range] at hi
   by_cases hk : i < k
-  · simp only [coinSeq, dif_pos hk]
+  · simp only [coinSeq, hk, ↓reduceDIte]
     exact h ⟨i, hk⟩ (show i < n by omega)
-  · simp only [coinSeq, dif_neg hk]
+  · simp only [coinSeq, hk, ↓reduceDIte]
 
 namespace SessionSteps
 
@@ -132,9 +133,11 @@ variable {D : Deploy Coin Col T} (S : SessionSteps D)
 def emb (x : Msg) {k : ℕ} (hk : k = S.kS x) (i : Fin k) : Fin (D.V.k x) :=
   ⟨S.pre x + i.val, by have := i.isLt; have := S.k_eq x; omega⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 theorem emb_strictMono (x : Msg) {k : ℕ} (hk : k = S.kS x) : StrictMono (S.emb x hk) :=
   fun _ _ hij => Nat.add_lt_add_left hij _
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
 /-- **A unit's session rounds are the rounds after the prefix**, each Flock round's once. -/
 theorem mem_rounds_iff (x : Msg) (u : ℕ) {k : ℕ} (hk : k = S.kS x) (t : Fin (D.V.k x)) :
     t ∈ D.rounds x u ↔ ∃ i, S.emb x hk i = t := by
@@ -147,6 +150,7 @@ theorem mem_rounds_iff (x : Msg) (u : ℕ) {k : ℕ} (hk : k = S.kS x) (t : Fin 
   · rintro ⟨i, rfl⟩
     exact Nat.le_add_right _ _
 
+omit [DecidableEq Col] [Zero Col] in
 /-- **The prefix's rounds**: from a transcript `ms` of answered rounds of the prefix, `j` more rounds either answer every
 prefix round, reaching a transcript `ms'` of all of it whose statement has the session's `kS x` rounds, or refuse one,
 ending the run; and both, with the transcript and the prover's calls, are the same at every coins `r'` that agree with
@@ -279,9 +283,8 @@ theorem sessionRuns_of_steps {D : Deploy Coin Col T} (S : SessionSteps D) (H : M
             omega
           show coinSeq r' (S.pre x + i) = coinSeq (fun i => r' (S.emb x hk i)) i
           by_cases hi : i < D.flock.V.k (S.stmt x (ms.map Prod.fst))
-          · simp only [coinSeq, dif_pos (hiff.2 hi), dif_pos hi]
-            rfl
-          · simp only [coinSeq, dif_neg (mt hiff.1 hi), dif_neg hi])
+          · simp only [coinSeq, hiff.2 hi, hi, ↓reduceDIte] <;> rfl
+          · simp only [coinSeq, mt hiff.1 hi, hi, ↓reduceDIte])
         (D.flock.V.k (S.stmt x (ms.map Prod.fst))) [] [] ⟨[], [], [], .rej⟩
       simp only [List.append_nil, List.nil_append] at this
       exact this
