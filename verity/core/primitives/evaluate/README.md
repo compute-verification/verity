@@ -26,7 +26,7 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
   Hopper's and sm_120's E4M3, sm_120's E5M2, NVFP4 and MXFP4), on copies of Security's step semantics: `Spec.lean` of
   `Security/Definitions/Core/TC/{Pipeline,Spec}.lean` (`tc_dot_total`), `Fp8Atom.lean` of `Pouw/Fp8Atom/{E4M3,Atom}.lean` and
   `Pouw/PearlC/Sm120.lean` (`tc_dot_total_e4m3`), `Fp4.lean` of `Pouw/PearlC/Fp4.lean` (`BlockScaledAlignAdd`). The E5M2 step
-  and the FP4 primitives' rules outside the block-scaled model (NaN scales, non-finite accumulators, MXFP4's overflow to
+  and the FP4 primitives' rules outside the scale-group model (NaN scales, non-finite accumulators, MXFP4's overflow to
   `±inf`) are transcribed from the Python; Security has none yet.
 - `Evaluate/Words.lean`: PoUW's `Pouw*` word primitives and the three `Ncp*` (six copied from
   `Security/Definitions/Pouw/PearlC/RowPrims.lean`, the rest transcribed). `Evaluate/Libdevice.lean`: the sampler's
@@ -42,7 +42,10 @@ this package adds the primitives. It is code, so it requires nothing of `Securit
   (`Difftest.serve`, [harness](../../difftest/README.md)): `{"fn": "evaluate", "input": {"program": <descriptor>, "inputs":
   [arg, ...]}}` gives `{"output": [word, ...]}` or `{"reject": "<reason>"}`, with one argument per parameter of the program
   function: its words in leaf order, or `{"table": "gelu_tanh_bf16" | "tanh_rn"}` for a registered table, which the evaluator
-  computes where a gate reads it (`tanh_rn`'s 2^28 words never enter the request). `library_table` and `registered_table`
+  computes where a gate reads it (`tanh_rn`'s 2^28 words never enter the request). `gate` (`{"program", "gate"}`) gives a
+  gate of the canonical layout (`Flock.Program.Gate`: index, primitive, operands, activation) and `partition` (`{"program",
+  "X"}`) the Program's `Q_word{X}` evaluation (`Flock.Extract.Partition`: per Call its Definition, units and owners); the suite
+  holds their Python mirrors, `layout.Gate` and `partition_object.Partition`, to them. `library_table` and `registered_table`
   (`{"name": ...}`) give a MUFU table's SHA-512 and a registered table's SHA-256 (over its entries as little-endian u32), which
   the suite holds to the library's and to Flock's pins.
 
