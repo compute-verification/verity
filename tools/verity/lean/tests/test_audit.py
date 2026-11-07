@@ -4702,7 +4702,7 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
     for m in ("Init", "Old", "A", "Unrelated"):
         (cache / f"{m}.json").write_text("{}")
         os.utime(cache / f"{m}.json", (1000, 1000))
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     argv = []
 
@@ -4737,6 +4737,203 @@ def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monk
     monkeypatch.setattr(A.os, "replace", replace)
     A.store_replay(tmp_path, "k", "M")
     assert json.loads((tmp_path / "k.json").read_text())["module"] == "M" and not list(tmp_path.glob(".*.tmp"))
+
+
+def test_free_memory_is_the_least_of_the_machines_available_and_what_each_cgroup_has_left(tmp_path):
+    """`free_gib`: `MemAvailable`, bounded by each limited cgroup at or above this one, less what it uses but its
+    inactive page cache."""
+    proc, cg = tmp_path / "proc", tmp_path / "cg"
+    (proc / "self").mkdir(parents=True)
+    (proc / "meminfo").write_text("MemTotal: 1000000000 kB\nMemAvailable: 500000000 kB\n")
+    (proc / "self" / "cgroup").write_text("0::/a/b\n")
+    (cg / "a" / "b").mkdir(parents=True)
+    (cg / "a" / "memory.max").write_text(str(300 * 2**30))
+    (cg / "a" / "memory.current").write_text(str(200 * 2**30))
+    (cg / "a" / "memory.stat").write_text(f"anon 1\ninactive_file {50 * 2**30}\n")
+    (cg / "a" / "b" / "memory.max").write_text("max")
+    assert A.free_gib(proc, cg) == 150
+    (cg / "a" / "memory.max").write_text("max")
+    assert round(A.free_gib(proc, cg)) == 477
+
+
+def test_run_hands_over_each_line_of_standard_output_as_it_comes_and_returns_the_whole(tmp_path):
+    lines = []
+    rc, text = A.run([sys.executable, "-c", "import sys; print('a'); print('b'); print('e', file=sys.stderr)"], tmp_path,
+                     tmp_path / "log", on_line=lines.append)
+    assert rc == 0 and lines == ["a\n", "b\n"] and text == "a\nb\ne\n" == (tmp_path / "log").read_text()
+
+
+def pipeline(tmp_path, monkeypatch, files, loop=False, **kw):
+    """A `Pipeline` of a package holding ``files`` under the root `P`; without ``loop``, no batch runs on its own."""
+    pkg = tmp_path / "pkg"
+    for rel in files:
+        (pkg / rel).parent.mkdir(parents=True, exist_ok=True)
+        (pkg / rel).write_text("")
+    if not loop:
+        monkeypatch.setattr(A.Pipeline, "_loop", lambda self: None)
+    return A.Pipeline(pkg, {"roots": ["P"]}, "t", tmp_path / "work", tmp_path / "cache", False, **kw)
+
+
+def test_a_pipeline_batches_the_modules_the_build_reports_once_enough_wait_and_memory_and_the_heavy_slot_are_free(
+        tmp_path, monkeypatch):
+    """A batch takes the package's modules under its roots that Lake reports built, not a facet, another package's module
+    or one outside the roots, once `batch` of them wait, `PIPELINE_FREE_GIB` is free and `_HEAVY_REPLAY` is free, which it
+    never waits for; after `end`, none starts."""
+    free = [10**6]
+    monkeypatch.setattr(A, "free_gib", lambda: free[0])
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean", "P/B.lean", "Other.lean"], batch=2)
+    for line in ("✔ [1/9] Built P.A (1.2s)\n", "✔ [2/9] Built P.A:c.o (900ms)\n", "✔ [3/9] Built Mathlib.X (2s)\n",
+                 "✔ [4/9] Built Other (2s)\n", "✔ [5/9] Replayed P.B\n"):
+        p.line(line)
+    assert p.pending == ["P.A"] and not p._go()
+    p.line("✔ [6/9] Built P.B (1m 2.5s)\n")
+    free[0] = A.PIPELINE_FREE_GIB - 1
+    assert not p._go()
+    free[0] = A.PIPELINE_FREE_GIB
+    assert A._HEAVY_REPLAY.acquire(blocking=False)
+    try:
+        assert not p._go() and not p.held
+    finally:
+        A._HEAVY_REPLAY.release()
+    assert p._go() and p.held
+    A._HEAVY_REPLAY.release()
+    p.held = False
+    p.end()
+    assert p._go() and not p.held
+
+
+def test_a_pipeline_runs_one_batch_at_a_time_in_the_heavy_slot_and_none_after_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(A, "free_gib", lambda: 10**6)
+    ran, started = [], threading.Event()
+
+    def replay(self, mods):
+        if free := A._HEAVY_REPLAY.acquire(blocking=False):
+            A._HEAVY_REPLAY.release()
+        ran.append((list(mods), not free))
+        started.set()
+
+    monkeypatch.setattr(A.Pipeline, "_replay", replay)
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean", "P/B.lean", "P/C.lean"], loop=True, batch=2)
+    p.line("Built P.A (1s)\n")
+    p.line("Built P.B (1s)\n")
+    started.wait()
+    p.line("Built P.C (1s)\n")
+    p.end()
+    p.thread.join()
+    assert ran == [(["P.A", "P.B"], True)] and p.pending == ["P.C"]
+    assert A._HEAVY_REPLAY.acquire(blocking=False)
+    A._HEAVY_REPLAY.release()
+
+
+def test_a_batch_reads_copies_of_the_files_the_build_can_write_keyed_as_those_bytes_in_place(tmp_path, monkeypatch):
+    """A batch's `.olean` files under a `.lake` the build writes (the package's, a fetched package's) are copied once into
+    the snapshot, every part, and named there, the search path too; the toolchain's stay where they are. Their keys are
+    those of the same bytes in place, so the final replay finds what a batch stored; a file the build rewrites after its
+    copy leaves the copy, and the keys of every later batch, as they were, and the final replay finds none of them."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean", "P/B.lean"])
+    lib = p.pkg / ".lake" / "build" / "lib" / "lean"
+    dep = p.pkg / ".lake" / "packages" / "dep" / ".lake" / "build" / "lib" / "lean"
+    tc = (tmp_path / "toolchain" / "lib" / "lean").resolve()
+    files = {"P.A": lib / "P" / "A.olean", "P.B": lib / "P" / "B.olean", "D": dep / "D.olean", "Init": tc / "Init.olean"}
+    imports = {"P.A": ["D", "Init"], "P.B": ["P.A"], "D": ["Init"], "Init": []}
+    for m, f in files.items():
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(m)
+    (lib / "P" / "A.olean.private").write_text("A's private part")
+    (lib / "P" / "A.ir").write_text("A's code")
+
+    def run(argv, cwd, log=None, timeout=None, on_line=None):
+        Path(argv[argv.index(str(A.TOOL / "Graph.lean")) + 1]).write_text(json.dumps({
+            "search": [str(lib), str(dep), str(tc)],
+            "graph": {m: {"olean": str(f), "imports": imports[m]} for m, f in files.items()}}))
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
+    live = {"graph": {m: {"olean": str(f), "imports": imports[m]} for m, f in files.items()}}
+    for b in ("b1", "b2"):
+        (tmp_path / b).mkdir()
+    facts, search = p.copied(["P.A", "P.B"], tmp_path / "b1")
+    g = facts["graph"]
+    assert facts["modules"] == ["P.A", "P.B"] and g["Init"]["olean"] == str(files["Init"]) and search[2] == str(tc)
+    for m in ("P.A", "P.B", "D"):
+        assert Path(g[m]["olean"]).is_relative_to(p.snapshot) and Path(g[m]["olean"]).read_text() == m
+    assert Path(g["P.A"]["olean"] + ".private").read_text() == "A's private part"
+    assert Path(g["P.A"]["olean"]).with_suffix(".ir").read_text() == "A's code"
+    assert Path(search[0]) / "P" / "A.olean" == Path(g["P.A"]["olean"]) and Path(search[1]) / "D.olean" == Path(g["D"]["olean"])
+    keys = A.replay_keys(facts, "t")
+    assert keys == A.replay_keys(live, "t")
+    files["D"].write_text("rewritten by the build")
+    later, _ = p.copied(["P.B"], tmp_path / "b2")
+    assert Path(later["graph"]["D"]["olean"]).read_text() == "D" and A.replay_keys(later, "t") == keys
+    assert A.replay_keys(live, "t")["P.B"] != keys["P.B"]
+
+
+def kernel_control(pkg: Path) -> dict:
+    """``pkg``, a copy of the control, given `violations.json`'s `kernel` case: a declaration that skipped the kernel."""
+    kernel = json.loads((HERE / "fixtures" / "violations.json").read_text())["kernel"]
+    for rel, text in kernel["write"].items():
+        (pkg / rel).write_text(text)
+    for rel, (old, new) in kernel["replace"].items():
+        (pkg / rel).write_text((pkg / rel).read_text().replace(old, new))
+    A.dump(pkg, A.load(pkg) | kernel["policy"])
+    return kernel
+
+
+def piped_build(pkg: Path, tmp_path: Path, monkeypatch, closure: bool) -> A.Pipeline:
+    """``pkg`` built, its build's lines given to a `Pipeline` that stores into `tmp_path/piped`, and one batch run on
+    every module the build reported."""
+    monkeypatch.setattr(A.Pipeline, "_loop", lambda self: None)
+    pipe = A.Pipeline(pkg, A.load(pkg), (pkg / "lean-toolchain").read_text().strip(), tmp_path / "work",
+                      tmp_path / "piped", closure)
+    rc, text = A.run(["lake", "build"], pkg, tmp_path / "build.log", on_line=pipe.line)
+    assert rc == 0, text
+    pipe._replay(list(pipe.pending))
+    return pipe
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_pipelined_replay_checks_and_rejects_what_the_replay_without_it_does(tmp_path, monkeypatch):
+    """On a real build with a declaration that skipped the kernel: a batch on every module the build reported, run on
+    copies of their files, stores the four the kernel accepted, `Control` (which imports the bad one) included. The replay
+    after the build then checks `Control.Bad` alone, reuses the four, and fails as the replay without a batch fails on a
+    cold cache, which checks all five: the same modules, and the same rejection. Only a real build shows Lake's lines,
+    `Graph.lean`'s graph and the keys of the copies meeting those of the files in place."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    kernel = kernel_control(pkg)
+    pipe = piped_build(pkg, tmp_path, monkeypatch, closure=False)
+    own = sorted(m for m in A.lean_modules(pkg) if A.under(["Control"], m))
+    (batch,) = pipe.batches
+    assert "error" not in batch and batch["modules"] == batch["checked"] == len(own) == 5, batch
+    assert any(f.startswith(kernel["fails"]) for f in batch["failures"]), batch
+
+    def audit(cache):
+        return A.audit(pkg, tmp_path / cache / "out", update=True, runs=False, log=lambda *_: None,
+                       replay_cache=tmp_path / cache)
+
+    def rejections(rep):
+        return [f.split("\n")[0] for f in rep["failures"] if f.startswith("replay")]
+    serial, piped = audit("serial"), audit("piped")
+    assert counts(serial) == (5, 0) and counts(piped) == (1, 4), "Control.Bad alone"
+    assert rejections(piped) == rejections(serial) and rejections(serial)[0].startswith(kernel["fails"])
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_pipelined_closure_replay_of_module_system_files_leaves_the_final_one_nothing_to_check(tmp_path, monkeypatch):
+    """With `--closure`, on `module` files, whose private parts the batch copies: the batch checks the own modules and the
+    toolchain modules they import, and the replay after the build reuses every one of them. Only the closure's cold
+    replay (the toolchain's `Init`) shows a batch storing closure modules the final replay then finds."""
+    pkg = tmp_path / "modules"
+    shutil.copytree(A.FIXTURES / "modules", pkg, ignore=shutil.ignore_patterns(".lake"))
+    pipe = piped_build(pkg, tmp_path, monkeypatch, closure=True)
+    (batch,) = pipe.batches
+    assert "error" not in batch and batch["failures"] == [] and batch["closure_checked"] > 100, batch
+    rep = A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=tmp_path / "piped",
+                  closure=True)
+    assert not [f for f in rep["failures"] if f.startswith("replay")], rep["failures"]
+    assert counts(rep) == (0, batch["checked"]) and rep["replay"]["closure"]["checked"] == 0, rep["replay"]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
