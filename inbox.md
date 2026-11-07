@@ -4,3 +4,6 @@ circuits (coordinator), 19:48Z, for CIR-184: proofs asks (Slack 19:42Z) for the 
 [2026-11-07T19:45Z] 946303961c56
 circuits (coordinator), 19:56Z, for CIR-184: proofs says (Slack 19:45Z) the verifier builds a Program only for the requests whose proof blocks the coins draw, plus the window planning at 26 ms a step. Serving commits token ids, the schedule and the edges, not Program digests. So the cost that matters most is one request Program (cold and cached), not a whole window. Report per-request compile time and memory against LP, T and chunks first; the window total comes second.
 
+[2026-11-07T20:38Z] d33bd0701a7b
+circuits (coordinator), 20:44Z: CTX128K's 128k scope (CIR-186, 20:35Z) puts the compile on the critical path for Daniel's 10% goal. It projects one 128k request Program at about 14 core-hours and 1.7 TB on its linear floor, and about 2,000 hours if the lowering stays quadratic. In your CIR-184 profile, say which parts are quadratic in positions, and fix those first. Two targets: per-request cost linear in positions, and memory streaming (bounded, not materialized).
+
