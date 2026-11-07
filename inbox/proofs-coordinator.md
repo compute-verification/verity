@@ -786,3 +786,43 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   - **PR 2's state:** the proof is drafted on a local branch and elaborating remotely. It rests on one weighted Rankin
     lemma, `admissibleTwo_rankin_weight`, which piece 1's sets theorem now uses as well, so its statement is unchanged.
     The served bound then reduces to an inequality in ℕ. I'll push it to `cursor/proofs-pcrankin-c327` once PR 1 is marked.
+
+- 19:08Z (ZKTWO) **The two-stage ZK statement is pushed, with its proof:** `cursor/proofs-zktwo-316a` @ `86b69ed3ba`,
+  on #7354's head. The generic statement and its proof elaborate with no `sorry` (r20261107-190240-9426). The deployed
+  instance is building (r20261107-190100-e1b4).
+  - **Route:** I extended #7354's `SampledAuditAny` line rather than the generic compiler's `ZkCompiled`, for four reasons.
+    - This line has a deployed instance today: `SessionLoopZKAnyDeployed` at the value service's hm96 leaves.
+      `ZkCompiled` has none even for one stage, because `ZkSessions`' `routed` and `shaped` need the session composer in
+      Lean (TSVERIFY's PR 3).
+    - `ZkCompiled.step` frames every message outside a session as independent of the witness, but the interior roots
+      are a message between the stages that depends on it. That route needs a new two-stage framing, a re-proved hybrid
+      (`compilerZK` is 658 lines) and hiding as a separate step: about twice ZKSCOPE's estimate.
+    - `Definitions.Claims.SamplingGeneric` opens `Claims.Recursion`'s combinators, and `compilerZK` imports
+      `Claims.Recursion.SeqPrefix`, until SPOTARCH's M1 lands.
+    - This line is already in layers: (b) `SampledAuditTwoAny` is generic over any value service and any sessions
+      simulated per outcome (39 modules, none recursive); (a) is Flock's `ZKOut` at the session loop; (c)
+      `SampledAuditTwoAnyDeployed` is the deployment. Nothing imports `Claims/Recursion/*`.
+  - **The statements:**
+    - `Flock.Guarantees.SampledAuditTwoAny` covers a stream of r registrations of one value service, whose values and
+      stack choices are functions of the uniform first-stage sample χ₁ (the interior values are the replay sample's).
+      Its bound is the stream bound (`RegisteredStreamLeakage`) averaged over χ₁, χ₂ and the simulator's coins: for each
+      admitted choice d, the simulator's probability on an ideal stream of v₀ plus the PRF gap at d, plus δ; then the
+      forge term averaged over χ₁; then ε(s).
+    - `Flock.Guarantees.SampledAuditTwoAnyDeployed` is that at the deployed session loop, with δ = r·N·2δ₁ from a new
+      `ideal_hm96_stream`.
+  - **Premises:** the one-stage statement's, with nothing new. Hiding enters only as terms: r·N·2δ₁
+    (`hash-derived-key`), and the stream's PRF and forge terms (`prf/sha-512`). Each session's `UnCausal ∧ TrustsStop`
+    reduces to `Loop.Src` at the honest worker by #7447, which isn't in my base; I'll merge it after ZKLAND's restack.
+  - **A question for you:** both statements, like the one-stage ones, also take `ZkServerOwnUser` (the serving stack
+    can't read the server's key). The lock has it `open` under LEAN-186, beside `Loop.Src` and `Hm96Hiding`, but
+    today's rulings name only those two as ZK-only trust. Should I ask Daniel to rule it the same way (it is the
+    firewall host's user separation), or keep it open?
+  - **A finding:** the interior registration's salts come from the server's one key, as the boundary's do
+    (`Flock/Firewall/Salts.lean`). So the two registrations can't be bounded separately and added; the stream bound
+    covers the shared key. That settles ZKSCOPE's open check.
+  - **Size:** 464 lines with the proof, inside ZKSCOPE's estimate. Still to do: the deployed build, witnesses,
+    listing, and a corollary at TSVERIFY's definitions.
+  - **For TSVERIFY:** my statement takes the samples as any uniform finite types and the interior values as any
+    function of the first-stage sample. Once #7354 sits on `checked`, I'll add the corollary at PR 3's concrete
+    `SamplingDeploy.Code`. Which definitions there will name the first-stage coin bytes, the second-stage coin bytes
+    and the interior values?
