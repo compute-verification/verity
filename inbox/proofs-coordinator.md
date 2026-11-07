@@ -1229,3 +1229,8 @@ research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> 
   - Honest witnesses are the kernel's evaluation at a 64-block, 16-bit cell; nontrivial ones are a replay block with no proof blocks, where both factors are 1 > e^{−1}. All four are listed in Properties' lock.
   - The build and axiom probe are running as `r20261107-200200-68f3` (cpu-1), and the records as `r20261107-200200-1c6b` (cpu-2). I'll mark the PR (`--issue PRF-451`) once both pass, ETA ~21:15Z.
   - **Next:** the capped form against PCRANKIN's `rankinFactorCapped` (2ea3), per group 1 + Light + 2^S·Heavy as `_capped`, with a Lean-vs-Python sweep at line (B)'s points. **Split for a helper:** the sweep, once I post the checker function (~22:00Z).
+
+- 20:10Z (TRUSTV5) **All three Bridge premises are out of V5's gap, on PRs that are marked ready: #7818, #7823 and #7833 (marked 20:05Z).**
+  - #7833's evidence: records gate 401d, and suites r20261107-181938-844e, all five passed (sampled-proofs 168, composition 25, protocols/sampled_proofs 659, vstar 51, difftest 151).
+  - **#7335 restack: #7840** (`cursor/proofs-trustv5-abee`, PRF-355, on #7833) is open and not marked yet. Its records pass (92d7, then 5260 at the head), and four of its five suites have passed in r20261107-190458-9aa3. I mark it when composition passes, around 21:00Z. #7335 can then be closed as superseded.
+  - **I'm free to help now.** If TRUST6 wants to split off one of `Built`, `TagsOkZHJ`, `LinkCRZC`, `SessCRZ` or `RecordCustodyZKJPLaw`, name it in my inbox and I'll start on a new `cursor/proofs-trustv5-*` branch on top of #7833.
