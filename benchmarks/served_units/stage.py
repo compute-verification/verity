@@ -55,6 +55,8 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
     pe-w2         expert, at a random tok (H = 3072 and 96 are w13's row and scale reads, 4096 and 4 w2's; each staged read is
                   checked to open, ok = 1 and h the registered row); `MoeExpertFp8BlockGemm_v4{K=6144,N=1}` (w13, mma.sync) and
                   `MoeExpertFp8BlockGemmW_v4{K=256,N=32}` (w2, wgmma) on random e4m3 operands and scales.
+    st-w13        pe-w13 and pe-w2 weights-stationary: M token rows (static M) of one expert against one block of its weight
+    st-w2         rows, the GEMM batched over the rows with w and ws shared, so the weight rows are one row of the block.
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -75,7 +77,8 @@ import numpy as np
 from circuit_check import targets as TG
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import program_digest
-from verity.ml.circuits.defs import bind
+from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.types import Array
 from verity.ml.circuits.ops import gemm as OG
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2
@@ -229,6 +232,37 @@ UNITS: dict[str, Unit] = {
     "pe-w2": _window(lambda S: bind(BM.MoeExpertFp8BlockGemmWV4, **S, DOT=BG.HopperE4m3QgmmaDot32),
                      {"K": 256, "N": 32, **_GEMM_ST, "SWAP": True}, lambda S: S["K"] * S["N"]),
 }
+
+
+def _stationary_sig(routed: bool):
+    """`fp8_moe.gemm_sig`'s with M token rows: xq, sx (and g) an array of M, w and ws once, the outputs M rows of N."""
+    def sig(S):
+        params, ret = fp8_moe.gemm_sig(routed, BM.E4M3, BM.F32, BM.BF16)(S)
+        return tuple((p, Array(S.M, t) if p in ("xq", "sx", "g") else t) for p, t in params), Array(S.M, ret)
+    return sig
+
+
+def _stationary_body(gemm):
+    def body(B, S, *args):
+        """M token rows against one expert's block of weight rows: the per-expert GEMM batched over the rows, its w and ws
+        read by every row, so the block's weight rows are a row of the proof block once, not once a token row."""
+        one = bind(gemm, **{k: getattr(S, k) for k in ("K", "N", "G", "KB", "SWAP", "DOT")})
+        return B.batch(one, *args, axes=(0,) * (len(args) - 2) + (None, None))
+    return body
+
+
+_ST = ("M", "K", "N", "G", "KB", "SWAP", "DOT")
+#: weights-stationary forms of `pe-w13` and `pe-w2` (benchmark Definitions, unregistered)
+MoeExpertFp8BlockGemmRows = CompositeDefinition("MoeExpertFp8BlockGemmRows", 1, _ST, _stationary_sig(False),
+                                                _stationary_body(BM.MoeExpertFp8BlockGemmV4), register=False)
+MoeExpertFp8BlockGemmWRows = CompositeDefinition("MoeExpertFp8BlockGemmWRows", 1, _ST, _stationary_sig(True),
+                                                 _stationary_body(BM.MoeExpertFp8BlockGemmWV4), register=False)
+UNITS.update({
+    "st-w13": _window(lambda S: bind(MoeExpertFp8BlockGemmRows, **S, DOT=BG.HopperE4m3MmaV2Dot32),
+                      {"M": 8, "K": 6144, "N": 1, **_GEMM_ST, "SWAP": False}, lambda S: S["M"] * S["K"] * S["N"]),
+    "st-w2": _window(lambda S: bind(MoeExpertFp8BlockGemmWRows, **S, DOT=BG.HopperE4m3QgmmaDot32),
+                     {"M": 8, "K": 256, "N": 32, **_GEMM_ST, "SWAP": True}, lambda S: S["M"] * S["K"] * S["N"]),
+})
 
 _EPS = '{"f64":"0x1.4f8b588e368f1p-17"}'
 _WGMMA = '{"fn":"HopperBF16WgmmaDot16_v1"}'
