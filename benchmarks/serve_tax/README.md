@@ -96,4 +96,5 @@ restore's times and the replay's busy GPU-seconds beside serving's over the same
 construction and are counted apart (`restore.by_construction`): the served engine core's process wrapper's own
 attributes, and each request's `detokenize`, which the replay leaves off. A host without FlashInfer's sampler JIT runs
 with `VLLM_USE_FLASHINFER_SAMPLER=0`, which leaves a seeded request's sampling as it was (it never takes FlashInfer's
-path) but moves an unseeded one's to the seeded path's Gumbel noise under the seed vLLM drew for it.
+path) but moves an unseeded one's to the seeded path's Gumbel noise under the seed vLLM took from numpy's generator
+for it.
