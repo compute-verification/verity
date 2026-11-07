@@ -8,12 +8,12 @@ public import Proofs.Core.Circuit
 # Proofs of the bit-level expansion's guarantees
 
 * `getLsbD_ofBits`, `ofBits_getLsbD`: `ofBits` assembles a value from its bits;
-* `Circuit.card_filter_unbit`: the expansion's gates whose gate satisfies `p` are the bits of the gates satisfying `p`;
 * `Circuit.constInputs_bitFaninPos`: with its constants as inputs every circuit has positive fan-in in bits, so its
   expansion is Boolean, and `RegisteredCircuit.constInputs_unregistered`: registering them adds no unregistered read;
 * `Circuit.isConst_false`: a circuit of positive fan-in in bits whose computed gates are at least a bit wide has no
   constant, so `Partition.ofConstInputs` and `RegisteredCircuit.constInputs_unregistered_eq` (and their expansion
   forms) carry a partition of it with its constants registered back to it, unchanged;
+* `Circuit.card_filter_unbit`: the expansion's gates whose gate satisfies `p` are the bits of the gates satisfying `p`;
 * `FlockSoundness.Audit.Circuit.toCircuit_boolean`: C-Flock's circuits are Boolean in the draft's sense when no gate is
   an empty row, the one operation that reads nothing.
 -/
