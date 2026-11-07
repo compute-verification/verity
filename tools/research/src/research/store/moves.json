@@ -1579,6 +1579,15 @@
         "benchmarks/torch_gpu/commit_slots/fixtures/commit-slots-v1.json": "verity/ml/commitments/tests/fixtures/commit-slots-v1.json",
         "benchmarks/numerical/tests/bench/data/captured-101/": "verity/ml/flock/tests/data/captured-101/"
       }
+    },
+    {
+      "paths": {
+        "benchmarks/remote_session/verifier.py": "verity/core/protocols/remote_bandwidth/session/verifier.py",
+        "benchmarks/remote_session/lean_verifier.py": "verity/core/protocols/remote_bandwidth/session/lean_verifier.py",
+        "benchmarks/remote_session/checks.py": "verity/core/protocols/remote_bandwidth/session/checks.py",
+        "benchmarks/remote_session/challengers.py": "verity/core/protocols/remote_bandwidth/session/challengers.py",
+        "benchmarks/remote_session/wire.py": "verity/core/protocols/remote_bandwidth/session/wire.py"
+      }
     }
   ]
 }

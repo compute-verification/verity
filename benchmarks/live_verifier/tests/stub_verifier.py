@@ -14,8 +14,8 @@ RS = Path(__file__).resolve().parents[2] / "remote_session"
 sys.path.insert(0, str(RS / "tests"))
 
 import test_session as T  # noqa: E402
-from benchmarks.remote_session import verifier  # noqa: E402
-from benchmarks.remote_session import wire  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import verifier  # noqa: E402
+from verity.core.protocols.remote_bandwidth.session import wire  # noqa: E402
 
 
 def main() -> int:
