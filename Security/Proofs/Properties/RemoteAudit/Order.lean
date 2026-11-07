@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Properties.RemoteAudit.Coins
 public import Proofs.Properties.RemoteAudit.Frozen
 
 /-!

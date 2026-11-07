@@ -1,7 +1,7 @@
 module
 
-public import Definitions.Accounting.Guarantees.TS.Steer
 public import Proofs.Accounting.TS.Stages
+public import Proofs.Accounting.Lemmas.TS.Steer
 
 /-!
 # Steering under one σ: proofs

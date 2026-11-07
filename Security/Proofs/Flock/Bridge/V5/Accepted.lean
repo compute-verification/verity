@@ -27,10 +27,11 @@ checks are V5's.
 * `v5Files_of_checks`: `PortRoots.check` and `KsScope.check` passing give V5's `dupName = none` and `RootFixesDomainL`
   (at a file without shared rows, at the public file's population: `pub.n = n`).
 * `SampledKSLiveV5Accepted`: `SampledKSLiveV5` with its event `LiveAcceptsKSP ∧ RunPopOk` in place of `LiveAcceptsZKP`
-  and without the four hypotheses, under the registration's law on its layout's strata (`Bridge.LawOn` at `nsOf`) and
-  at `δ` the law's own miss of `B`, as V5 has them; `sampledKSLiveV5Accepted_of` derives it from `SampledKSLiveV5` as
-  `sampledKSLiveV3_of` derives V3 from V2, and `sampledKSLiveV5Accepted` proves it. The session's simulator is V5's:
-  its draw files decode to `kd` units whatever the population (`Bridge.lawOn_size`), so it reads no population check.
+  and without the four hypotheses, under the law the verifier draws under from the registration (`Bridge.DrawsUnder`),
+  no Bernoulli law, and at `δ` the law's own miss of `B`, as V5 has them; `sampledKSLiveV5Accepted_of` derives it from
+  `SampledKSLiveV5` as `sampledKSLiveV3_of` derives V3 from V2, and `sampledKSLiveV5Accepted` proves it. The session's
+  simulator is V5's: its draw files decode to `kd` units whatever the population (`Bridge.lawSized_drawsUnder`,
+  `Bridge.lawSized_size`), so it reads no population check.
 -/
 
 @[expose] public section
@@ -244,10 +245,12 @@ open Classical in
 `verify --zk` at `own` accepts the transcript and the files (`LiveAcceptsKSP`: their ports row/v1, row/v2 or row-seg/v1
 rows of distinct names, no two registered roots one root under different domains, and the form, shared rows included,
 `KsScope` admits), the sampled-proofs run passes the registration's population (`RunPopOk`: the descriptor `desc` and
-the query `qr` give the game's `n` units in order), and the claims relation fails, under the registration's law on its
-layout's strata (`Bridge.LawOn` at `Bridge.nsOf`) at `δ` that law's own miss of `B`, as in `SampledKSLiveV5`. It has none
-of V5's hypotheses `RowsOk`, `dupName = none`, `RootFixesDomainL` and `PopMatches`; the game's `n` is the public file's
-population (`pub.n = n`). `SampledKSLiveV5` implies it (`sampledKSLiveV5Accepted_of`). -/
+the query `qr` give the game's `n` units in order), and the claims relation fails, under the law the verifier draws
+under from the registration (`Bridge.DrawsUnder`), no Bernoulli law (`Bridge.NotBernoulli`), at `δ` that law's own miss
+of `B`, as in `SampledKSLiveV5`. It has none of V5's hypotheses `RowsOk`, `dupName = none`, `RootFixesDomainL` and
+`PopMatches`; the game's `n` is the public file's population (`pub.n = n`). It reads the circuit file flat
+(`Flock.Desc.parse`), as `PortRoots` does, and V5 at it through `Flock.Desc.parseStmt_of_parse`. `SampledKSLiveV5`
+implies it (`sampledKSLiveV5Accepted_of`). -/
 def SampledKSLiveV5Accepted : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
@@ -259,8 +262,10 @@ def SampledKSLiveV5Accepted : Prop :=
     (_hn : pub.n = n)
     -- the statement's descriptor, and the registration's query
     (desc : Claims.Msg) (qr : Lean.Json)
-    -- the registration's law over the query's strata, drawing kd proof blocks
-    (law : Flock.Draw.Law) (kd : ℕ) (hlaw : Bridge.LawOn law (Bridge.nsOf desc qr) kd) (hdiv : kd % nTab I = 0)
+    -- the registration's law object and work table, the law the verifier draws under from them, drawing kd proof
+    -- blocks, and that it is no Bernoulli law
+    (lj : Lean.Json) (tb : Option Lean.Json) (law : Flock.Draw.Law) (kd : ℕ)
+    (hlaw : Bridge.DrawsUnder desc qr lj tb n law kd) (hb : Bridge.NotBernoulli law) (hdiv : kd % nTab I = 0)
     (dj : Finset (Fin n) → Lean.Json) (S₀ : Finset (Fin n)) (d₀ : Lean.Json)
     (y₀ : DrawSetupZHJP (inputsJ I 0) own (mPtsOf D.unroll.g (kd / nTab I)) S₀ d₀)
     (wr : (S : Finset (Fin n)) → (R : Reg) →
@@ -271,7 +276,8 @@ def SampledKSLiveV5Accepted : Prop :=
     (_hA3 : Assumptions.UniformRandomBytes Lb src)
     -- the verify command's tags, and live-verifier at `own` and the law
     (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr
+      fun _ => law)
     (k Rw M : ℕ) (_hk : 1 ≤ k) (_hRw : 1 ≤ Rw) (_hM : 1 ≤ M) (ρ : ℝ) (_hρ : ρ < 1)
     (_hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) (t' : ℝ) (_ht' : 0 ≤ t')
     -- the proof blocks whose miss is `δ`
@@ -282,12 +288,13 @@ def SampledKSLiveV5Accepted : Prop :=
     (q : Claims.Sampling.Query),
     let L := Bridge.execSel (n := n) src law n
     let P := (keyProgP D.unroll pi hU n).partition (Discharge.Layout.outsOfP D.unroll hU n pi)
-    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub).bindingZ
-      (rsZHJP_computes dj y₀ ht (Flock.Desc.parse_flat hD) hscope hU hpi hpub)
+    let vb := (rsZHJP dj y₀ ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) hscope hU hpi
+        hpub).bindingZ
+      (rsZHJP_computes dj y₀ ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) hscope hU hpi hpub)
     let σ := simZJA execArith hs512 (planZHJP dj y₀) (AcceptsZKP I own) wr (opnAtZHJP (planZHJP dj y₀) I own dj) dg
       (decAtZJ (planZHJP dj y₀)) (fun _ _ _ _ => true) (fun _ _ _ _ _ => []) (fun _ _ rs j => capOfRoot rs[j.val]!) N
-      (decodesZCJH_custodyP I own ht (Flock.Desc.parse_flat hD) law kd hdiv dj y₀ wr _ hTags hCust
-        (Bridge.lawOn_size hlaw hCust.2)) τ
+      (decodesZCJH_custodyP I own ht (Flock.Desc.parseStmt_stmt (Flock.Desc.parseStmt_of_parse hD)) law kd hdiv dj y₀ wr
+        _ hTags hCust (Bridge.lawSized_size (Bridge.lawSized_drawsUnder hlaw hb) hCust.2)) τ
     let Xr := XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw
     -- the deployed commitment's layout: the game's rows, read off the circuit file, at the public file's leaf map
     let Cc := (keyProgP D.unroll pi hU n).circuit (Discharge.Layout.outsOfP D.unroll hU n pi)
@@ -322,17 +329,17 @@ def SampledKSLiveV5Accepted : Prop :=
 they give V5's hypotheses (`rowsOk_of_scopeOkH`, `v5Files_of_checks` at `pub.n = n`, `popMatches_of_popOk`), and the
 accepted event is inside V5's; at files that fail, it is empty. -/
 theorem sampledKSLiveV5Accepted_of (h : Flock.Guarantees.SampledKSLiveV5) : SampledKSLiveV5Accepted := by
-  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hn desc qr law kd hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3
-    hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows roots Cd κ r ns δ hT hL
+  intro n Reg I own ht D hD hU pi hpi pub hpub hscope hn desc qr lj tb law kd hlaw hb hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb
+    src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q L P vb σ Xr Cc Lm rows roots Cd κ r ns δ hT hL
   by_cases hc : (Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
       ∃ count draw, Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables count draw = .ok ()) ∧
       Bridge.RunPopOk desc qr n
   · obtain ⟨⟨hck, _, _, hks⟩, p, hp, hpo⟩ := hc
     obtain ⟨hdup, hroots⟩ := v5Files_of_checks (Flock.Desc.parse_flat hD) hpi hpub hn hck hks
     exact (prob_mono (fun o ho => ⟨ho.1.1.1, ho.2⟩) _ τ).trans
-      (h n Reg I own ht D hD hU pi hpi pub hpub hscope (Bridge.rowsOk_of_scopeOkH hscope) hdup hroots desc qr
-        (Bridge.popMatches_of_popOk hp hpo) law kd hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw
-        hM ρ hρ hr t' ht' B τ qF qS q hT hL)
+      (h n Reg I own ht D (Flock.Desc.parseStmt_of_parse hD) hU pi hpi pub hpub hscope
+        (Bridge.rowsOk_of_scopeOkH hscope) hdup hroots desc qr (Bridge.popMatches_of_popOk hp hpo) lj tb law kd hlaw hb
+        hdiv dj S₀ d₀ y₀ wr dg N Ω Lb src hA3 hTags hCust k Rw M hk hRw hM ρ hρ hr t' ht' B τ qF qS q hT hL)
   · exact (prob_mono (q := fun _ => False) (fun o ho => hc ⟨⟨ho.1.1.2.1, ho.1.1.2.2⟩, ho.1.2⟩) _ τ).trans
       ((prob_false _ τ).le.trans zero_le)
 

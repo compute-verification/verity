@@ -1035,7 +1035,7 @@ class LiveServer:
                    else canonical_events(b'data: {"choices":[{"text":" extra"}]}\n\n'))
 
     async def _serve(self, body: dict, writer: asyncio.StreamWriter, ticket: int = 0,
-                     ordinal: int | None = None, release: tuple[int, bytes | None] | None = None) -> None:
+                     ordinal: int | None = None, release: tuple[int, bytes | None, int | None] | None = None) -> None:
         received = self.clock() - self.origin
         self.log["requests"] += 1
         self.log["receipt_late_ms"].append(round((received % self.tau) * 1000, 3))

@@ -18,5 +18,7 @@ public import Proofs.Flock.Level3.Folded
 public import Proofs.Flock.Level3.LookupRows
 public import Proofs.Flock.Level3.Placed
 public import Proofs.Flock.Level3.RowV2
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 @[expose] public section

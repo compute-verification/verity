@@ -1,12 +1,9 @@
 module
 
-public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Data.Finset.Prod
-public import Mathlib.Order.Interval.Finset.Nat
-public import Mathlib.Order.Lattice.Nat
-public import Mathlib.Data.ENat.Lattice
 public import Definitions.Accounting.Gates.Model
+public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+public import Mathlib.Data.ENat.Lattice
+public import Mathlib.Data.Fintype.Pi
 
 /-!
 # The word codec in the circuit model: what computing a block's encoding means (trusted)

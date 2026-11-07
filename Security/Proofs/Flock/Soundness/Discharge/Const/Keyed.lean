@@ -1,8 +1,9 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
-public import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 public import Proofs.Flock.Soundness.Discharge.Const.ConstCols
+public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 
 /-!
 # `hConst` at the production program's places

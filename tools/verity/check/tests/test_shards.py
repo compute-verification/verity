@@ -275,12 +275,18 @@ def test_a_shards_lean_slot_counts_only_its_own_packages(tmp_path, monkeypatch):
         FLAGS = ()
         packages = staticmethod(lambda files: PACKAGES)
         key = staticmethod(lambda p, files, flags: p.replace("/", "-"))
+        reusable = staticmethod(LA.reusable)
 
     monkeypatch.setenv("CHECK_CACHE", str(tmp_path))
     monkeypatch.setattr(CHECK, "_lean_audit", Audit)
     (tmp_path / "lean-audit").mkdir()
     for p in PACKAGES[1:]:
         (tmp_path / "lean-audit" / f"{Audit.key(p, (), ())}.json").write_text("{}")
+    assert "Security/Proofs" in PACKAGES[1:] and CHECK.lean_audit_misses(only=["Security/Proofs"]), \
+        "a pass of a package whose audit writes the ratchet's facts is reused only with them"
+    facts = tmp_path / "lean-audit" / "unread" / f"{Audit.key('Security/Proofs', (), ())}.json"
+    facts.parent.mkdir()
+    facts.write_text("{}")
     assert CHECK.lean_audit_misses() and CHECK.lean_audit_misses(only=PACKAGES[:1])
     assert not CHECK.lean_audit_misses(only=PACKAGES[1:])
     cmd = ["python", "lean_audit.py", "--package", PACKAGES[1]]

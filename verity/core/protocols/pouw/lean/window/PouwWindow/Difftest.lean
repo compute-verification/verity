@@ -1,15 +1,12 @@
 module
 
 public import Difftest
-public import PouwWindow.Json
 public import PouwWindow.Length
 public import PouwWindow.Statement
 public import PouwWindow.Inputs
 public import PouwWindow.Rounds
-public import PouwWindow.Lanes
 public import PouwWindow.KnownRows
 public import PouwWindow.RegFile
-public import PouwWindow.FullDraw
 
 /-!
 # The difftest's functions: the window's Lean behind `Difftest.serve`

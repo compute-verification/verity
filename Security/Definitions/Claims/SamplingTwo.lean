@@ -17,14 +17,16 @@ are the proof blocks, with `k = 1` and no interior registration.
 1. **The design** (`Design.Two`): the replay partition (`part`, the statement's replay query evaluated on its
    program), the first stage's rules, one per class of it (`replay`), and the second stage's `k` per stratum of the
    proof-block partition (`k`). A cell (`cell`) is a replay block's proof blocks in one stratum; `n_{ρ,t}` is its size.
-2. **The footprint** (`footprint`): replay block `ρ`'s fewest incorrect proof blocks in stratum `t` at any interior
-   consistent with its boundary, which the statement's roots commit. It is fixed before any coin. `ρ` is an incorrect
-   replay block when its footprint is positive in some stratum.
+2. **The footprint** (`footprint`) at interior values `ι`, one interior per replay block: replay block `ρ`'s incorrect
+   proof blocks in stratum `t` on its boundary values, which the statement's roots commit, and its interior `ι ρ`. A
+   replay block's strata are read at one interior, so that its cells' counts are those of one assignment of its values.
+   With one stratum, its least footprint is the fewest incorrect proof blocks of any interior consistent with its
+   boundary, fixed before any coin; `ρ` is an incorrect replay block when every interior leaves one.
 3. **The acceptance probability at the footprint** (`Design.Two.Pa`):
    `P̄_a(w) = E_S ∏_{ρ∈S} e_ρ(w)`, `e_ρ(w) = ∏_t C(n_{ρ,t} − w(ρ, t), k_t)/C(n_{ρ,t}, k_t)` (`Design.Two.esc`, the
    hypergeometric miss, `escCell`), written through the first stage's `P_a`; the confidence set
-   `M̄_δ = {w : P̄_a(w) > δ}` (`Design.Two.M`); and the relation `RTwo`: the extracted boundary trace's footprint is in
-   `M̄_δ`.
+   `M̄_δ = {w : P̄_a(w) > δ}` (`Design.Two.M`); and the relation `RTwo`: at some interiors, the extracted boundary
+   trace's footprint is in `M̄_δ`.
 4. **The compiled verifier** (`CompiledTwo`): a `Compiled` with the statement's two-stage design (`two`) and the
    replay sample (`replaySample`). Its second stage is `Compiled.stage2`, and `iroots x v ρ` is the roots a run shows for
    replay block `ρ`'s interior. Its extractor, errors and numbers are `Compiled`'s.
@@ -36,7 +38,15 @@ are the proof blocks, with `k = 1` and no interior registration.
    on its replay block's boundary values and interior values (`opens`). `slots`, `refuses`, `fixed` and `runs` are
    `Sessions`'.
 6. **The claims**: `CompiledTwo.KS`, at `Compiled`'s `κ_δ`, `γ` and `ε_bind`, and the compiler's statement
-   `CompilerKSTwo`.
+   `CompilerKSTwo`; `CompiledTwo.Exfil` and `CompilerExfilTwo`, the exfiltration bound (7).
+7. **What the incorrect proof blocks can serve**: a set `T` of proof blocks is admissible at `δ` when its counts per cell
+   (`counts`) are a footprint in `M̄_δ` (`admissibleTwo`); `b(T)` is the values its proof blocks commit (`bitsOf`). The
+   influence set at input values `a` (`influenceTwo`) is the served outputs (`served`) of every boundary trace with
+   inputs `a` (`inputsOf`) that `RTwo` takes, and `RInflTwo` holds when a trace's served outputs are in it at its own
+   inputs. `CompiledTwo.Exfil` is KS at `RInflTwo` and `|influenceTwo| ≤ Σ_{T admissible} 2^{b(T)}`: on fixed inputs, a
+   trace whose proof blocks outside `T` are correct serves outputs fixed by `T`'s committed bits, so exporting `β` bits
+   needs `2^β ≤ Σ_{T admissible} 2^{b(T)} ≤ 2^H·Σ_{j≤K} C(n, j)` (every admissible set at most `K` proof blocks and `H`
+   bits, `n` proof blocks).
 
 Statements only: definitions, no proofs.
 -/
@@ -95,12 +105,12 @@ noncomputable def wrongIn (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : Au
   (cell Pt Pρ ρ t).filter fun v => ¬ ∃ u r, Pt.blocks[v]? = some u ∧ Pρ.blocks[ρ]? = some r ∧
     s.prog.Correct (s.prog.refIn r (w.val H Cm s) ι) u
 
-/-- **The footprint** `w(ρ, t)`: the fewest incorrect proof blocks in stratum `t` of replay block `ρ` at any interior
-consistent with its boundary, the values the statement's roots commit at serve time. It is fixed before any coin; `ρ`
-is an incorrect replay block when it is positive in some stratum. -/
+/-- **The footprint at interior values `ι`** `w(ρ, t)`, `ι ρ` replay block `ρ`'s interior: cell `(ρ, t)`'s incorrect
+proof blocks on `ρ`'s boundary values, which the statement's roots commit at serve time, and its interior `ι ρ`. Every
+stratum of `ρ` is read at the one interior `ι ρ`. -/
 noncomputable def footprint (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition) (w : Wit)
-    (ρ t : ℕ) : ℕ :=
-  ⨅ ι : ℕ → Bool, (wrongIn H Cm s Pt Pρ w ρ t ι).card
+    (ι : ℕ → ℕ → Bool) (ρ t : ℕ) : ℕ :=
+  (wrongIn H Cm s Pt Pρ w ρ t (ι ρ)).card
 
 /-! ## 3. The acceptance probability at the footprint -/
 
@@ -126,12 +136,13 @@ noncomputable def Design.Two.Pa (d : Design.Two) (Pt : Partition) (fp : ℕ → 
 def Design.Two.M (d : Design.Two) (Pt : Partition) (δ : ℝ) : Set (ℕ → ℕ → ℕ) := {fp | δ < d.Pa Pt fp}
 
 /-- **The two-stage relation** at `δ`, on the statement's bytes: it parses, its proof-block partition and two-stage
-design evaluate (`partition`, `two`, the verifier's own), and the footprint of the boundary trace `w` opens is in
-`M̄_δ`. -/
+design evaluate (`partition`, `two`, the verifier's own), and at some interior values, one interior per replay block,
+the footprint of the boundary trace `w` opens is in `M̄_δ`. The interiors are the relation's to pick: serving commits
+only the boundary. -/
 def RTwo (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
     (partition : AuditStatement → Option Partition) (two : AuditStatement → Option Design.Two) (δ : ℝ) : Rel Wit :=
   fun x w => ∃ s Pt d, parse x = some s ∧ partition s = some Pt ∧ two s = some d ∧
-    footprint H Cm s Pt d.part w ∈ d.M Pt δ
+    ∃ ι : ℕ → ℕ → Bool, footprint H Cm s Pt d.part w ι ∈ d.M Pt δ
 
 /-- **The two-stage scope, readable**: a topologically ordered program, partitioned into proof blocks (`Partitions`),
 each within a block of the replay partition, whose blocks are disjoint, and a well-formed two-stage design. -/
@@ -139,12 +150,53 @@ def InScopeTwo (Pt : Partition) (d : Design.Two) (s : AuditStatement) : Prop :=
   s.prog.Topological ∧ Pt.Partitions s.prog ∧ d.part.gates.Nodup ∧
     (∀ v < Pt.blocks.length, (replayOf Pt d.part v).isSome) ∧ d.WellFormed Pt
 
+/-! ## 7. What the incorrect proof blocks can serve -/
+
+/-- `Y`'s proof blocks in cell `(ρ, t)`: the footprint of a set of proof blocks. -/
+def counts (Pt Pρ : Partition) (Y : Finset ℕ) (ρ t : ℕ) : ℕ := (Y ∩ cell Pt Pρ ρ t).card
+
+open Classical in
+/-- **The admissible sets** at `δ`: the sets `T` of proof blocks whose counts per cell are a footprint in `M̄_δ`, the
+incorrect sets a boundary trace `RTwo` takes can have. -/
+noncomputable def admissibleTwo (Pt : Partition) (d : Design.Two) (δ : ℝ) : Finset (Finset ℕ) :=
+  (Finset.range Pt.blocks.length).powerset.filter fun T => counts Pt d.part T ∈ d.M Pt δ
+
+/-- **The committed bits** `b(T) = Σ_{v∈T} |out(v)|` of a set `T` of proof blocks: the values each commits. -/
+def bitsOf (s : AuditStatement) (Pt : Partition) (T : Finset ℕ) : ℕ :=
+  ∑ v ∈ T, committed s.prog (Pt.blocks.getD v [])
+
+/-- The values `w` opens at the program's input gates, `none` at every other gate. -/
+def inputsOf (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (w : Wit) (g : ℕ) : Option Bool :=
+  if s.prog.gates[g]? = some .input then w.val H Cm s g else none
+
+/-- **The served outputs** of `w`: the values it opens at the program's returned gates, a constant's its own
+(`Prog.read`), an unopened one `false`. -/
+def served (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (w : Wit) :
+    Fin s.prog.outs.length → Bool :=
+  fun i => (s.prog.read (w.val H Cm s) s.prog.outs[i]).getD false
+
+open Classical in
+/-- **The influence set** at `δ` and input values `a`: the served outputs of every boundary trace with inputs `a` whose
+footprint is in `M̄_δ` at some interiors, the outputs `RTwo` lets a prover serve on those inputs. -/
+noncomputable def influenceTwo (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt : Partition)
+    (d : Design.Two) (δ : ℝ) (a : ℕ → Option Bool) : Finset (Fin s.prog.outs.length → Bool) :=
+  Finset.univ.filter fun y => ∃ w : Wit, inputsOf H Cm s w = a ∧
+    (∃ ι : ℕ → ℕ → Bool, footprint H Cm s Pt d.part w ι ∈ d.M Pt δ) ∧ served H Cm s w = y
+
+/-- **The influence relation** at `δ`, on the statement's bytes: it parses, its partitions evaluate, and the served
+outputs of `w` are in the influence set at `w`'s own inputs. Every boundary trace in `RTwo` is in it. -/
+def RInflTwo (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
+    (partition : AuditStatement → Option Partition) (two : AuditStatement → Option Design.Two) (δ : ℝ) : Rel Wit :=
+  fun x w => ∃ s Pt d, parse x = some s ∧ partition s = some Pt ∧ two s = some d ∧
+    served H Cm s w ∈ influenceTwo H Cm s Pt d δ (inputsOf H Cm s w)
+
 end Claims.Sampling
 
 namespace Claims.SamplingGeneric
 
 open Claims
-open Claims.Sampling (AuditStatement Partition InScopeTwo RTwo cell escCell replayOf forkOn KSLinOn Bext)
+open Claims.Sampling (AuditStatement Partition InScopeTwo RTwo RInflTwo influenceTwo admissibleTwo bitsOf cell escCell
+  replayOf forkOn KSLinOn Bext)
 
 /-! ## 4. The compiled verifier -/
 
@@ -219,11 +271,24 @@ structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
 
 /-! ## 6. The claims -/
 
-/-- **KS at the footprint**, on the statements in scope, at every `δ ≥ 0`: `Pr[acc ∧ footprint ∉ M̄_δ] ≤ δ + ε_ks +
-ε_bind`, at `Compiled`'s extractor, `κ_δ`, `γ` and `ε_bind = Pr[B_ext]` (`Compiled.KS` at `RTwo`). -/
+/-- **KS at the footprint**, on the statements in scope, at every `δ ≥ 0`: `Pr[acc ∧ no interiors put the footprint in
+M̄_δ] ≤ δ + ε_ks + ε_bind`, at `Compiled`'s extractor, `κ_δ`, `γ` and `ε_bind = Pr[B_ext]` (`Compiled.KS` at
+`RTwo`). -/
 def KS (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
   ∀ δ : ℝ, 0 ≤ δ →
     KSLinOn H L.V L.Scope (RTwo H L.commit L.parse L.partition L.two δ) L.E (L.κ δ) L.γ (fun _ => 1) (Bext H L.V L.E)
+
+/-- **The exfiltration bound at the footprint**, on the statements in scope, at every `δ ≥ 0`:
+`Pr[acc ∧ the served outputs are outside the influence set] ≤ δ + ε_ks + ε_bind` at `KS`'s extractor and errors
+(`RInflTwo`), and the influence set at any input values has at most `Σ_{T ∈ admissible} 2^{b(T)}` members: a set `T` of
+incorrect proof blocks can serve no more than its committed bits choose. -/
+def Exfil (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
+  ∀ δ : ℝ, 0 ≤ δ →
+    KSLinOn H L.V L.Scope (RInflTwo H L.commit L.parse L.partition L.two δ) L.E (L.κ δ) L.γ (fun _ => 1)
+        (Bext H L.V L.E) ∧
+      ∀ x s Pt d (a : ℕ → Option Bool), L.parse x = some s → L.partition s = some Pt → L.two s = some d →
+        InScopeTwo Pt d s →
+        (influenceTwo H L.commit s Pt d δ a).card ≤ ∑ T ∈ admissibleTwo Pt d δ, 2 ^ bitsOf s Pt T
 
 end CompiledTwo
 
@@ -233,5 +298,11 @@ one-stage compiler's errors. -/
 def CompilerKSTwo : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
     (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.KS H
+
+/-- **The two-stage compiler bounds exfiltration at the footprint**: at `CompilerKSTwo`'s premises, every compiled
+two-stage verifier meets `CompiledTwo.Exfil`. -/
+def CompilerExfilTwo : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.Exfil H
 
 end Claims.SamplingGeneric

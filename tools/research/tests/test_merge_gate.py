@@ -1017,6 +1017,36 @@ def test_a_deferred_landings_lock_commit_is_vouched_for_only_by_the_records_its_
     assert vouched(_deferred_lock(feat, tip, {lock: '{"records": 2}\n'}, "r20261020-000003-0003"), "r20261020-000003-0003", elsewhere) is None  # it checked main
 
 
+def test_a_lock_commit_carries_the_caps_its_lock_run_repaired_and_no_other_file(tmp_path):
+    """The lock run's `--bookkeeping warn` repairs files beside the locks (`REPAIRED`, its report's `repaired`): a lock commit
+    holding the repaired copy byte for byte is vouched for; one whose copy differs, one that leaves it out, and one changing
+    any other file is refused."""
+    import json
+
+    from research.merge import REPAIRED, regenerated_parent
+    from research.store.local import LocalStore
+    from test_queue_drive import _live_run
+
+    main, feat, tip = _repos(tmp_path)
+    store, lock, caps, rid = LocalStore(), "pkg/lean-audit.json", "tests/test_lean_packages.py", "r20261020-000005-0005"
+    assert caps in REPAIRED
+    d, fetch, _ = _live_run(tmp_path, rid, tip, {"pkg": '{"records": 2}\n'})
+    (d / "lean-audit" / "repaired" / "tests").mkdir(parents=True)
+    (d / "lean-audit" / "repaired" / caps).write_text('UNWITNESSED = {"pkg": 3}\n')
+    audit = json.loads((d / "lean-audit" / "audit.json").read_text())
+    audit["repaired"] = {caps: f"/workspace/research/runs/{rid}/lean-audit/repaired/{caps}"}
+    (d / "lean-audit" / "audit.json").write_text(json.dumps(audit))
+
+    def vouched(files: dict[str, str]) -> str | None:
+        return regenerated_parent(feat, _deferred_lock(feat, tip, files, rid), store, tool="check", kinds=frozenset({"check/v1"}),
+                                  command=CHECKED, deferred=rid, fetch=fetch)
+
+    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 3}\n'}) == rid
+    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 9}\n'}) is None
+    assert vouched({lock: '{"records": 2}\n'}) is None
+    assert vouched({lock: '{"records": 2}\n', caps: 'UNWITNESSED = {"pkg": 3}\n', "a.txt": "x\n"}) is None
+
+
 def test_a_report_naming_a_regenerated_record_the_stores_files_lack_is_unreadable_not_none(tmp_path, monkeypatch):
     """`regenerated_records` returning {} both for a check that regenerated nothing and for one whose records it couldn't
     read would land the train without them; a record the report names and the run's files lack raises."""

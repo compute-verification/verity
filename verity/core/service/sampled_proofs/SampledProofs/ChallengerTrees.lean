@@ -21,15 +21,18 @@ streams that tree's round `k` of the stream, opened after its `msg_sha512`, its 
 statement's tables to them (`sessions_tree_reason`): each session's record so, at its own tables' lengths, no tree two
 sessions', and every tree a session's, so no statement's coins are flipped twice. `trustedTreesOf` reads the trees from
 the one session the auditor's ledger opens on the verifier's window (`trustedSessionOf`), the session the sample's coins
-come from.
+come from. `sampleLinkFirst` holds the log's order (`sample_link_first`): the sample, then the link, then the other
+rounds; no coin of the sample released after a round is opened, and the first round opened a tree's `session` stream,
+the link points.
 
-The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`) and `challenger_session_trees`
-(`sessions_tree_reason` over the log's trees and the request's records, each with its tables), each `{"refused": why}`
-where Python refuses.
+The difftest's pieces: `challenger_coin_trees` (`coin_trees_of`), `challenger_session_trees` (`sessions_tree_reason`
+over the log's trees and the request's records, each with its tables), each `{"refused": why}` where Python refuses,
+and `challenger_sample_link_first` (`sample_link_first`).
 -/
 module
 
 public import SampledProofs.ChallengerDraw
+meta import SampledProofs.ChallengerDraw
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -234,6 +237,73 @@ def trustedTreesOf (key : ChallengerKey) (window : String) (coins : Json) : V (A
   let .arr ls := getD (getD coins "session") "log" | throw LOG_FORM
   coinTreesOf (← ls.toList.mapM fun | .str s => pure s | _ => throw LOG_FORM)
 
+/-- The refusal of a release log out of the order `sampleLinkFirst` holds it to. -/
+def SAMPLE_LINK_FIRST : String :=
+  "the challenger's release log is not the sample, then the link, then the other rounds: a coin of the sample is " ++
+  "released after a coin tree's round is opened, or the first round opened is not a tree's " ++ TREE_SESSION ++
+  " stream, the link points"
+
+/-- **The family and the root a root line of the release log shows**, as `releasedRootsOf` reads them; `none` where the
+line doesn't parse or names no family or no root. -/
+def rootOf (l : String) : Option (String × ByteArray) := do
+  let r ← (event l).toOption
+  let .str label := getD r "label" | none
+  let .str root := getD r "root" | none
+  pure (label, ← (Flock.unhex root).toOption)
+
+/-- Whether release log line `l` opens a coin tree's round: an event whose `event` is `OPEN_EVENT`. -/
+def openLine (l : String) : Bool :=
+  match event l with
+  | .ok j => jsonStrIs (getD j "event") OPEN_EVENT
+  | .error _ => false
+
+/-- Whether release log line `l` opens a round of a coin tree's stream `TREE_SESSION`, the stream a session's link
+points are opened from. -/
+def linkLine (l : String) : Bool :=
+  match event l with
+  | .ok j => jsonStrIs (getD j "event") OPEN_EVENT && jsonStrIs (getD j "stream") TREE_SESSION
+  | .error _ => false
+
+/-- `sampleLinkFirst`'s scan, `opened` whether a line opening a coin tree's round came already and `pending` the root's
+line awaiting its coin's release. -/
+def sampleLinkFirstFrom (label : String) (after : ByteArray) : Bool → Option String → List String → Bool
+  | _, _, [] => true
+  | opened, pending, l :: ls =>
+    if treeLine l then
+      if opened = false ∧ openLine l = true ∧ linkLine l = false then false
+      else sampleLinkFirstFrom label after (opened || openLine l) pending ls
+    else match pending with
+      | none => sampleLinkFirstFrom label after opened (some l) ls
+      | some a =>
+        if opened = true ∧ rootOf a = some (label, after) then false
+        else sampleLinkFirstFrom label after opened none ls
+
+/-- `sample_link_first`, **the sample, then the link, then the other rounds**, in the release log's lines `log` after its
+head. Read as `releasedRootsOf` reads them, a coin tree's line aside (`treeLine`) and the rest in pairs, a root's line
+and its coin's release: no coin of family `label` whose root's line names `after` (`rootOf`) is released after a line
+opening a coin tree's round (`openLine`), and the first such line opens the stream `TREE_SESSION` (`linkLine`), whose
+first round is the link points. A coin tree's own line may come anywhere. In v2's one-stage audit `label` is the
+parameters' challenger family and `after` the registration's digest, so the coins so released are the sample's
+(`challengerStream` holds the sample to every one of them), and the rounds opened are the sessions' links and their
+streams' rounds (`sessionsTreeReason`). -/
+def sampleLinkFirst (label : String) (after : ByteArray) (log : List String) : Bool :=
+  sampleLinkFirstFrom label after false none log
+
+private def rootT : String := "{\"event\":\"root\",\"index\":0,\"label\":\"draw\",\"received_at\":0,\"root\":\"ab\"}"
+private def releaseT : String := "{\"after\":\"ab\",\"event\":\"release\",\"index\":0,\"label\":\"draw\",\"released_at\":0}"
+private def openT (stream : String) : String :=
+  "{\"after\":\"cd\",\"coins\":\"ef\",\"event\":\"tree-open\",\"n\":1,\"round\":0,\"stream\":\"" ++ stream ++
+    "\",\"tree\":\"01\"}"
+private def treeT : String := "{\"event\":\"coin-tree\",\"key\":\"02\",\"nonce\":\"03\",\"root\":\"01\",\"spec\":{}}"
+
+#guard sampleLinkFirst "draw" ⟨#[0xab]⟩ [treeT, rootT, releaseT, openT TREE_SESSION, openT "circuit/rep0"]
+#guard sampleLinkFirst "draw" ⟨#[0xab]⟩ [rootT, treeT, releaseT, openT TREE_SESSION]
+#guard !sampleLinkFirst "draw" ⟨#[0xab]⟩ [treeT, openT TREE_SESSION, rootT, releaseT]
+#guard !sampleLinkFirst "draw" ⟨#[0xab]⟩ [rootT, openT TREE_SESSION, releaseT]
+#guard !sampleLinkFirst "draw" ⟨#[0xab]⟩ [rootT, releaseT, openT "circuit/rep0", openT TREE_SESSION]
+#guard sampleLinkFirst "other" ⟨#[0xab]⟩ [openT TREE_SESSION, rootT, releaseT]
+#guard sampleLinkFirst "draw" ⟨#[0xcd]⟩ [openT TREE_SESSION, rootT, releaseT]
+
 /-! The difftest's pieces. -/
 
 private def refusing (f : V Json) : Json :=
@@ -269,5 +339,16 @@ def sessionTreesPiece (j : Json) : V Json := do
   pure <| refusing do
     let why := sessionsTreeReason (← coinTreesOf lines) records
     return Json.mkObj [("reason", why.elim Json.null Json.str)]
+
+/-- `{"after", "label", "log"}` to `sample_link_first`'s over the release log `log` after its head, at family `label` and
+digest `after` (lowercase hex), `{"reason"}`: null when it holds, else `SAMPLE_LINK_FIRST`. -/
+def sampleLinkFirstPiece (j : Json) : V Json := do
+  unless keys? j == some #["after", "label", "log"] do throw "a request's keys are after, label, log"
+  let lines ← logOf j
+  let .str label := getD j "label" | throw "label is not a string"
+  let .str a := getD j "after" | throw "after is not lowercase hex"
+  let after ← Flock.unhex a
+  let why := if sampleLinkFirst label after lines.tail then Json.null else Json.str SAMPLE_LINK_FIRST
+  return Json.mkObj [("reason", why)]
 
 end SampledProofs.Challenger

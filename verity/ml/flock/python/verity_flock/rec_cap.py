@@ -9,7 +9,7 @@ query reaches were held by no V* statement. RecCap holds every one at a fixed ro
 its node, then zeros, which V* registers as all-zero rows ``rec-cap-zero`` under public salts (`rec_residuals.zero_salts`),
 as it registers every unit's outputs. So the statement holds only if every held row is a node's, and its ``b || c`` is the
 ZK server's: the verifier holds each table row of ``top`` to its node of ``root_B``, or of the reps' level-``l`` tops, in
-the coin server's record (``Flock/RecVStar.lean``'s ``checkTopRows``) and ``top`` to the registration the level's ``out``
+the challenger's record (``Flock/RecVStar.lean``'s ``checkTopRows``) and ``top`` to the registration the level's ``out``
 reads (``checkShared``, `rec_vstage.shared_rows`). The unit has no AND.
 
 The Lean statement is ``VStar.capUnit`` (``VStar/Cap.lean``): the later levels' caps, then level 0's, last in V*'s

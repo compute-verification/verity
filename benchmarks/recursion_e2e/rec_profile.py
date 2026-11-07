@@ -21,6 +21,8 @@ SCHEMA = "recursion-e2e/v1"
 #: the steps one recursive run needs, in order (vcap stages RecCap, which V*'s verdict needs; ``negative`` checks the
 #: run, ``icheck`` and ``oreplay`` time more of it)
 E2E_STEPS = ("build", "inner", "vstage", "vcap", "oprove", "lean")
+#: one recursive session's steps after its build: the inner session, V*'s staging, its outer proofs, Lean's verdicts
+SESSION_STEPS = E2E_STEPS[1:]
 ORDER = ("build", "inner", "icheck", "vstage", "vcap", "oprove", "oreplay", "lean", "forge-after", "negative")
 #: what each part of the recursive run is, recorded in the result's ``inputs``
 STATEMENTS = {
@@ -433,14 +435,10 @@ def read(root: Path) -> dict[str, Any]:
     doc["headline"] = headline(rows, s, steps) | ({"released": rel["ok"]} if rel else {})
     if doc["params"].get("release") == "1":
         doc["headline"]["ok"] = doc["headline"]["ok"] and bool(rel and rel["ok"])
-    # the figures read the tree's monitoring periods (figures.PERIODS); a failure there is recorded, not the table's
-    try:
-        import figures as F
-        budget = doc["params"].get("release_budget")
-        doc["figures"] = F.figures(doc, {x: (lambda r: r and timev(r[0].parent / "time-step.txt"))(repeats(root, x)[:1])
-                                         for x in F.SESSION_STEPS}, budget=int(budget) if budget else None)
-    except Exception as e:  # noqa: BLE001
-        doc["figures"] = {"error": f"{type(e).__name__}: {e}"}
+    # each session step's first invocation's /usr/bin/time -v (None for a step that didn't run), what a session's cost is
+    # scaled from
+    doc["session_times"] = {x: timev(r[0].parent / "time-step.txt") if (r := repeats(root, x)) else None
+                            for x in SESSION_STEPS}
     return doc
 
 
@@ -807,12 +805,6 @@ def markdown(doc: dict[str, Any]) -> str:
                          f"{_fmt3(p.get('prove_wall_s'))} | {p.get('decided') or '—'} | {'/'.join(p.get('record') or []) or '—'} |")
         if rel.get("stops"):
             lines.append("Stops: " + "; ".join(f"{e.get('part')}: {e.get('why', e.get('event'))}" for e in rel["stops"]) + ".")
-    fig = doc.get("figures")
-    if fig and fig.get("error"):
-        lines.append(f"Figures: not computed ({fig['error']}).")
-    elif fig:
-        import figures as F
-        lines.append(F.markdown(fig).rstrip("\n"))
     return "\n".join(lines) + "\n"
 
 
