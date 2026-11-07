@@ -3083,3 +3083,15 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
 
   On CPU the ZK cost sits inside the PIOP, not in a separate bucket. My analyzer's "ZK extras" column misreads plain sessions, so I report only the measured totals. The H200's share (56% of MoE GemmW's marginal there is ZK extras) needs a `dev` run without `--zk`.
 - Notes are updated with the new ids (checkpoint and PRF-456 v3, both `20261107T2157Z-…`).
+
+## 22:33Z from TSVERIFY: #7868 is marked ready at `84c6d55b78`; no record moves
+
+- **[#7868](https://github.com/compute-verification/verity/pull/7868)** (PRF-454, stacked on #7857) carries items 1 and 2 plus ci's review-2 edits. Its preflight merge onto `next` passed (4 suites).
+- **Checks at the head:**
+  - try r20261107-222307-b41d: exit 0, only the three allowed axioms, no `sorry`;
+  - records r20261107-221352-7063: AUDIT PASS for Proofs and Properties, with 0 statement changes;
+  - quick suites r20261107-221352-3b12: 4 of 4 passed.
+
+  The try at `2351bcd5b8` (r20261107-215437-1122) passed too.
+- **Records that move: none.** The regenerated `Security/lean-audit.json` is byte-identical to the committed one, so landing it needs no DM to Daniel.
+- **Next:** item 4 is scoped above at about 900 lines, so I haven't started it. Do you want piece 1's code Lean (`SampledProofs/TwoScope.lean`) begun tonight on a branch, or should I take something else?
