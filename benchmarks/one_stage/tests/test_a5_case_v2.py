@@ -111,29 +111,40 @@ def test_v2_names_the_public_file_as_the_audit_pinned_it(tmp_path):
     assert got["drawn"] == drawn
 
 
-@pytest.mark.parametrize("completed_body", [b"body 1", b"body 1, re-laid port-major"])
-def test_a_drawn_members_completed_public_file_is_pinned_once_the_tie_holds_and_is_the_one_v2_names(tmp_path,
-                                                                                                    completed_body):
+@pytest.mark.parametrize("relaid", [False, True], ids=["with tables", "instance-major"])
+def test_a_drawn_members_completed_public_file_is_pinned_once_the_tie_holds_and_is_the_one_v2_names(tmp_path, relaid):
     """`complete_drawn` rewrites a drawn member's public file after the draw under the completed header, an
-    instance-major member's body re-laid too, and the member's session proves that file. Once the tie holds,
-    `pin_completed` pins it as the member's ``completed`` entry, and v2's case names it: by SHA-512 the blob the case
-    carries, not the staged file, which no blob holds (OneStageZk's ``public file: no blob has the SHA-512``). The
-    staged entries and their leaf layer, which R4 holds to the registration, are as written before the draw."""
-    staged = {"m0-key": b'{"header": "staged"}\nbody 0', "m1-key": b'{"header": "staged"}\nbody 1'}
+    instance-major member's body re-laid port-major too (`flock_inputs.relay`), and the member's session proves that
+    file. Once the tie holds, `pin_completed` pins it as the member's ``completed`` entry, and v2's case names it: by
+    SHA-512 the blob the case carries, not the staged file, which no blob holds (OneStageZk's ``public file: no blob has
+    the SHA-512``). The staged entries, each saying whether completion re-lays its member (``relaid``), and their leaf
+    layer, which R4 holds to the registration, are as written before the draw, and the onsite record holds the completed
+    file to the member's staged body (`onsite_record.pinned`)."""
+    import onsite_record as OR
+
+    from verity.ml.circuits.codec import canonical_json
+    from verity.ml.windows import flock_inputs as FI
+
+    def rows(k: int) -> bytes:
+        return bytes((k + i) % 251 for i in range(4 * 2 * FI.BC_BYTES))
+
+    staged = {f"m{k}-key": b'{"header": "staged"}\n' + rows(k) for k in range(2)}
     members = []
     for k, (key, data) in enumerate(staged.items()):
         (tmp_path / f"m{k}").mkdir()
         (tmp_path / f"m{k}" / "pub-4.bin").write_bytes(data)
-        members.append({"k": k, "m": types.SimpleNamespace(key=key, n=4), "pin": "cc" * 64,
-                        "st": {"dir": tmp_path / f"m{k}", "public": hashlib.sha512(data).hexdigest()}})
+        members.append({"k": k, "m": types.SimpleNamespace(key=key, n=4, tables=() if relaid else (("t", 4),)),
+                        "pin": "cc" * 64, "st": {"dir": tmp_path / f"m{k}", "public": hashlib.sha512(data).hexdigest()}})
     pin = a5.public_pin(members, {key: data.partition(b"\n")[2] for key, data in staged.items()})
     (tmp_path / a5.PIN).write_text(json.dumps(pin))
-    mm, completed = members[1], b'{"header": "completed"}\n' + completed_body
+    assert {m["relaid"] for m in pin["members"].values()} == {relaid}
+    completed_body = FI.relay(rows(1), 4, 2) if relaid else rows(1)
+    mm, completed = members[1], b'{"instances": 4, "header": "completed"}\n' + completed_body
     (mm["st"]["dir"] / "pub-4.bin").write_bytes(completed)
     a5.pin_completed(tmp_path, [(mm, [0])])
     after = json.loads((tmp_path / a5.PIN).read_text())
     assert after["leaf_layer"] == pin["leaf_layer"]
-    assert {k: {x: m[x] for x in ("k", "file", "body")} for k, m in after["members"].items()} == pin["members"]
+    assert {k: {x: m[x] for x in ("k", "file", "body", "relaid")} for k, m in after["members"].items()} == pin["members"]
     assert "completed" not in after["members"]["m0-key"]
     assert after["members"]["m1-key"]["completed"] == {"file": hashlib.sha512(completed).hexdigest(),
                                                       "body": hashlib.sha512(completed_body).hexdigest()}
@@ -143,6 +154,8 @@ def test_a_drawn_members_completed_public_file_is_pinned_once_the_tie_holds_and_
     got = a5.v2_proof([{"mm": mm, "sdir": tmp_path}], zk=True, drawn=a5.drawn_by(EV, "ab" * 64))
     assert got["public"] == PF.file_sha512(got["proof"].public) == after["members"]["m1-key"]["completed"]["file"]
     assert got["public"] != pin["members"]["m1-key"]["file"]
+    reg = canonical_json({"format": "verity/registration/v1", "leaf_layer": pin["leaf_layer"]}).hex()
+    assert OR.pinned(tmp_path / a5.PIN, reg, {reg}, got["proof"].public) is None
 
 
 def test_v2_says_why_an_audit_has_no_case():

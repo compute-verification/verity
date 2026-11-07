@@ -259,12 +259,14 @@ PIN_FORMAT = "verity/public-pin/v1"
 
 def public_pin(members: Sequence[dict], publics: Mapping[str, bytes]) -> dict:
     """``members``' public files as staged (``publics``, their bodies by member key), before any check and the sample:
-    by member key, its index ``k``, the whole file's SHA-512 (``file``) and its body's (``body``), and ``leaf_layer``,
+    by member key, its index ``k``, the whole file's SHA-512 (``file``) and its body's (``body``), whether completing it
+    re-lays its body port-major (``relaid``: an instance-major member's, `flock_inputs.complete`), and ``leaf_layer``,
     the leaf layer over the bodies, which R4 holds to the registration the coins commit to, so a body changed after the
     sample isn't the pin's. A drawn member's file as its session proved it, completed from the staged one, is its
-    ``completed`` entry, added once the tie holds (`pin_completed`): v2's ``proofs.public``."""
+    ``completed`` entry, added once the tie holds (`pin_completed`): v2's ``proofs.public``, which the onsite record
+    holds to the staged body (`onsite_record.pinned`)."""
     return {"format": PIN_FORMAT, "leaf_layer": CS.leaf_layer(publics),
-            "members": {mm["m"].key: {"k": mm["k"], "file": mm["st"]["public"],
+            "members": {mm["m"].key: {"k": mm["k"], "file": mm["st"]["public"], "relaid": not mm["m"].tables,
                                       "body": hashlib.sha512(publics[mm["m"].key]).hexdigest()} for mm in members}}
 
 
