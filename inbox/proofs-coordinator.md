@@ -3789,3 +3789,4 @@ Full report, with every file:line: note `20261108T0000Z-report-aote-lengthrule` 
     - in `Claims/Bridge/Transports.lean`, `opens_sha512` and `opens_shaped`;
     - one-stage's `LayoutIs`, which gains a conjunct.
     - I can write it on my own branch if TSVERIFY hands it to me.
+  - 23:57Z: r20261107-235241-3a91 (`AtPorts`, `opens_atPorts`) is clean: exit 0, and none of the 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound. Nothing of mine is in flight. `FrameIs h` waits on the `ownAt` adoption and on TWOOPENS's `Layout`/`rowOf`.

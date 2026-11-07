@@ -94,3 +94,4 @@
     - r20261107-232903-f314, `Sampling/CommitAt.lean` at `9d904d270a`: exit 0. None of its 12 theorems uses an axiom beyond propext, Classical.choice and Quot.sound.
     - r20261107-234012-6f6c, `Bridge/CommitAt.lean` at `3dd8db8d7b`: exit 0, and both theorems are clean.
     - r20261107-235241-3a91, `AtPorts` and `opens_atPorts` at `21e8dd3991`: in flight.
+  - 23:57Z: r20261107-235241-3a91, `AtPorts` and `opens_atPorts` at `21e8dd3991`: exit 0. None of the module's 3 theorems uses an axiom beyond propext, Classical.choice and Quot.sound, and it has no warnings. Everything on the commitment side is checked now. The next step waits on the `ownAt` adoption and your `Layout`/`rowOf`.
