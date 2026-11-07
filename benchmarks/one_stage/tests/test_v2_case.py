@@ -175,7 +175,7 @@ def test_a_release_naming_another_key_than_the_auditors_record_is_refused(tmp_pa
 
 
 @pytest.mark.parametrize("how, why", [
-    ("changed after the draw", f"the kept public file isn't, by SHA-512, the one {a5.PIN} pinned at staging"),
+    ("changed after the draw", f"the kept public file isn't, by SHA-512, the one {a5.PIN} pinned for m0"),
     ("no pin", f"the window kept no {a5.PIN} naming m0"),
 ])
 def test_a_public_file_not_the_one_pinned_at_staging_is_refused(tmp_path, RP, capsys, how, why):
@@ -212,7 +212,7 @@ def test_the_case_reads_the_drawn_members_files_whichever_member_it_is(tmp_path,
     (w / "m2" / "circuit.txt").unlink()
     assert V.case(w, scratch)[0]["blobs"][0] == str(w / "m0" / "circuit.txt")
     (w / "m2" / "pub-4.bin").write_bytes(public_of(1))
-    with pytest.raises(V.Refused, match=f"isn't, by SHA-512, the one {a5.PIN} pinned at staging"):
+    with pytest.raises(V.Refused, match=f"isn't, by SHA-512, the one {a5.PIN} pinned for m2"):
         V.case(w, scratch)
     (w / "m2" / "pub-4.bin").write_bytes(public_of(2))
     (w / "m2" / "pub-4.bin").rename(w / "m2" / "kept.bin")
@@ -254,6 +254,35 @@ def test_the_onsite_record_reads_a5s_pin_against_the_registration_the_coins_comm
     assert OR.pinned(pin, registration(layer), {registration(layer)}, pub) is None
     other = registration("00" * 64)
     assert "leaf layer" in OR.pinned(pin, other, {other}, pub)
+
+
+def test_a_drawn_member_a5_completed_is_named_by_its_completed_file_and_held_to_the_pin(tmp_path, RP):
+    """a5 rewrites its drawn member's public file after the draw (`a5.complete_drawn`, an instance-major member's body
+    re-laid) and pins it once the tie holds (`a5.pin_completed`). Before that pin a kept completed file is refused; with
+    it the case names the completed file, the onsite record holds it to the pin (`onsite_record.pinned`), the staged
+    bodies still the registration's leaf layer, and the staged file, or a file neither entry pins, is refused."""
+    import onsite_record as OR
+
+    from verity.ml.circuits.codec import canonical_json
+
+    w, scratch = kept_window(tmp_path, RP), tmp_path / "scratch"
+    pub, pin = w / "m0" / "pub-4.bin", w / a5.PIN
+    staged = pub.read_bytes()
+    completed = b"completed header\n" + a5.body(pub) + b", re-laid"
+    pub.write_bytes(completed)
+    with pytest.raises(V.Refused, match="pinned for m0"):
+        V.case(w, scratch)
+    a5.pin_completed(w, [({"m": types.SimpleNamespace(key="m0-key", n=4), "st": {"dir": w / "m0"}}, [])])
+    assert V.case(w, scratch)[0]["params"]["proofs"]["public"] == hashlib.sha512(completed).hexdigest()
+    reg = canonical_json({"format": "verity/registration/v1", "leaf_layer": json.loads(pin.read_text())["leaf_layer"]})
+    assert OR.pinned(pin, reg.hex(), {reg.hex()}, pub) is None
+    pub.write_bytes(staged)
+    with pytest.raises(V.Refused, match="pinned for m0"):
+        V.case(w, scratch)
+    pub.write_bytes(b"completed header\nanother body")
+    with pytest.raises(V.Refused, match="pinned for m0"):
+        V.case(w, scratch)
+    assert "isn't, by SHA-512, one --public-pin pinned" in OR.pinned(pin, reg.hex(), {reg.hex()}, pub)
 
 
 def test_a_blob_with_no_file_leaves_only_missing(tmp_path):

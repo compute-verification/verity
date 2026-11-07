@@ -71,9 +71,9 @@ the registration asserts, is the auditor's placement under trusted-host (`STANDI
 sessions were verified against (`PERIOD`); and the remote theorem's registered-files condition (`registered_files`):
 each file remote's sampled proofs case (``--sampled-proofs-case``) registers, the circuit file and the public file, is
 by SHA-512 the one its params θ name (proofs.circuit, proofs.public), θ held to the params each composite that reads the
-case states, the files hashed here and never read off the evidence, and the public file the one a5 pinned at staging,
-before the draw (``--public-pin``, `pinned`), the pin's bodies held to the registration the challenger's coins committed
-to by their leaf layer. `scan-state-pinned` (`scan_state_pinned`): where an audit's window commits the scan's state in
+case states, the files hashed here and never read off the evidence, and the public file one a5 pinned (``--public-pin``,
+`pinned`): as staged before the draw, the pin's staged bodies held to the registration the challenger's coins committed
+to by their leaf layer, or as a5 completed it from the staged file once the tie held. `scan-state-pinned` (`scan_state_pinned`): where an audit's window commits the scan's state in
 its activations (`SCAN_STATE`, the entry `NetworkCheck.Period` holds to the scan's), V3c's audit opened its registered
 reads of it at that entry's root and domain (`AUDIT_SUMMARY`'s registered.own), accepted, and reported exactly each
 sampled member's registered reads (`AUDIT`): one-stage's registration checks read nothing of the window, so the audit's
@@ -497,12 +497,16 @@ CHECKED = {
                       "proofs.public. θ is held by SHA-512 over its canonical JSON to the params each of the run's "
                       "composites that reads the case states for it (params_sha512), and the files are hashed here, "
                       "never read off the evidence, whose digests are the prover's. Where θ names the public file, that "
-                      "file is also the one a5 pinned at staging, before the draw (--public-pin, a5's public-pin.json, "
-                      "`pinned`): by SHA-512 and its body's, a member's of the pin, whose bodies' leaf layer is the one "
-                      "the registration the case commits to holds (R4), the case's commitment the one each composite "
-                      "that reads the case states, so the registration the challenger's coins committed to. A public "
-                      "file changed after the draw isn't the pin's, nor is a pin rewritten to it, unless only its header "
-                      "changed and the pin with it: the pin binds the header only as the audit's own output, and v2 "
+                      "file is also one a5 pinned (--public-pin, a5's public-pin.json, `pinned`), by SHA-512 and its "
+                      "body's: a member's as staged before the draw, the pin's staged bodies' leaf layer the one the "
+                      "registration the case commits to holds (R4), the case's commitment the one each composite that "
+                      "reads the case states, so the registration the challenger's coins committed to; or a drawn "
+                      "member's as a5 completed it from its staged file, the file its session proved, pinned once the "
+                      "tie held (its completed entry, a5.pin_completed): its header completed and its body the staged "
+                      "one's, or an instance-major member's re-laid port-major, a function of the staged file, the "
+                      "registration's roots and the verifier's reads. A public file changed after the draw isn't the "
+                      "pin's, nor is a pin rewritten to it, beyond that completion: the pin binds the completed header "
+                      "and a re-laid body only as the audit's own output, and v2 "
                       "holds its fields to what was fixed before the coin, publicHeld its scheme, roots, domains, "
                       "population and units.indices (instance i is unit i), and flock-verify its circuit_sha512 to the "
                       "circuit file θ names, its classes to that circuit's class and its shared_rows to the roots "
@@ -1621,12 +1625,12 @@ def scan_state_pinned(out: Path, case: Any) -> dict[str, Any]:
 
 
 def pinned(pin: Path | None, commitment: Any, stated: set[Any], public: Path) -> str | None:
-    """Why the public file remote's sampled proofs case registers, ``public``, isn't the one a5 pinned at staging,
-    before the draw (``pin``, a5's ``public-pin.json``: by member key, each public file's SHA-512 and its body's, and
-    their leaf layer), else None. The pin's bodies are, by their leaf layer, those the registration the case commits to
-    holds (``commitment``, which each composite that reads the case states, ``stated``): the registration the
-    challenger's coins committed to, which R4 held to the bodies before the draw. And ``public`` is, by SHA-512 and its
-    body's, a pinned member's."""
+    """Why the public file remote's sampled proofs case registers, ``public``, isn't one a5 pinned (``pin``, a5's
+    ``public-pin.json``: by member key, each public file's SHA-512 and its body's as staged before the draw, their leaf
+    layer, and a drawn member's as completed once the tie held, its ``completed``), else None. The pin's staged bodies
+    are, by their leaf layer, those the registration the case commits to holds (``commitment``, which each composite
+    that reads the case states, ``stated``): the registration the challenger's coins committed to, which R4 held to the
+    bodies before the draw. And ``public`` is, by SHA-512 and its body's, a pinned member's, as staged or completed."""
     from verity.ml.circuits.codec import canonical_json
 
     if pin is None:
@@ -1634,6 +1638,7 @@ def pinned(pin: Path | None, commitment: Any, stated: set[Any], public: Path) ->
     try:
         doc = json.loads(pin.read_bytes())
         members = {k: (m["file"], m["body"]) for k, m in doc["members"].items()}
+        completed = {(m["completed"]["file"], m["completed"]["body"]) for m in doc["members"].values() if "completed" in m}
         layer = doc["leaf_layer"]
     except (OSError, AttributeError, KeyError, TypeError, ValueError) as e:
         return f"--public-pin isn't a pin of the public files at staging: {type(e).__name__}"
@@ -1653,8 +1658,9 @@ def pinned(pin: Path | None, commitment: Any, stated: set[Any], public: Path) ->
         for chunk in iter(lambda: f.read(1 << 20), b""):
             whole.update(chunk)
             body.update(chunk)
-    if (whole.hexdigest(), body.hexdigest()) not in members.values():
-        return "the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw"
+    if (whole.hexdigest(), body.hexdigest()) not in {*members.values(), *completed}:
+        return ("the public file the case registers isn't, by SHA-512, one --public-pin pinned at staging before the draw "
+                "or completed once the tie held")
     return None
 
 
@@ -1664,7 +1670,7 @@ def registered_files(found: Mapping[str, tuple[str, dict[str, Any]]], case: Path
     (`SAMPLED_ID`'s, ``{"params", "commitment", "blobs", ...}``) registers, the circuit file and then the public file
     (`proofs.evidence_v2`'s order), are by SHA-512 those its params θ name (``proofs.circuit``, ``proofs.public``), θ
     held by SHA-512 to the params each composite in ``found`` that reads the case states for it, and the public file
-    the one a5 pinned at staging, before the draw (``pin``, `pinned`). ``holds``, ``read_by``, those composites' ids,
+    one a5 pinned, as staged before the draw or as completed once the tie held (``pin``, `pinned`). ``holds``, ``read_by``, those composites' ids,
     ``compared``, the files θ names, ``why`` where it doesn't hold, and ``unbound`` (`PUBLIC_UNBOUND`) where θ names no
     public file."""
     import composite as CO

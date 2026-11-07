@@ -109,8 +109,8 @@
 #     registration of the deployment, both the auditor's and never the prover's node's, without which the network
 #     certifier's verdict is not established; its check that the files remote's sampled proofs case registers are the
 #     ones its params name by SHA-512 (the serve dir's private/sampled-proofs/case.json, where the composite wrote it),
-#     its public file the one V3c's audit pinned at staging, before the draw (its window/public-pin.json),
-#     without which neither that verdict nor a composite's that reads the case is; and, where the composite wrote the
+#     its public file one V3c's audit pinned (its window/public-pin.json), at staging before the draw or completed
+#     once the tie held, without which neither that verdict nor a composite's that reads the case is; and, where the composite wrote the
 #     inference-only case, where its α and Γ
 #     came from, its private policy.json's read: off the run's own division, or ALPHA and GAMMA, never a registered
 #     policy); its ONSITE line gates nothing.
