@@ -19,18 +19,15 @@
 "Exfil.escapes" = "Exfil.acceptCoins"
 
 # proofs' sampling designs have lemmas of their own that end in `_escape_le_exp` (`Law.stratified_escape_le_exp`). The
-# population's files are named under either name of its area (`security_areas_map.toml` moves `Population` to
-# `SampledProofs`), so the map renames the same declarations before and after that move.
+# population's files are named at their paths before `security_areas_map.toml` moves `Population` to `SampledProofs`
+# (`rename.py` refuses a path no file matches, so the map can't name them under both).
 [[words_in]]
 files = ["Security/Definitions/Population.lean", "Security/Definitions/Population/*.lean", "Security/Proofs/Population.lean",
-         "Security/Proofs/Population/*.lean", "Security/Definitions/SampledProofs.lean",
-         "Security/Definitions/SampledProofs/*.lean", "Security/Proofs/SampledProofs.lean",
-         "Security/Proofs/SampledProofs/*.lean"]
+         "Security/Proofs/Population/*.lean"]
 words = { "escape_le_exp" = "acceptProb_le_exp", "pow_escape_le_exp" = "pow_acceptProb_le_exp" }
 
 [[words_in]]
-files = ["Security/Definitions/Population/Exfiltration.lean", "Security/Proofs/Population/ExfiltrationBound.lean",
-         "Security/Definitions/SampledProofs/Exfiltration.lean", "Security/Proofs/SampledProofs/ExfiltrationBound.lean"]
+files = ["Security/Definitions/Population/Exfiltration.lean", "Security/Proofs/Population/ExfiltrationBound.lean"]
 words = { "escapes" = "acceptCoins" }
 
 [rewrite]

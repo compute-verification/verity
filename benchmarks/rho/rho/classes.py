@@ -130,7 +130,7 @@ class Argument(Protocol):
 
     name: str
     side: Literal["bound", "attack"]
-    #: the Lean statement first (or a `draft:` id), then the named premises
+    #: the Lean statement first (or a `draft:` id), then the assumptions
     cites: tuple[str, ...]
 
     def allowance(self, p: Profile) -> Allowance: ...

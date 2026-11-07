@@ -29,7 +29,7 @@ after it, beside a later step's forward; their receipts go under a later round. 
 So D is the ring's depth: the A slots of D steps live at once (the forward's own, and D - 1 steps' whose units are pending
 or running), and the units of a step wait D - 2 steps for their coin.  In process (``coins: in-process (not certified)``)
 a coin is back once its root is sent; off the node round s + D - 1 waits for step s's units unless (D - 1) * step >= R +
-their span (R the round trip, the span about 10 ms), so the served T64 row on the RTX PRO 6000 (R about 100 ms) is -so8,
+their span (R the round trip), so the served T64 row on the RTX PRO 6000 is -so8,
 at 54.6 MB of GPU memory a slot past -so6 (T * sum K bytes of A codes, and their scales).
 
 `check` holds a capture to dither_a's checks with its own round s for the A, admit, z and y leaves (the receipt-step leaf
@@ -442,8 +442,8 @@ class SoWindow(DO.DitherState):
         self.starts_ms.append(1e3 * (time.perf_counter() - t0))
 
     def prepare(self) -> None:
-        """In process, the next execution phase's challenger made now, outside a timed generate (its commitment over 16384 rounds
-        takes 1.7 s), as the challenger's gate makes an off-node challenge phase's before its execution phase."""
+        """In process, the next execution phase's challenger made now, outside a timed generate (its commitment covers 16384
+        rounds), as the challenger's gate makes an off-node challenge phase's before its execution phase."""
         if not self.open and self.prepared is None and CO.session() is None:
             self.prepared = CO.open_coins(None, 1, rounds_of())
 
@@ -2420,8 +2420,8 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
 
 def rehashed_calls(L: int, coin: bytes, drawn: int = 8) -> list[int]:
     """The last step's calls whose A table and receipt table `check_end` rehashes on the CPU: the first and last layers'
-    four (every linear's shape) and `drawn` the sampling coin picks: at most 16 of Llama 3.1 8B's 128, about half a second
-    where all 128 take about 4 s (under DO.A_STEP_ENV the A side is every K's table, so all 128 calls' rows)."""
+    four (every linear's shape) and `drawn` the sampling coin picks: at most 16 of Llama 3.1 8B's 128, an eighth of rehashing
+    them all (under DO.A_STEP_ENV the A side is every K's table, so all 128 calls' rows)."""
     h = hashlib.sha512(b"verity/kernels-int12/end-rehash/v1" + coin).digest()
     return sorted({*range(min(4, L)), *range(max(0, L - 4), L),
                    *(int.from_bytes(h[8 * j:8 * j + 8], "big") % L for j in range(drawn))})

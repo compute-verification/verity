@@ -19,7 +19,7 @@ import wgmma as W  # noqa: E402
 SM90_SMEM = 232448
 
 
-def test_a_config_round_trips_and_refuses_an_unbuilt_tile():
+def test_a_config_round_trips_and_refuses_an_unbuilt_tile() -> None:
     for text in ("128x256:c0:g8", "64x64:c32:g1", "128x128:c66:g16", "128x256:c0:g8:m2", "64x64:c32:g1:m2", "64x64:c0:g8:k0",
                  "128x64:c0:g1:k4"):
         assert str(W.Cfg.parse(text)) == text
@@ -31,23 +31,23 @@ def test_a_config_round_trips_and_refuses_an_unbuilt_tile():
             W.Cfg(*bad)
 
 
-def test_split_k_fills_the_sms_and_keeps_two_blocks_a_split():
+def test_split_k_fills_the_sms_and_keeps_two_blocks_a_split() -> None:
     assert W.auto_splits(2, 128) == 64 and W.auto_splits(1, 128) == 64 and W.auto_splits(40, 128) == 3
     assert W.auto_splits(200, 128) == 1 and W.auto_splits(1, 3) == 1 and W.auto_splits(1, 1) == 1
 
 
-def test_split_k_runs_only_where_the_tiles_leave_sms_idle():
+def test_split_k_runs_only_where_the_tiles_leave_sms_idle() -> None:
     assert W.splits_for(132, 128, 3) == 1 and W.splits_for(40960, 128, 0) == 1
     assert W.splits_for(64, 128, 3) == 3 and W.splits_for(64, 128, 0) == 2 and W.splits_for(8, 4, 16) == 4
 
 
-def test_every_tile_fits_the_cards_shared_memory_and_its_swizzle():
+def test_every_tile_fits_the_cards_shared_memory_and_its_swizzle() -> None:
     for tm, bn in W.TILES:
         assert 2 <= W.stages(tm, bn) <= W.MAX_STAGES and W.smem(tm, bn) <= SM90_SMEM
         assert (tm * W.BK) % 1024 == 0 and ((tm + bn) * W.BK) % 1024 == 0
 
 
-def test_params_is_the_kernels_layout():
+def test_params_is_the_kernels_layout() -> None:
     src = (HERE / "s8_wgmma.cu").read_text()
     sa, m, ws, size = map(int, re.search(r"offsetof\(Params, sa\) == (\d+) && offsetof\(Params, M\) == (\d+) && "
                                          r"offsetof\(Params, ws\) == (\d+) && sizeof\(Params\) == (\d+)", src).groups())
@@ -59,14 +59,14 @@ def test_params_is_the_kernels_layout():
     assert int(re.search(r"MAX_STAGES = (\d+)", src).group(1)) == W.MAX_STAGES
 
 
-def test_the_default_config():
+def test_the_default_config() -> None:
     assert W.default_cfg(1, 16384, 16384) == W.Cfg(64, 128)
     assert W.default_cfg(64, 128, 16384) == W.Cfg(64, 128)
     assert W.default_cfg(8192, 65536, 16384) == W.Cfg(128, 256)
     assert W.default_cfg(256, 64, 16384) == W.Cfg(128, 64)
 
 
-def test_the_tuned_table_holds_built_tiles_in_ascending_m():
+def test_the_tuned_table_holds_built_tiles_in_ascending_m() -> None:
     from configs import CONFIGS
     for rows in CONFIGS["wgmma:sm_90"].values():
         assert [m for m, _ in rows] == sorted({m for m, _ in rows})
@@ -74,7 +74,7 @@ def test_the_tuned_table_holds_built_tiles_in_ascending_m():
             assert str(W.Cfg.parse(text)) == text
 
 
-def test_the_grid_keeps_the_rounds_and_holds_at_most_its_ctas():
+def test_the_grid_keeps_the_rounds_and_holds_at_most_its_ctas() -> None:
     lib = types.SimpleNamespace(sms=132)
     grid = lambda tiles, ctas: W.Lib.grid(lib, tiles, ctas)  # noqa: E731
     assert grid(128, 0) == 128 and grid(264, 0) == 132 and grid(200, 0) == 100 and grid(1, 0) == 1
@@ -103,12 +103,12 @@ def _gate(igmma: str = "IGMMA.64x64x32.S8.S8 R24, gdesc[UR4], R24 ;", extra: str
     return [p for p in problems if "missing from the cubin" not in p]
 
 
-def test_the_sass_gate_passes_the_s8_atom_and_integer_divisions_f2i():
+def test_the_sass_gate_passes_the_s8_atom_and_integer_divisions_f2i() -> None:
     assert _gate() == [] and _gate(name="s8mm2_64x64") == []
     assert _gate(name="s8mm2_64x64", igmma="IGMMA.64x128x32.S8.S8 R24, gdesc[UR4], R24 ;")
 
 
-def test_the_sass_gate_wants_every_kernel_and_its_pair():
+def test_the_sass_gate_wants_every_kernel_and_its_pair() -> None:
     _, problems = SG.gate(PTXAS, LISTING.format(igmma="IGMMA.64x64x32.S8.S8 R24, gdesc[UR4], R24 ;", extra=""))
     missing = next(p for p in problems if "missing from the cubin" in p)
     assert "'s8mm2_128x256'" in missing and "'s8mm_128x256'" in missing and "'s8mm_64x64'" not in missing
@@ -116,11 +116,11 @@ def test_the_sass_gate_wants_every_kernel_and_its_pair():
 
 @pytest.mark.parametrize("bad", ["FFMA R1, R2, R3, R4 ;", "FMUL.FTZ R1, R2, R3 ;", "LDL R1, [R2] ;",
                                  "HGMMA.64x64x16.F32.BF16 R24, gdesc[UR4], R24 ;"])
-def test_the_sass_gate_refuses(bad):
+def test_the_sass_gate_refuses(bad: str) -> None:
     assert _gate(extra=bad)
 
 
-def test_the_sass_gate_refuses_an_unsigned_or_other_shaped_atom():
+def test_the_sass_gate_refuses_an_unsigned_or_other_shaped_atom() -> None:
     assert _gate(igmma="IGMMA.64x64x32.U8.S8 R24, gdesc[UR4], R24 ;")
     assert _gate(igmma="IGMMA.64x128x32.S8.S8 R24, gdesc[UR4], R24 ;")
 
@@ -130,12 +130,12 @@ def test_the_sass_gate_refuses_an_unsigned_or_other_shaped_atom():
     (PTXAS.replace("'sm_90a'", "'sm_100a'"), "compiled for sm_100a, want sm_90a"),
     (PTXAS + "ptxas info    : (C7515) Potential Performance Loss: wgmma.mma_async instructions are serialized\n", "C7515"),
 ])
-def test_the_sass_gate_refuses_the_report(report, why):
+def test_the_sass_gate_refuses_the_report(report: str, why: str) -> None:
     _, problems = SG.gate(report, LISTING.format(igmma="\n".join(["IGMMA.64x64x32.S8.S8 R24, gdesc[UR4], R24 ;"] * 4), extra=""))
     assert any(why in p for p in problems), problems
 
 
-def test_the_kernel_order_is_a_permutation_within_each_32_bytes():
+def test_the_kernel_order_is_a_permutation_within_each_32_bytes() -> None:
     assert sorted(W.KERNEL_ORDER) == list(range(32))
     assert W.KERNEL_ORDER[:8] == (0, 1, 2, 3, 8, 9, 10, 11) and W.KERNEL_ORDER[16:20] == (4, 5, 6, 7)
 
@@ -157,7 +157,7 @@ def _fragments(o: np.ndarray) -> np.ndarray:
 
 
 @pytest.mark.parametrize("bn,r", [(128, 8), (256, 16)])
-def test_the_registers_times_r_in_kernel_order_are_os_bytes_times_r(bn, r):
+def test_the_registers_times_r_in_kernel_order_are_os_bytes_times_r(bn: int, r: int) -> None:
     torch = pytest.importorskip("torch")
     rng = np.random.default_rng(bn + r)
     o = rng.integers(-2**31, 2**31, (64, bn), dtype=np.int64).astype(np.int32)
@@ -169,7 +169,7 @@ def test_the_registers_times_r_in_kernel_order_are_os_bytes_times_r(bn, r):
     assert not (o.view(np.int8).astype(np.int64) @ rk.astype(np.int64).T == want).all()
 
 
-def test_rparams_and_the_reduction_kernels_are_the_kernels():
+def test_rparams_and_the_reduction_kernels_are_the_kernels() -> None:
     src = (HERE / "s8_wgmma.cu").read_text()
     r, z, size = map(int, re.search(r"offsetof\(RParams, r\) == (\d+) && offsetof\(RParams, z\) == (\d+) && "
                                     r"sizeof\(RParams\) == (\d+)", src).groups())
@@ -183,7 +183,7 @@ def test_rparams_and_the_reduction_kernels_are_the_kernels():
     assert all(tm == 128 for tm, _ in W.FUSED_TILES)
 
 
-def test_a_tiles_reduction_fits_the_ring_beside_a_stage_of_the_next():
+def test_a_tiles_reduction_fits_the_ring_beside_a_stage_of_the_next() -> None:
     for tm, bn in W.FUSED_TILES:
         for r in W.RS:
             q, rst = W.red_geometry(tm, bn, r)
@@ -193,7 +193,7 @@ def test_a_tiles_reduction_fits_the_ring_beside_a_stage_of_the_next():
     assert W.red_geometry(128, 128, 128) == (2, 2) and W.red_geometry(128, 128, 64) == (4, 1)
 
 
-def test_the_sm_clock_is_each_ctas_cycles_over_its_nanoseconds_and_skips_ctas_that_wrote_none():
+def test_the_sm_clock_is_each_ctas_cycles_over_its_nanoseconds_and_skips_ctas_that_wrote_none() -> None:
     import torch
     clk = torch.zeros(4 * 4, dtype=torch.int64)
     assert W.sm_mhz(clk) is None
@@ -203,7 +203,7 @@ def test_the_sm_clock_is_each_ctas_cycles_over_its_nanoseconds_and_skips_ctas_th
     assert W.sm_mhz(clk) == pytest.approx(1800.0)
 
 
-def test_the_sass_gate_passes_a_reduction_kernels_two_atoms_and_refuses_a_third():
+def test_the_sass_gate_passes_a_reduction_kernels_two_atoms_and_refuses_a_third() -> None:
     name = "s8mr_128x256_r16"
     main = "IGMMA.64x256x32.S8.S8 R24, gdesc[UR4], R24 ;"
     red = "\n".join(["IGMMA.64x16x32.S8.S8 R200, R24, gdesc[UR8], R200 ;"] * 32)

@@ -233,6 +233,20 @@ def test_a_read_definition_is_renamed_as_its_modules_file_renames_it(tmp_path):
     assert M.lock_moves(tmp_path, words, files) == {"Compose.Declared": "Compose.RegisteredCircuit"}
 
 
+def test_a_lock_under_tests_fixtures_is_a_tests_data_and_never_read(tmp_path):
+    """A fixture lock holds what its test needs (`unread`'s holds `reads` of lists) and is no package's record: under a map
+    that excludes no fixture, the moves are the package lock's alone."""
+    words = M.Words({"words": {"Warden": "NetworkCertifier"}})
+    locks = {"Security/lean-audit.json": {"guarantees": {"NetTiming.SecurityProofs.W1": {}},
+                                          "reads": {"M": {"definitions": {"Warden.Obs": "00"}}}},
+             "tools/verity/lean/tests/fixtures/unread/Security/lean-audit.json": {
+                 "guarantees": {"NetTiming.Warden.spec": {}}, "reads": {"NetTiming.Warden.spec": ["NetTiming.Warden.helper"]}}}
+    for path, lock in locks.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(json.dumps(lock))
+    assert M.lock_moves(tmp_path, words, list(locks)) == {"Warden": "NetworkCertifier"}
+
+
 def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
     """`Properties.RemoteAudit.Line` and `.Line.Record` are modules, a namespace and a structure: a whole import line or
     quoted string names the module, and everywhere else the name stands."""
@@ -463,6 +477,40 @@ def test_a_json_pin_follows_a_manifest_the_move_rewrites(toy, toy_map):
     assert moved == manifest.replace("w/warden", "w/certifier")
     assert json.loads((toy / "fix/vec.json").read_text()) == {
         "inputs": {"README.md": sha(readme), "Sec/Proofs/lake-manifest.json": sha(moved)}, "out": [1]}
+
+
+def test_a_sorted_json_object_gets_a_renamed_key_in_its_sorted_place(toy, tmp_path_factory, capsys):
+    """An object whose keys were sorted comes back sorted, as its writer (`unread.py`'s caps) writes it, its lines otherwise
+    as they were; one that wasn't sorted keeps its order, and a file on one line or with a key twice keeps the words alone.
+    A second run changes nothing."""
+    def caps(areas: list[str]) -> str:
+        return json.dumps({"schema": "caps/v1", "areas": {a: [f"{a}.x", f"{a}.y"] for a in areas}}, indent=1) + "\n"
+    files = {"Sec/caps.json": caps(["Proofs/Core", "Proofs/Population", "Proofs/Rest"]),
+             "Sec/order.json": json.dumps({"Zeta": 1, "Population": 2, "Core": 3}, indent=1) + "\n",
+             "Sec/line.json": json.dumps({"Core": 1, "Population": 2, "Rest": 3}) + "\n",
+             "Sec/twice.json": '{\n "Core": 1,\n "Core": 2,\n "Population": 3,\n "Rest": 4\n}\n'}
+    for p, t in files.items():
+        (toy / p).write_text(t)
+    git(toy, "add", "-A")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "json")
+    words = tmp_path_factory.mktemp("map") / "map.toml"
+    words.write_text('[words]\n"Population" = "SampledProofs"\n')
+    assert M.main(["--map", str(words), "--root", str(toy)]) == 0
+    assert (toy / "Sec/caps.json").read_text() == caps(["Proofs/Core", "Proofs/Rest", "Proofs/SampledProofs"])
+    for p in ("Sec/order.json", "Sec/line.json", "Sec/twice.json"):
+        assert (toy / p).read_text() == files[p].replace("Population", "SampledProofs"), p
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
+    capsys.readouterr()
+    assert M.main(["--map", str(words), "--root", str(toy)]) == 0
+    assert "files rewritten: 0" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("path", ["Sec/lean-audit.json", "Sec/Proofs/lake-manifest.json", M.MOVES, "Sec/caps.toml"])
+def test_a_lock_a_manifest_moves_json_or_a_file_not_json_keeps_the_words_alone(path):
+    old = json.dumps({"Core": 1, "Population": 2, "Rest": 3}, indent=1) + "\n"
+    new = old.replace("Population", "SampledProofs")
+    assert M.resorted(old, new, path) == new
+    assert M.resorted(old, new, "Sec/caps.json") == json.dumps({"Core": 1, "Rest": 3, "SampledProofs": 2}, indent=1) + "\n"
 
 
 def test_it_refuses_a_dirty_worktree(toy, toy_map):
