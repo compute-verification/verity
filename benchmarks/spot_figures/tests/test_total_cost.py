@@ -209,8 +209,8 @@ def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
 
 @pytest.fixture(scope="module")
 def measured(tmp_path_factory) -> dict:
-    """One scope at four shares, with (A)'s tax measured, planned without Lean's check of (C)'s designs (`test_figure1.py`
-    stubs it, and the sampled-proofs suite runs it)."""
+    """One scope at four shares, with (A)'s tax measured, planned without Lean's checks (`test_figure1.py` stubs (C)'s,
+    `test_a_two_stage_point_is_what_lean_certifies` the two-stage lines', and the sampled-proofs suite runs both)."""
     mp = pytest.MonkeyPatch()
     load = cards.load
 
