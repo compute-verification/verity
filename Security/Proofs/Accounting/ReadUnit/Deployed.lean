@@ -1,0 +1,105 @@
+module
+
+public import Proofs.Accounting.ReadUnit.Tie
+public import Proofs.Flock.Bridge.UnitRows
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+
+/-!
+# The read's gates refine its reference at a unit of the parsed circuit file
+
+`gatesRefine_partsOf`: at unit `u` of the parsed file's partition (`Flock.Bridge.partsOf`), let the unit net's rows hold
+the read's program (`HoldsRead`) and compute its reference wherever they hold (`hsound`). Then, where the stack's
+constant gate is registered as 1 and is among `u`'s inputs, and copy `j`'s read outputs are committed, the read's gates
+at copy `j` refine `Hash.EmbeddingRead` (`ReadUnit.GatesRefine`), at the ports through the copy's gates
+(`Flock.Bridge.copyGate`). The values are those a correct unit's copy holds (`Flock.Bridge.rows_of_correct`).
+
+`le_pow_depth` and `depth_le` give the tree bounds the read's statements take, for a table of at most `2 ^ 32` rows.
+-/
+
+@[expose] public section
+
+namespace Accounting.ReadUnit.Gates
+
+open Flock.HmNets hiding and
+open FlockSoundness.Discharge.Hm
+
+/-- A table's rows fit its tree's leaves. -/
+theorem le_pow_depth (V : ℕ) : V ≤ 2 ^ Hash.Tree.depth V := by
+  unfold Hash.Tree.depth
+  split
+  · rename_i h
+    simpa using h
+  · have h := @Nat.lt_log2_self (V - 1)
+    generalize 2 ^ (Nat.log2 (V - 1) + 1) = p at h ⊢
+    omega
+
+/-- A table of at most `2 ^ 32` rows has a tree of depth at most 32. -/
+theorem depth_le {V : ℕ} (hV : V ≤ 2 ^ 32) : Hash.Tree.depth V ≤ 32 := by
+  unfold Hash.Tree.depth
+  split
+  · omega
+  · rename_i h
+    have hlt : V - 1 < 2 ^ 32 := Nat.lt_of_lt_of_le (Nat.sub_lt (by omega) Nat.one_pos) hV
+    have := (Nat.log2_lt (by omega)).2 hlt
+    omega
+
+/-- **The read's gates refine its reference at a unit of the parsed circuit file.** At unit `u` of `partsOf`, let the
+unit net's rows hold the read's program for a table of `V` rows of `H` words (`hr`), computing its reference wherever
+they hold with their constant set (`hsound`). If the stack's constant gate is registered as 1 and is among `u`'s inputs,
+and copy `j`'s read outputs are committed, then the read's gates at copy `j` refine `Hash.EmbeddingRead` at SHA-512 under
+the hm96 key `key`, at the ports through copy `j`'s gates. -/
+theorem gatesRefine_partsOf (key : Hash.Msg) {V H : ℕ} (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit)
+    (n : ℕ) {run : (List Lin × Lin) × St}
+    (hr : HoldsRead (FlockSoundness.Rows.ofNet hU) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2]))
+    (hsound : ∀ z : Fin (FlockSoundness.Rows.ofNet hU).w → Bool, (FlockSoundness.Rows.ofNet hU).Sat z →
+      z (FlockSoundness.Rows.ofNet hU).one = true →
+      evs (fun v => z (hr.φ v)) run.1.1 =
+          Hash.EmbeddingRead.h V H (readTok fun v => z (hr.φ v))
+            (readOpening H (Hash.Tree.depth V) fun v => z (hr.φ v)) ∧
+        (ev (fun v => z (hr.φ v)) run.1.2 = true →
+          Hash.EmbeddingRead.ok Verity.sha512 Verity.sha512 ⟨readDomain fun v => z (hr.φ v), V, fun r => r⟩ key
+            (readRoot fun v => z (hr.φ v)) V (readTok fun v => z (hr.φ v))
+            (readOpening H (Hash.Tree.depth V) fun v => z (hr.φ v))))
+    (consts : Fin (Flock.Bridge.circuitOf D hU n).N → Option Bool) (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv)
+    (hone : consts (Flock.Bridge.constGate D hU n u) = some true)
+    (hone_io : Flock.Bridge.constGate D hU n u ∈ (Flock.Bridge.partsOf D hU n).io u)
+    (hcom : ∀ i < 16 * H + 1, Flock.Bridge.copyGate D hU n u hj (hr.out i) ∈ (Flock.Bridge.partsOf D hU n).committed) :
+    ReadUnit.GatesRefine Verity.sha512 Verity.sha512 key consts (Flock.Bridge.partsOf D hU n) u
+      (readPorts (Flock.Bridge.copyGate D hU n u hj) hr V H) := by
+  refine gatesRefine_of_vals key (Flock.Bridge.partsOf D hU n) u (Flock.Bridge.copyGate D hU n u hj) hr hsound consts
+    fun tr hcorrect hconsts => ?_
+  obtain ⟨z, hsat, hz1, hz⟩ := Flock.Bridge.rows_of_correct D hU n hcorrect hj
+  exact ⟨fun c => z c.val, hsat, hz1.trans (hconsts _ hone_io true hone), fun c hc => hz c (Or.inl hc),
+    fun i hi => hz _ (Or.inr (hcom i hi))⟩
+
+end Accounting.ReadUnit.Gates
