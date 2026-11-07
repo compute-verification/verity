@@ -38,16 +38,16 @@ for u in ${SPLIT_UNITS:?}; do
   log "$u: stage $N"
   "$PY" benchmarks/served_units/stage.py "$u" "$N" "$sd/stage" > "$sd/stage.log" 2>&1 \
     || { log "$u: stage failed: $(tail -c 400 "$sd/stage.log")"; rc=1; keep; continue; }
-  i=$("$PY" - "$Z" "$u" "$sd" <<'EOF'
+  i=$("$PY" - "$Z" "$u" "$sd" "${SPLIT_ARMS:-nofw}" <<'EOF'
 import json, sys
 from pathlib import Path
-z, u, sd = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])
+z, u, sd, arms = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3]), sys.argv[4].split(",")
 st = json.loads((sd / "stage" / "stage.json").read_text())
 c = st["n"]
 (sd / f"draw-k{c}.json").write_text(json.dumps({"law": "subset", "population": c, "k": c, "units": list(range(c))}))
 part = sd / "stage" / "partition.json"
 plan = json.loads((z / "plan.json").read_text())
-plan.append({"unit": u, "tag": u, "c": c, "k": c, "arms": ["nofw"], "dir": str(sd), "stage_dir": str(sd / "stage"),
+plan.append({"unit": u, "tag": u, "c": c, "k": c, "arms": arms, "dir": str(sd), "stage_dir": str(sd / "stage"),
              "pin": (sd / "stage" / "pin.txt").read_text().strip(), "inst": str(sd / "stage" / "inst.bin"),
              "pub": str(sd / "stage" / "pub.bin"), "partition": str(part) if part.exists() else None})
 (z / "plan.json").write_text(json.dumps(plan, indent=1))
