@@ -86,9 +86,10 @@ charges only a window that sends decisions alone. Advice v1 sends two of them:
 - **n_order** counts the order entries: one for each arrival that deviates from release order, under the client's
   ingress.
 
-The other two are always 0 under v1. The replay derives preemptions and the certified O forces each lag row, so `v1.py`
-refuses a window that sends resumes or lag bits. `ChargeCount_v2{N, H, O}` charges the whole window, its decisions and
-both counts with their values, as one `code_v1` segment with one count and one finish. With H = O = 0 its charge, counts
+The other two are always 0 under v1. The replay derives preemptions and the certified O forces each lag row, so the
+advice code (`advice_code.codec`) refuses a window that sends resumes or lag bits. `ChargeCount_v2{N, H, O}` charges the
+whole window, its decisions and both counts with their values, as one `window_code` segment with one count and one
+finish. With H = O = 0 its charge, counts
 and run are `ChargeCount_v1{N}`'s; the tests check this on the fixture's windows and on random ones.
 
 **The symbols**, in `code_v1._window`'s order. Each is a (cum, freq, total) step of code.py's 32-bit `ArithEncoder`,

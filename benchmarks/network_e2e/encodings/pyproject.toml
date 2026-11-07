@@ -31,4 +31,7 @@ inputs = ["verity/__init__.py", "verity/errors.py", "verity/core/__init__.py", "
           # test_tick serves the replay's scheduler behind the vLLM integration's certified-tick gate (`serve_admit`)
           "integrations/vllm/verity_vllm/__init__.py", "integrations/vllm/verity_vllm/pipeline/__init__.py",
           "integrations/vllm/verity_vllm/pipeline/serve_admit.py", "integrations/vllm/verity_vllm/engine/__init__.py",
-          "integrations/vllm/verity_vllm/engine/hooks.py"]
+          "integrations/vllm/verity_vllm/engine/hooks.py",
+          # the replay, the derived rules, the coder and advice v1's codec are the vLLM integration's advice code, which
+          # replay.py, derived.py, code.py, code_v1.py and v1.py import and re-export
+          "integrations/vllm/verity_vllm/pipeline/advice_code"]

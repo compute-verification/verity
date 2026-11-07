@@ -290,7 +290,7 @@ class _Driver:
 @contextmanager
 def _tapped(drv: _Driver):
     K = RP._KV
-    names = ("allocate_slots", "cache_blocks", "free_request", "_new_blocks", "_pop_hash")
+    names = ("allocate_slots", "cache_blocks", "free_request", "_get_new_blocks", "_pop_hash")
     orig = {n: getattr(K, n) for n in names}
 
     def allocate_slots(self, r, n, hit=(), *, full_sequence_must_fit=False, has_scheduled_reqs=True, dry=False):
@@ -333,11 +333,11 @@ def _tapped(drv: _Driver):
         drv.free(self, r, held, ret)
         drv.check(self)
 
-    def _new_blocks(self, k):
+    def _get_new_blocks(self, k):
         if self.mine is None and drv.alloc is not None:
             drv.alloc["new"], drv.alloc["popping"] = k, True
         try:
-            return orig["_new_blocks"](self, k)
+            return orig["_get_new_blocks"](self, k)
         finally:
             if self.mine is None and drv.alloc is not None:
                 drv.alloc["popping"] = False
@@ -352,7 +352,7 @@ def _tapped(drv: _Driver):
         return orig["_pop_hash"](self, b)
 
     taps = {"allocate_slots": allocate_slots, "cache_blocks": cache_blocks, "free_request": free_request,
-            "_new_blocks": _new_blocks, "_pop_hash": _pop_hash}
+            "_get_new_blocks": _get_new_blocks, "_pop_hash": _pop_hash}
     for n in names:
         setattr(K, n, taps[n])
     try:

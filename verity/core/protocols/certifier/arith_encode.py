@@ -15,9 +15,10 @@ segment.
     KTContext_v1{C, NW}            (counts[C], en, ctx, bit) -> (ok, f0, f1, counts')
 
 Under advice v1 (the certifier PROTOCOL's "Advice v1") each certifier window is one terminated segment of the
-32-bit Witten–Neal–Cleary arithmetic coder (`benchmarks/network_e2e/encodings/code.py`, `ArithEncoder`), as `code_v1`
-codes it: the window's counts, then its values (the replay's decisions, each a bit at the registered book's KT estimate
-for its context, and the arrival order's deviations and the hits sent past the pool bound, integers). The compile
+32-bit Witten–Neal–Cleary arithmetic coder (`verity_vllm.pipeline.advice_code.arith`, `ArithEncoder`), as its window
+coder (`window_code`) codes it: the window's counts, then its values (the replay's decisions, each a bit at the
+registered book's KT estimate for its context, and the arrival order's deviations and the hits sent past the pool
+bound, integers). The compile
 slice's proof block runs the encoder forward, since which value is read next, and so its window, is the replay's
 position.
 

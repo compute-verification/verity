@@ -253,10 +253,10 @@ def test_without_the_tick_the_same_run_needs_decisions():
     data, pdata = V.encode(adv, rec, reg), V.encode(adv, rec, plain)
     assert V.decode(pdata, rec, plain) == adv
     assert sum(V.bits_by_window(pdata, rec, plain).values()) > sum(V.bits_by_window(data, rec, reg).values())
-    with pytest.raises(V.V1Error):
+    with pytest.raises(V.AdviceCodeError):
         V.decode(pdata, rec, reg)
     _, rec, adv, reg = tick_case(True)
-    with pytest.raises(V.V1Error, match="schedule isn't the replay's"):
+    with pytest.raises(V.AdviceCodeError, match="schedule isn't the replay's"):
         V.encode(adv, rec, dataclasses.replace(reg, tick=None))
 
 
@@ -350,14 +350,14 @@ def test_what_the_tick_refuses():
             R.Tick(bad, 1, 1)
     assert dataclasses.asdict(tk) == sa.Tick(*TICK).record()
     assert [tk.close(b) for b in range(4)] == [sa.Tick(*TICK).close(b) for b in range(4)]
-    with pytest.raises(V.V1Error, match="arrived and order are 0"):
+    with pytest.raises(V.AdviceCodeError, match="arrived and order are 0"):
         V.Registered(e, (EOS,), tick=tk, book=CV.Book.uniform(V.CAPS))
-    with pytest.raises(V.V1Error, match="replay.Tick"):
+    with pytest.raises(V.AdviceCodeError, match="replay.Tick"):
         V.Registered(e, (EOS,), tick=sa.Tick(*TICK))
     V.Registered(e, (EOS,), tick=tk, book=CV.Book.uniform(V.TICK_CAPS))
     _, rec, adv, reg = tick_case(False)
     q0, last = rec.requests[0], max(q.end for q in rec.requests) + 1
     later = V.Record((dataclasses.replace(q0, end=last, release=tuple(max(b, last) for b in q0.release)),
                       *rec.requests[1:]))
-    with pytest.raises(V.V1Error, match="release order"):
+    with pytest.raises(V.AdviceCodeError, match="release order"):
         V.encode(adv, later, reg)

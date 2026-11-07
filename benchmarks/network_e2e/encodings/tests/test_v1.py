@@ -130,7 +130,7 @@ def test_a_trace_corpus_trace_round_trips(smallkv):
         data = V.encode(adv, rec, r)
         assert V.decode(data, rec, r) == adv
         assert 0 <= 8 * len(data) - sum(V.bits_by_window(data, rec, r).values()) < 8
-    with pytest.raises(V.V1Error, match="outside v1|isn't the replay's"):
+    with pytest.raises(V.AdviceCodeError, match="outside v1|isn't the replay's"):
         V.encode(adv, rec, dataclasses.replace(reg, row_order="scheduling"))
 
 
@@ -170,7 +170,7 @@ def test_the_order_is_sent_as_its_deviations_from_release_order():
         bad = _string(wins[:w] + [dataclasses.replace(wins[w], order=((p, (r,)),))] + wins[w + 1:], reg)
         try:
             other = V.decode(bad, rec, reg)
-        except V.V1Error as e:
+        except V.AdviceCodeError as e:
             assert not refused or "rank" in str(e) or "names no arrival" in str(e)
             continue
         assert not refused and other != adv and V.encode(other, rec, reg) == bad
@@ -218,7 +218,7 @@ def test_hits_past_the_bound_are_sent_and_held_to_the_replay(smallkv):
     for at, changed in ((w, (wins[w].hits[0] + 1,) + wins[w].hits[1:]), (w, wins[w].hits[1:]),
                         (w, wins[w].hits + (0,)), (s[0], tuple(short))):
         bad = wins[:at] + [dataclasses.replace(wins[at], hits=changed)] + wins[at + 1:]
-        with pytest.raises(V.V1Error, match="replay's residual"):
+        with pytest.raises(V.AdviceCodeError, match="replay's residual"):
             V.decode(_string(bad, reg), rec, reg)
 
 
@@ -236,7 +236,7 @@ def test_the_pool_is_registered_never_sent(smallkv):
         other = dataclasses.replace(reg, engine=dataclasses.replace(t.engine, num_gpu_blocks=blocks))
         try:
             assert V.decode(data, rec, other) != adv
-        except V.V1Error:
+        except V.AdviceCodeError:
             pass
 
 
@@ -379,7 +379,7 @@ def test_the_strings_are_prefix_free(w):
         for bits in product((0, 1), repeat=n):
             try:
                 accepted[bits] = V.decode_bits(bits, rec, reg)
-            except V.V1Error:
+            except V.AdviceCodeError:
                 pass
     assert len(set(accepted.values())) == len(accepted) >= 3
     strings = sorted(accepted)
@@ -397,24 +397,24 @@ def test_truncated_and_extended_strings_are_refused():
     t, rec, reg, adv = case("async-prefix-cache", T=20)
     bits = exact_bits(V.encode(adv, rec, reg), rec, reg)
     for n in range(len(bits)):
-        with pytest.raises(V.V1Error):
+        with pytest.raises(V.AdviceCodeError):
             V.decode_bits(bits[:n], rec, reg)
     for b in (0, 1):
-        with pytest.raises(V.V1Error, match="after the last window"):
+        with pytest.raises(V.AdviceCodeError, match="after the last window"):
             V.decode_bits(bits + bytearray([b]), rec, reg)
     data = V.encode(adv, rec, reg)
     bad = [data[:-1], data + b"\0"]
     if 8 * len(data) > len(bits):
         bad.append(data[:-1] + bytes([data[-1] | 1]))
     for x in bad:
-        with pytest.raises(V.V1Error):
+        with pytest.raises(V.AdviceCodeError):
             V.decode(x, rec, reg)
 
 
 def test_decode_is_total():
     """Random strings, every one-bit change of an encoding, adversarial frames (empty, all zeros,
     all ones, truncations, splices and extensions of an encoding), and the codes of edited residuals (a decision
-    flipped, an order entry added): `V1Error` and nothing else, or an advice whose encoding they are."""
+    flipped, an order entry added): `AdviceCodeError` and nothing else, or an advice whose encoding they are."""
     rng = random.Random(5)
     caps = CV.Caps(arrived=64, hits=64, hit_units=64, resumes=1, order=4, order_len=1, gap=64, index=64, lag=1)
     t, rec, reg, adv = case("sync-kv-pressure", T=20, book=CV.Book.uniform(caps))
@@ -437,9 +437,9 @@ def test_decode_is_total():
     for x in tries:
         try:
             got = V.decode(x, rec, reg)
-        except V.V1Error:
+        except V.AdviceCodeError:
             continue
-        except Exception as e:  # noqa: BLE001 - nothing but V1Error may leave decode
+        except Exception as e:  # noqa: BLE001 - nothing but AdviceCodeError may leave decode
             raise AssertionError(f"decode raised {type(e).__name__}: {e}") from e
         decoded.add(x)
         assert type(got) is I1.Advice and V.encode(got, rec, reg) == x
@@ -464,33 +464,33 @@ def test_long_strings_are_prefix_free_and_self_delimiting(book):
         ends = list(accumulate(V.bits_by_window(data, rec, reg)[w] for w in range(V.windows(rec, reg.T))))
         for n in sorted(set(ends[:-1]) | {1, len(bits) - 1}):
             if n < len(bits):
-                with pytest.raises(V.V1Error):
+                with pytest.raises(V.AdviceCodeError):
                     V.decode_bits(bits[:n], rec, reg)
         for ext in (b"\0", b"\x80"):
-            with pytest.raises(V.V1Error):
+            with pytest.raises(V.AdviceCodeError):
                 V.decode(data + ext, rec, reg)
     for a, *_ in corpus:
         for b, _, rec, reg, _ in corpus:
             if len(a) < len(b) and b[:len(a)] == a:
-                with pytest.raises(V.V1Error):
+                with pytest.raises(V.AdviceCodeError):
                     V.decode_bits(a, rec, reg)
 
 
 def test_refuses_over_the_cap_and_off_the_record():
     t, rec, reg, adv = case("async-light", T=20)
     data = V.encode(adv, rec, reg)
-    with pytest.raises(V.V1Error, match="cap"):
+    with pytest.raises(V.AdviceCodeError, match="cap"):
         V.decode(data, rec, dataclasses.replace(reg, cap_bits=8 * len(data) - 1))
-    with pytest.raises(V.V1Error, match="pool"):
+    with pytest.raises(V.AdviceCodeError, match="pool"):
         V.encode(adv, rec, dataclasses.replace(reg, engine=dataclasses.replace(t.engine, num_gpu_blocks=2)))
-    with pytest.raises(V.V1Error, match="bytes"):
+    with pytest.raises(V.AdviceCodeError, match="bytes"):
         V.decode(list(data), rec, reg)
     moved = I1.Advice(adv.requests, adv.steps, adv.release[:-1] + (adv.release[-1] + 1,))
-    with pytest.raises(V.V1Error, match="another advice"):
+    with pytest.raises(V.AdviceCodeError, match="another advice"):
         V.encode(moved, rec, reg)
     s = next(k for k, st in enumerate(adv.steps) if len(st.rows) > 1 and k > 0
              and all(any(x.request == y.request for z in adv.steps[:k] for y in z.rows) for x in st.rows))
     swapped = I1.Advice(adv.requests, adv.steps[:s] + (I1.StepAdvice(adv.steps[s].rows[::-1]),) + adv.steps[s + 1:],
                         adv.release)
-    with pytest.raises(V.V1Error, match="outside v1"):
+    with pytest.raises(V.AdviceCodeError, match="outside v1"):
         V.encode(swapped, rec, reg)

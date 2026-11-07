@@ -1239,7 +1239,7 @@ comparators: 470,116 at L = 240 and 1.49 × 10^8 at 40,000. The 60 s llama8b-sha
 would cost 8.67 × 10^10, 70% of it the sort. A public cap on the rows, the sort's permutation as a private input or a
 narrower w_len would each cut that, each a change to what the Definition states.
 
-## Advice v1 (`benchmarks/network_e2e/encodings/v1.py`)
+## Advice v1 (`verity_vllm.pipeline.advice_code.codec`)
 
 v1 is the advice the compile slice's proof block takes: I1 v0 sent as only what the certified record, the scheduler
 replay and the derived rules leave. `v1.encode(advice, record, registered) -> bytes` and `v1.decode(bytes, record,
