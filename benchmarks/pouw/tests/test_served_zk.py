@@ -580,7 +580,7 @@ def _certifier(sid: bytes, key, sign, record: bytes, keys, seed: bytes = b"", cl
     """The certifier's run `run` on ingress link `link`, answering under `keys`' certifier signer the requests its
     challenger signs, PoUW's reader and the prover's `key` registered, the stream `sid` its context, on `clock`: the
     prover records `record` for PoUW execution phases 0 … `windows` − 1 before the first tick, signed, then they are published.
-    With the salt it sampled for each, which the prover's server receives in-band."""
+    With the salt it sampled for each, which the developer's server receives in-band."""
     drawn: dict[int, bytes] = {}
 
     def source(p: int, n: int) -> bytes:
