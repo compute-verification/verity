@@ -49,6 +49,10 @@ def main():
     from verity.ml.circuits.types import Array
 
     K = 2048
+    if "--mask-only" in sys.argv:
+        for N, V in ((2049, 16), (4096, 8), (32768, 4), (131072, 2)):
+            item(f"mask_form N={N} TOPK={K}", lambda N=N, V=V: MF.run(N, K, V=V, seed=N))
+        return
     item("DsaMqaLogit_v4{H=32,D=128}", lambda: ands(bind(BD.DsaMqaLogitV4, H=32, D=128)))
     # DsaMqaLogits_v4 is `flat`: one traced circuit a binding, N x ~0.92M ANDs inlined.  Its exact count at small N (any sharing
     # across keys the trace finds shows as a + bN), and the batch it flattens counted off its descriptors at the brief's N.
