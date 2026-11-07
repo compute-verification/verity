@@ -1738,7 +1738,8 @@ class Stream:
                            leaf_layer: str | None = None, anchors: Sequence[Any] = (),
                            registered: Mapping[str, int] | None = None, supplied: Mapping[str, Any] | None = None,
                            pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
-                           window_root: str | None = None, held: Sequence[str] | None = None) -> WindowCommitmentRecord:
+                           window_root: str | None = None, held: Sequence[str] | None = None,
+                           outputs: Mapping[str, Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
         """Receive a two-stage design's interior registration, once, after the first stage `draw` and before its second
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, replay block
         `draw.units[i]`'s being [i·n_rho, (i+1)·n_rho). The public-items rule on the interior values under the check's
@@ -1760,9 +1761,10 @@ class Stream:
                                                     "n_rho": self.n_rho}).verdict
             if v.ok:
                 program, query = P.population_program(self.unit, m), self.spec.check.query
-                earlier = self._earlier(record, supplied)
+                earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
-                            earlier, None, None, registered, supplied, pinned, self.binding, schemas, window_root, held)
+                            earlier, None, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
+                            outputs=outputs)
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
                 got.update(program=program, earlier=earlier)
@@ -1779,7 +1781,8 @@ class Stream:
         self._append(reg)
         e = self._entries[first.registration.order]
         e.interior, e.interior_program = reg, got["program"]
-        e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held)
+        e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
+                             outputs)
         return reg
 
     def _drawn_op(self, draw: Draw) -> dict[str, Any]:
