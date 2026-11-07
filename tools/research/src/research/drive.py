@@ -168,8 +168,8 @@ from . import policy
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, compare,
                        old_verdicts)
 from .gates import git_env
-from .queue import (IDENTITY, LANDED_WINDOW, PR, Entry, Member, Queue, QueueError, StoreLabels, _brought, _git, _out, _who, built_on,
-                    changed, forces_cold, lean_change, move_of, on_first_parents, queue_commit, unreviewed)
+from .queue import (CHECK_STEPS, IDENTITY, LANDED_WINDOW, PR, Entry, Member, Queue, QueueError, StoreLabels, _brought, _git, _out, _who,
+                    built_on, changed, forces_cold, lean_change, move_of, on_first_parents, queue_commit, unreviewed)
 from .queue_stats import ts
 from .store import vocab
 
@@ -222,10 +222,6 @@ LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lak
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
-#: the steps of a check (`tools/verity/check/check.py`)
-CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
-               "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
-               "ratchet-gate")
 #: the check step that runs the vLLM integration's ratchet gate on the merges above the check's base
 RATCHET_STEP = "ratchet-gate"
 #: the ratchet gate's line for a change it fails (`ratchet_gate.render`): its name (`#N`, or a range of commits), its top

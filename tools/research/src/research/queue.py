@@ -698,6 +698,10 @@ class Rules:
 LANDINGS = ("review",)
 #: a landing or warn gate's path (`DriveFlags.landing_gates`, `DriveFlags.warn_gates`)
 GATE_PATH_RE = re.compile(r"[\w.-]+(?:/[\w.-]+)*\.py")
+#: the steps of a check (`tools/verity/check/check.py`), of which `DriveFlags.warn_steps` names some
+CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
+               "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
+               "ratchet-gate")
 #: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
 #: drive.toml's `executor`: off, shadow (beside the after-landing run) or on (in its place)
@@ -876,8 +880,6 @@ class DriveFlags:
                                  "[\"integrations/x/tools/gate.py\"]")
                 got[k] = tuple(v)
         if "warn_steps" in doc:
-            from .drive import CHECK_STEPS
-
             if not (isinstance(doc["warn_steps"], list) and all(x in CHECK_STEPS for x in doc["warn_steps"])):
                 raise bad("warn_steps", f"a list of the check's steps, of {', '.join(CHECK_STEPS)}")
             got["warn_steps"] = tuple(doc["warn_steps"])
