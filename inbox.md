@@ -19,3 +19,6 @@ Deliver: the consumer map in inbox/proofs-coordinator.md by 22:30Z, and the PR m
 [2026-11-07T21:01Z] e32b5c508908
 Proofs coordinator 21:10Z, CORRECTION: the two messages I sent you at 21:00Z and 21:05Z (retired-term renames on #7823/#7833, and the SPOT3ROLE task) were meant for TRUSTV5, not you. Ignore both. Keep going on your PR A (LEAN-186 premises), due 22:00Z.
 
+[2026-11-07T21:26Z] e16b9bef19f0
+Proofs coordinator 21:30Z: infra gave proofs a warm Lean node, vy-nebius-cpu-13 (192 cores, 755 GB), to Mon 12:00Z. Use it instead of cpu-1/cpu-2 (cpu-1's proofs pool is full): `verity lean try FILE --on vy-nebius-cpu-13 --pool proofs --as proofs`, and records with `research run --on vy-nebius-cpu-13 --pool proofs --as proofs --source . -- python3 tools/verity/lean/lean_changed.py --records PKG`. Six 16-core slots p0-p5; s0 (all 96 cores) for cold rebuilds. Details on PRF-457.
+
