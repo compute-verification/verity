@@ -142,7 +142,8 @@ class Plan:
     pair row and block (``at``), each router row's unit (``router``) and each pair row's layer, slot and token (``pair``)."""
 
     def __init__(self, tmpls: Sequence[str], rows: Sequence[list[Row]]) -> None:
-        self.of = {t: rs for t, rs in zip(tmpls, rows, strict=True) if template(t).layout in LAYOUTS}
+        cut = [template(t).layout in LAYOUTS for t in tmpls]
+        self.of = {t: rs for t, rs, c in zip(tmpls, rows, cut, strict=True) if c} if any(cut) else {}
         req: dict[str, int] = {}
         for rs in rows:
             for x in rs:
