@@ -52,16 +52,20 @@ def edge_of(phi: Any, advice: WA.Advice, units: Sequence[Any], idle: Sequence[in
     of the history groups a later row reads (`dsa.Net.EDGE_GROUPS`) as `Net.prefix_params(E)` lays them out, and from its prompt's
     end on its last kept output. In, each request the last window left with outputs to keep (carried here with outputs left, in
     that window's `close` order), E its carried `computed`; out, each one this window leaves so, in its `close` order, E its
-    `computed` at the close, its unit's LP + T (an idle one's as it came in). A request with no Program here (`partial` refused
-    it) leaves no out member. None when neither edge carries one."""
+    `computed` at the close, its unit's LP + T (an idle one's as it came in, its fields passed through). A request with no Program
+    here (`partial` refused it) leaves no out member, and one whose rows read past INDEX_TOPK keys is refused. None when neither
+    edge carries one."""
     net = decoder(phi, 1, 0)
 
-    def groups(E: int, LP: int) -> tuple[tuple[str, int, int], ...]:
+    def groups(i: int, E: int) -> tuple[tuple[str, int, int], ...]:
+        q = advice.requests[i]
+        if net.reads_run(int(q.prompt_len) + int(q.output_len) - 1):
+            raise Unexpressible(f"request {i}: carried across a window's edge with rows past INDEX_TOPK keys, whose index-K history "
+                                f"the edge doesn't carry")
         return (*((g, t.leaves, t.homogeneous_width()) for g, t in net.prefix_params(E) if g in net.EDGE_GROUPS),
-                *((("last_token", 1, 32),) if E >= LP else ()))
+                *((("last_token", 1, 32),) if E >= q.prompt_len else ()))
 
-    ins = {i: groups(c.computed, advice.requests[i].prompt_len) for i, c in enumerate(advice.carried)
-           if c.kept < advice.requests[i].output_len and c.computed}
+    ins = {i: groups(i, c.computed) for i, c in enumerate(advice.carried) if c.kept < advice.requests[i].output_len and c.computed}
     outs = []
     for c in WA.close(advice):
         if not (c.must and c.state.computed) or (u := units[c.request]) is None and c.request not in idle:
@@ -69,5 +73,5 @@ def edge_of(phi: Any, advice: WA.Advice, units: Sequence[Any], idle: Sequence[in
         if u is not None and u.LP + u.T != c.state.computed:
             raise Unexpressible(f"request {c.request}: the window leaves it to continue at {c.state.computed}, and its Program here "
                                 f"reaches {u.LP + u.T}")
-        outs.append((c.request, groups(c.state.computed, advice.requests[c.request].prompt_len)))
+        outs.append((c.request, groups(c.request, c.state.computed)))
     return Edge(tuple(ins.items()), tuple(outs)) if ins or outs else None

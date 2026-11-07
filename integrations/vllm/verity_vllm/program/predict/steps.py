@@ -39,17 +39,18 @@
   Program's boundary inputs (`build.build_program`'s C): a cache hit's C rows, the producers', which GP-01 records per block; or,
   for a request the window carries in, its own rows up to where it continues (its carried `computed`), from its prompt's end on
   with its last kept output (`last_token`, from which it resumes at decode C), which GP-01 reads from the last window's edge
-  values (`segment.edge_of`, `workload.Edge`): registered parameters `edge.kv` (the latent rows) and `edge.last` (the indexer's
-  `edge.ik` and `edge.iks` too where a later row reads them, `dsa.Net.EDGE_GROUPS`), each the carried requests' fields of one
-  group in the last window's `close` order, that window's output ports; a history group no edge carries stays an Input of the
-  request's own, which no row reads. A request the window
-  leaves with outputs to keep reaches as far as its rows go, inside its prompt too (sampling nothing), and returns its rows so
-  far and its last kept output (`build_program(edge=)`), which GP-01 composes into this window's edge ports in its `close` order;
-  the next window carries its state. One whose rows here are all past its last kept output has no Program here. The launch and
-  the chunks are the advice's schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge)
-  share one Program. Its Program reads every launch its rows ran in, so a recompute after preemption has no Program there. A
-  launch the kernels' captured statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the
-  all-reduce and cuBLAS captures) and a row of more than 2,048 keys (`dsa`'s top-k selection).
+  values (`segment.edge_of`, `workload.Edge`): registered parameters `edge.kv` (the latent rows) and `edge.last`, each the
+  carried requests' fields of one group in the last window's `close` order, that window's output ports; a history group no edge
+  carries stays an Input of the request's own, which no row reads, and a request whose rows read past INDEX_TOPK keys, which
+  read the indexer's, is refused. A request the window leaves with outputs to keep reaches as far as
+  its rows go, inside its prompt too (sampling nothing), and returns its rows so far and its last kept output
+  (`build_program(edge=)`), which GP-01 composes into this window's edge ports in its `close` order; the next window carries its
+  state. One whose rows here are all past its last kept output has no Program here. The launch and the chunks are the advice's
+  schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge) share one Program. Its Program
+  reads every launch its rows ran in, so a recompute after preemption has no Program there. A launch the kernels' captured
+  statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the all-reduce and cuBLAS
+  captures). A row of more than INDEX_TOPK keys reads its top-k order from the Program's `run` input (`dsa.run_field`), its own
+  (`batch`'s R1), and the Program returns the checks that order is the top-k set.
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
@@ -728,7 +729,6 @@ def _label(policy: dict) -> str:
     return "greedy" if policy["kind"] == "greedy" else f"t{policy['temperature']:g}-p{policy['top_p']:g}"
 
 
-NO_CHUNKED_TRACE = "no trace: the Build has no chunked request wrapper (`vllm_meta` prefills a request in one launch)"
 NO_EDGE_TRACE = "no trace: the Build's request wrapper returns its samples alone, never a window's edge rows"
 
 
@@ -744,25 +744,30 @@ def trace_dir(u: RequestUnit | dict) -> str:
 
 def trace_commands(summary: dict, registered: Registered, root: str, *, max_model_len: int = 2048) -> list[list[str]]:
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
-    vLLM (CPU, on meta), each writing `<root>/<trace_dir>`; at tensor-parallel world W, φ's rank's (`--tp W --rank r --dead-free`);
-    in class G at the unit's launch context (`--launch-context '{"batch": ...}'`). A Program with prefill chunks or a window's edge
-    rows has none (`NO_CHUNKED_TRACE`, `NO_EDGE_TRACE`), so `compare` counts it `no_trace`."""
+    vLLM (CPU, on meta), each writing `<root>/<trace_dir>` at a `max_model_len` of at least its LP + T, under φ's GPU's name where
+    φ states one (`--device-name`: the tuned kernel configs a GPU-free host reads); at tensor-parallel world W, φ's rank's
+    (`--tp W --rank r --dead-free`); in class G at the unit's launch context (`--launch-context '{"batch": ...}'`), with its
+    prefill chunks there when it has them (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper,
+    `vllm_meta.ChunkedGreedyRequest`). A Program with a window's edge rows has none (`NO_EDGE_TRACE`), so `compare` counts it
+    `no_trace`."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     phi, seen, cmds = registered.phi, set(), []
-    target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
+    target, device = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}, phi.target.get("device_name")
     world = int(phi.tp.get("world", 1))
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
-        if u is None or u.get("chunks") or u.get("edge") or (d := trace_dir(u)) in seen:
+        if u is None or u.get("edge") or (d := trace_dir(u)) in seen:
             continue
         seen.add(d)
-        pol = u["policy"]
+        pol, ctx = u["policy"], {"batch": u.get("launch"), **({"chunks": list(u["chunks"])} if u.get("chunks") else {})}
         sampling = "greedy" if pol["kind"] == "greedy" else json.dumps({k: pol[k] for k in ("temperature", "top_p", "top_k")}, sort_keys=True)
         cmds.append(["verity-vllm", "build", "--out", os.path.join(root, d), "--wrapper", "request", "--LP", str(u["LP"]), "--T", str(u["T"]),
                      *(["--cached", str(u["C"])] if u.get("C") else []),
-                     *(["--launch-context", json.dumps({"batch": u["launch"]}, separators=(",", ":"))] if u.get("launch") else []),
-                     "--model", phi.model["repo"], "--revision", phi.model["revision"], "--max-model-len", str(max_model_len),
-                     "--target", json.dumps(target, sort_keys=True), "--profile", phi.profile, "--sampling", sampling, *tp])
+                     *(["--launch-context", json.dumps(ctx, separators=(",", ":"))] if u.get("launch") else []),
+                     "--model", phi.model["repo"], "--revision", phi.model["revision"],
+                     "--max-model-len", str(max(max_model_len, int(u["LP"]) + int(u["T"]))),
+                     "--target", json.dumps(target, sort_keys=True), *(["--device-name", device] if device else []),
+                     "--profile", phi.profile, "--sampling", sampling, *tp])
     return cmds
 
 
@@ -776,8 +781,7 @@ def compare(summary: dict, root: str) -> dict:
         res = Path(root, d, "result.json")
         doc = json.loads(res.read_text()) if res.exists() else {}
         traced = (doc.get("program") or {}).get("digest")
-        why = (NO_EDGE_TRACE if u.get("edge") else NO_CHUNKED_TRACE if u.get("chunks") else None) if not doc else \
-            str(doc.get("message") or doc.get("unsupported"))[:400]
+        why = (NO_EDGE_TRACE if u.get("edge") else None) if not doc else str(doc.get("message") or doc.get("unsupported"))[:400]
         out.append({"unit": d, "compiled": u["digest"], "traced": traced,
                     "outcome": "no_trace" if not traced else ("equal" if traced == u["digest"] else "different"),
                     **({} if traced or why is None else {"trace_error": why})})

@@ -33,15 +33,19 @@ request's Program is built at its launch context, which the advice fixes, and th
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a history behind no checked
   hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
-  request's partial on the other rank, which the cross-rank transfer must hold request by request. A shared prefix page is
-  no other request's computed value in GP-01: no wire runs from the request that computed it, and every request that reads it
-  reads it as an Input of its own history (`HISTORY_GROUPS`), a committed value the replay binds to the rows that computed it
-  (`check.replay.cached_prefix`). R1 holds that Input the request's own only where its value is a function of the request's own
-  certified inputs: a hit whose tokens R2 checked equal to its prompt through every run (the KV at a position reads every token
-  up to it). A request a window carries in reads its history from the edge's registered values (`workload.Edge`), its own fields
-  of them by position: its own rows and last token at the open, the last window's output ports, which R7 binds to that window's
-  Program (their opening is the verifier's to check), its advice held by `window_advice.follows` to the state the last window
-  left it in, whose hit, if any, was checked there; each field is held by its request, and so is each field of the edge it
+  request's partial on the other rank, which the cross-rank transfer must hold request by request. Its `run` (the Waksman
+  settings of each row past INDEX_TOPK, `dsa.run_field`) is its own too: each field routes the request's own key indices, and its
+  checks (`DsaTopKLongRow`) hold the routed order to the top-INDEX_TOPK set of the request's own logits in ascending index order,
+  the one order those logits fix, so each field is a function of the request's own inputs. No order a kernel or a prover picks
+  passes: a row past INDEX_TOPK is served under `VERITY_DSA_TOPK=canonical` (`dsa.Net` refuses an engine without it). A shared
+  prefix page is no other request's computed value in GP-01: no wire runs from the request that computed it, and every request
+  that reads it reads it as an Input of its own history (`HISTORY_GROUPS`), a committed value the replay binds to the rows that
+  computed it (`check.replay.cached_prefix`). R1 holds that Input the request's own only where its value is a function of the
+  request's own certified inputs: a hit whose tokens R2 checked equal to its prompt through every run (the KV at a position reads
+  every token up to it). A request a window carries in reads its history from the edge's registered values (`workload.Edge`), its
+  own fields of them by position: its own rows and last token at the open, the last window's output ports, which R7 binds to that
+  window's Program (their opening is the verifier's to check), its advice held by `window_advice.follows` to the state the last
+  window left it in, whose hit, if any, was checked there; each field is held by its request, and so is each field of the edge it
   leaves. Any other history is the batch's, and refused.
 """
 
@@ -90,13 +94,12 @@ def registered_phi(role: str, target: str, execution: str = "bi-eager") -> Phi:
 
 def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tuple[Any, ...], Fields]:
     """GP-01's parameters by holder: its shared Input batches `SHARED`; a Commit window's edge values field by field, each held by
-    its request (`workload.Edge`); each request's own groups (`OWN_GROUPS`) held by its index,
-    and its history (`HISTORY_GROUPS`) too where R2 checked it (``checked``: a hit whose tokens are checked equal); a
-    tensor-parallel rank's `peers_<k>` held by its
+    its request (`workload.Edge`); each request's own groups (`OWN_GROUPS`) held by its index, and its history (`HISTORY_GROUPS`)
+    too where R2 checked it (``checked``: a hit whose tokens are checked equal); a tensor-parallel rank's `peers_<k>` held by its
     index too, since the node binds each to the same request's partial of collective k on the other rank (`tp_links.json`; GP-01's
-    `request[<id>].peers_<k>`), a value of that request's own inputs on every rank; any other request-local group (`splits`, an
-    unchecked history, `schedule`, or one unknown here) `BATCH`. Its return: each request's outputs held by its index, then the
-    edge it leaves field by field."""
+    `request[<id>].peers_<k>`), a value of that request's own inputs on every rank, and its `run` (R1 of the module docstring); any
+    other request-local group (`splits`, an unchecked history, `schedule`, or one unknown here) `BATCH`. Its return: each
+    request's outputs held by its index, then the edge it leaves field by field."""
     from verity_vllm.program.workload import edge_ports
     edge = wl.edge.static() if getattr(wl, "edge", None) is not None else {"in": [], "out": []}
     ports = {side: [Fields(tuple(own(edge[side][m][0]) for m in ms)) for _, _, _, ms in edge_ports(edge[side])] for side in edge}
@@ -107,7 +110,7 @@ def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tup
         if len(groups) != len(r.component.params):
             raise BatchDependent(f"request {r.index}: its component names no group for some Input (provenance unknown)")
         mine = OWN_GROUPS + HISTORY_GROUPS * (r.index in checked)
-        labels += [own(r.index) if g in mine or g.startswith("peers_") else BATCH for j, g in enumerate(groups)
+        labels += [own(r.index) if g in mine or g == "run" or g.startswith("peers_") else BATCH for j, g in enumerate(groups)
                    if j not in set(sh) and g not in carried.get(r.index, ())]
     return tuple(labels), Fields((*(own(r.index) for r in wl.requests), *ports["out"]))
 
