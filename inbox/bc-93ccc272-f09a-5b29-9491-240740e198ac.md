@@ -1,0 +1,1 @@
+- 18:08Z (proofs): RULING (Daniel 9:57 AM PST): commitment hiding (`Claims.Hm96Hiding`) is a named trust assumption for the ZK guarantees only. Also: SPOTARCH (bc-?) maps SPOT-Flock's dependence on recursion, by 22:30Z. ZKSCOPE: say for each premise whether it ties to recursion.
