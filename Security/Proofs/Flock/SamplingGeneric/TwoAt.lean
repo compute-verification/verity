@@ -29,8 +29,8 @@ At this code, four of `ksTwo_code`'s hypotheses are facts of the order and the b
 `Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo` (`Proofs.Flock.SamplingGeneric.Guarantees`)
 states it. Its witnesses:
 
-* `sampledKSTwo_honest`: every premise at a toy code (`toyCode`) that parses no statement, accepts none, opens no
-  session and reads no bytes;
+* `Flock.SecurityProofs.SampledKSTwo_honest`: every premise at a toy code (`toyCode`) that parses no statement, accepts
+  none, opens no session and reads no bytes;
 * `compilerKSTwo_nontrivial`: the conclusion's `CompiledTwo.KS` fails at a verifier that accepts with an empty relation.
 -/
 
@@ -224,7 +224,7 @@ theorem callsUniform_toy : CallsUniform (fun _ => 0) toyBytes := fun _ =>
 
 /-- **`SampledKSTwo`'s premises hold at the toy code**, at its round order: both calls' A3 (they read no bytes), and
 the code's facts, since it parses no statement, accepts no run and opens no session. -/
-theorem sampledKSTwo_honest :
+theorem _root_.Flock.SecurityProofs.SampledKSTwo_honest :
     CallsUniform (fun _ => 0) toyBytes ∧ CallsUniform (fun _ => 0) toyBytes ∧
       RegMatchesTwo (toyCode.atOrder toyOrder) (fun _ => none) (fun _ => none) ∧
       (toyCode.atOrder toyOrder).RefusesTwo FlockDeploy.sha512 (fun _ => none) ∧

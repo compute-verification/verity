@@ -7,7 +7,7 @@ public import Proofs.Flock.SamplingGeneric.TwoAt
 
 `Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo` is `SamplingDeploy.ksTwo_atOrder`: the two-stage
 sampled verifier at its round order is knowledge sound at SHA-512 on the challenger's bytes uniform at each of its two
-calls and six facts of its code. Its witnesses are `SamplingDeploy.sampledKSTwo_honest` and
+calls and six facts of its code. Its witnesses are `Flock.SecurityProofs.SampledKSTwo_honest` and
 `Claims.SamplingGeneric.compilerKSTwo_nontrivial`.
 -/
 
