@@ -2602,7 +2602,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
     """The `assumptions` and `open` records as the build has them, the failures, {premise: the guarantees that take it}
     (``premised`` with each alias of listed premises as those), {premise: its kind, `assumptions`, `domain` or `open`},
     which each guarantee's record lists as its `premises`, and the `domain` records.
-    A named assumption is declared in the one module `assumptions_module` names (`Definitions.Assumptions`, the real
+    A named assumption is declared in the module `assumptions_module` names or one under it (`Definitions.Assumptions`, the real
     ones: a hash's collision resistance, the auditor's devices).  A domain hypothesis is part of what its guarantee says
     (a domain or scope, an event a lemma conditions on, a specification the deployed instance meets), listed under
     `domain` with `why`, one line naming what it restricts, and owing no issue; one that is another listed guarantee's
@@ -2683,7 +2683,7 @@ def assumption_records(policy: dict, now_reads: dict, update: bool, owner: str |
         return read[d][0] if d in read else walked[d][0] if d in walked else (homes or {}).get(d)
 
     def real(d: str) -> bool:
-        return home is not None and module(d) == home
+        return home is not None and (m := module(d)) is not None and under([home], m)
 
     moved = sorted(a for a in assumed if (a in opened or a in domained) and not real(a))
     if not update:

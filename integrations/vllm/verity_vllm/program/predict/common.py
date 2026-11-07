@@ -225,16 +225,50 @@ class _Launch:
         except ValueError as e:
             raise Unexpressible(f"request step {self.step}: {e}") from None
 
-    def keys(self, own: list[int]) -> list[int]:
-        """Every query row's key count in the launch (`targets.launch_keys`), `own`'s without a batch."""
+    def keys(self, own: list[int], without: list[tuple[int, int]] = ()) -> list[int]:
+        """Every query row's key count in the launch (`targets.launch_keys`), `own`'s without a batch; `without`: sequences
+        (rows, start) of the step whose rows another kernel runs (`prefills`' dense-MHA prefills), left out."""
         from collections import Counter
         from verity_vllm.program.frontend import targets as TG
-        keys = TG.launch_keys(self.step, self.ctx)
-        if keys is None:
+        seqs = TG.launch_sequences(self.step, self.ctx)
+        if seqs is None:
             return list(own)
+        drop, keys = Counter((int(n), int(p)) for n, p in without), []
+        for n, p in seqs:
+            if drop[(n, p)]:
+                drop[(n, p)] -= 1
+            else:
+                keys += [p + i + 1 for i in range(n)]
         if Counter(own) - Counter(keys):
             raise Unexpressible(f"request step {self.step}: the launch batch's key counts {keys} do not hold this request's {own}")
         return keys
+
+    def prefills(self, own: tuple[int, int], threshold: int) -> list[tuple[int, int]]:
+        """The step's prefills, (rows, start) each, as vLLM's MLA metadata builder counts them: every sequence from the first of
+        more than `threshold` rows (`split_decodes_and_prefills`) in the order `reorder_batch_to_split_decodes_and_prefills` gives
+        the batch, the extends (start > 0) of more than `threshold` rows and then the first chunks (start 0).  So with such an extend
+        every first chunk is a prefill, and without one the first chunks of more than `threshold` rows are; a first chunk of at most
+        `threshold` rows beside a longer one is refused, as the persistent batch's order, which the batch does not record, decides
+        whether it is one.  `own`: this request's (rows, start), the step's one sequence without a batch."""
+        from verity_vllm.program.frontend import targets as TG
+        try:
+            seqs = TG.launch_sequences(self.step, self.ctx)
+        except ValueError as e:
+            raise Unexpressible(f"request step {self.step}: {e}") from None
+        seqs = [own] if seqs is None else [(int(n), int(p)) for n, p in seqs]
+        if own not in seqs:
+            raise Unexpressible(f"request step {self.step}: the launch batch's sequences {seqs} do not hold this request's {own} "
+                                f"(rows, start)")
+        extends = [s for s in seqs if s[1] > 0 and s[0] > threshold]
+        first = [s for s in seqs if s[1] == 0]
+        if extends:
+            return extends + first
+        short, long = [s for s in first if s[0] <= threshold], [s for s in first if s[0] > threshold]
+        if short and long:
+            raise Unexpressible(f"vocabulary cannot express: request step {self.step} schedules first chunks of {[n for n, _ in short]} "
+                                f"rows beside ones of {[n for n, _ in long]} rows, above the decode threshold {threshold}: whether vLLM's "
+                                f"metadata builder counts the short ones prefills follows the persistent batch's order")
+        return long
 
 
 def launch_batch(phi, LP: int, T: int) -> list | None:

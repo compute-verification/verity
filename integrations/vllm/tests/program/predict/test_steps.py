@@ -1021,7 +1021,8 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
     seen, tokens, keys = [], CM._Launch.tokens, CM._Launch.keys
     monkeypatch.setattr(CM._Launch, "tokens", lambda self, own, sampled=False: (
         seen.append((self.step, own, sampled)), tokens(self, own, sampled))[1])
-    monkeypatch.setattr(CM._Launch, "keys", lambda self, own: (seen.append((self.step, tuple(own), "keys")), keys(self, own))[1])
+    monkeypatch.setattr(CM._Launch, "keys", lambda self, own, without=(): (
+        seen.append((self.step, tuple(own), "keys")), keys(self, own, without))[1])
     c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
     u = c.requests[0]
     assert (u.chunks, u.T, sorted(c.refused), c.batch_rule) == ((8, 8, 4), 2, [1], None)
