@@ -27,10 +27,10 @@ regenerate_locks = true
 # whole tree, and each move of `main` re-judged every member cold (a 514-PR rebuild took 70 min, about 8 s a merge).
 # A ready mark admits a PR: its merge onto `next` at the sync (a conflict, these gates) is the only check before it joins, and
 # the sync runs no preflight.
-# unread_gate (tools/verity/lean/unread_gate.py) is left out while it can't judge a merge onto a commit whose Lean no recorded
-# check has published facts for yet (each Lean landing until its lock run ends) and the sync takes that as a refusal, which
-# ejects the PR and withdraws its mark; the after-landing run's unread ratchet still catches what it would refuse.
-landing_gates = []
+# unread_gate (tools/verity/lean/unread_gate.py) refuses a merge that grows a package's unread Lean modules past its cap; one
+# it can't judge yet (no recorded check has published facts for the merge's Lean, as after a Lean landing until its lock run
+# ends) waits on `next` with its mark, and the next sync tries again.
+landing_gates = ["tools/verity/lean/unread_gate.py"]
 # scripts run as the landing gates are, whose failure keeps no PR out: the ready mark prints it as a warning, and drive lands
 # the PR and tells its owner and ci once a head, the owner fixing it in their next PR. A Markdown file a merge puts over its
 # cap (tests/test_repository.py)
@@ -81,6 +81,10 @@ executor = "shadow"
 # one that gains its verdict goes after those already moved, so none below it is merged again. A held member goes to `next`'s
 # top every sync, this on or not
 verdict_first = true
+# how many restacks across a move the syncs run at once in the background: one `restack.py` per head merged above a move it
+# lacks, each rewriting a whole tree on one core, its PR waiting off `next` until a later sync reads the result. The control
+# pod has 4 cores, and the tick needs one
+restack_jobs = 3
 # the low-risk lane: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next`, in its order, onto
 # `checked` on their ready mark alone (no land verdict), each whose merge onto `checked`'s tip changes nothing
 # `lowrisk_excludes` names, merges with no conflict, contains no unlanded PR and passes `landing_gates` and the compile gate;
