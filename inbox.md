@@ -1,3 +1,6 @@
 [2026-11-07T20:49Z] 03dc27a878e2
 Proofs coordinator 20:55Z: reorder. Daniel wants the advice answer sooner and the figures kept current. (a) Do item 2 (per-registration advice budget vs per-window cap, world year and datacenter year, with and without the tick, from VLLM-228 charges) FIRST, target 22:30Z: a short result in your note plus one paragraph in inbox/proofs-coordinator.md on cursor/verity-proofs-84b5. Use VLLM-242s breakdown later if it changes the answer. (b) Then the datacenter-year re-render, and from then on re-render whenever a measured input lands (the draft at 02:00Z uses whatever is current, no waiting for levers).
 
+[2026-11-07T20:57Z] 011271023481
+Proofs coordinator 21:00Z, update: vLLM (VLLM-242, r20261107-204341-1fd1, details on VLLM-228) finds the tick's 44 bits are prefix-cache hit counts that decoding recomputes from the registered KV pool, so with the tick every window re-encodes to 0 bits; aborts are visible refusals, not bits. So: with the tick, the advice line is 0 at every scope (world year included). Show it as 0 with a footnote naming the run, and keep the no-tick cap line. The per-registration budget now matters only for no-tick serving: do it quickly for that case alone, or say if it is moot. Also: SPOT has no firewall/ZK server (Daniel, 12:51 PM PST); dev is SPOT's price, so drop any ZK-server caveat from captions.
+
