@@ -66,13 +66,13 @@ noncomputable def gamesBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc
     List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl)) :=
   List.ofFn fun i => tabAfterL A H E Lf (ts.get i) (caps i)
 
-/-- After `Commit`: one link-point draw, then the games concurrently. -/
+/-- After `Commit`: one link-point sample, then the games concurrently. -/
 noncomputable def sessAfterBL (fs : List ((Fin 2 → Fin mPts → F) → Game (OutCL F D Sl))) :
     Game (List (OutCL F D Sl)) :=
   Game.coin (Fin 2 → Fin mPts → F) fun pts => batch (fs.map (· pts))
 
 /-- **A batched session under `Lf`** (`Flock.Record`): `Commit` sends every table's level-0 cap, then one link-point
-draw, then every table's reps and salted openings concurrently. -/
+sample, then every table's reps and salted openings concurrently. -/
 noncomputable def sessionBL (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc (List F) D)
     (Lf : Merkle.Leaf (List F) Sl D H) (ts : List (TabSpec mPts)) : Game (List (OutCL F D Sl)) :=
   Game.send (Fin ts.length → Cap D) fun caps => sessAfterBL (gamesBL A H E Lf ts caps)
@@ -82,7 +82,7 @@ def acceptedBL [Inhabited D] [Inhabited Sl] (ts : List (TabSpec mPts)) (outs : L
   ∀ i : Fin ts.length, (outs.getD i dfltOutL).accepted = true
 
 /-- **A batched session over any table run** (`Flock.Record`): `Commit` sends every table's commitment `Cm`, then one
-link-point draw, then every table's run `tab` after them, concurrently. `sessionBL` is its instance at `tabAfterL`
+link-point sample, then every table's run `tab` after them, concurrently. `sessionBL` is its instance at `tabAfterL`
 (`sessionBL_eq`); a session whose tables commit or open more (`--zk`'s pads) is another. -/
 def sessionG {Cm Out : Type} (tab : TabSpec mPts → Cm → (Fin 2 → Fin mPts → F) → Game Out)
     (ts : List (TabSpec mPts)) : Game (List Out) :=
@@ -117,7 +117,7 @@ theorem opensOKL_plain_pair (H : List UInt8 → D) (E : Merkle.Enc (List F) D) (
 local notation "𝔽" => FlockLevel3.GF128
 
 open Classical in
-/-- **The batched session on a draw, under `Lf`**: `Audit.Partition.batchedSession` with salted openings. At
+/-- **The batched session on a sample, under `Lf`**: `Audit.Partition.batchedSession` with salted openings. At
 `Refine.leaf512` it is the session flock-verify's hm96 statements run. -/
 noncomputable def batchedSessionL {n : ℕ} {Reg : Type} [Inhabited D] [Inhabited Sl] (H : List UInt8 → D)
     (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf (List 𝔽) Sl D H) (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
@@ -125,7 +125,7 @@ noncomputable def batchedSessionL {n : ℕ} {Reg : Type} [Inhabited D] [Inhabite
   (sessionBL execArith H E Lf (plan S R)).map fun outs => decide (acceptedBL (plan S R) outs)
 
 open Classical in
-/-- **The batched session on a draw, over any table run**: `sessionG tab` accepted by `acc`. `batchedSessionL` is its
+/-- **The batched session on a sample, over any table run**: `sessionG tab` accepted by `acc`. `batchedSessionL` is its
 instance at `tabAfterL` (`batchedSessionL_eq`). -/
 noncomputable def batchedSessionG {n : ℕ} {Reg Cm Out : Type}
     (tab : TabSpec mPts → Cm → (Fin 2 → Fin mPts → 𝔽) → Game Out) (acc : Out → Bool) (dflt : Out)

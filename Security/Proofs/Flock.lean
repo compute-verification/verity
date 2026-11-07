@@ -33,6 +33,8 @@ public import Proofs.Flock.SamplingClaims
 public import Proofs.Flock.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Masked
 public import Proofs.Flock.SamplingGeneric.TwoCode
+public import Proofs.Flock.SamplingGeneric.TwoAt
+public import Proofs.Flock.SamplingGeneric.Guarantees
 public import Proofs.Flock.Bridge
 public import Proofs.Flock.Bridge.Transports
 public import Proofs.Flock.Bridge.TransportsRefs
@@ -40,6 +42,6 @@ public import Proofs.Flock.SamplingBoundary
 public import Proofs.Flock.SamplingScope
 public import Proofs.Flock.ZkAny
 
-/-! C-Flock's proofs: the verifier's, level3's and soundness's. -/
+/-! Flock's proofs: the verifier's, level3's and soundness's. -/
 
 @[expose] public section

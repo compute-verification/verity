@@ -1,7 +1,7 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
 class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
 batch a request's calls run in (`launch_batch`, `_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
-token select over a row's whole-vocabulary logits (`select_token`)."""
+token select over a row's whole-vocabulary logits (`select_token`), and a wrapper's forwards over a decoder (`drive`)."""
 
 from __future__ import annotations
 
@@ -68,6 +68,53 @@ class _Stochastic:
     top_p_bits: int
 
 
+def request_passes(wrapper: str, LP: int | None, T: int | None, M: int, C: int, chunks: tuple[int, ...] | None,
+                   dense: bool) -> tuple[bool, tuple[int, ...], list[int], list[bool]]:
+    """A wrapper's forward passes, as `drive` runs them -> (resumed, its prefill chunks, each pass's rows, whether each samples): a
+    `step`'s M rows; a `request`'s prefill of rows C..LP-1 after a history of C (in its `chunks` when it ran in several launches,
+    only the last sampling) and its T decodes; or, off the `dense` decoder, one resumed at decode C >= LP, its decodes C..LP+T-1."""
+    if C and not 0 < C < (int(LP) if dense else int(LP) + int(T)):
+        raise Unexpressible(f"vocabulary cannot express: a history of {C} rows for a prompt of {LP}" +
+                            (" (0 < C < LP)" if dense else f" and {T} decodes (0 < C < LP + T)"))
+    resumed = wrapper == "request" and C >= int(LP)
+    chunks = tuple(int(c) for c in chunks or ())
+    if chunks and (wrapper != "request" or resumed or min(chunks) < 1 or sum(chunks) != int(LP) - C):
+        raise Unexpressible(f"vocabulary cannot express: prefill chunks {list(chunks)} of a {wrapper} (a request's chunks are its "
+                            f"{max(int(LP or 0) - C, 0)} prefill rows in turn, each at least one)")
+    chunks = chunks if len(chunks) > 1 else ()
+    passes = [M] if wrapper == "step" else [1] * (int(LP) + int(T) - C) if resumed else [*(chunks or [int(LP) - C]), *[1] * int(T)]
+    return resumed, chunks, passes, [False] * max(len(chunks) - 1, 0) + [True] * (len(passes) - max(len(chunks) - 1, 0))
+
+
+def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int | None, T: int | None, policy: _Stochastic | None,
+          batch: list | None, C: int = 0, chunks: tuple[int, ...] = (), last: Coll | None = None) -> list[Coll]:
+    """The wrapper's forwards over `model` -> its samples: a `step`'s M rows at pos0.. and its last row's sample, or a `request`'s
+    positions C..LP+T-1 after a history of C: its prefill of rows C..LP-1 (in `chunks`, one forward a chunk, each its own launch)
+    and the sample after it, then a decode at each position from LP on, each fed the previous sample; a history reaching LP or
+    past it (C >= LP) resumes at decode C, fed `last`, the token there. The request's launch step k is its k-th forward."""
+    if wrapper == "step":
+        hid = model.forward(rows, pos0)
+        return [model.sample(hid[-1], 0, pos0 + M - 1, policy)]
+    LP, T = int(LP), int(T)
+    toks: list[Coll] = []
+    step = 0
+    if C < LP:
+        a = C
+        for n in chunks or (LP - C,):
+            if batch is not None:
+                model.launch.step = step
+            hid = model.forward(rows[a:a + n], a)
+            a, step = a + n, step + 1
+        toks.append(model.sample(hid[-1], 0, LP - 1, policy))
+    for p in range(max(C, LP), LP + T):
+        if batch is not None:
+            model.launch.step = step
+        hid = model.forward([Coll(Value(32), (toks[-1] if toks else last).refs)], p)
+        toks.append(model.sample(hid[-1], len(toks), p, policy))
+        step += 1
+    return toks
+
+
 def select_token(call, k, logits: Refs, V: int, target, event: int, pos: int, policy: _Stochastic | None) -> Coll:
     """The token of sampling event `event` from a row's V logits at position `pos` (`call(fn, *refs)` emits, `k(role, **statics)` is
     the kind): greedy `TokenSelect`, or `GumbelTopPTokenSelect[vllm]` over the derived `splits` entry or at the single request's
@@ -119,17 +166,23 @@ class _Peers:
 class _Launch:
     """The batch a request's calls run in (`pipeline.launch_context.request_launch_batch`, parsed as `targets.parse_launch_context`
     parses the Build's `--launch-context`): per request step, every sequence the engine step schedules as (rows, start).  `step` is
-    the request step being written; without a batch a call is its own launch."""
+    the request step being written; without a batch a call is its own launch.  `capture_sizes`: the breakable CUDA graphs'
+    (`graph_capture_sizes`), whose captured kernels run at the step's padded tokens."""
 
-    def __init__(self, batch: list | None = None) -> None:
+    def __init__(self, batch: list | None = None, capture_sizes: tuple[int, ...] = ()) -> None:
         from verity_vllm.program.frontend import targets as TG
         self.ctx, self.step = TG.parse_launch_context({"batch": batch}) if batch else None, 0
+        self.capture_sizes = tuple(capture_sizes)
+
+    def with_batch(self, batch: list) -> _Launch:
+        """This launch's graphs over the request's batch."""
+        return _Launch(batch, self.capture_sizes)
 
     def tokens(self, own: int, sampled: bool = False) -> int:
         """The rows of the launch `own` rows run in (`targets.launch_tokens`); after the logits selection (`sampled`), its sequences."""
         from verity_vllm.program.frontend import targets as TG
         try:
-            return TG.launch_tokens(own, self.step, self.ctx, sampled=sampled)
+            return TG.launch_tokens(own, self.step, self.ctx, sampled=sampled, capture_sizes=self.capture_sizes)
         except ValueError as e:
             raise Unexpressible(f"request step {self.step}: {e}") from None
 
@@ -158,6 +211,11 @@ def launch_batch(phi, LP: int, T: int) -> list | None:
         raise Unexpressible(f"vocabulary cannot express: the launch batch of request shape LP {LP}, T {T}: "
                             f"{'its requests are co-scheduled differently' if batch else 'no request of the workload has it'}")
     return batch
+
+
+def graph_capture_sizes(phi) -> tuple[int, ...]:
+    """The capture sizes of φ's breakable CUDA graphs (`TargetProfile.graph_capture_sizes`); () for an execution without them."""
+    return phi.target_profile().graph_capture_sizes()
 
 
 def launch_rows(phi, LP: int, T: int, C: int = 0) -> dict | None:

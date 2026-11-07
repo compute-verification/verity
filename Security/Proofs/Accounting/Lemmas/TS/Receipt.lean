@@ -18,7 +18,7 @@ The luck premise (I7) `LuckAt` split at the receipt (LEDGER §1.3–§1.5), each
   `Fx1RunWordInjective`), or li, duo or fx1 units' checkpoint a segment, one deficient word a segment
   (`LiSegmentsBind`, `DuoSegmentsBind`, `Fx1SegmentsBind`).
 * `LuckCaseA`: the two together, (I7) at the operand luck `p` in case (a).
-* `OperandLuckCube`: the operand luck at `luck_quad`'s ¾ for rounds that draw uniform cube bits against a degree-2
+* `OperandLuckCube`: the operand luck at `luck_quad`'s ¾ for rounds that sample uniform cube bits against a degree-2
   operand error.
 * `LuckCaseACube`: case (a) with such rounds, (I7) at ¾ outright.
 * `LiSegmentsBind`: li units (LI-CP-W) bind their words: when every segment's warp checkpoint is the honest one, every
@@ -64,7 +64,7 @@ def LuckCaseA : Prop :=
     G.Pinned → G.CaseA → G.OperandLuck p → LuckAt p G.game
 
 /-- **The operand luck at ¾ for degree-2 operands** (`luck_quad`). For every ideal game split at the receipt whose
-rounds draw uniform cube bits after fixing their share and a degree-2 operand error, nonzero when the round is
+rounds sample uniform cube bits after fixing their share and a degree-2 operand error, nonzero when the round is
 deficient, the operand luck holds at ¾. -/
 def OperandLuckCube : Prop :=
   ∀ (R : Type) [CommRing R] {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] {S : ℕ}
@@ -72,7 +72,7 @@ def OperandLuckCube : Prop :=
 
 /-- **(I7) at ¾ in case (a) for degree-2 operands.** For every ideal game split at the receipt whose openings are
 pinned, whose rounds commit the full state of duo or fx1 units, one deficient word a unit, or li, duo or fx1 units'
-warp checkpoint a segment, one deficient word a segment, and draw uniform cube bits after fixing their share and a
+warp checkpoint a segment, one deficient word a segment, and sample uniform cube bits after fixing their share and a
 degree-2 operand error, (L) holds at ¾, with no luck hypothesis. -/
 def LuckCaseACube : Prop :=
   ∀ (R : Type) [CommRing R] {α V : Type} [Fintype α] [Fintype V] [DecidableEq V] {S : ℕ}

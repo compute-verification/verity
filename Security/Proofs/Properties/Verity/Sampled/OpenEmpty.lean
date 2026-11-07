@@ -10,7 +10,7 @@ import Proofs.Flock.Soundness.Discharge.Hm.Commit
 /-!
 # An opening's empty class at one hm96 leaf
 
-An opening of a coin tree's leaf releases the leaf's first coins, which the verifier compares with live coins drawn
+An opening of a coin tree's leaf releases the leaf's first coins, which the verifier compares with live coins flipped
 after the leaf was committed. The opening's class at those coins (`OpeningAt.classOf`) holds each round with the leaf's
 hash that releases them, and `openEmpty` is the probability that it is empty.
 
@@ -20,15 +20,15 @@ hash that releases them, and `openEmpty` is the probability that it is empty.
   leaf ideal, so the event no longer reads the coins, and `bits u` may be swapped for the release `P ω`. T1 on the
   complement then makes the leaf real again, where the leaf's own coins and salt release `P ω`.
 * **A coin tree's leaf is an hm96 leaf** (`treeX`, `treeMy`, `treeC`, `treeH`, `leaf_eq_treeH`, `treeMisses_le`): a
-  draw's leaf is `H(x(ω) + M·y, c(y))`, with `x(ω)` the round digest of the draw's coins, `M·y` hm96-sha512's mask of its
+  sample's leaf is `H(x(ω) + M·y, c(y))`, with `x(ω)` the round digest of the sample's coins, `M·y` hm96-sha512's mask of its
   salt under the tree's key and `c(y)` the salt's hash, so `fiberMisses_le` bounds the miss at the tree's leaf.
-* **The empty class, averaged over the device's draw** (`OpeningAt.AtLeaf`, `OpeningAt.misses_of_emptyAt`,
+* **The empty class, averaged over the device's sample** (`OpeningAt.AtLeaf`, `OpeningAt.misses_of_emptyAt`,
   `openEmpty_avg_le`): where the play ends in a close that records its log, a node's class is empty at `bits` only where
-  no round with the drawn round's leaf is released as `bits` (`OpeningAt.classOf_nonempty`). At a node that every draw
-  `d₀` of one leaf (its nonce, key, stream, round and count) describes, `openEmpty` averaged over the draw is at most
+  no round with the sampled round's leaf is released as `bits` (`OpeningAt.classOf_nonempty`). At a node that every sample
+  `d₀` of one leaf (its nonce, key, stream, round and count) describes, `openEmpty` averaged over the sample is at most
   `2·δ₁`.
-* **The round's law** (`avg_take`, `opened_eq_roundBits`, `avg_opened_roundBits`): a draw's first `m` coins of a
-  block of at least `m` are released as the bits (`roundBits`) of the `m` challenges they encode, so they have the law
+* **The round's law** (`avg_take`, `opened_eq_roundBits`, `avg_opened_roundBits`): a sample's first `m` coins of a
+  block of at least `m` are released as the bits (`roundBits`) of the `m` challenges they encode, so they have the sampling design
   of a round's `m` live challenges as bits.
 -/
 
@@ -45,7 +45,7 @@ def FiberMisses {Ω Salt B C D R : Type} [Add B] (My : Salt → B) (c : Salt →
   ∀ ω y, H (x ω + My y, c y) = ℓ → P ω ≠ r
 
 /-- **An opening's class is empty with probability at most `2·δ₁`** at one hm96 leaf. Over the leaf's uniform coins `ω`
-and salt `y`, and live coins `u` drawn independently whose bits `bits u` have the law of the release `P ω` (`hlaw`),
+and salt `y`, and live coins `u` sampled independently whose bits `bits u` have the sampling design of the release `P ω` (`hlaw`),
 this is the probability that no coins and salt with the leaf's hash release `bits u`. -/
 theorem fiberMisses_le {Ω Q Salt B C D R : Type} [Fintype Ω] [Nonempty Ω] [Fintype Q] [Nonempty Q] [Fintype Salt]
     [Nonempty Salt] [AddCommGroup B] [Fintype B] (My : Salt → B) (c : Salt → C) {δ₁ : ℝ≥0∞}
@@ -105,7 +105,7 @@ theorem fiberMisses_le {Ω Q Salt B C D R : Type} [Fintype Ω] [Nonempty Ω] [Fi
 open FlockSoundness.Discharge.ZkView (Bits bitsOf bytesOf)
 open FlockSoundness.Discharge.Hm (bitL eq_of_bitL get!_eq_getD)
 
-/-- A coin tree's salt as its 192 bytes, from the draw's 1536 bits (`TreeDraw.leaf`'s). -/
+/-- A coin tree's salt as its 192 bytes, from the sample's 1536 bits (`TreeDraw.leaf`'s). -/
 def treeSalt (y : Fin 1536 → Bool) : ByteArray := bytesOfBits 192 fun t => if h : t < 1536 then y ⟨t, h⟩ else false
 
 /-- **The round digest** of stream `s`'s round `r` under the nonce `ν` at the block of coins `ω`, as bits: the hm96
@@ -159,7 +159,7 @@ theorem treeCommitString_eq (ν key x y : ByteArray) :
   rw [← xorBytes_eq]
   rfl
 
-/-- **A draw's leaf is an hm96 leaf** `H(x(ω) + M·y, c(y))` of its coins `ω` and salt `y`. -/
+/-- **A sample's leaf is an hm96 leaf** `H(x(ω) + M·y, c(y))` of its coins `ω` and salt `y`. -/
 theorem leaf_eq_treeH {block : ℕ} (ν key : ByteArray) (s r : ℕ) (ω : Fin block → Fin 128 → Bool)
     (y : Fin 1536 → Bool) :
     TreeDraw.leaf ν key s r (ω, y) = treeH ν key (treeX ν s r ω + treeMy key y, treeC ν y) := by
@@ -167,9 +167,9 @@ theorem leaf_eq_treeH {block : ℕ} (ν key : ByteArray) (s r : ℕ) (ω : Fin b
   rw [treeCommitString_eq, mask_eq_of_sizes (h := treeHm ν) (h' := Flock.Hm96.sha512) rfl rfl]
   rfl
 
-/-- **No draw with a coin tree's leaf releases the live bits, with probability at most `2·δ₁`** (`fiberMisses_le` at
-`leaf_eq_treeH`). Over a uniform draw `p.1` and live coins `p.2` whose bits `bits p.2` have the law of a draw's first
-`n` coins (`hlaw`), this is the probability that no draw `d` with `p.1`'s leaf has its first `n` coins `bits p.2`. -/
+/-- **No sample with a coin tree's leaf releases the live bits, with probability at most `2·δ₁`** (`fiberMisses_le` at
+`leaf_eq_treeH`). Over a uniform sample `p.1` and live coins `p.2` whose bits `bits p.2` have the sampling design of a sample's first
+`n` coins (`hlaw`), this is the probability that no sample `d` with `p.1`'s leaf has its first `n` coins `bits p.2`. -/
 theorem treeMisses_le {block : ℕ} (ν key : ByteArray) (s r n : ℕ) {Q : Type} [Fintype Q] [Nonempty Q]
     (bits : Q → List Bool) {δ₁ : ℝ≥0∞} (hT1 : Claims.Hm96Hiding (treeMy key) (treeC ν) δ₁)
     (hlaw : ∀ G : List Bool → ℝ≥0∞,
@@ -225,7 +225,7 @@ namespace OpeningAt
 variable {β : Type} {E : List Release → Game β} {g' : Game β}
 
 /-- **A description at one leaf**: `o` opens, under the nonce `ν` and the key `key`, stream `s`'s round `r` with the
-count `n` in a block of `block` coins, at the device's draw `d₀` of that round. -/
+count `n` in a block of `block` coins, at the device's sample `d₀` of that round. -/
 structure AtLeaf (o : OpeningAt E g') (ν key : ByteArray) (s r n : ℕ) {block : ℕ} (d₀ : TreeDraw block) : Prop where
   nonce_eq : o.T.nonce = ν
   key_eq : treeKey o.T.sample.1 = key
@@ -236,7 +236,7 @@ structure AtLeaf (o : OpeningAt E g') (ν key : ByteArray) (s r n : ℕ) {block 
   draw_eq : HEq (o.T.sample.2 o.p.1 o.p.2) d₀
 
 /-- **The empty class misses at the leaf**: where the play ends in a close that records its log and `o` describes the
-node at the draw `d₀`'s leaf, an empty class at `bits` means no draw with `d₀`'s leaf has its first `n` coins `bits`
+node at the sample `d₀`'s leaf, an empty class at `bits` means no sample with `d₀`'s leaf has its first `n` coins `bits`
 (`classOf_nonempty`). -/
 theorem misses_of_emptyAt {lg : β → List Release} (hE : RecordsLog lg E) (o : OpeningAt E g') {ν key : ByteArray}
     {s r n block : ℕ} {d₀ : TreeDraw block} (h : o.AtLeaf ν key s r n d₀) {bits : List Bool} (he : EmptyAt E g' bits) :
@@ -249,10 +249,10 @@ theorem misses_of_emptyAt {lg : β → List Release} (hE : RecordsLog lg E) (o :
 
 end OpeningAt
 
-/-- **An opening's empty class has probability at most `2·δ₁`, averaged over the device's draw** at one leaf. Where the
-play ends in a close that records its log and, at each draw `d₀` of stream `s`'s round `r`, the node `g' d₀` has a
-description at `d₀`'s leaf (`ho`), the probability that its class is empty at live coins whose bits `bits u` have the law
-of a draw's first `n` coins (`hlaw`), averaged over the draw, is at most `2·δ₁` (`treeMisses_le`). -/
+/-- **An opening's empty class has probability at most `2·δ₁`, averaged over the device's sample** at one leaf. Where the
+play ends in a close that records its log and, at each sample `d₀` of stream `s`'s round `r`, the node `g' d₀` has a
+description at `d₀`'s leaf (`ho`), the probability that its class is empty at live coins whose bits `bits u` have the sampling design
+of a sample's first `n` coins (`hlaw`), averaged over the sample, is at most `2·δ₁` (`treeMisses_le`). -/
 theorem openEmpty_avg_le {β : Type} {lg : β → List Release} {E : List Release → Game β} (hE : RecordsLog lg E)
     (ν key : ByteArray) (s r n : ℕ) {block : ℕ} (g' : TreeDraw block → Game β)
     (ho : ∀ d₀, ∃ o : OpeningAt E (g' d₀), o.AtLeaf ν key s r n d₀) {Q : Type} [Fintype Q] [Nonempty Q]
@@ -273,7 +273,7 @@ theorem openEmpty_avg_le {β : Type} {lg : β → List Release} {E : List Releas
 
 variable (e : 𝔽 ≃ (Fin 128 → Bool))
 
-/-- **A draw's first `m` coins are a round's release**: in a block of at least `m` coins, the device releases them as
+/-- **A sample's first `m` coins are a round's release**: in a block of at least `m` coins, the device releases them as
 the bits of the `m` challenges they encode. -/
 theorem opened_eq_roundBits {block m : ℕ} (hm : m ≤ block) (d : TreeDraw block) :
     TreeDraw.opened d m = roundBits e fun i => e.symm (Fin.take m hm d.1 i) := by
@@ -283,7 +283,7 @@ theorem opened_eq_roundBits {block m : ℕ} (hm : m ≤ block) (d : TreeDraw blo
   rw [hr, TreeDraw.opened, ← Fin.ofFn_take_eq_take_ofFn hm]
   rfl
 
-/-- **A draw's first `m` coins have a round's law**: in a block of at least `m` coins, a uniform draw's first `m` coins
+/-- **A sample's first `m` coins have a round's law**: in a block of at least `m` coins, a uniform sample's first `m` coins
 are released as the bits of `m` uniform live challenges (`opened_eq_roundBits`). -/
 theorem avg_opened_roundBits {block m : ℕ} (hm : m ≤ block) (G : List Bool → ℝ≥0∞) :
     avg (fun ω : Fin block → Fin 128 → Bool => G (TreeDraw.opened (ω, fun _ => false) m)) =
