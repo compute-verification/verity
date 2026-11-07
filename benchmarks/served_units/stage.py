@@ -175,11 +175,10 @@ def _bits_words(bits) -> np.ndarray:
     return np.packbits(np.asarray(bits, np.uint8), bitorder="little").view("<u2")
 
 
-def _read_draw(S: dict, n: int, rng: np.random.Generator):
-    """A table of V random rows of H words, registered one a row (`row_table.commit` under a dense domain, owner -2), opened
-    at a random tok per input."""
-    V, H = S["V"], S["H"]
-    table = rng.integers(0, 1 << 16, (V, H), dtype=np.uint16)
+def _read_openings(table: np.ndarray, n: int, rng: np.random.Generator) -> tuple[dict[str, np.ndarray], np.ndarray]:
+    """``table``'s V rows of H words registered one a row (`row_table.commit` under a dense domain, owner -2) and opened at a
+    random tok per input: the read's rows by parameter, and the toks."""
+    V, H = table.shape
     dom = CommitmentDomain(rng.bytes(64), -2, RangeIndexedDomain(0, V), hash="sha512")
     salts = [rng.bytes(EMB.SALT_BYTES) for _ in range(V)]
     tree = RT.commit(dom, [bit_row((r.tolist(), 16)) for r in table], salts)
@@ -191,18 +190,27 @@ def _read_draw(S: dict, n: int, rng: np.random.Generator):
         args = EMB.arguments(V, int(t), tree.root, dom.domain_id, table[t].tolist(), salts[t], [p[k:k + 64] for k in range(0, len(p), 64)])
         for name, bits in zip(names, args):
             rows[name].append(_bits_words(bits))
-    return {p: np.stack(v) for p, v in rows.items()}, {"o0": table[toks], "o1": np.ones((n, 1), np.uint16)}
+    return {p: np.stack(v) for p, v in rows.items()}, toks
+
+
+def _read_draw(S: dict, n: int, rng: np.random.Generator):
+    """A table of V random rows of H words, opened at a random tok per input (`_read_openings`)."""
+    table = rng.integers(0, 1 << 16, (S["V"], S["H"]), dtype=np.uint16)
+    rows, toks = _read_openings(table, n, rng)
+    return rows, {"o0": table[toks], "o1": np.ones((n, 1), np.uint16)}
 
 
 def _log_f32(rng: np.random.Generator, lo: float, hi: float, n: int) -> np.ndarray:
     return np.exp(rng.uniform(np.log(lo), np.log(hi), n)).astype(np.float32)
 
 
-def _template_draw(S: dict, n: int, rng: np.random.Generator, fn) -> dict[str, np.ndarray]:
-    """Random words for each of a per-expert GEMM's or the router's parameters by name: e4m3 operands (no NaN code), log-uniform
-    f32 scales, a routed weight in (0, 1), N(0, 2) logits and N(0, 0.01) biases."""
+def _template_draw(S: dict, n: int, rng: np.random.Generator, fn, skip: tuple[str, ...] = ()) -> dict[str, np.ndarray]:
+    """Random words for each of a per-expert GEMM's or the router's parameters by name, but ``skip``'s: e4m3 operands (no NaN
+    code), log-uniform f32 scales, a routed weight in (0, 1), N(0, 2) logits and N(0, 0.01) biases."""
     out = {}
     for p, w in WI.layout(fn).rows:
+        if p in skip:
+            continue
         if p in ("xq", "w"):
             b = rng.integers(0, 256, (n, 2 * w), dtype=np.uint8)
             b[(b & 0x7F) == 0x7F] ^= 1
@@ -237,6 +245,28 @@ UNITS: dict[str, Unit] = {
     "pe-w2": _window(lambda S: bind(BM.MoeExpertFp8BlockGemmWV4, **S, DOT=BG.HopperE4m3QgmmaDot32),
                      {"K": 256, "N": 32, **_GEMM_ST, "SWAP": True}, lambda S: S["K"] * S["N"]),
 }
+
+
+def _fused(gemm, dot, defaults: dict) -> Unit:
+    """A per-expert GEMM over the weight rows it reads itself (`MoeExpertFp8ReadGemm(W)_v1`, READ = EmbeddingRead_v1{V, N K /
+    2}): a table of V random e4m3 rows (no NaN code) opened at a random tok per input, the GEMM's other operands by
+    `_template_draw`, no twin."""
+    def definition(S):
+        return bind(gemm, READ=EMB.read(S["V"], S["N"] * S["K"] // 2), DOT=dot, **{k: S[k] for k in ("K", "N", "G", "KB", "SWAP")})
+
+    def draw(S, n, rng):
+        b = rng.integers(0, 256, (S["V"], S["N"] * S["K"]), dtype=np.uint8)
+        b[(b & 0x7F) == 0x7F] ^= 1
+        rows, _ = _read_openings(b.view("<u2"), n, rng)
+        return {**rows, **_template_draw(S, n, rng, definition(S), skip=BM.READ_PORTS)}, None
+    return Unit(definition, (), draw, {"V": 256, **defaults}, lambda S: S["K"] * S["N"])
+
+
+#: each per-expert GEMM fused with its weight-row read, the fused cut's blocks
+UNITS.update({
+    "fr-w13": _fused(BM.MoeExpertFp8ReadGemmV1, BG.HopperE4m3MmaV2Dot32, {"K": 6144, "N": 1, **_GEMM_ST, "SWAP": False}),
+    "fr-w2": _fused(BM.MoeExpertFp8ReadGemmWV1, BG.HopperE4m3QgmmaDot32, {"K": 256, "N": 32, **_GEMM_ST, "SWAP": True}),
+})
 
 
 def _stationary_sig(routed: bool):
