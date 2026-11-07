@@ -56,7 +56,7 @@ theorem gε_iff_gGap (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout →
 
 /-- **Theorem 1 in ε form** (§3.5): if `G_ε` holds at the advantage `ε_a` with error `δ` and, for an adversary within
 `(T, q)`, the audit (any coins `C`, any acceptance predicate) satisfies `Pr[accept ∧ ∑_{u ∉ K} W_ref(u) > ε_s·W] ≤ δ_s`
-with `ε_s < 1`, then `Pr[accept ∧ (1 + ε_a)/(1 − ε_s)·T < W] ≤ δ_s + δ`. -/
+with `ε_s < 1`, then `Pr[accept ∧ (1 + ε_a)/(1 − ε_s)·T < W ∧ the run doesn't break SHA-512] ≤ δ_s + δ`. -/
 theorem theorem1Eps (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → Prop) (εa : ℝ) (δ : ℕ → ℕ → ℝ)
     (hG : Gε CM P D εa δ) (U : Workload) (hU : U.InDomain D) (T : ℝ) (hT : 0 ≤ T) (q : ℕ) (hq : q ≤ 2 ^ 64)
     (A : Adversary CM) (hA : A.Bounded U T q) (C : Type) [Fintype C] (accept : (Q → R) → S → C → Prop)
@@ -65,18 +65,20 @@ theorem theorem1Eps (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → 
         εs * totalWref P U.layout <
           ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ))
       ≤ δs) :
-    pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧ (1 + εa) / (1 - εs) * T < totalWref P U.layout)
+    pr (fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧ (1 + εa) / (1 - εs) * T < totalWref P U.layout ∧
+        ¬ A.Breaks U x.1 x.2.1)
       ≤ δs + δ q U.layout.N := by
   let E1 := fun x : (Q → R) × S × C => accept x.1 x.2.1 x.2.2 ∧
     εs * totalWref P U.layout <
       ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ)
   let E2 := fun y : (Q → R) × S =>
-    (1 + εa) * T < ∑ u ∈ correctSet P U y.1 y.2 (A.transcript U y.1 y.2), (P.Wref U.layout u : ℝ)
+    (1 + εa) * T < ∑ u ∈ correctSet P U y.1 y.2 (A.transcript U y.1 y.2), (P.Wref U.layout u : ℝ) ∧
+      ¬ A.Breaks U y.1 y.2
   have h1s : 0 < 1 - εs := by linarith
   calc _ ≤ pr (fun x : (Q → R) × S × C => E1 x ∨ E2 (x.1, x.2.1)) := pr_mono fun x hx => by
         by_cases h1 : E1 x
         · exact Or.inl h1
-        · refine Or.inr ?_
+        · refine Or.inr ⟨?_, hx.2.2⟩
           have hbad : ∑ u ∈ range U.layout.N \ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1),
               (P.Wref U.layout u : ℝ) ≤ εs * totalWref P U.layout := by
             by_contra h2
@@ -84,7 +86,7 @@ theorem theorem1Eps (CM : CostModel Q R S) (P : Protocol Q R S) (D : Layout → 
           have hsplit := Finset.sum_sdiff (f := fun u => (P.Wref U.layout u : ℝ))
             (correctSet_subset_range P U x.1 x.2.1 (A.transcript U x.1 x.2.1))
           have hW : (1 + εa) * T < (1 - εs) * totalWref P U.layout := by
-            have h := hx.2
+            have h := hx.2.1
             rw [div_mul_eq_mul_div, div_lt_iff₀ h1s] at h
             linarith
           show (1 + εa) * T < ∑ u ∈ correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1), (P.Wref U.layout u : ℝ)

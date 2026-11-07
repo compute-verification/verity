@@ -22,7 +22,8 @@ open Pouw.Pinned Finset
 
 /-- **(d) End to end, in ε form.** Under TT(g₀) and `Ω_max`'s bound, the protocol's advantage is
 `ε = Ω_max/(1 − g₀) − 1` (`ε = g/(1 − g)` at the reduction's gap `g = 1 − (1 − g₀)/Ω_max`), and the audit with `t`
-work-weighted samples satisfies `Pr[accept ∧ (1 + ε)/(1 − ε_s)·T < W] ≤ (1 − ε_s)^t + δ(q, N)` for every in-domain
+work-weighted samples satisfies `Pr[accept ∧ (1 + ε)/(1 − ε_s)·T < W ∧ the run doesn't break SHA-512] ≤
+(1 − ε_s)^t + δ(q, N)` for every in-domain
 workload, budget, oracle bound, adversary and `ε_s < 1` (`AuditGε`). -/
 def EndToEndEps : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
