@@ -208,6 +208,7 @@ def test_the_case_reads_the_drawn_members_files_whichever_member_it_is(tmp_path,
     got, how, n, _ = V.case(w, scratch)
     assert (how, n, got["params"]["proofs"]["circuit"]) == ("kept", 1, V.compose_command(LOG.read_text())["pin"])
     assert got["params"]["proofs"]["public"] == hashlib.sha512(public_of(2)).hexdigest()
+    assert got["params"]["proofs"]["members"] == [["A/c0", 4], ["A/c1", 4], ["A/c2", 4]]
     assert got["blobs"][:2] == [str(w / "m2" / "circuit.txt"), str(w / "m2" / "pub-4.bin")]
     (w / "m2" / "circuit.txt").unlink()
     assert V.case(w, scratch)[0]["blobs"][0] == str(w / "m0" / "circuit.txt")
@@ -232,6 +233,25 @@ def test_the_case_reads_the_drawn_members_files_whichever_member_it_is(tmp_path,
         shutil.rmtree(w / d)
     with pytest.raises(V.Refused, match="sessions of 0 members"):
         V.case(w, scratch)
+
+
+def test_the_layout_is_the_summarys_members_keyed_as_a5_named_them(tmp_path):
+    """`layout_of`: the window's members in unit order, each its key as a5 recorded it, or, in a summary from before
+    a5 recorded keys, its template's chunk ``<template>/c<j>`` counted from 0 per template; members that don't tile the
+    window from unit 0, or no summary, are refused."""
+    def summary(members: list[dict]) -> Path:
+        (tmp_path / "summary.json").write_text(json.dumps({"members": members}))
+        return tmp_path
+
+    old = [{"k": 2, "template": "B", "n": 1, "base": 5}, {"k": 0, "template": "A", "n": 2, "base": 0},
+           {"k": 1, "template": "A", "n": 3, "base": 2}]
+    assert V.layout_of(summary(old)) == [["A/c0", 2], ["A/c1", 3], ["B/c0", 1]]
+    assert V.layout_of(summary([m | {"key": f"K{m['k']}"} for m in old])) == [["K0", 2], ["K1", 3], ["K2", 1]]
+    with pytest.raises(V.Refused, match="m2 starts at unit 6, not 5"):
+        V.layout_of(summary([old[0] | {"base": 6}, *old[1:]]))
+    (tmp_path / "summary.json").unlink()
+    with pytest.raises(V.Refused, match="names no members"):
+        V.layout_of(tmp_path)
 
 
 def test_the_onsite_record_reads_a5s_pin_against_the_registration_the_coins_committed_to(tmp_path, RP):

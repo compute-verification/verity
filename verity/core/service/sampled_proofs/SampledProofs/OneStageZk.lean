@@ -287,7 +287,7 @@ def memberOf (members : Option (Array Member)) (record draw : Json) : V Member :
   | some ms =>
     let total := ms.foldl (fun t m => t + m.n) 0
     if total != pop then
-      throw s!"proofs: the layout's members count {total} units, not the record's population {pop}"
+      throw s!"the layout's members count {total} units, not the record's population {pop}"
     let us := Draw.proved draw
     let inM := fun (m : Member) (v : Int) => decide ((m.base : Int) ≤ v ∧ v < m.base + m.n)
     let some u := us[0]? | throw "the draw proves no unit: no member to verify"
@@ -773,7 +773,7 @@ private def header (roots domains : String) (instances : Nat) (indices : String)
 #guard memberRefusal r#"{"units":[6]}"# == s!"{ONE_MEMBER}: it proves unit 6, in no member"
 #guard memberRefusal r#"{"units":[]}"# == "the draw proves no unit: no member to verify"
 #guard (match memberOf (some (windowLayout.extract 0 2)) windowRecord (js r#"{"units":[3]}"#) with
-  | .error e => e | .ok _ => "") == "proofs: the layout's members count 5 units, not the record's population 6"
+  | .error e => e | .ok _ => "") == "the layout's members count 5 units, not the record's population 6"
 
 -- A slice is the ports under its key by whole path segment, its prefix stripped: `T/c24` holds none of `T/c2436`'s.
 #guard (sliceOf windowRecord "T/c24").size == 2 && ((sliceOf windowRecord "T/c24").get? "y").isSome

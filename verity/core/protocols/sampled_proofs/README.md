@@ -137,10 +137,13 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   their slots in class, stratum and block order.
 - **The audit on the proofs** (`verity/sampled-proofs/one-stage/v2`, `SampledProofs/OneStageZk.lean`, the executable
   `sampled-proofs-one-stage-zk`): v1 with the verdicts computed rather than read. Its parameters add the auditor's
-  circuit and public files' digests and the verifier's registered file; its evidence names step 4's one session's
-  record and rep files by SHA-512 in place of `verdicts`, the files coming in as `Core.Blobs`. It refuses none or
-  several sessions, a public file whose header isn't the registration's (`Record.matchesPublic`) or whose
-  `units.indices` aren't its population's units in order (`indicesHeld`), a population that isn't the program's proof
+  circuit and public files' digests, the verifier's registered file and, for a window, the verifier's layout of its
+  members (`proofs.members`, `[[key, n], ...]`); its evidence names step 4's one session's
+  record and rep files by SHA-512 in place of `verdicts`, the files coming in as `Core.Blobs`. It finds the drawn
+  member from the layout and the draw (`memberOf`), never from the case, and refuses none or several sessions, a draw
+  that proves units of two members, a public file whose header isn't that member's slice of the registration (its
+  ports under `<key>/` by whole path segment, prefix stripped, none missing or extra: `sliceOf`, `memberCodes`) or
+  whose `units.indices` aren't the member's units in order (`indicesHeld`), a population that isn't the program's proof
   blocks in order (`Slots.popOk`), and parameters naming no challenger coins. It reads the
   draw's coins as v1 does (`OneStage.coinsOf`; `oneStageZkReads` in `Security/Properties/Challenger.lean`) and holds
   the session's record to the coin trees the signed release log shows the challenger sampled and opened

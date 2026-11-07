@@ -1974,8 +1974,12 @@ def _public_of(rec: dict, roots: dict | None = None, indices: list | None = None
 
 
 #: `OneStageZk.INDICES_WHY`
-INDICES_WHY = ("public file: its units.indices are not the registration's population units in order "
-               "(instance i is unit i)")
+INDICES_WHY = "public file: its units.indices are not its member's units in order (instance i is unit base + i)"
+#: `OneStageZk.MEMBERS_WHY`
+MEMBERS_WHY = ("proofs: members is not the verifier's layout of the window ([[key, n], ...] in unit order: each key "
+               "non-empty, distinct and not another's whole-segment prefix, each n positive)")
+#: `OneStageZk.ONE_MEMBER`
+ONE_MEMBER = "the draw proves units outside one member of the layout: the case verifies one member's session"
 
 
 #: `OneStageZk.NO_CHALLENGER`
@@ -2030,7 +2034,9 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     a statement's; refused before the session is verified when its coins are not a tree the challenger logged, or the
     public file is not the registration's (`publicHeld`, its codes Python's `matches_public`'s), or its ``units.indices``
     are not the population's units in order (`indicesHeld`): a header rewritten after the draw, its pin with it, to
-    credit an honest instance as the drawn unit, or naming none; refused when a file it
+    credit an honest instance as the drawn unit, or naming none; refused for a layout of the window (``members``) that
+    isn't one, doesn't count the population, splits the draw between two members (`memberOf`), or whose drawn member's
+    slice of the registration isn't the public file's (`sliceOf`); refused when a file it
     names is in no blob, as the public file the parameters name is when the blobs hold another, or its sessions are not
     the evidence's. The public file is the parameters', committed before any coin: evidence naming one of its own, or
     parameters naming none, are refused. `test_proofs.py` holds the verdicts to `verify`'s on a real session, and
@@ -2108,6 +2114,13 @@ def test_v2_reads_no_verdict_from_the_evidence(server, server_v2):
     for f in (*relabelled, unitless + b"\n" + body):
         assert run(one, blobs_=[circuit.hex(), f.hex(), *blobs[2:]],
                    p=p2 | {"proofs": {**p2["proofs"], "public": _sha(f)}}) == ("reject", f"proofs: {INDICES_WHY}"), f
+    u, v = evidence["proved_units"]
+    for members, why in (
+            ([["", n]], f"params: {MEMBERS_WHY}"), ([["K", n - 1], ["K/c0", 1]], f"params: {MEMBERS_WHY}"),
+            ([["K", n + 1]], f"proofs: the layout's members count {n + 1} units, not the record's population {n}"),
+            ([["A", v], ["B", n - v]], f"proofs: {ONE_MEMBER}: it proves unit {u} of member A and unit {v} of member B"),
+            ([["K", n]], "proofs: public file: not the registration's for member K: roots, domains")):
+        assert run(one, p=p2 | {"proofs": {**p2["proofs"], "members": members}}) == ("reject", why), members
     assert run(base | {"proofs": {"public": _sha(public), **proofs(["s"])}, "sessions": ["s"]}) == (
         "reject", "evidence: the keys of the evidence's proofs are not sessions")
     got = run(one, p=p2 | {"proofs": {k: v for k, v in p2["proofs"].items() if k != "public"}})
