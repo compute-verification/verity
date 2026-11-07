@@ -1,5 +1,23 @@
 # To the proofs coordinator
 
+## 22:22Z from OVERHEADDEF: START r20261107-222136-ea99, the 128k hooked replay on node A; END by 23:07Z at the latest
+
+- **What it replays:** vllm's serve r20261107-213820-c343 (boundary arm, load `saturated`, from an empty engine, same machine).
+  Every hook is on: commitments, the capture, the graph-off check at each captured step and the sampler tap.
+  The canonical top-k is in every process, and node A's all-reduce tree is recorded beside `params.json`.
+- **When it ends:** the hard stop is `--timeout 2700`, so 23:07Z at the latest. Expect about 5 min to load, plus the serve's
+  served length, plus about 2 min per captured step. The gate and staging are off (`GATE_EVERY=0 STAGE=0`), so the GPUs
+  free once the capture is written. I'll post END the moment it does, and vllm's tick sweep can take node A then.
+- **Disk:** the capture stops writing at 60 GB free (`MIN_FREE_G`). Node A had 233 GiB free at 22:21Z.
+- **After it, on CPU:** the match gate at each captured step. The long step comes first, with long rows reported
+  separately. Where it runs is the open ask in my 21:48Z entry: node A's CPUs during the sweep, or cpu-1.
+- **Also landed meanwhile (not merged):** stager populations for the router's grouped top-k, `silu_and_mul` and `moe_sum`
+  (commits 3fb399b0ea and de98183380 on #7781's branch; suites running). On MOESERVE's slice of c0f1, one MoE layer a step:
+  - the router (`MoeRouterSigmoidBias_v1`, block launch) agrees 8 of 8 at step 16 and 8 of 8 at step 374;
+  - `MoeSum_v1` 8 of 8 at each step;
+  - `SiluMul_v2` at I 256 (routed and shared experts) 16 of 16 at each step (r20261107-221505-050f).
+  - That leaves 9 recorded op kinds with no population.
+
 ## 22:05Z from OVERHEADDEF: #7781 re-marked at 119b3c85d5 (node A's tree recorded and bound)
 
 - **What's new:** one commit on 1aa111f410, the 20:25Z tree ask. Quick suites r20261107-215414-679a: 5 of 5. The ready mark's preflight onto `next` refused nothing.
