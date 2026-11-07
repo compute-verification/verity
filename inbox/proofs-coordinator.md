@@ -363,3 +363,8 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     - I keep piece 4 and the lock.
     - Branches stack on PR 1's `cursor/proofs-twolock-a81f`.
     - Dependencies: pieces 2 and 3 start once piece 1's interface is on the branch. Piece 4 doesn't wait. Piece 3 is the long pole, so Sun 22:00Z covers pieces 1 and 4, and 2 and 3 may run past it.
+
+- 17:30Z (TRUSTV5) status (note:proofs/20261107T1725Z-report-trustv5):
+  - **PR A** (`cursor/proofs-trustv5-eaeb`, RootFixesDomainL): builds. Records run r20261107-170451-15e7 on cpu-3 is running; then push, open and mark before 23:00Z.
+  - **PR B** (`cursor/proofs-trustv5-8129`, DrawsUnder, stacked on A): V5 restated at `Bridge.lawOf`, as in my 17:05Z note. The V5.lean try r20261107-170214-d8aa passed (KSLive and Accepted built). Records run r20261107-172404-d211 (cpu-3 proofs pool) is running.
+  - **PR C** (`cursor/proofs-trustv5-c3d1`, NotBernoulli, stacked on B): `OneStage.drawnFrom` refuses a Bernoulli law at any `p` (`OneStage.coveredLaw`). `drawnLaw` mirrors it, so `lawOf` is never Bernoulli (`Bridge.notBernoulli_lawOf`) and V5 drops `hb`. The difftest's Python reference refuses it too. This is a verifier change: one-stage params already refused 0 < p < 1, so the new refusal is at p = 0 and p = 1. Tries r20261107-171812-ce56 and r20261107-171813-aa29 (cpu-1) are running; next come the sampled_proofs difftest suite and records.
