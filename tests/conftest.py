@@ -3,8 +3,9 @@
 landing without any claim being false meanwhile: lane names in code text, retired terms, dead doc paths, naming conventions,
 stale allowlist entries, Markdown over its cap.  A scan's own tests (that it reads each form) stay plain tests and fail, and
 so does a bookkeeping test that raises anything but a failed check (its scan broke), and anything that can make a claim false
-or can't be undone (a secret, a blob over its cap, an import across the boundaries).  Ruff's style findings warn in
-`tests/lint/test_repo_ruff.py` itself, which keeps its errors failing.  `tests/test_bookkeeping.py` holds the list to the tree."""
+or can't be undone (a secret, a blob over its cap, an import across the boundaries): ruff's errors among them, which
+`test_repo_ruff.py`'s `test_no_ruff_error` keeps failing.  The ratchet gate calls the lints' `test_no_new*` functions itself,
+outside pytest, so it still refuses what they find.  `tests/test_bookkeeping.py` holds the list to the tree."""
 from __future__ import annotations
 
 import warnings
@@ -15,6 +16,7 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 #: {test file: the tests of it whose findings warn}
 BOOKKEEPING = {
+    "tests/lint/test_repo_ruff.py": ("test_no_new_findings",),
     "tests/lint/test_repo_lane_text.py": ("test_no_new_lane_text", "test_pinned_files_hold_none",
                                           "test_the_list_is_well_formed_and_an_entry_moves_with_its_file"),
     "tests/test_retired_terms.py": ("test_no_retired_term_in_prose", "test_no_retired_term_in_the_maintained_docs",
