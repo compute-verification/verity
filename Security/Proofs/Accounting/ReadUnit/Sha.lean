@@ -106,7 +106,7 @@ theorem blocks_mul (total : ℕ) : 128 * blocks total = total + (Flock.ReadNet.p
 theorem chain_prefix {d d' : ByteArray} (n : ℕ) (h : ∀ i < 128 * n, d.get! i = d'.get! i) :
     chain d n = chain d' n := by
   induction n with
-  | zero => rfl
+  | zero => simp only [chain, List.range'_zero, List.foldl_nil]
   | succ n ih =>
       rw [chain_succ, chain_succ, ih fun i hi => h i (by omega)]
       exact compress_congr _ fun k hk => h _ (by omega)
@@ -249,7 +249,6 @@ theorem hash_chainW {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) {pre data
     omega
   have hc : chain P np = chain ⟨pre.toArray⟩ np := chain_prefix np fun i hi => by
     rw [get!_eq_getD, get!_eq_getD, hP', List.getD_append _ _ _ _ (by omega)]
-    simp
   have hpreP : chainV P np = chainV ⟨pre.toArray⟩ np := by
     unfold chainV
     rw [hc]
@@ -267,8 +266,12 @@ theorem isSha512_sha512 : IsSha512 Verity.sha512 := by
   apply List.ext_getElem
   · simp [Verity.Digest.bytes, hs]
   · intro i h1 h2
-    have hi : i < 64 := by simpa [Verity.Digest.bytes] using h1
-    simp [Verity.Digest.bytes, Verity.sha512, hs, hi]
+    have hi : i < (Flock.Sha512.hash ⟨m.toArray⟩).data.size := by
+      rw [hs]
+      simpa [Verity.Digest.bytes] using h1
+    simp only [Verity.Digest.bytes, List.getElem_ofFn, Array.getElem_toList]
+    show (Flock.Sha512.hash ⟨m.toArray⟩).data.getD i 0 = _
+    rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
 
 /-! ## Words in leaf order -/
 
@@ -370,6 +373,7 @@ theorem testBit_byte (v : BitVec 64) {k b : ℕ} (hb : b < 8) :
   rw [Nat.toUInt8_eq, UInt8.toNat_ofNat', e, ← Nat.shiftRight_eq_div_pow, show (256 : ℕ) = 2 ^ 8 from rfl, Nat.mod_mod,
     Nat.testBit_mod_two_pow, Nat.testBit_shiftRight]
   simp [hb]
+  exact BitVec.testBit_toNat _
 
 theorem bitL_bytesBE {vs : List (BitVec 64)} {t : ℕ} (ht : t < 64 * vs.length) :
     bitL (bytesBE vs) t = (vs.getD (t / 64) 0).getLsbD (8 * (7 - t / 8 % 8) + t % 8) := by
@@ -420,7 +424,8 @@ theorem ev_getD_wordBit (z : Var → Bool) {ws : List Word} (hw : Words64 ws) {t
 /-! ## The constants a part's message carries -/
 
 theorem chain_one (pre : ByteArray) : chain pre 1 = Flock.Sha512.compress Flock.Sha512.iv pre 0 := by
-  rw [chain_succ, Nat.mul_zero] <;> rfl
+  rw [chain_succ, Nat.mul_zero]
+  rfl
 
 theorem midstate_eq (pre : ByteArray) : Flock.ReadNet.midstate pre = (chainV pre 1).map constW := by
   rw [Flock.ReadNet.midstate, chainV, List.map_map, chain_one] <;> rfl
