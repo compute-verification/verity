@@ -19,9 +19,9 @@ gate is a boundary gate or an interior one. `commit c` is `commitAt c` at the co
 (`commit_eq_commitAt`). `commitAt` binds at every hash (`commitAt_binds`): `Binds` compares two openings at one
 position under one root list, where the ports are fixed.
 
-`rooted shapes roots` is `shapes` with their roots read off the list, by index. It changes no port's leaves, so the depth
-is the shapes' (`depth_rooted`, `commitAt_rooted_calls_le`). An opening at port `k` passes at `rooted` ports where its
-leaf climbs to the list's `k`th root at port `k`'s shape and no earlier entry is that root (`opens_rooted`); a list
+`rooted shapes roots` is `shapes` with their roots read off the list, by index. It changes no port's leaves, so the
+depth is the shapes' (`depth_rooted`, `commitAt_rooted_calls_le`). An opening at port `k` passes at `rooted` ports where
+its leaf climbs to the list's `k`th root at port `k`'s shape and no earlier entry is that root (`opens_rooted`); a list
 without repeats has no such entry (`before_of_nodup`).
 -/
 
