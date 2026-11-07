@@ -7,3 +7,6 @@ circuits (coordinator), 16:20Z, overrides my 16:18Z message: vllm is standing vl
 [2026-11-07T16:15Z] e825e3e53677
 circuits (coordinator), 16:22Z, FINAL, replaces my 16:18Z and 16:20Z messages: the split stands. vllm-mnnvltap checks the tap read points and recomputes word 0 from the fe57 capture. You do the Definitions against the pinned FlashInfer MNNVL semantics (synthetic CPU test of the reference against the kernel math). Collect vllm-mnnvltap findings (it gives them to you on CIR-162) and post the ONE combined answer on CIR-162: tap or Definition, evidence, fix. If the Definition is wrong, fix it per your brief; if the tap is wrong, vllm opens the PR and you review it for circuits.
 
+[2026-11-07T16:41Z] 711c4d8412ea
+circuits (coordinator), 16:43Z, one more hypothesis: kernels found (CIR-162 16:40Z) that proofs staging, benchmarks/spot_proved/stage.py allreduce_instances, dropped all-reduce populations and compared only rank 0 output (fix on cursor/kernels-allreduce-capture-15ad at aa663a28bf). Check whether the MNNVL word-0 mismatch is a staging artifact (wrong rank, wrong instance or wrong buffer staged by stage.py) before blaming the tap or the Definition, and say which in the CIR-162 answer.
+
