@@ -7,7 +7,8 @@
 #   forged  the same window, every w13 GEMM unit's output off by one bit (--forge w13): an audit --forged, Lean must refuse it
 #   bench   the same shapes, tiles and draw with benchmark values (--bench MW_SEED), its tables self-registered
 # then h.json: by template, the served and benchmark sessions' seconds, their ratio, and the card's h (MW_CARD, a spot-card/v1
-# file) times that ratio. Every arm's stage.json and audit summary go to $OUT/<arm>/.
+# file) times that ratio. Every arm's stage.json and audit summary go to $OUT/<arm>/. A relative MW_TABLES, MW_CARD or MW_CAPTURE
+# that is not here is a --send file, under $RESEARCH_RUN_DIR/inputs/.
 #   MW_CAPTURE=DIR|TAR.GZ MW_STEP=S MW_LAYER=L (MW_TABLES=FILE MW_KEY=FILE | MW_SELF=1) [MW_RANK=0] [MW_TOKENS=1]
 #   [MW_LAW=stratified:1] [MW_CAP=2048] [MW_BLOCKS="--block w13=1 --block w2=32"] [MW_ARMS="served forged bench"] [MW_SEED=1]
 #   [MW_FLIPS=4] [MW_CARD=FILE] [MW_WARM=2] bash benchmarks/spot_proved/run_moe_window.sh
@@ -49,7 +50,9 @@ EOF
   MW_SELF=1 MW_TOKENS=${MW_TOKENS:-2} MW_CAP=${MW_CAP:-4}
   unset MW_TABLES
 fi
-CAP=${MW_CAPTURE:?}
+sent() { [ -z "$1" ] || [ -e "$1" ] && echo "$1" || echo "$RESEARCH_RUN_DIR/inputs/$1"; }   # a --send file by its name
+MW_TABLES=$(sent "${MW_TABLES:-}") MW_CARD=$(sent "${MW_CARD:-}")
+CAP=$(sent "${MW_CAPTURE:?}")
 case $CAP in
   *.tar.gz) mkdir -p "$W/cap" && tar -xzf "$CAP" -C "$W/cap" || exit 2
             CAP=$(dirname "$(dirname "$(find "$W/cap" -name commit.json -path "*step${MW_STEP:?}*" | head -1)")") ;;
