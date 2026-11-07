@@ -121,7 +121,7 @@ def preflight(a: argparse.Namespace) -> int:
     from vllm.v1.engine.llm_engine import LLMEngine
 
     checkpoint = Path(a.checkpoint) if a.checkpoint else S.MODELS[a.model_id].checkpoint()
-    args = engine_args(served_argv(a, checkpoint, 0)[1:], 1)
+    args = engine_args(served_argv(a, checkpoint, 0)[1:], {"num_gpu_blocks": 1})
     got = {k: getattr(args, k) for k in ("model", "tensor_parallel_size", "max_model_len", "seed", "num_gpu_blocks_override",
                                          "enable_prefix_caching", "async_scheduling", "kv_cache_dtype", "block_size")}
     missing = [n for n in ("from_engine_args",) if not hasattr(LLMEngine, n)] + \
@@ -185,9 +185,16 @@ def copy_edges(src: Path, dst: Path) -> list[dict]:
 
 # ---------------------------------------------------------------------------------------------------- the restore
 
-def engine_args(server_argv: Sequence[str], num_gpu_blocks: int) -> Any:
+#: the step-trace header's scheduler and cache settings an engine's arguments set: vLLM resolves the batch limits by
+#: usage context and device, so the restore sets each to the served engine's
+PINNED_CONFIG = ("max_num_batched_tokens", "max_num_seqs", "max_model_len", "enable_chunked_prefill",
+                 "long_prefill_token_threshold", "max_num_partial_prefills", "async_scheduling", "block_size",
+                 "enable_prefix_caching")
+
+
+def engine_args(server_argv: Sequence[str], config: Mapping[str, Any]) -> Any:
     """The served engine's arguments, parsed from its server's argv as vLLM's OpenAI server parses them, with the
-    served block count (``num_gpu_blocks_override``)."""
+    served step trace header's block count (``num_gpu_blocks_override``) and `PINNED_CONFIG`."""
     from vllm.engine.arg_utils import EngineArgs
     from vllm.entrypoints.launchers.cli_args import make_arg_parser
     from vllm.utils.argparse_utils import FlexibleArgumentParser
@@ -196,9 +203,17 @@ def engine_args(server_argv: Sequence[str], num_gpu_blocks: int) -> Any:
     if argv[:2] == ["-m", "vllm.entrypoints.openai.api_server"]:
         argv = argv[2:]
     args = EngineArgs.from_cli_args(make_arg_parser(FlexibleArgumentParser()).parse_args(argv))
-    args.num_gpu_blocks_override = int(num_gpu_blocks)
+    args.num_gpu_blocks_override = int(config["num_gpu_blocks"])
+    for k in PINNED_CONFIG:
+        if config.get(k) is not None and hasattr(args, k):
+            setattr(args, k, config[k])
     args.disable_log_stats = True
     return args
+
+
+def config_difference(served: Mapping[str, Any], restored: Mapping[str, Any]) -> dict[str, list]:
+    """The scheduler and cache settings (step-trace header ``config``) whose values differ: name -> [served, restored]."""
+    return {k: [served.get(k), restored.get(k)] for k in sorted(set(served) | set(restored)) if served.get(k) != restored.get(k)}
 
 
 def served_trace(served: Path) -> list[dict]:
@@ -302,13 +317,22 @@ def restore(a: argparse.Namespace) -> int:
     sys.path.insert(0, str(ROOT / "integrations/vllm"))
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
+    from vllm.usage.usage_lib import UsageContext
     from vllm.v1.engine.llm_engine import LLMEngine
 
+    verdict = out / "restore.json"
     t0 = time.monotonic()
-    eng = LLMEngine.from_engine_args(engine_args(meta["server_argv"], header["config"]["num_gpu_blocks"]))
+    eng = LLMEngine.from_engine_args(engine_args(meta["server_argv"], header["config"]), UsageContext.OPENAI_API_SERVER)
     core = eng.engine_core.engine_core
     rpc = core.model_executor.collective_rpc
     res["build_s"] = round(time.monotonic() - t0, 1)
+    probe = StepTrace().install(core.scheduler)
+    probe.uninstall()
+    res["config_difference"] = config_difference(header["config"], probe.records[0]["config"])
+    if res["config_difference"]:
+        res["verdict"] = "the restored engine's scheduler or cache settings differ from the served one's"
+        verdict.write_text(json.dumps(res, indent=1))
+        return 1
 
     t0 = time.monotonic()
     res["loader_out"] = resolve(a.loader)(core, edge1) if a.loader else None
@@ -321,7 +345,6 @@ def restore(a: argparse.Namespace) -> int:
     res["restored_exact"] = {"kv": [g["layer_digests"] for g in mine] == [r["layer_digests"] for r in rec1["ranks"]],
                              "rng": [g["rng_digest"] for g in mine] == [r["rng_digest"] for r in rec1["ranks"]]}
     res["rank_map"] = E.check_rank_map(rec1["rank_map"], E.rank_map(got))
-    verdict = out / "restore.json"
     if not res["restored_exact"]["kv"]:
         res["verdict"] = "the restore is not exact at the edge"
         res["first_difference"] = edge_difference(rec1, {"ids": rec1["ids"], "ranks": [{"layer_digests": mine[0]["layer_digests"]}]},

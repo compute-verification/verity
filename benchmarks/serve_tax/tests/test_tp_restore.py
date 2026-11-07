@@ -89,6 +89,13 @@ def test_the_served_argv_is_the_record_arms_with_the_context_and_tp_given_last()
     assert argv[-2:] == ["--tensor-parallel-size", "2"] and argv.count("--max-model-len") == 1
 
 
+def test_a_restored_engines_settings_that_differ_are_named_with_both_values():
+    served = {"max_num_batched_tokens": 8192, "max_num_seqs": 256, "num_gpu_blocks": 900, "async_scheduling": True}
+    assert T.config_difference(served, dict(served)) == {}
+    assert T.config_difference(served, served | {"max_num_batched_tokens": 16384, "policy": "fcfs"}) == {
+        "max_num_batched_tokens": [8192, 16384], "policy": [None, "fcfs"]}
+
+
 def test_the_plugin_site_declares_the_edges_beside_the_step_trace(tmp_path):
     T.edge_site(tmp_path)
     eps = sorted(p.read_text() for p in tmp_path.glob("*.dist-info/entry_points.txt"))
