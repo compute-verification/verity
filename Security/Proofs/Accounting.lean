@@ -28,6 +28,7 @@ public import Proofs.Accounting.Pouw
 public import Proofs.Accounting.PouwWork
 public import Proofs.Accounting.BandwidthAudit
 public import Proofs.Accounting.RateAudit
+public import Proofs.Accounting.ReadUnit
 public import Proofs.Accounting.BoundReceipt
 public import Proofs.Accounting.Capacity
 public import Proofs.Accounting.DeclaredCircuit
