@@ -460,6 +460,9 @@ def _under_run(path: str) -> str:
 
 #: the Lean check's report among a check's run files (`lean_audit.py`): its `regenerated` names each package's regenerated lock
 AUDIT = "lean-audit/audit.json"
+#: the files beside the locks that drive's lock run repairs (`lean_audit.py --bookkeeping warn`: its `UNREAD_CAPS` and
+#: `CAPS_TEST`), which the report's `repaired` names by their repository paths and drive commits with the locks
+REPAIRED = frozenset({"tools/verity/lean/unread-caps.json", "tests/test_lean_packages.py"})
 
 
 class Unreadable(Exception):
@@ -469,7 +472,8 @@ class Unreadable(Exception):
 
 def regenerated_records(store, run_id: str, dest: Path | None = None) -> dict[str, tuple[str, Path | None]] | None:
     """{package: (sha256 of its regenerated lock, the fetched file under ``dest`` or None)} of a check that passed its Lean
-    check by regenerating records (the report's `regenerated`), from its files in the store; empty when it regenerated none,
+    check by regenerating records (the report's `regenerated`), and the same of each file of `REPAIRED` its lock run repaired
+    (`repaired`) under its repository path, from its files in the store; empty when it regenerated none,
     None when the store holds no report of its Lean check (its files aren't there yet: a check still running).  `Unreadable`
     when the report is listed but can't be read, or names a record its files lack."""
     if not (art := _run_files(store, run_id)):
@@ -493,11 +497,16 @@ def regenerated_records(store, run_id: str, dest: Path | None = None) -> dict[st
 
 
 def _regenerated_in(run_id: str, audit) -> dict[str, str]:
-    """{package: its regenerated lock's path among the run's files} of a Lean check's report."""
+    """{package: its regenerated lock's path among the run's files} of a Lean check's report, and {a file of `REPAIRED`: its
+    repaired copy's path there} of its `repaired`; `Unreadable` for a `repaired` naming any other file."""
     regen = audit.get("regenerated") if isinstance(audit, dict) else None
-    if not isinstance(regen or {}, dict):
-        raise Unreadable(f"{run_id}'s {AUDIT} has a `regenerated` that isn't an object")
-    return {str(pkg): _under_run(str(p)) for pkg, p in (regen or {}).items()}
+    fixed = audit.get("repaired") if isinstance(audit, dict) else None
+    if not isinstance(regen or {}, dict) or not isinstance(fixed or {}, dict):
+        raise Unreadable(f"{run_id}'s {AUDIT} has a `regenerated` or `repaired` that isn't an object")
+    if odd := sorted(set(fixed or {}) - REPAIRED):
+        raise Unreadable(f"{run_id}'s {AUDIT} says it repaired {', '.join(odd)}, which no lock run repairs (`REPAIRED`)")
+    return {str(pkg): _under_run(str(p)) for pkg, p in (regen or {}).items()} | {
+        str(f): _under_run(str(p)) for f, p in (fixed or {}).items()}
 
 
 def fetch_run(rid: str, names: list[str], cwd: Path | None = None, refresh: bool = False) -> tuple[Path, dict] | None:
@@ -536,6 +545,25 @@ def live_records(rid: str, fetch=fetch_run) -> dict[str, tuple[str, Path | None]
     return {pkg: (hashlib.sha256((got[0] / p).read_bytes()).hexdigest(), got[0] / p) for pkg, p in want.items()}
 
 
+def bookkeeping_warnings(store, rid: str, fetch=fetch_run) -> list[str]:
+    """The warnings of lock run ``rid``'s bookkeeping repairs (its Lean report's `bookkeeping`), read from its files in the
+    store, else from its run dir on its node (``fetch``); empty when it has none or its report can't be read: drive tells
+    them and puts them in the lock commit, and nothing waits on them."""
+    try:
+        audit = None
+        if (art := _run_files(store, rid)) and AUDIT in {f["path"] for f in store.listing(art)}:
+            with tempfile.TemporaryDirectory() as d:
+                audit = json.loads((store.fetch(art, Path(d), paths=[AUDIT]) / AUDIT).read_text())
+        elif (got := fetch(rid, [AUDIT])) is not None:
+            audit = json.loads((got[0] / AUDIT).read_text())
+        warned = audit.get("bookkeeping") if isinstance(audit, dict) else None
+        return [str(w) for w in warned] if isinstance(warned, list) else []
+    except Exception as e:  # noqa: BLE001  (warnings only: no report, no warnings)
+        print(f"research merge: lock run {rid}'s bookkeeping warnings unread ({type(e).__name__}: {e}); its lock commit "
+              f"lists none", file=sys.stderr)
+        return []
+
+
 def _blob_sha256(repo: Path, commit: str, path: str) -> str:
     r = subprocess.run(["git", "-C", str(repo), "cat-file", "blob", f"{commit}:{path}"], capture_output=True)
     return hashlib.sha256(r.stdout).hexdigest() if r.returncode == 0 else ""
@@ -554,7 +582,8 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
                        maps=None, deferred: str | None = None, fetch=None) -> str | None:
     """The passing ``tool`` attempt of ``commit``'s one parent that vouches for ``commit``, or None: ``commit`` changes only Lake
     packages' locks, names exactly those in its `Regenerated:` trailer, and they are byte for byte the locks that attempt
-    regenerated, one for each package it regenerated, so the tree that lands is the one that check audited.
+    regenerated, one for each package it regenerated, so the tree that lands is the one that check audited.  A file of
+    `REPAIRED` it changes is held the same way, to the copy the lock run repaired (`--bookkeeping warn`).
 
     ``deferred`` is the lock run drive commits ``commit`` for on the parent (`Driver._unvouched`), a check of lean-audit
     alone, so no passing attempt of the whole check: it vouches when ``commit``'s `Checked:` trailer names it, it ran on the
@@ -568,7 +597,7 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     files = _git(repo, "diff", "--name-only", "--no-renames", parent, commit).stdout.split()
     said = {f.strip() for f in _git(repo, "log", "-1", "--format=%(trailers:key=Regenerated,valueonly,separator=%x2C)",
                                      commit).stdout.replace("\n", ",").split(",") if f.strip()}
-    if not files or set(files) != said or not all(os.path.basename(f) == LOCK for f in files):
+    if not files or set(files) != said or not all(os.path.basename(f) == LOCK or f in REPAIRED for f in files):
         return None
     if deferred is not None:
         checked = re.findall(r"^Checked: (\S+)", _git(repo, "log", "-1", "--format=%B", commit).stdout, re.M)
@@ -576,7 +605,7 @@ def regenerated_parent(repo: Path, commit: str, store, *, tool: str, kinds: froz
     else:
         tree = _git(repo, "rev-parse", f"{parent}^{{tree}}").stdout.strip()
         ids = passing(store, parent, tool, kinds=kinds, command=command, tree=tree, maps=maps, repo=repo)
-    lock = {os.path.dirname(f) or ".": _blob_sha256(repo, commit, f) for f in files}
+    lock = {f if f in REPAIRED else os.path.dirname(f) or ".": _blob_sha256(repo, commit, f) for f in files}
     for rid in ids:
         try:
             recs = regenerated_records(store, rid)
