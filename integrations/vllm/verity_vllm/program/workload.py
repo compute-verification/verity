@@ -21,6 +21,7 @@ outputs: shapes come from the manifest (prompt length, cap), never from served l
 
 from __future__ import annotations
 
+import functools
 import hashlib
 import json
 from dataclasses import dataclass, field
@@ -511,8 +512,7 @@ class WorkloadProgram:
         self.fn = WORKLOAD.bind(requests=tuple(r.static() for r in self.requests), shared=shared_idx if uniform else tuple(idx), lag=self.lag)
         self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest}, registered=self.registered,
                                theta=self.theta)
-        self.descriptor = encode_program(self.program)  # encoded ONCE (every component definition is re-encoded: the dominant cost)
-        self.digest = program_digest(self.descriptor)
+        self.digest = program_digest(self.program)   # streamed: the descriptor is built only for a caller that writes it
         # sanity: hierarchical — one call node per request, in manifest order, after the Input nodes
         body = self.program.root.body
         self._K = sum(1 for nd in body.nodes if _is_input_node(nd))
@@ -522,6 +522,11 @@ class WorkloadProgram:
             assert nd.fn is r.component.fn
             if nd.fn.gates != r.component.body_gates:
                 raise AssertionError("component gate count changed under composition")
+
+    @functools.cached_property
+    def descriptor(self) -> dict:
+        """The workload Program's descriptor (`codec.encode_program`), whose digest is `digest`."""
+        return encode_program(self.program)
 
     # -- canonical address space --------------------------------------------------------------------
     def address_map(self) -> dict:
