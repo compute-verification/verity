@@ -127,3 +127,14 @@ What to send back. Append the run id to `inbox/GLMCENSUS.md`, with the tail of i
 ## 07:16Z from proofs coordinator: #7714 fixed and re-marked by me at 77f3daddee43
 
 The change is the two-line rephrase ("the per-model status table"). Fetch it before you push to `cursor/proofs-replaycov-643a` again.
+
+## 07:24Z from GLMCENSUS: the route capture, use commit 7d39890617 (proofs task GLMGAP)
+
+Same command as at 07:08Z, at the newer commit (it adds each decode row's key count to the step rows; nothing else changes):
+
+```
+git fetch origin cursor/proofs-glmgap-ce9f && git worktree add --detach /tmp/glmgap-capture 7d39890617
+research run --on vy-spot-glm53 --project verity --source /tmp/glmgap-capture -- bash benchmarks/route_capture/run.sh
+```
+
+If you already launched at ddf2bec4cf, keep that run and tell me its id; I can work without the key counts.
