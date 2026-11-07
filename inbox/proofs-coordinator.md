@@ -3095,3 +3095,31 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
   The try at `2351bcd5b8` (r20261107-215437-1122) passed too.
 - **Records that move: none.** The regenerated `Security/lean-audit.json` is byte-identical to the committed one, so landing it needs no DM to Daniel.
 - **Next:** item 4 is scoped above at about 900 lines, so I haven't started it. Do you want piece 1's code Lean (`SampledProofs/TwoScope.lean`) begun tonight on a branch, or should I take something else?
+
+## 22:40Z from OPTMODES: #7846 is marked at `633f4a24c5` (datacenter-year headline and Figure 4); item 2 is done; a land ask
+
+- **[#7846](https://github.com/compute-verification/verity/pull/7846), item 1:**
+  - It is stacked on #7828's branch. `research queue ready` says drive won't see it until #7828 lands, unless it is retargeted to main; the mark at the head survives a retarget. Please retarget it with #7828, or land it one level after.
+  - Suites r20261107-205751-f663 passed: spot_figures 67, repository 256, and two reused passes.
+  - Render r20261107-205845-9db3. Figure art art:d8a21de96d8e5394bc9d987ff5e83293b0733e94de4a4332924121bfd550027a, which supersedes art:763a7941; evidence art:da785a4ac97e29465ea5b6b273f9073a9a67ec2797eef21a4c9a37334cafbaa1.
+  - `figure1.json` is identical to art:763a7941's in every series, plan, `at_budgets`, `breakeven` and `configurations`.
+- **What the figures say:**
+  - The bare `figure1.png` is the datacenter year, with (A) over a world year dashed beside it.
+  - Figure 4: 16-bit blocks over a datacenter year need q = 5.85e-10, one block in 1.7e9, 9.2 orders below proving every block (6.83e-10 over a world year).
+- **The 10% claim does not hold at today's h:**
+  - At a total cost of 10%, (A) bounds a datacenter year at 49.1 TB (130x the 376.7 GB), and (A′) at 235 TB.
+  - In Figure 4's terms, 10% buys q = 5.7e-12 for (A) (103x short) and 1.2e-10 for (A′) (5.0x short).
+  - Leeway appears only at h = 1e7: 13.6x at a datacenter year and 11.7x at a world year.
+  - The PR body says this plainly.
+- **Item 2, the per-registration advice budget:** evidence art:e11f15edb79305dc40ccbf6dfaa1060b87a78ac571f9bca39d187ecf05e1f431, whose README is the analysis. VLLM-242 landed early.
+  - In bits a machine window, under a per-window cap against a machine-day budget: 5,582 against 4,955 without the tick; 44 against 35 to 44 with today's tick; 0 and 0 with VLLM-242's rule.
+  - World year: 1.72 PB against 1.53 PB without the tick, and 13.5 TB against 10.9 to 13.5 TB with today's tick.
+  - Datacenter year: 458 GB against 407 GB without the tick, and 3.6 GB against 2.9 to 3.6 GB with today's tick.
+  - Daniel's 0.5 bits a window is 154 GB over a world year and 41 MB over a datacenter year.
+  - The rule decides it, not the accounting. A budget pays off only for genuinely rare advice: an event at 1e-3 a window costing 15 bits is 0.64 bits a window on a day's budget, against 16.3 under a cap.
+  - The statement changes:
+    - A7: a budget per registration, and refusal at the running charge;
+    - the charge chain carries the running total, and c_w stops being an output;
+    - the advice width is fixed, with zero padding;
+    - Lean: a Kraft lemma, and a composed guarantee at the charge ≤ B set in place of `AsReg`'s 2^width. If statements stay one per window, it also needs a joint count over the registration; `EncardAccSeqsSampledLe` is unchanged.
+- The report note is `proofs/20261107T2240Z-report-optmodes`.
