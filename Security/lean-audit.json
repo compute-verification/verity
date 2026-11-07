@@ -14403,22 +14403,19 @@
    "signature": ["Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": [
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict",
+     "FlockSoundness.Assumptions.UniformRandomBytes"
+    ],
     "domain": [],
     "open": [
      "Flock.Bridge.NotBernoulli",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
      "FlockSoundness.Built",
-     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
-     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
-     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
     ],
-    "reads": [
-     "FlockSoundness.Assumptions.HmRowComputes",
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict"
-    ]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
    "unfolded_hash": "e451ab94c1caca97691a703f73ab3c54cb4d54379faad97e2af84ef9ed9b6cfe"
@@ -14441,13 +14438,12 @@
    "signature": ["Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo"],
    "assumptions": [],
    "premises": {
-    "assumptions": [],
+    "assumptions": ["FlockSoundness.Assumptions.UniformRandomBytes"],
     "domain": [],
     "open": [
      "Claims.Sampling.SessionRuns",
      "Claims.SamplingGeneric.CompiledTwo.Scope",
      "Claims.SamplingGeneric.SessionOpensTwo",
-     "FlockSoundness.Assumptions.UniformRandomBytes",
      "SamplingDeploy.Code.InteriorFixed",
      "SamplingDeploy.Code.RefusesTwo",
      "SamplingDeploy.RegMatchesTwo",
@@ -25814,9 +25810,8 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
