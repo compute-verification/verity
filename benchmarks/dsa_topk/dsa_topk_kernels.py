@@ -114,8 +114,7 @@ def _popc(x, HW: tl.constexpr):
 
 @triton.jit
 def canon_row(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
-              K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, HW: tl.constexpr,
-              STAGES: tl.constexpr):
+              K: tl.constexpr, KP2: tl.constexpr, BLOCK: tl.constexpr, MODE: tl.constexpr, HW: tl.constexpr):
     # one program a row, one read: the keys at or above the fast kernel's smallest selected key, in ascending order,
     # each at its rank (the words before it, then its word's bits below it: no scan over keys); then the row's
     # counts decide: no tie across the k-th key leaves the row as written, a tie has it written again from the
@@ -132,7 +131,7 @@ def canon_row(logits, ls0, ls1, out, os0, A, B, ncols, next_n, stats,
         c_gt = tl.zeros([W, 32], dtype=tl.int32)
         c_eq = tl.zeros([W, 32], dtype=tl.int32)
         kept = n * 0
-        for b in tl.range(0, n, BLOCK, num_stages=STAGES):
+        for b in range(0, n, BLOCK):
             idx = b + tl.arange(0, W)[:, None] * 32 + tl.arange(0, 32)[None, :]
             m = idx < n
             key = _ordered(tl.load(row + idx.to(tl.int64) * ls1, mask=m, other=0.0))

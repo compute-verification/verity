@@ -54,8 +54,6 @@ BLOCK = 2048
 NUM_WARPS = 8
 #: programs a multiprocessor should get before a row is split
 FILL = 2
-#: blocks a one-program row has in flight (Triton's loop pipelining)
-STAGES = 1
 #: `log_to` rewrites its record every this many calls (a device sync), since vLLM's workers may never reach atexit
 FLUSH_EVERY = 4096
 
@@ -125,10 +123,10 @@ class Canon:
     ``logits`` (float32, rows x columns) in place."""
 
     def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK, num_warps: int = NUM_WARPS,
-                 fill: int = FILL, stages: int = STAGES) -> None:
+                 fill: int = FILL) -> None:
         if not 32 <= block < 1 << 15 or block & (block - 1):
             raise ValueError(f"block: a power of two from 32 to 2**14, not {block}")
-        self.seg_min_keys, self.block, self.num_warps, self.fill, self.stages = seg_min_keys, block, num_warps, fill, stages
+        self.seg_min_keys, self.block, self.num_warps, self.fill = seg_min_keys, block, num_warps, fill
         self.calls = {op: 0 for op in OPS}
         self.launches: dict[str, int] = {op: 0 for op in OPS}
         self._stats: dict[Any, Any] = {}
@@ -174,8 +172,7 @@ class Canon:
         args = (logits, ls0, ls1, out, out.stride(0), a, b, ncols, next_n)
         const = dict(K=k, KP2=next_pow2(k), BLOCK=self.block, MODE=mode, num_warps=self.num_warps)
         if seg == 1:
-            K["canon_row"][(rows,)](*args, stats, HW=os.environ.get("TRITON_INTERPRET") != "1", STAGES=self.stages,
-                                    **const)
+            K["canon_row"][(rows,)](*args, stats, HW=os.environ.get("TRITON_INTERPRET") != "1", **const)
             return
         ws = self.workspace(dev, rows * (2 * seg + 1))
         K["count_seg"][(rows, seg)](*args, ws, seg, **const)

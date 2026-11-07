@@ -341,13 +341,12 @@ def time_cases() -> list[Case]:
 
 
 def variant(spec: str) -> dsa_topk.Canon:
-    """``BLOCK:WARPS:SEG_MIN_KEYS[:FILL[:STAGES]]`` (``SEG_MIN_KEYS`` ``off``: one program a row), or ``default``."""
+    """``BLOCK:WARPS:SEG_MIN_KEYS[:FILL]`` (``SEG_MIN_KEYS`` ``off``: one program a row), or ``default``."""
     if spec == "default":
         return dsa_topk.Canon()
     block, warps, seg, *rest = spec.split(":")
     return dsa_topk.Canon(seg_min_keys=1 << 40 if seg == "off" else int(seg), block=int(block), num_warps=int(warps),
-                          fill=int(rest[0]) if rest else dsa_topk.FILL,
-                          stages=int(rest[1]) if len(rest) > 1 else dsa_topk.STAGES)
+                          fill=int(rest[0]) if rest else dsa_topk.FILL)
 
 
 def time_(args) -> None:
