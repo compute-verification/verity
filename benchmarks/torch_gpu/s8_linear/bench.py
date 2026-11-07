@@ -18,8 +18,8 @@ around every item), each gated in this run before it is timed:
                   M a multiple of 16, its words counted against the Definition's
 DRAM read bandwidth is measured in the run, before and after (a streaming read of 4 GiB, `read_kernel`, interleaved with a
 copy), and the s8 tensor-core peak is the card's, `--peak-tops`, by default PEAKS' measured reading for the arch: sm_90's
-1,942.7 TOPS (the H200's best second of dense s8 wgmma) beside its data sheet's 1,979 at 1,830 MHz,
-sm_120's 807.5 (mma.sync at locked 2100 MHz). crossing.json records every reading (`peak_readings`); a
+the H200's best second of dense s8 wgmma, beside its data sheet's at 1,830 MHz, and sm_120's mma.sync at a locked
+2100 MHz. crossing.json records every reading (`peak_readings`); a
 fraction of peak scales by their ratio. A model's layer set is its linears (`fixture.MODELS`) at the same M.
 
 crossing.json, per arm and model (layer set) and per linear:
@@ -40,21 +40,26 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
 import triton
 import triton.language as tl
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "hash" / "exactlin"))
+import kbench  # noqa: E402
+from verity_vllm.engine import int8_fused as X  # noqa: E402
+
 import fixture as FX  # noqa: E402
 import int_mm as IM  # noqa: E402
-import kbench  # noqa: E402
 import lt as LT  # noqa: E402
 import roofline as RF  # noqa: E402
 import run as R  # noqa: E402
-from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 SWEEP_MS = (1, 8, 16, 32, 64, 96, 128, 160, 192, 224, 256, 320, 384, 448, 512, 768, 1023, 1024, 2048, 4096, 8192, 16384,
             20480)
@@ -75,7 +80,7 @@ def read_kernel(src, out, n, BLOCK: tl.constexpr, ITERS: tl.constexpr):
     tl.store(out + pid, tl.sum(acc, axis=0))
 
 
-def bandwidth(clock, reps: int) -> dict:
+def bandwidth(clock: Callable[[], object], reps: int) -> dict:
     """DRAM bandwidth: a streaming int32 read of BW_BYTES (read_kernel) and a device copy (read + write), interleaved."""
     n = BW_BYTES // 4
     src = torch.randint(0, 1 << 30, (n,), dtype=torch.int32, device="cuda")
@@ -96,7 +101,7 @@ def bandwidth(clock, reps: int) -> dict:
 class Linear:
     """One (N, K, M): weight copies, X, scales, the outputs, and the arms' gated callables."""
 
-    def __init__(self, n: int, k: int, m: int, kerns: dict):
+    def __init__(self, n: int, k: int, m: int, kerns: dict[str, R.Kernel]) -> None:
         self.n, self.k, self.m, self.kerns = n, k, m, kerns
         self.copies = kbench.copies_for(n, k)
         self.ws = [R.Weights(n, k, seed=2000 + i, special=False) for i in range(self.copies)]
@@ -109,7 +114,7 @@ class Linear:
         self.z = torch.empty((m, n), dtype=torch.int32, device="cuda")
         self.gates: dict = {}
 
-    def exact(self, arm: str):
+    def exact(self, arm: str) -> Callable[[], None] | None:
         kern = self.kerns[arm]
         cfg = kern.pick(self.m, self.n, self.k)
         R.poison(self.y)
@@ -120,12 +125,12 @@ class Linear:
         if self.gates[arm]["mismatches"] or not self.gates[arm]["checks_ok"]:
             return None
 
-        def f():
+        def f() -> None:
             for wt in self.ws:
                 kern.call(self.x, self.sa, wt.w, wt.sw, self.y, cfg)
         return f
 
-    def lt(self, clock) -> object:
+    def lt(self, clock: Callable[[], object]) -> object:
         plan = LT.Plan(self.m, self.n, self.k)
         cands = plan.candidates()
         fns, names, gate = {}, {}, {}
@@ -153,7 +158,7 @@ class Linear:
         self._plan = plan
         return fns[best]
 
-    def cutlass(self, swap: bool):
+    def cutlass(self, swap: bool) -> Callable[[], object] | None:
         """vLLM's CUTLASS int8 GEMM (`torch.ops._C.cutlass_scaled_mm`, no fallback), timed as a speed reference whatever its
         words; the gate records them: the plain call against z's epilogue in its own order (s_w first), the swapped call
         against the Definition's words. A call that doesn't launch isn't timed."""
@@ -164,7 +169,7 @@ class Linear:
         try:
             import vllm._custom_ops  # noqa: F401  (loads torch.ops._C)
 
-            def call(wt):
+            def call(wt: R.Weights) -> None:
                 if swap:
                     torch.ops._C.cutlass_scaled_mm(self.yt, wt.w, self.x.t(), wt.sw.reshape(-1, 1), self.sa.reshape(-1, 1), None)
                 else:

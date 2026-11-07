@@ -85,8 +85,9 @@ control that writes nothing rejected).
   one thread a core over 1, 2, 4, ... cores and each NUMA node's. `run_write_host.sh` is one Attempt on the CPUs the job
   was given.
 
-`tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 and BLAKE3 constants read out
-of `tagger.cu`. It checks them against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
+`tests/` holds CPU twins of every kernel's arithmetic and message layout, with the SHA-512 constants read out of
+`verity/ml/kernels/sha512.cuh`, which `tagger.cu` includes, and the BLAKE3 constants out of `tagger.cu`. It checks them
+against the core reference and checks that the bottom-up tree and its paths are RFC 6962's.
 `tests/test_prover.py` checks, with a fake tagger, that every window the harness runs is prepared before its seed and is
 in the store's one challenger state under a nonce of its own. Run it with
 `uv run tools/verity/check/suites.py benchmarks/bandwidth`.

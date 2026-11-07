@@ -13,8 +13,6 @@ TP stand-in (integrations/vllm's `tests.pipeline.served_tp`, deferred), without 
 * An accepted audit's charge terms: λ_δ, β_δ and their sum, off the audit's profile (`charge_terms`).
 * A single-GPU run's pieces without its Commit: I2's adapter (its requests, its refusal by name, its Program bodies by digest),
   the requests' bodies from the record, the stand-in window's link and `source1`'s codes, and the CLI's one committed run.
-* a5's R2 negative registers another population, one instance over where a template has a single one, so a one-unit window
-  (the forged TP1 case at step 24) is audited through its negatives.
 * A served window's pieces on a small synthetic serve-openai run dir (no Commit): its requests' bodies by I1 id, φ of the served
   engine, the registered compiler, the prover committing under the published binding (no re-commit), `serve_check`'s codes
   (a compiler without the cap, a root that isn't rows-sha512) and its negatives, and the CLI's served run.
@@ -42,10 +40,8 @@ from typing import Any
 import pytest
 
 from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits
-from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, partition as P, registration as R
+from verity.core.protocols.sampled_proofs.one_stage import audit as AU, draw as DR, registration as R
 from verity.ml.circuits.codec import canonical_json
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.types import Array, Value as Bits
 from verity.ml.windows import interface as IF, rows as CS
 from verity_vllm.engine.served_seed import DEFAULT_SEED
 from verity_vllm.pipeline import advice_windows as AW
@@ -674,19 +670,6 @@ def test_per_unit_timing_is_over_the_members_drawn_units_not_c_flocks_virtual_un
                                                               "proof_bytes": [830330, 830330]}}}}
     assert PP.per_unit(s) == {"T": {"units": 2, "k_log": 26, "proof_bytes": 1660660, "prove_s_per_unit": 214.45,
                                     "session_s_per_unit": 250.6, "verify_s_per_unit": 3.1, "lean_verify_s_per_unit": 23.5}}
-
-
-def test_a5s_r2_partition_is_another_population_even_of_a_one_unit_window():
-    xor8 = PrimitiveDefinition("ProvePathTestXor8", 1, (("a", Bits(8)), ("b", Bits(8))), Bits(8), lambda a, b: a ^ b,
-                               register=False)
-    pair = bind(CompositeDefinition("ProvePathTestPair", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
-                                    lambda B, S_, x: B.call(xor8, x[0], x[1]), register=False))
-    triple = bind(CompositeDefinition("ProvePathTestTriple", 0, (), lambda S_: ((("x", Array(3, Bits(8))),), Bits(8)),
-                                      lambda B, S_, x: B.call(xor8, B.call(xor8, x[0], x[1]), x[2]), register=False))
-    for defs, want in (([(pair, 1)], P.population_program(pair, 2)), ([(pair, 4)], P.population_program(pair, 3)),
-                       ([(pair, 1), (triple, 1)], P.mixed_population_program([(pair, 2), (triple, 1)])),
-                       ([(pair, 3), (triple, 1)], P.mixed_population_program([(pair, 2), (triple, 1)]))):
-        assert P.program_digest(A5.resized_program(defs)) == P.program_digest(want)
 
 
 TARGET = {"device_name": "test-gpu", "execution_label": "bi-eager", "batch_invariant": True}
@@ -1426,3 +1409,30 @@ def test_the_committers_key_is_made_once_private_and_read_back(tmp_path):
     p.write_bytes(bytes(31))
     with pytest.raises(ValueError, match="32 bytes, not 31"):
         PP.committer_key(p)
+
+
+def test_window_commits_h1_tie_reads_ws_tables_at_the_classs_rounds(tmp_path):
+    """`h1_tie`: with ``--window-registration`` W, H1's registration of the window, and ``--h1-key``, window-commit's
+    circuit reads W's tables (`window_class.Tables` of the serve's H1 window Program); none without W. Refused by name
+    without the key, for a W under another Program, and where H1's rounds aren't the class's outputs."""
+    from verity_vllm.program.predict.window_circuit import Tables
+    from verity_vllm.protocols.pouw import h1 as PH
+    serve, cls = tmp_path / "serve", SimpleNamespace(outputs=2)
+    (serve / "h1").mkdir(parents=True)
+    layout = {"calls": [["a", 0], ["b", 0]] * 2, "linears": [["a", 64, 8], ["b", 64, 8]], "m": 8}
+    (serve / "h1" / PH.PROGRAM_META).write_text(json.dumps({"program_digest": "p" * 128, "steps": 2, "layout": layout}))
+    (tmp_path / "w.json").write_text(json.dumps({"program": "p" * 128, "registered": []}))
+
+    def tie(cls=cls, **kw):
+        args = {"serve_run": str(serve), "window_registration": str(tmp_path / "w.json"), "h1_key": "key", **kw}
+        return PP.h1_tie(argparse.Namespace(**args), cls)
+    assert PP.h1_tie(argparse.Namespace(window_registration=None), cls) is None
+    w, meta, tables = tie()
+    assert w["program"] == meta["program_digest"] and tables == Tables(64, 8, 2)
+    with pytest.raises(ValueError, match="give --h1-key"):
+        tie(h1_key=None)
+    (tmp_path / "other.json").write_text(json.dumps({"program": "q" * 128}))
+    with pytest.raises(ValueError, match="is no registration under the serve's H1 window Program"):
+        tie(window_registration=str(tmp_path / "other.json"))
+    with pytest.raises(ValueError, match="H1's windows are 2 rounds, and the class's 4 outputs"):
+        tie(SimpleNamespace(outputs=4))

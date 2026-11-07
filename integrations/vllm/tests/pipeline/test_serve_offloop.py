@@ -8,6 +8,7 @@ import hashlib
 import json
 import shutil
 import threading
+from concurrent.futures import Future
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -345,6 +346,64 @@ def test_the_engine_serves_the_next_windows_while_a_seal_is_held(tmp_path, monke
     assert len(reqs) == 3 and all(r["check"]["passed"] for r in reqs.values())
     assert s.windows.summary()["passed"] and s.windows.summary()["seals"]["sealed"] == 3
     assert records(tmp_path / "OUT", "seals.jsonl") == seals and (tmp_path / "OUT" / "windows.jsonl").read_bytes() == (out / "windows.jsonl").read_bytes()
+
+
+class SealWaits:
+    """An arm whose release, like `serve_tie.WindowTie`'s, ends only once it has heard its window's seal line (``sealed``):
+    its close hands back a `Future` resolved then."""
+
+    def __init__(self) -> None:
+        self.futures: dict[int, Future] = {}
+        self.heard: list[dict[str, Any]] = []
+
+    def open(self, window: int) -> None:
+        self.futures[window] = Future()
+
+    def close(self, window: int) -> Future:
+        return self.futures[window]
+
+    def sealed(self, window: int, line: dict[str, Any]) -> None:
+        self.heard.append(line)
+        self.futures[window].set_result({"window": window, "sealed": "error" not in line})
+
+    def summary(self) -> dict[str, Any]:
+        return {"windows": len(self.futures)}
+
+
+def test_an_arm_hears_each_windows_seal_line_while_the_windows_line_waits_for_its_release(tmp_path, monkeypatch):
+    """An arm whose release waits for its window's seal hears each window's seals.jsonl line once it is written, a failed
+    seal's error too, while that window's line waits for the release: no seal waits on the line, so every window's seal
+    and line are written, each line carrying its arm's outcome."""
+    def seal(com: Any, rc: Any, d: Path, **kw: Any) -> dict[str, Any]:
+        if kw["rec"]["window"] == 1:
+            raise RuntimeError("store")
+        return {"row_dir": str(d)}
+
+    monkeypatch.setattr(sc, "seal_window", seal)
+    sealer, arm, out = ss.Sealer(1 << 40), SealWaits(), tmp_path / "serve"
+    out.mkdir()
+    s = Sealed(out, sealer=sealer)
+    s.windows.arm = arm
+    with s:
+        for i in range(3):
+            s.post("/v1/completions", _body(i))
+    sealer.close()
+    seals = records(out, "seals.jsonl")
+    assert [x["window"] for x in seals] == [0, 1, 2] and arm.heard == seals and seals[1]["error"] == "RuntimeError: store"
+    assert [w["pouw_h1"] for w in records(out, "windows.jsonl")] == [{"window": w, "sealed": w != 1} for w in range(3)]
+
+
+def test_an_arm_hears_why_a_window_has_no_seal():
+    heard: list[tuple[int, dict[str, Any]]] = []
+    w = SimpleNamespace(arm=SimpleNamespace(sealed=lambda k, line: heard.append((k, line))))
+    w._sealed = lambda line: sc.CommitWindows._sealed(w, line)
+    sc.CommitWindows._no_seal(w, {"window": 4, "error": "RuntimeError: finalize failed"}, None)
+    sc.CommitWindows._no_seal(w, {"window": 5}, {"error": "under the disk floor"})
+    sc.CommitWindows._no_seal(w, {"window": 6, "empty": True}, None)
+    assert heard == [(4, {"window": 4, "error": "not sealed: RuntimeError: finalize failed"}),
+                     (5, {"window": 5, "error": "not sealed: under the disk floor"}),
+                     (6, {"window": 6, "error": "not sealed: the window has no seal"})]
+    sc.CommitWindows._sealed(SimpleNamespace(arm=None), {"window": 7})       # an arm without ``sealed`` hears nothing
 
 
 def test_while_a_windows_finalize_blocks_the_loop_opens_the_next_window_and_serves_a_request_there(tmp_path, monkeypatch):
