@@ -118,7 +118,7 @@ first) is below `bound` modulo `2 ^ n`, `n` the bits' count. -/
 theorem sound_below (bits : List Lin) (bound : ℕ) :
     Sound (Flock.ReadNet.below bits bound) fun z r => ev z r = decide (num (evs z bits) < bound % 2 ^ bits.length) :=
   Sound.mono (sound_belowGo bound bits 0 Lin.zero) fun z r h => by
-    have := h 0 (by norm_num) (by simp <;> exact Nat.mod_one bound)
+    have := h 0 (by norm_num) (by simp; exact Nat.mod_one bound)
     simpa using this
 
 /-! ## The select -/

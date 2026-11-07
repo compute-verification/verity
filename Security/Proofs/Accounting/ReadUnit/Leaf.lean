@@ -107,7 +107,8 @@ theorem foldl_pow_testBit (f : ℕ → Bool) : ∀ n : ℕ,
       cases hf : f n
       · rw [ite_eq_right (by simp), Nat.add_zero]
         exact Nat.testBit_lt_two_pow hlt
-      · rw [ite_eq_left rfl, Nat.add_comm, Nat.testBit_two_pow_add_eq, Nat.testBit_lt_two_pow hlt] <;> rfl
+      · rw [ite_eq_left rfl, Nat.add_comm, Nat.testBit_two_pow_add_eq, Nat.testBit_lt_two_pow hlt]
+        rfl
 
 /-- Bit `s` of `M·y`'s byte `p` is `M·y`'s bit `8 p + s`. -/
 theorem testBit_mask (key y : Hash.Msg) {p s : ℕ} (hp : p < 64) (hs : s < 8) :
@@ -145,7 +146,8 @@ theorem ev_bi (z : Var → Bool) {x y : List Word} (hx : Shaped 8 x) (hy : Shape
   try dsimp only
   rw [List.getD_eq_getElem _ _ (by simpa using hj)]
   simp only [List.getElem_map, List.getElem_range]
-  rw [ev_getD_wordBit z hy.2 (by rw [hy.1]; omega), flockBit_eq, Bool.and_comm] <;> rfl
+  rw [ev_getD_wordBit z hy.2 (by rw [hy.1]; omega), flockBit_eq, Bool.and_comm]
+  rfl
 
 theorem bytesBE_append (a b : List (BitVec 64)) : bytesBE (a ++ b) = bytesBE a ++ bytesBE b := List.flatMap_append
 
@@ -180,7 +182,8 @@ theorem bytes_b (z : Var → Bool) {x y : List Word} (hx : Shaped 8 x) (hy : Sha
 
 theorem saltPrefix_data : Flock.Hm96.Default512.saltPrefix.data.toList = Hash.Hm96.saltPrefix := by
   rw [Flock.Hm96.Default512.saltPrefix, pad_data,
-    show Flock.Hm96.sha512.saltTag = "verity/hm96-sha512/salt/v1".toUTF8.push 0 from rfl, push_zero_data] <;> rfl
+    show Flock.Hm96.sha512.saltTag = "verity/hm96-sha512/salt/v1".toUTF8.push 0 from rfl, push_zero_data]
+  rfl
 
 theorem leafPrefix_data :
     Flock.Hm96.Default512.leafPrefix.data.toList = Hash.Hm96.leafPrefix Verity.sha512 pinnedKey := by
@@ -189,7 +192,8 @@ theorem leafPrefix_data :
     rw [isSha512_sha512 pinnedKey, hb]
   rw [Flock.Hm96.Default512.leafPrefix, Flock.Hm96.leafPrefix, pad_data, ByteArray.toList_data_append,
     show Flock.Hm96.sha512.leafTag = "verity/hm96-sha512/leaf/v1".toUTF8.push 0 from rfl, push_zero_data,
-    Hash.Hm96.leafPrefix, hk] <;> rfl
+    Hash.Hm96.leafPrefix, hk]
+  rfl
 
 theorem size_leafPrefix : Flock.Hm96.Default512.leafPrefix.size = 128 := by
   rw [size_of_data leafPrefix_data, Hash.Hm96.leafPrefix, length_padTo]
@@ -211,7 +215,8 @@ theorem commitString_eq (z : Var → Bool) {x y b c : List Word} (hx : Shaped 8 
   rw [Hash.Hm96.commitString, List.map_append, bytesBE_append, bytes_b z hx hy hb]
   congr 1
   rw [hc, ← saltPrefix_data, wordsBytes_eq z hy, hash_mid isSha512_sha512 size_saltPrefix, map_bv_midstate,
-    List.map_append, map_bv_constWords, length_bytesBE, List.length_map, hy.1, wordsBE_append] <;> rfl
+    List.map_append, map_bv_constWords, length_bytesBE, List.length_map, hy.1, wordsBE_append]
+  rfl
 
 /-- **Part B, the leaf**: the leaf generator meets `Gates.Hm96LeafSpec` under the pinned key. -/
 theorem leaf_spec : Hm96LeafSpec pinnedKey Flock.ReadNet.leaf := by
@@ -233,9 +238,10 @@ theorem leaf_spec : Hm96LeafSpec pinnedKey Flock.ReadNet.leaf := by
   refine ⟨⟨by simp [hbl, c1, l1], (hb1.append c2).append l2⟩, ?_⟩
   have hcs := commitString_eq z hx hy hb2 c3
   have hcl : (Hash.Hm96.commitString Verity.sha512 pinnedKey (wordsDigest z x) (wordsBytes z y)).length = 128 := by
-    rw [hcs, length_bytesBE, List.length_map, List.length_append, hbl, c1] <;> rfl
+    rw [hcs, length_bytesBE, List.length_map, List.length_append, hbl, c1]
   rw [hdrop, ← Hash.BindingProofs.bytes_inj, wordsDigest_bytes z ⟨l1, l2⟩, l3, map_bv_midstate, List.map_append,
     map_bv_constWords, Hash.Hm96.leaf, ← leafPrefix_data, hash_mid isSha512_sha512 size_leafPrefix, hcl, hcs,
-    wordsBE_append] <;> rfl
+    wordsBE_append]
+  rfl
 
 end Accounting.ReadUnit.Gates
