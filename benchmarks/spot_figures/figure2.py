@@ -24,6 +24,42 @@ def short(block: str) -> str:
     return block.split("{")[0] + (f" K={k.group(1)}" if k else "")
 
 
+def params(block: str) -> dict[str, str]:
+    """A specialization's top-level parameters, a nested function or constant by its name or value."""
+    body = block[block.find("{") + 1:block.rfind("}")] if "{" in block else ""
+    parts, depth, start = [], 0, 0
+    for i, ch in enumerate(body):
+        depth += (ch in "{[") - (ch in "}]")
+        if ch == "," and depth == 0:
+            parts, start = parts + [body[start:i]], i + 1
+    out = {}
+    for part in parts + ([body[start:]] if body else []):
+        key, _, value = part.partition("=")
+        nested = re.search(r'"(?:fn|f64)":"([^"]+)"', value)
+        out[key] = nested.group(1) if nested else value
+    return out
+
+
+def labels(rows: list[dict]) -> list[str]:
+    """Each bar's label: `short`, then, among the blocks sharing it, the parameters that tell them apart, then the
+    kind, then an ordinal, so every label is unique."""
+    base = [short(r["block"]) for r in rows]
+    ps = [params(r["block"]) for r in rows]
+    out = []
+    for i, label in enumerate(base):
+        group = [j for j, other in enumerate(base) if other == label]
+        keys = [k for k in ps[i] if k != "K" and len({ps[j].get(k) for j in group}) > 1] if len(group) > 1 else []
+        out.append(label + "".join(f" {k}={ps[i][k]}" for k in keys))
+    for extra in (lambda i, n: f" ({rows[i].get('kind')})", lambda i, n: f" #{n}"):
+        seen: dict[str, int] = {}
+        shared = {t for t in out if out.count(t) > 1}
+        for i, t in enumerate(out):
+            if t in shared:
+                seen[t] = seen.get(t, 0) + 1
+                out[i] = t + extra(i, seen[t])
+    return out
+
+
 def seconds(b: dict) -> float:
     """Proving GPU-seconds a block at a full statement."""
     return b["seconds_per_block"] + b["fixed_seconds"] / b["statement_blocks"]
@@ -40,16 +76,14 @@ def run(model: str) -> dict:
     types = []
     for s in sorted(strata, key=lambda s: (-s["per_token"] * s["macs"], -s["per_token"])):
         b = measured.get(s["block"])
-        types.append({"block": s["block"], "label": short(s["block"]), "kind": s.get("kind"),
+        types.append({"block": s["block"], "kind": s.get("kind"),
                       "per_token": s["per_token"], "macs": s["macs"], "out_bits": s["out_bits"],
                       "modeled": bool(s.get("modeled")),
                       "block_share": s["per_token"] / blocks, "mac_share": s["per_token"] * s["macs"] / served,
                       "measured": b is not None, "overhead": None if b is None else b["overhead"],
                       "seconds_per_token": None if b is None else s["per_token"] * seconds(b)})
-    shared = {t["label"] for t in types if sum(u["label"] == t["label"] for u in types) > 1}
-    for t in types:
-        if t["label"] in shared:
-            t["label"] += f" ({t['kind']})"
+    for t, label in zip(types, labels(types)):
+        t["label"] = label
     done = all(t["measured"] for t in types)
     return {
         "schema": SCHEMA, "model": model, "cards": {"workload": work, "proof_overhead": po},
