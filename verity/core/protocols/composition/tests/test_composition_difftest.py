@@ -21,7 +21,7 @@ difftest doesn't reach it; `CoreRemote`'s `#guard`s check which windows it finds
 that reuses the window's registration of its tables (`reusing`) is one made case, which sampled proofs refuses at
 `oneSession` too, before R1-R7 read the record; `CoreRemote`'s `#guard`s check what v2 decides on that record with a
 session's proofs granted (R7's domains and outputs, R6's previous) and that remote credits the one window on it and
-finds a window on the window's own registration stray. `product IDS serve` over each composite's subprotocols, the
+finds a window on the window's own registration stray. `product IDS serve` over onsite's subprotocols, the
 composite `verity run`'s verifier runs, is held to the same reference, and `product IDS id` names remote and onsite for
 their subprotocols and refuses every other set: the same two composites a configuration may list
 (`verity.core.deploy.config.COMPOSITES`)."""
@@ -319,13 +319,13 @@ BINDING = ["binding", "binding-id", "commitment-size"]
 
 
 @st.composite
-def composite(draw, product: R.Product) -> dict:
+def composite(draw, product: R.Product, mutation: str | None = None) -> dict:
     """One case of `product`: its subprotocols' cases (one time in six every one aimed at acceptance, one in six the same
     but for one of those that can be undecided, when one can, aimed at undecided, so that a product of seven reaches its
     binding breaks with a component undecided, and each at any verdict otherwise), the subprotocols it ties recommitted
     to one record (`one_record`) two times in three when they are aimed at acceptance and one in three otherwise, then
     at most one break of the composition's own inputs (half the time a break of the commitment alone, `BINDING`, when
-    every case is aimed at acceptance)."""
+    every case is aimed at acceptance), or the break `mutation`, one of `MUTATIONS`, when given."""
     mode = draw(st.integers(0, 5))
     undecided = [j for j, C in enumerate(product.components) if R.UNDECIDED in kinds(C)]
     pending = draw(st.sampled_from(undecided)) if undecided else None
@@ -339,7 +339,7 @@ def composite(draw, product: R.Product) -> dict:
                for c in cases]
     commitment = R.bind(product.id, [(c["id"], c["digest"]) for c in cases])
     params: object = {"components": named}
-    m = draw(st.sampled_from(BINDING if mode <= 1 and draw(st.booleans()) else MUTATIONS))
+    m = mutation or draw(st.sampled_from(BINDING if mode <= 1 and draw(st.booleans()) else MUTATIONS))
     i = draw(st.integers(0, len(cases) - 1))
     which = named if m and m.endswith("-param") or m in ("swap-params", "repeat-param") else entries
     if m in ("drop-param", "drop-case"):
@@ -443,13 +443,12 @@ def ids(product: R.Product) -> str:
 SEEN = {"onsite": collections.Counter(), "remote": collections.Counter()}
 ONSITE = port("onsite", R.ONSITE, SEEN["onsite"])
 REMOTE = port("remote", R.REMOTE, SEEN["remote"])
-#: `product IDS serve` over each composite's subprotocols, which `verity run`'s verifier runs
-PRODUCT = {p.id: port("product", p, SEEN[n], serve=(ids(p), "serve"), package="onsite")
-           for n, p in (("onsite", R.ONSITE), ("remote", R.REMOTE))}
+#: `product IDS serve` over onsite's subprotocols, which `verity run`'s verifier runs (remote v1's Pearl+ run has no
+#: reference cases yet, and H1's development composite is no product)
+PRODUCT = {R.ONSITE.id: port("product", R.ONSITE, SEEN["onsite"], serve=(ids(R.ONSITE), "serve"), package="onsite")}
 onsite_server = D.server_fixture(ONSITE)
 remote_server = D.server_fixture(REMOTE)
 product_onsite_server = D.server_fixture(PRODUCT[R.ONSITE.id])
-product_remote_server = D.server_fixture(PRODUCT[R.REMOTE.id])
 
 
 @pytest.fixture(scope="module")
@@ -529,6 +528,34 @@ def product_case(product: R.Product, cases: list[dict]) -> dict:
                                                    "id": c["id"], "params": c["params"]} for c in cases]}).encode().hex(),
             "params": {"components": [{"id": c["id"], "params": c["params"]} for c in cases]},
             "blobs": [b.hex() for b in BLOBS]}
+
+
+def test_remote_v1_ties_pearl_plus_run_to_the_policys_record():
+    """Remote v1's `run` tie, as `Core.Remote.V1`'s guards state it: a Pearl+ run naming the digest of the policy's
+    record holds, one naming another record's is a stray naming both, and a run whose commitment doesn't decode (an
+    extra key, a short digest, none) leaves Pearl+ to refuse it."""
+    assert R.REMOTE_V1.ties == (R.RUN,) and [s for s, _ in R.RUN.names] == [R.INFERENCE_ONLY.id, R.PEARL_PLUS.id]
+
+    def record(n: int) -> bytes:
+        return canonical({"format": "verity/registration/v2", "n": n, "registered": []}).encode()
+
+    def digest(n: int) -> bytes:
+        return R.policy_record(record(n), b"")[0]
+
+    def run(on: bytes, **extra) -> bytes:
+        return canonical({"manifests": [{}], "record": on.hex(), **extra}).encode()
+
+    def strays(policy: int, commitment: bytes) -> str | None:
+        return R.RUN.strays([(R.INFERENCE_ONLY.id, "{}", record(policy), b""),
+                             (R.PEARL_PLUS.id, "{}", commitment, b"")])
+
+    assert len(digest(0)) == 64 and R.run_record(run(digest(0)), b"") == [digest(0)]
+    assert strays(0, run(digest(0))) is None
+    assert strays(1, run(digest(0))) == (f"record: {R.INFERENCE_ONLY.id} committed {digest(1).hex()}, "
+                                         f"{R.PEARL_PLUS.id} committed {digest(0).hex()}")
+    for undecoded in (b"", run(digest(0), x=1), run(digest(0)[:32]),
+                      canonical({"manifests": [], "record": digest(0).hex()}).encode()):
+        assert not isinstance(R.run_record(undecoded, b""), list) and strays(1, undecoded) is None, undecoded
 
 
 @pytest.mark.parametrize("name", ["remote", pytest.param("onsite", marks=pytest.mark.slow)])
@@ -656,39 +683,47 @@ def test_onsite_agrees(onsite_server, recorded):
     which is no component, refused."""
     _agree(ONSITE, onsite_server, SEEN["onsite"], 1000, (R.REJECT, "reject, a component undecided", "one record",
                                                        "two records", "one store", "two stores"))
-    assert SEEN["onsite"]["generic bandwidth"] > 0, dict(SEEN["onsite"])
 
 
-def test_product_names_only_the_two_composites():
-    """`product IDS id` is remote over remote's subprotocols and onsite over onsite's, in any order, exactly the
-    configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS` gives their names),
-    and refuses every other set of their subprotocols and the wipe (exit 64)."""
+@pytest.mark.slow
+def test_onsite_refuses_p2_named_as_the_generic_bandwidth_audit(onsite_server, recorded):
+    """PoUB-P2's case named as the generic bandwidth audit's, under a commitment that binds it, names no component of
+    onsite: refused, in Lean as in Python, on every drawn case (`generic-bandwidth` on each, a break that
+    `test_onsite_agrees`'s seeded draw needn't reach)."""
+    seen = collections.Counter()
+    p = RejectingPort("onsite", reference(R.ONSITE, seen), composite(R.ONSITE, "generic-bandwidth"),
+                      package=PROTOCOLS / "onsite", need_rejects=False)
+    stats = D.run(p, examples=10, seed=0, server=onsite_server)
+    assert stats.counts == {R.REJECT: 10} and seen["generic bandwidth"] == 10, (stats, dict(seen))
+
+
+def test_product_names_only_the_composites():
+    """`product IDS id` is each composite over its subprotocols, in any order (onsite, and remote v1 with Pearl+'s
+    run), exactly the configuration's composites (`verity.core.deploy.config.COMPOSITES`, by the ids `SUBPROTOCOLS`
+    gives their names), and refuses every other set of their subprotocols, H1's development composite's among them,
+    and the wipe (exit 64)."""
     exe = D.build(PROTOCOLS / "onsite", "product")
 
     def named(xs) -> tuple[int, str]:
         p = subprocess.run([exe, ",".join(xs), "id"], capture_output=True, text=True)
         return p.returncode, p.stdout.strip()
 
-    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE)}
+    want = {p.id: sorted(C.id for C in p.components) for p in (R.ONSITE, R.REMOTE_V1)}
     assert {cid: sorted(subs.values()) for cid, subs in SPP.SUBPROTOCOLS.items()} == want
     assert {cid: sorted(names) for cid, names in K.COMPOSITES.items()} == {
         cid: sorted(subs) for cid, subs in SPP.SUBPROTOCOLS.items()}
     for cid, ids in want.items():
         assert named(ids) == (0, cid)
         assert named(ids[::-1]) == (0, cid)
+    assert named(C.id for C in R.REMOTE.components)[0] == 64
     every = sorted({i for ids in want.values() for i in ids} | {"verity/wipe/v0"})
     others = [s for k in range(len(every) + 1) for s in itertools.combinations(every, k)
               if sorted(s) not in want.values()]
-    assert len(others) == 2 ** len(every) - 2
+    assert len(others) == 2 ** len(every) - len(want)
     for s in others:
         assert named(s)[0] == 64, s
     assert named([R.POUW_PERIOD.id, R.POUW_PERIOD.id, R.SAMPLED_PROOFS.id])[0] == 64
     assert named([R.INFERENCE_ONLY.id, "verity/pouw/v1", R.SAMPLED_PROOFS.id])[0] == 64
-
-
-@pytest.mark.slow
-def test_product_over_remotes_subprotocols_is_remote(product_remote_server):
-    _agree(PRODUCT[R.REMOTE.id], product_remote_server, SEEN["remote"], 1000, (R.REJECT, "one record", "two records"))
 
 
 @pytest.mark.slow

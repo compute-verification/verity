@@ -18,7 +18,7 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.evaluation.bits import compile as compile_bits
 from verity.ml.circuits.evaluation.bits import evaluate_words
-from verity.core.protocols.pouw.circuit import lead as L
+from verity.ml.protocols.pouw.circuit import lead as L
 
 WORDS = {L.PouwLeadStep0: L.PouwLeadStep0Word, L.PouwLeadStep: L.PouwLeadStepWord, L.PouwLeadPad0: L.PouwLeadPad0Word,
          L.PouwLeadPad: L.PouwLeadPadWord, L.PouwLeadWeigh: L.PouwLeadWeighWord,

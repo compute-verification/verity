@@ -3992,6 +3992,7 @@ class Driver:
             return []
         tag = "(low-risk lane: no Lean, lock or soundness-path change)"
         if dry_run or q.shadow:
+            self._rebuilt("dropped: nothing is pushed" + (" [shadow]" if q.shadow else " (dry run)"))
             for m, commit in landed:
                 q.log(f"research queue drive: would land #{m.pr} on `{q.into}` {tag}" + (" [shadow]" if q.shadow else ""))
             return []
@@ -3999,6 +4000,7 @@ class Driver:
         if (r := self._push_into(drive, tip)).returncode:
             q.log(f"research queue drive: low-risk lane: pushing `{q.into}` was refused ({r.stderr.strip()[-200:]}); the next "
                   "tick tries again")
+            self._rebuilt(f"dropped: `{q.into}` wasn't pushed")
             return []
         _git(self.repo, "update-ref", q.base, tip)
         below = start
@@ -4226,11 +4228,11 @@ class Driver:
             from .merge import SWEEP_LIMIT, sweep_branches
 
             with authed(q.auth):
-                deleted, archived = sweep_branches(self.repo, "origin", log=q.log, keep=drive.get("stale_closed", {}))
+                deleted, archived = sweep_branches(self.repo, "origin", into=q.into, log=q.log, keep=drive.get("stale_closed", {}))
             more = SWEEP_LIMIT in (deleted, archived)
             if not more:
                 drive["branches_swept"] = self.now()
-            q.log(f"research queue drive: branch sweep: {deleted} deleted (on main), {archived} archived (unmerged, idle)"
+            q.log(f"research queue drive: branch sweep: {deleted} deleted (on {q.into}), {archived} archived (unmerged, idle)"
                   + (f"; at its limit of {SWEEP_LIMIT}, so the next tick sweeps again" if more else ""))
 
     # -- what only a PR's owner acts on: a stale PR, one nothing will land, a stacked PR whose base landed

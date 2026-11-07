@@ -72,7 +72,7 @@ from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as Cr
 from verity.core.protocols.pouw import verifier as V
 from verity.core.protocols.pouw import weights as W
-from verity.core.protocols.pouw.circuit import lead as L
+from verity.ml.protocols.pouw.circuit import lead as L
 from verity.ml.commitments.merkle import tree_levels
 
 pytestmark = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

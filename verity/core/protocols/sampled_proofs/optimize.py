@@ -16,7 +16,7 @@ whose incorrect output can forfeit downstream work (a noise or form proof block 
 **Cost.**  Per touched statement plus per proved proof block, as Flock does: subcircuit `s` cut into statements of `c` proof blocks costs
 `touched_s(k; c) * (a0 + a1 c) + k * (b + replay)`, a statement being touched when the draw meets it.  Everything is
 committed at serve time whatever the draw: every proof block's outputs (`commit_bits`, `commit_rows`),
-and the fixed serve-time commitments of every scale (`Commitment`: the Commit's taps, PoUW's work blocks, the remote audit's
+and the fixed serve-time commitments of every scale (`TensorCommit`: the Commit's taps, PoUW's work blocks, the remote audit's
 receipts, the bits a work block pins), so a plan's cost is the whole serve-time and proving total.  One tensor committed
 at several scales is counted once per scale, and `overlaps` prices what committing it once would save.  A plan is thus a
 one-stage design (`two_stage_design` prices a two-stage one, below).  A sampled proof block's witness is built by replaying the
@@ -166,7 +166,7 @@ class ReplayGrain:
 
 
 @dataclass(frozen=True)
-class Commitment:
+class TensorCommit:
     """One tensor committed at serve time by one scale, whatever the draw: `nbytes` hashed over the window, at the model's
     per-byte rate (`CostModel.commit_per_bit`) unless `cost` is measured.  `scale` names who commits it (the Commit's taps,
     PoUW's A rows or tile leaves, the remote audit's receipts, a work block's pin) and `tensor` what; one tensor under two
@@ -208,7 +208,7 @@ class CostModel:
     staged_per_unit: float = 0.0
     commit_per_bit: float = 0.0
     commit_per_row: float = 0.0
-    serve: tuple[Commitment, ...] = ()
+    serve: tuple[TensorCommit, ...] = ()
     replay: Mapping[str, ReplayGrain] = field(default_factory=dict)
     sigma: float = 0.0
     source: str = ""
@@ -247,7 +247,7 @@ class CostModel:
     def commit(self, c: Candidate) -> float:
         return c.units * (self.commit_per_bit * c.commit_bits + self.commit_per_row * c.commit_rows)
 
-    def committed(self, s: Commitment) -> float:
+    def committed(self, s: TensorCommit) -> float:
         return s.cost if s.cost is not None else 8 * self.commit_per_bit * s.nbytes
 
     def serve_cost(self) -> float:
@@ -841,7 +841,7 @@ def overlaps(costs: CostModel, *, latency: float = 0.0) -> list[dict]:
     its measured cost), and at decode its bytes, its chain and, when it gates the step, its chain's latency at `latency`
     a dependent compression (latency-bound).  Committed once, the cheapest copy is kept: the saving is the others' bytes
     and prefill cost, and at decode their latency less the kept copy's chain where it has to gate in their place."""
-    by: dict[str, list[Commitment]] = {}
+    by: dict[str, list[TensorCommit]] = {}
     for s in costs.serve:
         by.setdefault(s.tensor, []).append(s)
     rows = []
@@ -1431,7 +1431,7 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     return best | {"bound": two_stage_exfil(split, best["k"], replay_blocks, best["q"], delta, served, union)}
 
 
-__all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
+__all__ = ["Candidate", "TensorCommit", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
            "OVERFLOW", "Objective", "PROVING_ONLY", "Plan", "PlanBounds", "ReplayGrain", "SHA512_ANDS", "SHA512_ROWS",
            "TemplateCost",
            "CHORDS", "Cell", "KAPPAS", "acceptance_parts",

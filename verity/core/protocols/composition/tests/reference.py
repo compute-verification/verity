@@ -178,17 +178,22 @@ def _keys(j: Any, keys: list[str], what: str) -> None:
 
 def _one_stage_params(rest: dict) -> dict:
     """`OneStageZk.paramsOfJson` behind `VStar.Recursive.Sampled`'s refusal of v1: ``proofs``, exactly the circuit and
-    public files' SHA-512s and the verifier's registered file or null, then v1's params (`decode_params_v2`, which
-    refuses them naming no challenger) with a partition object."""
+    public files' SHA-512s, the verifier's registered file or null, and when named the registered circuit record's
+    SHA-512 or null, then v1's params (`decode_params_v2`, which refuses them naming no challenger) with a partition
+    object."""
     if "proofs" not in rest:
         raise Reject(f"the parameters name no proofs: {V1_REFUSED}")
     pr = rest["proofs"]
-    _keys(pr, ["circuit", "public", "registered"], "proofs")
+    digest = lambda x: isinstance(x, str) and len(x) == 128 and all(c in "0123456789abcdef" for c in x)  # noqa: E731
+    _keys(pr, ["circuit", "interface", "public", "registered"] if isinstance(pr, dict) and "interface" in pr
+          else ["circuit", "public", "registered"], "proofs")
     for k in ("circuit", "public"):
-        if not (isinstance(pr[k], str) and len(pr[k]) == 128 and all(c in "0123456789abcdef" for c in pr[k])):
+        if not digest(pr[k]):
             raise Reject(f"proofs: {k} is not a SHA-512 digest (128 lowercase hex)")
     if pr["registered"] is not None and not isinstance(pr["registered"], dict):
         raise Reject("proofs: registered is not the verifier's registered file (an object) or null")
+    if pr.get("interface") is not None and not digest(pr["interface"]):
+        raise Reject("proofs: interface is not a SHA-512 digest (128 lowercase hex) or null")
     p = ONE_STAGE.decode_params_v2(rest)
     if p["partition"] is None:
         raise Reject("partition is null: the sessions are verified against the verifier's own partition object")
@@ -296,6 +301,9 @@ POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(can
 SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, sampled_proofs, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")
+#: Pearl+'s run verdict, remote's work in its composite of record: no case is recorded for it, so it refuses a
+#: commitment that isn't JSON, as Pearl+'s decoder does, and has no answer to any other case
+PEARL_PLUS = Recorded("verity/pouw/pearl-plus/v1")
 BANDWIDTH = Recorded("verity/remote-bandwidth/p2/v0")
 #: The wipe, `MemoryChallenger.WipeProtocol.protocol`.
 WIPE = Ported("verity/wipe/v0", WIPE_CASES.answer)
@@ -520,11 +528,30 @@ def window_records(commitment: bytes, evidence: bytes) -> list[bytes] | core_che
     return out
 
 
+def run_record(commitment: bytes, evidence: bytes) -> list[bytes] | Reject | None:
+    """`Core.Remote.V1.runRecord`: the digest of the registration record Pearl+'s run is on, its commitment's
+    ``record``, as Pearl+ decodes the commitment (`PouwCheck.PearlPlus.Protocol.commitmentOf`: exactly ``manifests``, a
+    nonempty list, and ``record``, a SHA-512 digest in lowercase hex); else what refused it, or None when it doesn't
+    decode, either of which reads as no value."""
+    try:
+        j = P.canonical_json(commitment)
+        if not isinstance(j, dict) or sorted(j) != ["manifests", "record"]:
+            return None
+        if not isinstance(j["manifests"], list) or not j["manifests"] or not isinstance(j["record"], str):
+            return None
+        record = P.unhex(j["record"])
+    except Reject as e:
+        return e
+    return [record] if len(record) == 64 else None
+
+
 #: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
 #: `Core.Remote.windows`: every window of PoUW's period on the policy's record, remote's tie and onsite's.
 WINDOWS = Tie("record", ((INFERENCE_ONLY.id, policy_record), (POUW_PERIOD.id, window_records)))
+#: `Core.Remote.V1.run`: Pearl+'s run on the policy's record.
+RUN = Tie("record", ((INFERENCE_ONLY.id, policy_record), (PEARL_PLUS.id, run_record)))
 
 
 @dataclass(frozen=True)
@@ -560,9 +587,12 @@ class TiedSame(Same):
                 and (got := t.values(ev)) is not None]
 
 
-#: `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: each one's
-#: policy and integrity committing to one registration record, every window of each one's PoUW period naming the
-#: policy's record, and onsite's PoUS and PoUB-P2 on one store (`Core.Onsite.ties`, in its order).
+#: `Core.Remote.V1.protocol`, `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order
+#: of their ids: each one's policy and integrity committing to one registration record, remote's composite of record's
+#: Pearl+ run and every window of its development composite's PoUW period naming the policy's record, and onsite's PoUS
+#: and PoUB-P2 on one store.
+REMOTE_V1 = TiedSame("verity/remote/v1", (INFERENCE_ONLY, PEARL_PLUS, SAMPLED_PROOFS),
+                     (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (RUN,))
 REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
                   (WINDOWS,))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, SAMPLED_PROOFS, WIPE),

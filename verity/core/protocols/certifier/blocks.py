@@ -14,8 +14,6 @@ which the verifier pins at the root of the scan's rows the window reads (`ingres
 
 **The check** (`check`), over the record before any coin, the work per declaration and never per unit:
 
-- the record's ``blocks`` state no server, server time or transfers (`PRIVATE`): placement is private, and a record is
-  one host's;
 - no ``ingress`` declaration: a host's ingress is the scan's state, a registered read, never an Ingress;
 - every registered read and every table is of a load or of the scan's state: every registered parameter other than
   `SCAN_STATE` is a load;
@@ -159,10 +157,6 @@ def check(doc: Mapping[str, Any], layouts: Mapping[str, Any]) -> tuple[Load, ...
     breaks the module docstring's rules against ``layouts``, each template's bit rows by descriptor id (the interface's
     `layout`: its ``rows`` and ``outs``, each ``(name, words)``), the verifier's own from its catalog."""
     tpl = _templates(doc, layouts)
-    blocks = doc.get("blocks")
-    if isinstance(blocks, Mapping) and (named := [k for k in PRIVATE if k in blocks]):
-        raise ValueError(f"the record's blocks state {named}: placement is private, and a record is one host's; which host "
-                         "runs which units, and which rows cross its uplink, are no key of it")
     if doc.get("ingress"):
         raise ValueError("an ingress declaration: a host's ingress is the scan's state, a registered read, never an Ingress")
     reg = doc.get("registered") or {}

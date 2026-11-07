@@ -159,16 +159,27 @@ Protocols and claims:
   served activations, un-noised outputs), and an un-noised call earns no compute credit (ASK-174).
 - A workload is what a datacenter runs over a monitoring period (its Programs, their inputs and placement), at
   every scale; workloads compose, and "row" never names one.
+- A demo shows that the code works, so it runs fast: it samples one or two proof blocks, or whatever keeps it quick.
+  What the theorems give at an operating point (a sampling design, δ, a datacenter's size) is a separate result computed
+  from the bounds; no demo is sized up to show one.
+- Network accounting is two things for each execution block. First, its consistency with the network certificates: its
+  committed inputs and outputs are what they say crossed the wire, pass or fail, with no sampling requirement. Second,
+  from the sampled proofs, its transfers' covert capacity, in three terms reported apart: side channels, the timing
+  channel (which the network certifier, as an active warden, mostly fixes) and what the sampled proofs fail to check;
+  at full sampling only the first two remain.
 - The network certifier is one device on each AI server's uplink, whose one code run under one `trusted-host` gives
   both the cells and the records (`Security/Definitions/NetworkCertifier/Tap.lean`). No statement
   ties them by a premise or trusts them separately.
+- `WitnessPathPrivate c` is the per-channel premise, beside the per-party and site premises. The imprint key is a key
+  class of its own: an onsite device's root, set over the cable once per device, then a SHA-512 ratchet. ML-KEM-1024
+  is the one-hash rule's exception for transport only: a cableless remote party's, its secret always XORed with a
+  SHA-512 one and never on pair links (`ind-cca/ml-kem-1024`).
 - θ comes only from registered public data, registered at the start of a deployment; outputs of earlier runs
   are never θ (drops `NciCheck.Baseline`'s output provenance).
 - A protocol's verifier switches from Python to Lean only on evidence: its gap list shows nothing the
   Python checks that the Lean doesn't, and every recorded run replayed through the Lean gets the Python's verdict,
   negative controls included. The Python keeps running as the reference, the switch is one reversible line, and it moves
-  the protocol's properties into `Properties/`. Where it leads: Lean is the definition and the
-  verifier, `verity.ml`'s Python mirrors it under difftest, and a verifier imports no `verity.ml` code.
+  the protocol's properties into `Properties/`.
 - An auditor device releases its commitment to its coins only after the prover's commitment is in, so no
   soundness statement takes a hiding premise on it. A guarantee whose break includes a forged device release names two
   assumptions outside the theorem: `ecr/sha-512` for its finders and `euf-cma/lms-sha512-n64` for the forgery finder.
@@ -176,14 +187,14 @@ Protocols and claims:
   the circuit can't learn a coin, and verifier coins stay public. Only the weights may take a private encoding from a
   trusted third party, salted after the commitment with secrets the developer never sees, as one deployment variant.
 - No private or trapdoor encoding for KV. Credited dynamic memory rests on the public codec, and the stacking
-  bound on the named conjecture `EncodeChainHardness`, with the claims resting on it listed as conditional.
-  (`EncodeChainHardness` is falsified, `EncodeChainRefuted`; the bound now rests on `SquaringFloor` and
-  `ChainSum` in the repriced gate model, a thin lane a compare-select unit, listed the same way.)
+  bound on `SquaringFloor` and `ChainSum` in the repriced gate model (a thin lane a compare-select unit), with the claims
+  resting on them listed as conditional.
 - Memory and bandwidth accounting: no bound assumes the weights are incompressible, and a scheme may refuse
   all-zero weights; exhaustion is over the node's whole memory, KV included; no overhead target beyond 99%; guarantees
   are for the whole node. PoUB treats the developer's resources as one pool (conservation, no identity
   assumption), claims 0.15% over a 10-minute monitoring period with every window at most 1%, and never changes the
   model's logits.
+- PoUW's bar is T1–T3, not Dither or SAK; the lead (`verity/pouw/v2`) is next. See `verity/core/protocols/pouw/README.md`.
 - PoUW's guarantees, and only PoUW's, may rest on random-oracle assumptions for SHA-512
   (`StraightLineExtraction`, Compose's `SeedExtractedAt`), each a named `Prop` the lock lists. Flock's
   knowledge soundness keeps the collision form.

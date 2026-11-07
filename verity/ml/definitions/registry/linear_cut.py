@@ -5,7 +5,7 @@ PoUW's call of it commits and takes its y as that call commits it, computing nei
     LinearOut_v1{N,W,ROUND,CALL}    (y: Array<N, F32>) -> N/W × Array<W, BF16>         y: each committed word's high half, no gate
     each _v2                        σ of its _v1 (`verity.ml.definitions.boolean.sigma_lift`)
 
-**The A row** is the FP32 input row Pearl-C's A rows are (`verity.core.protocols.pouw.circuit.pc8`): the call's x widened to
+**The A row** is the FP32 input row Pearl-C's A rows are (`verity.ml.protocols.pouw.circuit.pc8`): the call's x widened to
 FP32, exact (`Bf16ToF32_v1` on each element, the encoding << 16), x read as R rows of K/R elements in order, so a cut reads
 it as its writers hold it (one row after a norm, a head's at o_proj). **y** is read as the call commits it, a row of its N
 BF16 words each widened to FP32 exactly as its A rows are, and the unit hands on each word's high half, its BF16 encoding
@@ -30,7 +30,7 @@ from verity.ml.definitions.registry.prims import BF16, F32
 __all__ = ["LinearARow", "LinearARowV2", "LinearOut", "LinearOutV2"]
 
 A_CONFORMANCE = ("protocol-defined; a cut linear's A row, its x's BF16 elements widened to FP32 exactly (Bf16ToF32_v1 each): "
-                 "the FP32 input row Pearl-C's A rows are (verity.core.protocols.pouw.circuit.pc8)")
+                 "the FP32 input row Pearl-C's A rows are (verity.ml.protocols.pouw.circuit.pc8)")
 OUT_CONFORMANCE = ("protocol-defined; a cut linear's y as its call commits it, each BF16 word widened to FP32: its N / W "
                    "output rows are its one input row's high halves (U32Hi16_v1 each) in order")
 
