@@ -17,7 +17,8 @@ rounds (`seenRounds`, `maskedOf`, `Loop.valsOf`). At the histories the deferred 
 only (`LeanRelease.LiveRoundEqOwn`), as `FinalRoundEq` asks its own:
 
 * **`LeanRelease.liveRoundEqOwn_ofLoopLink`**: at `SessionLoopZKDeployed`'s release, for every worker, the scheduled
-  rounds' equation (`LiveSchedOwn`) and the inner proof's (`LiveInnerOwn`) give `LiveRoundEqOwn`.
+  rounds' equation (`LiveSchedOwn`) and the inner proof's (`LiveInnerOwn`) give `LiveRoundEqOwn` at a statement that
+  is no V\* part's.
 * **`LeanRelease.liveRoundEqOwn_withInner`**: at that release with the inner proof's rounds the loop's finish's
   (`withInner` at `Loop.finOf`), at `SessionLoopZKDeployed`'s premises on the session, the statement and the loop's
   inputs, `LiveRoundEqOwn` holds at every worker taking some admissible `vs`'s values at its own histories
@@ -48,17 +49,18 @@ namespace LeanRelease
 
 /-- **`LiveRoundEq` for every worker at its own histories, from the scheduled rounds and the inner proof's**: at
 `SessionLoopZKDeployed`'s release, wherever the loop schedules its own round (`LiveSchedOwn`) and at the inner proof's
-rounds (`LiveInnerOwn`), each at the worker's own histories, at every worker `wk`. -/
+rounds (`LiveInnerOwn`), each at the worker's own histories, at every worker `wk`, at a statement that is no V\*
+part's. -/
 theorem liveRoundEqOwn_ofLoopLink (vs : Loop.finS.SwVals) (L₀ : LeanRelease Flock.Wit Loop.Tp)
     (src : Msg → Flock.Wit → Loop.Tp → ℕ → V (Array F128 × ByteArray × Array ByteArray))
     (real : Msg → Flock.Wit → Loop.Tp → ℕ → V (Tab × Array ByteArray))
-    (wk : (ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
+    (wk : (ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit) (hd : RecDeploy.decodeRec x = none)
     (hS : LiveSchedOwn vs L₀ src real wk x w) (hI : LiveInnerOwn vs L₀ src real wk x w) :
     LiveRoundEqOwn Loop.finS vs (ofLoopLink L₀ src real) CoinOpen.shaH wk x w := by
   intro ν t κ m₀ ρ₀ ops v hpos hlt hl hok href hown hv
   rcases hsc : Loop.schedOf (real x w (ν, t)) x (ops.map fun p => CoinLayer.rd p.2) with _ | r
   · exact hI ν t κ m₀ ρ₀ ops v hpos hlt hl hok href hown hv
-      ((Loop.schedOf_eq_none_iff (by omega) (by simpa using hpos)).mp hsc)
+      ((Loop.schedOf_eq_none_iff hd (by omega) (by simpa using hpos)).mp hsc)
   · exact hS ν t κ m₀ ρ₀ ops v r hpos hlt hl hok href hown hv hsc
 
 /-- **`LiveRoundEq` for every worker, at its own histories**: at `SessionLoopZKDeployed`'s release with the inner
@@ -83,7 +85,7 @@ theorem liveRoundEqOwn_withInner (vs : Loop.finS.SwVals) (L₁ : LeanRelease Flo
       wk x w) :
     LiveRoundEqOwn Loop.finS vs (ofLoopLink (withInner Masked.dataE L₁ real (Loop.finOf real L₁.draws)) src real)
       CoinOpen.shaH wk x w :=
-  liveRoundEqOwn_ofLoopLink vs _ src real wk x w
+  liveRoundEqOwn_ofLoopLink vs _ src real wk x w (by obtain ⟨_, hp, -⟩ := hsc; exact decodeRec_none_of_parse hp)
     (liveSchedOwn_ofLoopLink vs _ src real hreal wk hTab hTape hR hSv hsc hSrc hrows hL0 hV)
     (liveInnerOwn_withInner vs L₁ src real hreal x w hTab hTape hR hSv hsc hSrc hcaus wk hV hC hL0 hrows)
 
