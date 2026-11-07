@@ -234,21 +234,23 @@ def aligned(cap: Capture, op: str):
 
 
 def fused_ar_norm_instances(cap: Capture):
+    from verity.ml.definitions.registry.tp_allreduce import mnnvl_shot
     W = len(cap.ranks)
     for calls in aligned(cap, "vllm::flashinfer_trtllm_fused_allreduce_norm"):
         e0 = calls[cap.ranks[0]]
         T, H = e0["in"]["allreduce_in"]["shape"]
         half = H // 2
+        shot = mnnvl_shot(T, H, W)
         for t in range(cap.real_rows(cap.ranks[0], T)):
             for c in range(2):
                 sl = slice(c * half, (c + 1) * half)
-                yield (f"AllReduceResidualMnnvl_W{W}", f"AllReduceResidualMnnvl_v1{{WORLD={W},N={half},SHOT=1}}",
+                yield (f"AllReduceResidualMnnvl_W{W}_S{shot}", f"AllReduceResidualMnnvl_v1{{WORLD={W},N={half},SHOT={shot}}}",
                        (e0["seq"], t, c),
                        lambda calls=calls, t=t, sl=sl: [np.stack([cap.tensor(r, calls[r]["in"]["allreduce_in"])[t, sl] for r in cap.ranks]),
                                                         cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["in"]["residual"])[t, sl]],
                        lambda calls=calls, t=t, sl=sl: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["residual"])[t, sl]])
             eps = e0["in"]["rms_eps"]
-            yield (f"RmsNormMnnvl_W{W}", f'RmsNormMnnvl_v1{{N={H},SHOT=1,CLUSTER={W},EPS={{"f64":"{float(eps).hex()}"}},FMA=true}}',
+            yield (f"RmsNormMnnvl_W{W}_S{shot}", f'RmsNormMnnvl_v1{{N={H},SHOT={shot},CLUSTER={W},EPS={{"f64":"{float(eps).hex()}"}},FMA=true}}',
                    (e0["seq"], t),
                    lambda calls=calls, t=t: [cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["out"]["residual"])[t],
                                              cap.tensor(cap.ranks[0], calls[cap.ranks[0]]["in"]["rms_gamma"])],

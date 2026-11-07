@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # The capture of sampled proof blocks' values from a replay of a served GLM-5.3 window, under research run from a tree with
 # benchmarks/serve_tax/replay.py at its root (--cwd source), with capture.py, stage.py and this file sent (--send):
-#   ARM=RECORD_ARM_DIR LOAD=NAME [OPEN=dense:1,moe:1] [PER_TYPE=8] [SMALL=1,31] [BIG=32,64] [STEPS=s,...] [VENV=...]
+#   ARM=RECORD_ARM_DIR LOAD=NAME [OPEN=dense:1,moe:1] [PER_TYPE=8] [SMALL=1,31] [BIG=256,384] [STEPS=s,...] [VENV=...]
 #     bash "$RESEARCH_RUN_DIR/inputs/spot_job.sh"
-# 1. The first-stage coin: one step of the window's with SMALL tokens (the FP8 linears' FlashInfer branch) and one with BIG
-#    (their DeepGEMM branch and its group quants), each uniform over those steps, drawn here before the replay starts
-#    (OUT/first_stage.json); STEPS overrides it.
+# 1. The first-stage coin: one step of the window's with SMALL tokens (the FP8 linears' FlashInfer branch, the fused MNNVL
+#    all-reduce + norm) and one with BIG (DeepGEMM and its group quants, the multimem all-reduce, the fused add + RMSNorm at
+#    its 256-thread block, FA3 still split), each uniform over those steps, drawn here before the replay starts
+#    (OUT/first_stage.json; a class with no step takes the window's nearest one above it); STEPS overrides it.
 # 2. replay.py replays the window from an empty engine, served as recorded, with capture.py loaded in every worker: those
 #    steps' interiors are recorded and committed, the coins drawn after the root open layers (/workspace/spot-capture/<run>,
 #    outside OUT, which custody uploads).
@@ -36,7 +37,7 @@ export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLIN
 echo "spot: tree $(git -C "$TREE" rev-parse HEAD 2>/dev/null) venv $VENV checkpoint $CK capture $CAP ($free G free)"
 
 if [ -z "${STEPS:-}" ]; then
-  "$PY" - "$TREE" "$ARM" "$LOAD" "${SMALL:-1,31}" "${BIG:-32,64}" "$OUT/first_stage.json" <<'EOF' || exit 2
+  "$PY" - "$TREE" "$ARM" "$LOAD" "${SMALL:-1,31}" "${BIG:-256,384}" "$OUT/first_stage.json" <<'EOF' || exit 2
 import json, os, sys, time
 from pathlib import Path
 tree, arm, load, small, big, out = sys.argv[1:]
@@ -50,6 +51,11 @@ for name, rng in (("small", small), ("big", big)):
     lo, hi = map(int, rng.split(","))
     steps = sorted(s for s, n in tokens.items() if lo <= n <= hi)
     classes[name] = {"tokens": [lo, hi], "steps": len(steps)}
+    if not steps:
+        above = sorted((n, s) for s, n in tokens.items() if n > hi)
+        if above:
+            steps = [s for n, s in above if n == above[0][0]]
+            classes[name]["nearest_above"] = {"tokens": above[0][0], "steps": len(steps)}
     if steps:
         pick[name] = steps[int.from_bytes(coins[:32] if name == "small" else coins[32:], "big") % len(steps)]
 json.dump({"window_steps": len(tokens), "classes": classes, "coins": coins.hex(), "drawn_at": time.time(), "steps": pick,
