@@ -56,6 +56,7 @@ GPU code held bit for bit to its reference or Definition before it is timed.
 | `one_stage/` | the one-stage audit end to end: committed values, registration, the sample, Flock's circuit prover and the Lean verifier, to the audit record and its integrity profile, with its negatives | maintained |
 | `prove_path/` | a served run's proof blocks proved after the fact: the compiler's Programs, a sample on live coins, Flock `--zk` behind the Lean ZK server, and the Lean verifier | maintained |
 | `served_units/` | a served model's proof blocks proved one type at a time from synthetic values, the Lean verifier accepting the honest run and refusing forgeries | maintained |
+| `spot_proved/` | a replayed served step's values proved: one replayed step of a recorded replay block captured per TP rank under CUDA graphs, staged as each sampled type's proof blocks, and audited one stage end to end by the Lean verifier | maintained |
 | `multi_unit/` | an FP8 GEMM's proof blocks staged as Flock statements in several layouts: prover and verifier time, peak memory and proof bytes | maintained |
 | `flock_s8_block/` | C-Flock `--zk`'s price for a proof block of adjacent cells of one int8 GEMM output row, on one GPU node and on the CPU | maintained |
 | `unit_block/` | a word primitive's Boolean version built as one C-Flock proof block: the select's slot alone and with its rows' openings, against the 2^27 block | maintained |
