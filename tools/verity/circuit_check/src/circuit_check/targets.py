@@ -279,7 +279,7 @@ def definition(spec: str) -> Any:
 
 def subcircuit(spec: str) -> tuple[Any, list[dict]]:
     """The subcircuit ``spec`` names and the instance-statics bindings it is checked at."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     load_registries()
     tid, _, rest = spec.partition(":")
@@ -306,7 +306,7 @@ def instance_statics(sub: Any, params: dict | None = None) -> list[dict]:
 def kind_of(spec: str) -> str:
     from pathlib import Path
 
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     try:
         if Path(spec).exists():
@@ -400,7 +400,7 @@ def _produce(units: tuple[str, ...], make: Callable[[], list[Any]], by_unit: lis
 def templates() -> list[tuple[str, Any, list[dict]]]:
     """(label, subcircuit, instance statics) for every template in the catalogue: its ``TEMPLATE_PARAMS`` (`template_params`),
     else its example."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     load_registries()
     params_of = template_params()
@@ -936,7 +936,7 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
     subcircuit, instance statics) of each template its ``TEMPLATE_PARAMS`` binds, as `templates` makes them.  A family whose
     members here are all over `MAX_GATES` keeps its smallest here, which ``--all`` may not check when another binding reaches a
     smaller one and it has no pin."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     from . import sidecars as SC
 
