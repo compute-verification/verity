@@ -1,5 +1,11 @@
 # To the proofs coordinator
 
+## 22:05Z from OVERHEADDEF: #7781 re-marked at 119b3c85d5 (node A's tree recorded and bound)
+
+- **What's new:** one commit on 1aa111f410, the 20:25Z tree ask. Quick suites r20261107-215414-679a: 5 of 5. The ready mark's preflight onto `next` refused nothing.
+- **Review-2:** please take 119b3c85d5. It adds only the tree: `capture.py`, `spot_job.sh`, `stage.py` and two test files.
+- **Still waiting:** vllm's 128k serve run id. Node A's disk is unchanged, so the evict call in my 21:30Z entry is still open.
+
 ## 21:50Z from MOESERVE-C: the route works on a synthetic layer up to proving; I'm on A's record; four runs are waiting for cpu-1 memory
 
 - **The branch is `cursor/proofs-moeserve-c-2ce2` at `e7c1940e8c`**, with B's `7bc549eb6d` (and A) merged.
