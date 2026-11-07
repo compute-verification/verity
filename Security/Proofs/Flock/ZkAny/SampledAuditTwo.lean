@@ -1,0 +1,232 @@
+module
+
+public import Proofs.Flock.ZkAny.SampledAudit
+public import Proofs.Flock.ZkAny.RecordHiding
+
+/-!
+# A two-stage sampled audit's view at any values
+
+A two-stage audit registers its boundary values with the ZK server's value service before any coin. The verifier's live
+coins then draw the first-stage sample, the replay blocks, uniformly. The serving stack registers the sampled replay
+blocks' interior values with the same service, under the same key, before the second stage's coins; fresh live coins
+then draw the second-stage sample, and each sampled proof block's proof is one session through the ZK server. The
+auditor sees the admitted records, both samples, and the sampled sessions' releases with their outcomes.
+
+`Flock.Guarantees.SampledAuditTwoAny` states that view over a stream of `r` registrations of one value service (every
+registration on the server's record up to the audit's interior registration), whose values and whose stack's choices are
+functions of the first-stage sample `χ₁`: the interior values are the sampled replay blocks'. Per outcome of the sampled
+sessions, on every event, the view is no likelier than a simulator's that reads none of the values: an ideal stream of
+dummy values `v₀`, both samples, and the sessions' simulator given the records, the samples and the outcome. The terms
+are
+
+* for each choice `d` of the stack's sessions that the loop can admit (`streamChoices`), the simulator's probability on
+  an ideal stream of `v₀` plus the PRF gap of the key-derived salts at `d`, averaged over both samples and the
+  simulator's coins, plus `δ`, how far an ideal stream of the values is from one of `v₀` (at hm96's leaves
+  `ideal_hm96_stream`'s `r·N·2δ₁`);
+* the forge term (`streamForgeAdvantage`), averaged over the first-stage sample;
+* and the sessions' error at the outcome, `ε s`.
+
+One key salts every registration, so the PRF and forge terms are the stream's
+(`Verity.Guarantees.RegisteredStreamLeakage`) at each first-stage sample, not two registrations' bounds added. The
+first-stage sample is uniform and independent of the key and the sessions; one the auditor chooses is not covered.
+
+`Flock.SecurityProofs.SampledAuditTwoAny` proves it with the one-stage audit's swap (`prCoin_admits_perOutcome`) at the
+registrations' randomness and the first-stage sample together (`prCoin_admits_perOutcome_two`). At each first-stage
+sample, second-stage sample and simulator's coins, what is left is the probability that the loop admits a stream meeting
+one event, which `RegisteredStreamLeakage` bounds at that sample's values and stack; the ideal stream of the values is
+then within `δ` of the dummy's.
+
+* `streamRecOf`: the records a stream stack hands the loop.
+* `prCoin_admits_perOutcome_two`: the swap, a first-stage sample between the registrations and the sessions.
+* `ideal_hm96_stream`: an ideal stream hides its values at hm96 commitments, `r·N·2δ₁` over `r` registrations of `N`
+  leaves each (`leaves_hybrid` over the registrations, `leaves_swap_values` within each).
+-/
+
+@[expose] public section
+
+namespace FlockSoundness.ZK
+
+open Verity Verity.Game Verity.ValueSalts
+open scoped ENNReal
+
+/-- **The records a stream stack hands the loop**, registration `i`'s values `v i`, at the key and every registration's
+sessions `p`. -/
+def streamRecOf {K S Ys V O T R : Type} (sv : Service K S Ys V O T R) {r : ℕ} {m : Fin r → ℕ} (v : Fin r → V)
+    (st : StreamStack K V S O T R r m) (p : K × ((i : Fin r) → Fin (m i) → S)) : StreamRecord r S O T R :=
+  sv.streamHanded p.1 v p.2 (st p.1 v (sv.streamViews p.1 v p.2))
+
+/-- **The sessions' release swapped for its simulator, a first-stage sample drawn between.** Where, at every value `p`
+of the registrations' randomness and `χ₁` of the first-stage sample and `χ₂` of the second, the sessions' release is
+simulated per outcome by `Sim` given the record `ρ p χ₁` and both samples, the probability that `p` is admitted at `χ₁`
+and the audit shows the outcome `s` and an event on the record, both samples and the bytes is at most, averaged over
+both samples and the simulator's coins, the probability over `p` alone that it is admitted at `χ₁` and its record meets
+that event with the simulator's bytes, plus `ε s`. -/
+theorem prCoin_admits_perOutcome_two {P X₁ X₂ Ω Ωs St B Rec : Type} [Fintype P] [Fintype X₁] [Fintype X₂] [Fintype Ω]
+    [Fintype Ωs] (adm : P → X₁ → Prop) (ρ : P → X₁ → Rec) (out : P → X₁ → X₂ → Ω → St)
+    (rel : P → X₁ → X₂ → Ω → B) (Sim : Rec → X₁ → X₂ → St → Ωs → B) (ε : St → ℝ≥0∞)
+    (hS : ∀ p χ₁ χ₂, PerOutcome (out p χ₁ χ₂) (rel p χ₁ χ₂) (Sim (ρ p χ₁) χ₁ χ₂) ε) (s : St)
+    (E : Rec → X₁ → X₂ → B → Prop) :
+    prCoin (fun q : P × X₁ × X₂ × Ω => adm q.1 q.2.1 ∧ out q.1 q.2.1 q.2.2.1 q.2.2.2 = s ∧
+        E (ρ q.1 q.2.1) q.2.1 q.2.2.1 (rel q.1 q.2.1 q.2.2.1 q.2.2.2)) ≤
+      avg (fun q : X₁ × X₂ × Ωs => prCoin fun p : P => adm p q.1 ∧
+        E (ρ p q.1) q.1 q.2.1 (Sim (ρ p q.1) q.1 q.2.1 s q.2.2)) + ε s := by
+  let e : P × X₁ × X₂ × Ω ≃ (X₁ × P) × X₂ × Ω :=
+    { toFun := fun q => ((q.2.1, q.1), q.2.2.1, q.2.2.2)
+      invFun := fun q => (q.1.2, q.1.1, q.2.1, q.2.2)
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  have h1 := prCoin_admits_perOutcome (fun p : X₁ × P => adm p.2 p.1) (fun p => (ρ p.2 p.1, p.1))
+    (fun p => out p.2 p.1) (fun p => rel p.2 p.1) (fun ρχ χ₂ => Sim ρχ.1 ρχ.2 χ₂) ε (fun p χ₂ => hS p.2 p.1 χ₂) s
+    (fun ρχ χ₂ bs => E ρχ.1 ρχ.2 χ₂ bs)
+  have h2 : ∀ q : X₂ × Ωs, prCoin (fun p : X₁ × P => adm p.2 p.1 ∧
+      E (ρ p.2 p.1) p.1 q.1 (Sim (ρ p.2 p.1) p.1 q.1 s q.2)) =
+      avg fun χ₁ => prCoin fun p : P => adm p χ₁ ∧ E (ρ p χ₁) χ₁ q.1 (Sim (ρ p χ₁) χ₁ q.1 s q.2) := fun q =>
+    prCoin_prod_split (fun (χ₁ : X₁) (p : P) => adm p χ₁ ∧ E (ρ p χ₁) χ₁ q.1 (Sim (ρ p χ₁) χ₁ q.1 s q.2))
+  calc prCoin (fun q : P × X₁ × X₂ × Ω => adm q.1 q.2.1 ∧ out q.1 q.2.1 q.2.2.1 q.2.2.2 = s ∧
+        E (ρ q.1 q.2.1) q.2.1 q.2.2.1 (rel q.1 q.2.1 q.2.2.1 q.2.2.2))
+      = prCoin (fun q : (X₁ × P) × X₂ × Ω => adm q.1.2 q.1.1 ∧ out q.1.2 q.1.1 q.2.1 q.2.2 = s ∧
+          E (ρ q.1.2 q.1.1) q.1.1 q.2.1 (rel q.1.2 q.1.1 q.2.1 q.2.2)) :=
+        prCoin_congr_equiv e (fun q : (X₁ × P) × X₂ × Ω => adm q.1.2 q.1.1 ∧ out q.1.2 q.1.1 q.2.1 q.2.2 = s ∧
+          E (ρ q.1.2 q.1.1) q.1.1 q.2.1 (rel q.1.2 q.1.1 q.2.1 q.2.2))
+    _ ≤ avg (fun q : X₂ × Ωs => prCoin fun p : X₁ × P => adm p.2 p.1 ∧
+          E (ρ p.2 p.1) p.1 q.1 (Sim (ρ p.2 p.1) p.1 q.1 s q.2)) + ε s := h1
+    _ = avg (fun q : X₂ × Ωs => avg fun χ₁ => prCoin fun p : P => adm p χ₁ ∧
+          E (ρ p χ₁) χ₁ q.1 (Sim (ρ p χ₁) χ₁ q.1 s q.2)) + ε s :=
+        congrArg (fun f => avg f + ε s) (funext h2)
+    _ = avg (fun χ₁ : X₁ => avg fun q : X₂ × Ωs => prCoin fun p : P => adm p χ₁ ∧
+          E (ρ p χ₁) χ₁ q.1 (Sim (ρ p χ₁) χ₁ q.1 s q.2)) + ε s :=
+        congrArg (· + ε s) (avg_swap fun (q : X₂ × Ωs) (χ₁ : X₁) => prCoin fun p : P => adm p χ₁ ∧
+          E (ρ p χ₁) χ₁ q.1 (Sim (ρ p χ₁) χ₁ q.1 s q.2))
+    _ = avg (fun q : X₁ × X₂ × Ωs => prCoin fun p : P => adm p q.1 ∧
+          E (ρ p q.1) q.1 q.2.1 (Sim (ρ p q.1) q.1 q.2.1 s q.2.2)) + ε s :=
+        congrArg (· + ε s) (avg_prod_split fun q : X₁ × X₂ × Ωs => prCoin fun p : P => adm p q.1 ∧
+          E (ρ p q.1) q.1 q.2.1 (Sim (ρ p q.1) q.1 q.2.1 s q.2.2)).symm
+
+/-- **An ideal stream hides its values, at hm96 commitments.** Where the value service's commitments of the values `v`
+under the salts `y` are a function `g` of `N` hm96 leaves, leaf `i` being `H(dig v i + M·y_i, c(y_i))` under its own
+uniform salt `y_i`, an ideal stream of `r` registrations' values `v` is within `r·N·2δ₁` of one of `v₀` on every event,
+whichever registrations `P` it passes over, `δ₁` the hiding gap: each registration's commitment, of its own salts, is
+swapped at `N·2δ₁` (`leaves_swap_values`), one registration at a time (`leaves_hybrid`). -/
+theorem ideal_hm96_stream {K S Ys B C D V O T R : Type} [Fintype S] [Nonempty S] [Fintype Ys] [Nonempty Ys] [Fintype T]
+    [Nonempty T] [Fintype R] [Nonempty R] [AddCommGroup B] [Fintype B] [Nonempty B] [DecidableEq B] [DecidableEq C]
+    {N : ℕ} (sv : Service K S (Fin N → Ys) V O T R) (My : Ys → B) (c : Ys → C) (H : B × C → D)
+    (dig : V → Fin N → B) (g : (Fin N → D) → O)
+    (hout : ∀ v y, sv.out v y = g fun i => H (dig v i + My (y i), c (y i))) {r : ℕ} (m : Fin r → ℕ)
+    (v v₀ : Fin r → V) (P : Finset (Fin r)) (A : StreamRecord r S O T R → Prop) :
+    sv.streamIdeal m v P A ≤
+      sv.streamIdeal m v₀ P A + r * (N * (2 * ENNReal.ofReal (CROnly.hidingGap My c))) := by
+  let e : (Fin r → S × T × R) × (Fin r → Fin N → Ys) ≃ (Fin r → S × (Fin N → Ys) × T × R) :=
+    { toFun := fun q i => ((q.1 i).1, q.2 i, (q.1 i).2.1, (q.1 i).2.2)
+      invFun := fun p => (fun i => ((p i).1, (p i).2.2.1, (p i).2.2.2), fun i => (p i).2.1)
+      left_inv := fun _ => rfl
+      right_inv := fun _ => rfl }
+  have hv : ∀ u : Fin r → V, sv.streamIdeal m u P A =
+      prCoin (fun q : (Fin r → S × T × R) × (Fin r → Fin N → Ys) =>
+        A fun i => if i ∈ P then none
+          else some ((i : ℕ), m i, ((q.1 i).1, sv.out (u i) (q.2 i), (q.1 i).2.1), (q.1 i).2.2)) := fun u => by
+    unfold Service.streamIdeal
+    exact (prCoin_congr_equiv e _).symm
+  rw [hv v, hv v₀]
+  refine leaves_hybrid (fun (a : V × V) (y : Fin N → Ys) => sv.out a.1 y) (fun a y => sv.out a.2 y)
+    (δ := N * (2 * ENNReal.ofReal (CROnly.hidingGap My c))) (fun x G => ?_) r (fun _ i => (v i, v₀ i))
+    (fun ω os => A fun i => if i ∈ P then none else some ((i : ℕ), m i, ((ω i).1, os i, (ω i).2.1), (ω i).2.2))
+  simp only [hout]
+  exact leaves_swap_values My c H N (fun ω i => dig (x ω).1 i) (fun ω i => dig (x ω).2 i) (fun ω ls => G ω (g ls))
+
+end FlockSoundness.ZK
+
+namespace Flock.SecurityProofs
+
+open Verity Verity.Game Verity.ValueSalts Verity.Assumptions FlockSoundness.ZK
+open scoped ENNReal
+
+/-- **A two-stage sampled audit's view at any values, per outcome of its sampled sessions.** For every value service
+`sv` with finite keys, sessions, salts, tags and record tags; every stream of `r` registrations, registration `i` of an
+epoch of `m i` sessions, at most `b` of them passed over; every finite first-stage sample space `X₁` drawn uniformly
+after the boundary registration, and values `v` and a stack `st` that are functions of the first-stage sample; dummy
+values `v₀`, a key `k₀`, every finite second-stage sample space `X₂` drawn uniformly after the interior registration;
+and the sampled sessions' outcome `out` and released bytes `rel`, functions of the registrations' randomness (the key
+and every registration's sessions), both samples and the sessions' own randomness:
+
+if the stack reads no key (`ZkServerOwnUser`) at any first-stage sample, the sessions' release is simulated per outcome
+(`PerOutcome`) within `ε` at every key, sessions and samples by `Sim` given the admitted records and both samples, and
+an ideal stream of the values is within `δ` of one of `v₀` on every event at every first-stage sample, then at every
+outcome `s` and event `E` on the records, both samples and the bytes, the probability that the loop admits the stream
+and the audit shows `s` and `E` is at most the sum, over the choices `d` the loop can admit, of (the average, over both
+samples and `Sim`'s coins, of `E` on an ideal stream of `v₀` with `Sim`'s bytes plus the PRF gap at `d` there, plus
+`δ`), plus the probability, averaged over the first-stage sample, that the stack run at `k₀` forges a record tag, plus
+`ε s`. -/
+def _root_.Flock.Guarantees.SampledAuditTwoAny : Prop :=
+  ∀ {K S Y V O T R X₁ X₂ Ω Ωs St B : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T] [Fintype R] [Fintype X₁]
+    [Fintype X₂] [Fintype Ω] [Fintype Ωs] (sv : Service K S Y V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ)
+    (v : X₁ → Fin r → V) (v₀ : Fin r → V) (st : X₁ → StreamStack K V S O T R r m) (k₀ : K)
+    (out : K × ((i : Fin r) → Fin (m i) → S) → X₁ → X₂ → Ω → St)
+    (rel : K × ((i : Fin r) → Fin (m i) → S) → X₁ → X₂ → Ω → B)
+    (Sim : StreamRecord r S O T R → X₁ → X₂ → St → Ωs → B) (ε : St → ℝ≥0∞) (δ : ℝ≥0∞),
+    (∀ χ₁, ZkServerOwnUser (st χ₁)) →
+    (∀ p χ₁ χ₂, PerOutcome (out p χ₁ χ₂) (rel p χ₁ χ₂) (Sim (streamRecOf sv (v χ₁) (st χ₁) p) χ₁ χ₂) ε) →
+    (∀ χ₁ P A, sv.streamIdeal m (v χ₁) P A ≤ sv.streamIdeal m v₀ P A + δ) →
+    ∀ (s : St) (E : StreamRecord r S O T R → X₁ → X₂ → B → Prop),
+      prCoin (fun q : (K × ((i : Fin r) → Fin (m i) → S)) × X₁ × X₂ × Ω =>
+          sv.streamAdmits q.1.1 b (streamRecOf sv (v q.2.1) (st q.2.1) q.1) ∧
+            out q.1 q.2.1 q.2.2.1 q.2.2.2 = s ∧
+              E (streamRecOf sv (v q.2.1) (st q.2.1) q.1) q.2.1 q.2.2.1 (rel q.1 q.2.1 q.2.2.1 q.2.2.2)) ≤
+        (∑ d ∈ streamChoices r m b,
+          (avg (fun q : X₁ × X₂ × Ωs =>
+              sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
+                sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2))) + δ)) +
+          avg (fun χ₁ => sv.streamForgeAdvantage (v χ₁) (st χ₁ k₀ (v χ₁))) + ε s
+
+theorem SampledAuditTwoAny : Flock.Guarantees.SampledAuditTwoAny := by
+  intro K S Y V O T R X₁ X₂ Ω Ωs St B _ _ _ _ _ _ _ _ _ sv r m b v v₀ st k₀ out rel Sim ε δ hown hS hδ s E
+  have hc : ∀ {C : Type} [Fintype C] (x : ℝ≥0∞), avg (fun _ : C => x) ≤ x := by
+    intro C _ x
+    rcases isEmpty_or_nonempty C with hC | hC
+    · simp [avg]
+    · exact (avg_const x).le
+  have hsum : ∀ {C ι : Type} [Fintype C] (t : Finset ι) (f : ι → C → ℝ≥0∞),
+      avg (fun c => ∑ i ∈ t, f i c) = ∑ i ∈ t, avg (f i) := by
+    intro C ι _ t f
+    simp only [avg, Finset.mul_sum]
+    exact Finset.sum_comm
+  have hstream : ∀ q : X₁ × X₂ × Ωs,
+      prCoin (fun p : K × ((i : Fin r) → Fin (m i) → S) =>
+          sv.streamAdmits p.1 b (streamRecOf sv (v q.1) (st q.1) p) ∧
+            E (streamRecOf sv (v q.1) (st q.1) p) q.1 q.2.1
+              (Sim (streamRecOf sv (v q.1) (st q.1) p) q.1 q.2.1 s q.2.2)) ≤
+        (∑ d ∈ streamChoices r m b,
+          ((sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
+            sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2))) + δ)) +
+          sv.streamForgeAdvantage (v q.1) (st q.1 k₀ (v q.1)) := by
+    intro q
+    refine (Verity.SecurityProofs.RegisteredStreamLeakage sv r m b (v q.1) (st q.1)
+      (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) k₀ (hown q.1)).trans
+      (add_le_add (Finset.sum_le_sum fun d _ => ?_) le_rfl)
+    exact (add_le_add (hδ q.1 (passed d) _) le_rfl).trans_eq (add_right_comm _ _ _)
+  refine (prCoin_admits_perOutcome_two (fun p χ₁ => sv.streamAdmits p.1 b (streamRecOf sv (v χ₁) (st χ₁) p))
+    (fun p χ₁ => streamRecOf sv (v χ₁) (st χ₁) p) out rel Sim ε hS s E).trans (add_le_add ?_ le_rfl)
+  calc avg (fun q : X₁ × X₂ × Ωs => prCoin fun p : K × ((i : Fin r) → Fin (m i) → S) =>
+          sv.streamAdmits p.1 b (streamRecOf sv (v q.1) (st q.1) p) ∧
+            E (streamRecOf sv (v q.1) (st q.1) p) q.1 q.2.1
+              (Sim (streamRecOf sv (v q.1) (st q.1) p) q.1 q.2.1 s q.2.2))
+      ≤ avg (fun q : X₁ × X₂ × Ωs => (∑ d ∈ streamChoices r m b,
+          ((sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
+            sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2))) + δ)) +
+          sv.streamForgeAdvantage (v q.1) (st q.1 k₀ (v q.1))) := avg_mono hstream
+    _ = (∑ d ∈ streamChoices r m b, avg fun q : X₁ × X₂ × Ωs =>
+          (sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
+            sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2))) + δ) +
+          avg (fun q : X₁ × X₂ × Ωs => sv.streamForgeAdvantage (v q.1) (st q.1 k₀ (v q.1))) := by
+        rw [avg_add, hsum]
+    _ ≤ (∑ d ∈ streamChoices r m b,
+          (avg (fun q : X₁ × X₂ × Ωs =>
+              sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
+                sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2))) + δ)) +
+          avg (fun χ₁ => sv.streamForgeAdvantage (v χ₁) (st χ₁ k₀ (v χ₁))) := by
+        refine add_le_add (Finset.sum_le_sum fun d _ => ?_) ?_
+        · rw [avg_add]
+          exact add_le_add le_rfl (hc δ)
+        · rw [avg_prod_split fun q : X₁ × X₂ × Ωs => sv.streamForgeAdvantage (v q.1) (st q.1 k₀ (v q.1))]
+          exact avg_mono fun χ₁ => hc _
+
+end Flock.SecurityProofs
