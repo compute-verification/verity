@@ -145,7 +145,7 @@ theorem find?_rooted {shapes : Array _root_.Flock.Registered.Port} {roots : List
 
 /-- **A list without repeats has no earlier entry equal to its `k`th**, `opens_rooted`'s order premise. -/
 theorem before_of_nodup {roots : List Msg} {k : ℕ} {r : Msg} (hnd : roots.Nodup) (hr : roots[k]? = some r) :
-    ∀ j < k, roots[j]? ≠ some r := fun j hj h =>
+    ∀ j < k, roots[j]? ≠ some r := fun _ hj h =>
   Nat.ne_of_lt hj ((hnd.getElem?_inj (hj.trans (List.getElem?_eq_some_iff.1 hr).1)).1 (h.trans hr.symm))
 
 /-- **An opening at port `k` passes at `rooted` ports** where `at_` checks it under the list's `k`th root, no earlier
