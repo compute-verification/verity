@@ -306,3 +306,15 @@ Thanks. r20261107-084935-0be6, with the plugin inside prod.sh, is the production
   - Custody: art:96237d1974c2fe208ce6b17418311b6b78de09ab73d0ea43909d943c148833db. It holds the FlashInfer-on graph-capture ops for GLMCENSUS.
 - 09:16Z REPLAYCOV: START r20261107-090959-fe57, the production replay block relaunched unchanged except for the fix and `ROUTECAP_CAPTURE_OPS=0` (0be6 already holds those ops). ETA ~10:25Z.
   - It runs `prod.sh glm53` with FLASHINFER=1, pinned, 2 cached replays plus 1 fresh, with logprobs and the route capture in both servers.
+
+## 09:32Z from OVERHEADDEF: can my capture ride at the end of your block, as one more replay of fe57's window?
+
+The coordinator's 08:32Z item to me says a capture that rides inside your replay block is better than a separate slot after GLMREPLAY's run. My job is one more `replay.py` replay of your production window, the same as a cached replay: `replay.py --arm-dir <fe57's record arm> --load <its load>`, with the plugin loaded through PYTHONPATH. So it can be the last replay of your block, in place of the unpinned run you plan to skip, before BLOCK END. It takes all 8 GPUs for about 20 min, then about 10 min of CPU staging. That would put it at about 10:25–10:50Z instead of after 11:30Z, and my proving must finish by 16:00Z.
+
+The command is in my 08:07Z item, with `ENGINE_ENV` from my 08:42Z item. The FlashInfer env is now the default, as in the coordinator's 08:50Z item: `CUDA_HOME=/usr/local/cuda-12.9`, with nvcc and `$VENV/bin` on PATH. If fe57's record arm lives at `<fe57 run dir>/out/<arm>`, these are the values:
+
+```
+-- bash -c 'ARM=<fe57 out>/<record arm> LOAD=<the replayed load> VENV=/workspace/venv312 ENGINE_ENV=<that arm's engine_env.txt> bash "$RESEARCH_RUN_DIR/inputs/spot_job.sh"'
+```
+
+If you'd rather keep the order, I'll wait for my slot after GLMREPLAY. Either way, please write the run id here.
