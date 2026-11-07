@@ -20,6 +20,17 @@ MIXED_8192 = {"tokens": 8192, "reqs": 33, "new": 2, "prefix_hit_tokens": 512,
               "sampling": {"greedy": 21, "seeded": 4, "random": 8, "top_p": 12, "top_k": 2}, "cg": {"cg_mode": "NONE", "num_tokens": 8192}}
 
 
+def _warmup_step(n, prefill):
+    """One step of vLLM's kernel warm-up as the plugin records it: n requests, each with every feature of the warm-up's sampling."""
+    return {"tokens": 2 * n if prefill else n, "reqs": n, "new": n if prefill else 0, "prefix_hit_tokens": 0,
+            "prefill": [[2, 0, 2]] * n if prefill else [], "decode": 0 if prefill else n, "decode_ctx": [] if prefill else [3] * n,
+            "decode_ctx_max": 0 if prefill else 3, "sampling": {k: n for k in gap.WARMUP_SAMPLING},
+            "cg": {"cg_mode": "NONE", "num_tokens": 2 * n if prefill else n}}
+
+
+WARMUP = [_warmup_step(256, True), _warmup_step(256, False), _warmup_step(2, False), _warmup_step(1, False)]
+
+
 @pytest.fixture(scope="module")
 def launches():
     return StepNeeds(gap.class_g_phi())
@@ -72,6 +83,17 @@ def test_production_steps_name_each_gap(tmp_path, launches):
                                 "more tokens than class G's max_num_batched_tokens", "a sequence past class G's max_model_len"}
     assert g["engine"]["launch padded past its rows"]["tokens"] == 200
     assert "| dsa-topk | radix-topk (radix top-k) |" in gap.markdown(g)
+
+
+def test_vllms_warmup_is_not_served(tmp_path, launches):
+    """vLLM's kernel warm-up runs its dummy requests through `execute_model` before serving: the capture's leading warm-up steps
+    are left out and counted, with none of their sampler refusals, and a served step like them later is kept."""
+    g = gap.gap(_capture(tmp_path, [*WARMUP, CLASS_G_STEP]), _check([]), phi=launches.phi)
+    assert g["warmup"] == {"steps": 4, "tokens": 512 + 256 + 2 + 1} and g["steps"] == 1 and g["tokens"] == 8
+    assert not {r["definition"] for r in g["gaps"]} & {"select-top_k", "select-min_p", "select-penalties", "flashinfer-sampler"}
+    g = gap.gap(_capture(tmp_path / "late", [*WARMUP, CLASS_G_STEP, WARMUP[2]]), _check([]), phi=launches.phi)
+    assert g["warmup"]["steps"] == 4 and g["steps"] == 2 and g["tokens"] == 10
+    assert "select-top_k" in {r["definition"] for r in g["gaps"]}
 
 
 def test_the_sampler_fallback_turns_its_row_off(tmp_path, launches):

@@ -76,7 +76,11 @@ capture needed, whether a Definition exists at other statics, its owner (circuit
 capture or a deterministic kernel, vllm for serving), its Definition calls a scheduled token on the recording rank, and
 its share of all calls. A second table counts the tokens of steps outside class G's engine (CUDA graphs, padded
 launches, prefix-cache hits, class G's limits). The JSON adds `needs`: every Definition or refusal id with its calls on
-the recording rank, whether circuit-check registers it and whether it passes.
+the recording rank, whether circuit-check registers it and whether it passes. vLLM's kernel warm-up runs its dummy
+requests, each with every sampling feature, through the same `execute_model` before serving; the plugin records those
+steps, and `gap.py` leaves the capture's leading ones out and counts them (`warmup`). FlashInfer's sampler takes a step's
+unseeded requests only when one filters by top-k or top-p and none is seeded, so a seeded request keeps its whole batch
+on the native sampler.
 
 The suite (`tests/`) runs the plugin on stand-ins for both model runners and torch's profiler, and `gap.py` on synthetic
 steps.

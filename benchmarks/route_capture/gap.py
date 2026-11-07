@@ -9,7 +9,8 @@ there is registered, and it passes when it has no failures.
 Each step is evaluated at one tensor-parallel rank as the class G decoder writes its launch
 (`verity_vllm.program.predict.step_needs`): every Definition it calls with its calls, and each refusal counted in place of
 what it refuses. A Definition call is a proof block here. The step's engine facts class G doesn't run (graphs, a padded
-launch, a prefix hit, its limits) are counted by tokens beside them.
+launch, a prefix hit, its limits) are counted by tokens beside them. vLLM's kernel warm-up, which runs before serving through
+the same `execute_model`, is left out and counted (`warmup`).
 """
 from __future__ import annotations
 
@@ -33,11 +34,20 @@ OWNERS = {"no capture": "kernels", "unregistered": "circuits", "fails circuit-ch
 CLASS_G = {"max_num_seqs": 8, "max_num_batched_tokens": 2048, "max_model_len": 2048, "long_prefill_token_threshold": 256}
 #: class G's workload row (GLM-5.3 at TP8, eager) and its pinned config's case
 CLASS_G_ROW, CLASS_G_CASE = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager", "GLM53"
+#: the sampling the capture records that `SamplingParams.for_sampler_warmup` turns on together, for every warm-up request
+WARMUP_SAMPLING = ("logprobs", "min_p", "penalties", "random", "top_k", "top_p")
 
 
 def class_g_phi():
     """Class G's φ (`step_needs.workload_phi` of its row)."""
     return workload_phi(CLASS_G_ROW, CLASS_G_CASE)
+
+
+def warmup(row: dict[str, Any]) -> bool:
+    """Whether a step is like vLLM's kernel warm-up (`warmup_kernels`): every request sampled with every feature the warm-up's
+    `SamplingParams.for_sampler_warmup` sets. Only the capture's leading such steps are the warm-up."""
+    s, n = row.get("sampling") or {}, int(row["reqs"])
+    return n > 0 and all(s.get(k, 0) == n for k in WARMUP_SAMPLING)
 
 
 def decodes(row: dict[str, Any]) -> list[int]:
@@ -115,7 +125,11 @@ def gap(capture: Path, check: dict[str, Any], rank: int | None = None, phi=None)
     need: Counter[Need] = Counter()
     facts: Counter[str] = Counter()
     tokens = n_steps = 0
+    warm: list[dict[str, Any]] = []
     for row in steps(capture, rank):
+        if not n_steps and warmup(row):
+            warm.append(row)
+            continue
         need.update(needs(S, row, fi))
         facts.update({f: int(row["tokens"]) for f in engine_facts(row)})
         tokens += int(row["tokens"])
@@ -137,7 +151,7 @@ def gap(capture: Path, check: dict[str, Any], rank: int | None = None, phi=None)
         out.append({**r, "statics": _statics(r["ids"]), "n_statics": len(r["ids"]), "blocks_per_token": r["blocks"] / max(tokens, 1),
                     "share": r["blocks"] / max(blocks, 1), "ids": sorted(r["ids"])[:12]})
     return {"rank": rank, "steps": n_steps, "tokens": tokens, "blocks": blocks, "blocks_per_token": blocks / max(tokens, 1),
-            "flashinfer_sampler": fi, "engine_had_flashinfer": engine_had_flashinfer(capture),
+            "warmup": {"steps": len(warm), "tokens": sum(int(r["tokens"]) for r in warm)}, "flashinfer_sampler": fi, "engine_had_flashinfer": engine_had_flashinfer(capture),
             "class_g_registered": len(reg), "class_g_passing": sum(reg.values()),
             "gaps": [r for r in out if r["status"] != "covered"], "covered": [r for r in out if r["status"] == "covered"],
             "needs": [{"route": nd.route, "id": nd.id, "gap": nd.gap, "exists": nd.exists, "blocks": c,
@@ -146,7 +160,8 @@ def gap(capture: Path, check: dict[str, Any], rank: int | None = None, phi=None)
 
 
 def markdown(g: dict[str, Any]) -> str:
-    lines = [f"Rank {g['rank']}: {g['steps']} steps, {g['tokens']} tokens, {g['blocks_per_token']:.4g} proof blocks a token.", "",
+    lines = [f"Rank {g['rank']}: {g['steps']} steps, {g['tokens']} tokens, {g['blocks_per_token']:.4g} proof blocks a token "
+             f"(vLLM's warm-up, {g['warmup']['steps']} steps of {g['warmup']['tokens']} tokens, left out).", "",
              "| route | Definition or refusal | statics | Definition exists | owner | blocks a token | share of blocks |",
              "|---|---|---|---|---|---|---|"]
     for r in g["gaps"]:
