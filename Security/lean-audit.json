@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["Definitions"],
  "proved_in": ["Proofs"],
  "assumptions_module": "Definitions.Assumptions",
@@ -3309,6 +3310,7 @@
    "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
    "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
    "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ": "the honest verifier server's record custody: the record flock-verify --zk reads is the one its challenger wrote, and the draw file the one flock-verify draw printed",
+   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record flock-verify --zk reads is the one its challenger wrote, and the draw file the one flock-verify draw printed",
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
    "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order"
@@ -3382,7 +3384,6 @@
    "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ"
   ],
   "Flock.SecurityProofs.SampledKSLiveV5": [
-   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
    "FlockSoundness.Built",
    "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
    "FlockSoundness.Discharge.ZkLink.LinkCRZC",
@@ -54131,6 +54132,5 @@
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": "not yet lifted into a `FlockSoundness.Guarantees` definition; @proofs lifts it with `check.py --lift`",
   "Pouw.Salt.keyed_leaf_binds": "proves `Pouw.Guarantees.KeyedLeaf.Binds` under another name; @compute-research renames it `Pouw.SecurityProofs.KeyedLeaf.Binds` with `--moved`",
   "Pouw.Salt.keyed_leaf_hides": "proves `Pouw.Guarantees.KeyedLeaf.Hides` under another name; @compute-research renames it `Pouw.SecurityProofs.KeyedLeaf.Hides` with `--moved`"
- },
- "format": 1
+ }
 }
