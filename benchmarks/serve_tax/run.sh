@@ -13,7 +13,7 @@
 # Each restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR/<arm> (KV_DIR by default a fresh directory
 # under the node's scratch, removed at the end); RESTORE=FROM:TO then restores each RESTORE_ARM's edge FROM into a fresh
 # engine (warmed first on RESTORE_WARM of the replay block's prompts) and replays to edge TO (restore.py) into
-# OUT/<arm>-replay.
+# OUT/<arm>-replay. RESTORE_FROM=OUT_DIR with KV_DIR and no ARMS restores an earlier job's arms alone.
 # One plan (OUT/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
 # server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease; the tick arms
 # take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
@@ -47,7 +47,7 @@ unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 # Inductor's runtime R0_BLOCK choice (each process times a halved candidate) changes the reduction order: pin it
 export TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0
-replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY_FROM:-}" ] && replay_only=1
+replay_only=0; [ -z "${ARMS:-}" ] && [ "${CAPACITY:-0}" != 1 ] && [ -n "${REPLAY_FROM:-}${RESTORE_FROM:-}" ] && replay_only=1
 [ -f "$C4" ] || [ $replay_only = 1 ] || { echo "serve-tax: no C4 shard (--send it, or C4=PATH)"; exit 2; }
 [ -d "$CK" ] || { echo "serve-tax: no checkpoint at $CK"; exit 2; }
 v=$("$PY" -c 'import vllm; print(vllm.__version__)') || exit 2
@@ -75,7 +75,7 @@ if [ "${1:-}" = leased ]; then
   done
   for ra in ${RESTORE:+${RESTORE_ARM:-restore}}; do
     echo "== restore $ra ${RESTORE} $(date -u +%FT%TZ)"
-    "$PY" "$here/restore.py" --arm-dir "$OUT/$ra" --from-edge "${RESTORE%%:*}" --to-edge "${RESTORE##*:}" \
+    "$PY" "$here/restore.py" --arm-dir "${RESTORE_FROM:-$OUT}/$ra" --from-edge "${RESTORE%%:*}" --to-edge "${RESTORE##*:}" \
       --kv-dir "$KV_DIR/$ra" --checkpoint "$CK" --warm "${RESTORE_WARM:-0}" --out "$OUT/$ra-replay" \
       > "$OUT/$ra-replay.log" 2>&1 || { tail -n 60 "$OUT/$ra-replay.log"; rc=1; }
     tail -n 1 "$OUT/$ra-replay.log"
@@ -97,7 +97,8 @@ if [ "${1:-}" = leased ]; then
 fi
 
 if [ "${CAPACITY:-0}" != 1 ] && [ -z "${ARMS:-}" ]; then
-  [ $replay_only = 1 ] || { echo "serve-tax: ARMS: the arms to serve, in order (or only REPLAY with REPLAY_FROM)"; exit 2; }
+  [ $replay_only = 1 ] || { echo "serve-tax: ARMS: the arms to serve, in order (or only REPLAY with REPLAY_FROM, or RESTORE with RESTORE_FROM)"; exit 2; }
+  [ -z "${RESTORE_FROM:-}" ] || [ -n "${KV_DIR:-}" ] || { echo "serve-tax: RESTORE_FROM reads the edges' KV bytes in KV_DIR/<arm>: set KV_DIR"; exit 2; }
 elif [ "${CAPACITY:-0}" != 1 ]; then
   "$PY" "$here/serve_tax.py" plan --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" --rates "${RATES:?RATES: NAME=REQ_PER_S,...}" \
     --span-s "$SPAN_S" ${REQUESTS:+--requests "$REQUESTS"} --docs "$DOCS" --out "$PLAN" || exit 1
