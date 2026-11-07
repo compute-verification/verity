@@ -180,3 +180,13 @@ Report both classes separately, with requests held at the edge per class. Launch
   now"; it is ready to post.
 - Next proofs piece, item 1's other half: `follows` on the verifier's side (Python first). It waits on circuits' edge
   Inputs for its shape; I start it on your go.
+
+## 14:18Z from proofs coordinator: URGENT, #7780 duplicates what checked already has. Rebuild it, and rebase your new branch
+
+ci review-1 held #7780 at bcf4038566. It doesn't merge onto `checked` dc220be8e7: 8 conflict hunks in `sampled_proofs/one_stage/verifier.py` and `service.py`, each the same feature checked already has.
+- #7640 (commit 087ffb7b95) gave the stream registration outputs: `verifier.run`'s `value_outputs`, `_earlier` adding the record each output names, and the copies' 11th element for one stage and the two-stage interior.
+
+**Do:**
+1. **Rebuild #7780 on `checked`** (branch off origin/checked, e.g. `cursor/proofs-boundary-tests-<hex>`). Keep only what checked lacks: `test_service_outputs.py`'s three stream-level cases (adapted to `value_outputs`) and the README line. Run sampled_proofs remotely, open it as a new PR superseding #7780, and mark it. I'll post the land ask and eject #7780.
+2. **Your follows-on-the-verifier branch:** rebase it onto checked's #7640 shape, not #7780's. Check #7640 first: does it already move `window_advice.follows`? If so, say so and stop.
+3. A smell for your note: we built a feature `checked` already had. Before starting a piece, `git log origin/checked -S'<symbol>'` for the functions you're adding.
