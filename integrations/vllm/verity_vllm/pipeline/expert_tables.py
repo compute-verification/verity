@@ -20,6 +20,7 @@ import os
 import re
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
+from contextlib import nullcontext
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -30,11 +31,15 @@ from verity_vllm.check import weights_of_record as WR
 from verity_vllm.config import UsageError, option
 from verity_vllm.pipeline.expert_rows import table_param, table_words
 
+__all__ = ["FORMAT", "TABLES_NONCE", "committer", "entries", "nonces", "of_request", "program", "register", "tables_of"]
+
 FORMAT = "verity-vllm/expert-tables/v1"
-#: the salt nonce of a rank's first table under the committer's key, each next table the next, a rank's 2^32 apart
-#: (`nonces`): above every weight parameter's and the state's (`program.predict.window_weights.WEIGHTS_NONCE` and on)
+#: the salt nonces of the tables under the committer's key start here, a rank's 2^32 apart (`nonces`): above every weight
+#: parameter's and the state's (`program.predict.window_weights.WEIGHTS_NONCE` and on)
 TABLES_NONCE = 3 << 61
-LAYER_RE = re.compile(r"\.layers\.(\d+)\.")
+LAYER_RE = re.compile(r"(?:^|\.)layers\.(\d+)\.")
+PARAM_RE = re.compile(r"^weights/(.+)@\d+/b(\d+)/table$")
+KINDS = {("w13", "weight"): 0, ("w13", "weight_scale_inv"): 1, ("w2", "weight"): 2, ("w2", "weight_scale_inv"): 3}
 
 
 def program(repo: str, revision: str, world: int, rank: int, prefix: str) -> str:
@@ -69,9 +74,20 @@ def tables_of(fields: Sequence[tuple[str, Sequence[int], int]], blocks: Mapping[
 
 
 def nonces(params: Sequence[str], rank: int) -> dict[str, int]:
-    """Each table's salt nonce under the committer's key: `TABLES_NONCE` plus the rank's 2^32 plus its place among ``params``
-    sorted, so no two tables, ranks or weights take one salt."""
-    return {p: TABLES_NONCE + (int(rank) << 32) + i for i, p in enumerate(sorted(params))}
+    """Each table's salt nonce under the committer's key: `TABLES_NONCE` plus the rank's 2^32, its layer's 2^20, its projection's
+    weight or scales' 2^18 (`KINDS`) and its block.  A table's nonce is its own whatever is registered beside it, so no two tables,
+    ranks or weights take one salt, and a registration of some layers holds the whole registration's entries for them."""
+    out: dict[str, int] = {}
+    for p in params:
+        m = PARAM_RE.match(p)
+        e, L = (WR.EXPERTS_RE.match(m.group(1)), LAYER_RE.search(m.group(1))) if m else (None, None)
+        kind = KINDS.get((e.group(3), e.group(4))) if e else None
+        if m is None or L is None or kind is None or int(L.group(1)) >> 12 or int(m.group(2)) >> 18:
+            raise ValueError(f"{p}: not a table of a layer's expert weights or scales (layer below 2^12, block below 2^18)")
+        out[p] = TABLES_NONCE + (int(rank) << 32) + (int(L.group(1)) << 20) + (kind << 18) + int(m.group(2))
+    if len(set(out.values())) != len(out):
+        raise ValueError("two registered tables of one layer, projection and block")
+    return out
 
 
 def committer(doc: Mapping[str, Any], key: bytes) -> dict[str, Any]:
@@ -106,23 +122,30 @@ def _prefix(prog: dict[str, Any], ck: Any) -> str:
     return max(cands, key=lambda p: (sum(1 for f, _s, _b in fields if ck.has(WR.strip_prefix(f, p))), p == named, -len(p)))
 
 
-def _commit(job: tuple[dict[str, Any], dict[str, Any], str, list[tuple[str, list[int], int]], dict[str, list], str, bytes,
-                       dict[str, int]]) -> dict[str, dict[str, Any]]:
-    """One worker's tables: its fields composed as `weights_of_record` composes them for the rank, each table committed."""
+def entries(digest: str, words: np.ndarray, shape: Sequence[int], tables: Sequence[tuple[int, str, str, int]], key: bytes,
+            nonce: Mapping[str, int]) -> dict[str, dict[str, Any]]:
+    """The registered entries of one field's ``tables`` (`tables_of`), its words ``words`` of ``shape`` as composed for the rank,
+    each table committed at the rank's program ``digest`` and its ``nonce`` under ``key``."""
     from verity.core.protocols.sampled_proofs.one_stage import registered as G
     from verity_vllm.protocols.pouw.h1 import registered as H1R
 
+    E, N, K = (int(x) for x in shape)
+    return {param: H1R.commit(digest, param, table_words(words, what, E, N, K, 1, n, b), key, nonce[param], schema=G.SCHEMA_SEG).entry()
+            for b, param, what, n in tables}
+
+
+def _commit(job: tuple[dict[str, Any], dict[str, Any], str, list[tuple[str, list[int], int]], dict[str, list], str, bytes,
+                       dict[str, int]]) -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """One worker's tables: its fields composed as `weights_of_record` composes them for the rank, each table committed; and why
+    each field it left unresolved was."""
     prog, ckargs, prefix, fields, tables, digest, key, nonce = job
-    shapes, out = {f: [int(x) for x in s] for f, s, _b in fields}, {}
+    shapes, out = {f: s for f, s, _b in fields}, {}
 
     def on_field(label: str, words: np.ndarray) -> None:
-        E, N, K = shapes[label]
-        for b, param, what, n in tables[label]:
-            rows = table_words(words, what, E, N, K, 1, n, b)
-            out[param] = H1R.commit(digest, param, rows, key, nonce[param], schema=G.SCHEMA_SEG).entry()
+        out.update(entries(digest, words, shapes[label], tables[label], key, nonce))
 
-    WR.weights_of_record(prog, WR.CheckpointIndex(**ckargs), prefix=prefix, fields=fields, on_field=on_field)
-    return out
+    rec = WR.weights_of_record(prog, WR.CheckpointIndex(**ckargs), prefix=prefix, fields=fields, on_field=on_field)
+    return out, [f"{f['field']}: {f.get('why')}" for f in rec["fields"] if not f.get("digest")]
 
 
 def register(program_dir: str, checkpoint_dir: str, key: bytes, blocks: Mapping[str, int], *, layers: Sequence[int] | None = None,
@@ -160,16 +183,13 @@ def register(program_dir: str, checkpoint_dir: str, key: bytes, blocks: Mapping[
     jobs = [(prog, {"ckpt_dir": checkpoint_dir, **ckargs, "verify_shards": False}, prefix, fs, {f[0]: tables[f[0]] for f in fs}, digest,
              key, nonce) for fs in by_layer.values()]
     values: dict[str, dict[str, Any]] = {}
-    if workers > 1:
-        with ProcessPoolExecutor(workers) as ex:
-            for got in ex.map(_commit, jobs):
-                values |= got
-    else:
-        for j in jobs:
-            values |= _commit(j)
+    why: list[str] = []
+    with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as ex:
+        for got, unresolved in (ex.map if ex else map)(_commit, jobs):
+            values, why = values | got, why + unresolved
     if missing := sorted(set(nonce) - set(values)):
-        raise ValueError(f"{len(missing)} tables not composed from the checkpoint (weights_of_record left their fields unresolved): "
-                         f"{missing[:3]}")
+        raise ValueError(f"{len(missing)} tables not composed from the checkpoint, e.g. {missing[0]}; weights_of_record left "
+                         f"{len(why)} fields unresolved: {why[:2]}")
     return {"format": FORMAT, "program": digest, "repo": repo, "revision": rev, "world": world, "rank": rank, "prefix": prefix,
             "blocks": dict(sorted(blocks.items())), "values": dict(sorted(values.items()))}
 
