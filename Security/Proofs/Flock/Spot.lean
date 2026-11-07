@@ -23,6 +23,8 @@ The layers and their interfaces are `Claims.SpotFlock`'s. Here they are at the d
 * **The deployed guarantees** (`SpotFlock.ks`, `ksReg`, `ksCount`, `bits`, `zk`, `ksTwo`, `exfilTwo`): each L2's theorem
   at L1's export and L3's, in one line. `Claims.SpotFlock.composes` and `composesTwo` are the same composition at any
   proof system and compiled verifier.
+* **Knowledge soundness at Flock's own relation** (`SpotFlock.ksOfFlock`, `ksTwoOfFlock`): the same record at
+  `Arg.ofFlock D`, whose knowledge soundness is proved, so the KS side reads no refusal outside `arg p`'s relation.
 -/
 
 @[expose] public section
