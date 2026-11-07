@@ -29,8 +29,11 @@ ports 0 / 1) and its cache row's key and scale (`DsaIndexerKRow_v1` ports 0 / 1)
 body exchange, `call_boundaries` identities `<layer>.self_attn/<fx node>` (`CALL_TAPS`): the sparse MLA of a layer (SparseMlaSplit_v1 /
 SparseMla_v1 per query row), which `forward_mqa` returns and the W_UV bmm reads (the `attn` tap), and the W_UK_T absorb's product the
 sparse MLA reads (`q_nope_absorb`).  The source claims those identities (`claims`, one of `call_boundary_source.CLAIMS`), and each
-step's tensor of such a tap is held to the rows and width of the identity it binds (a collector error otherwise).  Nothing more is
-committed.
+step's tensor of such a tap is held to the rows and width of the identity it binds (a collector error otherwise).
+
+The rank's manifest may require `run` values of an indexer layer's rows past INDEX_TOPK (`run_values`): their rows of
+`topk_indices_buffer` are copied after `_sparse_indexer_and_attn` returns and committed as their Waksman settings at the step's
+end, under the manifest's names (`commit.committer.run_values`; `own_names`, `targets_at`).  Nothing more is committed.
 """
 from __future__ import annotations
 
@@ -43,6 +46,7 @@ import torch
 
 from verity_vllm.acquire.sources import call_boundary_source as CB
 from verity_vllm.commit import capture_map as CM
+from verity_vllm.commit.committer.run_values import RunValues
 from verity_vllm.query.manifest.bind import Port
 from verity_vllm.engine.hooks import Hooks
 
@@ -161,6 +165,8 @@ class AttentionSource:
         for r in identities:
             if (tl := call_tap(r)) is not None:
                 self.boundaries.setdefault((int(r.get("engine_step", r.get("step"))), *tl), []).append(r)
+        self.run = RunValues(identities, {CM.at_layer(routes.site["module"], i): i for i in self.layers})
+        self.own_names = self.run.names
         self._copies: list[Any] = []
         self._hooks = Hooks()
         self._pending: tuple[Any, Mapping[str, Any]] | None = None
@@ -187,11 +193,24 @@ class AttentionSource:
     def on_step_begin(self) -> None:
         self._pending, self._active = None, None
         self._copies = []
+        self.run.begin_step()
+
+    def on_step_end(self, job: Any) -> None:
+        def stage(name: str, t: Any) -> None:
+            self._copies.append(t)
+            self.c._acquire(name, t, job)
+            self.stats["run_values"] += 1
+
+        self.c.errors.extend(self.run.commit(stage))
+
+    def targets_at(self, engine_step: int) -> dict[str, int]:
+        return self.run.targets_at(engine_step)
 
     def begin_run(self) -> None:
         self.stats = {"layers": len(self.layers), "on_target": self.on_target, "calls": 0, "bound": 0, "unpaired": 0, "layout_refused": 0,
                       "mha_unbound": 0, "by_tap": {}, "copied_by_tap": {},
-                      "call_boundaries": sum(len(v) for v in self.boundaries.values()), "call_boundaries_held": 0}
+                      "call_boundaries": sum(len(v) for v in self.boundaries.values()), "call_boundaries_held": 0,
+                      **({"run_values": 0} if self.run.names else {})}
 
     def _hold_boundary(self, tid: str, layer: int, t: Any, job: Any) -> None:
         """The tensor of `CALL_TAPS` tap `tid` of `layer` at the job's step, held to the step's call boundaries of that layer the tap
@@ -298,6 +317,7 @@ class AttentionSource:
                     if layer in me.names.get(TOPK, {}):
                         me._bind(TOPK, layer, mod.topk_indices_buffer[: int(a["q_c"].shape[0]), : int(me.width[TOPK])], job)
                         me._flush(TOPK)
+                    me.run.take(int(job.step), layer, a.get("positions"), getattr(mod, "topk_indices_buffer", None), int(a["q_c"].shape[0]))
                 return out
             return attend
         return make

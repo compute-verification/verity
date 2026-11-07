@@ -29,6 +29,9 @@ from verity_vllm.acquire.sources import route_source as RS
 from verity_vllm.commit import binding as B
 from verity_vllm.query.manifest.bind import Binder, source_ports
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
+from verity_vllm.program.predict import dsa as D
+from verity_vllm.query.manifest.format import RUN_FAMILY
+from verity.ml.definitions.registry.dsa_topk import waksman_switches
 
 NORM_ROPE = G.fused_norm_rope
 OTHERS = ("module_hook", "sampler", "allreduce_norm")
@@ -388,6 +391,40 @@ def test_a_step_batching_requests_at_different_steps_of_their_own_holds_and_maps
     pop = [B.identity(PD, r["request_id"], r["engine_step"], 0, r["op_path"], "out", *r["element_range"], 3) for r in rows]
     cov = B.coverage_check(pop, bmap)
     assert (cov["expected_n"], cov["bound_n"], cov["ambiguous_n"], cov["missing"]) == (2, 2, 0, [])
+
+
+def run_row(step: int, layer: int, pos: int, topk: int) -> dict[str, Any]:
+    """A `run_values` row of layer `layer`'s row at position `pos` (its top-k order of `topk` of its pos + 1 keys)."""
+    op, member = D.run_field(layer, pos).rsplit("/", 1)
+    return {"family": RUN_FAMILY, "request_id": "r0", "step": step, "engine_step": step, "invocation": 0, "rank": 3, "op_path": op,
+            "output_member": member, "element_range": [0, waksman_switches(pos + 1, topk)], "dtype": "u8",
+            "attention_module": f"model.layers.{layer}.self_attn", "statics": {"N": pos + 1, "TOPK": topk}}
+
+
+def test_the_run_values_the_manifest_requires_are_the_layers_top_k_rows_at_their_positions():
+    """At the decode (position 3), the mixed step's last row (position 7, its decode row through MQA) and the sparse prefill's last
+    row (position 10), of two indexer layers: each field is committed at its step's end as the Program's `run` field holds the
+    order its layer wrote into the shared buffer at that row (the stand-in writes `(j + layer) % (P + 1)`, a valid order of the first
+    `topk` slots), and nothing else is."""
+    keep = sorted(INDEXER)[:2]
+    want = [(1, keep[0], 3, 2), (2, keep[1], 7, 3), (3, keep[0], 10, 4), (3, keep[1], 10, 4)]
+    r = AttnRun(True, tuple(run_row(*w) for w in want))
+    try:
+        for k, (md, _routes, _phase) in enumerate(STEPS):
+            r.att.on_step_begin()
+            r.step(k, md, skip=tuple(i for i in range(L) if i not in keep))
+            r.att.on_step_end(types.SimpleNamespace(step=k))
+    finally:
+        r.close()
+    assert r.com.errors == [] and r.att.stats["run_values"] == len(want)
+    assert r.att.own_names == {D.run_field(layer, pos) for _s, layer, pos, _k in want}
+    assert r.att.targets_at(3) == {D.run_field(keep[0], 10): 1, D.run_field(keep[1], 10): 1} and r.att.targets_at(0) == {}
+    for step, layer, pos, topk in want:
+        got = [t for n, t in r.rec[step] if n == D.run_field(layer, pos)]
+        order = r.seen[step][layer]["topk"][-1, :topk].tolist()
+        layout = {"fields": [{"name": D.run_field(layer, pos), "offset": 0, "leaves": waksman_switches(pos + 1, topk)}]}
+        assert len(got) == 1 and got[0].dtype == torch.uint8 and got[0].tolist() == D.run_bits(layout, {(layer, pos): order}, topk)
+    assert sum(n in r.att.own_names for k in r.rec for n in r.names(k)) == len(want)
 
 
 def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step():
