@@ -16,9 +16,9 @@ meta import Lean.Meta.Tactic.NormCast
 /-!
 # Exfiltration before detection: from the draw and the population to the probability of theft
 
-* `indepDraw_escapes`, `indepDraw_isDist`: the draw that catches unit `u` independently with probability `a u` lets the
+* `indepSample_acceptCoins`, `indepSample_isDist`: the draw that catches unit `u` independently with probability `a u` lets the
   wrong set `B` escape with probability exactly `Π_{u ∈ B} (1 - a u)`.
-* `pressure_of_draw`, `pressure_indepDraw`: **detection pressure from the draw and the cone.** A window whose leak is at
+* `pressure_of_sample`, `pressure_indepSample`: **detection pressure from the draw and the cone.** A window whose leak is at
   most its faulty proof blocks' cone egress `Σ_{u ∈ B} E(u)`, under a draw that catches `u` with probability
   `a u ≥ κ E(u)`, meets `DetectionPressure κ`.
 * `Dataflow.card_changed_le`: **a checked population is cone-local.** The egress slots where an assignment differs from
@@ -46,13 +46,13 @@ open Finset
 
 /-- **The independent draw's acceptance probability**: the wrong set `B` escapes with probability
 `Π_{u ∈ B} (1 - a u)`. -/
-theorem indepDraw_escapes {U : Type} [Fintype U] [DecidableEq U] (a : U → ℝ) (B : Finset U) :
-    ∑ c ∈ escapes B, indepDraw a c = ∏ u ∈ B, (1 - a u) := by
+theorem indepSample_acceptCoins {U : Type} [Fintype U] [DecidableEq U] (a : U → ℝ) (B : Finset U) :
+    ∑ c ∈ acceptCoins B, indepSample a c = ∏ u ∈ B, (1 - a u) := by
   let f : U → Bool → ℝ := fun u b => if u ∈ B ∧ b = true then 0 else if b then a u else 1 - a u
-  have hpt : ∀ c : U → Bool, (if ∀ u ∈ B, c u = false then indepDraw a c else 0) = ∏ u, f u (c u) := by
+  have hpt : ∀ c : U → Bool, (if ∀ u ∈ B, c u = false then indepSample a c else 0) = ∏ u, f u (c u) := by
     intro c
     by_cases hc : ∀ u ∈ B, c u = false
-    · rw [ite_eq_left hc, indepDraw]
+    · rw [ite_eq_left hc, indepSample]
       refine prod_congr rfl fun u _ => ?_
       have : ¬ (u ∈ B ∧ c u = true) := fun ⟨hu, hcu⟩ => by simp [hc u hu] at hcu
       simp only [f, this, ite_false]
@@ -63,28 +63,28 @@ theorem indepDraw_escapes {U : Type} [Fintype U] [DecidableEq U] (a : U → ℝ)
   have hsum : ∀ u, ∑ b, f u b = if u ∈ B then 1 - a u else 1 := by
     intro u
     by_cases hu : u ∈ B <;> simp [f, hu]
-  rw [escapes, sum_filter, sum_congr rfl fun c _ => hpt c, ← Fintype.prod_sum, prod_congr rfl fun u _ => hsum u,
+  rw [acceptCoins, sum_filter, sum_congr rfl fun c _ => hpt c, ← Fintype.prod_sum, prod_congr rfl fun u _ => hsum u,
     prod_ite_mem, univ_inter]
 
 /-- The independent draw is a distribution when every catch probability is in `[0, 1]`. -/
-theorem indepDraw_isDist {U : Type} [Fintype U] [DecidableEq U] {a : U → ℝ} (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) :
-    IsDist (indepDraw a) := by
+theorem indepSample_isDist {U : Type} [Fintype U] [DecidableEq U] {a : U → ℝ} (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) :
+    IsDist (indepSample a) := by
   refine ⟨fun c => prod_nonneg fun u _ => ?_, ?_⟩
   · split_ifs
     · exact (ha u).1
     · linarith [(ha u).2]
-  · have h := indepDraw_escapes a ∅
-    rwa [prod_empty, escapes, filter_true_of_mem fun c _ u hu => absurd hu (notMem_empty u)] at h
+  · have h := indepSample_acceptCoins a ∅
+    rwa [prod_empty, acceptCoins, filter_true_of_mem fun c _ u hu => absurd hu (notMem_empty u)] at h
 
 /-- **Detection pressure from the draw and the cone**: if each window's leak is at most its faulty proof blocks' cone
 egress `Σ_{u ∈ B} E(u)`, and the window escapes with probability at most `Π_{u ∈ B} (1 - a u)` for catch probabilities
 `a u ≥ κ E(u)`, the strategy meets detection pressure `κ`. -/
-theorem pressure_of_draw {Ω U : Type} [Fintype Ω] {μ : Ω → ℝ} {κ : ℝ} (hκ : 0 ≤ κ) (A : Strategy Ω)
+theorem pressure_of_sample {Ω U : Type} [Fintype Ω] {μ : Ω → ℝ} {κ : ℝ} (hκ : 0 ≤ κ) (A : Strategy Ω)
     (B : List Ω → Finset U) (E a : U → ℝ) (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) (hκE : ∀ u, κ * E u ≤ a u)
     (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u) (hesc : ∀ h, ∑ c ∈ A.esc h, μ c ≤ ∏ u ∈ B h, (1 - a u)) :
     DetectionPressure μ κ A := by
   intro h
-  refine (hesc h).trans ((escape_le_exp (B h) a fun u _ => ha u).trans (Real.exp_le_exp.2 ?_))
+  refine (hesc h).trans ((acceptProb_le_exp (B h) a fun u _ => ha u).trans (Real.exp_le_exp.2 ?_))
   have h1 : κ * ∑ u ∈ B h, E u ≤ ∑ u ∈ B h, a u := by
     rw [mul_sum]
     exact sum_le_sum fun u _ => hκE u
@@ -94,11 +94,11 @@ theorem pressure_of_draw {Ω U : Type} [Fintype Ω] {μ : Ω → ℝ} {κ : ℝ}
 /-- **The independent draw gives detection pressure**: a strategy whose window escapes exactly when its wrong set `B h`
 does, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` under the draw catching `u` with probability
 `a u ≥ κ E(u)`. -/
-theorem pressure_indepDraw {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E a : U → ℝ)
+theorem pressure_indepSample {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E a : U → ℝ)
     (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) (hκE : ∀ u, κ * E u ≤ a u) (A : Strategy (U → Bool))
-    (B : List (U → Bool) → Finset U) (hA : ∀ h, A.esc h = escapes (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u) :
-    DetectionPressure (indepDraw a) κ A :=
-  pressure_of_draw hκ A B E a ha hκE hleak fun h => by rw [hA h, indepDraw_escapes]
+    (B : List (U → Bool) → Finset U) (hA : ∀ h, A.esc h = acceptCoins (B h)) (hleak : ∀ h, A.leak h ≤ ∑ u ∈ B h, E u) :
+    DetectionPressure (indepSample a) κ A :=
+  pressure_of_sample hκ A B E a ha hκE hleak fun h => by rw [hA h, indepSample_acceptCoins]
 
 /-! ## Bits to probability -/
 
