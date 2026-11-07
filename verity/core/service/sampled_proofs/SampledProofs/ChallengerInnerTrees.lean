@@ -1,16 +1,16 @@
 /-
-A recursive session's inner coins as the challenger's release log shows it sampled and opened them: `rec_live`'s coin
-server (`verity_flock.rec_live.CoinServer`) on the challenger's coin tree, held to the log as `rec_live.tree_held_reason`
-holds it (`tests/test_challenger_inner_trees.py` holds that to this, the verifier of record).
+A recursive session's inner coins as the challenger's release log shows it sampled and opened them: `rec_live`'s live-coin
+part (`verity_flock.rec_live.CoinServer`) on the challenger's coin tree, held to the log as `rec_live.tree_held_reason`
+holds it (`tests/test_challenger_inner_trees.py` holds that to this, the verifier).
 
-`rec_live`'s coin server opens each round of its session's tree once given what the round answers, which are other bytes
+`rec_live`'s live-coin part opens each round of its session's tree once given what the round answers, which are other bytes
 than the ones `flock-circuit serve` opens a round after (`sessionTreeReason`): the link points, the tree's `session`
 round 0, after `linkAfterRoots` of its record's `link.roots` (`rec_live.link_after`: the SHA-512 of their canonical
 JSON), and each round its record's `rounds` list (`{stream, k, coins, ...}`), its stream's round `k`, after `roundAfter`
 of that entry (`rec_live.round_after`: the SHA-512 of its canonical JSON without its coins).
 
 `innerTreeReason` holds one inner session to the trees the log shows (`coinTreesOf`'s): its `coin_tree` a logged one,
-under its key, nonce, root and spec; its link points and every round its coin server's record (`public.json`,
+under its key, nonce, root and spec; its link points and every round its live-coin part's record (`public.json`,
 `rec/inner-transcript/v1`) lists opened as the record says, after those bytes, the record's coins for it as many as the
 log shows and hashing to its digest; no round read twice; and every opening the log shows of its tree one the record
 reads. `innerTreesReason` holds an audit's inner sessions to them: each session's so, no tree two sessions', and every
@@ -42,7 +42,7 @@ private def hexBytes (j : Json) : V ByteArray :=
   | .str s => formed (Flock.unhex s)
   | _ => throw INNER_RECORD_FORM
 
-/-- `rec_live.link_after`: what the coin server opens the link points after, the SHA-512 of `Commit`'s salted tops as
+/-- `rec_live.link_after`: what the challenger's live-coin part opens the link points after, the SHA-512 of `Commit`'s salted tops as
 its record writes them (`link.roots`: each table's nodes in hex), in canonical JSON. -/
 def linkAfterRoots (roots : Json) : V ByteArray := do
   let .obj kvs := roots | throw INNER_RECORD_FORM
@@ -51,7 +51,7 @@ def linkAfterRoots (roots : Json) : V ByteArray := do
     pure (t, Json.arr (← xs.mapM fun x => do pure (Json.str (Flock.hexOf (← hexBytes x)))))
   pure (Flock.Sha512.hash (← formed (Flock.canon (Json.mkObj rs.toList))).toUTF8)
 
-/-- `rec_live.round_after`: what the coin server opens a round's coins after, the SHA-512 of its record of the round
+/-- `rec_live.round_after`: what the challenger's live-coin part opens a round's coins after, the SHA-512 of its record of the round
 (`rounds`' entry) without its coins, in canonical JSON. -/
 def roundAfter (entry : Json) : V ByteArray := do
   let .obj kvs := entry | throw INNER_RECORD_FORM
@@ -73,7 +73,7 @@ structure InnerRead where
   after : String
   coins : String
 
-/-- What the coin server's record `pub` reads of its session's tree, in order: the link points as the tree's `session`
+/-- What the challenger's live-coin part's record `pub` reads of its session's tree, in order: the link points as the tree's `session`
 round 0, after `linkAfterRoots` of `link.roots`, then each entry of `rounds`, its stream's round `k`, after `roundAfter`
 of the entry. -/
 def innerReads (pub : Json) : V (Array InnerRead) := do
@@ -87,8 +87,8 @@ def innerReads (pub : Json) : V (Array InnerRead) := do
     pure { stream := s, round := k, n, after := Flock.hexOf (← roundAfter r), coins : InnerRead }
   pure (#[{ stream := TREE_SESSION, round := 0, n, after := Flock.hexOf after, coins }] ++ rs)
 
-/-- `tree_held_reason`'s one session (module docstring): why `tree`, an inner session's `coin_tree`, and `pub`, its coin
-server's record, don't show its coins to be ones the release log shows the challenger released (`trees`,
+/-- `tree_held_reason`'s one session (module docstring): why `tree`, an inner session's `coin_tree`, and `pub`, its live-coin
+part's record, don't show its coins to be ones the release log shows the challenger released (`trees`,
 `coinTreesOf`'s); `none` when they do. -/
 def innerTreeReason (trees : Array LoggedTree) (tree pub : Json) : Option String := Id.run do
   let some t := trees.find? (fun (t : LoggedTree) => getD tree "root" == Json.str t.root) | return some NO_TREE
@@ -110,8 +110,8 @@ def innerTreeReason (trees : Array LoggedTree) (tree pub : Json) : Option String
     return some s!"the challenger's release log shows {t.opened.size} openings of its tree and its record {reads.size}"
   return none
 
-/-- `tree_held_reason` (module docstring): why the inner sessions `sessions`, each its name, its `coin_tree` and its coin
-server's record, don't show their coins to be the ones the release log shows sampled and opened (`trees`), one tree a
+/-- `tree_held_reason` (module docstring): why the inner sessions `sessions`, each its name, its `coin_tree` and its live-coin
+part's record, don't show their coins to be the ones the release log shows sampled and opened (`trees`), one tree a
 session; `none` when they do. In order, each session's coins its tree's (`innerTreeReason`), a tree no earlier
 session's (`SHARED_TREE`); then every tree a session's (`UNUSED_TREE`). -/
 def innerTreesReason (trees : Array LoggedTree) (sessions : Array (String × Json × Json)) : Option String := Id.run do

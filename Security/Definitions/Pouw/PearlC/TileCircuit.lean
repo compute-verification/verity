@@ -20,7 +20,7 @@ it reads in order, and its value from theirs. No evaluator for IR Programs: the 
     total. The last promotion is `C̃_ij` (`cGate`);
   * **U**: four `HopperBF16WgmmaDot16_v1` steps (`peelF`, `PeelExact.k16Step`) from `C̃_ij` over the slices of `P_A,i`
     and `P_B,j`. The last is `U_ij` (`uGate`).
-* **One proof unit** (`Spec.part`) holds every computed gate.
+* **One proof block** (`Spec.part`) holds every computed gate.
 
 Which gate reads which, the widths and the outputs are checked against the template's `CallGraph`, with the checked
 templates' descriptor digests pinned, by `tests/test_circuit_tile_lean.py`. The order of a gate's reads is not in the
@@ -81,7 +81,7 @@ variable (S : Spec)
     · rfl
   outputs := Finset.univ.filter fun g => g.val ∈ S.outs
 
-/-- One proof unit holding every computed gate. -/
+/-- One proof block holding every computed gate. -/
 def part : Verity.Partition S.toCircuit 1 where
   unit g := if (S.gate g).input then none else some 0
   input_iff g := by

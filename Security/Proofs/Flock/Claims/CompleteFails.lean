@@ -194,7 +194,7 @@ theorem Claims.Flock.Complete_fails :
     ⟨inStmt, rfl, relS_inStmt _⟩ (by show (0 : ℝ) < 1; norm_num)⟩
 
 /-- **The sampling `Complete` can fail**: at `zeroHash`, the record `rejSD`'s reference prover is not accepted at the
-empty message, in scope with no faulty unit, at its error `δ_c = 0`. -/
+empty message, in scope with no incorrect proof block, at its error `δ_c = 0`. -/
 theorem Claims.Sampling.Complete_fails :
     ∃ (H : Msg → Msg) (D : Claims.Sampling.Deploy Unit Unit Unit), ¬ Claims.Sampling.Complete H D :=
   ⟨zeroHash, rejSD, not_complete_rejV out64_zeroHash rejSD.P (x := []) (w := ⟨[]⟩)

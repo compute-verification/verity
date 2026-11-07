@@ -46,7 +46,7 @@ accept. Where the statement reads (`readX`), and so wherever it has a V* part (`
   reaches session 0's first round (`reach_sessions`);
 * every later round reads the run's own inner and staging rounds (`innerPairs_reach`), whose last message is the
   staging message that `Stage.ofMsg` reads each part's public file, the inner session's record and V*'s shared rows
-  off, with the coin server's transcript of the inner rounds before it (`stage_reads`).
+  off, with the challenger's live-coin part's transcript of the inner rounds before it (`stage_reads`).
 
 The run lemmas under them hold for any verifier: a round before a run's last is answered by a message
 (`stepWith_mid`), a run whose round is answered by a message runs on or has used its rounds up (`stepWith_full`), and
@@ -264,7 +264,7 @@ theorem innerPairs_reach {xr : XR} (hx : readX x = some xr) {m : ℕ} (hk : IV.k
 
 /-- **F1: the staging round as `Stage.ofMsg` reads it.** Where the statement has a V* part, the run's staging round
 (round `k_I`) is its message `a`, answered by its coin's bytes, and `Stage.ofMsg tr` reads each part's public file,
-the inner session's record and V*'s shared rows off `a`, and the coin server's transcript `tr` of the inner rounds
+the inner session's record and V*'s shared rows off `a`, and the challenger's live-coin part's transcript `tr` of the inner rounds
 before it. -/
 theorem stage_reads (tr : Msg → List (Msg × Out) → ByteArray) (hn : 0 < nS x) :
     ∃ a, (run H P (V IV st) x ω r).msgs[IV.k (xIOf x)]? = some (a, .msg (coinSeq r (IV.k (xIOf x))).bytes) ∧

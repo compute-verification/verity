@@ -1,6 +1,6 @@
-"""served.py extract|prepare|summarize: one unit a served H1 window's own draw selected (`h1_prove/served.py`, core's
-`credit.drawn` on the window's signed draw coin), proved as its 32 lanes (`h1zy.PouwH1LaneZy_v1`, option A, run.py's lane
-statement) from the window's trace, each lane one C-Flock --zk statement whose rows open the window's own
+"""served.py extract|prepare|summarize: one unit a served H1 window's own sample selected (`h1_prove/served.py`, core's
+`credit.drawn` on the window's signed sampling coin), proved as its 32 lanes (`h1zy.PouwH1LaneZy_v1`, option A, run.py's lane
+statement) from the window's trace, each lane one Flock --zk statement whose rows open the window's own
 registered tables at the rows the verifier reads them.
 
 * **extract** (the H1 venv: it unpickles the prover's saved window, whose classes import torch). From the window's record
@@ -217,7 +217,7 @@ def extract(a) -> None:
 def smoke(a) -> None:
     """A stand-in window at ``--k`` in `extract`'s form: its A, B and z/y tables of random rows, committed as a served
     window's (the record's tables under a random window root and Program digest, B under none), unit 3 of a 64 × 64 call
-    drawn: the harness's own check, never a served result."""
+    sampled: the harness's own check, never a served result."""
     rng = np.random.default_rng(a.seed)
     k, rb, cb, t, u = a.k, 1, 1, 3, 7
     root, program = os.urandom(64).hex(), os.urandom(64).hex()
@@ -528,7 +528,7 @@ SHARED = ("k", "unit", "window", "draw_root", "roots", "lane_program", "registra
 
 def merge(a) -> int:
     """The summaries of jobs that each proved a share of one unit's lanes (H1L_LANES), as one: every share read the same
-    window, draw, unit, registration and produced tree, each lane and negative was checked once, every lane accepted and
+    window, sample, unit, registration and produced tree, each lane and negative was checked once, every lane accepted and
     both negatives were refused."""
     parts = [(p, json.loads(Path(p).read_text())) for p in a.summaries]
     head, problems, checks, opened = parts[0][1], [], {}, {}

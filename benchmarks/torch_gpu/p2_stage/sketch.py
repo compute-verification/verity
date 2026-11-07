@@ -1,11 +1,11 @@
-"""PoUB's receipts beside the staging decode: each pass's sketch of every unit of `C*` as the decode
+"""PoUB's receipts beside the store's load: each pass's sketch of every unit of `C*` as the decode
 reads it, the units' receipts and the pass's root, bit for bit `remote_bandwidth.p2`'s (the interface is `PROTOCOL.md`
 §11 of `verity/core/protocols/remote_bandwidth`; the fixture is `benchmarks/pous/p2_v1/serve.py fixture`). ::
 
     units = plan_units(layout.tensors)         # the units the store's tensors lie in: the pass's Plan.whole
     tree = Tree(units, device)                 # the receipt tree's row and leaf tables over one y buffer, built once
     P = Pass(seed, units, device)              # pass i's signs S_i on the device (16 rows over a unit's 8,224 bytes)
-    store.sketch = P                           # stage.Store.decode_rows sketches each chunk's units before its decode
+    store.sketch = P                           # stage.EncodedRows.decode_rows sketches each chunk's units before its decode
     ...                                        # the step's decode
     root = P.finish(tree, salts)               # y in unit order (P.y), the root; P.start_ns, P.end_ns
 

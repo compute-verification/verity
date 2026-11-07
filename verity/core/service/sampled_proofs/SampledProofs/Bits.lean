@@ -14,7 +14,7 @@ meta import Std.Data.HashMap
 /-!
 # A sampled statement's bits
 
-The one layout of a sampled statement's gates, as code: the Boolean-profile program a registered C-Flock circuit file
+The one layout of a sampled statement's gates, as code: the Boolean-profile program a registered Flock circuit file
 describes, where each of its gates sits, and each unit's gates and inputs. The sampled leg's bridge,
 `Properties.NetworkScan.Flattens` and NetworkCheck read these definitions and hold no second copy of them.
 

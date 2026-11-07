@@ -94,7 +94,7 @@ JSON_MUTATIONS = [
 
 def records(signer=None, malformed: bool = True) -> st.SearchStrategy:
     """Records of honest sessions, of sessions under one edit, and (with `malformed`) under one JSON edit, each under a
-    drawn mapping."""
+    sampled mapping."""
     mutations = [M._printable_scheme if m is M._scheme else m for m in M.MUTATIONS]
     schemes = st.sampled_from(SCHEME_SETS)
     honest = st.builds(record, M.sessions(signer), schemes)
@@ -109,7 +109,7 @@ def records(signer=None, malformed: bool = True) -> st.SearchStrategy:
 
 @pytest.mark.slow
 def test_verdict_agrees(server):
-    """The whole verdict on drawn records under the test signers' keys: accepted ones, every rejection reason, refusals."""
+    """The whole verdict on sampled records under the test signers' keys: accepted ones, every rejection reason, refusals."""
     stats = D.run(port(records()), examples=500, server=server)
     assert stats.outputs > 250 and stats.rejects > 20, stats
 
