@@ -94,6 +94,7 @@ class Capture:
         self.layers = sorted(x for v in c0["layers"].values() for x in v)
         self.whole = all(self.commit[r].get("kept") == "every recorded tensor" for r in self.ranks)
         self.every = False
+        self.per_call = 0
         self._params: dict = {}
 
     def tensor(self, r: int, ref: dict) -> np.ndarray:
@@ -134,6 +135,13 @@ class Capture:
         """Whether a call's values are here: an opened layer's, or (`every`, a step kept whole) any layer's call that reads
         no weights past the kept small parameters."""
         return e.get("layer") in self.layers or (self.every and not weights)
+
+    def cells(self, label: str, call: tuple, *dims: int):
+        """A call's instance indices over ``dims``: every one, or with `per_call` set (``--every-call``) that many drawn by
+        the coins, so a gate over every call never enumerates a call's rows times its columns."""
+        n = int(np.prod(dims, dtype=np.int64)) if dims else 1
+        for i in (draw(self.coins, f"cells/{label}/{call}", n, self.per_call) if self.per_call else range(n)):
+            yield tuple(int(x) for x in np.unravel_index(i, dims))
 
     def tokens(self, r: int) -> int:
         return sum(self.meta[r]["scheduled"].values())
@@ -190,13 +198,12 @@ def flashinfer_linear_instances(cap: Capture):
                 continue
             N = a["weight"]["shape"][0]
             block = f"FlashInferFp8Linear_v1{{K={K},N=1}}"
-            for t in range(cap.real_rows(r, M)):
-                for col in range(N):
-                    yield (f"FlashInferFp8Linear_K{K}", block, (r, e["seq"], t, col),
-                           lambda r=r, e=e, t=t, col=col: [cap.tensor(r, e["in"]["input"])[t],
-                                                           cap.tensor(r, e["in"]["weight"])[col:col + 1],
-                                                           cap.tensor(r, e["in"]["weight_scale"])[col // 128:col // 128 + 1]],
-                           lambda r=r, e=e, t=t, col=col: [cap.tensor(r, e["out"]["ret0"])[t, col:col + 1]])
+            for t, col in cap.cells("FlashInferFp8Linear", (r, e["seq"]), cap.real_rows(r, M), N):
+                yield (f"FlashInferFp8Linear_K{K}", block, (r, e["seq"], t, col),
+                       lambda r=r, e=e, t=t, col=col: [cap.tensor(r, e["in"]["input"])[t],
+                                                       cap.tensor(r, e["in"]["weight"])[col:col + 1],
+                                                       cap.tensor(r, e["in"]["weight_scale"])[col // 128:col // 128 + 1]],
+                       lambda r=r, e=e, t=t, col=col: [cap.tensor(r, e["out"]["ret0"])[t, col:col + 1]])
 
 
 def moe_w2_instances(cap: Capture, profile):
@@ -219,11 +226,10 @@ def moe_w2_instances(cap: Capture, profile):
             topk = a["topk_weights"]["shape"][1]
             dot = re.search(r"DOT=(\w+?)Dot", spec.id)
             label = f"MoeExpertFp8GemmW_K{K}_{'swap' if swap else 'noswap'}_{dot[1] if dot else 'dot'}"
-            for j in range(cap.real_rows(r, S)):
-                for col in range(N):
-                    yield (label, spec, (r, e["seq"], j, col),
-                           lambda r=r, e=e, j=j, col=col: moe_args(cap, r, e, j, col),
-                           lambda r=r, e=e, j=j, col=col, topk=topk: [cap.tensor(r, e["out"]["C"]).reshape(-1, topk, N)[j // topk, j % topk, col:col + 1]])
+            for j, col in cap.cells("MoeExpertFp8GemmW", (r, e["seq"]), cap.real_rows(r, S), N):
+                yield (label, spec, (r, e["seq"], j, col),
+                       lambda r=r, e=e, j=j, col=col: moe_args(cap, r, e, j, col),
+                       lambda r=r, e=e, j=j, col=col, topk=topk: [cap.tensor(r, e["out"]["C"]).reshape(-1, topk, N)[j // topk, j % topk, col:col + 1]])
 
 
 def moe_args(cap: Capture, r: int, e: dict, j: int, col: int) -> list:
@@ -376,7 +382,7 @@ def mla_combine_instances(cap: Capture):
             ns = len(SP.split_blocks(valid[t], nss[t]))
             if ns < 2:
                 continue
-            for h in range(H):
+            for (h,) in cap.cells(f"SparseMlaCombine/{t}", (r, e["seq"]), H):
                 yield (f"SparseMlaCombine_N{ns}", f'SparseMlaCombine_v1{{NSPLIT={ns},DV={DV},INV={{"fn":"Fa3InvSum_v1"}}}}',
                        (r, e["seq"], t, h),
                        lambda r=r, e=e, t=t, h=h, ns=ns: [cap.tensor(r, e["out"]["ret3"])[:ns, h, t],
@@ -399,17 +405,17 @@ def mla_split_part_instances(cap: Capture):
             splits = SP.split_blocks(valid[t], nss[t])
             if len(splits) < 2:
                 continue
-            for s, (b0, b1) in enumerate(splits):
+            for s, h in cap.cells(f"SparseMlaSplitPart/{t}", (r, e["seq"]), len(splits), H):
+                b0, b1 = splits[s]
                 lo, hi = b0 * BN, min(b1 * BN, valid[t])
                 block = (f'SparseMlaSplitPart_v1{{T={hi - lo},DR={DR},DV={DV},BN={BN},DOT={{"fn":"HopperBF16WgmmaDot16_v1"}},'
                          f'INV={{"fn":"Fa3InvSum_v1"}},SCALE={{"f64":"{scale}"}}}}')
-                for h in range(H):
-                    yield (f"SparseMlaSplitPart_T{hi - lo}", block, (r, e["seq"], t, h, s),
-                           lambda r=r, e=e, tap=tap, t=t, h=h, lo=lo, hi=hi: [
-                               cap.tensor(r, tap["in"]["q_v"])[t, h], cap.tensor(r, tap["in"]["q"])[t, h],
-                               cap.tensor(r, tap["in"]["kv_gathered"])[t, lo:hi]],
-                           lambda r=r, e=e, t=t, h=h, s=s: [cap.tensor(r, e["out"]["ret2"])[s, h, t, :],
-                                                            cap.tensor(r, e["out"]["ret3"])[s, h, t:t + 1]])
+                yield (f"SparseMlaSplitPart_T{hi - lo}", block, (r, e["seq"], t, h, s),
+                       lambda r=r, e=e, tap=tap, t=t, h=h, lo=lo, hi=hi: [
+                           cap.tensor(r, tap["in"]["q_v"])[t, h], cap.tensor(r, tap["in"]["q"])[t, h],
+                           cap.tensor(r, tap["in"]["kv_gathered"])[t, lo:hi]],
+                       lambda r=r, e=e, t=t, h=h, s=s: [cap.tensor(r, e["out"]["ret2"])[s, h, t, :],
+                                                        cap.tensor(r, e["out"]["ret3"])[s, h, t:t + 1]])
 
 
 # ---- draw, gate, stage ---------------------------------------------------------------------------------------------------
@@ -546,7 +552,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     cap = Capture(Path(a.capture), a.step)
-    cap.every = bool(a.every_call) and cap.whole
+    cap.every, cap.per_call = bool(a.every_call) and cap.whole, a.every_call
     profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     report: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "coins": cap.coins.hex(),
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {}}
