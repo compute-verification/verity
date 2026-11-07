@@ -1,8 +1,10 @@
 """A vLLM general plugin that records one replayed step's interior, per TP rank, in an engine that serves with CUDA graphs.
 
-    VERITY_SPOT_CAPTURE=DIR VERITY_SPOT_STEPS=s[,s2] [VERITY_SPOT_MLA_TOKENS=8] [VERITY_SPOT_KEEP=all] <a vLLM engine with this plugin registered>
+    python capture.py site SITE --capture DIR --steps s[,s2] [--open dense:1,moe:1] [--mla-tokens 8] [--keep all]
+    PYTHONPATH=SITE <a vLLM engine>
 
-Registered as a ``vllm.general_plugins`` entry point (`site` writes the dist-info), so it loads in every worker. It runs on
+Registered as a ``vllm.general_plugins`` entry point (`site` writes the dist-info, and the capture's settings into
+``SITE/spot_capture.json``, which the plugin reads beside itself), so it loads in every worker. It runs on
 the V2 model runner, vLLM's default at the integration's pin. A step is counted when a worker's ``execute_model`` has
 scheduled tokens and is not a dummy run. At step s (0-based), when the step dispatches to a CUDA graph (FULL, PIECEWISE or
 breakable), the runner's graph call is preceded by one more forward of the same model on the same input buffers, attention
@@ -18,15 +20,15 @@ recorded. A step the engine runs without a graph is recorded as it runs. What is
 * calls no dispatcher sees: each Triton fused-MoE launch (``invoke_fused_moe_triton_kernel``: A, its scales, the expert
   ids, the sorted token ids, the routed weights, the config, and C after the launch), and each sparse MLA kernel call
   (FlashMLA's ``_bf16_flash_mla_kernel``, or FA3's ``flash_attn_varlen_func`` in the FlashAttention sparse backend: the
-  queries, the global top-k rows, the outputs, and the KV rows those indices read for the first
-  ``VERITY_SPOT_MLA_TOKENS`` tokens).
+  queries, the global top-k rows, the outputs, and the KV rows those indices read for the first ``--mla-tokens``
+  tokens).
 
 Then the graph call runs as served, and its hidden states must equal the recorded forward's bit for bit (``check``). The
 extra forward writes the same KV values to the same slots, so the step and every later one are unchanged.
 
 Each recorded tensor is hashed when recorded; its bytes are held in memory until the coins have opened layers, and only the
-opened layers' tensors are written, once each, under ``DIR/rank<r>/blobs/<sha512>`` (``VERITY_SPOT_KEEP=all`` writes every
-one as it is recorded). ``DIR/rank<r>/step<s>/ops.jsonl`` lists
+opened layers' tensors are written, once each, under ``DIR/rank<r>/blobs/<sha512>`` (``--keep all`` writes every one as
+it is recorded). ``DIR/rank<r>/step<s>/ops.jsonl`` lists
 the events in order. ``step<s>/meta.json`` holds the step (tokens, padding, graph mode, the scheduled requests and their
 token counts), the check, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
 ``params.json``, which gives each parameter a recorded op read (its shape, dtype and SHA-512 over its bytes). Every
@@ -52,11 +54,22 @@ SKIP = {"empty", "empty_strided", "empty_like", "as_strided", "view", "_unsafe_v
         "split", "split_with_sizes", "unbind", "chunk", "narrow", "view_as", "resize_", "set_", "record_stream"}
 
 
+#: the capture's settings, which `site` writes beside its copy of this file
+CONFIG = "spot_capture.json"
+
+
+def config() -> dict | None:
+    """`site`'s settings, or None where none sit beside this file: the plugin then leaves the engine as it is."""
+    p = Path(__file__).with_name(CONFIG)
+    return json.loads(p.read_text()) if p.is_file() else None
+
+
 class _State:
-    def __init__(self) -> None:
-        self.dir = Path(os.environ["VERITY_SPOT_CAPTURE"])
-        self.targets = {int(s) for s in os.environ.get("VERITY_SPOT_STEPS", "").split(",") if s.strip()}
-        self.mla_tokens = int(os.environ.get("VERITY_SPOT_MLA_TOKENS", "8"))
+    def __init__(self, cfg: dict) -> None:
+        self.dir = Path(cfg["capture"])
+        self.targets = set(cfg["steps"])
+        self.mla_tokens = int(cfg["mla_tokens"])
+        self.open = dict(cfg["open"])
         self.step = -1
         self.active = False
         self.recording = False
@@ -71,7 +84,7 @@ class _State:
         self.used_params: set[str] = set()
         self.seen: set[str] = set()
         self.pending: dict[str, bytes] = {}
-        self.keep_all = os.environ.get("VERITY_SPOT_KEEP", "opened") == "all"
+        self.keep_all = cfg["keep"] == "all"
         self.events: list[dict] = []
         self.piece = -1
         self.parents: list[int] = []
@@ -93,13 +106,18 @@ S: _State | None = None
 
 def register() -> None:
     global S
-    if not os.environ.get("VERITY_SPOT_CAPTURE") or S is not None:
+    cfg = config()
+    if cfg is None or S is not None:
         return
-    S = _State()
+    S = _State(cfg)
     try:
         _install()
     except Exception:  # noqa: BLE001 -- a plugin that fails to install must say so and leave the engine as served
         print("[spot-capture] install failed:\n" + traceback.format_exc(), file=sys.stderr, flush=True)
+
+
+def _note(what: str) -> None:
+    print(f"[spot-capture] {what}", file=sys.stderr, flush=True)
 
 
 def _wrap(owner: Any, name: str, make) -> None:
@@ -242,7 +260,8 @@ def _install_moe() -> None:
     from vllm.model_executor.layers.fused_moe import fused_moe as fm
     try:
         from vllm.model_executor.layers.fused_moe.experts import triton_moe
-    except ImportError:
+    except ImportError as e:
+        _note(f"no fused_moe.experts.triton_moe ({e}): only fused_moe's own launch is wrapped")
         triton_moe = None
     names = ("A", "B", "C", "A_scale", "B_scale", "topk_weights", "sorted_token_ids", "expert_ids", "num_tokens_post_padded",
              "mul_routed_weight", "top_k", "config")
@@ -267,7 +286,8 @@ def _install_moe() -> None:
 def _install_mla() -> None:
     try:
         from vllm.v1.attention.backends.mla import flashmla_sparse as fs
-    except ImportError:
+    except ImportError as e:
+        _note(f"no sparse MLA backend ({e}): no sparse MLA kernel call is recorded")
         return
     import torch
 
@@ -295,7 +315,8 @@ def _install_mla() -> None:
         _wrap(fs.FlashMLASparseImpl, "_bf16_flash_mla_kernel", kernel)
     try:
         from vllm.v1.attention.backends.mla import flashattn_mla_sparse as fa
-    except ImportError:
+    except ImportError as e:
+        _note(f"no FlashAttention sparse MLA backend ({e}): only FlashMLA's kernel is recorded")
         return
 
     def varlen(orig):
@@ -525,6 +546,9 @@ def _check(mine: Any, out: Any, mode: str, batch_desc: Any) -> None:
         S.check.update(equal_tokens=bool(torch.equal(mine[:n], got[:n])), equal_padded=bool(torch.equal(mine, got)),
                        differ_words=int((mine[:n].view(torch.int16) != got[:n].view(torch.int16)).sum().item())
                        if mine.dtype == torch.bfloat16 else None)
+        if not S.check["equal_tokens"] and mine.shape == got.shape:
+            rows = (mine[:n] != got[:n]).reshape(n, -1).any(dim=1).nonzero().reshape(-1).tolist()
+            S.check["differ_rows"] = [int(r) for r in rows]
 
 
 def _finish(runner: Any) -> None:
@@ -558,7 +582,7 @@ def _finish(runner: Any) -> None:
 
 def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
     """The step's interior root over every rank's, then the coins, drawn by rank 0 only after every rank's root is fixed, and
-    the layers they open: ``VERITY_SPOT_OPEN`` (default ``dense:1,moe:1``) layers of each kind, whose parameters each rank
+    the layers they open: ``--open`` (default ``dense:1,moe:1``) layers of each kind, whose parameters each rank
     writes under ``open/`` (the bytes its sampled proof blocks read). Written to ``commit.json``."""
     import torch
     import torch.distributed as dist
@@ -566,7 +590,8 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
     try:
         from vllm.distributed.parallel_state import get_world_group
         group = get_world_group().cpu_group
-    except Exception:  # noqa: BLE001
+    except Exception as e:  # noqa: BLE001
+        _note(f"no vLLM world group ({e!r}): the roots and coins go over torch.distributed's default group")
         group = None
     world = dist.get_world_size() if dist.is_initialized() else 1
     roots = [None] * world
@@ -584,7 +609,7 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
     n_layers = int(getattr(hf, "num_hidden_layers"))
     dense_k = min(int(getattr(hf, "first_k_dense_replace", 0) or 0), n_layers)
     pools = {"dense": list(range(dense_k)), "moe": list(range(dense_k, n_layers))}
-    want = dict(x.split(":") for x in os.environ.get("VERITY_SPOT_OPEN", "dense:1,moe:1").split(",") if x)
+    want = S.open
     layers: dict[str, list[int]] = {}
     for kind, n in want.items():
         pool = list(pools.get(kind, []))
@@ -619,18 +644,37 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
     return commit
 
 
-def site(d: Path) -> Path:
-    """A directory that, on PYTHONPATH, registers this file as the ``vllm.general_plugins`` entry ``verity_spot_capture``."""
+def site(d: Path, cfg: dict) -> Path:
+    """A directory that, on PYTHONPATH, registers this file as the ``vllm.general_plugins`` entry ``verity_spot_capture``,
+    with ``cfg`` (`main`'s settings) beside it as `CONFIG`."""
     import shutil
     info = d / "verity_spot_capture-0.0.dist-info"
     info.mkdir(parents=True, exist_ok=True)
     (info / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-spot-capture\nVersion: 0.0\n")
     (info / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_spot_capture = spot_capture:register\n")
     shutil.copyfile(__file__, d / "spot_capture.py")
+    (d / CONFIG).write_text(json.dumps(cfg, indent=1, sort_keys=True))
     return d
 
 
+def main(argv: list[str]) -> int:
+    import argparse
+    ap = argparse.ArgumentParser(prog="capture.py")
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("site", help="write the plugin's site directory, its settings beside it")
+    s.add_argument("dir", type=Path)
+    s.add_argument("--capture", required=True, help="where each rank's capture goes")
+    s.add_argument("--steps", required=True, help="the 0-based steps to record, comma-separated")
+    s.add_argument("--open", default="dense:1,moe:1", help="how many layers of each kind the coins open, KIND:N,...")
+    s.add_argument("--mla-tokens", type=int, default=8, help="a sparse MLA call's tokens whose gathered KV rows are recorded")
+    s.add_argument("--keep", choices=("opened", "all"), default="opened", help="all: write every recorded tensor")
+    a = ap.parse_args(argv)
+    cfg = {"capture": str(Path(a.capture).resolve()), "steps": sorted({int(x) for x in a.steps.split(",") if x.strip()}),
+           "open": {k: int(n) for k, n in (x.split(":") for x in a.open.split(",") if x)}, "mla_tokens": a.mla_tokens,
+           "keep": a.keep}
+    print(site(a.dir, cfg))
+    return 0
+
+
 if __name__ == "__main__":
-    if sys.argv[1:2] != ["site"] or len(sys.argv) != 3:
-        raise SystemExit("capture.py site DIR")
-    print(site(Path(sys.argv[2])))
+    sys.exit(main(sys.argv[1:]))

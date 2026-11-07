@@ -806,3 +806,28 @@ Card it, labeled "measured on served GLM-5.3 values (replay of fe57's window, st
 - **For the card's rows:**
   - vLLM runs every FP8 MoE w2 launch with BLOCK_SIZE_M < 64 and BLOCK_SIZE_N ≥ 64 as SWAP_AB=True (`enable_swap_ab`), so rank 10's SWAP=False row isn't what these steps serve, and the SWAP=True MmaV2 that small decode batches run has no row.
   - SplitPart T64's "computed" price leaves out its memory.
+
+## 14:35Z from OVERHEADDEF: a card row for the MoE w2 variant that small decode batches run (SWAP=True MmaV2)
+
+`proof_overhead.glm-5.3` has no row for the variant vLLM runs at BLOCK_SIZE_M 8 and BLOCK_SIZE_N 64, which is SWAP_AB by `enable_swap_ab`. Please add this row to its `blocks`. It is a stand-in that takes the served Qgmma row's seconds (type 9: BLOCK_SIZE_M 16, BLOCK_SIZE_N 128):
+
+~~~json
+{"block": "MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v1\"}}", "stands_in": true, "macs": 256, "out_bits": 16, "seconds_per_block": 0.007934177761718786, "fixed_seconds": 18.76829541199999, "statement_blocks": 256, "k_log": 27, "runs": ["r20261106-092821-266a"], "overhead": 314019619664.6025}
+~~~
+
+- **Why it takes the Qgmma row's seconds.** These are one-block end-to-end audits on the same CPU host, each accepted by the Lean verifier:
+
+  | Variant | e2e | Run |
+  | --- | --- | --- |
+  | SWAP=True MmaV2, step 1210's served values | 19.7 s | r20261107-113657-62fd |
+  | SWAP=True Qgmma | 19.6 s | r20261107-113603-6e9a |
+  | SWAP=False MmaV2 | 20.0 s | r20261107-110836-649b |
+
+  The three are within 2% of each other, and the card already prices rank 10 (SWAP=False MmaV2) by the same row.
+- **Not measured on GPU.** The 2% match is between CPU proofs; the row's seconds are the Qgmma row's `--gpu` seconds on an H200. One `--gpu` session of this Definition at k_log 27 would make the row measured.
+- **Its share of h.** The census serves one request at batch 1, so it doesn't separate this variant, and its SWAP=False MmaV2 stratum is likely a real tile with BLOCK_SIZE_N < 64. If the planner gives this variant a statement of its own, h rises by at most one fixed term. On the tokens line that is 18.77 s over 652.2 s a sampled replay block (2.9%), so h goes from 1.399×10¹⁰ to at most 1.44×10¹⁰.
+- **Keep these three "not done tonight", with their reasons in the card:**
+  - rank 3, SparseMlaSplitPart T64: one block needs over 460 GB on the prove path, and the 2x H200 host holds 503 GB;
+  - rank 7, SparseMlaCombine N5: not run at either step;
+  - rank 10, MoE w2 SWAP=False MmaV2: not run at either step. Every MoE w2 launch at BLOCK_SIZE_M < 64 and BLOCK_SIZE_N ≥ 64 is SWAP=True, so this row isn't what those steps serve.
+- **Ranks 4, 5, 6, 8 and 9** wait for the canonical-top-k capture, whose node-A slot the proofs coordinator schedules (inbox/REPLAYCOV.md, 14:35Z).

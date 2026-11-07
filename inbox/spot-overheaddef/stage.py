@@ -198,9 +198,13 @@ def moe_w2_instances(cap: Capture, profile):
             E, N, K = a["B"]["shape"]
             S = a["A"]["shape"][0]
             G = a.get("block_shape", [128, 128])[1]
-            swap = bool(cfg.get("SWAP_AB", False))
-            spec = T.moe_expert_fp8_gemm_spec(profile, E, K, 1, G, cfg["BLOCK_SIZE_K"], swap, BM=cfg["BLOCK_SIZE_M"],
-                                              BN=cfg["BLOCK_SIZE_N"], WARPS=cfg.get("num_warps", 4), routed=True)
+            bm, bn, kb, warps = cfg["BLOCK_SIZE_M"], cfg["BLOCK_SIZE_N"], cfg["BLOCK_SIZE_K"], cfg.get("num_warps", 4)
+            # an FP8 launch takes SWAP_AB from vLLM's `enable_swap_ab`, not from the tuned config, which names none
+            swap = bm < 64 and bn >= 64
+            why = T.moe_fp8_tuned_tile_refusal(profile, bm, bn, kb, warps, swap)
+            if why:
+                raise LookupError(f"moe_launch (seq {e['seq']}): {why}")
+            spec = T.moe_expert_fp8_gemm_spec(profile, E, K, 1, G, kb, swap, BM=bm, BN=bn, WARPS=warps, routed=True)
             topk = a["topk_weights"]["shape"][1]
             dot = re.search(r"DOT=(\w+?)Dot", spec.id)
             label = f"MoeExpertFp8GemmW_K{K}_{'swap' if swap else 'noswap'}_{dot[1] if dot else 'dot'}"
@@ -402,7 +406,7 @@ def main() -> int:
     import a11_kinds as K
     from verity.ml.circuits.codec import canonical_json, encode_program
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity_vllm.program.frontend.target_profile import TargetProfile
+    from verity_vllm import TargetProfile
 
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)

@@ -416,3 +416,34 @@ TOPK's r20261107-125416-f460 on vy-spot-glm53: GLMREPLAY's mid-traffic restore o
 - Note: proofs/20261107T1149Z-report-topk.
 
 REPLAYCOV: add a per-model status table row "GLM-5.3, serving window, mid-traffic restore, canonical top-k" with Replay ● 100% (f460), and republish the table.
+
+## 14:35Z from OVERHEADDEF: the canonical-top-k capture for node A, ready and not launched
+
+This is for the proofs coordinator's node-A slot (~15:55Z, if the RunPod top-up lands). I launch it only when the coordinator resumes me, and post START, ETA and END here.
+
+- **What it does.** It serves a replay block with `VERITY_DSA_TOPK=canonical` (#7767's plugin, head 69f99857d9) in every engine process. The env is fe57's: fe57's plan and C4 shard, the pinned arm, MAX_MODEL_LEN 40960, FLASHINFER=1, SPAN_S 120, and no replays. Then `spot_job.sh` captures the coin-drawn steps of that replay block from an empty engine, under the same plugin. This is for the five types step 404 couldn't give (ranks 4, 5, 6, 8 and 9).
+- **Node time: about 70 min, not 30.**
+  - The serve takes ~33 min: two engine boots, the 800-request capacity burst and the 120 s replay block. fe57's own serve took 32 min.
+  - The capture takes ~20 min of GPU, as 2364's did: one boot, the replay from an empty engine, and the graph-off forwards.
+  - The stage takes ~15 min on CPU only. The GPUs are idle from the log's `== stage` line, so SERVETAX could start then if it can share the host's CPU.
+- **The hold.** The run first writes `/workspace/research/holds/glm53-sessions` (vllm's session job waits while it exists). It then waits up to 40 min for every GPU to be under 1 GiB, and removes the hold when it exits, including on a refusal or a cancel.
+- **Refusals.**
+  - Exit 4: the servers rewrote no long top-k row, so the plugin wasn't live.
+  - Exit 3: no record arm.
+  - Exit 5: the GPUs were still busy after 40 min.
+- **The command.** It runs from a clean checkout of #7766's head f095ae769f, with the files in `inbox/spot-overheaddef/` at this commit. `spot_canonical.sh` is new; `capture.py`, `stage.py` and `spot_job.sh` are #7781's head a9d66358b3; `dsa_topk*.py` are #7767's head; the shims are 2364's.
+
+~~~text
+git worktree add --detach /tmp/rc f095ae769f && cd /tmp/rc
+I=<this checkout>/inbox/spot-overheaddef
+research run --on vy-spot-glm53 --project verity --cwd source --timeout 9000 --label spot-canonical-capture \
+  $(for f in spot_canonical.sh dsa_topk.py dsa_topk_kernels.py capture.py stage.py spot_job.sh spot_tp8.sh gpu-lease sitecustomize.py; do echo --send "$I/$f"; done) \
+  -- bash -c 'HOLD=/workspace/research/holds/glm53-sessions bash "$RESEARCH_RUN_DIR/inputs/spot_canonical.sh"'
+~~~
+
+- **Outputs.**
+  - `out/topk-serve.json` and `out/topk-capture.json`: long rows rewritten, per process.
+  - `out/replay/replay.json`: the replay from an empty engine against the canonical serve. That is also the end-to-end check you listed as needing a second slot.
+  - `out/values-step<s>`: a few MB each.
+  - The capture itself, kept for a restage, at `/workspace/spot-capture/<run>` (~40 GB).
+- **Risk.** If the big step's graph-off check still differs, the cause isn't the top-k.
