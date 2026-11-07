@@ -394,6 +394,17 @@ extern "C" void* flock_cuda_host_alloc(size_t bytes) {
     return p;
 }
 
+// Host memory page-locked until unregistered (gpu_circuit.rs Pinned: hm96 salts read ahead, which launch_merkle512 copies
+// without the host waiting); 0 when the runtime refuses
+extern "C" int flock_cuda_host_register(void* p, size_t bytes) {
+    if (cudaHostRegister(p, bytes, cudaHostRegisterPortable) != cudaSuccess) { cudaGetLastError(); return 0; }
+    return 1;
+}
+
+extern "C" void flock_cuda_host_unregister(void* p) {
+    if (cudaHostUnregister(p) != cudaSuccess) cudaGetLastError();
+}
+
 // device memory for a witness's host words copied ahead of its session (gpu_circuit.rs DevBuf), and a copy either way on a
 // stream of its own, beside the kernels of the session proving meanwhile
 extern "C" void* flock_cuda_dev_alloc(size_t bytes) {
