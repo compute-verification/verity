@@ -26,8 +26,8 @@ Put it at the narrowest scope it applies to: work in one package, `<package>/.ag
 
 ## The file
 
-A skill is one `SKILL.md` in a directory of its name, at most 16 KB (`SKILL_SIZE_CAP` in `tests/test_repository.py`; a
-change over it lands, and drive tells its owner). That test admits tracked Markdown only under the maintained basenames
+A skill is one `SKILL.md` in a directory of its name, at most 16 KB (`SKILL_SIZE_CAP` in `tests/test_repository.py`; an
+`OVERSIZE_SKILLS` entry there only shrinks). That test admits tracked Markdown only under the maintained basenames
 (AGENTS.md "Where writing goes"), so a `workflow.md` or `examples.md` beside it fails; a script or `*.template.md` it uses
 may sit there.
 
