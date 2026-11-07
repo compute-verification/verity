@@ -59,12 +59,8 @@ Every path git sees changed must be one of:
   names (a `[[words_in]]` entry's words
   in the files its globs match; `word_maps`). A text file the words alone rewrite into its new text is an edit of that
   kind, whatever the file, and so is one that also drops each list entry the words made a repeat of the one before it
-  (`merged`);
-- a `*.json` file other than a lock, a Lake manifest or `moves.json` that is the old one with the words above applied
-  (and moved paths from the root rewritten, or not), but for the order of some objects' keys: the same JSON value (an
-  object's keys in any order, a list's entries in theirs) in the same lines, each but for a trailing comma, where each
-  object whose keys came out in another order is sorted at BASE and at HEAD, as a writer that keeps its keys sorted puts
-  a key the move renamed in its sorted place (`resorted`).
+  (`merged`); a JSON file may come back with each object whose keys were sorted and that renamed keys leave out of
+  order sorted again, as `rename.py` writes it (`resorted`).
 A move by a word map with `scope = "prose"` (`--words MAP`, else the map HEAD's `Move: tools/move/NAME.toml` line names, as
 BASE has it) is judged by that map instead (`Terms`): each file it edits is BASE's text with some of the map's words
 replaced, each in prose (a comment, a docstring, Markdown's text); or in Python or Lean code, as part of a name it renames to
@@ -1085,46 +1081,13 @@ def merged(old: str, new: str) -> str:
                    if not (i and w[i] == w[i - 1] and o[i] != o[i - 1] and ENTRY.fullmatch(w[i])))
 
 
-class _Object(tuple):
-    """A JSON object as its (key, value) pairs, in the order its text has them."""
-
-
-def resorted(old: str, want: str, new: str) -> bool:
-    """Whether ``new`` is ``want`` (``old`` as the move rewrites it) but for the order of some objects' keys: the same JSON
-    value (an object's keys in any order, a list's entries in theirs) in the same lines, each but for a trailing comma,
-    where each object whose keys came out in another order was sorted in ``old`` and is sorted in ``new``."""
-    try:
-        o, w, n = (json.loads(t, object_pairs_hook=_Object) for t in (old, want, new))
-    except ValueError:
-        return False
-
-    def same(o, w, n) -> bool:
-        if isinstance(w, _Object):
-            if not (isinstance(o, _Object) and isinstance(n, _Object) and len(o) == len(w)):
-                return False
-            ws, ns = [k for k, _ in w], [k for k, _ in n]
-            if len(set(ws)) != len(ws) or sorted(ws) != sorted(ns):
-                return False
-            if ws != ns and not ([k for k, _ in o] == sorted(k for k, _ in o) and ns == sorted(ns)):
-                return False
-            at = dict(n)
-            return all(same(ov, wv, at[k]) for (_, ov), (k, wv) in zip(o, w))
-        if isinstance(w, list):
-            return isinstance(o, list) and isinstance(n, list) and len(o) == len(w) == len(n) and all(map(same, o, w, n))
-        return type(w) is type(n) and w == n
-
-    def lines(t: str) -> list[str]:
-        return sorted(x[:-1] if x.endswith(",") else x for x in t.splitlines())
-
-    return same(o, w, n) and lines(want) == lines(new)
-
-
 def worded(text: str, path: str, maps: list, lock: bool = False) -> str:
-    """``text`` with each word map applied as `tools/move/rename.py` applies it: not to a file the map excludes, and in a
-    lock, not to the records."""
+    """``text`` with each word map applied as `tools/move/rename.py` applies it: not to a file the map excludes, in a
+    lock not to the records, and in a JSON file with each sorted object whose keys it renames sorted again (`resorted`)."""
+    R = _rename()
     for w in maps:
         if not w.excluded(path):
-            text = w.sub(text, path, _rename().record_spans(text) if lock else [])
+            text = R.resorted(text, w.sub(text, path, R.record_spans(text) if lock else []), path)
     return text
 
 
@@ -1499,10 +1462,6 @@ def certify(base: str, head: str, extra: dict[str, str] | None = None, cwd: str 
             a, unworded = worded(a, old, maps, lock=k == "lock"), a
             if b in (a, merged(unworded, a)):
                 report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "words"})
-                continue
-            if (kind(old) == k == "text" and old.endswith(".json") and new.endswith(".json")
-                    and any(resorted(unworded, w, b) for w in (a, substitute(a, pmap)))):
-                report["edits"].append({"path": new, **({"old": old} if old != new else {}), "kind": "sorted"})
                 continue
         al, bl = a.splitlines(), b.splitlines()
         why: tuple[str, str | None] | None = None
