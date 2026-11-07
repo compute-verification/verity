@@ -1,5 +1,5 @@
 {
- "roots": ["Definitions", "Models"],
+ "roots": ["Definitions"],
  "proved_in": ["Proofs"],
  "assumptions_module": "Definitions.Assumptions",
  "assumptions": {
@@ -5646,7 +5646,7 @@
   "PouwCheck.Rounds": "PoUW check's rounds code (`roundsCheck`), read through remote's PoUW period component (`PouwCheck.Period.protocol`), a component of remote, whose verdict RecursiveAuditC3 reads: PouwCheck's lock declares no spec layer for `PouwCheck.Rounds`, so its definitions are recorded here as read rather than as a spec"
  },
  "trees": {
-  "definitions": ["Definitions", "Models"],
+  "definitions": ["Definitions"],
   "properties": ["Properties"],
   "proofs": ["Proofs", "Proofs.Properties"],
   "except": {
