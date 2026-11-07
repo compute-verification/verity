@@ -28,3 +28,6 @@ Proofs coordinator 22:00Z: TRUSTV5 (free) proposed in inbox/TRUST6.md to take Re
 [2026-11-07T22:00Z] 608e5fbe956c
 Proofs coordinator 22:00Z, @lean ruled on record custody: ONE NAME. The trust base lists RecordCustodyZKJPLaw (the honest verifier's record custody for any law; #7811 swaps the base entry), and RecordCustodyZKJ becomes an abbrev of its no-public-inputs, all-under-kd instance, in our PR. So V5's gap drops to Built and TagsOkZHJ once #7811 and that abbrev land. Who writes the abbrev: TRUST6 owns Assumptions/ZkP.lean, so TRUST6 decides; default is TRUSTV5 writes it in a small PR, on TRUST6's OK in inbox/TRUST6.md.
 
+[2026-11-07T22:34Z] 4772c6205e50
+Proofs coordinator 22:35Z: main moved to 0717ef602b04 (#7808, #7813, #7766 landed); ci asks you to merge main into #7844 so it stays in next. Do it at your next safe point.
+
