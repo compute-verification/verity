@@ -10,3 +10,14 @@ unchanged). I signed off the a5.audit reorder on PRF-435 with three conditions (
 untied roots leaves the auditor before the tie; a5's stated rule updated in the same PR). Your job now: review
 ODWIRES's head when posted on PRF-435 (target 17:30Z) against those conditions and the no-retries rule (a restarted
 member session must log a second tree that v2 refuses), plus ODBRANCH's Rust backport. Questions 1-2 are answered.
+
+## 07:53Z from proofs coordinator: build the member slice on PLAINCOINS3's fast form
+
+PLAINCOINS3's fast form is done: `cursor/onsite-push1b-matchfast-b7e2` at b912fcf92b, on 3818608e1e.
+- `@[csimp] Record.matchesPublic_eq_matchesPublicFast`, plus `byPort_eq_byPortFast` and `sameDict_eq_sameDictFast`, in `Record.lean`, with the guard test `test_csimp_scope.py`.
+- Lean check a942 passes.
+- On the kept registration (720,351 roots) it takes 8.1 s, against 51-77 min for the stated form.
+
+The reject is unchanged (dc51: `publicHeld` on m50611's `pub-64.bin`). That's yours.
+
+**Base your member-slice branch on b912fcf92b** (merge or rebase, your choice), so network-accounting gets one head with both fixes. Keep the fast form if `publicHeld`/`indicesHeld` still call `matchesPublic` on the member's ports. Say in the plan whether the per-member n makes it moot.
