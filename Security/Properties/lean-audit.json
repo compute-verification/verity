@@ -110,6 +110,10 @@
   "Properties.SampledProofs.RequestsCover": {
    "owner": "@proofs",
    "why": "The requests the patterns' point describes: each read in one replay block, disjoint, as many and as wide as its classes say."
+  },
+  "Properties.SampledProofs.ServedCover": {
+   "owner": "@proofs",
+   "why": "The requests the capped point describes: disjoint, those reading in each replay block serving at most its class's cap."
   }
  },
  "open": {
@@ -1104,6 +1108,10 @@
   "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound": {
    "honest": ["Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_honest"],
    "nontrivial": "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_nontrivial"
   },
   "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
    "honest": ["Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_honest"],
@@ -8433,6 +8441,15 @@
    "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_nontrivial": {
    "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckSound": {

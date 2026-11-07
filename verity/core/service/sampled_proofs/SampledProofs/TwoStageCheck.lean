@@ -25,14 +25,17 @@ namespace SampledProofs.TwoStageCheck
 open SampledProofs.Interval
 open SampledProofs.FactorUpper
 
-/-- Which of the counts a point bounds: the admissible sets' (`sets`) or their patterns' over requests (`patterns`). -/
+/-- Which of the counts a point bounds: the admissible sets' (`sets`), their patterns' over requests (`patterns`), or
+the admissible sets' with each set's bits capped at what the requests reading it serve (`capped`). -/
 inductive Form where
   | sets
   | patterns
+  | capped
   deriving Repr, Inhabited, DecidableEq
 
-/-- **A class of replay blocks**: `count` of them, each covered by `cells` (one per stratum), and in the patterns' form
-each read by at most `N` requests, each reading at most `reads[t]`'s `(count, bits)` in stratum `t`. -/
+/-- **A class of replay blocks**: `count` of them, each covered by `cells` (one per stratum); in the patterns' form each
+read by at most `N` requests, each reading at most `reads[t]`'s `(count, bits)` in stratum `t`, and in the capped form
+by requests serving at most `N` times the point's `S` bits together. -/
 structure ReplayClass where
   count : Nat
   cells : List Cell
@@ -41,7 +44,7 @@ structure ReplayClass where
   deriving Repr, Inhabited
 
 /-- **A two-stage point**: its form, the first stage's rate `q`, Rankin's `θ`, the confidence `δ`, the bits `S` each
-request serves (the patterns' form), its classes of replay blocks and the precision `p`. -/
+request serves (the patterns' and capped forms), its classes of replay blocks and the precision `p`. -/
 structure Point where
   form : Form
   q : Rat
@@ -60,6 +63,7 @@ def classFactor (D : Point) (c : ReplayClass) : Option Rat :=
   match D.form with
   | .sets => lnFactorUpper c.cells D.params
   | .patterns => lnFactorUpperPatterns c.cells c.reads c.N D.S D.params
+  | .capped => lnFactorUpperCapped c.cells (c.N * D.S) D.params
 
 /-- `Σ_c count_c max(v_c, 0)` over the classes, `v_c = f c`; `none` when some `f c` is. -/
 def classSum (f : ReplayClass → Option Rat) : List ReplayClass → Option Rat

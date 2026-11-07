@@ -8,11 +8,12 @@ public import Proofs.Flock.Claims.Witnesses.SamplingTwoRankin
 /-!
 # A two-stage point's bits bound its count
 
-`Properties.SampledProofs.TwoStageCheckSound` (the sets' form) and `TwoStageCheckPatternsSound` (the patterns'). Each
-composes Rankin's bound (`Claims.Sampling.admissibleTwo_rankin`, `admissibleTwo_rankin_patterns`) at the uniform rate
-`D.q`, which the registered first stage meets (`firstStage_le`, from `bernoulli_Pa_le` and
-`Design.Two.subsetInputs_Pa_le`), with each replay block's factor bound at its class (`factorUpperSound`,
-`factorUpperPatternsSound`): the product over replay blocks is at most `e^{Σ_c count_c max(v_c, 0)}`
+`Properties.SampledProofs.TwoStageCheckSound` (the sets' form), `TwoStageCheckPatternsSound` (the patterns') and
+`TwoStageCheckServedSound` (the capped sets'). Each composes Rankin's bound (`Claims.Sampling.admissibleTwo_rankin`,
+`admissibleTwo_rankin_patterns`, `admissibleTwo_rankin_served`) at the uniform rate `D.q`, which the registered first
+stage meets (`firstStage_le`, from `bernoulli_Pa_le` and `Design.Two.subsetInputs_Pa_le`), with each replay block's
+factor bound at its class (`factorUpperSound`, `factorUpperPatternsSound`, `factorUpperCappedSound` at the class's cap
+`N_c · S`): the product over replay blocks is at most `e^{Σ_c count_c max(v_c, 0)}`
 (`prod_le_exp_classes`), `δ^{−θ} ≤ e^{θ lnUpper(1/δ)}` (`rpow_neg_le`), and `e^L ≤ 2^b` at `checkTwoStage`'s `b`
 (`exp_le_two_rpow`).
 
@@ -209,6 +210,10 @@ theorem rankinFactorPatterns_nonneg (s : AuditStatement) (Pt : Partition) (d : D
   sum_nonneg fun _ _ => mul_nonneg (pow_nonneg (by norm_num) _)
     (Real.iSup_nonneg fun _ => Real.rpow_nonneg (d.passes_nonneg Pt hq _ ρ) θ)
 
+theorem rankinFactorCapped_nonneg (s : AuditStatement) (Pt : Partition) (d : Design.Two) (S : ℕ) {q : ℝ} (hq : q ≤ 1)
+    (θ : ℝ) (ρ : ℕ) : 0 ≤ rankinFactorCapped s Pt d S q θ ρ :=
+  sum_nonneg fun _ _ => mul_nonneg (pow_nonneg (by norm_num) _) (Real.rpow_nonneg (d.passes_nonneg Pt hq _ ρ) θ)
+
 theorem blocksIn_subset (Pt Pρ : Partition) (ρ : ℕ) : blocksIn Pt Pρ ρ ⊆ range Pt.blocks.length :=
   biUnion_subset.2 fun _ _ => filter_subset _ _
 
@@ -251,6 +256,38 @@ theorem twoStageCheckPatternsSound : TwoStageCheckPatternsSound := by
     fun r r' hne => (hreq.2.1 r r' hne).mono (blocksTo_mono req (blocksIn_subset Pt d.part ρ) r)
       (blocksTo_mono req (blocksIn_subset Pt d.part ρ) r')
 
+/-- **A capped point's bits bound the capped count**, at replay block `ρ`'s cap `N_c · S` at its class `c`. -/
+theorem twoStageCheckServedSound : TwoStageCheckServedSound := by
+  intro D b hb hform s Pt d R _ _ req cls hs hfirst hcov hserve
+  obtain ⟨-, hq1, hθ, hδ, -⟩ := valid_of_check hb
+  have hq1' : ((D.q : ℚ) : ℝ) ≤ 1 := by exact_mod_cast hq1
+  obtain ⟨S, hS⟩ : ∃ S : ℕ → ℕ, ∀ ρ, S ρ = if ρ < d.part.blocks.length then
+      (D.classes.getD (cls ρ) default).N * D.S
+    else ∑ r ∈ univ.filter (fun r => (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty), servedBits req r :=
+    ⟨_, fun _ => rfl⟩
+  have hcap : ∀ ρ < d.part.blocks.length, ∀ c, D.classes[cls ρ]? = some c → S ρ = c.N * D.S := by
+    intro ρ hρ c hc
+    simp only [hS, hρ, ↓reduceIte, List.getD_eq_getElem?_getD, hc, Option.getD_some]
+  have hle : ∀ ρ, ∑ r ∈ univ.filter (fun r => (blocksTo s.prog Pt req (blocksIn Pt d.part ρ) r).Nonempty),
+      servedBits req r ≤ S ρ := by
+    intro ρ
+    by_cases hρ : ρ < d.part.blocks.length
+    · obtain ⟨c, hc, -⟩ := hcov.1 ρ hρ
+      rw [hcap ρ hρ c hc]
+      exact hserve.2 ρ hρ c hc
+    · simp only [hS, hρ, ↓reduceIte, le_refl]
+  have hR := admissibleTwo_rankin_served s Pt d (fun _ => (D.q : ℝ)) D.δ D.θ R req S hs
+    (firstStage_le hs hq1' hfirst) (fun _ => hq1') (by exact_mod_cast hδ) (by exact_mod_cast hθ) hserve.1 hle
+  refine bits_of_rankin hb cls hR (fun ρ _ => rankinFactorCapped_nonneg s Pt d _ hq1' _ ρ)
+    (fun ρ hρ c v hc hv => ?_) (fun ρ hρ => (hcov.1 ρ hρ).imp fun _ h => h.1) hcov.2
+  obtain ⟨c', hc', hcv⟩ := hcov.1 ρ hρ
+  rw [hc, Option.some.injEq] at hc'
+  subst hc'
+  have hv' : _root_.SampledProofs.FactorUpper.lnFactorUpperCapped c.cells (c.N * D.S) D.params = some v := by
+    simpa [classFactor, hform] using hv
+  rw [hcap ρ hρ c hc]
+  exact factorUpperCappedSound c.cells (c.N * D.S) D.params v hv' s Pt d ρ hcv
+
 section Witnesses
 
 open Claims.Witness.SamplingGeneric
@@ -292,6 +329,18 @@ theorem pair_requestsCover (form : Form) :
     exact ⟨(card_le_univ _).trans (by simp),
       fun ⟨⟩ _ => ⟨(by decide : servedBits (fun _ : Fin pairStmt.prog.outs.length => ()) () = 2), pair_readsCover⟩⟩
 
+theorem pair_servedCover (form : Form) :
+    ServedCover pairStmt pairPart pairDesign (fun _ => ()) (pairPoint form) fun _ => 0 := by
+  refine ⟨fun r r' h => absurd (Subsingleton.elim r r') h, fun ρ hρ c hc => ?_⟩
+  obtain rfl : ρ = 0 := by
+    have : pairDesign.part.blocks.length = 1 := rfl
+    omega
+  simp only [pairPoint, List.getElem?_cons_zero, Option.some.injEq] at hc
+  subst hc
+  refine (sum_le_sum_of_subset (filter_subset _ _)).trans ?_
+  rw [Fintype.sum_unique]
+  exact (by decide : servedBits (fun _ : Fin pairStmt.prog.outs.length => ()) () ≤ 1 * 2)
+
 /-- `nothingDesign` over `emptyStmt` and `soloPart` is `nothingTwo` over `toyStmt` and `toyPart`. -/
 theorem nothing_count :
     (∑ T ∈ admissibleTwo soloPart nothingDesign (9 / 10), 2 ^ bitsOf emptyStmt soloPart T : ℕ) = 3 :=
@@ -312,6 +361,19 @@ theorem nothing_patterns_count :
       2 ^ ∑ r, lightBits toyStmt toyPart (servedBits toyReq r) (p r) : ℕ) = 3
   rw [himg _ (by rw [nothingTwo_admissible]; decide), sum_pair toy_pat_ne]
   simp [lightBits, toy_servedBits]
+
+theorem nothing_served_count :
+    (∑ T ∈ admissibleTwo soloPart nothingDesign (9 / 10), 2 ^ min (bitsOf emptyStmt soloPart T)
+      (∑ r ∈ univ.filter (fun r => (blocksTo emptyStmt.prog soloPart oneReq T r).Nonempty),
+        min (bitsOf emptyStmt soloPart (blocksTo emptyStmt.prog soloPart oneReq T r)) (servedBits oneReq r)) : ℕ) =
+      3 :=
+  (rfl : (∑ T ∈ admissibleTwo soloPart nothingDesign (9 / 10), 2 ^ min (bitsOf emptyStmt soloPart T)
+      (∑ r ∈ univ.filter (fun r => (blocksTo emptyStmt.prog soloPart oneReq T r).Nonempty),
+        min (bitsOf emptyStmt soloPart (blocksTo emptyStmt.prog soloPart oneReq T r)) (servedBits oneReq r)) : ℕ) =
+    ∑ T ∈ admissibleTwo toyPart nothingTwo (9 / 10), 2 ^ min (bitsOf toyStmt toyPart T)
+      (∑ r ∈ univ.filter (fun r => (blocksTo toyStmt.prog toyPart toyReq T r).Nonempty),
+        min (bitsOf toyStmt toyPart (blocksTo toyStmt.prog toyPart toyReq T r)) (servedBits toyReq r))).trans
+    nothingTwo_countServed
 
 end TwoStageCheckProof
 
@@ -350,6 +412,26 @@ theorem twoStageCheckPatternsSound_nontrivial :
           2 ^ ∑ r, lightBits emptyStmt soloPart (servedBits oneReq r) (p r) : ℕ) : ℝ) ≤
       (2 : ℝ) ^ (((1 : ℚ) : ℝ)) := by
   rw [nothing_patterns_count]
+  norm_num
+
+/-- **`TwoStageCheckServedSound`'s honest witness**: `twoStageCheckSound_honest`'s, and the one request reading both
+of `pairStmt`'s outputs serves `2` bits, the class's one request times the point's `S`. -/
+theorem twoStageCheckServedSound_honest :
+    InScopeTwo pairPart pairDesign pairStmt ∧ FirstStageAt pairDesign ((pairPoint .capped).q : ℝ) ∧
+      ClassesCover pairStmt pairPart pairDesign (pairPoint .capped) (fun _ => 0) ∧
+      ServedCover pairStmt pairPart pairDesign (fun _ => ()) (pairPoint .capped) (fun _ => 0) ∧
+      (checkTwoStage (pairPoint .capped)).isSome = true ∧ (checkTwoStage (deployedPoint .capped)).isSome = true :=
+  ⟨pairStmt_inScope, pair_firstStage _, pair_classesCover _, pair_servedCover _, by decide +kernel,
+    by decide +kernel⟩
+
+/-- **`TwoStageCheckServedSound`'s conclusion fails** at `nothingDesign`, with one request reading the one output,
+at `1` bit: the capped count is `3`. -/
+theorem twoStageCheckServedSound_nontrivial :
+    ¬ ((∑ T ∈ admissibleTwo soloPart nothingDesign (9 / 10), 2 ^ min (bitsOf emptyStmt soloPart T)
+        (∑ r ∈ univ.filter (fun r => (blocksTo emptyStmt.prog soloPart oneReq T r).Nonempty),
+          min (bitsOf emptyStmt soloPart (blocksTo emptyStmt.prog soloPart oneReq T r)) (servedBits oneReq r)) : ℕ) :
+        ℝ) ≤ (2 : ℝ) ^ (((1 : ℚ) : ℝ)) := by
+  rw [nothing_served_count]
   norm_num
 
 end Witnesses

@@ -15,8 +15,9 @@ number is a string, a natural number or a rational `"num/den"`, so none passes t
   `PlanCheck.leakBound` certifies, or `{"bound": null}` when it refuses;
 * `{"kind": "work", "strata": [["work", "num"], ...], "den", "target", "delta"}` answers `{"ok": bool}`,
   `PlanCheck.checkWork`;
-* `{"kind": "two", "form": "sets" | "patterns", "q", "theta", "delta", "S", "p", "classes": [{"count", "cells": [{"k",
-  "parts": [["count", "bits"], ...]}, ...], "reads": [[["count", "bits"], ...], ...], "N"}, ...]}`, optionally with
+* `{"kind": "two", "form": "sets" | "patterns" | "capped", "q", "theta", "delta", "S", "p", "classes": [{"count",
+  "cells": [{"k", "parts": [["count", "bits"], ...]}, ...], "reads": [[["count", "bits"], ...], ...], "N"}, ...]}`,
+  optionally with
   `"search": {"span", "n", "p"}`, answers `{"bits": "num/den", "theta": "num/den"}`, what `TwoStageCheck.checkTwoStage`
   certifies at `theta`, or at the `θ` `TwoStageCheck.searchTheta` finds from it (`{"bits": null}` when it refuses);
 
@@ -71,6 +72,7 @@ def two (j : Json) : Except String Json := do
   let form ← match ← str j "form" with
     | "sets" => pure TwoStageCheck.Form.sets
     | "patterns" => pure .patterns
+    | "capped" => pure .capped
     | f => throw s!"no form {f}"
   let classes ← (← j.getObjValAs? (Array Json) "classes").toList.mapM twoClass
   let D : TwoStageCheck.Point := { form, q := ← rat (← str j "q"), θ := ← rat (← str j "theta"),
