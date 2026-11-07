@@ -285,30 +285,4 @@ theorem couplingTarget_assembled (K : Constructions V) (dev : Exchange → Prope
     (fun c σ => Binding.logged_tables_le V k Binding.readsV2 dev θ F c σ (Binding.binds_of_prints V k dev θ hP) (hS c))
     (digestBound_of V k _ (by rfl) A θ F) hε (fun c σ => decodes_of_digests hA hDg (fun _ h => h.1.2) hW (hM c σ))
 
-/-- **The coupling, assembled, at the session's own coins**: `couplingTarget_assembled` with the sample's coins the
-session's bytes as `m` fresh frames (`srcCoinsAt`), uniform by A3 wherever the session reads `m` frames' bytes
-(`hL`). -/
-theorem couplingTarget_assembled_src (K : Constructions V) (dev : Exchange → Properties.Challenger.History)
-    (rd : Readings)
-    (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
-      Decoders A.rounds A.Reg)
-    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String) (m : ℕ)
-    (A : Live) (θ : ByteArray) (F : Array ByteArray) (hP : ∀ o : Exchange, o.params = θ → Lines.PrintsLog (dev o) o.log)
-    (hS : ∀ c, Binding.SignsPlay V dev θ F c) (hL : A.Lb 0 = m * 64)
-    (hε : ∀ c σ, couplesErr V θ F c A (rd A θ F c) σ (D A θ F c σ)
-      (sampleMaps e V rd label (afterAt V k) (srcCoinsAt m) A θ F c σ)
-      (fun q _ s => openGap (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool) +
-        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (roundBits e : (Fin s.n → 𝔽) → List Bool))
-      (fun q => openGap (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool) +
-        openEmpty (finish (V.signer θ) θ F c σ.1) q.g' (linkBits e : (Fin 2 → Fin A.mP → 𝔽) → List Bool)) ≤
-        A.hidingTerm)
-    (hA : SetsUp V θ F A) (hDg : DigestsAt V θ) (hW : WritesView A)
-    (hM : ∀ c σ, MovesReach V θ F c k
-      (fun o => (Binding.Logged Binding.readsV2 o ∧ TablesSent o.sent) ∧ SampledDigest k o.sent (afterAt V k θ F c σ))
-      A (rd A θ F c) σ
-      (D A θ F c σ) (sampleMaps e V rd label (afterAt V k) (srcCoinsAt m) A θ F c σ)
-      (linkEmpty e (finish (V.signer θ) θ F c σ.1)) (roundEmpty e (finish (V.signer θ) θ F c σ.1))) :
-    CouplingTarget V k (K.assembled e dev k rd D label (afterAt V k) (srcCoinsAt m)) A θ F :=
-  couplingTarget_assembled e V k K dev rd D label (srcCoinsAt m) A θ F hP hS (avg_srcCoinsAt hL) hε hA hDg hW hM
-
 end Verity.Sampled

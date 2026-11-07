@@ -225,18 +225,14 @@ theorem opensAt_of_sessions (I : Instance d α)
 end Instance
 
 /-- **`remote_soundness_deployedAt` at sessions `OpensReady`**: its openings premise `OpensAt` discharged by
-`opensAt_of_sessions`, and its session premise `SessionAt` by `sessionAt_of_registered` from `SessionRegistered`. -/
+`opensAt_of_sessions`, and its session premise `SessionAt` by `sessionAt_of_registered` from `SessionRegistered`; of
+the coupling, `couplingTarget_at`'s, what is left is the device's log opening only the record's rounds (`hOR`). -/
 theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions I.base)
     (reg : (A : Live) → Option Claims.Msg → A.Reg)
     (record : Live → ByteArray → Array ByteArray → ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : Live → ByteArray → Array ByteArray → ByteArray → Claims.Msg)
     (hready : ∀ θ F A, I.session θ = some A → SetsUp I.base θ F A → A.OpensReady)
     (hRg : I.RegisteredFiles) (hSr : I.SessionRegistered .remote)
-    (hε : I.StopsWithin .remote reg record recordDigest)
-    (hL : ∀ θ F A, I.sessions θ F = some A → A.Lb 0 = _root_.SampledProofs.Challenger.MAX_COINS * 64)
-    (hord : ∀ θ F c (σ : Verity.Game.Strategy (I.base.game θ F c)) (x : Verity.Game.CoinTape (I.base.game θ F c) σ),
-      I.base.Verdict .remote .sampled (Verity.Game.CoinTape.run (I.base.game θ F c) σ x) →
-      OrderHeld (Verity.Game.CoinTape.run (I.base.game θ F c) σ x).sent)
     (hOR : ∀ θ F c (σ : Verity.Game.Strategy (I.base.game θ F c)) (x : Verity.Game.CoinTape (I.base.game θ F c) σ),
       I.base.Verdict .remote .sampled (Verity.Game.CoinTape.run (I.base.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (Verity.Game.CoinTape.run (I.base.game θ F c) σ x) →
@@ -247,6 +243,6 @@ theorem remote_soundness_deployedReady (I : Instance d α) (K₀ : Constructions
     (hW : I.base.PouwSound .remote) (hI : I.base.InferenceOnlySound .remote) :
     (I.vocab (I.constructionsAt K₀ .remote reg record recordDigest)).SoundnessAt .remote :=
   remote_soundness_deployedAt I K₀ reg record recordDigest (I.opensAt_of_sessions hready) hRg
-    (I.sessionAt_of_registered .remote hSr) hε hL hord hOR hB hR hW hI
+    (I.sessionAt_of_registered .remote hSr) hOR hB hR hW hI
 
 end Verity.Sampled
