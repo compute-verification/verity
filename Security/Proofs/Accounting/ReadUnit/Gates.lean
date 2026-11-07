@@ -50,7 +50,9 @@ net computes whenever its rows hold (`FlockSoundness.Discharge.Hm.Sound`), again
 * `SelectSpec`: `EmbeddingReadSelect_v1{V, H}`, the row or the fill row by the token, and the verdict.
 
 Each statement takes its part's generator as a parameter, so a generator that mirrors the part's Python lowering is
-proved against it, and `readNet` composes the four as `EmbeddingRead_v1`'s body does. A digest or a byte string is held
+proved against it, and `readNet` composes the four as `EmbeddingRead_v1`'s body does. Each holds of every input, with
+the inputs' shapes premises of what it concludes, as `FlockSoundness.Discharge.Hm`'s gadgets' statements do, so that
+`Sound.bind'` composes them. A digest or a byte string is held
 in 64-bit words of forms in leaf order, each word's bits least significant first and its bytes big-endian
 (`Accounting.ReadUnit.bytesOf`), as a read unit's ports hold them.
 -/
@@ -74,26 +76,25 @@ def wordsBytes (z : Var → Bool) (ws : List Word) : Hash.Msg := bytesOf (evs z 
 /-- The digest the 8 words `ws` hold under `z`, in leaf order. -/
 def wordsDigest (z : Var → Bool) (ws : List Word) : Verity.Digest := digestOf (evs z ws.flatten)
 
-/-- **Part A: the row-seg digest.** On a row's `n` forms, the net of `gen` returns 8 words that hold the row's
+/-- **Part A: the row-seg digest.** On a row of `n` forms, the net of `gen` returns 8 words that hold the row's
 `sha512/row-seg/v1` digest whenever its rows hold. -/
 def RowSegSpec (n : ℕ) (gen : List Lin → M (List Word)) : Prop :=
-  ∀ row : List Lin, row.length = n →
-    Sound (gen row) fun z x => Shaped 8 x ∧ wordsDigest z x = Hash.RowSeg.digest Verity.sha512 (evs z row)
+  ∀ row : List Lin, Sound (gen row) fun z x => row.length = n →
+    Shaped 8 x ∧ wordsDigest z x = Hash.RowSeg.digest Verity.sha512 (evs z row)
 
 /-- **Part B: the hm96 leaf**, under the hm96 key `key`. On a digest's 8 words `x` and a salt's 24 words `y`, the net of
 `gen` returns 24 words `b ‖ c ‖ leaf` whose last 8 hold the hm96 leaf of the digest and the salt they hold, whenever its
 rows hold. -/
 def Hm96LeafSpec (key : Hash.Msg) (gen : List Word → List Word → M (List Word)) : Prop :=
-  ∀ x y : List Word, Shaped 8 x → Shaped 24 y →
-    Sound (gen x y) fun z out => Shaped 24 out ∧
-      wordsDigest z (out.drop 16) = Hash.Hm96.leaf Verity.sha512 key (wordsDigest z x) (wordsBytes z y)
+  ∀ x y : List Word, Sound (gen x y) fun z out => Shaped 8 x → Shaped 24 y →
+    Shaped 24 out ∧ wordsDigest z (out.drop 16) = Hash.Hm96.leaf Verity.sha512 key (wordsDigest z x) (wordsBytes z y)
 
 /-- **Part B: the select**, for a table of `V` rows. On the token's 32 forms (least significant first), the frame read's
 verdict `opened` and the row's forms, the net of `gen` returns the row where the token is below `V` and the fill row
 elsewhere, and a verdict set exactly where the token is at least `V` or `opened` is, whenever its rows hold. -/
 def SelectSpec (V : ℕ) (gen : List Lin → Lin → List Lin → M (List Lin × Lin)) : Prop :=
-  ∀ (tok : List Lin) (opened : Lin) (row : List Lin), tok.length = 32 → row.length % 16 = 0 →
-    Sound (gen tok opened row) fun z out =>
+  ∀ (tok : List Lin) (opened : Lin) (row : List Lin), Sound (gen tok opened row) fun z out =>
+    tok.length = 32 → row.length % 16 = 0 →
       evs z out.1 = (if num (evs z tok) < V then evs z row else Hash.EmbeddingRead.fill (row.length / 16)) ∧
         ev z out.2 = (decide (V ≤ num (evs z tok)) || ev z opened)
 
@@ -107,9 +108,9 @@ leaf's 8 words, the rank's `D` forms (least significant first) and `D` sibling d
 siblings in the dense domain under that domain id, reaches the root, whenever its rows hold. -/
 def FrameReadSpec (D : ℕ) (schema : String)
     (gen : List Word → List Word → List Word → List Lin → List (List Word) → M Lin) : Prop :=
-  ∀ (root domain leaf : List Word) (pos : List Lin) (path : List (List Word)), Shaped 8 root → Shaped 8 domain →
-    Shaped 8 leaf → pos.length = D → path.length = D → (∀ s ∈ path, Shaped 8 s) →
-    Sound (gen root domain leaf pos path) fun z opened => ev z opened = true →
+  ∀ (root domain leaf : List Word) (pos : List Lin) (path : List (List Word)),
+    Sound (gen root domain leaf pos path) fun z opened => Shaped 8 root → Shaped 8 domain → Shaped 8 leaf →
+      pos.length = D → path.length = D → (∀ s ∈ path, Shaped 8 s) → ev z opened = true →
       (Hash.Tree.climb Verity.sha512 (denseDomain D (wordsDigest z domain)) 0 (num (evs z pos))
         (Verity.sha512 (Hash.Tree.leafMsg (denseDomain D (wordsDigest z domain)) (num (evs z pos)) schema
           (wordsDigest z leaf).bytes))
