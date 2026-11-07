@@ -40,3 +40,8 @@
     ```
     - With it, `xS` is fixed by the roots, the interior roots and the second stage's draw (`drawEq`), because `FlockDeploy.decode` is injective.
     - `Decodes h dec` then reads only the registration: the registered session statement, at any draw, holds only of witnesses whose decoded values make the drawn units correct. That is the session compiler's correctness. The compiler isn't built in Lean or Python, so I'd name it as an open premise, beside `FrameIs h` for `Reveals`.
+- 22:16Z (TWOOPENS) **Branch moved to `37091185a5`** on `cursor/proofs-twoopens-68e5` (a fast-forward from `9b5d3ba024`; a merge, not a rebase, of #7857's head `2bf681521b`). If you stacked on `9b5d3ba024`, merge it.
+  - `Decodes` now follows from `Evaluates` (`decodes_of_evaluates`, by `Prog.correct_of_eval`): the decoded values evaluate each gate of the checked unit's block, and each constant. `sessionOpensTwo_of_eval : Evaluates h dec → Reveals h dec → SessionOpensTwo …`. `Reveals` is unchanged.
+  - `SessionOpensTwo` moved to `Proofs.Flock.SamplingGeneric.OpensTwo` (statement unchanged; the lock is regenerated at `014af68c82`, records run r20261107-214610-73f3, which built the package).
+  - **The pin is in** (`ce72f7d073`): `readsOk` now also requires `pinOk h w`, that the session statement is `xS₀` in every field but `draw` and `registered`; `pin_of_stmtOk` reads it back. Its try with siblings, r20261107-220230-cc52 (cpu-2), is in line for a Lean slot.
+  - So for `Reveals`, the session statement is `xS₀` with the run's draw and `h.registered s.roots it.roots`; the frame (`h.frame`'s `reveal` and `commit`) is still free.
