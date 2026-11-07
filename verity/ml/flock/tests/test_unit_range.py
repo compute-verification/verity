@@ -73,6 +73,18 @@ def test_a_piece_lowered_only_on_a_constant_operand_is_counted_by_its_stated_and
     assert IL._piece_ands(SimpleNamespace(id="UnitRangeConstOnly_v1")) == 7
 
 
+def test_a_unit_holding_the_top_p_keep_word_is_sized_by_its_composition():
+    """The top-p keep word has no piece but counts its composition (`topp_word.ands`), so a unit holding it is sized off its
+    Definition: in range at V = 16, and at V = 256 refused by name, before anything lowers it."""
+    from verity.ml.definitions.registry import sampling as SM
+    from verity_flock import topp_word as TW
+
+    w = FC.unit_witness(SM.topp_mask_word(16))
+    assert w["ands"] == TW.ands(16) and w["k"] <= FC.K_MAX
+    with pytest.raises(ValueError, match=r"^unit/topp: the unit needs a slot of 2\^29 witness bits \(372,127,590 ANDs"):
+        FC.refuse_past_range(SM.topp_mask_word(256), "unit/topp")
+
+
 @pytest.mark.parametrize("which", list(STATEMENTS))
 def test_the_count_is_the_flat_lowerings(which):
     """On `UnitStager`'s statements (a Boolean toy, two PoUW tile units, the anchors' stand-in) the Definition's count is the

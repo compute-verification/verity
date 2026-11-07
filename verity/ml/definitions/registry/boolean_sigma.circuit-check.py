@@ -12,7 +12,7 @@ def _boolean_roots() -> list[Any]:
     one's), mHC's post + pre layer at hidden 64 (two splits, one thread a column), the Inductor norms at
     one warp a row over one 64-column chunk, FA3's split decode at two splits of a 20-token context (the second partial) on the
     H200's k16 step, and the MoE router, expert GEMMs and align at 2 to 4 experts.  The static-free ones (`MoeAlignBefore_v2`,
-    `RouterArgmaxStep_v2`, `InductorSiluMulElem_v2`, ...) are catalog roots already, and each binding here reaches the σ
+    `ArgmaxStepF32_v2`, `InductorSiluMulElem_v2`, ...) are catalog roots already, and each binding here reaches the σ
     Definitions its body Calls (`Fa3AttentionHeadSplit_v2`, `MoeExpertCoordinate_v3`, the align steps)."""
     from verity.ml.circuits.defs import bind
     from verity.ml.circuits.ops.boolean import gemm as BG
