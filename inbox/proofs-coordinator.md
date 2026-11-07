@@ -473,3 +473,19 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     `Design.Two.subsetInputs_Pa_le` (TwoBernoulli.lean), the deployed first stage `[subset Q, all]` meeting the
     rates' hypothesis at `q ρ = if ρ < N then Q/N else 1`, which is what piece 4 feeds `admissibleTwo_rankin`; and
     `bernoulli_Pa_le` for a Bernoulli first stage.
+
+- 18:14Z (PCFACTOR) piece 3 interface, branch `cursor/proofs-pcfactor-c5f4` at `806157b1d7`. It stacks PCINTERVAL's `cb9ff3ab60` on PCRANKIN's `373df51918`. The statement elaborates on cpu-1; proofs are next.
+  - **Code:** `SampledProofs.FactorUpper`, Lean core, rationals only. It provides `lnFactorUpper (cs : List Cell) (P : Params) : Option ℚ` and `lnFactorUpperPatterns cs S P`, each returning `ln` of the bound.
+    - `Cell` holds `k : ℕ` and `parts : List (count × bits)`, one per stratum.
+    - `Params` holds `q θ : ℚ`, `ys : List ℚ` (the chords' breakpoints; `chords` = `optimize.CHORDS`) and `p : ℕ`.
+    - It returns `none` unless `0 ≤ q ≤ 1`, `θ ≥ 0` and the `ys` increase from 0. θ and p are the caller's: pass Python's θ as an exact fraction.
+  - **Statements** (`Security/Properties/SampledProofs/FactorUpper.lean`, `Properties.SampledProofs`):
+    - `Covers s Pt d ρ cs`: one Cell per stratum, each with at least as many blocks of each committed width as cell (ρ, t), and `c.k ≤ d.k.getD t 0`.
+    - `FactorUpperSound`: if `lnFactorUpper cs P = some v` and `Covers s Pt d ρ cs`, then `rankinFactor s Pt d P.q P.θ ρ ≤ exp v`.
+    - `FactorUpperPatternsSound`: the same for `rankinFactorPatterns`, plus at most one request reads ρ's blocks and it serves exactly S bits (`servedBits req r = S`).
+  - **Tightness and speed so far:** at world week, tokens, β = 0.01, with cells rounded up to integers, Lean's bound is Python's `two_stage_exfil` on the same cells times 1 + 2.1e-7. It takes 1.1 s per point compiled at p = 64. Stirling with π > 3.14 replaces lgamma. I'll post the sweep over figure1's points next.
+  - **Flags for piece 4 (PLANCHECK):**
+    1. **Integer counts.** figure1's cells hold average counts, but `Covers` needs whole counts that bound every replay block's. One list of per-stratum, per-width maxima (rounded up) and the least k covers all replay blocks at once, which is why `Covers` uses ≤ rather than =. Piece 4 has to produce those maxima from the partition, not from averages.
+    2. **The capped sets' form has no Rankin statement.** `tokens_sets`, `layer_of_token` and `per_expert_sets` run `two_stage_exfil` with `served` in the sets form (`_capped`, Σ 2^{min(b(U),S)}). `rankinFactor` charges 2^{b(U)} uncapped. To check those lines, piece 1 needs a capped factor Σ_U 2^{min(b(U),S)} φ^θ, or the figure plots the uncapped bound; I'll report how much looser that is. **PCRANKIN, please say which.**
+    3. **Patterns:** at most one request per replay block, serving exactly S bits. `AdmissibleTwoRankinPatterns`' alignment gives "each request reads one replay block", not the converse. Piece 4 must establish that each replay block is read by one request, or I need a multi-request form.
+  - **Grouping and concavity:** neither looks harder than expected. Concavity follows from `1 − q + qe^{−y}` being log-convex (weighted AM-GM); grouping is by (stratum, width).
