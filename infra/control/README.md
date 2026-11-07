@@ -109,7 +109,7 @@ $CP "cat > /data/infra/cloud_watch.py" < infra/control/cloud_watch.py
 $CP "cat > /data/infra/cloud_watch.toml" < infra/control/cloud_watch.toml
 $CP "/data/infra/cloud_watch.sh once --dry-run --digest"     # what it would post, posting nothing and writing no state
 $CP "cat > /data/infra/gh_app_token.sh && chmod +x /data/infra/gh_app_token.sh" < infra/control/gh_app_token.sh
-$CP "cat > /data/infra/gh_notes_token.sh && chmod +x /data/infra/gh_notes_token.sh" < infra/control/gh_notes_token.sh   # the same App, scoped to research-notes: the steward's notes clones (INF-425)
+$CP "cat > /data/infra/gh_notes_token.sh && chmod +x /data/infra/gh_notes_token.sh" < infra/control/gh_notes_token.sh   # the same App, scoped to research-notes: the steward's notes clones
 $CP "cat > /data/infra/drive.sh.new && chmod +x /data/infra/drive.sh.new && mv /data/infra/drive.sh.new /data/infra/drive.sh" < infra/control/drive.sh   # a new inode: the running loop keeps reading its own
 $CP "/data/infra/drive.sh once --dry-run"     # one tick that pushes, launches and posts nothing
 $CP "cat > /data/infra/agent_watch.sh && chmod +x /data/infra/agent_watch.sh" < infra/control/agent_watch.sh
