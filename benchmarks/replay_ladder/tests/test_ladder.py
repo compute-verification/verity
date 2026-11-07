@@ -69,24 +69,27 @@ def test_compile_mode_reads_vllm_s_log(tmp_path):
     assert [L.compile_mode(p) for p in (fresh, load, none, tmp_path / "missing.log")] == ["compile", "load", None, None]
 
 
-def tiling_log(d: Path, *kept: int, xblock: int = 1024, first: str = "k") -> None:
+def tiling_log(d: Path, *kept: int, xblock: int = 1024, only: bool = False) -> None:
+    """One process a kept R0_BLOCK: each keeps it on reduction k (and 2048 on j unless ``only``), and ``xblock`` on a
+    pointwise kernel."""
     d.mkdir(parents=True, exist_ok=True)
     for pid, r0 in enumerate(kept):
-        recs = [{"kernel": "j", "heuristic": "REDUCTION", "candidates": [], "kept": {"R0_BLOCK": 2048}},
-                {"kernel": "k", "heuristic": "REDUCTION", "candidates": [], "kept": {"R0_BLOCK": r0}},
+        recs = [{"kernel": "k", "heuristic": "REDUCTION", "candidates": [], "kept": {"R0_BLOCK": r0}},
                 {"kernel": "p", "heuristic": "POINTWISE", "candidates": [], "kept": {"XBLOCK": xblock}}]
-        recs.sort(key=lambda r: r["kernel"] != first)
+        if not only:
+            recs.insert(0, {"kernel": "j", "heuristic": "REDUCTION", "candidates": [], "kept": {"R0_BLOCK": 2048}})
         (d / f"tilings.{pid}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
 
 
-def test_runs_that_kept_different_tilings_get_different_digests(tmp_path):
+def test_a_reduction_that_kept_two_configs_is_split(tmp_path):
     tiling_log(tmp_path / "a", 512)
-    tiling_log(tmp_path / "b", 512, xblock=512, first="j")
+    tiling_log(tmp_path / "b", 512, xblock=512, only=True)
     tiling_log(tmp_path / "c", 1024)
     tiling_log(tmp_path / "tp", 1024, 512)
-    a, b, c, tp = (L.tilings(tmp_path / n) for n in ("a", "b", "c", "tp"))
-    assert a == b and a["digest"] != c["digest"] and (a["processes"], a["choices"]) == (1, 2)
-    assert tp["processes"] == 2 and L.tilings(tmp_path / "none") is None
+    a, b, c, tp = (L.kept(tmp_path / n) for n in ("a", "b", "c", "tp"))
+    assert L.split([a, b]) == {"runs": 2, "reductions": 2, "split": 0}
+    assert L.split([a, c])["split"] == 1 and L.tilings(tmp_path / "tp") == {"runs": 1, "reductions": 2, "split": 1}
+    assert L.kept(tmp_path / "none") is None and L.tilings(tmp_path / "none") is None
 
 
 def replay_json(d: Path, differing: int, against: int | None = None) -> None:
@@ -165,10 +168,10 @@ def test_summary_reads_a_model_directory(tmp_path):
     assert row["replays"][1]["compile"] == "compile"
     assert row["alone"]["requests_tokens_differing"] == 1
     md = L.markdown([row])
-    assert row["serve_tilings"]["digest"] == row["replays"][0]["tilings"]["digest"]
-    assert row["tilings"] == {"runs": 3, "distinct": 2, "choices": 2}
+    assert row["serve_tilings"] == row["replays"][0]["tilings"] == {"runs": 1, "reductions": 2, "split": 0}
+    assert row["tilings"] == {"runs": 3, "reductions": 2, "split": 1}
     assert ("| qwen3-8b | 1 | inductor_pin | 4, 10, 40 | 1 of 2 | "
-            "90.000000% | 0, 1 (fresh compile) | 1 | 2 of 3 (2) | 1 of 2 |") in md
+            "90.000000% | 0, 1 (fresh compile) | 1 | 1 of 2 | 1 of 2 |") in md
     for legacy, arm in ((True, "rblock"), (False, "unpinned"), (None, "unpinned")):
         (d / "serve.json").write_text(json.dumps({"model": "qwen3-8b", "inductor_pin": legacy}))
         assert L.model_row(d)["pin"] == arm

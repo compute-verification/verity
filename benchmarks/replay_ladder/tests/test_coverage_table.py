@@ -70,8 +70,8 @@ def test_the_ladder_fills_each_replay_column_from_its_arm():
 
 
 def test_the_footnote_names_the_models_that_need_the_pin():
-    big = ladder_model("unpinned", "r2", [1.0, 1.0]) | {"model": "big", "tilings": {"replays": 2, "distinct": 2, "choices": 1}}
-    mid = ladder_model("unpinned", "r0", [1.0, 1.0]) | {"tilings": {"replays": 2, "distinct": 1, "choices": 1}}
+    big = ladder_model("unpinned", "r2", [1.0, 1.0]) | {"model": "big", "tilings": {"runs": 2, "reductions": 1, "split": 1}}
+    mid = ladder_model("unpinned", "r0", [1.0, 1.0]) | {"tilings": {"runs": 2, "reductions": 1, "split": 0}}
     small = ladder_model("unpinned", "r3", [1.0, 0.9]) | {"model": "small"}
     tiny = ladder_model("unpinned", "r4", [1.0]) | {"model": "tiny"}
     cov = copy.deepcopy(COV)

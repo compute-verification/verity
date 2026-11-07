@@ -86,15 +86,16 @@ def ladder_cell(m: dict) -> dict | None:
 
 
 def pin_verdicts(cov: dict) -> tuple[list[str], list[str]]:
-    """The models whose unpinned replays differed from serving or kept different tilings (they need the pin), and those
-    whose unpinned replays all matched serving, keeping the same tilings where those were logged."""
+    """The models whose unpinned replays differed from serving or had a reduction keep more than one tiling (they need
+    the pin), and those whose unpinned replays all matched serving, keeping one tiling a reduction where those were
+    logged."""
     need, fine = [], []
     for row in cov["rows"]:
         c = row["cells"].get("replay_unpinned") or {}
         if c.get("status") != "measured" or c.get("rows_exact") is None:
             continue
         t = c.get("tilings")
-        (need if (t and t["distinct"] > 1) or c["rows_exact"] < 1 else fine).append(row["model"])
+        (need if (t and t["split"]) or c["rows_exact"] < 1 else fine).append(row["model"])
     return need, fine
 
 

@@ -33,7 +33,6 @@ from __future__ import annotations
 import argparse
 import functools
 import gzip
-import hashlib
 import json
 import os
 import re
@@ -190,17 +189,34 @@ def sums(rec: dict) -> bool:
         any(s in rec["kernel"] for s in ("_red_", "_per_"))
 
 
-def tilings(d: Path) -> dict | None:
-    """The run-time choices among reduction configs that serving's or a replay's processes logged (`inductor_pin`): how
-    many reductions chose in the busiest process, and a digest of every process's choices, equal between two runs whose
-    processes chose alike."""
+def kept(d: Path) -> dict[str, set[str]] | None:
+    """The run-time choices among reduction configs that serving's or a replay's processes logged (`inductor_pin`): each
+    reduction, by its kernel and candidates, and the configs it kept in any of them."""
     files = sorted(d.glob("tilings.*.jsonl"))
     if not files:
         return None
-    procs = sorted(json.dumps(sorted([r["kernel"], r["kept"]] for r in map(json.loads, f.read_text().splitlines())
-                                     if sums(r)), sort_keys=True) for f in files)
-    return {"processes": len(procs), "choices": max(len(json.loads(p)) for p in procs),
-            "digest": hashlib.sha512("\n".join(procs).encode()).hexdigest()[:16]}
+    out: dict[str, set[str]] = {}
+    for f in files:
+        for r in map(json.loads, f.read_text().splitlines()):
+            if sums(r):
+                out.setdefault(json.dumps([r["kernel"], r["candidates"]]), set()).add(json.dumps(r["kept"], sort_keys=True))
+    return out
+
+
+def split(runs: list[dict[str, set[str]]]) -> dict:
+    """Over runs' choices (`kept`): how many reductions chose, and how many of them kept more than one config, in one
+    process or across them, whose sums can then come out in different orders."""
+    every: dict[str, set[str]] = {}
+    for k in runs:
+        for key, v in k.items():
+            every.setdefault(key, set()).update(v)
+    return {"runs": len(runs), "reductions": len(every), "split": sum(len(v) > 1 for v in every.values())}
+
+
+def tilings(d: Path) -> dict | None:
+    """One run's choices (`kept`), summed up as `split` does."""
+    k = kept(d)
+    return None if k is None else split([k])
 
 
 def replay(a: argparse.Namespace) -> int:
@@ -314,9 +330,8 @@ def model_row(d: Path) -> dict:
             "replay_over_served": r["replay_over_served"], "compile": compile_mode(d / f"{rd.name}.log"),
             "tilings": tilings(rd)})
     row["serve_tilings"] = tilings(d / SERVING_TILINGS)
-    seen = [t for t in (row["serve_tilings"], *(x.get("tilings") for x in row["replays"])) if t]
-    row["tilings"] = {"runs": len(seen), "distinct": len({t["digest"] for t in seen}),
-                      "choices": max(t["choices"] for t in seen)} if seen else None
+    runs = [k for k in (kept(d / SERVING_TILINGS), *(kept(d / f"replay-{x['index']}") for x in row["replays"])) if k]
+    row["tilings"] = split(runs) if runs else None
     af = d / "alone" / "alone.json"
     if af.is_file():
         x = json.loads(af.read_text())
@@ -329,7 +344,7 @@ def model_row(d: Path) -> dict:
 def markdown(rows: list[dict]) -> str:
     head = ("| model | TP | Inductor pin | window: requests, steps, output tokens | replays exact | rows exact (worst replay) | "
             "requests differing from serving, per replay | requests differing from replay 1 | "
-            "tilings kept at run time: distinct sets over serving and replays (kernels choosing) | "
+            "reductions that kept more than one config over serving and replays, of those choosing | "
             "alone: requests differing |")
     lines = [head, "|" + "---|" * 10]
     for r in rows:
@@ -344,7 +359,7 @@ def markdown(rows: list[dict]) -> str:
         alone_s = f"{al['requests_tokens_differing']} of {al['requests']}" if al else "—"
         win = (f"{w.get('requests', '—')}, {w.get('steps', '—')}, {w.get('tokens_served', '—')}" if w else "—")
         t = r.get("tilings")
-        tiling = f"{t['distinct']} of {t['runs']} ({t['choices']})" if t else "—"
+        tiling = f"{t['split']} of {t['reductions']}" if t else "—"
         lines.append(f"| {r['model']} | {r['tp'] or '—'} | {PIN_ENV[r['pin']]} | {win} | {exact} | {worst} | {per} | "
                      f"{first} | {tiling} | {alone_s} |")
     return "\n".join(lines) + "\n"

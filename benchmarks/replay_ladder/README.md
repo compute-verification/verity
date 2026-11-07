@@ -29,7 +29,8 @@ For each model:
   `TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`, which drops the halved-R0_BLOCK candidate but leaves a reduction's other
   candidates to the timing. Each arm compiles into its own caches, since a compile cache keeps the choices made where it
   was written. The capacity server's processes and each replay's log the configs their reductions kept at run time
-  (`tilings.PID.jsonl`); the summary counts the distinct sets over serving and the replays.
+  (`tilings.PID.jsonl`); the summary counts the reductions that kept more than one config over serving and the
+  replays.
 - `alone`: 64 of the window's requests, evenly spaced in arrival order, each served by itself on an empty prefix cache in
   one compiled engine, compared with serving and with the first replay: how far a request's tokens depend on its batch,
   which is why a replay needs the recorded schedule.
