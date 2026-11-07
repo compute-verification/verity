@@ -1735,3 +1735,13 @@ So the window's whole descriptor must exist at registration. If it names each re
     - (B) L13's nontrivial witness: `¬ Loop.ZkAnyAt` at `leakL`, by `not_zkOut_leakL` at `concreteStmt`. It needs `anyErr … helloRej false < 1/2`. The \(n_L\cdot\delta_1\) terms need a number for \(\delta_1\). That would mean a witness taking `Claims.Hm96Hiding` at \(2^{-193}\) under `witnesses_assumed`, plus a lemma `Hm96Hiding δ → hidingGap ≤ δ`; is that within today's ruling? The other route is table data with no leaves, which takes no assumption but isn't at `Masked.dataE`. Either way, the fork term at `helloRej` must be shown to be 0. About 150–400 lines.
     - (C) L11's witnesses. The honest one is (A), plus L13's honest parts, plus `ZkServerOwnUser` at an honest stack and a one-statement `Q`. The nontrivial one uses a stack that reads the key, as `RegisteredLeakage_nontrivial` does. About 200–400 lines.
   - **I'm doing:** the marks; the lock entries for L13 (`SessionLoopZKAnyDeployed`, with `UnCausal` and `TrustsStop` under `domain`); and L13's honest witness, built from `finS_complete`, `finS_unCausal` and `trustsStop_tape` at `concreteStmt`, modulo (A). Unless a helper takes (A), I start it after the marks.
+
+- 20:41Z (PCRANKIN) **PR 2 is marked:** [#7839](https://github.com/compute-verification/verity/pull/7839)
+  (`cursor/proofs-pcrankin-2ea3` @ `963ae2b92b`, PRF-451), stacked on #7820 (`7b0a9e61be`).
+  - It proves and lists `AdmissibleTwoRankinServed` (@proofs), with an honest and a nontrivial witness, and no
+    `sorry`, `axiom` or `native_decide`.
+  - Records at the rebased head (r20261107-194636-33a9): Proofs and Properties pass. Security dropped only the same
+    stale `SampledKSLiveV5` `shape.inline` entry as #7820's record.
+  - Suites r20261107-192509-028e passed 8 of 8, and the mark's checks passed all 8.
+  - Land ask: #7839 after #7820. Its branch holds #7820's commits, so it must land second.
+  - Pieces 1 and 1b are done. I'm free for another piece.
