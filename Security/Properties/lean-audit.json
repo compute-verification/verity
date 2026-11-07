@@ -327,6 +327,12 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "Claims.ExpectedCR": {
+   "owner": "@proofs",
+   "digest": "83125752f67066703612e6c2f5f7f9a3da5f44b0db4f4072efface41ec981eaf",
+   "issue": "LEAN-186",
+   "due": "2026-11-30"
+  },
   "MemoryChallenger.Properties.WipeRun.Plays": {
    "owner": "@memory-accounting",
    "digest": "5b24be0019ae820eccc6190a9ae6025923268852362544040c6edc1dba51bfe5",
@@ -716,12 +722,6 @@
    "digest": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5",
    "issue": "LEAN-62",
    "due": "2026-11-06"
-  },
-  "Verity.Vocab.FinderCR": {
-   "owner": "@soundness",
-   "digest": "ac9a385f70101635417ebdbe596771e472e1860e4bd509cdea565732da998e91",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
   },
   "Verity.Vocab.InferenceOnlySound": {
    "owner": "@lean",
@@ -8613,7 +8613,7 @@
    "premises": {
     "assumptions": [],
     "domain": [],
-    "open": ["Verity.Vocab.FinderCR"],
+    "open": ["Claims.ExpectedCR"],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
