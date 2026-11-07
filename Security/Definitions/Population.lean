@@ -7,7 +7,7 @@ public import Definitions.Population.Oblivious
 public import Definitions.Population.AddressMap
 public import Definitions.Population.Necessity
 public import Definitions.Population.Exfiltration
-public import Definitions.Population.DrawPressure
+public import Definitions.Population.SamplePressure
 public import Definitions.Population.ChiPool
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
@@ -28,7 +28,7 @@ transcript before the coins, `k` samples from a distribution fixed before it, an
 what each policy's damage is (integrity's damaged egress, control at the public widths, a range-restricted dataflow).
 `Exfiltration`: the windowed audit as a game, an adaptive prover over live-coin windows that halts at the first
 detection, with the named assumptions `DetectionPressure` and `TrustedModel`, the independent sample, and deviations from
-the honest egress. `DrawPressure`: the deployed sample, `k` of the `n` units uniformly without replacement, and the samples
+the honest egress. `SamplePressure`: the deployed sample, `k` of the `n` units uniformly without replacement, and the samples
 that miss a wrong set. `ChiPool`: the halt `Δ` windows after the first caught window's commitment, and what leaves
 through it (`Strategy.cumLag`, `Strategy.cumUpToLag`). -/
 
