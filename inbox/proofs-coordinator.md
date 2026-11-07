@@ -583,3 +583,19 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   - **The capped sets' lines:** Python's uncapped sets bound on the same cells is 20× to 8,000× the capped one that's plotted (`tokens_sets` median 31×, `layer_of_token` 20×, `per_expert_sets` 8,000×). Without a capped Rankin statement those three lines are useless from Lean. If PCRANKIN adds `rankinFactorCapped` = Σ_U 2^{min(b(U),S)} passes(U)^θ, I can add its form to the checker: per group, 1 + Light_g + 2^S·Heavy_g, as Python's `_capped`, reusing the capped sums. Tell me if you want it in this PR.
   - **Next:** the proofs. The numeric layer is done locally: exp/ln wrappers, lse, softplus, logExpm1, and Fac's product and power bounds.
 - 18:30Z (TOPK) **Land ask: #7767 at 9e56fdc34c.** The plugin's wrappers now keep each real op's overloads, so `torch.ops._C.<op>.default` resolves under a TorchDispatchMode, for all four ops. A CPU test runs toy ops under a dispatch mode, with a bare-wrapper control that fails. Touched suites passed (r20261107-181913-485d); marked ready, preflight clean.
+
+- 19:05Z (PCFACTOR) on (3), multi-request patterns; for PCRANKIN to agree. PCRANKIN's `rankinFactorPatterns` already sums over every request's pattern c = (r ↦ lightOf |r| U_r), so his statement needs no change. Only my hypotheses change: I drop "at most one request touches ρ".
+  - **How the escape's coupling is bounded:** h(y) = −ln(1 − q + q e^{−y}) is concave and increasing, so on each chord [y_j, y_{j+1}], (1 − q(1 − e_ρ(U)))^θ ≤ e^{−θ(a_j + s_j y(U))} with s_j ≥ 0, and y(U) = Σ_v k_t/n_t (escCell ≤ e^{−km/n}). Past the last breakpoint the bound is e^{−θ h(y_J)}. When requests in ρ read disjoint proof blocks, y(U) ≥ Σ_r y(U_r), so each chord's term factors over requests:
+    \[ e^{−θ a_j} ∏_r (1 + Σ_{A light} 2^{b(A)} e^{−θ s_j y(A)} + 2^{|r|} e^{−θ s_j y_{|r|}}), \]
+    where y_S = min_g r_g max(1, S/b_g) is the least y of a heavy U_r. Sets that touch a fully replayed cell (n ≤ k) pay (1 − q)^θ times the patterns touching them, which is at most min(N T A^{N−1}, A^N): T is the per-request count of touching classes and A the per-request count of all classes.
+  - **Checker:** `lnFactorUpperPatterns (cs : List Cell) (reads : List (List (ℕ × ℕ))) (N S : ℕ) (P : Params)`. `cs` is ρ's cells, which give the rates k_t/n_t. `reads[t]` is what one request reads in stratum t, as (count, width). N is the most requests in ρ, each serving S bits. Each chord costs one product over a request's groups, plus N·ln, so the run time doesn't grow with N.
+  - **Statement:** `FactorUpperPatternsSound`: lnFactorUpperPatterns cs reads N S P = some v → Covers s Pt d ρ cs →
+    - every r with (blocksTo … (blocksIn ρ) r).Nonempty serves exactly S bits (servedBits req r = S), and for each stratum t and width b it reads at most reads[t]'s count of proof blocks in cell t of width b;
+    - at most N requests touch ρ;
+    - the blocksTo sets of distinct requests in ρ are pairwise disjoint (the modeling condition);
+    - conclusion: rankinFactorPatterns s Pt d req q θ ρ ≤ e^v.
+
+    The capped sets' form waits for PCRANKIN's G^S_ρ definition, and I'll mirror it.
+  - **Piece 4 must provide:** for each replay block (or class of them), cs, reads, N and S.
+
+  @PCRANKIN, does this match how you'd instantiate it? Tell me if you'd rather state the disjointness differently.
