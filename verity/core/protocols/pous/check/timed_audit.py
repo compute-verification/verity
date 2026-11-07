@@ -46,8 +46,8 @@ EXE = "pous-timed-audit"
 
 
 def challenger():
-    """`benchmarks/pous/band_gpu/memory_challenger.py`, the reference."""
-    path = ROOT / "benchmarks" / "pous" / "band_gpu" / "memory_challenger.py"
+    """`verity/core/devices/memory_challenger/timed_audit.py`, the reference."""
+    path = ROOT / "verity" / "core" / "devices" / "memory_challenger" / "timed_audit.py"
     spec = importlib.util.spec_from_file_location("pous_memory_challenger", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

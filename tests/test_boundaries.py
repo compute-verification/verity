@@ -218,7 +218,7 @@ BENCHMARKS_IMPORTERS = {
                                                                             "`inplace` (`benchmarks/remote_session`)",
     "integrations/vllm/verity_vllm/engine/int8_credited_env.py": "circuits (vllm): `benchmarks/vllm_encoded/paged.py`",
     "verity/core/protocols/pous/check/timed_audit.py": "memory-accounting: the memory challenger, the strict timed audit's "
-                                                       "reference (`benchmarks/pous/band_gpu/memory_challenger.py`)",
+                                                       "reference (`verity/core/devices/memory_challenger/timed_audit.py`)",
     "verity/ml/flock/python/verity_flock/struct_lower.py": "proofs: H1's unit (`benchmarks/pouw/h1_prove`, `hidden_zk`)",
     # Flock and circuit-check build statements from the numerical benchmarks' templates and lowerings
     **dict.fromkeys((

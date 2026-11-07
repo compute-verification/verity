@@ -1,7 +1,7 @@
 """The verifier process of the harness's timed audit: a client of the responder (`pous_native.cu`'s wire format, or the
 harness's `ControlResponder`) and `verity.core.protocols.pous.protocol.TimedAudit`'s audits against it.
 
-    python benchmarks/pous/band_gpu/memory_challenger.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
+    python verity/core/devices/memory_challenger/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
         [--k K] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
         [--seed HEX]
 
@@ -426,7 +426,7 @@ def pous_check() -> Any:
     check is a tree of its own (`tests/test_boundaries.py`'s `SEPARATE`)."""
     import importlib.util
 
-    path = Path(__file__).resolve().parents[3] / "verity/core/protocols/pous/check/timed_audit.py"
+    path = Path(__file__).resolve().parents[4] / "verity/core/protocols/pous/check/timed_audit.py"
     spec = importlib.util.spec_from_file_location("pous_check_timed_audit", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
