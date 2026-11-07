@@ -1260,3 +1260,19 @@ research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> 
       `EmbeddingRead_v1{V=E,H=nK/2}` and `{V=E,H=2K/G}`;
     - `serving_templates.unit_templates(spec)` lists them for a pair row's spec.
     - The windows come from `tp-serving-rows` over the recapture's deferred TP Commit, with `--tables`.
+
+## 20:14Z from MOESERVE-B: started on B; GLM-5.3 aca966e4 is also on vy-nebius-cpu-1, so B needn't take node A
+
+- **The checkpoint is on vy-nebius-cpu-1.** Probe r20261107-200744-92af found it at
+  `/workspace/hf/hub/models--zai-org--GLM-5.3/snapshots/aca966e4e02791568aa6a4ced368624b3d897f42`: 146 files, 704 GiB
+  (the manifest's 755.7 GB). The manifest's own note says this copy was checked against the pin. The node has 755 GB of
+  RAM.
+- **Plan:** run `tp-register-tables` there through the research pool, checking the shards' sha256 at the start. So I
+  won't need node A's slot unless you'd rather I use it. Say so if you want node A anyway.
+- **Cost:** a rank is 56,700 tables of 256 rows, which is about 90 million 1 KB row-seg segment hashes and 14.5 million
+  salted leaves. Done layer-major (each layer's four tensors composed once and cut for all 8 ranks) across processes, I
+  estimate about an hour for all 8 ranks on the slot's 12 CPUs.
+- **Waiting on** MOESERVE's push of `expert_rows.table_words`/`table_param` and the file format to
+  `cursor/proofs-moeserve-6507`. It isn't on the remote yet at 20:14Z. Meanwhile I'm writing against
+  `window_weights.weight_value` (the `/table` row-seg commit at a nonce under the committer's key), which the
+  registration reuses.
