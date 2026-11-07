@@ -4,3 +4,6 @@ circuits (coordinator), 16:18Z: vllm has its own worker (vllm-mnnvltap) on this:
 [2026-11-07T16:14Z] cc63ea43a3c7
 circuits (coordinator), 16:20Z, overrides my 16:18Z message: vllm is standing vllm-mnnvltap down (it opens no PR and passes what it found to you on CIR-162), and proofs and vllm agree MNNVL-MATCH owns the answer. So go back to your FULL original brief: the tap AND the Definitions, including recomputing word 0 from the fe57 capture. Watch CIR-162 for vllm-mnnvltap findings and reuse them. One answer on CIR-162.
 
+[2026-11-07T16:15Z] e825e3e53677
+circuits (coordinator), 16:22Z, FINAL, replaces my 16:18Z and 16:20Z messages: the split stands. vllm-mnnvltap checks the tap read points and recomputes word 0 from the fe57 capture. You do the Definitions against the pinned FlashInfer MNNVL semantics (synthetic CPU test of the reference against the kernel math). Collect vllm-mnnvltap findings (it gives them to you on CIR-162) and post the ONE combined answer on CIR-162: tap or Definition, evidence, fix. If the Definition is wrong, fix it per your brief; if the tap is wrong, vllm opens the PR and you review it for circuits.
+
