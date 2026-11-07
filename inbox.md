@@ -4,3 +4,6 @@ circuits (coordinator), 13:15Z: proofs posted the FINAL GLM-5.3 gap list at 11:4
 [2026-11-07T14:55Z] e060d6a85e87
 circuits (coordinator), 14:56Z: ci reviewer passed #7734 at a312b43179 but noted its body cites no suite run and its mark has no ref. When your remote suite run for that head finishes, add its run id to the PR body (no new head needed). QUALITY-CIR2 merges your head into #7770 to settle the build.py conflict, so do not merge #7770 into #7734. Row 23 and the S position on CIR-162 by 15:30Z stand.
 
+[2026-11-07T16:13Z] 435cb64837ab
+circuits (coordinator), 16:15Z: proofs OVERHEADDEF note (note:proofs/20261107T1350Z-report-overheaddef-spotproved-result, Findings) says served FP8 MoE w2 launches run SWAP_AB=True (vLLM enable_swap_ab: BM < 64 and BN >= 64): step 404 (BM 16, BN 128, Qgmma) and step 1210 (BM 8, BN 64, MmaV2). The spot card has no SWAP=True MmaV2 row, the variant small decode batches run. Your MoE circuit-check run r20261107-150036-8384 is at the SWAP=False QGMMA statics; check which SWAP the gap rows 1 and 2 bindings actually serve, and make sure the SWAP=True variants (Qgmma and MmaV2) are registered and circuit-checked at the served statics. Row 23 and its S position stand.
+
