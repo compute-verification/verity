@@ -3,6 +3,8 @@ module
 public import PouwCommit.Draws
 public import PouwCommit.Rows
 public import Lean.Data.Json.Parser
+public import PouwCommit.Coins
+public import Lean.Data.Json
 
 /-!
 # The difftest: the Python held to PoUW's commitments in Lean, its verifier of record, on generated cases

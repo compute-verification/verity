@@ -4,6 +4,7 @@ public import Flock.Hm96
 public import PouwCommit.Frame
 public import PouwCommit.Py
 public import PouwCommit.Tagged
+public import Identity.Domains
 
 /-!
 # The epoch coins' check (`verity.core.protocols.pouw.coins`)

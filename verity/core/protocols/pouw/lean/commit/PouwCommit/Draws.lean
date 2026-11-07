@@ -2,6 +2,7 @@ module
 
 public import PouwCommit.Coins
 public import Identity.Domains
+public import Randomness
 
 /-!
 # The salts and draws PoUW derives (`verity.core.protocols.pouw.audit`; the clear audit's draws, `benchmarks/pouw/clear`)
