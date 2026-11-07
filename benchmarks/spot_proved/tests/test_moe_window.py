@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 
 HERE = Path(__file__).resolve().parents[1]
-LAYER, STEP, E, TOPK, S = 3, 5, 8, 2, 3
+LAYER, STEP, E, TOPK, S = 3, 5, 32, 2, 3   # E = 32: a router unit's logits are a whole SHA-512 block (a statement row needs one)
 G = 32
 UP = {"K": 64, "N": 64, "config": {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 32, "BLOCK_SIZE_K": 32, "num_warps": 4}}
 DOWN = {"K": 64, "N": 64, "config": {"BLOCK_SIZE_M": 16, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 32, "num_warps": 4}}

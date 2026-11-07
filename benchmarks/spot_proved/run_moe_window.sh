@@ -79,6 +79,9 @@ elif [ "${MW_SELF:-0}" = 1 ]; then
 else log "moe-window: give MW_TABLES and MW_KEY (the rank's registration), or MW_SELF=1 (a registration made after serving)"; exit 2; fi
 MW=benchmarks/spot_proved/moe_window.py
 RA=benchmarks/prove_path/records_audit.py
+MAIN=${MW_MAIN_FILE:-$W/main.txt}   # main's first-parent line, which the audit's challenger session pins on
+[ -n "${MW_MAIN_FILE:-}" ] || git -C "$SRC" rev-list --first-parent HEAD > "$MAIN"
+[ -s "$MAIN" ] || { log "moe-window: no first-parent line for the challenger session to pin on: set MW_MAIN_FILE"; exit 2; }
 
 arm() {   # arm NAME [moe_window flags]: stage NAME's window, then audit it; -> the audit's exit
   local name=$1 o=$OUT/$1 d=$W/$1 held rc; shift
@@ -109,7 +112,7 @@ arm() {   # arm NAME [moe_window flags]: stage NAME's window, then audit it; -> 
   fi
   log "moe-window $name: audit ${flags[*]}"
   "$VPY" "$RA" audit --window "$d/stage/window" --law "$LAW" --circuit "${held% *}" --run "${held#* }" \
-    --registered "$d/stage/tables.json" --m0-pythonpath "$PYTHONPATH" --bin "$BIN" --lean "$LEAN" --firewall "$FC_FIREWALL_LEAN" \
+    --registered "$d/stage/tables.json" --challenger local --main "$MAIN" --m0-pythonpath "$PYTHONPATH" --bin "$BIN" --lean "$LEAN" --firewall "$FC_FIREWALL_LEAN" \
     --out "$d/audit" "${flags[@]}" > "$o/audit.log" 2>&1
   rc=$?
   for f in summary.json window/audit.json; do [ -e "$d/audit/$f" ] && cp "$d/audit/$f" "$o/$(basename "$f")"; done
