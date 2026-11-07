@@ -201,7 +201,7 @@ context.
   $\varepsilon_{ks}$ and $\delta_{link}$ at the fine level;
 - `effAcceptProb_full`, `twoStage_full_profile`: **(b1) is one-stage over the coarse partition** ($e_{\text{eff}} = e_{L_1}$);
 - `effAcceptProb_bernoulli_prod`: with a Bernoulli first stage, $e_{\text{eff}}(B) = \prod_{u \in B}\big(1 - p + p\,m_u\big)$ for
-  any second stage, $m_u$ the largest second-stage miss probability inside $u$;
+  any second stage, $m_u$ the largest second-stage acceptance probability inside $u$;
 - `Partition.two_stage_a_coarse`: **(a) is one-stage over the fine partition**, and its curve bounds coarse counts;
 - `Partition.Refines.exists_wrong_fine`: an incorrect coarse unit has an incorrect fine unit under every interior, the lemma
   behind (b).

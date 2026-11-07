@@ -39,9 +39,6 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its ou
 | `library.py` | queries over the library: a bracket and the per-block read breakdown for any algorithm, model, policy and data mode |
 | `slowdown.py` | the bracket per row; `python benchmarks/nci/slowdown.py [--calibration ID] [--row ID]` |
 | `kappa.py` | kappa per token and over each frontier model's pretraining schedule, by part; `python benchmarks/nci/kappa.py [--model ID]` |
-| `covering_priced.py` | Kimi K2's slowdown under the covering bound's forms (one cost, two costs, a price per weight, the priced additive form) at bf16, FP8 and FP4, from per-class weight prices; `python benchmarks/nci/covering_priced.py [--prices FILE.json] [--dgrad]`; `--baselines [--prices FILE.json ...]` gives the priced form's gain over the uniform form under each `c_w` a registration (the weights alone, or with the optimizer state) makes selectable, per price source |
-| `prices_olmoe.json` | a price file for `covering_priced.py --prices`: per-role prices of an updated weight measured on OLMoE-1B-7B-0924's checkpoints (AdamW, 64 experts, top-8), the routed experts (`mlp_in`, `mlp_out`) apart from a dense MLP (`dense_mlp_in`, `dense_mlp_out`); its `about`, `runs` and `method` say how |
-| `prices_olmo2.json` | a price file for `covering_priced.py --prices`: per-class prices of an updated weight measured on OLMo-2 7B and 13B at early, mid and late stage 1, theta's forward codes (`points`) and with its fp32 master (`points_optimizer`), and the theta-selectable tiers over the block matrices; its `about` and `runs` say how |
 | `tiers.py` | the remote composition's terms under the verification stack, per tier (its `efficiency`, and `remote_terms`, the `s` and `x` rho's `multiple_bound` takes); `python benchmarks/nci/tiers.py [--json]` |
 | `exposure.py` | what `tiers.py`'s `efficiency` is most exposed to: ranges, tornados, elasticities, thresholds on its inverse, and the closed forms of mu, nu and chi |
 | `fit.py` | the fit bound: the memory cap when no server window holds a model that reaches the target loss; `python benchmarks/nci/fit.py [--json]` |
@@ -248,7 +245,7 @@ All values below are from `parameters.json`; render the index for the findings b
   - So `U`, the description of the update, sits at or below `K` for every demonstrated post-training method except
     full-weight training. At a 1T MoE, though, decoding seeds costs steps × parameters, and that is what binds.
 - **Activations set the floor.**
-  - Production systems send 8-bit activations across parallel links. The one boundary test in training is stable only
+  - Serving systems send 8-bit activations across parallel links. The one boundary test in training is stable only
     from about 4.4 bits (`b_a.activation/boundary-training`).
   - Retrained bottlenecks cut the bits a token carries across a shard boundary by 2–4x. One preprint claims 100x, and
     its matched-token replication loses 14–15% in loss at only 8x (`activation.boundary_bits/d7168`).
