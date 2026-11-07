@@ -21,10 +21,10 @@ export HF_HOME=${HF_HOME:-/workspace/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 # toolkit under /usr/local unless CUDA_HOME names one. DEEP_GEMM=0 serves FP8 without DeepGEMM.
 CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
 export CUDA_HOME
-# vLLM uses FlashInfer only with flashinfer-cubin installed or nvcc on PATH, and the pin requires neither. By default
-# FlashInfer stays off and so does its sampler (whose JIT needs a newer nvcc than some images carry). FLASHINFER=1 puts
-# CUDA_HOME's nvcc on PATH and leaves the sampler at vLLM's default, as in a stock install with a CUDA toolkit: FlashInfer's
-# sampler, autotune and (TP > 1 on Hopper or Blackwell) fused all-reduce + RMSNorm.
+# vLLM's FlashInfer autotune and fused all-reduce + RMSNorm (TP > 1 on Hopper or Blackwell) need flashinfer-cubin or nvcc
+# on PATH, and the pin installs neither; its FlashInfer sampler needs only VLLM_USE_FLASHINFER_SAMPLER unset, but its JIT
+# needs CUDA_HOME's curand headers. By default all three stay off. FLASHINFER=1 puts CUDA_HOME's nvcc on PATH and leaves
+# the sampler at vLLM's default, as in a stock install with a CUDA toolkit, so all three run.
 if [ "${FLASHINFER:-0}" = 1 ]; then export PATH="$CUDA_HOME/bin:$PATH"
 else export VLLM_USE_FLASHINFER_SAMPLER=${VLLM_USE_FLASHINFER_SAMPLER:-0}; fi
 unset NCCL_P2P_DISABLE

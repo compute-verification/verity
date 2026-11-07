@@ -61,7 +61,7 @@ python benchmarks/replay_ladder/status_table.py render STATUS.json --ladder OUT/
 first's bit for bit, `replay.py --logprobs`), `FLASHINFER` (`1`: CUDA_HOME's nvcc on PATH and FlashInfer's sampler at
 vLLM's default, so vLLM uses FlashInfer as a stock install with a CUDA toolkit does, its autotune and, at TP > 1 on Hopper
 or Blackwell, its fused all-reduce + RMSNorm included; otherwise FlashInfer is off, since the pin installs neither
-flashinfer-cubin nor nvcc), and
+flashinfer-cubin nor nvcc, and so is its sampler, whose JIT needs the toolkit's curand headers), and
 `SPAN_S`, `OVER` and `BURST` for the window (`ladder.py serve --docs` caps the shard's documents a plan takes prompts
 from). `engine_env.txt` records `has_flashinfer`, and each arm's `autotune.sha256` the digest of every FlashInfer
 autotune cache after serving and after each replay. A TP2, TP4 or TP8 model needs a node with that many GPUs. GLM-5.3's window stays inside 2,048 tokens of
@@ -74,4 +74,4 @@ template, half greedy and half at temperature 0.7 with a per-request seed, every
 its cap; the servers' context limit is `MAX_MODEL_LEN` (40,960), and `FLASHINFER` is 1 unless set. Each arm's `kinds.json` breaks every replay's differing
 requests down by kind, with each one's context at its first difference. FP8 models run DeepGEMM, which JIT-compiles with the newest CUDA toolkit under
 `/usr/local` (12.8 or newer; a RunPod image's 12.4 can't, so install `cuda-nvcc-12-9 cuda-cudart-dev-12-9 cuda-cccl-12-9`
-first), unless `DEEP_GEMM=0`; `engine_env.txt` records the choice.
+first, and `libcurand-dev-12-9` for `FLASHINFER=1`), unless `DEEP_GEMM=0`; `engine_env.txt` records the choice.
