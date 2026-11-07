@@ -16,6 +16,10 @@ nothing under it.
 at the port of `own roots` whose root it is. `commit c` is `commitAt c` at the constant ports `c.own`
 (`commit_eq_commitAt`), and `commitAt` binds at every hash, one root list at a time, by `commit_binds`'s argument
 (`commitAt_binds`).
+
+`rooted c.own roots` is the code's ports with their roots read off the list, by index. It changes no port's leaves, so
+the depth is the code's (`depth_rooted`) and one opening's calls are bounded as `commit`'s are
+(`commitAt_rooted_calls_le`).
 -/
 
 @[expose] public section
@@ -63,5 +67,47 @@ theorem commitAt_binds (H : Msg → Msg) (c : Code) (own : List Msg → Array _r
   intro roots
   exact pathCommit_binds (at_ := c.at_) (π := c.π) (layer := c.layer)
     (hm96Leaf_binds H (row_places c.place c.bits) c.salt) (regPath_binds H (own roots)) roots
+
+/-- **`commitAt` under a root list is `commit` at that list's ports.** -/
+theorem commitAt_opens (c : Code) (own : List Msg → Array _root_.Flock.Registered.Port) (roots : List Msg) :
+    (commitAt c own).opens roots = (commit { c with own := own roots }).opens roots := rfl
+
+/-- **One opening's calls under `commitAt`**: `opens_calls_le` at the list's ports. -/
+theorem commitAt_calls_le (H : Msg → Msg) (c : Code) (own : List Msg → Array _root_.Flock.Registered.Port)
+    (roots : List Msg) (o : Opening Bool) :
+    (((commitAt c own).opens roots o).eval H).2.length ≤ 4 + depth (own roots) := by
+  rw [commitAt_opens]
+  exact opens_calls_le H { c with own := own roots } roots o
+
+/-- **Ports at a root list**: each port of `shapes` with its root the list's entry at its index, and a port past the
+list as it is. -/
+def rooted (shapes : Array _root_.Flock.Registered.Port) (roots : List Msg) : Array _root_.Flock.Registered.Port :=
+  shapes.mapIdx fun k p => match roots[k]? with
+    | some r => { p with root := bytes r }
+    | none => p
+
+theorem leaves_rooted (shapes : Array _root_.Flock.Registered.Port) (roots : List Msg) :
+    (rooted shapes roots).toList.map (·.leaves) = shapes.toList.map (·.leaves) := by
+  apply List.ext_getElem
+  · simp [rooted]
+  · intro i h₁ h₂
+    simp only [List.getElem_map, Array.getElem_toList, rooted, Array.getElem_mapIdx]
+    cases roots[i]? <;> rfl
+
+/-- **`rooted` keeps the depth**: it sets roots only. -/
+theorem depth_rooted (shapes : Array _root_.Flock.Registered.Port) (roots : List Msg) :
+    depth (rooted shapes roots) = depth shapes := by
+  have h : ∀ own : Array _root_.Flock.Registered.Port,
+      depth own = (own.toList.map (·.leaves)).foldr (fun n m => max (_root_.Flock.log2ceil n) m) 0 := by
+    intro own
+    rw [List.foldr_map]
+    rfl
+  rw [h, h, leaves_rooted]
+
+/-- **One opening's calls at the code's ports with the list's roots** are bounded as `commit`'s are, by the code's
+deepest port. -/
+theorem commitAt_rooted_calls_le (H : Msg → Msg) (c : Code) (roots : List Msg) (o : Opening Bool) :
+    (((commitAt c (rooted c.own)).opens roots o).eval H).2.length ≤ 4 + depth c.own := by
+  simpa only [depth_rooted] using commitAt_calls_le H c (rooted c.own) roots o
 
 end SamplingDeploy
