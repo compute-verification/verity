@@ -7,7 +7,8 @@ lint holds the rest of ``git ls-files``' ``*.py`` and ``*.pyi``, ``tools/verity`
 alone: a nearer one would replace it for ``ruff check`` there, so there is none.  Findings are counted per ``(file, rule)``: the file relative
 to the repository and the rule's code, the key the ratchet gate counts by too, so a refactor that moves a finding within its
 file changes nothing here.  An entry ``{"file", "rule", "count"}`` allows ``count`` findings of its pair.  A pair found more
-times than its entry allows, or found with no entry, fails.  An entry that allows more than is found doesn't: the list can run
+times than its entry allows, or found with no entry, fails; in the root suite only an error's (`ERRORS`) fails, and the rest
+warn (`tests/conftest.py`'s `BOOKKEEPING`).  An entry that allows more than is found doesn't: the list can run
 ahead of a tree, holding the findings of PRs queued below it on ``next`` that a fix, an ejection or a reorder leaves out, and
 ``--prune`` deletes and lowers what this tree no longer finds.  ``ruff check --fix PATH`` fixes some (F401, F541, RUF100's
 stale ``# noqa``).
@@ -38,6 +39,8 @@ LIST = Path(__file__).resolve().parent / "allowlists" / f"{NAME}.json"
 #: what the integration's ruff lint holds to its own list (its `ROOT` and `DEFINITIONS`), and the archive
 LEFT_OUT = ("integrations/vllm/", "verity/ml/definitions/", "archive/")
 FIELDS = ("file", "rule", "count")
+#: the rules whose findings are errors: a syntax error, an undefined name, a misused statement or comparison
+ERRORS = ("syntax-error", "E9", "F63", "F7", "F82")
 FIX = ("Fix the code (`ruff check --fix PATH` fixes some), or, where the rule is wrong for that line, say why in a "
        "`# noqa: CODE` on it. If the file moved, move its entries in the same change: "
        "`python3 tests/lint/test_repo_ruff.py --move OLD NEW`.")
@@ -84,15 +87,29 @@ def test_the_repository_has_two_ruff_configurations() -> None:
         "Put a rule or a per-file exception in the root's, under `[lint.per-file-ignores]` for one path")
 
 
-def test_no_new_findings() -> None:
+def new_findings(rules: tuple[str, ...] = ("",)) -> list[str]:
+    """Each (file, rule) pair whose rule starts with one of ``rules`` and is found more often than the list allows, with its
+    sites."""
     found, have, sites = Counter(k for k, *_ in scan()), allowed(), {}
     for k, line, message in scan():
         sites.setdefault(k, []).append((line, message))
-    new = [f"  {k[0]} [{k[1]}]: {n} found, {have[k]} allowed\n"
-           + "\n".join(f"    {k[0]}:{line} {message}" for line, message in sorted(sites[k]))
-           for k, n in sorted(found.items()) if n > have[k]]
+    return [f"  {k[0]} [{k[1]}]: {n} found, {have[k]} allowed\n"
+            + "\n".join(f"    {k[0]}:{line} {message}" for line, message in sorted(sites[k]))
+            for k, n in sorted(found.items()) if n > have[k] and k[1].startswith(rules)]
+
+
+def test_no_new_findings() -> None:
+    """The ratchet gate runs this as it is; the root suite's `BOOKKEEPING` (`tests/conftest.py`) makes it warn there."""
+    new = new_findings()
     assert not new, (f"ruff (ruff.toml): {len(new)} (file, rule) pair(s) found more often than tests/lint/allowlists/{NAME}.json "
                      f"allows. {FIX}\n" + "\n".join(new))
+
+
+def test_no_ruff_error() -> None:
+    """A new error (`ERRORS`) fails in the root suite, where a new style finding only warns."""
+    new = new_findings(ERRORS)
+    assert not new, (f"ruff (ruff.toml): {len(new)} (file, rule) pair(s) of errors (a syntax error, an undefined name) found more "
+                     f"often than tests/lint/allowlists/{NAME}.json allows. {FIX}\n" + "\n".join(new))
 
 
 def moved(entries: Counter, old: str, new: str) -> Counter:
