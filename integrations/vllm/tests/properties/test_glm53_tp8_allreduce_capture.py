@@ -23,6 +23,7 @@ from tests.properties import glm53_tp8_allreduce_capture_gpu as X
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.registry import tp_allreduce as T
 from verity.ml.definitions.registry import tp_allreduce_check as K
+from verity.ml.definitions.registry import tp_allreduce_nodes as TN
 from verity_vllm.properties.record import REGISTRY, digest_of
 
 N = 1536
@@ -38,7 +39,7 @@ def _random_tree(rng):
         i, j = sorted(rng.choice(len(nodes), 2, replace=False))
         b, a = nodes.pop(j), nodes.pop(i)
         nodes.append((a, b))
-    return T.multimem_tree(nodes[0], X.WORLD)
+    return TN.multimem_tree(nodes[0], X.WORLD)
 
 
 TREES = tuple(_random_tree(np.random.default_rng(s)) for s in range(X.WORLD))
@@ -940,7 +941,7 @@ def _bind_captured(c: T.Captured, M: int):
 
 def _node_of(c: T.Captured) -> dict:
     """The node record whose routes `c` is, by its node tree."""
-    return next(r for r in T.NODE_RECORDS if T.node_key(r)[2:] == c.node)
+    return next(r for r in TN.NODE_RECORDS if TN.node_key(r)[2:] == c.node)
 
 
 def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
@@ -963,7 +964,7 @@ def test_each_captured_route_is_the_dispatchs_at_its_setting() -> None:
         else:
             rec = _node_of(c)
             assert c.runs == next(tuple(r["run_records"]) for r in rec["routes"] if (r["setting"], r["N"], r["route"]) == c[:3])
-            assert c.device == T.node_key(rec)[0] == ("9.0", 132) and c.definition == "AllReduceMultimem_v1"
+            assert c.device == TN.node_key(rec)[0] == ("9.0", 132) and c.definition == "AllReduceMultimem_v1"
             facts = {"device": c.device, "trees": c.node[0], "ftz": c.node[1]}
             assert (T.covered(c.setting, c.N, c.route, c.lo) is c) == (c.node == T.UNSTATED_NODE[1:])
         for M in range(c.lo, c.hi + 1):
@@ -1031,7 +1032,7 @@ NODE_TREE = "(((((((0,2),3),1),5),6),4),7)"
 
 
 def _tree_strs(trees) -> set[str]:
-    return {X.tree_str(T.multimem_tree(t, X.WORLD)) for t in trees}
+    return {X.tree_str(TN.multimem_tree(t, X.WORLD)) for t in trees}
 
 
 def test_the_node_records_are_the_two_h200_nodes() -> None:
@@ -1039,21 +1040,21 @@ def test_the_node_records_are_the_two_h200_nodes() -> None:
     memory as NVLS in one f32 sum on that tree, so it covers symmetric memory to 5461 tokens and NCCL from 5462 to 8192 at vLLM's
     defaults, both at that tree (offset-free).  The second is `CAPTURE_RUNS`' node, `GLM53_H200_TREE` on every owner and no NCCL
     logged, its routes at the runs `CAPTURE_RUNS` names, and `UNSTATED_NODE`."""
-    new, old = T.NODE_RECORDS
+    new, old = TN.NODE_RECORDS
     assert _tree_strs(new["multimem"]["trees"]) == {NODE_TREE} and _tree_strs(old["multimem"]["trees"]) == {X.tree_str(T.GLM53_H200_TREE)}
-    assert T.node_key(new)[0] == T.node_key(old)[0] == H200 and new["multimem"]["ftz"] is old["multimem"]["ftz"] is False
+    assert TN.node_key(new)[0] == TN.node_key(old)[0] == H200 and new["multimem"]["ftz"] is old["multimem"]["ftz"] is False
     assert [(r["setting"], r["N"], r["route"], r["lo"], r["hi"]) for r in new["routes"]] == [
         ("defaults", 6144, "pynccl_comm", 5462, 8192), ("defaults", 6144, "symm_mem_comm", 43, 5461)]
     assert new["nccl"]["fit"] == "f32" and [(s["M"], s["algo"], s["proto"], s["channels"], len(s["runs"])) for s in new["nccl"]["sizes"]] == [
         (5462, "NVLS", "SIMPLE", "0..15", 1), (8192, "NVLS", "SIMPLE", "0..15", 1)]
-    assert X.tree_str(T.nvls_tree(new["nccl"], X.WORLD)) == NODE_TREE and new["versions"]["nccl"] == "2.29.7+cuda12.9"
+    assert X.tree_str(TN.nvls_tree(new["nccl"], X.WORLD)) == NODE_TREE and new["versions"]["nccl"] == "2.29.7+cuda12.9"
     assert old["nccl"] is None and tuple(s["run_record"] for s in old["source"]) == T.CAPTURE_RUNS
     assert [(r["setting"], r["N"], r["route"], r["lo"], r["hi"], tuple(r["run_records"])) for r in old["routes"]] == [
         ("custom-off", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[:2]), ("defaults", 6144, "symm_mem_comm", 43, 2048, T.CAPTURE_RUNS[2:]),
         ("defaults", 7168, "symm_mem_comm", 37, 2048, T.CAPTURE_RUNS[2:])]
-    assert T.UNSTATED_NODE == (T.node_key(old)[0], *T.node_key(old)[2:])
+    assert T.UNSTATED_NODE == (TN.node_key(old)[0], *TN.node_key(old)[2:])
     nvls = T.covered("defaults", 6144, "pynccl_comm", 5462, device=H200, trees=new["multimem"]["trees"], ftz=False)
-    assert nvls.statics == {"TREES": T.node_key(new)[2], "FTZ": False} and T.offset_free(nvls, X.WORLD)
+    assert nvls.statics == {"TREES": TN.node_key(new)[2], "FTZ": False} and T.offset_free(nvls, X.WORLD)
 
 
 def test_covered_takes_the_stated_node_tree() -> None:
@@ -1061,18 +1062,18 @@ def test_covered_takes_the_stated_node_tree() -> None:
     tree.  At `CAPTURE_RUNS`' tree, or with none stated (`UNSTATED_NODE`), symmetric memory covers up to 2048 at its own tree and
     NCCL nothing.  Half a statement (TREES or FTZ alone), another tree, FTZ on, a tree not one per owner, or another device
     covers neither."""
-    new_t, old_t = T.NODE_RECORDS[0]["multimem"]["trees"], [T.GLM53_H200_TREE] * X.WORLD
+    new_t, old_t = TN.NODE_RECORDS[0]["multimem"]["trees"], [T.GLM53_H200_TREE] * X.WORLD
 
     def at(route: str, M: int, device=H200, **stated):
         return T.covered("defaults", 6144, route, M, device=device, **stated)
 
     for M in (43, 2048, 5461):
-        assert at("symm_mem_comm", M, trees=new_t, ftz=False).statics["TREES"] == T.node_key(T.NODE_RECORDS[0])[2]
+        assert at("symm_mem_comm", M, trees=new_t, ftz=False).statics["TREES"] == TN.node_key(TN.NODE_RECORDS[0])[2]
     for M in (5462, 8192):
         assert at("pynccl_comm", M, trees=new_t, ftz=False).definition == "AllReduceMultimem_v1"
     assert at("pynccl_comm", 8193, trees=new_t, ftz=False) is None
     for stated in ({"trees": old_t, "ftz": False}, {}):
-        assert at("symm_mem_comm", 2048, **stated).statics["TREES"] == T.multimem_trees(old_t, X.WORLD)
+        assert at("symm_mem_comm", 2048, **stated).statics["TREES"] == TN.multimem_trees(old_t, X.WORLD)
         assert at("symm_mem_comm", 2049, **stated) is None and at("pynccl_comm", 5462, **stated) is None
     for stated in ({"trees": new_t}, {"ftz": False}, {"trees": new_t, "ftz": True}, {"trees": [BALANCED] * X.WORLD, "ftz": False},
                    {"trees": new_t[:7], "ftz": False}):
@@ -1084,7 +1085,7 @@ def test_a_registration_is_refused_by_name(monkeypatch) -> None:
     """`node_refusal` names why a registration's stated node tree is refused: `multimem_tree_unrecorded` for a tree, FTZ, device or
     world no record holds, or a tree that is not one per owner; `multimem_tree_unstated` for half a statement, and for none once
     `UNSTATED_NODE` is None, under which `covered` covers no symmetric-memory call stated none (and still FlashInfer's)."""
-    new_t = T.NODE_RECORDS[0]["multimem"]["trees"]
+    new_t = TN.NODE_RECORDS[0]["multimem"]["trees"]
     for trees, ftz in ((new_t, False), ([T.GLM53_H200_TREE] * X.WORLD, False), (None, None)):
         assert T.node_refusal(trees, ftz, device=H200) is None
     for trees, ftz, device, world in ((new_t, True, H200, 8), ([BALANCED] * X.WORLD, False, H200, 8), (new_t, False, T.RTX_PRO_6000, 8),
@@ -1120,17 +1121,20 @@ def _set(path: tuple, value):
     (_set(("nccl", "sizes", 0, "bytes"), 1), r"nccl.sizes\[0\].bytes"),
     (_set(("nccl", "sizes", 0, "runs"), [[0, 1, 0]]), "runs end at 1"),
     (_set(("routes", 0, "setting"), "served"), r"routes\[0\] is setting 'served'"),
+    (_set(("routes", 0, "route"), "ca_comm"), r"routes\[0\] is route 'ca_comm'"),
     (_set(("routes", 1, "lo"), 9999), "lo 9999 > hi"),
     (lambda r: r["routes"].append(copy.deepcopy(r["routes"][0])), "repeats"),
     (_set(("routes", 0, "run_records"), ["art:" + "1" * 64]), "not in source"),
     (_set(("source", 0, "run_record"), None), r"source\[0\].run_record"),
 ])
 def test_a_node_record_is_refused_by_its_field(mutate, match: str) -> None:
-    rec = copy.deepcopy(T.NODE_RECORDS[0])
-    T.check_node_record(rec)
+    """A record `tp_allreduce` reads (`check_node_record`'s format, then `SETTINGS` where it keys the routes) is refused by its
+    field."""
+    rec = copy.deepcopy(TN.NODE_RECORDS[0])
+    T._node_entries(TN.check_node_record(rec))
     mutate(rec)
     with pytest.raises(ValueError, match=match):
-        T.check_node_record(rec)
+        T._node_entries(TN.check_node_record(rec))
 
 
 def _registered(doc: dict) -> dict:
@@ -1147,25 +1151,25 @@ def test_a_register_run_writes_a_node_record_that_round_trips(tmp_path, monkeypa
     doc = _registered(_with_nccl(_doc()))
     assert X.register_verdict(doc)["ok"]
     rec = X.node_record(doc, "c0ffee")
-    assert json.loads(json.dumps(rec)) == rec and T.node_key(rec) == (H200, X.WORLD, T.multimem_trees(TREES, X.WORLD), True)
+    assert json.loads(json.dumps(rec)) == rec and TN.node_key(rec) == (H200, X.WORLD, TN.multimem_trees(TREES, X.WORLD), True)
     assert rec["versions"] == {"driver": "595.91.07", "nccl": None, "torch": "2.13.0+cu129", "vllm": "0.28.1rc1.dev472+gd9105ea80",
                                "flashinfer": "0.6.18"}
     assert rec["multimem"]["probes"] == [[6144, 64]] and rec["source"] == [{"run_record": None, "commit": "c0ffee"}]
     assert rec["nccl"]["fit"] == "bf16" and [(s["M"], s["algo"], s["channels"]) for s in rec["nccl"]["sizes"]] == [(5462, "RING", "0..23")]
     assert [(r["setting"], r["N"], r["route"], r["lo"], r["hi"]) for r in rec["routes"]] == [("defaults", 6144, "symm_mem_comm", 64, 64)]
     with pytest.raises(ValueError, match="run_record"):
-        T.check_node_record(rec)
+        TN.check_node_record(rec)
     art = "art:" + "0" * 64
     rec["source"][0]["run_record"], rec["routes"][0]["run_records"] = art, [art]
     path = tmp_path / "nodes.json"
     path.write_text(json.dumps([rec]))
-    assert T.load_node_records(path) == (rec,)
+    assert TN.load_node_records(path) == (rec,)
     monkeypatch.setattr(T, "CAPTURED", (*T.CAPTURED, *T._node_entries(rec)))
     got = T.covered("defaults", 6144, "symm_mem_comm", 64, device=H200, trees=list(TREES), ftz=True)
-    assert got.runs == (art,) and got.statics == {"TREES": T.multimem_trees(TREES, X.WORLD), "FTZ": True}
+    assert got.runs == (art,) and got.statics == {"TREES": TN.multimem_trees(TREES, X.WORLD), "FTZ": True}
     path.write_text(json.dumps([rec, rec]))
     with pytest.raises(ValueError, match="two node records"):
-        T.load_node_records(path)
+        TN.load_node_records(path)
     untuned = _registered(_with_nccl(_doc()))
     untuned["nccl_log"] = {}
     assert not X.register_verdict(untuned)["ok"]
@@ -1224,7 +1228,7 @@ def test_main_end_to_end_on_stubbed_ranks(small, tmp_path, monkeypatch, capsys) 
                                  "h7168/M2", "h7168/M146", "h7168/M148", "h7168_probe/M148"}
     assert doc["bind"]["ok"] and doc["h7168_bind"]["ok"] and doc["probes"]["agree"] and doc["probes"]["ftz"] is True
     assert all(d["ok"] for d in doc["dispatch"].values()) and set(doc["dispatch"]) == set(X.spawns("defaults"))
-    assert [T.multimem_tree(t, 8) for t in doc["probes"]["trees"]] == list(TREES) and doc["prefill"] == "served"
+    assert [TN.multimem_tree(t, 8) for t in doc["probes"]["trees"]] == list(TREES) and doc["prefill"] == "served"
     assert doc["h7168"] == {"ok": True, "trees": doc["probes"]["trees"], "ftz": True, "same_as_glm53": True}
     assert doc["switch_cost"] == {"M171": round(2 / 3, 3)} and sorted(doc["words"]) == [
         "words/again_M171.npy", "words/allreduce_M171.npy", "words/h7168_M148.npy", "words/h7168_probe_M148.npy",
@@ -1316,8 +1320,8 @@ def test_main_registers_the_node_on_stubbed_ranks(nccl_small, tmp_path, monkeypa
     assert X.main(argv) == 0
     doc = json.loads((out / X.RECORD).read_text())
     assert set(doc["cases"]) == {"probe/M171", "again/M171", "nccl_probe/M172", "nccl_again/M172"} and doc["register"] == {"ok": True}
-    rec = T.check_node_record(json.loads(node.read_text()), cited=False)
-    assert T.node_key(rec) == (H200, X.WORLD, T.multimem_trees(TREES, X.WORLD), True) and rec["versions"]["nccl"] == "2.29.7+cuda12.9"
+    rec = TN.check_node_record(json.loads(node.read_text()), cited=False)
+    assert TN.node_key(rec) == (H200, X.WORLD, TN.multimem_trees(TREES, X.WORLD), True) and rec["versions"]["nccl"] == "2.29.7+cuda12.9"
     assert rec["nccl"]["fit"] == "f32" and [(s["M"], s["algo"], s["proto"], s["channels"], len(s["runs"])) for s in rec["nccl"]["sizes"]] == [
         (172, "NVLS", "SIMPLE", "0..15", 1)]
     assert [(r["route"], r["lo"], r["hi"]) for r in rec["routes"]] == [("pynccl_comm", 172, 172), ("symm_mem_comm", 171, 171)]

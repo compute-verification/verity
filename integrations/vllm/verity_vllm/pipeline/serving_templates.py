@@ -162,11 +162,12 @@ def cols_refused(word: str) -> str | None:
     if spec_base(word) != "AllReduceMultimem_v1":
         return None
     from verity.ml.definitions.registry import tp_allreduce as TA
+    from verity.ml.definitions.registry import tp_allreduce_nodes as TN
 
     S = spec_statics(word)
     try:
         world = TA.ranks(S["WORLD"])
-        trees = TA.multimem_trees(S["TREES"], world)
+        trees = TN.multimem_trees(S["TREES"], world)
         TA.multimem_owners(world, int(S["SIZE"]))
     except (KeyError, TypeError, ValueError) as e:
         return f"{word}: {type(e).__name__}: {e}"

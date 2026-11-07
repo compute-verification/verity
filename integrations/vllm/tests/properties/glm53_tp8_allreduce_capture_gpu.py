@@ -71,9 +71,9 @@ those M GO at the runs.  ``coverage`` lists, per setting, hidden size and route,
 `tp_allreduce.CAPTURED` may then cite, with this run's id.
 
 The multimem trees are the node's, not the H200's, so ``--register RECORD.json`` runs only `REGISTER_PHASES` (a few minutes) and
-writes the node's record (`node_record`, `tp_allreduce.check_node_record`) when `register_verdict` holds: its device and
+writes the node's record (`node_record`, `tp_allreduce_nodes.check_node_record`) when `register_verdict` holds: its device and
 versions, each owner's tree and FTZ, NCCL's fit, tuning and runs past 64 MiB, and the routes its probes showed.  Added to
-`tp_allreduce.NODE_FILE` with its run record, it keys symmetric memory's and NVLS's routes on that node's tree.
+`tp_allreduce_nodes.NODE_FILE` with its run record, it keys symmetric memory's and NVLS's routes on that node's tree.
 
     cd integrations/vllm; PY=/workspace/cp/venv312/bin/python  # the H200 pod's venv; PYTHONPATH as verity_vllm/ops/pod_bootstrap.sh sets it
     export CUDA_HOME=/usr/local/cuda PATH=/workspace/cp/venv312/bin:/usr/local/cuda/bin:$PATH
@@ -107,6 +107,7 @@ from verity_vllm.config import RowEngine
 from verity.ml.definitions.numerics import derived_rows as DR
 from verity.ml.definitions.registry import tp_allreduce as T
 from verity.ml.definitions.registry import tp_allreduce_check as K
+from verity.ml.definitions.registry import tp_allreduce_nodes as TN
 from verity_vllm.properties.record import seal as seal_record
 
 SCHEMA = "verity-vllm/glm53-tp8-allreduce-capture/v3"
@@ -1362,10 +1363,10 @@ def register_verdict(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 def node_record(doc: dict[str, Any], commit: str | None = None) -> dict[str, Any]:
-    """The node record a run whose `register_verdict` holds shows (`tp_allreduce.check_node_record`, uncited: its route records
+    """The node record a run whose `register_verdict` holds shows (`tp_allreduce_nodes.check_node_record`, uncited: its route records
     are the run's, added with it): the gate's device and driver, the versions, the probes' trees, FTZ and [N, M] (h7168's when its
     verdict holds at the same trees), NCCL's fit and per probed M its tuning and runs when its verdict holds, and per (setting, N,
-    route) of symmetric memory's, and NCCL's when it is one f32 sum on one tree (NVLS, `tp_allreduce.nvls_tree`), the fewest and
+    route) of symmetric memory's, and NCCL's when it is one f32 sum on one tree (NVLS, `tp_allreduce_nodes.nvls_tree`), the fewest and
     most tokens of its launches, every one GO."""
     g, env, p = doc["gate"], doc["environment"], doc["probes"]
     h7168 = doc["h7168"].get("ok") is True and doc["h7168"].get("same_as_glm53") is True
@@ -1381,7 +1382,7 @@ def node_record(doc: dict[str, Any], commit: str | None = None) -> dict[str, Any
         (fit,) = {r["fit"] for _, r in runs}
         nccl = json.loads(json.dumps({"fit": fit, "sizes": sizes}))
         try:
-            nvls = T.nvls_tree(nccl, WORLD) is not None
+            nvls = TN.nvls_tree(nccl, WORLD) is not None
         except ValueError:
             nvls = False
     spans: dict[tuple[str, int, str], list[tuple[int, bool]]] = {}
@@ -1391,7 +1392,7 @@ def node_record(doc: dict[str, Any], commit: str | None = None) -> dict[str, Any
             spans.setdefault((c["setting"], c["H"], route), []).append((c["M"], doc["cases"][c["key"]]["ok"]))
     phases = ("probe", "again", *(("h7168_probe",) if h7168 else ()))
     versions = sorted({v for log in logs.values() for v in log.get("version", [])})
-    rec = {"schema": T.NODE_SCHEMA, "device": {"name": g["name"], "compute_capability": g["compute_cap"], "sms": g["sms"]},
+    rec = {"schema": TN.NODE_SCHEMA, "device": {"name": g["name"], "compute_capability": g["compute_cap"], "sms": g["sms"]},
            "world": WORLD, "versions": {"driver": g.get("driver"), "nccl": versions[0] if len(versions) == 1 else None,
                                         **{k: env.get(k) for k in ("torch", "vllm", "flashinfer")}},
            "multimem": {"trees": p["trees"], "ftz": p["ftz"],
@@ -1401,7 +1402,7 @@ def node_record(doc: dict[str, Any], commit: str | None = None) -> dict[str, Any
                       for (s, n, r), ms in sorted(spans.items()) if all(ok for _, ok in ms)],
            "source": [{"run_record": None, "commit": commit}]}
     rec["multimem"]["probes"] = [list(x) for x in rec["multimem"]["probes"]]
-    return T.check_node_record(json.loads(json.dumps(rec)), cited=False)
+    return TN.check_node_record(json.loads(json.dumps(rec)), cited=False)
 
 
 def _commit() -> str | None:
@@ -1600,7 +1601,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--only", default=None, help=f"comma list of phases: {', '.join(PHASES)} (default all; --register's "
                                                   f"{', '.join(REGISTER_PHASES)})")
     ap.add_argument("--register", default=None, metavar="RECORD.json",
-                    help="write this node's record (tp_allreduce.check_node_record) there when its probes hold one; exit 0 then")
+                    help="write this node's record (tp_allreduce_nodes.check_node_record) there when its probes hold one; exit 0 then")
     a = ap.parse_args(argv)
     a.only = a.only or ",".join(REGISTER_PHASES if a.register else PHASES)
     doc = run(a)

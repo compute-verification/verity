@@ -42,11 +42,9 @@ What the 8-GPU capture (`tests/properties/glm53_tp8_allreduce_capture_gpu.py`) h
 `CAPTURED`; `covered` answers for one call, and a route it does not name is not covered, whatever the dispatch says. The third
 GO run served vLLM's defaults and also captured DeepSeek-V4-Pro's 7168-wide all-reduces.
 
-The NVSwitch's reduction trees are the node's, not the H200's: two 8x H200 nodes have shown different ones.  So symmetric
-memory's routes, and NCCL's past them where NCCL runs NVLS (one in-switch f32 sum on one tree, `nvls_tree`), come from node
-records (`NODE_FILE`, `check_node_record`: the device, versions, each owner's tree and FTZ, NCCL's tuning and runs, the routes
-and the runs they rest on), each written by the capture's ``--register`` on one node.  `covered` takes a node's routes only at
-its device and the TREES and FTZ a registration states, `UNSTATED_NODE` when it states none; `node_refusal` names a refusal.
+The NVSwitch's reduction trees are the node's, not the H200's, so symmetric memory's routes, and NCCL's past them where NCCL
+runs NVLS (one in-switch f32 sum on one tree), come from node records (`tp_allreduce_nodes`).  `covered` takes a node's routes
+only at its device and the TREES and FTZ a registration states, `UNSTATED_NODE` when it states none; `node_refusal` names a refusal.
 
 The MNNVL all-reduce (`reduceOneshotDeterministic`, `reduceLamportRanksChunked`): every rank's bf16 payload has -0 (0x8000, the
 Lamport sentinel) written as +0 (`sanitizeLamportPayload`); the f32 sum starts at +0 and adds rank 0, 1, ..., WORLD-1 (FADD.FTZ)
@@ -102,8 +100,6 @@ is 0x7FFF.
 """
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import NamedTuple
 
 import numpy as np
@@ -115,17 +111,17 @@ from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import BF16
+from verity.ml.definitions.registry.tp_allreduce_nodes import (NODE_FILE, NODE_RECORDS, multimem_tree, multimem_trees, node_key,
+                                                               nvls_tree, stated_node)
 
 __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "AllReduceMnnvlCoordinate", "AllReduceMultimem",
            "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
            "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",
            "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_REPLAY_RUN", "MULTIMEM_VECTOR",
-           "NCCL_TREE_RUNS", "NODE_FILE", "NODE_RECORDS", "NODE_SCHEMA", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS",
-           "SYMM_MEM_MAX_BYTES", "TREE_UNRECORDED", "TREE_UNSTATED", "UNSTATED_NODE", "WARP", "chain", "check_node_record", "covered",
-           "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits", "fused_max_tokens", "load_node_records",
-           "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "multimem_tree", "multimem_trees", "nccl_chain",
-           "node_key", "node_refusal", "nvls_tree", "offset_free", "ranks", "route_binding", "served_route", "settings_of", "strategy",
-           "tree_clusters", "tree_from_clusters", "tree_leaves"]
+           "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS", "SYMM_MEM_MAX_BYTES", "TREE_UNRECORDED", "TREE_UNSTATED",
+           "UNSTATED_NODE", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits",
+           "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "nccl_chain", "node_refusal",
+           "offset_free", "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters"]
 
 WARP = 32
 #: FlashInfer `MNNVL_ONE_SHOT_THRESHOLD`: the one-shot kernel up to this many bytes of M * H * WORLD
@@ -157,7 +153,7 @@ SETTINGS = {"defaults": (True, True), "custom-off": (False, True), "switch": (Tr
 CAPTURE_RUNS = tuple(EVIDENCE["glm53_tp8_allreduce_capture"]["run_records"])
 _CUSTOM_OFF_RUNS = CAPTURE_RUNS[:2]
 _DEFAULT_RUNS = CAPTURE_RUNS[2:]
-#: the tree every owner's multimem reduction took on the node of `CAPTURE_RUNS` (its record in `NODE_RECORDS`, including the
+#: the tree every owner's multimem reduction took on the node of `CAPTURE_RUNS` (its record in `tp_allreduce_nodes`, including the
 #: 7168-wide pass): another node's may differ, so it is a fixed tree for bindings and tests, not the H200's
 GLM53_H200_TREE = ((((((0, (1, 2)), 3), 5), 6), 4), 7)
 #: vLLM's batch-invariant mode (``VLLM_BATCH_INVARIANT=1``), the setting under which every TP all-reduce is pynccl's
@@ -175,7 +171,7 @@ class Captured(NamedTuple):
     `fused_allreduce_rms_norm`'s FlashInfer call; else the communicator `CudaCommunicator.all_reduce` hands it to) equal
     `definition` at `statics` on every word, in the runs whose records are `runs`, over `world` ranks of `device` ((compute
     capability, SMs)) with NCCL's `transport` between them (``"shm"``: ``NCCL_P2P_DISABLE=1``), on the node whose multimem
-    trees and FTZ are `node` (`node_key`'s last two). A device, transport or node of None is one the entry is not keyed on (the
+    trees and FTZ are `node` (`tp_allreduce_nodes.node_key`'s last two). A device, transport or node of None is one the entry is not keyed on (the
     H200 entries', routes NCCL does not run, keyed on their setting at world 8; every route but multimem's and NVLS's)."""
     setting: str
     N: int
@@ -222,23 +218,12 @@ def covered(setting: str, N: int, route: str, M: int, *, world: int = 8, device=
     if setting not in SETTINGS and setting != BATCH_INVARIANT:
         raise ValueError(f"setting {setting!r}: one of {sorted(SETTINGS) + [BATCH_INVARIANT]}")
     dev = None if device is None else device_of(*device)
-    node, node_dev = _stated_node(trees, ftz, int(world)), dev
+    node, node_dev = stated_node(trees, ftz, int(world)), dev
     if trees is None and ftz is None and UNSTATED_NODE is not None:
         node, node_dev = UNSTATED_NODE[1:], dev or UNSTATED_NODE[0]
     return next((c for c in CAPTURED if (c.setting, c.N, c.route, c.world) == (setting, N, route, int(world)) and c.lo <= M <= c.hi
                  and c.transport in (None, transport)
                  and (c.device in (None, dev) if c.node is None else (c.device, c.node) == (node_dev, node))), None)
-
-
-def _stated_node(trees, ftz, world: int) -> tuple | None:
-    """A registration's stated (TREES, FTZ) in canonical form, or None when it states neither or a tree that is not one per owner
-    of `world` ranks."""
-    if trees is None or ftz is None:
-        return None
-    try:
-        return multimem_trees(trees, world), bool(ftz)
-    except ValueError:
-        return None
 
 
 def ranks(W) -> int:
@@ -345,37 +330,6 @@ def custom_owners(world: int, size: int, stage: int) -> list[tuple[int, int, int
     return runs
 
 
-def tree_leaves(t) -> tuple[int, ...]:
-    return (t,) if isinstance(t, int) else tuple(r for c in t for r in tree_leaves(c))
-
-
-def multimem_tree(t, world: int):
-    """`t` as a reduction tree over ranks 0..WORLD-1 in canonical form: a rank, or a pair of trees (one f32 add), every rank once,
-    each pair's children ordered by their least rank (an IEEE add commutes)."""
-    def canon(x):
-        if isinstance(x, bool) or not isinstance(x, (int, tuple, list)):
-            raise ValueError(f"TREE {t!r}: a node is a rank or a pair of nodes, not {x!r}")
-        if isinstance(x, int):
-            return x
-        if len(x) != 2:
-            raise ValueError(f"TREE {t!r}: the node {x!r} adds {len(x)} subtrees; each add takes two")
-        a, b = canon(x[0]), canon(x[1])
-        return (a, b) if min(tree_leaves(a)) < min(tree_leaves(b)) else (b, a)
-
-    c = canon(t)
-    if sorted(tree_leaves(c)) != list(range(world)):
-        raise ValueError(f"TREE {t!r}: its leaves must be the ranks 0..{world - 1}, each once")
-    return c
-
-
-def multimem_trees(trees, world: int) -> tuple:
-    """One canonical tree per owner rank."""
-    trees = tuple(trees)
-    if len(trees) != world:
-        raise ValueError(f"TREES: one tree per owner rank, {world}, not {len(trees)}")
-    return tuple(multimem_tree(t, world) for t in trees)
-
-
 def chain(world: int, order=None):
     """The tree adding the ranks of `order` (default 0, 1, ..., WORLD-1) one at a time onto the first."""
     order = tuple(range(world)) if order is None else tuple(order)
@@ -453,163 +407,18 @@ def multimem_runs(world: int, size: int, trees) -> list[tuple[int, int, object]]
 # Node records
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-NODE_SCHEMA = "tp-allreduce-node/1"
-#: every node record (`check_node_record`), one per node the 8-GPU capture's ``--register`` (or a whole capture) ran on
-NODE_FILE = Path(__file__).with_name("tp_allreduce_nodes.json")
-#: the models an NCCL probe fits: bf16 at every hop, or one in-switch f32 sum rounded once, IEEE or FTZ
-NODE_NCCL_FITS = ("bf16", "f32", "f32_ftz")
-#: the routes a node record keys: torch's symmetric memory, and NCCL's past it when its probe fits one in-switch f32 sum (NVLS)
-NODE_ROUTES = ("symm_mem_comm", "pynccl_comm")
 #: `node_refusal`'s names: the registration states no multimem tree and FTZ; no node record holds the ones it states
 TREE_UNSTATED, TREE_UNRECORDED = "multimem_tree_unstated", "multimem_tree_unrecorded"
-_NODE_KEYS = ("schema", "device", "world", "versions", "multimem", "nccl", "routes", "source")
-
-
-def _fields(where: str, d, keys) -> dict:
-    if not isinstance(d, dict) or sorted(d) != sorted(keys):
-        got = sorted(d) if isinstance(d, dict) else type(d).__name__
-        raise ValueError(f"node record: {where} has {got}, not the keys {sorted(keys)}")
-    return d
-
-
-def _int(where: str, v, lo: int = 1) -> int:
-    if isinstance(v, bool) or not isinstance(v, int) or v < lo:
-        raise ValueError(f"node record: {where} is {v!r}, not an integer >= {lo}")
-    return v
-
-
-def _text(where: str, v, *, none: bool = False):
-    if not (isinstance(v, str) and v) and not (none and v is None):
-        raise ValueError(f"node record: {where} is {v!r}, not a string{' or null' if none else ''}")
-    return v
-
-
-def _list(where: str, v, *, empty: bool = False) -> list:
-    if not isinstance(v, list) or (not v and not empty):
-        raise ValueError(f"node record: {where} is {v!r}, not a {'' if empty else 'nonempty '}list")
-    return v
-
-
-def _trees(where: str, trees, world: int) -> tuple:
-    try:
-        return tuple(multimem_tree(t, world) for t in _list(where, trees))
-    except ValueError as e:
-        raise ValueError(f"node record: {where}: {e}") from None
-
-
-def nvls_tree(nccl: dict | None, world: int):
-    """The one tree a node record's NCCL all-reduces (its ``nccl``) take at every probed size over `world` ranks, when its fit is
-    one in-switch f32 sum (NVLS, `AllReduceMultimem_v1` at that tree on every owner), else ValueError."""
-    if nccl is None or nccl["fit"] not in ("f32", "f32_ftz"):
-        raise ValueError("node record: a pynccl_comm route needs nccl.fit f32 or f32_ftz (one in-switch f32 sum)")
-    trees = {multimem_tree(s["trees"][s["runs"][0][2]], world) for s in nccl["sizes"] if len(s["runs"]) == 1}
-    if len(trees) != 1 or any(len(s["runs"]) != 1 for s in nccl["sizes"]):
-        raise ValueError("node record: a pynccl_comm route needs NCCL's every probed size one run of one tree, the same tree")
-    return trees.pop()
-
-
-def check_node_record(rec, *, cited: bool = True) -> dict:
-    """`rec` when it is a node record (`NODE_SCHEMA`), else ValueError naming the field. ``device`` {name, compute_capability
-    "major.minor", sms}, ``world``, ``versions`` {driver, nccl, torch, vllm, flashinfer: each a string, or null where the run did
-    not log it}; ``multimem`` {trees: one per owner rank as nested [a, b] lists, ftz, probes: the [N, M] all-reduces the probes
-    read them off}; ``nccl``: null, or NCCL's all-reduces past symmetric memory {fit (`NODE_NCCL_FITS`), sizes: per probed [N, M]
-    its bytes, NCCL's tuning (algo, proto, channels) and the runs [lo, hi, t] of the decoded ``trees`` over every element};
-    ``routes``: per (setting, N, route) the lo..hi tokens its GO launches showed and the run records they rest on, a pynccl_comm
-    one needing NCCL's fit one in-switch f32 sum in one run of one tree; ``source``: each run record with the commit it ran. A
-    `cited` record (the tree's) has every route resting on run records ``source`` lists; the probe writes one uncited, before its
-    run has a record."""
-    _fields("the record", rec, _NODE_KEYS)
-    if rec["schema"] != NODE_SCHEMA:
-        raise ValueError(f"node record: schema {rec['schema']!r}, not {NODE_SCHEMA!r}")
-    dev = _fields("device", rec["device"], ("name", "compute_capability", "sms"))
-    _text("device.name", dev["name"])
-    cc = _text("device.compute_capability", dev["compute_capability"])
-    if len(cc.split(".")) != 2 or not all(p.isdigit() for p in cc.split(".")):
-        raise ValueError(f"node record: device.compute_capability {cc!r}, not major.minor")
-    _int("device.sms", dev["sms"])
-    world = ranks(_int("world", rec["world"], 2))
-    for k, v in _fields("versions", rec["versions"], ("driver", "nccl", "torch", "vllm", "flashinfer")).items():
-        _text(f"versions.{k}", v, none=True)
-    mm = _fields("multimem", rec["multimem"], ("trees", "ftz", "probes"))
-    if len(_trees("multimem.trees", mm["trees"], world)) != world:
-        raise ValueError(f"node record: multimem.trees holds {len(mm['trees'])} trees, one per owner rank of {world}")
-    if not isinstance(mm["ftz"], bool):
-        raise ValueError(f"node record: multimem.ftz is {mm['ftz']!r}, not a boolean")
-    for i, p in enumerate(_list("multimem.probes", mm["probes"])):
-        if not isinstance(p, list) or len(p) != 2:
-            raise ValueError(f"node record: multimem.probes[{i}] is {p!r}, not [N, M]")
-        _int(f"multimem.probes[{i}].N", p[0])
-        _int(f"multimem.probes[{i}].M", p[1])
-    if rec["nccl"] is not None:
-        n = _fields("nccl", rec["nccl"], ("fit", "sizes"))
-        if n["fit"] not in NODE_NCCL_FITS:
-            raise ValueError(f"node record: nccl.fit {n['fit']!r}, not one of {NODE_NCCL_FITS}")
-        for i, s in enumerate(_list("nccl.sizes", n["sizes"])):
-            w = f"nccl.sizes[{i}]"
-            _fields(w, s, ("N", "M", "bytes", "algo", "proto", "channels", "runs", "trees"))
-            size = _int(f"{w}.N", s["N"]) * _int(f"{w}.M", s["M"])
-            if _int(f"{w}.bytes", s["bytes"]) != 2 * size:
-                raise ValueError(f"node record: {w}.bytes {s['bytes']}, not the {2 * size} of {s['M']} x {s['N']} bf16")
-            for k in ("algo", "proto", "channels"):
-                _text(f"{w}.{k}", s[k])
-            trees = _trees(f"{w}.trees", s["trees"], world)
-            at = 0
-            for j, r in enumerate(_list(f"{w}.runs", s["runs"])):
-                if (not isinstance(r, list) or len(r) != 3 or r[0] != at or _int(f"{w}.runs[{j}].hi", r[1]) <= at
-                        or not 0 <= _int(f"{w}.runs[{j}].t", r[2], 0) < len(trees)):
-                    raise ValueError(f"node record: {w}.runs[{j}] is {r!r}, not [lo, hi, t] from {at} with t a tree of {w}.trees")
-                at = r[1]
-            if at != size:
-                raise ValueError(f"node record: {w}.runs end at {at}, not the call's {size} elements")
-    source = _list("source", rec["source"])
-    for i, s in enumerate(source):
-        _fields(f"source[{i}]", s, ("run_record", "commit"))
-        _text(f"source[{i}].run_record", s["run_record"], none=not cited)
-        _text(f"source[{i}].commit", s["commit"], none=True)
-    records = {s["run_record"] for s in source}
-    seen = set()
-    for i, r in enumerate(_list("routes", rec["routes"])):
-        w = f"routes[{i}]"
-        _fields(w, r, ("setting", "N", "route", "lo", "hi", "run_records"))
-        if r["setting"] not in SETTINGS or r["route"] not in NODE_ROUTES:
-            raise ValueError(f"node record: {w} is setting {r['setting']!r} route {r['route']!r}: settings {sorted(SETTINGS)}, "
-                             f"routes {NODE_ROUTES}")
-        if _int(f"{w}.hi", r["hi"]) < _int(f"{w}.lo", r["lo"]):
-            raise ValueError(f"node record: {w} lo {r['lo']} > hi {r['hi']}")
-        key = (r["setting"], _int(f"{w}.N", r["N"]), r["route"])
-        if key in seen:
-            raise ValueError(f"node record: {w} repeats {key}")
-        seen.add(key)
-        arts = _list(f"{w}.run_records", r["run_records"], empty=not cited)
-        if cited and not set(arts) <= records:
-            raise ValueError(f"node record: {w}.run_records {sorted(set(arts) - records)} are not in source")
-        if r["route"] == "pynccl_comm":
-            nvls_tree(rec["nccl"], world)
-    return rec
-
-
-def node_key(rec: dict) -> tuple:
-    """(device (`device_of`), world, TREES, FTZ) of a node record: what a registration's stated node tree must equal."""
-    d = rec["device"]
-    return device_of(d["compute_capability"], d["sms"]), rec["world"], multimem_trees(rec["multimem"]["trees"], rec["world"]), \
-        rec["multimem"]["ftz"]
-
-
-def load_node_records(path: Path = NODE_FILE) -> tuple[dict, ...]:
-    """Every node record of `path` (a JSON list), each `check_node_record` cited, no two of one node tree (`node_key`)."""
-    recs = tuple(check_node_record(r) for r in json.loads(Path(path).read_text()))
-    keys = [node_key(r) for r in recs]
-    if len(set(keys)) != len(keys):
-        raise ValueError(f"{path}: two node records hold one node tree")
-    return recs
 
 
 def _node_entries(rec: dict) -> list[Captured]:
     """A node record's routes as `CAPTURED` entries keyed on its node tree: multimem's at its TREES and FTZ, NVLS's at NCCL's
-    one tree for every owner."""
+    one tree for every owner.  A route at a setting not in `SETTINGS` is refused."""
     dev, world, trees, ftz = node_key(rec)
     out = []
-    for r in rec["routes"]:
+    for i, r in enumerate(rec["routes"]):
+        if r["setting"] not in SETTINGS:
+            raise ValueError(f"node record: routes[{i}] is setting {r['setting']!r}, not one of {sorted(SETTINGS)}")
         statics = ({"TREES": trees, "FTZ": ftz} if r["route"] == "symm_mem_comm" else
                    {"TREES": (nvls_tree(rec["nccl"], world),) * world, "FTZ": rec["nccl"]["fit"] == "f32_ftz"})
         out.append(Captured(r["setting"], r["N"], r["route"], r["lo"], r["hi"], "AllReduceMultimem_v1", statics,
@@ -617,7 +426,6 @@ def _node_entries(rec: dict) -> list[Captured]:
     return out
 
 
-NODE_RECORDS = load_node_records()
 #: Every covered route: `_BASE_CAPTURED`'s, and each node record's keyed on its node tree (`_node_entries`)
 CAPTURED = (*_BASE_CAPTURED, *(e for rec in NODE_RECORDS for e in _node_entries(rec)))
 #: the node (device, TREES, FTZ) `covered` takes for a registration that states no TREES and FTZ, on a device the caller names
@@ -634,7 +442,7 @@ def node_refusal(trees, ftz, *, device, world: int = 8) -> str | None:
     if trees is None or ftz is None:
         return (f"{TREE_UNSTATED}: the registration states no multimem TREES and FTZ for its {world}-rank {dev} node, which "
                 "symmetric memory's and NVLS's routes are keyed on")
-    node = _stated_node(trees, ftz, int(world))
+    node = stated_node(trees, ftz, int(world))
     if node is None or not any(node_key(r) == (dev, int(world), *node) for r in NODE_RECORDS):
         return (f"{TREE_UNRECORDED}: no node record ({NODE_FILE.name}) holds TREES {trees!r} FTZ {ftz!r} at {world} ranks of "
                 f"{dev}; run the 8-GPU capture's --register on the node and add its record")
