@@ -3,7 +3,7 @@ bits. No torch: a `StepCircuit` saved with `StepCircuit.save` is measured again 
 ``python -m training_slowdown.capture.circuit F.npz``.
 
 `StepCircuit` is training_slowdown.capture.structure's dataflow of a program recorded from its start, restricted to its measured
-step R (`Trace.region`) and the values R reads from earlier steps that depend on their token data (`carried`: θ' and
+step R (`Capture.region`) and the values R reads from earlier steps that depend on their token data (`carried`: θ' and
 the run's other persistent state). Each value has its predecessors, phase, whether it is token-indexed (`tok`), whether
 it depends on an earlier step's token data (`dep`) or on step R's own (`tokdep`), its bits, and the gates of the op that
 made it (each counted op at its circuit Definition's price, `gates.per_mac`, split over the op's values by elements).

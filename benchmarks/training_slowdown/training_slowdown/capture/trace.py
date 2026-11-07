@@ -47,7 +47,7 @@ from torch._subclasses.fake_tensor import (DataDependentOutputException, Dynamic
                                            UnsupportedOperatorException)
 from torch.fx.experimental.proxy_tensor import make_fx
 
-__all__ = ["BACKWARD", "CaptureRefused", "PHASE", "Trace", "capture_fn", "capture_step", "phase"]
+__all__ = ["BACKWARD", "Capture", "CaptureRefused", "PHASE", "capture_fn", "capture_step", "phase"]
 
 BACKWARD = "te_capture::backward"
 PHASE = "te_capture::phase::"
@@ -72,7 +72,7 @@ def phase(name: str):
 
 
 @dataclass
-class Trace:
+class Capture:
     """One capture: the graph; each graph attribute that is a parameter or buffer, as (kind, name, aliases); the
     optimizer state after the step; the token-axis sizes the batch was captured at. A capture of several steps (a
     recorded program's update period) gives each step's tokens by its nodes' ``meta["te_step"]`` (`step_tokens`), and
@@ -253,7 +253,7 @@ def _marked_backward():
 
 
 def _trace(step: Callable[[torch.nn.Module, Any, list], Any], model: torch.nn.Module,
-           optimizers: Sequence[torch.optim.Optimizer], leaves: list, spec, device) -> Trace:
+           optimizers: Sequence[torch.optim.Optimizer], leaves: list, spec, device) -> Capture:
     """One `make_fx` capture of ``step(fake_model, batch, fake_optimizers)``, ``batch`` the unflattened `leaves` as fakes."""
     mode = FakeTensorMode(allow_non_fake_inputs=True)
     fake_model, fake_opts = _fake_copy(model, optimizers, mode, device)
@@ -294,7 +294,7 @@ def _trace(step: Callable[[torch.nn.Module, Any, list], Any], model: torch.nn.Mo
                 if isinstance(v, torch.Tensor):
                     state.append({"optimizer": oi, "param": pname.get(id(p), "?"), "key": str(k),
                                   "shape": list(v.shape), "dtype": str(v.dtype).removeprefix("torch.")})
-    return Trace(gm, attrs, state)
+    return Capture(gm, attrs, state)
 
 
 def _optimizers(optimizer) -> list[torch.optim.Optimizer]:
