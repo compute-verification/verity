@@ -2240,7 +2240,8 @@ def fetch(local_dir: Path, *, everything: bool = False, also: tuple[str, ...] = 
     ssh = ssh_argv(rec["host"], rec["port"], user=rec.get("user") or "root")
     rd = rec["remote_run_dir"]
     if everything:
-        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && tar -cf - ."]
+        # a live run's logs grow while tar reads them: GNU tar's exit 1 ("file changed as we read it") still wrote the archive
+        remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && {{ tar -cf - .; s=$?; [ $s -eq 1 ] && s=0; exit $s; }}"]
     else:
         names = " ".join(shlex.quote(n) for n in (*SMALL_FILES, *also))
         remote_cmd = ["sh", "-c", f"cd {shlex.quote(rd)} && ls {names} 2>/dev/null | tar -cf - -T -"]
