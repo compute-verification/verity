@@ -778,7 +778,8 @@ pub fn host_slots(st: &Stmt, ni: usize, ins: &[Vec<F128>]) -> Vec<HostSlot> {
 /// setup: parameters and schedule; staging the witness's inputs and host slots; decoding the proof). Under M1 (`Live::Zk`) the proof is the
 /// unmasked one the CPU prover leaves before masking (with level 0's hiding messages and record, and lincheck's folded comb),
 /// and a round the handler refused (the masking's degenerate coins, a refused coin) is raised once the device returns. With
-/// `Reuse::Take` of a kept tag, `src` is not read: the witness and level-0 commitment are rep 0's (never under M1).
+/// `Reuse::Take` of a kept tag, `src` is not read: the witness and level-0 commitment are rep 0's (under M1 with level 0's pads
+/// and extra lanes, the session's, so `level0`'s are not read either).
 #[allow(clippy::too_many_arguments)]
 pub fn prove_circuit(
     st: &Stmt,
@@ -812,8 +813,6 @@ pub fn prove_circuit(
         Some(r) => params.with_rounds(r),
         None => params,
     };
-    // M1's level-0 commitment and lane phase are its own (fc_commit_l0_zk, ligerito_zk.cuh): both reps prove in full under it
-    let reuse = if level0.is_some() { Reuse::None } else { reuse };
     let t = types(st);
     let unit = st.c.unit();
     let n_claims = 2 + 2 * st.regions.len();
@@ -960,16 +959,18 @@ pub fn prove_circuit(
     #[cfg(not(feature = "sha512"))]
     let _ = native_sha;
     #[cfg(feature = "sha512")]
-    let zk_words: Option<(Vec<F128>, Vec<F128>)> = level0.map(|z| {
+    let zk_words: Option<(Vec<F128>, Vec<F128>)> = level0.filter(|_| !taken).map(|z| {
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
         assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
         assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
         (z.pads.concat(), z.extra.concat())
     });
     #[cfg(feature = "sha512")]
-    if let (Some(z), Some((pads, extra))) = (level0, &zk_words) {
+    if let Some(z) = level0 {
         (p.zk_on, p.zk_rep, p.zk_t_pad, p.zk_tamper) = (1, z.rep as i32, z.t_pad as i32, z.tamper as i32);
-        (p.zk_pads, p.zk_extra) = (pads.as_ptr() as *const u64, extra.as_ptr() as *const u64);
+        if let Some((pads, extra)) = &zk_words {
+            (p.zk_pads, p.zk_extra) = (pads.as_ptr() as *const u64, extra.as_ptr() as *const u64);
+        }
     }
     #[cfg(not(feature = "sha512"))]
     let _ = level0;

@@ -212,7 +212,8 @@ __global__ void fc_comb_expand(FcRanges R, const F128* __restrict__ eq, long lon
 }
 
 // What rep 0 keeps for rep 1 (rep_reuse): its witness (z, a, b; rep 1 transposes z for the lincheck again) and level-0
-// codeword, tree and cap, live in the device arena, which stays open until rep 1 releases them.
+// codeword, tree and cap, and under M1 level 0's pads and extra lanes (the session's, which rep 1's lane phase reads), live in
+// the device arena, which stays open until rep 1 releases them.
 struct FcKept {
     bool live = false;
     unsigned long long tag = 0;
@@ -223,6 +224,7 @@ struct FcKept {
     long long l0_bl = 0;
     int l0_ni = 0;
     std::vector<MHash> l0_cap;
+    F128 *d_zk_pads = nullptr, *d_zk_extra = nullptr;
 };
 static FcKept g_fc_kept;
 // the most this prover has asked of device_arena, which only grows (a larger request by another prover makes the keep check
@@ -232,8 +234,9 @@ static size_t g_fc_arena = 0;
 // a session that stopped between its reps: release what its rep 0 kept
 static void fc_kept_drop() {
     if (!g_fc_kept.live) return;
-    for (void* p : {(void*)g_fc_kept.df, (void*)g_fc_kept.d_a, (void*)g_fc_kept.d_b, (void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0})
-        ffi_free(p);
+    for (void* p : {(void*)g_fc_kept.df, (void*)g_fc_kept.d_a, (void*)g_fc_kept.d_b, (void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0,
+                    (void*)g_fc_kept.d_zk_pads, (void*)g_fc_kept.d_zk_extra})
+        if (p) ffi_free(p);
     device_arena.finish();
     g_fc_kept = FcKept{};
 }
