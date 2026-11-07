@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Accounting.RemoteHeld.Line
-public import Proofs.Properties.RemoteAudit.Subprotocol
+public import Proofs.Properties.Accounting.Remote.Subprotocol
 
 /-!
 # The memory line of record at the bandwidth component, proved (`Properties.RemoteAudit.Subprotocol.LineHeldAtSubprotocol`)

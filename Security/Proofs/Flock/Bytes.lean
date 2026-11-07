@@ -13,8 +13,8 @@ fold is its list's (`foldl_eq`); `hexOf` writes each byte as two characters, one
 one hex string are one (`hexOf_inj`); lists cut into pieces of one length `k > 0` are one when their concatenations are
 (`flatten_inj`).
 
-The network certifier's and the network records' byte lemmas (`Proofs.Properties.NetworkCertifier.Bytes`,
-`Proofs.Properties.NetworkRecords.Bytes`) build on these, under the same names.
+The network certifier's and the network records' byte lemmas (`Proofs.Properties.NetworkCertifier.Check.Bytes`,
+`Proofs.Properties.NetworkCertifier.Records.Bytes`) build on these, under the same names.
 -/
 
 @[expose] public section
