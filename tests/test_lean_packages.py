@@ -89,13 +89,13 @@ def test_the_unwitnessed_list_only_shrinks():
 
 
 def test_the_randomness_assumption_cites_this_toolchain():
-    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
-    for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
-    updates the citation."""
-    proofs = ROOT / "Security/Proofs"
-    version = (proofs / "lean-toolchain").read_text().strip().rpartition(":")[2]
-    for doc in ("ASSUMPTIONS.md", "Assumptions.lean"):
-        assert f"Lean {version}'s runtime" in (proofs / "Flock/Soundness" / doc).read_text(), doc
+    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes` in `Definitions/Assumptions.lean`) cites
+    what the toolchain's runtime reads for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails
+    here until someone re-reads it and updates the citation."""
+    security = ROOT / "Security"
+    version = (security / "Proofs/lean-toolchain").read_text().strip().rpartition(":")[2]
+    for doc in ("Proofs/Flock/Soundness/ASSUMPTIONS.md", "Definitions/Assumptions.lean"):
+        assert f"Lean {version}'s runtime" in (security / doc).read_text(), doc
 
 
 def _module_roots(pkg: Path):
