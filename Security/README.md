@@ -172,9 +172,9 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
 - **Derived quantities**, none assumed:
   - F, the incorrect proof blocks (committed outputs that differ from their gates applied to their committed inputs), and
     the **faulty share** φ, the share of credited work that lies in F;
-  - Φ_cred, the rate PoUW credits as work of the registered circuit, and the **credited utilization** u = Φ_cred/Φ_R;
+  - Φ_cred, the rate PoUW credits, and the **credited utilization** u = Φ_cred/Φ_R;
   - Φ_gap, credited work a cheaper route could produce; Φ_bk, bookkeeping (certificate slack and verdict lag);
-  - Φ_D, the rate of correct credited work of the registered circuit;
+  - Φ_D, the rate of the registered circuit's correct credited work;
   - q_I, the most of the weighted count inference block I computes whole (part 2); ζ̄ and the counts below use the same
     convention.
 - **Updated state.** The trained model's parameter slots i, each with its eligible versions (one per optimizer step
@@ -373,10 +373,10 @@ guarantees to read first"):
 **The accounting**, deterministic. Every counted multiplication of a successful computation inside A goes to exactly
 one of two parts:
 
-- an inference block I of correct credited work of the registered circuit whose effective fresh input k_I + k_{F,I} + k_{a,I}
+- an inference block I of the registered circuit's correct credited work whose effective fresh input k_I + k_{F,I} + k_{a,I}
   (its own fresh input, the bits incorrect proof blocks inject into it, and the advice bits its structure depends on) is
   within the range of part 2's assembly, contributing q_I;
-- the remainder: unregistered hardware, registered hardware not running the registered circuit's credited work, the incorrect proof
+- the remainder: unregistered hardware, registered hardware not running credited work, the incorrect proof
   blocks, the credit gap, the bookkeeping, blocks out of range, and multiplications split between a block and the rest.
 
 Credit isn't counted twice, and padding isn't evidence that hardware ran anything. The remainder does at most ζ̄
