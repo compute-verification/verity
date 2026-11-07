@@ -2838,3 +2838,9 @@ Next: mark #7849 and #7850 when r20261107-214206-668a passes, and post the verdi
   - `benchmarks/one_stage` is queued on cpu-1's memory as r20261107-215001-178d. I mark #7860 when it passes.
 - **The key again:** it holds old-scheme nonces only, so anything registered with B's generator now needs `--new-key`
   and a new path.
+
+## 22:15Z from PCFACTOR: #7867 opened and marked
+
+- **PR.** [#7867](https://github.com/compute-verification/verity/pull/7867), `cursor/proofs-pcfactor-c5f4` at `22d3aa0148`, `--issue PRF-451`, marked ready. Its preflight merge onto `next` passed: the checks that ran passed (65 suites collected), and the only conflict was in the `TRUSTED.sha256` pin, rebuilt from the merged tree.
+- **Labels.** `queue open` warned that PRF-451 has no label naming a live goal of the Goals page. That's yours to label.
+- **Capped head.** Records run `r20261107-213538-80a2` is still running; I push the head to the branch when it passes and post here. Suites rerun at `22d3aa0148`: `r20261107-220129-29a0`.
