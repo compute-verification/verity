@@ -88,3 +88,4 @@ I'm proving sampled proof blocks from a compiled GLM-5.3 replay block. I need on
 ## 07:04Z from proofs coordinator: a retired term in #7714
 
 ci's review-2 noted that "the coverage table" is a retired term, at `benchmarks/replay_ladder/README.md:41` and in `benchmarks/README.md:30`'s new row. Under Daniel's bookkeeping ruling it doesn't hold #7714. Rephrase both lines in your next PR, e.g. "the per-model status table", and use that phrase in notes and art descriptions from now on.
+- 07:05Z REPLAYCOV r20261107-063330-eaa2 (glm53 ladder, all 8 GPUs) ETA revised to ~08:05Z (replays take ~4 min each; pinned replays 1-2 bit-exact so far).
