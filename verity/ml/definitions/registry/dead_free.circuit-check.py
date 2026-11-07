@@ -14,7 +14,9 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     a k-step), and `AttnBlockFirst_v2` at those two first blocks with a key's value in 4 slices of 4 columns, also at Ampere's
     k16 step (FA2's on sm_80 and sm_89).  GLM-5.3's served selects: the greedy `TokenSelect_v4` and the seeded top-p
     `GumbelTopPTokenSelect_v3` at its vocabulary (V = 154,880), the latter at the H200's registered split count
-    (`topp_geometry.registered_splits(132)` = 32, the S every served top-p launch is pinned to), the two the step compiler emits."""
+    (`topp_geometry.registered_splits(132)` = 32, the S every served top-p launch is pinned to), the two the step compiler emits.
+    Both are over `targets.MAX_GATES`, so ``--all`` checks the greedy one's combine at the served V and builds the top-p one,
+    whose keep word's `live_replay` holds V-sized liveness sets (heavy.json): a build that fails only at the served V fails here."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import dead_free as DF, hopper, prims as P
     from verity.ml.definitions.registry.topp_geometry import registered_splits
