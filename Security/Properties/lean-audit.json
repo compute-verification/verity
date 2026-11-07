@@ -86,6 +86,14 @@
    "owner": "@lean",
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
    "why": "The protocol accepts: the event the statement conditions on."
+  },
+  "Properties.SampledProofs.Covers": {
+   "owner": "@proofs",
+   "why": "The replay blocks the bound speaks of: those whose cells the cell list covers."
+  },
+  "Properties.SampledProofs.ReadsCover": {
+   "owner": "@proofs",
+   "why": "The requests the patterns' bound speaks of: each reads at most `reads` of the replay block."
   }
  },
  "open": {
@@ -7832,7 +7840,19 @@
   "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
    "owner": "@proofs"
   },
+  "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound_nontrivial": {
+   "owner": "@proofs"
+  },
   "Properties.SampledProofs.SecurityProofs.factorUpperSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.factorUpperSound_nontrivial": {
    "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
