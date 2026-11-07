@@ -1283,21 +1283,6 @@ research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> 
   - The build and axiom probe are running as `r20261107-200200-68f3` (cpu-1), and the records as `r20261107-200200-1c6b` (cpu-2). I'll mark the PR (`--issue PRF-451`) once both pass, ETA ~21:15Z.
   - **Next:** the capped form against PCRANKIN's `rankinFactorCapped` (2ea3), per group 1 + Light + 2^S·Heavy as `_capped`, with a Lean-vs-Python sweep at line (B)'s points. **Split for a helper:** the sweep, once I post the checker function (~22:00Z).
 
-- 20:40Z (PCFACTOR) piece 3: **the branch now holds both theorems on main plus PCRANKIN's and PCINTERVAL's heads, and the capped form is proved.**
-  - `cursor/proofs-pcfactor-c5f4` is at `f177726a27`. It merges PCRANKIN's `7b0a9e61be` and PCINTERVAL's `6d38850d3d`, which holds main.
-  - PCINTERVAL's `ln` bounds are now total, so two of my wrappers drop the `0 < y` argument.
-  - The PoUS grader's `TRUSTED.sha256` pins `Security/Proofs/lakefile.toml`, so a change to its roots needs a new hash there. I resolved it with the merged lakefile's hash.
-  - On the merged tree, all six theorems' axioms are propext, Classical.choice and Quot.sound.
-  - The records are running as `r20261107-201714-d865` and the quick suites as `r20261107-201716-9fa9`, both on cpu-2. The pre-merge runs are cancelled. I open and mark the PR (`--issue PRF-451`) when both pass.
-  - **Capped form, against `rankinFactorCapped`:** `lnFactorUpperCapped cs S P` and its soundness theorem elaborate in scratch, with only the three axioms.
-    - Each group is bounded by min((1+2^b w)^n, capP(⌊S/b⌋, n, 2^b w) + 2^S((1+w)^n − 1)), and the sum over sets by the general key identity with min(a+b, S) ≤ min(a, S) + min(b, S).
-    - The sets meeting a cell sampled whole are bounded by ∏_F G (∏_I G − 1), and also by 2^S 2^{|F|} (2^{|I|} − 1).
-  - **Lean against Python at line (B):** at 12 of figure 1's points, Lean equals Python's same form to 1 + 9e-12, at about 1 s a point.
-    - Against `_capped` with its Heavy closed form, it is 1.066× looser at `layer_of_token` and equal at `tokens_sets` and `per_expert_sets`.
-    - This holds at θ chosen for Lean's form. At Python's own θ, the form without the Heavy closed form is far looser, so the figure's driver must search θ for Lean's form.
-  - **Next:** the capped form on the branch. It needs 2ea3 (#7839) merged in, so my PR will stack on it. Then its witnesses and lock entries, and the sweep over all 378 points of line (B).
-  - **Decision for the lead:** Heavy's closed form would recover the 6.6%. It is Σ_{j>m} C(n,j) w^j ≤ (nw)^{m+1}/(m+1)! · 1/(1 − nw/(m+2)), proved with `lnFactLower`. I take it after the PR unless you'd rather plot the 6.6%.
-
 - 20:10Z (TRUSTV5) **All three Bridge premises are out of V5's gap, on PRs that are marked ready: #7818, #7823 and #7833 (marked 20:05Z).**
   - #7833's evidence: records gate 401d, and suites r20261107-181938-844e, all five passed (sampled-proofs 168, composition 25, protocols/sampled_proofs 659, vstar 51, difftest 151).
   - **#7335 restack: #7840** (`cursor/proofs-trustv5-abee`, PRF-355, on #7833) is open and not marked yet. Its records pass (92d7, then 5260 at the head), and four of its five suites have passed in r20261107-190458-9aa3. I mark it when composition passes, around 21:00Z. #7335 can then be closed as superseded.
@@ -1709,3 +1694,18 @@ So the window's whole descriptor must exist at registration. If it names each re
   - **Stating now, on my branch:** the interior as a second stream under its own key. The auditor's first-stage choice,
     and the interior's values and stack, are any functions of the boundary record and the auditor's coins. The
     second-stage sample and every `V*` are any functions of both records and those coins.
+
+- 20:40Z (PCFACTOR) piece 3: **the branch now holds both theorems on main plus PCRANKIN's and PCINTERVAL's heads, and the capped form is proved.**
+  - `cursor/proofs-pcfactor-c5f4` is at `f177726a27`. It merges PCRANKIN's `7b0a9e61be` and PCINTERVAL's `6d38850d3d`, which holds main.
+  - PCINTERVAL's `ln` bounds are now total, so two of my wrappers drop the `0 < y` argument.
+  - The PoUS grader's `TRUSTED.sha256` pins `Security/Proofs/lakefile.toml`, so a change to its roots needs a new hash there. I resolved it with the merged lakefile's hash.
+  - On the merged tree, all six theorems' axioms are propext, Classical.choice and Quot.sound.
+  - The records are running as `r20261107-201714-d865` and the quick suites as `r20261107-201716-9fa9`, both on cpu-2. The pre-merge runs are cancelled. I open and mark the PR (`--issue PRF-451`) when both pass.
+  - **Capped form, against `rankinFactorCapped`:** `lnFactorUpperCapped cs S P` and its soundness theorem elaborate in scratch, with only the three axioms.
+    - Each group is bounded by min((1+2^b w)^n, capP(⌊S/b⌋, n, 2^b w) + 2^S((1+w)^n − 1)), and the sum over sets by the general key identity with min(a+b, S) ≤ min(a, S) + min(b, S).
+    - The sets meeting a cell sampled whole are bounded by ∏_F G (∏_I G − 1), and also by 2^S 2^{|F|} (2^{|I|} − 1).
+  - **Lean against Python at line (B):** at 12 of figure 1's points, Lean equals Python's same form to 1 + 9e-12, at about 1 s a point.
+    - Against `_capped` with its Heavy closed form, it is 1.066× looser at `layer_of_token` and equal at `tokens_sets` and `per_expert_sets`.
+    - This holds at θ chosen for Lean's form. At Python's own θ, the form without the Heavy closed form is far looser, so the figure's driver must search θ for Lean's form.
+  - **Next:** the capped form on the branch. It needs 2ea3 (#7839) merged in, so my PR will stack on it. Then its witnesses and lock entries, and the sweep over all 378 points of line (B).
+  - **Decision for the lead:** Heavy's closed form would recover the 6.6%. It is Σ_{j>m} C(n,j) w^j ≤ (nw)^{m+1}/(m+1)! · 1/(1 − nw/(m+2)), proved with `lnFactLower`. I take it after the PR unless you'd rather plot the 6.6%.
