@@ -35,8 +35,9 @@ builds. The top statement rests on these named assumptions:
   idealized; its docstring says what that leaves out).
 - `RecordCustodyZKJ`: the record `flock-verify --zk` reads is the one the challenger wrote for the live session, and its
   sample file is the one `flock-verify draw` printed for the verifier's own sample.
-- `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
-  (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
+- `SHA512CRStrict` (`cr/sha-512`) and `SHA512CRExpected` (`ecr/sha-512`), in `Security/Definitions/Assumptions.lean`:
+  SHA-512's collision resistance, taken at the collision finders the proof builds from the prover (`TableCRZAt` and
+  `LinkCRZCAt`, which unfold to them).
 
 In the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files, which come
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet

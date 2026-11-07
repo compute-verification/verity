@@ -30,9 +30,10 @@ incorrect set of the trace the extractor recovers.
    δ = C(n−K₀, k)/C(n, k) for k of n proof blocks sampled uniformly, with ε̄_ks Flock's error averaged over the sessions
    and ε_link the link's term:
    - Domain: the circuit and public files parse, the statement is in scope, and k ≤ n splits evenly over the tables.
-   - Real: SHA-512 collision resistance, through its folds.
-   - Folds into: `TableCRZAt` and `LinkCRZCAt` into `Claims.ExpectedCR`; `UniformRandomBytes` (the verifier's bytes,
-     exactly uniform) and `RecordCustodyZKJ` (the record is the live session's) into Core's challenger premises.
+   - Real: SHA-512 collision resistance (`SHA512CRStrict`, `SHA512CRExpected`), at the prover's finders (`TableCRZAt`
+     and `LinkCRZCAt` unfold to it), and `UniformRandomBytes` (the verifier's bytes, exactly uniform), each declared in
+     `Definitions/Assumptions.lean`.
+   - Folds into: `RecordCustodyZKJ` (the record is the live session's) into Core's challenger premises.
    - Open: `TagsOkZHJ` and `Built`, hypotheses on the statement's form.
 2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Claims/RecursionGeneric.lean`, proved in
    `Proofs/Flock/RecGeneric/OuterProof.lean`): for every Π_in its repetition extractor shows knowledge sound, binding
@@ -526,7 +527,7 @@ conditions it places on its inputs and setup, which the lock also lists, are lef
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
-| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/Refused.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance for its finders, `TableCRZAt` and `LinkCRZC` |
+| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/Refused.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
 | PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
@@ -552,8 +553,8 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   one-stage form is v2, which runs `flock-verify --zk` on the sessions' files itself and reads the challenger's signed
   coins; one-stage v1, which takes the sessions' verdicts as evidence, is refused. No Lean statement yet carries v2's
   acceptance to `SampledKSLiveV3`'s event.
-- **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`,
-  `LinkCRZC`, `TileServiceSound`, `TileDrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
+- **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
+  `SHA512CRExpected`, `TileServiceSound`, `TileDrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the prover runs or hosts is trusted, and every coin is live,
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
