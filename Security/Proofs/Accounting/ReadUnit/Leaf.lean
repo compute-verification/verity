@@ -39,6 +39,7 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
+import all Init.Data.String.Defs
 
 @[expose] public section
 
@@ -121,7 +122,7 @@ theorem bitL_bytes (d : Verity.Digest) {i s : ℕ} (hi : i < 64) (hs : s < 8) :
     bitL d.bytes (8 * i + s) = (d ⟨i, hi⟩).toNat.testBit s := by
   rw [bitL, show (8 * i + s) / 8 = i by omega, show (8 * i + s) % 8 = s by omega,
     List.getD_eq_getElem _ _ (by simpa [Verity.Digest.bytes] using hi)]
-  simp [Verity.Digest.bytes, List.getElem_ofFn]
+  simp only [Verity.Digest.bytes, List.getElem_ofFn]
 
 /-! ## `b = x ⊕ M·y` -/
 
@@ -138,7 +139,7 @@ theorem ev_bi (z : Var → Bool) {x y : List Word} (hx : Shaped 8 x) (hy : Shape
       (bitL (wordsDigest z x).bytes i ^^ Hash.Hm96.maskBit pinnedKey (wordsBytes z y) i) := by
   rw [maskBit_hom (ev z) (ev_xor z), maskBit_eq, ev_getD_wordBit z hx.2 (by rw [hx.1]; omega),
     wordsDigest_bytes z hx, wordsBytes_eq z hy]
-  congr 1
+  refine congrArg (fun t => _ ^^ t) ?_
   refine foldl_congr_mem (fun acc j hj => ?_) false
   rw [List.mem_range] at hj
   try dsimp only
@@ -192,7 +193,9 @@ theorem leafPrefix_data :
 
 theorem size_leafPrefix : Flock.Hm96.Default512.leafPrefix.size = 128 := by
   rw [size_of_data leafPrefix_data, Hash.Hm96.leafPrefix, length_padTo]
-  have : (Hash.cstr "verity/hm96-sha512/leaf/v1").length = 27 := by decide +kernel
+  have : (Hash.cstr "verity/hm96-sha512/leaf/v1").length = 27 := by
+    rw [← push_zero_data, Array.length_toList, ByteArray.size_data]
+    decide +kernel
   simp only [List.length_append, this, Hash.BindingProofs.bytes_length]
   norm_num
 
@@ -214,10 +217,12 @@ theorem commitString_eq (z : Var → Bool) {x y b c : List Word} (hx : Shaped 8 
 theorem leaf_spec : Hm96LeafSpec pinnedKey Flock.ReadNet.leaf := by
   intro x y
   simp only [Flock.ReadNet.leaf]
-  refine Sound.bind' (sound_mapM_word _ (fun _ => True) (fun z w => bv z (bWord x y w))
-    (fun w => Sound.mono (sound_commitW _) fun z r h _ => h (by simp)) _) fun b =>
+  refine Sound.bind' (sound_mapM_word (fun w => commitW (bWord x y w)) (fun _ => True)
+    (fun z w => bv z (bWord x y w))
+    (fun w => Sound.mono (sound_commitW (bWord x y w)) fun z r h _ => h (by simp [bWord])) (List.range 8)) fun b =>
     Sound.bind' (sound_shaW 2 _ _) fun c => Sound.bind' (sound_shaW 2 _ _) fun lf =>
-      Sound.pure' fun z hlf hc hb hx hy => ?_
+      Sound.pure' fun z hlf hc hb => ?_
+  intro hx hy
   obtain ⟨hb1, hb2⟩ := hb fun _ _ => trivial
   have hbl : b.length = 8 := by rw [length_of_map_bv hb2]; simp
   obtain ⟨c1, c2, c3⟩ := hc (length_midstate _) (words64_midstate _)

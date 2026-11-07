@@ -7,6 +7,7 @@ module
 
 public import Flock.ReadNet.Select
 public import Proofs.Accounting.ReadUnit.Gates
+public import Proofs.Flock.Soundness.Discharge.Hm.Word
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -87,7 +88,8 @@ theorem sound_belowGo (bound : ℕ) : ∀ (bs : List Lin) (i : ℕ) (lt : Lin),
   | b :: bs, i, lt => by
     unfold Flock.ReadNet.belowGo
     refine Sound.bind' (sound_belowStep bound i b lt) fun lt' =>
-      Sound.mono (sound_belowGo bound bs (i + 1) lt') fun z r hih hstep N hN hlt => ?_
+      Sound.mono (sound_belowGo bound bs (i + 1) lt') fun z r hih hstep => ?_
+    intro N hN hlt
     have key : ev z lt' = decide (N + 2 ^ i * (ev z b).toNat < bound % 2 ^ (i + 1)) := by
       rw [hstep, hlt]
       exact below_step bound i N hN (ev z b)
@@ -106,7 +108,7 @@ first) is below `bound` modulo `2 ^ n`, `n` the bits' count. -/
 theorem sound_below (bits : List Lin) (bound : ℕ) :
     Sound (Flock.ReadNet.below bits bound) fun z r => ev z r = decide (num (evs z bits) < bound % 2 ^ bits.length) :=
   Sound.mono (sound_belowGo bound bits 0 Lin.zero) fun z r h => by
-    have := h 0 (by norm_num) (by simp)
+    have := h 0 (by norm_num) (by simp <;> exact Nat.mod_one bound)
     simpa using this
 
 /-! ## The select -/
@@ -134,10 +136,15 @@ theorem select_spec {V : ℕ} (hV : V < 2 ^ 32) : SelectSpec V (Flock.ReadNet.se
   intro tok opened row
   unfold Flock.ReadNet.select
   refine Sound.bind' (sound_below tok V) fun inside => ?_
-  refine Sound.bind' (sound_mapM _ (fun z rf => (ev z rf.2 ^^ (ev z inside && (ev z rf.1 ^^ ev z rf.2))))
-    (fun rf => Sound.bind' (sound_and _ _) fun r => Sound.pure' fun z hr => by rw [ev_xor, hr, ev_xor]) _)
+  refine Sound.bind' (sound_mapM (fun rf : Lin × Lin => do
+        let r ← Flock.HmNets.and inside (rf.1 ^^^ rf.2)
+        pure (rf.2 ^^^ r))
+      (fun z rf => (ev z rf.2 ^^ (ev z inside && (ev z rf.1 ^^ ev z rf.2))))
+      (fun rf => Sound.bind' (sound_and _ _) fun r => Sound.pure' fun z hr => by rw [ev_xor, hr, ev_xor])
+      (row.zip (List.replicate (row.length / 16) Flock.ReadNet.fillBits).flatten))
     fun h => ?_
-  refine Sound.bind' (sound_and _ _) fun r => Sound.pure' fun z hr hh hin htok hrow => ?_
+  refine Sound.bind' (sound_and _ _) fun r => Sound.pure' fun z hr => ?_
+  intro hh hin htok hrow
   obtain ⟨hlen, hbits⟩ := hh
   set ff := (List.replicate (row.length / 16) Flock.ReadNet.fillBits).flatten with hff
   have hffl : ff.length = row.length := by
