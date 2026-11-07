@@ -3,12 +3,12 @@ module
 public import Definitions.Claims.SamplingTwo
 
 /-!
-# Claims: what a request of the two-stage influence set reads
+# Claims: what a set of incorrect proof blocks serves, request by request
 
-The vocabulary the served-output cap and the patterns' count are stated in, on `Claims.Sampling`'s program and
-partition. Split the served outputs into requests by any map `req`; request `r` serves `|r|` bits (`servedBits`), and
-`T_r` is the proof blocks of `T` with a committed value one of `r`'s served outputs reads (`blocksTo`), through the wires
-a gate reads (`Prog.Reads`). A request's class of `T_r` under the patterns' count is `lightOf`, and its bits `lightBits`.
+Under a split `req` of the served outputs into requests, request `r` serves `|r|` bits (`servedBits`), and `T_r` is the
+proof blocks of `T` with a committed value one of `r`'s served outputs reads (`blocksTo`, `Prog.Reads`). The patterns'
+form counts the two-stage influence set (`Claims.Sampling.influenceTwo`) by the admissible sets' patterns
+`r ↦ lightOf |r| T_r`, a request's class costing `lightBits` (`Claims.Guarantees.InfluenceTwoPatterns`).
 
 Statements only: definitions, no proofs.
 -/
@@ -36,7 +36,8 @@ noncomputable def blocksTo {R : Type} (C : Prog) (Pt : Partition) (req : Fin C.o
     ∃ i, req i = r ∧ C.Reads C.outs[i] g
 
 /-- **A request's class of `U`**: `none` at `U = ∅`; `some none` when `U` commits at least `n` bits, so that its blocks
-are forgotten; and `some (some U)` otherwise. -/
+are forgotten; and `some (some U)` otherwise. The influence set is counted by the admissible sets' patterns
+`r ↦ lightOf |r| T_r`. -/
 def lightOf (s : AuditStatement) (Pt : Partition) (n : ℕ) (U : Finset ℕ) : Option (Option (Finset ℕ)) :=
   if U = ∅ then none else if n ≤ bitsOf s Pt U then some none else some (some U)
 

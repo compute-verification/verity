@@ -1,7 +1,7 @@
 module
 
 public import Definitions.Claims.SamplingTwo
-public import Definitions.Claims.SamplingTwoServed
+public import Definitions.Claims.Guarantees.SamplingTwo
 public import Proofs.Flock.SamplingGeneric.TwoCount
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -53,9 +53,8 @@ serve at most `∏_r min(Σ_{U of class p r} 2^{b(U)}, 2^{|r|})` outputs, at any
 classes, a request whose `T_r` commits at least `|r|` bits costs `|r|` and its blocks are forgotten, and the count is
 never above the sets'.
 
-`Prog.Reads`, `servedBits`, `blocksTo`, `lightOf` and `lightBits` are `Definitions.Claims.SamplingTwoServed`'s.
-
-* `Prog.Reads.trans`, `Prog.Reads.read`, `Prog.Reads.le`: gate `g` reads gate `j`, itself or through the wires it reads.
+* `Prog.Reads.trans`, `Prog.Reads.read`, `Prog.Reads.le`: gate `g` reads gate `j` (`Prog.Reads`, with `servedBits`,
+  `blocksTo`, `lightOf` and `lightBits` in `Definitions.Claims.SamplingServed`), itself or through the wires it reads.
 * `Prog.runIn_congr_reads`, `boundary_eq_reads`, `outs_eq_reads`: **the determinism lemma at one returned gate**: two
   traces that make every proof block outside `T` correct and agree at the inputs and at the committed values of `T`
   that a returned gate reads agree at it.
@@ -73,8 +72,9 @@ never above the sets'.
   and the bound to charge is the smaller of that and the served-output cap.
 * `card_influenceTwo_le_classes`, `card_influenceTwo_le_touched`: **patterns**: the influence set counted by the
   admissible sets' patterns under any classes, and by which requests they touch.
-* `lightBits_lightOf`, `card_influenceTwo_le_patterns`, `sum_patterns_le_served`: **the patterns' form**: a request
-  whose `T_r` commits at least `|r|` bits costs `|r|`, with its blocks forgotten; never above the sets' count.
+* `lightBits_lightOf`, `card_influenceTwo_le_patterns`, `sum_patterns_le_served`: **the patterns' form** at `lightOf`'s
+  classes: a request whose `T_r` commits at least `|r|` bits costs `|r|`, with its blocks forgotten; never above the
+  sets' count. The lock lists it as `Claims.SecurityProofs.InfluenceTwoPatterns`.
 * `CompiledTwo.exfil_served`: **the corollary of `CompiledTwo.Exfil`**: KS at `RInflTwo`, with the influence set under
   the smaller of the served-output cap and `2^{|outs|}`.
 -/
@@ -623,3 +623,7 @@ theorem exfil_served {H : Msg → Msg} {L : CompiledTwo Coin A} (hL : L.Exfil H)
 end CompiledTwo
 
 end Claims.SamplingGeneric
+
+/-- **The patterns' form** (`card_influenceTwo_le_patterns`). -/
+theorem Claims.SecurityProofs.InfluenceTwoPatterns : Claims.Guarantees.InfluenceTwoPatterns :=
+  fun H Cm _ _ _ hs δ a _ _ _ req => Claims.Sampling.card_influenceTwo_le_patterns H Cm hs δ a req

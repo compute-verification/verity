@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.SamplingTwoServed
+public import Definitions.Claims.SamplingServed
 public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
