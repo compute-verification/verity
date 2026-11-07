@@ -110,7 +110,7 @@ def test_without_dark_compute_the_declared_side_is_the_chain_bound():
 
 
 def test_the_adversary_relays_partial_sums_only_when_it_pays():
-    """With width-1 blocks the partial-sum law never reaches the thread bound, and relaying the whole residual into the
+    """With width-1 blocks the partial-sum rule never reaches the thread bound, and relaying the whole residual into the
     declared blocks' sums would buy far less than the residual trains directly: the adversary relays only the few
     partial sums that pay, and the residual still trains at full efficiency."""
     p = T.DEFAULTS | {"d": 1.0, "e": 1e6, "lag_s": 0.0, "kappa_chain": 0.0695}

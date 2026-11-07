@@ -13,7 +13,7 @@ of the first is a rerun of the second through `extendDraw`, and the two models a
 * a run's coins are its rerun's inner coins (`Comp.coins_extend`), and a fork at an inner round is its rerun's fork
   there (`Comp.named_extend`, `extend_fork_min`);
 * `P_O`'s run accepts exactly where it is kept (`Comp.innerFO_acc_iff`), and it is kept exactly where its rerun's inner
-  view accepts, but where the rerun accepts at a draw `P_O`'s runs don't show (`Comp.BadO`) or at one where `E_O` gives
+  view accepts, but where the rerun accepts at a sample `P_O`'s runs don't show (`Comp.BadO`) or at one where `E_O` gives
   witnesses outside `R_O` (`Comp.OutRO`) (`Comp.accAt_iff`);
 * a run's calls are among its rerun's searched evaluations (`Comp.rerunCalls`), or those collide (`CallsLogColl`), so
   a collision among runs' calls is one among their reruns' (`Comp.findColl_cover`).
@@ -30,7 +30,7 @@ namespace Claims.RecGeneric
 
 open Claims Claims.Recursion
 
-/-- An inner run's coins forked at `j` onto another's, extended, are the extended draws forked at `j` capped at the
+/-- An inner run's coins forked at `j` onto another's, extended, are the extended samples forked at `j` capped at the
 inner rounds. -/
 theorem extendDraw_fork {Coin C : Type} [Inhabited Coin] {n N : ℕ} (j : ℕ)
     (a b : (Fin n → Coin) × (Fin N → Coin) × C) :
@@ -46,7 +46,7 @@ variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {K : Co
 /-! ## Acceptance -/
 
 omit [Nonempty Coin] in
-/-- **`P_O`'s run at a draw accepts exactly where it is kept.** -/
+/-- **`P_O`'s run at a sample accepts exactly where it is kept.** -/
 theorem innerFO_acc_iff (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c) (ω : Ω)
     (d : (Fin (K.V.k x) → Coin) × K.EO.C x) :
     (K.innerFO I S H P x decC ω d).out = .acc ↔ K.keepDO I S H P x ω d = true := by
@@ -70,14 +70,14 @@ theorem innerFO_acc_iff (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : �
     exact (runO hCF decC hdec ω d hw hRO hacc' ha).2.1
 
 omit [Nonempty Coin] in
-/-- A kept draw is not bad. -/
+/-- A kept sample is not bad. -/
 theorem not_badO_of_keepDO {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x}
     (h : K.keepDO I S H P x ω d = true) : ¬ K.BadO I S H P x ω d := fun hb => by
   simp only [Comp.keepDO, decide_eq_true_eq] at h
   exact hb.2 h.2.2
 
 omit [Nonempty Coin] in
-/-- **Off the bad draws and those where `E_O` gives witnesses outside `R_O`, a draw is kept exactly where its inner
+/-- **Off the bad samples and those where `E_O` gives witnesses outside `R_O`, a sample is kept exactly where its inner
 view accepts.** -/
 theorem keepDO_iff_acc {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} (hb : ¬ K.BadO I S H P x ω d)
     (ho : ¬ K.OutRO H P x ω d) :
@@ -97,7 +97,7 @@ theorem keepDO_iff_acc {ω : Ω} {d : (Fin (K.V.k x) → Coin) × K.EO.C x} (hb 
 
 omit [Nonempty Coin] in
 /-- **`P_O`'s aborting run accepts exactly where its rerun's inner view does**, but where the rerun accepts at a bad
-draw or at one where `E_O` gives witnesses outside `R_O`: a kept run's rerun accepts, and off those draws an accepting
+sample or at one where `E_O` gives witnesses outside `R_O`: a kept run's rerun accepts, and off those samples an accepting
 rerun is kept. -/
 theorem accAt_iff (hCF : I.LastCoinFree H) (decC : Msg → Coin) (hdec : ∀ c, decC (I.ans c) = c)
     (hn : I.V.k (K.xI x) ≤ K.V.k x) (ω : Ω)

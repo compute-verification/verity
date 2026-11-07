@@ -96,7 +96,7 @@ instance instFintypePassCoins (N b h ρ r s : ℕ) : Fintype (PassCoins N b h ρ
   inferInstanceAs (Fintype (_ × _ × _))
 
 /-- A chained prover over `P` passes with `r`-bit roots: pass `j`'s device, an interactive device of `RateAudit`'s
-class, and the root its seed is drawn at, each any function of the earlier passes' coins (the root also of the
+class, and the root its seed is sampled at, each any function of the earlier passes' coins (the root also of the
 store). -/
 structure Chain (P N b h ρ S L q r s : ℕ) where
   device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → InteractiveProver N b h ρ S L q
@@ -111,7 +111,7 @@ def dev (A : Chain P N b h ρ S L q r s) (j : Fin P) (ω : Fin P → PassCoins N
     InteractiveProver N b h ρ S L q :=
   A.device j (fun i => ω i.1)
 
-/-- Pass `j`'s oracle: its family at the root its seed is drawn at, `H(σ_t, j, root_{j−1}, ·)`. -/
+/-- Pass `j`'s oracle: its family at the root its seed is sampled at, `H(σ_t, j, root_{j−1}, ·)`. -/
 def oracle (A : Chain P N b h ρ S L q r s) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
     Oracle N b h ρ :=
   (ω j).2.1 (A.root j (fun i => ω i.1) E)

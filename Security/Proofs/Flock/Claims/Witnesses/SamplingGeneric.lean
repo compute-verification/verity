@@ -345,7 +345,7 @@ end Claims
 /-- Two input gates, both returned. -/
 def twoProg : Claims.Sampling.Prog := ⟨[.input, .input], [0, 1]⟩
 
-/-- The program, drawn `all`. -/
+/-- The program, sampled `all`. -/
 def twoStmt : AuditStatement := ⟨[], twoProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
 /-- One class of one stratum of two proof blocks, `{0}` and `{1}`. -/

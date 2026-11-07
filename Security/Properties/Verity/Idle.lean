@@ -8,7 +8,7 @@ public import Properties.Verity.Coupling
 The witnesses of `Verity.Soundness`, `Verity.RemoteSoundness` and `Verity.SoundnessOf` read these: a small hand-built
 descriptor, not a parsed file. The device has no on-chip state, no memory, no ops and no bandwidth (`device`); the
 circuit file is read as empty files under the netlist tags (`fileRead`); the coin commitment has no families, the device
-draws nothing at the close and signs nothing (`signer`), the honest prover sends an empty request and closes the device
+samples nothing at the close and signs nothing (`signer`), the honest prover sends an empty request and closes the device
 at once, no check reads its log, and there are no commitment openings and no gates computed;
 the world charges nothing over an empty window (`world`); the schedule is one
 empty block (`blocks`), and its wipe fills nothing and accepts nothing (`wipe`). Every finder and forger outputs nothing
@@ -81,7 +81,7 @@ def finder : Claims.Finder where
   out _ := none
   cost _ := 0
 
-/-- **The device's signer**: it signs nothing and draws nothing at the close. -/
+/-- **The device's signer**: it signs nothing and samples nothing at the close. -/
 def signer : Signer := ⟨fun _ => [], 0, fun _ _ _ _ => [], fun _ _ => []⟩
 
 /-- The forger that saw no signature and outputs nothing, on one coin, with no SHA-512 call. -/
@@ -172,8 +172,8 @@ theorem periodRun_pouw_fails (c : Certificates) (hW : c.W = 1) (p : Price) (ξ :
 
 /-- **The idle deployment's period coupling at PoUW**, at `vocab δ 1`, for every verdict, composite, parameters,
 committed files, commitment, strategy and resolution of the coin trees' coins: the run that charges nothing and accepts
-everything (`periodRun`), over one coin in bijection with the coins drawn up front (the coin commitment has no families
-and the device draws nothing at the close), with no break. Its claim, one gate of work, fails at every coin, so its `world` holds. -/
+everything (`periodRun`), over one coin in bijection with the coins flipped up front (the coin commitment has no families
+and the device samples nothing at the close), with no break. Its claim, one gate of work, fails at every coin, so its `world` holds. -/
 def coupling (δ : ℝ≥0∞) (acc : Exchange → Prop) (k : Verity.Registration.Composite) (θ : ByteArray)
     (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy ((vocab δ 1).game θ F c)) (ρ : TreeCoins) :
     (vocab δ 1).PeriodCoupling acc k .pouw θ F c σ ρ where

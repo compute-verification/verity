@@ -27,7 +27,7 @@ import Proofs.Flock.Verifier.HmNets
 /-!
 # VBridge G item 3: V*'s port columns, decoded from the registered reads
 
-At an accepted outer proof every layer is `Good` (`ZkOuter.Good`): no wrong unit, and each wire a unit reads at a
+At an accepted outer proof every layer is `Good` (`ZkOuter.Good`): no incorrect proof block, and each wire a unit reads at a
 registered read carries the registrant's bit there (`RegAgree`). This file reads those bits through the session's layout
 (`layShHJ`) into the columns of a copy of V*'s unit, so that the unit theorems (`unit_innerUnit`, `keyProg_recOpen`) apply
 to the layer itself. Only `RegAgree` is read: the unit theorems hold at any transcript's local evaluation.

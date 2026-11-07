@@ -67,7 +67,7 @@ def test_a_select_is_the_gather_on_every_id(family, E):
 
 def test_a_unit_that_selects_its_experts_words_lowers():
     """K words of one routed expert among E = 128, each selected from its slab column: under `Q_word` every unit lowers, each is
-    the select's ANDs, and every unit equals the reference on synthetic draws."""
+    the select's ANDs, and every unit equals the reference on synthetic samples."""
     E, K = 128, 4
     sel = _word("MoeSelectBf16", E)
     sig = lambda S: ((("e", I32), ("cols", Array(K, Array(E, Value(16))))), Array(K, Value(16)))  # noqa: E731

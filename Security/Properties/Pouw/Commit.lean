@@ -86,13 +86,13 @@ def CoinOpens (c : CoinCommitment) (o : CoinOpening) (label : String) (after : B
 /-- An opening `coin_reason` accepts (gives no reason) is one `CoinOpens` describes. -/
 def CoinAccepts : Prop := ∀ c o label after, coinReason c o label after = .ok none → CoinOpens c o label after
 
-/-! ## Salts and draw keys -/
+/-! ## Salts and sample keys -/
 
 /-- A key PoUW derives (`derive` under its domains) is from a nonempty source. -/
 def KeyRefusals : Prop :=
   ∀ source domain context k, key? source domain context = .ok k → source.size ≠ 0
 
-/-- Every key PoUW derives is 32 bytes: the epoch's salt key, the audit key, and the Pearl-C draw and replay keys. -/
+/-- Every key PoUW derives is 32 bytes: the epoch's salt key, the audit key, and the Pearl-C sample and replay keys. -/
 def KeySize : Prop :=
   ∀ source domain context k, key? source domain context = .ok k → k.size = 32
 
@@ -113,14 +113,14 @@ def EpochSaltAccepts : Prop :=
   ∀ c o weightsRoot s, epochSalt c o weightsRoot = .ok (.ok s) →
     CoinOpens c o "salt" weightsRoot ∧ saltOf c o.coin weightsRoot = .ok s
 
-/-- A coin `draw_coin` gives is the opened one, from an epoch with a coin commitment whose draw coin the opening opens after
+/-- A coin `draw_coin` gives is the opened one, from an epoch with a coin commitment whose sampling coin the opening opens after
 what the verifier recorded. -/
 def DrawCoinAccepts : Prop :=
   ∀ cc o after coin, drawCoin cc o after = .ok (.ok coin) → ∃ c, cc = some c ∧ CoinOpens c o "draw" after ∧ coin = o.coin
 
-/-! ## Draws -/
+/-! ## Samples -/
 
-/-- A work-weighted draw (`Sampled.select`) gives `t` tickets, each a position of the ticket list. -/
+/-- A work-weighted sample (`Sampled.select`) gives `t` tickets, each a position of the ticket list. -/
 def DrawShape : Prop :=
   ∀ key tickets t ids, weightedDraw key tickets t = .ok ids → ids.length = t ∧ ∀ i ∈ ids, i < tickets.length
 

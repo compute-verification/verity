@@ -668,7 +668,7 @@ def test_a_binding_run_does_in_each_other_binding_s_place_what_making_its_roots_
     making them did beyond them (the catalog's roots record notes it) can't be done in their place: ``_late_roots``' import of
     `syn.late.lz` and its ``SynWide7_v1``, made by its id, are done (`units._replay`), and ``_minted_roots``' composite, which
     no id makes, is made.  So this process's registry and its in-tree modules are, in order, the ones a run that makes every
-    binding's roots has (the roots record stale), with that run's verdicts: C-Flock lowers a word primitive by the first
+    binding's roots has (the roots record stale), with that run's verdicts: Flock lowers a word primitive by the first
     Boolean Definition registered of that word, which another binding's roots can be the first to register."""
     root = _late_tree(tmp_path / "t")
     assert _records_only(root)["stored"] == 7
