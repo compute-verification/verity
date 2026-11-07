@@ -64,6 +64,8 @@ def test_the_plan_mixes_its_kinds_with_their_shares_lengths_and_sampling(tmp_pat
     assert all(r["seeded"] == (r["sampling"]["temperature"] > 0) for r in plan)
     meta = json.loads(out.with_suffix(".meta.json").read_text())
     assert sum(k["requests"] for k in meta["kinds"].values()) == 200
+    at = L.S.corpus().traffic.arrivals(plan, 2.0)
+    assert all(b > a for a, b in zip(at, at[1:])) and 0.7 * 100 < at[-1] < 1.3 * 100
 
 
 def test_a_plan_request_carries_its_own_sampling_and_seed_and_stops_at_its_end(monkeypatch):

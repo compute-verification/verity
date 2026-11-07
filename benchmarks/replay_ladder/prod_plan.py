@@ -16,7 +16,9 @@
 Each request is greedy or, with probability `SAMPLED`, at temperature 0.7 with its seed by the public seed rule
 (`corpus.request_seed` of its id), the rest of its sampling the checkpoint's generation_config; every request stops at its
 end of text or its cap. A plan's first requests are a window's: `GAP` keeps a conversation's turns within about a minute of
-arrivals at the rates a TP8 node serves.
+arrivals at the rates a TP8 node serves. Arrivals are Poisson: each request carries its unit-rate exponential gap
+(``gap_draw``, which serve_tax's schedule divides by the load's rate), from a stream of its own so the rest of the plan
+doesn't depend on it.
 
 ``kinds`` reads a ladder model directory (its plan, window and replays) into kinds.json: per kind, the window's requests
 and served tokens, and per replay the requests whose tokens differ, with each one's context at its first difference
@@ -133,11 +135,13 @@ def build(a: argparse.Namespace) -> int:
             slots[q] = {"kind": "sharegpt", "prompt_ids": chat([{"role": "user", "content": c[0]["value"]}]), "max_tokens": out}
 
     out_f = Path(a.out)
+    gaps = random.Random(f"gap_draw/{a.seed}")
     with open(out_f, "w") as f:
         for i, r in enumerate(slots):
             seeded = rng.random() < SAMPLED
             r |= {"i": i, "prompt_len": len(r["prompt_ids"]), "seeded": seeded,
-                  "sampling": {"temperature": TEMPERATURE} if seeded else {"temperature": 0.0}}
+                  "sampling": {"temperature": TEMPERATURE} if seeded else {"temperature": 0.0},
+                  "gap_draw": gaps.expovariate(1.0)}
             f.write(json.dumps(r, separators=(",", ":")) + "\n")
     kinds: dict[str, dict] = {}
     for r in slots:
