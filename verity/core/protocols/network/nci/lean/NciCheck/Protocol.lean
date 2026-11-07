@@ -12,9 +12,10 @@ The inference-only policy (`Nci.CompliesRate Γ α`, `Security/Definitions/Nci.l
 divide into inference blocks of at most `Γ` gates, each reading at most `α` bits of fresh input per gate: input from
 outside the block that is not registered information. `NciCheck.Baseline.evaluate` is the policy's check: the division's
 check at the size of the description (`NciCheck.Desc.evaluate`), then the provenance of the registered information
-against the deployment's registration log. This module makes that check a `Core.Protocol`, which neither composite runs
-yet. v0 publishes the division and isn't zero-knowledge, so no composite may run it; only v1, the private form, may be
-composed. It has no rounds and reads no coins: it answers from the declared circuit, the declared division and the
+against the deployment's registration log. This module makes that check a `Core.Protocol`, which both composites list
+among their subprotocols (`Core.Remote.components`, `Core.Onsite.components`). v0 publishes the division and isn't
+zero-knowledge, so they compose it only as a stated exception, which v1, the private form, replaces. It has no rounds
+and reads no coins: it answers from the declared circuit, the declared division and the
 registered information it is handed, and is never undecided.
 
 Its case splits the check's instance and trusted input as sampled proofs' one-stage audit splits its own

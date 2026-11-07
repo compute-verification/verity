@@ -17,14 +17,14 @@ vacuous but can never make Lean prove something false.
 Soundness rests on three: SHA-512's collision resistance in two forms, each a hypothesis about one explicit finder, and the
 verifier's randomness. `SHA512CRStrict` (`cr/sha-512`) bounds a finder by its worst-case number of evaluations: the
 compiled and knowledge terms' collision finders and `δ_tree`'s. `SHA512CRExpected` (`ecr/sha-512`, Assumption 2) bounds
-a finder by its expected number: the link term's. Assumption 3 is a hypothesis about the byte source the verifier draws its
+a finder by its expected number: the binding error's. Assumption 3 is a hypothesis about the byte source the verifier samples its
 units from, the operating system's; its per-test form, `UniformRandomBytesTest`, is one about the same source's bytes for
 the commitments' salts and the ZK server's tape, up to a slack `η`. The round coins' uniformity (A6,
-`uniform/flock-coin-server`) is not a `Prop` here: the session game draws its coins itself, so the model embodies it
+`uniform/flock-coin-server`) is not a `Prop` here: the session game flips its coins itself, so the model embodies it
 (`ASSUMPTIONS.md`).
 
 The rest are not soundness's hardness assumptions. Assumption 4 is a hypothesis about one test of `verity.randomness`'s
-keyed streams, for the PoUW window draw, and Assumption 5 one about the window's secret. `HmRowComputes` is not
+keyed streams, for the PoUW window sample, and Assumption 5 one about the window's secret. `HmRowComputes` is not
 cryptographic: it says the circuit's row-hashing slots compute SHA-512, a fact about the circuit that is still to prove
 (phase 2i), named here so that the value binding's theorems take it as a hypothesis. Zero knowledge's are hm96 leaf hiding
 (T1, the spec's `Claims.Hm96Hiding`, read here by `hm96Hiding_apply`) and `X_L + κ ≠ 0` on the level-0 domain
@@ -112,7 +112,7 @@ A3: the theorems read `drawWith` on a model byte source, the unit sample runs it
 The CSPRNG is idealized as exactly uniform here, for every event. That is refutable at the deployed source: Linux's CRNG
 (5.18 and later, `drivers/char/random.c`) answers a read past 32 bytes with a ChaCha20 stream under one 256-bit key, so
 the event that the bytes are among the source's outputs has probability 1 there and at most `2^(256 - 8n)` at `n`
-uniform bytes. The true bound carries the CSPRNG's distinguishing advantage against the draw's test, which
+uniform bytes. The true bound carries the CSPRNG's distinguishing advantage against the sample's test, which
 `UniformRandomBytesTest` states. A VM snapshot restored more than once must not repeat the kernel's CSPRNG state, which
 holds when the kernel reseeds on a VM generation change (vmgenid, Linux 5.18 and later, with hypervisor support). A
 hardware RNG doesn't make it hold: from 5.18 the kernel mixes RDSEED in only when it reseeds, about once a minute, and
@@ -135,11 +135,11 @@ so the event that the bytes are among the source's outputs has probability 1 the
 uniform bytes. The theorems take it for the test they need.
 
 What it covers is every byte a zero-knowledge session reads from the operating system. Each rep of the ZK server's frame
-reads its draws in one call at its start (`flock-firewall frame`, `Frame.cmd`: `Frame.drawsWith` at `IO.getRandomBytes`):
+reads its samples in one call at its start (`flock-firewall frame`, `Frame.cmd`: `Frame.drawsWith` at `IO.getRandomBytes`):
 the pads `h`, the dot-product mask `μ`, the inner rows' padding, `τ`'s salt and the pads tree's salts. The tap
 (`flock-firewall tap`) serves the prover's every other read: the mask slot's words, level 0's hiding, the other trees'
-salts and the coin tree's nonce. C-Flock's prover reads every hm96 leaf salt, 192 bytes a leaf, from the operating system
-(the tap, or `getrandom(2)` unfirewalled), as the recursive audit's firewall and a registrant (`os.urandom`) do for their
+salts and the coin tree's nonce. Flock's prover reads every hm96 leaf salt, 192 bytes a leaf, from the operating system
+(the tap, or `getrandom(2)` unserved), as the recursive audit's firewall and a registrant (`os.urandom`) do for their
 commitments' salts. So the masks and the Reed–Solomon padding are inside A3's
 scope, as the salts are, and no premise on a stream generator is left on them. `Discharge.ZkView.OsSalts` reads 192
 bytes as one salt and takes the hiding theorems to them; `Claims.ZKServer.OsTape` reads the server's tape.
@@ -156,7 +156,7 @@ def UniformRandomBytesTest {Ω ι : Type} [Fintype Ω] [Fintype ι] [DecidableEq
   prCoin (fun ω => E (t ω)) ≤ prCoin E + η ∧ prCoin E ≤ prCoin (fun ω => E (t ω)) + η
 
 /-- **Assumption 4 (`prf/sha-512`): `verity.randomness`'s keyed streams at distinct indices pass a test as independent
-uniform bytes do, up to `η`**, for the PoUW window draw.
+uniform bytes do, up to `η`**, for the PoUW window sample.
 
 A verifier secret `source` of `S` bytes gives the key `Randomness.derive source domain context`. The key's stream at
 index `idx i` is `Randomness.stream key (idx i) (L i)`, its first `L i` bytes, the spec of `Key.stream` that
@@ -165,7 +165,7 @@ probability that independent uniform streams of those lengths do, plus `η`, whe
 framings (`Randomness.frames`, the bytes each stream hashes after the key) are pairwise distinct.
 
 It is a predicate on one test, as `SHA512CRExpected` is on one finder. A statement for every test would be refutable, since `2^(8S)`
-sources give at most that many stream tuples. The theorems take it for the test they need, whether the draw computed
+sources give at most that many stream tuples. The theorems take it for the test they need, whether the sample computed
 from the streams misses a given set, and `η` enters their bound.
 
 What A4 assumes of SHA-512 is that its compression function `f` (a 1024-bit message block, a 512-bit chaining value) is a
@@ -182,13 +182,13 @@ def KeyedStreamsUniform (S : ℕ) (domain : String) (context : List (String × R
         Randomness.stream (Randomness.derive ⟨Array.ofFn fun b => UInt8.ofFin (src b)⟩ domain context) (idx i) (L i)) ≤
       prCoin (fun f : (i : Fin m) → Fin (L i) → Fin 256 => E fun i => ⟨Array.ofFn fun b => UInt8.ofFin (f i b)⟩) + η
 
-/-- **Assumption 5 (`uniform/python-secrets`): the PoUW window's secret is `S` uniform bytes**, drawn fresh for the
+/-- **Assumption 5 (`uniform/python-secrets`): the PoUW window's secret is `S` uniform bytes**, sampled fresh for the
 window. A source is a finite probability space `Ω` (`prCoin` weighs its outcomes evenly) and, on outcome `ω`, the secret
 `sec ω`. The source is uniform when every event about the secret has the probability it has for `S` uniform bytes.
 
 What A5 assumes of the verifier is that its window secret is such a source: `secrets.token_bytes(32)` from the operating
-system's CSPRNG, drawn once the window's receipt is complete and used for that window alone (`Ledger.open`). A
-secret reused across windows is outside it, since later windows would be committed after earlier draws were seen.
+system's CSPRNG, sampled once the window's receipt is complete and used for that window alone (`Ledger.open`). A
+secret reused across windows is outside it, since later windows would be committed after earlier samples were seen.
 
 The verifier's platform is Linux, with CPython 3.12 or later. There `secrets.token_bytes` reads `os.urandom`, which is
 `getrandom(2)`, the kernel's CSPRNG, and blocks until that is initialized. It keeps no user-space state, so a forked
@@ -218,7 +218,7 @@ assumes, not proved here.
 
 It is a fact about the slot circuits and their wiring, not about SHA-512, and it is not cryptographic: phase 2i is to
 prove it from the `sha512x3` and `hm96` sections of the circuit file. The theorems that bind rows to registered digests
-(`Binding`) take it for the rows the drawn units' tables read. -/
+(`Binding`) take it for the rows the sampled proof blocks' tables read. -/
 def HmRowComputes {W : Type} (H : List UInt8 → List UInt8) (saltPrefix : List UInt8) (mask : List UInt8 → List UInt8)
     (sat : W → Prop) (row salt bc : W → List UInt8) : Prop :=
   ∀ w, sat w → bc w = List.zipWith (· ^^^ ·) (H (row w)) (mask (salt w)) ++ H (saltPrefix ++ salt w)
@@ -261,7 +261,7 @@ is not a set an algorithm is asked to find. Where a theorem's bound is stated at
 (`CROnly.hm96Hiding_gap`), it takes no premise at all: so are `Flock.Guarantees.RecursiveZK`,
 `Flock.Guarantees.RecursiveCircuitPrivate`, `Flock.Guarantees.RecursiveCircuitIndist`,
 `Flock.Guarantees.RecursiveCircuitPrivateLeaves`, `Flock.Guarantees.ZeroKnowledgeHidden` and
-`FailClosed.flock_verify_sound`'s zero-knowledge views. A key drawn per session
+`FailClosed.flock_verify_sound`'s zero-knowledge views. A key sampled per session
 from the operating system (A3) would replace it by the average over keys, `2^-257` (`CROnly.hm96_sha512_sum`), as the
 committed coins' bound at a fresh uniform key already is (`ZkCoins.CommittedLeHm96`). -/
 def HashDerivedKey {Y B C : Type} [Fintype Y] [Fintype B] (My : Y → B) (c : Y → C) : Prop :=

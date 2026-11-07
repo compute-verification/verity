@@ -47,7 +47,7 @@ import Proofs.Pouw.RelativeSecurity
 /-!
 # A leaf's group of linked sessions realizes one unit, any shape (the proof)
 
-`Accounting.TS.Group.group_soundAt`, the argument every leaf proved as a group of one-unit C-Flock statements shares,
+`Accounting.TS.Group.group_soundAt`, the argument every leaf proved as a group of one-unit Flock statements shares,
 whatever the group (any finite type `ι` of statements: `Ix L n`'s `L` lanes of `n` chunks and a combine, or option A's
 33): a proof layer accepted only where each of the group's sessions passes the leaf verifier's per-statement checks
 (`Group.SessionChecks`), whose relation the group's circuits realize at the rows the sessions open
@@ -58,9 +58,9 @@ is, at one of its sessions, an unsound proof of the checked layer where its port
 they hold, which the known-read check's names give at known content naming `ok`: `names_of_check`, with full checking
 asked there too) or an accepted outcome that isn't the session's write of a live run (`RowsSession.Written`), which
 has probability `0` in every session's game (`RowsSession.prob_unwritten`) and so on the window (`WindowLaw`). At a
-written outcome the leaf verifier's draw check (`PouwWindow.Lanes.checkFull`) gives full checking: the record's draw is
-`subset` of every unit of a non-empty population, and the session's custody makes it the verifier's draw `subset kd`
-over `n` units, so the outcome draws every unit, `kd = n` and `0 < n` (`RowsSession.full_of_check`), and every unit
+written outcome the leaf verifier's sample check (`PouwWindow.Lanes.checkFull`) gives full checking: the record's sample is
+`subset` of every unit of a non-empty population, and the session's custody makes it the verifier's sample `subset kd`
+over `n` units, so the outcome samples every unit, `kd = n` and `0 < n` (`RowsSession.full_of_check`), and every unit
 reads its one-row ports at their rows (`RowsSession.readsOwnRow_of`). Every unit's served roots are registered
 (`RowsSession.ServedRegistered`) wherever the one-read check (`PouwWindow.Lanes.checkOneRead`) holds, which the
 sessions' reads built from `own` give (`RowsSession.servedRegistered_canon`). The sessions' registrants' rows agree
@@ -91,7 +91,7 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 variable (s : RowsSession)
 
 /-- **An outcome is written**: its transcript is the session's write (`wr`) of a live run's output at its registration
-and draw, as every outcome of the session's game is. -/
+and sample, as every outcome of the session's game is. -/
 def Written (o : s.Out) : Prop :=
   ∃ (R : s.Reg) (S : Finset (Fin s.n))
     (o' : LiveOutJ (planZHJ (Reg := s.Reg) s.dj s.y₀ S R).length (mPtsOf s.c.g (s.kd / nTab s.I))),
@@ -105,10 +105,10 @@ theorem prob_unwritten : prob (fun o : s.Out => ¬ s.Written o) s.G s.τ = 0 := 
   exact nonpos_iff_eq_zero.1
     ((prob_mono (fun a h => h ⟨R, s.L.draw ω, a, rfl⟩) _ _).trans (prob_false _ _).le)
 
-/-- **The leaf verifier's draw policy gives full checking**: at an accepted written outcome whose record
-`PouwWindow.Lanes.checkFull` accepts, the record's draw is the verifier's draw of the outcome's units
-(`RecordCustodyZKJ`: the record holds the draw file `dj S`, which decodes to `drawOf (.subset kd) n S`), and the check
-makes it `subset n` of `n > 0` units, every one: the outcome draws every unit, `kd = n` and `0 < n`. -/
+/-- **The leaf verifier's sample policy gives full checking**: at an accepted written outcome whose record
+`PouwWindow.Lanes.checkFull` accepts, the record's sample is the verifier's sample of the outcome's units
+(`RecordCustodyZKJ`: the record holds the sample file `dj S`, which decodes to `drawOf (.subset kd) n S`), and the check
+makes it `subset n` of `n > 0` units, every one: the outcome samples every unit, `kd = n` and `0 < n`. -/
 theorem full_of_check {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Written o)
     (hf : PouwWindow.Lanes.checkFull o.2.2.record = .ok ()) :
     o.2.1 = Finset.univ ∧ s.kd = s.n ∧ 0 < s.n := by
@@ -134,8 +134,8 @@ theorem full_of_check {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Wr
   obtain ⟨u', hu', he⟩ := (FlockSoundness.Discharge.ZkLink.drawOf_mem _ _ S u.val).1 hm
   exact (Fin.ext he) ▸ hu'
 
-/-- **At a written accepted outcome that draws every unit, every unit reads a one-row port at its row**
-(`Accounting.TS.Lanes.ReadsOwnRow`): the unit is drawn and proved (`drawn_of_acceptsZKR`, `drawOkZKHJ_of_file`), so
+/-- **At a written accepted outcome that samples every unit, every unit reads a one-row port at its row**
+(`Accounting.TS.Lanes.ReadsOwnRow`): the unit is sampled and proved (`drawn_of_acceptsZKR`, `drawOkZKHJ_of_file`), so
 acceptance gives `own`'s port a position at the unit's index (`reads_of_acceptsZKR`), which is the unit's read
 (`ServedRegistered`); a port of one read has it at index 0. -/
 theorem readsOwnRow_of {o : s.Out} (hacc : LiveAcceptsZKR s.I s.own o) (hw : s.Written o)
@@ -190,8 +190,8 @@ theorem rowsReg_eq_portRead (hS : ∀ u, s.ServedRegistered u)
     · rw [ite_eq_right hr, ite_eq_right fun hp => hr ⟨hp.1, hiff.1 hp.2⟩]
   · rw [dite_eq_right h, dite_eq_right h]
 
-/-- **Under the complete check every port row of a drawn unit is registered and opens at its registered root**: at
-an outcome flock-verify `--zk --registered` accepts, a drawn unit `u` whose registrant reads its served roots' rows
+/-- **Under the complete check every port row of a sampled proof block is registered and opens at its registered root**: at
+an outcome flock-verify `--zk --registered` accepts, a sampled proof block `u` whose registrant reads its served roots' rows
 (`ServedRegistered`), in a circuit whose every port is a port of `own` (`Flock.Registered.checkComplete`; acceptance
 has the circuit name each port once), reads `u`'s row of every port `q` (each input port and output row, so whatever an
 output's cone reads, the lane index included) as a registered read through `own`'s port of `q`'s name (`ownPort`), and
@@ -276,7 +276,7 @@ open Accounting.TS Accounting.TS.Checked Accounting.TS.Lanes Flock.SoundAtBridge
 open Pouw.RelativeSecurity (Paths)
 open scoped ENNReal
 
-/-- **A leaf's group of linked C-Flock sessions realizes one unit, any group**: a proof layer `pf` accepted only where
+/-- **A leaf's group of linked Flock sessions realizes one unit, any group**: a proof layer `pf` accepted only where
 the leaf verifier's group check `gate` passes and each of the group's sessions passes `SessionChecks` at its known
 content `known` (naming `ok`), the ports `full` it reads in full and its file's ports `want`, whose relation the group's
 circuits realize at the rows the sessions open (`GroupRealizes`) and admits a clash of two of the sessions' registrants'
@@ -398,7 +398,7 @@ theorem groupLayer_not_soundAt {Ω : Type} [Fintype Ω] {S nπ n : ℕ} {V : Typ
 end Accounting.TS.Group
 
 open Accounting.TS Accounting.TS.Group in
-/-- **A leaf's group of linked C-Flock sessions realizes one unit, any shape** (`Accounting.Guarantees.TS.LeafGroupSound`):
+/-- **A leaf's group of linked Flock sessions realizes one unit, any shape** (`Accounting.Guarantees.TS.LeafGroupSound`):
 `group_soundAt` at the group layer, its `T.lanes · n + 1` statements (`card_ix`), the known content each session's
 verifier builds ending in its `o0` row (`okKnown_names`), the served roots registered by the reads built from `own`
 and the one-read check (`RowsSession.servedRegistered_canon`), and `GroupRealizes` at its relation's first disjunct. -/

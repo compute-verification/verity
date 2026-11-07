@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A served H1 window's live units (live@<s>) through sampled proofs: each round's statement proved by C-Flock --zk
+# A served H1 window's live units (live@<s>) through sampled proofs: each round's statement proved by Flock --zk
 # and verified by the Lean verifier against the verifier's own live Program, partition and registered reads (live.py's
 # docstring has the checks). On a node that holds the window's dump (or reads it, --send) (`pouw_h1_gpu --commit --live-dump DIR`):
 #   research run --on MACHINE --project verity --source . --cwd source --mem-gb 128 \
@@ -48,7 +48,7 @@ for L in "${WINDOWS[@]}"; do
   if [ "$FW" = 1 ]; then
     export FC_FIREWALL=1 FC_HOST_WITNESS=1 FC_FIREWALL_STATEMENT=verity/flock-circuit
     export FC_FIREWALL_HELLO_ARGS="--partition $WK/verifier/partition.json --program $WK/verifier/program.json"
-    vlimit() { :; }   # the firewall's Lean children can't start their threads under `ulimit -v` (job.sh)
+    vlimit() { :; }   # the ZK server's Lean children can't start their threads under `ulimit -v` (job.sh)
   fi
   # each statement is one instance of a few thousand ANDs, padded to k_log 26 by --zk: a session (serve, prove and the
   # ZK server's Lean) peaks near 55 GB and takes about 20 min on 32 CPUs, so they run PAR at a time under the run's cgroup

@@ -320,7 +320,7 @@ def lowbyte_difference(ref: PC.CallRecord, got: PC.CallRecord) -> str | None:
 def first_difference(ref: PC.CallRecord, got: PC.CallRecord) -> str | None:
     """None when ``got`` commits what ``ref`` does: its weight side's Y unit leaves, inputs' digest and root, its inputs'
     digest, every unit's leaf, the root and the served y. Otherwise the first difference: the first wrong Y unit, the first
-    wrong unit in the partition's numbering (its role and place, and for a dequantization unit its arguments and both
+    incorrect proof block in the partition's numbering (its role and place, and for a dequantization unit its arguments and both
     values), or the first wrong served entry."""
     if got.shape != ref.shape:
         return f"shape {got.shape} is not {ref.shape}"

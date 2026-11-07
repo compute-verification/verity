@@ -50,7 +50,7 @@ import Proofs.Flock.SessionLoop.FinRounds
 two premises in the step's own form, each over `swSrcE_hmk_cut`'s premises:
 
 * **`Loop.FinPiop`**: table `j`'s rep `r`'s PIOP returns from the views' source, cut at the opened coins, and the cap
-  and pads root it frames are under `2^64` bytes. `swSrcE_hmk_cut` reads that return; the firewall's rep returning
+  and pads root it frames are under `2^64` bytes. `swSrcE_hmk_cut` reads that return; the ZK server's rep returning
   doesn't give it (`piopCut_fw` needs the masked values themselves), so it is a premise.
 * **`Loop.FinFc`**: the equation at `final_c`'s pad, which `swSrcE_hmk_cut` leaves out.
 

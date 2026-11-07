@@ -176,6 +176,22 @@ class NoPiece(NotImplementedError):
     """An IR primitive that Flock's lowering has no piece for."""
 
 
+#: the top-p keep word over every split count (``sampling.topp_mask_word``), which no one circuit holds (`topp_word`)
+TOPP_WORD = r"TopPMaskWordx(\d+)_v1"
+
+
+def no_piece(pids: Collection[str]) -> str:
+    """Why a unit holding the primitives ``pids`` can't be lowered, with the fix where there is one."""
+    import re
+
+    why = "C-Flock has no piece for " + ", ".join(pids)
+    if any(re.fullmatch(TOPP_WORD, p) for p in pids):
+        why += (": the top-p keep word over every split count is `topp_word`'s composition, about 10^11 ANDs at a served "
+                "vocabulary, which no unit holds; bind the word-gate keep word (TopPKeepWord_v2{V,S}, one per split count S, "
+                "each of its gates a piece) instead")
+    return why
+
+
 # --- the walk ----------------------------------------------------------------------------------------------------------
 
 def _width(prim) -> int:
@@ -240,7 +256,7 @@ def lower_gates(C: Circuit, gates, wires: dict[int, list], pieces: dict[str, Cal
             continue
         piece = pieces.get(prim.id)
         if piece is None:
-            raise NoPiece(f"C-Flock has no circuit piece for the IR primitive {prim.id}")
+            raise NoPiece(no_piece([prim.id]))
         out = piece(C, *ops)
         if len(out) != _width(prim):
             raise AssertionError(f"piece for {prim.id} returned {len(out)} bits, the primitive returns {_width(prim)}")
@@ -319,11 +335,14 @@ _PIECE_ANDS: dict[str, int] = {}
 
 
 def _piece_ands(prim) -> int:
-    """The ANDs of ``prim``'s piece on free operands (none for a primitive C-Flock has no piece for, which no unit holding it
+    """The ANDs of ``prim``'s piece on free operands (none for a primitive Flock has no piece for, which no unit holding it
     lowers past), each primitive id lowered once. A piece that lowers only on a constant operand (a rotation by a constant
-    count, which is wiring) can't be lowered on free ones, and states its ANDs as its ``ands`` attribute instead."""
+    count, which is wiring) can't be lowered on free ones, and states its ANDs as its ``ands`` attribute instead. The top-p
+    keep word (`TOPP_WORD`) has no piece but counts its composition's (`topp_word.ands`), so that a unit holding it is sized,
+    and refused past the range (`circuit.refuse_past_range`), before anything lowers it."""
     if prim.id not in _PIECE_ANDS:
         import inspect
+        import re
 
         from verity.ml.circuits.evaluation.reference import signature_of
 
@@ -336,6 +355,10 @@ def _piece_ands(prim) -> int:
             outs = lower(C, prim, [C.input(f"in{j}", w) for j, w in enumerate(w for pt in params for w in pt.leaf_widths())])
             C.output("out", [b for w in outs for b in w])
             ands = C.counts()["ands"]
+        elif (m := re.fullmatch(TOPP_WORD, prim.id)) is not None:
+            from . import topp_word
+
+            ands = topp_word.ands(int(m[1]))
         _PIECE_ANDS[prim.id] = ands
     return _PIECE_ANDS[prim.id]
 

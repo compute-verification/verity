@@ -693,7 +693,7 @@ def peel(mm, nxt, *, operand: str, width: int, offset: int = 0):
 GRIDS = {"fp4c": tuple(range(-4, 5)), "fp4": (-12, -8, -6, -4, -3, -2, -1, 0, 1, 2, 3, 4, 6, 8, 12),
          "int5": tuple(range(-16, 17))}
 GRID_MODES = ("round", "dither")
-#: linears also take `sr`, unbiased stochastic rounding, whose coin is a uniform draw rather than one bit
+#: linears also take `sr`, unbiased stochastic rounding, whose coin is a uniform sample rather than one bit
 LINEAR_GRID_MODES = GRID_MODES + ("sr",)
 #: block scales a linear's `grid` may choose from, per block of k: the UE4M3 odd integers (an odd scale keeps every
 #: coin's bilinear coefficient odd) or every integer UE4M3 holds up to 15; `odd9` the odd ones to 9, so an E2M1x2
@@ -772,7 +772,7 @@ def on_grid(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, di
     """Integers on the grid and scales s (one per slice over `dims`, kept) with x ~ q s: `round` the nearest level,
     s = absmax / top; `dither` the level below v = x / s or the one above it by the fair bit b, s = absmax / top
     (1 + 2^-20) so that |v| < top (on a uniform grid, floor(v) + b); `sr` the level above with probability
-    (v - lo) / (hi - lo), `bits` holding uniform draws in [0, 1), the same s (unbiased: E q = v). `coined`: the coin
+    (v - lo) / (hi - lo), `bits` holding uniform samples in [0, 1), the same s (unbiased: E q = v). `coined`: the coin
     only at those positions, the rest rounded on the same s."""
     top = LEVELS[grid][-1]
     a = x.abs().amax(dim=dims, keepdim=True).clamp(min=1e-30)
@@ -798,7 +798,7 @@ def on_blocks(x: torch.Tensor, grid: str, mode: str, bits: torch.Tensor | None, 
 
 
 def coin_positions(mm, k: int, density: float) -> torch.Tensor:
-    """The coined k-positions: round(density * WORD_K) of every word of WORD_K, uniformly, drawn per (seed, layer,
+    """The coined k-positions: round(density * WORD_K) of every word of WORD_K, uniformly, sampled per (seed, layer,
     linear) like the weight's coins (after commitment: nothing the server commits depends on them)."""
     g = torch.Generator(device=mm.device)
     g.manual_seed(zlib.crc32(f"pos/{mm.seed}/{mm.layer}/{mm.name}".encode()))
