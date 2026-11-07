@@ -42,6 +42,7 @@ public import Flock.With.Log
 public import Flock.With.VerifyE
 public import Flock.Partition
 public import Flock.HmNets
+public import Flock.ReadNet.Frame
 public import Flock.RecOpen
 public import Flock.RecSparse
 public import Flock.RecSparseCmd
