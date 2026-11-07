@@ -32,6 +32,7 @@ from verity_vllm.program.predict.steps import (
     compare,
     compile_steps,
     dead_gates_of,
+    launch_class,
     plan_steps,
     policy_of,
     request_program,
@@ -760,6 +761,40 @@ def test_class_g_compiles_a_request_alone_at_its_launch_context(tmp_path):
         a = alone.requests[k]
         assert B._unit(a) == B._unit(u) and [x[1:] for x in sum(alone.steps, [])] == [x[1:] for x in sum(plan.steps, []) if x[0] == r]
         assert all(len(step) == 1 for step in a.launch) and any(len(step) > 1 for step in u.launch)
+
+
+def _async_window() -> tuple[I1.Advice, dict]:
+    """Two requests under async scheduling: r0 (LP 8) stops on EOS after 3 kept outputs, and the scheduler, a step ahead of its
+    sample, ran one row of it past them (step 3), beside r1's decode; r1 (LP 5) keeps its max_tokens of 4."""
+    return _session([(8, 3, {**GREEDY, "max_tokens": 16}), (5, 4, GREEDY)],
+                    [[(0, 0, 8)], [(0, 8, 1), (1, 0, 5)], [(0, 9, 1), (1, 5, 1)], [(0, 10, 1), (1, 6, 1)], [(1, 7, 1)]])
+
+
+def test_class_g_admits_async_scheduling_and_plans_the_row_it_discards_into_the_launch_it_ran_in(tmp_path):
+    """A class-G registration under async scheduling (LAG 1) passes `launch_class`; in a window where the scheduler ran a row past
+    r0's stop, r0 plans to its kept outputs with that row discarded, and r1's launch at that step holds it, since it ran."""
+    reg = _class_g(tmp_path, target={"async_scheduling": True})
+    assert reg.phi.target_profile().lag() == 1
+    launch_class(reg.phi)
+    plan = plan_steps(reg, *_async_window())
+    assert not plan.refused and plan.discarded == [(3, 0, 10, 1)] and [u.T for u in plan.requests] == [2, 3]
+    assert plan.requests[0].batch() == [[[8, 0]], [[1, 8], [5, 0]], [[1, 9], [1, 5]]]
+    assert plan.requests[1].batch() == [[[1, 8], [5, 0]], [[1, 9], [1, 5]], [[1, 10], [1, 6]], [[1, 7]]]
+    assert plan.steps[3] == [(1, 6, 1, 1)]
+
+
+@pytest.mark.slow
+def test_class_g_compiles_a_window_under_async_scheduling_with_the_row_it_discarded(tmp_path):
+    """`_async_window` compiled whole under a class-G registration with async scheduling: both request Programs at their launch
+    contexts (r1's holding r0's discarded row), GP-01 at LAG 1, the discarded row in no Program, and the batch rules pass. What no
+    cheaper test can: that the Build builds a class-G Program at a launch holding a row async scheduling discarded, and that
+    `compile_steps` composes them. Its two GLM-5.3 builds take about a minute."""
+    reg = _class_g(tmp_path, target={"async_scheduling": True})
+    advice, ingress = _async_window()
+    c = compile_steps(reg, advice, ingress)
+    assert c.batch_rule is None and not c.refused and len(c.programs) == 2 and c.discarded == [(3, 0, 10, 1)]
+    assert [u.launch for u in c.requests] == [u.launch for u in plan_steps(reg, advice, ingress).requests] and c.workload.lag == 1
+    assert c.steps[3] == [RowRef(1, c.requests[1].digest, 6, 1, 1)]
 
 
 @pytest.mark.parametrize("engine,edit,fact", [
