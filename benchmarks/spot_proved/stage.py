@@ -345,13 +345,18 @@ def allreduce_instances(cap: Capture, unstaged: dict | None = None):
 
 def cublas_route(M: int, K: int, N: int, f32: bool) -> tuple[str, dict] | str:
     """The role and statics the Program binds an unbiased bf16 GEMM of M rows against a [N, K] weight at, cuBLAS's captured
-    vLLM-default route at those M (`bf16_gemm.f32out_route` for f32 out, the linear's `default_cublas_route` for bf16 out), or
-    why it has none."""
+    vLLM-default route at those M (for f32 out, the route `vllm_bindings.bf16_gemm.f32out_route` binds; the linear's
+    `default_cublas_route` for bf16 out), or why it has none."""
     from verity.ml.definitions.registry import bf16_gemm_check as BC
-    from verity_vllm.program.frontend.rules.vllm_bindings import bf16_gemm as BG
     if f32:
-        got = BG.f32out_route(M, K, N)
-        return got if isinstance(got, str) else (got[1], got[2])
+        phase = "f32out" if f"f32out {K} {N}" in BC.CUBLAS_ROUTES["routes"] else "router"
+        kernel = BC.dispatch_sm90(M, K, N)[0]
+        if phase == "router" and kernel != "cublas":
+            return f"vLLM dispatches the {kernel} tier at M={M}, K={K}, N={N}, not aten.mm.dtype"
+        route = BC.default_cublas_route(phase, M, K, N)
+        if route is None:
+            return f"no captured vLLM-default cuBLAS {phase} route for M={M}, K={K}, N={N}"
+        return ("cublas_splitk_gemm_f32out" if route[0] == "splitk" else "cublas_gemm_f32out"), route[1]
     route = BC.default_cublas_route("linear", M, K, N)
     if route is None:
         return f"no captured vLLM-default cuBLAS linear route for M={M}, K={K}, N={N}"
