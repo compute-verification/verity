@@ -374,7 +374,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--over", type=float, default=1.45, help="the window's arrival rate over the measured capacity")
     s.add_argument("--burst", type=int, default=800, help="the capacity burst's requests")
     s.add_argument("--docs", type=int, default=1 << 20,
-                   help="the shard's first documents the plans draw from (default: all; a fast model's window runs "
+                   help="the shard's first documents the plans take prompts from (default: all; a fast model's window runs "
                         "serve_tax's 20,000 out)")
     r = sub.add_parser("replay")
     r.add_argument("--model", required=True, choices=sorted(LADDER))

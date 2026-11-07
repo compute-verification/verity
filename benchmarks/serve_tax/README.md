@@ -37,7 +37,7 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
   --env REPLAY=saturated -- bash benchmarks/serve_tax/run.sh
 ~~~
 
-`run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit window and the KV edge's window).
+`run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit period and the KV edge's window).
 `MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
 The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
