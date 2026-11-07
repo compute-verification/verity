@@ -3977,6 +3977,18 @@ def test_a_premise_free_guarantee_lists_no_further_nontrivial_witness():
         ["witnesses.nontrivial-drops"]
 
 
+def test_a_named_assumption_may_sit_in_a_module_under_assumptions_module():
+    """`assumptions_module` names a module and the modules under it (`Definitions.Assumptions.Pouw`), so an area can keep its
+    named assumptions in a submodule of its own; a module that only shares the name's prefix (`P.AssumptionsX`) is not one."""
+    def codes(module):
+        f = facts(pins={"P.t": fact(reads=[{"name": "P.f", "module": "P.Defs", "kind": "def", "hash": "1" * 32},
+                                           {"name": "P.Hyp", "module": module, "kind": "def", "hash": "3" * 32}])})
+        return [x.code for x in A.judge(POLICY, f, FILES, update=True)[0]]
+    named = {"assumptions.outside-module", "open.unlisted"}
+    assert not named & set(codes("P.Assumptions.Pouw"))
+    assert named & set(codes("P.AssumptionsX"))
+
+
 def test_an_assumption_is_listed_by_name_with_its_record():
     """Each assumption has an owner and the digest of its definition as `reads` holds it, so a changed assumption is its own
     record; an entry no guarantee reads fails; an update converts a list of assumption modules into the definitions read
