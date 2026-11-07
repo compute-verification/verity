@@ -368,7 +368,7 @@ theorem leakCheckSound_honest :
 
 /-- No design certifies `−1` bits: the conclusion fails where a check accepting everything would return `−1`. -/
 theorem leakCheckSound_nontrivial :
-    ∀ _ : NeZero (1 : ℕ), ¬ CertifiesLeak (Law.bernoulli 1 0 1) (fun _ => 0) ((1 / 2 : ℚ) : ℝ) ((-1 : ℚ) : ℝ) := by
+    ∀ h : NeZero (1 : ℕ), ¬ CertifiesLeak (@Law.bernoulli 1 0 1 h) (fun _ => 0) ((1 / 2 : ℚ) : ℝ) ((-1 : ℚ) : ℝ) := by
   intro _ ⟨H, K, _, _, hℓ⟩
   have h0 : 0 ≤ locBits 1 K := by
     unfold locBits
@@ -384,7 +384,7 @@ theorem leakCountSound_honest :
 
 /-- A unit never sampled always escapes: the count's conclusion fails where a check accepting everything would pass. -/
 theorem leakCountSound_nontrivial :
-    ∀ _ : NeZero (1 : ℕ), ¬ (Law.bernoulli 1 0 1).miss (0 + 1) < ENNReal.ofReal ((1 / 2 : ℚ) : ℝ) := by
+    ∀ h : NeZero (1 : ℕ), ¬ (@Law.bernoulli 1 0 1 h).miss (0 + 1) < ENNReal.ofReal ((1 / 2 : ℚ) : ℝ) := by
   intro _ h
   have he := Law.escape_le_miss (Law.bernoulli 1 0 1) (K := 0 + 1) (B := {0}) (by simp)
   have h1 : ((Law.bernoulli 1 0 1).escape {0}).toReal = 1 := by
@@ -402,7 +402,7 @@ theorem workCheckSound_honest :
 
 /-- A stratum never sampled doesn't meet a target: its one unit, doing all the work, always escapes. -/
 theorem workCheckSound_nontrivial :
-    ∀ _ : NeZero (1 : ℕ), ¬ MeetsTarget (Law.bernoulliOf (fun _ : Fin 1 => (0 : ℕ)) 1) (fun _ => ((1 : ℚ) : ℝ))
+    ∀ h : NeZero (1 : ℕ), ¬ MeetsTarget (@Law.bernoulliOf 1 (fun _ => 0) 1 h) (fun _ => ((1 : ℚ) : ℝ))
       ((1 : ℚ) : ℝ) ((1 / 2 : ℚ) : ℝ) := by
   intro _ h
   have := h {0} (by simp)
