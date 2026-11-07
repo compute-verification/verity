@@ -1,7 +1,7 @@
 /-
 The challenger's session: its signed close over the release log, and the auditor's signed ledger of which session is a
 window's (`challenger.py`'s "The session's close" and "The auditor's ledger", which `tests/test_challenger_difftest.py`
-holds to this, the verifier of record).
+holds to this, the verifier).
 
 The challenger logs each root it receives and each release after it, a line each in canonical JSON (`releases.jsonl`, its
 head the commitment, its times integers), and when its session ends, however it ends, signs the log at its key's next

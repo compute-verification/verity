@@ -33,8 +33,8 @@ def test_the_engine_class_sets_what_the_arguments_leave_unset():
 
 
 def test_a_max_prompt_over_the_class_limit_is_refused_before_any_engine(tmp_path):
-    with pytest.raises(SystemExit, match="--max-prompt 300 is over engine class G's prompt limit 256"):
-        AR.main(["--out", str(tmp_path / "run"), "--engine-class", "G", "--max-prompt", "300"])
+    with pytest.raises(SystemExit, match="--max-prompt 3000 is over engine class G's prompt limit 2048"):
+        AR.main(["--out", str(tmp_path / "run"), "--engine-class", "G", "--max-prompt", "3000"])
     assert not (tmp_path / "run").exists()
 
 

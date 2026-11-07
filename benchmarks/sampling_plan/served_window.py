@@ -1,7 +1,7 @@
 """The served window's partition in the planner's two modes: Llama-3.2-1B int8 at T 8,192 on the H200, one step
 a window, cut into proof blocks at each rung of a ladder, for the free-compute target and the exfiltration target,
 priced proving only (`PROVING_ONLY`, Lean's `GranularityOptimum`) and proving plus `w` times the serve-time commitment
-(`n b(s) h`, paid on every proof block, drawn or not) at two readings of h, a hashed byte's cost; and the second mode
+(`n b(s) h`, paid on every proof block, sampled or not) at two readings of h, a hashed byte's cost; and the second mode
 again under a code-based commitment at each rate ρ of `RATES`.
 
 A model, not a measurement: each input carries its status (M measured, D derived, A assumed) and source (`IN`, read
@@ -10,18 +10,18 @@ from `served_window_inputs.json`).
 **The ladder.**  Every rung covers the window's work; per token and layer:
 
 - `chunk L`, `coord`, `tile RxC`: the int8 linears (qkv, o_proj, gate_up, down) as K-chunks of L MACs that commit their
-  32-bit running sums, as output coordinates (the served draw's `ScaledMmS8Coordinate`), or as tiles of R tokens by C
+  32-bit running sums, as output coordinates (the served sample's `ScaledMmS8Coordinate`), or as tiles of R tokens by C
   output channels, opening each operand row once; the row ops stay at today's units (one an output coordinate), and
-  attention is a query head's row in key blocks, the most keys a power of two whose block C-Flock holds, each block
+  attention is a query head's row in key blocks, the most keys a power of two whose block Flock holds, each block
   opening the running softmax state (its f32 output row, max and sum) and committing it, the last its output row.  The
   window commits what it commits today (every Call's outputs, `Q_word_v1`), plus the chunks' sums and attention's states.
 - `attn|mlp token`, `layer token`, `4 layers token`: fused proof blocks that commit only their boundary, the residual
   stream and the K and V a later token reads: every interior value stays inside a proof block.
 
 A proof block costs its ANDs (int8 MACs at `BlackwellS8ImmaDot32_v1`'s 4,190 per 32, bf16 MACs at `F32Fma_v2`'s 4,498, the row
-ops at their pieces, and every row it opens at hm96's `row_ands`) at the cost model fitted from C-Flock's zero-knowledge
+ops at their pieces, and every row it opens at hm96's `row_ands`) at the cost model fitted from Flock's zero-knowledge
 sessions (`inputs.observations`, GPU-seconds of an RTX PRO 6000), with its statement's share when statements are full.
-`fits` is false for a rung with a proof block C-Flock's block can't hold (`inputs.cap`: its ANDs and rows at the composer's
+`fits` is false for a rung with a proof block Flock's block can't hold (`inputs.cap`: its ANDs and rows at the composer's
 occupancy past 2^`K_MAX`) or wider than the widest size class (`UNIT_CLASS_MAX` bits); such a rung is priced one proof
 block a statement, what lifting the limit would buy.
 
@@ -35,16 +35,16 @@ columns Merkle-hashed at serve time (about 1/ρ the bytes, at h), and opened by 
 claims: no proof block hashes a row in circuit (`Part.hashed` leaves its ANDs), and the hm96 commitment is gone.  The
 encoding and the openings' own work in Flock are not priced, so its proving is a floor.  Each proof block's fit and its
 statement's share stay today's (`inputs.cap`, which the hm96 and SHA-512 slots only enlarge), and no rung's fit turns on
-those slots: a rung that misses C-Flock's block misses it on its own ANDs and rows' bits.
+those slots: a rung that misses Flock's block misses it on its own ANDs and rows' bits.
 
 **Replay.**  Serving keeps only the requests' tokens and the weights (a commitment is a hash), so every mode's total adds the
-rebuilding of the drawn proof blocks' witnesses (`replay`): each request a drawn proof block lies in, re-run whole from its
+rebuilding of the sampled proof blocks' witnesses (`replay`): each request a sampled proof block lies in, re-run whole from its
 prompt at the stock step's share, under either commitment (`optimize.met_replay` on the `request` replay grain).  A
 request's values are its own tokens' alone (the served engine is batch-invariant), so no co-scheduled request is re-run
-with it.  The draws barely differ between rungs, so the replay moves the totals, not s*.
+with it.  The samples barely differ between rungs, so the replay moves the totals, not s*.
 
 **Targets.**  Free compute: C = `EPS` of the scope's MACs, at the window and pooled over each monitoring period
-(`wipe_monitoring.PERIODS`: a week, a month and a year) of windows at the stock step; the draws are about Λ/ε whatever
+(`wipe_monitoring.PERIODS`: a week, a month and a year) of windows at the stock step; the samples are about Λ/ε whatever
 the scope, the commitment grows with it.  Exfiltration: ℓ = `LEAK_BITS` a window.
 
     uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
@@ -103,7 +103,7 @@ TILES = ((2, 2), (4, 4), (16, 16), (64, 64), (128, 128))
 class Part:
     """One stratum of a rung: `units` proof blocks a window of `work` MACs each, `out_bits` wide, committing `commit_bytes`
     at serve time, of `ands` ANDs, the rows they open included (`hashed` of them, their openings at hm96's `row_ands`);
-    `gates` and `rows` are its widest proof block's own ANDs and the rows it opens (bytes each), what C-Flock's block
+    `gates` and `rows` are its widest proof block's own ANDs and the rows it opens (bytes each), what Flock's block
     holds."""
 
     name: str
@@ -126,7 +126,7 @@ class Part:
 
     @property
     def per_statement(self) -> int:
-        """A statement's proof blocks (`inputs.cap`), one for a block C-Flock can't hold."""
+        """A statement's proof blocks (`inputs.cap`), one for a block Flock can't hold."""
         return cap(round(self.gates), self.rows) or 1
 
 
@@ -185,7 +185,7 @@ def attention_block(keys: float, last: bool) -> tuple[float, tuple[float, ...]]:
 
 
 def attention_keys() -> int:
-    """A key block's keys: the most, a power of two, whose block C-Flock holds."""
+    """A key block's keys: the most, a power of two, whose block Flock holds."""
     positions = round(IN["tokens"].value / IN["sequences"].value)
     return next(kb for kb in (positions >> i for i in range(positions.bit_length()))
                 if all(cap(round(g), rows) for g, rows in (attention_block(kb, last) for last in (False, True))))
@@ -300,7 +300,7 @@ def fitted() -> Fitted:
 
 
 def unit_cost(m: CostModel, ands: float, per: int, marginal: bool = False) -> float:
-    """A drawn proof block's GPU-seconds in a full statement of `per` of them: proved and staged, and 1/per of the
+    """A sampled proof block's GPU-seconds in a full statement of `per` of them: proved and staged, and 1/per of the
     statement.  The fit's per-statement term grows with the subcircuit's ANDs, which a statement of one proof block pays
     whole; `marginal` leaves it out, the reading where that term is fixed."""
     statement = m.statement_fixed + (0.0 if marginal else m.statement_per_and * ands)
@@ -313,7 +313,7 @@ def scale(parts: list[Part], windows: float) -> list[Part]:
 
 def grain(name: str, parts: list[Part], m: CostModel, by: str, marginal: bool = False) -> Grain:
     """The rung as n equal proof blocks of its mean work and width, its proving cost weighted by work (`by` "work") or by
-    width ("bits"): the cost the laws pay, which draw a proof block in proportion to it."""
+    width ("bits"): the cost the laws pay, which sample a proof block in proportion to it."""
     n = sum(p.units for p in parts)
     weight = {p.name: p.units * (p.work if by == "work" else p.out_bits) for p in parts}
     total = sum(weight.values())
@@ -350,7 +350,7 @@ def request_grain(windows: float) -> ReplayGrain:
 
 
 def replayed(cost: dict | None, windows: float) -> dict | None:
-    """``cost`` with its draws' `replay` (the `request` replay grain's blocks they meet) in its total."""
+    """``cost`` with its samples' `replay` (the `request` replay grain's blocks they meet) in its total."""
     if cost is None:
         return None
     r = met_replay(request_grain(windows), cost["draws"])

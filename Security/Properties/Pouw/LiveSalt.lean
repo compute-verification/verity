@@ -76,7 +76,7 @@ credited in one period, the one whose close lists the epoch's root.
 
 Under the salt-only layout an abandoned session ends complete too, so a prover can open `n` sessions on `n` epoch roots
 and present the epoch whose salt it likes best. The salt decides seed_B, the row seeds and `rotation_key`, not which units
-are proven (the draw coin, released after registration). Each epoch's deadline counts from its own session's release, and
+are proven (the sampling coin, released after registration). Each epoch's deadline counts from its own session's release, and
 every pass of the epoch registers by it, so abandoning buys no time, and an install that outlasts the deadline is cut into
 intervals, each its own epoch. Best-of-`n` gains at most `n·ε`, where `ε` is the chance that one salt lets a dishonest
 pass through, while nothing keyed by the salt is rewarded. A Pearl-C period refuses a complete salt-only session that no

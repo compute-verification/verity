@@ -41,7 +41,7 @@ class _Clock:
 
 
 def _nonces(label: bytes = b""):
-    """Deterministic nonces for a test, distinct for each label and draw: the verifier's own randomness, replayed."""
+    """Deterministic nonces for a test, distinct for each label and sample: the verifier's own randomness, replayed."""
     counter = itertools.count()
     return lambda n: hashlib.sha512(b"test nonce " + label + next(counter).to_bytes(8, "big")).digest()[:n]
 
@@ -71,7 +71,7 @@ def state_of(tmp_path):
 @dataclass(frozen=True)
 class _Setup:
     """A device's store and its `vk`, with what the verifier knows of its salt: the device's id, the commitment to `W`
-    and the source the salt was drawn from.  Unpacks as `(store, vk)`."""
+    and the source the salt was sampled from.  Unpacks as `(store, vk)`."""
 
     store: audit.Store
     vk: VerifierKey
@@ -649,7 +649,7 @@ def _forge(store: audit.Store, tag: str, seed: bytes, known: set[int]) -> audit.
 
 def test_a_second_verifier_of_the_store_repeats_no_window(big_store, state_of) -> None:
     """Two verifiers of one tag over one store, both counting from their first window, share the store's state, so
-    their windows draw different seeds and samples, and samples learned from one pass none of the other's windows; a
+    their windows sample different seeds and samples, and samples learned from one pass none of the other's windows; a
     second state over the same file is refused while the first runs."""
     store, vk = big_store
     params = _params("ro-blake3/v1")
@@ -671,7 +671,7 @@ def test_a_second_verifier_of_the_store_repeats_no_window(big_store, state_of) -
 
 
 def test_another_tags_window_reveals_no_samples(big_store, state_of) -> None:
-    """The fast check's window and the certified tag's window over one store, both the first of their verifiers, draw
+    """The fast check's window and the certified tag's window over one store, both the first of their verifiers, sample
     different samples: the samples a `gf31-poly/v1` window reveals after its commitment pass no `ro-blake3/v1` window,
     and a prover that tags only those labels is rejected."""
     store, vk = big_store
@@ -689,7 +689,7 @@ def test_another_tags_window_reveals_no_samples(big_store, state_of) -> None:
 
 
 def test_a_restarted_challenger_repeats_no_window_and_refuses_a_replayed_root(big_store, tmp_path) -> None:
-    """After a restart the store's state holds every nonce drawn before it: a challenger whose randomness repeats one
+    """After a restart the store's state holds every nonce sampled before it: a challenger whose randomness repeats one
     opens no window, and a fresh window's seed and samples are new, so the root and openings of a window from before
     the restart, replayed without reading the store, are refused: the replayed leaves are bound to the old seed, and the
     old openings answer other samples."""

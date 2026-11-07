@@ -42,7 +42,7 @@ import Proofs.Flock.Soundness.Game.Prob
 (`Bridge.RowsOk`, which the scope check `scopeOkH` already gives: `Bridge.rowsOk_of_scopeOkH`), each of its own name
 (`Registered.dupName`), no two ports' registered roots one root under different domains (`PortRoots.rootsColl = none`),
 and the registration's population the game's `n` units in order (`Bridge.PopMatches`).
-The verifiers of record now refuse every file that fails the last three: `verify --zk` runs `Flock.PortRoots.check`
+The verifiers now refuse every file that fails the last three: `verify --zk` runs `Flock.PortRoots.check`
 last in its verdict (`Main.verifyCmd`, with or without `--ks-form`, the check's old flag), and the sampled-proofs run
 refuses the registration (`SampledProofs.Run.run`,
 `population-order`, `SampledProofs.Slots.popOk`). So the guarantee reads them off acceptance.

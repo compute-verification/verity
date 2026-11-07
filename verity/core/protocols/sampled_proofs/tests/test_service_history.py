@@ -19,7 +19,7 @@ import fake_challenger as FC
 class _Whole(FC.Stream):
     """A stream whose every check reads its whole log, as a stream's did before it kept what R6 and R7 read."""
 
-    def _earlier(self, record, supplied=None):
+    def _earlier(self, record, supplied=None, outputs=None):
         return self._log
 
 
@@ -129,10 +129,10 @@ def _one_stage(cls) -> tuple[list, tuple, tuple, tuple, S.Stream]:
 class _Forgetful(FC.Stream):
     """A stream that leaves the records whose window has no key out of its checks."""
 
-    def _earlier(self, record, supplied=None):
+    def _earlier(self, record, supplied=None, outputs=None):
         irregular, self._irregular = self._irregular, []
         try:
-            return super()._earlier(record, supplied)
+            return super()._earlier(record, supplied, outputs)
         finally:
             self._irregular = irregular
 

@@ -154,7 +154,7 @@ def row_words(T: int, x, b, j: int, raws):
 # ---------------------------------------------------------------------------------------------------------------
 
 class StubRng:
-    """Returns the given arrays to `h1t_ref`'s draws, in its order: real signs, tag signs, tag mantissas."""
+    """Returns the given arrays to `h1t_ref`'s samples, in its order: real signs, tag signs, tag mantissas."""
 
     def __init__(self, draws):
         self.draws = list(draws)

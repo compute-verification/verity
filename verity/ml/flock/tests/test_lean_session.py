@@ -7,8 +7,8 @@ the loop's nonce) and never the prover's, `Hello`'s answer and every coin checke
 in the honest prover's order, a `Commit` answered without coins ending the session, a `Ping` answered by the loop and
 never leaving, every request after a refusal refused
 without reaching the auditor, and nothing of a session read after its `Finish`. The loop starts the reps' frames on a
-port of its own and drives each itself, every coin a frame takes the loop's own opening. `flock-circuit`'s firewalled
-sessions through it are the end-to-end check (live PROTOCOL.md §10.4)."""
+port of its own and drives each itself, every coin a frame takes the loop's own opening. `flock-circuit`'s ZK
+server sessions through it are the end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
 
 import hashlib
@@ -335,8 +335,8 @@ def test_a_frame_starts_only_as_a_live_sessions_rep(loop, line, why):
 @pytest.mark.slow
 def test_each_reps_frame_draws_its_own(zk):
     """Each rep's frame the loop starts for a live session samples its own randomness at the statement's start, and starts
-    once, and only once the session's level 0 is drawn: a rep before it is refused, so the pads' root, a draw of the
-    loop's, reaches the prover only after every table's witness is in. Each answer is the pads' root alone (the draws never
+    once, and only once the session's level 0 is sampled: a rep before it is refused, so the pads' root, a sample of the
+    loop's, reaches the prover only after every table's witness is in. Each answer is the pads' root alone (the samples never
     leave the loop) and the two reps' roots differ, a rep started again is refused, and so is a table the session doesn't
     have."""
     S = Sessions(_args(zk, "pub-16.bin"))
@@ -487,7 +487,7 @@ def level0(lp: Loop, tables: list[tuple[int, bytes]], name: str = "00" * 64):
 ])
 def test_a_level_0_the_loop_cannot_draw(loop, tables, why):
     """A level-0 request is a witness of whole words for each of a live session's tables; anything else is refused before
-    the loop draws (`test_the_loop_draws_level_0_at_the_statement_with_its_own_mask_words` takes a live session's)."""
+    the loop samples (`test_the_loop_draws_level_0_at_the_statement_with_its_own_mask_words` takes a live session's)."""
     _, lp = loop
     assert level0(lp, tables) == why
 
@@ -513,8 +513,8 @@ def _mask_words(m: int) -> int:
 
 @pytest.mark.slow
 def test_the_loop_draws_level_0_at_the_statement_with_its_own_mask_words(zk):
-    """The loop draws a table's level 0 only at its statement's `m`, on a witness of that `m`'s words, and writes the mask
-    slot's words itself: its answer leads with them, a word for each of the slot's, fresh for each draw and never the
+    """The loop samples a table's level 0 only at its statement's `m`, on a witness of that `m`'s words, and writes the mask
+    slot's words itself: its answer leads with them, a word for each of the slot's, fresh for each sample and never the
     witness's, whatever the prover's witness held there. So the prover has no say in the words that hide the claims'
     ring-switch values (`flock-circuit`'s `zk_worker_level0` holds a worker that keeps its own to the session's stop)."""
     S = Sessions(_args(zk, "pub-16.bin"))
@@ -537,11 +537,11 @@ def test_the_loop_draws_level_0_at_the_statement_with_its_own_mask_words(zk):
 
 @pytest.mark.slow
 def test_a_commit_leaves_only_with_the_loops_level_0(zk):
-    """The loop samples a table's level-0 hiding and salts itself, fresh for each table: two draws over one witness differ,
+    """The loop samples a table's level-0 hiding and salts itself, fresh for each table: two samples over one witness differ,
     in the hiding and the root. It samples a session's once: a second request, or one whose witnesses are not one for each
-    of the session's tables, is refused, so the prover can't draw until a root suits it. A `Commit` leaves only
+    of the session's tables, is refused, so the prover can't sample until a root suits it. A `Commit` leaves only
     when each root it carries is the one the loop sampled for its own session's table, which it samples only at the
-    table's `m`: a root drawn for another session is refused, never reaching the auditor, and the session's own leaves,
+    table's `m`: a root sampled for another session is refused, never reaching the auditor, and the session's own leaves,
     its opening then checked (zero words refused). The `Commit` that leaves is the loop's own, whatever the prover's
     carried beside its roots: `root_F` the session's Σ, no public words, nothing after."""
     args = _args(zk, "pub-16.bin")
@@ -601,11 +601,11 @@ def test_a_commit_answered_without_coins_ends_the_session(zk, answer, said):
 
 @pytest.mark.slow
 def test_the_loop_draws_level_0_only_once_every_tables_witness_is_in(zk):
-    """In a session of two tables the loop draws neither table's level 0 until it holds both witnesses: a request carrying
-    one table's witness, or three, is refused with nothing drawn, and so is a rep's start, so none of the session's draws
+    """In a session of two tables the loop samples neither table's level 0 until it holds both witnesses: a request carrying
+    one table's witness, or three, is refused with nothing sampled, and so is a rep's start, so none of the session's samples
     (level 0's mask words, hiding and salts, a rep's pads) reaches the prover before both witnesses are its. On both it
-    answers both tables, each its own draw. A witness after that draw, alone or beside the other table's, is refused: each
-    table's witness is fixed before any of the session's draws, as the model (`FlockSoundness.ZK.Table.view`) fixes it
+    answers both tables, each its own sample. A witness after that sample, alone or beside the other table's, is refused: each
+    table's witness is fixed before any of the session's samples, as the model (`FlockSoundness.ZK.Table.view`) fixes it
     before the tape, and the worker selftest's `zk_worker_level0` holds `flock-circuit` to the same refusals."""
     S = Sessions(_args(zk, "pub-16.bin", 2))
     s, name = S.session()
@@ -640,8 +640,8 @@ def doctored(roots: list[tuple[str, bytes]]) -> bytes:
 
 @pytest.mark.slow
 def test_a_sessions_level_0_lives_only_as_long_as_it(zk):
-    """A level 0 is drawn only for a session the loop is serving, named by the loop's id for it, and every one drawn for a
-    session, committed or not, is freed when that session ends, whatever the others hold: a prover that draws
+    """A level 0 is sampled only for a session the loop is serving, named by the loop's id for it, and every one sampled for a
+    session, committed or not, is freed when that session ends, whatever the others hold: a prover that samples
     and never commits leaves nothing behind."""
     S = Sessions(_args(zk, "pub-16.bin"))
     got = level0(S.lp, [(25, _zeros(25))], "ab" * 64)
@@ -677,7 +677,7 @@ def test_the_loops_finish_reads_its_level_0_and_draws_each_reps_salts(zk):
     """The loop's finish (`Finish.serveLoop`) takes a table's level 0 from the loop, by its root, and only one the loop sampled
     at the table's `m`, for a session it still serves; its answer is that root. A rep's request before its salts for levels
     ≥ 1 is refused, and so are the salts of a rep whose frame has not taken its algebraic phase's last coins, here one whose
-    level 0 no `Commit` carries (the selftest's firewalled sessions draw them past it, and `zk_worker_finish`'s
+    level 0 no `Commit` carries (the selftest's ZK server sessions sample them past it, and `zk_worker_finish`'s
     `salts-early` and `salts-again` hold a worker asking before it, or a second time, to the refusal). Once the session
     that sampled the level 0 ends, the loop has freed it, and finish refuses its root."""
     S = Sessions(_args(zk, "pub-16.bin"))
@@ -801,7 +801,7 @@ def test_a_schedule_the_setup_refuses(junk):
 @pytest.mark.parametrize("name, public, tables", [("selftest/honest", "pub-16.bin", 1), ("m26", "pub-32.bin", 1),
                                                    ("j2", "pub-32.bin", 2), ("drawn", "pub-32.bin", 1)])
 def test_the_schedule_is_the_recorded_rounds(zk, name, public, tables):
-    """At a recorded session's statement and draw, the openings the loop asks for after the session stream's are the record's
+    """At a recorded session's statement and sample, the openings the loop asks for after the session stream's are the record's
     rounds: each rep stream's coin counts in order, the streams one after another in table order, rep 0 before rep 1."""
     _, _, draw_ = _record(zk, name)
     d = zk / "sessions" / name
@@ -843,7 +843,7 @@ HM = hm96.SHA512
 
 class CoinTree:
     """The verifier's coin tree, `coin-tree/hm96-sha512/v2` (`live/src/coin_tree.rs`'s `CoinTree`, checked by
-    `Flock/Firewall/Coins.lean`): drawn at `Hello` under the prover's nonce `nonce` and a fresh session key, per stream and
+    `Flock/Firewall/Coins.lean`): sampled at `Hello` under the prover's nonce `nonce` and a fresh session key, per stream and
     round a block of `spec["block"]` coins, `edit(stream, round, block)` choosing some first (`CoinTree::draw_with`). Every
     SHA-512 input is prefixed by the nonce; a block commits through its chain `T_i = H(CHAIN ‖ c_i ‖ T_{i+1})` from
     `T_block = H(TAIL)` into a keyed hm96 leaf, each stream's rounds are a subtree, and the streams' roots, padded to a power

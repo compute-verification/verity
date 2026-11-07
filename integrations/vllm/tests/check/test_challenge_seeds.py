@@ -1,4 +1,4 @@
-"""Every challenge draw takes its seed from its caller: no sample over committed or snapshotted values is sampled from a default seed, and a
+"""Every challenge sample takes its seed from its caller: no sample over committed or snapshotted values is sampled from a default seed, and a
 command line that samples one refuses to run without `--seed`."""
 from __future__ import annotations
 

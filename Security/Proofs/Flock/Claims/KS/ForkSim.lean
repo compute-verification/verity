@@ -203,7 +203,7 @@ def NoCoin : Game β → Prop
   | @Game.coin _ _ _ _ _ => False
 
 /-- **Every coin answers its own send**: from a position with no round open (`true`), the game sends before each coin;
-right after a send (`false`), it draws that send's coin or draws none again. -/
+right after a send (`false`), it samples that send's coin or samples none again. -/
 def Fresh : Bool → Game β → Prop
   | _, .ret _ => True
   | true, .send _ k => ∀ m, Fresh false (k m)
