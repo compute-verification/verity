@@ -7,7 +7,7 @@ public import Proofs.Flock.Claims.ZK.L0Pin
 # Level 0's bodies at the switched source, under `L0Fixed`
 
 The switched session sends level 0's bodies at the pads `padsL0` its source fixes (`Masked.runCut_cutL0_of_ret`); the
-frame releases them at the session's pads. Where `vs`'s level-0 values are the firewall's (`Loop.L0Fixed`), the two
+frame releases them at the session's pads. Where `vs`'s level-0 values are the ZK server's (`Loop.L0Fixed`), the two
 agree from `zp 64` to `h_ab`, the only pads a body reads:
 
 * `LigLock.l0BodyAt_pads_congr`: level 0's bodies read their pads only from `zp 64` to `h_ab`.

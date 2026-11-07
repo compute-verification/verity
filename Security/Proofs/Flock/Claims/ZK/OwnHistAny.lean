@@ -17,7 +17,7 @@ hold for any worker only there: `live` reads the worker's values at each prefix,
   `OwnHist.eq_ownOf`, every own history is the one on its answers).
 * **What an own history's messages are** at the Lean frame's release: at a frame round where the worker's run is live,
   the frame's release of the worker's round (`LeanRelease.ownHist_msg_live`); where it is not, the release of the
-  stand-in, the firewall's scheduled round as a stopped rep's (`LeanRelease.ownHist_msg_fill`).
+  stand-in, the ZK server's scheduled round as a stopped rep's (`LeanRelease.ownHist_msg_fill`).
 -/
 
 @[expose] public section
@@ -147,7 +147,7 @@ theorem ownHist_msg_live {h : List (Msg × Msg)} (hown : L.toSrv.OwnHist L.fillO
   exact (hown j hj).trans (L.frameD_toSrv L.fillOf wk x w ρ κ _ hkj hu)
 
 /-- **An own history's message at a frame round where the worker's run is not live** is the frame's release of the
-stand-in there: the firewall's scheduled round, at the values its release log reports, as a stopped rep's. -/
+stand-in there: the ZK server's scheduled round, at the values its release log reports, as a stopped rep's. -/
 theorem ownHist_msg_fill {h : List (Msg × Msg)} (hown : L.toSrv.OwnHist L.fillOf wk x w ρ κ h) {j : ℕ}
     (hj : j < h.length) (hk : L.kindAt x j = .masked) (hl : L.toSrv.live wk x w ρ κ (h.take j) = false) :
     (h[j]'hj).1 =

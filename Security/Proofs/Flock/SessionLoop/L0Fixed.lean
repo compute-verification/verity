@@ -4,9 +4,9 @@ public import Proofs.Flock.SessionLoop.TakenVals
 public import Proofs.Flock.Claims.ZK.FinishSwLig
 
 /-!
-# `vs`'s level 0 is the firewall's
+# `vs`'s level 0 is the ZK server's
 
-The firewall computes level 0's opening itself: from `zp 64` to `h_ab` (the out-of-domain value, each lane message and
+The ZK server computes level 0's opening itself: from `zp 64` to `h_ab` (the out-of-domain value, each lane message and
 the pair's sums) no round frees a word, the frame passes only the scheduled body, and the release is level 0's clear
 values (`LigLock.l0Clear`) on the loop's packed table at the opened coins plus the pads. The switched session sends
 `vs`'s values there under the same pads (`Loop.swSrcE_masked_vsWord`), so a round of level 0 is the switched message
@@ -28,10 +28,10 @@ open Claims.ZKMal.CoinLayer Claims.ZKMal.Masked
 
 namespace Loop
 
-/-- **`vs`'s level-0 values are the firewall's**: at every nonce, tape and opened coins not refused by round `n`, the
+/-- **`vs`'s level-0 values are the ZK server's**: at every nonce, tape and opened coins not refused by round `n`, the
 session's setup, table `j`, rep `r` and the table's extra claims at the link's points (`SimLig`'s `LigEach` form),
 `vs`'s value at each index from `zp 64` to `h_ab` is level 0's clear value (`l0Clear`) at the coins from `ligP0` on, the
-tape's packed table, the basis of the rep's switched vectors at the coins and the tape's extra lanes, as the firewall
+tape's packed table, the basis of the rep's switched vectors at the coins and the tape's extra lanes, as the ZK server
 computes it. -/
 def L0Fixed (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (x : Msg) (w : Flock.Wit) : Prop :=
   ∀ (ν : CoinLayer.Nonce) (τ : UE.Tape) (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ), ¬ Refused x c n →

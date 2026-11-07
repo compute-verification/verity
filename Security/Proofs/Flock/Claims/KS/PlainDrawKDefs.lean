@@ -42,7 +42,7 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Bridge.CustodyPlain
 
 /-!
-# The plain verdict at the statement's draw, at `VK keep`: the definitions
+# The plain verdict at the statement's sample, at `VK keep`: the definitions
 
 `PlainDraw`'s predicates at every `keep`, with no facts about them: flock-verify's acceptance is `verifyWithMK keep` at
 SHA-512 (`With.std`), the record decodes through `Record.decodeWithK keep`, and a recorded round is the live outcome's
@@ -64,7 +64,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **flock-verify accepts at the setup at the draw `dr`, its digest comparisons read through `keep`**: `AcceptsAtD`
+/-- **flock-verify accepts at the setup at the sample `dr`, its digest comparisons read through `keep`**: `AcceptsAtD`
 with `verifyWithMK keep` at SHA-512 for `verify`. -/
 def AcceptsAtDK (keep : Bool → Bool) (I : Exec.Inputs) (dr : Option Json) (t : Exec.Transcript) : Prop :=
   ∃ spec sts, setupAtD I dr = .ok (spec, sts) ∧
@@ -99,7 +99,7 @@ def TxNoOffAtK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {N : ℕ} (C 
           t.proofs[1]!)) p.val = some u ∧ u ≠ C p
 
 open Classical in
-/-- **The record writer at the draw `d`, through `keep`**: at the live outcome `o`, a transcript `verifyWithMK keep`
+/-- **The record writer at the sample `d`, through `keep`**: at the live outcome `o`, a transcript `verifyWithMK keep`
 accepts at the setup at `d` that records `o` there up to the rounds' digests (`RecordsLiveAtDK`), where one exists,
 else a session without proof files, which the verdict refuses at every `keep`. -/
 noncomputable def wrPDK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveOutJ J mPts) :
@@ -116,7 +116,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The plain verdict at the draw `d`, through `keep`**: `verifyWithMK keep` accepts what `wrPDK` writes for the
+/-- **The plain verdict at the sample `d`, through `keep`**: `verifyWithMK keep` accepts what `wrPDK` writes for the
 outcome at the setup at `d`, the outcome's root is `rootB₀`'s, and the deployed plain reader looks up no column off
 `C` in that transcript there (`TxNoOffAtK`). `plainVerdictAt` at every `keep`. -/
 def plainVerdictAtK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {N mPts : ℕ} (C : Fin N → List 𝔽)

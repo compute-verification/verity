@@ -40,24 +40,24 @@ import Mathlib.Topology.Sheaves.Init
 
 A monitoring period is `m` windows, each audited on its own live coins (the period's coins are `Fin m → Ω`, window
 `i`'s at `ω i`) at a statement registered as `sw i`. `PooledLeakAccepted` is the count `K_pooled`: what a covert
-sender in the server moves through the network certifier over the whole monitoring period, with the faulty units paid
+sender in the server moves through the network certifier over the whole monitoring period, with the incorrect proof blocks paid
 for once over the period rather than at `δ` in every window. At each window the witness computed from the
-registration, before the window's sample, has a faulty set `W i` (it reads only the earlier windows' coins), and the
+registration, before the window's sample, has an incorrect set `W i` (it reads only the earlier windows' coins), and the
 statement takes two inputs per window:
 
 * the conditional escape (`hesc`): given the earlier windows' coins, the window's audit accepts with probability at most
   `(1 - q)^|W_i| + e_i`, `q` the deployed design's per-window detection probability (a uniform sample of `kd_i` of the
   window's `n_i` proof blocks meets it at `q = kd_i / n_i`; the statement fixes no sample's form);
 * the leak relation at that same witness (`hleak`): the audit accepts while the window's observations in the network
-  certifier's record are not accepted with the faulty set `W_i` (`LeakAt`) with probability at most `e'_i`.
+  certifier's record are not accepted with the incorrect set `W_i` (`LeakAt`) with probability at most `e'_i`.
 
-From them, every audit accepts while the faulty sets hold `Fmax ≥ ln(1/δ)/q` units or more, or some window's leak
+From them, every audit accepts while the incorrect sets hold `Fmax ≥ ln(1/δ)/q` units or more, or some window's leak
 relation fails, with probability at most `δ + Σ_i e_i + Σ_i e'_i` (the escapes multiply, `PooledWrongUnitsLe`'s
-argument with the escape as the input); and the secrets whose every window meets its relation, with the faulty sets
+argument with the escape as the input); and the secrets whose every window meets its relation, with the incorrect sets
 under `Fmax` (`PooledGood`), number at most
 `#Ss · ∏_c (cap_c + 1) · (N + 1)^Fmax · 2^(b · Fmax) · ∏_i 2^#(freeInputs_i \ reg_i) · Dj^k_i`, `N = Σ_i n_i` the
 period's proof blocks and `b` each proof block's committed bits: `(ln(1/δ)/q + 1) · (b + log2 (N + 1))` bits for the
-faulty proof blocks, plus the advice and timing terms and the schedule terms. A proof block's outputs are at most 16
+incorrect proof blocks, plus the advice and timing terms and the schedule terms. A proof block's outputs are at most 16
 bits, so `b = 16`.
 
 The network certifier is one device on the server's uplink, as in `PeriodLeakAccepted`
@@ -88,7 +88,7 @@ the network certifier running its code by `trusted-host` on schedules in `Ss`, e
 and its record of them in the format `f`,
 the windows' observations; and a covert sender in the server whose secrets `z ∈ Zs` a decoder recovers from the
 client's cells at the period's coins. For each secret, `acc z i ω x` is window `i`'s audit accepting at its coins `x`
-after the earlier windows' coins `ω`, and `W z ω i ⊆ range (n i)` is the faulty set of the witness computed from window
+after the earlier windows' coins `ω`, and `W z ω i ⊆ range (n i)` is the incorrect set of the witness computed from window
 `i`'s registration; both read only the windows before `i`. Given
 
 * `hesc`, the conditional escape: `Pr_x[acc z i ω x] ≤ (1 - q)^|W z ω i| + e i`, `q` the design's per-window
@@ -98,7 +98,7 @@ after the earlier windows' coins `ω`, and `W z ω i ⊆ range (n i)` is the fau
 
 for `0 ≤ q ≤ 1` and `Fmax ≥ ln(1/δ)/q`:
 
-* for every secret, every audit accepts and the monitoring period's good event fails (`PooledGood`: the faulty sets
+* for every secret, every audit accepts and the monitoring period's good event fails (`PooledGood`: the incorrect sets
   hold under `Fmax` units and every window meets its leak relation at its own) with probability at most
   `δ + Σ e + Σ e'`;
 * at every sample of the coins, the secrets that meet the good event number at most

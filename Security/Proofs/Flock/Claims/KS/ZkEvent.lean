@@ -48,7 +48,7 @@ live session's:
 
 * `cols_zk`: an accepted masked run's reader looks up table `j`'s columns at the shape and level 0 `ZkTxNoOff` reads,
   in its live session's rep streams `2j`, `2j + 1` and proof files.
-* `accTxJ_of_run`: an accepting run of `V true` at SHA-512 decides, and on a statement of draw `d`, a run whose reader
+* `accTxJ_of_run`: an accepting run of `V true` at SHA-512 decides, and on a statement of sample `d`, a run whose reader
   looks up no column of table `j` off `C` has `AccTxJ` at table `j` at its live outcome and its link's root, at any
   `J ≤` the statement's tables above `j`: `verify --zk` accepts what `wrS` writes for it at the setup at `d`
   (`acceptsAt_wrS`), and that transcript records the run's streams and proof files (`RecordsLiveAtS`), whose columns
@@ -137,7 +137,7 @@ namespace Gen
 variable [S : ZkSetup]
 
 /-- **The deployed masked event gives `AccTxJ`**: an accepting run of `V true` at SHA-512 decides on its messages and
-coins, and on a statement of draw `d`, at any `J ≤` the statement's tables above `j`, if the run's reader looks up no
+coins, and on a statement of sample `d`, at any `J ≤` the statement's tables above `j`, if the run's reader looks up no
 column of table `j` off `C`, `AccTxJ` holds at table `j` at the run's live outcome (`viewOf`, at any `mPts`) and its
 link's root: `verify --zk` accepts what `wrS` writes for it at the setup at `d` (`acceptsAt_wrS`), and that transcript
 records the run's streams and proof files (`recordsLiveAtS_wrS`), whose columns are the reader's (`cols_zk`). -/
@@ -203,7 +203,7 @@ theorem accTxJ_of_run (mPts : ℕ) {Ω : Type} {P : Claims.Prover Ω} {x : Claim
 end Gen
 
 /-- **The deployed masked event gives `AccTxJ`**: an accepting run of `V true` at SHA-512 decides on its messages and
-coins, and on a statement of draw `d`, at any `J ≤` the statement's tables above `j`, if the run's reader looks up no
+coins, and on a statement of sample `d`, at any `J ≤` the statement's tables above `j`, if the run's reader looks up no
 column of table `j` off `C`, `AccTxJ` holds at table `j` at the run's live outcome (`viewOf`, at any `mPts`) and its
 link's root: `verify --zk` accepts what `wrS` writes for it at the setup at `d` (`acceptsAt_wrS`), and that transcript
 records the run's streams and proof files (`recordsLiveAtS_wrS`), whose columns are the reader's (`cols_zk`). -/

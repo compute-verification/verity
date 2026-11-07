@@ -191,7 +191,7 @@ open Loop Ranked in
 set_option maxHeartbeats 4000000 in
 /-- **The frame takes a rep's ring-switch round where it takes its coins**: at a history whose next round is rep stream
 `2j + r`'s ring-switch round `k` (`Masked.rankSlot + k`, before the opening's binding), whose coins the loop's frame
-takes, on the loop's own tables where `src` draws the tape's level 0. The scheduled round is the switch's body `k` on
+takes, on the loop's own tables where `src` samples the tape's level 0. The scheduled round is the switch's body `k` on
 the rep's own table (`ofLoop_sched_unrefused`, `Bind.sched_switch_sv`, `Loop.loopNr_piop`). At `k = 0` the frame is in
 the algebraic phase at its last position (`repState_piop`, `repState_pre_pcs`) and its rank stop passed, so it takes the
 opening's label (`label_pcs_of_rank`); past it the frame is outside every masked phase (`repState_switched_in`), and the

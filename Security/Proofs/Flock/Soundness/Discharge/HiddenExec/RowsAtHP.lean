@@ -18,7 +18,7 @@ inputs `own`, at the session's statement circuit `c` (`HmOut.parseStmt`): the pr
 inputs), its outputs `Layout.outsOfP`, the sites `sitesAtHP`, and the registration the population's public file `pop`
 (`HmIn.loadPublic`, with or without shared rows):
 
-* `sitesAtHP_bcSite`: `BcSiteHP` at every satisfiable site, from `tableHP_bcSite` at a draw flock-verify sets up and
+* `sitesAtHP_bcSite`: `BcSiteHP` at every satisfiable site, from `tableHP_bcSite` at a sample flock-verify sets up and
   `tableAtHP_unsat` elsewhere;
 * `layAtHP`, `rsAtHP`: `keyLayoutHP`, `keyRowsHP` at `sitesAtHP`, `KeysRowP` from the statement circuit
   (`Layout.keysRowP_of_keysRow`, `Hidden.keysRow_stmt`);
@@ -37,8 +37,8 @@ variable {n : ℕ} {I : Inputs} {own : Option ByteArray} {mPts : ℕ} (ht : I.ta
   {pop : Public} (hpub : HmIn.loadPublic I.tags c pi I.publicFile = .ok pop) {Reg : Type}
 
 include hU hpi hpub in
-/-- **The site fact at a drawn table at `own`** (`tableH_bcSiteS`): at a draw flock-verify sets up with
-`Stmt.setupHidden … own`, each drawn unit's site is `BcSiteHP`: the draw `dj S` decodes to `D`, its proved units are in
+/-- **The site fact at a sampled table at `own`** (`tableH_bcSiteS`): at a sample flock-verify sets up with
+`Stmt.setupHidden … own`, each sampled proof block's site is `BcSiteHP`: the sample `dj S` decodes to `D`, its proved units are in
 its population, its public file loads (`HmIn.loadPublic`) to `pop`, and the unit's block and template instance index
 its rank in `D.proved`, the template instance below `2^⌊log₂ c.g⌋` (`Layout.vu_lt_pow2_stmt`). -/
 theorem tableHP_bcSite {S : Finset (Fin n)} (x : DrawSetupHP I own mPts S (dj S)) {u : Fin n} (h : u ∈ S) :
@@ -60,8 +60,8 @@ theorem tableHP_bcSite {S : Finset (Fin n)} (x : DrawSetupHP I own mPts S (dj S)
     exact x.proved_rank h
 
 include hU hpi hpub in
-/-- **`BcSiteHP` at every satisfiable site** of the one-table hidden plan at `own`: at a draw flock-verify sets up by
-`tableHP_bcSite`; at a refused draw no message satisfies the table (`tableAtHP_unsat`). -/
+/-- **`BcSiteHP` at every satisfiable site** of the one-table hidden plan at `own`: at a sample flock-verify sets up by
+`tableHP_bcSite`; at a refused sample no message satisfies the table (`tableAtHP_unsat`). -/
 theorem sitesAtHP_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planAtHP dj x₀) (tabAtHP dj x₀) S R u), Binding.Sat (planAtHP dj x₀) (tabAtHP dj x₀) S R u M →

@@ -6,7 +6,7 @@ issues every request to it, on the schedule `Drive.reqs` fixes. Nothing the prov
 
 * `startRep`: a rep's frame starts at the loop's frames port (`rep NAME TABLE REP`), for a live session whose level 0 the
   loop drew and one of its tables' reps, at the statement's start (`Drive.start`: its pads layout and mask slot), its
-  draws from the operating system, which never leave the loop: the prover gets the pads' root alone.
+  samples from the operating system, which never leave the loop: the prover gets the pads' root alone.
 * `round`: a session's `Round` of a rep stream carries the device's round. Its place is the statement's: the algebraic
   phase's scheduled round (`Skeleton.rounds`, on the table's level 0, the loop's own), then the opening's
   (`Drive.openStepM`, the rep's opening a round at a time, on the extra claims at the session's `Commit` coins,
@@ -69,7 +69,7 @@ structure Rep where
   table : Nat
   rep : Nat
   cfg : Frame.Cfg
-  /-- the draws the frame took at the rep's start, which the finish holds the rep's requests to (`ownOf`) -/
+  /-- the samples the frame took at the rep's start, which the finish holds the rep's requests to (`ownOf`) -/
   draws : Frame.Draws := default
   st : Frame.State := {}
   alg : Array (ByteArray × Nat) := #[]
@@ -160,9 +160,9 @@ def Sessions.maskOf (R : Sessions) (L0 : Level0.Slots) (name : String) (j m : Na
   return (← Drive.maskSlot st, st.c.kLog)
 
 /-- **Table `i`'s rep `r` of the session named `name` starts**, for the request line `line` on `ch`: `rep NAME I R` is
-answered `ok 64` followed by the pads' root (`Frame.padsRoot`) over the rep's draws, drawn from the operating system at
+answered `ok 64` followed by the pads' root (`Frame.padsRoot`) over the rep's samples, sampled from the operating system at
 the statement's start (`Drive.start`) and kept in the rep's frame, never sent; a rep's frame starts once, and only once
-the session's level 0 is drawn (`Level0.Slots.drawn`), so after every table's witness is in (`Session.level0`). Anything
+the session's level 0 is sampled (`Level0.Slots.drawn`), so after every table's witness is in (`Session.level0`). Anything
 else is answered `err WHY`. -/
 def startRep (ch : Frame.Chan) (reg : IO.Ref Sessions) (l0s : IO.Ref Level0.Slots) (line : String) : IO Unit := do
   let say := fun (s : String) => ch.write (s ++ "\n").toUTF8
@@ -636,7 +636,7 @@ def finish (reg : IO.Ref Sessions) (sid tables : Nat) : IO (Except String Unit) 
   return finishOf (← reg.get) sid tables
 
 /-- **What the loop holds of table `i`'s rep `r`** on the level 0 of root `root`, in its frames `R` and level 0s `L0`
-(`Finish.Own`): the draws its frame took at its start, which the loop's finish proves the rep with (`Finish.drawsOf`), and
+(`Finish.Own`): the samples its frame took at its start, which the loop's finish proves the rep with (`Finish.drawsOf`), and
 what it holds the rep's requests to: the algebraic phase's values the frame took at their pads (`Frame.absorbed`'s order,
 the rest `0`), the extra claims at the session's link points (`Drive.extras`, as `placeOf` opens with them), the coins
 the stream answered each of the rep's rounds so far, and whether those cover every round of its algebraic phase (`alg`,
@@ -658,7 +658,7 @@ def ownOf (R : Sessions) (L0 : Level0.Slots) (i r : Nat) (root : ByteArray) : Ex
 /-- **What the loop tells the prover of table `i`'s rep `r`** in the live session named `name`, for the request line
 `line` on `ch`, past the session's `Commit`: `place NAME I R` is answered by its next round's place (`placeOf`), `alg N`
 or `open N` for the algebraic phase's or the opening's scheduled round, squeezing `N` coins, `salts` where the algebraic
-phase ended and the opening waits for the rep's salts for levels ≥ 1, which the loop's finish draws only then
+phase ended and the opening waits for the rep's salts for levels ≥ 1, which the loop's finish samples only then
 (`Finish.serve`'s `salts`, `Finish.Own.algebraEnded`), else `own`: the inner proof's,
 whose rounds the host relays from the loop's finish (`roundPlace`); `vals NAME I R`
 by `ok N` followed by the `N` bytes of the values the frame took so far (`Rep.vals`). A prover whose device stops sends
