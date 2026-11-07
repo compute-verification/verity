@@ -167,11 +167,8 @@ def launch_batch(phi, LP: int, T: int) -> list | None:
 
 
 def graph_capture_sizes(phi) -> tuple[int, ...]:
-    """The capture sizes of φ's breakable CUDA graphs (`TargetProfile.COMPILATIONS`' "breakable"), at which a step's captured kernels
-    run padded (`targets.graph_tokens`); () for an execution without them."""
-    tp = phi.target_profile()
-    c = tp.COMPILATIONS.get(tp.compilation) if tp.compilation else None
-    return tuple(c["capture_sizes"]) if c and c.get("breakable") else ()
+    """The capture sizes of φ's breakable CUDA graphs (`TargetProfile.graph_capture_sizes`); () for an execution without them."""
+    return phi.target_profile().graph_capture_sizes()
 
 
 def launch_rows(phi, LP: int, T: int, C: int = 0) -> dict | None:

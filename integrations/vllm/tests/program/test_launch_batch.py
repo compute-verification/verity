@@ -94,6 +94,16 @@ def test_under_breakable_graphs_a_steps_captured_kernels_run_at_its_capture_size
     assert _Launch([[[1, 17], [1, 231], [1, 5]]]).tokens(1) == 3
 
 
+def test_the_bindings_read_the_padded_launch_under_a_breakable_target(declared):
+    VB.observe_launch_context(TG.parse_launch_context({"batch": [[[1, 3], [2, 0]]]}))
+    node, sampled = _node({"launch_step": 0, "launch_rows": "tokens"}), _node({"launch_step": 0, "launch_rows": "sampled"})
+    assert OB.launch_tokens_of(node, 2) == 3
+    VB.observe_target_profile(TargetProfile(batch_invariant=False, compilation="breakable"))
+    assert OB.launch_tokens_of(node, 2) == 4 and OB.launch_tokens_of(sampled, 1) == 2
+    with OB.launch_region(0, "tokens"):
+        assert OB.traced_launch_tokens(2) == 4
+
+
 def test_batch_dispatch_is_a_multi_request_row_without_batch_invariance():
     reqs = [(64, 3, 0), (300, 2, 1)]
     assert LC.batch_dispatch(_wl(reqs, batch_invariant=False))

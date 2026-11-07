@@ -639,9 +639,15 @@ class TargetProfile:
         env = {"VLLM_BATCH_INVARIANT": "1" if self.batch_invariant else "0"}
         if self.fp8_block_gemm == "cutlass":
             env["VLLM_USE_DEEP_GEMM"] = "0"   # excludes FlashInfer-DeepGEMM + DeepGEMM; the selector then takes CUTLASS (cc 9.x)
-        if self.compilation is not None and self.COMPILATIONS[self.compilation].get("breakable"):
+        if self.graph_capture_sizes():
             env["VLLM_USE_BREAKABLE_CUDAGRAPH"] = "1"
         return env
+
+    def graph_capture_sizes(self) -> tuple[int, ...]:
+        """The capture sizes of the breakable CUDA graphs this profile declares, to which a step's captured kernels run padded
+        (`targets.graph_tokens`); () for an execution without them."""
+        c = self.COMPILATIONS[self.compilation] if self.compilation is not None else {}
+        return tuple(c["capture_sizes"]) if c.get("breakable") else ()
 
 
 DEFAULT_TARGET = TargetProfile.default()
