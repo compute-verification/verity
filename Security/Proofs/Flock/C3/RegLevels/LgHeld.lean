@@ -1,5 +1,26 @@
-import Proofs.Flock.C3.Sparse.HeldStages
+module
+
+public import Proofs.Flock.C3.Compose.HoloEncoded
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.C3.RegLevels.SrcMaps
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.C3.RegLevels.LgCoins
 import Proofs.Flock.C3.RegLevels.RRounds
+import Proofs.Flock.C3.RegLevels.SrcRun
+import Proofs.Flock.C3.Sparse.HeldStages
 
 /-!
 # `StageHeld` part 3 at R's stages: `laterCoins_of_held`'s `h4` and `h5`
@@ -18,6 +39,8 @@ weave R's Ligerito's coins are `rep0`'s rounds from `k₂`, as many as it takes.
 (`stackedStreams_of_covers`' `hx`, `hxs`); both end by `r` where the run's stages take at most `r - 1` rounds in all
 (`htot`, `Compose.coins_total_holo` at `holoCTs`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

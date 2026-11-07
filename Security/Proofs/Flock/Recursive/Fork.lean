@@ -1,5 +1,9 @@
-import Proofs.Flock.Recursive.Defs
-import Proofs.Flock.Soundness.StrictCR
+module
+
+public import Proofs.Flock.Recursive.Defs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: binding a stage to a reference opening fixed before its coin
@@ -26,6 +30,8 @@ fixes its round-`k` message before `ρ_k`. A plurality over the extraction's ope
 
 `stage_bind` puts the two together: the stage's binding error is `leafAvg εtr + (Σ_pos κ pos)·√(q²/2^513)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

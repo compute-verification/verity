@@ -1,4 +1,6 @@
-import Properties.Firewall
+module
+
+public import Properties.Firewall
 
 /-!
 # The firewall's record, proved
@@ -9,6 +11,8 @@ import Properties.Firewall
 to a recursive session's stop. The honest lemmas are at `finishedRecord` and `scheduledAdmitted`, the nontrivial ones at
 the empty record and at a missed release time.
 -/
+
+@[expose] public section
 
 namespace Properties.Firewall
 

@@ -1,5 +1,8 @@
-import Definitions.Accounting.Assumptions.RateAudit
-import Definitions.Accounting.Assumptions.RemoteHeld
+module
+
+public import Definitions.Accounting.Assumptions.RateAudit
+public import Definitions.Accounting.Assumptions.RemoteHeld
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The remote audit over PoUS's P2 store: its codec's work and the squaring ceiling at P2 (trusted; drafted)
@@ -18,6 +21,8 @@ P2's form, each a named `Prop`:
 `audit.ledger` refuses a P2 record (`audit.Rebuild` refuses a P2 codec) until one does. The squaring rate `s` is not
 measured: the H200's at 16,448 bits is the measurement the stated instance waits on.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions
 

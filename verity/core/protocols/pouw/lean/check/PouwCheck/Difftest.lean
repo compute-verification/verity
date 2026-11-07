@@ -1,9 +1,10 @@
-import Difftest
-import PouwCheck.Check
-import PouwCheck.Chunks
-import PouwCheck.Opening
-import PouwCheck.Pass
-import PouwCheck.Rounds
+module
+
+public import Difftest
+public import PouwCheck.Check
+public import PouwCheck.Chunks
+public import PouwCheck.Opening
+public import PouwCheck.Rounds
 
 /-!
 # The difftest's functions: the check's Lean behind `Difftest.serve`
@@ -35,6 +36,8 @@ harness (`verity/core/difftest`):
 * `chunks` (a natural number K, not an object): `PouwCheck.Chunks.chunks` (`weights.chunks`) as `{"chunks": n}`, or
   `{"refused": why}`; any other input is a reject.
 -/
+
+@[expose] public section
 
 namespace PouwCheck.Difftest
 

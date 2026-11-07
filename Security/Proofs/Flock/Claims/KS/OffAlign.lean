@@ -1,5 +1,43 @@
-import Proofs.Flock.Claims.KS.ForkAlign
-import Proofs.Flock.Soundness.Game.LockOff
+module
+
+public import Batteries.Data.ByteArray
+public import Proofs.Flock.Claims.KS.ForkAlign
+public import Proofs.Flock.Soundness.Game.Expect
+public import Proofs.Flock.Soundness.Game.LockOff
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Game.Lock
+import VCVio.Prelude.Core
 
 /-!
 # A slot's off mass at its node, aligned with the off mass after a number of coins
@@ -18,6 +56,8 @@ the prefix:
 * `Lock.nodeE_nodeOff_le_offC`: the alignment, at the fork event `SlotAt` is stated for, so every `SlotAt` proof of the
   √ chain applies unchanged; `Lock.nodeE_congr`: aligned locksteps have the same `nodeE`, as `forkE_congr`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

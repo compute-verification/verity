@@ -1,41 +1,43 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Honest
-import Proofs.Flock.Claims.Complete.ZkTables.Faithful
-import Proofs.Flock.Claims.Complete.ZkTables.Ready
-import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
-import Proofs.Flock.Claims.Complete.ZkTables.Run
-import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
-import Proofs.Flock.Claims.Complete.ZkTables.Scope
-import Proofs.Flock.Claims.Complete.ZkTables.Discharge
-import Proofs.Flock.Claims.Complete.ZkTables.Link
-import Proofs.Flock.Claims.Complete.ZkTables.Count
-import Proofs.Flock.Claims.Complete.ZkTables.Trace
-import Proofs.Flock.Claims.Complete.ZkTables.Runs
-import Proofs.Flock.Claims.Complete.ZkTables.Complete
-import Proofs.Flock.Claims.Complete.ZkTables.Names
-import Proofs.Flock.Claims.Complete.ZkTables.Session
-import Proofs.Flock.Claims.Complete.ZkTables.Decode
-import Proofs.Flock.Claims.Complete.ZkTables.Prover
-import Proofs.Flock.Claims.Complete.ZkTables.Goals
-import Proofs.Flock.Claims.Complete.ZkTables.Files
-import Proofs.Flock.Claims.Complete.ZkTables.Reps
-import Proofs.Flock.Claims.Complete.ZkTables.Stmt
-import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
-import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
-import Proofs.Flock.Claims.Complete.ZkTables.Table
-import Proofs.Flock.Claims.Complete.ZkTables.Level0
-import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
-import Proofs.Flock.Claims.Complete.ZkTables.View
-import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
-import Proofs.Flock.Claims.Complete.ZkTables.Parts
-import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
-import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
-import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
-import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
-import Proofs.Flock.Claims.Complete.ZkTables.Round0
-import Proofs.Flock.Claims.Complete.ZkTables.Pass
-import Proofs.Flock.Claims.Complete.ZkTables.Refuse
-import Proofs.Flock.Claims.Complete.ZkTables.Round1
-import Proofs.Flock.Claims.Complete.ZkTables.Round2
+module
+
+public import Proofs.Flock.Claims.Complete.ZkTables.Honest
+public import Proofs.Flock.Claims.Complete.ZkTables.Faithful
+public import Proofs.Flock.Claims.Complete.ZkTables.Ready
+public import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
+public import Proofs.Flock.Claims.Complete.ZkTables.Run
+public import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
+public import Proofs.Flock.Claims.Complete.ZkTables.Scope
+public import Proofs.Flock.Claims.Complete.ZkTables.Discharge
+public import Proofs.Flock.Claims.Complete.ZkTables.Link
+public import Proofs.Flock.Claims.Complete.ZkTables.Count
+public import Proofs.Flock.Claims.Complete.ZkTables.Trace
+public import Proofs.Flock.Claims.Complete.ZkTables.Runs
+public import Proofs.Flock.Claims.Complete.ZkTables.Complete
+public import Proofs.Flock.Claims.Complete.ZkTables.Names
+public import Proofs.Flock.Claims.Complete.ZkTables.Session
+public import Proofs.Flock.Claims.Complete.ZkTables.Decode
+public import Proofs.Flock.Claims.Complete.ZkTables.Prover
+public import Proofs.Flock.Claims.Complete.ZkTables.Goals
+public import Proofs.Flock.Claims.Complete.ZkTables.Files
+public import Proofs.Flock.Claims.Complete.ZkTables.Reps
+public import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+public import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
+public import Proofs.Flock.Claims.Complete.ZkTables.StmtOne
+public import Proofs.Flock.Claims.Complete.ZkTables.Table
+public import Proofs.Flock.Claims.Complete.ZkTables.Level0
+public import Proofs.Flock.Claims.Complete.ZkTables.RepSplit
+public import Proofs.Flock.Claims.Complete.ZkTables.View
+public import Proofs.Flock.Claims.Complete.ZkTables.RepRuns
+public import Proofs.Flock.Claims.Complete.ZkTables.Parts
+public import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+public import Proofs.Flock.Claims.Complete.ZkTables.ReplayGo
+public import Proofs.Flock.Claims.Complete.ZkTables.RunsGo
+public import Proofs.Flock.Claims.Complete.ZkTables.ShapeGo
+public import Proofs.Flock.Claims.Complete.ZkTables.Round0
+public import Proofs.Flock.Claims.Complete.ZkTables.Pass
+public import Proofs.Flock.Claims.Complete.ZkTables.Refuse
+public import Proofs.Flock.Claims.Complete.ZkTables.Round1
+public import Proofs.Flock.Claims.Complete.ZkTables.Round2
 
 /-! Flock's completeness at the deployed masked verifier at any number of tables. The honest masked prover runs each
 table on its share of the witness (`Honest`: `traces`, `honestP`, which is `honestPZk` at one table); the record's
@@ -101,9 +103,9 @@ lanes' rows vanishing at its pads, and `RunsRest` holds (`RunsGo`: `repT_go`, `r
 rep's proof has the masked PIOP's closed-form lengths, level 0's cap and Ligerito lengths, the inner proof's 192-byte
 salts and 64-byte path entries, and a file under `2^64` bytes at a good case's at most 2,048 extra claims
 (`Case.extras_le`), so `ShapeRest` holds (`ShapeGo`: `shapeRest`), leaving `complete_jsonT` to level 0's four and the
-mask-rank bound (`complete_jsonT_of_level0`); `Zk.Level0Premises` and `Zk.Level0Verifier` prove level 0's four
-(`L0.complete_jsonT_closed`), and `Zk.RankDeployed` the bound, so `complete_jsonT` rests on the JSON specification
-alone (`L0.complete_jsonT_of_spec`).
+mask-rank bound (`complete_jsonT_of_level0`); `Zk.Level0Premises` proves three of level 0's four and
+`Zk.RankDeployed` the bound, so `complete_jsonT` rests on the JSON specification and level 0's verifier premise
+(`Level0.Verifier`), which is not proved.
 For zero knowledge, `honestPR`'s first message is the link of
 the tables' level-0 caps, each cap a function of its level's leaves, over `encodeRowsZk`'s rows (`Round0`:
 `honestPR_first`, `commitsPZk_caps`, `encodeRowsZk_entry`), and a session that returns passed every rep's `β`,
@@ -115,3 +117,5 @@ with the digest, the level-0 cap and the pads' root absorbed, or, where that tab
 stops after the link message (`Round1`: `sessionPZk_go_round1`, `sessionPZk_go_round1_err`). Its third is that rep's
 outer zerocheck point squeeze, taken with nothing absorbed since the first: the header of `m − 13` coins of kind `2`
 alone (`Round2`: `sessionPZk_go_round2`). -/
+
+@[expose] public section

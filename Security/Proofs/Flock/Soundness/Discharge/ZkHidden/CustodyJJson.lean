@@ -1,5 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `zk_session_soundHJ_custody` from the printed draw file
@@ -8,6 +23,8 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
 and, for `DrawFileZK`, that each draw file is the JSON value `flock-verify draw` printed for the verifier's own draw
 under `subset kd` (`drawFileZK_of_toJson_subset`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

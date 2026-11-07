@@ -1,5 +1,9 @@
-import Definitions.Accounting.Assumptions.Coverage
-import Definitions.Accounting.CoverageToy
+module
+
+public import Definitions.Accounting.Assumptions.Coverage
+public import Definitions.Accounting.CoverageToy
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The floor under coverage
@@ -7,6 +11,8 @@ import Definitions.Accounting.CoverageToy
 Coverage of efficient methods turns a floor on covered computations (from a local bound on inference blocks and the
 counting theorem) into a bound on success below the floor.
 -/
+
+@[expose] public section
 
 namespace Nci.Guarantees
 

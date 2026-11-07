@@ -1,6 +1,23 @@
-import Proofs.Properties.Nci.BodiesOk.Decoded
-import Proofs.Properties.Nci.BodiesOk.Order
-import Proofs.Properties.Nci.Resolve
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Decoded
+public import Proofs.Properties.Nci.BodiesOk.Order
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `Resolve.BodiesOk`, proved
@@ -12,6 +29,8 @@ Definitions holding the root and closed under calls whose nodes name only parame
 (`order_closed`); every activation `Good` reaches has its Definition in that set (`good_closed`), so its references are
 `RefOk` (`body_ok`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

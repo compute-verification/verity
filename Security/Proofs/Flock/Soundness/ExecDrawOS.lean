@@ -1,13 +1,16 @@
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.Assumptions
-import Init.Internal.Order.While
+module
+
+public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.Assumptions
+public import Init.Internal.Order.While
 
 /-!
-# The live draw: `drawOS`, extend-and-rerun included, escapes no more often than the model's
+# The live draw, extend-and-rerun included, escapes no more often than the model's
 
-`Flock.Draw.drawOS` is the verifier's draw from its operating-system randomness. It is `Flock.Draw.drawWith` with every
-stream's bytes from `IO.getRandomBytes` (`drawOS_def`, by `rfl`): each stratum's `subset` runs on a stream of
+The verifier has no randomness of its own. The live draw is `Flock.Draw.drawWith` on the challenger's coins, read in
+order (`SampledProofs.Draw.drawUnits`, as the one-stage audit runs it): each stratum's `subset` runs on a stream of
 `need` bytes, and `Flock.Draw.onWith` extends the stream by `need` more and reruns it whenever it runs out.
+`Flock.Draw.drawOS` is the same `drawWith` with every stream's bytes from `IO.getRandomBytes` (`drawOS_def`, by `rfl`).
 
 To Lean's logic `IO.getRandomBytes` is an opaque constant, so the theorems read `drawWith` on a model byte source,
 `tapeGet`: stream `i` reads a tape in order, and a read past its end fails. `runOS f law pop` is the draw on the bytes
@@ -26,13 +29,15 @@ probability space `Ω`, uniform by assumption A3 (`Assumptions.UniformRandomByte
   `execOS_escape_le`, `execOS_work_escape_le` and `execOS_subset_escape_le` bound its escape, and `execOS_miss_le` its
   count curve.
 
-The live verifier reads as many bytes as its reruns need, with no bound. On a run that reads at most `L i` bytes of each
-stream it returns what `runOS` does on those bytes, and these runs exhaust every run as `L` grows, so its escape is the
-limit of the ones bounded here, each at most the model's. A3 is what makes those bytes uniform. The limit itself is
-measure theory the theorems don't state.
+The live draw reads as many bytes as its reruns need. On a run that reads at most `L i` bytes of each stream it returns
+what `runOS` does on those bytes, and these runs exhaust every run as `L` grows, so its escape is the limit of the ones
+bounded here, each at most the model's. A3 is what makes those bytes uniform. The limit itself is measure theory the
+theorems don't state.
 
 The Bernoulli law's live draw is `Proofs.Flock.Claims.Sampling.ExecBernoulli`'s `drawOS_bernoulli_escape_le`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Law
 
@@ -393,8 +398,8 @@ theorem drawWith_subset_run (get : ℕ → ℕ → StateT (ℕ → ℕ) Option B
 def tapesOf {m : ℕ} {L : Fin m → ℕ} (f : (i : Fin m) → Fin (L i) → Fin 256) : ℕ → ByteArray :=
   fun i => (Array.ofFn fun s => streamOf (f s)).getD i ByteArray.empty
 
-/-- **The live draw on given bytes**: `Flock.Draw.drawOS`'s `drawWith`, each stream `i` reading the bytes `f i`; `none`
-when it would read past them. -/
+/-- **The live draw on given bytes**: `Flock.Draw.drawWith`, each stream `i` reading the bytes `f i`; `none` when it
+would read past them. -/
 def runOS {m : ℕ} {L : Fin m → ℕ} (f : (i : Fin m) → Fin (L i) → Fin 256) (law : Flock.Draw.Law) (pop : ℕ) :
     Option Flock.Draw.UnitDraw :=
   match (Flock.Draw.drawWith (tapeGet (tapesOf f)) law pop).run fun _ => 0 with
@@ -493,8 +498,8 @@ theorem drawOS_subset_escape_le (n k : ℕ) (hk : k ≤ n) {Ω : Type} [Fintype 
         exact subset_exec_escape_le n k (L 0) hk B
 
 
-/-- **The live draw as a law**: `Flock.Draw.drawOS`'s draw on a byte source `t` over `Ω`, reading each stream's first `L i`
-bytes; a run that would read past them draws every unit. -/
+/-- **The live draw as a law**: `Flock.Draw.drawWith`'s draw on a byte source `t` over `Ω`, reading each stream's first
+`L i` bytes; a run that would read past them draws every unit. -/
 def execOS {Ω : Type} [Fintype Ω] [Nonempty Ω] {m : ℕ} {L : Fin m → ℕ} (t : Ω → (i : Fin m) → Fin (L i) → Fin 256)
     (law : Flock.Draw.Law) (pop : ℕ) : Law n where
   Ω := Ω
@@ -561,7 +566,8 @@ theorem execOS_miss_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k
     (execOS (n := n) t (.stratified K (Array.ofFn S)) pop).miss c ≤ (stratified σ k hk).miss c :=
   iSup₂_mono fun B _ => execOS_escape_le σ k hk S hS K pop L t ht B
 
-/-- **`drawOS` is `drawWith` on `IO.getRandomBytes`**: the live draw is the one the theorems above are about. -/
+/-- **`drawOS` is `drawWith` on `IO.getRandomBytes`**: the draw the theorems above are about, on the operating system's
+bytes. -/
 theorem drawOS_def (law : Flock.Draw.Law) (pop : ℕ) :
     Flock.Draw.drawOS law pop = (do
       let some d ← Flock.Draw.drawWith (fun _ need => IO.getRandomBytes need.toUSize) law pop

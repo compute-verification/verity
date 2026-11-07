@@ -1,6 +1,10 @@
-import Proofs.Flock.Soundness.NovelBasis
-import Proofs.Flock.Soundness.LigeritoLevels
-import Definitions.Flock.Accounting.Padded
+module
+
+public import Definitions.Flock.Accounting.Padded
+public import Proofs.Flock.Soundness.LigeritoLevels
+public import Proofs.Flock.Soundness.NovelBasis
+import ArkLib.Data.CodingTheory.JohnsonBound.Family
+import Proofs.Flock.Soundness.LigeritoDecode
 
 /-!
 # The padded level-0 code: `RS[2^d, k]` on the first `k` novel-basis monomials
@@ -17,6 +21,8 @@ file gives that code what `ListSize`, `LigeritoLevels` and `LigeritoDecode` give
   (`card_closeRows_le`, ArkLib's Johnson bound);
 * `prCoin_mca_le` bounds its MCA events by `padMcaA / 2^256` (`prCoin_pad_mca_le`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

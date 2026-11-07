@@ -13,8 +13,13 @@ So the element-level verdict accepts wherever the shipped one does, with the sam
 (`verifyWithE_of_verifyWith`, `verifyLoggedE_of_verifyLogged`). `Sim.impSt` relates two runs of one `StV σ` where the
 second ends `.ok`, at the same state, wherever the first does; it walks the two `keep`s in step.
 -/
-import Flock.With.Log
-import Flock.JsonParse
+module
+
+public import Flock.With.Log
+import Flock.With.SimVerify
+import Flock.With.SimWalk
+
+@[expose] public section
 
 namespace Flock
 
@@ -48,7 +53,7 @@ def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j 
   check ((← str l "mode") == "exchange") "S3/E1: link.mode is not exchange"
   -- S4
   check ((← str l "sigma") == hexOf spec.sigma) "S4: the record's Σ is not the statement's"
-  -- U1–U3 (§7.3): a null draw is no draw
+  -- U1–U3 (`Flock.Draw`): a null draw is no draw
   let recDraw := match j.getObjVal? "unit_draw" with
     | .ok Json.null => none
     | .ok d => some d
@@ -94,7 +99,7 @@ def decodeJWithK (keep : Bool → Bool) (hs : Hashes M) (spec : SessionSpec) (j 
       let coins ← f128s (← arr r "coins")
       check (1 ≤ n && n ≤ 65536 && coins.size == n && keep (sha.size == (← spec.dgWith hs ByteArray.empty).size))
         s!"S12: {name} round {k} is malformed"
-      -- the framed bytes, when the server retained them: bound to the digest, then compared exactly at replay (§6.2)
+      -- the framed bytes, when the server retained them: bound to the digest, then compared exactly at replay (`Flock.Transcript`)
       check (!spec.retainRounds || !isNull r "msg")
         s!"S12: {name} round {k}: the statement retains round bytes and the record has none"
       let bytes ← if isNull r "msg" then pure none else do

@@ -21,7 +21,10 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
   identity it registered the prover under (lowercase hex of whole bytes), refused in any other form; and it may add
   `challenger`, `{"key", "label"}`: the auditor's challenger the draw's coins come from (its LMS key,
-  `ChallengerKey.ofJson`) and the family they are drawn from, which needs `window_root`, refused in any other form;
+  `ChallengerKey.ofJson`) and the family they are drawn from, which needs `window_root`, refused in any other form; and
+  it may add `day` and `declarations`, both or neither: the window's day (a natural number) and the registration log's
+  declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which R2 holds the
+  record's program to (`Registration.declaredCode`), refused in any other form;
 * **commitment**: the registration record, canonical JSON, fixed before the draw; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's draw), `proved_units`, `instances`,
@@ -45,12 +48,18 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   and each template's own under a stratified or work law), and the **profile** is `audit.profile`'s `IntegrityProfile`:
   one level `unit`, the partition's units, drawn by the verifier's law.
 -/
-import CoreProtocol.Cli
-import CoreProtocol.Profile
-import CoreProtocol.Live
-import SampledProofs.Registration
-import SampledProofs.Record
-import SampledProofs.ChallengerDraw
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Profile
+public import CoreProtocol.Live
+public import SampledProofs.Registration
+public import SampledProofs.Record
+public import SampledProofs.ChallengerDraw
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.OneStage
 
@@ -138,6 +147,8 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "window_root").isSome then keys.push "window_root" else keys
   let keys := if (field? j "held").isSome then keys.push "held" else keys
   let keys := if (field? j "challenger").isSome then keys.push "challenger" else keys
+  let keys := if (field? j "day").isSome || (field? j "declarations").isSome then keys ++ #["day", "declarations"]
+    else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -235,11 +246,21 @@ def paramsParsed (j : Json) : V Params := do
       | .str v => if registered.any (·.1 == v) then pure v else throw s!"held value {v}: not a registered value"
       | _ => throw "held values are a list of registered values"
     | _ => throw "held values are a list of registered values"
+  let declared ← if (field? j "day").isNone then pure none else do
+    let some day := nat? (getD j "day") | throw "a declared day is a natural number"
+    let .arr ds := getD j "declarations" | throw "the declarations are a list"
+    let ds ← ds.mapM fun d => do
+      exactly d #["blocks", "day", "program"] "a declaration"
+      match nat? (getD d "day"), getD d "program" with
+      | some n, .str p => pure (n, p)
+      | _, _ => throw "a declaration's day is not a natural number or its program not a string"
+    pure (some (day, ds))
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
-                                    registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held },
+                                    registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
+                                    declared },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then

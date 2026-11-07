@@ -1,12 +1,14 @@
-import Definitions.Pouw.Assumptions.Pinned
+module
+
+public import Definitions.Pouw.Assumptions.Pinned
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.NormNum
 
 /-!
 # (a) `G_γ` from TT, and the overhead budget
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

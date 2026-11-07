@@ -1,7 +1,9 @@
-import Proofs.Flock.Claims.ZK.Blind
-import Flock.Firewall.Frame
-import Flock.Firewall.Assumptions
-import Flock.Firewall.Coins
+module
+
+public import Proofs.Flock.Claims.ZK.Blind
+public import Flock.Firewall.Frame
+public import Flock.Firewall.Assumptions
+public import Flock.Firewall.Coins
 
 /-!
 # The ZK server's release is the Lean frame, at the Lean frame's draws
@@ -41,10 +43,10 @@ at the draws on the server's tape (`LeanRelease.draws`):
   the scheduled round in its place, and the device round passes where it equals the scheduled round byte for byte
   outside the algebraic phase's masked values and the frame takes it. A round that passes leaves as the frame's release
   of it, and one that fails as the frame's release of the scheduled round, as a stopped rep's
-  (`LeanRelease.check_release`). Rust's own checks run first and can only fail a round more (`LeanRelease.cross`), and
-  so can the loop's: at an inner round its finish has not computed, it hands the frame no device round
-  (`Frames.roundStep`). At the inner proof's rounds the scheduled round is the frame's own (`Frame.innerSched`, on the
-  finish's rounds), which Rust relays; relayed as the frame computed it, it is `check`'s against itself (`check_self`).
+  (`LeanRelease.check_release`). Rust's own checks run first and can only fail a round more (`LeanRelease.cross`). At
+  the inner proof's rounds the scheduled round is the frame's own (`Frame.innerSched`, on the finish's rounds), which
+  Rust relays; relayed as the frame computed it, it is `check`'s against itself (`check_self`). The loop refuses an
+  inner round its finish has not computed (`Frames.roundPlace`), so the session stops there.
 
 `LeanRelease.toSrv` is it as a `ZkServer` with one slot per round, of the deployed session's kinds
 (`LeanRelease.kindAt`):
@@ -91,6 +93,8 @@ firewall computes:
 So `Flock.zk_server_blind`'s bound holds at the deployed release, at any worker: one bit a session
 (`Flock.zk_server_lean`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -314,9 +318,8 @@ structure LeanRelease (W R : Type) where
   computed : Msg → W → R → List (Msg × Msg) → _root_.Flock.Firewall.Contract.ReleaseLog
   /-- Rust's own checks on a worker's rep beside the Lean frame's pass decision (`pass`): the worker failing, the
   device's level-0 root, the constraints on the pads, the end check on the returned proof and Rust's masking
-  cross-checks; and the session loop's, at an inner round its finish has not computed (`Frames.roundStep`). Each can
-  only fail a round more, the failed rep's rounds reaching the loop's frame as no device round, which the frame fails:
-  any decision at all -/
+  cross-checks. Each can only fail a round more, the failed rep's rounds reaching the loop's frame as no device round,
+  which the frame fails: any decision at all -/
   cross : Msg → ℕ → W → R → List (Msg × Msg) → Msg → Bool
   /-- the device round the firewall sends in the device's place once a round failed: the skeleton's round with zero
   values in the algebraic phase, the Lean finish's round in the opening, and at the inner proof's rounds the frame's own
@@ -1098,6 +1101,32 @@ open FlockSoundness.Discharge
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
+/-- **`Flock.zk_server_lean` from the switched prover's zero knowledge**: the deferred release at `swP vs`, from
+`Claims.Flock.ZKAt` at its prover with `refP`'s simulator, at any proof of it (`Flock.zk_deployZk_sw` from the session's
+six Props; `Flock.zk_deployZk_sw_stops` at the session with the frame's stops). -/
+theorem Flock.zk_server_lean_of (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)
+    (S : RefSession) (vs : S.SwVals) (t : ℕ) (δ₁ : ENNReal)
+    (hzk : Claims.Flock.ZKAt H (FlockDeploy.deployZk rel) (S.swP vs).prover
+      ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+      (fun x => 8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t)
+      fun _ => 4 * t * 3 ^ t)
+    (L : LeanRelease Flock.Wit (S.refP.Nonce × S.refP.Rand))
+    (wk : L.toSrv.Worker) (x : Msg) (w : Flock.Wit) (hR : Flock.R (FlockDeploy.deployZk rel).parse x w)
+    (hI : L.ItemsRefine H (S.swP vs).prover (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk x w) {Θ : Type}
+    (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = (FlockDeploy.deployZk rel).V.k x + 1)
+    (Ev : List ((Msg × Out) × ℕ) → Prop) :
+    Pr (fun ω : (S.refP.Nonce × S.refP.Rand) × L.toSrv.Chk =>
+        Ev (L.toSrv.timed x (runStar H (L.toSrv.proverD L.fillOf (fun x => (FlockDeploy.deployZk rel).V.k x + 1) wk w) Vs x ω θ).msgs)) ≤
+      2 * (Pr (fun c : (leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).C x =>
+          Ev (L.toSrv.timed x ((leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
+            (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).out H Vs θ x c))) +
+          (8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
+          4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) := by
+  have h := L.toSrv.zk_deferred L.fillOf H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (S.swP vs).prover _ _ _ _
+    hzk.2 x w hR wk (L.refD H _ _ wk x w hI) Vs θ hk Ev
+  exact h
+
 /-- **The ZK server at `flock-circuit --zk`'s reference session, released by the Lean frame at its own draws**: the
 deployed release `L.toSrv`, whose masks are the frames' draws on the server's tape and whose coin stops and pass decision
 are the frames', and which stops a session only at its `Finish` (`ZkServer.nextD` with the stand-in `LeanRelease.fillOf`; every worker
@@ -1135,10 +1164,8 @@ theorem Flock.zk_server_lean (H : Msg → Msg) (rel : _root_.Flock.Readable.Pars
           Ev (L.toSrv.timed x ((leaky1 ((S.refP.withSim fun x _ c => S.coinModel x c).simulatorE t (t * 3 ^ t))
             (fun x => (FlockDeploy.deployZk rel).V.k x + 1) L.toSrv.stop).out H Vs θ x c))) +
           (8 * S.nLeaves x * δ₁.toReal + 8 * t * S.nLeaves x * δ₁.toReal + 2 * (1 / 3) ^ t) +
-          4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) := by
-  have h := L.toSrv.zk_deferred L.fillOf H (fun x => (FlockDeploy.deployZk rel).V.k x + 1) (S.swP vs).prover _ _ _ _
-    (Flock.zk_deployZk_sw H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT).2 x w hR wk
-    (L.refD H _ _ wk x w hI) Vs θ hk Ev
-  exact h
+          4 * t * 3 ^ t * (Fork H ((S.swP vs).prover w) Vs θ x).Pr H) :=
+  Flock.zk_server_lean_of H rel S vs t δ₁ (Flock.zk_deployZk_sw H rel S vs t ht hT1 hδ₁ hS hV hD hc hsc hT) L wk x w
+    hR hI Vs θ hk Ev
 
 end Claims.ZKServer

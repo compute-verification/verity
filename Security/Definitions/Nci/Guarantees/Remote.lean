@@ -1,5 +1,7 @@
-import Definitions.Nci.Guarantees.Dampener
-import Definitions.Nci.Assumptions.Remote
+module
+
+public import Definitions.Nci.Guarantees.Dampener
+public import Definitions.Nci.Assumptions.Remote
 
 /-!
 # The compute dampener, remote protocol: the guarantees
@@ -23,6 +25,10 @@ hypothesis derived, and the two that sampled proofs and PoUW's deficit add:
   `1 − s = C/(C + U)` is tiers' (`evaluate` counts the residual over `C + U`); it only raises `ρ` over the form above,
   as `0 ≤ s ≤ 1`. With every proof block proved (T1–T4), `q = 1` and the escape term's probability is 0 at any `θ > 0`.
 -/
+
+@[expose] public section
+
+open Verity.Game renaming prPMFReal → prob
 
 namespace Nci.Guarantees
 
@@ -69,24 +75,24 @@ with no sampling. Then, at an escape slack `θ > 0`, with probability at least `
 `s + (1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ`, and the hardware multiple the developer needs is at least
 `ρ = max(1, 1/(s + ((1 − s)(r̂ + ε_W W_cert/C + ε' + JΔ/H + θ) + ν_T + χ)/MFU₀))`, with `r̂ = 1 − W_cert/C`. -/
 def DampenerRemote : Prop :=
-  ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (c : Fin N → ℝ) (wrong : Ω → Fin N → Prop) (p ε : ℝ)
+  ∀ (Ω : Type) [Fintype Ω] (μ : PMF Ω) (N : ℕ) (cap : Fin N → ℝ) (wrong : Ω → Fin N → Prop) (p ε : ℝ)
     (β ι : Type) [DecidableEq ι] (bad detected : Ω → Finset β) (I : Finset ι) (ident : β → ι) (τ w : β → ℝ)
     (Φ Δ H q B θ εW : ℝ)
-    (κ C U W χ mfu : ℝ) (M Mu Mr Mx : Ω → ℕ) (Γ : ℕ) (α b_w b_a : ℝ) (r d : Declaration) (T : Threading r)
+    (κ C U W χ mfu : ℝ) (M Mu Mr Mx : Ω → ℕ) (Γ : ℕ) (α b_w b_a : ℝ) (r d : RegisteredCircuit) (T : Threading r)
     (dd e : ℕ) (Mc : Containment r.D d.D),
-    0 ≤ p → 0 < ε → (∀ i, 0 ≤ c i) → ∑ i, c i ≤ C → Assumptions.PouwSound μ wrong p →
+    0 ≤ p → 0 < ε → (∀ i, 0 ≤ cap i) → Assumptions.WithinCompute cap C → Assumptions.PouwSound μ wrong p →
     0 < H → 0 ≤ Δ → Φ * H ≤ C → (∀ ω, ∀ b ∈ bad ω, ident b ∈ I) →
     (∀ ω, Assumptions.TerminalDetection (bad ω) (detected ω) ident τ Δ) →
     (∀ ω j t, ∑ b ∈ bad ω with ident b = j ∧ t ≤ τ b ∧ τ b ≤ t + Δ, w b ≤ Φ * Δ) →
     0 < θ → (∀ b, 0 ≤ w b) → 0 < q → q ≤ 1 → 0 ≤ B → (∀ ω, ∀ b ∈ bad ω, w b ≤ B) →
     Assumptions.SampledDetection μ bad detected ident τ q →
     0 < κ → 0 < C → 0 ≤ U → 0 < mfu → mfu ≤ 1 → 0 ≤ α → 0 < b_w → 0 < b_a → 0 < dd →
-    Complies Γ α d → Assumptions.ThetaRegistered r d (PartialContainment.ofContainment Mc) →
+    CompliesRate Γ α d → Assumptions.ThetaRegistered r d (PartialContainment.ofContainment Mc) →
     T.Threaded Γ (α * Γ) dd e →
     Assumptions.WeightsIncompressible r T Γ (α * Γ) b_w b_a → (d.D.size d.D.computed : ℝ) ≤ C →
     (∀ ω, 0 < M ω) → (∀ ω, M ω ≤ Mu ω + Mr ω + T.M.card + Mx ω) →
     (∀ ω, (Mu ω : ℝ) ≤ mfu * κ * U / 2) →
-    (∀ ω, (Mr ω : ℝ) ≤ κ * (C - (1 - εW) * W + wrongCapacity c (wrong ω) + ∑ b ∈ bad ω, w b) / 2) →
+    (∀ ω, Assumptions.ResidualAtMost (Mr ω) κ C εW W (wrongCapacity cap (wrong ω)) (∑ b ∈ bad ω, w b)) →
     (∀ ω, (Mx ω : ℝ) ≤ κ * χ * (C + U) / 2) →
       1 - (p / ε + I.card * ((1 - q) / q * B) / (θ * C)) ≤ prob μ (fun ω => efficiency κ (M ω) C U ≤
           unmonitoredShare C U +

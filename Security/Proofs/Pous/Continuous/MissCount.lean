@@ -1,9 +1,10 @@
-import Mathlib.Analysis.SpecialFunctions.Exp
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
-import Mathlib.Data.Fintype.BigOperators
-import Mathlib.Logic.Equiv.Fin.Basic
-import Mathlib.Order.ConditionallyCompleteLattice.Indexed
-import Definitions.Pous.Game.Prob
+module
+
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Definitions.Pous.Game.Prob
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 import Proofs.Pous.Sanity
 
 /-!
@@ -24,6 +25,8 @@ The proof is the exponential supermartingale `exp(−θ·#misses + (1 − e^−�
 `h` is the list of earlier draws, oldest first, so round `j`'s is `(List.ofFn I).take j`. `q` may take any real values,
 and `q h` and `X h` may be any functions of `h`: the bound holds for every adapted choice.
 -/
+
+@[expose] public section
 
 namespace PousContinuous
 

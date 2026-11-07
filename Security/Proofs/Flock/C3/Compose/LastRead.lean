@@ -1,4 +1,19 @@
-import Proofs.Flock.C3.Compose.Tied
+module
+
+public import Proofs.Flock.C3.Compose.Tied
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # n9: `MsgsReadC3` at the normalized tied source
@@ -15,6 +30,8 @@ R's Ligerito's (`RepsMsgsRead`, `SparseMsgsRead`, `OpenMsgsRead`, `LigMsgsRead`)
 alone where R's Ligerito ends in a coin (`LigWhole`), and the openings are read from the layers stratum by stratum
 (`OpensReadAt`); past it both runs have no messages. `msgsReadC3_tied` is it at the normalized tied source.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

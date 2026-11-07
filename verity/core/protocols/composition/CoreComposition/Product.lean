@@ -1,6 +1,6 @@
 /-
 A composition of core protocols, the common part of onsite and remote Verity: one `Core.Protocol` whose check runs each
-subprotocol's own `answer` on that subprotocol's case, and decides by reject dominance.
+subprotocol's own `answer` on that subprotocol's case, and decides so that any rejection rejects the whole.
 
 * It rejects when any subprotocol rejects, whatever the others answer, so an undecided subprotocol never hides a
   rejection. It also rejects when the cases don't fit the composition (a subprotocol unknown, missing, repeated or out of
@@ -17,9 +17,15 @@ line that subprotocol's own `serve` reads, under its id, in the same order:
 `{"components":[{"commitment":HEX,"evidence":HEX,"id":ID,"params":PARAMS},...]}`. All three are canonical JSON or bytes,
 and an object with a key missing or a key more is refused.
 -/
-import CoreProtocol.Protocol
-import CoreProtocol.Protocol.Canonical
-import Flock.Hash
+module
+
+public import CoreProtocol.Protocol
+public import CoreProtocol.Protocol.Canonical
+public import Flock.Hash
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core.Composition
 
@@ -120,7 +126,7 @@ def decodeParams (j : Json) : V (List Named) := do
 def decodeCommitment (b : ByteArray) : V ByteArray :=
   if b.size = 64 then .ok b else .error s!"the binding of the components' digests is 64 bytes, not {b.size}"
 
-/-- Read in place (`Core.Canonical`), as `canonicalJson` and `Flock.unhex` would read it: a component's evidence can be
+/-- Read in place (`Core.Canonical`), as `canonicalJson` and `Flock.unhex` would read it: a subprotocol's evidence can be
 gigabytes of hex (PoUS's `C*`). -/
 def decodeEvidence (b : ByteArray) : V (List Case) := do
   (← entries (← Canonical.read b).1 "the composition's evidence").mapM fun x => do

@@ -1,5 +1,7 @@
-import Mathlib.Data.Rat.Floor
-import Definitions.Accounting.Gates.Model
+module
+
+public import Mathlib.Data.Rat.Floor
+public import Definitions.Accounting.Gates.Model
 
 /-!
 # Primitives' output intervals: the evaluators, and property/v1's rules for them (trusted)
@@ -12,6 +14,8 @@ property/v1 reads it: `+0 … +inf` is `[0, 0x7F800000]`, ordered as the floats,
 0.
 `Guarantees.Gates` states that each interval holds its evaluator's value.
 -/
+
+@[expose] public section
 
 namespace Accounting.Gates
 

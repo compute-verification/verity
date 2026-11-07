@@ -4,7 +4,12 @@ draws by), at one table, the form `flock_verify_sound`'s plain hidden-output bra
 draw design): a plain subset draw passes at hidden outputs and under `--zk`, and is still refused at public outputs; a
 plain session at hidden outputs is still refused at two tables, the form just past the proof.
 -/
-import Flock.ProvedScope
+module
+
+public import Flock.ProvedScope
+meta import Flock.ProvedScope
+
+@[expose] public section
 
 namespace Flock.Test.PlainHidden
 

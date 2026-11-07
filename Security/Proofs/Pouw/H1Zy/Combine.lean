@@ -1,4 +1,10 @@
-import Definitions.Pouw.H1Zy.Combine
+module
+
+public import Definitions.Pouw.H1Zy.Combine
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.Push
+import Mathlib.Tactic.SetLike
 
 /-!
 # The combine's `ok` is the receipt check
@@ -8,6 +14,8 @@ over the lanes' words in lane order (from `0`) is the receipt's word (`combineOk
 (`tree_xor32`), and its `PouwAndBit` tree is `true` exactly when every comparison is (`tree_andBit`). Both trees are the
 fold of an associative operation from a left identity (`tree_eq_foldl`), so the tree's shape doesn't matter.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

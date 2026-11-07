@@ -1,5 +1,10 @@
-import Definitions.Pouw.Assumptions.Dimension.Mixing
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Mixing
+import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Dimension.Proofs
+import Proofs.Pouw.NCP.RelationWitness
 
 /-!
 # The mixing lemma: proofs
@@ -9,6 +14,8 @@ import Proofs.Pouw.Dimension.Proofs
 * `algBound4090`: with A1, `cost ≥ 16·(1 − γ₁)·D`.
 * `alg4090Witness`: the new hypotheses are satisfiable.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

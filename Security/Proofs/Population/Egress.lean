@@ -1,8 +1,11 @@
-import Proofs.Population.Determinacy
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+module
+
+public import Definitions.Population.Dataflow
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.BigOperators
 import Mathlib.Data.Finset.Powerset
+import Mathlib.Data.Fintype.BigOperators
+import Proofs.Population.Determinacy
 
 /-!
 # Non-exfiltration: what the egress can show with at most `m` faulty proof blocks
@@ -23,6 +26,8 @@ faulty proof blocks lie in `B` (or number at most `m`): the prover's whole freed
 * `loop_egress`, **acyclicity is needed**: one unit that copies `k` slots onto themselves (single assignment, one
   cycle) shows `2 ^ k` egress values with no faulty proof block at all.
 -/
+
+@[expose] public section
 
 namespace Population.Dataflow
 

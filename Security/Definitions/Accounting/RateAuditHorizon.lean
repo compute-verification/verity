@@ -1,4 +1,7 @@
-import Definitions.Accounting.RateAuditRemote
+module
+
+public import Definitions.Accounting.RateAuditRemote
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The causal horizon: rounds whose good sets precede their samples (trusted)
@@ -19,6 +22,8 @@ one store, window `w`'s prover any function of the earlier windows' coins, their
 window's passes and a session's windows may be one prover or many, sharing whatever the earlier coins allow. The
 guarantees over these games conserve the words read, rebuilt or held, whoever reads, rebuilds or holds them.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 

@@ -1,12 +1,14 @@
-import Definitions.Pouw.PearlC.Instance
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Pouw.PearlC.Device
+module
+
+public import Definitions.Pouw.PearlC.Device
 
 /-!
 # The named assumption TT_OUT (trusted)
 
 `Prop`s taken as hypotheses by the statements that use them, never `axiom`s.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

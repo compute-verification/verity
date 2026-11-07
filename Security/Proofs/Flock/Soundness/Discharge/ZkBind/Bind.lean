@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Link
-import Proofs.Flock.Soundness.Binding.Rows
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
+public import Proofs.Flock.Soundness.Binding.Layout
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # `--zk` value binding: the committed values are the drawn units' own
@@ -20,6 +24,8 @@ strings for `--zk` tables as a named structure (`vb : ZkLink.ValueBindingZ … (
 commit string to carries, on that wire, the bit of the unit's own column in its block, and its commitment is the
 registered one.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

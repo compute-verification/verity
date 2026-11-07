@@ -1,5 +1,46 @@
-import Proofs.Flock.SessionLoop.FinRepErasedOf
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.SessionLoop.FinRepErasedOf
+public import Proofs.Flock.SessionLoop.FinRepView
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.SessionLoop.FinCommits
 import Proofs.Flock.SessionLoop.FinHmkCut
+import Proofs.Flock.SessionLoop.FinPoints
+import Proofs.Flock.SessionLoop.FinRounds
 
 /-!
 # `FinRepErased` with the views' masked values read off the history
@@ -15,6 +56,8 @@ two premises in the step's own form, each over `swSrcE_hmk_cut`'s premises:
 
 **`Loop.finRepErased_of_cut`**: `finRepErased_of` with `hMk` replaced by those two.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -157,7 +200,7 @@ theorem finRepErased_step_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _r
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs) (hPiop : FinPiop vs L₀ src wk x w) (hFc : FinFc vs L₀ src wk x w)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) (hPiop : FinPiop vs L₀ src wk x w) (hFc : FinFc vs L₀ src wk x w)
     {ν : finS.Nonce} {t : finS.Tape} {κ : (LeanRelease.ofLoopLink L₀ src (realOf src)).toSrv.Chk} {m₀ ρ₀ : Msg}
     {ops : List (Msg × Msg)} (hF : FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops)
     (hrows : ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
@@ -303,7 +346,7 @@ theorem finRepErased_of_cut (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _roo
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w)
     (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
-    (hc : finS.SwCausal vs)
+    (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     (hRows : ∀ ν t κ m₀ ρ₀ ops, FinCtx (LeanRelease.ofLoopLink L₀ src (realOf src)) wk x w ν t κ m₀ ρ₀ ops →
       ∀ j : Fin (Masked.jOf x), ((finS.C x j).T (finS.cz x (finCoins x ops) j)).tab.onVals.RowsAt
         (finS.wt x w j, vs x w ν (finCoins x ops) (finS.seenOf x t) j)

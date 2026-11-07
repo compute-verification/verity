@@ -1,8 +1,7 @@
-import Definitions.Pouw.PearlC.Instance
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Pouw.PearlC.Device
-import Definitions.Pouw.PearlC.DeviceRev1
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.DeviceRev1
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # TT_OUT at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
@@ -52,6 +51,8 @@ fails at decode. No reader of these assumptions takes `AdmitsRef`: it is complet
 
 The rest (the credit, debit and cap, the second hole carried, the falsifiers) is `TTOut`'s and `TTOutPearlCDevRev1`'s.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

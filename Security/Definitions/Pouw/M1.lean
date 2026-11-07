@@ -1,6 +1,7 @@
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.D1
-import Mathlib.Data.Fintype.Sum
+module
+
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.D1
 
 /-!
 # `D1.m1`: the named milestone instance (trusted; §3.2's derivation, tt-attacks §4, working decisions W4 and W6)
@@ -20,6 +21,8 @@ import Mathlib.Data.Fintype.Sum
 * **`W_ref`** is a parameter of `m1`. `m1Wref` is the explicit `H_ref` schedule of llm-shapes §3, with the
   per-(epoch, weight) and per-(epoch, weight, group) products apportioned to units by rows.
 -/
+
+@[expose] public section
 
 namespace Pouw.D1
 

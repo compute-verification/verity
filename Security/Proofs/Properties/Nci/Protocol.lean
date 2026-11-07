@@ -1,4 +1,8 @@
-import Properties.Nci.Protocol
+module
+
+public import Properties.Nci.Protocol
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 import Proofs.Properties.Nci.BaselineSteps
 
 /-!
@@ -7,6 +11,8 @@ import Proofs.Properties.Nci.BaselineSteps
 `ProtocolAccepts` (`Properties.Nci.Protocol`) by unfolding `NciCheck.Protocol.check` past its `names` check, with the policy check's verdict
 from `BaselineSteps.evaluate_ok`: `NciCheck.Baseline.evaluate` returns the verdict `NciCheck.Desc.evaluate` gives.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs
 

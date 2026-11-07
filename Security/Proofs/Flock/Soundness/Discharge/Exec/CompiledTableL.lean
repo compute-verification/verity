@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
-import Proofs.Flock.Soundness.CompiledAlign
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.CompiledL
+public import Proofs.Flock.Soundness.CompiledAlign
 
 /-!
 # The salted compiled bound for any level-0 table
@@ -12,6 +14,8 @@ import Proofs.Flock.Soundness.CompiledAlign
 
 with `ε_c⁻ = tableError + Σ √(N_ℓ·Q_ℓ·Adv_{r,ℓ}) + Pr[self-clash]` (`epsCminusL`), one number for every `T`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 
@@ -42,15 +46,6 @@ noncomputable def advRTL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (fun d b b' => ind (fun x : OutCL F D Sl × OutCL F D Sl =>
       ∃ p, Rewinding.ConflictAt (opRL H E Lf ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d) x p) (b, b'))
     (lockTableL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts T σ.1) σ.2
-
-theorem advRTL_C0starL [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (Lf : Merkle.Leaf (List F) Sl D H) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level)
-    (rest : List Level) (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
-    (σ : Strategy (tableCL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) :
-    advRTL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
-        (C0starL A H E Lf S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) r ℓ σ =
-      advRL A H E Lf S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts r ℓ σ :=
-  rfl
 
 open Classical in
 /-- **The salted bad runs, cap by cap, for any level-0 table `C₀`**, given a bound `x₀` on the level-0 rewinding

@@ -1,5 +1,8 @@
-import Properties.Pouw
-import Properties.Pouw.Check
+module
+
+public import Properties.Pouw
+public import Properties.Pouw.Check
+import all Lean.Data.Json.Basic
 import Proofs.Properties.Pouw.Grid
 
 /-!
@@ -11,6 +14,8 @@ composes them; the rest follow. `acceptedInRange_of_grid` proves `AcceptedInRang
 converse of `AcceptMeans`, and `serviceReject_rejects` what `AcceptedIsTheService's` and `UndecidedOnlyFromService`
 leave: the service's reject is the check's.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Check
 

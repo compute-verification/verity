@@ -1,4 +1,8 @@
-import Definitions.Pous.Accounting.Rebuild
+module
+
+public import Definitions.Pous.Accounting.Rebuild
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Chain.Flat
 
 /-!
@@ -8,6 +12,8 @@ import Proofs.Pous.Chain.Flat
 non-decreasing in `d`. The rounds of every row of `Pous.Guarantees.BandGradedMeetsFamily` last under
 `240·6 + 3·13 = 1,479` call-times.
 -/
+
+@[expose] public section
 
 namespace PousRebuild
 

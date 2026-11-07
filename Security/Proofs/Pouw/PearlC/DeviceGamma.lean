@@ -1,4 +1,9 @@
-import Proofs.Pouw.PearlC.TileGamma
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Proofs.Pouw.PearlC.TileGamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # TT_OUT and γ at a device record
@@ -12,6 +17,8 @@ Staged; nothing pinned.
   (`pearlCGammaDevAt`) and `GγSampled` from TT_OUT per tile (`pearlCSampledDevAt`), both at `γ = 1 − (399/400)/ω`.
   `pearlCTilesDev_total`: the audit tiles' `W_ref` is the layout's `∑_u wrefDev`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,4 +1,23 @@
+module
+
+public import Proofs.Flock.VBridge.Algebra.ToVStar
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.VBridge.PartS
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.AlgHolds
+import Proofs.Flock.VBridge.PartsCover
 
 /-!
 # `AlgebraHolds` from each part's residuals vanishing
@@ -9,6 +28,8 @@ verifier values `vv` that read the rep's `w` at `wIdx` of the group's ports and 
 group's `V`, `AlgebraHolds` holds. `vv`'s agreement with `v` is the tie a caller takes from check 5 (`ResTie`) at the
 verifier's values; it stays a hypothesis here.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.OfVStar
 

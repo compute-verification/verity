@@ -1,6 +1,37 @@
-import Definitions.Claims
-import Definitions.Pouw.RelativeSecurity
-import Definitions.Pouw.RelativeSecurityJ10R
+module
+
+public import Definitions.Pouw.RelativeSecurityJ10R
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Relative security's named premises for the staged window (trusted)
@@ -47,6 +78,8 @@ premise here is weakened for it. The charge counts every product of the call's p
 call's product, one whose products each serve several rows or columns, is charged fewer products and is outside the
 call's one-sided scope (charging purity at `jFrame`): K1 is not claimed there, as it isn't per unit.
 -/
+
+@[expose] public section
 
 namespace Pouw.Assumptions
 
@@ -108,9 +141,13 @@ The finders and their costs, path by path:
   the table: its cost is about the draws times `T`.
 - **Zero knowledge: extraction first.** The openings a zero-knowledge break equivocates are witness, inside C-Flock's
   proofs, so the finder must extract them before it can compare: its cost is the knowledge extractor's, C-Flock's link
-  finders' `2t'(1 + k)` calls at `t'` one run's (`linkBoundZC`), not `2T`. So `cz` is about `2(1 + k)` times the
-  calls one unit of `Mc`'s time can buy, and `dz` counts the extractor's own calls. Where both the link finder and `Claims.KS`'s
+  finders' `2t'(1 + k)` calls at `t'` one run's, the prover's and the verifier's (`linkBoundZC`), not `2T`. So `cz`
+  is about `2(1 + k)` times the calls one unit of `Mc`'s time can buy, and `dz` counts the extractor's own calls. Where both the link finder and `Claims.KS`'s
   `B` are needed, `fz` runs both and outputs the first collision either finds, at their costs summed.
+
+The floors per prover read this premise at the fork finders built from `M` (`forkFinders`: `1` continuation for
+binding, `kz` for zero knowledge), never at finders of the analysis's choosing, and conclude at those finders' collision
+probabilities (`breakPr`), so collision resistance is applied to them outside the floors.
 
 It assumes nothing of SHA-512. `ecr/sha-512` enters only the floors' bound, adversary by adversary (`breakBound`), at a
 budget computed from the adversary: a finder that meets `Claims.ExpectedCR` within `cb · time M + db` SHA-512 calls in

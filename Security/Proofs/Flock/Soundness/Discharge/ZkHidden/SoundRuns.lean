@@ -1,6 +1,28 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDefs
-import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDefs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
 
 /-!
 # `RunsZC` at the live hidden-output `--zk` tables, from `TablesAtZKHLive`
@@ -15,6 +37,8 @@ each run a `RepRun` for `decAtZ` and the table's verdict accept at the two resul
 on every circuit `HmOut.parse` accepts (where the unit returns the outputs, for `runsZC_liveH`), and `runsZC_liveHISt` and
 `runsZC_liveHSt` on every statement circuit (`HmOut.parseStmt`, a templated file's template unrolled).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

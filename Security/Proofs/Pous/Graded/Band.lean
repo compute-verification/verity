@@ -1,6 +1,12 @@
-import Proofs.Pous.Statements
-import Proofs.Pous.Graded.Theorem
+module
+
+public import Definitions.Pous.Guarantees
+public import Proofs.Pous.Chain.Flat
+public import Proofs.Pous.Graded.Tail
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pous.Chain.Family
+import Proofs.Pous.Graded.Theorem
 
 /-!
 # The band store with up to `t` late rounds
@@ -62,6 +68,8 @@ conversions to wall-clock time take a call to be at least 241.5 µs. At the refe
 not hold: a prover rebuilds a label from 1.53% of `C` in 481 Keccak-f, less than one call, by keeping five 200-byte
 round states per block, so it never re-encodes a segment. The theorem is about the ideal model and is unaffected.
 -/
+
+@[expose] public section
 
 namespace PousGraded
 

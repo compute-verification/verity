@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Verity x vLLM integration: runtime capture, definitions and Torch-derived Programs for vLLM, Match/Commit, the qualification sweep."
 requires-python = ">=3.12"
 dependencies = [
-    "research",
     "verity",
     "verity-config",
     "numpy>=1.26",
@@ -16,6 +15,9 @@ verity-vllm = "verity_vllm.pipeline.cli:main"
 [project.optional-dependencies]
 # The CPU half (compare / replay / gates / derivation tests) needs torch; the pod runtime adds vLLM through pod_bootstrap.sh.
 torch = ["torch>=2.4"]
+# The team's run and store tool, which the custody, telemetry and store paths (`pipeline/research*.py`, `source_identity.py`)
+# and their tests use; the workspace installs it with every member.
+research = ["research"]
 
 [build-system]
 requires = ["hatchling"]
@@ -124,7 +126,7 @@ untraced = [
 # package imports (`research.store.tool`, `research.telemetry.source_identity`) and the store CLI that `store_io` starts for a
 # fetch and `records.data` starts as `python -m research` (its `__main__`), and the run fixture
 # tests/regression/test_attempt_resolution.py resolves. Test-only: tests/pipeline checks the fixtures
-# this package registers and the example's stored workload (examples/vllm/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
+# this package registers and the demo's stored workload (examples/vllm/workloads/SHA256SUMS); tests/program/test_fp8_moe.py replays the Hopper e4m3 k32 step's pinned vectors (under `verity`);
 # tests/engine's int8 tests run benchmarks/ppl's int8 steps as their oracle;
 # tests/store/test_remote_session.py runs the remote session's prover and verifier (`store.remote`), and the verifier
 # imports lean_verifier.py, challengers.py and store_layout.py; tests/protocol_options/test_pouw_h1_circuits.py parses a
@@ -225,7 +227,6 @@ tests = [
     "tests/engine/test_env.py",
     "tests/observe/test_fold_build_versions.py",
     "tests/program/predict/test_predict.py",
-    "tests/program/test_device_pin.py",
     "tests/program/test_twins.py",
     "tests/test_no_by_name_rules.py",
 ]

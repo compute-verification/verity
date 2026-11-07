@@ -1,4 +1,7 @@
-import Properties.Pous.WipeSigned
+module
+
+public import Properties.Pous.WipeSigned
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # What the challenger's record of a wipe keeps
@@ -6,6 +9,8 @@ import Properties.Pous.WipeSigned
 Read by read (`WipeRun.step`), the challenger's record keeps an answer for each batch, each batch's wrong count is 0
 exactly when its answer is its read's label, and a session that has ended has a batch (`Inv`, `inv_recorded`).
 -/
+
+@[expose] public section
 
 namespace MemoryChallenger.Properties.SecurityProofs.WipeRuns
 

@@ -1,7 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coins
-import Proofs.Flock.Soundness.Discharge.Composed.Geometry
-import Proofs.Flock.Soundness.Discharge.Composed.Pads
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coins
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.Holds
+public import Proofs.Flock.Soundness.Discharge.Composed.Pads
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `coinedOf_setup`, from the refinement's three facts
@@ -17,6 +32,8 @@ What is left reads `bodyOf`, the refinement, and is stated here as three named f
 * `innerOf_holds` (`Composed/Inner/Holds.lean`, the inner lane's): the honest prover's pads satisfy the inner proof's constraint at every valid witness whose registered
   values are the public ones (`Table.InnerHolds`; `innerOf`'s `lam`, `theta`, `vals`, `lanes`, `lig`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

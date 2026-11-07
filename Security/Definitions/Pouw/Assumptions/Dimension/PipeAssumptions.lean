@@ -1,4 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.PipeModel
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.PipeModel
+public import Definitions.Pouw.Dimension.Lift
 
 /-!
 # The closed pipe's and the lifting's named assumptions
@@ -9,6 +12,8 @@ at `c = 2`, `γ = 0`: `a1CostQuadHolds`), `A1_nonquad`, `LiftMinRank` and `LiftM
 `Prop`s with parameters, and each has a satisfiability witness (`A1CostWitness`, `LiftMinRankWitness`,
 `LiftMinRankL5eWitness`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

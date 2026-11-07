@@ -1,8 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.ZkSession.Table
-import Proofs.Flock.Soundness.SessionBatch
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Lowering
-import Proofs.Flock.Soundness.ExecDrawOS
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkSession.Table
+public import Proofs.Flock.Soundness.SessionBatch
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Lowering
+public import Proofs.Flock.Soundness.ExecDrawOS
 
 /-!
 # A batched `--zk` session and its audit (live/PROTOCOL.md §1–§7, PROTOCOL.md §5)
@@ -52,6 +54,8 @@ averaged over the draw (`ksAvgZK`). The lowering comes from each drawn unit's pl
 * *The non-ZK session's structural guarantees*, unchanged: the drawn units' places (`UnitPlace`: W6, `Layout.Aliased`),
   the constant and zero columns, and the rows' commit (`HmRowComputes`), as the headline takes them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkSession
 
@@ -299,7 +303,7 @@ theorem zk_flock_count (hA : A.Correct) (place : ∀ S R u, u ∈ S → UnitPlac
   extraction_audit_count (analysisZK A P planZ tab _ Xc (loweringSoundZK_of_place A P planZ tab place))
     (zk_knowledgeSound A P planZ tab hA _ Xc _) hlink K σ
 
-/-- **The `--zk` count curve at the live draw.** With the units drawn by `Flock.Draw.drawOS`'s stratified law on a
+/-- **The `--zk` count curve at the live draw.** With the units drawn by `Flock.Draw.drawWith`'s stratified law on a
 byte source that A3 makes uniform (`hA3`), as in `Prog.flock_headline`:
 `Pr[accept ∧ at least K wrong units] ≤ miss(K) + ε_ks^zk + δ_link`, with `miss(K)` `Law.stratified`'s count curve. -/
 theorem zk_flock_count_execOS (hA : A.Correct)

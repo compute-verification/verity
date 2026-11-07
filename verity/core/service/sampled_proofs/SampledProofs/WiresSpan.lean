@@ -1,7 +1,11 @@
-import SampledProofs.Wires
+module
+
+public import SampledProofs.Wires
 
 /-! The span `Wire.span` computes from a wire's digits bounds the writer of every reader row it covers
 (`Wire.writerAt_mem_span`): the first of the lemmas holding `check` to `checkRef`. -/
+
+@[expose] public section
 
 namespace SampledProofs.Wires
 

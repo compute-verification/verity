@@ -1,7 +1,18 @@
-import Proofs.Flock.Soundness.ExecCircuit
+module
+
+public import Aesop.BuiltinRules
+public import Flock.HmRow
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.ExecTyped
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Soundness.ExecCheck
-import Proofs.Flock.Soundness.ExecTyped
-import Proofs.Flock.Soundness.ExecSetup
+import Proofs.Flock.Soundness.ExecCircuit
+import Proofs.Flock.Soundness.ExecParse
 
 /-!
 # A typed template's statement, as `HmRow.parse` and `Stmt.setupH` accept it (1e for templates, T2)
@@ -13,10 +24,13 @@ import Proofs.Flock.Soundness.ExecSetup
   `sha512/row/v1`'s (`rowPorts_typed`).
 -/
 
+@[expose] public section
+
 open Flock FlockLevel3
 
 namespace FlockSoundness
 
+-- `split` and `cases` at every branch of `HmRow.rowPorts`' unfolded body
 set_option maxHeartbeats 1000000 in
 /-- `HmRow.rowPorts`' ports for a typed statement are `sha512/row/v1`'s (it refuses `row_schemas`), each whole SHA-512
 blocks of `16 · words` bits, with a compression at least (it refuses a row of no words). -/
@@ -97,6 +111,8 @@ structure ParseFactsT (tags : Tags) (t : Typed.Template) (c : Circuit) : Prop wh
   /-- a typed statement's rows are `sha512/row/v1`'s, each of `16 · words` bits in at least one compression -/
   v1 : tags.typed = true → ∀ p ∈ c.ports.toList, p.v2 = false ∧ p.bits = 16 * p.words ∧ 0 < p.chunks
 
+-- one proof of a few hundred lines down `HmRow.parse`'s unfolded body: `split` and `cases` at each branch, a bind step
+-- per value it reads
 set_option maxHeartbeats 4000000 in
 theorem parse_facts_tmpl {tags : Tags} {bytes : ByteArray} {tables : List (String × ByteArray)} {t : Typed.Template}
     {c : Circuit} (h : HmRow.parse tags bytes tables (tmpl := some t) = .ok c) : ParseFactsT tags t c := by

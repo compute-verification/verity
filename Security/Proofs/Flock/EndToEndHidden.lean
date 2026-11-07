@@ -1,4 +1,27 @@
-import Proofs.Flock.EndToEndHidden.Statement
+module
+
+public import Proofs.Flock.EndToEndHidden.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
 
 /-!
 # Proof of C-Flock's end-to-end guarantee under hidden outputs
@@ -13,6 +36,8 @@ unrolls to, which `HmOut.parse` reads from the file (`Flock.Desc.parse_flat`). `
 `EndToEndHidden_refSetup` shows the hidden-output statements' reference setup `y₀` (theirs and `EndToEndRegistered`'s)
 is no extra condition: every draw flock-verify accepts gives one, at any number of tables.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

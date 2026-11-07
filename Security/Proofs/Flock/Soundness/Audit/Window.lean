@@ -1,4 +1,9 @@
-import Proofs.Flock.Soundness.Audit.Closure
+module
+
+public import Proofs.Flock.Soundness.Audit.Closure
+import Mathlib.Analysis.MeanInequalities
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Windows of calls
@@ -42,6 +47,8 @@ of 1,000 units at work 2 and 10 at work 1,000, call 1 of 100,000 units at work 0
 0.156 against the bound's 2.4·10⁻⁴. Uncapped it would draw 834. A call with several work strata must have a cap that
 does not bind, or prove those strata whole.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

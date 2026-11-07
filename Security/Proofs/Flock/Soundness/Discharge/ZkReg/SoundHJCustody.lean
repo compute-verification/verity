@@ -1,6 +1,26 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
+module
+
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJ
+public import Proofs.Flock.Soundness.Registered.ReadsX
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 
 /-!
 # One hidden-output `--zk --registered` sampled session of `J` tables, under the record's custody
@@ -15,6 +35,8 @@ import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 * `zk_session_soundHJR_custody`: the custody assumption reads only the record and its draws, which neither the shared
   rows nor the registered check change.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

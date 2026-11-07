@@ -1,5 +1,26 @@
-import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
-import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+public import Proofs.Flock.Soundness.Discharge.ZkReg.SoundHJCustody
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # `zk_session_soundHJR_custody`, "wrong" measured against the public file
@@ -16,6 +37,8 @@ second conjunct ties, at each read the verifier owns, to the root `--registered 
 * `zk_session_soundHJR_custody_drawn_reg`: the drawn units' form of the first conjunct,
   `Pr[flock-verify accepts ∧ some drawn unit in wrongRegZ] ≤ ε_ks + δ_link`, without A3, and the same second conjunct.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

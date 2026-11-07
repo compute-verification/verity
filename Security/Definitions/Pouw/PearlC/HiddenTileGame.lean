@@ -1,4 +1,8 @@
-import Definitions.Pouw.PearlC.Hidden
+module
+
+public import Definitions.Pouw.PearlC.Hidden
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # What a proof system gives per tile, toward the hidden audit's open obligation (trusted)
@@ -18,6 +22,8 @@ stated here for any hidden audit:
 `tileProofSoundAll_of_tileGame` proves `TileProofSoundAll` from the two, through core's batch lemma
 (`Verity.Guarantees.ProbBatchInduced`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,11 +1,30 @@
-import Proofs.Flock.Recursive.Sound
-import Proofs.Flock.Recursive.Multi
-import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
-import Proofs.Flock.Recursive.ZkReg.Vals
-import Proofs.Flock.Recursive.ZkReg.Off
-import Proofs.Flock.Recursive.Finds
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
-import Proofs.Flock.Soundness.Assumptions.CustodyZk
+module
+
+public import Proofs.Flock.Recursive.Finds
+public import Proofs.Flock.Recursive.Sound
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Recursive.ZkReg.Off
+public import Proofs.Flock.Soundness.Assumptions.CustodyZk
+public import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedHJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsHJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: the outer proof, `--zk --registered` sessions of fixed public verifiers V*
@@ -45,6 +64,8 @@ session accepts (`Accepts`), and the decoded witness is each session's value lay
   SHA-512 collision; with none, `CR` holds at budget `0` (`ZkOuter.cr_of_not_fork`) and `boundIf` there is at most
   `ZkOuter.boundCR`, the miss and the drawn units' statistical errors (`ZkOuter.boundIf_le`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

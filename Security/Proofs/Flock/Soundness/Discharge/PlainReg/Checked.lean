@@ -1,15 +1,43 @@
-import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
-import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
-import Proofs.Flock.Soundness.Discharge.ZkReg.CheckedH
-import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineInst
+public import Proofs.Flock.Soundness.Discharge.PlainReg.BindH
+public import Proofs.Flock.Soundness.Discharge.PlainReg.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindH
+public import Proofs.Flock.Soundness.Discharge.ZkReg.DefsH
+public import Proofs.Flock.Soundness.Registered.ReadsX
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+public import Proofs.Flock.Soundness.Discharge.HiddenDec.Statements
+import all Init.Data.Array.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The registered check at an accepted hidden-output `verify --registered F` outcome, without `--zk`
 
 `opens_of_acceptsR`: at an outcome `AcceptsR` accepts over hidden outputs at one table, each registered read that is the
 verifier's own at the record's draw (`ZkReg.OwnReadsH`) opens the root `own` holds at the position `own` gives, through
-`ZkReg.regPathsH`, at the leaf of the population's row. It is `ZkReg.checked_of_acceptsH`'s proof at `setupOf I` in
-place of `setupOf (zkInputs I)`: the one table's statement is setupHidden's at the record's draw
+`ZkReg.regPathsH`, at the leaf of the population's row: the one table's statement is setupHidden's at the record's draw
 (`HiddenExec.setupTables_okH`), `checkRegistered` is `Registered.check` (`ZkReg.checkRegistered_ok`), and the drawn
 instance at `u`'s rank holds the population's row of `u` (`Hidden.drawn_digestW`).
 
@@ -19,6 +47,8 @@ the template instance's (`layAtHI`), each the population's public file's (`regLe
 * `checked_of_acceptsRH`: the registered reads of `layAtH`, at `rsAtHS`, are checked;
 * `checked_of_acceptsRHI`: the registered reads of `layAtHI`, at `HiddenExec.rsAtHI`, are checked.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainReg
 

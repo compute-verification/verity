@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Audit.FlockLink
+module
+
+public import Proofs.Flock.Soundness.Audit.FlockLink
 
 /-!
 # The compiled-layer audit with `δ_link` discharged
@@ -20,6 +22,8 @@ What it rests on, all named:
 The numeric side conditions are `N₀/(ek) ≤ ρ < 1` for every table (`hr`, `hρ`) and `t'`, the SHA-512 evaluations of one
 session run.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -99,36 +103,6 @@ noncomputable def placeDecoder (place : ∀ S R u, u ∈ S → UnitPlace P (tabO
     (witnessOf execArith (tabOf plan tab S R u).S.m (tabOf plan tab S R u).sch.k0
       (tabOf plan tab S R u).sch.level₀.logCols M)
   else fun _ => false
-
-/-- **The compiled-layer count curve from the drawn units' places**: `flock_batched_count_linked` with the lowering
-discharged by each drawn unit's place in its table (`UnitPlace`: the row placement). What remains named is A2, `ValueBinding` and the places. -/
-theorem flock_batched_count_placed
-    (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) {Dh : Type} {Hc : List UInt8 → Dh}
-    (vb : P.ValueBinding plan tab (P.placeDecoder plan tab place) Hc)
-    {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (K : ℕ) (σ : Strategy (audit L Reg (batchedSession H E plan)))
-    (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
-    prob (fun o => o.1 = true ∧ K ≤ (P.wrong (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)).card)
-        (audit L Reg (batchedSession H E plan)) σ ≤
-      L.miss K + ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  P.flock_batched_count_linked H E plan tab vb (P.loweringSoundB_of_place plan tab place) hk hRw hM hρ hr
-    ht K σ hCR
-
-/-- **Drawn units, from the drawn units' places**: `flock_batched_drawn_linked` with the lowering discharged by
-`UnitPlace`. -/
-theorem flock_batched_drawn_placed
-    (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) {Dh : Type} {Hc : List UInt8 → Dh}
-    (vb : P.ValueBinding plan tab (P.placeDecoder plan tab place) Hc)
-    {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
-    (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ} (ht : 0 ≤ t')
-    (σ : Strategy (audit L Reg (batchedSession H E plan)))
-    (hCR : P.LinkCR H E plan tab vb (reg σ) (cont σ) k Rw M t') :
-    prob (fun o => o.1 = true ∧ ¬ Disjoint (P.wrong (P.Xplur H E plan tab vb (reg σ) (cont σ) k Rw)) o.2)
-        (audit L Reg (batchedSession H E plan)) σ ≤
-      ksAvgBE H E plan k (reg σ) (cont σ) + P.linkBoundE (L := L) plan tab vb k Rw M ρ t' :=
-  P.flock_batched_drawn_linked H E plan tab vb (P.loweringSoundB_of_place plan tab place) hk hRw hM hρ hr
-    ht σ hCR
 
 end Partition
 

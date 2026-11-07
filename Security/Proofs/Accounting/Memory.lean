@@ -1,5 +1,10 @@
-import Proofs.Accounting.Memory.Counting
-import Proofs.Accounting.Memory.Adds
+module
+
+public import Proofs.Accounting.Memory.Counting
+public import Proofs.Accounting.Memory.Adds
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
 
 /-!
 # Memory adds, by counting: the guarantees
@@ -10,6 +15,8 @@ Each statement of `Security/Definitions/Accounting/Guarantees/Memory.lean`, prov
 * `Memory/Adds.lean`: the composition with PoUS's guarantee: each fibre coded into `S` bits, the coded adversary
   answering as the location does, and the union over the challenges; the isolation forms at `H = 0`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Memory
 

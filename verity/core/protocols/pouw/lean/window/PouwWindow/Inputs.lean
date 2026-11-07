@@ -1,6 +1,7 @@
-import PouwWindow.Side
-import PouwWindow.Record
-import Identity.Domains
+module
+
+public import PouwWindow.Side
+public import PouwWindow.Record
 
 /-!
 # The tile instances' public inputs (`window.py`, "The tile instances' public inputs")
@@ -11,6 +12,8 @@ instance s is tile `drawn[σ·cap + s]`, or N − 1 past the draw (`instanceTs?`
 root, its domain, side A's and side B's domains, the pass's -h3 domain), little-endian, instance-major. The registration is
 one-stage's record as JSON, read as Python reads it.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 

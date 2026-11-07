@@ -1,7 +1,9 @@
-import Proofs.Flock.Soundness.E2E
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.Binding.Weights
-import Proofs.Flock.Soundness.StrictCR
+module
+
+public import Proofs.Flock.Soundness.E2E
+public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.Binding.Weights
+public import Proofs.Flock.Soundness.StrictCR
 
 /-!
 # The end-to-end theorem with the value binding of `hm96-sha512/row/v1` rows
@@ -30,14 +32,17 @@ be SHA-512; each at its finders' budgets:
 **`δ_tree`.** "Accept" is `execAccept`, read from the registered roots, and the bound counts it with the model's
 acceptance at the registered leaves (`Layout.regLeaf`). Where they differ is `δ_tree`: `tr` covers the event that the
 executable accepts and the model rejects by runs that open a serving root off its plurality (`TreeRewind.covers`). That
-cover is the link from the executable's openings to the model's (R11), still open, so `tr` is a named hypothesis. The
-skeleton's `hExec` (every accept is the model's) gives a cover with no positions, at `δ_tree = 0` (`TreeRewind.ofNever`).
+cover is the link from the executable's openings to the model's (the refinement `ExecRefines`), still open, so `tr` is a
+named hypothesis. The skeleton's `hExec` (every accept is the model's) gives a cover with no positions, at `δ_tree = 0`
+(`TreeRewind.ofNever`).
 
 **A3.** None of these forms takes A3 (`uniform/io-getrandombytes`). The generic forms hold at every law `L`, the live
 draw `Law.execOS` included, and read it only through their terms. The `_exec` forms are at `Law.execStratified`, whose
 outcomes are the byte tapes themselves, uniform by construction. The live verifier's bytes enter through `Law.execOS`, and
 A3 compares its count curve with `Law.stratified`'s (`Law.execOS_miss_le`): `Prog.flock_headline` composes the two.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Binding
 

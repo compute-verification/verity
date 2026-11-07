@@ -1,6 +1,8 @@
-import Definitions.Accounting.RateAuditInteractive
-import Definitions.Accounting.RateAuditRemote
-import Definitions.Accounting.RateAuditHorizon
+module
+
+public import Definitions.Accounting.RateAuditInteractive
+public import Definitions.Accounting.RateAuditRemote
+public import Definitions.Accounting.RateAuditHorizon
 
 /-!
 # The remote rate audit as deployed: one game (trusted)
@@ -28,6 +30,8 @@ which this game does not model (the PR's gap list). What the guarantee charges f
 reading it is a named term of `γ` (`muChip`, `muLink`, `muRebuild`, `muLambda`), each a fraction of a pass's `N·b`
 bits; the draw's shortfall is `d̄` over the horizon and `d_w` in a window.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 
@@ -113,7 +117,7 @@ def queries (w : IWorld N b h ρ) : List Bool → PIChip N b h ρ α → List (B
 
 end PIChip
 
-/-- A pass's device in the deployed window: `InteractiveDevice`'s on-chip state (`S` bits) and device memory laid out
+/-- A pass's device in the deployed window: `InteractiveProver`'s on-chip state (`S` bits) and device memory laid out
 from the store before the seed and the stream, side sources that answer as any function of the store, the certified
 stream, the oracle and the bits sent so far, and a chip program with completions from the state. In every world,
 starting from nothing sent, the program takes in at most `L` bits over the side link (side sources and the certified

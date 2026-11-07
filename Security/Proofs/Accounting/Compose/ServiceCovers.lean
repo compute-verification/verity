@@ -1,5 +1,8 @@
-import Definitions.Accounting.Guarantees.Compose
-import Proofs.Accounting.TS.Drawn
+module
+
+public import Definitions.Accounting.Guarantees.Compose
+public import Proofs.Accounting.TS.Drawn
+public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # `ServiceCovers`: the service's share covers every tile that isn't good
@@ -14,6 +17,8 @@ unit `v` is `u`, and the edge adds nothing to the cone. Along `ReflTransGen` the
 `Declared.Reaches`, and a tile's cone weight is at most `N_w` times
 its `tileCone` (`0` when `N_w = 0`: a tile's words are among the circuit's).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Compose.CoversProof
 

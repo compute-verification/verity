@@ -1,4 +1,7 @@
-import Lean.Data.Json.Basic
+module
+
+public import Lean.Data.Json.Basic
+public import Std.Data.TreeMap.Raw.AdditionalOperations
 import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
@@ -12,6 +15,8 @@ exponent, as `canon` reads the integers it accepts). It is equality of forms (`j
 the order of its tree, key order in a well-formed one), so `drawEq`, `JsonEquiv` on optional values, decides it
 (`drawEq_iff`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 

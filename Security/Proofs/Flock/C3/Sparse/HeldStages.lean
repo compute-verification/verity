@@ -1,5 +1,26 @@
-import Proofs.Flock.C3.Compose.LaterHeldW
-import Proofs.Flock.C3.Sparse.MsgsLayers
+module
+
+public import Proofs.Flock.C3.Compose.LaterHeldW
+import all Init.Data.Repr
+public import Proofs.Flock.C3.Sparse.SessionAt
+public import Proofs.Flock.C3.Sparse.SrcTape
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.C3.Compose.HoloSparseRounds
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictInner
+import Proofs.Flock.VBridge.Pinned
 
 /-!
 # The sparse stages' coins from the inner session's records (`h2`, `h3`)
@@ -14,6 +35,8 @@ before it (`heldBefore`).
 `x`'s stage at `sparseCoins`' coins is `StageHeldW` from its start round: its coins are the held rounds of coins,
 flattened (`sparseCsFlat`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

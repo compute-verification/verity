@@ -1,6 +1,11 @@
+module
+
+public import Proofs.Flock.Soundness.CROnly.Defs
+public import Proofs.Flock.Soundness.ExecStratified
+public import Proofs.Flock.Soundness.Types.ProgramE2E
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.CROnly.Link
-import Proofs.Flock.Soundness.ExecStratified
-import Proofs.Flock.Soundness.Types.ProgramE2E
 
 /-!
 # The executable-law and program-of-units e2e forms under `cr/sha-512` alone
@@ -9,6 +14,8 @@ import Proofs.Flock.Soundness.Types.ProgramE2E
 `UProg.flock_e2e_*_classes` forms, restated as in `CROnly/E2E.lean`: `LinkCRStrict` at budget `q` in place of `LinkCR`, and
 `strictRunCost t' q` in place of `t'`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.CROnly
 

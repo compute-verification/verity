@@ -81,10 +81,10 @@ INSTANCES: dict[str, Instance] = {i.id: i for i in (
     Instance("ajtai-n64", "Ajtai n = 64", algebraic=True),
     Instance("ajtai-n128", "Ajtai n = 128", algebraic=True),
     Instance("io-getrandombytes", "IO.getRandomBytes"),
-    # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window (#423)
+    # A5: the PoUW window's secret, secrets.token_bytes(32), fresh per window
     Instance("python-secrets", "Python's secrets"),
-    # A6: each round's coins from Flock's Rust coin server (/dev/urandom outside seed mode), sampled after the prover's message
-    Instance("flock-coin-server", "Flock's coin server"),
+    # A6: each round's coins from Flock's challenger (Rust, /dev/urandom outside seed mode), sampled after the prover's message
+    Instance("flock-coin-server", "Flock's challenger"),
     # verity.ml.crypto.lms: LMS (RFC 8554) over SHA-512, its whole 64-byte output, the network certifier's and the
     # memory challenger's signatures; its EUF-CMA rests on SHA-512 itself: multi-target second-preimage resistance under RFC
     # 8554's prefixes (its §9) and, for keys derived from a seed (its Appendix A), SHA-512 as a PRF keyed by the seed
@@ -218,6 +218,13 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "The auditor's device runs its stated code, timing included, on a host the prover doesn't control, with its CPU "
           "isolated from other tenants and a monotonic clock; the host never restores its earlier state", "Trusted host",
           "standard"),
+    # `Verity.Assumptions.ZkServerOwnUser` (Security/Definitions/Core/Assumptions/ZkServer.lean), the premise of
+    # `Verity.Guarantees.RegisteredLeakage` and `Verity.Guarantees.RegisteredStreamLeakage`: a stack is the same function
+    # under every salt key of the ZK server's
+    Entry("zk-server-own-user", "assumption",
+          "The ZK server's value service and its session loop run under the ZK server's own OS user, which no worker and no "
+          "serving stack shares, and the salt key's file is that user's alone, so nothing the serving stack runs reads the "
+          "key", "ZK server's own user", "standard"),
     # The four per-party assumptions of `Accounting.Assumptions.Parties` (Security/Definitions/Accounting/Assumptions/
     # Parties.lean), each about one auditor party p; the reason to believe them is that p runs on a machine the auditor
     # owns, which is not itself an assumption.  The device-attest statements (`Properties.Attest`) read them
@@ -231,7 +238,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "coins not yet released; what it learns of them is what p's outputs carry", "Secret party", "standard"),
     Entry("confined", "assumption",
           "Confined p: the auditor party p's only outputs are the messages of its declared channels (toward the auditor, "
-          "its manifest's public messages, such as one liveness record per sampling block): no other channel, timing "
+          "its manifest's public messages, such as one liveness record per execution phase): no other channel, timing "
           "included, carries its state out", "Confined party", "standard"),
     Entry("witness-path-private", "assumption",
           "Witness path private: the path between an auditor party and the prover carries no observer but its two "
@@ -260,7 +267,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "trusted-host, pending network-accounting's widening) and the memory challenger's coins drawn online, "
           "after its state is fixed", "PoUS ring device"),
     # its falsification test is the measurement behind ROOT_CALL_NS (verity/core/protocols/pous/PROTOCOL.md, P2's SeqRoot):
-    # the timing red team's modelled floor, note:20261004T2102Z-report-relay-p2-redteam-timing
+    # the timing red team's modelled floor
     # (art:23a323f313d2193873c59ee8ab59a0f1197167a0b4c6d008346d771c3e72de57), and the 8-core cooperation run
     # r20260929-060834-0ec4 (art:b92b6d56fa12cc8e04b3f6843991c2e76f49366adc89140a96c33842f70b41ed); a faster squaring on the
     # stated device falsifies it
@@ -296,6 +303,17 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "prover can slow, a receipt it can backdate), or if the cost model charges that computation less than the run "
           "spent on it. The PoUW form is proved on the actual model's clock (Accounting.SecurityProofs.Actual."
           "honestClock); the Pearl-C form is not proved", "Honest clock", "standard"),
+    # the min-cut bound's cut conjectures (Security/Definitions/Assumptions.lean): (H) is
+    # `Nci.Cut.Assumptions.Hardness`, (E) `Nci.Cut.Assumptions.Exports`
+    Entry("training-cut-hardness", "assumption",
+          "(H), cut hardness: every set S of words of the registered circuit with κ(S) ≤ k has "
+          "Σ_r β_r |val(S ∩ A_r)| ≤ κ(S), κ(S) the least number of gates meeting every path from the unregistered "
+          "inputs to the gates of S's words: each value of array A_r that S's words carry costs β_r of those gates; "
+          "refuted by exhibiting a set of words whose values cost more than κ(S)", "(H) cut hardness", "conjectured"),
+    Entry("training-cut-exports", "assumption",
+          "(E), cut exports: every set B of computed gates has κ(B → E(B)) ≥ b |E(B)|, E(B) the outputs fed by a MAC "
+          "inside B with no wire in B: each output B finishes costs b of the gates separating B from it; refuted by "
+          "exhibiting a set of computed gates with κ(B → E(B)) < b |E(B)|", "(E) cut exports", "conjectured"),
     # EPS1's tensor–scalar model (Security/Definitions/Accounting/Assumptions/TS.lean, note:20261017T0324Z-draft-eps1-spec):
     # the named assumptions Theorem D-ideal (I1)–(I8) and the compiler lemma rest on, and the compiler's per-stage form
     # (Security/Definitions/Accounting/Assumptions/Stages.lean)
@@ -330,8 +348,8 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
     Entry("accounting-ts-nosum", "assumption",
           "NOSUM: on the stated device no unit outside the route menu heads a fresh committed word", "NOSUM",
           "measured"),
-    # What the declared capacity Π rests on, per node and per window (ASK-74 = A; note:20261019T0455Z-draft-rt-scope,
-    # "Device identity and clock"): ε is relative to Π (decision 100), and ASK-65 = A made the floor the node's. Its
+    # What the declared capacity Π rests on, per node and per window: ε is relative to Π, and the
+    # floor is the node's. Its
     # trust is the auditor's inventory of the node, as certifier-coverage's is the auditor's placement; nothing checks
     # it at run time but the prover's own driver, and NVIDIA's attestation states no clock and can't rule out an
     # undeclared GPU
@@ -340,7 +358,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "declared board and vBIOS, and no SM clock exceeds f_max, the top of that vBIOS's clock table (MIG and MPS "
           "need no clause: they can't raise the node's capacity). Trust: the auditor's inventory of the node, onsite "
           "or the host provider's instance record", "Declared device", "standard"),
-    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean, note:20261017T1818Z-draft-axioms):
+    # The data-sheet axioms A1–A7 (Security/Definitions/Accounting/Assumptions/Sheet.lean):
     # vendor statements that build the data-sheet machine and give (I1)–(I5) at the ½ floor
     Entry("accounting-sheet-clock", "assumption",
           "A1 CLOCK: the SM clock never exceeds the device's f_max, from the device's own source. Assumed: sm_120's "
@@ -422,7 +440,7 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "order, pinning (accounting-ts-proofs-pin) and E1(c) (accounting-ts-right-fixed), ProofsSound: outside an "
           "event of probability at most S·(δ_bind + n_π·δ_ZK), an accepted window is accepted by the ideal game and its "
           "owned right fixed words per unit are at least (1 − Σ_w d_w/S)·N_w, rightness read on the path's coins. The "
-          "headlines (sm_120's, the H200's and the B200's) take the two alone as named premises: binding in its fork "
+          "headlines (sm_120's, the H200's and the B200's) take the two alone as assumptions: binding in its fork "
           "form at δ_fork (BindingForkAt: at every round w, on a run and on its continuation from w on fresh coins, "
           "which share w's commitment, every proof of round w is accepted and some proof opens w's leaves differently, "
           "with probability at most δ_fork), read at δ_bind = √δ_fork through BindingOfFork; and each proof's "
@@ -517,14 +535,54 @@ ENTRIES: dict[str, Entry] = {e.id: e for e in (
           "least the words of the units that are fixed under option A, computed, and with every unit steering them "
           "computed, over the rounds, and the folded words at least the words of the units whose receipts commit their "
           "folds", "TS counts fixed", "conjectured"),
+    # `Claims.ZKServer.Relay.RelayServes` and `Claims.ZKServer.Relay.WorkerDeterministic`
+    # (Security/Proofs/Flock/ZkAny/RelayServes.lean) are their Lean forms, premises of the relay's `envPre_run`
+    Entry("flock-relay-serves", "assumption",
+          "The firewall's relay serves each session's requests as its IO code reads: at each request that reaches a "
+          "slot of the session's schedule, the loop's references (the rep frames, the level 0s, the link, the loop's "
+          "own proofs, the inner proof's rounds and the salts the finish keeps) change as the IO function the relay "
+          "calls there changes them, stated with the pure functions it calls, and each answer the relay reads on the "
+          "auditor's connection is the auditor's to everything the relay sent it", "Relay serves", "standard"),
+    Entry("flock-worker-deterministic", "assumption",
+          "The prover's worker behind the ZK server gives each frame round's content as a function of its history: "
+          "the content LiveChallenger::round sends in its Req::Round is the value the model's worker gives at the "
+          "coins the worker has received, from the statement, the witness and its tapes", "Worker deterministic",
+          "standard"),
     # `Claims.ZKServer.Loop.Src` (Security/Proofs/Flock/SessionLoop/Statement.lean) is its Lean form, a premise of
     # Flock.Guarantees.SessionLoopZKDeployed; its two halves are `Loop.Level0Src` and `Loop.RepSrc`
     Entry("flock-firewall-os-src", "assumption",
           "Every input the firewall's session loop takes from its host and its operating system is the session tape's: "
-          "for each table's level 0, the witness's packed table at the tape's mask words and the tape's extra lanes, lane "
+          "for each table's level 0, at the sizes it draws: the witness's packed table at the tape's mask words and the "
+          "tape's extra lanes, lane "
           "paddings and level-0 salts; for each rep, its pads, its pads tree's salts and its salts for levels 1 and up. "
-          "The loop runs on the auditor-trusted host (trusted-host), whose operating system's random bytes are the "
-          "uniform draws the tape models", "Firewall OS source", "standard"),
+          "The loop runs on the developer's own host, whose operating system's random bytes are the uniform draws the "
+          "tape models; the host is the developer's, not an auditor-trusted one, and that is the host to trust here, "
+          "since zero knowledge protects the developer", "Firewall OS source", "standard"),
+    # the training formalism v2's assumptions (Security/Definitions/Assumptions.lean): A1 is
+    # `Nci.Formalism.Assumptions.CutCost`, the token-work bound `Nci.Formalism.Assumptions.TokenWork`, A2
+    # `Nci.Formalism.Assumptions.EfficiencyFloor`
+    Entry("training-cut-cost", "assumption",
+          "A1, cut cost: no inference block I of the trained circuit (at most c gates, at most k bits beyond θ) reads "
+          "fewer bits |in(I) \\ θ| than u_I + Σ_T a_T(e_T(I)), over the tokens T it works on, at the values a finite "
+          "family of witness blocks of the circuit gives: e_T(I) where I's work on token T begins, a_T(x) the least "
+          "state bits of T (the gates of T's own block that the work reads and doesn't compute) that any witness "
+          "block working on T alone and entering it at x reads, and u_I the shared bits, what the witness blocks "
+          "entering I's tokens where I's work on them begins all read beyond the tokens' own state, counted once and "
+          "net of what I computes (θ' or the encoding it is decoded from, the shared context and the earlier tokens' "
+          "keys and values); a witness's reads are in(W) \\ θ, counted as the policy counts a block's; refuted by "
+          "exhibiting an inference block that violates it", "A1 cut cost", "conjectured"),
+    Entry("training-token-work", "assumption",
+          "The token-work bound: for a set X of token gates of the trained circuit and a cap, at every set S of "
+          "tokens, entry profile f and shared bits ν within A1's budget (ν + Σ_{T ∈ S} a_T(f_T) ≤ k, at the values "
+          "A1's witness blocks give), Σ_{T ∈ S} W_T(f_T, ν) ≤ cap, W_T(x, ν) the most gates of X in T that an "
+          "inference block holds whose work on T begins at x and whose shared bits are at most ν; A1 prices a "
+          "block's reads and says nothing of how much token work they reach; refuted by exhibiting inference blocks "
+          "with shared bits at most ν that, entering their tokens at those entries, hold more than the cap of X",
+          "token-work bound", "conjectured"),
+    Entry("training-efficiency-floor", "assumption",
+          "A2, efficiency floor: no run of the methods considered whose total update stays within a given bin of Δ "
+          "reaches the target loss ℓ* for less than p·H(ℓ*), H(ℓ*) the least compute of any of them to reach it; "
+          "empirical, falsified by a measured run", "A2 efficiency floor", "measured"),
 )}
 
 

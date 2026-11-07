@@ -1,6 +1,43 @@
-import Proofs.Flock.Claims.Scope.Check
-import Proofs.Flock.Claims.Scope.Setup
-import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
+module
+
+public import Proofs.Flock.Claims.Scope.Check
+public import Proofs.Flock.Claims.Scope.Readable
+public import Proofs.Flock.Claims.Scope.Setup
+public import Proofs.Flock.Soundness.Discharge.FailClosed.TmplStmt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.ParseStmt
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The readable scope is the verifier's scope check
@@ -13,6 +50,8 @@ For every statement the verifier parses (`Parses`) and every relation part `rel`
   after the check (`Sizes`: `inScope_iff_scope`), not the setup's.
 * `inScope_iff_zk`: under `--zk`, exactly when `ProvedScope.check` passes.
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -83,18 +122,18 @@ theorem bitRows_unrolled (c : Circuit) : ProvedScope.bitRows (HmOut.unrolled c) 
 
 /-- **The check's form is the statement circuit's** (`HmOut.unrolled`, ASK-112 option A): on a flat circuit the wire
 condition and `scopeOk` (`scopeOkI` with hidden outputs), as `scope_iff_rows` reads them; on a templated one `scopeOkT`,
-which is the unrolled unit's form, its rows' and the templated statement's own: `--zk`, hidden outputs, no registered
-reads of the verifier's own, at most one table, and a unit reading one input group and returning the outputs. -/
-theorem formOk_iff {t : Tags} {zk reg : Bool} {count : Nat} {cf : ByteArray} {tables : List (String × ByteArray)}
+which is the unrolled unit's form, its rows' and the templated statement's own: `--zk`, hidden outputs, at most one
+table, and a unit reading one input group and returning the outputs. -/
+theorem formOk_iff {t : Tags} {zk : Bool} {count : Nat} {cf : ByteArray} {tables : List (String × ByteArray)}
     {c : Circuit} (hty : t.typed = false) (hc : ProvedScope.circuitOf t cf tables = .ok c) :
-    FormOk t zk reg count c ↔
+    FormOk t zk count c ↔
       (((HmOut.unrolled c).unit.inGroups.size = 1 ∧
             ¬ ((HmOut.unrolled c).outNet != (HmOut.unrolled c).unitNet) = true) ∨
           (t.hiddenOutputs = true ∧ ProvedScope.wiresAcyclic (HmOut.unrolled c) = true)) ∧
         (HmOut.unrolled c).unit.unitLog ≤ 32 ∧ ProvedScope.portReadsB (HmOut.unrolled c).unit = true ∧
         (if t.hiddenOutputs then ProvedScope.v1Ports (HmOut.unrolled c) || ProvedScope.bitRows (HmOut.unrolled c)
           else ProvedScope.v1Ports (HmOut.unrolled c)) = true ∧
-        (c.tmpl.isSome = true → zk = true ∧ t.hiddenOutputs = true ∧ ¬ reg = true ∧ count ≤ 1 ∧
+        (c.tmpl.isSome = true → zk = true ∧ t.hiddenOutputs = true ∧ count ≤ 1 ∧
           (HmOut.unrolled c).unit.inGroups.size = 1 ∧
           ¬ ((HmOut.unrolled c).outNet != (HmOut.unrolled c).unitNet) = true) := by
   cases ht : c.tmpl with
@@ -113,10 +152,10 @@ theorem formOk_iff {t : Tags} {zk reg : Bool} {count : Nat} {cf : ByteArray} {ta
     simp only [Bool.and_eq_true, Bool.not_eq_true', beq_iff_eq, decide_eq_true_eq, ↓reduceIte, bne_iff_ne, ne_eq,
       not_not, true_and, Bool.true_and, Bool.not_eq_true]
     constructor
-    · rintro ⟨⟨⟨⟨⟨⟨hz, hr⟩, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩
-      exact ⟨Or.inl ⟨hig1, hout⟩, hlog, hpr' hlog, hrows, hz, hr, hn, hig1, hout⟩
-    · rintro ⟨-, hlog, -, hrows, hz, hr, hn, hig1, hout⟩
-      exact ⟨⟨⟨⟨⟨⟨hz, hr⟩, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩
+    · rintro ⟨⟨⟨⟨⟨hz, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩
+      exact ⟨Or.inl ⟨hig1, hout⟩, hlog, hpr' hlog, hrows, hz, hn, hig1, hout⟩
+    · rintro ⟨-, hlog, -, hrows, hz, hn, hig1, hout⟩
+      exact ⟨⟨⟨⟨⟨hz, hn⟩, hig1⟩, hout⟩, hlog⟩, hrows⟩
 
 /-- **The readable scope is the verifier's scope check, and `22 ≤ m`**, for every statement the verifier parses. -/
 theorem inScope_iff (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) :
@@ -137,9 +176,9 @@ theorem inScope_iff (rel : Parsed → Relation) {p : Parsed} (hp : Parses p) :
   have eR : (∃ c pub, ProvedScope.circuitOf p.tags p.I.circuitFile p.I.tables = .ok c ∧
       ProvedScope.publicOf p.tags c p.I.publicFile = .ok pub ∧
       (pub.tables.isSome = true → ProvedScope.sharedRowsOk p.tags p.zk p.registered = true) ∧
-      FormOk p.tags p.zk p.registered p.I.count c) ↔
+      FormOk p.tags p.zk p.I.count c) ↔
       (pop.tables.isSome = true → ProvedScope.sharedRowsOk p.tags p.zk p.registered = true) ∧
-      FormOk p.tags p.zk p.registered p.I.count st.c := by
+      FormOk p.tags p.zk p.I.count st.c := by
     constructor
     · rintro ⟨c, pub, e1, e2, hX, hF⟩
       rw [hc] at e1

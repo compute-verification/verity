@@ -1,4 +1,11 @@
-import Properties.NetworkPeriod
+module
+
+public import Properties.NetworkPeriod
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
+import all Init.Data.Array.Basic
+public import Mathlib.Algebra.GroupWithZero.Nat
+import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
@@ -12,6 +19,8 @@ connections and the windows (the compute audits, or the scans) are sums over `Fi
 finding is none (`firstFinding_none`), a tied audit's among them, and each link-window's `wiredCheck` and
 `stateCheck`.
 -/
+
+@[expose] public section
 
 namespace Properties.NetworkPeriod
 

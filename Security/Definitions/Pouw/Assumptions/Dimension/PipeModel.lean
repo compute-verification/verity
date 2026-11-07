@@ -1,5 +1,6 @@
-import Definitions.Pouw.Assumptions.Dimension.Mixing
-import Definitions.Pouw.Dimension.Lift
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Mixing
 
 /-!
 # The closed scalar pipe (trusted definitions)
@@ -8,6 +9,8 @@ The model of `Pouw.Dimension.Pipe`'s docstring (AlgM_4090 with a closed scalar p
 and quadratic pipes, the programs `ClosedPipe` and `QuadPipe`, and `A1CostOn`, the conclusion `A1_cost` states for one
 class of pipes. The named assumptions over this model are in `Pouw.Dimension.PipeAssumptions`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

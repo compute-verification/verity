@@ -1,5 +1,6 @@
-import Flock.Hash
-import Randomness
+module
+
+public import Randomness
 
 /-!
 # Bytes, SHA-512 and frame-v3-sha512
@@ -17,6 +18,8 @@ The byte encodings the remote audit's formats use (`int.to_bytes`, `int.from_byt
 `frame` is the merkle frame v3, `FRAME ‖ u32be |tag| ‖ tag ‖ (u64be |part| ‖ part)*`, and `uint` `_uint`'s minimal
 big-endian bytes (`FlockSoundness.Randomness.natBytes`).
 -/
+
+@[expose] public section
 
 namespace RemoteAudit
 

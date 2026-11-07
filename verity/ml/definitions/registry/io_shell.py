@@ -57,7 +57,9 @@ A collector's rows and an entry's are a few i32s at a small KO, under the 112 by
 of a proof block, so a window proves them inside its token select's combine: `SelectCollect_v1{V, C, KO, FIRST}` is
 `dead_free.TokenSelectCombine_v2{V, C}`'s select, then `OutCollect_v1{KO, FIRST}` over it, (the select, the state), and
 `SelectEntry_v1{V, C, KO, FIRST, IDB, NP, STOP}` the last position's: the select, its collector, then `SlotEntry_v1` over
-that state, the entry alone. Each is Calls of those Definitions, no gate of its own.
+that state, the entry alone. Each is Calls of those Definitions, no gate of its own. `SelectCollect_v2{V, C, KO, FIRST,
+ROUND}` is v1 at a round no gate reads: where a window holds a position's select to a row of a round's input-ids table, each
+round's collectors are a template of their own, so a sample stratified by template has a reader of every round's table.
 
 Registered functions:
   IngressPrompt{MODEL,LP,V}  (body: N u8) -> (ok: bit, LP i32, max_tokens: i32)
@@ -68,6 +70,8 @@ Registered functions:
   SlotEntry{KO,IDB,NP,STOP}  (occ: i32, state: KO + 2 i32) -> ⌈(33 + KO·IDB) / 16⌉ u16 bits
   SelectCollect{V,C,KO,FIRST}
                              (x0: bf16, best: n bf16, idx: n i32, head | state) -> (tok: i32, state: KO + 2 i32)
+  SelectCollect{V,C,KO,FIRST,ROUND}
+                             v2: v1's, ROUND read by no gate
   SelectEntry{V,C,KO,FIRST,IDB,NP,STOP}
                              (x0: bf16, best: n bf16, idx: n i32, head | state, occ: i32) -> SlotEntry's entry
 """
@@ -274,7 +278,8 @@ def feed_reference(slot: list[int], sel: int | None, NP: int) -> tuple[int, list
 
 
 @composite("TokenFeed", 1, ["NP", "FIRST"], feed_sig, refuse=feed_refuse,
-           conformance="vLLM's input id at a position: the prompt's below its length, else the previous position's sample")
+           conformance="not-yet-established: vLLM's input id at a position, the prompt's below its length, else the previous "
+                       "position's sample")
 def TokenFeed(B, S, slot, sel=None):
     """A class Program's token at a position and the slot it carries to the next (the module docstring)."""
     o = word_ops(B)
@@ -362,7 +367,8 @@ def collect_reference(a: list[int], tok: int, KO: int, FIRST: bool) -> list[int]
 
 
 @composite("OutCollect", 1, ["KO", "FIRST"], collect_sig, refuse=collect_refuse,
-           conformance="vLLM's output ids of a request: its samples from its prompt's last position on, KO at most")
+           conformance="not-yet-established: vLLM's output ids of a request, its samples from its prompt's last position on, KO "
+                       "at most")
 def OutCollect(B, S, a, tok):
     """A slot's outputs carried to the next position, this position's shifted in while it is one of the KO from the prompt's
     last (the module docstring)."""
@@ -416,8 +422,8 @@ def entry_reference(occ: int, state: list[int], KO: int, IDB: int, NP: int, STOP
 
 
 @composite("SlotEntry", 1, ["KO", "IDB", "NP", "STOP"], entry_sig, refuse=entry_refuse,
-           conformance="a request's output count and ids as vLLM served them: up to max_tokens and its first stop id, "
-                       "KO + 1 where the class can't hold it")
+           conformance="not-yet-established: a request's output count and ids as vLLM served them, up to max_tokens and its "
+                       "first stop id, KO + 1 where the class can't hold it")
 def SlotEntry(B, S, occ, state):
     """A slot's entry of the network certifier's Programs' row (the module docstring): ``read`` the slot's occupancy
     bit, then n and the kept outputs; output i is kept while the slot is occupied, its prompt 1 to NP ids, i <
@@ -477,7 +483,8 @@ def select_entry_sig(S):
 
 
 @composite("SelectCollect", 1, ["V", "C", "KO", "FIRST"], select_collect_sig, refuse=select_refuse,
-           conformance="vLLM's sample at a position and its output ids so far: TokenSelectCombine_v2, then OutCollect_v1")
+           conformance="not-yet-established: vLLM's sample at a position and its output ids so far, TokenSelectCombine_v2, then "
+                       "OutCollect_v1")
 def SelectCollect(B, S, x0, best, idx, a):
     """A position's select over its groups' bests and indices and ``logits[0]`` (`TokenSelectCombine_v2{V, C}`), and the
     slot's outputs carried on with it (`OutCollect_v1{KO, FIRST}`): (the select, the state)."""
@@ -485,9 +492,25 @@ def SelectCollect(B, S, x0, best, idx, a):
     return tuple_of(tok, B.call(bind(OutCollect, KO=S.KO, FIRST=S.FIRST), a, tok))
 
 
+def round_refuse(S: dict) -> str | None:
+    """`SelectCollect_v2`'s refusal: v1's, or a ROUND that isn't a natural number."""
+    r = S.get("ROUND", 0)
+    return select_refuse(S) or (None if type(r) is int and r >= 0 else f"ROUND={r!r}: a round is a natural number")
+
+
+@composite("SelectCollect", 2, ["V", "C", "KO", "FIRST", "ROUND"], select_collect_sig, refuse=round_refuse,
+           conformance="not-yet-established: vLLM's sample at a position and its output ids so far: SelectCollect_v1, "
+                       "at a round")
+def SelectCollectV2(B, S, x0, best, idx, a):
+    """`SelectCollect_v1{V, C, KO, FIRST}`'s body; ``ROUND``, the round of the input-ids table its select is held to, is read
+    by no gate."""
+    tok = B.call(_select(S), x0, best, idx)
+    return tuple_of(tok, B.call(bind(OutCollect, KO=S.KO, FIRST=S.FIRST), a, tok))
+
+
 @composite("SelectEntry", 1, ["V", "C", "KO", "FIRST", "IDB", "NP", "STOP"], select_entry_sig, refuse=select_refuse,
-           conformance="vLLM's last sample, its request's outputs and their count: TokenSelectCombine_v2, OutCollect_v1, "
-                       "then SlotEntry_v1")
+           conformance="not-yet-established: vLLM's last sample, its request's outputs and their count, "
+                       "TokenSelectCombine_v2, OutCollect_v1, then SlotEntry_v1")
 def SelectEntry(B, S, x0, best, idx, a, occ):
     """The last position's select (`TokenSelectCombine_v2{V, C}`), collected (`OutCollect_v1{KO, FIRST}`), and the slot's
     entry of that state and its occupancy word (`SlotEntry_v1{KO, IDB, NP, STOP}`): the entry."""
@@ -496,4 +519,4 @@ def SelectEntry(B, S, x0, best, idx, a, occ):
     return B.call(bind(SlotEntry, KO=S.KO, IDB=S.IDB, NP=S.NP, STOP=S.STOP), occ, state)
 
 
-IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry]
+IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry, SelectCollectV2]

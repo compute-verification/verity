@@ -1,19 +1,58 @@
-import Proofs.Pouw.Period
-import Proofs.Pouw.Period.Accept
-import Proofs.Accounting.ComposePeriod.Honest
+module
+
+public import Proofs.Accounting.ComposePeriod.Honest
+public import Proofs.Pouw.Period
+public import Proofs.Pouw.Period.Accept
+public import Properties.Pouw.Period
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # An honest live-salt period meets `H1CheckedCreditPeriod`'s premises
 
 The positive twin of `Properties.Pouw.Period.H1CheckedCreditPeriod`, as
-`Accounting.SecurityProofs.ComposePeriod.Honest` is of `CircuitWorkPeriod`: a period of `n ≥ 1` windows at H1's
+`Accounting.SecurityProofs.ComposePeriod.Honest` is of `CircuitWorkMonitoringPeriod`: a period of `n ≥ 1` windows at H1's
 instance's own numbers, whose every window the deployed check (`PouwCheck.protocol.check`) accepts at the
-all-protocols leg's parameters (`Accept.h1Params`), and which meets every premise of the instance
+parameters `Accept.h1Params`, and which meets every premise of the instance
 (`h1_meets`).
 
-The leg's check takes these numbers: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
+The check takes these numbers at `h1Params`: `verity/pouw/v1` accepts the loop's honest window with 128 real tiles of `N = 144`,
 all 24 drawn tiles proved, at `ε = 1/2` and `δ = 10⁻⁶`. So the `N_p = 144` and `K_d = 24` that `DrawIsCoin` and this
-witness use are the leg's actual check's.
+witness use are the deployed check's own.
 
 * The circuit (`circuit`): 128 committed words, one a unit (H1's 128 real tiles a window), no operands, so no unit
   writes another late (`reaches_iff`) and each real tile's late cone is its own word; one round, live. The
@@ -33,6 +72,8 @@ The conclusion then speaks of the whole period: its accepted prefix is all `n` w
 credited live words are `128·n` (`checkedLive_all`), so `h1_credit` is `H1CheckedCreditPeriod`'s bound at `128·n` live
 words, not at none.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Period.SecurityProofs.HonestH1
 
@@ -169,7 +210,7 @@ def period : (n : ℕ) → WindowPlay Bool Ω1 (Fin 144) circuit.rounds n
   | 0 => .done
   | n + 1 => .window (fun _ => true) stages fun _ => period n
 
-/-- The check's parameters: the leg's (`h1_params`). -/
+/-- The check's parameters: `h1Params`. -/
 def prm : Params := h1Params ""
 
 /-- Every window's registration: the loop's honest one. -/

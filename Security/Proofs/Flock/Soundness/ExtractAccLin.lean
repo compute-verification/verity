@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.LinkFinder
+module
+
+public import Proofs.Flock.Soundness.LinkFinder
 
 /-!
 # Extraction from accepted reruns, linearly: a conflict finder at level 0
@@ -21,6 +23,8 @@ and the bound is linear:
 * `joint_acc_le_ecr`: under expected-time collision resistance at the finder, `ε · Pr[fails]` is at most
   `ε_c + N·ε/(ek) + (k + 1)·E[c]/2^256 + (k + 1)/(eR)`: weight 1, `k + 1` runs.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 
@@ -325,10 +329,6 @@ theorem conflict_succ_ge (g : Game β) (s : Strategy g) (acc : β → Prop) (op 
 noncomputable def waitCostC (acc : β → Prop) (c : β → ℝ) : List β → ℝ
   | [] => 0
   | b :: bs => c b + (1 - ind acc b) * waitCostC acc c bs
-
-theorem waitCostC_nonneg (acc : β → Prop) (c : β → ℝ) (hc : ∀ b, 0 ≤ c b) : ∀ bs, 0 ≤ waitCostC acc c bs
-  | [] => le_rfl
-  | b :: bs => add_nonneg (hc b) (mul_nonneg (by linarith [ind_le_one acc b]) (waitCostC_nonneg acc c hc bs))
 
 /-- **A wait costs `geom ε R` runs** in expectation. -/
 theorem expectN_waitCostC (g : Game β) (s : Strategy g) (acc : β → Prop) (c : β → ℝ) : ∀ R : ℕ,

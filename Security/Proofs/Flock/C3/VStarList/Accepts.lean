@@ -1,10 +1,26 @@
-import Flock.RecSetup
-import Proofs.Flock.C3.VStarList.Range
-import Proofs.Flock.Recursive.HoloExec
+module
+
+public import Flock.RecSetup
+public import Proofs.Flock.C3.VStarList.Range
+public import Proofs.Flock.Recursive.HoloExec
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.Hidden.Theorems
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
 
 /-!
 # Piece (h): `AcceptsC3` from the verifier's acceptance
@@ -29,6 +45,8 @@ covers check (`RecVStar.checkCovers`). So:
   accepted candidate-3 session check 5's source is the files of the record the verifier holds the inner transcript
   against, never a record of what check 5 reads (`Source.coins`), which `checkAtC3` refuses there.
 -/
+
+@[expose] public section
 
 namespace FlockC3.VStarList
 
@@ -276,7 +294,8 @@ theorem statements_of_checkStmt
 
 /-- **The inner files' statement** (`Files.stmt`) is `setupHidden`'s on the files, under their program. -/
 theorem stmt_setupHidden {u : String} {spec' : SessionSpec} {st' : Stmt} (h : f.stmt u = .ok (spec', st')) :
-    Stmt.setupHidden RecVStar.innerTags f.circuit f.pub Coins.os [] none (some f.partition) f.program = .ok st' := by
+    Stmt.setupHidden RecVStar.innerTags f.circuit f.pub RecVStar.innerTree [] none (some f.partition) f.program =
+      .ok st' := by
   unfold RecCoins.Files.stmt at h
   split at h
   · rename_i x hx
@@ -319,7 +338,7 @@ parses `tr` and `reg`) to `cs`, and its checks of a session's statements `sts` p
 the inner statement `st` set up from the files' circuit and public file, as `AcceptsStmt` sets it up, `AcceptsC3`
 holds, check 5's verdict included (its sparse refusals and its inner shape). -/
 theorem c3_of_checks (hsp : ish.sparse.isSome = true)
-    (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub Coins.os 1 (partition := obj) (program := prog) =
+    (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := obj) (program := prog) =
       .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.m = .ok p)
     (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
     (hcs : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs)
@@ -356,7 +375,7 @@ theorem c3_of_checks (hsp : ish.sparse.isSome = true)
 `flock_verify_sound` reads it). -/
 theorem acceptsC3_of_verify {I : Exec.Inputs} {r : String} {spec' : SessionSpec}
     (hset : Exec.setupOf I r = .ok (spec', sts)) (hsp : ish.sparse.isSome = true)
-    (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub Coins.os 1 (partition := obj) (program := prog) =
+    (hpub : Stmt.setupTables RecVStar.innerTags f.circuit f.pub RecVStar.innerTree 1 (partition := obj) (program := prog) =
       .ok (spec, #[st])) (hzk : ∃ p, Zk.schedule st.m = .ok p)
     (htr : Flock.JsonParse.parse tt = .ok tr) (hreg : Flock.JsonParse.parse rt = .ok reg)
     (hcs : RecSetup.commits (some ish) (.ok tt) (.ok (some rt)) bound record = .ok cs)

@@ -1,5 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
-import Proofs.Flock.Soundness.Discharge.Inst.Keys
+module
+
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.KeyH
+public import Proofs.Flock.Soundness.Discharge.Inst.Keys
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -34,17 +38,17 @@ open FlockSoundness.Discharge.Hm (blockBit blockBit_of_lt)
 
 /-! ## Δ at the input bits a wire fills -/
 
-/-- **No output pair of Δ is at another net's slot**, at output rows that fit: every output row's message bit is an
-input bit of a `sha512x3` or `hm96` slot (`Hidden.Any.msg_at`). -/
+/-- **No output pair of Δ is at another net's slot**, at unsegmented or row-seg output rows: every output row's message
+bit is an input bit of a `sha512x3` or `hm96` slot (`Hidden.Any.msg_atK`). -/
 theorem outPairs_ne_net {tags : Tags} {st : Stmt} (L : FlockSoundness.Layout st) (F : Aliased.UnitFacts tags st)
     (hrows : Hidden.Any.OutRowsP st.c) {q : ℕ × ℕ} (hq : q ∈ Hidden.outPairs st.c) {n s₀ b : ℕ}
     (hn : n < st.c.nets.size) (hsha : n ≠ st.c.shaNet) (hhm : n ≠ st.c.hmNet) (hs₀ : s₀ < (st.c.rangeOf n).count)
     (hb : b < 2 ^ (st.c.rangeOf n).slotLog) : q.1 ≠ (st.c.rangeOf n).slot s₀ + b := by
   obtain ⟨g, hg, j, hj, k, hk, t, ht, hq1⟩ := outPairs_fst hq
   rw [hq1]
-  obtain ⟨hp, -, ht8⟩ := hrows.bound hj hk ht
+  obtain ⟨hp, hbw, ht8⟩ := hrows.bound hj hk ht
   have R := Hm.RowRanges.ofL L F.parse F.check
-  obtain ⟨n', s, off, hn', hat, -⟩ := Hidden.Any.msg_at R (b := 2 * k + t / 8) hg hp (hrows.segs hj) ht8
+  obtain ⟨n', s, off, hn', hat, -⟩ := Hidden.Any.msg_atK R hg hp (hrows.2 j hj).2 hbw ht8
   have hne : n ≠ n' := by rcases hn' with rfl | rfl <;> assumption
   intro he
   exact Hm.atSlot_ne L F (R.rowNet_lt hn') hn hne hat ⟨hs₀, hb, he⟩

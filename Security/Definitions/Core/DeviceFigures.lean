@@ -1,7 +1,11 @@
-import Definitions.Core.Accel.Isa
-import Mathlib.Algebra.Order.Field.Rat
-import Mathlib.Algebra.Order.Ring.NNRat
-import Mathlib.Data.Fintype.Defs
+module
+
+public import Definitions.Core.Accel.Isa
+public import Mathlib.Algebra.Order.Field.Rat
+public import Mathlib.Algebra.Order.Ring.NNRat
+public import Mathlib.Data.Fintype.Defs
+public import Mathlib.Data.NNRat.Defs
+import Mathlib.Data.Finset.Attr
 
 /-!
 # A device's figures, and registration's check of them against the auditor's estimates (trusted)
@@ -30,6 +34,8 @@ Figures and tolerances are nonnegative rationals, so the check is exact. That a 
 faster than its clock and its peak rates) is a premise of the hardware model, stated with its assumptions over these
 definitions.
 -/
+
+@[expose] public section
 
 namespace Verity
 

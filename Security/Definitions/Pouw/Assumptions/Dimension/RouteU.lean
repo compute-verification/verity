@@ -1,7 +1,8 @@
-import Definitions.Pouw.Assumptions.Dimension.Assumptions
-import Definitions.Pouw.Assumptions.Dimension.Mixing
-import Definitions.Pouw.Dimension.Causal
-import Definitions.Pouw.Assumptions.NCP.RouteUWord
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Mixing
+public import Definitions.Pouw.Dimension.Causal
+public import Definitions.Pouw.Assumptions.NCP.RouteUWord
 
 /-!
 # Theorem D on route U's checked words (trusted statements)
@@ -29,6 +30,8 @@ No reduction between programs is used, so no free instruction is added.
 
 The final checkpoint is excluded, as in Theorem D: `C^U_T = A·B` (`RouteU.CheckedUFinal`).
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension
 

@@ -1,7 +1,18 @@
-import Proofs.Flock.Soundness.Audit.OneStage
-import Proofs.Flock.Soundness.Audit.TwoStage
-import Proofs.Flock.Soundness.Game.Batch
-import Proofs.Flock.Soundness.Instance
+module
+
+public import Proofs.Flock.Soundness.Audit.TwoStage
+public import Proofs.Flock.Soundness.Instance
+public import Definitions.Flock.Game.Batch
+public import Mathlib.Order.CompletePartialOrder
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Accounting.Numbers
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Soundness
+import VCVio.Prelude.Core
 
 /-!
 # The Flock instantiation, at the oracle layer
@@ -29,6 +40,8 @@ Mutual correlated agreement is proved (`mcaError_le_bchks25`), so there is no ot
 Of `Audit/`, only this file and the compiled instances (`FlockCompiled.lean`, `FlockBatched.lean`)
 import the Flock theorems.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

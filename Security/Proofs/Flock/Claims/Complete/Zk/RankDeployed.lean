@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Complete.Zk.RankBridge
-import Proofs.Flock.Claims.Complete.Zk.RankPrimal
-import Proofs.Flock.Level3.Pinned
+module
+
+public import Proofs.Flock.Claims.Complete.Zk.RankBridge
+public import Proofs.Flock.Claims.Complete.Zk.RankPrimal
+public import Proofs.Flock.Level3.Pinned
 
 /-!
 # The deployed rank bound
@@ -20,6 +22,8 @@ the `c` claims' first six pinned, at most `2^-122` of the coins leave the mask s
 * `maskRankBound_of_small`: `MaskRankBound` from `SmallSlotBound` alone, so `maskRankBound`: `MaskRankBound` holds,
   `SmallSlotBound` by the verifier's floor (`smallSlotBound`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.MaskRank
 
@@ -87,8 +91,6 @@ theorem csz_Ud_le (r : Fin 4 → Fin 10 → GF128) {T : ℕ} (hT : T ≤ 10) : c
 
 theorem ud_le (e : Fin 4) (r : Fin 4 → Fin 10 → GF128) : ud e r ≤ 2 ^ 64 :=
   (csz_projS_le _ _).trans ((csz_Ud_le r (by norm_num)).trans (by norm_num))
-
-theorem pre_seven : pre 10 7 = {0, 1, 2, 3, 4, 5, 6} := by decide
 
 /-- **The pinned rows' size**: at an odd point, the six pinned coordinates' span has `2^64` elements. With the
 seventh pinned value `pinnedF 0` as a further coordinate, the `128` eq-products are `GF(2)`-independent
@@ -358,8 +360,6 @@ theorem B64_le : Bc (2 ^ 128 : ℝ) 6 4 ≤ 1 / 2 ^ 200 := by
 theorem B65_le : (2 : ℝ) ^ 128 * Bc (2 ^ 128) 6 5 ≤ 3 / 2 ^ 128 := by
   simp only [Bc, cB]
   norm_num
-
-theorem B62_nonneg : 0 ≤ Bc (2 ^ 128 : ℝ) 6 2 := Bc_nonneg (by positivity) 6 2
 
 end Numerics
 

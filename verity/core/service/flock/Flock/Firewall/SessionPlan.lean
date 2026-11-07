@@ -16,7 +16,13 @@ the setup's own Lean values, never a parse of the `Hello` text.
 
 The analysis holds them to the coin layer (`Claims/ZK/SessionLean.lean`).
 -/
-import Flock.Firewall.Hello
+module
+
+public import Flock.Firewall.Coins
+public import Flock.Firewall.Hello
+public import Flock.Zk
+
+@[expose] public section
 
 namespace Flock.Firewall.Session
 

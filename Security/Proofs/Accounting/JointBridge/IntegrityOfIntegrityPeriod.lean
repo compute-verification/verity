@@ -1,4 +1,19 @@
-import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod
+module
+
+public import Proofs.Accounting.JointBridge.Guarantees.IntegrityOfIntegrityPeriod
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.EndToEnd.Period
 import Proofs.Pouw.Prob
 
@@ -10,6 +25,8 @@ the units are wrong is one on which every sampling block is accepted and the fau
 `ε·units ≥ ln(1/δ)/q`, the event `Flock.SecurityProofs.IntegrityHorizon` bounds; the realization's `law` carries the
 bound from the period's game to the uniform coins.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

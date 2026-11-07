@@ -1,5 +1,13 @@
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.PearlC.DevicePrices
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TileGamma
 import Proofs.Pouw.PearlC.UOnlyGamma
-import Definitions.Pouw.Assumptions.PearlC.TTOutTileUOnly
+import Proofs.Pouw.Prob
 
 /-!
 # TT_OUT over U alone per audit tile: it asserts more than the (C̃, U) tile row, and γ from it
@@ -14,6 +22,8 @@ Staged; nothing pinned.
   with the same ω as rev1: `pearlCSampledUOnlySm120Rev1_8192` (0.51056%) and `pearlCSampledUOnlyUnpromotedCap1000_8192`
   (0.36162%) at sm_120's prices.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

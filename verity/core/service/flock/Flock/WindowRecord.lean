@@ -1,5 +1,8 @@
-import Flock.Canon
-import Flock.Hash
+module
+
+public import Flock.Canon
+public import Flock.Hash
+public import Lean.Data.Json.FromToJson.Basic
 
 /-!
 # A one-stage window record's digest
@@ -12,6 +15,8 @@ the network check (`NetworkCheck.Period.answered`), sampled proofs' registration
 here. Python's `registration.digest` is its mirror on records whose numbers are integers, where `canon` writes
 Python's `canonical_json`.
 -/
+
+@[expose] public section
 
 namespace Flock.WindowRecord
 

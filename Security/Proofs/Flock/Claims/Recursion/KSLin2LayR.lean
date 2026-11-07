@@ -1,7 +1,48 @@
-import Proofs.Flock.Claims.Recursion.KSLin2R
-import Proofs.Flock.Claims.Recursion.DeployedR
-import Proofs.Flock.Claims.Recursion.LamDeployed
-import Proofs.Flock.Claims.Recursion.PartAcceptsPin
+module
+
+public import Proofs.Flock.Claims.Recursion.KSLin2R
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.LamDeployed
+public import Proofs.Flock.Claims.Recursion.PartAcceptsPin
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ZkOuter
+import Proofs.Flock.Claims.Recursion.CapPorts
+import Proofs.Flock.Claims.Recursion.RowsCover
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Recursion.TopsOpens
+import Proofs.Flock.Claims.Recursion.TopsStaged
 
 /-!
 # `KSLin2` and `BitsLin2` at the layout of record (`DeployedR.layR`)
@@ -27,6 +68,8 @@ evaluated, by the finders. `lamLin2_layR_ge` charges the extra calls anyway, `e`
 holds at `layR` for every `v, e ≤ 2^54` (`lamLin2_deployed_ge_dep`, whose six terms are each at least `103` up to
 `c_S ≤ 2^59`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 

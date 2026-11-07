@@ -1,9 +1,12 @@
-import Definitions.Pouw.Guarantees.Deadline
-import Proofs.Pouw.Game
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Pouw.Guarantees.Deadline
+public import Proofs.Pouw.Game
+public import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
+public import Proofs.Pouw.PearlC.TTOutW1
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.DeviceCapRev1Gamma
-import Proofs.Pouw.PearlC.ServedMixedRev1Gamma
-import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.Prob
 
 /-!
 # Proofs of the deadline's guarantees
@@ -16,6 +19,8 @@ deadline.
 The sm_120 instances are stated at W1: each is `PearlCSampledByDeadline` at `CM := W1.w1Priced dv salt`, with its
 sampled γ from the old reduction at that cost model (`Proofs.Pouw.PearlC.TTOutW1`).
 -/
+
+@[expose] public section
 
 namespace Pouw.SecurityProofs
 

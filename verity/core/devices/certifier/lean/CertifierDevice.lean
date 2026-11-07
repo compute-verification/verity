@@ -1,13 +1,15 @@
-import CertifierDevice.Frame
-import CertifierDevice.Certifier
-import CertifierDevice.Online
-import CertifierDevice.Served
-import CertifierDevice.Shaper
-import CertifierDevice.Device
-import CertifierDevice.Driver
-import CertifierDevice.Issuer
-import CertifierDevice.Difftest
-import CertifierDevice.IssuerDifftest
+module
+
+public import CertifierDevice.Frame
+public import CertifierDevice.Certifier
+public import CertifierDevice.Online
+public import CertifierDevice.Served
+public import CertifierDevice.Shaper
+public import CertifierDevice.Device
+public import CertifierDevice.Driver
+public import CertifierDevice.Issuer
+public import CertifierDevice.Difftest
+public import CertifierDevice.IssuerDifftest
 
 /-!
 # The active network certifier device
@@ -23,3 +25,5 @@ reuses `certifier_program` (`NetworkCertifier`: statuses, `ClockSync`, `SyncSet`
 and `core_world` (`Core.World`, `Core.Conn`). Code: no Mathlib and nothing of `verity/Security/`. `Difftest` holds `step` to `active.Proxy` on generated traces, and `IssuerDifftest` holds
 `Issuer.certify` and `Issuer.clock` to `certificate.Issuer` on generated records and syncs.
 -/
+
+@[expose] public section

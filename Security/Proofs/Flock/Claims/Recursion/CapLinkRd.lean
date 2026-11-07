@@ -1,4 +1,47 @@
-import Proofs.Flock.Claims.Recursion.CapLink
+module
+
+public import Definitions.Claims.RecursionLin
+public import Proofs.Flock.Claims.KS.Fork
+public import Proofs.Flock.Claims.Recursion.CapLink
+public import Proofs.Flock.Soundness.LinkFinder
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.Transport
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Recursion.FlockKSLin
+import Proofs.Flock.Claims.Recursion.OuterKS
+import Proofs.Flock.Soundness.Game.Expect
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A cap position's off mass at the abort law, at read sets
@@ -16,6 +59,8 @@ values at the position (`rd`), and the link finder's two-reading term (`LinkFind
   collision among their calls, a run reads anything but the plurality after `q`'s round alone with probability at most
   `FC`'s hit at `q` plus `1/(M+1)`.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 

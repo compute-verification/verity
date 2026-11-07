@@ -1,5 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.PlainJ.Defs
+public import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # One plain sampled session of `J` hidden-output tables: the plan, the draws and the openings
@@ -15,6 +30,8 @@ the one-table hidden-output tables (`HiddenExec.TableH`, `DrawSetupH`) in place 
 * `DrawOkPHJ`, `opnPHJ`: the coin server's draw at each table, and table `j`'s openings, with `setupHidden` for
   `setupH`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.PlainHJ
 

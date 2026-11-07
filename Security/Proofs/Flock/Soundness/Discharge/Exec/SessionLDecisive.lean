@@ -1,6 +1,9 @@
-import Proofs.Flock.Soundness.Discharge.Exec.SessionL
-import Proofs.Flock.Soundness.Audit.OneStage
-import Proofs.Flock.Soundness.Game.Union
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionL
+public import Proofs.Flock.Soundness.Audit.OneStage
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Opening
 
 /-!
 # Decisiveness of the salted batched session
@@ -28,6 +31,8 @@ tiling). No table needs to be satisfiable and no schedule needs a side condition
   the zero claim rejects, and with it the table and the session;
 * **productivity** (`batchedSessionL_productive`): every message type of the session is inhabited.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec.SessionLDecisive
 

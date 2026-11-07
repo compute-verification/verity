@@ -4,8 +4,14 @@ cut short, a link after a filler, a table off its grid, a link outside the shape
 an input row linked twice and a link whose rows differ are refused, each with its code. The rows trees (`RecLinkTree`)
 open to their roots, and `--rec-links ROOT:N` is read only at a table's root and grid count.
 -/
-import Flock.RecLinks
-import Flock.RecLinkTree
+module
+
+public import Flock.RecLinkTree
+public import Flock.RecLinks
+meta import Flock.RecLinkTree
+meta import Flock.RecLinks
+
+@[expose] public section
 
 namespace Flock.Test.RecLinks
 

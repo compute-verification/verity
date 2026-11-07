@@ -1,4 +1,26 @@
-import Proofs.Flock.Soundness.TmplUnitAt
+module
+
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.ExecPlacement
+public import Proofs.Flock.Soundness.TmplUnitAt
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.TmplUnitNet
+import Proofs.Flock.Soundness.TmplUnrollAt
+import VCVio.Prelude.Core
 
 /-!
 # A hidden-output file's statement circuit
@@ -9,6 +31,8 @@ other file's circuit as `HmOut.parse` does. A consumer of `HmOut.parseStmt … =
 the flat file's `HmOut.parse`, or the templated file's committed circuit `ct` with `c = HmOut.unrolled ct`, which is `ct`
 with its unit net the logical one (`unrolled_of_parseTmpl`, `unrolled_unit`, `unrolled_built`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

@@ -1,7 +1,9 @@
-import Definitions.Accounting.RateAuditDeployed
-import Definitions.Accounting.Remote.Deployed
-import Definitions.Accounting.Assumptions.RateAudit
-import Definitions.Accounting.Assumptions.RateAuditDeployed
+module
+
+public import Definitions.Accounting.RateAuditDeployed
+public import Definitions.Accounting.Remote.Deployed
+public import Definitions.Accounting.Assumptions.RateAudit
+public import Definitions.Accounting.Assumptions.RateAuditDeployed
 
 /-!
 # The remote bandwidth audit as deployed: conservation over a session (trusted)
@@ -35,6 +37,8 @@ also supports 64 rows). For the verbatim-sector class the sketch receipt is prov
 `RemoteSessionConservationSketchDeployed` (at the deployed 16-row parameters, under the per-pass hash budget
 `Accounting.Assumptions.SketchHashBudget`: the sum form, whose query term stays non-vacuous at the measured caps).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 
@@ -318,7 +322,7 @@ def RemoteWindowRunConservationRelay : Prop :=
 /-- **The remote bandwidth audit with deployed tensor-sketch receipts, for the verbatim class.** A session of `n`
 windows draws one `ks × (32·m)` signs matrix per window, runs `P` causal passes with `G` candidate oracles per pass (the
 grinding its Fiat–Shamir pass seed allows, `fiat-shamir`), then draws `d` of the window's `P·N` receipts. Every pass is
-a `RateSketch.Device`: it obtains 32-byte sectors only whole and verbatim. If each pass rebuilds at most `X` bits, and
+a `RateSketch.Prover`: it obtains 32-byte sectors only whole and verbatim. If each pass rebuilds at most `X` bits, and
 the signs' rank tail is `Assumptions.SketchRank ks m r ε`, then the probability that every opening passes while the
 session or some window falls below its reading is at most
 
@@ -370,7 +374,7 @@ candidates, and grinding multiplies only the tag-guess term. From seven windows 
 **The reading.** `qtot` is the node's hash budget for one pass, so the deployed cap of at most `2^55` compressions a
 pass reads `qtot = 2^55`, where the query term is `n·P·2^-41` (`sketchQueryTermCapsSum`) and the guess term
 `n·P·G·N/2^512` stays negligible at `G ≤ 2^55`. The multiplicative bound `n·P·G·(N/2^512 + q/2^96)` is the special
-case `qtot = G·q` that the per-candidate caps alone give (`Device.budget_of_bounded`;
+case `qtot = G·q` that the per-candidate caps alone give (`Prover.budget_of_bounded`;
 `Accounting.SecurityProofs.RemoteSessionConservationSketchDeployedProduct` keeps it stated), which at those caps was
 vacuous: its query term alone is `2^14` before `n·P` (`sketchQueryTermCaps`).
 

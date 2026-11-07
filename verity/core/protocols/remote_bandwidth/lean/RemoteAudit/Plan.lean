@@ -1,4 +1,6 @@
-import RemoteAudit.Basic
+module
+
+public import RemoteAudit.Basic
 
 /-!
 # A pass's plan: `receipts.Plan`
@@ -8,6 +10,10 @@ and no run starting where the one before it ends. Position p is the p-th block o
 Its digest is `SHA512(PLAN_DOMAIN ‖ u32be R ‖ (u64be first ‖ u64be count) × R)`. `Plan.make?` refuses (`none`) every
 other plan, as `Plan(runs, blocks)` raises; runs arrive as integers, so a negative one is refused here too.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace RemoteAudit
 

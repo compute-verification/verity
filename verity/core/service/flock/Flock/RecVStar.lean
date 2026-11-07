@@ -20,15 +20,21 @@ The inner shape is the verifier's own (`rec-inner`): `Stmt.setupTables` on the i
 up for V*'s native side, read once, since the inner circuit can be tens of GB; `verify --rec-inner F` reads the line it
 printed.
 -/
-import Flock.HmRow
-import Flock.ProvedScope
-import Flock.RecOpening
-import Flock.Registered
-import Flock.WindowRecord
-import VStar.Cli
-import VStar.Compose
-import VStar.Stage
-import Flock.JsonParse
+module
+
+public import Flock.HmRow
+public import Flock.ProvedScope
+public import Flock.RecOpening
+public import Flock.Registered
+public import Flock.WindowRecord
+public import VStar.Cli
+public import VStar.Compose
+public import VStar.Stage
+public import Flock.JsonParse
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock
 namespace RecVStar
@@ -79,8 +85,18 @@ structure Inner where
   links : Option LinkShape := none
   deriving Repr, BEq, Inhabited
 
-/-- A recursive session's inner statement (§16.16) on the verifier's live coins, as `87-rec-private.sh` runs `inner-fold`. -/
-def innerTags : Tags := Tags.circuitPlainLeaves.withCoins Coins.os
+/-- The inner session's keyed coin tree: the session's stream (the link points), the circuit table's two reps, each rep's
+sparse phase and candidate 3's stacked table R (`rec_live.INNER_COIN_STREAMS`), 512 rounds of at most 512 coins each, as
+`Zk.coinSpec` has them. A session that opens fewer streams leaves the rest unopened. -/
+def innerCoinSpec : CoinTree.Spec :=
+  ⟨#["session", "circuit/rep0", "circuit/rep1", "sparse/rep0", "sparse/rep1", "stacked/rep0"], 9, 512⟩
+
+/-- A recursive session's inner statement's coins: the challenger's keyed coin tree (`innerCoinSpec`). -/
+def innerTree : Coins := .tree innerCoinSpec
+
+/-- A recursive session's inner statement (`Tags.withPlainLeaves`), on the challenger's coin tree (`innerTree`), under the statement's own
+tags. -/
+def innerTags : Tags := Tags.circuitPlainLeaves
 
 /-- The fewest bits that number `n` things: `0` for at most one. -/
 def bitsFor (n : Nat) : Nat := if n ≤ 1 then 0 else Nat.log2 (n - 1) + 1
@@ -95,7 +111,7 @@ def linkShapeOf (st : Stmt) (rows : Nat) : LinkShape :=
 with `links`, the row count of the link table the statement carries, that table's shape (`linkShapeOf`). -/
 def innerOf (circuitB pubB : ByteArray) (partition : Option Json) (program : Option ByteArray) (holo : Bool := false)
     (links : Option Nat := none) : V Inner := do
-  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB Coins.os 1 (partition := partition) (program := program)
+  let (spec, sts) ← Stmt.setupTables innerTags circuitB pubB innerTree 1 (partition := partition) (program := program)
   let some st := sts[0]? | throw "rec-inner: the inner statement has no table"
   pure { m := st.m, kLog := st.c.kLog, claims := 2 + spec.points * st.regions.size, regions := st.regions.size, holo,
          links := links.map (linkShapeOf st) }
@@ -881,16 +897,11 @@ def checkRows (s : VStar.Stmt) (registered : Array Registered.Port) (rows : Opti
 
 def ACC_VALUE : String := "rec-acc"
 
-/-- The first name two of the verifier's registered ports share. -/
-def dupName? (registered : Array Registered.Port) : Option String :=
-  let names := registered.toList.map (·.name)
-  names.find? fun nm => names.count nm != 1
-
-/-- **The verifier's reads file names each port once** (`dupName?`): `checkAcc` and `checkAccReads` read a name's first
-port (`find?`), so a second port of that name would be one neither checks. A file `Registered.ofJson` parses names each
-once (a JSON object's keys); the refusal holds whatever list of ports the verifier is given. -/
+/-- **The verifier's reads file names each port once** (`Registered.dupName?`): `checkAcc` and `checkAccReads` read a
+name's first port (`find?`), so a second port of that name would be one neither checks. `Registered.ofJson` refuses a file
+naming a port twice by the same check; this refusal holds whatever list of ports the verifier is given. -/
 def checkNames (s : VStar.Stmt) (registered : Array Registered.Port) : V Unit :=
-  match dupName? registered with
+  match Registered.dupName? registered.toList with
   | some nm => throw s!"{s.name}: the registered reads name two ports {nm}, and each check reads a name's first"
   | none => pure ()
 

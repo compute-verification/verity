@@ -1,6 +1,24 @@
-import Proofs.Flock.VBridge.Sha
-import Proofs.Flock.Verifier.Hash
-import Flock.Merkle
+module
+
+public import Batteries.Data.List.Basic
+public import Flock.Merkle
+public import Proofs.Flock.VBridge.Sha
+public import Proofs.Flock.Verifier.Hash
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # V*'s climb through the tree's nodes
@@ -14,6 +32,8 @@ direction bit `d[h]` swaps the current digest and the sibling (`_Forms.swap`: `t
 `Flock.climb ms` of the digest at the position through the siblings, for any scheme `ms` whose node is `SHA-512(l ‖ r)`
 (`MerkleScheme.hm96Sha512`, and `MerkleScheme.sha512`'s unsalted leaves).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

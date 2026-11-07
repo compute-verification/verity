@@ -1,5 +1,8 @@
-import NetworkCertifier.AdviceV1
-import Lean.Data.Json
+module
+
+public import NetworkCertifier.AdviceV1
+public import Lean.Data.Json.FromToJson.Basic
+public import Lean.Data.Json.Parser
 
 /-!
 # The charge's difftest: advice v1's charge against `arith_encode.reference_charge`, on random instances
@@ -21,6 +24,8 @@ decisions of the slots that ask, in order.
   `ok` 0 a `null`;
 * `charges`: `charges` of the decision streams, from the book's priors and run 0, or `null` when a window refuses.
 -/
+
+@[expose] public section
 
 namespace NetworkCertifier.AdviceV1.ChargeDifftest
 

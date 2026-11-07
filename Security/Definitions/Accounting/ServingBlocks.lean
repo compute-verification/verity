@@ -1,11 +1,13 @@
-import Definitions.Core.Formalism
-import Mathlib.Basic.Real.Basic
+module
+
+public import Definitions.Core.Formalism
+public import Mathlib.Basic.Real.Basic
 
 /-!
 # Serving blocks and the training class's counts (trusted)
 
-A training class's counted operations sit in a circuit with its registered input gates, a declaration `d`
-(`Verity.Declaration`): at the serving-block bound, the actual circuit the fleet evaluates. Its per-block cap `q(c, k)`
+A training class's counted operations sit in a circuit with its registered input gates, a registered circuit `d`
+(`Verity.RegisteredCircuit`): at the serving-block bound, the actual circuit the fleet evaluates. Its per-block cap `q(c, k)`
 bounds the weight of the operations computed wholly inside any block of at most `c` operation gates that reads at most
 `k` unregistered input bits. A **serving block** is a server-time block's gates (`Verity.Block`): a server's gates
 between two consecutive wipes. Each counted operation is assigned to the serving block holding its representative gate.
@@ -22,10 +24,8 @@ For a circuit `C` and counted operations `J` (`Counted`):
 * `J.split R B`: the part of `J.outside R B` whose representative is in one of the blocks, the operations split between a
   block and gates outside it.
 
-A block's unregistered input bits are `|in(I) \ θ|` (`Verity.Declaration.unregistered`), one bit per gate on a Boolean
-circuit. Blocks here have at most `c` gates. Padding a block to exactly `c` gates (`Verity.Guarantees.Padding`) adds
-only registered gates that read registered gates, so it adds no unregistered input bit and no counted operation: a cap
-at exactly `c` gates, read on the padded circuit, gives the cap at most `c` on the circuit at hand.
+A block's unregistered input bits are `|in(I) \ θ|` (`Verity.RegisteredCircuit.unregistered`), one bit per gate on a Boolean
+circuit. Blocks here have at most `c` gates, as a `(c, k)`-partition's inference blocks do (`Verity.Partition.IsCK`).
 
 The named premises are `ServingSizes` (each serving block's gates and unregistered input bits), `WeightsAtMost`,
 `PerBlockCap`, `UncertifiedCap`, `OperationBodies` (an operation's gates are unregistered and lead to its representative)
@@ -33,6 +33,8 @@ and `Overlap` (a gate is in at most `μ` operations' bodies). The last two bound
 assigned to a serving block but not computed wholly inside it: each has a gate outside the block that a gate of the
 block reads, an unregistered input of the block, so at most `ω_max μ k_S` of `Ω_S` escapes the per-block cap.
 -/
+
+@[expose] public section
 
 namespace Accounting.ServingBlocks
 
@@ -78,7 +80,7 @@ end Counted
 unregistered input bits (`|in(I) \ θ|`) holds counted weight at most `q c k` computed wholly inside it. A property of the
 training class at the block size `(c, k)` (Lemma 1, `Verity.Guarantees.BlockDescription`), read on the circuit at
 hand. -/
-def PerBlockCap (d : Declaration) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k : ℕ) : Prop :=
+def PerBlockCap (d : RegisteredCircuit) (J : Counted d.D) (q : ℕ → ℕ → ℝ) (c k : ℕ) : Prop :=
   ∀ I ⊆ d.D.computed, I.card ≤ c → (d.unregistered I).card ≤ k → J.inside I ≤ q c k
 
 /-- **An uncertified cap** `q_U`: the weight of `R`'s counted operations computed wholly inside none of the blocks `B i`
@@ -92,7 +94,7 @@ def UncertifiedCap {C : Circuit} (J : Counted C) (R : Finset (Fin C.N)) {ι : Ty
 representative is read by another gate of the operation, so the operation's gates lead to its representative inside the
 operation. It allows an operation split across a wipe or between servers; such an operation then has a gate outside its
 serving block that a gate of the block reads. -/
-def OperationBodies (d : Declaration) (J : Counted d.D) : Prop :=
+def OperationBodies (d : RegisteredCircuit) (J : Counted d.D) : Prop :=
   ∀ v ∈ J.V, ∀ u ∈ J.body v, u ∉ d.θ ∧ (u ≠ v → ∃ g ∈ J.body v, u ∈ d.D.reads g)
 
 /-- **Overlap** `μ`: every gate is in the bodies of at most `μ` counted operations (`μ = 1` when no two operations share
@@ -101,8 +103,8 @@ def Overlap {C : Circuit} (J : Counted C) (μ : ℕ) : Prop :=
   ∀ g, (J.V.filter fun v => g ∈ J.body v).card ≤ μ
 
 /-- **Serving-block sizes** `(c_S, k_S)`: each serving block `u ∈ S` of `P` has at most `cS u` gates and reads at most
-`kS u` unregistered input bits, `Verity.Guarantees.Padding`'s premise. -/
-def ServingSizes (d : Declaration) {B : ℕ} (P : Partition d.D B) (S : Finset (Fin B)) (cS kS : Fin B → ℕ) : Prop :=
+`kS u` unregistered input bits, the `(c, k)` budgets (`Verity.Partition.IsCK`) at `(c_S, k_S)`. -/
+def ServingSizes (d : RegisteredCircuit) {B : ℕ} (P : Partition d.D B) (S : Finset (Fin B)) (cS kS : Fin B → ℕ) : Prop :=
   ∀ u ∈ S, (P.gates u).card ≤ cS u ∧ (d.unregistered (P.gates u)).card ≤ kS u
 
 /-- **Weights at most** `ω_max`: every counted operation weighs at most `ωmax`. -/

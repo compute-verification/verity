@@ -1,4 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # The inner proof's runs
@@ -9,6 +27,8 @@ three), absorbs `τ`'s commitment, draws `β`, absorbs `Y` and draws the `Q` que
 same, in order. What follows the last coin is checks only (`forIn_keeps`). `zk_inner_coins` is the four rounds read,
 and `innerGameC_plays` the model's run on them, which records each query's position from the fourth round's coin.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

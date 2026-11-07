@@ -1,6 +1,47 @@
-import Proofs.Flock.Claims.Complete.ZkTables.Count
-import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Decode
+public import Proofs.Flock.Claims.Complete.Zk.Json.Record
+public import Proofs.Flock.Claims.Complete.ZkTables.Skeleton
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Json.Canon
+import Proofs.Flock.Claims.Complete.Json.Goals
+import Proofs.Flock.Claims.Complete.Zk.Discharge
+import Proofs.Flock.Claims.Complete.Zk.Json.Runs
+import Proofs.Flock.Claims.Complete.Zk.Json.Session
+import Proofs.Flock.Claims.Complete.Zk.Link
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.DeployK
 
 /-!
 # The honest masked session runs, at several tables
@@ -14,6 +55,8 @@ stopped, `repRunJ`; at every case of several tables `ProverRunsJ`). Every table'
 through `Hashes.ofSha512` so do its masked level-0 commitment (`commitPZk_ok`) and its pads' (`innerCommitP_ok`); the
 session walks its rep streams in order (`JsonRT.Runs.forIn_idx`).
 -/
+
+@[expose] public section
 
 namespace FlockComplete.ZkTables
 

@@ -1,5 +1,11 @@
-import Mathlib.Data.Nat.Size
-import Mathlib.Data.List.OfFn
+module
+
+public import Mathlib.Data.Nat.Bits
+public import Mathlib.Data.Nat.Size
+public import Mathlib.Data.Subtype
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Tactic.Finiteness.Attr
 
 /-!
 # Advice v1's charge: the counted coded length of a decision stream under the registered book
@@ -35,6 +41,8 @@ what `reference_charge` gives on 4,000 random instances, accepted and refused (`
 returns `none` there. On the states a window reaches (`low ≤ high < 2^32`), the Python's masks `& (HALF − 1)` are
 `% HALF`, as below.
 -/
+
+@[expose] public section
 
 namespace NetTiming.AdviceV1
 

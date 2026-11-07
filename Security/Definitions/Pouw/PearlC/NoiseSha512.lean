@@ -1,5 +1,7 @@
-import Definitions.Pouw.PearlC.Instance
-import Definitions.Pouw.PearlC.Sha512
+module
+
+public import Definitions.Pouw.PearlC.Instance
+public import Definitions.Pouw.PearlC.Sha512
 
 /-!
 # Pearl-C's noise as SHA-512 gives it (trusted; definitions only)
@@ -9,7 +11,7 @@ noise Pearl-C's h3 hashing actually draws, as a function of the salt, the weight
 activations, through the spec's own SHA-512 (`Sha512.digest`), not a random oracle. A statement that wants the noise of
 the deployment instantiates `PearlCSem` with `sha512Sem`; the oracle `H` is then unused, and what is uniform is the salt.
 
-The rules, op for op, are `verity/core/protocols/pouw/schemes/pearl_c.py` (h3, row-seeded, forming v1):
+The rules, op for op, are `verity/ml/protocols/pouw/schemes/pearl_c.py` (h3, row-seeded, forming v1):
 - `s512 role msg` (`pearl_c.s512`): the first 32 bytes of SHA-512 over the role's label block
   (`"pearl-c/h3s/<role>\0"` zero-padded to 128 bytes) and `msg`.
 - `seedB` (`pearl_c.seed_b`): `s512 "seed-B" (salt ‖ root_B)`, one per weight and salt.
@@ -37,6 +39,8 @@ The Python's refusals (a unit or row index of `2^32` or more, a non-finite BF16 
 taken mod `2^64` as `u64le` bytes, and no line reaches a non-finite value (every `|x| ≥ 1`, so the scale and the codes are
 finite and normal).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

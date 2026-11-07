@@ -1,4 +1,10 @@
-import Proofs.Flock.Soundness.ExecDrawOS
+module
+
+public import Proofs.Flock.Soundness.ExecDrawOS
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The executable Bernoulli draw escapes no more often than the model's
@@ -18,6 +24,8 @@ exact uniform draw `r ∈ [0, den)` from the stream (`Flock.Draw.uniform`, rejec
   (`Flock.Draw.drawWith`, `Law.runOS`) on a uniform byte source (A3) escapes no more often, as `ExecDrawOS.lean` proves
   for the other three laws.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.DrawExec
 

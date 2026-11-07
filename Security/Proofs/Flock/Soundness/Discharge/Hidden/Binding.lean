@@ -1,4 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 
 /-!
 # The row commitment binds an output row (`cr/sha-512`)
@@ -8,6 +24,8 @@ the salts agree (the masks then cancel) and in the salt digest when they differ.
 `OutputsCommitted` covers, on one circuit file, public file and tables, read one registered `b ‖ c` for one unit's output
 row, so when their template instances' output words differ, `commitPair` of the two rows is a collision.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

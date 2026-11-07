@@ -1,7 +1,23 @@
+module
+
+public import Proofs.Flock.Recursive.FirewallLive
+public import Proofs.Flock.Recursive.FirewallHonest
+public import Proofs.Flock.Recursive.Firewall
+import Flock.Firewall.Contract
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Recursive.FirewallZK
-import Proofs.Flock.Recursive.FirewallTemplate
-import Proofs.Flock.Recursive.FirewallLive
-import Proofs.Flock.Recursive.FirewallHonest
 
 /-!
 # `FirewallSends` from the firewall's code
@@ -27,6 +43,8 @@ those of the messages `msgs`, each reading the strings before it.
   messages (`FirewallHonest.honestMsgs`), at a schedule the firewall holds a session to and a worker that follows it,
   its rows reading only the commit strings before them (`FirewallHonest.honest_accepts` at the zero salt).
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

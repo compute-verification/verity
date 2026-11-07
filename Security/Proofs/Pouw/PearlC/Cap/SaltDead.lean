@@ -1,5 +1,10 @@
+module
+
+public import Proofs.Pouw.PearlC.Cap.SaltDeadStep
+import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.FormingP
-import Proofs.Pouw.PearlC.Cap.SaltDeadStep
 
 /-!
 # The salt-dead two-ends lemma
@@ -19,6 +24,8 @@ product `−|E′|·11/4`. So RowA decides `saltDeadP` per element from two eval
 * **(E)** `saltDeadP_iff_ends`, with no hypothesis on `α`, `x` or `β`; **(C)** `saltDeadP_card_ends`, the per-block
   count RowA's `sd` port carries; **(Z)** `codeVal_eq_iff`, the circuit's comparison of two codes' values.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Cap
 

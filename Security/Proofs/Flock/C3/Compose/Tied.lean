@@ -1,9 +1,27 @@
-import Proofs.Flock.C3.Compose.SrcClauses
+module
+
+public import Proofs.Flock.C3.Compose.SrcClauses
+public import Proofs.Flock.C3.Reps.Tie
+public import Proofs.Flock.C3.Sparse.SrcTie
+public import Proofs.Flock.C3.Opening.SrcOpening
+public import Proofs.Flock.C3.RegLevels.SrcTie
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.HoloValues.Shape
 import Proofs.Flock.Recursive.ForkRuns
-import Proofs.Flock.C3.Reps.Tie
-import Proofs.Flock.C3.Sparse.SrcTie
-import Proofs.Flock.C3.Opening.SrcOpening
-import Proofs.Flock.C3.RegLevels.SrcTie
+import Proofs.Flock.Soundness.Refine.Basis
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # n7: the tied source, each stage's output its play's
@@ -19,6 +37,8 @@ sparse phase by its RecSparse unit (`SparseTie`, `plays_of_tie`), R's opening on
 its read fact's checks pass (`OpeningReadAt`), and R's Ligerito by its accepting run (`LevelTie`). A stage's message
 types follow from its kinds (`tysAt_of_kinds`) where the shape's are among `T`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Compose
 

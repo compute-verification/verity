@@ -1,4 +1,24 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysStatements
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.Soundness.Refine.Plays
+import Proofs.Flock.Soundness.Refine.Zerocheck
 
 /-!
 # The masked replay's runs
@@ -14,6 +34,8 @@ on them are constraints, so nothing it does after a coin depends on whether a ch
 The replay's claims are `abcClaims` on the coins: `ab`'s point is the lincheck's (its rounds' coins reversed, then the
 zerocheck's residual coins), `c`'s is `(L_s(z), pinned ++ r_rest)`, which `zcVector_eq` reads as the model's `r`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkExec
 

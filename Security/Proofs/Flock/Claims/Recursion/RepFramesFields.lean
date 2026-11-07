@@ -1,4 +1,22 @@
-import Proofs.Flock.Claims.Recursion.RepFramesBind
+module
+
+public import Proofs.Flock.Claims.Recursion.RepFramesBind
+public import Proofs.Flock.Soundness.Discharge.DecodeZL.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 
 /-!
 # What a rep's frames fix of its proof, before Ligerito
@@ -10,6 +28,8 @@ statement binding, the zerocheck, the lincheck and the ring switch absorb, and h
 
 Ligerito's fields from equal `ligFrames` are `RepFramesLig`'s; the openings and `initialCap` are in no frame.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

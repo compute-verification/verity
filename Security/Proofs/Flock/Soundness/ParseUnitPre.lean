@@ -1,3 +1,14 @@
+module
+
+public import Aesop.BuiltinRules
+public import Flock.HmRow
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Soundness.ExecCircuit
 
 /-!
@@ -7,6 +18,8 @@ import Proofs.Flock.Soundness.ExecCircuit
 comes first, ahead of the file's own nets, so it is the circuit's unit (`unit_of_parsePre`). The flat-parse consumers'
 `…Pre` forms (`Layout.outShape_of_parsePre`, `Hidden.unitFacts_of_parsePre`) read their facts about the unit off `n`.
 -/
+
+@[expose] public section
 
 open Flock
 

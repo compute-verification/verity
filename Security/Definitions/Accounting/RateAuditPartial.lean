@@ -1,5 +1,7 @@
-import Definitions.Accounting.RateAudit
-import Definitions.Accounting.RateAuditJoint
+module
+
+public import Definitions.Accounting.RateAudit
+public import Definitions.Accounting.RateAuditJoint
 
 /-!
 # The rate audit with partial completion (trusted)
@@ -29,6 +31,8 @@ plays, without `RealizesRate`'s compute field: that the game's compute and the c
 the named assumption `Accounting.Assumptions.RateComputeAdditive` (the actual-circuit model's W), which the guarantees take
 as a hypothesis.
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate
 
@@ -113,7 +117,7 @@ def queries (w : World N b h ρ) : PChip N b h ρ α → List (Bits ρ × Fin N 
 
 end PChip
 
-/-- A device with partial completion: `Device`'s on-chip state, device memory and free side sources, laid out from the
+/-- A device with partial completion: `Prover`'s on-chip state, device memory and free side sources, laid out from the
 store before the seed and the stream, and a chip program with completions from that state. In every world the program
 takes in at most `L` bits over the side link (free side sources and the certified stream together) and makes at most
 `q` oracle queries. -/

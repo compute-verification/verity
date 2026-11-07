@@ -1,6 +1,8 @@
-import Proofs.Accounting.DeclaredCircuit.Requirement
-import Properties.Accounting.DeclaredCircuit
-import Proofs.Properties.RemoteAudit.Schedule
+module
+
+public import Proofs.Accounting.DeclaredCircuit.Requirement
+public import Properties.Accounting.DeclaredCircuit
+public import Proofs.Properties.RemoteAudit.Schedule
 
 /-!
 # A declared circuit's space and bandwidth at the committed steering cap, proved
@@ -14,6 +16,8 @@ check accepts there makes the layout the slot of the schedule's `cap + 1` padded
 events are `G`'s (`RateSketch.pass_congr`). A window's reads counted against the draws are `G`'s on a session the check
 accepts at every pass, and its correct receipts on one it refuses, which no shortfall reaches.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch.SketchSummarySession
 
@@ -194,7 +198,7 @@ theorem scheduledRequirement : ScheduledRequirement := by
         (hX (SketchPrefix.of x.2 w j) x.1 ((win x w).kept j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
           ((x.2 w).2.1 j).1 (((x.2 w).2.1 j).2 ((win x w).kept j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)))
     have hp := hpass (SketchPrefix.of x.2 w j) x.1 (hacc w j) ((x.2 w).2.1 j)
-    rcases RateSketch.Device.unpaid_tiles_split ((win x w).dev j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
+    rcases RateSketch.Prover.unpaid_tiles_split ((win x w).dev j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
         RateSketch.sketch (x.2 w).1 ((win x w).oracle j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1)
         (Data.ofParts (store x.1 x.2 w j) ((x.2 w).2.1 j).1) (tiles x w j) (Xr * τ + C) k (by norm_num) hXp hj
       with ⟨t, ht⟩ | ⟨ι, hb⟩

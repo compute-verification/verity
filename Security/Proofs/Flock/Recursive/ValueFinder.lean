@@ -1,5 +1,23 @@
-import Proofs.Flock.Recursive.TopFinder
-import Proofs.Flock.C3.RegLevels.ValueTie
+module
+
+public import Proofs.Flock.C3.RegLevels.ValueTie
+public import Proofs.Flock.Recursive.TopFinder
+public import Proofs.Flock.Recursive.ValueSrc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # A one-run finder for a registrant's row off a value the verifier registers itself
@@ -28,6 +46,8 @@ recomputes: at most `7n + 2D + 5` SHA-512 evaluations for `n` rows and `D = log2
 `2^D < 2n`), plus the `n` salts' `3n` (`RecCoins.verifierSalt`, three SHA-512 each, `RecCoins.saltOf`): `10n + 2D + 5`
 in all.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

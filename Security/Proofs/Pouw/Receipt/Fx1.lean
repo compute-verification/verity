@@ -1,5 +1,12 @@
-import Definitions.Pouw.Receipt.Fx1
-import Proofs.Pouw.Receipt.Run
+module
+
+public import Definitions.Pouw.Receipt.Fx1
+public import Proofs.Pouw.Receipt.Run
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.NormNum.Ineq
+import Mathlib.Tactic.NormNum.Pow
+import Mathlib.Tactic.SetLike
+import Proofs.Pouw.Receipt.Duo
 
 /-!
 # fx1's words are bound wherever duo's are
@@ -8,6 +15,8 @@ fx1 is duo on the words times odd multipliers: `fx1Word k a r m s = duoWord k a 
 triples, quadruples and runs (`fx1Run_eq`). Multiplying by an odd `m` is injective (`mul_odd_cancel`), so each of
 duo's injectivity statements composes with it into fx1's, and the state bijection is duo's at the word `d·m`.
 -/
+
+@[expose] public section
 
 namespace Pouw.ReceiptProofs
 

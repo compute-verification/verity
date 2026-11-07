@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.ZK.Interact
-import Proofs.Flock.Claims.ZK.Rewind
-import Proofs.Flock.Claims.ZK.Indexed
+module
+
+public import Proofs.Flock.Claims.ZK.Interact
+public import Proofs.Flock.Claims.ZK.Rewind
+public import Proofs.Flock.Claims.ZK.Indexed
 
 /-!
 # Sequential composition of `ZKmalR`
@@ -26,7 +28,7 @@ Both are proved at one statement (`zkmalAt_seqU`, `zkmalAt_iter`, from `A`'s and
 every statement: nothing at `x` reads another statement, so the tapes and the number of sessions may be chosen per
 statement. A session whose tape is its own type at each unit's statement is one prover on one tape at `x` through
 bijections of the nonces and of the rests (`ZKmalAt.of_equiv`). `ZKmalRx` is the spec's statement-indexed form
-(`Definitions/Claims/IndexedTapes.lean`; `ZKmalR` its constant case, `zkmalRx_const`), and `zkmalRx_iter` meets it with
+(`Definitions/Core/Interaction.lean`; `ZKmalR` its constant case, `zkmalRx_const`), and `zkmalRx_iter` meets it with
 `m x` sessions.
 
 `zkmalAt_seqG` and `zkmalAt_iterG` are the general forms, of which `zkmalAt_seqU` and `zkmalAt_iter` are the case
@@ -35,19 +37,13 @@ transcripts (as a claim's own test may), and `B`'s zero knowledge is read only a
 (`Seq.Reach`), so a session's rounds need be fixed only there.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKMal
 
 open Claims
 
 /-! ## Transcripts in two parts -/
-
-/-- The answer is a message, not a decision. -/
-def isMsg : Out → Bool
-  | .msg _ => true
-  | _ => false
-
-/-- **The run goes on after `k` rounds**: `k` rounds, each answered with a message. -/
-def goesOn (k : ℕ) (τ : List (Msg × Out)) : Bool := τ.length == k && τ.all fun p => isMsg p.2
 
 /-- `τB` after `τA` where `τA` goes on, else `τA`. -/
 def cont (k : ℕ) (τA τB : List (Msg × Out)) : List (Msg × Out) := if goesOn k τA then τA ++ τB else τA
@@ -141,16 +137,6 @@ theorem runStar_congr {Ω Ω' Θ : Type} (H : Msg → Msg) (P : Prover Ω) (P' :
 
 /-! ## Two protocols in turn -/
 
-/-- **Two protocols in turn**: `A` for `kA x` rounds at `x`, then `B` at the statement `xB x u` with witness
-`wB w ωA x u`, where the unit `u` is read from `A`'s history (`sel`), and `B`'s witness may read `A`'s tape `ωA` (the
-salts of what `A` committed, which `B` opens). -/
-structure Seq (WA WB TA : Type) where
-  kA : Msg → ℕ
-  U : Msg → Type
-  sel : (x : Msg) → List (Msg × Msg) → U x
-  xB : (x : Msg) → U x → Msg
-  wB : WA → TA → (x : Msg) → U x → WB
-
 /-- The composed prover: `A`'s on its tape for `A`'s rounds, then `B`'s on its own, after `A`'s history. -/
 def Seq.prover {WA WB ΩA ΩB : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB) (w : WA) :
     Prover (ΩA × ΩB) :=
@@ -165,12 +151,6 @@ def _root_.Claims.VStar.head {Θ : Type} (Vs : VStar Θ) (k : Msg → ℕ) : VSt
 def _root_.Claims.VStar.after {Θ : Type} (Vs : VStar Θ) (x : Msg) (k : Msg → ℕ) : VStar (Θ × List Msg) :=
   ⟨k, fun _ as θ' => Vs.next x (θ'.2 ++ as) θ'.1⟩
 
-/-- A simulator program whose questions to the verifier come after `pre`. -/
-def spUnder {α : Type} (pre : List Msg) : SP α → SP α
-  | .ret a => .ret a
-  | .hash q k => .hash q fun r => spUnder pre (k r)
-  | .ask as k => .ask (pre ++ as) fun b => spUnder pre (k b)
-
 theorem spUnder_eval {α : Type} (H : Msg → Msg) (ask : List Msg → Out) (pre : List Msg) :
     ∀ p : SP α, SP.eval H ask (spUnder pre p) = SP.eval H (fun as => ask (pre ++ as)) p
   | .ret _ => rfl
@@ -181,18 +161,6 @@ theorem spUnder_eval {α : Type} (H : Msg → Msg) (ask : List Msg → Out) (pre
 def spOut {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (p : SP (List (Msg × Out))) :
     List (Msg × Out) :=
   (p.eval H fun as => ((Vs.next x as θ).eval H).1).1
-
-/-- **The composed simulator, continuing where `go` holds**: `A`'s, then, where `go` holds at its transcript, `B`'s
-program at the unit that transcript selects (`progB`), asking `V*` after `A`'s messages. `B`'s coins are one type `CB x`
-for every unit. `go` need agree with `goesOn` only at `A`'s real transcripts (`zkmalAt_seqG`). -/
-def Seq.simG {WA WB TA : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type) [∀ x, Fintype (CB x)]
-    [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out)))
-    (go : Msg → List (Msg × Out) → Bool) : Simulator where
-  C x := SA.C x × CB x
-  prog x c := spBind (SA.prog x c.1) fun τA =>
-    if go x τA then
-      spBind (spUnder (τA.map Prod.fst) (progB x (Q.sel x (histOf τA)) c.2)) fun τB => .ret (τA ++ τB)
-    else .ret τA
 
 /-- **The composed simulator**: `simG` where `A`'s transcript goes on. -/
 def Seq.simU {WA WB TA : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type) [∀ x, Fintype (CB x)]
@@ -219,16 +187,6 @@ theorem Seq.simG_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (C
   by_cases hg : go x (SP.eval H (fun as => ((Vs.next x as θ).eval H).1) (SA.prog x c.1)).1 = true
   · simp only [hg, ite_true, spBind_eval, spUnder_eval, SP.eval]
   · simp only [hg, ite_false, Bool.false_eq_true, SP.eval]
-
-theorem Seq.simU_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type)
-    [∀ x, Fintype (CB x)] [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out)))
-    (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB : Msg → ℕ) (c : (Q.simU SA CB progB).C x) :
-    (Q.simU SA CB progB).out H Vs θ x c =
-      cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x c.1)
-        (spOut H (Vs.after x kB) (θ, (SA.out H (Vs.head Q.kA) θ x c.1).map Prod.fst)
-          (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))))
-          (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))) c.2)) :=
-  Q.simG_out SA CB progB _ H Vs θ x kB c
 
 /-- **The composed run is `A`'s run, then where it goes on `B`'s run** against `V*` after `A`'s messages. -/
 theorem Seq.msgs_eq {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB)
@@ -378,13 +336,6 @@ theorem Seq.pLog_B {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → Pr
     exact he
 
 /-! ## The composed tape -/
-
-/-- **The composed tape**: the guess `j`, `A`'s and `B`'s nonces, and `A`'s first rest, with `A`'s second rest and
-`B`'s rest as the rest. `A` reads its second rest when `j < a`, so `Fork`'s two runs differ in `A`, and its first when
-`j = a`, so they share `A`'s run and differ in `B`. -/
-def forkTape (a : ℕ) {NA ΩA NB ΩB : Type} (s : (Fin (a + 1) × NA × NB × ΩA) × (ΩA × ΩB)) :
-    (NA × ΩA) × (NB × ΩB) :=
-  ((s.1.2.1, if (s.1.1 : ℕ) < a then s.2.1 else s.1.2.2.2), (s.1.2.2.1, s.2.2))
 
 /-- `forkTape` with the guess and the rest it leaves unread. -/
 def forkEquiv (a : ℕ) (NA ΩA NB ΩB : Type) :
@@ -539,12 +490,6 @@ def Seq.Reach {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA �
   ∃ w, RA x w ∧ ∃ (Θ : Type) (Vs : VStar Θ) (θ : Θ) (ωA : TA),
     goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs = true ∧
       Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs) = u
-
-/-- `RelOn` where `B`'s relation holds at every unit and tape. -/
-theorem Seq.relOn_of_forall {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA → Prover TA)
-    (RA : Rel WA) (RB : Rel WB) (h : ∀ x w, RA x w → ∀ ωA u, RB (Q.xB x u) (Q.wB w ωA x u)) :
-    Q.RelOn H PA RA RB :=
-  fun x w hw _ _ _ ωA _ => h x w hw ωA _
 
 theorem Finder.pr_nonneg (H : Msg → Msg) (F : Finder) : 0 ≤ F.Pr H := Pr_nonneg _
 
@@ -765,30 +710,6 @@ theorem zkmalR_seq {WA WB NA ΩA NB ΩB : Type} [Fintype NA] [Nonempty NA] [Fint
 
 /-! ## `n` sessions in turn -/
 
-/-- A tape: a nonce and the rest, each finite and inhabited. -/
-structure SeqTape where
-  N : Type
-  Ω : Type
-  [fN : Fintype N]
-  [nN : Nonempty N]
-  [fΩ : Fintype Ω]
-  [nΩ : Nonempty Ω]
-
-attribute [instance] SeqTape.fN SeqTape.nN SeqTape.fΩ SeqTape.nΩ
-
-/-- The tape of `n + 1` sessions in turn: the first's is `T₀`, and session `n + 1` adds `forkTape (c + n)`'s guess, its
-own `NB × ΩB`, and a second rest for the sessions before it. -/
-def SeqTape.iter (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB] :
-    ℕ → SeqTape
-  | 0 => T₀
-  | n + 1 => ⟨Fin (c + n + 1) × (SeqTape.iter T₀ c NB ΩB n).N × NB × (SeqTape.iter T₀ c NB ΩB n).Ω,
-      (SeqTape.iter T₀ c NB ΩB n).Ω × ΩB⟩
-
-/-- The first `n + 1` sessions' tape as a type. -/
-abbrev SeqTape.at (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB] [Nonempty ΩB]
-    (n : ℕ) : Type :=
-  (T₀.iter c NB ΩB n).N × (T₀.iter c NB ΩB n).Ω
-
 /-- **`n + 1` sessions in turn**: `P₀`, then session `j + 1` (`PB j`) after the first `j + 1`, at the unit their
 history selects (`Q j`), on `forkTape (c + j)`. -/
 def iterProver {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB]
@@ -796,16 +717,6 @@ def iterProver {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintyp
     (PB : ℕ → WB → Prover (NB × ΩB)) : (n : ℕ) → WA → Prover (T₀.at c NB ΩB n)
   | 0 => P₀
   | n + 1 => fun w => ((Q n).prover (iterProver T₀ c NB ΩB Q P₀ PB n) (PB n) w).comap (forkTape (c + n))
-
-/-- The simulator of `n + 1` sessions in turn, continuing where `go` holds: `S₀`, then, where `go j` holds at the
-simulated history, session `j + 1`'s program at the unit that history selects (`Seq.simG`), on coins `CB j`. -/
-def iterSimG {WA WB : Type} (T₀ : SeqTape) (c : ℕ) (NB ΩB : Type) [Fintype NB] [Nonempty NB] [Fintype ΩB]
-    [Nonempty ΩB] (Q : (n : ℕ) → Seq WA WB (T₀.at c NB ΩB n)) (S₀ : Simulator) (CB : ℕ → Msg → Type)
-    [∀ n x, Fintype (CB n x)] [∀ n x, Nonempty (CB n x)]
-    (progB : (n : ℕ) → (x : Msg) → (Q n).U x → CB n x → SP (List (Msg × Out)))
-    (go : ℕ → Msg → List (Msg × Out) → Bool) : ℕ → Simulator
-  | 0 => S₀
-  | n + 1 => (Q n).simG (iterSimG T₀ c NB ΩB Q S₀ CB progB go n) (CB n) (progB n) (go n)
 
 /-- The simulator of `n + 1` sessions in turn: `iterSimG` going on where the first `j + 1`'s simulated transcript does
 (`goesOn`, `Seq.simU`). -/

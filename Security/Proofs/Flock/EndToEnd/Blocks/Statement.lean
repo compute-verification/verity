@@ -1,4 +1,19 @@
-import Proofs.Flock.EndToEnd.Period.Statement
+module
+
+public import Proofs.Flock.EndToEnd.Period.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The integrity audit per server-time block, and pooled over a monitoring period's blocks (trusted)
@@ -30,6 +45,8 @@ A wrong unit is counted in the session that holds it (`SamplingBlock.wrongSet`).
 statements say nothing of whether the value a session reads there is the one the block before committed;
 `IntegrityBlockCarried` and `IntegrityHorizonCarried` (`EndToEnd/Carry/Statement.lean`) do.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

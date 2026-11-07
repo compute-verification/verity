@@ -1,5 +1,26 @@
-import Proofs.Properties.Nci.Resolve
-import Proofs.Properties.Nci.Width
+module
+
+public import Proofs.Properties.Nci.Resolve
+public import Proofs.Properties.Nci.Width
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Properties.Nci.Lemmas
+import Std.Data.HashSet.Lemmas
 
 /-!
 # The novel reads, from what `Desc.analyze` and `Desc.novelWidth` compute
@@ -16,6 +37,8 @@ segment's first piece. `readsExact` (`Proofs.Properties.Nci.Agrees`) proves it.
 `descAgrees_of_open` gives `DescAgrees` from it, `Walk.OperandsResolve` and `Resolve.BodiesOk`, and
 `descAgrees_of_readsExact` (`Proofs.Properties.Nci.Agrees`) from it alone, the other two proved.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.Novel
 

@@ -1,5 +1,7 @@
-import Properties.Pous.Period
-import Properties.Pous.EndToEndAt
+module
+
+public import Properties.Pous.Period
+public import Properties.Pous.EndToEndAt
 
 /-!
 # PoUS over one period at any point and block count
@@ -22,6 +24,8 @@ import Properties.Pous.EndToEndAt
   bit-ticks with probability at most `δ + ε_max`.
 * `PeriodHeldDemo`: `PeriodHeldAt` at `N = 1038·2^16`, whose state bound is 1,060,008,348,186 bits.
 -/
+
+@[expose] public section
 
 namespace Pous.Period
 
@@ -50,7 +54,7 @@ structure AuditsOf {B w p : ℕ} [NeZero p] (sch : Scheme (ringRO B w p)) (ΩW �
   /-- the payload `C*` decodes to, as the ring game's bits -/
   W : ΩW × ΩQ → Bits sch.n
   /-- the memory challenger's signed session -/
-  session : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → PousCheck.Run.Session
+  session : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → PousCheck.Run.ChallengePhaseRecord
   /-- the memory challenger's record of its sessions -/
   device : ΩW × ΩQ × ((ringRO B w p).Ω × HmCoins × Streams) → MemoryChallenger.Properties.Challengers
 

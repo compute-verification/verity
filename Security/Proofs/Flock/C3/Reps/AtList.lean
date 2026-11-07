@@ -1,5 +1,21 @@
-import Proofs.Flock.C3.Reps.WithReads
+module
+
+public import Proofs.Flock.C3.Reps.WithReads
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.PubRows.Shape
+import Proofs.Flock.C3.VStarList.Shape
 
 /-!
 # C3's rep decoder over the verifier's own list
@@ -19,6 +35,8 @@ the list is V*'s holo statements (`FlockC3.VStarList.statements_holo`).
   from each part's `ResZeroAtLH`, `RepMaps.algebraDecodes` and `withReads_algebraDecodes` with the structure and groups
   the list's.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

@@ -1,5 +1,21 @@
-import Proofs.Flock.VBridge.Climb
+module
+
+public import Proofs.Flock.VBridge.Climb
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.Hm.Commit
+import Proofs.Flock.Verifier.Hash
 
 /-!
 # V*'s opening: the row's leaf climbs to the top
@@ -16,6 +32,8 @@ and the directions are the position's low bits, `out` carries the verifier of re
 `out` is half of `_steps`; the other half, `acc_out` (the opening's share of the consistency sums, `cons_structure`), is
 `rec_residuals.residual_forms` at `cons_structure(LANES)` and waits on that gadget's statement.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 

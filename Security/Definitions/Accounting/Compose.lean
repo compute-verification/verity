@@ -1,7 +1,9 @@
-import Definitions.Accounting.TS
-import Definitions.Accounting.Gates.Model
-import Definitions.Accounting.Device
-import Definitions.Pouw.Window
+module
+
+public import Definitions.Accounting.TS
+public import Definitions.Accounting.Gates.Model
+public import Definitions.Accounting.Device
+public import Definitions.Pouw.Window
 
 /-!
 # PoUW as a compile pass over an arbitrary declared circuit (trusted)
@@ -14,7 +16,7 @@ window's grid-padded tiles, one a proof unit, and proves each drawn tile with th
 Each round's coin is `live` (the verifier's, released after the round's served values are committed) or `seeded`
 (a seed: SHA-512 of the window's salt, the unit's position and its operands' roots, Fiat–Shamir). The live statements
 (`CircuitWork`, `CircuitCredit`) describe the designed protocol: PoUW's code today has one salt a window and derives
-the noise in the scheme (`verity/core/protocols/pouw/coins.py`'s `LABELS`, `PROTOCOL.md`), so every window it runs is
+the noise in the scheme (`verity/core/protocols/pouw/coins.py`'s `LABELS`), so every window it runs is
 seeded, and its credit is the seeded statements' (`CircuitWorkSeeded`, `CircuitCreditSeeded`), at a grinding premium
 per seed group (GRIND, one seed a call), once its seeds name what each round reads (`SeedNamed`, which
 today's code doesn't meet).
@@ -126,6 +128,8 @@ The physical layer:
   for a seeded window. The ledger, not this statement, decides how much of a device's time the certificates it
   admits may claim.
 -/
+
+@[expose] public section
 
 namespace Accounting.Compose
 

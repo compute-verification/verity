@@ -1,6 +1,8 @@
-import MemoryChallenger.Judge
-import PousCheck.SetupProtocol
-import PousCheck.Merkle
+module
+
+public import MemoryChallenger.Judge
+public import PousCheck.SetupProtocol
+public import PousCheck.Merkle
 
 /-!
 # A PoUS run, composed
@@ -8,10 +10,10 @@ import PousCheck.Merkle
 `verity/core/protocols/pous/run.py`'s `check`: what setup published and what the memory challenger signed, joined. A run
 is the setup's public outputs (`SetupProtocol.Public`, `root` the root of `C*`'s leaves under `salt`), the memory
 challenger's table of `C*` (every block's `sha512/row/v2` digest in block order, `blockDigest`: the harness's
-`DIGESTS.bin`) and one signed session (`Session`). `check` judges it with two inputs of the verifier's own: `trusted`,
-the verifier's list of memory-challenger keys, which never comes from the run's record (whoever writes the record could
-otherwise list its own key), and the id the auditor designated for the audit's session. It accepts the run at P2's
-deployed point (`DEPLOYED`) under S1's LMS (`SCHEMES`) when, in order:
+`DIGESTS.bin`) and its record of one signed session (`ChallengePhaseRecord`). `check` judges it with two inputs of the
+verifier's own: `trusted`, the verifier's list of memory-challenger keys, which never comes from the run's record
+(whoever writes the record could otherwise list its own key), and the id the auditor designated for the audit's session.
+It accepts the run at P2's deployed point (`DEPLOYED`) under S1's LMS (`SCHEMES`) when, in order:
 
 1. the setup published the point's block count and a 24-byte salt;
 2. the table holds one 64-byte digest a block, and its leaves under that salt (`rowLeaf`, `verifier.row_leaf`) have the
@@ -30,6 +32,10 @@ difftest.
 `SETUP.json` the setup's public outputs (`Public.toJson`) and `SESSION.json` `{"commitment", "openings", "signed"}`,
 each exactly the canonical JSON of what it decodes to, and `SESSION_ID` the designated id in lowercase hex.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PousCheck.Run
 
@@ -50,7 +56,7 @@ def SALT : Nat := 24
 
 /-- One session as the memory challenger records it: what it signed, the commitment published before it and its coin
 openings. Which keys are trusted is the verifier's, never the record's (`check`'s `trusted`). -/
-structure Session where
+structure ChallengePhaseRecord where
   signed : SignedSession
   commitment : SessionCommitment
   openings : Array CoinOpening
@@ -75,7 +81,7 @@ def need (ok : Bool) (reason : String) : Except String Unit := if ok then pure (
 
 /-- `check` at `pt` under `schemes`. -/
 def checkAt (schemes : Schemes) (pt : Point) (trusted : List ByteArray) (pub : SetupProtocol.Public)
-    (digests : ByteArray) (r : Session) (sid : ByteArray) : Except String Unit := do
+    (digests : ByteArray) (r : ChallengePhaseRecord) (sid : ByteArray) : Except String Unit := do
   let q := pt.params
   let sc := r.commitment
   need (pub.blocks == q.blocks) s!"the setup published {pub.blocks} blocks, not the point's {q.blocks}"
@@ -96,17 +102,17 @@ def checkAt (schemes : Schemes) (pt : Point) (trusted : List ByteArray) (pub : S
 
 /-- The composed check of a run (module docstring). `trusted` is the verifier's list of memory-challenger keys and never
 comes from the run's record. -/
-def check (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : Session)
+def check (trusted : List ByteArray) (pub : SetupProtocol.Public) (digests : ByteArray) (r : ChallengePhaseRecord)
     (sid : ByteArray) : Except String Unit :=
   checkAt SCHEMES DEPLOYED trusted pub digests r sid
 
 /-! ## Its formats -/
 
-def Session.toJson (r : Session) : Json :=
+def ChallengePhaseRecord.toJson (r : ChallengePhaseRecord) : Json :=
   Json.mkObj [("commitment", r.commitment.toJson), ("openings", .arr (r.openings.map CoinOpening.toJson)),
     ("signed", r.signed.toJson)]
 
-def Session.ofJson (j : Json) : V Session := do
+def ChallengePhaseRecord.ofJson (j : Json) : V ChallengePhaseRecord := do
   let ctx := "session"
   pure { signed := ← SignedSession.ofJson (← J.get j "signed" ctx),
          commitment := ← SessionCommitment.ofJson (← J.get j "commitment" ctx),
@@ -120,7 +126,7 @@ def decodeTrusted : Json → V (Array ByteArray) := exactly (fun j => hexArr j "
 
 def decodeSetup : Json → V SetupProtocol.Public := exactly SetupProtocol.Public.ofJson SetupProtocol.Public.toJson
 
-def decodeSession : Json → V Session := exactly Session.ofJson Session.toJson
+def decodeSession : Json → V ChallengePhaseRecord := exactly ChallengePhaseRecord.ofJson ChallengePhaseRecord.toJson
 
 /-- The outcome as the record's verdict: `{"accepted": true}`, or `{"accepted": false, "reason": …}`. -/
 def outcomeJson : Except String Unit → Json

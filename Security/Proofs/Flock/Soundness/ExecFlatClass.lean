@@ -1,4 +1,14 @@
-import Proofs.Flock.Soundness.ExecTemplateSetup
+module
+
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.ComposePlace
+public import Proofs.Flock.Soundness.ExecTemplateSetup
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.List.GetD
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.Types.Parts
 
 /-!
 # A typed flat class's unit, placed (1e for flat classes)
@@ -14,6 +24,8 @@ a flat class: `parseTyped` parses the file with the unit's net first (`HmRow.par
 - `setupH_flatRealizes`, `setupH_flatPlacement`: so at each unit slot, the accepted statement realizes the unit's composed
   rows (`Layout.realizes`) and places them (`Realizes.placement`), the table class's `placed` there.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

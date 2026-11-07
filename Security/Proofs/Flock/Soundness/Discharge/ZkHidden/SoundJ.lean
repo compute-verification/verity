@@ -1,4 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
+import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 
 /-!
 # The soundness half of one hidden-output `--zk` sampled session of `J` tables
@@ -17,6 +34,8 @@ circuit and public file are `HmOut`'s, each table is `setupHidden`'s (`setupTabl
 rows are HiddenExec's `keyPlaceH` and `keyRowsH` (`rsZHJ`), the tags are `TagsOkZHJ`, and the coin server's draws are
 `DrawOkZKHJ`. The record is `RecordsLiveZKJ`, unchanged.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkHidden
 

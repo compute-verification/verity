@@ -1,9 +1,43 @@
-import Proofs.Flock.Claims.Recursion.ResLowerD
-import Proofs.Flock.Claims.Recursion.DecodeAt
-import Proofs.Flock.Claims.Recursion.RestVerdictBases
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.DeployedBrings
+module
+
+public import Proofs.Flock.Claims.Recursion.ResLowerD
+public import Proofs.Flock.Claims.Recursion.ResAccOff
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.Reps.AtList
+import Proofs.Flock.Claims.Recursion.DecodeAt
+import Proofs.Flock.Claims.Recursion.VerdictLoop
+import Proofs.Flock.Claims.Recursion.VerdictRowDTie
+import Proofs.Flock.Claims.Recursion.VerdictRowG
 
 /-!
 # The pieces of `resLowered_D`
@@ -25,6 +59,8 @@ facts at part `s`'s decision (`resSite_of_dec`), `ReadsAt` and the base checks (
   from P2 below `accBase` and P3 above), and the residuals vanish at one where they vanish at the other
   (`resZero_off`, at `structureOf_accLow`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.DecompBR
 
