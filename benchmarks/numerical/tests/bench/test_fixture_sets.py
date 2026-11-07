@@ -7,7 +7,7 @@ import json
 import pytest
 
 from verity_numerical.bench import fixture_sets as FS
-from verity_numerical.bench import templates as TM
+from verity_flock import subcircuit_templates as TM
 
 
 def test_the_committed_synthetic_sets_are_the_generators():

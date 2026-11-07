@@ -32,8 +32,8 @@ import numpy as np
 
 from verity.ml.randomness import Key, derive
 
-from . import input_sets as IS
-from . import templates as TM
+from verity_flock import input_sets as IS
+from verity_flock import subcircuit_templates as TM
 
 SOURCE = b"verity input-set synthetic"
 DOMAIN = "verity/input-sets/synthetic/v1"

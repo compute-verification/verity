@@ -60,7 +60,7 @@ def _population(sub, n: int, sets: Path, seed: int):
     `Q_template_instance` v0 over `population_program` of its template at ``n`` (instance i is unit i), with that program."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity_numerical.bench.generate import generate
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     s = InputSet.open(generate(sub, n, seed, sets)["path"])
     template = s.subcircuit.definition(**FC.set_statics(s))
@@ -103,7 +103,7 @@ def stage(n: int, sets: Path, out: Path, plain_leaves: bool = False, sparse=None
     (flock-circuit, with ``sparse``, the bucket's `rec_sparse.Shape`): the stacked table R registered with it here
     (`rec_session.stage_stacked`, ``forge`` ``cell`` its forgery), the circuit registration whose digest META binds."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     RB.check_inner(n)
     sub = TM.parse_subcircuit_id(subcircuit) if subcircuit else TM.rope_head(64)
@@ -130,7 +130,7 @@ def stage_window(window: Path, k: int, subcircuit: str, sets: Path, out: Path, z
     ``stage-zk``)."""
     from verity.core.protocols.sampled_proofs.one_stage import partition as P
     from verity.ml.windows.flock_inputs import flock_input_files
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     win = json.loads((window / "window.json").read_text())
     mem = win["members"][k]

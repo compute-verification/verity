@@ -84,7 +84,7 @@ SERVING_COMMIT_COST = Tool(
     command=["python", "benchmarks/commitments/serving_commit_cost.py"],
     closure=["benchmarks/commitments/**", *package_paths(TREE, "verity.ml.commitments", "**"), *package_paths(TREE, "verity", "errors.py"),
              "verity/ml/windows/rows.py", "verity/ml/windows/hiding.py",
-             "benchmarks/numerical/python/verity_numerical/bench/input_sets.py"],
+             "verity/ml/flock/python/verity_flock/input_sets.py"],
     key_params=["input_set", "n", "workers"],
     produces=["bench-result/v1", "run-files/v1"],
     parse=parse_serving,
