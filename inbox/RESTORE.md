@@ -134,3 +134,8 @@ minutes; START and END lines follow here. I terminate the pod after END, unless 
 - 10:33Z GLMREPLAY: END r20261107-102043-ccfa (rc 1; GPU at 0 MiB). The restores loaded edge 1 and checked it, then
   stopped at the replay's first `schedule()`. The restored engine had its stats off while the loaded scheduler kept
   the served one's (fixed in 8bcb6daa00, as your restore.py does). START r20261107-103301-0112 at 8bcb6daa00. ETA ~10:55Z.
+- 10:57Z GLMREPLAY: END r20261107-103301-0112 (rc 1; GPU at 0 MiB). Both arms matched on steps, tokens and logprob bits
+  (mixed: 1,337 steps, 159,283 tokens over 666 requests; unseeded: 1,397 steps, 157,109 tokens over 665), with 55
+  requests held decoding at edge 1. The far edge differed only in 44 and 40 blocks taken after edge 1, whose unwritten
+  slots kept the served pool's old bytes against the restore's fill. Fixed in 406951e28e: edge 1 dumps the whole pool
+  (about 103 GB on this pod). START r20261107-105638-b8e5, the mixed arm at 406951e28e. ETA ~11:10Z.
