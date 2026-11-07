@@ -39,13 +39,15 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
   --env REPLAY=saturated -- bash benchmarks/serve_tax/run.sh
 ~~~
 
-`run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit window and the KV edge's window).
-`MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b` on one GPU, the last two from their pinned snapshots
-under `HF_HOME`; `glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
+`run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit period and the KV edge's window).
+`MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
 The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
 and refuse a tree without them. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
+
+On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b`, the last two read from their pinned
+snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
 
 ## What it writes
 

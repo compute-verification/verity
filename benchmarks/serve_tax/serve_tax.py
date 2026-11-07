@@ -650,7 +650,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--warm-s", type=float, default=20.0, help="a warm-up load at the lowest rate first (0: none)")
     r.add_argument("--drain-s", type=float, default=600.0)
     r.add_argument("--startup-s", type=float, default=1800.0)
-    r.add_argument("--window-s", type=float, default=600.0, help="the Commit window the tokens arm closes at")
+    r.add_argument("--window-s", type=float, default=600.0, help="the Commit period the tokens arm closes at")
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
     r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
     r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan draws from")
