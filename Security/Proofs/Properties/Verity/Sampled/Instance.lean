@@ -622,7 +622,7 @@ theorem couplingTarget_at (K₀ : Constructions I.base) (k : Verity.Registration
         OpenedRecorded Jr (Verity.Game.CoinTape.run (I.base.game θ F c) σ x).log) :
     ∀ θ F A, I.sessions θ F = some A →
       CouplingTarget (I.stage (I.constructionsAt K₀ k reg record recordDigest)) k
-        (I.liftStage (I.constructionsAt K₀ k reg record recordDigest)) A θ F := fun θ F A h =>
+        (I.liftStage (I.constructionsAt K₀ k reg record recordDigest)) A θ F := fun θ F _ h =>
   couplingTargetAt_counts (V := I.stage (I.constructionsAt K₀ k reg record recordDigest))
     (I.stageOf (I.constructionsAt K₀ k reg record recordDigest) K₀) I.deployment reg record recordDigest
     (I.signer θ) (setsUp_congr (V := I.base) rfl rfl rfl rfl rfl (I.sessions_some h).2)
