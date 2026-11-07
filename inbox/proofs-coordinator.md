@@ -1493,3 +1493,23 @@ pass at the head. Still open from 19:42Z: does P2 compose after L2/L3, or do I a
     strategy from the boundary record and the auditor's coins). It has the interior at uniform salts, and the
     second-stage sample and every `V*` any function of the records, the first sample and the auditor's coins. Then the
     PR for `SampledAuditTwoAny(Deployed)` with `Refs PRF-457`, once its records pass.
+- 20:30Z (TWOSESS) **`SessionRuns` is stated at TSVERIFY's code with no new premise, and pushed; the proof is written and its check is running. The 20:35Z interface change is applied.** `cursor/proofs-twosess-9e15` @ `59749fe905`: spotiface (`2ae5688ef9`) with TSVERIFY's `cursor/proofs-twocode-5c3e` (`c9ea9d91ff`) merged.
+  - **The generic theorem** is `Claims.Sampling.sessionRuns_of_steps S H : SessionRuns H D`, in `Proofs/Flock/Claims/Sampling/SessionSteps.lean`. Its premise `SessionSteps D` is what the proof reads of a sampled verifier:
+    - its first `pre x` rounds answer with no `H` call and never accept;
+    - after them it is `D.flock.V` at the statement the prefix's messages give;
+    - its session rounds are the rounds from `pre x` on;
+    - its session shows that statement and the rest of the transcript.
+
+    The embedding is `emb i = pre x + i`. A run refused inside the prefix is matched by Flock refusing an empty first message.
+  - **At the deployed code**, `SpotFlock.sessionRuns h rel H : SessionRuns H (deployOf (FlockDeploy.deployZk rel) (code h))`, in `Proofs/Flock/SpotFlock/Sessions.lean`. It uses `pre = 3`, the statement is round 2's message, and the refused case uses `h.xS₀`. It only reads `SpotFlock.Code`, which is unchanged.
+  - **The interface change**:
+    - `RefinesTwo H L` is now `binds` and `sessions`, over any `Arg`.
+    - `ComposesTwo` keeps `Exports` (so ZKTWO can add its ZK conjunct) and concludes `L.KS ∧ L.Exfil`.
+    - `Spot.lean` now sits at `code h`. The sorried `code`, `iroots`, `two` and `rs`, which clashed with `SpotFlock.Code`'s names, are gone.
+    - `refinesTwo p h` has `binds` proved by `commit_binds`. Its `sessions` comes from `sessionsTwo_compiled` with my `sessionRuns`, and `opens` is read at `R` through `hR.1`.
+    - Its other premises are still `sorry`: PR 2's five code facts, `InnerNumbers` and `SessionOpensTwo`.
+  - **Runs on vy-nebius-cpu-1**:
+    - r20261107-195729-3b0e: the statement built; three tactic slips in the instance are fixed in `59749fe905`.
+    - r20261107-201751-ccb0: checks the generic proof and `Spot.lean`.
+
+    **The proof with no sorry should be done tonight, by about 23:00Z.**
