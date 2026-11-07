@@ -886,7 +886,7 @@ def stats(win: DO.DitherState):
 # -- the gate ----------------------------------------------------------------------------------------------------------------
 
 # N > 0: `check` hashes a table's leaves in a spawned pool of N processes once it has POOL_MIN rows or more (a prefill
-# capture's 2.75M z/y units take ~4 min on one core); unset or 0, in this process
+# capture has 2.75M z/y units); unset or 0, in this process
 CHECK_WORKERS_ENV = "DITHER_CHECK_WORKERS"
 POOL_MIN = 4096
 _POOL: list = []
