@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 
@@ -157,7 +158,9 @@ def test_each_edges_record_is_copied_out_of_the_scratch_directory(tmp_path):
                                                                     "outputs.jsonl"]
 
 
-def test_a_production_plans_requests_send_their_own_sampling_and_a_share_of_the_sampled_go_unseeded():
+def test_a_production_plans_requests_send_their_own_sampling_and_a_share_of_the_sampled_go_unseeded(monkeypatch):
+    corpus = SimpleNamespace(request_seed=lambda rid: int(rid[4:]) + 1000, SAMPLING={"production": {}})
+    monkeypatch.setattr(T.S, "corpus", lambda: corpus)
     greedy = {"i": 0, "prompt_ids": [1, 2], "max_tokens": 8, "seeded": False, "sampling": {"temperature": 0.0}}
     sampled = {"i": 1, "prompt_ids": [3], "max_tokens": 4, "seeded": True, "sampling": {"temperature": 0.7}}
     ids = [f"tpr-{i:05d}" for i in range(400)]
@@ -172,12 +175,11 @@ def test_a_production_plans_requests_send_their_own_sampling_and_a_share_of_the_
     seeded = next(rid for rid in ids if T.request_class(sampled, rid, 0.5) == "seeded")
     unseeded = next(rid for rid in ids if T.request_class(sampled, rid, 0.5) == "unseeded")
     b = body("glm", sampled, seeded, "production")
-    assert b["temperature"] == 0.7 and b["logprobs"] == 0 and b["seed"] == T.S.corpus().request_seed(seeded)
+    assert b["temperature"] == 0.7 and b["logprobs"] == 0 and b["seed"] == int(seeded[4:]) + 1000
     assert b["prompt"] == [3] and b["max_tokens"] == 4 and b["user"] == seeded and "ignore_eos" not in b
     assert "seed" not in body("glm", sampled, unseeded, "production")
     assert "seed" not in body("glm", greedy, seeded, "production")
     assert body("glm", {"prompt_ids": []}, seeded, "production") == {"model": "glm", "real": "production", "logprobs": 0}
-    T.S.corpus().SAMPLING.setdefault("production", {})
     named = T.own_body(lambda *a: {}, 0.5, "production")("glm", sampled, seeded, "production")
     assert "temperature" not in named and "seed" not in named and "ignore_eos" not in named and named["logprobs"] == 0
 
