@@ -27,7 +27,11 @@ It starts from an empty engine. `restore.py` starts mid-traffic instead: it puts
 edge into a fresh engine (the KV bytes into the same block ids, then the state, `boundary.restore`), replays to a later
 edge, adding each request that arrived in between before the step it arrived before, and compares every step's
 schedule, every sampled token and its logprob's bits, and at the far edge the KV pool's root, each block's fingerprint,
-the block pool and every dumped leaf (`boundary.py`'s docstring says what an edge takes and how).
+the block pool and every dumped leaf (`boundary.py`'s docstring says what an edge takes and how). `rebuild.py` starts from
+less, only what a host copy of the K/V pages and the step record hold: it adds each request held at the edge to a fresh
+engine as a new request with its outputs so far, copies its computed prefix's pages from the edge's KV file into blocks
+the fresh engine allocates, as a KV connector's load does, and compares the replay the same way, with each request's K/V
+over its computed tokens as a SHA-512 root at both edges (``--tail`` sets what a partial block holds past its prefix).
 
 The workload is the trace corpus's (`benchmarks/network_e2e/traces`: C4 prompts of 16 to 1,024 tokens, about 60% behind
 one of eight shared prefixes, caps of 64 or 256 tokens) under Poisson arrivals, every request decoding to its cap
