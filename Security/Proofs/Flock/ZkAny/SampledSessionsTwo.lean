@@ -36,16 +36,17 @@ def recTwoOf {K S Ys V O T R X₁ : Type} (sv : Service K S Ys V O T R) {r : ℕ
 `SampledAuditTwoAny`, and every `ℓ` sessions `Q` of a protocol that meets `ZKOut` at the prover `Pv i` within `ε i`
 wherever its parameters `i` are `ok`: where the stack reads no key, every session's parameters are `ok`, its statement
 and witness are in `Rl`, its verifier runs the protocol's `k` rounds, its error is at most `εS j` at each outcome, its
-simulator's coins are those of `CB j` through `eC`, and an ideal stream of the values is within `δ` of one of `v₀` at
-every first-stage sample, the audit's view at the sessions' outcomes `s` is `SampledAuditTwoAny`'s bound, with the
-sessions' simulators run in turn (`Tup.sims`) and their errors added (`Tup.errs εS ℓ s`). -/
+simulator's coins are those of `CB j` through `eC`, and at every first-stage sample an ideal stream of the values is
+within `δ` of one of the dummy values `v₀` there, the audit's view at the sessions' outcomes `s` is
+`SampledAuditTwoAny`'s bound, with the sessions' simulators run in turn (`Tup.sims`) and their errors added
+(`Tup.errs εS ℓ s`). -/
 theorem sampledAuditTwo_zkOut {K S Ys V O T R X₁ X₂ ι W St N₀ Ω₀ Θ : Type} [Fintype K] [Fintype S] [Fintype Ys]
     [Fintype T] [Fintype R] [Fintype X₁] [Fintype X₂] [Fintype N₀] [Nonempty N₀] [Fintype Ω₀] [Nonempty Ω₀]
     {CB : ℕ → Type} [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)] {H : Msg → Msg} {k : Msg → ℕ}
     {Pv : ι → W → Msg → Prover (N₀ × Ω₀)} {Rl : Rel W} {out : Msg → List (Msg × Out) → St} {Sm : SimOut St}
     {ε : ι → (x : Msg) → W → (Θ' : Type) → VStar Θ' → Θ' → St → ℝ} {ok : ι → Prop}
     (hZ : ∀ i, ok i → ZKOut (fun _ => N₀) (fun _ => Ω₀) H k (Pv i) Rl out Sm (ε i))
-    (sv : Service K S Ys V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v : X₁ → Fin r → V) (v₀ : Fin r → V)
+    (sv : Service K S Ys V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v v₀ : X₁ → Fin r → V)
     (st : X₁ → StreamStack K V S O T R r m) (k₀ : K) (ℓ : ℕ)
     (Q : Sessions (StreamRecord r S O T R × X₁) X₂ ((K × ((i : Fin r) → Fin (m i) → S)) × X₁) ι W (N₀ × Ω₀) Θ)
     (eC : ∀ j ρ χ b, CB j ≃ Sm.C (Q.x j ρ χ b)) (εS : ℕ → St → ℝ≥0∞) (δ : ℝ≥0∞)
@@ -54,7 +55,7 @@ theorem sampledAuditTwo_zkOut {K S Ys V O T R X₁ X₂ ι W St N₀ Ω₀ Θ : 
     (hk : ∀ j ρ χ b, (Q.Vs j ρ χ b).k (Q.x j ρ χ b) = k (Q.x j ρ χ b))
     (hε : ∀ j p χ π b o, ENNReal.ofReal (ε (Q.i j p χ π b) (Q.x j (recTwoOf sv v st p) χ b) (Q.w j p χ π b) Θ
       (Q.Vs j (recTwoOf sv v st p) χ b) (Q.θ j (recTwoOf sv v st p) χ b) o) ≤ εS j o)
-    (hδ : ∀ χ₁ P A, sv.streamIdeal m (v χ₁) P A ≤ sv.streamIdeal m v₀ P A + δ) (s : Tup (fun _ => St) ℓ)
+    (hδ : ∀ χ₁ P A, sv.streamIdeal m (v χ₁) P A ≤ sv.streamIdeal m (v₀ χ₁) P A + δ) (s : Tup (fun _ => St) ℓ)
     (E : StreamRecord r S O T R → X₁ → X₂ → Tup (fun _ => List (Msg × Out)) ℓ → Prop) :
     prCoin (fun q : (K × ((i : Fin r) → Fin (m i) → S)) × X₁ × X₂ × Tup (fun _ => N₀ × Ω₀) ℓ =>
         sv.streamAdmits q.1.1 b (streamRecOf sv (v q.2.1) (st q.2.1) q.1) ∧
@@ -64,7 +65,7 @@ theorem sampledAuditTwo_zkOut {K S Ys V O T R X₁ X₂ ι W St N₀ Ω₀ Θ : 
               (Tup.rels (Q.rel H Pv (recTwoOf sv v st) (q.1, q.2.1) q.2.2.1) ℓ q.2.2.2)) ≤
       (∑ d ∈ streamChoices r m b,
         (avg (fun q : X₁ × X₂ × Tup CB ℓ =>
-            sv.streamIdeal m v₀ (passed d)
+            sv.streamIdeal m (v₀ q.1) (passed d)
                 (fun ρs => E ρs q.1 q.2.1 (Tup.sims (Q.sim Sm H eC (ρs, q.1) q.2.1) ℓ s q.2.2)) +
               sv.streamPrfAdvantage (v q.1) d
                 (fun ρs => E ρs q.1 q.2.1 (Tup.sims (Q.sim Sm H eC (ρs, q.1) q.2.1) ℓ s q.2.2))) + δ)) +

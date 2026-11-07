@@ -8,9 +8,10 @@ public import Proofs.Flock.ZkAny.SampledSessionsTwo
 
 `Flock.Guarantees.SampledAuditTwoAnyDeployed` is `Flock.Guarantees.SampledAuditTwoAny` with its sampled sessions `ℓ`
 sessions of the deployed session loop, one after another, as `Flock.Guarantees.SampledAuditAnyDeployed` has them for
-one stage, and every registration's commitments `N` hm96 leaves at the pinned key. The stream is every registration on
-the ZK server's record up to the audit's interior registration; the interior registration's values are the sampled
-replay blocks' interiors, a function of the first-stage sample, and the stack's choices may be too. Each session is
+one stage, and every registration's commitments `N` hm96 leaves at the pinned key, put together by the registration's
+public layout. The stream is every registration on the ZK server's record up to the audit's interior registration; the
+interior registration's values are the sampled replay blocks' interiors, a function of the first-stage sample, and so
+are its layout and the stack's choices; the boundary and interior registrations' layouts differ. Each session is
 `SessionLoopZKAnyDeployed`'s release (`LeanRelease.ofLoopLink` at `Loop.realOf src`, every session at the same `L₀` and
 `src`), at its `Finish` verdict, against a verifier `V*` of its `refK x + 2` rounds; its worker and values are any the
 stack chose, where the values' unswitched round encoding is causal and the transport's trusts hold at the worker
@@ -37,10 +38,11 @@ set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000
 
 /-- **A two-stage sampled audit's view at any values, at the deployed session loop.** For every value service `sv` whose
-commitments of the values `v` under the salts `y` are a function `g` of `N` hm96 leaves at the pinned key,
-`Hc(dig v i + M·y_i, c(y_i))`; every stream of `r` registrations, registration `i` of an epoch of `m i` sessions, at
-most `b` passed over; every finite first-stage sample space `X₁`, values `v` and stack `st` functions of the first-stage
-sample, dummy values `v₀`, key `k₀`, and finite second-stage sample space `X₂`; `ℓ` sampled sessions of the deployed
+commitment of the values `v` under the salts `y` is a function `g`, of the values' public layout `sh v`, of `N` hm96
+leaves at the pinned key, `Hc(dig v i + M·y_i, c(y_i))`; every stream of `r` registrations, registration `i` of an
+epoch of `m i` sessions, at most `b` passed over; every finite first-stage sample space `X₁`, values `v`, dummy values
+`v₀` of the values' layouts, and a stack `st`, all functions of the first-stage sample; a key `k₀`, and a finite
+second-stage sample space `X₂`; `ℓ` sampled sessions of the deployed
 session loop at `0 < t` repetitions and a relation `Rl` at whose statements the session's table witnesses are valid
 (`Complete`), at `L₀` and `src`; and the sessions `Q`, with the simulators' coins of session `j` those of `CB j` through
 `eC`:
@@ -50,16 +52,17 @@ at its worker, its statement and witness are in `Rl`, its `V*` runs `refK x + 2`
 is at most `εS j` at each verdict, then at the sessions' verdicts `s` and every event `E` on the records, both samples
 and the sessions' messages, the probability that the loop admits the stream and the audit shows `s` and `E` is at most
 the sum, over the choices `d` the loop can admit, of (the average over both samples and the simulators' coins of `E` on
-an ideal stream of `v₀` with the simulators' messages, plus the PRF gap at `d` there, plus `r·N·2δ₁`), plus the forge
+an ideal stream of `v₀` at the first-stage sample with the simulators' messages, plus the PRF gap at `d` there, plus
+`r·N·2δ₁`), plus the forge
 term averaged over the first-stage sample, plus the sessions' errors at `s`. -/
 def _root_.Flock.Guarantees.SampledAuditTwoAnyDeployed : Prop :=
-  ∀ {K S V O T R X₁ X₂ Θ D : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R] [Nonempty S] [Nonempty T]
+  ∀ {K S V O T R X₁ X₂ Θ D Sh : Type} [Fintype K] [Fintype S] [Fintype T] [Fintype R] [Nonempty S] [Nonempty T]
     [Nonempty R] [Fintype X₁] [Fintype X₂] {N : ℕ} {CB : ℕ → Type} [∀ j, Fintype (CB j)] [∀ j, Nonempty (CB j)]
     (sv : Service K S (Fin N → ZkView.Salt) V O T R) (Hc : ZkView.Bits × ByteArray → D)
-    (dig : V → Fin N → ZkView.Bits) (g : (Fin N → D) → O),
-    (∀ v y, sv.out v y = g fun i => Hc (dig v i + ZkView.My (y i), ZkView.saltHash (y i))) →
-    ∀ (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v : X₁ → Fin r → V) (v₀ : Fin r → V) (st : X₁ → StreamStack K V S O T R r m)
-      (k₀ : K) (ℓ t : ℕ), 0 < t →
+    (dig : V → Fin N → ZkView.Bits) (sh : V → Sh) (g : Sh → (Fin N → D) → O),
+    (∀ v y, sv.out v y = g (sh v) fun i => Hc (dig v i + ZkView.My (y i), ZkView.saltHash (y i))) →
+    ∀ (r : ℕ) (m : Fin r → ℕ) (b : ℕ) (v v₀ : X₁ → Fin r → V), (∀ χ₁ i, sh (v χ₁ i) = sh (v₀ χ₁ i)) →
+    ∀ (st : X₁ → StreamStack K V S O T R r m) (k₀ : K) (ℓ t : ℕ), 0 < t →
     ∀ (Rl : Rel Claims.Flock.Wit), (CoinLayer.session Loop.loopNr Masked.dataE).Complete Rl →
     ∀ (L₀ : LeanRelease Claims.Flock.Wit
         ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce ×
@@ -108,7 +111,7 @@ def _root_.Flock.Guarantees.SampledAuditTwoAnyDeployed : Prop :=
                   (recTwoOf sv v st) (q.1, q.2.1) q.2.2.1) ℓ q.2.2.2)) ≤
         (∑ d ∈ streamChoices r m b,
           (avg (fun q : X₁ × X₂ × Tup CB ℓ =>
-              sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Tup.sims (Q.sim (Loop.anySim Masked.dataE
+              sv.streamIdeal m (v₀ q.1) (passed d) (fun ρs => E ρs q.1 q.2.1 (Tup.sims (Q.sim (Loop.anySim Masked.dataE
                 (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) t) CoinOpen.shaH eC
                   (ρs, q.1) q.2.1) ℓ s q.2.2)) +
                 sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Tup.sims (Q.sim (Loop.anySim Masked.dataE
@@ -118,8 +121,8 @@ def _root_.Flock.Guarantees.SampledAuditTwoAnyDeployed : Prop :=
           avg (fun χ₁ => sv.streamForgeAdvantage (v χ₁) (st χ₁ k₀ (v χ₁))) + Tup.errs εS ℓ s
 
 theorem SampledAuditTwoAnyDeployed : Flock.Guarantees.SampledAuditTwoAnyDeployed := by
-  intro K S V O T R X₁ X₂ Θ D _ _ _ _ _ _ _ _ _ N CB _ _ sv Hc dig g hout r m b v v₀ st k₀ ℓ t ht Rl hV L₀ src Q eC εS
-    hown hok hR hk hε s E
+  intro K S V O T R X₁ X₂ Θ D Sh _ _ _ _ _ _ _ _ _ N CB _ _ sv Hc dig sh g hout r m b v v₀ hsh st k₀ ℓ t ht Rl hV L₀
+    src Q eC εS hown hok hR hk hε s E
   exact sampledAuditTwo_zkOut
     (ok := fun i : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals ×
         (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Worker =>
@@ -128,6 +131,6 @@ theorem SampledAuditTwoAnyDeployed : Flock.Guarantees.SampledAuditTwoAnyDeployed
           (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)) CoinOpen.shaH i.2 Rl)
     (fun i hi => (SessionLoopZKAnyDeployed i.1 t ht Rl hV hi.1 L₀ src i.2 hi.2).1) sv r m b v v₀ st k₀ ℓ Q eC εS _
     hown hok hR hk hε
-    (fun χ₁ P A => ideal_hm96_stream sv ZkView.My ZkView.saltHash Hc dig g hout m (v χ₁) v₀ P A) s E
+    (fun χ₁ P A => ideal_hm96_stream sv ZkView.My ZkView.saltHash Hc dig sh g hout m (v χ₁) (v₀ χ₁) (hsh χ₁) P A) s E
 
 end Flock.SecurityProofs

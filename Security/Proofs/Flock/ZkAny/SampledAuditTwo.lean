@@ -102,17 +102,18 @@ theorem prCoin_admits_perOutcome_two {P X₁ X₂ Ω Ωs St B Rec : Type} [Finty
         congrArg (· + ε s) (avg_prod_split fun q : X₁ × X₂ × Ωs => prCoin fun p : P => adm p q.1 ∧
           E (ρ p q.1) q.1 q.2.1 (Sim (ρ p q.1) q.1 q.2.1 s q.2.2)).symm
 
-/-- **An ideal stream hides its values, at hm96 commitments.** Where the value service's commitments of the values `v`
-under the salts `y` are a function `g` of `N` hm96 leaves, leaf `i` being `H(dig v i + M·y_i, c(y_i))` under its own
-uniform salt `y_i`, an ideal stream of `r` registrations' values `v` is within `r·N·2δ₁` of one of `v₀` on every event,
-whichever registrations `P` it passes over, `δ₁` the hiding gap: each registration's commitment, of its own salts, is
-swapped at `N·2δ₁` (`leaves_swap_values`), one registration at a time (`leaves_hybrid`). -/
-theorem ideal_hm96_stream {K S Ys B C D V O T R : Type} [Fintype S] [Nonempty S] [Fintype Ys] [Nonempty Ys] [Fintype T]
-    [Nonempty T] [Fintype R] [Nonempty R] [AddCommGroup B] [Fintype B] [Nonempty B] [DecidableEq B] [DecidableEq C]
-    {N : ℕ} (sv : Service K S (Fin N → Ys) V O T R) (My : Ys → B) (c : Ys → C) (H : B × C → D)
-    (dig : V → Fin N → B) (g : (Fin N → D) → O)
-    (hout : ∀ v y, sv.out v y = g fun i => H (dig v i + My (y i), c (y i))) {r : ℕ} (m : Fin r → ℕ)
-    (v v₀ : Fin r → V) (P : Finset (Fin r)) (A : StreamRecord r S O T R → Prop) :
+/-- **An ideal stream hides its values, at hm96 commitments.** Where the value service's commitment of the values `v`
+under the salts `y` is a function `g`, of the values' public shape `sh v`, of `N` hm96 leaves, leaf `i` being
+`H(dig v i + M·y_i, c(y_i))` under its own uniform salt `y_i`, an ideal stream of `r` registrations' values `v` is
+within `r·N·2δ₁` of one of values `v₀` of the same shapes on every event, whichever registrations `P` it passes over,
+`δ₁` the hiding gap: each registration's commitment, of its own salts, is swapped at `N·2δ₁` (`leaves_swap_values`),
+one registration at a time (`leaves_hybrid`). -/
+theorem ideal_hm96_stream {K S Ys B C D V O T R Sh : Type} [Fintype S] [Nonempty S] [Fintype Ys] [Nonempty Ys]
+    [Fintype T] [Nonempty T] [Fintype R] [Nonempty R] [AddCommGroup B] [Fintype B] [Nonempty B] [DecidableEq B]
+    [DecidableEq C] {N : ℕ} (sv : Service K S (Fin N → Ys) V O T R) (My : Ys → B) (c : Ys → C) (H : B × C → D)
+    (dig : V → Fin N → B) (sh : V → Sh) (g : Sh → (Fin N → D) → O)
+    (hout : ∀ v y, sv.out v y = g (sh v) fun i => H (dig v i + My (y i), c (y i))) {r : ℕ} (m : Fin r → ℕ)
+    (v v₀ : Fin r → V) (hsh : ∀ i, sh (v i) = sh (v₀ i)) (P : Finset (Fin r)) (A : StreamRecord r S O T R → Prop) :
     sv.streamIdeal m v P A ≤
       sv.streamIdeal m v₀ P A + r * (N * (2 * ENNReal.ofReal (CROnly.hidingGap My c))) := by
   let e : (Fin r → S × T × R) × (Fin r → Fin N → Ys) ≃ (Fin r → S × (Fin N → Ys) × T × R) :=
@@ -127,13 +128,18 @@ theorem ideal_hm96_stream {K S Ys B C D V O T R : Type} [Fintype S] [Nonempty S]
     unfold Service.streamIdeal
     exact (prCoin_congr_equiv e _).symm
   rw [hv v, hv v₀]
-  refine leaves_hybrid (fun (a : V × V) (y : Fin N → Ys) => sv.out a.1 y) (fun a y => sv.out a.2 y)
-    (δ := N * (2 * ENNReal.ofReal (CROnly.hidingGap My c))) (fun x G => ?_) r
-    (fun (_ : Fin r → S × T × R) i => (v i, v₀ i))
+  refine leaves_hybrid (fun (a : {a : V × V // sh a.1 = sh a.2}) (y : Fin N → Ys) => sv.out a.1.1 y)
+    (fun a y => sv.out a.1.2 y) (δ := N * (2 * ENNReal.ofReal (CROnly.hidingGap My c))) (fun x G => ?_) r
+    (fun (_ : Fin r → S × T × R) i => ⟨(v i, v₀ i), hsh i⟩)
     (fun (ω : Fin r → S × T × R) (os : Fin r → O) => A fun i => if i ∈ P then none
       else some ((i : ℕ), m i, ((ω i).1, os i, (ω i).2.1), (ω i).2.2))
-  simp only [hout]
-  exact leaves_swap_values My c H N (fun ω i => dig (x ω).1 i) (fun ω i => dig (x ω).2 i) (fun ω ls => G ω (g ls))
+  have h₁ : ∀ ω y, sv.out (x ω).1.1 y = g (sh (x ω).1.1) fun i => H (dig (x ω).1.1 i + My (y i), c (y i)) :=
+    fun ω y => hout _ y
+  have h₂ : ∀ ω y, sv.out (x ω).1.2 y = g (sh (x ω).1.1) fun i => H (dig (x ω).1.2 i + My (y i), c (y i)) :=
+    fun ω y => by rw [hout, (x ω).2]
+  simp only [h₁, h₂]
+  exact leaves_swap_values My c H N (fun ω i => dig (x ω).1.1 i) (fun ω i => dig (x ω).1.2 i)
+    (fun ω ls => G ω (g (sh (x ω).1.1) ls))
 
 end FlockSoundness.ZK
 
@@ -145,8 +151,9 @@ open scoped ENNReal
 /-- **A two-stage sampled audit's view at any values, per outcome of its sampled sessions.** For every value service
 `sv` with finite keys, sessions, salts, tags and record tags; every stream of `r` registrations, registration `i` of an
 epoch of `m i` sessions, at most `b` of them passed over; every finite first-stage sample space `X₁` drawn uniformly
-after the boundary registration, and values `v` and a stack `st` that are functions of the first-stage sample; dummy
-values `v₀`, a key `k₀`, every finite second-stage sample space `X₂` drawn uniformly after the interior registration;
+after the boundary registration, and values `v`, dummy values `v₀` and a stack `st` that are functions of the
+first-stage sample; a key `k₀`, every finite second-stage sample space `X₂` drawn uniformly after the interior
+registration;
 and the sampled sessions' outcome `out` and released bytes `rel`, functions of the registrations' randomness (the key
 and every registration's sessions), both samples and the sessions' own randomness:
 
@@ -161,13 +168,13 @@ samples and `Sim`'s coins, of `E` on an ideal stream of `v₀` with `Sim`'s byte
 def _root_.Flock.Guarantees.SampledAuditTwoAny : Prop :=
   ∀ {K S Y V O T R X₁ X₂ Ω Ωs St B : Type} [Fintype K] [Fintype S] [Fintype Y] [Fintype T] [Fintype R] [Fintype X₁]
     [Fintype X₂] [Fintype Ω] [Fintype Ωs] (sv : Service K S Y V O T R) (r : ℕ) (m : Fin r → ℕ) (b : ℕ)
-    (v : X₁ → Fin r → V) (v₀ : Fin r → V) (st : X₁ → StreamStack K V S O T R r m) (k₀ : K)
+    (v v₀ : X₁ → Fin r → V) (st : X₁ → StreamStack K V S O T R r m) (k₀ : K)
     (out : K × ((i : Fin r) → Fin (m i) → S) → X₁ → X₂ → Ω → St)
     (rel : K × ((i : Fin r) → Fin (m i) → S) → X₁ → X₂ → Ω → B)
     (Sim : StreamRecord r S O T R → X₁ → X₂ → St → Ωs → B) (ε : St → ℝ≥0∞) (δ : ℝ≥0∞),
     (∀ χ₁, ZkServerOwnUser (st χ₁)) →
     (∀ p χ₁ χ₂, PerOutcome (out p χ₁ χ₂) (rel p χ₁ χ₂) (Sim (streamRecOf sv (v χ₁) (st χ₁) p) χ₁ χ₂) ε) →
-    (∀ χ₁ P A, sv.streamIdeal m (v χ₁) P A ≤ sv.streamIdeal m v₀ P A + δ) →
+    (∀ χ₁ P A, sv.streamIdeal m (v χ₁) P A ≤ sv.streamIdeal m (v₀ χ₁) P A + δ) →
     ∀ (s : St) (E : StreamRecord r S O T R → X₁ → X₂ → B → Prop),
       prCoin (fun q : (K × ((i : Fin r) → Fin (m i) → S)) × X₁ × X₂ × Ω =>
           sv.streamAdmits q.1.1 b (streamRecOf sv (v q.2.1) (st q.2.1) q.1) ∧
@@ -175,7 +182,7 @@ def _root_.Flock.Guarantees.SampledAuditTwoAny : Prop :=
               E (streamRecOf sv (v q.2.1) (st q.2.1) q.1) q.2.1 q.2.2.1 (rel q.1 q.2.1 q.2.2.1 q.2.2.2)) ≤
         (∑ d ∈ streamChoices r m b,
           (avg (fun q : X₁ × X₂ × Ωs =>
-              sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
+              sv.streamIdeal m (v₀ q.1) (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
                 sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2))) + δ)) +
           avg (fun χ₁ => sv.streamForgeAdvantage (v χ₁) (st χ₁ k₀ (v χ₁))) + ε s
 
@@ -197,7 +204,7 @@ theorem SampledAuditTwoAny : Flock.Guarantees.SampledAuditTwoAny := by
             E (streamRecOf sv (v q.1) (st q.1) p) q.1 q.2.1
               (Sim (streamRecOf sv (v q.1) (st q.1) p) q.1 q.2.1 s q.2.2)) ≤
         (∑ d ∈ streamChoices r m b,
-          ((sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
+          ((sv.streamIdeal m (v₀ q.1) (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
             sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2))) + δ)) +
           sv.streamForgeAdvantage (v q.1) (st q.1 k₀ (v q.1)) := by
     intro q
@@ -212,17 +219,17 @@ theorem SampledAuditTwoAny : Flock.Guarantees.SampledAuditTwoAny := by
             E (streamRecOf sv (v q.1) (st q.1) p) q.1 q.2.1
               (Sim (streamRecOf sv (v q.1) (st q.1) p) q.1 q.2.1 s q.2.2))
       ≤ avg (fun q : X₁ × X₂ × Ωs => (∑ d ∈ streamChoices r m b,
-          ((sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
+          ((sv.streamIdeal m (v₀ q.1) (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
             sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2))) + δ)) +
           sv.streamForgeAdvantage (v q.1) (st q.1 k₀ (v q.1))) := avg_mono hstream
     _ = (∑ d ∈ streamChoices r m b, avg fun q : X₁ × X₂ × Ωs =>
-          (sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
+          (sv.streamIdeal m (v₀ q.1) (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
             sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2))) + δ) +
           avg (fun q : X₁ × X₂ × Ωs => sv.streamForgeAdvantage (v q.1) (st q.1 k₀ (v q.1))) := by
         rw [avg_add, hsum]
     _ ≤ (∑ d ∈ streamChoices r m b,
           (avg (fun q : X₁ × X₂ × Ωs =>
-              sv.streamIdeal m v₀ (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
+              sv.streamIdeal m (v₀ q.1) (passed d) (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2)) +
                 sv.streamPrfAdvantage (v q.1) d (fun ρs => E ρs q.1 q.2.1 (Sim ρs q.1 q.2.1 s q.2.2))) + δ)) +
           avg (fun χ₁ => sv.streamForgeAdvantage (v χ₁) (st χ₁ k₀ (v χ₁))) := by
         refine add_le_add (Finset.sum_le_sum fun d _ => ?_) ?_
