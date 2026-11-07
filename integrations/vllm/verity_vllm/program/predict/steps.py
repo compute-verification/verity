@@ -320,12 +320,12 @@ def _coded_advice(registered: Registered, advice: Any, record: Any) -> WA.Advice
     if record is None:
         raise Unexpressible("the advice code decodes against the session's certified record, and none was given")
 
-    def v0() -> bytes:
+    def canonical_bytes() -> bytes:
         adv = registered.code.decode(advice, record, registered.cap_bits)
         if type(adv) is not I1.Advice:
             raise TypeError(f"it gave a {type(adv).__name__}, not an I1 Advice")
         return I1.encode(adv)
-    return _window_advice(_decoded("ill-formed v1 advice", ValueError, v0))
+    return _window_advice(_decoded("ill-formed v1 advice", ValueError, canonical_bytes))
 
 
 def ingress_body(i: int, q: I1.RequestAdvice, body: bytes, served: str | None, vocab: int) -> dict:
