@@ -34,7 +34,7 @@ Checked (all on the checkpoint's dequantized weights, `--layers` and the MTP lay
   cast           how far Pearl-C's v1 cast (e4m3(α·x) per row, both operands, per rank's k on row-parallel linears) moves
                  each layer's update, unrotated and under `STACK` (the measure registration's docstring states: 158% / 4%)
   lm_head        n = 19360 padded to whole 64-column tiles with zero rows, the last tile's rows voluntary: the domain, that
-                 no other tile goes undrawn, V-EX's cap, and the credit on the full tiles' real columns
+                 no other tile goes unsampled, V-EX's cap, and the credit on the full tiles' real columns
   shares         the credit map's shares (`--map`, glm53_credit_map's JSON), then per registered stack with its unreached
                  linears uncredited under Pearl-C and lm_head padded
 

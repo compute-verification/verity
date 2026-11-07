@@ -5,16 +5,16 @@ public import Proofs.Flock.Claims.Prob
 public import Proofs.Pouw.PearlC.TileGapTol
 
 /-!
-# g under the sampled audit drawn as the run draws, from TT_OUT per tile
+# g under the sampled audit sampled as the run samples, from TT_OUT per tile
 
-The run draws each tile by its own transcript's tickets (`drawTickets`): its declared weight on a committed tile, nothing
+The run samples each tile by its own transcript's tickets (`drawTickets`): its declared weight on a committed tile, nothing
 on a blank one, scaled to integers by the lcm of the denominators. The game averages over the oracle and the salt each
-transcript's draw probability (`GGapSampledDrawTol`).
+transcript's sample probability (`GGapSampledDrawTol`).
 
 * `ex_le_add_pr`: an average over `(H, s)` of probabilities, each at most `δ` off an event `E` and at most
   `δ + 1` on it, is at most `δ + Pr[E]`.
 * `ticketsOf_cast`, `lcm_den_pos`: a nonnegative weight's tickets are the lcm times the weight, and the lcm is positive.
-* `sampledOfGoodDrawTol`: for one oracle and salt, an accepted draw either has more than `u(X_O)` of the transcript's
+* `sampledOfGoodDrawTol`: for one oracle and salt, an accepted sample either has more than `u(X_O)` of the transcript's
   tickets outside the accepted tiles, with probability at most `δ` by the miss bound (as in `sampledOfGoodTol`), or,
   since a blank tile weighs nothing, its accepted good tiles carry at least `1 − u(X_O)` of the claimed work, at most `Ω`
   times their credit, and then TT_OUT's event holds.
@@ -89,9 +89,9 @@ theorem goodDeclTiles_subset {Q R S : Type} (P : Protocol Q R S) (TR : TileRules
   unfold goodDeclTiles at hg
   exact (mem_filter.mp hg).1
 
-/-- **The draw's bound for one oracle and salt.** Fix a transcript `τ`, its declarations `dec`, a set `good` of its
-committed tiles on which the draw's weight is at most `Ω` times `credit`, and a set `O` of committed tiles disjoint from
-`good` and the blank ones. Unless `good`'s credit exceeds `T/(1 − γ₀)`, the tolerant audit drawn by `τ`'s tickets accepts
+/-- **The sample's bound for one oracle and salt.** Fix a transcript `τ`, its declarations `dec`, a set `good` of its
+committed tiles on which the sample's weight is at most `Ω` times `credit`, and a set `O` of committed tiles disjoint from
+`good` and the blank ones. Unless `good`'s credit exceeds `T/(1 − γ₀)`, the tolerant audit sampled by `τ`'s tickets accepts
 `good ∪ blank` and `O` while `T` is below `1 − γ` of `1 − u(X_O)` of the claimed work, `γ = 1 − (1 − γ₀)/Ω`, with
 probability at most `δ`. -/
 theorem sampledOfGoodDrawTol {Q R S : Type} (TR : TileRules Q R S) (Wd : Layout → ℕ → Decl → ℚ) (U : Workload)
@@ -166,7 +166,7 @@ theorem sampledOfGoodDrawTol {Q R S : Type} (TR : TileRules Q R S) (Wd : Layout 
   rw [← drawsIn_eq_of_acceptsTol c hdisj hacc]
   exact hlt
 
-/-- **TT_OUT per tile gives γ under the sampled audit drawn as the run draws.** If the draw's weight is nonnegative, a
+/-- **TT_OUT per tile gives γ under the sampled audit sampled as the run samples.** If the sample's weight is nonnegative, a
 tile within its cap earns a nonnegative credit, and a declaration consistent with a tile within its cap (its kept width
 within the unit's `k`, its declared credited rows passing Π's rules) weighs it at most `Ω` times its credit, then
 `TTOutTile(γ₀)` gives `GGapSampledDrawTol` at `γ = 1 − (1 − γ₀)/Ω`, at the same error. -/
@@ -229,7 +229,7 @@ theorem gapSampledDrawTol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R]
     rw [hact]
     exact hc0 U hU x.1 x.2 g (mem_range.mp hgr) c.act hgc.1
 
-/-- **The tolerant audit drawn as the run draws at the deployed table**: `GGapSampledDrawTol` at the threshold table
+/-- **The tolerant audit sampled as the run samples at the deployed table**: `GGapSampledDrawTol` at the threshold table
 `u 0 = ε_s`, `u x = 1` otherwise, a miss bound at `(1 − ε_s)^t` (`missBound_strict`). -/
 theorem gapSampledDrawTolThreshold_of_tol {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop}
@@ -238,8 +238,8 @@ theorem gapSampledDrawTolThreshold_of_tol {Q R S : Type} [Fintype Q] [DecidableE
   intro U hU T hT q hq A hA dec t εs hεs
   exact h U hU T hT q hq A hA dec t (fun x => if x = 0 then εs else 1) ((1 - εs) ^ t) (missBound_strict t εs hεs)
 
-/-- **The audit drawn as the run draws that accepts only checked tiles is the tolerant one's strict case**:
-`GGapSampledDrawTolThreshold` gives `GGapSampledDraw`, since a draw every sample of which lands on an accepted good tile or
+/-- **The audit sampled as the run samples that accepts only checked tiles is the tolerant one's strict case**:
+`GGapSampledDrawTolThreshold` gives `GGapSampledDraw`, since a sample every sample of which lands on an accepted good tile or
 a blank one has none on a tile over its inert-work bound. -/
 theorem gapSampledDraw_of_threshold {Q R S : Type} [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     {CM : CostModel Q R S} {P : Protocol Q R S} {TR : TileRules Q R S} {D : Layout → Prop}

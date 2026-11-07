@@ -85,7 +85,7 @@ its domain rules on committed activations and on each fixed-operand row, and its
   the transcript's claimed ticket or useful words.
 - `capOK H s U u act`: the unit's replayed debit is within the cap. It is part of `Correct`: a unit above the cap is
   rejected, so it is in neither TT_OUT's credit sum nor `GGap`'s win sum. `Correct` is the game's idealized check of every
-  unit; a verifier that checks drawn tiles decides the cap per tile (`Tile.lean`: `TileGood`, `GGapSampled`).
+  unit; a verifier that checks sampled tiles decides the cap per tile (`Tile.lean`: `TileGood`, `GGapSampled`).
 - `Wref`: the honest reference's cost of the unit, read from the layout (excluding hash calls; the model's own clean
   quantizer is outside the unit, so neither program is charged for it). -/
 structure Protocol (Q R S : Type) where
@@ -221,7 +221,7 @@ def debitOf (p : Params) (c : Costs) (d : Debit) : ℚ :=
 
 /-- The honest reference's work: the credited work plus the forming that depends on the activations alone. Neither this
 nor `creditOf` has a weight-side term (`B̃·F_A`, `P_B`, the forming of B̃), whether that work runs per call or once per
-weight and epoch, so a verifier's `W_ref` and its draw's tickets must use exactly `wrefOf`. -/
+weight and epoch, so a verifier's `W_ref` and its sample's tickets must use exactly `wrefOf`. -/
 def wrefOf (p : Params) (c : Costs) (s : Shape) : ℚ := creditOf p c s + (c.qa : ℚ) * s.m * s.k
 
 /-- The credited work when forming is not credited at all. -/
@@ -240,7 +240,7 @@ def PearlCAccounting (P : Protocol Q R S) (p : Params) (c : Costs) (ρ : ℚ) : 
 /-- Pearl-C's shape domain: positive dimensions, a whole number of promotion groups, `k ≤ 2^16`, and promotion every
 4 atoms, which confines freezing to one group (P1). What freezing remains is debited per unit, and the cap on the debit is
 in `Correct`, since it depends on the activations and the noise (the aligned-spike census). The
-noise law, the seeds and the chain live in the protocol's reference functions.
+noise distribution, the seeds and the chain live in the protocol's reference functions.
 
 **The channel split** is part of the model's own FP8 path, adopted as `Costs.adopted` adopts Pearl's α.
 - **The set.** Each linear layer ℓ has a fixed set `S_ℓ` of input channels, at most 1% of its k. They are computed by the

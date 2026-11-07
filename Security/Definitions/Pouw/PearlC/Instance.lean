@@ -128,20 +128,20 @@ noncomputable def pearlCProtocol (sem : PearlCSem Q R S) (c : Costs) (ρ : ℚ) 
   Wref := fun L u => (wrefOf Params.pi c (L.shape u) : ℝ)
 
 /-- **The named failure probability** `δ(q, N) = (q + N)·2^−128`. Each of the `q` oracle calls, preprocessing included, yields at
-most one fresh noise draw, and each of the `N` declared units has its own E_A draw (keyed by the unit's index; F_A, F_B
-and E_B are per job, shared by the job's units). The conjecture is that a draw on which some program undercuts that
+most one fresh noise sample, and each of the `N` declared units has its own E_A sample (keyed by the unit's index; F_A, F_B
+and E_B are per job, shared by the job's units). The conjecture is that a sample on which some program undercuts that
 unit's credit by more than `g₀` has probability at most `2^−128`, the seeds' entropy; the union bound over the grinding
-draws and the units gives `δ`, and it needs no independence between them. With `q, N ≤ 2^64`, `δ ≤ 2^−63`.
+samples and the units gives `δ`, and it needs no independence between them. With `q, N ≤ 2^64`, `δ ≤ 2^−63`.
 
 **The noise-loss event has probability 0**, for F's lines at norm 16 (Π's), for one-row units as well.
-- A row the noise floor admits (`mul.rn(σ, α) ≥ 1`) can't lose its noise, whatever the draw.
+- A row the noise floor admits (`mul.rn(σ, α) ≥ 1`) can't lose its noise, whatever the sample.
 - Pearl's line rule scales each E line to L2 norm 256 in BF16 and rounds each entry to E4M3, so a line's largest entry
   is at least its RMS. Over every line its largest entry is at least 44. This is exact: the roundings are monotone, so
   the minimum is taken over the largest magnitude `M = 1..128`, with all 32 magnitudes equal to `M`.
 - At the floor, `β_row ≥ f32(√32/(256·16))`, so the largest `E′` entry is at least `e4m3(f32(β_row·44)) = 0.0625`, a
   normal code. `E′ = 0` is therefore impossible, and the per-row probability is `0 ≤ 2^−128`.
-- Every draw also keeps at least 85% of its nominal `‖E′‖ = σα·√32/16`, so no draw can be recognized from `E′` alone as
-  weak. The `2^−128` above is thus a conjecture about draws that all carry their noise.
+- Every sample also keeps at least 85% of its nominal `‖E′‖ = σα·√32/16`, so no sample can be recognized from `E′` alone as
+  weak. The `2^−128` above is thus a conjecture about samples that all carry their noise.
 - At norm 256 the largest entry
   is at least `2^−8`, also nonzero; the 32 entries are not independent. -/
 noncomputable def δPearlC (q N : ℕ) : ℝ := ((q + N : ℕ) : ℝ) / 2 ^ 128

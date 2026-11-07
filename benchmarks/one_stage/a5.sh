@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, on a CPU machine: a deferred Commit's window, a stand-in, through registration, the verifier's Lean
-# draw, M0's prover and the Lean verifier of record (a5.py). The Commit is the CPU RoPE d64 fixture (integrations/vllm
+# sample, M0's prover and the Lean verifier (a5.py). The Commit is the CPU RoPE d64 fixture (integrations/vllm
 # tests/pipeline/served_rope: the production committer, sealed into a deferred replay bundle), and the window is
 # `verity-vllm serving-rows` on it; with WINDOW=served it is the in-Commit hook's over the same members (served_rope --served),
 # which A5 takes only over a SHA-512 run root of record. The fixture's members are committed under rows-sha512, which the window

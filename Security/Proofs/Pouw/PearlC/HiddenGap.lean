@@ -8,13 +8,13 @@ public import Proofs.Core.Game.Prob
 /-!
 # The hidden audit keeps the sampled audit's gap (compute accounting's file)
 
-* **One prover** (`gapHidden_of_sampled`): on each draw, when the hidden audit accepts while some drawn tile is
+* **One prover** (`gapHidden_of_sampled`): on each sample, when the hidden audit accepts while some sampled tile is
   neither good nor blank, that tile's verdict was accept (`hidden_pointwise`). So the hidden audit's win probability is
-  at most `GGapSampled`'s plus, over the `t` draws, `TileProofSound`'s per-draw error.
+  at most `GGapSampled`'s plus, over the `t` samples, `TileProofSound`'s per-draw error.
 * **Every prover in the class** (`gapHidden_of_sampled_all`): `GGapSampled` and the open obligation
   `TileProofSoundAll` give `GGapHidden`, at `t·δzk(q)` more error, for any hidden audit and every opening.
 * **The headline, conditional** (`pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`): v1 under rev1 per tile at 1/1,000,
-  8192³, 0.36949% under the hidden audit at W1, for a free hidden audit and `δzk`; nothing about C-Flock until its
+  8192³, 0.36949% under the hidden audit at W1, for a free hidden audit and `δzk`; nothing about Flock until its
   instance lands.
 -/
 
@@ -48,7 +48,7 @@ theorem ex_ite_one {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] 
   simp
 
 open Classical in
-/-- One draw: when the audit fails on the opened tiles, some drawn tile is neither good nor blank, and the joint verdict is
+/-- One sample: when the audit fails on the opened tiles, some sampled tile is neither good nor blank, and the joint verdict is
 at most that tile's verdict. -/
 theorem hidden_pointwise {w : ℕ → ℕ} {NT t : ℕ} (g : Verity.Game (List Bool)) (s : Verity.Game.Strategy g)
     (K : Finset ℕ) (c : Fin t → Ticket w NT) (E : Prop) :
@@ -121,8 +121,8 @@ honest cast at 8.72: `g = 1648180439/446072750000` (0.36949%), for any hidden au
 the cost model `W1.w1Priced` on `W1Device.sm120Loop sha fetch`, from `TTOutTilePearlCDevRev1W1` there.
 
 Conditional: `HA` and `δzk` are free, and the open obligation `TileProofSoundAll` holds at a degenerate hidden audit
-(`Bounded := fun _ _ _ _ _ => False`, an empty class) for any `δzk ≥ 0`, so this says nothing about C-Flock until
-C-Flock's `HiddenAudit` instance and the obligation's discharge at it land. Cite it only as conditional. -/
+(`Bounded := fun _ _ _ _ _ => False`, an empty class) for any `δzk ≥ 0`, so this says nothing about Flock until
+Flock's `HiddenAudit` instance and the obligation's discharge at it land. Cite it only as conditional. -/
 theorem pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192 (sha fetch : ℚ) (salt : S → List ℕ) (sem : PearlCSem Q R S)
     (HA : HiddenAudit Q R S) (δzk : ℕ → ℝ)
     (hTT : TTOutTilePearlCDevRev1W1 (Pouw.PearlC.W1.W1Device.sm120Loop sha fetch) salt (devSm120v1 Prices.sm120Loop)

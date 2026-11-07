@@ -83,7 +83,7 @@ def grid_tiles(shape: Shape, h: int, w: int) -> list[Tile]:
 
 @dataclass(frozen=True, slots=True)
 class Context:
-    """What a scheme's noise may depend on for one matmul: the epoch's salt, the declaration and the committed roots."""
+    """What a scheme's noise may depend on for one matmul: the execution phase's salt, the declaration and the committed roots."""
 
     salt: bytes
     matmul: Matmul

@@ -139,7 +139,7 @@ conditional**, FP32 at 8.376, the honest cast at 8.72: `g = 1648180439/446072750
 
 Conditional as `pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192`: `HA` and `δzk` are free, and the open obligation
 `TileProofSoundAll` holds at a degenerate hidden audit (an empty class) for any `δzk ≥ 0`, so this says nothing about
-C-Flock until C-Flock's `HiddenAudit` instance and the obligation's discharge at it land. Cite it only as conditional. -/
+Flock until Flock's `HiddenAudit` instance and the obligation's discharge at it land. Cite it only as conditional. -/
 theorem pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192 (HA : HiddenAudit Q R S) (δzk : ℕ → ℝ)
     (hTT : TTOutTilePearlCDevRev1 CM (devSm120v1 Prices.sm120Loop) sem (1 / 1000)) (hN : RowSeedNoise sem sem')
     (hCM : CM.SplitClosed)

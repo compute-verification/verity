@@ -1,6 +1,6 @@
-"""Pearl-C's work law (`pearl_c_work`): splits bounded by 1% of k, credit
+"""Pearl-C's work sampling design (`pearl_c_work`): splits bounded by 1% of k, credit
 on real, kept, unexcluded cells at Lean's accounting, the tile rule (zero filler and padding, credited rows pass and
-excluded rows fail, the debit under the cap, and under -h3 each credited row's too), draws keyed by the epoch's sampling coin
+excluded rows fail, the debit under the cap, and under -h3 each credited row's too), samples keyed by the execution phase's sampling coin
 after the commitment, and the audit."""
 
 from __future__ import annotations
@@ -211,9 +211,9 @@ def test_audit_credits_real_rows_and_checks_the_excluded_ones():
 
 
 def test_an_excluded_weight_row_earns_nothing_and_its_tiles_are_accepted():
-    """Where the work law and L3's tile check differ: a weight row that fails the per-row rules is excluded, and every
+    """Where the work sampling design and L3's tile check differ: a weight row that fails the per-row rules is excluded, and every
     tile holding its column is accepted with none of that column's cells credited, while L3's `TileCheck.Accepts` asks
-    `fixedOK` of each of a tile's columns and refuses the tile.  The work law is credit-sound there only while the
+    `fixedOK` of each of a tile's columns and refuses the tile.  The work sampling design is credit-sound there only while the
     excluded column's chain words (its C̃ and U words, computed and bound as any other's) earn nothing: W and the credit
     count 19 · 15 cells, not 19 · 16, and declaring the row credited fails its tile."""
     rows_a = CV.rows_f32("work-life", "A", 20, K) + [C.f32_row([0] * K)] * 12
@@ -318,9 +318,9 @@ def test_v_ex_is_a_no_op_on_pearl_c():
 
 
 def test_audit_under_hashing_h3():
-    """The work law's audit is the same under hashing format -h3: its openings verify against hm96-sha512 roots, once
+    """The work sampling design's audit is the same under hashing format -h3: its openings verify against hm96-sha512 roots, once
     the honest prover has given up (`volunteer`) the A row over its row cap.  Each row's seed reads the hiding roots, so
-    which rows pass the row cap changes with the salts; under this salt key row 4 is over it, and a drawn tile holding
+    which rows pass the row cap changes with the salts; under this salt key row 4 is over it, and a sampled tile holding
     it fails until it is given up."""
     h3 = C.PearlC(k_min=32, tile=(16, 16), forming="v1", hashing="h3")
     epoch, prover, tr, rows_a, rows_b = lifecycle(scheme=h3, salt_key=bytes([10]) * 32)
@@ -366,7 +366,7 @@ def test_split_check_gates_an_honest_split():
 
 
 def test_aligned_spike_unit_is_rejected_by_the_cap():
-    """F1's negative control through the audit: every row passes the domain, and the drawn tile's replayed debit (74%+
+    """F1's negative control through the audit: every row passes the domain, and the sampled tile's replayed debit (74%+
     of its atom-words) exceeds ρ·creditOf; the same unit without spikes is accepted."""
     k, t = 1024, 4
     s = C.PearlC(k_min=128, tile=(t, t), forming="v1", hashing="h0")
@@ -480,9 +480,9 @@ def test_census_row_cap_leaves_k_from_k_min_unchanged():
 
 
 def test_the_draw_coin_must_open_against_the_epochs_commitment_after_the_commitment():
-    """The sampling coin is the epoch's, asked of the challenger once the verifier recorded the transcript and records roots
-    (`draw_after`): a foreign challenger's coin, a coin not under the commitment, the epoch's salt coin, a coin opened
-    before the commitment, another epoch's coin and an epoch with no coin commitment are each refused before any tile
+    """The sampling coin is the execution phase's, asked of the challenger once the verifier recorded the transcript and records roots
+    (`draw_after`): a foreign challenger's coin, a coin not under the commitment, the execution phase's salt coin, a coin opened
+    before the commitment, another execution phase's coin and an execution phase with no coin commitment are each refused before any tile
     is opened; the honest challenger's coin selects the tiles `draw_key` gives."""
     epoch, prover, tr, rows_a, rows_b = lifecycle()
     records = CW.declare(S, epoch, {3: rows_a}, {9: rows_b}, SPLITS, real_rows={3: 20})

@@ -212,7 +212,7 @@ variable (F : VStarFamily T CT cls regs sch L Reg Cm Reg' Reg₂) (dg : ByteArra
 `segs_of_scopeOk`; `readsUnsegC3` discharges it so for C3's families). The registered check does not give it: it checks
 a bit row in its own leaf schema (`Registered.checkPort`: `sha512/row/v2` or `/row-seg/v1`) rather than refusing it.
 **No registered read is of a segmented row.** At every accepted outer proof, each session's registered reads are rows
-of ports without segments. Acceptance does not give it: `hown` speaks of the drawn units' reads only, and `rd` is the
+of ports without segments. Acceptance does not give it: `hown` speaks of the sampled proof blocks' reads only, and `rd` is the
 family's field. A segmented row's bytes (`Layout.encSeg`, what `sha512/row-seg/v1` hashes) need not fix its bits
 across two ports or two widths, so one row's bytes (`SharedRows`) would not give one row's bits (`RowsShared`). -/
 def ReadsUnsegmented : Prop :=

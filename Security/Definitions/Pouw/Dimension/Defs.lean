@@ -13,7 +13,7 @@ noise `ω = (E₁, F₁)` on the whole grid (`Noise`: every entry in `[−31, 32
 instruction.
 
 * **Adaptive inputs.** `F₁` and `R` are public before `A` is committed, so `A` is any function `g(F₁)` (for the
-  fixed `R` and salt), quantified. `B` does not depend on `F₁`: it is committed before `F₁` is drawn. The inputs `L`
+  fixed `R` and salt), quantified. `B` does not depend on `F₁`: it is committed before `F₁` is sampled. The inputs `L`
   are any functions in `V₀` (`V0`): the constants, the noise coordinates and every function of `F₁` (so of `F₁`, `R`
   and `A`), all free.
 * `free c w` outputs `c + Σ_{s < len} w_s·slot_s`, an exact ℚ-linear combination of the earlier slots and a constant,

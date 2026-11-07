@@ -237,8 +237,8 @@ def Requirement [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMo
 `w u / ∑_v w v`. -/
 abbrev Ticket (w : ℕ → ℕ) (N : ℕ) : Type := Σ u : Fin N, Fin (w u)
 
-/-- The audit with `t` independent work-weighted samples accepts iff every sampled unit is in `K` (the verifier
-recomputes the sampled units and checks their checked values and useful output). -/
+/-- The audit with `t` independent work-weighted samples accepts iff every sampled proof block is in `K` (the verifier
+recomputes the sampled proof blocks and checks their checked values and useful output). -/
 def AuditAccepts {w : ℕ → ℕ} {N t : ℕ} (K : Finset ℕ) (c : Fin t → Ticket w N) : Prop :=
   ∀ i, ((c i).1 : ℕ) ∈ K
 
@@ -246,7 +246,7 @@ def AuditAccepts {w : ℕ → ℕ} {N t : ℕ} (K : Finset ℕ) (c : Fin t → T
 def drawsIn {w : ℕ → ℕ} {N t : ℕ} (O : Finset ℕ) (c : Fin t → Ticket w N) : ℕ :=
   (univ.filter fun i => ((c i).1 : ℕ) ∈ O).card
 
-/-- The tolerant audit accepts iff every sampled unit is in `K`, checked and credited, or in `O`, accepted and credited
+/-- The tolerant audit accepts iff every sampled proof block is in `K`, checked and credited, or in `O`, accepted and credited
 nothing. -/
 def AuditAcceptsTol {w : ℕ → ℕ} {N t : ℕ} (K O : Finset ℕ) (c : Fin t → Ticket w N) : Prop :=
   ∀ i, ((c i).1 : ℕ) ∈ K ∨ ((c i).1 : ℕ) ∈ O
