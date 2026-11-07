@@ -17,8 +17,9 @@ from sweep import Case, build
 
 from common import tc
 
-#: β's step outward where Lean's bits are above the weights at the surface's β: the solver's tolerance
-REL = 0.005
+#: β's step outward where Lean's bits are above the weights at the surface's β: `sweep.solve` stops within
+#: 1 + rel/4 of the weights on either side, and Lean's bits are a hair above the planner's
+REL = 0.001
 
 
 def case_of(meta: dict) -> Case:
