@@ -160,7 +160,7 @@ def stmtOk (x m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) : Bool :=
   match parse h x, interiorsOf m₁, secondDraw h c₀ c₁, FlockDeploy.setupOf true xS, FlockDeploy.decode xS with
   | some s, some it, some draw, some (ins, _, _), some w =>
     (partition h s).isSome && (two h s).isSome && (FlockDeploy.V true).k xS == k₀ h &&
-      drawEq ins.read.draw (some (Flock.norm draw)) &&
+      FlockDeploy.drawEq ins.read.draw (some (Flock.norm draw)) &&
       w.registered.map ByteArray.data == some (h.registered s.roots it.roots).data
   | _, _, _, _, _ => false
 
