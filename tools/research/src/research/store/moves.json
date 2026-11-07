@@ -1677,6 +1677,16 @@
     },
     {
       "paths": {
+        "benchmarks/pous/band_gpu/memory_challenger.py": "verity/core/devices/memory_challenger/timed_audit.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/pous/challenger_party.py": "verity/core/devices/memory_challenger/challenger_party.py"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/remote_session/verifier.py": "verity/core/protocols/remote_bandwidth/session/verifier.py",
         "benchmarks/remote_session/lean_verifier.py": "verity/core/protocols/remote_bandwidth/session/lean_verifier.py",
         "benchmarks/remote_session/checks.py": "verity/core/protocols/remote_bandwidth/session/checks.py",
