@@ -50,7 +50,7 @@ STATS = ("rows_long", "rows_tied", "rows_bisected")
 SEG_MIN_KEYS = 8192
 #: keys a program reads at a time (32 to 2**14: canon_row reads 32-key words, and two block counts share an int32), and
 #: its warps
-BLOCK = 2048
+BLOCK = 1024
 NUM_WARPS = 8
 #: programs a multiprocessor should get before a row is split
 FILL = 2
