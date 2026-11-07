@@ -427,7 +427,7 @@ def test_the_clients_certificate_refusals_are_the_references(lean):
 
 
 def test_on_generated_answers_the_lean_is_the_reference(lean):
-    """On answers drawn from the served certificates in any order and number, with any of their digests seen: the Lean's
+    """On answers sampled from the served certificates in any order and number, with any of their digests seen: the Lean's
     refusals are the reference's, every refusal among them."""
     _, c = _served()
     pool = sorted(c.values(), key=lambda x: (x.link, x.direction.code, x.window, x.digest, x.signature))
@@ -547,7 +547,7 @@ def test_the_signed_syncs_are_the_references(lean):
 
 
 def test_on_generated_openings_the_lean_is_the_reference(lean):
-    """On openings drawn from those of `_openings` in any order and number, in `SESSION` or another: the Lean's syncs
+    """On openings sampled from those of `_openings` in any order and number, in `SESSION` or another: the Lean's syncs
     are `certificate.SignedClocks`', and so are each opening's refusal and the link-windows with two signed syncs,
     every refusal among them."""
     _, honest, bad, beside = _openings()

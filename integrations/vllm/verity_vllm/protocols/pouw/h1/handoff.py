@@ -19,9 +19,9 @@ GPU lease ends only when it exits.
 * **What is unchanged.** The resuming process runs the same `close` and release (`pouw_h1_window.finish`) the serving
   process would have: the same empty calls, tables, rounds, trees and sampling coin, each committed when it would have been, and
   each coin opened after the same roots, on the same session. Nothing opens in the gap: the next frame is the round coin
-  of the first step past the last served one. The draw coin is the window's draw session's
+  of the first step past the last served one. The sampling coin is the window's sample session's
   (`pouw_h1_window.DrawSession`), not yet opened at the hand-off: its reserve answer travels in the file, and the
-  resuming process opens it through the gate it is given, withheld on the draw root, as the serving process would have.
+  resuming process opens it through the gate it is given, withheld on the sample root, as the serving process would have.
 * **The file** holds the run's salt key, which nothing else persists, so it is the prover's scratch (mode 0600, outside a
   run's published directory), and its holder deletes it once the window has closed.
 """
@@ -142,8 +142,8 @@ def suspend(run: PH.H1Run, directory: str | Path) -> Path:
 
 
 def resume(directory: str | Path, fd: int, gate: PHW.Gate | None = None) -> tuple[PH.H1Run, Resumed]:
-    """The run `suspend` saved in `directory`, its coins on the session whose stream is the descriptor `fd`, its draw
-    session opened through `gate` (`pouw_h1_window.Gate`; None leaves it unopenable, and the draw is refused), and that
+    """The run `suspend` saved in `directory`, its coins on the session whose stream is the descriptor `fd`, its sample
+    session opened through `gate` (`pouw_h1_window.Gate`; None leaves it unopenable, and the sample is refused), and that
     session's client: refused (ValueError) when a rebuilt request or slot table isn't the one its round's root is over."""
     import torch
 

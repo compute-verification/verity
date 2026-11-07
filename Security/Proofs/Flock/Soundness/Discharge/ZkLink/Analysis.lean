@@ -10,8 +10,8 @@ import Proofs.Flock.Soundness.Game.Prob
 /-!
 # The compiled `--zk` audit's analysis, with the expected-time extractor
 
-`analysisBEL` (`Discharge/Exec/FlockBatchedAccL.lean`) for the compiled `--zk` session (`batchedSessionZC`): each drawn
-unit's table is extracted from `k` reruns of everything after `Commit` in which the session accepts (`extractTableZ`),
+`analysisBEL` (`Discharge/Exec/FlockBatchedAccL.lean`) for the compiled `--zk` session (`batchedSessionZC`): each sampled
+proof block's table is extracted from `k` reruns of everything after `Commit` in which the session accepts (`extractTableZ`),
 and the analysis carries
 $$\varepsilon\le\frac{a+\varepsilon\Pr[\text{link}]}{1-r}$$
 as its `cover`, from the joint inequality `ε·Pr[fails] ≤ a + r·ε` (`JointZC`) at a knowledge bound `a`, with `ε` the
@@ -22,7 +22,7 @@ session's acceptance probability and `r = N₀/(ek) < 1`:
   accepted reruns.
 
 `JointZC` at a closed-form `a` from the caps (the compiled `ε_ks`) is open: it is the `--zk` counterpart of
-`joint_le_accBL`. The link term does not depend on `a`.
+`joint_le_accBL`. The binding error does not depend on `a`.
 -/
 
 @[expose] public section
@@ -100,7 +100,7 @@ theorem prob_batchedSessionZC_eq (S : Finset (Fin n)) (R : Reg) (τ : Strategy (
   rfl
 
 /-- **The compiled joint inequality at the knowledge bound `a`** (`joint_le_accBL`'s form): for every plan's table `j`
-and every strategy in the compiled session after the draw, `a ≥ 0` and
+and every strategy in the compiled session after the sample, `a ≥ 0` and
 `Pr[the session accepts]·Pr[table j's extraction from k accepted reruns fails] ≤ a + N₀/(ek)·Pr[the session accepts]`. -/
 def JointZC (k : ℕ) (a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) →
     Fin (planZ S R).length → ℝ) : Prop :=
@@ -110,8 +110,8 @@ def JointZC (k : ℕ) (a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sess
 
 variable {L : Law n}
 
-/-- **The compiled link term**: `ε·Pr[the oracle extracted from k accepted reruns has the link event]/(1 − N₀/(ek))`
-at drawn unit `u`. -/
+/-- **The compiled binding error**: `ε·Pr[the oracle extracted from k accepted reruns has the link event]/(1 − N₀/(ek))`
+at sampled proof block `u`. -/
 noncomputable def linkTermZC (decode : DecoderZK (C := C) planZ tab) (k : ℕ) (S : Finset (Fin n)) (R : Reg)
     (τ : Strategy (batchedSessionZC A Hs planZ S R)) (u : Fin n) (Xt : Fin C.N → Bool) : ℝ≥0∞ :=
   ENNReal.ofReal (accProbZC A Hs (planZ S R) (zcStrat A Hs planZ τ) *
@@ -119,7 +119,7 @@ noncomputable def linkTermZC (decode : DecoderZK (C := C) planZ tab) (k : ℕ) (
     (1 - rateZ (planZ S R) (tab S R u) k))
 
 /-- **The compiled `--zk` audit's analysis, with the expected-time extractor**, at a knowledge bound `a` with its joint
-inequality (`hj`). `Xc` is the committed transcript (the link theorem defines it), `decode` reads each drawn unit from
+inequality (`hj`). `Xc` is the committed transcript (the link theorem defines it), `decode` reads each sampled proof block from
 its table's padded witness, and `k` is the number of accepted reruns, with `N₀/(ek) < 1` for every table of every plan. -/
 noncomputable def analysisZC (decode : DecoderZK (C := C) planZ tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) (k : ℕ)
@@ -161,8 +161,8 @@ noncomputable def analysisZC (decode : DecoderZK (C := C) planZ tab)
       (div_nonneg (mul_nonneg hε0 hL) hr1.le)]
     exact ENNReal.ofReal_le_ofReal key
 
-/-- **The compiled knowledge term**, per prover: after each draw, the largest over the plan's tables of
-`a/(1 − N₀/(ek))`, averaged over the draw. -/
+/-- **The compiled knowledge term**, per prover: after each sample, the largest over the plan's tables of
+`a/(1 − N₀/(ek))`, averaged over the sample. -/
 noncomputable def ksAvgZC (k : ℕ)
     (a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ)
     (R : Reg) (τ : Cont L Reg (batchedSessionZC A Hs planZ) R) : ℝ≥0∞ :=
@@ -170,7 +170,7 @@ noncomputable def ksAvgZC (k : ℕ)
     ENNReal.ofReal (a (L.draw ω) R (zcStrat A Hs planZ (τ ω)) j / (1 - rateZ (planZ (L.draw ω) R) j k))
 
 omit [Fintype K] in
-/-- **The compiled analysis's knowledge term is its own bound**, averaged over the draw. -/
+/-- **The compiled analysis's knowledge term is its own bound**, averaged over the sample. -/
 theorem zc_knowledgeSound (decode : DecoderZK (C := C) planZ tab)
     (Xc : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → (Fin C.N → Bool)) {k : ℕ}
     (hr : ∀ S R j, rateZ (planZ S R) j k < 1) (hlow : LoweringSoundZK A P planZ tab decode)

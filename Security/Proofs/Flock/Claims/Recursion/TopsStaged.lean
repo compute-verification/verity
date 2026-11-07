@@ -55,7 +55,7 @@ staging off the run (`StagedB`, `stagedB_deployRec_part`) and needs no `RunPairs
 layout whose held rounds have no pieces, as `layoutBTops`'s don't (`heldWhole_layoutBTops`). `HeldB` comes from
 `heldB_layoutBTops` at `schedMatches_dense`, `capPorts` and `rowsCover`, and the decoder and calls premises from
 `canonicalProofFiles` and `plainCallsBindOrSlack_sha512`. What stays open at the dense form is the last round's pieces
-(`FinPieces`), `PartChecksBV` and `PartOpensB` at the coin server's transcript read by a reader `untr` at the V\*
+(`FinPieces`), `PartChecksBV` and `PartOpensB` at the challenger's live-coin part's transcript read by a reader `untr` at the V\*
 statements staged as V\* stages them (`showsPart`, `cmtTr`), `DecompB`, the readers' `ReadersTrue`, and `untr` reading
 that transcript back at an accepted run's inner rounds (`ReadsBackB`).
 `bitsLin2_deployed_staged` is its `BitsLin2On` form (`bitsLin2On_of_ksLin2On`, `sessionAccepts`). At `finOpen`,
@@ -102,7 +102,7 @@ theorem heldWhole_layoutBTops (fin : Msg → List (ℕ × List (Msg × List HmNe
 `ksLin2_deployed_plain_parts` at `layoutBTops`, with `HeldB` from `heldB_layoutBTops` and `HeldWhole` from
 `heldWhole_layoutBTops`. What stays at the dense form is
 `FinPieces`, `PartChecksBV` and `PartOpensB` at `showsPart`/`cmtTr`, and `DecompB`; then the readers' two facts and
-`untr` reading the coin server's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are
+`untr` reading the challenger's live-coin part's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are
 open. -/
 theorem ksLin2_deployed_staged (b : Brings) (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
     (join : List Msg → Msg) (final : Msg → Option (List (List (Msg × Salt)) × Msg)) (w : Msg → ℝ)
