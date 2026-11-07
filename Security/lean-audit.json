@@ -4152,7 +4152,7 @@
    "nontrivial": "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial"
   },
   "Accounting.SecurityProofs.ComputeOfPouw": {
-   "honest": ["Accounting.SecurityProofs.ComputeOfPouw_honest"],
+   "honest": ["Accounting.SecurityProofs.ComputeOfPouwPerRun_honest"],
    "nontrivial": "Accounting.SecurityProofs.ComputeOfPouw_nontrivial"
   },
   "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
@@ -6880,9 +6880,6 @@
    "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.ComputeOfPouwPerRun_nontrivial": {
-   "owner": "@memory-accounting"
-  },
-  "Accounting.SecurityProofs.ComputeOfPouw_honest": {
    "owner": "@memory-accounting"
   },
   "Accounting.SecurityProofs.ComputeOfPouw_nontrivial": {

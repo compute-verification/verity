@@ -23,36 +23,15 @@ open Finset QTree
 
 variable {Q R S : Type}
 
-/-! ## The honest reference as an oracle program -/
+/-! ## The honest reference as an oracle program (`honestProg`, `Definitions.Pouw.Witness.Honest`) -/
 
 section Honest
 
 variable (P : D1.Params Q R S)
 
-/-- Unit `u`'s honest commitment on activations `A`, from the answers `a` to `qAct` and `b` to `qWt` (the formulas
-of `D1.Params.refChecked` and `refOut` with the oracle's answers as inputs). -/
-def commitAns (U : Workload) (u : ℕ) (A : Mat) (a b : List R) : Commit :=
-  let sh := U.layout.shape u
-  let E := P.expAct sh a b
-  let F := P.expWt sh b
-  let act' : Mat := fun i l => wrap32 (A i l + mmW P.r E.1 E.2 i l)
-  let wt' : Mat := fun l j => wrap32 (U.weight (U.layout.wid u) l j + mmW P.r F.1 F.2 l j)
-  ⟨A, fun t => mmW (D1.blockEnd P.d sh.k t) act' wt',
-    fun i j => wrap32 (wrap32 (mmW sh.k act' wt' i j - mmW P.r (mmW sh.k A F.1) F.2 i j)
-      - mmW P.r E.1 (mmW sh.k E.2 wt') i j)⟩
-
 theorem commitAns_eq (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) :
     commitAns P U u A ((P.qAct s u A (U.layout.wid u)).map H) ((P.qWt s u (U.layout.wid u)).map H)
       = ⟨A, P.toProtocol.refChecked H s U u A, P.toProtocol.refOut H s U u A⟩ := rfl
-
-/-- Unit `u`'s honest program: query its noise, then commit. -/
-def unitProg (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Commit :=
-  (queryAll (P.qAct s u (act u) (U.layout.wid u))).bind fun a =>
-    (queryAll (P.qWt s u (U.layout.wid u))).bind fun b => done (commitAns P U u (act u) a b)
-
-/-- The honest reference: every unit's honest program, in order. -/
-def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
-  upTo (unitProg P U act s) U.layout.N
 
 theorem eval_honestProg (H : Q → R) (U : Workload) (act : ℕ → Mat) (s : S) :
     (honestProg P U act s).eval H = honestTranscript P.toProtocol H s U act := by
@@ -177,10 +156,6 @@ theorem salt_nonempty : Nonempty Salt := ⟨⟨0, Nat.two_pow_pos 128⟩⟩
 
 /-- The honest reference as an adversary of the free model: no preprocessing, activation input 0. -/
 def freeHonest {Q R : Type} (P : D1.Params Q R Salt) : Adversary (freeModel Q R Salt) :=
-  ⟨done [], fun U act _ s => honestProg P U act s, fun _ => 0⟩
-
-/-- The honest reference as an adversary of the witness model. -/
-noncomputable def pricedHonest {Q R : Type} (P : D1.Params Q R Salt) : Adversary (outputPriced Q R Salt) :=
   ⟨done [], fun U act _ s => honestProg P U act s, fun _ => 0⟩
 
 theorem freeHonest_bounded {Q R : Type} (P : D1.Params Q R Salt) {c : ℕ} (hc : P.QueryBound c) (U : Workload) :

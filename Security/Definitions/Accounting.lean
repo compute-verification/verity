@@ -36,6 +36,7 @@ public import Definitions.Accounting.PeriodBinding
 public import Definitions.Accounting.Physical
 public import Definitions.Accounting.Slowdown
 public import Definitions.Accounting.Pouw
+public import Definitions.Accounting.PouwWitness
 public import Definitions.Accounting.PouwWork
 public import Definitions.Accounting.RateAudit
 public import Definitions.Accounting.RateAuditDeployed
@@ -82,7 +83,7 @@ the lock's `layers` lists what they may import:
   `JointBlocks` and `Wipe` (server blocks, each opened by a memory wipe, and the streamed-label wipe on the device
   model).
 * **Each audit's game.** The compute audit: `Pouw` and `PouwWork` (PoUW's game, and its work on one node of the actual
-  circuit), `Compose` and `ComposePeriod` (PoUW as a compile pass over a registered circuit, over one execution phase
+  circuit), `PouwWitness` (the run its witnesses fail at), `Compose` and `ComposePeriod` (PoUW as a compile pass over a registered circuit, over one execution phase
   and over a monitoring period), `HMu` and `CoinFlow` (the receipt-luck premise H-μ⁺ and a Program's coin flow),
   `Served`, `Filler`, `BoundReceipt` and `BoundSketch` (receipts bound to the matmul), and `TS`, `Headline` and
   `HeadlineDc` (the tensor–scalar model and the headline instances' exact data). The capacity audit: `Capacity`,

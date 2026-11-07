@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.PerRun
+public import Definitions.Accounting.PouwWitness
 public import Proofs.Pouw.Witness
 import Proofs.Pouw.Prob
 
@@ -9,18 +9,20 @@ import Proofs.Pouw.Prob
 
 `Accounting.Guarantees.ComputeOfPouw` and `Accounting.Guarantees.ComputeOfPouwPerRun`:
 
-* honest: the milestone's sixteen units are in `D1.m1Domain`, and the output-priced model, where TT holds and the
-  honest reference runs at `≤ W_ref` (`Pouw.Proofs.ttWitness`), truncates (`Accounting.BudgetAbort`): the copy runs the
-  program and commits its transcript when its committed units' GEMMs fit the budget, and blanks otherwise
-  (`PouwWitness.truncated`);
+* honest (one lemma for both): the milestone's sixteen units are in `D1.m1Domain`, and the output-priced model, where
+  TT holds and the honest reference runs at `≤ W_ref` (`Pouw.Proofs.ttWitness`), truncates (`Accounting.BudgetAbort`):
+  the copy runs the program and commits its transcript when its committed units' GEMMs fit the budget, and blanks
+  otherwise (`PouwWitness.truncated`);
 * nontrivial: on a device with no capacity and an idle schedule, a run whose every audit accepts does no work, so its
   compute audit accepts short of the certificate `W = 1` with probability 1, above the error 0
-  (`PouwWitness.acceptAllRun`).
+  (`Accounting.PouwWitness.acceptAllRun`).
 -/
 
 @[expose] public section
 
 namespace Accounting.SecurityProofs
+
+open Accounting.PouwWitness
 
 namespace PouwWitness
 
@@ -71,22 +73,6 @@ theorem outputPriced_budgetAbort : Accounting.BudgetAbort (Pouw.outputPriced Q R
     · show (truncated prog b U act σ s).eval H = (prog U act σ s).eval H
       rw [eval_truncated, if_pos hc]
 
-/-- A device with no capacity. -/
-def nullDevice : Device Unit := ⟨0, 0, fun _ => 0, 0, fun _ => 0⟩
-
-/-- The step that charges nothing. -/
-def idleStep : Step Unit Unit := ⟨fun _ _ => 0, fun _ => 0, fun _ _ => 0, fun _ => 0, fun _ => 0⟩
-
-/-- A run on `nullDevice` whose schedule is idle and whose every audit accepts. -/
-def acceptAllRun : Run nullDevice Unit Unit Unit Unit where
-  acct _ := ()
-  win _ := ⟨0, 0⟩
-  schedule _ _ := idleStep
-  fits _ := by
-    intro t
-    simp [Step.Fits, idleStep, nullDevice]
-  accepts _ _ := True
-
 theorem acceptAllRun_work (p : Price) (ω : Unit × Unit × Unit) : acceptAllRun.work p ω = 0 := by
   simp [Run.work, Schedule.work, Schedule.ops, acceptAllRun, idleStep]
 
@@ -94,12 +80,8 @@ end PouwWitness
 
 open PouwWitness
 
-/-- **`ComputeOfPouw`'s premise holds at the milestone**: its sixteen units are in the domain. -/
-theorem ComputeOfPouw_honest : Pouw.Proofs.M1.sixteen.InDomain Pouw.D1.m1Domain :=
-  Pouw.Proofs.M1.sixteen_inDomain
-
-/-- **`ComputeOfPouwPerRun`'s premises hold at the milestone, in the output-priced model**: the model truncates, and
-the sixteen units are in the domain. -/
+/-- **`ComputeOfPouwPerRun`'s and `ComputeOfPouw`'s premises hold at the milestone, in the output-priced model**: the
+model truncates, and the sixteen units are in the domain. -/
 theorem ComputeOfPouwPerRun_honest :
     Accounting.BudgetAbort (Pouw.outputPriced Pouw.D1.M1Q Pouw.D1.M1R Pouw.Salt) ∧
       Pouw.Proofs.M1.sixteen.InDomain Pouw.D1.m1Domain :=
