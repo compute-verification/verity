@@ -35,6 +35,11 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   (`plancheck`), and a refused design is an error.  A point without a design (the trivial bound, or a count of every
   proof block, which samples none) has `lean` None.
 
+Lean checks each patterns'-form point too (`lean_two`, unless `lean` is off): its count is the bits Lean certifies
+(`TwoStageCheckPatternsSound`) at the θ Lean finds from the planner's, with the planner's bits (`planner`) and Lean's
+θ beside them, and a refused point is an error.  A capped sets'-form point has `lean` None until its factor bound is
+stated.
+
 Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
 two-stage statement holds one Definition's sampled proof blocks of a sampled request, or of a registration's sampled
@@ -257,6 +262,11 @@ def _size_class(bits: float) -> int:
     return w
 
 
+def _split(cells: list[Cell], merged: int) -> list[Cell]:
+    """The cells in a two-stage design's strata: the size classes up to `merged` in stratum 0, each wider one its own."""
+    return [replace(c, stratum=0 if _size_class(c.bits) <= merged else _size_class(c.bits)) for c in cells]
+
+
 def _hazard(q: float, y: float) -> float:
     """h(y) = −ln(1 − q(1 − e^{−y})): a replay block's share of Λ once its incorrect blocks have rate y."""
     return -log1p(-q * -expm1(-y)) if y < inf else -log1p(-q) if q < 1 else inf
@@ -270,7 +280,7 @@ def write_form(cells: list[Cell], row: dict, replay_blocks: float, delta: float,
     unit of h, and at most R·F.  A replay block charged c has y at least the least k_t/n_t of a block of at least c bits,
     or c times the least k_t/(n_t b) of a narrower one; c/h(y) only rises between the cells' bits, so its most is at one
     of them or at F."""
-    split = [replace(c, stratum=0 if _size_class(c.bits) <= row["merged"] else _size_class(c.bits)) for c in cells]
+    split = _split(cells, row["merged"])
     n: dict[int, float] = {}
     for c in split:
         n[c.stratum] = n.get(c.stratum, 0.0) + c.n
@@ -290,7 +300,7 @@ def computed_proving(cells: list[Cell], row: dict, computed: tuple[bool, ...]) -
     included, that is in the cells `computed` marks: the types `priced` computes rather than measures.  A design that
     samples a few blocks of a type pays its statement's fixed cost on them, so this can be far above the type's share
     of the marginal."""
-    split = [replace(c, stratum=0 if _size_class(c.bits) <= row["merged"] else _size_class(c.bits)) for c in cells]
+    split = _split(cells, row["merged"])
     at = (row["k"], row["q"], row["registration"])
     whole = two_stage_price(split, *at)[2]
     measured = two_stage_price([replace(c, prove=0.0, fixed=0.0) if x else c
@@ -316,6 +326,20 @@ def grain(m: f1.Model, name: str, layers: float, boundary_bits: float, tokens: f
                  boundary_bits)
 
 
+def lean_two(g: Grain, row: dict, delta: float, served: float, form: str) -> tuple[float, dict]:
+    """Lean's check of a two-stage line's point (`plancheck.two`, its replay blocks one class): the bits it certifies,
+    rounded up to a float, at the θ it finds from the planner's, with the planner's bits and that θ beside them.  The
+    capped sets' form waits on its factor bound (`lean` None); a point Lean refuses is an error."""
+    if form != "patterns":
+        return row["bound"], {"lean": None}
+    d = plancheck.two(_split(list(g.cells), row["merged"]), row["k"], g.replay_blocks, row["q"], delta, served, True,
+                      row["theta"])
+    ((bits, theta),) = plancheck.check([d])
+    if bits is None:
+        raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")
+    return plancheck.upper(bits), {"lean": True, "planner": row["bound"], "theta": float(theta)}
+
+
 def _plan(row: dict | None) -> dict | None:
     return None if row is None else f1._plan(row)
 
@@ -324,7 +348,7 @@ def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
     exfiltration, which of the count and the served bits binds, the requests a registration samples and its cap (`REG`),
     and the computed share of its design's proving.  A two-stage line's `form` and its registration's replay blocks
-    (`span`) come with it; with `lean`, Lean's check of the one-stage line's designs (`figure1.lean_check`)."""
+    (`span`) come with it; with `lean`, Lean's check of each line's designs (`figure1.lean_check`, `lean_two`)."""
     name, m, g, budget, computed, form, span, lean = job
     served = f1.served_total(m)
     if name == "every_block":
@@ -346,8 +370,9 @@ def _point(job: tuple) -> dict:
                                  "plan": _plan(work["row"]), **checked["work"]}}
     row = two_stage_design(g.cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
                            served=m.served, union=form == "patterns", registration=span)
-    return {"exfiltration": {"y": min(row["bound"], served), "count": row["bound"],
-                             "binds": "served" if served <= row["bound"] else "count", "plan": _plan(row),
+    count, checked = lean_two(g, row, m.delta, m.served, form) if lean else (row["bound"], {})
+    return {"exfiltration": {"y": min(count, served), "count": count,
+                             "binds": "served" if served <= count else "count", "plan": _plan(row), **checked,
                              **{k: row[k] for k in REG},
                              "computed_proving": computed_proving(list(g.cells), row, computed)},
             "infiltration": {"y": write_form(list(g.cells), row, g.replay_blocks, m.delta, g.footprint),
@@ -557,7 +582,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             series[panel].append({"scope": s.name, "config": name, "beta": betas,
                                   "x": [tax[name]["tax"] + b for b in betas], "y": [r["y"] for r in rows],
                                   **{k: [r[k] for r in rows]
-                                     for k in ("binds", "count", *REG, "computed_proving", "lean") if k in rows[0]},
+                                     for k in ("binds", "count", *REG, "computed_proving", "lean", "planner", "theta")
+                                     if k in rows[0]},
                                   "plan": [r["plan"] for r in rows]})
     out_scopes = {s.name: {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
                            "gpu_seconds": s.gpu_seconds, "requests": s.requests,
@@ -571,7 +597,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                          "gpu_seconds": registration_gpu_seconds(r, c),
                          "requests": per_gpu_s * registration_gpu_seconds(r, c)} for r, label in REGISTRATIONS.items()}
     out = {"schema": SCHEMA, "model": model_name, "request": request, "overhead": h, "registrations": registrations,
-           "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK)} if lean else None,
+           "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
+                    "precision": plancheck.TWO_P} if lean else None,
            "overhead_label": sc["proof_overhead"]["value"]["label"], "betas": betas, "budgets": c["budgets"].value,
            "served_bits_request": c["served_bits"].value, "footprint_bits": [c["served_bits"].value, boundary],
            "configurations": {n: conf.__dict__ | {"panels": list(conf.panels), "overhead": lines[n][2],

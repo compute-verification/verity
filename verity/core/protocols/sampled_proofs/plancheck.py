@@ -7,7 +7,9 @@ A leak design is `units` proof blocks each exporting at most `width` bits, each 
 the bits it certifies (`CertifiesLeak`), or None when it can't certify the count: at least the planner's
 `b K + loc_bits(n, K)` in exact arithmetic, which the planner's float can exceed by its rounding.  A work design is strata of proof blocks, each a block's `work` and its rate `num / den`, planned so that incorrect
 blocks of total work at least `target` escape with probability at most `delta` (`MeetsTarget`, however many blocks each
-stratum holds), and Lean answers whether they do.
+stratum holds), and Lean answers whether they do.  A two-stage point (`two`) is `optimize.two_stage_exfil`'s: Lean
+answers the bits it certifies for the count (`TwoStageCheckSound`, `TwoStageCheckPatternsSound`), at the Rankin θ it
+finds from the planner's (`TwoStageCheck.searchTheta`), or None when it can't certify one.
 
 The planner computes in floats.  `leak_design` and `work_design` state its design exactly, each rate rounded up by
 `SLACK` (which raises the design's expected samples by that share and no more), so that a float rounded below the rate
@@ -19,14 +21,19 @@ import json
 import math
 import subprocess
 from fractions import Fraction
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from .one_stage.verifier import LeanError, executable
-from .optimize import Grain, leak_count
+from .optimize import Cell, Grain, leak_count
 
 EXE = "sampled-proofs-plancheck"
 #: the share by which a design's float rate is rounded up before Lean checks it
 SLACK = Fraction(1, 2**20)
+#: `TwoStageCheck.searchTheta`'s grid: θ₀ 2^j for |j| <= span, then a Fibonacci search over fib(n + 4) steps, each
+#: evaluated at precision p
+SEARCH = {"span": 2, "n": 12, "p": 32}
+#: the precision a two-stage point's bits are certified at
+TWO_P = 64
 
 
 def exact(x: float | int | Fraction) -> Fraction:
@@ -81,9 +88,37 @@ def work_design(g: Grain, target: float, delta: float) -> dict:
     return work([(Fraction(g.work), r.numerator)], r.denominator, target, delta)
 
 
-def check(designs: Sequence[dict]) -> list[Fraction | bool | None]:
+def two(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: float, q: float, delta: float,
+        served: float | None = None, union: bool = False, theta: float = 0.0, p: int = TWO_P,
+        search: Mapping[str, int] | None = SEARCH) -> dict:
+    """`optimize.two_stage_exfil`'s point as the executable reads it (`TwoStageCheck.Design`): its `replay_blocks`
+    replay blocks, rounded up, as one class, whose cell in each stratum holds its types' blocks by width, each count
+    summed and rounded up and each width rounded up to whole bits, sampling `k` of them rounded down; the first stage's
+    rate at most `q`.  Under `union`, the patterns' form, each replay block is read by one request, reading all of it
+    and serving `served` bits rounded up.  Lean searches θ from `theta` unless `search` is None."""
+    if served is not None and not union:
+        raise ValueError("Lean checks the capped sets' form once its factor bound is stated")
+    cells = list(cells)
+    strata = sorted({c.stratum for c in cells})
+    parts = []
+    for t in strata:
+        widths: dict[int, Fraction] = {}
+        for c in cells:
+            if c.stratum == t:
+                widths[math.ceil(c.bits)] = widths.get(math.ceil(c.bits), Fraction(0)) + Fraction(c.n)
+        parts.append([[str(math.ceil(n)), str(b)] for b, n in sorted(widths.items())])
+    one = {"count": str(math.ceil(replay_blocks)),
+           "cells": [{"k": str(math.floor(k[t])), "parts": ps} for t, ps in zip(strata, parts)],
+           "reads": parts if union else [], "N": "1" if union else "0"}
+    out = {"kind": "two", "form": "patterns" if union else "sets", "q": _q(min(exact(q), Fraction(q))),
+           "theta": _q(Fraction(f"{theta:.6g}")), "delta": _q(exact(delta)),
+           "S": str(math.ceil(served)) if union else "0", "p": str(p), "classes": [one]}
+    return out | ({"search": {x: str(v) for x, v in search.items()}} if search is not None else {})
+
+
+def check(designs: Sequence[dict]) -> list[Fraction | bool | tuple[Fraction | None, Fraction] | None]:
     """Lean's answer to each design, in order: a leak design's certified bits (None when refused), a work design's
-    verdict."""
+    verdict, a two-stage point's certified bits (None when refused) and the θ they are at."""
     if not designs:
         return []
     p = subprocess.run([str(executable(EXE))], input="".join(json.dumps(d) + "\n" for d in designs),
@@ -93,12 +128,14 @@ def check(designs: Sequence[dict]) -> list[Fraction | bool | None]:
     out = [json.loads(line) for line in p.stdout.splitlines()]
     if len(out) != len(designs):
         raise LeanError(f"{EXE} answered {len(out)} of {len(designs)} designs")
-    answers: list[Fraction | bool | None] = []
+    answers: list[Fraction | bool | tuple[Fraction | None, Fraction] | None] = []
     for d, o in zip(designs, out):
         if "error" in o:
             raise LeanError(f"{EXE} can't read {d}: {o['error']}")
         if d["kind"] == "leak":
             answers.append(None if o["bound"] is None else Fraction(o["bound"]))
+        elif d["kind"] == "two":
+            answers.append((None if o["bits"] is None else Fraction(o["bits"]), Fraction(o["theta"])))
         else:
             answers.append(o["ok"])
     return answers
