@@ -6,6 +6,9 @@ launch (`common._Launch`: the batch a request's calls run in without batch invar
 and all-reduce routes (`registry.bf16_gemm_check`, `registry.tp_allreduce`), vLLM's tuned fused-MoE tile for the device
 (`engine.profiles.devices`) and FA3's split count (`registry.sparse_mla_split`).  The configuration is the generic profile's
 (`generic.derive_config` at the rank) and the weights record its map (`generic._mla_weight_field`) in the family's module order.
+A request after a history of C positions (`build.build_program`'s C: a prefix-cache hit, or where a Commit window carries it in)
+reads each layer's history as Inputs (`Net.prefix_params`): every layer's latent rows and every indexer layer's keys and scales,
+which open its layers' logs (`_Model.open_with`) before its first call.
 
 Vocabulary: EmbeddingShard and the embedding's all-reduce; RMSNorm (layer 0's input norm); per layer the block-FP8 linears (FlashInfer
 below 32 rows, else DeepGEMM), DsaRMSNorm of q_c and kv_c, the interleaved RoPE of k_pe and of each head's q_pe, the latent absorptions
@@ -14,9 +17,9 @@ DsaIndexerQ, DsaMqaLogits and DsaTopKShortRow; the all-reduce + residual + RMSNo
 budget, else the all-reduce and RMSNormFusedCuda); the SiLU MLP below FIRST_DENSE, and from it on the MoE block: the f32 router GEMM,
 the shared expert, MoeRouterSigmoidBias, Fp8GroupQuantUe8m0, the block-FP8 expert GEMMs per (token, slot) pair, MoeSum and the
 shared expert's add; then the last row's logits, their all-gather and the token select (greedy, or the seeded temperature + top-p
-select: `common.select_token`).  A fact outside it raises `Unexpressible`, φ's
-when the decoder is made and a launch's (a prefill past the decode threshold, a row of more than INDEX_TOPK keys, a GEMM, all-reduce
-or MoE tile no record covers) when the launch is written.
+select: `common.select_token`).  A fact outside it raises `Unexpressible`, φ's and a history of more than INDEX_TOPK keys
+(the long rows' Waksman path, whose order is a `run` value, isn't mirrored) when the decoder is made, and a launch's (a prefill
+past the decode threshold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
 
 from __future__ import annotations
@@ -25,7 +28,7 @@ from verity.ml.circuits.defs import Builder
 from verity.ml.circuits.refs import Coll, PartLog, Refs, concat, strided_view
 from verity.ml.circuits.types import Type, Value
 
-from .common import Unexpressible, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
+from .common import Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, kind, select_token, served_class
 from .phi import Phi
 
 
@@ -89,6 +92,8 @@ class Net:
             facts.append(str(e))
         if facts:
             _refuse("; ".join(facts))
+        if int(history) > int(C["INDEX_TOPK"]):
+            _refuse(f"a row of {int(history)} keys > TOPK {C['INDEX_TOPK']} (the top-k kernels' radix selection)")
         self.settings = settings_of(bool(phi.engine.get("disable_custom_all_reduce")), phi.engine.get("env") or {})
         ff = FF.facts_for(hf)
         self.model_class, self.NL = served_class(ff["vllm_class"]), int(C["NL"])
@@ -121,6 +126,18 @@ class Net:
         H = int(self.C["H"])
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
 
+    #: the history groups a later row reads, which a Commit window's edge carries (`segment.edge_of`): the latent rows. A row reads
+    #: the indexer's keys and scales only past INDEX_TOPK keys (below, its top-k selection keeps every key), which the decoder refuses
+    EDGE_GROUPS = ("prefix",)
+
+    def prefix_params(self, C: int) -> list[tuple[str, Type]]:
+        """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
+        layer's latent rows `prefix` (bf16 [NL, C, KV_LORA + QK_ROPE]: the normed kv_c, then the roped k_pe), and the indexer
+        layers', in layer order, index-K slots `prefix_ik` (e4m3 [NI, C, INDEX_HEAD_DIM]) and their scales `prefix_iks` (f32 [NI, C])."""
+        NI, row = len(self.indexers), int(self.C["KV_LORA"]) + int(self.C["QK_ROPE"])
+        return [("prefix", _arr((self.NL, C, row), 16)), ("prefix_ik", _arr((NI, C, int(self.C["INDEX_HEAD_DIM"])), 8)),
+                ("prefix_iks", _arr((NI, C), 32))]
+
     def model(self, B: Builder, W: Coll, peers: _Peers) -> "_Model":
         return _Model(self, B, W, peers)
 
@@ -147,6 +164,31 @@ class _Model:
 
     def call(self, fn, *refs: Refs) -> Coll:
         return self.B.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs)))
+
+    def open_with(self, prefix: list[Coll], C: int) -> None:
+        """Every layer's history opens with its C rows of `prefix` (`Net.prefix_params`: the latent rows, then the indexer layers'
+        index-K slots and scales), read and never computed: the request's own rows follow at positions C.."""
+        latent, ik, iks = prefix
+        for L in range(self.net.NL):
+            logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
+            if len(logs["latent"]):
+                raise AssertionError(f"layer {L}'s history opens once, before its first call")
+            for j in range(C):
+                logs["latent"].append(latent[L][j].refs)
+        for n, L in enumerate(sorted(self.net.indexers)):
+            for j in range(C):
+                self.logs[L]["ik"].append(ik[n][j].refs)
+                self.logs[L]["iks"].append(iks[n][j].refs)
+
+    def edge_rows(self) -> list[Coll]:
+        """Every layer's rows so far of the groups a later row reads (`Net.EDGE_GROUPS`), its history's and its own, as
+        `Net.prefix_params` lays out a history of them: wires and no gates."""
+        E, net = len(self.logs[0]["latent"]), self.net
+        logs = {"prefix": [self.logs[L]["latent"] for L in range(net.NL)],
+                **{g: [self.logs[L][h] for L in sorted(net.indexers)] for g, h in (("prefix_ik", "ik"), ("prefix_iks", "iks"))}}
+        if any(len(log) != E for g in net.EDGE_GROUPS for log in logs[g]):
+            raise AssertionError(f"every layer's history holds the {E} rows of layer 0's")
+        return [Coll(t, concat([log.cut(E) for log in logs[g]])) for g, t in net.prefix_params(E) if g in net.EDGE_GROUPS]
 
     def forward(self, toks: list[Coll], pos0: int) -> list[Refs]:
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""

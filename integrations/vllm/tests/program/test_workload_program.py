@@ -404,6 +404,93 @@ def test_chronology_is_declared_and_bounded():
     assert "observed" in ch["observed_time"]
 
 
+_ROWS = ("prefix", "prefix_ik", "prefix_iks")
+
+
+def _toy_edge_request(LP: int, C: int, E: int, last: bool):
+    """`GpTestEdge{LP,C,E,LAST}`: a request after a history of C rows of each group (`prefix`, `prefix_ik`, `prefix_iks`, and with
+    LAST its `last_token`) that samples one token reading the history's last scale, and with E returns its rows [0, E) of each
+    group after its sample, the history's then its own, as `build_program(edge=)` does."""
+    V = Value(16)
+
+    def params(S):
+        return [("prompt", Array(S.LP, V)), *((g, Array(S.C, V)) for g in _ROWS * bool(S.C)),
+                *([("last_token", Array(1, V))] if S.LAST else []), ("weights", Array(4, V))]
+
+    def sig(S):
+        return tuple(params(S)), W.TupleT(Array(1, V), *[Array(S.E, V)] * 3) if S.E else Array(1, V)
+
+    def body(B, S, *args):
+        a = dict(zip([n for n, _ in params(S)], args))
+        s = B.call(_ADD, a["last_token"][0] if S.LAST else a["prompt"][0], a["weights"][0])
+        sample = coll_concat(Array(1, V), [B.call(_ADD, s, a["prefix_iks"][S.C - 1]) if S.C else s])
+        if not S.E:
+            return sample
+        rows = [coll_concat(Array(S.E, V), [*([a[g]] if S.C else []), *(B.call(_ADD, a["prompt"][j % S.LP], a["weights"][1 + k])
+                                                                       for j in range(S.C, S.E))]) for k, g in enumerate(_ROWS)]
+        return coll_concat(sig(S)[1], [sample, *rows])
+
+    d = REGISTRY["GpTestEdge_v1"] if "GpTestEdge_v1" in REGISTRY else CompositeDefinition("GpTestEdge", 1, ("LP", "C", "E", "LAST"), sig, body)
+    return d.bind(LP=LP, C=C, E=E, LAST=last)
+
+
+def _edge_wl(units: dict, edge: W.Edge) -> W.WorkloadProgram:
+    reqs = []
+    for i, shape in units.items():
+        fn = _toy_edge_request(*shape)
+        c = W.request_component(encode_program(Program(fn)), REGISTRY, [(n, repr(t)) for n, t in fn.signature()[0]])
+        reqs.append(W.WorkloadRequest(f"r{i}", i, shape[0], 1, 0, c, T=0))
+    return W.WorkloadProgram(reqs, lag=0, edge=edge)
+
+
+def _groups(E: int, LP: int = 3) -> tuple:
+    return (*((g, E, 16) for g in _ROWS), *((("last_token", 1, 16),) if E >= LP else ()))
+
+
+def test_a_window_edge_is_registered_values_its_carried_requests_read_and_output_ports_in_close_order():
+    """GP-01 at a Commit window's edges (`Edge`, `Workload_v2`): window w leaves r1 inside its 3-token prompt (rows [0, 2), no last
+    token) and r2 past it (rows [0, 4) and its last sample), its out-ports each a tuple of their fields in close order after the
+    requests' outputs, r1's and r2's their samples; window w+1 takes those ports as registered parameters, r1 and r2 reading
+    their history from their fields, never from Inputs of their own, r3 idle passing its fields through to the edge it leaves
+    beside r1. Evaluated, every out-port field is its request's rows (its history's, then its own) or the idle one's in-port
+    field; R1 (`check.batch.separable` over `predict.batch.workload_labels`) holds each field its request's own, and a field
+    handed to another request is the crossing it names."""
+    from verity.ml.circuits.evaluation.reference import evaluate
+    from verity_vllm.check.batch import SHARED, Fields, own, separable
+    from verity_vllm.program.predict.batch import workload_labels
+    out = _edge_wl({0: (3, 0, 0, False), 1: (3, 0, 2, False), 2: (3, 0, 4, False)}, W.Edge(outs=((1, _groups(2)), (2, _groups(4)))))
+    params, ret = out.fn.signature()
+    assert out.fn.id.startswith("Workload_v2{") and out.registered == () and [n for n, _ in params][1:] == [f"request[r{i}].prompt" for i in range(3)]
+    V = Value(16)
+    assert ret == W.TupleT(*[Array(1, V)] * 3, *[W.TupleT(Array(2, V), Array(4, V))] * 3, W.TupleT(Array(1, V)))
+    o = evaluate(out.fn, [1, 2, 3, 4], [10, 11, 12], [20, 21, 22], [30, 31, 32])
+    assert o[:3] == (11, 21, 31) and o[3:9] == (22, 23, 32, 33, 34, 32) and o[-1] == 31   # r1's, then r2's latent rows; r2's sample
+    edge = W.Edge(ins=((1, _groups(2)), (2, _groups(4)), (3, _groups(1))), outs=((1, _groups(5)), (3, _groups(1))))
+    wl = _edge_wl({1: (3, 2, 5, False), 2: (3, 4, 0, True)}, edge)
+    params, ret = wl.fn.signature()
+    assert wl.registered == wl.ports == ("edge.kv", "edge.ik", "edge.iks", "edge.last") and [n for n, _ in params] == [
+        "shared.weights", *wl.ports, "request[r1].prompt", "request[r2].prompt"]
+    assert dict(params)["edge.kv"] == W.TupleT(Array(2, V), Array(4, V), Array(1, V)) and dict(params)["edge.last"] == W.TupleT(Array(1, V))
+    assert ret == W.TupleT(Array(1, V), Array(1, V), *[W.TupleT(Array(5, V), Array(1, V))] * 3, W.TupleT(Array(1, V)))
+    kv, ik, iks = ([100 * k + j for j in range(7)] for k in (1, 2, 3))
+    o = evaluate(wl.fn, [1, 2, 3, 4], kv, ik, iks, [40], [10, 11, 12], [20, 21, 22])
+    assert o[:2] == (10 + 1 + 301, 40 + 1 + 305)                     # each sample reads its own history's last scale
+    assert o[2:8] == (100, 101, 12 + 2, 10 + 2, 11 + 2, 106)        # r1's latent rows, its 2 carried then its own 3; r3's passed on
+    assert o[8:20:6] == (200, 300) and o[-1] == o[0]
+    am = {i["name"]: i for i in wl.address_map()["requests"][1]["inputs"]}
+    assert am["prefix"]["global"] == "edge.kv[1]" and am["last_token"]["global"] == "edge.last[0]" and am["prompt"]["global"] == "request[r2].prompt"
+    assert wl.artifact()["edge"]["ports"] == {"in": list(wl.ports), "out": ["edge.kv", "edge.ik", "edge.iks", "edge.last"]}
+    labels, held = workload_labels(wl)
+    assert labels == (SHARED, *[Fields((own(1), own(2), own(3)))] * 3, Fields((own(2),)), own(1), own(2))
+    assert held.labels[2:] == (*[Fields((own(1), own(3)))] * 3, Fields((own(1),))) and separable(wl.fn, labels, held) == []
+    crossed = separable(wl.fn, (*labels[:3], Fields((own(2), own(1), own(3))), *labels[4:]), held)
+    assert {(c.owner, c.param, c.holder) for c in crossed} == {(1, "edge.iks", 2), (2, "edge.iks", 1)}
+    with pytest.raises(ValueError, match=r"request 2's history Inputs aren't its in-port fields"):
+        _edge_wl({2: (3, 4, 0, True)}, W.Edge(ins=((2, _groups(3)),)))
+    with pytest.raises(ValueError, match=r"request 3 leaves with .* nor came in so"):
+        _edge_wl({1: (3, 0, 2, False)}, W.Edge(outs=((1, _groups(2)), (3, _groups(1)))))
+
+
 def test_population_partitions_the_gates():
     wl = _wl([(3, 2), (5, 0), (3, 2)])
     p = wl.population()

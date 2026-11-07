@@ -51,7 +51,7 @@ import Proofs.Flock.Soundness.Refine.Arith
 /-!
 # A deployed rep's ring-switch target is the opening's
 
-`fwRows_at` takes the firewall's ring-switch target `T` as the opening's (`Composed.openT`) at the view's masked claims'
+`fwRows_at` takes the ZK server's ring-switch target `T` as the opening's (`Composed.openT`) at the view's masked claims'
 `ŝ`. Here that is read off the deployed rep: `repFwC`'s ring switch on table `j`'s rep `r`, answered by the opened coins
 (`ligCoin`) from the rep's base, on the packed table of the witness's trace (`ligTab`), with extra claims at the
 statement's region claims' points.

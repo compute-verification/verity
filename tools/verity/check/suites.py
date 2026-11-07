@@ -677,7 +677,7 @@ def roots(suite: Suite, pkgs: dict[str, str]) -> list[str]:
 
 
 def flock_lean() -> Path:
-    """The Lean verifier of record, the package check's `lean-build` step builds (check.py's `FLOCK_LEAN`)."""
+    """The Lean verifier, the package check's `lean-build` step builds (check.py's `FLOCK_LEAN`)."""
     return ROOT / "verity" / "core" / "service" / "flock"
 
 
@@ -2190,7 +2190,7 @@ def worker_gb(s: Suite) -> float:
 
 def wide_gb(mem_gb: float | None, serial: int) -> float | None:
     """The GB the parallel suites share: ``mem_gb`` less `TEST_PROCESS_GB` for each of the ``serial`` processes that run the
-    one-process suites beside them. Parallel suites that overlap draw their workers' GB from it in turn, so two side by side can't
+    one-process suites beside them. Parallel suites that overlap sample their workers' GB from it in turn, so two side by side can't
     each size to the whole (circuit_check's 53 workers and flock's 30, each sized to all of --mem-gb, reached 800 GB
     together)."""
     return None if mem_gb is None else max(0.0, mem_gb - serial * TEST_PROCESS_GB)

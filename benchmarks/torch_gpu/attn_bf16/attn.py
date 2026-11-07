@@ -37,8 +37,8 @@ GROUP = {"s16": 16, "h16": 16, "h8": 8}
 #: the s16 kernels' most keys a query sees, and PV's largest K
 S16_KEYS = 32
 #: each op's launch: (tiling, warps a CTA, head groups a warp), falling back to h16, h8 and then q8 where the tiling can't
-#: serve; run.py's timing sweeps the alternatives (on the H200 at the frozen shape, QK^T and PV are each fastest with every
-#: group of a sequence in one warp, at M = 4,096, 16,384 and 20,480 within 3%)
+#: serve; run.py's timing sweeps the alternatives, and LAUNCH is the fastest it found at the frozen shape (every group of
+#: a sequence in one warp)
 LAUNCH = {"qk": ("s16", 1, 16), "pv": ("s16", 1, 16)}
 #: qk's and pv's ``path``: attn.LAUNCH's tiling, or the reference kernels
 PATHS = ("fast", "ref")
