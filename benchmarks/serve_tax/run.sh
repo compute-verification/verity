@@ -7,6 +7,11 @@
 #     bash benchmarks/serve_tax/run.sh
 #   CAPACITY=1 [REQUESTS=800] bash benchmarks/serve_tax/run.sh   # stock compiled under one burst: its capacity
 #   REPLAY=LOAD REPLAY_FROM=RECORD_ARM_DIR [REPLAY_MODES=...] bash benchmarks/serve_tax/run.sh   # only replay an earlier window
+#   ARMS="restore-base restore" RATES=medium=R REPS=1 SPAN_S=720 EDGES_S=180,360,540 [SAVE_KV=1] [RESTORE=1:2]
+#     [NUM_GPU_BLOCKS=N] [KV_DIR=DIR] bash benchmarks/serve_tax/run.sh   # boundary states at the edges, one restored
+# The restore arm keeps the KV bytes and states of SAVE_KV's edges in KV_DIR (default: a fresh directory under the node's
+# scratch, removed at the end); RESTORE=FROM:TO then restores edge FROM into a fresh engine and replays to edge TO
+# (restore.py) into OUT/restore-replay.
 # One plan (OUT/plan.jsonl, from the shard's first DOCS documents) is made before the GPUs are held; then each arm is a
 # server lifetime of its own (serve_tax.py run) into OUT/<arm>, in ARMS's order, all under one gpu-lease; the tick arms
 # take τ from TICK_MS, else from TICK_FROM, else from this job's own record arm, calibrated on its saturated load.
@@ -35,7 +40,7 @@ command -v nvcc >/dev/null || for d in ${CUDA_HOME:+"$CUDA_HOME/bin"} $(ls -d /u
 done
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 REPS=${REPS:-3}; SPAN_S=${SPAN_S:-60}; MAX_MIN=${MAX_MIN:-240}; DOCS=${DOCS:-45000}
-WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=$OUT/plan.jsonl
+WINDOW_S=${WINDOW_S:-600}; KV_WINDOW_S=${KV_WINDOW_S:-$WINDOW_S}; PLAN=${PLAN:-$OUT/plan.jsonl}
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
 # Inductor's runtime R0_BLOCK choice (each process times a halved candidate) changes the reduction order: pin it
@@ -58,12 +63,21 @@ if [ "${1:-}" = leased ]; then
   rc=0
   if [ -n "${TICK_MS:-}" ]; then tick=(--tick-ms "$TICK_MS"); else tick=(--tick-from "${TICK_FROM:-$OUT/record}"); fi
   count=(); [ -n "${REQUESTS:-}" ] && count=(--requests "$REQUESTS")
+  [ -n "${NUM_GPU_BLOCKS:-}" ] && count+=(--num-gpu-blocks "$NUM_GPU_BLOCKS")
+  [ -n "${EDGES_S:-}" ] && count+=(--edges-s "$EDGES_S" --save-kv "${SAVE_KV:-1}" --kv-dir "$KV_DIR")
   for arm in ${ARMS:-}; do
     echo "== $arm $(date -u +%FT%TZ)"
     "$PY" "$here/serve_tax.py" run --arm "$arm" "${common[@]}" --rates "$RATES" --reps "$REPS" --span-s "$SPAN_S" \
       --plan "$PLAN" --docs "$DOCS" --window-s "$WINDOW_S" --kv-window-s "$KV_WINDOW_S" "${tick[@]}" "${count[@]}" \
       --out "$OUT/$arm" || rc=1
   done
+  if [ -n "${RESTORE:-}" ]; then
+    echo "== restore ${RESTORE} $(date -u +%FT%TZ)"
+    "$PY" "$here/restore.py" --arm-dir "$OUT/restore" --from-edge "${RESTORE%%:*}" --to-edge "${RESTORE##*:}" \
+      --kv-dir "$KV_DIR" --checkpoint "$CK" --out "$OUT/restore-replay" > "$OUT/restore-replay.log" 2>&1 \
+      || { tail -n 60 "$OUT/restore-replay.log"; rc=1; }
+    tail -n 1 "$OUT/restore-replay.log"
+  fi
   if [ -n "${REPLAY:-}" ]; then
     declare -A times=()
     for mode in ${REPLAY_MODES:-compiled eager}; do
@@ -86,10 +100,15 @@ elif [ "${CAPACITY:-0}" != 1 ]; then
   "$PY" "$here/serve_tax.py" plan --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" --rates "${RATES:?RATES: NAME=REQ_PER_S,...}" \
     --span-s "$SPAN_S" ${REQUESTS:+--requests "$REQUESTS"} --docs "$DOCS" --out "$PLAN" || exit 1
 fi
-export PLAN DOCS WINDOW_S KV_WINDOW_S
+fresh_kv=0
+if [ -n "${EDGES_S:-}" ] && [ -z "${KV_DIR:-}" ]; then
+  KV_DIR=$(mktemp -d "${SCRATCH:-/workspace/research/scratch}/serve-tax-kv.XXXXXX") || exit 2; fresh_kv=1
+fi
+export PLAN DOCS WINDOW_S KV_WINDOW_S KV_DIR
 GPU_LEASE_WHO=${GPU_LEASE_WHO:-serve-tax} gpu-lease "$GPUS" --wait --max-min "$MAX_MIN" -- bash "$here/run.sh" leased
 rc=$?
-gzip -f "$OUT"/*/server/step_trace.*.jsonl 2>/dev/null
+[ $fresh_kv = 1 ] && rm -rf "$KV_DIR"
+gzip -f "$OUT"/*/server/step_trace.*.jsonl "$OUT"/*/server/edges/outputs.*.jsonl "$OUT"/restore-replay/*.jsonl 2>/dev/null
 dirs=()
 for d in "$OUT"/*/; do [ -f "$d/meta.json" ] && dirs+=("$d"); done
 [ ${#dirs[@]} -gt 0 ] && "$PY" "$here/serve_tax.py" table "${dirs[@]}" --out "$OUT"

@@ -10,6 +10,14 @@ directory its files go to, ``window_s``, and a true value for each change), ever
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
   in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``.
 
+and with ``edges`` (seconds after the first request whose id holds ``edge_tag``) every engine core takes a replay block's
+boundary state at each edge (`edges_of`, `boundary.Edges`): it drains, takes the state between two steps, and goes on.
+Each edge's record (`edges.PID.jsonl`: the drain, the pause and its parts, the KV pool's root, sizes, the GPU's busy time
+since the last edge), its `boundary.dump_core` and block fingerprints (``edges/``) and its state (``kv_dir``/edge-K.state.pkl)
+are written off the engine loop, and the KV pool's bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv. From the
+first edge ``save_kv`` names to the last edge, each step's sampled tokens and their logprobs' bits go to
+``edges/outputs.PID.jsonl``.
+
 The tick's plugin (`verity_vllm.pipeline.tick_plugin`) is a separate entry point, loaded after this one, so its gate wraps
 the scheduler outside these.
 """
@@ -290,6 +298,148 @@ def _lines(path: Path) -> Callable[[dict], None]:
     return write
 
 
+def _lines_behind(path: Path) -> Callable[[dict], None]:
+    """`_lines`, written by a thread of its own: the caller only queues the line."""
+    write = _lines(path)
+    q: queue.SimpleQueue = queue.SimpleQueue()
+
+    def work() -> None:
+        while (rec := q.get()) is not None:
+            write(rec)
+    t = threading.Thread(target=work, name="servetax-lines", daemon=True)
+    t.start()
+    atexit.register(lambda: (q.put(None), t.join()))
+    return q.put
+
+
+def step_outputs_hook(trace: Any, sink: Callable[[dict], None], active: Callable[[], bool]) -> Callable[[Any], Any]:
+    """A wrapper of the scheduler's ``update_from_output``, outside the step trace's (which forgets the step's index): while
+    ``active()``, each step's sampled tokens and logprob bits (`boundary.step_outputs`) to ``sink`` under the trace's
+    index of the step."""
+    import boundary as B
+
+    def update_from_output(orig):
+        def wrapped(so, mro, *a, **kw):
+            step = trace._pending.get(id(so))
+            outs = orig(so, mro, *a, **kw)
+            if step is not None and active():
+                sink({"step": step, "out": B.step_outputs(outs)})
+            return outs
+        return wrapped
+    return update_from_output
+
+
+def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = time.monotonic) -> Any:
+    """The engine core's `boundary.Edges` under ``cfg``: due ``edges_s`` after the first request whose id holds ``edge_tag``,
+    each taking the boundary state as module `boundary` reads it (the KV pool copied to a pinned host buffer allocated
+    here, once, and hashed), its record and files written as the module's docstring says."""
+    import pickle
+
+    import numpy as np
+    import torch
+
+    import boundary as B
+    from verity_vllm.engine.hooks import Hooks
+    from verity_vllm.engine.step_trace import StepTrace
+
+    out = Path(cfg["out"])
+    d = out / "edges"
+    d.mkdir(parents=True, exist_ok=True)
+    pid = os.getpid()
+    sched, _kvm, pool, runner = B.parts(core)
+    trace = next((x for x in getattr(sched, "_verity_servetax", ()) if isinstance(x, StepTrace)), None)
+    if trace is None:
+        raise RuntimeError("the edges need the step trace (record) on the scheduler")
+    kv = B.KvPool(runner.kv_caches, len(pool.blocks))
+    host = kv.host() if cfg.get("kv_copy", True) else None
+    at = [float(x) for x in cfg["edges_s"]]
+    due, start = B.at_times(at, clock)
+    tag = cfg.get("edge_tag")
+    save_kv = set(int(k) for k in cfg.get("save_kv", (0,)))
+    kv_dir = Path(cfg.get("kv_dir") or d)
+    kv_dir.mkdir(parents=True, exist_ok=True)
+    record = _lines(out / f"edges.{pid}.jsonl")
+    busy = B.Busy(lambda: torch.cuda.Event(enable_timing=True), first=trace.scheduled)
+    runner._verity_busy = busy
+    active = [False]
+    last = {"step": trace.scheduled, "resumed_t": None}
+    writer: list[threading.Thread | None] = [None]
+    hooks = Hooks(tag="serve-tax-edges")
+
+    def add_request(orig):
+        def wrapped(request, *a, **kw):
+            if tag is None or tag in request.request_id:
+                start()
+            return orig(request, *a, **kw)
+        return wrapped
+
+    hooks.wrap(sched, "add_request", add_request)
+    hooks.wrap(sched, "update_from_output", step_outputs_hook(trace, _lines_behind(d / f"outputs.{pid}.jsonl"),
+                                                              lambda: active[0]))
+
+    def take(e: B.Edges, info: dict) -> None:
+        k = info["edge"]
+        t0 = clock()
+        torch.cuda.synchronize()
+        t1 = clock()
+        st = B.capture(core)
+        st["next_step"], st["kv_layout"] = trace.scheduled, kv.layout()
+        t2 = clock()
+        dumped = B.dump_core(core)
+        t3 = clock()
+        if writer[0] is not None:
+            writer[0].join()
+        t4 = clock()
+        kvr = kv.take(host)
+        t5 = clock()
+        busy.reap(wait=True)
+        fp = kvr.pop("fingerprint")
+        st["kv"] = kvr
+        busy_s, busy_steps = busy.total(last["step"], trace.scheduled)
+        rec = {"edge": k, "next_step": trace.scheduled, "at_s": at[k], "drained_unix": time.time() - (clock() - info["drained_t"]),
+               "drain_s": info["drained_t"] - info["due_t"], "drain_calls": info["drain_calls"], "sync_s": t1 - t0,
+               "state_s": t2 - t1, "dump_s": t3 - t2, "write_wait_s": t4 - t3, "kv_s": t5 - t4,
+               "pause_s": t5 - info["drained_t"], "pause_production_s": (t5 - info["drained_t"]) - (t3 - t2) - (t4 - t3),
+               "requests": len(sched.requests), "running": len(sched.running), "waiting": len(sched.waiting),
+               "sizes": B.sizes(st), "kv": kvr, "since_last": {"from_step": last["step"], "busy_s": busy_s,
+                                                              "busy_steps": busy_steps,
+                                                              "wall_s": (info["drained_t"] - last["resumed_t"])
+                                                              if last["resumed_t"] is not None else None},
+               "skipped": st["skipped"], "runner_skipped": st["runner"]["skipped"]}
+        record(rec)
+        last["step"], last["resumed_t"] = trace.scheduled, clock()
+        active[0] = min(save_kv) <= k < len(at) - 1
+
+        def write() -> None:
+            t = time.monotonic()
+            with open(kv_dir / f"edge-{k}.state.pkl", "wb") as f:
+                pickle.dump(st, f, protocol=pickle.HIGHEST_PROTOCOL)
+            (d / f"edge-{k}.dump.json").write_text(json.dumps(dumped))
+            if fp is not None:
+                np.save(d / f"edge-{k}.fp.npy", fp)
+            got = {"edge": k, "state_write_s": time.monotonic() - t}
+            if host is not None and k in save_kv:
+                t = time.monotonic()
+                path = kv_dir / f"edge-{k}.kv"
+                got |= {"kv_file": str(path), "kv_write_bytes": B.write_host(host, str(path)), "kv_write_s": time.monotonic() - t}
+            record(got)
+        writer[0] = threading.Thread(target=write, name=f"edge-{k}-write")
+        writer[0].start()
+
+    return B.Edges(core, due, take, clock)
+
+
+def _edge_step(orig: Callable[[Any], Any], cfg: Mapping[str, Any]) -> Callable[[Any], Any]:
+    """`EngineCore.step_with_batch_queue` through the engine core's `boundary.Edges`, made at its first step (after startup,
+    when its KV cache exists)."""
+    def step_with_batch_queue(self: Any) -> Any:
+        e = getattr(self, "_verity_edges", None)
+        if e is None:
+            e = self._verity_edges = edges_of(self, cfg)
+        return e.step(orig)
+    return step_with_batch_queue
+
+
 def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
     """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the tokens' commit, then the
     release gate (outside both, so that they see a request when the gate adds it)."""
@@ -411,4 +561,11 @@ def register() -> None:
             runner = getattr(importlib.import_module(name), "GPUModelRunner", None)
             if runner is not None:
                 hooks.wrap(runner, "execute_model", lambda execute: _kv_runner(execute, cfg))
+    if cfg.get("edges_s"):
+        import boundary as B
+        from vllm.v1.engine.core import EngineCore
+        from vllm.v1.worker.gpu.model_runner import GPUModelRunner
+
+        hooks.wrap(EngineCore, "step_with_batch_queue", lambda orig: _edge_step(orig, cfg))
+        B.busy_runner(GPUModelRunner, lambda r: getattr(r, "_verity_busy", None))
     _PLUGIN.append(hooks)
