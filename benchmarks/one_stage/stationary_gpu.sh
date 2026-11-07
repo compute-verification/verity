@@ -12,8 +12,9 @@
 #      ST_PROVE_CPUS=0-31 (the prover's and the build's cores; the stagers take the rest)
 #      ST_HOLD (a file whose text names this run's slot: written once the file is gone, waiting up to ST_HOLD_WAIT=600 s, and
 #      removed at exit)  ST_DEADLINE (UTC epoch seconds after which no point starts)
-#      ST_OVERLAP=1,2,4,8 (each point proved by that many prover processes at once on the one GPU against one verifier,
-#      zk_cost.py prove --provers K; unset: one)  ST_CACHE=1 (then FC_STMT_CACHE=1, at one prover and the best K)
+#      ST_OVERLAP=1,2,4,8 (K prover processes at once on the one GPU against one verifier, zk_cost.py prove --provers K, on
+#      the points of full/K and full/(2K) blocks; give the type counts down to full/(2 max K), e.g. pe-w13@2048,1024,512,256,128;
+#      unset: one)  ST_CACHE=1 (then FC_STMT_CACHE=1 on each type's largest point at one prover and its best point and K)
 #      ST_KEEP_BIN (a path the built prover is copied to)  ST_BIN (a prover built so: no build)
 #      ST_CPU=1 (no CUDA: the CPU prover, `prove --zk` without --gpu, for checking the runner on a CPU node)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
@@ -98,29 +99,43 @@ zk() {
   return "${PIPESTATUS[0]}"
 }
 
-# prove P: plan point P by one prover, or with ST_OVERLAP by K provers at once against one verifier for each K; then with
-# ST_CACHE=1 the statement cache on, at one prover and at the K whose provers proved the most sessions a second
+# prove P: plan point P by one prover; with ST_OVERLAP by K provers at once against one verifier, for each K of it at which
+# the point's c is full/K or full/(2K) (full: its type's largest staged count). A prover's device arena is about
+# 16.5 x 2^(m-3) bytes, held for its process (66 GiB at m = 35), so K provers of full/K blocks fill one device as one of full
+# does, and every K gets two sizes
 prove() {
-  local p=$1 k rcs=0 best
-  [ -n "${ST_OVERLAP:-}" ] || { zk "$p" || rcs=1; }
+  local p=$1 k c full rcs=0
+  [ -n "${ST_OVERLAP:-}" ] || { zk "$p" || rcs=1; return $rcs; }
+  read -r c full < <("$PY" -c 'import json, sys; pl = json.load(open(sys.argv[1])); q = pl[int(sys.argv[2])]
+print(q["c"], max(x["c"] for x in pl if x["tag"] == q["tag"]))' "$Z/plan.json" "$p")
   for k in ${ST_OVERLAP//,/ }; do
+    [ $((c * k)) = "$full" ] || [ $((2 * c * k)) = "$full" ] || continue
     if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "point $p, $k at once: past the deadline"; continue; fi
     zk "$p" --provers "$k" || rcs=1
   done
-  [ "${ST_CACHE:-0}" = 1 ] || return $rcs
-  best=$("$PY" - "$Z/records/prove.jsonl" "$p" "$Z/plan.json" <<'EOF2'
-import json, sys
-plan = json.load(open(sys.argv[3]))[int(sys.argv[2])]
-recs = [json.loads(x) for x in open(sys.argv[1]) if x.strip()]
-rate = {r["provers"]: r["provers"] / (sum(r["cycle_s"]) / len(r["cycle_s"])) for r in recs
-        if r.get("cycle_s") and r["accepted"] and not r.get("stmt_cache") and (r["tag"], r["c"]) == (plan["tag"], plan["c"])}
-print(max(rate, key=rate.get) if rate else 1)
-EOF2
-)
-  for k in $(echo 1 "$best" | tr ' ' '\n' | sort -nu); do
+  return $rcs
+}
+
+# cache P...: with ST_CACHE=1, the statement cache on for one type's points P: at one prover on its largest statement, and at
+# the point and K whose provers proved the most blocks a second with it off
+cache() {
+  [ "${ST_CACHE:-0}" = 1 ] || return 0
+  local rcs=0 p k
+  while read -r p k; do
     if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "point $p, cache, $k at once: past the deadline"; continue; fi
     zk "$p" --provers "$k" --stmt-cache || rcs=1
-  done
+  done < <("$PY" - "$Z/records/prove.jsonl" "$Z/plan.json" "$@" <<'EOF2'
+import json, sys
+plan, pts = json.load(open(sys.argv[2])), [int(x) for x in sys.argv[3:]]
+idx = {(plan[p]["tag"], plan[p]["c"]): p for p in pts}
+recs = [json.loads(x) for x in open(sys.argv[1]) if x.strip()]
+rate = {(idx[(r["tag"], r["c"])], r["provers"]): r["provers"] * r["c"] / (sum(r["cycle_s"]) / len(r["cycle_s"]))
+        for r in recs if r.get("cycle_s") and r["accepted"] and not r.get("stmt_cache") and (r["tag"], r["c"]) in idx}
+first = max(pts, key=lambda p: plan[p]["c"])
+for x in dict.fromkeys([(first, 1)] + ([max(rate, key=rate.get)] if rate else [])):
+    print(*x)
+EOF2
+)
   return $rcs
 }
 
@@ -165,6 +180,7 @@ EOF
       if [ "$DEADLINE" != 0 ] && [ "$(date +%s)" -ge "$DEADLINE" ]; then log "$u: point $p not proved: past the deadline"; continue; fi
       prove "$p" || rc=1
     done
+    cache ${pts//,/ } || rc=1
     keep
     rm -f "$sd"/c*/stage/circuit.txt "$sd"/c*/stage/*.bin
     ran=1; break

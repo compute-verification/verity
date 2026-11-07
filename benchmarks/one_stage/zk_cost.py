@@ -443,7 +443,8 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
           f"e2e {[x['e2e_s'] and round(x['e2e_s'], 2) for x in lives]}, k_log {[x['k_log'] for x in lives]}, "
           f"dense_m {[x['dense_m'] for x in lives]}, peak {peak_kb / 2**20:.1f} GiB (prover, serve and firewall summed), "
           f"accepted {rec['accepted']}"
-          + ("" if rec["accepted"] else f" ({[x['why'] for x in lives]}; {(o / 'prove.err').read_text()[-300:]!r})"), flush=True)
+          + ("" if rec["accepted"] else f" ({[x['why'] for x in lives]}; {(o / f'prove{provers[0][1]}.err').read_text()[-300:]!r})"),
+          flush=True)
     return rec
 
 
