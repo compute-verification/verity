@@ -31,6 +31,13 @@ OWNERS = {"no capture": "kernels", "unregistered": "circuits", "fails circuit-ch
           "FlashInfer sampler": "vllm"}
 #: class G's engine limits (`CLASS_G_LIMITS`), with the prefix cache off and eager execution
 CLASS_G = {"max_num_seqs": 8, "max_num_batched_tokens": 2048, "max_model_len": 2048, "long_prefill_token_threshold": 256}
+#: class G's workload row (GLM-5.3 at TP8, eager) and its pinned config's case
+CLASS_G_ROW, CLASS_G_CASE = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager", "GLM53"
+
+
+def class_g_phi():
+    """Class G's φ (`step_needs.workload_phi` of its row)."""
+    return workload_phi(CLASS_G_ROW, CLASS_G_CASE)
 
 
 def decodes(row: dict[str, Any]) -> list[int]:
@@ -102,7 +109,7 @@ def _statics(ids: list[str]) -> str:
 def gap(capture: Path, check: dict[str, Any], rank: int | None = None, phi=None) -> dict[str, Any]:
     """The capture's needs at one recording rank (the lowest unless named) against class G's registered, passing Definitions."""
     rank = min(ranks(capture)) if rank is None else rank
-    S = StepNeeds(phi if phi is not None else workload_phi())
+    S = StepNeeds(phi if phi is not None else class_g_phi())
     reg = statuses(check)
     fi = flashinfer_sampler_on(capture)
     need: Counter[Need] = Counter()

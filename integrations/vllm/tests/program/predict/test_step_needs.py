@@ -7,10 +7,12 @@ import pytest
 
 from verity_vllm.program.predict.step_needs import StepNeeds, workload_phi
 
+CLASS_G_ROW = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
+
 
 @pytest.fixture(scope="module")
 def S():
-    return StepNeeds(workload_phi())
+    return StepNeeds(workload_phi(CLASS_G_ROW, "GLM53"))
 
 
 def _gaps(need):

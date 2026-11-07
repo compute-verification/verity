@@ -26,10 +26,8 @@ from pathlib import Path
 from .common import Unexpressible, _arr_shape, kind
 from .phi import Phi
 
-__all__ = ["CLASS_G_ROW", "Need", "StepNeeds", "workload_phi"]
+__all__ = ["Need", "StepNeeds", "workload_phi"]
 
-#: class G's workload row: GLM-5.3 at TP8, eager, on H200
-CLASS_G_ROW = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
 _CAPTURE_MAP = "glm-moe-dsa-eager-hopper-tp8-v0.json"
 
 
@@ -47,9 +45,9 @@ def _id(name: str, **statics: object) -> str:
     return f"{name}{{{','.join(f'{k}={v}' for k, v in statics.items())}}}"
 
 
-def workload_phi(row: str = CLASS_G_ROW, case: str = "GLM53") -> Phi:
-    """The φ of a workload row of record, its checkpoint's config.json the package's pinned copy (`hf_configs/<case>.config.json`),
-    as `score.phi_of` makes it."""
+def workload_phi(row: str, case: str) -> Phi:
+    """The φ of a workload row of record (`workloads/<row>.json`), its checkpoint's config.json the package's pinned copy
+    (`hf_configs/<case>.config.json`), as `score.phi_of` makes it."""
     from verity_vllm.config import WORKLOADS, RowEngine
     from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 
