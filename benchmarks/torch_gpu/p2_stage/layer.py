@@ -241,7 +241,7 @@ def stage(args, lay, src, read: L.Read, dev, out: Out, layer: int) -> tuple[dict
         cw = against_stream(lay, src, read, layer, name, w) if args.w else None
         dw = against_manifest(src, layer, name, host)
         if cw is None and dw is None:
-            raise SystemExit("nothing to hold the staged bytes to: give --w or a weights manifest with digests")
+            raise SystemExit("nothing to hold the loaded bytes to: give --w or a weights manifest with digests")
         ok &= (cw is None or cw["mismatched_bytes"] == 0) and (dw is None or all(dw.values()))
         ts = S.timed(lambda: S.decode_matrix(store, layer, name, w), args.reps, DEVICE, warmup=1)
         out.record(step="stage", matrix=name, tensor=t.name, shape=[t.n, t.k], first_block=t.first_block, blocks=blocks,

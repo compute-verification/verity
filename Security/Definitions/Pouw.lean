@@ -110,6 +110,7 @@ public import Definitions.Pouw.TileBound.Fp8Defs
 public import Definitions.Pouw.Window
 public import Definitions.Pouw.Witness
 public import Definitions.Pouw.Witness.Copy
+public import Definitions.Pouw.Witness.Honest
 public import Definitions.Pouw.Witness.Model
 
 /-!

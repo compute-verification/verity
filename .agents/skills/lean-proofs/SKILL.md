@@ -125,8 +125,9 @@ hold: Mathlib's names, and no binder `X` where ArkLib is imported (its `notation
   tools/verity/check/tests/test_lean_*.py tests/test_lean_packages.py`.
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
-  `lean-audit.json` merges without a rebuild and never conflicts; each `merge.py:` warning names an entry it took from
-  one side, so read them.
+  `lean-audit.json` merges without a rebuild, by `origin/main`'s copy of the driver; each `merge.py:` warning names an
+  entry it took from one side, so read them. It conflicts only where it can't vouch for the merge (a newer lock `format`,
+  the worktree's copy merging in newer merge rules, a merge that drops most of a section), and says why: do what it says.
 - Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
   commit of exactly the records a passing run kept needs no new run. Once your PR lands, drive's lock run regenerates
   records another PR moved; re-record only what it can't (a hand-written entry a merge warning says took theirs, `shape`, a
