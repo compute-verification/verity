@@ -9,6 +9,7 @@ set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 VENV=${VENV:-/workspace/venv312}; PY=$VENV/bin/python
+export HF_HOME=${HF_HOME:-/workspace/hf}
 SHAREGPT_REPO=anon8231489123/ShareGPT_Vicuna_unfiltered
 SHAREGPT_REV=192ab2185289094fc556ec8ce5ce1e8e587154ca
 SHAREGPT_FILE=ShareGPT_V3_unfiltered_cleaned_split.json
