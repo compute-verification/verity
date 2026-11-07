@@ -337,7 +337,7 @@ words = { "Sample" = "PlanPoint" }
 
 # Dither's noise period L′ is its noise repeat length
 [[words_in]]
-files = ["verity/core/protocols/pouw/**", "benchmarks/pouw/**"]
+files = ["verity/core/protocols/pouw/**", "verity/ml/protocols/pouw/**", "benchmarks/pouw/**"]
 words = { "noise periods" = "noise repeat lengths", "noise period" = "noise repeat length", "Noise period" = "Noise repeat length" }
 
 # PoUW's served span is its execution phase (its "window" and "epoch"), with the execution phase's salt and coins, in
@@ -346,7 +346,7 @@ words = { "noise periods" = "noise repeat lengths", "noise period" = "noise repe
 # keeps its spelling: `window`, `epoch` and `pass_epoch` as names, `pouw-window`, the domain tags, and, in [keep],
 # network accounting's certifier window and the windows and epochs of other senses these files name
 [[words_in]]
-files = ["benchmarks/pouw/accel_v31/h200.sh", "benchmarks/pouw/accel_v31/run.sh", "benchmarks/pouw/accel_v31/v31.cu",
+files = ["benchmarks/pouw/accel_v31/run.sh", "benchmarks/pouw/accel_v31/v31.cu",
          "benchmarks/pouw/accel_v31/v31lib.py", "benchmarks/pouw/accel_v31/v31.py",
          "benchmarks/pouw/h1_prove/h1unit.py", "benchmarks/pouw/h1_prove/run.py", "benchmarks/pouw/highutil/period.py",
          "benchmarks/pouw/pearl_c_vllm/e2e.py", "benchmarks/pouw/pearl_c_vllm/verify_run.py",
@@ -354,18 +354,18 @@ files = ["benchmarks/pouw/accel_v31/h200.sh", "benchmarks/pouw/accel_v31/run.sh"
          "benchmarks/pouw/tests/test_pearl_c_vllm.py", "benchmarks/pouw/tests/test_served_zk.py",
          "integrations/vllm/verity_vllm/protocols/pouw/__init__.py",
          "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/manifest.py", "verity/core/protocols/pouw/audit.py",
-         "verity/core/protocols/pouw/circuit/admit.py", "verity/core/protocols/pouw/circuit/anchors.py",
-         "verity/core/protocols/pouw/circuit/compile.py", "verity/core/protocols/pouw/circuit/dither.py",
-         "verity/core/protocols/pouw/circuit/eps1_reference.py", "verity/core/protocols/pouw/circuit/h1device.py",
-         "verity/core/protocols/pouw/circuit/h1tile.circuit-check.py", "verity/core/protocols/pouw/circuit/h1tile.py",
-         "verity/core/protocols/pouw/circuit/h1window.circuit-check.py",
-         "verity/core/protocols/pouw/circuit/h1window.py", "verity/core/protocols/pouw/circuit/h1zy.py",
-         "verity/core/protocols/pouw/circuit/__init__.py", "verity/core/protocols/pouw/circuit/leaves.py",
-         "verity/core/protocols/pouw/circuit/live.circuit-check.py", "verity/core/protocols/pouw/circuit/live.py",
-         "verity/core/protocols/pouw/circuit/live_reads.py", "verity/core/protocols/pouw/circuit/ncp2.circuit-check.py",
-         "verity/core/protocols/pouw/circuit/ncp2.py", "verity/core/protocols/pouw/circuit/partition.py",
-         "verity/core/protocols/pouw/circuit/pc8.circuit-check.py", "verity/core/protocols/pouw/circuit/plan.py",
-         "verity/core/protocols/pouw/circuit/seeds.py", "verity/core/protocols/pouw/circuit/segment.circuit-check.py",
+         "verity/ml/protocols/pouw/circuit/admit.py", "verity/ml/protocols/pouw/circuit/anchors.py",
+         "verity/ml/protocols/pouw/circuit/compile.py", "verity/ml/protocols/pouw/circuit/dither.py",
+         "verity/ml/protocols/pouw/circuit/eps1_reference.py", "verity/ml/protocols/pouw/circuit/h1device.py",
+         "verity/ml/protocols/pouw/circuit/h1tile.circuit-check.py", "verity/ml/protocols/pouw/circuit/h1tile.py",
+         "verity/ml/protocols/pouw/circuit/h1window.circuit-check.py",
+         "verity/ml/protocols/pouw/circuit/h1window.py", "verity/ml/protocols/pouw/circuit/h1zy.py",
+         "verity/ml/protocols/pouw/circuit/__init__.py", "verity/ml/protocols/pouw/circuit/leaves.py",
+         "verity/ml/protocols/pouw/circuit/live.circuit-check.py", "verity/ml/protocols/pouw/circuit/live.py",
+         "verity/core/protocols/pouw/live_reads.py", "verity/ml/protocols/pouw/circuit/ncp2.circuit-check.py",
+         "verity/ml/protocols/pouw/circuit/ncp2.py", "verity/ml/protocols/pouw/circuit/partition.py",
+         "verity/ml/protocols/pouw/circuit/pc8.circuit-check.py", "verity/ml/protocols/pouw/circuit/plan.py",
+         "verity/ml/protocols/pouw/circuit/seeds.py", "verity/ml/protocols/pouw/circuit/segment.circuit-check.py",
          "verity/core/protocols/pouw/coins.py", "verity/core/protocols/pouw/core_check.py",
          "verity/core/protocols/pouw/dither/PROTOCOL.md", "verity/core/protocols/pouw/grind.py",
          "verity/core/protocols/pouw/identifier.py", "verity/core/protocols/pouw/__init__.py",
@@ -419,7 +419,7 @@ files = ["benchmarks/pouw/accel_v31/h200.sh", "benchmarks/pouw/accel_v31/run.sh"
          "verity/core/protocols/pouw/lean/window/README.md",
          "verity/core/protocols/pouw/lean/window/tests/test_difftest.py",
          "verity/core/protocols/pouw/lean/window/tests/test_reg_file.py", "verity/core/protocols/pouw/operands.py",
-         "verity/core/protocols/pouw/PROTOCOL.md", "verity/core/protocols/pouw/protocol.py",
+         "verity/core/protocols/pouw/protocol.py",
          "verity/core/protocols/pouw/README.md", "verity/core/protocols/pouw/registration.py",
          "verity/core/protocols/pouw/salt.py", "verity/core/protocols/pouw/serving.py",
          "verity/core/protocols/pouw/tests/epoch_coins.py", "verity/core/protocols/pouw/tests/epoch_coins_vectors.py",
@@ -483,9 +483,9 @@ files = ["benchmarks/pouw/accel_v31/h200.sh", "benchmarks/pouw/accel_v31/run.sh"
 
 # Dither's bare cell is its output cell
 [[words_in]]
-files = ["benchmarks/pouw/accel_v31/h200.sh", "benchmarks/pouw/accel_v31/run.sh", "benchmarks/pouw/accel_v31/v31.cu",
+files = ["benchmarks/pouw/accel_v31/run.sh", "benchmarks/pouw/accel_v31/v31.cu",
          "benchmarks/pouw/accel_v31/v31lib.py", "benchmarks/pouw/accel_v31/v31.py",
-         "benchmarks/pouw/highutil/period.py", "verity/core/protocols/pouw/circuit/dither.py",
+         "benchmarks/pouw/highutil/period.py", "verity/ml/protocols/pouw/circuit/dither.py",
          "verity/core/protocols/pouw/dither/PROTOCOL.md"]
 [words_in.words]
 "a cell" = "an output cell"
@@ -497,14 +497,14 @@ files = ["benchmarks/pouw/accel_v31/h200.sh", "benchmarks/pouw/accel_v31/run.sh"
 
 # H1's period, credit's span, is its credit period where PoUW's credit names it (its other periods stay: [keep])
 [[words_in]]
-files = ["verity/core/protocols/pouw/PROTOCOL.md", "verity/core/protocols/pouw/README.md",
+files = ["verity/core/protocols/pouw/README.md",
          "verity/core/protocols/pouw/lean/check/README.md", "verity/core/protocols/pouw/lean/check/PouwCheck.lean",
          "verity/core/protocols/pouw/lean/check/PouwCheck/VerifiedDifftest.lean",
          "verity/core/protocols/pouw/lean/check/tests/pouw_credit_cases.py",
          "verity/core/protocols/pouw/lean/check/tests/pouw_live_verified_cases.py",
          "verity/core/protocols/pouw/lean/check/tests/pouw_verified_cases.py",
-         "verity/core/protocols/pouw/circuit/h1window.py", "verity/core/protocols/pouw/circuit/live.py",
-         "verity/core/protocols/pouw/circuit/live_reads.py", "verity/core/protocols/pouw/core_check.py",
+         "verity/ml/protocols/pouw/circuit/h1window.py", "verity/ml/protocols/pouw/circuit/live.py",
+         "verity/core/protocols/pouw/live_reads.py", "verity/core/protocols/pouw/core_check.py",
          "verity/core/protocols/pouw/salt.py", "verity/core/protocols/pouw/verifier.py",
          "verity/core/protocols/pouw/weights.py", "verity/core/protocols/pouw/tests/test_pouw_core_check.py",
          "verity/core/protocols/pouw/tests/test_circuit_h1window.py"]
