@@ -1395,6 +1395,18 @@ def test_a_tables_reads_and_verdicts_take_its_supplied_values():
         I.Window(embedding(ingress=(I.Ingress(EID, "tok", 0, 2, 0),)), RUN, LAW, 3)
 
 
+def test_each_members_committed_reads_are_its_units_rows_of_the_supplied_values():
+    """`member_reads`: each member's ports a committed read fills, as `Window.close` commits them, each the value it reads, the
+    value's rows its units read and each unit's ref into them: a table read's root and domain id and an opening's verdict, one
+    row of the table's supplied value for every unit. A member with no registration reads none."""
+    lay = I.layout(EMB)
+    ms = (CS.Member(EID, lay.rows, lay.outs, 2, 0, name=f"{EID}/c0"), CS.Member(EID, lay.rows, lay.outs, 1, 2, name=f"{EID}/c1"))
+    got = [{p: (v, rows, refs.tolist()) for p, (v, rows, refs) in g.items()} for g in I.member_reads(ms, embedding().registered)]
+    assert got == [{p: (f"embed/{of}", [0], [0] * n) for p, of in (("root", "root"), ("domain", "domain"), ("o1", "opened"))}
+                   for n in (2, 1)]
+    assert I.member_reads(ms, None) == [{}, {}]
+
+
 def listed_embedding(*wired: tuple[str, str, tuple[int, ...]], registered: I.Registered | None = None) -> dict:
     """`embedding`'s three reads listed in two members (2 units, then 1), each port its units' own rows, the first member's
     ports ``wired``, beside ``registered`` (`embedding`'s tables, table reads and openings by default)."""
