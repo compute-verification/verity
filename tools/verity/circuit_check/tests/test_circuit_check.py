@@ -371,6 +371,90 @@ def test_the_vectors_start_with_every_edge():
     assert a[:len(e32)].tolist() == list(e32) and (x[:len(e16)] == np.array(e16)[:, None]).all()
 
 
+def test_a_caller_keeps_room_for_random_vectors_after_fewer_edges():
+    from verity.ml.circuits.types import Value
+
+    e16 = VX.edges(16)
+    (a,) = VX.vectors([Value(16)], 6, 1, edge=4)
+    (b,) = VX.vectors([Value(16)], 6, 1)
+    assert a[:4].tolist() == list(e16[:4]) and b.tolist() == list(e16[:6]) and a[4:].tolist() != list(e16[4:6])
+
+
+def _f32_sum():
+    from verity.ml.circuits.types import Value
+    from verity.ml.definitions.registry import prims as P
+
+    return _composite("CircuitCheckFloorSum", (_f32x2(), Value(32)), lambda B, S, x: B.call(P.F32Add, x[0], x[1]))
+
+
+def test_a_realization_compares_at_least_two_random_vectors_within_the_budget():
+    """Past ``reference_budget`` the vector rule leaves ``min_vectors`` vectors, every one all-edge (an f32 word has 17 edges):
+    the floor adds two random ones while the reference's work on them is within ``random_budget``, so the lowering compares
+    the Definition on a random vector.  Past the budget it compares on edge vectors only (``vectors/edge-only``, a warning);
+    a Definition no realization takes keeps its vectors and is compared on none (``vectors/none``)."""
+    fn, floor = _f32_sum(), dataclasses.replace(OPTS, reference_budget=1)
+
+    def run(opts):
+        e = CK.check_definition(fn, opts, memo={}, pins=PINS)
+        _clean(e)
+        c = e["correspondence"]
+        low = next(r for r in c["realizations"] if r["via"] == "c-flock:ir_lower")
+        return e, (c["vectors"], c["edge_vectors"], low.get("compared"), low.get("random"))
+
+    e, got = run(floor)
+    assert got == (6, 4, 6, 2) and CK.vector_class(e) == "random" and CK.classified(e) is e
+    e, got = run(dataclasses.replace(floor, random_budget=1))
+    assert got == (4, 4, 4, 0) and CK.vector_class(e) == "edge-only"
+    assert [w["name"] for w in CK.classified(e)["warnings"] if w["check"] == "vectors"] == [
+        "vectors/edge-only CircuitCheckFloorSum_v1: 1 its realizations compared it with the reference on all-edge vectors only, "
+        "on no random one"]
+    e, got = run(dataclasses.replace(floor, lower_max_gates=0))
+    assert got == (4, 4, None, None) and CK.vector_class(e) == "none"
+    assert [w["code"] for w in CK.classified(e)["warnings"] if w["check"] == "vectors"] == ["none"]
+
+
+def test_a_kernels_random_vectors_are_those_it_compared_past_the_edges():
+    """A kernel's ``random`` is how many it compared past the all-edge vectors: one that declines every random vector compared
+    the Definition on edge vectors only, beside one that compared it on both."""
+    from verity.ml.circuits.defs import PrimitiveDefinition
+    from verity.ml.circuits.evaluation import register_kernel
+    from verity.ml.circuits.evaluation.batch import _KERNELS
+    from verity.ml.circuits.types import Value
+
+    prim = PrimitiveDefinition("CircuitCheckFloorKernel", 1, (("a", Value(16)),), Value(16), lambda a: a ^ 1, register=False)
+    register_kernel(prim, lambda a: (a ^ 1, None))
+    register_kernel(prim, lambda a: (a ^ 1, np.arange(a.shape[0]) >= 4), kernel="edges", partial=True)
+    try:
+        e = CK.check_definition(prim, dataclasses.replace(OPTS, reference_budget=1), pins=PINS)
+    finally:
+        del _KERNELS[prim.id]
+    _clean(e)
+    via = {r["via"]: (r["compared"], r["random"]) for r in e["correspondence"]["realizations"] if r["via"].startswith("kernel:")}
+    assert via == {"kernel:numpy": (6, 2), "kernel:edges": (4, 0)} and CK.vector_class(e) == "random"
+
+
+def test_the_summary_counts_and_names_the_targets_by_vector_class():
+    """Each target is ``random``, ``edge-only`` or ``none`` by its realizations (a row by its worst Definition, a template by its
+    Definitions', target's and proof blocks'), each named; those read lazily are named too; a by-calls root is none of them."""
+    def entry(name, *recs, **corr):
+        return {"definition": name, "correspondence": {"realizations": list(recs), **corr}, "failures": [], "warnings": []}
+
+    out = [CK.classified(r) for r in (
+        entry("R", {"via": "kernel:numpy", "compared": 6, "random": 2}),
+        entry("E", {"via": "kernel:numpy", "compared": 4, "random": 0}),
+        entry("N", {"via": "kernel:numpy", "declines": "a kernel takes arrays"}, wide=[{"param": 1}]),
+        {"row": "build", "definitions": [entry("R2", {"compared": 3, "random": 1}), entry("N2", {"lowered": False})],
+         "failures": [], "warnings": []},
+        {"subcircuit": "rope-head", "definitions": [entry("D", {"compared": 4, "random": 0})],
+         "lowering": [{"lowered": True, "compared": 3, "random": 1}], "failures": [], "warnings": []},
+        {"definition": "B", "mode": "by-calls", "failures": [], "warnings": []})]
+    s = CK.summarize(out)
+    assert s["vectors"] == {"random": {"count": 2, "targets": ["R", "rope-head"]}, "edge-only": {"count": 1, "targets": ["E"]},
+                            "none": {"count": 2, "targets": ["N", "build"]}, "lazy": {"count": 1, "targets": ["N"]}}
+    assert s["warnings"]["vectors/edge-only"]["by_definition"] == {"E": 1}
+    assert s["warnings"]["vectors/none"]["by_definition"] == {"N": 1, "build": 1}
+
+
 # --- registered tables ----------------------------------------------------------------------------------------------------------
 
 #: a table of 2^12 two-word entries (8,192 leaves), past `TABLE_OPTS.input_budget`, held by `_HOLDS` as a registered input
