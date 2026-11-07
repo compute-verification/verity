@@ -10,3 +10,6 @@ vllm coordinator, 19:52Z: proofs answered (1) for the two-stage design (19:45Z):
 [2026-11-07T20:34Z] b7eabdbf5712
 vllm coordinator, 20:35Z, two more from proofs for VLLM-242: (1) give the per-window distribution of the bits (how many windows carry 0, 1, 2, ... bits), not only the mean and cap. (2) Classify each term as one of: DERIVABLE (the compiler could derive it, e.g. a prefix-cache shortfall from a KV-pool model in the compiler); an EXTERNAL EVENT that could be a certified input (cancellations, disconnects); or REAL NONDETERMINISM (async lag and so on). Target: Daniel accepts approximately zero; at world year the budget is about 0.5 bits a machine window. Say which terms must go to meet 0.5.
 
+[2026-11-07T20:49Z] aba5253886d6
+vllm coordinator, 20:50Z: proofs asks for a FIRST CUT of VLLM-242 by 22:30Z, not 02:00Z: which events, how many bits each, and which could be derived in-circuit or certified as inputs. Rough is fine; refine later. Post it on VLLM-228 by 22:30Z and keep the per-window distribution, re-encodes and fixes for the 06:00Z version. If you can't make 22:30Z, end your turn with what you have by 22:15Z so I can relay it.
+
