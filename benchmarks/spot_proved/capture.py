@@ -1,22 +1,24 @@
-"""A vLLM general plugin that records one replayed step's interior, per TP rank, in a compiled (``-O2``, CUDA graph) engine.
+"""A vLLM general plugin that records one replayed step's interior, per TP rank, in an engine that serves with CUDA graphs.
 
     VERITY_SPOT_CAPTURE=DIR VERITY_SPOT_STEPS=s[,s2] [VERITY_SPOT_MLA_TOKENS=4] <a vLLM engine with this plugin registered>
 
 Registered as a ``vllm.general_plugins`` entry point (`site` writes the dist-info), so it loads in every worker. It runs on
 the V2 model runner, vLLM's default at the integration's pin. A step is counted when a worker's ``execute_model`` has
-scheduled tokens and is not a dummy run. At step s (0-based), when the step dispatches to a CUDA graph (FULL or PIECEWISE),
-the runner's graph call is preceded by one more forward of the same model on the same input buffers, attention metadata,
-slot mappings and padded size, with the forward context's graph mode set to NONE. That forward runs the same compiled
-Inductor code with its Python wrapper live, and is the one recorded:
+scheduled tokens and is not a dummy run. At step s (0-based), when the step dispatches to a CUDA graph (FULL, PIECEWISE or
+breakable), the runner's graph call is preceded by one more forward of the same model on the same input buffers, attention
+metadata, slot mappings and padded size, with the forward context's graph mode set to NONE; that forward is the one
+recorded. A step the engine runs without a graph is recorded as it runs. What is recorded:
 
-* every op the compiled pieces dispatch (`Recorder`, a TorchDispatchMode entered inside `PiecewiseBackend.__call__`): the
-  custom ops (group quant, FP8 GEMMs, allreduce, the fused MoE op, the DSA indexer) and aten's extern ops, with each tensor
-  argument before the call and each return and written argument after it. A parameter is named, not copied. A tensor above
-  ``BIG`` bytes (a KV cache) is recorded by shape only. Values that pass only between two Inductor Triton kernels are not
-  recorded;
-* inside the opaque ops: each Triton fused-MoE launch (``invoke_fused_moe_triton_kernel``: A, its scales, the expert ids,
-  the sorted token ids, the routed weights, the config, and C after the launch), and each sparse MLA kernel call
-  (``_bf16_flash_mla_kernel``: q, the global top-k rows, out and lse, and the KV rows those indices read for the first
+* every dispatched op (`Recorder`, a TorchDispatchMode): over the whole forward when the model is not compiled (the pin's
+  default for GLM-5 and DeepSeek-V3.2, whose breakable CUDA graphs turn compilation off), or inside each
+  ``PiecewiseBackend.__call__`` when it is, where values that pass only between two Inductor Triton kernels are not
+  recorded. Inside vLLM's Python custom ops (``vllm::``) the ops they dispatch are recorded too, each naming its
+  ``parent``. Each tensor argument is recorded before the call, and each return and written argument after it. A parameter
+  is named, not copied. A tensor above ``BIG`` bytes (a KV cache) is recorded by shape only;
+* calls no dispatcher sees: each Triton fused-MoE launch (``invoke_fused_moe_triton_kernel``: A, its scales, the expert
+  ids, the sorted token ids, the routed weights, the config, and C after the launch), and each sparse MLA kernel call
+  (FlashMLA's ``_bf16_flash_mla_kernel``, or FA3's ``flash_attn_varlen_func`` in the FlashAttention sparse backend: the
+  queries, the global top-k rows, the outputs, and the KV rows those indices read for the first
   ``VERITY_SPOT_MLA_TOKENS`` tokens).
 
 Then the graph call runs as served, and its hidden states must equal the recorded forward's bit for bit (``check``). The
@@ -65,6 +67,10 @@ class _State:
         self.seen: set[str] = set()
         self.events: list[dict] = []
         self.piece = -1
+        self.parents: list[int] = []
+        self.whole = False
+        self.check: dict | None = None
+        self.t0 = time.time()
         self.rank = 0
         self.errors: list[str] = []
         self.bytes = 0
@@ -153,7 +159,7 @@ def _install() -> None:
 
     def pb_call(orig):
         def call(self, *args):
-            if not S.recording:
+            if not S.recording or S.whole:
                 return orig(self, *args)
             S.piece = int(getattr(self, "piecewise_compile_index", -1))
             with Recorder():
@@ -184,6 +190,24 @@ def _bind_model_state(runner: Any) -> None:
         return out
     ms.prepare_attn = prepare_attn
     ms._spot_bound = True
+    model = runner.model
+    fwd = model.forward
+
+    def forward(*a, **kw):
+        if not S.active or S.recording or _graph_mode() != "NONE":
+            return fwd(*a, **kw)
+        out = _recorded(runner, "NONE", lambda: fwd(*a, **kw))
+        S.check = {"mode": "NONE", "recorded_forward": out is not None, "served_forward": True}
+        return out if out is not None else fwd(*a, **kw)
+    model.forward = forward
+
+
+def _graph_mode() -> str:
+    from vllm.forward_context import get_forward_context, is_forward_context_available
+    if not is_forward_context_available():
+        return "NONE"
+    mode = get_forward_context().cudagraph_runtime_mode
+    return getattr(mode, "name", str(mode))
 
 
 def _install_moe() -> None:
@@ -239,6 +263,31 @@ def _install_mla() -> None:
 
     if hasattr(fs.FlashMLASparseImpl, "_bf16_flash_mla_kernel"):
         _wrap(fs.FlashMLASparseImpl, "_bf16_flash_mla_kernel", kernel)
+    try:
+        from vllm.v1.attention.backends.mla import flashattn_mla_sparse as fa
+    except ImportError:
+        return
+
+    def varlen(orig):
+        def run(*a, **kw):
+            if not S.recording:
+                return orig(*a, **kw)
+            ins = {k: _ref(v) for k, v in kw.items() if k not in ("k", "v")}
+            k, v, table = kw["k"], kw["v"], kw["block_table"]
+            ins["k"] = {"shape": list(k.shape), "dtype": str(k.dtype), "kv_rows": True}
+            n = min(S.mla_tokens, int(table.shape[0]))
+            if n:
+                idx = table[:n].long().clamp(min=0).reshape(-1)
+                rows = k.reshape(k.shape[0], -1), v.reshape(v.shape[0], -1)
+                ins["kv_gathered"] = _ref(torch.cat([rows[1][idx], rows[0][idx]], dim=-1).reshape(n, table.shape[1], -1))
+                ins["kv_gathered_tokens"] = n
+            out = orig(*a, **kw)
+            outs = out if isinstance(out, tuple) else (out,)
+            _event("fa3_sparse_mla", ins, {f"r{i}": _ref(t) for i, t in enumerate(outs) if isinstance(t, torch.Tensor)})
+            return out
+        return run
+
+    _wrap(fa, "flash_attn_varlen_func", varlen)
 
 
 def _recorder_base():
@@ -247,7 +296,10 @@ def _recorder_base():
 
 
 class Recorder(_recorder_base()):
+    """Records each dispatched op, and inside vLLM's Python custom ops (``vllm::``) the ops they dispatch, with ``parent``."""
+
     def __torch_dispatch__(self, func, types, args=(), kwargs=None):
+        import torch
         kwargs = kwargs or {}
         packet = getattr(func, "_overloadpacket", None)
         base = getattr(packet, "__name__", str(func)).split(".")[-1]
@@ -257,12 +309,21 @@ class Recorder(_recorder_base()):
         schema = func._schema
         flat = list(args) + [kwargs.get(a.name) for a in schema.arguments[len(args):]]
         ins = {a.name: _ref(v) for a, v in zip(schema.arguments, flat)}
-        out = func(*args, **kwargs)
+        seq = _event(f"{ns}::{base}", ins, {})
+        if ns == "vllm" and torch._C._dispatch_has_kernel_for_dispatch_key(func.name(), "CUDA"):
+            S.parents.append(seq)
+            try:
+                with self:
+                    out = func.redispatch(torch._C.DispatchKeySet(torch._C.DispatchKey.CUDA), *args, **kwargs)
+            finally:
+                S.parents.pop()
+        else:
+            out = func(*args, **kwargs)
         outs = {f"ret{i}": _ref(t) for i, t in enumerate(out if isinstance(out, (tuple, list)) else (out,))}
         for a, v in zip(schema.arguments, flat):
             if a.alias_info is not None and a.alias_info.is_write:
                 outs[a.name] = _ref(v)
-        _event(f"{ns}::{base}", ins, outs)
+        S.events[seq]["out"] = outs
         return out
 
 
@@ -305,22 +366,45 @@ def _ref(v: Any) -> Any:
     return {"repr": repr(v)[:200]}
 
 
-def _event(kind: str, ins: dict, outs: dict) -> None:
-    S.events.append({"seq": len(S.events), "piece": S.piece, "op": kind, "in": ins, "out": outs})
+def _event(kind: str, ins: dict, outs: dict) -> int:
+    seq = len(S.events)
+    S.events.append({"seq": seq, "piece": S.piece, "parent": S.parents[-1] if S.parents else None, "op": kind, "in": ins,
+                     "out": outs})
+    return seq
 
 
-def _eager(runner: Any, model_inputs: dict | None, mode: str, batch_desc: Any) -> Any:
+def _recorded(runner: Any, mode: str, forward) -> Any:
+    """Runs ``forward()`` with recording on: under a `Recorder` for the whole forward unless the model is compiled (then
+    `PiecewiseBackend` enters one per piece). Returns the hidden states, or None if the forward raised."""
+    import contextlib
     import torch
-    from vllm.config import CUDAGraphMode
-    from vllm.forward_context import BatchDescriptor, get_forward_context, set_forward_context
-
     S.rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
     _params(runner)
     S.t0 = time.time()
     S.mode = mode
-    ib = S.input_batch
+    cmode = runner.vllm_config.compilation_config.mode
+    S.whole = getattr(cmode, "name", str(cmode)) != "VLLM_COMPILE"
     S.recording = True
     try:
+        with Recorder() if S.whole else contextlib.nullcontext():
+            out = forward()
+        hidden = out[0] if isinstance(out, tuple) else out
+        S.piece = -1
+        _event("model_output", {}, {"hidden": _ref(hidden)})
+        return out
+    except Exception:  # noqa: BLE001
+        S.errors.append(traceback.format_exc()[-4000:])
+        return None
+    finally:
+        S.recording = False
+
+
+def _eager(runner: Any, model_inputs: dict | None, mode: str, batch_desc: Any) -> Any:
+    from vllm.config import CUDAGraphMode
+    from vllm.forward_context import BatchDescriptor, get_forward_context, set_forward_context
+    ib = S.input_batch
+
+    def forward():
         if model_inputs is None:
             inputs = {"input_ids": ib.input_ids, "positions": ib.positions, "inputs_embeds": None, "intermediate_tensors": None,
                       **runner.model_state.prepare_inputs(ib, runner.req_states)}
@@ -330,24 +414,19 @@ def _eager(runner: Any, model_inputs: dict | None, mode: str, batch_desc: Any) -
                                                                       has_lora=runner.lora_config is not None,
                                                                       num_active_loras=getattr(batch_desc, "num_active_loras", 0)),
                                      slot_mapping=S.slot_maps, is_padding=getattr(ib, "is_padding", None)):
-                out = runner.model(**inputs)
-        else:
-            fc = get_forward_context()
-            was = fc.cudagraph_runtime_mode
-            fc.cudagraph_runtime_mode = CUDAGraphMode.NONE
-            try:
-                out = runner.model(**model_inputs)
-            finally:
-                fc.cudagraph_runtime_mode = was
-        out = out[0] if isinstance(out, tuple) else out
-        S.piece = -1
-        _event("model_output", {}, {"hidden": _ref(out)})
-        return out.clone()
-    except Exception:  # noqa: BLE001
-        S.errors.append(traceback.format_exc()[-4000:])
+                return runner.model(**inputs)
+        fc = get_forward_context()
+        was = fc.cudagraph_runtime_mode
+        fc.cudagraph_runtime_mode = CUDAGraphMode.NONE
+        try:
+            return runner.model(**model_inputs)
+        finally:
+            fc.cudagraph_runtime_mode = was
+
+    out = _recorded(runner, mode, forward)
+    if out is None:
         return None
-    finally:
-        S.recording = False
+    return (out[0] if isinstance(out, tuple) else out).clone()
 
 
 def _check(mine: Any, out: Any, mode: str, batch_desc: Any) -> None:
@@ -387,7 +466,7 @@ def _finish(runner: Any) -> None:
     (d / "meta.json").write_text(json.dumps(meta, indent=1, sort_keys=True))
     print(f"[spot-capture] rank {S.rank} step {S.step}: {len(S.events)} events, {S.bytes >> 20} MiB, check {meta['check']}, "
           f"errors {len(S.errors)}", flush=True)
-    S.events, S.errors = [], []
+    S.events, S.errors, S.check = [], [], None
 
 
 def site(d: Path) -> Path:
