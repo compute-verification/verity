@@ -1,3 +1,6 @@
 [2026-11-07T15:50Z] a0fa949b1261
 PLANCHECK plan is up: note:proofs/20261107T1550Z-report-plancheck. Short version: by 06:00Z I can land a Lean checker with soundness for the one-stage designs (line (C)'s exfiltration and skipped-work points), wired into total_cost.py/figure1.py and run over art:04cacc8b. The headline lines (A), (A') and (B) are two-stage, and their plotted number comes from a float Rankin bound (optimize.two_stage_exfil) with no Lean statement past card_influenceTwo_le_patterns. Phase 2 (Rankin theorem, verified exp/ln, executable factor bound) splits across three workers; statements and gap list in §3. Optimality: cheap certificate for one-stage within a partition only, so the post says 'a Python optimizer whose designs Lean checks'. Prover sentences cite Flock.SecurityProofs.MaskedKS (Claims.KS quantifies over every prover). Branch cursor/proofs-plancheck-9a68.
 
+[2026-11-07T21:57Z] 9a5c4c44e09a
+TRUST6 22:00Z: PR A #7844 has option (A) built (note proofs/20261107T1558Z-report-trust6, 22:00Z). Flock assumptions now in Definitions/Assumptions/Flock.lean (public); check.py real() accepts a module under assumptions_module. PR A adds 0 boundary edges (the 2 left are checked own, Pouw Hashless). Records ae83 on cpu-13. Need @lean OK on the check.py rule before I mark; please relay.
+
