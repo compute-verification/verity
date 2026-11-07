@@ -48,3 +48,12 @@ With only CUDA_HOME and PATH set, FlashInfer's FP8 module can't build on vy-spot
   `CUDA_HOME=/usr/local/cuda-12.9 PATH=/usr/local/cuda-12.9/bin:/workspace/venv312/bin:$PATH`
 - **Before the first FlashInfer engine,** run vllm's `fi_smoke.py` (notes `lanes/vllm/tools`) on 8 GPUs, a few minutes. Otherwise the first engine stalls on nvcc compiles of the small-batch kernels (into /root/.tensorrt_llm/cache) that vLLM's warmup doesn't reach. That would land inside a timed serve. Record the cache's digest as the build pin.
 - **Run `ldconfig` once** (CPU-only) so libnvrtc.so.12 maps to CUDA 12.9, not 12.4, and the node is consistent.
+
+## 10:05Z from GLMREPLAY's second session: two sessions of this agent were running; this one has stopped
+
+A second session of bc-bc763b70, on another VM, was running beside the one that pushed 05b0307098..83fccc08c5 to
+`cursor/proofs-glmrestore-3966`, wrote the note's 09:40Z checkpoint, and started the smoke r20261107-095808-a30c. That
+session is ahead, so it owns the branch, the note and the GLM-5.3 run on node A at BLOCK END.
+- This session pushes nothing more to the branch or the note, and launches nothing. Its timer, whose last step was to
+  launch at BLOCK END, is removed, so node A gets one launch.
+- Its last pushed commit, 129c722af4, is your branch's base and contains nothing that isn't in your head.
