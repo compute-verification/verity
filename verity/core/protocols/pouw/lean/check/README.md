@@ -105,7 +105,7 @@ credited row its z table's root (`tables.z`), and the sample root over the rows 
 and every round's root and coin must be the one root the challenger's log shows its sampling coin followed, read through the
 session the auditor's ledger opens for the window; so a bit changed after the sampling coin is refused, and the credited
 calls are the rows whose bit is true. `drawn`: the units the sampling coin selects, never a list handed in: `drawCheck`'s rule
-under the law `work:k` (`workUnits`), over the window's layout (`h1window.program`'s arguments, its units the compiled
+under the sampling design `work:k` (`workUnits`), over the window's layout (`h1window.program`'s arguments, its units the compiled
 Program's, call by call, each call's tiles row block major), one stratum per K (`strata`), each unit's work R·C·K, at
 the K its period's open committed (`law`; `committedK` reads `draw_k`, and a window with fewer units than K is refused).
 `servedRows`: each manifest row states its call's served rows m_s (`served`, under `calls_root`, so fixed before the
