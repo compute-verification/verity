@@ -673,13 +673,19 @@ def test_prefill_chunks_are_a_request_s_prompt_rows_at_a_launch_batch():
         build_program(phi, "request", LP=8, T=1, chunks=(3, 5))
 
 
-def test_a_class_g_request_whose_launch_no_capture_covers_is_refused_alone(tmp_path):
-    """A class-G registration at the class's limit of 8,192 tokens a step: a request co-scheduled in a step of 3,000 tokens builds
-    no Program, since no captured all-reduce covers that launch, and `partial` refuses it by name, request by request."""
-    reqs = [(10, 1, {**GREEDY, "max_tokens": 1})] + [(230, 1, {**GREEDY, "max_tokens": 1})] * 13
-    advice, ingress = _session(reqs, [[(0, 0, 10)] + [(i, 0, 230) for i in range(1, 14)]])
-    reg = _class_g(tmp_path, engine={"max_num_batched_tokens": 8192})
-    why = "an all-reduce of 3000 x 6144 on route 'symm_mem_comm'"
+@pytest.mark.parametrize("reqs,steps,why", [
+    ([(10, 1, {**GREEDY, "max_tokens": 1})] + [(230, 1, {**GREEDY, "max_tokens": 1})] * 13,
+     [[(0, 0, 10)] + [(i, 0, 230) for i in range(1, 14)]], "an all-reduce of 3000 x 6144 on route 'symm_mem_comm'"),
+    ([(2100, 1, {**GREEDY, "max_tokens": 1})], [[(0, 256 * k, min(256, 2100 - 256 * k))] for k in range(9)],
+     "a row of 2100 keys > TOPK 2048 (the top-k kernels' radix selection)"),
+])
+def test_a_class_g_request_whose_launch_no_capture_covers_is_refused_alone(reqs, steps, why, tmp_path):
+    """A class-G registration at the class's limits of 8,192 tokens a step and 32,768 positions: a request co-scheduled in a step
+    of 3,000 tokens builds no Program, since no captured all-reduce covers that launch, nor does a prompt of 2,100 tokens (nine
+    chunks), since its last rows read more than INDEX_TOPK keys, and `partial` refuses each by name, request by request, before
+    writing any launch."""
+    advice, ingress = _session(reqs, steps)
+    reg = _class_g(tmp_path, engine={"max_num_batched_tokens": 8192, "max_model_len": 32768})
     with pytest.raises(Unexpressible, match=re.escape(why)):
         compile_steps(reg, advice, ingress)
     with pytest.raises(Unexpressible, match=re.escape(f"every request is refused, request 0 first: request 0: its Program is refused: "
