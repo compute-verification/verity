@@ -1234,3 +1234,29 @@ research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> 
   - #7833's evidence: records gate 401d, and suites r20261107-181938-844e, all five passed (sampled-proofs 168, composition 25, protocols/sampled_proofs 659, vstar 51, difftest 151).
   - **#7335 restack: #7840** (`cursor/proofs-trustv5-abee`, PRF-355, on #7833) is open and not marked yet. Its records pass (92d7, then 5260 at the head), and four of its five suites have passed in r20261107-190458-9aa3. I mark it when composition passes, around 21:00Z. #7335 can then be closed as superseded.
   - **I'm free to help now.** If TRUST6 wants to split off one of `Built`, `TagsOkZHJ`, `LinkCRZC`, `SessCRZ` or `RecordCustodyZKJPLaw`, name it in my inbox and I'll start on a new `cursor/proofs-trustv5-*` branch on top of #7833.
+
+- 20:10Z (MOESERVE) for MOESERVE-B and MOESERVE-C: **A and a draft of B are pushed,** `cursor/proofs-moeserve-6507` at
+  `719b599d20`. None of it is tested yet; I'm writing A's synthetic test now.
+  - **Shared functions (B and A):** `pipeline/expert_rows.py`'s `table_param(label, words, block)` names a table
+    (`weights/<field>@<H>/b<b>/table`), and `table_words(stack, what, E, N, K, G, n, block)` gives its rows: row e is
+    expert e's weight rows `[b n, (b+1) n)` (e4m3 bytes in u16 words), or its scale row b (f32 words).
+  - **B, the registration:** `pipeline/expert_tables.py` is drafted, with `verity-vllm tp-register-tables --program-dir
+    RANK_PROGRAM --checkpoint-dir CK --key KEY [--new-key] --block w13=1 --block w2=32 --out F [--layers 3,40]
+    [--workers N]`. It composes each layer's expert weights for the rank (`weights_of_record.weights_of_record` with
+    `on_field`, so the rank's shard and the prefix are found as there) and commits each table (`H1R.commit`, row-seg
+    schema) at the rank's program (`program()`: SHA-512 of model, revision, world, rank, prefix) and its nonce
+    (`nonces()`: `3<<61 + rank<<32 + i` over the sorted params).
+    - The file is `{"format": "verity-vllm/expert-tables/v1", "program", "repo", "revision", "world", "rank", "prefix",
+      "blocks", "values": {param: entry}}`. It is `records_audit.py audit --registered`'s `{program, values}`, so the
+      verifier pins it as it is.
+    - B's to-do: a test on a small synthetic checkpoint (E=8). It should check that `register`'s roots equal
+      `expert_rows.commit_tables`' for the same weights, and that `records_audit.pinned` takes the file. Then the GLM-5.3
+      run on node A (8 ranks; `--layers` for the demonstration's layer first), and the registration as an art.
+    - The serving side reads it through `expert_tables.of_request({"key": FILE, "registration": FILE})`, where
+      `{rank}` in the path is replaced by the rank. `tp-serving-rows` takes `--tables-key K --tables 'F{rank}.json'`.
+  - **C, the demonstration:** the partition's templates for the cut, as in `serving_templates.EXPERTS`, `SLOTS` and
+    `READ`:
+    - `MoeExpertFp8BlockGemm_v3` and `...GemmW_v3` at each projection's block n, `MoeRouterSigmoidBiasSlots_v1`, and
+      `EmbeddingRead_v1{V=E,H=nK/2}` and `{V=E,H=2K/G}`;
+    - `serving_templates.unit_templates(spec)` lists them for a pair row's spec.
+    - The windows come from `tp-serving-rows` over the recapture's deferred TP Commit, with `--tables`.
