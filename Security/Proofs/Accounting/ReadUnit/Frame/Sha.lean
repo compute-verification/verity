@@ -64,15 +64,14 @@ theorem ev_flatten (z : Var → Bool) {ws : List Word} (h : Words64 ws) {i p : �
 theorem length_wordsBytes' (z : Var → Bool) {ws : List Word} (hw : Words64 ws) :
     (wordsBytes z ws).length = 8 * ws.length := by
   rw [wordsBytes, ReadUnit.bytesOf, length_flatMap_range]
-  simp only [evs, List.length_map, length_flatten_words64 hw]
-  omega
+  simp only [evs, List.length_map, length_flatten_words64 hw] <;> omega
 
 /-- **Words holding bytes hold them in leaf order.** -/
 theorem wordsBytes_of_holds {z : Var → Bool} {ws : List Word} {bs : List UInt8} (h : HoldsBytes z ws bs) :
     wordsBytes z ws = bs := by
   obtain ⟨hw, hlen, hb⟩ := h
   have hfl := length_flatten_words64 hw
-  have hevs : (evs z ws.flatten).length = 64 * ws.length := by simp [evs, hfl]
+  have hevs : (evs z ws.flatten).length = 64 * ws.length := by simp only [evs, List.length_map, hfl]
   refine ext_getD 0 (by rw [length_wordsBytes' z hw, hlen]) fun n hn => ?_
   rw [length_wordsBytes' z hw] at hn
   obtain ⟨i, m, hm, rfl⟩ : ∃ i m, m < 8 ∧ n = 8 * i + m := ⟨n / 8, n % 8, Nat.mod_lt _ (by norm_num), by omega⟩
