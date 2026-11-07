@@ -26177,9 +26177,8 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -30962,6 +30961,18 @@
     "Claims.SamplingGeneric.simAt": "0b60f8fe98acb3df4ee53a8cc10fd2ffa43444819254e111218d018b6c316c2f"
    }
   },
+  "Definitions.Claims.SamplingServed": {
+   "digest": "add02b79656af7269f1191c540f8009b9c7f3d1d146da15a2833794294d03f58",
+   "definitions": {
+    "Claims.Sampling.Prog.Reads": "dd84f9e0cdfa1838e7cfc716a65a0a297c07f0e6ffb87cfaed40e4c23f2eeedb",
+    "Claims.Sampling.Prog.Reads.refl": "3b2e67abd0befb73efa4f39d4b7b7adb32fe5ed1f4a5121e9d97c991ddcaf559",
+    "Claims.Sampling.Prog.Reads.step": "8cece28434037fb1d3ef7361689d9f1cb2b979533a1deff53c54c607735f3459",
+    "Claims.Sampling.blocksTo": "bd2fd8b0746a1c182850700772f8127b95cbcfbb7b9ee444306b0957cdcc38d8",
+    "Claims.Sampling.lightBits": "573935eff52fd4e7e854b689bb6b874bbf3dd7be792e11ada4150bdd3ab61720",
+    "Claims.Sampling.lightOf": "d848ab05205d283ebe42d5f70d7032b752c0e739173bcf857721eb52572c83eb",
+    "Claims.Sampling.servedBits": "fd1af0d5b30633a67b2904336bd420c55227b25b3245d102fd436a4736c8c84c"
+   }
+  },
   "Definitions.Claims.SamplingTwo": {
    "digest": "d2ef9a784567b2789e4e391ec860007664418dae1b57932546b1d57a87beca87",
    "definitions": {
@@ -31011,18 +31022,6 @@
     "Claims.Sampling.blocksIn": "72daacf89ce7fad980a9a3c7608922a8f992a403c67b357208dd1889968306ed",
     "Claims.Sampling.rankinFactor": "e287aa04eef2610430b6677637f6eca7097ad7ceb517f5372ad301f4bc83d79e",
     "Claims.Sampling.rankinFactorPatterns": "0063b26a0c3809fe529fa6ebc2c4294db168cf62ca737bd170c1e1fbc8efa676"
-   }
-  },
-  "Definitions.Claims.SamplingTwoServed": {
-   "digest": "add02b79656af7269f1191c540f8009b9c7f3d1d146da15a2833794294d03f58",
-   "definitions": {
-    "Claims.Sampling.Prog.Reads": "dd84f9e0cdfa1838e7cfc716a65a0a297c07f0e6ffb87cfaed40e4c23f2eeedb",
-    "Claims.Sampling.Prog.Reads.refl": "3b2e67abd0befb73efa4f39d4b7b7adb32fe5ed1f4a5121e9d97c991ddcaf559",
-    "Claims.Sampling.Prog.Reads.step": "8cece28434037fb1d3ef7361689d9f1cb2b979533a1deff53c54c607735f3459",
-    "Claims.Sampling.blocksTo": "bd2fd8b0746a1c182850700772f8127b95cbcfbb7b9ee444306b0957cdcc38d8",
-    "Claims.Sampling.lightBits": "573935eff52fd4e7e854b689bb6b874bbf3dd7be792e11ada4150bdd3ab61720",
-    "Claims.Sampling.lightOf": "d848ab05205d283ebe42d5f70d7032b752c0e739173bcf857721eb52572c83eb",
-    "Claims.Sampling.servedBits": "fd1af0d5b30633a67b2904336bd420c55227b25b3245d102fd436a4736c8c84c"
    }
   },
   "Definitions.Claims.ZKOut": {
