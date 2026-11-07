@@ -177,7 +177,7 @@ theorem copyGate_mem_committed (u : Fin n) {j : ℕ} (hj : j < D.unroll.upv) (c 
       g ∈ Layout.outsOf D.unroll hU n := by
     intro g hg
     unfold Layout.outsOf
-    rw [Finset.mem_filter]
+    refine (@Finset.mem_filter _ _ (Classical.decPred _) _ _).2 ?_
     exact ⟨Finset.mem_univ _, u, Fin.cast (congrArg Rows.w (rows_keyProg D hU n u)).symm
       ((Rows.ofNet hU).stackCol D.unroll.upv hj c), (unitInst_wire D hU n u _).symm.trans hg.symm, j, jj, t, hj,
       hjj, ht, hc ▸ hlo, hc ▸ hhi, hx⟩
