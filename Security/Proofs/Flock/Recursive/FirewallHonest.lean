@@ -1,9 +1,7 @@
 module
 
-public import Flock.Firewall.Honest
 public import Proofs.Flock.Recursive.FirewallTemplate
 public import Proofs.Flock.Recursive.FirewallWire
-public import Proofs.Flock.Recursive.FirewallJson
 public import Proofs.Flock.Recursive.FirewallSteps
 import all Lean.Data.Json.Basic
 

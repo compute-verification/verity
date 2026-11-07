@@ -31,8 +31,8 @@ any length), nothing left over in a body or after the last record. Its `digest` 
 (more than one); one certified record's verdict is v4's; one raw or committed record has `status:<reason>` when its
 status in the clear is not complete, then on egress `advice` as v4, then `mismatch` when a raw record's grid is not the
 Program's (`expected_grids`, slot for slot) or a committed record's digest is not `record_digest` of the Program's grid
-with a complete status (`commitment.py`: SHA-256, padding elided). On ingress a raw or committed record is checked on
-its status alone.
+with a complete status (`commitment.py`: tagged SHA-512, padding elided). On ingress a raw or committed record is
+checked on its status alone.
 
 **Without the grid** (`check_link(grid=False)`, N2's, whose head check holds each certified head's grid):
 `evaluateNoGrid` gives each egress execution phase `egressVerdictNoGrid`'s verdict, every test above but the grid
@@ -204,26 +204,22 @@ end Decoding
 
 /-! ## The committed record's digest (`commitment.py`) -/
 
-/-- `tagged_sha256(tag, payload)`'s bytes: SHA-256 of `"veritor/tagged-sha256/v1\0" ‖ u32be len(tag) ‖ tag ‖
-u64be len(payload) ‖ payload`. -/
-def taggedSha256 (tag : String) (payload : ByteArray) : ByteArray :=
-  Flock.Sha256.hash ("veritor/tagged-sha256/v1".toUTF8.push 0 ++ Flock.be32 tag.toUTF8.size.toUInt32 ++ tag.toUTF8 ++
-    Flock.be64 payload.size.toUInt64 ++ payload)
-
-/-- `row_digest` of a left-packed row: its count and its real frames, padding elided. -/
-def rowDigest (row : Array (Option ByteArray)) : ByteArray :=
+/-- `row_digest` of a left-packed row: `tagged_sha512` (`Identity.taggedSha512`) of its count and its real frames,
+padding elided, 64 bytes. It refuses what Python refuses, a payload of `2 ^ 64` bytes or more. -/
+def rowDigest (row : Array (Option ByteArray)) : Flock.V ByteArray :=
   let frames := row.filterMap id
-  taggedSha256 "verity-network-warden/row/v1" (frames.foldl (· ++ ·) (Flock.be32 frames.size.toUInt32))
+  Identity.taggedSha512 "verity-network-certifier/row-sha512/v1"
+    (frames.foldl (· ++ ·) (Flock.be32 frames.size.toUInt32))
 
-/-- `record_digest(link, window, grid, COMPLETE, params)` as `tagged_sha256` writes it, lowercase hex. Its header is in
+/-- `record_digest(link, window, grid, COMPLETE, params)` as `tagged_sha512` writes it, lowercase hex. Its header is in
 the identity form (`Flock.canonUtf8`, `canonical_json_bytes`), a link's characters past ASCII in UTF-8. -/
 def committedDigest (link : String) (window : Nat) (grid : RawGrid) (g : Grid) : Flock.V String := do
   let header ← Flock.canonUtf8 (Json.mkObj [
     ("link", .str link), ("window", toJson window), ("buckets", toJson g.buckets), ("allocation", toJson g.allocation),
     ("frame_bytes", toJson g.frameBytes), ("bucket_ms", toJson g.bucketMs), ("status", .str "complete")])
   let h := header.toUTF8
-  pure (Flock.hexOf (taggedSha256 "verity-network-warden/record/v1"
-    (grid.foldl (fun acc row => acc ++ rowDigest row) (Flock.be32 h.size.toUInt32 ++ h))))
+  let rows ← grid.foldlM (fun acc row => do return acc ++ (← rowDigest row)) (Flock.be32 h.size.toUInt32 ++ h)
+  return Flock.hexOf (← Identity.taggedSha512 "verity-network-certifier/record-sha512/v1" rows)
 
 /-! ## The check -/
 

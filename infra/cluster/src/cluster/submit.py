@@ -10,7 +10,7 @@ The executors, as they stand:
 - **vy-nebius-2, CPUs only:** a systemd scope with the memory cap, pinned to the project's CPUs, CUDA hidden, and node 2's ops
   daemon pauses a guest through a timed window. A guest gets `cpus` CPUs of its share in whole cores of its own (`cores` in
   the placement: the machine's `research cpu-hold` claims them, waits while none are free, and puts them in this wrapper in
-  place of the share), at nice 0: every queued run had all of 48-95 at nice 19, 34 at once at load 1000 (19 Oct), and nice
+  place of the share), at nice 0: every queued run had all of 48-95 at nice 19, 34 at once at load 1000, and nice
   orders nothing between scopes. The scope holds the CPUs itself (`AllowedCPUs=`), so a workload's own `taskset` can't
   leave them; systemd drops that without a word where user@.service doesn't delegate cpuset (research's
   pods/nebius/user-cpuset.conf), so the wrapper starts nothing (exit 70) unless the scope's cpuset is the pin.

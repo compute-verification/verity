@@ -102,11 +102,12 @@ class IntegrityProfile:
     tiling that level's members; `accept`, `rho` and `worst_case` are the other laws', and it reads through `strata`.
     `drawn` counts the members actually drawn at each level, all passed.
 
-    A profile of more than one level is valid only when its checked level is committed before the first draw
-    (as serving commits every value, at serve time).  When the checked level is committed after
-    a sample it follows, the prover picks how many checked members of a drawn member are incorrect after seeing that sample,
-    and `accept(m)` over m incorrect checked members no longer bounds it; such a lifecycle's profile is over the level
-    committed first.
+    `accept(m)` reads m at a member's footprint.  When the checked level is committed before the first sample (as
+    serving commits every value, at serve time), m is the member's incorrect checked members.  Under a two-stage design
+    the checked level is committed after the sample it follows (the interior registration), so the prover picks a
+    sampled member's interior after seeing that sample; m is then its footprint, the fewest incorrect checked members
+    of any interior consistent with its boundary commitment, which is fixed before any coin, and an interior with more
+    only lowers `accept`.
 
     Let n be the checked members inside one Bernoulli member (the whole transcript when no level is Bernoulli-drawn,
     with p = 1).  The k-subset is uniform over all n of them, so undrawn levels in between don't change the law: a

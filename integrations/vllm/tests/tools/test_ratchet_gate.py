@@ -15,6 +15,7 @@ the silent-except check beside that (a new swallowing handler, typed or broad, r
 re-raises or records its outcome passing, a rename moving its entry, the list's total held, a loosened lint failing, both
 counted lints counting one change), a repository list (ruff's, a counted lint's) catching up to what its base holds and no
 further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
+counted lint's violations in a lint module the gate runs as the base has it counted on the change's own copy, a
 public command P16's list gains (passing when the file it names runs it, refused when that file doesn't or isn't
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
@@ -332,6 +333,7 @@ def test_each_queue_merge_is_one_pr_against_the_one_below(repo):
 def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(repo, verdict_cache, monkeypatch):
     """A sync gates each PR on its merge onto `next`, every PR below it included: with the cache, N merges cost N judgments, not
     N(N+1)/2."""
+    monkeypatch.setenv("RATCHET_GATE_JOBS", "1")  # judgments are counted in this process
     base = repo.commit("p02", {P02: _allowlist(_entry("verity_vllm/a.py", "X"))})
     heads = []
     for i, files in enumerate([{P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
@@ -353,6 +355,40 @@ def test_a_sync_judges_each_change_once_and_a_cached_verdict_is_the_one_judged(r
     assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == len(tops) + 1
     monkeypatch.setattr(G, "SELF", "another gate")
     assert G.gate("main", tops[-1]) == fresh[-1] and len(judged) == 2 * len(tops) + 1
+
+
+def test_changes_judged_at_once_report_what_changes_judged_in_turn_report(linted, verdict_cache, monkeypatch, capsys):
+    """A train's merges are judged by a pool of processes, each with its own worktree for the base's lints: the report, its
+    order and the exit status are the ones judging them in turn gives, failures included, cached or not."""
+    linted.git("checkout", "-q", "-b", "next", "main")
+    for pr, files in enumerate([
+            {"integrations/vllm/verity_vllm/a.py": "A = 'ok'\n", P01: _allowlist(_entry("verity_vllm/b.py", "B"))},
+            {P01: _allowlist()},
+            {"integrations/vllm/verity_vllm/d.py": "D = 1\n"},
+            {"integrations/vllm/verity_vllm/c.py": "C = 'BAD'\n", P01: _allowlist(_entry("verity_vllm/c.py", "C"))},
+            {"integrations/vllm/verity_vllm/e.py": "E = 1  # noqa: E1\n"},
+            {"integrations/vllm/verity_vllm/f.py": "F = 1\n"}], 1):
+        linted.git("checkout", "-q", "-b", f"b{pr}", "next")
+        head = linted.commit(f"pr {pr}", files)
+        linted.git("checkout", "-q", "next")
+        linted.queue(pr, f"pr {pr}", head)
+    pools, pool = [], G.ProcessPoolExecutor
+    monkeypatch.setattr(G, "ProcessPoolExecutor", lambda n, **k: (pools.append(n), pool(n, **k))[1])
+
+    def report(jobs: str, cache: str = "") -> list[tuple[int, str]]:
+        monkeypatch.setenv("RATCHET_GATE_JOBS", jobs)
+        monkeypatch.setenv("RATCHET_GATE_CACHE", cache)
+        return [(G.main(["main", "next", *flag]), capsys.readouterr().out) for flag in ([], ["--json"])]
+
+    serial = report("1")
+    assert pools == [] and [v for _, v in _verdicts(json.loads(serial[1][1]))] == [
+        "passed", "failed", "untouched", "failed", "failed", "untouched"]
+    assert [code for code, _ in serial] == [1, 1] and "#2 (" in serial[0][1] and "p01_core: verity_vllm/b.py [k]" in serial[0][1]
+    assert report("4") == serial and pools == [4, 4]
+    assert report("4", str(verdict_cache)) == serial and report("1", str(verdict_cache)) == serial and pools == [4, 4, 4]
+    assert len(linted.git("worktree", "list").splitlines()) == 1
+    monkeypatch.setenv("RATCHET_GATE_JOBS", "none")
+    assert G.main(["main", "next"]) == 2 and "RATCHET_GATE_JOBS is 'none'" in capsys.readouterr().err
 
 
 def test_a_new_ratchet_is_its_own_baseline_and_a_moved_or_renamed_one_is_still_compared(repo):
@@ -1224,7 +1260,7 @@ DOCS_A = {"file": "docs/a.md", "count": 1}
 
 @pytest.fixture
 def lane_linted(repo) -> Repo:
-    """``repo`` with the repository's real lane-text lint: docs/a.md's ``#1234`` is its one site, which the list allows."""
+    """``repo`` with the repository's real lane-text lint: docs/a.md's PR number is its one site, which the list allows."""
     repo.commit("lane text", {REPO_LANE_LINT: (SCRIPT.parents[3] / REPO_LANE_LINT).read_text(),
                               REPO_LANE_JSON: _allowlist(DOCS_A), "docs/a.md": "# A\n\nSee #1234.\n"})
     repo.git("checkout", "-q", "-b", "pr")
@@ -1362,3 +1398,29 @@ def test_a_site_a_lint_below_on_next_counts_is_refused_at_the_pr_that_adds_it_an
     assert (c["name"], c["verdict"]) == ("#4", "failed") and "finds 3 violation(s) on its tree" in c["why"], c["why"]
     assert c["fix"] == ["repo_lane_text: docs/b.md: 2 found, 0 allowed", "repo_lane_text: docs/b.md:3 toy: TOY1",
                         "repo_lane_text: docs/b.md:3 toy: TOY2"], "the violation the tree below holds is #2's, not #4's"
+
+
+def test_a_lint_module_whose_own_prose_a_change_cleans_is_counted_on_its_own_copy(lane_linted):
+    """The gate runs the base's copy of a lint module the change edits, and the lane-text lint reads that copy's prose too:
+    a change that rewrites the module's docstring and drops its entry passes, counted on its own copy, and one that edits
+    the module's code, keeps its site and drops its entry fails, naming the site where the change's copy holds it."""
+    toy = {"file": LINT, "count": 1}
+    lane_linted.git("checkout", "-q", "main")
+    lane_linted.commit("a lint whose docstring names its issue", {LINT: '"""P1, after VLLM-136."""\n' + TOY_LINT,
+                                                                  REPO_LANE_JSON: _allowlist(DOCS_A, toy)})
+    lane_linted.git("checkout", "-q", "-B", "pr")
+    lane_linted.commit("the docstring says what is true now", {LINT: '"""P1."""\n' + TOY_LINT, REPO_LANE_JSON: _allowlist(DOCS_A)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core", "repo_lane_text"]), c["why"]
+    assert (f"the base's lint code (p01_core, repo_lane_text) finds 2 violation(s) in the base's copy of {LINT}, which it "
+            "runs in place of the change's, and the change's own copy is within its list") in c["why"], c["why"]
+    assert _lane_lint(lane_linted) is None
+    lane_linted.git("checkout", "-q", "-B", "pr", "main")
+    wider = TOY_LINT.replace('WORD = re.compile(r"BAD")', 'WORD = re.compile(r"BAD|WORSE")')
+    assert wider != TOY_LINT
+    lane_linted.commit("counts WORSE, and drops the entry", {LINT: '"""P1.\n\nAfter VLLM-136."""\n' + wider,
+                                                             REPO_LANE_JSON: _allowlist(DOCS_A)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [f"repo_lane_text: {LINT}: 1 found, 0 allowed",
+                                                   f"repo_lane_text: {LINT}:3 linear: VLLM-136"]), c["why"]
+    assert f"{LINT}: 1 found, 0 allowed" in (_lane_lint(lane_linted) or "")

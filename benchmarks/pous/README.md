@@ -156,7 +156,7 @@ key that isn't on the node, and kills nothing. Its header lists the challenger's
 runs it on a CPU, with one segment in host memory.
 
 `served_case.py --window DIR` builds PoUS's or the wipe's piece for the one-stage composite (composite.py, beside
-served_verdicts.py) from what a served window kept: `case.json`, the component's case, and `answer.json`, its own answer
+served_verdicts.py) from what a served window kept: `case.json`, the subprotocol's case, and `answer.json`, its own answer
 on it, whose commitment is the digest the composite binds. Both go to the window's private directory (0700), never
 beside the public answer. `served_piece.py` and `streamed_wipe/served_wipe.sh` write that piece through it while they
 run; after a run, from the kept outputs alone, PoUS's `C*` is encoded again from the served snapshot at the kept salt, and
@@ -171,7 +171,7 @@ allows for.
 `wipe_resume/` runs the red team's resume attack (art:7617c8017e80) on both wipes, on CPU. `pi2_state_attack.py` rebuilds
 band and dense blocks from the five odd rounds' SHAKE256 states (1,000 B a 64 KiB block) and times an answer against the
 `D = 5` read deadline. `resume.py` adapts the attack to the streamed wipe, which the prover can't evaluate without `K`, and runs
-it next to honest, naive-cheat and broken-premise provers (`K` on the prover's node, an undeclared tier), all judged by the
+it next to honest, naive-cheat and broken-premise provers (`K` on the developer's node, an undeclared tier), all judged by the
 Lean verdict and `streamed_wipe.verdict`. It writes `resume.json` and fails if any prover ends other than expected:
 
 ~~~bash

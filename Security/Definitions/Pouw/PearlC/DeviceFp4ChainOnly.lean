@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.PearlC.DeviceFp4Issue
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # Pearl-C4's chain-only reading at an FP4 record (definitions only, staged)

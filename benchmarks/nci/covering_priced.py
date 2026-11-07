@@ -9,11 +9,11 @@ The forms, each a lower bound on the slowdown, at least (chained charge per gate
   ``(k/c)^2 + k``. ``c`` is at most the cheapest updated weight's cost, since parameter-hardness holds for every block.
 * ``two c's`` (``Nci.Guarantees.CoveringBoundTwoCosts``, on main): ``c_w`` per weight (the cheapest class again),
   ``c_a`` per activation, per block ``(k/c_w)(k/c_a) + k``.
-* ``priced`` (in progress): weight ``i`` costs ``p_i`` bits, ``sum_{i in theta'_S} p_i <= |in(S) \\ theta|``. A block
-  covers chained products of price sum at most ``k * (k/c_a) + k * p_max``, so the numerator is the price sum over the
-  chained products: the product-weighted mean price replaces the cheapest class's ``c_w``.
-* ``priced additive``: the priced form with the weights' bits paid outside the token computations (the conditional
-  premise of ``Nci.Cover.Guarantees.CoveringBoundAdditive``), per block ``k^2/(4 c_a) + k p_max``.
+* ``priced`` (no Lean statement): weight ``i`` costs ``p_i`` bits, ``sum_{i in theta'_S} p_i <= |in(S) \\ theta|``. A
+  block covers chained products of price sum at most ``k * (k/c_a) + k * p_max``, so the numerator is the price sum over
+  the chained products: the product-weighted mean price replaces the cheapest class's ``c_w``.
+* ``priced additive`` (no Lean statement): the priced form with the weights' bits paid outside the token computations,
+  a conditional premise, per block ``k^2/(4 c_a) + k p_max``.
 
 Chaining (``chainedBlocksAt``) is decided per product stage of one token's forward pass from the count ``n`` of distinct
 updated weights upstream inside the token's computation (``depth.py`` of the realism note: routed experts and the router
@@ -626,17 +626,6 @@ def sensitivity(pts: dict, cheapest: dict) -> dict:
     return out
 
 
-def check_daniel() -> dict:
-    """The covering bound write-up's marginal-slowdown table: Kimi K2 at k = 2e7, w = 2.5, raw: the base tier
-    k^2/w + k gives 41, the additive charge 166, a-bit activations (a = 4) 660."""
-    m = k2()
-    gates = K.schedule(m)[1]
-    a0 = K.active_weights(m) / gates
-    k, w = 2e7, 2.5
-    return {"base": a0 * S / (k * k / w + k), "additive": a0 * S / (k * k / (4 * w) + k),
-            "a=4": a0 * S / (k * k / (4 * w * 4) + k)}
-
-
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--prices", action="append", help="a price file (load_prices) in place of Pythia's; with "
@@ -667,9 +656,6 @@ def main(argv: list[str] | None = None) -> int:
         pts, cheapest, label = PYTHIA, CHEAPEST, "Pythia prices"
     res = report(pts, cheapest, label, dgrad=args.dgrad)
     res["sensitivity"] = sensitivity(pts, cheapest)
-    res["daniel_check"] = check_daniel()
-    print("Daniel's table at k = 2e7, w = 2.5 (41 / 166 / 660): "
-          + ", ".join(f"{n} {v:.0f}" for n, v in res["daniel_check"].items()))
     if args.json:
         Path(args.json).write_text(json.dumps(res, indent=1, default=str))
     return 0

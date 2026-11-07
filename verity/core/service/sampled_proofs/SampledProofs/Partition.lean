@@ -13,10 +13,6 @@ program and applies the query itself; it never takes a population or a unit inde
 module
 
 public import Flock.HmRow
-public import Flock.TemplateQuery
-public import Flock.Draw
-public import Flock.Extract
-public import Flock.Qcall
 public import SampledProofs.Json
 public import SampledProofs.Program
 

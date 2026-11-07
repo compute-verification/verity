@@ -19,7 +19,7 @@ def test_the_reference_numbers_match_the_spec_arithmetic():
     assert math.isclose(operating.exfil(r.scenario, sync)["one location"], sync / both)
     work = operating.work(r, REG["work.v4-pretrain.flops"])
     assert 30 < work["unencumbered"] < 40
-    assert math.isclose(work["dark pool"], work["unencumbered"] / r.scenario.context.fleet.eps_dark)
+    assert math.isclose(work["dark pool"], work["unencumbered"] / r.scenario.context.fleet.eps_unreg)
     assert math.isclose(work["lower bound"], r.scenario.seconds(r.lo))
     assert math.isclose(work["best attack"], r.scenario.seconds(r.attack))
     assert work["unencumbered"] <= work["lower bound"] <= work["best attack"] * (1 + 1e-9) <= work["dark pool"] * 1.001

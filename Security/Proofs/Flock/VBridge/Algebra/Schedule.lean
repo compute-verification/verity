@@ -1,6 +1,13 @@
 module
 
 public import Proofs.Flock.VBridge.Algebra.Sizes
+public import Proofs.Flock.VBridge.Algebra.Ligerito
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.VBridge.Algebra.RunSkel
+import Proofs.Flock.VBridge.Algebra.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # The rounds `verifierRows` asks for

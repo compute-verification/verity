@@ -1,6 +1,9 @@
 module
 
-public import Definitions.Pouw.Dimension.Defs
+public import Mathlib.Data.Finset.Card
+public import Mathlib.Data.Rat.Init
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # `MH100`'s price table and the hypothesis `H32` (draft semantics)

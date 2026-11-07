@@ -10,8 +10,7 @@ public import Proofs.Nci.Covering
 to a block `S` of the covering that computes its output gate; at most `k` are not completed by `S`. The completed ones lie
 in `θ'_S × J_S`: `|θ'_S| ≤ k / c_w` by parameter-hardness at `c_w`, so `|θ'_S| < D` since `c_w D > k`; with `Q = θ'_S`
 the inputs of `S` in `T_j` cut the activation off for each token `j ∈ J_S`, so they are at least `c_a` and
-`|J_S| ≤ k / c_a`. That count for one block is `CoveringTwoCosts.card_charged_le`, which the cover theorem's join to
-the NCI policy uses at each block's own `k` (`Proofs.Nci.Cover.Chained`).
+`|J_S| ≤ k / c_a`. That count for one block is `CoveringTwoCosts.card_charged_le`.
 
 At `c_w = c_a = r · b` the assumptions are `ParameterHard` and `ActivationChained` by definition, and the bound is
 `CoveringBound`'s (`coveringBound_of_twoCosts`). `CoveringBound` keeps its own proof.
@@ -23,13 +22,10 @@ namespace Nci.SecurityProofs.CoveringTwoCosts
 
 open Verity Finset Nci.Covering
 
-variable {d : Declaration} (B : MulBlocks d)
+variable {d : RegisteredCircuit} (B : MulBlocks d)
 
 theorem parameterHard_iff (s : ℕ) (r b : ℝ) :
     Assumptions.ParameterHard d B s r b ↔ Assumptions.ParameterHardAt d B s (r * b) := Iff.rfl
-
-theorem activationChained_iff (D : ℕ) (r b : ℝ) (p : Fin B.nw × Fin B.nt) :
-    Assumptions.ActivationChained d B D r b p ↔ Assumptions.ActivationChainedAt d B D (r * b) p := Iff.rfl
 
 theorem chainedBlocks_eq (D : ℕ) (r b : ℝ) :
     Assumptions.chainedBlocks d B D r b = Assumptions.chainedBlocksAt d B D (r * b) := rfl
@@ -53,7 +49,7 @@ open Verity Finset Nci.Covering Nci.SecurityProofs.Covering
 /-- **One block's chained count at two costs**: an `(s, k)`-inference block `S` of an `(s, c_w)`-parameter-hard `d`,
 with `c_w D > k` and `c_a > 0`, computes the output gates of at most `(k / c_w)(k / c_a) + k` multiplication blocks
 chained at `(D, c_a)`: at most `k` that it doesn't complete, and the completed ones in `θ'_S × J_S`. -/
-theorem CoveringTwoCosts.card_charged_le {d : Declaration} (B : MulBlocks d) {s k D : ℕ} {cw ca : ℝ}
+theorem CoveringTwoCosts.card_charged_le {d : RegisteredCircuit} (B : MulBlocks d) {s k D : ℕ} {cw ca : ℝ}
     (hkD : (k : ℝ) < cw * D) (hca : 0 < ca) (hhard : Assumptions.ParameterHardAt d B s cw) {S : Subcircuit d.D}
     (hS : InferenceBlock d s k S) :
     (((Assumptions.chainedBlocksAt d B D ca).filter fun p => B.o p ∈ S.inner).card : ℝ) ≤ k / cw * (k / ca) + k := by

@@ -12,8 +12,9 @@ from typing import Any
 CUT = ("RoPE_v1", "Gemm_v1", "ScaledMmS8_v1")
 #: the row Definitions whose Calls are split into coordinates of themselves: coordinate n of a row is its Definition at N = 1
 #: (the expert-indexed pair GEMMs, `fp8_moe_experts.pair_rows` at one column; FlashInfer's FP8 linear, `deepgemm`, one output
-#: word with the row's quantisation of its own; the block-scaled FP8 GEMM, `fp8.ScaledMmFp8BlockSharedScale`, one output word,
-#: ``w[n]`` and ``ws[n // G]``), the ``coord`` layout; each family's E and G where its statics have none
+#: word with the row's quantisation of its own, where its ``PARTS`` quantise the row once; the block-scaled FP8 GEMM,
+#: `fp8.ScaledMmFp8BlockSharedScale`, one output word, ``w[n]`` and ``ws[n // G]``), the ``coord`` layout; each family's E and
+#: G where its statics have none
 COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8Linear_v1": {"E": 1, "G": 128},
           "ScaledMmFp8BlockSharedScale_v1": {"E": 1}}
 #: the row Definitions elementwise along the last axis of every parameter and of the output, by that axis's static: a row W wide
@@ -34,20 +35,30 @@ SLICES = {"LlBf16DotprodGemm_v1": (("N",), ((None,), (0,))), "Gemm_v2": (("N",),
           "DsaMqaLogits_v3": (("N",), ((None,), (None,), (0,), (0,))), "EmbeddingShard_v1": (("H",), ((None,), (1,))),
           "AllGather_v1": (("WORLD",), ((0,),)), "CublasSplitKGemmF32Out_v1": (("N",), ((None,), (0,)))}
 #: the row Definitions whose Calls are split into parts, each a Definition of its own at the row's statics it names: per part, its
-#: family, what it reads in order (``("arg", g)`` the row's argument group g, ``("out", j)`` the row's committed output member j)
-#: and the output members it returns; together they return every output once, and the row computes what they compose to
-#: (tests/program/test_tp_allreduce_parts.py).  A ``COLS`` part is read in column blocks, a ``COORDS`` part in coordinates, any
-#: other one whole (the ``part`` layout).  `tp_allreduce.AllReduceRmsNormMnnvl`: its all-reduce and residual add (r), then its
-#: norm of the committed r.  `deepgemm.DeepGemmFp8Linear`: its quantisation of x (q, s), then its GEMM of the committed q and s
-#: (tests/program/test_deepgemm_parts.py).
+#: family, what it reads in order (``("arg", g)`` the row's argument group g, ``("out", j)`` the row's committed output member j,
+#: ``("mid", name)`` the row's intermediate) and what it returns (``j`` the row's committed output member j, ``name`` an
+#: intermediate: a value the row's Definition computes and serving never stores, which the reader computes by its twin,
+#: `part_rows.MIDS`, and the window wires to every part that reads it, `part_rows.wire`); together they return every output
+#: once, and the row computes what they compose to (tests/program/test_tp_allreduce_parts.py).  A ``COLS`` part is read in
+#: column blocks, a ``COORDS`` part in coordinates, any other one whole (the ``part`` layout).
+#: `tp_allreduce.AllReduceRmsNormMnnvl`: its all-reduce and residual add (r), then its norm of the committed r.
+#: `deepgemm.DeepGemmFp8Linear`: its quantisation of x (q, s), then its GEMM of the committed q and s.
+#: `deepgemm.FlashInferFp8Linear`: its quantisation of x once (q, s, which FlashInfer keeps in its workspace), then the same GEMM
+#: of those q and s (tests/program/test_deepgemm_parts.py).
 PARTS = {"AllReduceRmsNormMnnvl_v1": (("AllReduceResidualMnnvl_v1", (("arg", 0), ("arg", 1)), (1,)),
                                       ("RmsNormMnnvl_v1", (("out", 1), ("arg", 2)), (0,))),
          "DeepGemmFp8Linear_v1": (("Fp8GroupQuantUe8m0_v1", (("arg", 0),), (0, 1)),
-                                  ("ScaledMmFp8BlockSharedScale_v1", (("out", 0), ("out", 1), ("arg", 1), ("arg", 2)), (2,)))}
-#: the statics a ``PARTS`` row family's parts take that the row has none of: DeepGEMM's linear quantises and scales in
-#: 128-wide blocks (`deepgemm.FP8_BLOCK`)
-PART_STATICS = {"DeepGemmFp8Linear_v1": {"G": 128}}
-PART_OF = {p[0]: (row, p) for row, ps in PARTS.items() for p in ps}
+                                  ("ScaledMmFp8BlockSharedScale_v1", (("out", 0), ("out", 1), ("arg", 1), ("arg", 2)), (2,))),
+         "FlashInferFp8Linear_v1": (("FlashInferFp8Quant1x128_v1", (("arg", 0),), ("q", "s")),
+                                    ("ScaledMmFp8BlockSharedScale_v1", (("mid", "q"), ("mid", "s"), ("arg", 1), ("arg", 2)), (0,)))}
+#: the statics a ``PARTS`` row family's parts take that the row has none of: the block-FP8 linears quantise and scale in 128-wide
+#: blocks (`deepgemm.FP8_BLOCK`)
+PART_STATICS = {"DeepGemmFp8Linear_v1": {"G": 128}, "FlashInferFp8Linear_v1": {"G": 128}}
+#: each part family, by the row families it is a part of
+PART_OF: dict[str, dict[str, tuple]] = {}
+for _row, _ps in PARTS.items():
+    for _p in _ps:
+        PART_OF.setdefault(_p[0], {})[_row] = _p
 #: the chunk families that cut a ``COORDS`` family's coordinate along K (the ``kchunk`` layout, `kchunk_rows`), by the row family:
 #: a coordinate of K weights is C = K / k chunks of k (whole scale blocks and tiles), chunk 0 FIRST, chunk C - 1 LAST, each
 #: continuing the one before's f32 accumulator (`fp8_moe_experts.MoeExpertFp8CoordinateChunk_v1`, the w13 launch)
@@ -170,8 +181,7 @@ def part(word: str, spec: str) -> tuple | None:
     (the row is ``word``'s own family)."""
     from verity_vllm.query.program_view import spec_base
 
-    hit = PART_OF.get(spec_base(word))
-    return hit[1] if hit is not None and hit[0] == spec_base(spec) else None
+    return PART_OF.get(spec_base(word), {}).get(spec_base(spec))
 
 
 def chunk_widths(K: int, G: int, KB: int) -> list[int]:

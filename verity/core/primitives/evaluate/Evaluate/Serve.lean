@@ -3,7 +3,6 @@ module
 public import Evaluate.Walk
 public import Flock.Gate
 public import Flock.Evaluated
-public import Difftest
 
 /-!
 # The difftest function

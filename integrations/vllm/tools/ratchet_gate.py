@@ -48,7 +48,9 @@ when:
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
-  lints with the base's pin.
+  lints with the base's pin.  A counted lint reads those replaced files too, as the base has them, so its violations in one
+  are counted again on the change's own copy, against the change's list: a lint module whose prose the change cleans, with
+  its entry dropped, passes, and one that keeps its sites without its entry fails, naming the change's own sites.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
   fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
   finds.
@@ -100,7 +102,10 @@ else one ``uv run --with`` fetches the pin for (the network, once per uv cache).
 BASE too for a verdict that reads it (a failed change's exemptions run BASE's move_check): a sync of N PRs judges each change
 once, not N times, and once `main` moves an untouched or passed change is still not judged again.  The source checks' findings
 are kept beside the verdict under BASE's key (they run BASE's lints and config), and apply to the top change only, so a member
-below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  Before marking
+below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  A change's
+judgement reads only its own commits (and BASE), so the changes the cache doesn't hold are judged at once, each in a forked
+process of its own, its worktree and ruff cache with it, up to ``$RATCHET_GATE_JOBS`` at a time (default the lesser of 16 and
+this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  Before marking
 a branch, run
 ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
 (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the host), which the
@@ -117,6 +122,7 @@ import importlib.util
 import io
 import json
 import math
+import multiprocessing
 import os
 import re
 import shutil
@@ -127,7 +133,9 @@ import tokenize
 import tomllib
 import types
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
@@ -954,6 +962,46 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
     return ran, failures
 
 
+def replaced(c: Change, lints: Iterable[str]) -> set[str]:
+    """The files `base_lints`'s worktree for ``c`` holds as its base has them, not as the change does: each file of a lint
+    directory in ``lints``, and each ruff config, that the change edits or deletes (its allowlists hold the change's
+    entries)."""
+    out = git("diff", "--no-renames", "--name-only", "--diff-filter=DMT", "-z", c.lo, c.hi, "--", *lints, RUFF_CONFIG,
+              REPO_RUFF_CONFIG)
+    return {f for f in out.split("\0") if f and not is_ratchet(f)}
+
+
+def own_copies(c: Change, lints: Iterable[str], found: list[str]) -> tuple[list[str], list[str]]:
+    """(``found``, each counted lint's violations at a file `replaced` names judged on the change's own copy; the
+    violations that leave, as found).  A counted lint reads every file the worktree holds, so in a lint directory or a ruff
+    config it reads the base's text, which the change's tree doesn't hold: the change's copy is counted as the base's lint
+    counts it, against the change's list, and within it, its violations go; past it, the change's own sites replace them.
+    Another lint's violations there stay as found."""
+    at, names = replaced(c, lints), {s for s, *_ in COUNTED}
+    out, by = [], {}
+    for v in found:
+        s, m = v.partition(": ")[0], SITE.match(v)
+        if m and m[1] in at and s in names:
+            by.setdefault((s, m[1]), []).append(v)
+        else:
+            out.append(v)
+    gone = []
+    for (s, f), vs in by.items():
+        _, sites, noun = next(x for x in COUNTED if x[0] == s)
+        if (lint := counted_lint_at(c.lo, s, sites, noun)) is None:
+            out += vs
+            continue
+        holds, count = counter(lint, sites)
+        own = tree_files(c.hi, {f}).get(f) if holds(f) and not f.startswith(tuple(lint.LEFT_OUT)) else None
+        now = count(own.decode("utf-8", errors="replace"), f) if own is not None else []
+        listed, marked = counted_list(lint, s, c.hi)
+        if len(now) <= listed[f] or getattr(lint, "is_registry", lambda path, marks: False)(f, marked):
+            gone += vs
+        else:
+            out += [f"{s}: {f}: {len(now)} found, {listed[f]} allowed"] + [f"{s}: {f}:{line} {what}" for line, what in now]
+    return out, gone
+
+
 def violations(failures: list[dict]) -> list[str]:
     """Each violation a failing test names (its message's indented lines, else its first), or the error a test raised, by
     lint."""
@@ -1012,6 +1060,7 @@ def judge(c: Change, base: str) -> None:
         uncalled, public = public_callers(c)
     noqa_grows = c.noqa_added > c.noqa_removed
     inherited: list[str] = []
+    based: list[str] = []
     if c.touched and not (grown or bad or uncalled or noqa_grows):
         selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}
         if selection:
@@ -1020,13 +1069,18 @@ def judge(c: Change, base: str) -> None:
             if found:
                 had = set(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]))
                 inherited, found = [v for v in found if v in had], [v for v in found if v not in had]
+                found, based = own_copies(c, selection, found)
     if not (grown or bad or uncalled or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
             + ([f"public, each run by its caller: {', '.join(public)}"] if public else [])
-            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints and not inherited else [])
+            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"]
+               if c.lints and not (inherited or based) else [])
             + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(inherited)} violation(s) its own tree already holds, "
-                f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else []))
+                f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else [])
+            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(based)} violation(s) in the base's copy of "
+                f"{', '.join(sorted({SITE.match(v)[1] for v in based}))}, which it runs in place of the change's, and the "
+                f"change's own copy is within its list"] if based else []))
         return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
@@ -1186,14 +1240,47 @@ def keep(c: Change, p: Path | None, fields: tuple[str, ...] = JUDGED) -> None:
         pass
 
 
+def jobs() -> int:
+    """How many changes are judged at once: ``$RATCHET_GATE_JOBS``, default the lesser of 16 and this process's CPUs."""
+    raw = os.environ.get("RATCHET_GATE_JOBS", "")
+    if not raw:
+        return min(16, len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count() or 1)
+    if not raw.isdigit() or int(raw) < 1:
+        raise GitError(f"RATCHET_GATE_JOBS is {raw!r}: set it to a number of processes, 1 to judge the changes in turn")
+    return int(raw)
+
+
+def judged(c: Change, base: str) -> Change:
+    """``c`` judged, its verdict kept."""
+    judge(c, base)
+    keep(c, cache_path(c, None if c.verdict in BASE_FREE else base))
+    return c
+
+
+def judge_all(cs: list[Change], base: str) -> list[Change]:
+    """Each of ``cs`` judged, in order: by up to ``jobs()`` forked processes, or in turn.  The first error in chain order is
+    the one raised, as in turn."""
+    n = min(jobs(), len(cs))
+    if n <= 1 or "fork" not in multiprocessing.get_all_start_methods():
+        return [judged(c, base) for c in cs]
+    pool = ProcessPoolExecutor(n, mp_context=multiprocessing.get_context("fork"))
+    try:
+        return [f.result() for f in [pool.submit(judged, c, base) for c in cs]]
+    except BrokenProcessPool as e:
+        raise GitError(f"a process judging the changes died ({e}), so the gate couldn't judge them all: rerun it, with "
+                       f"RATCHET_GATE_JOBS=1 to judge them in turn") from e
+    finally:
+        pool.shutdown(cancel_futures=True)
+
+
 def gate(base: str, top: str) -> dict:
     base, top = (git("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))
     cs = changes(base, top)
+    todo = [i for i, c in enumerate(cs) if not (recall(c, cache_path(c, None), verdicts=BASE_FREE)
+                                                or recall(c, cache_path(c, base)))]
+    for i, c in zip(todo, judge_all([cs[i] for i in todo], base)):
+        cs[i] = c
     for c in cs:
-        free, based = cache_path(c, None), cache_path(c, base)
-        if not (recall(c, free, verdicts=BASE_FREE) or recall(c, based)):
-            judge(c, base)
-            keep(c, free if c.verdict in BASE_FREE else based)
         if c.hi == top:
             lint_top(c, base)
     failed = [c for c in cs if c.verdict == "failed"]

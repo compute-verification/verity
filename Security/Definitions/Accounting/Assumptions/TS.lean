@@ -63,13 +63,11 @@ Which form each takes:
   every unit not skipped whole are folded (its fold clause). A sampled window's proofs vouch for the drawn units only,
   so `RightFixed`, which asks for every committed value right, says nothing there; and a unit's check can pass by luck,
   so goodness reads the run's modes, not rightness.
-* `LinSteer`: SAMPLING's LIN-STEER, for the compiler's closure.
 
 The joint-luck premise JL is not used: D-ideal keeps the proved `ε_jl`.
 
-`LinSteer` is false (`Accounting.Guarantees.TS.LinSteerSegments`: a segmented consumer satisfies it only when its
-noise-active segments carry equal counts), and no guarantee rests on it; `Accounting.Guarantees.TS.SegmentSteer` is the
-bound that holds.
+SAMPLING's LIN-STEER is false and is not stated here: a segmented consumer satisfies it only when its noise-active
+segments carry equal counts. It and the bound that holds, `SegmentSteer`, are lemmas (`Proofs.Accounting.Lemmas.TS.Steer`).
 -/
 
 @[expose] public section
@@ -234,11 +232,6 @@ window's words). -/
 def ProofsSound {Ω : Type} [Fintype Ω] {S : ℕ} (P : Play Ω S K T L U) (Nw δbind δzk : ℝ) (nπ : ℕ) : Prop :=
   ∃ E : Paths Ω S → Prop, prob E ≤ S * (δbind + nπ * δzk) ∧
     ∀ x, P.accepts x → ¬ E x → P.game.accepts x ∧ (1 - P.game.deficiency x / S) * Nw ≤ (P.run x).fixed
-
-/-- `accounting-ts-lin-steer` (SAMPLING; false, `Accounting.Guarantees.TS.LinSteerSegments` and `LinSteerFalse`).
-**LIN-STEER**: zeroing a fraction `φ = |Z|/|act|` of the row's noise-active coordinates saves at most `φ` of the consumer's work. -/
-def LinSteer {m : ℕ} (c : Consumer m) : Prop :=
-  ∀ Z ⊆ c.act, c.cost ∅ - c.cost Z ≤ (Z.card : ℝ) / c.act.card * c.cost ∅
 
 /-- `accounting-ts-right-fixed` (Lemma E1(c), proved on paper; the rounds' equal shares). **With every committed value
 right, what isn't fixed is in the shares**: on every accepted path whose committed values (each round's, read before its

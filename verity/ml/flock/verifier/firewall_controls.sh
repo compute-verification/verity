@@ -6,7 +6,8 @@
 # `Loop.HonestRoundsPass` names (Security/Proofs/Flock/SessionLoop/Fill.lean). Every control must end in a
 # visible refusal at its `Finish`, never before: the verifier's verdict (its `SESSION` line) does not accept, after as many
 # rounds as the honest session's, and the prover's record carries the control's own refusal (`EXPECT` below:
-# `prover_stopped`'s, the ZK server's, and the verdict's `why`, the Lean frame's stop where it stopped a rep). A `cut-MODE` control (a worker that fails) runs at its table's device rounds 2, half way and the last of
+# `prover_stopped`'s, the ZK server's, and the verdict's `why`, the Lean frame's stop where it stopped a rep; `ALSO`, a
+# second refusal a control may carry beside it). A `cut-MODE` control (a worker that fails) runs at its table's device rounds 2, half way and the last of
 # the honest session's (`firewall_device_rounds`), and `inner` (FC_INNER_TAMPER, §10.4: table 0 rep 0's inner round J
 # relayed with a value byte flipped) at each of the inner proof's rounds 0 to 3. Run from the source tree's root:
 #   bash verity/ml/flock/verifier/firewall_controls.sh
@@ -95,6 +96,11 @@ EXPECT = {"root": (FW + "level-0 root: the device committed ", True), "witness":
           "cut-rc240": (DEV + "PROVER-STOPPED: degenerate coins: ", None), "cut-panic": (DEV + "panicked: ", None),
           "cut-silent": (DEV + "silent past the firewall's deadline", None), "cut-decode": (DEV + "the device's output does not decode", None),
           "cut-tree": ("", True), "inner": ("", True)}
+# a second detection a control may carry and never needs: a session stops at its first failure, every rep with it
+# (`Frames.Sessions.stopped`: each later round leaves as a stopped rep's scheduled round), so where the Lean frame alone stops
+# a rep (the opening's rounds, cut-tree at round 0, every inner round), the ZK server's own check of the proof's exposed values
+# against the ones the frame passed may refuse it too
+ALSO = {c: FW + "the proof's exposed value " for c in ("opening", "opening-frame", "cut-tree", "inner")}
 rows = [json.loads(l) for l in open(sys.argv[1])]
 rounds = (rows[0].get("auditor") or {}).get("rounds") if rows else None
 for r in rows:
@@ -103,10 +109,12 @@ for r in rows:
         r["ok"] = (r.get("accepted") is True and a.get("accepted") is True and bool(rounds)
                    and not r.get("frame_stops") and not r.get("prover_stopped"))
     else:
-        stopped, frame = EXPECT[r["control"].split("@")[0]]
+        c = r["control"].split("@")[0]
+        stopped, frame = EXPECT[c]
         why, ps = r.get("why") or "", r.get("prover_stopped") or ""
         r["ok"] = (r.get("accepted") is False and a.get("accepted") is False and a.get("rounds") == rounds
-                   and (ps.startswith(stopped) if stopped else ps == "") and frame in (None, why.startswith("Ok(Refused(\"" + FRAME)))
+                   and (ps.startswith(stopped) if stopped else ps == "" or (c in ALSO and ps.startswith(ALSO[c])))
+                   and frame in (None, why.startswith("Ok(Refused(\"" + FRAME)))
     print(("OK " if r["ok"] else "BAD ") + json.dumps(r))
 ok = bool(rows) and rows[0]["control"] == "honest" and all(r["ok"] for r in rows)
 json.dump({"ok": ok, "rows": rows}, open(sys.argv[2], "w"), indent=1)

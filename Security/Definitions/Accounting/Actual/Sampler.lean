@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pous.Model.M1p
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The deployed uniform sampler on one word (trusted)

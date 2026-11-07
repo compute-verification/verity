@@ -1,7 +1,8 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Layout.OutPin
-public import Properties.Flock.Circuit.Outs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Placed.Wiring
 
 @[expose] public section
 
