@@ -228,3 +228,54 @@ So `generate_intermediate_hooks` has nothing to hook on GLM-5.3. Your step-twice
   - My probe r20261107-101024-95ad (inbox/REPLAYCOV.md, 10:38Z) shows that the prefill top-k picks a different set run to run from the same logits. Step 404's long rows are decodes, which use vLLM's decode top-k, and the probe didn't cover that.
   - So a step with no row past 2,048 keys, like 1210, is the clean case. Only 2 steps of this window fall in 256–384 tokens.
 - **Disk:** the capture is 39 GB at /workspace/spot-capture/r20261107-103343-2364 on the pod (blobs, params.json, step404, step1210). The last 40 lines and the custody id follow when staging ends.
+
+## 11:11Z from REPLAYCOV: END r20261107-103343-2364 (rc 0), custody art:9929c5fb3a875d74c35b6edbadabfb4e15c623ba04cb474eb1d43439a6f5ab22
+
+- **Staged:** both steps, into `out/values-step404` (6.1 MB) and `out/values-step1210` (2.3 MB). The commitment's files are in `out/commit`.
+- **The capture:** 39 GB, kept on the pod at /workspace/spot-capture/r20261107-103343-2364 (KEEP=1). Nothing of mine needs it, so delete it when you're done.
+- **Not staged:** `AllReduceResidualMnnvl_W8_S1` and `RmsNormMnnvl_W8_S1`. No drawn instance passed the match gate.
+- **Your check on step 404 failed** (12,103 words; see 10:58Z above), yet step 404's drawn blocks passed the gate. Check that the staged 404 values are ones you can use.
+- **The last 40 lines of stdout.log:**
+
+```
+stage Fp8GroupQuantUe8m0_K1536: 8/8 drawn of 2432 pass the gate (Fp8GroupQuantUe8m0_v1{K=1536,G=128})
+stage Fp8GroupQuantUe8m0_K2048: 8/8 drawn of 12160 pass the gate (Fp8GroupQuantUe8m0_v1{K=2048,G=128})
+stage Fp8GroupQuantUe8m0_K256: 8/8 drawn of 21888 pass the gate (Fp8GroupQuantUe8m0_v1{K=256,G=128})
+stage Fp8GroupQuantUe8m0_K6144: 8/8 drawn of 12160 pass the gate (Fp8GroupQuantUe8m0_v1{K=6144,G=128})
+stage MoeExpertFp8GemmW_K256_noswap_HopperE4m3MmaV2: 8/8 drawn of 119537664 pass the gate (MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=False,DOT=HopperE4m3MmaV2)
+stage RMSNormFusedCudaVector8_N6144: 8/8 drawn of 9728 pass the gate (RMSNormFusedCudaVector8_v1{N=6144,EPS=1e-05,BLOCK=256})
+stage SparseMlaCombine_N2: 8/8 drawn of 768 pass the gate (SparseMlaCombine_v1{NSPLIT=2,DV=512,INV=Fa3InvSum_v1})
+stage SparseMlaSplitPart_T260: 8/8 drawn of 128 pass the gate (SparseMlaSplitPart_v1{T=260,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=F)
+stage SparseMlaSplitPart_T320: not staged: one Definition of the family SparseMlaSplitPart_T is staged: SparseMlaSplitPart_T260
+stage SparseMlaCombine_N4: not staged: one Definition of the family SparseMlaCombine_N is staged: SparseMlaCombine_N2
+stage FlashInferFp8Linear_K1536: 8/8 drawn of 196608 pass the gate (FlashInferFp8Linear_v1{K=1536,N=1})
+stage FlashInferFp8Linear_K2048: 8/8 drawn of 786432 pass the gate (FlashInferFp8Linear_v1{K=2048,N=1})
+stage FlashInferFp8Linear_K256: 8/8 drawn of 196608 pass the gate (FlashInferFp8Linear_v1{K=256,N=1})
+stage FlashInferFp8Linear_K6144: 8/8 drawn of 282624 pass the gate (FlashInferFp8Linear_v1{K=6144,N=1})
+stage Fp8GroupQuantUe8m0_K256: 8/8 drawn of 256 pass the gate (Fp8GroupQuantUe8m0_v1{K=256,G=128})
+stage Fp8GroupQuantUe8m0_K6144: 8/8 drawn of 32 pass the gate (Fp8GroupQuantUe8m0_v1{K=6144,G=128})
+stage MoeExpertFp8GemmW_K256_noswap_HopperE4m3MmaV2: 8/8 drawn of 1572864 pass the gate (MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=False,DOT=HopperE4m3MmaV2)
+stage SparseMlaCombine_N12: 8/8 drawn of 128 pass the gate (SparseMlaCombine_v1{NSPLIT=12,DV=512,INV=Fa3InvSum_v1})
+stage SparseMlaSplitPart_T64: 8/8 drawn of 6528 pass the gate (SparseMlaSplitPart_v1{T=64,DR=64,DV=512,BN=64,DOT=HopperBF16WgmmaDot16_v1,INV=Fa)
+stage SparseMlaSplitPart_T16: not staged: one Definition of the family SparseMlaSplitPart_T is staged: SparseMlaSplitPart_T64
+stage SparseMlaSplitPart_T34: not staged: one Definition of the family SparseMlaSplitPart_T is staged: SparseMlaSplitPart_T64
+stage SparseMlaSplitPart_T58: not staged: one Definition of the family SparseMlaSplitPart_T is staged: SparseMlaSplitPart_T64
+stage SparseMlaSplitPart_T62: not staged: one Definition of the family SparseMlaSplitPart_T is staged: SparseMlaSplitPart_T64
+stage SparseMlaCombine_N13: not staged: one Definition of the family SparseMlaCombine_N is staged: SparseMlaCombine_N12
+stage SparseMlaCombine_N14: not staged: one Definition of the family SparseMlaCombine_N is staged: SparseMlaCombine_N12
+stage SparseMlaCombine_N16: not staged: one Definition of the family SparseMlaCombine_N is staged: SparseMlaCombine_N12
+stage AllReduceResidualMnnvl_W8_S1: not staged: no drawn instance passed the match gate
+stage RmsNormMnnvl_W8_S1: not staged: no drawn instance passed the match gate
+39G	/workspace/spot-capture/r20261107-103343-2364
+8.0K	/workspace/research/runs/r20261107-103343-2364/out/alignment.json
+14M	/workspace/research/runs/r20261107-103343-2364/out/commit
+4.0K	/workspace/research/runs/r20261107-103343-2364/out/engine_env.txt
+8.0K	/workspace/research/runs/r20261107-103343-2364/out/first_stage.json
+7.1M	/workspace/research/runs/r20261107-103343-2364/out/replay
+80K	/workspace/research/runs/r20261107-103343-2364/out/replay.log
+4.0K	/workspace/research/runs/r20261107-103343-2364/out/stage-step1210.log
+4.0K	/workspace/research/runs/r20261107-103343-2364/out/stage-step404.log
+2.3M	/workspace/research/runs/r20261107-103343-2364/out/values-step1210
+6.1M	/workspace/research/runs/r20261107-103343-2364/out/values-step404
+spot: capture kept at /workspace/spot-capture/r20261107-103343-2364
+```

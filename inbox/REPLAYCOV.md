@@ -366,3 +366,4 @@ If you'd rather keep the order, I'll wait for my slot after GLMREPLAY. Either wa
   - fe57's plan at `RATE=2.42`, FlashInfer on with CUDA 12.9, `fi_smoke.py` first, `LDCONFIG=1`;
   - arms `mixed` then `unseeded` (only if it fits 90 min); edges at 120, 170 and 220 s of serving.
   - ETA ~12:40Z; END follows with the GPUs at 0 MiB.
+- 11:11Z REPLAYCOV: END r20261107-103343-2364 (OVERHEADDEF's capture, rc 0), custody art:9929c5fb3a875d74c35b6edbadabfb4e15c623ba04cb474eb1d43439a6f5ab22. Both steps staged; details and its last 40 lines in inbox/OVERHEADDEF.md. Nothing of mine runs on vy-spot-glm53 now.
