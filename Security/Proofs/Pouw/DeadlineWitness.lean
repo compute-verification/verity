@@ -66,6 +66,7 @@ noncomputable def idleRun : TimedRun Unit Unit Unit := ⟨0, fun _ _ => 0, fun _
 
 theorem dot_correct (H : Unit → Unit) (s : Unit) (u : Fin 1) :
     (u : ℕ) ∈ correctSet acceptAll dot H s (commitAll.transcript dot H s) := by
+  classical
   unfold correctSet
   rw [Finset.mem_filter]
   exact ⟨Finset.mem_range.2 u.2, ⟨0, 0, 0⟩, rfl,
