@@ -97,16 +97,16 @@ theorem foldl_pow_testBit (f : ℕ → Bool) : ∀ n : ℕ,
     refine ⟨by split <;> rw [Nat.pow_succ] <;> omega, fun i hi => ?_⟩
     by_cases hin : i < n
     · cases hf : f n
-      · rw [if_neg (by simp), Nat.add_zero]
+      · rw [ite_eq_right (by simp), Nat.add_zero]
         exact hbit i hin
-      · rw [if_pos rfl, Nat.add_comm, Nat.testBit_two_pow_add_gt hin]
+      · rw [ite_eq_left rfl, Nat.add_comm, Nat.testBit_two_pow_add_gt hin]
         exact hbit i hin
     · have hni : i = n := by omega
       rw [hni]
       cases hf : f n
-      · rw [if_neg (by simp), Nat.add_zero]
+      · rw [ite_eq_right (by simp), Nat.add_zero]
         exact Nat.testBit_lt_two_pow hlt
-      · rw [if_pos rfl, Nat.add_comm, Nat.testBit_two_pow_add_eq, Nat.testBit_lt_two_pow hlt] <;> rfl
+      · rw [ite_eq_left rfl, Nat.add_comm, Nat.testBit_two_pow_add_eq, Nat.testBit_lt_two_pow hlt] <;> rfl
 
 /-- Bit `s` of `M·y`'s byte `p` is `M·y`'s bit `8 p + s`. -/
 theorem testBit_mask (key y : Hash.Msg) {p s : ℕ} (hp : p < 64) (hs : s < 8) :

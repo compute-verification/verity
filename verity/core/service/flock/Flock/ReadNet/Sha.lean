@@ -20,7 +20,7 @@ open HmNets
 /-- SHA-512's padding after a message of `total` bytes (`sha512.pad_tail`): `0x80`, zeros to 112 mod 128, the bit count as
 16 bytes big-endian. -/
 def padTail (total : Nat) : List UInt8 :=
-  [128] ++ List.replicate ((240 - (total + 1) % 128) % 128) 0 ++
+  ([128] : List UInt8) ++ List.replicate ((240 - (total + 1) % 128) % 128) (0 : UInt8) ++
     (List.range' 0 16).map fun a => ((total * 8) >>> (8 * (15 - a)) % 256).toUInt8
 
 /-- A byte string's bits as constant forms, bit `q % 8` of byte `q / 8` (`forms.const_bits(b, 8)` a byte). -/

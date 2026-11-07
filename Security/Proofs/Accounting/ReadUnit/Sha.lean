@@ -89,7 +89,8 @@ theorem sound_shaW : ∀ (n : ℕ) (cv msg : List Word), Sound (Flock.ReadNet.sh
 /-! ## The padding and the chain -/
 
 theorem padTail_bytes (total : ℕ) :
-    Flock.ReadNet.padTail total = [128] ++ List.replicate (zeroPad total) 0 ++ lenBytes total := rfl
+    Flock.ReadNet.padTail total = ([128] : List UInt8) ++ List.replicate (zeroPad total) (0 : UInt8) ++ lenBytes total :=
+  rfl
 
 theorem length_padTail (total : ℕ) : (Flock.ReadNet.padTail total).length = zeroPad total + 17 := by
   simp only [padTail_bytes, lenBytes, List.length_append, List.length_cons, List.length_nil, List.length_replicate,
@@ -456,7 +457,7 @@ theorem hash_mid {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) {pre : ByteA
         (wordsBE (data ++ Flock.ReadNet.padTail (128 + data.length)))) := by
   have hl : pre.data.toList.length = 128 := by rw [Array.length_toList, ByteArray.size_data, hpre]
   have hb : (⟨pre.data.toList.toArray⟩ : ByteArray) = pre := ByteArray.ext (by simp)
-  rw [hash_chainW hG (np := 1) (by rw [hl]), hb, hl]
+  rw [hash_chainW hG (np := 1) (by omega), hb, hl]
 
 /-! ## Byte strings of the code -/
 
@@ -467,7 +468,7 @@ theorem pad_data (b : ByteArray) (n : ℕ) : (Flock.Hm96.pad b n).data.toList = 
   omega
 
 theorem push_zero_data (s : String) : (s.toUTF8.push 0).data.toList = Hash.cstr s := by
-  simp [Hash.cstr, Hash.utf8, ByteArray.push]
+  simp [Hash.cstr, Hash.utf8, ByteArray.data_push]
 
 theorem be64_data (x : ℕ) : (Flock.HmRow.be64 x).data.toList = Hash.be 8 x := by
   simp [Flock.HmRow.be64, Hash.be]

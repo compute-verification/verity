@@ -67,11 +67,11 @@ theorem sound_belowStep (bound i : ℕ) (b lt : Lin) :
       else Flock.HmNets.and (b ^^^ Lin.one) lt)
       fun z r => ev z r = (if bound.testBit i then (!ev z b || ev z lt) else (!ev z b && ev z lt)) := by
   by_cases h : bound.testBit i = true
-  · rw [if_pos h, if_pos h]
+  · rw [ite_eq_left h, ite_eq_left h]
     refine Sound.bind' (sound_and _ _) fun r => Sound.pure' fun z hr => ?_
     rw [ev_xor, hr, ev_xor, ev_one, ev_one]
     cases ev z b <;> cases ev z lt <;> rfl
-  · rw [if_neg h, if_neg h]
+  · rw [ite_eq_right h, ite_eq_right h]
     refine Sound.mono (sound_and _ _) fun z r hr => ?_
     rw [hr, ev_xor, ev_one]
     cases ev z b <;> cases ev z lt <;> rfl
@@ -156,20 +156,20 @@ theorem select_spec {V : ℕ} (hV : V < 2 ^ 32) : SelectSpec V (Flock.ReadNet.se
     by_cases hlt : num (evs z tok) < V <;> simp [hlt]
   refine ⟨?_, ?_⟩
   · by_cases hlt : num (evs z tok) < V
-    · rw [if_pos hlt]
+    · rw [ite_eq_left hlt]
       apply List.ext_getElem
       · simp only [evs, List.length_map, hlen, hzl]
       · intro i h1 h2
         have hi : i < row.length := by simpa [evs, hlen, hzl] using h1
         simp only [evs, List.getElem_map]
-        rw [hval i hi, if_pos hlt]
-    · rw [if_neg hlt, ← hfill]
+        rw [hval i hi, ite_eq_left hlt]
+    · rw [ite_eq_right hlt, ← hfill]
       apply List.ext_getElem
       · simp only [evs, List.length_map, hlen, hzl, hffl]
       · intro i h1 h2
         have hi : i < row.length := by simpa [evs, hlen, hzl] using h1
         simp only [evs, List.getElem_map]
-        rw [hval i hi, if_neg hlt]
+        rw [hval i hi, ite_eq_right hlt]
   · show ev z (Lin.one ^^^ r) = _
     rw [ev_xor, ev_one, hr, ev_xor, ev_one, hin]
     by_cases hlt : num (evs z tok) < V
