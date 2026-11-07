@@ -419,7 +419,6 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2)) (hn : NoMiss V θ F c rd σ o.2)
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
     (hN : SampleNamed k (CoinTape.run (V.game θ F c) σ o.2).sent label after)
-    (hord : OrderHeld (CoinTape.run (V.game θ F c) σ o.2).sent)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log) :
     ReachesOff V θ F c A rd σ D M (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1))
@@ -427,8 +426,8 @@ theorem ReachesOff.counts {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray
   subst hrd hD hM
   obtain ⟨ω, pts, hL0, hr⟩ := h
   have hθ := (play_ends V θ F c σ o.2).1
-  have hfirst := linkFirst_verdict hA hθ hv hl hord
-  have hP := freshBefore_verdict hA hθ hv hl hord hN
+  have hfirst := linkFirst_verdict hA hθ hv hl
+  have hP := freshBefore_verdict hA hθ hv hl hN
   have h0r := A.rounds_pos
   obtain ⟨text₀, proofs₀, spec₀, sts₀, hrec₀, -, hs₀, spec', sts', hs', -, hver⟩ :=
     accepts_sent hA hθ hv (filesOn_play hA hDg hv)
@@ -512,8 +511,6 @@ theorem countsReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       SampledDigest k (CoinTape.run (V.game θ F c) σ x).sent after →
         SampleNamed k (CoinTape.run (V.game θ F c) σ x).sent label after)
-    (hord : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
-      OrderHeld (CoinTape.run (V.game θ F c) σ x).sent)
     (hO : ∀ x : CoinTape (V.game θ F c) σ, V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ x) →
       Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ x) →
       ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ x).sent = some text →
@@ -521,7 +518,7 @@ theorem countsReach_layout {V : Vocab d α} {θ : ByteArray} {F : Array ByteArra
     CountsReach fieldEnc V θ F c k (fun o => Binding.Logged Binding.readsV2 o ∧ SampledDigest k o.sent after) A rd σ
       D M :=
   fun _ h ⟨hv, hn, hl, hd⟩ => h.counts hA hDg reg record recordDigest hrd hD hm hsrc hM hv hn hl
-    (hN _ hv hl hd) (hord _ hv) (hO _ hv hl)
+    (hN _ hv hl hd) (hO _ hv hl)
 
 /-- **`CountsReach` at the deployment**: `countsReach_layout` at `movesReachAt`'s readings, decoders, family, digest
 and coins, its premises on the sample closed as `movesReachAt` closes them. -/
@@ -542,8 +539,7 @@ theorem countsReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ :
         (afterAt V k θ F c σ) (srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A)) :=
   countsReach_layout (label := labelAt θ) (after := afterAt V k θ F c σ)
     (κ := srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A) hA hDg reg (record c) (recordDigest c)
-    rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA)
-    (fun x hv => orderHeld_verdict hA (play_ends V θ F c σ x).1 hv) (hO c σ)
+    rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA) (hO c σ)
 
 /-- **The coupling at the deployment, off the empty classes at their counts**: `couplingTarget_assembled_at` at the
 deployed device's history and `movesReachAt`'s readings, decoders, family, digest and coins, with its `hM` by

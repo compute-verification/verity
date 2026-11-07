@@ -50,9 +50,7 @@ coins `srcCoinsAt MAX_COINS`. It holds wherever:
 * `A` is the session v2 sets up (`hA`), v2's parameters name the vocabulary's digests (`hDg`) and the session reads
   `MAX_COINS` frames' bytes (`hL`), as `couplingTarget_assembled_src` takes them;
 * the device's log opens only the record's rounds at every accepted play whose log v2 read is the device's (`hO`,
-  `OpenedRecorded`).
-
-v2's order refusal passes at every accepted play (`OrderHeld`) by `orderHeld_verdict`. -/
+  `OpenedRecorded`). -/
 theorem movesReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : ByteArray} {F : Array ByteArray}
     {A : Live} (reg : Option Claims.Msg → A.Reg) (record : ByteArray → Exchange → Option Claims.Msg)
     (recordDigest : ByteArray → Claims.Msg) (hA : SetsUp V θ F A) (hDg : DigestsAt V θ)
@@ -70,8 +68,7 @@ theorem movesReachAt {V : Vocab d α} {k : Verity.Registration.Composite} {θ : 
       (linkEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) (roundEmpty fieldEnc (finish (V.signer θ) θ F c σ.1)) :=
   movesReach_layout (label := labelAt θ) (after := afterAt V k θ F c σ)
     (κ := srcCoinsAt _root_.SampledProofs.Challenger.MAX_COINS A) hA hDg reg (record c) (recordDigest c)
-    rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA)
-    (fun x hv => orderHeld_verdict hA (play_ends V θ F c σ x).1 hv) (hO c σ)
+    rfl rfl le_rfl (bytesOf_srcCoinsAt hL) rfl (sampleNamed_layout hA) (hO c σ)
 
 /-- **The coupling at the deployment**: `couplingTarget_assembled_src` at the deployed device's history
 (`Device.dev`) and `movesReachAt`'s readings, decoders, family, digest and coins, with its `hM` by `movesReachAt`.
