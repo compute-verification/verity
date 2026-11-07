@@ -43,6 +43,18 @@ plain CUDA graph the pass is captured with the op, and what the wrappers decide 
 `PYTHONPATH` loads it. `VERITY_DSA_TOPK_LOG=DIR` keeps each process's counters in `DIR/dsa_topk.PID.json`: calls and
 launches per op, and the rows rewritten, those with a tie across the k-th key, and those bisected.
 
+## Using it
+
+Any vLLM command at the integration's pin (a server, a replay, an in-process engine), from the pin's venv, with the
+variables in the environment its engine processes inherit (`VLLM_PLUGINS` unset or naming `verity_dsa_topk`):
+
+~~~text
+python benchmarks/dsa_topk/dsa_topk.py site DIR
+PYTHONPATH=DIR${PYTHONPATH:+:$PYTHONPATH} VERITY_DSA_TOPK=canonical [VERITY_DSA_TOPK_LOG=LOGDIR] COMMAND
+~~~
+
+`rows_long` above zero in a process's counters shows the plugin rewrote long rows there.
+
 ## Measuring
 
 On a GPU node with the pin's venv (`integrations/vllm/verity_vllm/ops/pod_bootstrap.sh`'s `venv312`):
@@ -59,6 +71,8 @@ outputs unpatched and canonical across processes and repetitions, whether the ca
 (also from a garbage fast selection), whether the unpatched one selects the reference's set up to keys tied at the
 k-th, and whether rows of at most `k` keys are unchanged. `stress.py time` writes `time.json`: the device time a call
 (CUDA events, queued behind a sleep) and the host time, unpatched and canonical, per parameter variant (`--variants`).
+`stress.py plugin`, run from a site directory under `VERITY_DSA_TOPK=canonical`, loads the plugin as vLLM does and calls
+each case through the indexer's own entry points (`plugin.json`).
 
 `replay.sh` replays a served replay-ladder window with the plugin in every engine process (its header has the command).
 The tests (`tests/`) hold the definition, the torch reference, the wrappers' dispatch on stand-in ops, and the kernels in
