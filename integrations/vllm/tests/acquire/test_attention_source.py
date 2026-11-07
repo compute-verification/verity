@@ -404,12 +404,12 @@ def run_row(step: int, layer: int, pos: int, topk: int) -> dict[str, Any]:
 
 
 def test_the_run_values_the_manifest_requires_are_the_layers_top_k_rows_at_their_positions():
-    """At the decode (position 3), the mixed step's last row (position 7, its decode row through MQA) and the sparse prefill's last
-    row (position 10), of two indexer layers: each field is committed at its step's end as the Program's `run` field holds the
-    order its layer wrote into the shared buffer at that row (the stand-in writes `(j + layer) % (P + 1)`, a valid order of the first
-    `topk` slots), and nothing else is."""
+    """At the decode (position 3), the mixed step's decode row (position 4, its one row through MQA: its prefill rows go through
+    dense MHA, which serves rows of at most INDEX_TOPK keys) and the sparse prefill's last row (position 10), of two indexer layers:
+    each field is committed at its step's end as the Program's `run` field holds the order its layer wrote into the shared buffer at
+    that row (the stand-in writes `(j + layer) % (P + 1)`, a valid order of the first `topk` slots), and nothing else is."""
     keep = sorted(INDEXER)[:2]
-    want = [(1, keep[0], 3, 2), (2, keep[1], 7, 3), (3, keep[0], 10, 4), (3, keep[1], 10, 4)]
+    want = [(1, keep[0], 3, 2), (2, keep[1], 4, 3), (3, keep[0], 10, 4), (3, keep[1], 10, 4)]
     r = AttnRun(True, tuple(run_row(*w) for w in want))
     try:
         for k, (md, _routes, _phase) in enumerate(STEPS):
@@ -423,7 +423,8 @@ def test_the_run_values_the_manifest_requires_are_the_layers_top_k_rows_at_their
     assert r.att.targets_at(3) == {D.run_field(keep[0], 10): 1, D.run_field(keep[1], 10): 1} and r.att.targets_at(0) == {}
     for step, layer, pos, topk in want:
         got = [t for n, t in r.rec[step] if n == D.run_field(layer, pos)]
-        order = r.seen[step][layer]["topk"][-1, :topk].tolist()
+        seen = r.seen[step][layer]
+        order = seen["topk"][seen["positions"].tolist().index(pos), :topk].tolist()
         layout = {"fields": [{"name": D.run_field(layer, pos), "offset": 0, "leaves": waksman_switches(pos + 1, topk)}]}
         assert len(got) == 1 and got[0].dtype == torch.uint8 and got[0].tolist() == D.run_bits(layout, {(layer, pos): order}, topk)
     assert sum(n in r.att.own_names for k in r.rec for n in r.names(k)) == len(want)
