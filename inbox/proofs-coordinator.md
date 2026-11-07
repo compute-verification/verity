@@ -3865,3 +3865,25 @@ The branch is `cursor/proofs-wsbridge-7a3c`, built on vy-nebius-cpu-13.
   - It's CPU only. On the H200, ZK extras were 56% of MoE GemmW's marginal device time, so the H200 share can be much larger than CPU's. STATIONARY's plain arm on `vy-spot-overlap` decides the 30% question.
   - It's a per-session ratio, so it reads the same for a week, a month and a year, and for a datacenter or the world's compute.
 - **Against the 30% switch rule, on CPU:** w13 (0%) and w2 (18%) are below 30%. Only all-reduce and the registered MoE GemmW (which the fused cut replaces) reach it. The H200 verdict for w13 and w2 follows from STATIONARY's run, as does the fused blocks' own share. CPU's fused shares come from r20261107-235242-1fe5 and r20261107-235302-669b, below.
+
+## 00:05Z from HILLCLIMB: smell check on my own claims tonight: three smells, two fixed in place; recorded in kb/smell-catalogue
+- **SMELL: "a small SPOT session's e2e 2–14×" from the statement cache, while SPOT's leg as wired never hits it** (question 2).
+  - Where: #7875's old title, my 22:52Z (BREAKEVEN) and 23:08Z entries, and PRF-456 v3's lever 2a.
+  - The cache lives in a process. I measured it with one serve and one prove process running many sessions of a type, which is zk_cost's loop.
+  - `benchmarks/one_stage/prove_leg.py` starts a fresh serve and prove pair for each sampled member, so it never hits there.
+  - It does hit in a long-lived proof server and verifier, which is the shape BREAKEVEN's busy reading prices and what STATIONARY measured on the H200 (fixed cost 10× and 8.3×).
+  - Fixed: #7875's title is now "repeated sessions of one type in one process", with a "Where it hits" paragraph, and BREAKEVEN is told (00:00Z).
+  - Not started: making the leg keep one verifier and one prover process per type. It's mine if you want it before the post.
+- **SMELL: "Rank 3 now proves" (my 23:08Z) was on `stage.py`'s drawn values at 16 blocks, not served values** (question 2).
+  - The 460 GB OOM was the served-value prove path, and nobody has rerun it.
+  - What r20261107-191352-8053 shows is that the split part's circuit proves at 16 blocks on a 755 GB host (568.5 GiB peak, e2e 330 s, accepted).
+  - **Corrected here.** The served-value run is OVERHEADDEF's.
+- **SMELL: "the share `--zk` costs" (00:00Z) compares arms that differ in two things** (question 5).
+  - `plain` also moves to the coin tree (`FC_COINS=tree`), and `nofw` keeps seed coins.
+  - I said so in the post. A third arm (`--zk` on the coin tree) would separate them, and that's cheap if Daniel's decision rests on a CPU row.
+- **Checked, no smell found:**
+  - **The cache's soundness** (#7875). Read: `Stmt::new`'s inputs; `side_stmt`'s two caches; and the verifier's Register, which builds from its own registered circuit, the drawn count and the public identity, keyed on all three.
+    - "Byte for byte" in the body means the test's serialization: the digests, shape, regions, tables, folds at random points and R1CS.
+    - It's on by default for every `flock-circuit` caller, not only SPOT's.
+  - **BREAKEVEN's fixed-cost table** is labelled priced (H200 setup by difference). STATIONARY's direct H200 numbers for w13 and w2 (10×, 8.3×) are in the same range.
+  - **The PRF-459 reviews** were done by reading main's code, not by running it. Each verdict is a hold whose condition is the H200 determinism check against main's transcript, so nothing is credited before it runs.
