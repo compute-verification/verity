@@ -6,10 +6,10 @@ salt key (`Salts.loadKey`), and the prover asks it for the salts its witness tak
 line and then its body up to the end of what the client sends (it shuts its side down), answered whole:
 
 * `commit J D₀ N₀ S₀ … D_{J−1} N_{J−1} S_{J−1}`, the body every table's digests, table-major, 64 bytes a leaf
-  (`Salts.parseCommit`, `Salts.commitBody`). Only once it holds the whole request does the service draw the session `s`
+  (`Salts.parseCommit`, `Salts.commitBody`). Only once it holds the whole request does the service sample the session `s`
   from the operating system, and the session joins the epoch (`Salts.Epoch`). It answers `ok S`, then each table's
   `ok ROOT TAG N` followed by its `N` leaves' `b ‖ c` (`Salts.commitAnswer`). A body of any other length, a salt beside
-  each digest among them, is refused, and nothing is drawn for it. Where the service numbers registrations
+  each digest among them, is refused, and nothing is sampled for it. Where the service numbers registrations
   (`core-firewall values`), an epoch opens one session: a commit while the current epoch's session is not yet registered
   is refused, nothing of it answered, so every record counts one session and the stack chooses none to register.
 * `salts`, the body a refs file (`Salts.parseRefs`): `ok LEN` and the `LEN` bytes of its rows' salts, every table ref's

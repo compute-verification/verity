@@ -26,7 +26,7 @@ hypothesis carries what the statement doesn't say yet: that the acceptance is th
 
 Soundness rests on five. Three are `Prop`s in `Assumptions.lean`, taken as hypotheses: SHA-512's
 collision resistance in two forms, and the randomness of the challenger's coins the unit sample reads. The fourth, A6,
-is the coin server's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
+is the challenger's live-coin part's randomness for the round coins, which the model embodies (A6, below). The fifth, `live-verifier`, is
 the record's custody (nothing in the record authenticates its writer): `--zk`'s soundness (`zk_session_sound_custody`) takes it as
 `Assumptions.Zk.RecordCustodyZK`, in `Assumptions/Zk.lean`. The table's last row is zero
 knowledge's, not soundness's: a model claim about the honest prover. The development declares no
@@ -38,8 +38,8 @@ knowledge's, not soundness's: a model claim about the honest prover. The develop
 | `Assumptions.SHA512CRExpected` (A2) | `ecr/sha-512` | `T/2^256`, for `T` evaluations in expectation | the link finders (`LinkCR`, `hCR`) |
 | `Assumptions.UniformRandomBytes` (A3); per test, `UniformRandomBytesTest` | `uniform/io-getrandombytes` | every event has its probability for uniform bytes, the CSPRNG idealized; per test, one event, within `η` | the unit sample (`ht`; `hA3` in the headline); per test, zero knowledge's salts (`Discharge.ZkView.OsSalts`, `recursiveZK_os_gap`) and the ZK server's tape (`Claims.ZKServer.OsTape`) |
 | none: the model's coins (A6) | `uniform/flock-coin-server` | each round's coins uniform, flipped after the prover's message; under `--zk` or `--coins tree`, committed at `Hello` and opened after it, at a cost of `N·2^-256` (A6, tree coins) | the round coins |
-| `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's coin server wrote for the live session (`RecordsLiveZK`), and its sample file the one `flock-verify draw` printed for the verifier's own sample (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each sample of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
-| `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZK`, with `DrawOk` (`DrawOkZK`, and forms) at each sample of the law | `SoundExec*`'s and `SoundZ*`'s `hCust` |
+| `Assumptions.Zk.RecordCustodyZK` | `live-verifier` | none: the record `verify --zk` reads is the one the verifier's challenger wrote for the live session (`RecordsLiveZK`), and its sample file the one `flock-verify draw` printed for the verifier's own sample (`DrawFileZK`) | `--zk`'s `hRec` and `hDraw` (`zk_session_sound_custody`, `hCust`; `hDraw` at each sample of `Law.execOS` is `drawOkZK_of_exec`); at `J` tables `Assumptions.Zk.RecordCustodyZKJ`, the same at `RecordsLiveZKJ` and the subset sampling design (`zk_session_soundJ_custody`; `hDraw` is `drawOkZKJ_of_file`), and under hidden outputs (`zk_session_soundHJ_custody`; `hDraw` is `drawOkZKHJ_of_file`) |
+| `Assumptions.RecordCustodyExec` (`…ExecH`); `Zk.RecordCustodyZKLaw` (`…ZKHLaw`, `…ZKJLaw`, `…ZKHJLaw`) | `live-verifier` | none: as `RecordCustodyZK`, with `DrawOk` (`DrawOkZK`, and forms) at each sample of the sampling design | `SoundExec*`'s and `SoundZ*`'s `hCust` |
 | none: the model's Ligerito prover (`LigProver`) | none: a model claim, as A6's | the honest Ligerito prover's level-≥ 1 bytes are a function of the table, the statement, the public coins, the restart and fresh salts; nothing proves it (`LigProver`'s docstring, `Discharge/Composed/Inner.lean`) | zero knowledge's view, not soundness: `Composed.zk_session_view`, `zk_session_composed` and `ZkEveryCoin.zk_session_view_all` hold for every such prover `P`, as do `ZkHidden.zk_session_viewH`, `zk_session_viewHJ` and `zk_session_composedHJ` |
 
 Both collision-resistance `Prop`s are **per finder, and per prover**. Some finder outputs a collision after no
@@ -119,16 +119,16 @@ commitments' salts and the ZK server's tape.
   salts included.
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
-**A6. The coin server's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
+**A6. The challenger's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
 coins.
 
 - **Statement.** Each round's coins are uniform field elements, independent of every earlier round's and sampled after the
   prover's message of that round. The model's session flips its coins exactly so (the games' coin nodes), so A6 is what
   makes the model's coins the run's.
-- **Why it is not a `Prop`.** The session game flips its own coins: no theorem reads a coin source it could be a
+- **Why it is not a `Prop`.** The session game flips its own coins: no theorem reads a byte source for the coins it could be a
   hypothesis about, as A3 is about the unit sample's byte source. Stating it as a `Prop` would need the session played on
   a byte source, which the model doesn't have.
-- **What it assumes of the coin server.** The Rust coin server (`live/src/lib.rs`, `Server::coins`) reads each round's
+- **What it assumes of the challenger.** The Rust challenger (`live/src/lib.rs`, `Server::coins`) reads each round's
   coins from `/dev/urandom` when it has no seed. A3 is about the byte sources the theorems read (the unit sample's, the
   salts' and the ZK server's tape), so it doesn't cover these bytes, which the model's coin nodes sample.
 - **Seed coins are outside it.** By default the prover's non-ZK session derives every coin from one OS seed (`cfg.coin_seed`;
@@ -137,14 +137,14 @@ coins.
   check has passed (`ProvedScope.SEED_COINS`).
 - **Tree coins (`--zk`, `--coins tree`).** Under either, the coins are committed, not flipped round by round
   (`coin-tree/hm96-sha512/v2`, `live/src/coin_tree.rs`; the live `PROTOCOL.md` §9). A6 for these sessions is the following.
-  - *The coins.* At `Hello`, after the prover's nonce and before its first message (`Commit`), the coin server reads
+  - *The coins.* At `Hello`, after the prover's nonce and before its first message (`Commit`), the challenger reads
     from `/dev/urandom` a fresh hm96 key (256 bytes, bit 2047 cleared: hm96 §2's key space), then a block of coins and a 192-byte salt for each stream and round
     (`CoinTree::draw_with`, at `Hello` in `live/src/lib.rs`), commits to every block as keyed hm96 leaves under one
     SHA-512 tree, and answers `Hello` with the root and the key. It opens round `r`'s leaves only in
     its answer to the prover's round-`r` message. That ordering takes the place of "sampled after the prover's message"
     in the statement above. As with A6 itself, the record can't establish it: the Lean verifier checks each opening against
-    the root, not when it was sampled or opened. On `sampled-proofs-one-stage-zk` the auditor's challenger is the coin
-    server: it samples each session's tree and opens each round after its message digest, logging both under its signed
+    the root, not when it was sampled or opened. On `sampled-proofs-one-stage-zk` the auditor's challenger
+    samples each session's tree and opens each round after its message digest, logging both under its signed
     close, and the audit holds each session's record to those lines, one tree per session
     (`verity/core/service/sampled_proofs/SampledProofs/ChallengerTrees.lean`). There the ordering rests on `trusted-host`.
   - *Why the model's coins are still the run's.* Given the key, each leaf has its own salt, so opening one reveals
@@ -181,12 +181,12 @@ and two verifications; a one-run finder's `qS` one run and one verification; `qT
 | `ε_ks`, the knowledge term | `SHA512CRStrict` | `ksBoundAccB_le_strict`, `ksAvgBE_le_strict` (`TableCR`, `hKS`) | `ksAvgStrict`: per table `ksStrict = tableError + Σ_{r<2} Σ_ℓ √(2^{log N_ℓ}·Q_ℓ·qF²/2^513) + qS²/2^513 + √(k·qF²/2^513)`, over `1 − N₀/(ek)`, its largest after each sample averaged over the sample |
 | `δ_tree`, the serving roots' binding | `SHA512CRStrict` | `tree_le_strict`, `TreeRewind.le` (`tr`, `hT`) | `TreeRewind.bound qT = √(N_s·Q_s·qT²/2^513)` (`DESIGN.md` §1) |
 | `δ_reg`, the registered reads' path binding | `SHA512CRStrict` | `Reads.prob_off_le` (`hR`) | `qR²/2^513` |
-| `δ_link`, the link term | `SHA512CRExpected` | `flock_batched_linkSoundE` (`LinkCR`, `hCR`) | `linkBoundE`, finite at the provers whose link finders satisfy it |
+| `δ_link`, the binding error | `SHA512CRExpected` | `flock_batched_linkSoundE` (`LinkCR`, `hCR`) | `linkBoundE`, finite at the provers whose link finders satisfy it |
 | `δ_link`, under `cr/sha-512` alone | `SHA512CRStrict` | `CROnly.linkCR_of_strict` (`LinkCRStrict`, `hCRs`: the same finders stopped at `q` evaluations) | `linkBoundE` at per-run cost `strictRunCost t' q = 2^256·(t'/q + q²/2^513)`; at `q³ = t'·2^512` the hash part is `3(1 + k)·t'^{2/3}/2^{512/3}` (`CROnly.linkBoundE_at_cube`) |
 
 **`cr/sha-512` alone** (`CROnly/`). Every e2e theorem of the non-ZK session and the headline is restated
 with `hCRs` in place of `hCR` (`CROnly.flock_e2e_*`, `CROnly.uprog_e2e_*`, `CROnly.prog_e2e_count`, `_drawn`,
-`CROnly.flock_headline`), so they rest on `SHA512CRStrict` and no `SHA512CRExpected`. The price is the link term's: for
+`CROnly.flock_headline`), so they rest on `SHA512CRStrict` and no `SHA512CRExpected`. The price is the binding error's: for
 audit B (`Q_s ≈ 2^24`, `ρ = 1/2`) `δ_link` is about `t^{2/3}·2^-123.5` against the record's `t·2^-209.4`, so `2^-70.2`
 instead of `2^-129.4` at `t = 2^80`. `expected_of_strict` (truncation at `q` and Markov) reads the stopped finder's
 bound as linear in its expected cost, which loses `(2(1 + k))^{1/3}` against the best budget for the finder's own cost.
@@ -233,7 +233,7 @@ intended to prove, or a numeric condition on the bound's parameters.
 | `hKS` (`StrictCR.TableCR`), `hT` (`StrictCR.Finder.CR`) | hardness | `SHA512CRStrict` of SHA-512 (`cr/sha-512`), for the knowledge finders of each table after each sample at budgets `qF`, `qS`, and for `tr`'s finder at budget `qT` |
 | `hCR` (`LinkCR`) | hardness | `SHA512CRExpected` of SHA-512 (`ecr/sha-512`), for the prover's link finders |
 | `hA3` (`UniformRandomBytes`) | platform | A3 (`uniform/io-getrandombytes`), for the unit sample's byte source |
-| none: the round coins | platform | A6 (`uniform/flock-coin-server`), the coin server's OS randomness: each round's coins uniform, flipped after the prover's message (under `--zk` or `--coins tree`: committed at `Hello` and opened after it, plus `N·2^-256`; A6, tree coins). The model embodies it (next row), so no hypothesis states it |
+| none: the round coins | platform | A6 (`uniform/flock-coin-server`), the challenger's OS randomness: each round's coins uniform, flipped after the prover's message (under `--zk` or `--coins tree`: committed at `Hello` and opened after it, plus `N·2^-256`; A6, tree coins). The model embodies it (next row), so no hypothesis states it |
 | none: the session's game | model | the protocol as `batchedSession` models it, against any prover `Strategy`, with the round coins A6 gives |
 | `pp.placed`, `pp.aliased` | intended to prove | W6 (the table's statement holds the program's rows) and `Layout.Aliased` |
 | `hHm`; `lay`, `rs` | intended to prove | `HmRowComputes`, and the layout's facts (in place of `vb`) |
@@ -296,7 +296,7 @@ refused ones included, with the coins uniform: at a refused coin the prover stop
 prefix on the dummy witness, within `2·|LeafPos|·2^-193` both ways (`ZK.Table.table_abort_hm96`: Lemma A at every coin
 vector and T1 on every pre-final leaf), and elsewhere Lemma B.
 Which verifiers: at each coin vector `zk_session_view` is honest-verifier zero knowledge for those fixed coins. It covers
-a verifier that chooses its coins only because the coin server commits every coin at `Hello`, before the prover's first
+a verifier that chooses its coins only because the challenger commits every coin at `Hello`, before the prover's first
 message (`verity/ml/flock/live/src/coin_tree.rs`), and the prover checks each opening against that commitment before it
 uses the coin; the binding is collision resistance of `x ↦ SHA-512(ν ‖ x)` (`keyed-cr`, watched in `lean-audit.json`).
 No statement models that commitment yet, so this order of messages and the binding assumption are what the

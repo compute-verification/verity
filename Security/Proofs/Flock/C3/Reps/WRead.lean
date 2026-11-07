@@ -127,7 +127,7 @@ theorem el_wRead (Lb : (j : Fin S) → (Vs j).Bits) (ρ : Fin 2) {i : ℕ} (hi :
   rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hs, Option.getD_some,
     ← getElem!_pos (wRead Vs sh sess un Lb ρ) i hs, getElem!_wRead Lb ρ hi, ite_eq_left hex]
 
-/-- **A statement V* is drawn over has `upv > 0`**, given any outer proof of it (`upv_pos`). -/
+/-- **A statement V* is sampled over has `upv > 0`**, given any outer proof of it (`upv_pos`). -/
 theorem upv_of_outer {Q : VStmt} {Reg' : Type} (zo : Q.Outer Reg') : 0 < Q.c.upv :=
   FlockVBridge.Family.upv_pos zo.hc Q.hscope
 
