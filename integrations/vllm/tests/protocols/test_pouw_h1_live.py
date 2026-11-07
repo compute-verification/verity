@@ -8,19 +8,18 @@ import json
 
 import numpy as np
 import pytest
+from verity.core.protocols.pouw import core_check as CC
+from verity.ml.protocols.pouw.circuit import live as L
+from verity.core.protocols.pouw import live_reads as LR
+from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity_vllm.protocols import pouw
+from verity_vllm.protocols.pouw import h1 as PH
+from verity_vllm.protocols.pouw.h1 import live as LV
+from verity_vllm.protocols.pouw.h1 import requests as RQ
+from verity_vllm.protocols.pouw.h1 import served as SV
+from verity_vllm.protocols.pouw.h1.static import graph_pad
 
 torch = pytest.importorskip("torch")
-
-from verity.core.protocols.pouw import core_check as CC  # noqa: E402
-from verity.ml.protocols.pouw.circuit import live as L  # noqa: E402
-from verity.core.protocols.pouw import live_reads as LR  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
-from verity_vllm.protocols import pouw  # noqa: E402
-from verity_vllm.protocols.pouw import h1 as PH  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import live as LV  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import requests as RQ  # noqa: E402
-from verity_vllm.protocols.pouw.h1 import served as SV  # noqa: E402
-from verity_vllm.protocols.pouw.h1.static import graph_pad  # noqa: E402
 
 from tests.protocols.test_credit_gate import (  # noqa: E402,F401
     FILES, LAYOUT, PHC, ROWS, ZyArm, _credit, _descriptor, _linear_is_the_stand_in, _period_weights, _record, _serve,

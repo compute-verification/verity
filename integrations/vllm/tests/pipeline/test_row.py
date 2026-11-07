@@ -25,7 +25,6 @@ import gzip
 import json
 import os
 import select
-import shutil
 import signal
 import subprocess
 import sys
@@ -46,15 +45,6 @@ from verity_vllm.pipeline.row_stages import SingleRow
 TREE = Path(__file__).resolve().parents[2]
 WL = TREE / "workloads"
 ROW = "llama32-1b__bf16__l40s__tp1__b1__i256__o32__mixed__greedy__bi-eager"
-
-
-@pytest.fixture
-def gnu_timeout() -> None:
-    """Skips where the machine has no GNU timeout. Asked by the tests that start one, not at import, so a file that imports this
-    module's helpers starts no program the suite's read guard can't trace."""
-    t = shutil.which("timeout")
-    if t is None or b"GNU" not in subprocess.run([t, "--version"], capture_output=True).stdout:
-        pytest.skip("GNU timeout (coreutils) required -- the pods have it, macOS does not")
 
 
 def _opts(tmp: Path, *argv: str, environ: dict[str, str] | None = None, row: str = ROW):

@@ -26,14 +26,14 @@ its file.  A file with more than its entry allows, or with one and no entry, fai
 (AGENTS.md, ARCHITECTURE.md, GLOSSARY.md and the skills) hold none and may have no entry.  An entry that allows more than
 is found doesn't fail: the list can run ahead of a tree, as each area cleans its own, and ``--prune`` deletes and lowers
 what this tree no longer finds.  A file that moves takes its entry with it, in the same change (``--move``).  The ratchet
-gate (``integrations/vllm/tools/ratchet_gate.py``) refuses a change that adds a site to a file it touches, or that grows
+gate (``integrations/vllm/tools/ratchet_gate.py``) fails a change that adds a site to a file it touches, or that grows
 this list or leaves a renamed file's entry behind, and judges a change to this module by running it as the change's base
 has it on the change's tree.  So it imports only the standard library, ``test_no_new_lane_text`` takes no fixture, and the
 gate reads ``LEFT_OUT``, ``FIX``, ``holds``, ``sites`` and ``parse`` from the base's copy of this module.
 
     python3 tests/lint/test_repo_lane_text.py --move OLD NEW   # a file (or directory) moved: its entry follows it
     python3 tests/lint/test_repo_lane_text.py --prune          # delete and lower what this tree no longer finds
-    python3 tests/lint/test_repo_lane_text.py --record         # the list is what this tree finds (the gate holds a rise)
+    python3 tests/lint/test_repo_lane_text.py --record         # the list is what this tree finds (the ratchet gate flags a rise)
 """
 from __future__ import annotations
 

@@ -22,7 +22,7 @@ gates compute:
   information, which a block that uses it is handed.
 
 Bit `(g, i)` is numbered `i + W g` (`finProdFinEquiv`), so the bits a bit reads, of gates of smaller index, have smaller
-numbers. `wordBits d S` is the set of the real bits of the gates of `S`, a set of whole words.
+numbers.
 -/
 
 @[expose] public section
@@ -83,10 +83,5 @@ def Circuit.ofDecl (d : Verity.RegisteredCircuit) : Circuit where
   θ_input y hy := by
     obtain ⟨x, hx, rfl⟩ := mem_map.1 hy
     simp [(mem_filter.1 hx).2.1]
-
-open BitView in
-/-- **The bits of a set `S` of `d`'s gates** in its bit view: the real bits of the gates of `S`. -/
-def wordBits (d : Verity.RegisteredCircuit) (S : Finset (Fin d.D.N)) : Finset (Fin (Circuit.ofDecl d).N) :=
-  (bits d.D S).map (enc d.D).toEmbedding
 
 end Nci.Cover
