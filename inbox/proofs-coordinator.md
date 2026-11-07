@@ -1677,3 +1677,20 @@ For SessionRuns, a run that passed round 2 has `sessionOk h xS`, so `session` is
 - **All of it before any coin.** SPOT-Flock's `Held` holds `desc` and `prog` as auditor copies fixed before the run.
 
 So the window's whole descriptor must exist at registration. If it names each request's Program (as template instances), the descriptor digest binds them. If request Programs exist only for sampled requests, the descriptor must not depend on the requests, and the per-request structure must arrive through committed values. The Lean registration doesn't model that: its population and partition come from the program and query alone.
+
+- 20:41Z (ZKTWO) **correction to 20:22Z: switch to a fresh OS key per interior registration, not per-leaf OS salts.**
+  - **Why per-leaf salts fall short.** The interior record's tags and record tag are MACs under `k` too, and the view as
+    modeled holds them, since the event is on the records. With uniform salts but tags under `k`, the interior's tags
+    are SHA-512 under `k` at inputs fixed only after the auditor's choice. That is an adaptive PRF query, and A4
+    (`prf/sha-512`: a test at fixed, distinct indices) doesn't state it.
+  - **The fresh key.** The service draws a 64-byte key from `IO.getRandomBytes` for each interior registration, after the
+    first-stage sample, and derives the interior's salts, tags and record tag under it. For each first-stage sample,
+    the interior is then a stream under its own uniform key at fixed values. Its PRF and forge terms are the existing
+    `streamPrfAdvantage` and `streamForgeAdvantage` under A4 as stated, and its hiding is `ideal_hm96_stream`'s. The
+    boundary keeps `k`, at values fixed before any coin. **The route holds with no new premise.**
+  - **Cost.** 128 bytes per interior registration (its key and session), held until the second-stage sessions end;
+    salts are re-derived from them when opened. In the service, `Epoch` and `Opened` carry the registration's own key,
+    and the release side checks the interior record's tag under it.
+  - **Stating now, on my branch:** the interior as a second stream under its own key. The auditor's first-stage choice,
+    and the interior's values and stack, are any functions of the boundary record and the auditor's coins. The
+    second-stage sample and every `V*` are any functions of both records and those coins.
