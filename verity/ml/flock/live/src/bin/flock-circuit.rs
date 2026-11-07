@@ -21,7 +21,7 @@
 //! coin tree sampled and opened by the challenger (`flock_live::tree_from`), not sampled here.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     sync::PoisonError,
     panic::{AssertUnwindSafe, catch_unwind},
     sync::{Arc, Mutex},
@@ -485,8 +485,34 @@ fn table_names(tables: usize) -> Vec<String> {
 /// `count` equal consecutive parts, and table `j` proves part `j` as a subset sample of the population, under an identity that
 /// names the session's rules for several tables.
 fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
+    side_tables(Side::Fresh, st, inst, draw, count)
+}
+
+/// Whose drawn statements a session's tables reuse under `FC_STMT_CACHE`: each side keeps its own, never the other's.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Side { Fresh, Verifier, Prover }
+
+type StmtKey = (Side, [u8; 64], String, usize);
+static STMT_MEMO: Mutex<Option<HashMap<StmtKey, Arc<Stmt>>>> = Mutex::new(None);
+
+/// `Stmt::new(st.c, n, id)`, which reads only those: under `FC_STMT_CACHE`, built once per side, registered statement,
+/// identity and drawn count, and reused by every later session that draws as many units.
+fn side_stmt(side: Side, st: &Stmt, n: usize, id: Value) -> Result<Arc<Stmt>, String> {
+    if side == Side::Fresh || std::env::var_os("FC_STMT_CACHE").is_none() {
+        return Stmt::new(st.c.clone(), n, id).map(Arc::new);
+    }
+    let key = (side, st.digest, id.to_string(), n);
+    if let Some(s) = STMT_MEMO.lock().unwrap_or_else(PoisonError::into_inner).get_or_insert_with(HashMap::new).get(&key) {
+        return Ok(s.clone());
+    }
+    let s = Arc::new(Stmt::new(st.c.clone(), n, id)?);
+    STMT_MEMO.lock().unwrap_or_else(PoisonError::into_inner).get_or_insert_with(HashMap::new).insert(key, s.clone());
+    Ok(s)
+}
+
+fn side_tables(side: Side, st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
     if count <= 1 {
-        let (st, inst) = match draw { Some(d) => drawn(st, inst, d)?, None => (st.clone(), inst.clone()) };
+        let (st, inst) = match draw { Some(d) => side_drawn(side, st, inst, d)?, None => (st.clone(), inst.clone()) };
         if draw.is_some() && is_zk(&st) {
             zk_shape_ok(&st)?;
         }
@@ -516,11 +542,11 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
                                            one-table session's); a rank check per table; every table's level-0 root in one commit; every proof \
                                            after the last coin of every stream (the barrier)");
         }
-        let ds = Stmt::new(st.c.clone(), di.n, id)?;
+        let ds = side_stmt(side, st, di.n, id)?;
         if is_zk(&ds) {
             zk_shape_ok(&ds)?;
         }
-        Ok(Table { name, st: Arc::new(ds), inst: Arc::new(di) })
+        Ok(Table { name, st: ds, inst: Arc::new(di) })
     }).collect::<Result<Vec<_>, String>>()?;
     if list.iter().any(|t| t.st.m_pts != list[0].st.m_pts) {
         return Err("tables: the tables' link points have different lengths".into());
@@ -747,10 +773,14 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
 
 /// The sampled proof blocks' statement over a registered population (both sides derive it from the population file and the sample).
 fn drawn(st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
+    side_drawn(Side::Fresh, st, inst, draw)
+}
+
+fn side_drawn(side: Side, st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
     let di = inst.drawn(&st.c, draw)?;
     check_public(&st.c, &di)?;
-    let ds = Stmt::new(st.c.clone(), di.n, st.identity.clone())?;
-    Ok((Arc::new(ds), Arc::new(di)))
+    let ds = side_stmt(side, st, di.n, st.identity.clone())?;
+    Ok((ds, Arc::new(di)))
 }
 
 /// A shared transport used as a plain one (so it can be wrapped).
@@ -952,7 +982,7 @@ fn with_draw(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_li
     s.cfg.draw_law = Some((law, inst.n as u64));
     let (st, inst) = (st.clone(), inst.clone());
     s.with_draw(Box::new(move |draw: &Value| {
-        let tabs = session_tables(&st, &inst, Some(draw), count)?;
+        let tabs = side_tables(Side::Verifier, &st, &inst, Some(draw), count)?;
         Ok((config_of(&tabs), Box::new(CircuitVerifier::new(tabs)) as Box<dyn StatementVerifier>))
     }))
 }
@@ -3721,7 +3751,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             Some(s) if s.names() == names => Ok(s.clone()),
             _ => session_tables(st, inst, None, names.len()),
         },
-        Ok(Resp::Draw(d)) => session_tables(st, inst, Some(&serde_json::from_str(&d).unwrap_or(Value::Null)), names.len()),
+        Ok(Resp::Draw(d)) => side_tables(Side::Prover, st, inst, Some(&serde_json::from_str(&d).unwrap_or(Value::Null)), names.len()),
         other => return Err((json!({"accepted": false, "why": format!("register: {other:?}"), "prover_stopped": "register refused"}), Vec::new())),
     };
     let tabs = match tabs {
