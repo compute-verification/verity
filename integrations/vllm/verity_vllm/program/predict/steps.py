@@ -28,9 +28,10 @@
   kept output. This rests on the target computing a position's row bit for bit alike however its prefill is chunked or
   recomputed; where it doesn't, the committed row isn't the Program's and the proof fails visibly.
 - Off batch invariance the compiler serves class G alone (`launch_class`, `engine.profiles.engine_classes.CLASS_G`: GLM-5.3 at
-  TP8, eager, on H200, under a registration of at most `CLASS_G_LIMITS`: steps of at most 8,192 tokens and 256 sequences,
-  positions at most 32,768, prefill chunks of at most 256 rows, the prefix cache stated on or off), whose token-count-dependent
-  kernel choices read the whole launch. There a request's Program is its rows in the window alone: the request wrapper after a
+  TP8, eager or compiled at breakable CUDA graphs, on H200, under a registration of at most `CLASS_G_LIMITS`: steps of at most
+  8,192 tokens and 256 sequences, positions at most 32,768, prefill chunks of at most 256 rows, the prefix cache stated on or
+  off), whose token-count-dependent kernel choices read the whole launch, padded to its capture size where it runs in a captured
+  graph. There a request's Program is its rows in the window alone: the request wrapper after a
   history of C positions, at its launch context (`RequestUnit.launch`, `common._Launch`): per step of its Program, each of its
   prefill chunks and then its decodes, every row that step's forward ran as (n, start), in the advice's batch order, a refused
   request's rows and discarded rows included, since they ran. A prefill the engine ran over several steps is the chunked request
@@ -104,7 +105,7 @@ from typing import Any
 
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
-from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_LIMITS
+from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP
 from verity_vllm.program.prune import dead_units
@@ -426,12 +427,18 @@ def producers_of(i: int, s: int, row: I1.Row, bs: int) -> tuple[int, ...]:
 
 def launch_class(phi: Phi) -> None:
     """Refuse a registration without batch invariance outside class G (`CLASS_G`), naming each fact of it outside: the model,
-    world, execution and device, and the engine limits, each stated and within `CLASS_G_LIMITS`, and the prefix cache stated on or
+    world and device, an execution the class doesn't serve (`CLASS_G_EXECUTIONS`) or a target compilation other than the one it
+    serves that execution at, and the engine limits, each stated and within `CLASS_G_LIMITS`, and the prefix cache stated on or
     off (vLLM's default is on)."""
     eng = dict(phi.engine or {})
     facts = [f"{k} {v!r}, not {CLASS_G[k]!r}" for k, v in (("model_type", str(phi.hf_config.get("model_type", "")).lower()),
-                                                        ("world", int((phi.tp or {}).get("world", 1))), ("execution", phi.execution),
+                                                        ("world", int((phi.tp or {}).get("world", 1))),
                                                         ("device_name", (phi.target or {}).get("device_name"))) if v != CLASS_G[k]]
+    if phi.execution not in CLASS_G_EXECUTIONS:
+        facts.append(f"execution {phi.execution!r}, not one of {', '.join(map(repr, CLASS_G_EXECUTIONS))}")
+    elif (phi.target or {}).get("compilation") != CLASS_G_EXECUTIONS[phi.execution]:
+        facts.append(f"target compilation {(phi.target or {}).get('compilation')!r} at execution {phi.execution!r}, not "
+                     f"{CLASS_G_EXECUTIONS[phi.execution]!r}")
     facts += [f"engine arg {k} {eng.get(k)!r}, not a stated value of at most {cap}" for k, cap in CLASS_G_LIMITS.items()
               if type(eng.get(k)) is not int or not 0 < eng[k] <= cap]
     if type(eng.get("enable_prefix_caching")) is not bool:

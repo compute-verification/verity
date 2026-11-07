@@ -233,17 +233,23 @@ class _Peers:
 class _Launch:
     """The batch a request's calls run in (`pipeline.launch_context.request_launch_batch`, parsed as `targets.parse_launch_context`
     parses the Build's `--launch-context`): per request step, every sequence the engine step schedules as (rows, start).  `step` is
-    the request step being written; without a batch a call is its own launch."""
+    the request step being written; without a batch a call is its own launch.  `capture_sizes`: the breakable CUDA graphs'
+    (`graph_capture_sizes`), whose captured kernels run at the step's padded tokens."""
 
-    def __init__(self, batch: list | None = None) -> None:
+    def __init__(self, batch: list | None = None, capture_sizes: tuple[int, ...] = ()) -> None:
         from verity_vllm.program.frontend import targets as TG
         self.ctx, self.step = TG.parse_launch_context({"batch": batch}) if batch else None, 0
+        self.capture_sizes = tuple(capture_sizes)
+
+    def with_batch(self, batch: list) -> _Launch:
+        """This launch's graphs over the request's batch."""
+        return _Launch(batch, self.capture_sizes)
 
     def tokens(self, own: int, sampled: bool = False) -> int:
         """The rows of the launch `own` rows run in (`targets.launch_tokens`); after the logits selection (`sampled`), its sequences."""
         from verity_vllm.program.frontend import targets as TG
         try:
-            return TG.launch_tokens(own, self.step, self.ctx, sampled=sampled)
+            return TG.launch_tokens(own, self.step, self.ctx, sampled=sampled, capture_sizes=self.capture_sizes)
         except ValueError as e:
             raise Unexpressible(f"request step {self.step}: {e}") from None
 
@@ -282,13 +288,18 @@ def open_launch(model, model_class: str, phi, wrapper: str, LP: int | None, T: i
         if not getattr(model, "reads_launch", False):
             raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance), whose kernel "
                                 f"choices the {model_class} decoder reads at its own rows")
-        model.launch = _Launch(batch)
+        model.launch = model.launch.with_batch(batch)
     steps = len(chunks) + max(int(T or 0), 0)
     if chunks and (batch is None or len(batch) != steps):
         raise Unexpressible(f"vocabulary cannot express: a prefill in {len(chunks)} chunks " + (
             f"at a launch batch of {len(batch)} steps, not one a chunk and one a decode ({steps})" if batch is not None else
             "without a launch batch (on a batch-invariant target a chunked prefill is the request wrapper's Program)"))
     return batch
+
+
+def graph_capture_sizes(phi) -> tuple[int, ...]:
+    """The capture sizes of φ's breakable CUDA graphs (`TargetProfile.graph_capture_sizes`); () for an execution without them."""
+    return phi.target_profile().graph_capture_sizes()
 
 
 def launch_rows(phi, LP: int, T: int, C: int = 0) -> dict | None:

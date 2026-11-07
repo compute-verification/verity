@@ -15,9 +15,10 @@ _ARGS_MODELLED = ("disable_custom_all_reduce", "max_model_len", "max_num_batched
                   "enable_chunked_prefill", "long_prefill_token_threshold")
 
 
-def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, tuple[str, ...]]) -> None:
-    """Refuse φ outside a decoder's domain (worlds, execution, checkpoint dtypes) or the samplers the vocabulary has."""
-    worlds, execution, dtypes = domain
+def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str | tuple[str, ...], tuple[str, ...]]) -> None:
+    """Refuse φ outside a decoder's domain (worlds, execution or executions, checkpoint dtypes) or the samplers the vocabulary has."""
+    worlds, executions, dtypes = domain
+    executions = (executions,) if isinstance(executions, str) else executions
     facts = []
     s = phi.sampling or {}
     if s.get("kind", "greedy") == "stochastic":
@@ -32,7 +33,7 @@ def check_phi(phi: Phi, domain: tuple[tuple[int, ...], str, tuple[str, ...]]) ->
         facts.append(f"tensor parallel world {world} ({' and '.join(f'TP{w}' for w in worlds)}, the worlds a Build has traced)")
     if phi.profile != "b1-eager-v3":
         facts.append(f"numerics profile {phi.profile!r}")
-    if phi.execution != execution:
+    if phi.execution not in executions:
         facts.append(f"execution {phi.execution!r}")
     if (phi.model or {}).get("dtype", "bfloat16") not in dtypes:
         facts.append(f"checkpoint dtype {phi.model.get('dtype')!r} ({' or '.join(dtypes)} only)")
