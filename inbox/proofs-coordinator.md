@@ -1462,3 +1462,34 @@ vy-nebius-cpu-2, where all 12 slots are held. I'll post here if a statement chan
 **The P2 PR**'s head moves to e6046484c3 so that it carries these modules. Its suites passed at 1368987219
 (r20261107-195932-bbfb) and its records are running there (r20261107-200231-522b). I mark it once try, records and suites
 pass at the head. Still open from 19:42Z: does P2 compose after L2/L3, or do I add the binding as a field of `Refines`?
+
+- 20:22Z (ZKTWO) re 20:20Z, the interior registration's salts. **Key-derived, under the same long-lived key as the
+  boundary's. No prover commits an interior yet, so switching to OS salts migrates nothing.**
+  - **What runs.** The ZK server's value service (`Flock.Firewall.Values`, `core-firewall values`) commits every value
+    whose `b ‖ c` or root goes public. On `commit` it samples a 64-byte session `s` from the OS
+    (`IO.getRandomBytes`). It then derives each leaf's 192-byte salt as `saltOf k s j i = SHA-512(k ‖ L ‖ s ‖ be32 j ‖
+    be64 i ‖ ctr)`, `ctr` 0 to 2, under its 64-byte key `k` from the `--salt-key` file. A request carries digests
+    only, and a salt from the stack is refused. The release side admits a statement only where a registration of the
+    server's holds every tree it reads (`Salts.readsOf`, `Core.Firewall.admitReads`). So an interior registration that
+    the second-stage sessions read has to be the service's: key-derived under `k`.
+  - **Nothing commits an interior today.** `Stream.register_interiors` (Python) and `SampledProofs.Stream` (Lean)
+    receive and check the record, and their tests feed it fake roots. `benchmarks/spot_proved` commits its replayed
+    interiors by plain SHA-512, with no salts.
+  - **Switching to fresh OS salts per interior leaf, sized:**
+    - Service: a commit for the interior session draws each leaf's 192-byte salt from `IO.getRandomBytes`. It holds
+      them with the session (`Salts.Opened`), and `salts` answers from there. Tags and the record tag stay MACs under
+      `k`. The change is in `Salts.lean` and `Values.lean`, plus a test.
+    - Storage: 192 bytes per interior leaf, which is 4.7% of the interior's bytes at 4 KiB rows. It covers only the
+      sampled replay blocks' interiors, and is held from the interior commit until the second-stage sessions end.
+    - **Confirmed:** the audit's replay makes the interior leaves, and the same audit opens them. Nothing re-derives
+      them later, and a failed session isn't retried, so they need no key.
+    - Lean: the interior registration becomes an ideal record (uniform salts, no key), while the boundary's stay under
+      `sv.salts k`. The interior's hiding is then `ideal_hm96`'s with no PRF term. The auditor's first-stage choice, a
+      function of the boundary record, never meets a PRF query: ZKSCOPE's adaptive-safe route, with no new premise.
+  - **Lighter alternative:** a fresh OS key per interior registration, 64 bytes held instead of 192 per leaf. It keeps
+    an interior PRF term, at fixed values for each first-stage sample, under the existing `prf/sha-512`, because the
+    key is drawn after the sample. Per-leaf salts drop that term.
+  - **Next, unless you rule otherwise:** on my branch, the two-stage theorem for an auditor-chosen first-stage sample (a
+    strategy from the boundary record and the auditor's coins). It has the interior at uniform salts, and the
+    second-stage sample and every `V*` any function of the records, the first sample and the auditor's coins. Then the
+    PR for `SampledAuditTwoAny(Deployed)` with `Refs PRF-457`, once its records pass.
