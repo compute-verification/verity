@@ -38,7 +38,7 @@ For each model:
   request's token at one position, and its share exact is the window's output tokens less those that differ, over the
   window's output tokens.
 
-`coverage_table.py` renders the coverage table, one row per model with its Circuit, Replay (pinned), Replay unpinned and
+`coverage_table.py` renders the per-model status table, one row per model with its Circuit, Replay (pinned), Replay unpinned and
 Proved status, from a sidecar that backs every cell with its run or art ids, and fills each ladder model's Replay cells
 from a summary.json's two arms.
 
