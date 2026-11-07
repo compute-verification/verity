@@ -44,6 +44,8 @@ from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.partition_object import calls
 
+pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
+
 FIX = Path(__file__).parent / "fixtures"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
