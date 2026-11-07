@@ -63,7 +63,7 @@ roots = ["Proofs.Core", "Proofs.Core.Rec", "Proofs.Nci", "Proofs.Pous", "Proofs.
   "Proofs.Properties.Nci.Width", "Proofs.Properties.Nci.Novel", "Proofs.Properties.Nci.BaselineSteps",
   "Proofs.Properties.Nci.Baseline", "Proofs.Properties.Nci.OperandsResolve", "Proofs.Properties.Nci.Agrees",
   "Proofs.Properties.SampledProofs", "Proofs.Properties.SampledProofs.Halt",
-  "Proofs.Properties.SampledProofs.Interval", "Proofs.Properties.SampledProofs.FactorUpper",
+  "Proofs.Properties.SampledProofs.Interval", "Proofs.Properties.SampledProofs.FactorUpper", "Proofs.Properties.SampledProofs.TwoStageCheck",
   "Proofs.Properties.SampledProofs.Bits", "Proofs.Properties.Core.Evaluate",
   "Proofs.Properties.NetworkCertifier.Records", "Proofs.Properties.SampledProofs.PlanCheck",
   "Proofs.Properties.NetworkPeriod", "Proofs.Properties.Accounting.Requirement", "Proofs.Properties.NetworkScan",

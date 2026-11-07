@@ -41,5 +41,6 @@ public import SampledProofs.WiresDrawn
 public import SampledProofs.SiteDifftest
 public import SampledProofs.Interval
 public import SampledProofs.FactorUpper
+public import SampledProofs.TwoStageCheck
 
 @[expose] public section

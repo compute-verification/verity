@@ -36,6 +36,7 @@
   "Properties.SampledProofs.Bits",
   "Properties.SampledProofs.Interval",
   "Properties.SampledProofs.FactorUpper",
+  "Properties.SampledProofs.TwoStageCheck",
   "Properties.SampledProofs.Halt",
   "Properties.SampledProofs.Second",
   "Properties.SampledProofs.PlanCheck",
@@ -91,6 +92,18 @@
   "Properties.SampledProofs.Covers": {
    "owner": "@proofs",
    "why": "The replay blocks the bound speaks of: those whose cells the cell list covers."
+  },
+  "Properties.SampledProofs.FirstStageAt": {
+   "owner": "@proofs",
+   "why": "The first stages the bound speaks of: those sampling each replay block at the point's rate or more."
+  },
+  "Properties.SampledProofs.ClassesCover": {
+   "owner": "@proofs",
+   "why": "The deployments the point describes: replay blocks its classes cover, each class holding at most its count."
+  },
+  "Properties.SampledProofs.RequestsCover": {
+   "owner": "@proofs",
+   "why": "The requests the patterns' point describes: each read in one replay block, disjoint, as many and as wide as its classes say."
   },
   "Properties.SampledProofs.ReadsCover": {
    "owner": "@proofs",
@@ -1081,6 +1094,14 @@
   "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
    "honest": ["Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound_honest"],
    "nontrivial": "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.twoStageCheckSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.twoStageCheckSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1871,7 +1892,8 @@
     "Properties.SampledProofs.Second",
     "Properties.SampledProofs.Interval",
     "Properties.SampledProofs.FactorUpper",
-    "Properties.SampledProofs.PlanCheck"
+    "Properties.SampledProofs.PlanCheck",
+    "Properties.SampledProofs.TwoStageCheck"
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -2086,6 +2108,11 @@
    "imports": ["SampledProofs.FactorUpper", "Definitions.Claims.SamplingTwoRankin"],
    "except": [],
    "why": "what Rankin's factor's upper bound bounds is stated against its own function (`SampledProofs.FactorUpper`, on Lean core) and the factors Rankin's bound multiplies (`Definitions.Claims.SamplingTwoRankin`), never a proof"
+  },
+  "Properties.SampledProofs.TwoStageCheck": {
+   "imports": ["SampledProofs.TwoStageCheck", "Properties.SampledProofs.FactorUpper"],
+   "except": [],
+   "why": "what a two-stage point's bits bound is stated against its own function and the factor bounds' covers, on the two-stage count's definitions: never a proof"
   },
   "Properties.Nci.Desc": {
    "imports": [
@@ -7874,6 +7901,24 @@
    "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.factorUpperSound_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_nontrivial": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckSound": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckSound_honest": {
+   "owner": "@proofs"
+  },
+  "Properties.SampledProofs.SecurityProofs.twoStageCheckSound_nontrivial": {
    "owner": "@proofs"
   },
   "Properties.SampledProofs.SecurityProofs.leakCheckSound": {
