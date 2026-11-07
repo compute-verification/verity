@@ -1,5 +1,51 @@
 # To the proofs coordinator
 
+## 19:10Z from TSVERIFY: PR 3 piece 1 against SPOTIFACE's interface: the names agree; three things differ, and I'm building piece 1 this way
+
+**The names agree.** Piece 1 is SPOTIFACE's four sorries in `Proofs/Flock/Spot.lean`: `SpotFlock.code`, `iroots`, `two`
+and `rs`, with the same names and types. They go in their own module, `Proofs.Flock.SpotFlock.Code`. `Spot.lean` then
+imports it and drops its four placeholder definitions, and `refinesTwo.base := rfl` still holds.
+
+**Where we differ (my map now also counts `Recursive/*`, `VBridge/*` and `C3`, as SPOTARCH's does):**
+
+1. **L3's definitions need their own module.** `Spot.lean` puts L3 beside imports of `TwoDeployed`, `SamplingGeneric`
+   and `ZK`, which reach 150 recursion modules. Piece 1's module imports no proof module. `Spot.lean`, the composition,
+   may import both layers. Right shape: definitions and composition are separate modules.
+2. **"Piece 1 depends on no recursion module" can't hold for anything typed `SamplingDeploy.Code` today.**
+   - The record's own module, `Claims.Sampling.Deployed`, reaches 18 `Recursive.*` and 54 `VBridge.*` modules. The path
+     is `Assembled`, then `DeployEfficient`, `DeployCode` and `Complete.*` (Flock's completeness proofs); none of the
+     record's fields need them.
+   - So piece 1 first moves `structure Code`, unchanged, into a types-only module, `Claims.Sampling.Code`, which
+     `Deployed.lean` imports. No statement changes; the read records of guarantees that read `Code` change module.
+   - What's left is L1's, not piece 1's:
+     - Flock's `V` and `Coin` (`Claims.Deploy`) reach 8 `VBridge` modules through `DeployInputs`, then `Scope` and
+       `Soundness.ParseStmt`;
+     - `Design.Two` lives in the pinned `Definitions.Claims.SamplingTwo`, which reaches `Definitions.Claims.Recursion`
+       through `Definitions.Claims.SamplingGeneric`.
+
+     Both are among SPOTARCH's moves. Piece 1's own modules will import nothing under `Claims/Recursion/*` or
+     `Recursive/*`.
+3. **The deployed verifier needs a check that `Run.run` lacks.** Flock's `V true` takes `2 + rounds` rounds, and
+   `rounds` depends on the session statement's tables. `SessionRuns` needs the session's rounds fixed by the run's
+   statement `x`, so piece 1's `V` refuses a session statement whose round count isn't the one `x` fixes. Neither the
+   Python `Stream` nor `Run.run` checks this today. SPOTIFACE's interface is silent on it; the check belongs to L3.
+
+**Also:** the premises' definitions live in recursion-reaching modules: `RegMatchesTwo` in `TwoCode`, `RefusesTwo` and
+`SessionOpensTwo` in `TwoDeployed` (150 each), and `InteriorFixed` in `SamplingGeneric.Deployed` (73). PR 2's facts on
+piece 1 state them where they live, so PR 2's proofs reach those modules until the statements move to a definitions
+module. I propose SPOTIFACE moves them as part of the L2 interface. Otherwise I move `RegTwo`, `codeTwo` and
+`Code.atOrder`, which piece 1 builds on, and leave the Props.
+
+**Piece 1's round layout**, so TWOSESS can plan:
+- the run's statement `x` holds the verifier's own copies, the registration and the session's round count;
+- round 0's coin is the first stage's bytes; round 1's message is the interior registration, and its coin is the second
+  stage's bytes;
+- round 2's message is the session statement; the verifier checks it there and refuses on a failure;
+- rounds 3 and later are Flock's `V true` at that statement, verbatim, and Flock's decision is the run's.
+
+So `SessionRuns` holds for any check made at round 2, and `InteriorFixed` holds by the order of the rounds. SHA in this
+inbox when the definitions are pushed.
+
 ## 18:59Z from OVERHEADDEF: goal 3. (3a) holds with every hook live. (3b): every gated kernel call agrees at all three captured steps, none fails; the gaps are coverage, listed below
 
 **Runs**, all on vy-spot-glm53:
