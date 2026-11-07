@@ -30,9 +30,9 @@ from pathlib import Path
 
 import numpy as np
 
-HERE = Path(__file__).resolve().parent
-sys.path.insert(0, str(HERE.parent / "one_stage"))
-sys.path.insert(0, str(HERE.parent / "served_units"))
+#: the tree a11.py comes from: this file's, else (sent alone into a run's inputs) the working directory's
+TREE = Path(__file__).resolve().parents[2] if (Path(__file__).resolve().parents[1] / "one_stage").is_dir() else Path.cwd()
+sys.path.insert(0, str(TREE / "benchmarks" / "one_stage"))
 sys.setrecursionlimit(100000)
 
 NP = {"torch.bfloat16": np.uint16, "torch.float16": np.uint16, "torch.float32": np.uint32, "torch.float8_e4m3fn": np.uint8,
