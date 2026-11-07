@@ -95,12 +95,14 @@ environment extension loaded, so none of the package's code runs), and replays t
                  plain range (`0 < x`, `x ≤ y`, `∀ i, 0 ≤ f i`, over bound variables and numerals), unless
                  `shape.inline`, which only shrinks, lists it (`inline_failures`), or did under names a rename changed
                  (`paired`); its size is the AUDIT line's inline debt
-    trust        (`trust`: the premises that are the trust base; `deployed`: the guarantees that state the deployed system)
-                 a deployed guarantee rests on a premise outside `trust` that its `trust_gap` entry doesn't list (an update
-                 adds none, so the gap only shrinks), or the entry lists one it no longer rests on, or `trust_gap` lists a
-                 guarantee `deployed` doesn't (`--update` drops both): what it rests on is the named assumptions and open
-                 premises its record lists, and through each domain hypothesis that is another listed guarantee's
-                 statement (`cites`) that guarantee's, transitively (`trust_gaps`); the report prints each one's gap
+    trust        (`trust`: the premises that are the trust base, `base`, and a deployed guarantee's own, `extra`,
+                 each with the reason a ruling's rule gives; `deployed`: the guarantees that state the deployed system)
+                 a deployed guarantee rests on a premise outside its trust that its `trust_gap` entry doesn't list (an
+                 update adds none, so the gap only shrinks), or the entry lists one it no longer rests on, or
+                 `trust_gap` lists a guarantee `deployed` doesn't (`--update` drops both): what it rests on is the named
+                 assumptions and open premises its record lists, and through each domain hypothesis that is another
+                 listed guarantee's statement (`cites`) that guarantee's, transitively (`trust_gaps`); the report prints
+                 each one's gap
     trees        (`trees`: which module prefixes are the definitions, properties and proofs trees, its own and those of
                  the packages it requires by path) a guarantee's statement reads a definition of a module of the proofs
                  tree, or an audited module of the definitions or properties tree imports one, unless a prefix of `trees`'
@@ -1200,9 +1202,13 @@ def renamed_witnesses(policy: dict, moved: dict[str, str]) -> dict:
     """The policy's `witnesses`, `unwitnessed`, `witnesses_assumed`, `trust`, `deployed` and `trust_gap` with every
     guarantee, theorem and premise they name `renamed` by ``moved``."""
     out, ws, allow = {}, policy.get("witnesses"), policy.get("unwitnessed")
-    for k in ("trust", "deployed"):
-        if name_list(policy.get(k)):
-            out[k] = sorted(renamed(n, moved) for n in policy[k])
+    if name_list(policy.get("deployed")):
+        out["deployed"] = sorted(renamed(n, moved) for n in policy["deployed"])
+    if isinstance(trust := policy.get("trust"), dict):
+        extra = trust.get("extra") if isinstance(trust.get("extra"), dict) else {}
+        out["trust"] = trust | {"base": sorted(renamed(n, moved) for n in name_list(trust.get("base")))} | (
+            {"extra": {renamed(g, moved): {renamed(p, moved): why for p, why in ps.items()}
+                       for g, ps in extra.items() if isinstance(ps, dict)}} if "extra" in trust else {})
     if isinstance(gap := policy.get("trust_gap"), dict):
         out["trust_gap"] = {renamed(g, moved): sorted(renamed(p, moved) for p in name_list(ps)) for g, ps in gap.items()}
     if isinstance(taken := policy.get("witnesses_assumed"), dict):
@@ -2905,7 +2911,7 @@ RECORD_DIFFERENCE = Codes({
 #: the bookkeeping `--bookkeeping warn` (drive's lock run after a landing) repairs in the lock it regenerates
 #: instead of failing, each with one warning naming the entry and its owner, so the next PR does the work: a premise's
 #: kind and its ticket, an entry no guarantee has, an owner, a guarantee the witnesses rule holds to witnesses it lacks,
-#: and a `trust_gap` entry that lists more than its deployed guarantee rests on outside the trust base
+#: and a `trust_gap` entry that lists more than its deployed guarantee rests on outside its trust
 BOOKKEEPING = Codes({
     "open.unlisted", "assumptions.outside-module", "domain.uncovered", "open.seed",    # under `open`, on the default ticket
     "witnesses.missing", "witnesses.unwitnessed-changed",                              # under `unwitnessed`, as it is now
@@ -2997,7 +3003,7 @@ def bookkeeping_warnings(fails: list[str], lock: dict, ticket: dict, was: dict |
         elif c.startswith("witnesses.") and c not in ("witnesses.stale", "witnesses.assumed-stale"):
             what = "listed under `unwitnessed` at its statement's hashes now: it owes its `honest` and `nontrivial` witnesses"
         elif c == "trust.gap-gone":
-            what = f"dropped from its `trust_gap` entry, outside the trust base no longer: {dropped(e)}"
+            what = f"dropped from its `trust_gap` entry, outside its trust no longer: {dropped(e)}"
         elif c == "trust.gap-stale":
             what = "its `trust_gap` entry dropped: `deployed` doesn't list it"
         elif c.endswith("-stale") or c.endswith(".stale"):
@@ -3035,39 +3041,63 @@ def premise_closure(lock: dict, name: str) -> set[str]:
     return out
 
 
+def trusted(lock: dict, name: str) -> set[str]:
+    """The premises deployed guarantee ``name`` may rest on: the trust base (`trust.base`) and its own
+    (`trust.extra`)."""
+    trust = lock.get("trust") if isinstance(lock.get("trust"), dict) else {}
+    extra = trust.get("extra") if isinstance(trust.get("extra"), dict) else {}
+    return set(name_list(trust.get("base"))) | set(extra.get(name) if isinstance(extra.get(name), dict) else ())
+
+
 def trust_gaps(lock: dict) -> dict[str, list[str]]:
-    """{each guarantee `deployed` lists: the premises of its closure (`premise_closure`) outside `trust`}: what the deployed
-    system rests on beyond its trust base."""
-    trust = set(name_list(lock.get("trust")))
-    return {g: sorted(premise_closure(lock, g) - trust) for g in name_list(lock.get("deployed"))}
+    """{each guarantee `deployed` lists: the premises of its closure (`premise_closure`) it may not rest on
+    (`trusted`)}: what the deployed system rests on beyond its trust base."""
+    return {g: sorted(premise_closure(lock, g) - trusted(lock, g)) for g in name_list(lock.get("deployed"))}
+
+
+def trust_form(trust) -> bool:
+    """Whether ``trust`` is {"base": [premise, ...], "extra": {deployed guarantee: {premise: its one-line reason}}},
+    `extra` optional and each of its entries holding a premise."""
+    extra = trust.get("extra", {}) if isinstance(trust, dict) else None
+    return (isinstance(trust, dict) and set(trust) <= {"base", "extra"} and "base" in trust
+            and trust["base"] == name_list(trust["base"]) and isinstance(extra, dict)
+            and all(isinstance(ps, dict) and ps and all(isinstance(w, str) and w.strip() and "\n" not in w
+                                                        for w in ps.values()) for ps in extra.values()))
 
 
 def trust_failures(lock: dict) -> list[str]:
-    """The trust gap's ratchet.  `trust` (the premises that are the trust base) and `deployed` (the guarantees that state the
-    deployed system, each one the lock lists) are lists of names, and `trust_gap` ({deployed guarantee: its premises outside
-    the trust base}) holds each one's gap (`trust_gaps`): a premise new to a gap fails until a person lists it, since an
-    update adds none, and one a gap no longer has, or an entry of a guarantee `deployed` doesn't list, fails until the entry
-    drops (`trust_gap_kept`, which `--update` and the lock run's bookkeeping write)."""
+    """The trust gap's ratchet.  `trust` holds the premises that are the trust base (`base`) and, for a deployed
+    guarantee a ruling's rule trusts more for, its own with their reasons (`extra`; `trust_form`); `deployed` lists the
+    guarantees that state the deployed system, each one the lock lists; and `trust_gap` ({deployed guarantee: its
+    premises outside its trust}) holds each one's gap (`trust_gaps`): a premise new to a gap fails until a person lists
+    it, since an update adds none, and one a gap no longer has, or an entry of a guarantee `deployed` doesn't list, fails
+    until the entry drops (`trust_gap_kept`, which `--update` and the lock run's bookkeeping write)."""
     held = lock.get("trust_gap", {})
-    fails = [Failure("trust.form", None, f"trust: `{k}` is a list of names")
-             for k in ("trust", "deployed") if k in lock and lock[k] != name_list(lock[k])]
+    fails = [] if "trust" not in lock or trust_form(lock["trust"]) else [Failure(
+        "trust.form", None, 'trust: `trust` is {"base": [premise, ...], "extra": {deployed guarantee: {premise: its '
+        'one-line reason}}}, `extra` optional')]
+    if "deployed" in lock and lock["deployed"] != name_list(lock["deployed"]):
+        fails.append(Failure("trust.form", None, "trust: `deployed` is a list of names"))
     if not isinstance(held, dict) or any(v != name_list(v) for v in held.values()):
         fails.append(Failure("trust.form", None, "trust: `trust_gap` is {deployed guarantee: [premise, ...]}"))
     if fails:
         return fails
-    listed = lock.get("guarantees") or {}
+    listed, deployed = lock.get("guarantees") or {}, set(name_list(lock.get("deployed")))
+    for g in sorted(set((lock.get("trust") or {}).get("extra", {})) - deployed):
+        fails.append(Failure("trust.extra-unlisted", g, f"trust: `trust.extra` lists {g}, which `deployed` doesn't: a "
+                             "guarantee's own trust is a deployed guarantee's; drop the entry, or list the guarantee"))
     for g, gap in trust_gaps(lock).items():
         if g not in listed:
             fails.append(Failure("trust.deployed-unlisted", g, f"trust: `deployed` lists {g}, which `guarantees` doesn't: "
                                  "list the guarantee that states the deployed system, or drop the entry"))
         elif new := sorted(set(gap) - set(held.get(g, []))):
             fails.append(Failure("trust.gap-new", g, f"trust: {g}, a deployed guarantee, rests on {', '.join(new)}, outside "
-                                 "the trust base (`trust`), which its `trust_gap` entry doesn't list: discharge each (prove "
-                                 "it, or state it as a premise `trust` lists, at its instance), or list it there and say why "
-                                 "in the PR: the gap only shrinks"))
+                                 "its trust (`trust`), which its `trust_gap` entry doesn't list: discharge each (prove "
+                                 "it, or state it as a premise of the trust base at its instance), or list it there "
+                                 "and say why in the PR: the gap only shrinks"))
         if g in listed and (gone := sorted(set(held.get(g, [])) - set(gap))):
             fails.append(Failure("trust.gap-gone", g, f"trust: {g}'s `trust_gap` entry lists {', '.join(gone)}, which it no "
-                                 "longer rests on outside the trust base: drop it from the entry (`check.py --update` "
+                                 "longer rests on outside its trust: drop it from the entry (`check.py --update` "
                                  "does)"))
     for g in sorted(set(held) - set(name_list(lock.get("deployed")))):
         fails.append(Failure("trust.gap-stale", g, f"trust: `trust_gap` lists {g}, which `deployed` doesn't: drop the "
@@ -4958,7 +4988,7 @@ def main(argv: list[str]) -> int:
             for n in rep.get("notes", []):
                 print(f"  note: {n}", flush=True)
             if (gaps := rep.get("trust_gap")) is not None:
-                print(f"  trust gap: {sum(map(len, gaps.values()))} premises outside the trust base over the {len(gaps)} "
+                print(f"  trust gap: {sum(map(len, gaps.values()))} premises outside their trust over the {len(gaps)} "
                       f"deployed guarantees, {len(set().union(*gaps.values()))} distinct:", flush=True)
                 for g, gap in gaps.items():
                     print(f"    {g}: {len(gap)}" + (f" ({', '.join(gap)})" if gap else ""), flush=True)

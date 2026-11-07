@@ -796,17 +796,24 @@
    "due": "2026-11-30"
   }
  },
- "trust": [
-  "Claims.ExpectedCR",
-  "Claims.StrictBirthday",
-  "FlockSoundness.Assumptions.SHA512CRExpected",
-  "FlockSoundness.Assumptions.SHA512CRStrict",
-  "FlockSoundness.Assumptions.UniformRandomBytes",
-  "FlockSoundness.Assumptions.UniformRandomBytesTest",
-  "Verity.Assumptions.ChallengerLogsCoins",
-  "Verity.Assumptions.FlipsAfterRecorded",
-  "Verity.Assumptions.VerifierReadsLog"
- ],
+ "trust": {
+  "base": [
+   "Claims.ExpectedCR",
+   "Claims.StrictBirthday",
+   "FlockSoundness.Assumptions.SHA512CRExpected",
+   "FlockSoundness.Assumptions.SHA512CRStrict",
+   "FlockSoundness.Assumptions.UniformRandomBytes",
+   "FlockSoundness.Assumptions.UniformRandomBytesTest",
+   "Verity.Assumptions.ChallengerLogsCoins",
+   "Verity.Assumptions.FlipsAfterRecorded",
+   "Verity.Assumptions.VerifierReadsLog"
+  ],
+  "extra": {
+   "Verity.remote_soundness_of_subprotocols": {
+    "Hash.Assumptions.LmsUnforgeable": "the remote verifier never talks to the onsite devices and gets each device's LMS signature only as a witness inside the proof, so the signature's unforgeability is the remote audit's to trust"
+   }
+  }
+ },
  "deployed": [
   "Pous.EndToEnd.SecurityProofs.endToEndRingDeployed",
   "Pous.Period.SecurityProofs.periodHeld",
