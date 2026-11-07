@@ -15,10 +15,10 @@ same fields.  :data:`PROVENANCE_FIELDS` are every set's provenance keys: a synth
 keys ``None``), and :func:`provenance` fills ``source`` (``captured`` for a ``vllm-vu-set/v1``) and ``recipe`` (``None``) for a set
 that predates them.  A set's subcircuit is derived from its ``relation`` (``templates.identify``), never stored beside it.
 
-    python -m verity_numerical.bench.input_sets show DIR
-    python -m verity_numerical.bench.input_sets verify DIR [--lo L --hi H]      files against the manifest, then every instance
+    python -m verity_flock.input_sets show DIR
+    python -m verity_flock.input_sets verify DIR [--lo L --hi H]      files against the manifest, then every instance
                                                                                 re-evaluated by the IR evaluator
-    python -m verity_numerical.bench.input_sets meta DIR                        the ``input-set/v1`` store meta (``research data put``)
+    python -m verity_flock.input_sets meta DIR                        the ``input-set/v1`` store meta (``research data put``)
 """
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ from typing import Any, Iterable, Mapping, Sequence
 
 import numpy as np
 
-from . import templates as TM
+from verity_flock import subcircuit_templates as TM
 
 SCHEMA = "input-set/v1"
 CAPTURED_SCHEMA = "vllm-vu-set/v1"
@@ -251,7 +251,7 @@ def subset(src: str | Path, dst_root: str | Path, lo: int, hi: int) -> Path:
 
 
 def main(argv: Iterable[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(prog="verity_numerical.bench.input_sets")
+    ap = argparse.ArgumentParser(prog="verity_flock.input_sets")
     sp = ap.add_subparsers(dest="cmd", required=True)
     for name in ("show", "verify", "meta"):
         p = sp.add_parser(name)

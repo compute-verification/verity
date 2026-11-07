@@ -1222,7 +1222,7 @@ def template(reg: CircuitTypeTable, tname: str, tp: dict, T_range=None, cache: d
                else walker.store.find("GemmCoordinate_v1", K=str(tp["K"])))
         return _walked(base, walker, ids.get(None), f"GemmCoordinate{json.dumps(tp, sort_keys=True)}")
     if tname in SPINE_UNITS:
-        from verity_numerical.bench import templates as TM
+        from verity_flock import subcircuit_templates as TM
 
         sub = TM.subcircuit(SPINE_UNITS[tname], **_params(tname, tp))
         return _spine(reg, sub, base, walker, spec, f"{tname}{json.dumps(tp, sort_keys=True)}",
@@ -1380,7 +1380,7 @@ def statics_key(statics: dict) -> str:
 
 
 def subcircuit(sub, statics=({},)) -> dict:
-    """One bound subcircuit's Boolean export (``verity_numerical.bench.templates.Subcircuit``), self-contained: a template record
+    """One bound subcircuit's Boolean export (``verity_flock.subcircuit_templates.Subcircuit``), self-contained: a template record
     per instance statics (``variants``, keyed by :func:`statics_key`; attention one per key count T), as a row's templates are
     recorded (a spine template its C-Flock unit and tail, any other its Definition walked), with every definition, subcircuit
     node and circuit type (``circuit_types`` content, keyed by digest) they reach. Raises where the subcircuit has no core

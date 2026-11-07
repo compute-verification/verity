@@ -55,7 +55,7 @@ FORMATS = {"v1": G.SCHEMA, "v2": G.SCHEMA_V2, "seg": G.SCHEMA_SEG}
 
 def program() -> tuple[Program, dict]:
     """The verifier's own program and query."""
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     template = TM.rope_head(64).definition()
     (_, xt), (_, ct) = template.signature()[0]
@@ -73,9 +73,9 @@ def program() -> tuple[Program, dict]:
 
 def stage(out: Path, seed: int = SEED, schema: str = G.SCHEMA) -> dict:
     from verity_flock import circuit as FC
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
     from synthetic_sets import synthetic_set
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
 
     out.mkdir(parents=True, exist_ok=True)
     prog, query = program()
