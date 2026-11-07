@@ -482,7 +482,7 @@ NOISED = program("Noised", {"x": VEC, "w1": MAT, "w2": MAT, "z": VEC}, VEC, nois
 def test_work_is_pinned_to_a_block_only_by_data_it_must_consume_there_or_a_named_premise(setup):
     """A helper holding the registered weights needs only small inputs and outputs, so crossing bytes
     alone attribute nothing. Fresh data from a trusted device that only the block receives pins the work there: a helper
-    could get it only through the block's certified egress. So does the named premise that the fleet is closed."""
+    could get it only through the block's certified egress. So does the proposed assumption that the fleet is closed."""
     dc, p = setup
     profile = p.public(Plan(EPOCH))
     claims = audit(run(p, INPUTS, Plan(EPOCH)), profile)
@@ -556,7 +556,7 @@ def test_the_joint_ledger_credits_each_units_time_and_memory_once(setup):
     night = Plan(EPOCH, wipes=wipes("b.gpu"))
     honest = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night))
     assert honest.sound and {(x.unit, x.resource, x.grade) for x in honest.credits} == {
-        ("dc0", "compute:mac", None), ("dc0", "compute:cuda", None), ("b.gpu", "held", None)}   # the prover system's
+        ("dc0", "compute:mac", None), ("dc0", "compute:cuda", None), ("b.gpu", "held", None)}   # the whole datacenter's
     closed = account(audit(run(p, INPUTS, night), p.public(night)), p.public(night), assume=(FLEET_CLOSED,))
     assert {(x.unit, x.grade) for x in closed.credits if x.resource.startswith("compute")} == {
         ("a", "fleet-closed"), ("b", "fleet-closed")}

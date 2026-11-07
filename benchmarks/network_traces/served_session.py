@@ -98,7 +98,7 @@ ids as the network certifier's cells carry them and its finish (`finish`): the e
 certified I/O, not the prover's record of it. The certified I/O is ``io``'s file, written in KEEP on `AUDITOR`: it
 reaches the served node over a private route (``endpoint --io -`` on an ssh stdin, or a ``--send`` the step moves out of
 the run dir), never through a run's custody, and the served node already holds its values. The check then runs on the
-prover's node, and the chain's report says so (`chain_record.WARDEN_SERVED_STUBBED`). Its art (``--endpoint ART``,
+developer's node, and the chain's report says so (`chain_record.WARDEN_SERVED_STUBBED`). Its art (``--endpoint ART``,
 ``endpoint``'s ``$OUT``) is report.json, windows.jsonl and serve.json.
 
 The runs (the lane's gate key is on `AUDITOR`, a CPU node; KEEP is the lane's gate directory there):
@@ -699,7 +699,7 @@ def chain(a: argparse.Namespace) -> int:
             raise Refused(f"{kv!r}: CR_K=V, a chain_record.sh variable")
         if k in ("CR_SCAN_ARGS", "CR_SCAN_CMD") and any(w in v for w in ("--draw", "--challenger", "--peer")):
             raise Refused(f"{k}: the scan's draw and its coins are --draw and --coins's, which keep the draw off the "
-                          "prover's node")
+                          "developer's node")
         env[k] = v
     coins = coin_args(a, fetch)
     if any(c.isspace() for w in coins for c in w):
