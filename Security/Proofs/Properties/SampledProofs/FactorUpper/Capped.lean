@@ -9,9 +9,10 @@ public import Proofs.Properties.SampledProofs.FactorUpper.Patterns
 a width) of `2^{min(b_k(U), S)}`, as `min(a + b, S) ≤ min(a, S) + min(b, S)` (`capped_term_le`), and a sum over the sets
 of a product over the keys is the product over the keys of their sums over counts, `Σ_j C(n, j) f(j)` (`binS`,
 `sum_prod_cnt`). Each key's sum is at most the lesser of `(1 + 2^b w)^n` and its sets of at most `⌊S/b⌋` proof blocks
-plus `2^S ((1 + w)^n − 1)` (`binS_served`), which `servedFac` bounds (`servedFac_bounds`). The whole sum over the sets
-avoiding the cells sampled whole is also at most `2^S (∏ (1 + w)^n − 1)` (`served_sound`). The sets meeting one are
-bounded both ways, by `∏_F G (∏_I G − 1)` (`whole_capped_le`) and by `2^S 2^{n_F} (2^{n_I} − 1)` (`whole_count_le`).
+plus `2^S` times the rest (`binS_served`), the rest at most `(1 + w)^n − 1` and, at `z = n w < ⌊S/b⌋ + 2`, its closed
+form (`tailS_le_closed`); `servedFac` bounds the lesser (`servedFac_bounds`). The whole sum over the sets avoiding the
+cells sampled whole is also at most `2^S (∏ (1 + w)^n − 1)` (`served_sound`). The sets meeting one are bounded both
+ways, by `∏_F G (∏_I G − 1)` (`whole_capped_le`) and by `2^S 2^{n_F} (2^{n_I} − 1)` (`whole_count_le`).
 -/
 
 @[expose] public section
@@ -129,17 +130,72 @@ theorem capped_term_le {G : Type*} [DecidableEq G] (K : Finset G) (κ : ℕ → 
   exact mul_le_mul_of_nonneg_right (pow_le_pow_right₀ (by norm_num) (min_sum_le K _ S))
     (Finset.prod_nonneg fun k _ => pow_nonneg (hw k) _)
 
+/-- `Σ_{m<j≤n} C(n, j) w^j`: a key's sets of more than `m` of its `n` proof blocks, at weight `w` each. -/
+noncomputable def tailS (m n : ℕ) (w : ℝ) : ℝ :=
+  ∑ j ∈ (Finset.range (n + 1)).filter (m < ·), (n.choose j : ℝ) * w ^ j
+
+theorem tailS_nonneg (m n : ℕ) {w : ℝ} (hw : 0 ≤ w) : 0 ≤ tailS m n w :=
+  Finset.sum_nonneg fun _ _ => by positivity
+
+theorem tailS_le_grow (m n : ℕ) {w : ℝ} (hw : 0 ≤ w) : tailS m n w ≤ (1 + w) ^ n - 1 := by
+  have h := binS_pow n w
+  unfold binS at h
+  have h0 : (0 : ℕ) ∈ Finset.range (n + 1) := Finset.mem_range.2 (Nat.succ_pos n)
+  rw [← Finset.add_sum_erase _ _ h0] at h
+  simp only [Nat.choose_zero_right, Nat.cast_one, pow_zero, mul_one] at h
+  rw [← h, add_sub_cancel_left]
+  unfold tailS
+  refine Finset.sum_le_sum_of_subset_of_nonneg (fun j hj => ?_) fun j _ _ => by positivity
+  rw [Finset.mem_filter] at hj
+  exact Finset.mem_erase.2 ⟨by omega, hj.1⟩
+
+/-- **The tail's closed form**: at `z = n w < m + 2`, `Σ_{m<j≤n} C(n, j) w^j ≤ z^{m+1}/(m+1)! · 1/(1 − z/(m+2))`, as
+`C(n, j) ≤ n^j/j!` and `j! ≥ (m+1)! (m+2)^{j−m−1}`. -/
+theorem tailS_le_closed (m n : ℕ) {w : ℝ} (hw : 0 ≤ w) (hz : (n : ℝ) * w < m + 2) :
+    tailS m n w ≤ ((n : ℝ) * w) ^ (m + 1) / ((m + 1)! : ℝ) / (1 - (n : ℝ) * w / (m + 2)) := by
+  set z := (n : ℝ) * w with hzdef
+  have hz0 : 0 ≤ z := mul_nonneg (Nat.cast_nonneg _) hw
+  have hm2 : (0 : ℝ) < m + 2 := by positivity
+  set r := z / (m + 2) with hr
+  have hr0 : 0 ≤ r := div_nonneg hz0 hm2.le
+  have hr1 : r < 1 := (div_lt_one hm2).2 hz
+  set A := z ^ (m + 1) / ((m + 1)! : ℝ) with hA
+  have hA0 : 0 ≤ A := by positivity
+  have hfilt : (Finset.range (n + 1)).filter (m < ·) = Finset.Ico (m + 1) (n + 1) := by
+    ext j; simp only [Finset.mem_filter, Finset.mem_range, Finset.mem_Ico]; omega
+  have hterm : ∀ i, (n.choose (m + 1 + i) : ℝ) * w ^ (m + 1 + i) ≤ A * r ^ i := by
+    intro i
+    have hc := Nat.choose_le_pow_div (α := ℝ) (m + 1 + i) n
+    have hf : ((m + 1)! : ℝ) * ((m : ℝ) + 2) ^ i ≤ ((m + 1 + i)! : ℝ) := by
+      have h := @Nat.factorial_mul_pow_le_factorial (m + 1) i
+      have e : ((m : ℝ) + 2) = ((m + 1 + 1 : ℕ) : ℝ) := by push_cast; ring
+      rw [e]; exact_mod_cast h
+    calc (n.choose (m + 1 + i) : ℝ) * w ^ (m + 1 + i)
+        ≤ (n : ℝ) ^ (m + 1 + i) / ((m + 1 + i)! : ℝ) * w ^ (m + 1 + i) :=
+          mul_le_mul_of_nonneg_right hc (pow_nonneg hw _)
+      _ = z ^ (m + 1 + i) / ((m + 1 + i)! : ℝ) := by rw [hzdef, mul_pow]; ring
+      _ ≤ z ^ (m + 1 + i) / (((m + 1)! : ℝ) * ((m : ℝ) + 2) ^ i) :=
+          div_le_div_of_nonneg_left (pow_nonneg hz0 _) (by positivity) hf
+      _ = A * r ^ i := by rw [hA, hr, div_pow, pow_add]; field_simp
+  unfold tailS
+  rw [hfilt, Finset.sum_Ico_eq_sum_range]
+  calc ∑ i ∈ Finset.range (n + 1 - (m + 1)), (n.choose (m + 1 + i) : ℝ) * w ^ (m + 1 + i)
+      ≤ ∑ i ∈ Finset.range (n + 1 - (m + 1)), A * r ^ i := Finset.sum_le_sum fun i _ => hterm i
+    _ = A * ∑ i ∈ Finset.range (n + 1 - (m + 1)), r ^ i := by rw [Finset.mul_sum]
+    _ ≤ A * (1 / (1 - r)) :=
+        mul_le_mul_of_nonneg_left ((geom_le_min _ hr0 hr1).trans (min_le_right _ _)) hA0
+    _ = A / (1 - r) := by ring
+
 /-- A key's served value: `(1 + 2^b w)^n`, and its sets of at most `⌊S/b⌋` proof blocks plus `2^S` times the rest. -/
 noncomputable def servVal (b n S : ℕ) (w : ℝ) : ℝ :=
-  min ((1 + 2 ^ b * w) ^ n) (capP (S / b) n (2 ^ b * w) + 2 ^ S * ((1 + w) ^ n - 1))
+  min ((1 + 2 ^ b * w) ^ n) (capP (S / b) n (2 ^ b * w) + 2 ^ S * tailS (S / b) n w)
 
 theorem one_le_servVal (b n S : ℕ) {w : ℝ} (hw : 0 ≤ w) : 1 ≤ servVal b n S w := by
   unfold servVal
   have hb : 0 ≤ (2 : ℝ) ^ b * w := mul_nonneg (pow_nonneg (zero_le_two (α := ℝ)) b) hw
   have h1 : 1 ≤ (1 + 2 ^ b * w) ^ n := one_le_pow₀ (by linarith)
   have h2 := one_le_capP (S / b) n hb
-  have h3 : 0 ≤ (2 : ℝ) ^ S * ((1 + w) ^ n - 1) :=
-    mul_nonneg (by positivity) (by linarith [one_le_pow₀ (n := n) (by linarith : (1 : ℝ) ≤ 1 + w)])
+  have h3 : 0 ≤ (2 : ℝ) ^ S * tailS (S / b) n w := mul_nonneg (by positivity) (tailS_nonneg _ _ hw)
   exact le_min h1 (by linarith)
 
 /-- **A key's served sum**: `Σ_{j≤n} C(n, j) 2^{min(j b, S)} w^j` is at most its served value. -/
@@ -156,19 +212,14 @@ theorem binS_served (b n S : ℕ) {w : ℝ} (hw : 0 ≤ w) :
   · set m := S / b
     have hterm : ∀ j ∈ Finset.range (n + 1), (n.choose j : ℝ) * ((2 : ℝ) ^ min (j * b) S * w ^ j) ≤
         (if j ≤ m then (n.choose j : ℝ) * (2 ^ b * w) ^ j else 0) +
-          2 ^ S * (if j = 0 then 0 else (n.choose j : ℝ) * w ^ j) := by
+          2 ^ S * (if m < j then (n.choose j : ℝ) * w ^ j else 0) := by
       intro j _
       by_cases hjm : j ≤ m
-      · rw [if_pos hjm]
-        have h1 : (n.choose j : ℝ) * ((2 : ℝ) ^ min (j * b) S * w ^ j) ≤ (n.choose j : ℝ) * (2 ^ b * w) ^ j := by
-          refine mul_le_mul_of_nonneg_left ?_ (Nat.cast_nonneg _)
-          rw [mul_pow, ← pow_mul, mul_comm b j]
-          exact mul_le_mul_of_nonneg_right (pow_le_pow_right₀ (by norm_num) (min_le_left _ _)) (pow_nonneg hw _)
-        have h2 : 0 ≤ (2 : ℝ) ^ S * (if j = 0 then 0 else (n.choose j : ℝ) * w ^ j) := by
-          split_ifs <;> positivity
-        linarith
-      · have hj0 : j ≠ 0 := by rintro rfl; exact hjm (Nat.zero_le _)
-        rw [if_neg hjm, if_neg hj0, zero_add]
+      · rw [if_pos hjm, if_neg (by omega), mul_zero, add_zero]
+        refine mul_le_mul_of_nonneg_left ?_ (Nat.cast_nonneg _)
+        rw [mul_pow, ← pow_mul, mul_comm b j]
+        exact mul_le_mul_of_nonneg_right (pow_le_pow_right₀ (by norm_num) (min_le_left _ _)) (pow_nonneg hw _)
+      · rw [if_neg hjm, if_pos (by omega), zero_add]
         calc (n.choose j : ℝ) * ((2 : ℝ) ^ min (j * b) S * w ^ j)
             ≤ (n.choose j : ℝ) * ((2 : ℝ) ^ S * w ^ j) :=
               mul_le_mul_of_nonneg_left (mul_le_mul_of_nonneg_right
@@ -183,19 +234,64 @@ theorem binS_served (b n S : ℕ) {w : ℝ} (hw : 0 ≤ w) :
       refine Finset.sum_le_sum_of_subset_of_nonneg (fun j hj => ?_) fun j _ _ => by positivity
       rw [Finset.mem_filter] at hj
       exact Finset.mem_range.2 (by omega)
-    · congr 1
-      have := binS_pow n w
-      unfold binS at this
-      rw [Finset.sum_range_succ'] at this ⊢
-      rw [if_pos rfl, add_zero]
-      simp only [Nat.choose_zero_right, Nat.cast_one, pow_zero, mul_one] at this
-      have hs : ∑ j ∈ Finset.range n, (if j + 1 = 0 then (0 : ℝ) else (n.choose (j + 1) : ℝ) * w ^ (j + 1)) =
-          ∑ j ∈ Finset.range n, (n.choose (j + 1) : ℝ) * w ^ (j + 1) :=
-        Finset.sum_congr rfl fun j _ => if_neg (Nat.succ_ne_zero j)
-      rw [hs]; linarith
+    · rw [← Finset.sum_filter]; rfl
 
 theorem FacBounds.mono {F : Fac} {A B : ℝ} (hA : 0 ≤ A) (hAB : A ≤ B) (h : FacBounds F B) : FacBounds F A :=
   ⟨hA, (Real.log_le_log (by linarith) (by linarith)).trans h.2.1, h.2.2.mono hA hAB⟩
+
+/-- **`heavyTail` bounds a key's tail**: the grow form always, and the closed form once `z = n w < m + 2`. -/
+theorem heavyTail_bounds {g : Group} {S : ℕ} (hg : groupOk g S) (lw : ℚ) (p : ℕ) :
+    LogUB (heavyTail g lw S p) (tailS (S / g.b) g.n (Real.exp lw)) := by
+  have hw := Real.exp_pos (lw : ℝ)
+  have hO := pow_bounds (n := g.n) (lnN := g.lnN) p (one_bounds (x := Real.exp lw) (lx := lw) p hw.le le_rfl)
+    fun _ => hg.2.1
+  have hgrow : LogUB ((Fac.one lw p).pow g.n g.lnN p).l (tailS (S / g.b) g.n (Real.exp lw)) :=
+    hO.2.2.mono (tailS_nonneg _ _ hw.le) (tailS_le_grow _ _ hw.le)
+  unfold heavyTail
+  dsimp only
+  split_ifs with he
+  swap
+  · exact hgrow
+  refine LogUB.omin hgrow ?_
+  set m := S / g.b with hm
+  set e : ℚ := expUp (g.lnN + lw - lnLower ((m + 2 : ℕ) : ℚ) p) p with he_def
+  have hn : (0 : ℝ) < g.n := by exact_mod_cast hg.1
+  have hz0 : 0 < (g.n : ℝ) * Real.exp lw := mul_pos hn hw
+  have hlnz : Real.log ((g.n : ℝ) * Real.exp lw) ≤ (g.lnN : ℝ) + lw := by
+    rw [Real.log_mul hn.ne' hw.ne', Real.log_exp]; linarith [hg.2.1]
+  have hm2 : (0 : ℝ) < m + 2 := by positivity
+  have hze : (g.n : ℝ) * Real.exp lw / (m + 2) ≤ (e : ℝ) := by
+    have h1 := exp_le_expUp (g.lnN + lw - lnLower ((m + 2 : ℕ) : ℚ) p) p
+    have h2 := lnLowerSound ((m + 2 : ℕ) : ℚ) p
+    calc (g.n : ℝ) * Real.exp lw / (m + 2)
+        = Real.exp (Real.log ((g.n : ℝ) * Real.exp lw) - Real.log ((m : ℝ) + 2)) := by
+          rw [Real.exp_sub, Real.exp_log hz0, Real.exp_log hm2]
+      _ ≤ Real.exp (((g.lnN + lw - lnLower ((m + 2 : ℕ) : ℚ) p : ℚ) : ℝ)) := by
+          apply Real.exp_le_exp.2; push_cast at h2 ⊢; linarith
+      _ ≤ (e : ℝ) := h1
+  have he1 : (e : ℝ) < 1 := by exact_mod_cast he
+  have hz : (g.n : ℝ) * Real.exp lw < m + 2 := by
+    have h : (g.n : ℝ) * Real.exp lw / (m + 2) < 1 := lt_of_le_of_lt hze he1
+    rwa [div_lt_one hm2] at h
+  refine (tailS_le_closed m g.n hw.le hz).trans ?_
+  have hd : 0 < 1 - (g.n : ℝ) * Real.exp lw / (m + 2) := by linarith
+  have hfac : (g.lf : ℝ) + (lnLower ((m + 1 : ℕ) : ℚ) p : ℝ) ≤ Real.log ((m + 1)! : ℝ) := by
+    rw [Nat.factorial_succ, Nat.cast_mul, Real.log_mul (by positivity) (by positivity)]
+    have := lnLowerSound ((m + 1 : ℕ) : ℚ) p
+    have hlf : (g.lf : ℝ) ≤ Real.log ((m)! : ℝ) := hg.2.2.2.2
+    push_cast at this ⊢
+    linarith
+  have h1e := lnLowerSound (1 - e) p
+  have hle : Real.log (1 - (e : ℝ)) ≤ Real.log (1 - (g.n : ℝ) * Real.exp lw / (m + 2)) :=
+    Real.log_le_log (by linarith) (by linarith)
+  have hpow : ((m : ℝ) + 1) * Real.log ((g.n : ℝ) * Real.exp lw) ≤ ((m : ℝ) + 1) * ((g.lnN : ℝ) + lw) :=
+    mul_le_mul_of_nonneg_left hlnz (by positivity)
+  rw [← Real.exp_log (show 0 < ((g.n : ℝ) * Real.exp lw) ^ (m + 1) / ((m + 1)! : ℝ) /
+    (1 - (g.n : ℝ) * Real.exp lw / (m + 2)) by positivity)]
+  apply Real.exp_le_exp.2
+  rw [Real.log_div (by positivity) hd.ne', Real.log_div (by positivity) (by positivity), Real.log_pow]
+  push_cast at h1e hfac ⊢
+  linarith
 
 theorem servedFac_bounds {L : Ln2} (hL : ln2Ok L) {g : Group} {S : ℕ} (hg : groupOk g S) (lw : ℚ) (p : ℕ) :
     FacBounds (servedFac L g lw S p) (servVal g.b g.n S (Real.exp lw) - 1) := by
@@ -213,16 +309,14 @@ theorem servedFac_bounds {L : Ln2} (hL : ln2Ok L) {g : Group} {S : ℕ} (hg : gr
     have hC := cappedFac_bounds hL hg lw p
     have hcap : capVal g S (2 ^ g.b * Real.exp lw) = capP (S / g.b) g.n (2 ^ g.b * Real.exp lw) := if_neg hb
     rw [hcap] at hC
-    have hO := pow_bounds (n := g.n) (lnN := g.lnN) p (one_bounds (x := Real.exp lw) (lx := lw) p hw.le le_rfl)
-      fun _ => hg.2.1
-    have hO0 : 0 ≤ (1 + Real.exp lw) ^ g.n - 1 := hO.1
-    have hS := LogUB.scale hO.2.2 hO0 (k := (2 : ℝ) ^ S) (c := (S : ℚ) * L.up)
+    have hT0 := tailS_nonneg (S / g.b) g.n hw.le
+    have hS := LogUB.scale (heavyTail_bounds hg lw p) hT0 (k := (2 : ℝ) ^ S) (c := (S : ℚ) * L.up)
       (by have := two_pow_le_exp hL S; push_cast at this ⊢; exact this)
-    have hsum := lse_two hC.2.2 hS hC.1 (mul_nonneg (by positivity) hO0) p
+    have hsum := lse_two hC.2.2 hS hC.1 (mul_nonneg (by positivity) hT0) p
     have hmin := min_le_right ((1 + 2 ^ g.b * Real.exp (lw : ℝ)) ^ g.n)
-      (capP (S / g.b) g.n (2 ^ g.b * Real.exp lw) + 2 ^ S * ((1 + Real.exp lw) ^ g.n - 1))
+      (capP (S / g.b) g.n (2 ^ g.b * Real.exp lw) + 2 ^ S * tailS (S / g.b) g.n (Real.exp lw))
     have hlog : LogUB (omin (wholeFac L g lw p).l (lse ([(cappedFac L g lw S p).l,
-        ((Fac.one lw p).pow g.n g.lnN p).l.map ((S : ℚ) * L.up + ·)].filterMap id) p))
+        (heavyTail g lw S p).map ((S : ℚ) * L.up + ·)].filterMap id) p))
         (servVal g.b g.n S (Real.exp lw) - 1) :=
       LogUB.omin (hW.2.2.mono (by linarith) hle) (hsum.mono (by linarith) (by unfold servVal; linarith [hmin]))
     refine ⟨by linarith, ?_, hlog⟩

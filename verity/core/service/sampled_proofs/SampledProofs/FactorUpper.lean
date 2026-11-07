@@ -36,8 +36,9 @@ The bound is `optimize.two_stage_exfil`'s, term by term:
    `Σ_{1≤j≤m} C(n, j) x^j`, bounded by `C(n, j) ≤ n^j/j!` and Stirling's `ln m! ≥ m ln m − m + ½ ln(2πm)` (`lnHead`);
    and `2^S Σ_{1≤j≤S/b_min} W^j/j!`, `W = Σ_v w_v`;
 5. in the capped form, a set's `2^{min(b(U), S)}` is at most the product of `2^{min(b_g(U), S)}` over the groups, so
-   each group's sum is the lesser of `(1 + 2^{b_g} w_g)^{n_g}` and its sets of at most `⌊S/b_g⌋` proof blocks plus
-   `2^S ((1 + w_g)^{n_g} − 1)` (`servedFac`), and the whole sum is also at most `2^S (∏_g (1 + w_g)^{n_g} − 1)`.
+   each group's sum is the lesser of `(1 + 2^{b_g} w_g)^{n_g}` and its sets of at most `m = ⌊S/b_g⌋` proof blocks plus
+   `2^S` times the rest (`servedFac`), the rest at most `(1 + w_g)^{n_g} − 1` and, at `z = n_g w_g < m + 2`, at most
+   `z^{m+1}/(m+1)! · 1/(1 − z/(m+2))` (`heavyTail`); the whole sum is also at most `2^S (∏_g (1 + w_g)^{n_g} − 1)`.
 
 Every quantity is carried as an upper bound on its logarithm, and a factor `1 + L` as bounds on both `ln(1 + L)` and
 `ln L` (`Fac`), so that a product of factors each barely above `1` keeps its size. The precision `p` (and `θ`'s, for
@@ -396,15 +397,26 @@ def lnFactorUpperPatterns (cs : List Cell) (reads : List (List (Nat × Nat))) (N
 
 /-! ## The capped factor -/
 
+/-- At least `ln Σ_{j>m} C(n, j) w^j`, a group's sets of more than `m = ⌊S/b⌋` of its proof blocks at `w = e^{lw}`:
+`(1 + w)^n − 1`, and once `z = n w < m + 2` also `z^{m+1}/(m+1)! · 1/(1 − z/(m+2))`, as `C(n, j) ≤ n^j/j!` and each
+term is at most `z/(m+2)` of the one before. -/
+def heavyTail (g : Group) (lw : Rat) (S p : Nat) : Option Rat :=
+  let grow := ((Fac.one lw p).pow g.n g.lnN p).l
+  let m := S / g.b
+  let e := expUp (g.lnN + lw - lnLower ((m + 2 : Nat) : Rat) p) p
+  if e < 1 then
+    omin grow (some ((m + 1 : Nat) * (g.lnN + lw) - (g.lf + lnLower ((m + 1 : Nat) : Rat) p) - lnLower (1 - e) p))
+  else grow
+
 /-- **A group's served sum**: at least `ln Σ_U 2^{min(b(U), S)} ∏_{v∈U} w` over its sets at `w = e^{lw}`, the lesser
 of `(1 + 2^b w)^n` (`wholeFac`) and, once a set can hold more than `S` bits, its sets of at most `⌊S/b⌋` proof blocks
-(`cappedFac`) plus `2^S` times the rest, `2^S ((1 + w)^n − 1)`. -/
+(`cappedFac`) plus `2^S` times the rest (`heavyTail`). -/
 def servedFac (L : Ln2) (g : Group) (lw : Rat) (S p : Nat) : Fac :=
   let W := wholeFac L g lw p
   if g.b = 0 ∨ g.n ≤ S / g.b then W
   else
     let l := omin W.l (lse ([(cappedFac L g lw S p).l,
-      ((Fac.one lw p).pow g.n g.lnN p).l.map ((S : Rat) * L.up + ·)].filterMap id) p)
+      (heavyTail g lw S p).map ((S : Rat) * L.up + ·)].filterMap id) p)
     ⟨min W.f (lnOnePlus l p), l⟩
 
 /-- **The served sets' sum**: at least `ln Σ_{∅ ≠ U} 2^{min(b(U), S)} ∏_{v∈U} w_v` over the sets of the groups' proof
