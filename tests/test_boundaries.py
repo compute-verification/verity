@@ -226,7 +226,7 @@ BENCHMARKS_IMPORTERS = {
         "verity/ml/flock/python/verity_flock/circuit.py", "verity/ml/flock/python/verity_flock/circuit_bench.py",
         "verity/ml/flock/python/verity_flock/instances.py", "verity/ml/flock/python/verity_flock/ir_bench.py",
         "verity/ml/flock/python/verity_flock/register.py",
-        "verity/ml/flock/tests/plain_hidden.py", "verity/ml/flock/tests/served_registered.py",
+        "verity/ml/flock/tests/plain_hidden.py",
         "verity/ml/flock/tests/test_backend.py", "verity/ml/flock/tests/test_circuit.py",
         "verity/ml/flock/tests/test_class_statement.py", "verity/ml/flock/tests/test_derive.py",
         "verity/ml/flock/tests/test_flock_rows.py", "verity/ml/flock/tests/test_gemm_hill.py",
