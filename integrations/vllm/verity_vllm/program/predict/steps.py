@@ -34,11 +34,13 @@
   the advice's batch order, a refused request's rows and discarded rows included, since they ran. Its history (`segment_of`) is what
   it reads and never computes, its Program's boundary inputs (`build.build_program`'s C): a cache hit's C rows, the producers', which
   GP-01 records per block; or, for a request the window carries in, its own rows up to where it continues (its carried `computed`),
-  from its prompt's end on with its last kept output (`last_token`, from which it resumes at decode C). A request the window leaves
-  with outputs to keep reaches as far as its rows go, and the next window carries its state; one whose rows here are all past its
-  last kept output has no Program here. The launch is the advice's schedule, never a batch-mate's value; requests of one (LP, T, C,
-  policy, launch) share one Program. The request wrapper prefills in one launch, so a chunked prefill, a recompute after preemption
-  and a request the window leaves mid-prefill have no Program there.
+  from its prompt's end on with its last kept output (`last_token`, from which it resumes at decode C). Those Inputs are committed
+  values, a hit's of the requests that computed them and a carried request's of the boundary commitment, whose openings bind
+  them outside the compiler. A request the window leaves with outputs to keep reaches as far as its rows go, and the next window
+  carries its state; one whose rows here are all past its last kept output has no Program here. The launch is the advice's
+  schedule, never a batch-mate's value; requests of one (LP, T, C, policy, launch) share one Program. The request wrapper prefills
+  in one launch, so a chunked prefill, a recompute after preemption and a request the window leaves mid-prefill have no Program
+  there.
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
@@ -446,7 +448,7 @@ def launch_of(i: int, LP: int, T: int, C: int, rows: Rows, steps: Any) -> tuple:
         s0, _, first = held[0]
         raise Unexpressible(f"request {i}: step {s0} prefills {first.n} of its {LP} prompt rows"
                             + (f" after its {C}-token history" if C else "") + ", a chunked prefill without batch invariance (the "
-                            f"request wrapper prefills in one launch)")
+                            "request wrapper prefills in one launch)")
     for s, _, row in decodes:
         if row.n != 1 or row.preempted:
             raise Unexpressible(f"request {i}: step {s} runs {row.n} rows of it{' resumed' if row.preempted else ''}, a recompute "

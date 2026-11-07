@@ -36,9 +36,9 @@ request's Program is built at its launch context, which the advice fixes, and th
   reads it as an Input of its own history (`HISTORY_GROUPS`), a committed value the replay binds to the rows that computed it
   (`check.replay.cached_prefix`). R1 holds that Input the request's own only where its value is a function of the request's own
   certified inputs: a hit whose tokens R2 checked equal to its prompt through every run (the KV at a position reads every token
-  up to it), or the state a window carries it in with: its own rows and last token at the open, the boundary state's values of
-  its own earlier rows (their opening is the verifier's to check), its advice held by `window_advice.follows` to the state the
-  last window left it in, whose hit, if any, was checked there. Any other history is the batch's, and refused.
+  up to it), or the state a window carries it in with: its own rows and last token at the open, values of the boundary
+  commitment (their opening is the verifier's to check), its advice held by `window_advice.follows` to the state the last window
+  left it in, whose hit, if any, was checked there. Any other history is the batch's, and refused.
 """
 
 from __future__ import annotations
