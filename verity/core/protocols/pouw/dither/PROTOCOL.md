@@ -100,7 +100,7 @@ compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither 
 - Each call has an operand root, bound in its execution phase's dither run's commit phase, and a value root holding its
   T_s and O, bound in that run's response phase (see "An execution phase's runs"), both before the block's check coin.
   The sampled output cells are opened after it.
-- The weights are in the period's weight root, bound once a period, before any of the period's coins.
+- The weights are in the period's weight root, bound once a period, before any coin of the period is flipped.
 
 **The value root's layout**, pinned for kernels. It is the `v31.py` layout at 16 KiB rows,
 under Dither's tag and without segment S's rows:
@@ -168,7 +168,7 @@ NOFOLD-OPT's picks, all with T_S implied by O and
 
 ## An execution phase's runs
 
-Before any of a period's coins, the replica registers (see "Registration") and binds the weight root. The certifier
+Before any coin of the period is flipped, the replica registers (see "Registration") and binds the weight root. The certifier
 signs its registration receipt of both, and the challenger flips the period's weight-side coins from it. Then the
 replica's execution phases follow in one sequence, each through two runs.
 
@@ -446,7 +446,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
   coin before its run's challenge phase. A replica's answers are a stream of one-statement batches, run concurrently
   beside its later execution phases and never serialized. τ_ans includes the wait for the ZK server's release slot.
 - **No q(Δ + τ_ans) ≤ T.** `Timed` covers any number of execution phases, with answers beside later ones: their
-  sampling periods telescope to T. Selections arrive about every 43.8 s a replica (T/q).
+  execution and verification phases telescope to T. Selections arrive about every 43.8 s a replica (T/q).
 - **τ_ans isn't set.** v3.1's 10 s on an "8 s latency floor" rested on no measured Dither proof block. τ_ans is to be
   set from a passing `--zk` run of the proof block with live coins, the release slot included, with a wide margin.
   - One late answer refuses the week. An honest week fails 76.3% of the time if 1e-4 of answers are late and 1.43% at

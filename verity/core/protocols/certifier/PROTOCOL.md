@@ -30,7 +30,7 @@ Where each part is stated in Lean:
 - the audit: `NetworkCheck.Check` (`verity/network-certificate/v4`) and `NetworkCheck.Records`
   (`verity/network-records/v3`);
 - one execution phase's verdict of record: `NetworkCheck.LinkWindow`;
-- a period, onsite's communication component: `NetworkCheck.Period` (`verity/certifier/v0`).
+- a period, onsite's network certification subprotocol: `NetworkCheck.Period` (`verity/certifier/v0`).
 
 ## Zero knowledge: what ties the checks, and the named gap
 
@@ -289,7 +289,7 @@ Stated in Lean: `NetworkCheck.LinkWindow`'s network certifier form (`Kind.warden
 active network certifier's records, both ends at the network certifier's grid and parameters digest, with no sync read;
 `service.WardenProfile` is the Python reference.
 
-## A period, as onsite's communication component (`verity/certifier/v0`)
+## A period, as onsite's network certification subprotocol (`verity/certifier/v0`)
 
 Stated in Lean: `NetworkCheck.Period` (`verity/core/protocols/network/lean/NetworkCheck/Period.lean`, the
 `network-period` executable), whose module docstring has both forms, the clock form and the rows form, their formats
@@ -375,7 +375,7 @@ produced. The I/O tie closes that on a served link's egress. It is one proof blo
 selection `All`. It opens every cell of the window and holds each to the output the advice's map names there, and that
 output's id to the id the Commit sampled. It is a design with a prototype on the network certifier's own egress
 (`io_tie`, its cells cut by `warden.Warden._egress`), in no Spec and unproved. The execution phase's tie is T proof
-blocks, one a bucket row of the network certifier's registration (WARDEN's v2, a row a bucket), and each outputs 1
+blocks, one a bucket row of the network certifier's registration (`warden.py`'s v2, a row a bucket), and each outputs 1
 exactly when:
 1. every cell of its row is one of the network certifier's three: a `PAD` on a stream (no payload; a slot no connection holds is
    B zero bytes, a `PAD` on stream 0), a `DATA` cell (P = B − 9 bytes of payload, one token id's canonical event
@@ -448,7 +448,7 @@ every bucket from s to s + D + ⌊n_i / r⌋, at rank ρ among that bucket's liv
 requests' is unheld. Each output's entry in its bucket's port is e = σ·P + row: σ is its step's place among the
 bucket's steps, sorted and padded to S. The proof block reads the map as 8 bytes a slot, q and e as u32be: e = 2^32 − 1
 for a `PAD` on q, 2^32 − 2 for its `END`, and q = 0 for an unheld slot (stream 0's `PAD`, B zero bytes).
-- **The advice is private**: it is never published; it enters the circuit builder and is proved in zero
+- **The advice is private**: it is never published; it enters the registered compiler and is proved in zero
   knowledge. v4 computes the map in the clear from the opened advice v0, and takes the map and the steps as public
   inputs. That is the **named gap**, the one the compile unit carries (the advice's hiding root in the registration,
   "the advice is opened to the verifier until the compile unit exists"). Nothing may call the tie zero-knowledge until
@@ -684,7 +684,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
     (`test_the_unit_is_its_reference`, slow).
 
 **The proof block,** `IoTieBucket{B, R, P, S}`, one a bucket row (R = lanes·r slots):
-- **The cells** are the network certifier's per-window value, as WARDEN's registration v2 commits them: each bucket's R cells are
+- **The cells** are the network certifier's per-window value, as `warden.py`'s registration v2 commits them: each bucket's R cells are
   one `hm96-sha512/row/v2` row of R·B bytes under a fresh salt, in a `frame-v3-sha512` tree of T rows (a dense
   domain, its pads to a power of two). The proof block's `row` input is the registered port (`warden_rows.bucket_port`:
   proof block t reads row t, every slot held or not, with no wiring), so the proof system's registered read checks it
@@ -706,7 +706,7 @@ proof block outputs 1 exactly when, in each lane of ordinal q:
 - **Output:** one bit, ok. An execution phase's tie is its T proof blocks'.
 
 So the layout to register is a row a bucket. Row t − w·T holds bucket t's S slots in slot order, slot j at bytes
-j·B to (j + 1)·B: WARDEN's row (t − w·T)·S + j becomes words j·B/2 onward of row t − w·T. At WARDEN's schedule that
+j·B to (j + 1)·B: `warden.py`'s row (t − w·T)·S + j becomes words j·B/2 onward of row t − w·T. At `warden.py`'s schedule that
 row is 4 KiB. Built that way: `IoTieBucket` reads its one bucket row and its S Commit step rows as registered ports,
 S + 1 reads a proof block, and recomputes no root and hashes no row.
 
@@ -923,11 +923,11 @@ its bucket fails the connection there with one fail cell that carries no reason,
 scheduled end. So the client's view of the server side is the schedule, each connection's fail cell or none, and the
 data in the cells: the server's accept time, send timing, ACKs and flow control reach it only through the fail cells.
 One run of the network certifier's code gives both the cells the client receives and its record of them
-(`Security/Definitions/NetworkCertifier/Tap.lean`, under `trusted-host`). NCI's transfer gates are these cells' bits,
+(`Security/Definitions/NetworkCertifier/Tap.lean`, under `trusted-host`). The inference-only policy's transfer gates are these cells' bits,
 whose number per window the schedule fixes. The schedules are charged `log2 #schedules`, so a schedule that came to
 depend on the server is still counted. The content term comes from the audits, not from a premise:
 `SecurityProofs.PeriodLeakAccepted` composes each window's sampled leak bound at the network certifier's rows with the
-client's view read back from its record, over a monitoring period of sampled audits. Each window adds its unregistered
+client's view read back from its record, over a monitoring period of sampled audits. Each window adds its fresh
 inputs' bits, log2 of its possible incorrect sets, their committed bits and the timing, and each window's audit fails with
 probability at most δ + ε_ks + ε_bind + Pr[B_tap].
 
@@ -1597,7 +1597,7 @@ them.
     (`compact_placement`) is the record at bytes 0 … 8 and zero after it, and no record is padding, since the ordinal
     is at least 1. The proxy faults the window `malformed` on a unit whose record isn't one (`compact_record_data`) or
     names another request than its connection's, and on bytes left uncut at the stream's end. A cell's ordinal is
-    then fixed by the traffic, and its 32-bit token field is all the server chooses in it: under a K-draw tie an
+    then fixed by the traffic, and its 32-bit token field is all the server chooses in it: under a K-sample tie an
     unchecked cell carries at most 32 bits, against the 247 bytes after the header of a 256-byte event frame. The
     certifier still sees only bytes. The client renders OpenAI's completions SSE from the cells with the registered
     tokenizer (`benchmarks/network_traces/compact_render.py`: vLLM V1's incremental detokenization, byte-equal to

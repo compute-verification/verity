@@ -76,7 +76,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   through the whole remote composite; its tests (`examples/lifecycle/tests/test_lifecycle.py`) run each composite honest
   and with every deviation it lists refused. Nothing about it is proved.
 - `vllm/` (`run` `moved`, `proof` `none`): the vLLM demo, the remote protocol on a real served model. Llama-3.2-1B INT8
-  served by vLLM on one H200 through `verity_vllm`'s committing endpoint; `verity example vllm` serves one execution phase,
+  served by vLLM on one H200 through `verity_vllm`'s committing endpoint; `verity demo vllm` serves one execution phase,
   commits its values, and audits it through `benchmarks/one_stage/served_verdicts.sh`: live coins sample proof blocks,
   Flock `--zk` proves them and the Lean verifier checks them, PoUW runs on the served model, and onsite's subprotocols
   run where each has its piece. Its run is `moved`: PoUW's verdict is a development run that credits nothing, so no run of

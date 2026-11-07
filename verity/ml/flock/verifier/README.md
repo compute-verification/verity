@@ -153,7 +153,7 @@ it, which `verify` checks and then refuses. The names pinned at older commits (`
 parsed, so recorded sessions keep their names, and each one before hm96-sha512 rows is refused for its form. Those with
 keyed-BLAKE3 row leaves and SHA-256 trees (`@19c7269a`, `@fd02e847`, `@631567f7` and `verity/flock-netlist/v1`) need
 `--comp`, the BLAKE3 compression circuit, and the verifier and `hash-test` carry BLAKE3 for them alone. The pure-block,
-IR-frame (v2 and v3), IR-sampling, IR-block and vllm-block statements are legacy: their checks evaluate part of the
+The `IR-frame` (v2 and v3), `IR-sampling`, `IR-block` and `vllm-block` statements are legacy: their checks evaluate part of the
 computation and make intermediate values public, so the Lean verifier sets none of them up and refuses every session of
 one before it reads a file (`Flock.ProvedScope.legacyStatements`, `ProvedScope.legacyWhy`). `Flock.Test.Legacy` pins
 that, and that every statement before hm96-sha512 rows is refused once every check has passed.
@@ -217,7 +217,7 @@ sampling design or missing sample alone as accepted.
 | D19 | a V* cap session that doesn't read its level's tops at the verifier's shared rows |
 | D20 | a record not in its canonical text |
 | D21 | a nonzero proof-of-work nonce |
-| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/ml/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `NciCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on NCI's mistyped descriptors |
+| D22 | the verifier's own `--program` with a reference that reads a leaf at another width than its type gives that position (`E_REINTERPRET`, `verity/ml/circuits/PROTOCOL.md` §4.4): `Flock.Program.Widths`, which `NciCheck` decodes with too, refuses it at setup with the codec's message; upstream reads no program. `qword_program_agree.py --widths` holds the decoder to the codec on `NciCheck`'s mistyped descriptors |
 
 Where the paper is silent, the verifier follows upstream:
 

@@ -19,7 +19,7 @@ inference-only policy's check (`Core.Remote.components` in `verity/core/protocol
 subprotocols' commitments, the policy and the one-stage audit committed to one record, and every execution phase of the credit period
 names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
 (`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
-(`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
+(`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
 `verity/core/protocols/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/core/protocols/onsite`).

@@ -109,7 +109,7 @@ format:
 | format | what it registers |
 | --- | --- |
 | `verity/registration/site/v1` | the Site's own site entry (`Core.Site.Registration.Entry`, `CoreProtocol/Site.lean`): the sheets, locations and links it adds to the Site, with the Site's JSON, digest and check |
-| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the builder `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
+| `verity/registration/information/v1` | θ, each registered value by its committed root (`value`, `root`, `leaves`, `words`, `word_bits`, `domain`, a public checkpoint's pin), and the registered compiler `B` (digest, advice format, public advice cap `ℓ`); each once in the log |
 | `verity/registration/declaration/v1` | a day's circuit (`day`, the day's index among the monitoring period's days; `program`, its program's SHA-512; `blocks`, its block Definitions by descriptor key); one a day, before the day's first coin |
 
 Registration registers the site, θ, `B` and each day's registered circuit, not the circuit `B` builds. A subprotocol's
@@ -121,8 +121,8 @@ An entry's digest is `SHA-512(format ‖ 0 ‖ canon(entry))`, and the genesis i
 has the Site's head. `check` holds each entry to the log before it and refuses the first that fails by name: a site
 entry by the Site's checks (`Core.Site.Registration.Entry.refusal`, `previous` first), an information entry by
 `previous` and then `duplicate-information`, and a declaration by `previous` and then `duplicate-declaration`, a second
-declaration of a day. A component reads its view of an accepted log by projection (`View`: the Site, θ's values, the
-builder and the days' registered circuits, at the head). As a core protocol, `protocol` (`verity/registration/log/v1`, the
+declaration of a day. A subprotocol reads its view of an accepted log by projection (`View`: the Site, θ's values, the
+registered compiler and the days' registered circuits, at the head). As a core protocol, `protocol` (`verity/registration/log/v1`, the
 `core-registration` executable) takes the auditor's parameters (`{"auditor", "composite"}`, the auditor the Site's
 `Core.Site.Registration.Auditor`), the log as commitment (`{"composite", "entries"}`, its head the digest) and `{}` as
 evidence; it makes public the log's view and rejects as `entry I: REFUSAL`, and refuses a log or parameters outside

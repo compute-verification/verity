@@ -206,7 +206,7 @@ A spec-level reference for network accounting's timing channel:
   load's registration on the host's uplink, ingress, in the session's first execution phase, kind ``load``), so the
   interface's ``input_count`` under them and the scan's state's root has no free input;
 - the scan's ingress side (`ingress_scan`): `IngressScanBucket`, one unit a certifier bucket, reads the bucket's
-  warden ingress row, the slot state the bucket before carries and the Programs' entries, one port `prog<j>` a slot,
+  network certifier's ingress row, the slot state the bucket before carries and the Programs' entries, one port `prog<j>` a slot,
   each `SlotEntry_v1`'s word-aligned row of its slot (registered reads), and computes the next state (each block to the
   slot holding its connection, a new connection to the lowest free slot, its prompt ids appended, a due, occupied
   slot's output count and ids taken from its entry at its anchor, every other entry ignored, a slot held through its
@@ -232,7 +232,7 @@ A spec-level reference for network accounting's timing channel:
   bucket t reads slot j's entry at row j·nb + ⌊t / EVERY⌋ of one slot-entries input, and an empty slot's entry is
   ignored (its outputs masked by `occ`, never on the egress). A request the class can't hold is refused at the scan's
   unit, never truncated: a prompt of more than `KI` ids (1,024 at w63's class) at its cell, a Program's n over `KO` at
-  its anchor. A window whose warden refused a connection, traffic past its slots, has no certified record, and the
+  its anchor. A window whose network certifier refused a connection, traffic past its slots, has no certified record, and the
   period check refuses it. `Class.serves` names the network certifier parameters it takes every run of.
   `benchmarks/network_traces/scan_zk.py` proves both sides of a group of link-windows in one registration: ingress unit
   t's state and view outputs are committed as registered reads of the scan's state and view rows t, which ingress unit
@@ -353,7 +353,7 @@ to `lean` under the 8 Oct ruling (the friction skill), on these grounds:
   take as inputs what the proof system and the lowering give: the findings of the verifier's own Flock Lean run, the
   sessions' SHA-512s, the registration, the sample, and the Program's and partition's digests and the gate ids. The Lean
   reads an LMS key only, and rejects any other.
-- on a warden link (`service.WardenProfile`) the gap list is empty too: the Lean's warden form (`Kind.warden`) is the
+- on a network certifier's link (`service.WardenProfile`) the gap list is empty too: the Lean's form for it (`Kind.warden`) is the
   plain proof block's public row with both ends' grids at the network certifier's parameters digest, which both take as
   an input (the network certifier's deployment publishes it), and no sync read, as in the Python; it refuses a network
   certifier case whose digest isn't 64 bytes, whose ends have a profile, or whose two grids differ.

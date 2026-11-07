@@ -76,7 +76,7 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
   hardware outside it is unregistered. Φ_X is X's **capacity**, work a tick at its rated peak (the site entry: SKU,
   clock, rate per operand class). Φ_R and Φ_U are the registered and unregistered capacities, Φ = Φ_R + Φ_U.
 - **The actual circuit** A: every gate the hardware computed, hidden work included, each gate g at a leaf x(g) and a
-  tick t(g); A[X, I] is its gates at X during the ticks I. The builder's own runs, the developer's preparation and
+  tick t(g); A[X, I] is its gates at X during the ticks I. The registered compiler's own runs, the developer's preparation and
   anything else the hardware does are gates of A.
 - **Initial information**: the registered information θ, input gates whose values are committed before J (models, code,
   data). Nothing else is carried into J.
@@ -99,9 +99,9 @@ The numbers come from the slowdown calculator (`benchmarks/rho`), not from this 
 - **Derived quantities**, none assumed:
   - F, the incorrect proof blocks (committed outputs that differ from their gates applied to their committed inputs), and
     the **faulty share** φ, the share of credited work that lies in F;
-  - Φ_cred, the rate PoUW credits as registered work, and the **credited utilization** u = Φ_cred/Φ_R;
+  - Φ_cred, the rate PoUW credits as work of the registered circuit, and the **credited utilization** u = Φ_cred/Φ_R;
   - Φ_gap, credited work a cheaper route could produce; Φ_bk, bookkeeping (certificate slack and verdict lag);
-  - Φ_D, the rate of correct credited registered work;
+  - Φ_D, the rate of correct credited work of the registered circuit;
   - q_I, the most of the weighted count inference block I computes whole (part 2); ζ̄ and the counts below use the same
     convention.
 - **Updated state.** The trained model's parameter slots i, each with its eligible versions (one per optimizer step
@@ -169,7 +169,7 @@ multiplications) is coverage for one structure: a candidate sufficient condition
 A block can **import** information, spending its k fresh bits, or **reconstruct** it, spending its c gates. A local
 bound has three ingredients, each with its own premises: **information** (which jointly selected values are expensive
 to reconstruct), **structure** (how much counted computation the held values support) and **counting** (from a
-per-block cap to the circuit). Coverage (part 1) then says which learning methods the bound constrains. The Lean is
+block yield to the circuit). Coverage (part 1) then says which learning methods the bound constrains. The Lean is
 `Nci.Capability` (vocabulary), `Nci.Assumptions` (premises) and `Nci.Guarantees` (the repertoire), one module per role;
 `Security/Definitions/Nci/Capability/README.md` surveys every premise, structure and bound in one ontology, with how to
 test each. Improving the structure never strengthens an information premise; a stronger premise is a new hypothesis,
@@ -252,11 +252,11 @@ record is the min-cut theorem (Start here).
 
 #### Counting and the standard assemblies
 
-Theorem 3 (`Verity.Guarantees.Counting`, proved) turns a per-block cap q on weighted counted products into
+Theorem 3 (`Verity.Guarantees.Counting`, proved) turns a block yield q on weighted counted products into
 |C| ≥ c·Ω/q, Ω the computation's weighted total; coverage must then bound Ω, not the raw product count. The assemblies
 used so far:
 
-| Information | Structure | Per-block cap |
+| Information | Structure | Block yield |
 |---|---|---|
 | update hardness | dependency, recomputing priced out | k, in served weight |
 | none | dependency, recomputing by gates | k + c/g, in served weight |
@@ -300,10 +300,10 @@ guarantees to read first"):
 **The accounting**, deterministic. Every counted multiplication of a successful computation inside A goes to exactly
 one of two parts:
 
-- an inference block I of correct credited registered computation whose effective fresh input k_I + k_{F,I} + k_{a,I}
+- an inference block I of correct credited work of the registered circuit whose effective fresh input k_I + k_{F,I} + k_{a,I}
   (its own fresh input, the bits incorrect proof blocks inject into it, and the advice bits its structure depends on) is
   within the range of part 2's assembly, contributing q_I;
-- the remainder: unregistered hardware, registered hardware not running credited registered work, the incorrect proof
+- the remainder: unregistered hardware, registered hardware not running the registered circuit's credited work, the incorrect proof
   blocks, the credit gap, the bookkeeping, blocks out of range, and multiplications split between a block and the rest.
 
 Credit isn't counted twice, and padding isn't evidence that hardware ran anything. The remainder does at most ζ̄
