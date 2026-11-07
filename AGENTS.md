@@ -76,7 +76,11 @@ The rules in force, each stated as itself; the friction skill has the standing r
   verifier. A protocol states what is committed, which units need proofs, the public Program each must pass and what it
   does with the outcome; the proof system owns commitments, live coins, the record, the selection, proving, verifying and the
   integrity profile. A protocol carries no policy parameter: it surfaces what its sample established (ε at δ), and the
-  model's size is public.
+  model's size is public. These core protocols wrap SPOT, the sampled proof system, in the recursion layer and the ZK
+  server. SPOT on its own (the research release and its post) has none of that: an inference server serves and commits
+  its values, a proof server replays the sampled requests and proves them, and the verifier (the challenger and the Lean
+  verifier) checks them. The proof server talks only to the verifier, and bits sent to the verifier are not exfiltration
+  (Daniel, 7 Nov).
 - **One hash: SHA-512 with its whole output, everywhere.** Commitments are hiding commitments (`hm96` rows, or keyed
   leaves: a subtree's digest SHA-512(ks ‖ salt ‖ M_top) under a window's secret key) in frame-v3-sha512 trees, and signatures
   are hash-based (LMS, n = 64). Two named exceptions: Pearl's FP8 scheme as Pearl defines it,
@@ -87,7 +91,7 @@ The rules in force, each stated as itself; the friction skill has the standing r
   per-matmul noise seeds, seed_j = SHA-512(tag ‖ salt ‖ forward ‖ position ‖ root(A_j) ‖ root(B_j)), from the execution
   phase's live salt (`pouw.salt`) and the operands' committed roots, which a sampled proof block's proof derives. Grinding is a term
   of the guarantee: a steer that needs m noised coordinates succeeds with probability at most μ^m a try. No
-  retries: a failed proof is a visible failure, and nothing resamples. Outer proofs go through the ZK server as independent
+  retries: a failed proof is a visible failure, and nothing resamples. In the core protocols, outer proofs go through the ZK server as independent
   sessions: each staged statement is fixed before any session flips coins and gets exactly one session, with its own live
   coins in its own ZK server pass; no statement reads another session's transcript or coins; every session is recorded and
   every verdict counts (provisional).
