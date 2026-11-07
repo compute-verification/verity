@@ -3,10 +3,11 @@ composite of them.
 
 * :data:`SIG`: each operation's operand and result kinds (f an f32 or u32 word, i a count, b a bit); :data:`WIDTH`, their bits.
 * :data:`GATES`: each operation's word gate.  It is the registry's primitive where one computes the operation (F32 add / sub / mul /
-  fma, compares, selects, the i32 ops, DivFullRcp, MufuEx2Ftz); else a small composite of them (`tl.exp`, `div.full`, `>=`,
-  `|a - b| < 1e-9`, Python's and numpy's max / min, `<`), one body over calls (`k.call`, `k.c`) that `topp_words.IREngine` emits and
-  :func:`numeric` evaluates on ints; or one of six new primitives (a bit XOR, a word XOR, a bit select, i32 -> f32, `__nv_logf`, the
-  combine's `numkeep`).  A count is an i32 (the builder's 20-bit count, zero-extended: every count is below V < 2^19).
+  fma, compares, selects, the i32 ops, DivFullRcp, MufuEx2Ftz, MufuSqrtFtz); else a small composite of them (`tl.exp`, `div.full`, `>=`,
+  `|a - b| < 1e-9`, Python's and numpy's max / min, `<`, a count's bit), one body over calls (`k.call`, `k.c`) that
+  `topp_words.IREngine` emits and :func:`numeric` evaluates on ints; or one of six new primitives (a bit XOR, a word XOR, a bit
+  select, i32 -> f32, `__nv_logf`, the combine's `numkeep`).  A count is an i32 (the builder's 20-bit count, zero-extended: every
+  count is below V < 2^19).
 """
 from __future__ import annotations
 
@@ -18,7 +19,7 @@ import numpy as np
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.ops.scalar import BIT, BitAnd, BitNot, BitOr, F32, F32Eq, F32Fabs, I32, I32Add, I32Eq, I32Le, SelectF32, SelectI32
 from verity.ml.circuits.ops.fp32 import F32Add, F32Fma, F32Mul
-from verity.ml.circuits.ops.mufu import DivFullRcp, DivFullScaleA, MufuEx2Ftz
+from verity.ml.circuits.ops.mufu import DivFullRcp, DivFullScaleA, MufuEx2Ftz, MufuSqrtFtz
 from verity.ml.definitions.registry.ref_prims import F32GtStrict, F32Sub
 
 #: bits of a count word inside the builder (a lane count; V < 2^(CW - 1)); a count gate reads it as an i32
@@ -163,6 +164,12 @@ def _ilt(k, a, b):
     return k.call(BitNot, k.call(I32Le, b, a))
 
 
+def _ibit(k, a, m):
+    """Whether the count ``a`` has a bit of the mask ``m``: ``(a & m) != 0``."""
+    from verity.ml.definitions.registry.dsa import U32And   # (lazy: dsa imports this module)
+    return k.call(BitNot, k.call(I32Eq, k.call(U32And, a, m), k.c(0)))
+
+
 #: each operation's operand and result kinds: f an f32 (or u32) word, i a count, b a bit
 SIG = {
     "sub": ("ff", "f"), "add": ("ff", "f"), "mul": ("ff", "f"), "fma": ("fff", "f"), "exp": ("f", "f"), "rcp": ("f", "f"),
@@ -171,6 +178,7 @@ SIG = {
     "seli": ("bii", "i"), "selb": ("bbb", "b"), "gate": ("bf", "f"), "gatei": ("bi", "i"), "and": ("bb", "b"),
     "or": ("bb", "b"), "xor": ("bb", "b"), "xorf": ("ff", "f"), "xori": ("ii", "i"), "not": ("b", "b"), "iadd": ("ii", "i"),
     "ile": ("ii", "b"), "ilt": ("ii", "b"), "i2f": ("i", "f"), "b2i": ("b", "i"), "numkeep": ("if", "i"), "weq": ("ff", "b"),
+    "sqrt": ("f", "f"), "ibit": ("ii", "b"),
 }
 WIDTH = {"f": 32, "i": CW, "b": 1}
 #: each operation's word gate, or its expansion into word gates (a function of the calls it makes), and the constant operands it
@@ -183,7 +191,7 @@ GATES = {
     "gate": (SelectF32, ((0, 32),)), "gatei": (SelectI32, ((0, 32),)), "and": (BitAnd, ()), "or": (BitOr, ()),
     "xor": (BitXor, ()), "xorf": (U32Xor, ()), "xori": (U32Xor, ()), "not": (BitNot, ()), "iadd": (I32Add, ()),
     "ile": (I32Le, ()), "ilt": (_ilt, ()), "i2f": (I32ToF32, ()), "b2i": (SelectI32, ((1, 32), (0, 32))),
-    "numkeep": (TopPNumkeep, ()), "weq": (I32Eq, ()),
+    "numkeep": (TopPNumkeep, ()), "weq": (I32Eq, ()), "sqrt": (MufuSqrtFtz, ()), "ibit": (_ibit, ()),
 }
 @cache
 def numeric(name: str):
