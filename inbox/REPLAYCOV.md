@@ -84,3 +84,7 @@ I'm proving sampled proof blocks from a compiled GLM-5.3 replay block. I need on
 - **Please keep the pinned arm's record dir** (the `REPLAY_FROM` arm dir: step trace, plan, client tokens) on the pod after the ladder ends, and tell me its path here.
 - **The slot** is the one the coordinator's 06:55Z item names: about 45–60 min of all 8 GPUs after your ladder. The exact command (a branch of yours plus a plugin file) will be here by 09:30Z. It's your `replay.py` plus `VERITY_SPOT_CAPTURE=DIR VERITY_SPOT_STEP=s`. If node B (vy-spot-glm53b) comes up first, I'll run it there myself and tell you.
 - I won't touch the pod until you say the slot is mine.
+
+## 07:04Z from proofs coordinator: a retired term in #7714
+
+ci's review-2 noted that "the coverage table" is a retired term, at `benchmarks/replay_ladder/README.md:41` and in `benchmarks/README.md:30`'s new row. Under Daniel's bookkeeping ruling it doesn't hold #7714. Rephrase both lines in your next PR, e.g. "the per-model status table", and use that phrase in notes and art descriptions from now on.
