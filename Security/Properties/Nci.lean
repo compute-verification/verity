@@ -10,7 +10,7 @@ public import NciCheck.Check
 the verifier's check of a declared division against the inference-only policy at its rate,
 `Nci.CompliesRate c α` (`Definitions/Nci.lean`), at the gate budget `c = gamma` and the rate
 `α = num / den`, and `NciCheck.check` is `evaluate` with a refusal written `{"error": code}` (with a `message` giving
-the fix for some codes). θ, the registered information, holds only input gates bound at registration (`IsRegistered`):
+the fix for some codes). θ, the registered information, holds only input gates bound at registration (`IsBoundAtRegistration`):
 one bound per run is refused. The difftest holds it to the Python reference on random instances; the statements here say
 what it computes on every instance. Each is a named `Prop`, proved as
 `NciCheck.Properties.SecurityProofs.X : NciCheck.Properties.X` in `Proofs.Properties.Nci`, and a guarantee of
@@ -104,7 +104,7 @@ def IsInput (P : Prog) (g : ℕ) : Prop :=
 `Flock.Program.inputId?`), not `run` (`Input<w>_v1`). This reads the circuit file's public layout, which marks the
 gates whose values are θ, the registered information; which entry of the registration log holds each value is θ's
 provenance (`Properties.Nci.Baseline`). -/
-def IsRegistered (P : Prog) (g : ℕ) : Prop :=
+def IsBoundAtRegistration (P : Prog) (g : ℕ) : Prop :=
   ∃ p ops sc, P.gate g = .ok (p, ops, sc) ∧
     (Flock.Program.inputId? (P.defs[p]!).key).map (·.1) = some Flock.Program.REGISTRATION
 
@@ -112,7 +112,8 @@ def IsRegistered (P : Prog) (g : ℕ) : Prop :=
 
 /-- Entry `t` of θ names an input gate bound at registration that no earlier entry names. -/
 def ThetaOk (P : Prog) (theta : Array Json) (t : ℕ) : Prop :=
-  ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsRegistered P g ∧ ∀ t' < t, natOf? theta[t']! ≠ some g
+  ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsBoundAtRegistration P g ∧
+    ∀ t' < t, natOf? theta[t']! ≠ some g
 
 /-- Entry `t` of θ's refusal `k`: `theta-unknown` where it is not a gate id, else `theta-not-input` where its gate is
 not an input gate, else `theta-not-registered` where it is one bound per run, else `theta-duplicate` where an earlier
@@ -120,8 +121,9 @@ entry names the same gate. -/
 def ThetaFault (P : Prog) (theta : Array Json) (t : ℕ) (k : String) : Prop :=
   (k = "theta-unknown" ∧ ∀ g, natOf? theta[t]! = some g → gates P ≤ g) ∨
     (k = "theta-not-input" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ ¬ IsInput P g) ∨
-    (k = "theta-not-registered" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ ¬ IsRegistered P g) ∨
-    (k = "theta-duplicate" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsRegistered P g ∧
+    (k = "theta-not-registered" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧
+      ¬ IsBoundAtRegistration P g) ∨
+    (k = "theta-duplicate" ∧ ∃ g, natOf? theta[t]! = some g ∧ g < gates P ∧ IsInput P g ∧ IsBoundAtRegistration P g ∧
       ∃ t' < t, natOf? theta[t']! = some g)
 
 /-- Gate `g`'s owner is `"input"` and `g` an input gate, or an inference block and `g` a computed gate. -/
