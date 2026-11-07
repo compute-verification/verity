@@ -99,6 +99,43 @@ def test_a_lean_member_lands_on_its_verdict_and_main_moves_only_to_its_lock_comm
     assert _main(world) == lock and h.after[-1][0] == main and len(h.launched) == 1, world.logs
 
 
+def test_the_bookkeeping_a_lock_run_repaired_is_committed_with_its_records_and_told(world, monkeypatch):
+    """Drive's lock run under `--bookkeeping warn`: a file of `merge.REPAIRED` its Lean report's `repaired`
+    names is committed at its repository path beside the regenerated locks, which the merge gate vouches for against the run
+    as it does the locks; its warnings are listed in the lock commit and told to the Lean lane and each owner they name, once."""
+    h = _locks(world, monkeypatch)
+    tip = _lands(h, {1: LEAN})
+    (rid,) = h.lock_ids()
+    _passes(h, rid, tip, {"pkg": '{"records": 2}\n'})
+    d = h.world.tmp / "live" / rid
+    caps = "UNWITNESSED = {\"pkg\": 2}\n"
+    (d / "lean-audit" / "repaired" / "tests").mkdir(parents=True)
+    (d / "lean-audit" / "repaired" / "tests" / "test_lean_packages.py").write_text(caps)
+    audit = json.loads((d / merge.AUDIT).read_text())
+    warned = ["pkg: bookkeeping: P.Sound (@proofs): listed under `open` on LEAN-186, due 2026-11-14 (open.unlisted)"]
+    audit |= {"repaired": {"tests/test_lean_packages.py":
+                           f"/workspace/research/runs/{rid}/lean-audit/repaired/tests/test_lean_packages.py"},
+              "bookkeeping": warned}
+    (d / merge.AUDIT).write_text(json.dumps(audit))
+    h.tick()
+    lock = _checked(world)
+    assert _git(world.origin, "show", "checked:tests/test_lean_packages.py") == caps.strip()
+    body = _git(world.origin, "log", "-1", "--format=%B", "checked")
+    assert "Regenerated: pkg/lean-audit.json, tests/test_lean_packages.py" in body and _vouched(h, lock, rid) == rid, body
+    assert f"  {warned[0]}\n" in body and body.index(warned[0]) < body.index("Checked:"), body
+    (told,) = [p for p in h.posts if "repaired bookkeeping" in p]
+    assert told.startswith("@lean @proofs queue: ") and warned[0] in told and "#1" in told, told
+    h.tick()
+    assert len([p for p in h.posts if "repaired bookkeeping" in p]) == 1
+
+
+def test_a_lean_report_naming_a_repaired_file_outside_repaired_is_unreadable(tmp_path):
+    with pytest.raises(merge.Unreadable, match="no lock run repairs"):
+        merge._regenerated_in("r1", {"regenerated": {}, "repaired": {"AGENTS.md": "/x/lean-audit/repaired/AGENTS.md"}})
+    assert merge._regenerated_in("r1", {"repaired": {"tests/test_lean_packages.py": "/r/lean-audit/repaired/t.py"}}) == {
+        "tests/test_lean_packages.py": "lean-audit/repaired/t.py"}
+
+
 def test_a_lock_run_that_regenerated_nothing_leaves_its_tip_for_the_after_landing_run(world, monkeypatch):
     h = _locks(world, monkeypatch)
     tip = _lands(h, {1: LEAN})

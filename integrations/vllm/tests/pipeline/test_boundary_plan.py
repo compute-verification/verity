@@ -20,7 +20,7 @@ from verity_vllm.pipeline import cli
 from verity_vllm.pipeline import commit_plan as CP
 from verity_vllm.pipeline import row_plan as RP
 from verity_vllm.pipeline.timeline import Timeline
-from tests.pipeline.test_row import _built, _row, gnu_timeout  # noqa: F401  (fixture)
+from tests.pipeline.test_row import _built, _row
 
 
 def _commit_args(tmp_path: Path, **kw) -> types.SimpleNamespace:

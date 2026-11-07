@@ -37,18 +37,21 @@ when:
 * among the other entries, the per-site ones and P10's, whose count is a size in lines, no ratchet its base has holds
   more after it than before, and no entry's recorded ``count`` grows (an entry is its fields less ``count``);
 * a command the ``public`` table of P16's list (``allowlists/p16_cli_callers.json``) gains, one run from outside the
-  integration, where P16's suite doesn't look, or one given another caller, names a file that, in the change's tree, runs it
+  integration, where P16's suite doesn't look, or only from a file the public export doesn't copy, or one given another
+  caller, names a file that, in the change's tree, runs it
   as the base's P16 lint finds a call (its ``runs``).  Like the environment-read list's registry marks, the table is a
   declaration and no ratchet counts it, but this one is checked, so a change may add one (were the table P16's code, which
   the gate runs as the base has it, no change could add a command run from ``benchmarks/``); and
 * if it changes a lint's code or allowlist, its base's lint code finds nothing on its tree that its allowlists don't cover,
   beyond what it finds on the base's own tree, with the base's lists: a violation the tree below already holds isn't the
   change's, so it passes, naming the change that added each one's line (``git blame --first-parent`` on the base: ``#N``
-  for a queue merge), whose own merge the source checks below refuse.  In a temporary worktree of the change's top, each
+  for a queue merge), whose own merge the source checks below fail.  In a temporary worktree of the change's top, each
   lint directory to run and both ``ruff.toml`` files are replaced by the base's, each allowlist there holding the top's
   entries for its slug (none for a deleted one), P16's the top's public commands too, and the ``test_no_new*`` tests
   of each lint whose code or allowlist changed (every lint's in a directory whose shared code did) run without pytest, the ruff
-  lints with the base's pin.
+  lints with the base's pin.  A counted lint reads those replaced files too, as the base has them, so its violations in one
+  are counted again on the change's own copy, against the change's list: a lint module whose prose the change cleans, with
+  its entry dropped, passes, and one that keeps its sites without its entry fails, naming the change's own sites.
   So loosening a lint to drop its entries (raising P10's cap, skipping a kind, ignoring a ruff rule, deleting the lint)
   fails, naming each violation the base's lint still finds, while tightening one passes once the change fixes what it
   finds.
@@ -58,9 +61,8 @@ allowlist, and every change is judged by it: in the ``*.py`` files it touches un
 no more ``noqa`` comments (``# noqa``, ``# noqa: CODE``, a file's ``# ruff: noqa``) than it removes.  A line is matched by its stripped text, codes included, so one
 that moves with its code counts as kept, and deleting a stale ``noqa`` pays for a new one.
 
-The top change's Python is linted too (drive lands before the suites run, so a new finding would land and be reverted),
-when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the change
-adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
+The top change's Python is linted too, when its base has the repository's ruff lint: each ``*.py`` and ``*.pyi`` file the
+change adds or modifies outside that lint's ``LEFT_OUT`` (the integration's ruff lint's files, and ``archive/``) is checked by ruff
 under the base's root ``ruff.toml``, as it is before the change and after it, and the change fails when any (file, rule) count
 grows, naming each new finding ``file:line RULE message``.  (file, rule) is the repository's ruff lint's key too, so a
 finding moved within its file passes both.  A renamed file's before is its old path's (``git diff -M``), so a move keeps its
@@ -76,11 +78,12 @@ reads it would exempt doesn't count): the fix is the area's settings registry.  
 catch (every outcome is recorded): the fix is to re-raise, record the outcome, or narrow the handler.
 A rename must move the file's entry (``python3 tests/lint/test_<slug>.py --move OLD NEW``), as for ruff.
 
-Only the top change is linted: a PR's own commits at the preflight, its merge onto `next` at the sync, where the members below
-were linted at their own merges.  Its findings and sites are counted with the lints, configs and pin its own base has when
-that base holds BASE (its merge onto `next`, whose members below may change a lint: the lints it lands with), else with
-BASE's (a preflight's merge base, an older `main`), so a PR that adds a site a lint queued below it counts is refused at
-its own merge, not found later by the whole-tree run of a change that touches a lint.
+Only the top change is linted: a branch's own commits before marking, the tip's merge in the after-landing run, so a merge
+that lands below a run's tip, with others in one landing, is never linted here (the repository's lints still check its files
+against their lists).  Its findings and sites are counted with the lints, configs and pin its own base has when that base holds
+BASE (the merge below it, whose merges below may change a lint: the lints it landed with), else with BASE's (a branch's
+merge base, an older `main`), so a PR that adds a site a lint landed below it counts fails at its own merge, not later in
+the whole-tree run of a change that touches a lint.
 
 A counted lint with ``holds`` reads each file its ``holds`` takes, of any kind, rather than each ``*.py`` file, and counts it
 by its path too: the repository's lane text, in the prose of code, Lean and Markdown, whose fix says where the text goes (history
@@ -90,25 +93,29 @@ Exempt: a revert (each commit's subject ``Revert "``, or a queue merge whose PR 
 BASE's ``tools/verity/check/move_check.py`` certifies.
 
 It runs on git, in the repository of the current directory, and runs no code but the base's (its lints and the ruff it pins,
-and BASE's move_check), so the merge queue runs `main`'s copy of it, which a PR can't weaken, on `main` and a PR's head (or,
-at the sync, its merge onto `next`, each member below judged again) as it admits the PR (a landing gate in drive.toml's ``landing_gates``: `research queue ready`'s preflight refuses the mark, and the
-sync onto `next` leaves the PR out).  The lints run on the Python that runs it, and ruff (the ruff lints, and the source lint)
+and BASE's move_check).  Nothing runs it before a PR lands: it is the check's ``ratchet-gate`` step
+(``tools/verity/check/check.py``'s ``ratchet_gate``, ci.toml's job), off the merge gate (policy.toml's ``off_gate``), which
+drive's after-landing run of `checked`'s tip runs as ``ratchet_gate.py BASE TIP`` with BASE's copy of this file, which no
+change it judges can weaken, BASE a commit below the tip that drive sends (``check.py`` says which).  Each `Queue: #N` merge
+above BASE is judged against the one below it, so a failure names its PR, which drive takes as the red's culprit.  The red
+never holds `main`, and drive never reverts its culprit (drive.toml's ``warn_steps``): it rings the culprit's owner, who
+fixes it forward in their next PR.  The lints run on the Python that runs it, and ruff (the ruff lints, and the source lint)
 on the first Python whose ``-m ruff`` is the base's pin: this one, else one ``uv run --offline --with`` makes from uv's cache,
-else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A sync gates each PR on its merge onto
-`next`, which holds every PR below it, so each change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default
-``~/.cache/verity/ratchet-gate``; empty: none), keyed by this file's bytes and the change's commits, which are all it reads, and
-BASE too for a verdict that reads it (a failed change's exemptions run BASE's move_check): a sync of N PRs judges each change
-once, not N times, and once `main` moves an untouched or passed change is still not judged again.  The source checks' findings
+else one ``uv run --with`` fetches the pin for (the network, once per uv cache).  A run judges every change above its BASE,
+and runs overlap (a rerun of one tip, a later tip's run whose BASE lies below changes an earlier run judged), so each
+change's verdict is kept under ``$RATCHET_GATE_CACHE`` (default ``~/.cache/verity/ratchet-gate``; empty: none; the check's
+step keeps it in the check's cache), keyed by this file's bytes and the change's commits, which are all it reads, and BASE
+too for a verdict that reads it (a failed change's exemptions run BASE's move_check): N runs over a change judge it once,
+not N times, and once BASE moves an untouched or passed change is still not judged again.  The source checks' findings
 are kept beside the verdict under BASE's key (they run BASE's lints and config), and apply to the top change only, so a member
 below the top is never failed by them.  An entry that can't be read is judged again, and an error is never kept.  A change's
 judgement reads only its own commits (and BASE), so the changes the cache doesn't hold are judged at once, each in a forked
 process of its own, its worktree and ruff cache with it, up to ``$RATCHET_GATE_JOBS`` at a time (default the lesser of 16 and
-this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  Before marking
-a branch, run
-``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes, 1 when one fails
-(with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the host), which the
-sync takes as a refusal: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose ``failures`` name
-each failing change's top ``commit``.
+this process's CPUs; 1 judges them in turn), and reported in chain order, as judging them in turn reports them.  Before
+marking a branch, run ``python3 integrations/vllm/tools/ratchet_gate.py origin/main HEAD``.  Exit 0 when every change passes,
+1 when one fails (with the fix), 2 on a usage or git error, or when the base's lints or ruff can't run (with the fix for the
+host), which fails the check's step: the gate never passes what it couldn't judge.  ``--json`` prints `KIND`, whose
+``failures`` name each failing change's top ``commit``.
 """
 from __future__ import annotations
 
@@ -131,7 +138,7 @@ import tokenize
 import tomllib
 import types
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass, field
@@ -168,7 +175,7 @@ FILE_MODES = {"100644", "100755"}
 #: the lint directories, each run as its base has it
 LINTS = (LINT, REPO_LINT)
 #: P16's lint (every CLI command has a caller) and its list, whose ``public`` table names each command run from outside the
-#: integration with the file that runs it
+#: integration, or only from a file the public export doesn't copy, with the file that runs it
 CALLERS_MODULE = f"{LINT}/test_p16_cli_callers.py"
 CALLERS_LIST = f"{LINT}/allowlists/p16_cli_callers.json"
 PUBLIC = "public"
@@ -960,6 +967,46 @@ def base_lints(c: Change, selection: dict[str, list[str] | None], after: dict[st
     return ran, failures
 
 
+def replaced(c: Change, lints: Iterable[str]) -> set[str]:
+    """The files `base_lints`'s worktree for ``c`` holds as its base has them, not as the change does: each file of a lint
+    directory in ``lints``, and each ruff config, that the change edits or deletes (its allowlists hold the change's
+    entries)."""
+    out = git("diff", "--no-renames", "--name-only", "--diff-filter=DMT", "-z", c.lo, c.hi, "--", *lints, RUFF_CONFIG,
+              REPO_RUFF_CONFIG)
+    return {f for f in out.split("\0") if f and not is_ratchet(f)}
+
+
+def own_copies(c: Change, lints: Iterable[str], found: list[str]) -> tuple[list[str], list[str]]:
+    """(``found``, each counted lint's violations at a file `replaced` names judged on the change's own copy; the
+    violations that leave, as found).  A counted lint reads every file the worktree holds, so in a lint directory or a ruff
+    config it reads the base's text, which the change's tree doesn't hold: the change's copy is counted as the base's lint
+    counts it, against the change's list, and within it, its violations go; past it, the change's own sites replace them.
+    Another lint's violations there stay as found."""
+    at, names = replaced(c, lints), {s for s, *_ in COUNTED}
+    out, by = [], {}
+    for v in found:
+        s, m = v.partition(": ")[0], SITE.match(v)
+        if m and m[1] in at and s in names:
+            by.setdefault((s, m[1]), []).append(v)
+        else:
+            out.append(v)
+    gone = []
+    for (s, f), vs in by.items():
+        _, sites, noun = next(x for x in COUNTED if x[0] == s)
+        if (lint := counted_lint_at(c.lo, s, sites, noun)) is None:
+            out += vs
+            continue
+        holds, count = counter(lint, sites)
+        own = tree_files(c.hi, {f}).get(f) if holds(f) and not f.startswith(tuple(lint.LEFT_OUT)) else None
+        now = count(own.decode("utf-8", errors="replace"), f) if own is not None else []
+        listed, marked = counted_list(lint, s, c.hi)
+        if len(now) <= listed[f] or getattr(lint, "is_registry", lambda path, marks: False)(f, marked):
+            gone += vs
+        else:
+            out += [f"{s}: {f}: {len(now)} found, {listed[f]} allowed"] + [f"{s}: {f}:{line} {what}" for line, what in now]
+    return out, gone
+
+
 def violations(failures: list[dict]) -> list[str]:
     """Each violation a failing test names (its message's indented lines, else its first), or the error a test raised, by
     lint."""
@@ -1018,6 +1065,7 @@ def judge(c: Change, base: str) -> None:
         uncalled, public = public_callers(c)
     noqa_grows = c.noqa_added > c.noqa_removed
     inherited: list[str] = []
+    based: list[str] = []
     if c.touched and not (grown or bad or uncalled or noqa_grows):
         selection = {lint: s for lint in LINTS if (s := lint_selection(c.touched, lint)) is None or s}
         if selection:
@@ -1026,13 +1074,18 @@ def judge(c: Change, base: str) -> None:
             if found:
                 had = set(violations(base_lints(Change(c.lo, c.lo, []), selection, before)[1]))
                 inherited, found = [v for v in found if v in had], [v for v in found if v not in had]
+                found, based = own_copies(c, selection, found)
     if not (grown or bad or uncalled or noqa_grows or found):
         c.verdict, c.why = "passed", "; ".join(
             ([f"{c.before} -> {c.after} ratchet exceptions"] if c.touched else []) + [f"pooled: {p}" for p in c.pooled] + noqa
             + ([f"public, each run by its caller: {', '.join(public)}"] if public else [])
-            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"] if c.lints and not inherited else [])
+            + ([f"the base's lint code finds nothing uncovered ({', '.join(c.lints)})"]
+               if c.lints and not (inherited or based) else [])
             + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(inherited)} violation(s) its own tree already holds, "
-                f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else []))
+                f"which aren't this change's: {added_by(c.lo, inherited)}"] if inherited else [])
+            + ([f"the base's lint code ({', '.join(c.lints)}) finds {len(based)} violation(s) in the base's copy of "
+                f"{', '.join(sorted({SITE.match(v)[1] for v in based}))}, which it runs in place of the change's, and the "
+                f"change's own copy is within its list"] if based else []))
         return
     if is_revert(c):
         c.verdict, c.why = "exempt", "a revert"
@@ -1070,9 +1123,9 @@ def judge(c: Change, base: str) -> None:
 
 
 def lints_at(c: Change, base: str) -> str:
-    """Where the source checks read their lints for ``c``: its own base when that holds BASE (its merge onto `next`, whose
-    members below may change a lint, so these are the lints that land with it), else BASE (a branch's preflight, whose merge
-    base is an older `main`).  A member below that makes a lint count more is counted against the PR that adds a site to it,
+    """Where the source checks read their lints for ``c``: its own base when that holds BASE (a merge on the train, whose
+    merges below may change a lint, so these are the lints it landed with), else BASE (a branch's own commits, whose merge
+    base is an older `main`).  A merge below that makes a lint count more is counted against the PR that adds a site to it,
     rather than found later by the whole-tree run of a change that touches a lint."""
     if c.lo != base and subprocess.run(["git", "merge-base", "--is-ancestor", base, c.lo], capture_output=True).returncode == 0:
         return c.lo
