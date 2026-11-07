@@ -43,7 +43,7 @@ theorem testBit_num : ∀ (l : List Bool) (q : ℕ), (ReadUnit.num l).testBit q 
   | [], q => by simp [num_nil]
   | b :: l, 0 => by
     rw [num_cons, Nat.testBit_zero, List.getD_cons_zero]
-    cases b <;> simp <;> omega
+    cases b <;> simp
   | b :: l, q + 1 => by
     rw [num_cons, Nat.testBit_add_one, List.getD_cons_succ, ← testBit_num l q]
     congr 1
@@ -80,7 +80,7 @@ def byteV (z : Var → Bool) (b : Byte) : UInt8 := UInt8.ofNat (ReadUnit.num (ev
 /-- The bytes byte forms hold at `z`. -/
 def bytesV (z : Var → Bool) (bs : List Byte) : Hash.Msg := bs.map (byteV z)
 
-theorem testBit_byteV (z : Var → Bool) {b : Byte} (hb : b.length = 8) {q : ℕ} (hq : q < 8) :
+theorem testBit_byteV (z : Var → Bool) {b : Byte} (hb : b.length = 8) {q : ℕ} (_hq : q < 8) :
     (byteV z b).toNat.testBit q = ev z (b.getD q Lin.zero) := by
   have h := num_evs_lt z b
   rw [hb] at h
@@ -193,6 +193,7 @@ theorem holds_wordsB (z : Var → Bool) {data : List Byte} (h8 : Bytes8 data) (h
     rw [show 8 * (p / 8) + p % 8 = p by omega, List.getD_eq_getElem?_getD (l := List.range 8),
       List.getElem?_range (by omega)] at key
     simp only [Option.getD_some] at key
-    rw [e, key, getD_bytesV, testBit_byteV z (length_getD_of_bytes8 h8 (by omega)) (Nat.mod_lt _ (by norm_num))]
+    rw [e, key, getD_bytesV,
+      testBit_byteV z (length_getD_of_bytes8 h8 (j := 8 * i + 7 - p / 8) (by omega)) (Nat.mod_lt _ (by norm_num))]
 
 end Accounting.ReadUnit.FrameRead

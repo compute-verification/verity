@@ -39,27 +39,43 @@ theorem sound_mapM_getD {β γ : Type} (d : γ) (f : β → M γ) (Q : (Var → 
 def ConstsOk (z : Var → Bool) (c : Consts) : Prop :=
   (∀ f, c.1 = some f → ev z f = false) ∧ ∀ f, c.2 = some f → ev z f = true
 
+/-- With `BL.constant` a constant form, the constant bits are `pure`: the cache gains only constant forms. -/
+theorem constBits_constForm (c : Consts) (v w : ℕ) : ∃ c' : Consts, constBits constForm c v w =
+      pure (c', (List.range w).map fun j => if v.testBit j then c'.2.getD Lin.one else c'.1.getD Lin.zero) ∧
+    (∀ f, c'.1 = some f → f = Lin.const false ∨ c.1 = some f) ∧
+      ∀ f, c'.2 = some f → f = Lin.const true ∨ c.2 = some f := by
+  simp only [constBits, constForm]
+  split_ifs <;> simp only [map_pure, pure_bind] <;>
+    exact ⟨_, rfl, fun f hf => by first | exact Or.inr hf | exact Or.inl (Option.some.inj hf).symm,
+      fun f hf => by first | exact Or.inr hf | exact Or.inl (Option.some.inj hf).symm⟩
+
 /-- **The constant bits** (`_body.const` over `BL.constant` in a flat net): `v`'s low `w` bits. -/
 theorem sound_constBits (c : Consts) (v w : ℕ) : Sound (constBits constForm c v w) fun z r =>
     ConstsOk z c → ConstsOk z r.1 ∧ evs z r.2 = (List.range w).map v.testBit ∧ r.2.length = w := by
-  simp only [constBits, constForm, map_pure]
-  refine Sound.bind' (P := fun z c0 => ConstsOk z c → ∀ f, c0 = some f → ev z f = false)
-    (Sound.ite' (fun _ => Sound.pure' fun z _ f hf => by cases hf; rfl) fun _ => Sound.pure' fun z hc => hc.1)
-    fun c0 => Sound.bind' (P := fun z c1 => ConstsOk z c → ∀ f, c1 = some f → ev z f = true)
-      (Sound.ite' (fun _ => Sound.pure' fun z _ f hf => by cases hf; rfl) fun _ => Sound.pure' fun z hc => hc.2)
-      fun c1 => Sound.pure' fun z h1 h0 hc => ⟨⟨h0 hc, h1 hc⟩, ?_, by simp⟩
-  have e0 : ev z (c0.getD Lin.zero) = false := by
-    cases c0 with
+  obtain ⟨c', he, h1, h2⟩ := constBits_constForm c v w
+  rw [he]
+  refine Sound.pure' fun z hc => ?_
+  have e0 : ∀ f, c'.1 = some f → ev z f = false := fun f hf => by
+    rcases h1 f hf with rfl | h
+    · rfl
+    · exact hc.1 f h
+  have e1 : ∀ f, c'.2 = some f → ev z f = true := fun f hf => by
+    rcases h2 f hf with rfl | h
+    · rfl
+    · exact hc.2 f h
+  have g0 : ev z (c'.1.getD Lin.zero) = false := by
+    cases h : c'.1 with
     | none => rfl
-    | some f => exact h0 hc f rfl
-  have e1 : ev z (c1.getD Lin.one) = true := by
-    cases c1 with
+    | some f => exact e0 f h
+  have g1 : ev z (c'.2.getD Lin.one) = true := by
+    cases h : c'.2 with
     | none => rfl
-    | some f => exact h1 hc f rfl
+    | some f => exact e1 f h
+  refine ⟨⟨e0, e1⟩, ?_, by simp⟩
   simp only [evs, List.map_map]
   refine List.map_congr_left fun j _ => ?_
   simp only [Function.comp_apply]
-  split <;> simp_all
+  split <;> rename_i hj <;> simp [hj, g0, g1]
 
 /-! ## The AND tree and the comparison -/
 
@@ -78,8 +94,10 @@ theorem sound_andPairs : ∀ l : List Lin, Sound (andPairs l) fun z r =>
 
 theorem sound_andTree : ∀ (k : ℕ) (l : List Lin), Sound (andTree k l) fun z r =>
     l.length ≤ k + 1 → (ev z r = true ↔ ∀ f ∈ l, ev z f = true)
-  | _, [] => Sound.pure' fun z _ => by simp
-  | _, [a] => Sound.pure' fun z _ => by simp
+  | 0, [] => Sound.pure' fun z _ => by simp
+  | _ + 1, [] => Sound.pure' fun z _ => by simp
+  | 0, [a] => Sound.pure' fun z _ => by simp
+  | _ + 1, [a] => Sound.pure' fun z _ => by simp
   | 0, a :: b :: l => Sound.pure' fun z h => by simp at h
   | k + 1, a :: b :: l => by
     show Sound (andPairs (a :: b :: l) >>= fun l' => andTree k l') _
@@ -131,17 +149,24 @@ theorem sound_selectGo : ∀ (m : Lin) (fl : List Lin) (ps : List (Lin × Lin)),
   | m, [], ps => Sound.pure' fun z => rfl
   | m, _ :: _, [] => Sound.pure' fun z => rfl
   | m, f :: fl, (a, b) :: ps => by
+    have hk : ∀ m' : Lin, Sound (selectGo m' fl ps) fun z r =>
+        ev z m' = (ev z m ^^ (ev z f && (ev z a ^^ ev z b))) →
+          ev z r = selV (ev z m) (evs z (f :: fl)) (((a, b) :: ps).map fun ab => (ev z ab.1, ev z ab.2)) :=
+      fun m' => Sound.mono (sound_selectGo m' fl ps) fun z r h hm' => by
+        rw [h, hm']
+        simp [selV, evs]
     simp only [selectGo]
-    refine Sound.bind' (P := fun z m' => ev z m' = (ev z m ^^ (ev z f && (ev z a ^^ ev z b)))) ?_ fun m' =>
-      Sound.mono (sound_selectGo m' fl ps) fun z r h hm' => ?_
-    · refine Sound.ite' (fun hc => Sound.pure' fun z => ?_) fun _ =>
-        Sound.bind' (sound_and _ _) fun r => Sound.pure' fun z hr => ?_
-      · have hd := ev_of_isConst hc z
-        rw [ev_xor] at hd
-        split_ifs with hdc <;> simp [hd, hdc]
-      · simp [hr]
-    · rw [h, hm']
-      simp [selV, evs]
+    refine Sound.ite' (fun hc => ?_) fun _ => ?_
+    · simp only [pure_bind]
+      refine Sound.mono (hk _) fun z r h => h ?_
+      have hd := ev_of_isConst hc z
+      rw [ev_xor] at hd
+      rw [hd]
+      split_ifs with hdc <;> simp [hdc]
+    · refine Sound.bind' (sound_and _ _) fun r => ?_
+      simp only [pure_bind]
+      refine Sound.mono (hk _) fun z x h hr => h ?_
+      simp [hr]
 
 theorem selV_false (m : Bool) : ∀ (k : ℕ) (ps : List (Bool × Bool)), selV m (List.replicate k false) ps = m
   | 0, ps => by cases ps <;> rfl
@@ -217,24 +242,27 @@ theorem sound_flagsGo (bits : List Lin) (N : ℕ) : ∀ (t : ℕ) (acc : Option 
       evs z r = (List.range ((t + 7) / 8)).map (fun j => anyFrom z bits (8 * (j + 1)) N) ++ evs z out
   | 0, acc, out => Sound.pure' fun z _ _ => by simp
   | t + 1, acc, out => by
-    simp only [flagsGo]
-    refine Sound.bind' (P := fun z a => t + 1 + 8 ≤ N → acc.elim false (ev z) = anyFrom z bits (t + 1 + 8) N →
-        ev z a = anyFrom z bits (t + 8) N) ?_ fun a => Sound.mono (sound_flagsGo t (some a) _) fun z r h ha hN hacc => ?_
-    · cases acc with
-      | none => exact Sound.pure' fun z hN hacc => by
-          rw [anyFrom_step z bits (show t + 8 < N by omega), show t + 8 + 1 = t + 1 + 8 by omega, ← hacc]
-          simp
-      | some a₀ => exact Sound.mono (sound_orL a₀ _) fun z r hr hN hacc => by
-          rw [hr, anyFrom_step z bits (show t + 8 < N by omega), show t + 8 + 1 = t + 1 + 8 by omega, ← hacc,
-            Bool.or_comm]
-          rfl
-    · have ha' := ha hN hacc
-      rw [h (by omega) ha']
-      split_ifs with h8
-      · rw [show (t + 1 + 7) / 8 = (t + 7) / 8 + 1 by omega, List.range_succ, List.map_append, List.append_assoc]
-        simp only [List.map_cons, List.map_nil, evs, List.singleton_append]
-        rw [ha', show 8 * ((t + 7) / 8 + 1) = t + 8 by omega]
-      · rw [show (t + 1 + 7) / 8 = (t + 7) / 8 by omega]
+    have tail : ∀ a : Lin, Sound (flagsGo bits t (some a) (if (t + 8) % 8 = 0 then a :: out else out)) fun z r =>
+        t + 1 + 8 ≤ N → ev z a = anyFrom z bits (t + 8) N →
+          evs z r = (List.range ((t + 1 + 7) / 8)).map (fun j => anyFrom z bits (8 * (j + 1)) N) ++ evs z out :=
+      fun a => Sound.mono (sound_flagsGo bits N t (some a) _) fun z r h hN ha => by
+        rw [h (by omega) ha]
+        split_ifs with h8
+        · rw [show (t + 1 + 7) / 8 = (t + 7) / 8 + 1 by omega, List.range_succ, List.map_append, List.append_assoc]
+          simp only [List.map_cons, List.map_nil, evs, List.singleton_append]
+          rw [ha, show 8 * ((t + 7) / 8 + 1) = t + 8 by omega]
+        · rw [show (t + 1 + 7) / 8 = (t + 7) / 8 by omega]
+    cases acc with
+    | none =>
+      simp only [flagsGo, pure_bind]
+      refine Sound.mono (tail _) fun z r h hN hacc => h hN ?_
+      rw [anyFrom_step z bits (show t + 8 < N by omega), show t + 8 + 1 = t + 1 + 8 by omega, ← hacc]
+      simp
+    | some a₀ =>
+      simp only [flagsGo]
+      refine Sound.bind' (sound_orL a₀ _) fun a => Sound.mono (tail a) fun z r h hr hN hacc => h hN ?_
+      rw [hr, anyFrom_step z bits (show t + 8 < N by omega), show t + 8 + 1 = t + 1 + 8 by omega, ← hacc]
+      exact Bool.or_comm _ _
 
 /-- **The flags** (`frame_v3._flags`): flag `j < n - 1` is set iff bits `8 (j + 1) … 8 n - 1` of `bits` have one set. -/
 theorem sound_flags (bits : List Lin) (n : ℕ) : Sound (flags bits n) fun z fl => 1 ≤ n →
