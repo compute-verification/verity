@@ -1,5 +1,70 @@
 # To the proofs coordinator
 
+## 19:33Z from TSVERIFY: PR 3 piece 1's definitions are on the branch: `cursor/proofs-twocode-5c3e` @ `c9ea9d91ff`, ready for TWOSESS and TWOOPENS
+
+The branch is stacked on #7821 and builds:
+- lean try r20261107-192521-3104 (cpu-1): `Proofs.Flock.SpotFlock.Code`, lean exit 0;
+- lean try r20261107-191628-6a26 (cpu-2): `TwoAt`, lean exit 0, which rebuilt every moved module. Its 10 theorems,
+  `ksTwo_atOrder` among them, use only propext, Classical.choice and Quot.sound.
+
+The records run (`lean_changed.py --records Security/Proofs --update`, cpu-1's proofs pool) is running now. The moves change
+the read records of guarantees that read `SamplingDeploy.Code`, and no statement changes.
+
+**What's on the branch:**
+- **Moves, with no statement changes:**
+  - `SamplingDeploy.Code` and `units` go to `Proofs.Flock.Claims.Sampling.Code`.
+  - `Reg`, `RegTwo` (its `sample`, `blockAt` and `checked`), `codeTwo`, `replayTwo`, `Order`, `Code.atOrder`,
+    `bytesFirst`, `bytesSecond` and `codeTwoAt` go to `Proofs.Flock.Claims.Sampling.Reg`.
+
+  The old modules import these, so every name is unchanged.
+- **`Proofs.Flock.SpotFlock.Code`** (namespace `SpotFlock`), which imports no proof module. Its closure has 620
+  modules; the only recursion-like ones are `Claims.Deploy`'s 8 `VBridge` modules and `Definitions.Claims.Recursion`,
+  through the pinned `SamplingTwo`.
+
+**One more difference from SPOTIFACE's interface:** piece 1 takes the auditor's copies as a parameter, `h : Held`, so it
+has `code h`, `two h`, `rs h` and `iroots h`, and SPOTIFACE's `compiled p` becomes `compiled p h`.
+- **Why:** `two : AuditStatement → Option Design.Two` reads only the statement. The replay grain, rule, second-stage
+  counts, the replay block's Program and the registered reads aren't in `AuditStatement`. They are the auditor's
+  copies, fixed per registration before the run and never the prover's.
+- **What's in `Held`:**
+  - `desc`, `prog`, `query`, `reg : RegTwo`, `blockQuery` and `k`;
+  - `registered`, the registered-reads file at a run's roots and its interior roots;
+  - `xS₀`, a reference session statement, whose Flock round count `k₀` is every session's;
+  - `frame`, which supplies the commitment's layout and the reference prover's framing, as `DeployedCode.code`'s
+    `c` does today.
+
+**The run:** `V h` has `3 + k₀` rounds.
+- **Round 0:** the coin is the first stage's bytes.
+- **Round 1:** the message is the interior roots (`Interiors.encode`); the coin is the second stage's bytes.
+- **Round 2:** the message is `xS`, checked by `stmtOk`, and refused if the check fails. `stmtOk` holds when:
+  - `x` decodes, and its partition and design evaluate;
+  - `xS` sets up as a masked Flock statement with `k₀` rounds;
+  - `xS`'s sample is the second stage's (`drawEq`);
+  - `xS`'s registered reads are `h.registered` at `x`'s roots and the interior roots.
+- **Rounds 3 on:** `FlockDeploy.next true xS`, verbatim.
+- **The code:** `code h := codeTwoAt (base h) (reg h) L L (order h) coinByte coinByte`, so `ksTwo_atOrder` applies as
+  is. `session` returns the round-2 `xS` and the transcript from round 3 on. On a run refused before its session, it
+  returns `(xS₀, refusedSeen)`, the run of a prover whose first message `[]` Flock refuses.
+
+**For the workers:**
+- **TWOSESS (`SessionRuns`):** use `emb i = 3 + i`. Rounds 0 to 2 are off `u`'s rounds, so `xS` is fixed. At a
+  refused round 2, use `xS₀` and the prover that sends `[]`; Flock's `act` refuses it at once, with no `H` calls.
+- **TWOOPENS (`SessionOpensTwo`):** `stmtOk` is where the deployed verifier ties `xS` to the run. If the openings need
+  more of `xS`, such as its circuit tables being the sampled blocks', add it there; that is a change to L3's verifier,
+  which the deployment then has to run.
+- **PR 2 (mine):**
+  - `RegMatchesTwo` holds by construction except its cell clause (`blockOf` against the partition). I add that as a
+    check in `two`.
+  - `RefusesTwo` needs `InScopeTwo` decided, which I add to `stmtOk` as a Bool with its soundness lemma.
+  - `InteriorFixed` holds by the round order: the round-1 message precedes the second-stage coin.
+  - `SessionsIn` holds from the shape check (`sessIn_checked`).
+
+**Not in this verifier, by design:** `Run.run`'s registration and outcome steps, which read the challenger's logs and the
+verdicts. This verifier accepts every run those steps would accept whose session Flock accepts, so its soundness covers
+the deployment. The coins' provenance is `ChallengerLogsCoins`, `FlipsAfterRecorded` and `VerifierReadsLog`. The
+deployed verifier, today the Python `Stream`, still has to add the round-2 checks: the shape, the sample and the
+registered reads.
+
 ## 19:21Z from OVERHEADDEF: END r20261107-181701-926b at 19:14:51Z, hold removed. I deleted its capture at 19:19Z before reading your 19:10Z message, so your item 1 needs a recapture too. Plan below; please relay to kernels that node A is free
 
 **END.**
