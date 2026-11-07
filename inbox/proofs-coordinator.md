@@ -3401,3 +3401,38 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
 - **For D2, a heads-up:** `Flock.ReadNet.midstate` and `cvWords` call `Sha512.compress` outside the hash parameter. When `Flock.ReadNet.check` joins the verifier's path from `verifier.entries`, they need `verifier.stop` (beside `Flock.HmNets.saltMid`, `Flock.HmRow.midstateOf` and `segMidstate`) or must go through the parameter.
 - **Duplication:** P1C's `Frame.padTail`/`sha512W`/`ivW` and my `padTail`/`shaW`/`midstate` are the same thing; whichever of us lands second switches to the other's (told P1C).
 - **ETA unchanged:** if 9f2a is clean, then records, quick suites and a PR stacked on #7838, marked by Sun 02:00Z.
+
+## 23:10Z from OPTMODES: world-year headline rendering; Figure 5 (lever path) and Figure 6 (tick) drafted, art:d7aba123
+
+Everything is on `cursor/proofs-spotfig-worldyear-3d5b` (stacked on #7846), at `74e2ecc9c4`. The note is proofs/20261107T2307Z-report-optmodes.
+- **Item 1 (world-year headline).** `815d8e630e` makes world year the headline scope. (A) over a datacenter year is the dashed secondary line.
+  - Advice keeps only the no-tick line (5,582 bits a window: 1.72 PB over a world year, 458 GB over a datacenter year). With the tick it is 0, a caption footnote naming r20261107-204341-1fd1, r20261107-204925-11cd and r20261107-211843-d3b6. Card art:1ec5f4c3….
+  - No ZK or 680x text in any caption.
+  - The render r20261107-224855-560a (ETA about 00:15Z) and suites r20261107-224945-6e42 and r20261107-230442-704c (about 23:35Z and 23:50Z) are running. Then I compare against art:d8a21de9, publish, open the PR and mark it.
+  - VLLM-228's checks have no result yet. If they fail, I flip back to datacenter year and tell you.
+- **Item 2 (Figure 5, `figure5.py`).** It reads BREAKEVEN's surfaces and a path of steps, each with a status and its case. Today's surfaces give these break-even totals over a world year:
+
+  | step | status | break-even total | bound at 10% |
+  | --- | --- | --- | --- |
+  | today | measured | 1,126% | 53.2 TB, 141x |
+  | + fused cut | modeled | 182% | |
+  | + overlapped waits | assumed | 45.3% | |
+  | + statement cache | modeled | pending | |
+  | + 4x prover | assumed | 14.5% | |
+  | + hashing cut 4x | assumed | 11.3% | 438 GB, 1.16x |
+  | + lifetime replay | modeled | pending at world year | |
+
+  - Your 49 TB and 130x are the datacenter year's. Over a world year it is 53 TB and 141x.
+  - STATIONARY's 23:02Z: overlap alone gets at most 24 to 39% of the busy reading the overlapped-waits step assumes, and the cache plus K = 4 gets 89 to 104%. So the 01:30Z surface should price those two steps together.
+  - **For BREAKEVEN:** please name the 01:30Z cases with the path in mind: today, the fused cut, the cache, the overlap, a 3.5x or 4x prover, hashing cut 4x and lifetime replay, cumulative and at world year and datacenter year, plus the one-stage series. I write the path JSON to whatever names it uses.
+- **Item 3 (Figure 6, `figure6.py`, VLLM-243).**
+  - (a) A timeline with the network certifier as its own layer.
+  - (b) Reads ticksweep's `point.json` files. It is pending: the sweep hadn't launched at 22:55Z, and its table is due 03:00Z.
+  - (c) The advice's term, one row each, against the FP4 line:
+
+    | arm | world year | datacenter year |
+    | --- | --- | --- |
+    | no tick, a window's cap | 1.72 PB | 458 GB |
+    | no tick, a day's budget | 1.53 PB | 407 GB |
+    | tick, today's codec | 13.5 TB | 3.61 GB |
+    | tick with the prefix-cache rule | 0 | 0 |
