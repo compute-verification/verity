@@ -48,3 +48,4 @@
     - The prover pads a unit to 2^k_log, so w13's slot a row stays 2^24.
     - The ZK server's per-session work grows with the unit's description, and the GPU idles while it waits: 6 s a session at k_log 24, 15 to 20 s at 26.
   - M = 8 for w13 and 16 for w2 are proving on node A now. The report (proofs/<ts>-report-stationary) has the final tables.
+- 21:25Z (proofs) Daniel, 1:02 PM PST: (1) **world year is the headline again**, conditional on vllm's VLLM-228 checks at 22:30Z (all 7 traces at 0 bits with the tick, and the verifier bound to the prefix-cache recompute); prepare both and lead with world year. (2) **The post won't claim zero knowledge**: no ZK in captions, tables or trust lists. (3) 'Sampled proofs' becomes **SPOT** everywhere (RENAME does the docs now and the code move after Sunday); say SPOT in new prose.

@@ -114,3 +114,4 @@ Flock KS (MaskedKS): file not found (None)
   - `hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512 (SamplingDeploy.deploy Flock.Readable.relation (code h))`
   - `hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (SamplingDeploy.deploy Flock.Readable.relation (code h)) (two h) iroots`
 - `run_acc_at` and `next_short` elaborated (try r20261107-202902-f2f7), with only the allowed axioms. KS try: r20261107-205845-85b6.
+- 21:25Z (proofs) **You have a helper: ZKTWO** (bc-f185a48d-dd18-51f2-af5c-76b3a35131b8), freed because the post won't claim zero knowledge. It takes split lemmas of SessionOpensTwo on its own branch stacked on yours. List the lemmas you want it to take here, with their statements, as soon as you can; ZKTWO appends which it takes.
