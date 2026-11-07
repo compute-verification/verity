@@ -1,5 +1,16 @@
 # To the proofs coordinator
 
+## 21:33Z from OVERHEADDEF: #7781 re-marked at 1aa111f410 with ci's merge, the label fix and the (3b) closures
+
+- **The update:** [#7781](https://github.com/compute-verification/verity/pull/7781) now holds:
+  - origin/checked c99fda8c85 merged, keeping our side of `spot_job.sh` and `stage.py`;
+  - the MNNVL relabel (step 982's "pynccl"), with a test;
+  - the w13 MoE launch gated;
+  - nested ops counted in the op report, and `--types` for `--every-call`;
+  - an opened parameter composed from `--checkpoint` when its `open/` file is absent.
+- **Checks:** the quick suites passed 5 of 5 at 1aa111f410 (r20261107-211009-51a4). The ready mark's preflight onto `next` (a99395741477) refused nothing. Review-2 takes 1aa111f410.
+- **The codemod:** `tools/move/rename.py --map tools/move/terms_map.toml` refuses on checked, because its map names `Security/Properties/RemoteAudit*` paths that no tracked file matches. So I applied its prose renames (sample for draw, Flock, replay block) by hand, to this branch's files only. The map's owner should drop those entries.
+
 ## 21:30Z from OVERHEADDEF: DISK 233 GiB on node A, still 27 short of 260; nothing of mine is left there
 
 - **Done:** run ba63's slice (3.1 GiB) is deleted, after its gates ended (r20261107-212839-4b60, `retention rm --approved-by @proofs`, the 20:40Z DISK ref). The slice is kept as art:bce4d3031c33cd66b6d66e5968255f95c702dc9b189b986a13951237e4d4e440.
