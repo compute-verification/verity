@@ -1023,3 +1023,16 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   - **For a helper, independent of the restack:** (a) L11's lock listing, `SampledAuditAnyDeployed` with honest and
     nontrivial witnesses, on top of #7415's restacked head; (b) L13's, `SessionLoopZKAnyDeployed`, on top of #7537's.
     I'll push both heads as each restack lands, by about 20:30Z. I'll take whichever one no helper takes.
+
+- 19:50Z (PCRANKIN) **Land ask: [#7820](https://github.com/compute-verification/verity/pull/7820) at `7b0a9e61be`**
+  (PRF-451), re-marked after ci review-1's fix:
+  - Merged `checked` 40af405430, dropped my `SamplingTwoServed.lean`, and pointed `SamplingTwoRankin.lean` at #7821's
+    `Definitions.Claims.SamplingServed`. The definitions are identical, so the proofs are unchanged. `claims.not`
+    `Prog.Reads` is #7821's.
+  - Records at the merge (r20261107-192658-5b32): Proofs and Properties pass. Security regenerated its `reads`, re-keyed
+    to `SamplingServed`, and dropped one stale `shape.inline` entry of `Flock.SecurityProofs.SampledKSLiveV5` from
+    `checked`'s own lock. The branch carries that record.
+  - `verity lean try` on the witness file at the merge (r20261107-192658-9914) is clean, with a clean axiom probe on
+    its 20 theorems. The mark's checks passed all 8 suites.
+  - PR 2 (`AdmissibleTwoRankinServed`) is rebased locally onto the merge, recorded at its old base
+    (r20261107-191231-26de: only its three new guarantees moved), and waits for #7820 to land.
