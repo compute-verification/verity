@@ -1,4 +1,6 @@
-import PousCheck.SetupProtocol
+module
+
+public import PousCheck.SetupProtocol
 
 /-!
 # The PoUS setup check's properties, stated against the Lean code
@@ -25,6 +27,8 @@ All three are proved and guarantees of this package (`lean-audit.json`): `Deploy
 `AcceptsDecodes` (completeness: a `C*` that decodes to the committed `W` is accepted), with its instance, and the code's
 block decoder read as the trusted model's (`DecodeIsModel`).
 -/
+
+@[expose] public section
 
 namespace PousCheck.Properties
 

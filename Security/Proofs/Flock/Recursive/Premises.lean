@@ -1,9 +1,22 @@
-import Proofs.Flock.Recursive.Compile
-import Proofs.Flock.Recursive.Raw
-import Proofs.Flock.Soundness.Assumptions.Recursive
-import Proofs.Flock.Soundness.Assumptions.Zk
-import Proofs.Flock.Soundness.Assumptions.Inner
-import Proofs.Flock.Soundness.Assumptions.Registrant
+module
+
+public import Proofs.Flock.Recursive.Compile
+public import Proofs.Flock.Soundness.Assumptions.Zk
+public import Proofs.Flock.Soundness.Assumptions.Inner
+public import Proofs.Flock.Soundness.Assumptions.Registrant
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The premises the recursive audit's property takes
@@ -38,9 +51,11 @@ abbreviates, unchanged.
   and session record the coin server writes at each history hold that history's commitments and coins where a map of
   the rounds says they go (one premise over the writer `wr`, as the verifier holds what it writes).
 
-The list belongs in `Security/Definitions/` (the same ruling), whose modules import only Mathlib and the spec; C-Flock's
+The list belongs in `Security/Definitions/`, whose modules import only Mathlib and the spec; C-Flock's
 definitions, which these read, are still in the proofs package, so the list is here until they are extracted.
 -/
+
+@[expose] public section
 
 namespace Flock.Premises
 

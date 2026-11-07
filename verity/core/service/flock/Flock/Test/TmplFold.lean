@@ -6,10 +6,19 @@ positions, and that equals `Stmt.project (Stmt.baseOf α (Stmt.tensor lw ρ) A B
 net committed at the layout's positions (`Tmpl.unrollAt`), the matrices a flat unit's slot would hold, and so does
 `foldSplit`, on these and on units whose pair or quad the call tree reaches on two paths, where it folds tables.
 -/
-import Flock.TmplSplit
-import Flock.NetAt
-import Flock.Statement
-import Flock.Test.TmplLayout
+module
+
+public import Flock.NetAt
+public import Flock.Statement
+public import Flock.Test.Tmpl
+public import Flock.Test.TmplLayout
+public import Flock.TmplSplit
+meta import Flock.NetAt
+meta import Flock.Statement
+meta import Flock.Test.TmplLayout
+meta import Flock.TmplSplit
+
+@[expose] public section
 
 namespace Flock.Test.TmplFold
 

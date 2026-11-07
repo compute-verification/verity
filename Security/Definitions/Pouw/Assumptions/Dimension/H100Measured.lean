@@ -1,4 +1,7 @@
-import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.H100Assumptions
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # `MH100`'s measured price table (Round 7; draft semantics)
@@ -35,6 +38,8 @@ the hardware. The table is kept as Round 7 measured it, so that no record that r
   register, as low as 21.45 loop-free, and 21.33 at full dispatch (`H32`'s docstring).
 * **Not measured on the H100:** the predicate and carry writers, and the uniform datapath.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.H100
 

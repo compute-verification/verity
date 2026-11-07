@@ -1,4 +1,21 @@
-import Proofs.Flock.Recursive.ValueFinder
+module
+
+public import Proofs.Flock.Recursive.ValueFinder
+public import Proofs.Flock.Recursive.ValueSrc
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.VBridge.PartS
 
 /-!
 # The verifier's own rows as `valueFinder`'s source
@@ -16,6 +33,8 @@ are their ties:
   (`valueRows_coef`, `valueRows_dirs`, `valueRows_v`), so `valueSrcC3_eq` gives `value_tie_coll`'s `hsrc`;
 * `stackedLevel_of_check`, `openingCheck_of_check`: `RecCoins.check` runs those checks at those units.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

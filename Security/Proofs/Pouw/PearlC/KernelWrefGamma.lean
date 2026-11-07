@@ -1,5 +1,10 @@
-import Proofs.Pouw.PearlC.DeviceRev1Gamma
-import Definitions.Pouw.PearlC.DeviceKernelWref
+module
+
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TileGamma
 
 /-!
 # γ against the honest kernel's `W_ref`, from the record's TT_OUT (staged)
@@ -12,6 +17,8 @@ import Definitions.Pouw.PearlC.DeviceKernelWref
   (`pearlCGammaDevKAt`, `pearlCGammaDevRev1KAt`) and `GγSampled` from TT_OUT per tile (`pearlCSampledDevKAt`,
   `pearlCSampledDevRev1KAt`), where `wrefDevK d c = ω·(1 − ρ)·creditDev` (rev1: `wrefDevRev1K`, `creditDevRev1`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

@@ -1,3 +1,13 @@
+module
+
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Option
+public import Mathlib.Data.Fintype.Prod
+public import Mathlib.Data.Fintype.Sigma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
 import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
@@ -14,6 +24,8 @@ nowhere. Which stop comes may depend on anything, the witness included, so the s
 * `RecStops M`, `card_recStops`: a recursive session's stops, none or the first statement `p` to stop after its `k`-th
   message, `k ≤ M p`, which are `1 + Σ_p (M p + 1)`.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

@@ -1,4 +1,11 @@
+module
+
+public import Definitions.NetworkCertifier.Assumptions
+public import Definitions.NetworkCertifier.Schedule
+public import Mathlib.Data.Set.Card
+import Mathlib.Data.Sym.Sym2.Init
 import Proofs.NetworkCertifier.Advice
+import Proofs.NetworkCertifier.Counting
 
 /-!
 # Theorem 3 for the shipped schedule: the constant-rate Program
@@ -10,6 +17,8 @@ reaches.
 
 The witness at the end shows that the windows bound is met exactly by a covert sender.
 -/
+
+@[expose] public section
 
 namespace NetTiming
 

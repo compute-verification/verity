@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ExecDraw
-import Proofs.Flock.Soundness.Audit.Stratified
-import Proofs.Flock.Soundness.E2E
+module
+
+public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.Audit.Stratified
+public import Proofs.Flock.Soundness.E2E
 
 /-!
 # The executable stratified draw, and the e2e theorems at its law
@@ -19,11 +21,13 @@ units run over `σ`'s stratum.
   count curve bounded by `Law.stratified`'s `miss`.
 
 The streams are uniform by assumption A3 (`Assumptions.UniformRandomBytes`, `uniform/io-getrandombytes`). The live draw,
-`Flock.Draw.drawOS`, extends a stream that runs out and reruns, rather than drawing every unit; `ExecDrawOS.lean` proves the
-same bounds for it.
+`Flock.Draw.drawWith` on the challenger's coins, extends a stream that runs out and reruns, rather than drawing every
+unit; `ExecDrawOS.lean` proves the same bounds for it.
 
 `stratumK` is the count law's `k` by `rfl`: `countRule_eq_draw` (`Audit/FlockWork.lean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -101,7 +105,7 @@ theorem stratified_units (strata : Array Flock.Draw.Stratum) (streams : Array By
   exact hmem j hj
 
 /-- **The executable stratified draw escapes no more often than the model's.** Its probability space is independent
-uniform streams: that the verifier's bytes are uniform is A3 (`Assumptions.UniformRandomBytes`,
+uniform streams: that the challenger's coins are uniform is A3 (`Assumptions.UniformRandomBytes`,
 `uniform/io-getrandombytes`), which `drawOS_stratified_escape_le` (`ExecDrawOS.lean`) takes for the live draw, reruns
 included. -/
 theorem stratified_exec_escape_le (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)

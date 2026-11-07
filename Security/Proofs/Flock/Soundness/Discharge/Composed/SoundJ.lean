@@ -1,4 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
+import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 
 /-!
 # The soundness half of one `--zk` sampled session of `J` tables
@@ -21,6 +38,8 @@ The same bound shape and assumptions as `zk_session_sound`, with two changes tha
 `ε_ks` (`ksAvgStrictZ`) is the worst table's knowledge error averaged over the law's draws, and `δ_link` reads the plan
 only through the positions the draw reads and `ρ`, a bound on every table's rate, so neither grows with `J`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

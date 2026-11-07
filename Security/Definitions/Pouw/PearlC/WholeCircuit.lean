@@ -1,5 +1,6 @@
-import Definitions.Pouw.PearlC.RowCircuit
-import Definitions.Core.Partition
+module
+
+public import Definitions.Pouw.PearlC.RowCircuit
 
 /-!
 # A whole Program's gate table from its units' tables (definitions only)
@@ -24,6 +25,8 @@ The inputs' widths, the ports, the unit numbering and the outputs are checked ag
 its descriptor digests pinned, by `tests/test_circuit_whole_lean.py`; each unit's own table is tied to its template by
 `test_circuit_row_lean.py` and `test_circuit_tile_lean.py`.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 

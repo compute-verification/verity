@@ -1,3 +1,16 @@
+module
+
+public import Definitions.Pouw.TileBound.Defs
+public import Mathlib.Algebra.Field.Rat
+public import Mathlib.Algebra.Group.End
+public import Mathlib.Data.Fintype.Sum
+public import Mathlib.Logic.Equiv.Fin.Basic
+meta import Lean.Meta.Tactic.NormCast
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.LinearAlgebra.Matrix.Notation
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.GCD
 import Proofs.Pouw.TileBound.Proofs
 
 /-!
@@ -17,6 +30,8 @@ It costs `7(mn + m + n)` against honest `8mn`. That is below honest
 whenever `7(m + n) < mn`, for instance at `m = n = 16`. So the model's int8 cell is open for a real program, not only for
 the numbers `support_admits_open` exhibits. On the card, tile index sharing and integer scale classes stop it (§7.3).
 -/
+
+@[expose] public section
 
 namespace Pouw.TileBound
 

@@ -1,5 +1,7 @@
-import Proofs.Accounting.Defs.Actual.Source
-import Proofs.Accounting.Defs.Localization
+module
+
+public import Proofs.Accounting.Defs.Actual.Source
+public import Proofs.Accounting.Defs.Localization
 
 /-!
 # Accounting's vocabulary that no guarantee reads
@@ -7,3 +9,5 @@ import Proofs.Accounting.Defs.Localization
 Definitions the proofs use and no listed guarantee's statement reads, kept out of the trusted text (`Definitions/`):
 the placed source (`Actual`) and localization.
 -/
+
+@[expose] public section

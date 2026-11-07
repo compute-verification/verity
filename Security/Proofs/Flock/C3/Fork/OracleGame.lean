@@ -1,3 +1,11 @@
+module
+
+public import Definitions.Flock.Game.Interleave
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Interleave
 
 /-!
@@ -12,6 +20,8 @@ It goes through `valueF`, the value of a game whose outcome `a` pays `u a` (`val
 indicator): `value p (g.bind f)` is `valueF` at the continuations' values (`value_bind_valueF`), and the repetition
 theorem holds for products of payoffs (`valueF_interleave_le`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

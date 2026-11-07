@@ -1,5 +1,9 @@
-import Definitions.Core.Game
-import Definitions.Accounting.Physical
+module
+
+public import Definitions.Core.Game
+public import Definitions.Accounting.Physical
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Tasks, classes, thresholds and slowdown (trusted)
@@ -21,6 +25,8 @@ The symbol table's task and slowdown rows, and the classes they are read in:
   the class `𝒜` exceeds `η`, and the **slowdown** (`slowdown`) the ratio of two thresholds,
   `T_𝒢(η; 𝒜′) / T_𝒢(η; 𝒜_phys)`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Slowdown
 

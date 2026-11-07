@@ -1,5 +1,23 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
+public import Proofs.Flock.Recursive.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Recursive.Guarantees
-import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # The recursive audit's zero knowledge at the operating system's salts
@@ -13,6 +31,8 @@ The firewall reads each commitment's salt from the operating system, 192 bytes (
   and at the pinned key's hiding gap `hidingGap(My, saltHash)` (`CROnly.hm96Hiding_gap`) with no premise but A3 per
   test. The bound gains `η`.
 -/
+
+@[expose] public section
 
 namespace Flock.SecurityProofs
 

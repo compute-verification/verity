@@ -1,6 +1,10 @@
-import Proofs.Population.Determinacy
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
+module
+
+public import Definitions.Population.Dataflow
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+public import Proofs.Population.Determinacy
 import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
 
 /-!
 # Skippable work: what the faulty proof blocks' cones and luck bound
@@ -24,6 +28,8 @@ easy, as `A = −b` zeroes a product), it was copied from a unit computing the s
   premise holds only when no two credited units share (function, inputs, coin), which is the compile pass's job
   (a coin per unit), not the population's.
 -/
+
+@[expose] public section
 
 namespace Population.Dataflow
 

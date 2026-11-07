@@ -1,5 +1,11 @@
-import Definitions.Core.Blocks
-import Proofs.Core.Game.Prob
+module
+
+public import Definitions.Core.Blocks
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Mathlib.Data.Fintype.BigOperators
+import Proofs.Core.Game.Basic
+import Proofs.Core.Game.Interleave
 
 /-!
 # A wipe that meets the boundary's definitions, and its survivor bound on a run
@@ -15,6 +21,8 @@ any game, draws the foreign content, the seed and the spot reads at the boundary
 for every wipe (`Wipe.OfRun.drawn_preserves`); on it the blank wipe's event has probability at most `2^-128`
 (`Wipe.OfRun.blank_drawn`).
 -/
+
+@[expose] public section
 
 namespace Verity
 

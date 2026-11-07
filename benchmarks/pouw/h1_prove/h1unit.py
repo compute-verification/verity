@@ -75,8 +75,8 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, row_l
 from verity.core.protocols.pouw import core_check as CC
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import salt as PS
-from verity.core.protocols.pouw.circuit import h1window as HW
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.sampled_proofs.one_stage import partition as P
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
 
@@ -91,7 +91,6 @@ PUB_BITS = CC.PUBLIC_ROW_BITS
 STAND_IN_REVEAL_TAG = b"verity/pouw/h1-prove/stand-in-reveal/v0\0"
 STREAM = hashlib.sha512(b"verity/pouw/h1-prove/stand-in-stream/v0").digest()
 PROVER = PS.prover_id(b"verity/pouw/h1-prove/stand-in-prover-key/v0")
-PUB_SALT_TAG = b"verity/pouw/h1-prove/pub-row-salt/v0\0"
 OK_SALT_TAG = CC.OK_SALT_TAG
 WINDOW_TAG = "verity/pouw/h1-prove/window/v0"
 A_TABLES_TAG = b"verity/pouw/h1-prove/a-tables/v0\0"
@@ -123,9 +122,9 @@ def layout() -> str | None:
     """The statement's form: ``H1_TMPL`` unset, empty or ``flat``, None: the flat statement (``flock-circuit``, the unit's
     netlist in the file), the one the Lean verifier accepts; ``structural``, the templated statement at `LAYOUT`
     (``flock-circuit/tmpl``, `circuit.compose`'s ``layout``), the unit as `struct_lower`'s template (`stager`); another
-    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The soundness proof covers a templated
-    statement only without the verifier's registered reads (`ProvedScope.scopeOkT`), so the Lean verifier refuses H1's,
-    which read ``--registered``, after every other check, and it stays opt-in."""
+    layout mode (`verity_flock.tmpl.mode_of`), the templated statement at it. The statement check covers H1's templated
+    statement with its ``--registered`` reads (`ProvedScope.scopeOkT`), but the knowledge-soundness form reads a flat
+    circuit (`KsScope`, `HmOut.parse`), so the Lean verifier refuses it after every other check, and it stays opt-in."""
     import os
     from verity_flock import tmpl as TM
     m = os.environ.get("H1_TMPL") or FLAT
@@ -168,8 +167,9 @@ def unit_salt(reveal: bytes, window: int, stream: bytes = STREAM, prover: bytes 
 
 
 def pub_salt(window: str, position: int) -> bytes:
-    """The public row's hm96 salt, which anyone derives from the window and the unit's position."""
-    return hashlib.shake_256(PUB_SALT_TAG + window.encode() + b"\0" + int(position).to_bytes(8, "big")).digest(SALT_BYTES)
+    """The public row's hm96 salt, which anyone derives from the window and the unit's position:
+    `core_check.public_row_salt`, which credit registers served public rows under (`h1window.public_table`)."""
+    return CC.public_row_salt(window, int(position))
 
 
 def ok_salt(window: str, position: int) -> bytes:
@@ -454,7 +454,7 @@ class Shape:
 
     @cached_property
     def layout(self):
-        from verity.core.protocols.pouw.circuit import h1tile as H
+        from verity.ml.protocols.pouw.circuit import h1tile as H
         return H.Layout(self.r, self.c, self.k)
 
     @property
@@ -493,7 +493,7 @@ class Shape:
 
     def unit(self):
         """The tile unit (`h1window.tile_unit`, over the v1 or v3 H1 tile by `tile`; J10-R's with ``j10r``)."""
-        from verity.core.protocols.pouw.circuit import h1tile as H
+        from verity.ml.protocols.pouw.circuit import h1tile as H
         if self.j10r:
             return HW._chunked(self.k, HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile5))
         return HW.tile_unit(self.k, (self.r, self.c), H.PouwH1Tile3 if tile() == "v3" else None)

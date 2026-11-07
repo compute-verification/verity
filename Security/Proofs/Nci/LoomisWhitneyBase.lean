@@ -1,5 +1,6 @@
-import Mathlib.Algebra.Order.BigOperators.Ring.Finset
-import Mathlib.Analysis.Real.Sqrt
+module
+
+public import Mathlib.Analysis.Real.Sqrt
 
 /-!
 # The discrete Loomis–Whitney inequality, on Mathlib alone
@@ -14,6 +15,8 @@ output entries `(t, i)` they contribute to (`card_products_le_sqrt`), and summin
 Cauchy–Schwarz bounds them by `√(p Q Y)` (`sum_card_products_le_sqrt`). The cover theorem's partial-sum bounds apply it
 to a block's products as cells of a matrix cube. Both import it from here, which needs nothing but Mathlib.
 -/
+
+@[expose] public section
 
 namespace Nci.SecurityProofs
 

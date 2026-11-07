@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.BoundBridge
-import Proofs.Flock.Claims.Recursion.BoundForks
+module
+
+public import Proofs.Flock.Claims.Recursion.BoundBridge
+public import Proofs.Flock.Claims.Recursion.BoundForks
 
 /-!
 # The recursion's inner stage from (P1) at `DE`, through one plurality (route 2B)
@@ -27,6 +29,8 @@ import Proofs.Flock.Claims.Recursion.BoundForks
 no `WeightCovers`: `γ` at the bound record need only be at least `DE`'s (`Bd.DE.weight ≤ Bd.weight`).
 `Bound.KS_of_plainKSAbort_binds` is the recursion's KS from it.
 -/
+
+@[expose] public section
 
 namespace Claims.Recursion
 
@@ -496,17 +500,6 @@ theorem Bound.innerFO_vLog_subBy (decC : Msg → Msg → Coin) (hdec : ∀ x c, 
     · exact Or.inl fun e he => h e (hrun.2.2 e he)
     · exact Or.inr h
   · exact Or.inl fun e he => by simp [Bound.innerFO, hk, abortTrace] at he
-
-/-- `P_O`'s aborting run records only calls that `E_O`'s witnesses there record, or those witnesses' calls collide
-(`CallsLogColl`). -/
-theorem Bound.innerFO_vLog_sub (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans c) = c)
-    (hV : InnerViewRun H D (Inner.ofFlock Bd.deploy decI) DO) (hL : CallsLogColl H D (Inner.ofFlock Bd.deploy decI) DO)
-    (ω : Ω) (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) :
-    (∀ e ∈ (Bd.innerFO decI H D DO decO P x decC ω d).vLog,
-      e ∈ D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD [])) ∨
-      ∃ u v, findColl (D.calls x ((eoOut H D (Inner.ofFlock Bd.deploy decI) DO decO P x ω d).getD [])) =
-        some (u, v) ∧ Collision H u v :=
-  Bound.innerFO_vLog_subBy (cl := fun x _ ws => D.calls x ws) decC hdec hV hL ω d
 
 /-- **`B` at `P_O`'s aborting runs finds only collisions among the calls `cl` searches at `B_I`'s fork**: each kept
 run's calls are among those at the draw it extends to, or those collide (`CallsLogCollBy`), and an aborted run makes

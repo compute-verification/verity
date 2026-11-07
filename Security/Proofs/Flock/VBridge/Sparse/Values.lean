@@ -1,5 +1,27 @@
-import Proofs.Flock.VBridge.Sparse.Gadgets
+module
+
+public import Proofs.Flock.VBridge.Sparse.Gadgets
+public import Proofs.Flock.Soundness.Refine.Tapes
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Refine.Arith
+import VCVio.Prelude.Core
 
 /-!
 # The gadgets' values
@@ -8,6 +30,8 @@ What the mirrors in `Gadgets.lean` compute: `treeVal` is the factors' product in
 many levels as factors; `sumVal` their sum (`fOf_sumVal`); and `demuxVal` at the bits `T_LOG − 1, …, 0` puts each slot's
 vector at the entry its type's low `T_LOG` bits name, zero at every other (`demuxVal_eq`, `splits_range`, `low_testBit`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

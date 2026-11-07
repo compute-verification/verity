@@ -1,8 +1,12 @@
-import Definitions.Flock.Game.Prob
-import Definitions.Core.Draw
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Data.Nat.Choose.Basic
-import Mathlib.Data.Fintype.Fin
+module
+
+public import Definitions.Core.Draw
+public import Definitions.Flock.Game.Prob
+public import Mathlib.Data.Fintype.Fin
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Data.Nat.Choose.Basic
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Draw laws
@@ -24,6 +28,8 @@ misses a set `B` of units.
 
 The lemmas named here are `Proofs/Flock/Soundness/Audit/Law.lean`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

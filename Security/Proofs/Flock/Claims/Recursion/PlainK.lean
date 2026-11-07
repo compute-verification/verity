@@ -1,9 +1,11 @@
-import Proofs.Flock.Claims.Recursion.FlockKSDeployK
-import Proofs.Flock.Claims.KS.ForkSlack
-import Proofs.Flock.Claims.KS.PlainBound
-import Proofs.Flock.Claims.KS.PlainFirst
-import Proofs.Flock.Claims.KS.PlainWrP
-import Proofs.Flock.Claims.KS.TableBound
+module
+
+public import Proofs.Flock.Claims.Recursion.FlockKSDeployK
+public import Proofs.Flock.Claims.KS.ForkSlack
+public import Proofs.Flock.Claims.KS.PlainBound
+public import Proofs.Flock.Claims.KS.PlainFirst
+public import Proofs.Flock.Claims.KS.PlainWrP
+public import Proofs.Flock.Claims.KS.TableBound
 
 /-!
 # The plain record at `VK keep`, and the run-level facts the table bound's chain reads there
@@ -21,6 +23,8 @@ through a few run-level facts. Their files sit below `DeployVK`, so their forms 
   is in scope (`accK_inScope`) and sets up at a draw (`accK_draw`);
 * the simulation the plain mixture reads (`PlainSimRunK`, `PlainSimK`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy
 
@@ -48,10 +52,6 @@ theorem deployPlainK_true (rel : Readable.Parsed → Readable.Relation) :
     deployPlainK (fun _ => true) rel = deployPlainE rel :=
   congrArg (fun W => ({ deployPlain rel with V := W } : Claims.Flock.Deploy Coin (List 𝔽) Claims.Flock.PlainTrace))
     VK_true
-
-theorem deployPlainTrimK_id (rel : Readable.Parsed → Readable.Relation) :
-    deployPlainTrimK id rel = deployPlainTrim rel :=
-  congrArg (fun D => Claims.Flock.Deploy.mapCols D trimCol) (deployPlainK_id rel)
 
 /-- **`VK keep`'s decision at SHA-512**: it accepts exactly when the verdict read through `keep` accepts the record and
 proof files at the statement's setup and the custody checks pass (`next_decide_sha512`'s form). -/

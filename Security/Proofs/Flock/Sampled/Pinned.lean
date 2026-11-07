@@ -1,5 +1,9 @@
-import Proofs.Flock.Sampled.Defs
-import VStar.Menu.Pinned
+module
+
+public import Proofs.Flock.Sampled.Defs
+public import VStar.Menu.Pinned
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # F6's pinned menus as `Menu`s
@@ -16,6 +20,8 @@ most claims), and its type bound `VStar.Menu.types`'s. The padded sessions of an
   not proved: the proof, a bound on `VStar.parts`, is deferred.
 * `pinned_inRange`: every pinned model's menu is in the live verifier's range, whatever its padded sessions.
 -/
+
+@[expose] public section
 
 namespace FlockSampled
 

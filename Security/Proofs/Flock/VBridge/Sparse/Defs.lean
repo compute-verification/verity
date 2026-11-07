@@ -1,5 +1,9 @@
-import Definitions.Flock.Sparse
-import Flock.RecAlgebra
+module
+
+public import Definitions.Flock.Sparse
+public import Flock.RecAlgebra
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # `RecSparse_v1` over F
@@ -17,6 +21,8 @@ w is the message ports' elements in order (`message_ports`): `h` (64), `pre0 …
 `α`, `z`, `x_rest`, `y_rest`, the layout factors `U`, and the phase's own coins `cs` in the order drawn: `ζ_c` (6),
 `ζ_r` (6), `r_k` (`ν`), `r_s` (`S_LOG`), `ζ_p` (`P_LOG`), `ρ_t` (`T_LOG`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Sparse
 

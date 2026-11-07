@@ -1,13 +1,12 @@
-import Difftest
-import PouwWindow.Json
-import PouwWindow.Length
-import PouwWindow.Statement
-import PouwWindow.Inputs
-import PouwWindow.Rounds
-import PouwWindow.Lanes
-import PouwWindow.KnownRows
-import PouwWindow.RegFile
-import PouwWindow.FullDraw
+module
+
+public import Difftest
+public import PouwWindow.Length
+public import PouwWindow.Statement
+public import PouwWindow.Inputs
+public import PouwWindow.Rounds
+public import PouwWindow.KnownRows
+public import PouwWindow.RegFile
 
 /-!
 # The difftest's functions: the window's Lean behind `Difftest.serve`
@@ -54,6 +53,8 @@ to Python.
 A domain `{binding, count}` is `CommitmentDomain(binding, OWNER, RangeIndexedDomain(0, count), hash="sha512")`; bytes are
 hex, read as `bytes.fromhex` reads them.
 -/
+
+@[expose] public section
 
 namespace PouwWindow.Difftest
 

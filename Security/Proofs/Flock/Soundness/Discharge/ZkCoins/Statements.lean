@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
-import Proofs.Flock.Soundness.CROnly.Hm96Defs
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The coin step's guarantees, as statements
@@ -18,6 +21,8 @@ The bound against live coins is `value`, the optimal adaptive prover's against i
 bound's square (`value_interleave_le`: two reps on independent coins) carries over whole; the commitment adds a sum over
 committed rounds, not a factor.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkCoins
 

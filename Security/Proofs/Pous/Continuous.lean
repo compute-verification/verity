@@ -1,12 +1,14 @@
-import Proofs.Pous.Continuous.MissCount
-import Proofs.Pous.Continuous.Verdict
-import Proofs.Pous.Continuous.VerdictCode
-import Proofs.Pous.Continuous.Verifier
-import Proofs.Pous.Continuous.PerAnswer
-import Proofs.Pous.Continuous.Band
-import Proofs.Pous.Continuous.Complete
-import Proofs.Pous.Continuous.TimeAverage
-import Proofs.Pous.Continuous.BandTimeAverage
+module
+
+public import Proofs.Pous.Continuous.MissCount
+public import Proofs.Pous.Continuous.Verdict
+public import Proofs.Pous.Continuous.VerdictCode
+public import Proofs.Pous.Continuous.Verifier
+public import Proofs.Pous.Continuous.PerAnswer
+public import Proofs.Pous.Chain.Family
+public import Proofs.Pous.Continuous.Complete
+public import Proofs.Pous.Continuous.TimeAverage
+public import Proofs.Pous.Continuous.BandTimeAverage
 
 /-!
 # The continuous audit
@@ -24,8 +26,6 @@ responder that runs on its clock. The statements are `Pous.Guarantees.PerAnswer`
 * `Continuous/PerAnswer.lean`: both guarantees from `TimedINC` (`PousContinuous.per_answer`,
   `PousContinuous.continuous_audit`; pinned as `Pous.SecurityProofs.PerAnswer` and
   `Pous.SecurityProofs.ContinuousAudit`).
-* `Continuous/Band.lean`: `ContinuousAudit` on the 64 KiB band at `D = 5` from its unconditional certificate,
-  `ε_proof = 3182352/2^28` (`PousContinuous.band64_continuous`, `band64_epsProof`), not pinned.
 * `Continuous/Complete.lean`: completeness, `Pous.Guarantees.ContinuousComplete`: a responder whose rounds miss at
   rate at most `q` is rejected with probability at most `P[Bin(n, q) > f₀]`, by the graded audit's tail rule
   (`PousContinuous.continuous_complete`; pinned as `Pous.SecurityProofs.ContinuousComplete`). The honest responder
@@ -43,3 +43,5 @@ responder that runs on its clock. The statements are `Pous.Guarantees.PerAnswer`
   Definition's circuit) is `verdictProg` gate for gate, so `VerdictIs` holds of it (`PousVerdict.Code.prog_eq`,
   `PousVerdict.Code.verdictIs_prog`), and its run, verdicts and acceptance are the analysis's, not pinned.
 -/
+
+@[expose] public section

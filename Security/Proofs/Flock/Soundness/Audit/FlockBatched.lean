@@ -1,12 +1,20 @@
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Audit.Flock
-import Proofs.Flock.Soundness.SessionBatch
-import Proofs.Flock.Soundness.Lowering
+module
+
+public import Definitions.Flock.Lowering
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Audit.Flock
+public import Proofs.Flock.Soundness.Instance
+public import Proofs.Flock.Soundness.Lowering
+public import Proofs.Flock.Soundness.SessionBatch
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The Flock audit at the compiled layer, several tables per session
 
-The protocol's session (PROTOCOL.md §5, `SessionBatch.lean`): the verifier plans the tables from the
+The protocol's session (`Flock.Record`, `SessionBatch.lean`): the verifier plans the tables from the
 draw and the registration (`plan`), `Commit` sends every table's level-0 cap, one link-point draw
 serves all of them, and then they run concurrently; the session accepts when every table accepts
 (`batchedSession`). Each drawn unit is read from one table of the plan (`tab S R u`), with its own
@@ -33,6 +41,8 @@ named assumption; `δ_link` stays named (`LinkSound`).
 
 `flock_batched_count`: `Pr[accept ∧ at least K wrong units] ≤ miss K + ε_ks(σ) + δ_link(σ)`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

@@ -1,5 +1,27 @@
-import Proofs.Flock.EndToEnd.Joint.MT.Drawn
+module
+
+public import Proofs.Flock.EndToEnd.Joint.MT.Drawn
+public import Proofs.Flock.EndToEnd.Joint.MT.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.EndToEnd.Joint.Prod
+import Proofs.Flock.EndToEnd.Period.Union
+import Proofs.Flock.Soundness.Audit.HarmBound
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Game.Union
 
 /-!
@@ -16,6 +38,8 @@ The proofs of `JointStratified` and `JointStratifiedHorizon` (`Joint/Bound.lean`
   `Σ_t (ε_ks,t + ε_bind,t)` by `period_union`, or every draw misses with the product of the escapes below `δ`, at most
   `δ` by `period_prod`.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 

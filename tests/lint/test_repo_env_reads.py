@@ -15,7 +15,7 @@ deletes and lowers what this tree no longer finds.
 An area's settings registry is where reads belong, so it is exempt: a module named ``settings.py``, or one the list marks
 ``{"file": PATH, "registry": true}``.  A file that moves takes its entries with it, in the same change (``--move``): this lint
 reads no history, so a renamed file's reads count under its new path.  The ratchet gate (``integrations/vllm/tools/
-ratchet_gate.py``) refuses a change whose Python gains a read, or that grows this list or leaves a renamed file's entries
+ratchet_gate.py``) fails a change whose Python gains a read, or that grows this list or leaves a renamed file's entries
 behind, and judges a change to this module by running it as the change's base has it on the change's tree.  So it imports only
 the standard library, ``test_no_new_reads`` takes no fixture, and the gate reads ``LEFT_OUT``, ``FIX``, ``reads``, ``parse``
 and ``is_registry`` from the base's copy of this module.

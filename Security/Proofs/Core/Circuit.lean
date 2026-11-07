@@ -1,4 +1,7 @@
-import Definitions.Core.Guarantees.Circuit
+module
+
+public import Definitions.Core.Guarantees.Circuit
+import Mathlib.Algebra.BigOperators.Group.Finset.Basic
 
 /-!
 # Lemmas about circuits and partitions
@@ -14,6 +17,8 @@ width:
   inside it, whatever the values on the coarse unit's interior;
 * `Containment.implementation`: a circuit that contains `C` implements it.
 -/
+
+@[expose] public section
 
 namespace Verity
 

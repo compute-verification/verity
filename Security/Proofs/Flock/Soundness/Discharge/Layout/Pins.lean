@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Binding.Rows
-import Proofs.Flock.Soundness.Discharge.Layout.Readers
+module
+
+public import Proofs.Flock.Soundness.Binding.Rows
+public import Proofs.Flock.Soundness.Discharge.Layout.Readers
 
 /-!
 # A layout and its rows from three pinning facts
@@ -22,6 +24,8 @@ auditor's `matches_public`, not by anything here), and `SHA-512(enc v)` of the r
 value elsewhere. That the serving roots commit to these leaves is the serving roots' rewinding (`StrictCR.TreeRewind`),
 paid once in the headline as `δ_tree`; nothing here is cryptographic.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 
@@ -128,19 +132,6 @@ noncomputable def rows (enc : BitVal rd.W → List UInt8) (enc_inj : Function.In
       rd.regLeaf encO R (rd.pos g)
     rw [hv]
     simp only [regLeaf, show ¬ rd.isRow (rd.pos g) from hrow, ↓reduceIte]
-
-/-- The layout's commit string of a wire is the readers'. -/
-theorem layout_pos (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) (g : Fin C.N) :
-    (rd.layout place encO hcopy).pos g = rd.pos g := rfl
-
-/-- The layout's registered leaf is the readers'. -/
-theorem layout_regLeaf (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) (R : Reg) (q : rd.Pos) :
-    (rd.layout place encO hcopy).regLeaf R q = rd.regLeaf encO R q := rfl
-
-/-- **The value a message holds at a commit string** is the readers' `valAt`, at the commit string's width. -/
-theorem layout_row (encO : BitVal rd.W → List UInt8) (hcopy : rd.Copies place) (S : Finset (Fin n)) (R : Reg)
-    (u : Fin n) (M : Binding.Msg plan tab S R u) (q : rd.Pos) :
-    (rd.layout place encO hcopy).row S R u M q = (widthOf rd.W (rd.rowBits q), rd.valAt S R u M q) := rfl
 
 end Readers
 

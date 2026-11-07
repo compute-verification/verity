@@ -1,6 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.Place
-import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
-import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The compiled `--zk` count curve on the circuit's program
@@ -10,6 +25,8 @@ drawn unit placed at its site in its `--zk` table's accepted statement (`place :
 committed transcript the plurality value layer of the rows' binding (`vb := rs.bindingZ hHm`). Its `place` and `vb`
 hypotheses become the sites (`si`), the parse (`hparse`), the layout (`lay`, `rs`) and `HmRowComputes` (`hHm`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

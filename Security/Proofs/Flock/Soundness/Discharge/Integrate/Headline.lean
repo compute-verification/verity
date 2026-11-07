@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
-import Proofs.Flock.Soundness.Discharge.Hm.Site
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+public import Proofs.Flock.Soundness.Discharge.Hm.Site
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
 # The headline at the executable, with every open guarantee named
@@ -8,8 +10,8 @@ import Proofs.Flock.Soundness.Discharge.Layout.Scope
 `Prog.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
 honest transcript fails its openings check, so the headline the executable instantiates is e2e-exec's salted, one-table
 form at flock-verify's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
-`hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with R11 discharged up to R11b (`hdec`, the decoder right at
-the law's draws, `DecodesOn`).
+`hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with the refinement discharged up to the decoder (`hdec`, the
+decoder right at the law's draws, `DecodesOn`).
 
 `flock_headline_exec` instantiates it at the production program `Placed.keyProg c hU n` (the circuit's program on Δ's
 source keys), its returned outputs' bits for the program's outputs (`Layout.outsOf`), and the one-table plan of the
@@ -21,8 +23,10 @@ session's inputs (`planAt`, `Sites.lean`), with:
 * `hHm := Discharge.Hm.keyedRowsOuts_computes` (`rsAt_computes`).
 
 Its hypotheses on the statement's form (`ht`, `hc`, `hU`, `hpub`, `hpt`, `hscope`) are ones flock-verify refuses a statement
-failing (PROTOCOL.md §16.15), and `FailClosed.flock_headline_exec` takes none of them.
+failing (`Flock.ProvedScope`), and `FailClosed.flock_headline_exec` takes none of them.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Integrate
 
@@ -70,12 +74,12 @@ noncomputable abbrev tablesAt : Finset (Fin n) → Reg → TabSpec mPts := fun S
 /-- **The headline at the executable.** Let `I` be a verify command's inputs (one table) whose one circuit file parses
 to an untyped circuit `c` (`hc`, `ht`) and whose public file loads to `pub` with no shared-row tables (`hpt`, as
 the circuit prover's per-instance public files load, under `@967b8d06` too, whose tag allows them), and let the
-challenger write draw `S` as the JSON `dj S` (`x₀` one draw it sets up). Let the verifier draw the units with
-`Flock.Draw.drawOS`'s stratified law on a byte source A3 makes uniform, and let each draw's session be the challenger's
-one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify accepts with at least `K`
-wrong units of the production program `Placed.keyProg c hU n`, at the simulated prover's committed values (1 on the
-constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability at most
-`miss(K) + ε_ks + δ_link`.
+challenger write draw `S` as the JSON `dj S` (`x₀` one draw it sets up). Let the units be sampled with
+`Flock.Draw.drawWith`'s stratified law on the challenger's coins, a byte source A3 makes uniform, and let each draw's
+session be the challenger's one table (`liveTable`, A6), written out by `wr`. Against any live prover `τ`, flock-verify
+accepts with at least `K` wrong units of the production program `Placed.keyProg c hU n`, at the simulated prover's
+committed values (1 on the constant's gate, 0 on the zero's, the plurality of its openings elsewhere), with probability
+at most `miss(K) + ε_ks + δ_link`.
 
 Its hypotheses, past the session's inputs:
 * the circuit is in `rs`'s scope, `hscope : Layout.scopeOk c = true`: a check that runs on the parsed circuit, that the
@@ -97,10 +101,10 @@ Scope. W6 is definitional on the untyped path: the unit's rows are the parsed ne
 that the unit net lowers its template's Definition. The tail stages of `tc_units` templates are outside every unit's
 rows. The typed path is not production. `keyProg` has no edges between units: the headline bounds template instances
 that fail at their own committed values, and a template instance reading its producers' outputs is carried by the copy
-constraints and the region pins, not by an edge of the program. The proof coins are the challenger's per-round OS coins
-(A6): seed-derived coins are outside the headline, so a circuit-prover session counts only under `FC_COINS=os`. The tag
-is whatever the verifier passes as `--statement`: a session counts when
-`flock-verify verify --statement verity/flock-circuit@967b8d06 --coins os` accepts it with one table, so the headline
+constraints and the region pins, not by an edge of the program. The proof coins are the challenger's, on its keyed coin
+tree (A6, tree coins): `verify` refuses a session on a committed seed's coins (`ProvedScope.servedForm`), so a session
+counts only under `--coins tree`. The tag is whatever the verifier passes as `--statement`: a session counts when
+`flock-verify verify --statement verity/flock-circuit@967b8d06 --coins tree` accepts it with one table, so the headline
 covers only public-output `@967b8d06` sessions, from older builds. Main's prover now always writes the
 hidden-output statement (`verity/flock-circuit`, the default `--statement`, `hiddenOutputs = true`), under which
 `setupTables` calls `setupHidden`, which this headline does not cover: `HiddenExec.flock_headline_exec_hidden`

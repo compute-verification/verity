@@ -1,5 +1,7 @@
-import Properties.RemoteAudit
-import Proofs.Properties.RemoteAudit.Plan
+module
+
+public import Proofs.Properties.RemoteAudit.Plan
+public import Properties.RemoteAudit
 
 /-!
 # The session's bookkeeping (`AcceptedMinPasses`, `PassesStepped`, `PassesReadDistinct`, `ReceiptsBelowLimit`,
@@ -13,6 +15,8 @@ next indices, each with the next append coin; and the session's head, and each p
 appends, past which the pass's plan reads nothing. A rejection only marks its window's verdict, so it keeps the
 invariant too.
 -/
+
+@[expose] public section
 
 open RemoteAudit RemoteAudit.Session
 

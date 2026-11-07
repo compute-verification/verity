@@ -1,10 +1,46 @@
-import Proofs.Flock.Claims.Recursion.SlotsCheck
+module
+
+public import Proofs.Flock.Claims.Recursion.Deploy
+public import Proofs.Flock.Claims.Recursion.NumsFixedR
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployScope
 import Proofs.Flock.Claims.Recursion.ResLowerDeployed
-import Proofs.Flock.Claims.Recursion.NumsFixedR
+import Proofs.Flock.Claims.Recursion.SlotsCheck
 import Proofs.Flock.Recursive.VStarCheck
 import Proofs.Flock.Soundness.Discharge.Hidden.Public
 import Proofs.Flock.Soundness.Discharge.Layout.Drawn
-import Proofs.Flock.Soundness.Discharge.Exec.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # A staged part's numbers don't read its public file
@@ -25,6 +61,8 @@ So the numbers agree at any two rounds where the staged statement sets up (`nums
 (`numsOf_staged`), and `vstarAt` is the staged statement itself (`vstarAt_staged`). Nothing here assumes the verifier's
 own public input words (`--public-inputs`) are absent: the walks of `Stmt.setupTables` and `Stmt.setupHidden` take any.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -150,33 +188,14 @@ theorem raw_ins_files {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .
   repeat' split at h
   all_goals first | (cases h; done) | (cases h; exact ⟨rfl, rfl, rfl⟩)
 
-/-- A `--zk` statement's coins are its keyed coin tree. -/
-theorem raw_ins_coins {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) (hz : w.zk = true) :
-    ∃ cs, s.read.I.coins = .tree cs := by
-  unfold FlockDeploy.Raw.ins at h
-  simp only [bind, Except.bind, pure, Except.pure] at h
-  repeat' split at h
-  all_goals
-    first
-    | (cases h; done)
-    | (cases h
-       first
-       | exact ⟨_, rfl⟩
-       | (try dsimp only
-          rw [if_pos hz]
-          exact ⟨_, rfl⟩)
-       | exact absurd hz ‹_›)
-
 /-- A `--zk` statement's tags are its statement's under the circuit's mask and its table count. -/
 theorem read_tags_of {w : FlockDeploy.Raw} {s : FlockDeploy.Ins} (h : w.ins = .ok s) (hz : w.zk = true) :
     s.read.tags = Zk.tags s.stmtTags (Zk.maskLogOf w.circuit) w.count := by
-  obtain ⟨cs, hcs⟩ := raw_ins_coins h hz
   obtain ⟨-, hT⟩ := ResLower.raw_ins_tags h
   obtain ⟨hc, hn, -⟩ := raw_ins_files h
   have hz' : s.read.zk = true := (FlockDeploy.Raw.ins_zk h).trans hz
   unfold Flock.Readable.Read.tags
-  rw [if_pos hz', FlockSoundness.Discharge.ZkExec.zkTags_eq, hT, hcs, FlockSoundness.Discharge.ZkExec.withCoins_tree,
-    hc, hn]
+  rw [if_pos hz', FlockSoundness.Discharge.ZkExec.zkTags_eq, hT, hc, hn]
 
 /-- Part `s`'s staged statement is read from its part's raw statement with the staged public file. -/
 theorem staged_ins {st : Stage} {x : Claims.Msg} {ms : List (Claims.Msg × Claims.Out)} {s : ℕ} {i : RecIns}

@@ -1,8 +1,22 @@
-import Properties.Pous.EndToEndAt
+module
+
+public import Proofs.Flock.Soundness.ExecDraw
+public import Proofs.Flock.Soundness.KeyedDraw
+public import Properties.Pous.EndToEndAt
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Pous.EndToEnd
-import Proofs.Pous.P2.Rounds
-import Proofs.Flock.Soundness.KeyedDraw
 import Proofs.Pous.Obligation
+import Proofs.Pous.P2.Rounds
+import Proofs.Pous.Thm1.Theorem1iTimed
+import VCVio.Prelude.Core
 
 /-!
 # PoUS's ring game at any block count, proved
@@ -20,6 +34,8 @@ import Proofs.Pous.Obligation
   reads the per-round floor only at that `N`) from `P2RingRoundSecureWide`, and at Demo B's `N` with its state bound
   (`Pous.SecurityProofs.stateBound_p2ring_demo`).
 -/
+
+@[expose] public section
 
 namespace Pous.EndToEnd.SecurityProofs
 

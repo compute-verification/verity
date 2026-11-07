@@ -1,31 +1,39 @@
-import Proofs.Flock.Claims.Sampling.Select.DrawLaw
-import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.ExecStrataOf
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.ExecStrataOf
 
 /-!
 # The deployed draw at the registration's strata
 
-`SampledKSLiveV5` draws with the deployed draw (`SampledProofs.Draw.drawUnits`, `Flock.Draw.drawWith` on one stream of
-bytes read in order, as `Flock.Draw.drawOS` reads `IO.getRandomBytes`) under a C-Flock law over the registration's strata,
-and its `δ` is that law's own `P_a`. This file holds what the statement reads and how the draw meets it:
+`SampledKSLiveV5` draws with the deployed draw (`SampledProofs.Draw.drawUnits`, `Flock.Draw.drawWith` on the
+challenger's coins read in order as one stream) under a C-Flock law over the registration's strata, and its `δ` is that
+law's own `P_a`. This file holds what the statement reads and how the draw meets it:
 
 * `StrataOn St ns`: the strata `St`'s ranges, in order, are the slots `0, …, Σ ns − 1`, at sizes `ns`, so each stratum
   is one run of consecutive slots;
 * `LawOn law ns kd`: `law` is `subset kd`, or `stratified K` or `work K` over strata at `ns`, each stratum's `k` the
-  rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli law is none;
+  rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli law is none (`NotBernoulli`);
 * `pa_stratified`, `pa_work`: such a law's claims design (`oneStageOf`) misses `B` with `strataPa` of its strata's sizes
   and draws; `pa_empty_of_lawOn`: it misses nothing with probability `1`;
 * `drawUnits_miss_le`: the deployed draw misses a set `U` of slots with probability at most `P_a(U)` (`one_bound`,
   `strata_bound`);
 * `execSel src law pop`: the deployed draw as a law on the verifier's bytes `src`, a draw that runs out of them drawing
   every unit; `execSel_escape_le`: under A3 it escapes `W` with probability at most `P_a` of `W`'s slots;
-* `lawOn_size`: a draw file that decodes to the verifier's draw under such a law has `kd` units, at any population
-  (`ofJson_shape`, and `UnitDraw.ofJson`'s per-stratum count, `ofJson_count`, `ofJson_count_work`, in strata whose ranges
-  it checks tile the population, `strataProblem_none`, `workProblem_chain`);
+* `lawSized_size`: a draw file that decodes to the verifier's draw under a law that is `subset kd`, or whose strata
+  hold each slot once and draw `kd` units in all (`LawSized`, as a law on strata is, `lawSized_of_lawOn`), has `kd`
+  units, at any population (`ofJson_shape`, and `UnitDraw.ofJson`'s per-stratum count, `ofJson_count`,
+  `ofJson_count_work`, in strata whose ranges it checks tile the population, `strataProblem_none`,
+  `workProblem_chain`); `lawOn_size` at a law on strata;
+* `drawUnits_size`: the deployed draw under such a law that ends holds `kd` units, at any population (`subset_size`,
+  `stratifiedWith_size`);
 * `All`: the rule's law is `subset n` over the `n` units (`Select.Rule.lawOver`), on the strata at `kd = n`
   (`lawOn_all`), and under it the deployed draw holds every unit whatever its bytes (`drawUnits_all`, `execSel_all`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 
@@ -79,6 +87,10 @@ def LawOn (law : Flock.Draw.Law) (ns : List ℕ) (kd : ℕ) : Prop :=
   | .work K ws => StrataOn (ws.toList.map (·.toStratum)) ns ∧
       (∀ s ∈ ws.toList, s.k = Flock.Draw.workK K s.work s.size (Flock.Draw.totalWork ws) s.floor) ∧
       (ws.toList.map (·.k)).sum = kd
+
+/-- **No Bernoulli law**: `law` draws a count its strata or its `k` fix, not one the coins set, as `LawOn` and
+`LawSized` require. -/
+def NotBernoulli (law : Flock.Draw.Law) : Prop := ∀ a b, law ≠ .bernoulli a b
 
 /-- A stratified law's design misses `B` with `strataPa` of its strata's sizes and draws, when its strata have sizes `ns`
 and each stratum's `k` is the rule's. -/
@@ -310,11 +322,37 @@ theorem mem_expand_of_mem {rs : List (ℕ × ℕ)} {r : ℕ × ℕ} (hr : r ∈ 
   simp only [Properties.SampledProofs.SecurityProofs.expand, List.mem_flatMap, List.mem_range'_1]
   exact ⟨r, hr, h1, by omega⟩
 
-/-- **A draw file of the verifier's draw under such a law decodes only to `kd` units**, at any population: a subset
+/-- **A law whose draw files hold `kd` units** (`lawSized_size`): `subset kd`, or a stratified or work law whose
+strata's slots hold each unit once and whose strata's `k`s sum to `kd`. A Bernoulli law is none. -/
+def LawSized (law : Flock.Draw.Law) (kd : ℕ) : Prop :=
+  match law with
+  | .subset k => k = kd
+  | .bernoulli _ _ => False
+  | .stratified _ St =>
+    (St.toList.flatMap fun s => Properties.SampledProofs.SecurityProofs.expand s.units.toList).Nodup ∧
+      (St.toList.map (·.k)).sum = kd
+  | .work _ ws =>
+    ((ws.toList.map (·.toStratum)).flatMap fun s =>
+        Properties.SampledProofs.SecurityProofs.expand s.units.toList).Nodup ∧
+      (ws.toList.map (·.k)).sum = kd
+
+/-- A law on strata at `ns` is sized: its strata's slots are `0, …, Σ ns − 1`, each once. -/
+theorem lawSized_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : LawOn law ns kd) : LawSized law kd := by
+  cases law with
+  | subset k => exact h.1
+  | bernoulli a b => exact h.elim
+  | stratified K St =>
+    obtain ⟨⟨hon, -⟩, -, -, -, hsum⟩ := h
+    exact ⟨by rw [hon]; exact List.nodup_range, hsum⟩
+  | work K ws =>
+    obtain ⟨⟨hon, -⟩, -, hsum⟩ := h
+    exact ⟨by rw [hon]; exact List.nodup_range, hsum⟩
+
+/-- **A draw file of the verifier's draw under a sized law decodes only to `kd` units**, at any population: a subset
 draw has its `k` (`ofJson_shape`), and a stratified or work draw `k_s` units in each stratum (`ofJson_count`,
 `ofJson_count_work`), whose slots hold each unit once and whose ranges hold each of its units, since `UnitDraw.ofJson`
 checks that they tile the draw's population (`strataProblem_none`, `workProblem_chain`). -/
-theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (hlaw : LawOn law ns kd)
+theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSized law kd)
     {dj : Finset (Fin n) → Lean.Json} (hdj : Discharge.ZkLink.DrawFileZK dj law n) (S : Finset (Fin n))
     (D : Flock.Draw.UnitDraw) (hD : Flock.Draw.UnitDraw.ofJson (dj S) = .ok D) : D.units.size = kd := by
   obtain rfl := hdj S D hD
@@ -324,11 +362,11 @@ theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (
     exact v.isLt
   cases law with
   | subset k =>
-    obtain ⟨rfl, -⟩ := hlaw
+    obtain rfl := hlaw
     exact (Discharge.Composed.ofJson_shape hD).2.2 _ rfl
   | bernoulli a b => exact hlaw.elim
   | stratified K St =>
-    obtain ⟨⟨hon, -⟩, -, -, -, hsum⟩ := hlaw
+    obtain ⟨hnd, hsum⟩ := hlaw
     have hch := (Audit.StrataExec.strataProblem_none (Audit.StrataExec.ofJson_stratified hD rfl).1).2.2.2
     have hin : ∀ u ∈ (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList,
         u ∈ St.toList.flatMap fun s => Properties.SampledProofs.SecurityProofs.expand s.units.toList := by
@@ -350,8 +388,7 @@ theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (
       exact (any_iff_mem_expand s.units u).symm
     have hcount := sum_count_strata (fun s : Flock.Draw.Stratum =>
       Properties.SampledProofs.SecurityProofs.expand s.units.toList) St.toList
-      (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList
-      (by rw [hon]; exact List.nodup_range) hin
+      (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList hnd hin
     calc (Discharge.ZkLink.drawOf (.stratified K St) n S).units.size
         = (Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList.length := Array.length_toList.symm
       _ = (St.toList.map fun s => ((Discharge.ZkLink.drawOf (.stratified K St) n S).units.toList.filter fun u =>
@@ -359,7 +396,7 @@ theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (
       _ = (St.toList.map (·.k)).sum := congrArg List.sum (List.map_congr_left hc)
       _ = kd := hsum
   | work K ws =>
-    obtain ⟨⟨hon, -⟩, -, hsum⟩ := hlaw
+    obtain ⟨hnd, hsum⟩ := hlaw
     have hch := Audit.StrataExec.workProblem_chain (Audit.StrataExec.ofJson_work hD rfl)
     have hin : ∀ u ∈ (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList,
         u ∈ (ws.toList.map (·.toStratum)).flatMap fun s =>
@@ -382,8 +419,7 @@ theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (
       exact (any_iff_mem_expand s.units u).symm
     have hcount := sum_count_strata (fun s : Flock.Draw.Stratum =>
       Properties.SampledProofs.SecurityProofs.expand s.units.toList) (ws.toList.map (·.toStratum))
-      (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList
-      (by rw [hon]; exact List.nodup_range) hin
+      (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList hnd hin
     calc (Discharge.ZkLink.drawOf (.work K ws) n S).units.size
         = (Discharge.ZkLink.drawOf (.work K ws) n S).units.toList.length := Array.length_toList.symm
       _ = ((ws.toList.map (·.toStratum)).map fun s => ((Discharge.ZkLink.drawOf (.work K ws) n S).units.toList.filter
@@ -395,5 +431,159 @@ theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (
           rfl
       _ = (ws.toList.map (·.k)).sum := congrArg List.sum (List.map_congr_left hc)
       _ = kd := hsum
+
+/-- **A draw file of the verifier's draw under a law on strata decodes only to `kd` units** (`lawSized_size`). -/
+theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (hlaw : LawOn law ns kd)
+    {dj : Finset (Fin n) → Lean.Json} (hdj : Discharge.ZkLink.DrawFileZK dj law n) (S : Finset (Fin n))
+    (D : Flock.Draw.UnitDraw) (hD : Flock.Draw.UnitDraw.ofJson (dj S) = .ok D) : D.units.size = kd :=
+  lawSized_size (lawSized_of_lawOn hlaw) hdj S D hD
+
+/-- A `subset k n` draw that ends holds `k` units. -/
+theorem subset_size {k n : ℕ} {src : ByteArray} {D : Array ℕ} (h : Flock.Draw.subset k n src = some D) :
+    D.size = k := by
+  rw [Audit.DrawExec.subset_eq] at h
+  obtain ⟨sw, -, rfl⟩ := Option.map_eq_some_iff.1 h
+  rw [← Array.length_toList, (Audit.StrataExec.qsort_perm _ _).length_eq, Array.length_toList, Array.size_map,
+    Array.size_range]
+
+open Properties.SampledProofs.SecurityProofs (bind_ok bind_error onWith_take) in
+/-- **`stratifiedWith` on the verifier's bytes draws each stratum's `k`**: a run that returns a draw holds `∑ k_s` units,
+each stratum's `subset` returning its `k` (`subset_size`). -/
+theorem stratifiedWith_size (src : ByteArray) (strata : Array Flock.Draw.Stratum) (p p' : ℕ) (D : Array ℕ)
+    (h : (Flock.Draw.stratifiedWith (fun _ need => SampledProofs.Draw.take src need) strata).run p =
+      .ok (some D, p')) :
+    D.size = (strata.toList.map (·.k)).sum := by
+  unfold Flock.Draw.stratifiedWith at h
+  dsimp only at h
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at h
+  have hsize : ([:strata.size] : Std.Legacy.Range).size = strata.size := by
+    show (strata.size - 0 + 1 - 1) / 1 = _
+    omega
+  rw [hsize, show ([:strata.size] : Std.Legacy.Range).start = 0 from rfl,
+    show ([:strata.size] : Std.Legacy.Range).step = 1 from rfl] at h
+  have loop : ∀ (l : List ℕ) (out : Array ℕ) (pos : ℕ) (r : Option (Option (Array ℕ))) (out' : Array ℕ) (pos₁ : ℕ),
+      (forIn (m := StateT ℕ (Except String)) l ((none : Option (Option (Array ℕ))), out) (fun i __s => do
+          let __x ← Flock.Draw.onWith (fun need => SampledProofs.Draw.take src need) strata[i]!.need
+            (Flock.Draw.subset strata[i]!.k strata[i]!.size)
+          match __x with
+          | some local_ => pure (ForInStep.yield (none, __s.2 ++ Array.map strata[i]!.unit local_))
+          | _ => pure (ForInStep.done (some none, __s.2)))).run pos = .ok ((r, out'), pos₁) →
+      r = none ∧ out'.size = out.size + (l.map fun i => strata[i]!.k).sum := by
+    intro l
+    induction l with
+    | nil =>
+      intro out pos r out' pos₁ hl
+      simp only [List.forIn_nil, StateT.run_pure] at hl
+      obtain ⟨h1, _⟩ := Prod.mk.inj (Except.ok.inj hl)
+      obtain ⟨rfl, rfl⟩ := Prod.mk.inj h1
+      exact ⟨rfl, by simp⟩
+    | cons i is ih =>
+      intro out pos r out' pos₁ hl
+      rw [List.forIn_cons, StateT.run_bind, StateT.run_bind] at hl
+      cases ho : (Flock.Draw.onWith (fun need => SampledProofs.Draw.take src need) strata[i]!.need
+          (Flock.Draw.subset strata[i]!.k strata[i]!.size)).run pos with
+      | error e => rw [ho] at hl; exact absurd hl (by rw [bind_error, bind_error]; simp)
+      | ok x =>
+        obtain ⟨v, pos₂⟩ := x
+        obtain ⟨j, Dl, rfl, rfl, hst⟩ := onWith_take src _ (by unfold Flock.Draw.Stratum.need; omega) _ pos _ _ ho
+        obtain ⟨-, -, hrun, -⟩ := hst
+        rw [ho, bind_ok] at hl
+        dsimp only at hl
+        rw [StateT.run_pure, pure_bind] at hl
+        dsimp only at hl
+        obtain ⟨hr, hsz⟩ := ih _ _ r out' pos₁ hl
+        refine ⟨hr, ?_⟩
+        rw [hsz, Array.size_append, Array.size_map, subset_size hrun, List.map_cons, List.sum_cons]
+        omega
+  rw [StateT.run_bind] at h
+  cases hl : (forIn (m := StateT ℕ (Except String)) (List.range' 0 strata.size 1)
+      ((none : Option (Option (Array ℕ))), (#[] : Array ℕ)) _).run p with
+  | error e => rw [hl] at h; exact absurd h (by rw [bind_error]; simp)
+  | ok y =>
+    obtain ⟨⟨r, out'⟩, pos₁⟩ := y
+    rw [hl, bind_ok] at h
+    dsimp only at h
+    obtain ⟨rfl, hsz⟩ := loop _ _ _ _ _ _ hl
+    rw [StateT.run_pure] at h
+    obtain ⟨h1, _⟩ := Prod.mk.inj (Except.ok.inj h)
+    rw [← Option.some.inj h1, ← Array.length_toList, (Audit.StrataExec.qsort_perm _ _).length_eq,
+      Array.length_toList, hsz, Array.size_empty, Nat.zero_add]
+    congr 1
+    refine List.ext_getElem (by simp) fun i h₁ _ => ?_
+    have hi : i < strata.size := by simpa using h₁
+    simp [getElem!_pos strata i hi]
+
+open Properties.SampledProofs.SecurityProofs (bind_ok bind_error onWith_take) in
+/-- **The deployed draw under such a law draws `kd` units**: a draw from `src` that ends holds `kd` units, `subset k`'s
+`k` (`subset_size`), and a stratified or work law's `k_s` in each stratum (`stratifiedWith_size`), at any population. -/
+theorem drawUnits_size {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} (hlaw : LawOn law ns kd) {src : ByteArray}
+    {units : Array ℕ} {read : ℕ} (h : SampledProofs.Draw.drawUnits law n src = .ok (units, read)) :
+    units.size = kd := by
+  unfold SampledProofs.Draw.drawUnits at h
+  cases hw : (Flock.Draw.drawWith (fun _ need => SampledProofs.Draw.take src need) law n).run 0 with
+  | error e => rw [hw] at h; exact absurd h (by rw [bind_error]; simp)
+  | ok x =>
+    obtain ⟨r, read'⟩ := x
+    rw [hw, bind_ok] at h
+    obtain ⟨d, rfl⟩ : ∃ d, r = some d := by
+      cases r with
+      | none => exact absurd h (by simp [throw, throwThe, MonadExceptOf.throw])
+      | some d => exact ⟨d, rfl⟩
+    dsimp only at h
+    obtain ⟨hu, -⟩ := Prod.mk.inj (Except.ok.inj h)
+    subst hu
+    cases law with
+    | subset k =>
+      obtain ⟨hk, -⟩ := hlaw
+      unfold Flock.Draw.drawWith at hw
+      dsimp only at hw
+      rw [StateT.run_bind] at hw
+      cases ho : (Flock.Draw.onWith (fun need => SampledProofs.Draw.take src need)
+          (2 * k * Flock.Draw.width n + 64) (Flock.Draw.subset k n)).run 0 with
+      | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
+      | ok y =>
+        obtain ⟨v, p⟩ := y
+        obtain ⟨j, D, rfl, -, hst⟩ := onWith_take src _ (by omega) _ 0 _ _ ho
+        obtain ⟨-, -, hrun, -⟩ := hst
+        rw [ho, bind_ok, StateT.run_pure] at hw
+        obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
+        obtain rfl := (Option.some.inj h1).symm
+        exact (subset_size hrun).trans hk
+    | bernoulli a b => exact hlaw.elim
+    | stratified K St =>
+      obtain ⟨-, -, -, -, hsum⟩ := hlaw
+      unfold Flock.Draw.drawWith at hw
+      dsimp only at hw
+      rw [StateT.run_bind] at hw
+      cases ho : (Flock.Draw.stratifiedWith (fun _ need => SampledProofs.Draw.take src need) St).run 0 with
+      | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
+      | ok y =>
+        obtain ⟨v, p⟩ := y
+        rw [ho, bind_ok, StateT.run_pure] at hw
+        obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
+        cases v with
+        | none => exact absurd h1 (by simp)
+        | some D =>
+          obtain rfl := (Option.some.inj h1).symm
+          exact (stratifiedWith_size src St 0 p D ho).trans hsum
+    | work K ws =>
+      obtain ⟨-, -, hsum⟩ := hlaw
+      unfold Flock.Draw.drawWith at hw
+      dsimp only at hw
+      rw [StateT.run_bind] at hw
+      cases ho : (Flock.Draw.stratifiedWith (fun _ need => SampledProofs.Draw.take src need)
+          (ws.map (·.toStratum))).run 0 with
+      | error e => rw [ho] at hw; exact absurd hw (by rw [bind_error]; simp)
+      | ok y =>
+        obtain ⟨v, p⟩ := y
+        rw [ho, bind_ok, StateT.run_pure] at hw
+        obtain ⟨h1, -⟩ := Prod.mk.inj (Except.ok.inj hw)
+        cases v with
+        | none => exact absurd h1 (by simp)
+        | some D =>
+          obtain rfl := (Option.some.inj h1).symm
+          refine (stratifiedWith_size src _ 0 p D ho).trans ?_
+          rw [← hsum, Array.toList_map, List.map_map]
+          rfl
 
 end Flock.Bridge

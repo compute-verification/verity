@@ -9,7 +9,7 @@ Files:
 
 - `commit_gpu.cuh`: the committer (device code, constants, `Committer`); its header has the construction. A kernel that
   commits rows it produces includes it (see Tile leaves). The frame's leaf, pad and node, the hm96 leaf's mask, salt
-  digest and value, and the constants' builders are the GPU's one row commitment, `verity/ml/kernels/row_commit.cuh`;
+  digest and value, and the code that builds the constants are the GPU's one row commitment, `verity/ml/kernels/row_commit.cuh`;
   this file keeps the committer's schedule.
 - `commit_gpu.cu`: the command line: `check` (writes every level and every leaf's b || c for `reference.py`), `bench`
   (alone, as a CUDA graph, with the root on the host, and beside the GEMM) and the raw compression rate (`sha`).
@@ -21,8 +21,10 @@ Files:
   the tile sweep and an nsys trace under one GPU lease). `summary.py`: one line a measurement, or (`table`) the Results
   table, (`tiles`) the R table, or (`formats`) the leaf-format table.
 
+On an RTX PRO 6000 node (MACHINE):
+
 ~~~text
-research run --on vy-nebius-2 --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
+research run --on MACHINE --project verity --source . --cwd source --env GPU_LEASE_WHO=LANE \
   [--env BUILDS="a0r0l a0r0 a1r0 a0r3"] -- bash benchmarks/pouw/commit_gpu/gpu.sh
 ~~~
 

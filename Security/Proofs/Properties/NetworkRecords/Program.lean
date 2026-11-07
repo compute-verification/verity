@@ -1,5 +1,18 @@
-import Proofs.Properties.NetworkRecords.Bytes
-import Properties.NetworkRecords
+module
+
+public import Aesop.BuiltinRules
+public import Mathlib.Algebra.GroupWithZero.Nat
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToDual
+public import Proofs.Properties.NetworkRecords.Bytes
+public import Properties.NetworkCertifier
+public import Properties.NetworkRecords
+import Batteries.Data.Fin.Lemmas
+import Mathlib.Algebra.BigOperators.Group.List.Basic
+import Mathlib.Algebra.Order.Ring.Nat
+import Mathlib.Data.Finset.Attr
+import Mathlib.Order.Fin.Basic
+import Mathlib.Tactic.SetLike
 
 /-!
 # Every frame of the Program's grid is one of the link's frames
@@ -8,6 +21,8 @@ The FIFO releases no more frames than were enqueued (`queue_add`), and no more a
 (`sum_enqueued_le`), so each slot the Program fills holds the payload of a frame the link has (`expectedRow_frame`): of
 `B` bytes when every payload is `8·B` bits (`programGrid_sizes`).
 -/
+
+@[expose] public section
 
 open NetworkCertifier (ClockSync LogicalFrame expectedRow queue released enqueued handingFrom handingBuckets payloads)
 open Properties.NetworkCertifier (programGrid bytesGrid)

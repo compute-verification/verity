@@ -1,6 +1,24 @@
-import Proofs.Flock.VBridge.Runs.Rep
-import Proofs.Flock.VBridge.Family
+module
+
+public import Proofs.Flock.VBridge.Family
+public import Proofs.Flock.VBridge.Algebra.LigeritoConverse
+public import Proofs.Flock.VBridge.Algebra.Lincheck
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.DecodeZL.ZL
+import Proofs.Flock.VBridge.Runs.Rep
 
 /-!
 # `TableFiles.Runs` from both reps' algebra
@@ -18,6 +36,8 @@ each round retaining its chunk's bytes and issuing the coins its chunk's closing
 * `valid_fast`, `valid_extras_wf`, `valid_roundsWF`, `valid_decode`: the fields of `RunsFrom` that `TableFiles.Valid`
   already gives.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

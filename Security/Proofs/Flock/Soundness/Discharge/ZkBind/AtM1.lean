@@ -1,4 +1,19 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.At
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.At
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 
 /-!
@@ -8,6 +23,8 @@ import Proofs.Flock.Soundness.Discharge.ZkLink.M1
 plan `planZAt` is at C-Flock ZK's parameters (`planZAt_M1`, from `ZkLink.tableAtZK_M1`: what `verify --zk` checks at
 setup), so `ksAvgStrictZ_le_m1` applies with no hypothesis on the tables.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

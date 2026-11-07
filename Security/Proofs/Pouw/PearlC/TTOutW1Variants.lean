@@ -1,7 +1,9 @@
-import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
-import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
-import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
-import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
+public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
+public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
 import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
@@ -10,6 +12,8 @@ import Proofs.Pouw.PearlC.TTOutW1
 As `TTOutW1`'s device forms: each W1 form is its abstract form at `CM := W1.w1Priced dv salt` with `CM.Queries`
 (`w1Priced_queries`) dropped, so each reader at W1 is its reduction at that cost model.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.TTOutW1
 

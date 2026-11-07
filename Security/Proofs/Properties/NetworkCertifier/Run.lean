@@ -1,5 +1,17 @@
-import Proofs.Properties.NetworkCertifier.Outcomes
-import Proofs.Properties.NetworkCertifier.Extract
+module
+
+public import Proofs.Properties.NetworkCertifier.Extract
+public import Proofs.Properties.NetworkCertifier.Outcomes
+public import Proofs.Properties.NetworkCertifier.Tree
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.Set.Card
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
+import Proofs.Properties.Identity
+import Proofs.Properties.NetworkCertifier.Bytes
+import Proofs.Properties.NetworkCertifier.Grid
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # What a certificate's digest and message pin down
@@ -10,6 +22,8 @@ certificate message's input names one certifier session, link-window and digest 
 `link_short` for the link's length). `Proofs.Properties.CertifierNetwork.Runs` uses them to match each record an
 accepted unit holds to the one the certifier device issued.
 -/
+
+@[expose] public section
 
 open NetworkCheck hiding Params
 open NetworkCheck.Check

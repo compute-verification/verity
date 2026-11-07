@@ -1,8 +1,25 @@
-import Proofs.Flock.Recursive.AuditC3
+module
+
+public import Proofs.Flock.Recursive.AuditC3
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.VStarList.Range
 import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.Loads
+import Proofs.Flock.Recursive.Private
 import Proofs.Flock.Recursive.RegExtract
-import Proofs.Flock.C3.VStarList.Range
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The recursive audit at candidate 3: its proof
@@ -42,6 +59,8 @@ gap 2 is read at VBridge at the committed rounds (`zk_sessions_recursive_fork_in
 (ii) is `RecursiveFirewallPrivate`.
 -/
 
+@[expose] public section
+
 namespace Flock.SecurityProofs
 
 open FlockSoundness FlockSoundness.Discharge FlockSoundness.Discharge.Recursion
@@ -50,7 +69,7 @@ open Flock FlockLevel3 Accounting ZkBind Integrate Placed StrictCR DecodeZL
 open scoped ENNReal
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 open Classical in
 /-- **A kept session's own list is its own** where a written, accepted transcript passes `P`. -/

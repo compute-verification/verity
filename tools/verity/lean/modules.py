@@ -203,13 +203,15 @@ def _lakefile(d: Path) -> dict | None:
     return tomllib.loads(f.read_text()) if f.is_file() else None
 
 
-def package_modules(pkg: Path, files: list[str]) -> list[str]:
-    """The tracked `.lean` files (``files``: paths from the root) of package ``pkg`` that are modules of one of its
-    `[[lean_lib]]`s (the library's name or under it) or a `[[lean_exe]]`'s root, those of packages nested in it aside."""
-    cfg = _lakefile(ROOT / pkg)
+def package_modules(pkg: Path, files: list[str], root: Path | None = None) -> list[str]:
+    """The tracked `.lean` files (``files``: paths from ``root``, default the repository's) of package ``pkg`` that are
+    modules of one of its `[[lean_lib]]`s (the library's name or under it) or a `[[lean_exe]]`'s root, those of packages
+    nested in it aside."""
+    root = ROOT if root is None else root
+    cfg = _lakefile(root / pkg)
     if cfg is None:
         raise ValueError(f"{pkg}: no lakefile.toml")
-    src = (ROOT / pkg / cfg.get("srcDir", ".")).resolve()
+    src = (root / pkg / cfg.get("srcDir", ".")).resolve()
     libs = [lib["name"] for lib in cfg.get("lean_lib", [])]
     exes = {exe.get("root", exe["name"]) for exe in cfg.get("lean_exe", [])}
     nested = {f.rsplit("/", 1)[0] + "/" for f in files if f.endswith("/lakefile.toml") and f.startswith(f"{pkg}/")
@@ -218,7 +220,7 @@ def package_modules(pkg: Path, files: list[str]) -> list[str]:
     for f in files:
         if not f.endswith(".lean") or not f.startswith(f"{pkg}/") or any(f.startswith(n) for n in nested):
             continue
-        path = (ROOT / f).resolve()
+        path = (root / f).resolve()
         if not path.is_relative_to(src):
             continue
         mod = path.relative_to(src).with_suffix("").as_posix().replace("/", ".")

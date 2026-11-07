@@ -43,8 +43,12 @@ background wait any call, finishing whose start the watch didn't see (it lay bef
   build or a wait may be legitimate, unless it is a holder's held unread);
 - **crashed** when the agent's latest run ended in ERROR: the watch starts a new run, at most once every `RESTART_S` and
   `MAX_RESTARTS` times in a row (vllm's runs errored within a minute, run after run, on 18 Oct), then records it as
-  **erroring**, for a person. Only a latest run that FINISHED ends the row: a restarted run reads RUNNING for a while before
-  it errors again.
+  **erroring**, for a person. A latest run that FINISHED ends the row, and so does a coordinator back from ERROR for
+  `STICK_S` (a restarted run reads RUNNING for a while before it errors again, so seeing it running is not enough). When
+  `OUTAGE_MIN` or more coordinators are down at once, it is the platform's failure: each is restarted every `OUTAGE_RETRY_S`,
+  not counted and never relaunched, until it comes back; and once `RING_MIN` have been down `RING_DOWN_S`, an **outage**
+  record (the relay posts it to the top coordinator and the registry's human) is written, again every `RING_EVERY_S` while it lasts. A sweep the API
+  refuses with 429 waits its Retry-After (`rate_wait`) rather than asking again every minute.
 
 A run among an agent's newest left in CREATING for 10 min by the API's own `updatedAt` with no newer run started (only ones
 cancelled on arrival) and no run followed (a run queued behind a followed one waits its turn, and that one is judged), or a followed background wait with nothing at all streamed for 2 h while its agent's `updatedAt` moves, is recorded once as **stuck**: on 18 Oct proofs' and circuits' runs sat in CREATING behind a
@@ -96,13 +100,16 @@ An agent that works but says nothing is **silent**: a worker ACTIVE for `SILENT_
 its (a note whose `origin:` names it, new or changed by its mtime; for a coordinator also any note of its lane, under
 `lanes/<handle>/` or with `lane: <handle>`, since it signs with its lane) and no push to its branches. Its branches are the API's
 (`git.branches` of its runs, or of a worker's GET), a worker's workers.d `branch`, those its notes' origins name, and every
-head ending in its id's last four characters (a coordinator's `cursor/...-1037`); pushes are read every `HEADS_EVERY_S` with
+head ending in its id's last four characters (a coordinator's `cursor/...-1037`), widened by `same_task` to the heads a task
+moved to (`cursor/lean-one18-v2-fc8d` beside `cursor/lean-one18-fc8d`); pushes are read every `HEADS_EVERY_S` with
 `git ls-remote --heads` of `--git-remote` (the deploy key fixtures_export.sh fetches with), a branch's push time being when the
 watch first saw its sha (`heads.json` beside `--log`). The 90 min count from the latest of its ACTIVE spell's start, its newest
 note, its newest push and the first heads read, so a fresh deploy judges nobody for 90 min. It is recorded once, and again
 after a second window (`SILENT_RINGS`), then not until one of those moves; the relay rings its handle (a coordinator's own, a
-worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more,
-as **no_step**, rung to @top: on 26 Oct nine workers sat ACTIVE with no step for 30-64 h, each rung twice and then by no one.
+worker's launcher's). A silent agent still showing nothing `NO_STEP_S` (6 h) after its last activity is recorded once more:
+a worker is archived (`POST /v1/agents/{id}/archive`, which stops it and frees its slot) and recorded as **archived**, rung to
+its lane, which relaunches it from its last note or drops it; a coordinator, or a worker the API won't archive, is recorded as
+**no_step**, rung to @top.
 Its last activity there also counts its agent's own `updatedAt` and, for a coordinator, its judged run's `updatedAt` and last
 stream event, since no_step advises stopping and archiving it: on 26 Oct at 21:05Z it said so of compute-accounting's and
 network-accounting's coordinators, each working in Slack within two minutes, with no note or push for 6 h.
@@ -200,6 +207,13 @@ AWAIT_KEEP_S = 6 * 3600     # a run end nobody acted on this long ago is forgott
 CONTINUE_RETRY_S = 30 * 60  # how long a refused continue run is tried again before it is left for a person
 REFUSED_S = 5 * 60          # a run whose cancel got 409 still read as going this long after is left for a person
 MAX_RESTARTS = 3            # ERROR runs in a row the watch restarts before leaving the agent for a person
+STICK_S = 10 * 60           # a coordinator back from ERROR (its latest run not ERROR) this long: its restart count clears
+OUTAGE_MIN = 3              # coordinators down (latest run ERROR) at once: a platform outage, not one agent's fault, so
+OUTAGE_RETRY_S = 15 * 60    # ... each is restarted this often, uncapped and uncounted, and none is relaunched
+RING_DOWN_S = 30 * 60       # coordinators down this long, RING_MIN of them or more: an `outage` record, for the top coordinator and a person,
+RING_MIN = 5
+RING_EVERY_S = 3600         # ... again this often while it lasts
+RATE_WAIT_S = (120, 900)    # a sweep refused with 429 waits Retry-After, else from the first, doubling, to the second
 UNREADABLE_S = 3600         # a latest run the API won't read this long is recorded again, for a person
 IDLE_RECENT_S = 6 * 3600    # an IDLE agent is read only if it changed this recently (an ERROR leaves an agent IDLE)
 RUNS_PAGE = 50              # an ACTIVE agent's runs are read a page at a time, back to the newest that started
@@ -210,6 +224,8 @@ TERMINAL = {"FINISHED", "ERROR", "CANCELLED", "EXPIRED"}
 # while its agent's `updatedAt` moves (with that still too, the wait is stalled: cancelled and continued)
 STUCK = {"CREATING": 10 * 60, "WAITING_FOR_BACKGROUND_WORK": 2 * 3600}
 GOAL = "run-goal-"              # a goal run's id: the runs endpoint and its stream take only run-<uuid> (400)
+#: the handle a run's sender no route knows is watched under (`ring_run`): its idle and silence ring infra, who finds its owner
+UNOWNED = "infra"
 SUBAGENT = {"tool-call-delta"}          # interaction_update types that report a subagent's progress, not the parent's
 CONTINUE = ("continue: your run was held from {since} (the agent watch saw nothing for {mins} min after {after}, and "
             "cancelled it). Read your inbox and carry on from where you stopped.")
@@ -266,10 +282,14 @@ RUN_STATUSES = ("CREATING", "RUNNING", "WAITING_FOR_BACKGROUND_WORK", "FINISHED"
                 "unknown")
 WATCH_STATES = ("ok", "followed", "held", "held_again", "continued", "continue_failed", "cancel_refused", "long_call", "stuck",
                 "crashed", "erroring", "unreadable", "ready_to_wake", "worker_idle", "worker_long", "silent", "run_ended",
-                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step")
+                "stalled", "idle_after_run", "relaunch", "workers_failed", "not_relaunched", "held_unread", "no_step",
+                "outage", "archived")
 BURST_S = 15 * 60               # workers of one parent failing within this of the first are one alert (proofs' 14: 16:49-17:03Z)
 BURST_QUIET_S = 3 * 60          # ... posted once none has joined for this long (so a lone failure waits about a sweep)
 CONV_MSGS = 6                   # a failed worker's last assistant messages read for a wake-up it set itself
+#: a conversation read's timeout, and how long an agent whose read timed out goes unread: a coordinator's long transcript can
+#: take past the API's 60 s, and a few such reads spent a sweep's whole SWEEP_READS_S
+CONV_TIMEOUT_S, CONV_SKIP_S = 15, 30 * 60
 # a wake-up an agent says it set (subscribe_timer's tool call is not in the API's conversation, only what it says of it)
 WAKE_RE = re.compile(r"[^.!?\n]*\b(?:wake[- ]?up|subscribe_timer|timer)s?\b[^.!?\n]*[.!?]?", re.I)
 WAKE_IN_RE = re.compile(r"\bin (\d+) ?(min(?:ute)?s?|h(?:ours?)?)\b", re.I)
@@ -303,6 +323,15 @@ RUN_ENDS_SLACK_S = 10 * 60      # each node is read back this far past its last 
 RUN_ENDS_KEEP_S = 3 * 86400     # a run rung (or skipped) this long ago is forgotten
 SAY_EVERY_S = 3600              # a failing ls-remote or node read is printed at most this often
 BRANCH_RE = re.compile(r"\b(?:cursor|lane)/[A-Za-z0-9._/-]*[A-Za-z0-9]")
+
+
+def same_task(head: str, branch: str) -> bool:
+    """Whether ``head`` is ``branch``'s task on a new branch: it starts with ``branch`` less its last `-` part and ends with
+    that part (`cursor/lean-one18-v2-fc8d` for `cursor/lean-one18-fc8d`). An agent that moves to a new branch names it
+    nowhere the watch reads. A stem that is only a lane (`cursor/lean` of `cursor/lean-fc8d`) widens to nothing, since
+    every branch of that lane would match it."""
+    stem, dash, tail = branch.rpartition("-")
+    return bool(dash) and "-" in stem.partition("/")[2] and head.startswith(stem + "-") and head.endswith(dash + tail)
 
 
 def iso(t: float) -> str:
@@ -534,7 +563,8 @@ def handover_note(notes: Path | None, handle: str) -> Path | None:
 # Run on a node over ssh (`python3 - ROOT SINCE`), standard library only: each run under ROOT/runs whose status.json changed at
 # or after SINCE (epoch s) and reads a terminal state, with who sent it (its request's `submitted_by`, else the `--by` its command
 # passes), what it was, and, for one that was cancelled or SIGTERMed, the newest `research cancel` of it in its events.jsonl's last
-# MiB (`cancel_reason`, and `cancelled_by`, the BY of its "(research cancel by BY)"), as one JSON list.
+# MiB (`cancel_reason`, and `cancelled_by`, the BY of its "(research cancel by BY)"), as one JSON list. A run whose status.json
+# changed then but isn't over is listed too, as `live` with only its start and sender: its sender's activity, not an end.
 RUNS_READER = r'''
 import json, os, re, sys
 root, since = sys.argv[1], float(sys.argv[2])
@@ -577,15 +607,19 @@ for n in names:
     if not n.startswith("r") or mtime < since:
         continue
     st = load(p)
-    if st.get("state") not in ("done", "failed", "cancelled"):
-        continue
     tr = st.get("transitions") or [{}]
-    job, req = load(os.path.join(runs, n, "job.json")), load(os.path.join(root, "requests", n, "request.json"))
+    req = load(os.path.join(root, "requests", n, "request.json"))
+    if st.get("state") not in ("done", "failed", "cancelled"):
+        out.append({"run": n, "state": st.get("state"), "live": True, "started": tr[0].get("t_utc"), "mtime": mtime,
+                    "submitted_by": req.get("submitted_by") or ""})
+        continue
+    job = load(os.path.join(runs, n, "job.json"))
     cmd = [str(a) for a in (req.get("command") or (job.get("execution") or {}).get("command") or [])]
     own, comp = job.get("ownership") or {}, job.get("computation") or {}
     by, why = cancel_of(os.path.join(runs, n)) if st.get("state") == "cancelled" or st.get("rc") == 143 else ("", "")
     out.append({"run": n, "state": st.get("state"), "rc": st.get("rc"), "wall_s": st.get("wall_s"),
-                "ended": tr[-1].get("t_utc"), "mtime": mtime, "submitted_by": req.get("submitted_by") or "",
+                "started": tr[0].get("t_utc"), "ended": tr[-1].get("t_utc"), "mtime": mtime,
+                "submitted_by": req.get("submitted_by") or "",
                 "by": cmd[cmd.index("--by") + 1] if "--by" in cmd[:-1] else "", "lane": own.get("lane") or "",
                 "job": own.get("job") or "", "stage": comp.get("stage") or "", "command": " ".join(cmd)[:200],
                 "cancelled_by": by, "cancel_reason": why, "tree": comp.get("tree_sha") or ""})
@@ -643,6 +677,31 @@ def node_runs(cfg: dict, notes: Path | None, node: str, since: float,
     return rows, ""
 
 
+def github_prs(remote: str, env_file: Path, pages: int = 10) -> Callable[[], list[dict]]:
+    """A reader of `remote`'s open PRs on GitHub (`{"branch", "body"}` each, newest first, up to `pages` of 100), with the token
+    `env_file`'s `GH_TOKEN=` line holds, read at each call so a rotated token needs no restart."""
+    m = re.search(r"github\.com[:/]([^/\s]+/[^/\s]+?)(?:\.git)?/?$", remote)
+    if not m:
+        raise ValueError(f"--git-remote {remote!r} names no GitHub repository")
+
+    def read() -> list[dict]:
+        token = next((v.strip().strip("\"'") for k, _, v in (ln.partition("=") for ln in env_file.read_text().splitlines())
+                      if k.strip().removeprefix("export ").strip() == "GH_TOKEN" and v.strip()), None)
+        if not token:
+            raise ValueError(f"no GH_TOKEN in {env_file}")
+        out: list[dict] = []
+        for page in range(1, pages + 1):
+            req = urllib.request.Request(f"https://api.github.com/repos/{m[1]}/pulls?state=open&per_page=100&page={page}",
+                                         headers={"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json"})
+            with urllib.request.urlopen(req, timeout=60) as r:  # noqa: S310 (a literal https URL)
+                got = json.loads(r.read())
+            out += [{"branch": (p.get("head") or {}).get("ref") or "", "body": p.get("body") or ""} for p in got]
+            if len(got) < 100:
+                break
+        return out
+    return read
+
+
 def print_runs(nodes: Path, notes: Path | None, hours: float) -> int:
     """`agent_watch.py runs`: each node's runs that ended in the last `hours`, one JSON line each, as the watch would read them."""
     cfg, rc = read_json(nodes), 0
@@ -652,7 +711,8 @@ def print_runs(nodes: Path, notes: Path | None, hours: float) -> int:
             print(why, file=sys.stderr)
             rc = 1
         for row in rows or []:
-            print(json.dumps({"node": node, **row}, sort_keys=True))
+            if not row.get("live"):
+                print(json.dumps({"node": node, **row}, sort_keys=True))
     return rc
 
 
@@ -702,9 +762,9 @@ class Api:
             h["Content-Type"] = "application/json"
         return urllib.request.Request(self.base + path, data=data, method=method, headers=h)
 
-    def get(self, path: str, **params) -> dict:
+    def get(self, path: str, timeout: float | None = None, **params) -> dict:
         q = ("?" + urllib.parse.urlencode({k: v for k, v in params.items() if v is not None})) if params else ""
-        timeout = self.timeout
+        timeout = self.timeout if timeout is None else min(timeout, self.timeout)
         if self.reads_until is not None:
             if (timeout := min(timeout, self.reads_until - self.clock())) <= 0:
                 raise TimeoutError(f"this sweep's reads are spent ({SWEEP_READS_S // 60} min); the next sweep reads again")
@@ -804,8 +864,11 @@ class Watch:
                  notes: Path | None = None, worker_long_s: float = WORKER_LONG_S, git_remote: str | None = None,
                  nodes: Path | None = None, sh: Callable[[list[str], str | None, float], tuple[int, str, str]] = run_cmd,
                  launcher: Path | None = None, launch: Callable[[list[str], dict[str, str]], tuple[int, str, str]] = run_env,
-                 launch_api: Callable[[str], object] = lambda key: Api(key)):
+                 launch_api: Callable[[str], object] = lambda key: Api(key),
+                 open_prs: Callable[[], list[dict]] | None = None):
         self.api, self.log, self.clock, self.wake, self.publish = api, log, clock, wake, publish
+        self.open_prs, self.prs_read = open_prs, -float("inf")
+        self.pr_branches: dict[str, set[str]] = {}  # agent id (full or short) an open PR's body names -> that PR's branches
         self.notes, self.worker_long_s = notes, worker_long_s
         self.git_remote, self.nodes, self.sh = git_remote, nodes, sh
         self.launch_env, self.launcher, self.launch, self.launch_api = log.with_name("launch.env"), launcher, launch, launch_api
@@ -813,12 +876,14 @@ class Watch:
         self.holders_all: dict[str, str] = {}       # every agent a registry holder names (its lanes too) -> the handle
         self.heads_path, self.ends_path = log.with_name("heads.json"), log.with_name("run_ends.json")
         self.heads = read_json(self.heads_path)     # {"t0", "t", "heads": {branch: [sha, when the watch first saw it]}}
-        self.ends = read_json(self.ends_path)       # {"since", "nodes": {node: last read}, "seen": {node/run: when}}
+        self.ends = read_json(self.ends_path)       # {"since", "nodes": {node: last read}, "seen": {node/run: when},
+                                                    #  "ran": {agent: when its newest ended run was sent}}
         self.heads_read = self.ends_read = -float("inf")
         self.said: dict[str, float] = {}            # what failed -> when it was last printed
         self.names: dict[str, str] = {}             # listed agent -> its name, for run_ended
         self.branches: dict[str, set[str]] = {}     # listed agent -> the branches its run records name
         self.worker_status: dict[str, str] = {}             # worker -> its status as this sweep read it, for status.json
+        self.slow_convs: dict[str, float] = {}              # agent -> until when its conversation goes unread (CONV_SKIP_S)
         self.agent_status: dict[str, str] = {}              # listed agent -> its status as this sweep read it, for run_ended
         self.registry, self.routes, self.timers = registry, routes, timers
         self.doorbells = ""                         # whether doorbells.json was fresh, stale or missing at the last sweep
@@ -846,6 +911,9 @@ class Watch:
         self.owners: dict[str, str] = s.get("owners", {})         # listed agent a coordinator launched -> that coordinator's handle
         self.children: dict[str, dict] = s.get("children", {})    # worker a followed run's Task call named -> parent, name, t
         self.bursts: dict[str, dict] = s.get("bursts", {})        # parent -> its workers' failures held to post as one
+        self.down: dict[str, float] = s.get("down", {})           # agent -> since when its latest run has been ERROR
+        self.back: dict[str, float] = s.get("back", {})           # agent -> since when it has been back from ERROR
+        self.rung_outage: float = s.get("rung_outage", 0.0)       # when the last `outage` record was written
         self.final: dict[str, dict] = {}                          # run -> its terminal record, never read again (not saved)
         self.learn_tried: dict[str, float] = {}                   # sender whose brief named no coordinator -> when (not saved)
         self.learn_left = 0                                       # briefs the current node read may still read
@@ -863,7 +931,8 @@ class Watch:
                                    "pending": self.pending, "done": self.done, "woken": self.woken,
                                    "workers": self.workers, "active": self.active, "silent": self.silent,
                                    "awaiting": self.awaiting, "relaunched": self.relaunched, "owners": self.owners,
-                                   "children": children, "bursts": self.bursts}) + "\n")
+                                   "children": children, "bursts": self.bursts, "down": self.down, "back": self.back,
+                                   "rung_outage": self.rung_outage}) + "\n")
         tmp.replace(self.state_path)
 
     def owned(self, agent: str) -> dict[str, str]:
@@ -943,9 +1012,13 @@ class Watch:
     def conversation(self, agent: str) -> list[dict] | None:
         """An agent's messages (`GET /v0/agents/{id}/conversation`: user and assistant text only, no tool calls); None when
         the API won't read it."""
+        if self.clock() < self.slow_convs.get(agent, 0):
+            return None
         try:
-            msgs = (self.api.get(f"/v0/agents/{agent}/conversation") or {}).get("messages") or []
+            msgs = (self.api.get(f"/v0/agents/{agent}/conversation", timeout=CONV_TIMEOUT_S) or {}).get("messages") or []
         except (urllib.error.URLError, OSError, ValueError) as e:
+            if isinstance(e, TimeoutError) or isinstance(getattr(e, "reason", None), TimeoutError):
+                self.slow_convs[agent] = self.clock() + CONV_SKIP_S
             print(f"{iso(self.clock())} conversation of {agent}: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
             return None
         return [m for m in msgs if isinstance(m, dict)]
@@ -996,11 +1069,73 @@ class Watch:
         if due:
             self.save()
 
+    def outage(self) -> bool:
+        """Whether `OUTAGE_MIN` or more coordinators are down at once: the platform's failure, not one agent's."""
+        return sum(1 for x in self.down if x in self.coords) >= OUTAGE_MIN
+
+    def track(self, agent: str, status: str | None, t: float) -> None:
+        """Note when `agent`'s latest run went to ERROR (`down`) or came back from it (`back`). Back `STICK_S` (its restart stuck),
+        its restart count and its left-for-a-person mark clear, however its runs ended."""
+        if status == "ERROR":
+            self.back.pop(agent, None)
+            if agent not in self.down:
+                self.down[agent] = t
+                self.save()
+            return
+        if status is None or (agent not in self.down and agent not in self.errors and agent not in self.left):
+            return
+        since = self.back.setdefault(agent, t)
+        if t - since >= STICK_S:
+            for d in (self.down, self.back, self.errors):
+                d.pop(agent, None)
+            self.left.discard(agent)
+        self.save()
+
+    def ring_outage(self, t: float) -> None:
+        """An `outage` record (the relay posts it to the top coordinator and a person) when `RING_MIN` or more coordinators have been down
+        `RING_DOWN_S`, once every `RING_EVERY_S` while it lasts."""
+        long = sorted((self.coords[x], since) for x, since in self.down.items() if x in self.coords and t - since >= RING_DOWN_S)
+        if len(long) < RING_MIN or t - self.rung_outage < RING_EVERY_S:
+            return
+        self.rung_outage = t
+        self.save()
+        self.record("outage", Run("", "", ""), judged=False, owner="top", count=len(long),
+                    handles=[h for h, _ in long], since=iso(min(s for _, s in long)), every_min=OUTAGE_RETRY_S // 60)
+
+    def archive(self, agent: str) -> str | None:
+        """Archive a silent worker (`POST /v1/agents/{id}/archive`), which stops it and frees its cloud-agent slot: None once
+        archived, else why the API refused."""
+        try:
+            self.api.post(f"/v1/agents/{agent}/archive", {})
+        except urllib.error.HTTPError as e:
+            return f"HTTP {e.code}"
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            return f"{type(e).__name__}: {e}"
+        return None
+
     def restart(self, a: dict, run: str, t: float) -> None:
         """A new run on an agent whose latest run ended in ERROR, at most once every `RESTART_S` and `MAX_RESTARTS` times in a
         row; then a coordinator is relaunched."""
         r = Run(a["id"], run, a.get("name") or "")
         n = self.errors.get(a["id"], 0)
+        if a["id"] in self.coords and self.outage():
+            if t - self.freed.get(a["id"], -OUTAGE_RETRY_S) < OUTAGE_RETRY_S:
+                return
+            self.freed[a["id"]] = t
+            self.save()
+            down = sorted(self.coords[x] for x in self.down if x in self.coords)
+            try:
+                new = self.api.post(f"/v1/agents/{a['id']}/runs", {"prompt": {"text": AFTER_ERROR}})
+                action = "restarted in an outage (not counted toward its limit)"
+                self.record("crashed", r, status="ERROR", action=action, down=down,
+                            new_run=((new or {}).get("run") or {}).get("id"), **self.owned(a["id"]))
+            except urllib.error.HTTPError as e:
+                self.record("crashed", r, status="ERROR", action=f"restart in an outage failed: HTTP {e.code}; again in "
+                            f"{OUTAGE_RETRY_S // 60} min", down=down, **self.owned(a["id"]))
+            except (urllib.error.URLError, OSError, ValueError) as e:
+                self.record("crashed", r, status="ERROR", action=f"restart in an outage failed: {type(e).__name__}: {e}; again "
+                            f"in {OUTAGE_RETRY_S // 60} min", down=down, **self.owned(a["id"]))
+            return
         if run in self.done:                        # restarted already: only the next ERROR run counts
             return
         if n >= MAX_RESTARTS:
@@ -1297,6 +1432,10 @@ class Watch:
         for agent, d in workers(self.notes, self.log.with_name("workers.d"), self.registry, coords, t).items():
             if agent in listed and d["handle"]:                 # an agent a coordinator launched through the API: it owns it
                 self.owners[agent] = d["handle"]
+            if d["handle"] and (self.children.get(agent) or {}).get("owner"):
+                with self.kids_lock:                            # a stray a note or workers.d now names is its lane's
+                    self.children.pop(agent, None)
+                (self.workers.get(agent) or {}).pop("handle", None)
             w = self.workers.setdefault(agent, {"heard": 0.0})
             w.update(lane=d["lane"] or w.get("lane") or "", handle=d["handle"] or w.get("handle"),
                      heard=max(w["heard"], d["heard"]))
@@ -1312,10 +1451,10 @@ class Watch:
                 continue
             p = c["parent"]
             if p not in parents:
-                parents[p] = self.parent_handle(p, coords)
-            handle = parents[p]
-            if agent in listed and handle:
-                self.owners[agent] = handle
+                parents[p] = self.parent_handle(p, coords) if p else None
+            handle = parents[p] or c.get("owner")
+            if agent in listed and parents[p]:                  # a stray's owner (infra) is never its owner here: it isn't resumed
+                self.owners[agent] = parents[p]
             w = self.workers.setdefault(agent, {"heard": 0.0})
             w.update(parent=p, lane=w.get("lane") or handle or "", handle=w.get("handle") or handle,
                      heard=max(w["heard"], c["t"]), name=w.get("name") or c.get("name") or "")
@@ -1376,6 +1515,25 @@ class Watch:
         if json.dumps([self.workers, self.owners], sort_keys=True) != before:
             self.save()
 
+    def read_prs(self, t: float) -> None:
+        """Every `HEADS_EVERY_S`, the open PRs (`open_prs`, `{"branch", "body"}` each): a push to a PR's branch is the activity of
+        every agent its body names, so a worker on a branch named another way (`cursor/lean-...-fc8d`) isn't judged silent. A
+        failed read keeps the last one."""
+        if self.open_prs is None or t - self.prs_read < HEADS_EVERY_S:
+            return
+        self.prs_read = t
+        try:
+            prs = self.open_prs()
+        except (OSError, ValueError, urllib.error.URLError) as e:
+            self.say("prs", f"open PRs unreadable ({type(e).__name__}: {e}); the last read's PR branches still count", t)
+            return
+        named: dict[str, set[str]] = {}
+        for pr in prs:
+            body, branch = str(pr.get("body") or ""), str(pr.get("branch") or "")
+            for agent in {*AGENT_RE.findall(body), *SHORT_AGENT_RE.findall(body)} if branch else ():
+                named.setdefault(agent, set()).add(branch)
+        self.pr_branches = named
+
     def read_heads(self, t: float) -> None:
         """Every `HEADS_EVERY_S`, Verity's branch heads (`git ls-remote --heads`, the deploy key fixtures_export.sh fetches with):
         a branch whose sha moved, or that appeared, was pushed when the watch saw it; `heads.json` keeps them across restarts."""
@@ -1400,9 +1558,11 @@ class Watch:
 
     def watch_silence(self, known: dict[str, dict], t: float) -> None:
         """Record `silent` for each agent in `known` (agent -> {name, handle, lane, run, since: ACTIVE since, branches}) with no
-        note of its (`note_times`) and no push to its branches (its own, the ones its notes name, and every head ending in its
-        id's last four characters, as a coordinator's `cursor/...-1037`) for `SILENT_S`, counted from the latest of those, its
-        ACTIVE spell's start and the first heads read; again after a second window, then not until one of those moves. Needs
+        note of its (`note_times`), no push to its branches (its own, the ones its notes name, those of open PRs whose body names
+        it, every head ending in its id's last four characters, as a coordinator's `cursor/...-1037`, and the heads `same_task`
+        finds for any of these) and no start or end of a research run it sent (`run_ends`' `ran`) for `SILENT_S`, counted from
+        the latest of those, its ACTIVE spell's start and the first heads read; again after a second window, then not until one
+        of those moves. Needs
         `--notes` and heads read in the last `HEADS_STALE_S`."""
         changed = False
         for agent in [a for a in self.silent if a not in known]:
@@ -1417,12 +1577,15 @@ class Watch:
         for agent, k in sorted(known.items()):
             coord = agent in self.coords
             mine = {*k["branches"], *named.get(agent, ()), *named.get(short_id(agent), ()),
+                    *self.pr_branches.get(agent, ()), *self.pr_branches.get(short_id(agent), ()),
                     *(b for b in heads if b.endswith("-" + agent[-4:]))}
+            mine |= {h for h in heads if any(same_task(h, b) for b in mine)}
             pushed = max((heads[b][1] for b in mine if b in heads), default=None)
             # a coordinator signs its notes with its lane, not its id (top, 27 Oct: four false silent rings in 70 min)
             lane_note = max((lanes[x] for x in (k["handle"], k["lane"]) if x and x in lanes), default=None) if coord else None
-            last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, self.heads["t0"])
-                       if x is not None)
+            ran = (self.ends.get("ran") or {}).get(agent)
+            last = max(x for x in (k["since"], heard.get(agent), heard.get(short_id(agent)), lane_note, pushed, ran,
+                                   self.heads["t0"]) if x is not None)
             s = self.silent.get(agent)
             if s and s["from"] != last:
                 self.silent.pop(agent)
@@ -1433,9 +1596,14 @@ class Watch:
                 if s and not s.get("no_step") and t - still >= NO_STEP_S:
                     s["no_step"] = True
                     changed = True
-                    self.record("no_step", Run(agent, k["run"], k["name"]), since=iso(still), hours=int((t - still) // 3600),
-                                lane=k["lane"], **({"handle": k["handle"]} if k["handle"] else {}), owner="top",
-                                role="coordinator" if coord else "worker")
+                    why = None if coord else self.archive(agent)
+                    common = dict(since=iso(still), hours=int((t - still) // 3600), lane=k["lane"],
+                                  **({"handle": k["handle"]} if k["handle"] else {}), role="coordinator" if coord else "worker")
+                    if coord or why:
+                        self.record("no_step", Run(agent, k["run"], k["name"]), owner="top", **common,
+                                    **({"archive_failed": why} if why else {}))
+                    else:
+                        self.record("archived", Run(agent, k["run"], k["name"]), **common)
                 continue
             if t - last < (COORD_SILENT_S if coord else SILENT_S) * (n + 1):
                 continue
@@ -1507,8 +1675,9 @@ class Watch:
         as `run_ended` for the handle of whoever sent it: a coordinator's own or a former one's, a worker's launcher's or its
         parent's (only its coordinator can resume it, with Task), else its lane's (`--by`, the job's lane, or a handle named in
         `submitted_by`) when that is a handle. The read's runs no handle owns are one record, with no handle and role `unknown`.
-        `run_ends.json` keeps each node's last read and the runs already seen; runs that ended before the first read are not
-        rung."""
+        `run_ends.json` keeps each node's last read, the runs already seen, and when each sender sent its newest ended run (its
+        end less its wall time), which `watch_silence` counts as the sender's activity; runs that ended before the first read
+        are not rung."""
         cfg = read_json(self.nodes)
         nodes = [str(n) for n in cfg.get("nodes") or []]
         every = cfg.get("every_s") if isinstance(cfg.get("every_s"), (int, float)) else RUN_ENDS_EVERY_S
@@ -1516,7 +1685,8 @@ class Watch:
             return
         self.ends_read = t
         st = {"since": self.ends.get("since", t), "nodes": dict(self.ends.get("nodes") or {}),
-              "seen": {k: v for k, v in (self.ends.get("seen") or {}).items() if v >= t - RUN_ENDS_KEEP_S}}
+              "seen": {k: v for k, v in (self.ends.get("seen") or {}).items() if v >= t - RUN_ENDS_KEEP_S},
+              "ran": {k: v for k, v in (self.ends.get("ran") or {}).items() if v >= t - RUN_ENDS_KEEP_S}}
         handles = {str(h.get("handle")) for h in read_json(self.registry).get("handles") or []}
         quiet = {str(h) for h in cfg.get("quiet_handles") or []}
         unknown: list[dict] = []
@@ -1528,7 +1698,12 @@ class Watch:
                 continue
             st["nodes"][node], self.learn_left = t, LEARN_PER_READ
             for row in rows:
-                if not isinstance(row, dict) or (key := f"{node}/{row.get('run')}") in st["seen"]:
+                if not isinstance(row, dict):
+                    continue
+                if (by := AGENT_RE.search(str(row.get("submitted_by") or ""))) and (
+                        when := max((x for x in (epoch(row.get("started")), epoch(row.get("ended"))) if x), default=None)):
+                    st["ran"][by[0]] = max(when, st["ran"].get(by[0], 0))
+                if row.get("live") or (key := f"{node}/{row.get('run')}") in st["seen"]:
                     continue
                 st["seen"][key] = t
                 ended = epoch(row.get("ended")) or row.get("mtime") or t
@@ -1570,7 +1745,8 @@ class Watch:
             kid = self.children.get(agent) or {}
             if kid:
                 kid["t"] = self.clock()             # a worker still sending runs is never forgotten
-        known = agent in coords or agent in self.owners or w.get("handle") or w.get("parent") or kid
+        stray = bool(kid.get("owner")) and not kid.get("parent")     # watched as infra's until a route claims it: still unknown
+        known = agent in coords or agent in self.owners or w.get("parent") or (kid and not stray) or (w.get("handle") and not stray)
         if agent and not known and not lineage(self.registry, coords, agent) and self.learn_left > 0:
             kid = self.learn(agent, coords, self.clock())
         parent = w.get("parent") or kid.get("parent")
@@ -1580,7 +1756,7 @@ class Watch:
             handle, role, name = h, "coordinator", self.names.get(agent, "")
         elif agent in self.owners:                 # an agent a coordinator launched through the API, a relaunched worker
             handle, role, name = self.owners[agent], "worker", self.names.get(agent, "") or str(kid.get("name") or "")
-        elif w.get("handle"):
+        elif w.get("handle") and not stray:
             handle, role, name = w["handle"], "worker", str(w.get("name") or "")
         elif parent and (h := self.parent_handle(parent, coords)):
             handle, role, name = h, "worker", str(w.get("name") or kid.get("name") or self.names.get(agent, ""))
@@ -1608,6 +1784,9 @@ class Watch:
         if role == "unknown":
             print(f"{iso(self.clock())} run ends: {node} {row.get('run')} sent by {sent or row.get('by') or '?'}, which no "
                   "handle owns: recorded for @infra to route", file=sys.stderr, flush=True)
+            if agent and agent not in coords:
+                with self.kids_lock:                # watched as infra's worker until a route claims it (`watch_workers`)
+                    self.children.setdefault(agent, {"parent": "", "name": "", "t": self.clock(), "owner": UNOWNED})
             return {"run": str(row.get("run")), "node": node, "sender": sent or str(row.get("by") or ""), "what": what[:80],
                     "rc": row.get("rc"), "state": row.get("state"), "after": duration(row.get("wall_s")), "at": iso(ended)}
         self.record("run_ended", Run(agent, str(row.get("run")), name), judged=False, handle=handle, role=role, node=node,
@@ -1849,6 +2028,7 @@ class Watch:
         current: dict[str, tuple[dict, dict]] = {}      # run -> (agent, run record)
         judged: dict[str, dict] = {}                    # run -> agent: the run each agent read is judged by
         judges: dict[str, dict] = {}                    # agent -> the record of the run it is judged by
+        errored: list[tuple[dict, str]] = []            # (agent, its latest run) ended in ERROR, restarted after the pass
         for a in live.values():
             latest = a["latestRunId"]
             if (runs := self.runs_of(a, t)) is None:
@@ -1872,12 +2052,19 @@ class Watch:
             if judge:
                 judges[a["id"]] = judge
                 self.status_of[a["id"]] = (judge["id"], str(judge.get("status")))
+            if a["id"] in coords:
+                self.track(a["id"], last.get("status") if last else None, t)
             if last and last.get("status") == "FINISHED":   # not a run going: a restart runs a minute before it errors
                 if self.errors.pop(a["id"], None) is not None or a["id"] in self.left:
                     self.left.discard(a["id"])
                     self.save()
             elif last and last.get("status") == "ERROR":
-                self.restart(a, latest, t)
+                errored.append((a, latest))
+        for x in [x for x in self.down if x not in coords]:
+            self.down.pop(x)
+        for a, latest in errored:                       # after every coordinator is tracked, so `outage` counts them all
+            self.restart(a, latest, t)
+        self.ring_outage(t)
         self.retry(current, t)
         bells, fresh = doorbells(self.log.with_name("doorbells.json"), t)
         every = timers(self.timers)
@@ -1917,6 +2104,7 @@ class Watch:
                                 "run": "", "since": w["since"], "branches": list(w.get("branches") or []),
                                 "acted": w.get("updated")}
         self.read_heads(t)
+        self.read_prs(t)
         self.watch_silence(known, t)
         self.run_ends(coords, t)
         self.watch_resumes({a["id"]: a for a in agents if a.get("status") != "ARCHIVED"}, judges, live, t)
@@ -2077,6 +2265,15 @@ class Publisher:
                   f"published (psql read {(r.stdout or '').strip()[:40]!r})", file=sys.stderr, flush=True)
 
 
+def rate_wait(e: urllib.error.HTTPError, last: float) -> float:
+    """Seconds to wait after a sweep the API refused with 429: its Retry-After when it gives one, else double the last wait
+    (from `RATE_WAIT_S[0]`), at most `RATE_WAIT_S[1]`. A sweep every minute into a rate limit kept it shut for 3.5 h."""
+    first, cap = RATE_WAIT_S
+    given = str((e.headers or {}).get("Retry-After") or "")
+    asked = float(given) if re.fullmatch(r"\d+(?:\.\d+)?", given) else 0.0   # an HTTP-date form doubles instead
+    return min(cap, asked if asked > 0 else max(first, 2 * last))
+
+
 def pump(watch: Watch, r: Run) -> None:
     """Feed the run's stream to the watch until the run ends or the watch stops following it; then the next sweep may follow
     it again."""
@@ -2115,6 +2312,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="Verity's remote, for `git ls-remote --heads` (pushes; without it nobody is judged silent)")
     lp.add_argument("--nodes", type=Path, default=Path("/data/agent-watch/nodes.json"),
                     help="the nodes whose ended runs ring their sender's handle (no file: none)")
+    lp.add_argument("--gh-env", type=Path, default=None,
+                    help="a file with a GH_TOKEN= line: --git-remote's open PRs, whose bodies name the agents their pushes count for")
     lp.add_argument("--launcher", type=Path, default=None,
                     help="launch_coordinator.py, for a coordinator's relaunch (default: the --registry checkout's "
                          "infra/cursor/launch_coordinator.py); relaunching also needs launch.env beside --log")
@@ -2145,20 +2344,27 @@ def main(argv: list[str] | None = None) -> int:
             lambda body, t: print(f"dry-run: would publish {len(body)} bytes to {STATUS_TABLE}", file=sys.stderr, flush=True))
     launcher = ns.launcher or (ns.registry.resolve().parents[3] / "infra/cursor/launch_coordinator.py" if ns.registry else None)
     watch = Watch(api, ns.log, registry=ns.registry, routes=ns.routes, timers=ns.timers, wake=ns.wake, publish=publish, notes=ns.notes,
-                  worker_long_s=ns.worker_long_h * 3600, git_remote=ns.git_remote, nodes=ns.nodes, launcher=launcher)
+                  worker_long_s=ns.worker_long_h * 3600, git_remote=ns.git_remote, nodes=ns.nodes, launcher=launcher,
+                  open_prs=github_prs(ns.git_remote, ns.gh_env) if ns.gh_env and ns.git_remote else None)
     if ns.dry_run:
         watch.launch = lambda argv, env: (print(f"dry-run: {shlex.join(argv)}", file=sys.stderr, flush=True), (1, "", "dry-run"))[1]
         watch.launch_api = lambda key: api
     if ns.once:
         watch.sweep(lambda r: None)
         return 0
+    wait = 0.0
     while True:
         api.reads_until = api.clock() + SWEEP_READS_S
         try:
             watch.sweep(lambda r: follow(watch, r))
+            wait = 0.0
+        except urllib.error.HTTPError as e:
+            wait = rate_wait(e, wait) if e.code == 429 else 0.0
+            print(f"{iso(time.time())} sweep failed: {type(e).__name__}: {e}"
+                  + (f"; the next sweep in {wait:.0f} s" if wait else ""), file=sys.stderr, flush=True)
         except (urllib.error.URLError, OSError, ValueError) as e:
             print(f"{iso(time.time())} sweep failed: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
-        time.sleep(POLL_S)
+        time.sleep(max(POLL_S, wait))
 
 
 if __name__ == "__main__":

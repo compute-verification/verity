@@ -1,4 +1,7 @@
-import PouwCheck
+module
+
+public import PouwCheck
+public import PouwCheck.Pass
 
 /-!
 # PoUW's Pearl-C live salt: what the check of a pass salted by a live challenger session must establish
@@ -80,6 +83,8 @@ pass through, while nothing keyed by the salt is rewarded. A Pearl-C period refu
 accepted pass presents, which makes the gain zero within credited periods. That rule is the period checker's, not this
 check's.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.LiveSalt
 

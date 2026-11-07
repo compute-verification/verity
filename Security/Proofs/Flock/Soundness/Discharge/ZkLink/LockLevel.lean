@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.OracleP
-import Proofs.Flock.Soundness.CompiledAlign
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The compiled masked level 0 in lockstep with the oracle one
@@ -10,6 +12,8 @@ ZK's masked level 0 (`ligeritoPadZK`) beside its compiled form (`ligeritoPadZC`)
 computed from the opened rows (`padColumnO_eq`). The folds and the OOD samples are `CompiledLock`'s (`lockFold`,
 `lockTwoOod`), the masked lane rounds and `ρ` the same game on both sides (`lockFoldZK`, `Lock.same`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

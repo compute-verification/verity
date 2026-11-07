@@ -1,4 +1,6 @@
-import NciCheck.Protocol
+module
+
+public import NciCheck.Protocol
 
 /-!
 # What NCI's core protocol's acceptance means
@@ -20,6 +22,8 @@ say what that verdict means: θ holds what the deployment's first record registe
 Proved as `NciCheck.Properties.SecurityProofs.ProtocolAccepts : NciCheck.Properties.ProtocolAccepts` in
 `Proofs.Properties.Nci.Protocol`.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties
 

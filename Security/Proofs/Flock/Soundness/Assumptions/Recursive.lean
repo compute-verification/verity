@@ -1,4 +1,19 @@
-import Proofs.Flock.Recursive.Registrants
+module
+
+public import Proofs.Flock.Recursive.Registrants
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # V*'s bridge: the recursive audit's open obligation
@@ -19,6 +34,8 @@ C-Flock's definitions are still in its proofs package (`Proofs.Flock.Soundness`)
 (`Proofs.Flock.Recursive`), so this module imports `Proofs.Flock.Recursive.Registrants`, and `Models.lean`, which the `security`
 package builds without `security_proofs`, does not import it: `Proofs.Flock.Recursive` does.
 -/
+
+@[expose] public section
 
 namespace Flock.Assumptions
 

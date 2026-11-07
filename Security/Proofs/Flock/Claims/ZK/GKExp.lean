@@ -1,6 +1,50 @@
-import Proofs.Flock.Claims.ERepCost
-import Proofs.Flock.Claims.ZK.GKCost
-import Proofs.Flock.Soundness.ZK.GK.Theorem
+module
+
+public import Mathlib.NumberTheory.LucasLehmer
+public import Proofs.Flock.Claims.ERepCost
+public import Proofs.Flock.Claims.ZK.GKCost
+public import Proofs.Flock.Claims.ZK.GKProof
+public import Proofs.Flock.Claims.ZK.Statement
+public import Proofs.Flock.Soundness.ZK.GK.Theorem
+public import Std.Tactic.BVDecide.Normalize.BitVec
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Soundness.Game.Expect
+import Std.Tactic.BVDecide.Normalize.Prop
+import VCVio.Prelude.Core
 
 /-!
 # The Goldreich–Kahan simulator with estimation, in expected polynomial time
@@ -34,6 +78,8 @@ the rewinds' `3^{-t}`, and only the worst case grows with it.
 the nonce and the first run's tape, `M` dummy-witness tapes and `4M` SHVZK tapes, each read at most once (`gkT`). The
 two have one law (`ev_gkT`, from `ev_estimateT` and `ev_rewindsT`).
 -/
+
+@[expose] public section
 
 namespace Claims.ZKMal
 

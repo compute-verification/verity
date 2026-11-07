@@ -1,4 +1,6 @@
-import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 
 /-!
 # The drawn units of one `--zk` session of `J` tables, at flock-verify's acceptance
@@ -14,6 +16,8 @@ file carries an event of the draw too, and bounds the drawn units' correctness:
 * `zk_session_soundJ_custody_drawn_reg`: the same at flock-verify's acceptance, at the coin server's custody, with
   `ksAvgStrictZ` for `ε_ks`. Its bound has no miss term, so it needs no A3.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -37,8 +41,9 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) {L : Law n}
 
-/-- **R11 at `--zk` for sessions of `J` tables, with an event of the draw**: flock-verify `--zk` accepts the live audit
-at a draw in `E` no likelier than the compiled batched audit, played by `simZJ … τ`, accepts at a draw in `E`. -/
+/-- **The refinement at `--zk` for sessions of `J` tables, with an event of the draw**: flock-verify `--zk` accepts the
+live audit at a draw in `E` no likelier than the compiled batched audit, played by `simZJ … τ`, accepts at a draw in
+`E`. -/
 theorem execRefinesZK_tables_drawn (hdec : DecodesOnZKJ A Hs planZ I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOfZJ dg planZ N wr))) (E : Finset (Fin n) → Prop) :
     prob (fun o => LiveAcceptsZK I o ∧ E o.2.1) (auditLive L Reg (liveOfZJ dg planZ N wr)) τ ≤

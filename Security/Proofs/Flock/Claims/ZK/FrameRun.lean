@@ -1,4 +1,6 @@
-import Proofs.Flock.Claims.ZK.FrameState
+module
+
+public import Proofs.Flock.Claims.ZK.FrameState
 
 /-!
 # The frame's fold over its requests
@@ -11,8 +13,11 @@ the step's equations that the loop's release reads:
   from its state.
 * `run_snoc`: so one request past a fold that did not end is one `step` past it.
 * `step_sched`, `step_coins`: a round with its scheduled round in its place is the frame's `check` (`check_l0`'s), and
-  coins are `Masker.answer`.
+  coins are `Masker.answer`; `check_of_step`, `answer_of_step`: conversely, a round that left was the check and coins
+  taken were the answer.
 -/
+
+@[expose] public section
 
 namespace Flock.Firewall.Frame
 
@@ -47,5 +52,38 @@ theorem step_sched {c : Cfg} {st : State} {n : Nat} {v r out : ByteArray} {s' : 
 theorem step_coins {c : Cfg} {st : State} {cs : Array F128} {s' : Masker} (h : st.m.answer c cs = .ok s') :
     step c st (.coins (.ok cs)) = (.ok, { st with m := s' }) := by
   simp only [step, h]
+
+/-- **A round that left with a scheduled round in its place** was the frame's pass decision (`check`), at the state the
+round left. -/
+theorem check_of_step {c : Cfg} {st st' : State} {n : Nat} {v r out : ByteArray} {vd : String}
+    (h : step c st (.round n v (.sched r)) = (.round out vd, st')) :
+    ∃ why, check c st.m v r n = .ok (out, st'.m, why) := by
+  simp only [step] at h
+  split at h
+  · cases h
+  · revert h
+    cases hc : check c st.m v r n with
+    | error e =>
+      intro h
+      cases hs : e.startsWith STOP <;> simp [hs] at h
+    | ok q =>
+      obtain ⟨o, s', w⟩ := q
+      intro h
+      cases h
+      exact ⟨w, rfl⟩
+
+/-- **Coins the frame took** left `Masker.answer`'s state. -/
+theorem answer_of_step {c : Cfg} {st st' : State} {cs : Array F128} (h : step c st (.coins (.ok cs)) = (.ok, st')) :
+    st.m.answer c cs = .ok st'.m := by
+  simp only [step] at h
+  revert h
+  cases ha : st.m.answer c cs with
+  | error e =>
+    intro h
+    cases hs : e.startsWith STOP <;> simp [hs] at h
+  | ok s' =>
+    intro h
+    cases h
+    rfl
 
 end Flock.Firewall.Frame

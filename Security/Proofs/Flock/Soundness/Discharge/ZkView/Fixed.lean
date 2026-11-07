@@ -1,4 +1,25 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+public import Proofs.Flock.Soundness.Discharge.ZkView.Statements
+public import Proofs.Flock.Verifier.Hash
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.CROnly.ZK
+import VCVio.Prelude.Core
 
 /-!
 # Lemma B at the `--zk` wire
@@ -6,6 +27,8 @@ import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
 `Coined.hm96` is `Table.Hm96` at a `--zk` table: its leaves are `H(x ⊕ M·y, c(y))` by `leafSplit`, so `viewExe` and
 `simExe` are `Hm96.viewR` and `Hm96.simR`, and `CROnly.session_shvzk_gap` bounds any event of their encoding.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 

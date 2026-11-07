@@ -1,4 +1,6 @@
-import Proofs.Pouw.DitherWitness
+module
+
+public import Proofs.Pouw.DitherWitness
 
 /-!
 # `WorkSound`, `WorkMoment` and `FleetSound` say something
@@ -27,6 +29,10 @@ and period `twPd` (`T = 8`, `μ = (2, 1, 1)`, `C = 14`, `η = 1/7`), with `k = 2
 * `FleetSound_honest` and `FleetSound_nontrivial`, the witnesses the lock lists: both at a fleet of two replicas
   (`n = 1`), closed at that one instance.
 -/
+
+@[expose] public section
+
+open Claims renaming Ex → avg
 
 namespace Pouw.SecurityProofs.DitherWitness
 

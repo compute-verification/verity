@@ -1,5 +1,29 @@
-import Proofs.Properties.Nci.BodiesOk.ForReads
-import Proofs.Properties.Nci.ReadsSet
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Decode
+public import Proofs.Properties.Nci.BodiesOk.ForReads
+public import Proofs.Properties.Nci.ReadsSet
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Properties.Nci.BodiesOk.Basic
+import Proofs.Properties.Nci.BodiesOk.Decoded
+import Proofs.Properties.Nci.ReadsOneNode
 
 /-!
 # `ReadsExact.Decoded`, `ReadsExact.RetParts`, `ReadsExact.ScanOut` and `ReadsExact.RootFacts`, proved
@@ -16,6 +40,8 @@ and `Novel.ReadsExact` holds wherever `ReadsExact.RootSet` does (`readsExact_of_
 reference of a node calling a primitive is read by a member (`cover_reads`) and a node calling a composite has the
 shape `ReadsExact.compNodeSet` reads (`compShape_reads`), so `ReadsExact.RootSet` holds (`rootSet`).
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

@@ -1,4 +1,9 @@
-import Proofs.Flock.Recursive.Defs
+module
+
+public import Proofs.Flock.Recursive.Defs
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: commit-and-prove composition
@@ -25,6 +30,8 @@ inner verifier reads it (`same k` at the transcript's coins, under which the inn
 whose message is an oracle, which the outer witness holds only at its queried rows, binds too. `commit_and_prove` is its
 case `same k := Eq`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

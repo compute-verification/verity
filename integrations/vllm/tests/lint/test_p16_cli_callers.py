@@ -10,7 +10,7 @@ A command in ``verity_vllm.pipeline.cli.COMMANDS`` is called when one of these r
   ``allowlists/p16_cli_callers.json`` names with the file that runs it.  It is a declaration rather than an exception, as the
   environment-read lint's settings-registry marks are, so no ratchet counts it: the ratchet gate
   (``integrations/vllm/tools/ratchet_gate.py``) accepts one a change adds, or gives another caller, when that file, in the
-  change's tree, runs the command (``runs``, as this module's base copy finds a call), and refuses it otherwise.
+  change's tree, runs the command (``runs``, as this module's base copy finds a call), and fails it otherwise.
 
 Scanned: ``integrations/vllm`` outside ``tests`` directories, ``test_*`` files and ``cli.py`` (whose table names every
 command). A test is not a caller, and neither is Markdown or a command's own help text.  Checked today, against

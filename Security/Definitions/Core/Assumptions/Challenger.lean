@@ -1,4 +1,6 @@
-import Definitions.Core.Challenger
+module
+
+public import Definitions.Core.Challenger
 
 /-!
 # Where coins come from: the challenger's premises
@@ -19,6 +21,8 @@ The challenger is an auditor device on a host the prover doesn't control (`trust
 from nowhere else. The two cases where randomness is derived from a coin by hashing are named in
 `Definitions.Core.Challenger`; they read their coin through these premises.
 -/
+
+@[expose] public section
 
 namespace Verity.Assumptions
 

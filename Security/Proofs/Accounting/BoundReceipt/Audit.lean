@@ -1,13 +1,15 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.BoundReceipt
-import Proofs.Accounting.RateAudit.Audit
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.BoundReceipt
+public import Proofs.Accounting.RateAudit.Audit
 
 /-!
 # Receipts bound to the matmul: the proofs
 
 Each location is a `RelayDevice` of `RateAudit`'s game, whose oracle is the mix at what the location holds:
 
-- the GPU at tile outputs `z` is its device (`Device.toRelay`), over the store, at the mix `atZ G z`;
+- the GPU at tile outputs `z` is its device (`Prover.toRelay`), over the store, at the mix `atZ G z`;
 - the rest at a store `E` is a device over the tile outputs (`Rest.view`), with no on-chip state, its memory inlined
   into its program (`Chip.inline`), so that it has no footprint, its tile work as rebuilds and what the GPU sent as
   side reads, at the mix `atE G E`.
@@ -17,6 +19,8 @@ An accepted node whose blocks were made at fewer than `k` places is the sample's
 `m + 1` (`RateAudit`'s compression of the tile outputs, at `C(q_z, m + 1)/2^λ`) or the GPU made `k − m` (its
 compression of the store, at `C(q, k − m)/2^λ`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Rate.Chip
 

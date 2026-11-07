@@ -1,4 +1,21 @@
-import Proofs.Flock.Recursive.Stage
+module
+
+public import Proofs.Flock.Recursive.Stage
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # Recursion: V*'s stages at the wires V* reads
@@ -14,6 +31,8 @@ agrees with them on the read wires decodes alike (`VDecodesR`), so that wire is 
   `VDecodesR`, with the same bounds;
 * `vFullR_of_vFull`, `vDecodes_of_vDecodesR`: `VFull` gives `VFullR`, and `VDecodesR` gives `VDecodes`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion
 

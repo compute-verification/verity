@@ -1,9 +1,11 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.Stacking
-import Proofs.Accounting.RateAudit.DeployedSketchSum
-import Proofs.Accounting.RateAudit.DeployedRelay
-import Proofs.Accounting.Requirement
-import Proofs.Accounting.Gates
+module
+
+public import Mathlib
+public import Definitions.Accounting.Guarantees.Stacking
+public import Proofs.Accounting.RateAudit.DeployedSketchSum
+public import Proofs.Accounting.RateAudit.DeployedRelay
+public import Proofs.Accounting.Requirement
+public import Proofs.Accounting.Gates
 
 /-!
 # Stacking: the carrier lemma and the stacked session
@@ -43,6 +45,8 @@ bound a declared circuit's held and read bits over at most `k` steps by the stor
 are its own (`Requirement.cap_of_matches`, from `RequirementHeld` and `RequirementMoved` with no block held), so a
 shortfall against the requirement is one against the store.
 -/
+
+@[expose] public section
 
 namespace Accounting
 
@@ -763,7 +767,7 @@ theorem pr_pass_le {d : ℕ} (A : SketchDeployedWindow P N m ρ h S L q ks G) (r
   refine Rate.pr_le_of_fiber _ _ (fun sd => ?_)
   by_cases hr : RankGood r sd.1
   · exact (pr_mono fun z hz => hz.2).trans (pr_unpaidPass_le A sd.1 _ _ j fun η =>
-      Device.pr_unpaid_rank_family_le (fun c => A.device j η c) sd.1 r X qtot hr32 hr
+      Prover.pr_unpaid_rank_family_le (fun c => A.device j η c) sd.1 r X qtot hr32 hr
         (fun c => hX j η c sd.1) (hq j η sd.1))
   · calc _ ≤ pr (fun _ : SketchStore N m × (Fin P → SketchPassCoins N ρ h ks G) => False) :=
           pr_mono fun _ hz => hr hz.1
@@ -1040,7 +1044,7 @@ end Accounting.RateSketch
 
 namespace Accounting.Requirement
 
-variable {V : Type} [DecidableEq V] (W : Wiring V) (e : Execution V) (ℓ : Layout V)
+variable {V : Type} [DecidableEq V] (W : Wiring V) (e : Execution V) (ℓ : Store.Placement V)
 
 /-- Over a window of at most `k` steps at each of which the store holds `W`'s credited blocks with at most `N` resident
 blocks and the plan covers `W`'s reads in at most `N` blocks, the live bits the audit credits and the bits read from

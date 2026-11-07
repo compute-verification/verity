@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Laws
-import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Witnesses
+module
+
+public import Proofs.Flock.Soundness.Audit.Partitioning.Guarantees
+public import Proofs.Flock.Soundness.Audit.Partitioning.SecurityProofs.Unequal.Laws
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
 # Achievability, the granularity optimum and unequal units: the proofs
@@ -18,6 +20,8 @@ as a hypothesis (`hCA`), and `FreeCompute` passes its proof.
 * `unequalCost_of_le`: the same per class, weighted by the class's cheapest unit, with `c(ρt) ≤ ρ·c(t)`. It assumes
   `a ≤ A`, which every `n ≥ 1` implies; without it the statement is false at `n = 0` (`unequalCost_needs_le`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit.Partitioning.SecurityProofs.Unequal
 

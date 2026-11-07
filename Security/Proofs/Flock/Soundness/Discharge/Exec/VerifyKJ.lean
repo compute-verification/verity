@@ -1,3 +1,10 @@
+module
+
+public import Flock.With.Eq
+public import Flock.With.VerifyE
+public import Proofs.Flock.Soundness.Refine.Frames
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
 import Proofs.Flock.Soundness.Discharge.Exec.VerifyK
 
 /-!
@@ -16,6 +23,8 @@ and Bits route reads the same walkers at `j` (`Record.decodeJWithK`, `verifyJWit
 At `keep := id` and SHA-512, `Record.decodeJWithK` on a record's parsed value is `Record.decode` on the record
 (`decode_eq_decodeJWithK_id`).
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

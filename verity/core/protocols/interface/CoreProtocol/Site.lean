@@ -1,15 +1,18 @@
-import Lean.Data.Json
-import Flock.Canon
-import Flock.Hash
-import CoreProtocol.Ratio
+module
+
+public import Lean.Data.Json
+public import Flock.Canon
+public import Flock.Hash
+public import CoreProtocol.Ratio
 
 /-!
 # The Site in code
 
 The spec's `Verity.Site` (`Security/Definitions/Core/Site.lean`) as code, on Lean core and C-Flock's canonical JSON and
 SHA-512: the registered hardware, folded from the registration log (`Site.ofLog`), the check each entry passes
-(`Registration.Entry.refusal`), and the views the protocols read. Its checks are the spec's, clause for clause and in
-the spec's order, over this file's own types, each decidable; `Properties.Core.Site` states that each is the spec's, and
+(`Registration.Entry.refusal`), and the views the protocols read. Its log holds site entries only; the spec's
+declarations of a day's circuit are the registration log's (`Core.Registration`). Its checks are the spec's, clause for
+clause and in the spec's order, over this file's own types, each decidable; `Properties.Core.Site` states that each is the spec's, and
 `verity.core.site` is its Python mirror, held to it by the difftest (`site-difftest`). A sheet carries its device's
 figures (`DeviceFigures`, the spec's `Definitions/Core/DeviceFigures.lean`), nonnegative rationals (`Figure`, the spec's
 `ℚ≥0`).
@@ -19,6 +22,10 @@ The digests are parameters as in the spec (`Registration.Digests`); the deployed
 a rational written as `Core.Ratio` writes one. The views (`Site.sheetOf`, `device`, `node`, `tiers`, `boundary`, `units`,
 `registered`, `host`) are functions of the site alone, but `device`, which reads the auditor's sheet too.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Core
 

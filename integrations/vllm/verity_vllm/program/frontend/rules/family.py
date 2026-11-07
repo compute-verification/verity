@@ -557,7 +557,7 @@ def _decoder_layer_body(B, S, h, *rest):
 #: The hand-built decoder layer at T positions (TA1's LayerPre/Attention/LayerPost) — the S2 structural oracle.
 DecoderLayerT = CompositeDefinition("DeriveOracleDecoderLayer", 1, ("C", "L0", "T", "T0"), _decoder_layer_sig, _decoder_layer_body,
                                     doc="TA1 decoder layer at T positions (prefill of one layer): LayerPre x T, Attention x T, LayerPost x T",
-                                    conformance="structural oracle (composed of exact-model-tested / model-untested TA1 composites)", register=False)
+                                    conformance="derived: a structural oracle, composed of exact-model-tested and model-untested TA1 composites", register=False)
 
 
 def _layer_binder(flat_sd, ctx):

@@ -1,5 +1,8 @@
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Core.Game
+module
+
+public import Definitions.Pouw.PearlC.Tile
+public import Definitions.Core.Game
+public import Definitions.Core.Interaction
 
 /-!
 # The hidden audit (trusted)
@@ -12,12 +15,13 @@ proof of the tile-check Program. `GγHidden` is `GγSampled`'s bound for that au
 soundness speaks of (`HiddenAudit.Bounded`), at `t·ηzk(q)` more error.
 -/
 
+@[expose] public section
+
+open Claims renaming Ex → ex
+
 namespace Pouw.PearlC
 
 variable {Q R S : Type}
-
-/-- The expectation of `f` over a uniform `x : α`; `0` on an empty type. -/
-noncomputable def ex {α : Type} [Fintype α] (f : α → ℝ) : ℝ := (∑ x, f x) / Fintype.card α
 
 /-- **The hidden audit**: the tile check as a proof. The verifier never opens a drawn tile. It holds the transcript's
 commitment `root U τ o`, where the opening `o` is the commitment's randomness (for hm96-SHA-512, the leaves' salts),

@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
-import Proofs.Flock.Soundness.Discharge.Layout.Keyed
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Bind
+public import Proofs.Flock.Soundness.Binding.Rows
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # A `--zk` layout from a public one at the same statements
@@ -14,6 +17,8 @@ satisfying public message is one about every satisfying `--zk` message.
 * `LayoutZ.ofShadow`: the `--zk` layout, given that the two decoders agree on messages packing one witness (`hdec`);
 * `HmRowsZ.ofShadow`: its rows, and `HmRowsZ.ofShadow_computes`: `HmRowComputes` moves along.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

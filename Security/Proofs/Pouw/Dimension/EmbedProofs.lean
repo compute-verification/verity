@@ -1,5 +1,12 @@
-import Definitions.Pouw.Assumptions.Dimension.Embed
-import Proofs.Pouw.Dimension.OpenPipeProofs
+module
+
+public import Definitions.Pouw.Assumptions.Dimension.Embed
+public import Proofs.Pouw.Dimension.OpenPipeProofs
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Dimension.ForestProofs
+import Proofs.Pouw.Dimension.PipeProofs
 
 /-!
 # M4090 and the embedding theorem: proofs
@@ -17,6 +24,8 @@ import Proofs.Pouw.Dimension.OpenPipeProofs
   cannot be an FP32 step, so each is a distinct instruction at 16 (`count16`); `perWordM4090Gap` composes it with
   `embedFp`.
 -/
+
+@[expose] public section
 
 namespace Pouw.Dimension.Embed
 

@@ -1,7 +1,10 @@
-import Definitions.Core.Boolean
-import Definitions.Core.Partition
-import Flock.Desc
-import Properties.Flock.Circuit.Outs
+module
+
+public import Definitions.Core.Partition
+public import Flock.Desc
+public import Properties.Flock.Circuit.Outs
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The registered circuit file as core's circuit
@@ -21,6 +24,8 @@ file's `pub.n`) give the key program `keyProg D.unroll hU n`, whose circuit and 
 
 The lemmas about them are `Proofs.Flock.Bridge.CircuitOf`'s.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 

@@ -1,6 +1,24 @@
-import Proofs.Flock.Recursive.ZkReg.DrawnRefines
-import Proofs.Flock.Recursive.ZkReg.RegLink
-import Proofs.Flock.Soundness.Registered.ReadsX
+module
+
+public import Proofs.Flock.Recursive.ZkReg.DrawnRefines
+public import Proofs.Flock.Recursive.ZkReg.RegLink
+public import Proofs.Flock.Soundness.Registered.ReadsX
+public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The committed values of a `--zk --registered` session at its registered reads
@@ -13,6 +31,8 @@ opening of each commit string is its row and salt (`regOpenZ`), whose `hm96X` le
 `cr/sha-512` for the finders that collide an extracted opening with the registrant's (`RegCRZC`, a hypothesis as `hCR`
 is).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkReg
 

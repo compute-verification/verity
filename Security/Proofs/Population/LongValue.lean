@@ -1,5 +1,12 @@
-import Definitions.Population.LongValue
+module
+
+public import Definitions.Population.LongValue
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Proofs.Population.Determinacy
+import Proofs.Population.Egress
 import Proofs.Population.Leakage
+import Proofs.Population.Work
 
 /-!
 # Long values buy nothing
@@ -28,6 +35,8 @@ of its width (or the run holds a collision), the verifier's view of it is ⊥, a
   extra symbol is ⊥ itself, `log₂ (1 + 1/|V|)` bits a slot at most, and it costs its writer's and readers' correctness;
   read with ⊥ replaced by any short value, the counts are the population's with `|V|` (`fill_card_leak_le_coneEgress`).
 -/
+
+@[expose] public section
 
 namespace Population
 

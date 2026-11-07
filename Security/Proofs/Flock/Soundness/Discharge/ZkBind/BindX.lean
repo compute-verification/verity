@@ -1,6 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.ZkBind.Headline
-import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
-import Proofs.Flock.Soundness.Binding.RowsX
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Shadow
+public import Proofs.Flock.Soundness.Binding.RowsX
+public import Proofs.Flock.Soundness.Discharge.ZkBind.Place
+public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # `--zk` rows each under its own encoding
@@ -14,6 +30,8 @@ import Proofs.Flock.Soundness.Binding.RowsX
 * `HmRowsZX.ofShadow`: the `--zk` rows of a public layout's `HmRowsX`, and `HmRowsZX.ofShadow_computes`;
 * `zk_flock_countC_execOS_keyProgX`: the compiled `--zk` count curve at such rows' binding.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkBind
 

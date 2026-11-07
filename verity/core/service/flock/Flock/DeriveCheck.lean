@@ -26,8 +26,12 @@ unit `blockRow`, those with Δ applied.
 
 `compose_sound` (soundness package) is proved from the walk alone, so it holds of whatever `deriveAll` builds.
 -/
-import Std.Data.HashSet
-import Flock.DeriveAll
+module
+
+public import Flock.DeriveAll
+public import Std.Data.HashSet
+
+@[expose] public section
 
 namespace Flock.DeriveAll
 

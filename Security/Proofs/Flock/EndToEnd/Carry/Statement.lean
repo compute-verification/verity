@@ -1,5 +1,19 @@
-import Proofs.Flock.EndToEnd.Blocks.Statement
-import Proofs.Flock.Soundness.LinkCarry
+module
+
+public import Proofs.Flock.EndToEnd.Blocks.Statement
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The integrity audit over a monitoring period of blocks, with carried state (trusted)
@@ -30,6 +44,8 @@ one it picked, and that session's trial's (`CarriedLeaf.costMix`). The named ass
 and `ecr/sha-512` (`Assumptions.SHA512CRExpected`) at each carried leaf's finder, with that cost. The proofs are
 `Flock.SecurityProofs.IntegrityHorizonCarried` and `IntegrityBlockCarried`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 

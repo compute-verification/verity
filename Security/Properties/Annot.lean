@@ -1,5 +1,6 @@
-import Flock.Annot
-import Flock.AnnotExpand
+module
+
+public import Flock.AnnotExpand
 
 /-!
 # The description-level annotation check's property, stated against the Lean functions
@@ -29,6 +30,8 @@ the per-Definition flags `gateKinds` and `planHolds`. Reading `Holds` as `Verity
 gates the ones `Prog.gate` classifies so, proved once: the one canonical format the Lean rules ask circuit inputs and
 outputs to use. Until both land, `Flock.Annot.check` is code no soundness theorem reaches, and no verifier calls it.
 -/
+
+@[expose] public section
 
 namespace Properties.Annot
 

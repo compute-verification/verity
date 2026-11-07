@@ -1,6 +1,19 @@
+module
+
+public import Mathlib.Data.Fintype.Powerset
+public import Definitions.Population.Necessity
+public import Definitions.Population.Oblivious
+public import Mathlib.Data.Fintype.Option
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Data.Fintype.BigOperators
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Proofs.Population.Determinacy
 import Proofs.Population.NecessitySkeleton
 import Proofs.Population.Transfer
-import Mathlib.Data.Fintype.Powerset
+import Proofs.Population.Work
 
 /-!
 # The policy × property matrix: what each policy needs beyond tier 1, and what each property buys
@@ -31,6 +44,8 @@ amplification is unbounded).
   case `R` = the padding. Necessity is `DynPopulation.leak_of_moved_read`: a corruptible address that moves a read onto
   a slot no honest run reads leaks that slot through one faulty proof block.
 -/
+
+@[expose] public section
 
 namespace Population.Iop
 

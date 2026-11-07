@@ -1,7 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
-import Proofs.Flock.Soundness.Discharge.Layout.OutSite
-import Proofs.Flock.Soundness.Discharge.Layout.OutShape
-import Properties.Flock.Circuit.Outs
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+public import Proofs.Flock.Soundness.Discharge.Layout.OutRegion
+public import Proofs.Flock.Soundness.Discharge.Layout.OutShape
+public import Proofs.Flock.Soundness.Discharge.Layout.OutSite
+import Mathlib.Combinatorics.Matroid.Init
+
+@[expose] public section
 
 set_option Elab.async false
 

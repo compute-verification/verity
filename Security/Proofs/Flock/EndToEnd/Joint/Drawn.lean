@@ -1,6 +1,8 @@
-import Proofs.Flock.EndToEnd.Joint.Statement
-import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
-import Proofs.Flock.Soundness.Audit.HarmBound
+module
+
+public import Proofs.Flock.EndToEnd.Joint.Statement
+public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+public import Proofs.Flock.Soundness.Audit.HarmBound
 
 /-!
 # A sampling block stratified by subcircuit: its drawn units, its draw's miss, and its one budget
@@ -15,6 +17,8 @@ import Proofs.Flock.Soundness.Audit.HarmBound
 * `StratifiedBlock.within_of_le`: a set in the confidence set, `δ ≤` its escape, is within the one budget:
   `Law.stratified_risk_le` for its spend, and `maxHarm`'s supremum for its ANDs and output bits.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 
@@ -31,8 +35,8 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : Law n}
 
-/-- **R11 at `--zk` at one table, with an event of the draw**: flock-verify `--zk` accepts the live audit at a draw in
-`E` no likelier than the compiled batched audit, played by `simZ … τ`, accepts at a draw in `E`. -/
+/-- **The refinement at `--zk` at one table, with an event of the draw**: flock-verify `--zk` accepts the live audit at
+a draw in `E` no likelier than the compiled batched audit, played by `simZ … τ`, accepts at a draw in `E`. -/
 theorem execRefinesZK_on_drawn (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) (E : Finset (Fin n) → Prop) :
     prob (fun o => LiveAcceptsZK I o ∧ E o.2.1) (auditLive L Reg (liveOf dg mPts N wr)) τ ≤

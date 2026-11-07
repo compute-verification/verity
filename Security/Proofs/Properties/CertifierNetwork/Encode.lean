@@ -1,7 +1,56 @@
-import Proofs.Properties.CertifierNetwork.Defs
-import Proofs.Properties.CertifierDevice.Issuer
+module
+
+import all Init.Data.String.Defs
+public import Aesop.BuiltinRules
+public import Batteries.Data.ByteArray
+public import Mathlib.Algebra.Group.Int.Defs
+public import Mathlib.Algebra.Group.Nat.Defs
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToDual
+public import Properties.CertifierDevice
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Properties.CertifierDevice.Basic
-import Proofs.Properties.NetworkCertifier.Grid
+import Proofs.Properties.CertifierDevice.Issuer
+import Proofs.Properties.Identity
+import Proofs.Properties.NetworkCertifier.Bytes
+import Proofs.Properties.NetworkCertifier.Tree
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A device's record has an encoding
@@ -10,6 +59,8 @@ import Proofs.Properties.NetworkCertifier.Grid
 publishes fits them: its grid is `T` packed rows of `r` slots (`Packed`), each frame `B` bytes, and its integers, link and
 key identifier are within their widths (`prepare_of`).
 -/
+
+@[expose] public section
 
 namespace Properties.CertifierNetwork.Proofs
 
@@ -140,7 +191,7 @@ theorem realFrames_of {g : Params} {grid : Array Slots} (hs : grid.size = g.buck
 
 theorem frameTag_size : frameTag.size = 34 := by decide
 
-theorem block_of {x : ByteArray} (h : x.size ≤ 128) : block x = .ok (x ++ ⟨Array.replicate (128 - x.size) 0⟩) := by
+theorem chunk_of {x : ByteArray} (h : x.size ≤ 128) : block x = .ok (x ++ ⟨Array.replicate (128 - x.size) 0⟩) := by
   unfold block
   rw [ite_eq_left h]
   rfl
@@ -148,7 +199,7 @@ theorem block_of {x : ByteArray} (h : x.size ≤ 128) : block x = .ok (x ++ ⟨A
 theorem frameLeaf_of {f : ByteArray} {B : Nat} (hB : B < 2 ^ 32) (hf : f.size = B) :
     ∃ x, frameLeaf f B = .ok x ∧ x.size = 64 := by
   obtain ⟨u, hu, hus⟩ := uBE_of (w := 4) (x := B) "B" (by omega) (cast_lt (w := 4) hB)
-  have hblk := block_of (x := frameTag ++ u) (by rw [ByteArray.size_append, frameTag_size, hus]; omega)
+  have hblk := chunk_of (x := frameTag ++ u) (by rw [ByteArray.size_append, frameTag_size, hus]; omega)
   have hne : ¬ (f.size ≠ B) := fun h => h hf
   have hl : leafInput f B = .ok (frameTag ++ u ++ ⟨Array.replicate (128 - (frameTag ++ u).size) 0⟩ ++ f) := by
     unfold leafInput

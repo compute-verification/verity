@@ -1,4 +1,21 @@
-import Proofs.Flock.C3.Reps.Maps
+module
+
+public import Proofs.Flock.C3.Reps.Maps
+public import Proofs.Flock.C3.Opening.SrcOpening
+public import Proofs.Flock.C3.RegLevels.SrcUnits
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.C3.RegLevels.RsT
 
 /-!
@@ -12,6 +29,8 @@ import Proofs.Flock.C3.RegLevels.RsT
   steps' coins (custody), the Ligerito steps' weave (the source's definition), each opening at its map's unit, and
   the run's and the proof's ties.
 -/
+
+@[expose] public section
 
 namespace FlockC3.RegLevels
 

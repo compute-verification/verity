@@ -1,6 +1,7 @@
-import PouwCommit.Draws
-import SampledProofs.Challenger
-import Identity.Domains
+module
+
+public import PouwCommit.Draws
+public import SampledProofs.Challenger
 
 /-!
 # A live window's round coins (`window.py`, "Live windows")
@@ -15,6 +16,8 @@ window's round coins, and `roundKey` is `round_key`, round `r`'s noise key from 
 A Pearl-C pass's live session is reserved for its salt coin alone (`SALT_FAMILIES`), which `saltEpochReason`
 (`salt_epoch_reason`) checks.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 

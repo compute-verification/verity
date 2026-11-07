@@ -10,6 +10,7 @@ defaultTargets = ["SampledProofs", "sampled-proofs-one-stage", "sampled-proofs-o
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+backward.proofsInPublic = true
 
 [[require]]
 name = "core_protocol"

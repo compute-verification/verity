@@ -1,4 +1,12 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+module
+
+public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+public import Proofs.Flock.Soundness.Discharge.Layout.HmRegion
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -97,6 +105,7 @@ theorem tables_facts {body : ByteArray} {counts : Array ℕ} {n np K R S : ℕ} 
     simp only [Array.getElem_range, decide_eq_true_eq]
     omega
 
+-- `walk_step` down `HmRow.loadPublic`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **What `HmRow.loadPublic` reads of a population's `b ‖ c`**: each is 128 bytes, and a shared-row file's refs are one
 per instance and port, each below its table's count, into tables of consecutive rows. -/

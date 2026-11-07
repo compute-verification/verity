@@ -1,5 +1,21 @@
-import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
 
 /-!
 # `zk_session_soundJ_custody`, "wrong" measured against the public file
@@ -17,6 +33,8 @@ wrong units contain `zk_session_soundJ_custody`'s (`wrong_subset_wrongRegZ`), so
 * `rsZJ_wrongRegZ`: the registered commit strings are the public file's, so `wrongRegZ` is one set at every
   registration.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 

@@ -1,8 +1,10 @@
-import Proofs.Flock.Claims.ZK.FinishSwPts
-import Proofs.Flock.Claims.ZK.FinishSwBit
-import Proofs.Flock.Claims.ZK.FinishSwLigE
-import Proofs.Flock.Claims.ZK.FinishRank
-import Proofs.Flock.Claims.ZK.FinishSrc
+module
+
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.ZK.FinishSwBit
+public import Proofs.Flock.Claims.ZK.FinishSwLigE
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.FinishSrc
 
 /-!
 # The firewall's rep is the switched source's cut
@@ -17,6 +19,8 @@ coins (`ligCoin`) and the packed table of the witness's trace (`ligTab`). So the
 * `repFwC_piopFw`: where the firewall's rep returned, so did its PIOP.
 * `zcCoins_ligRespE`, `lcCoins_ligRespE`, `rsCoins_ligRespE`: the closed forms' coins at the replies `ligRespE c` are
   the opened coins.
+* `LigLock.LigHyp.ofSalt`, `LigLock.LigHyp.ofLanes`: `LigHyp` reads levels ≥ 1's salts only on the schedule, and the
+  extra lanes and lane paddings only within level 0's sizes.
 * **`swSrcE_repCut`**: `repCut_fw` at the switched source. `hmk` is `swSrcE_hmk_frame`. `hpiop`'s rank half is
   `rank_at_admits`, and its switched vectors are the prover's (`swSrc_sv`), whose claims have the firewall's points
   (`zerocheckCut_at`, `lincheckCut_at`, `claims_x`) and `m − 6` coordinates (`claims_xsize'`), read off the packed
@@ -29,8 +33,10 @@ it). That the rep's base is before the stop comes from the firewall's PIOP havin
 bound), and that no refusal shows by round `n` from the admitted coins (`not_refused_of_admits`).
 -/
 
+@[expose] public section
+
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 namespace Flock.Firewall.Finish
 open Flock Transcript
@@ -75,6 +81,47 @@ theorem LigHyp.ofSalt {coin : ℕ → ℕ → _root_.Flock.F128} {n p0 : ℕ} {m
     (hs : ∀ i, 1 ≤ i → i < sch.levels.size → ∀ q < 2 ^ (sch.levels.getD i default).d, salt' i q = salt i q) :
     LigHyp coin n p0 ms sch t b lay h rep tPad extra lanePad salt' src :=
   { H with salt := fun a b' i h1 h2 q hq => by rw [hs i h1 h2 q hq]; exact H.salt a b' i h1 h2 q hq }
+
+/-- **`LigHyp` reads the extra lanes and lane paddings only within level 0's sizes**: it holds at extra lanes that agree
+with its own below the folded table's size, and at lane paddings that agree on the `2^lanes + 4` lanes below `t_pad`,
+for rep `0` or `1`. -/
+theorem LigHyp.ofLanes {coin : ℕ → ℕ → _root_.Flock.F128} {n p0 : ℕ} {ms : _root_.Flock.MerkleScheme}
+    {sch : _root_.Flock.Schedule} {t b : Array _root_.Flock.F128} {lay : _root_.Flock.Zk.PadLayout}
+    {h : Array _root_.Flock.F128} {rep tPad : ℕ} {extra lanePad extra' lanePad' : ℕ → ℕ → _root_.Flock.F128}
+    {salt : ℕ → ℕ → ByteArray} {src : FlockComplete.RepSrc}
+    (H : LigHyp coin n p0 ms sch t b lay h rep tPad extra lanePad salt src)
+    (he : ∀ e c, c < (tabS coin p0 t sch.k0).size → extra' e c = extra e c)
+    (hp : ∀ l i, l < 2 ^ (sch.levels.getD 0 default).lanes + _root_.Flock.Zk.EXTRA_LANES → i < tPad →
+      lanePad' l i = lanePad l i)
+    (hr : rep < 2) :
+    LigHyp coin n p0 ms sch t b lay h rep tPad extra' lanePad' salt src := by
+  have hA : ∀ e, (Array.range (tabS coin p0 t sch.k0).size).map (extra' e) =
+      (Array.range (tabS coin p0 t sch.k0).size).map (extra e) := fun e =>
+    Array.map_congr_left fun c hc => he e c (Array.mem_range.1 hc)
+  have hE : _root_.Flock.Zk.EXTRA_LANES = 4 := rfl
+  have hB : (Array.range tPad).map (fun i =>
+      (List.range (2 ^ (sch.levels.getD 0 default).lanes)).foldl
+        (fun acc l => acc + ((_root_.Flock.eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad' l i))
+        ((rhoS coin p0 sch.k0).1.smul (lanePad' (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i) +
+          (rhoS coin p0 sch.k0).2.smul (lanePad' (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i))) =
+      (Array.range tPad).map (fun i =>
+      (List.range (2 ^ (sch.levels.getD 0 default).lanes)).foldl
+        (fun acc l => acc + ((_root_.Flock.eqTableK ((Array.range sch.k0).map (chS coin p0)))[l]!).smul (lanePad l i))
+        ((rhoS coin p0 sch.k0).1.smul (lanePad (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i) +
+          (rhoS coin p0 sch.k0).2.smul (lanePad (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i))) := by
+    refine Array.map_congr_left fun i hi => ?_
+    have hi' := Array.mem_range.1 hi
+    rw [hp (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep) i (by omega) hi',
+      hp (2 ^ (sch.levels.getD 0 default).lanes + 2 * rep + 1) i (by omega) hi']
+    exact List.foldl_ext _ _ _ fun acc l hl => by
+      have := List.mem_range.1 hl
+      try dsimp only
+      rw [hp l i (by omega) hi']
+  exact { H with
+    e0 := by rw [hA]; exact H.e0
+    e1 := by rw [hA]; exact H.e1
+    y1 := fun a b' => by rw [hA, hA]; exact H.y1 a b'
+    ybar := fun a b' => by rw [hB]; exact H.ybar a b' }
 
 end FlockComplete.LigLock
 

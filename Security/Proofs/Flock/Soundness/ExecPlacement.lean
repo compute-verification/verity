@@ -1,5 +1,24 @@
-import Proofs.Flock.Soundness.ExecDelta
-import Proofs.Flock.Level3.Placed
+module
+
+public import Proofs.Flock.Level3.Placed
+public import Proofs.Flock.Soundness.ExecDelta
+public import Proofs.Flock.Soundness.ExecRows
+public import Proofs.Flock.Soundness.Lowering
+import Batteries.Data.UInt
+import Flock.Sizes
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Algebra.Polynomial.SpecificDegree
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Mathlib.FieldTheory.Finite.Extension
+import Proofs.Flock.Level3.ArithFacts
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.Fold
+import Proofs.Flock.Level3.Nodes
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.SparseRows
+import Std.Data.HashSet
+import Std.Data.TreeMap.Raw.Lemmas
 
 /-!
 # An instance's rows, placed by the statement the verifier accepted
@@ -21,6 +40,8 @@ Then at each unit copy's computed rows the matrices are the logical net's rows, 
 each copy's constant row they read the pin; and so does the pin's row. `ExecSetup.lean` derives `Layout` from
 `Stmt.setupH`.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

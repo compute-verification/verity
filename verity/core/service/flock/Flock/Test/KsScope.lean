@@ -1,15 +1,22 @@
 /-
-`KsScope`: the `--zk` statement passes `tagsWhy`, and a typed statement or one of public outputs is refused. A unit of one
-input group that returns the outputs passes `filesWhy`; a unit reading two input groups and a tail stage returning the
-outputs (both in `scopeOkI`, which `ProvedScope.check` admits under hidden outputs) are refused. A shared-row public file
-in the form `SampledKSLiveV5` covers (two input ports' tables, its circuit's public input ports parsing, the file loading
-over them, no two roots one) passes `sharedWhy` and the whole check; one whose circuit's public input ports do not parse,
-one that does not load and a per-instance file are refused. At one table any draw passes `drawWhy`; at more, a subset
-draw whose `k` the tables divide passes, and a draw of `k` they don't divide, a draw that does not parse and no draw are
-refused.
+`KsScope`: the `--zk` statement passes `tagsWhy`, and a typed statement or one of public outputs is refused. A unit of
+one input group that returns the outputs passes `filesWhy`, and with a `sha512/row-seg/v1` output row too; with that row
+one compression short, or an output row of two ports, it is refused, and so are a unit reading two input groups and a
+tail stage returning the outputs (both in `scopeOkI`, which `ProvedScope.check` admits under hidden outputs). A
+shared-row public file in the form `SampledKSLiveV5` covers (two input ports' tables, its circuit's public input ports
+parsing, the file loading over them, no two roots one) passes `sharedWhy` and the whole check; one whose circuit's
+public input ports do not parse, one that does not load and a per-instance file are refused. At one table any draw
+passes `drawWhy`; at more, a subset draw whose `k` the tables divide passes, and a draw of `k` they don't divide, a draw
+that does not parse and no draw are refused.
 -/
-import Flock.KsScope
-import Flock.Test.Wires
+module
+
+public import Flock.KsScope
+public import Flock.Test.Wires
+meta import Flock.KsScope
+meta import Flock.Test.Wires
+
+@[expose] public section
 
 namespace Flock.Test.KsScope
 
@@ -29,6 +36,20 @@ def one : Circuit := Wires.circ #[Wires.net #[⟨0, 1, #[1]⟩] 1 #[1] #[(#[0], 
 #guard filesWhy Tags.circuit one default ByteArray.empty == none
 #guard ProvedScope.scopeOkI (Wires.rms 0) && filesWhy Tags.circuit (Wires.rms 0) default ByteArray.empty == some SCOPE_WHY
 #guard ProvedScope.scopeOkI Wires.tail && filesWhy Tags.circuit Wires.tail default ByteArray.empty == some SCOPE_WHY
+
+/-- `one` with a `sha512/row/v2` input row `x` and a `sha512/row-seg/v1` output row `y` of 1,024 bits in `chunks`
+compressions, its one segment's two and none past them when well formed. -/
+def segOut (chunks : Nat) : Circuit :=
+  { one with
+    ports := #[{ name := "x", words := 64, chunks := 1, nb := 0, bits := 1024, v2 := true },
+      { name := "y", words := 64, chunks, nb := 0, bits := 1024, v2 := true, segs := some (HmRow.segShape 1024).1 }],
+    outRowPorts := #[1] }
+
+#guard ProvedScope.scopeOkH (segOut 2) && filesWhy Tags.circuit (segOut 2) default ByteArray.empty == none
+#guard !ProvedScope.scopeOkH (segOut 1) && filesWhy Tags.circuit (segOut 1) default ByteArray.empty == some SCOPE_WHY
+#guard (ProvedScope.scopeWhy true (segOut 1)).startsWith "rows that are neither" &&
+  (ProvedScope.scopeWhy true (segOut 1)).endsWith "one output port per output row"
+#guard !ProvedScope.scopeOkH { segOut 2 with outRowPorts := #[2] }
 
 /-- `one` with two input ports, `x` and `y`. -/
 def two : Circuit :=

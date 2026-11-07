@@ -1,5 +1,10 @@
-import Definitions.Accounting.Assumptions.RemoteOutside
-import Definitions.Accounting.Assumptions.RemoteSketch
+module
+
+public import Definitions.Accounting.Assumptions.RemoteOutside
+public import Definitions.Accounting.Assumptions.RemoteSketch
+public import Definitions.Accounting.Assumptions.RemoteHeld
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Accounting.RemoteHeld
 
 /-!
@@ -15,6 +20,8 @@ on the node or computed on outside it at a tick of the pass was on the node (`pr
 * the provider's lockdown (`ProviderLockdown`) over an interval holding every credited pass gives `NoOutsideCompute`
   (`noOutsideCompute_of_lockdown`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote
 

@@ -1,5 +1,10 @@
+module
+
+public import Proofs.Properties.RemoteAudit.Session
+public import Proofs.Properties.RemoteAudit.Bisect
 import Batteries.Tactic.OpenPrivate
-import Proofs.Properties.RemoteAudit.Session
+import Proofs.Properties.RemoteAudit.Plan
+import Proofs.Properties.RemoteAudit.Sort
 
 /-!
 # Released blocks stay out of every later plan (`ReleasedStayOut`)
@@ -11,6 +16,10 @@ covers (`avoid_of_check`). The invariant (`Rel R old`): the points `R` stay cove
 past the counts `old` reads none of them. It holds from `State.init` with no points, and from an accepted release on
 with that release's blocks and the passes recorded before it.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 open RemoteAudit RemoteAudit.Session
 

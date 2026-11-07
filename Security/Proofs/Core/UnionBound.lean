@@ -1,5 +1,41 @@
-import Proofs.Pouw.Prob
-import Definitions.Claims
+module
+
+public import Definitions.Claims
+public import Definitions.Core.Interaction
+public import Definitions.Pouw.Basic.Prob
+public import Proofs.Pouw.Prob
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The union bound over a product of coins
@@ -19,10 +55,12 @@ The probability over the product that some protocol fails is then at most the su
   the coins before it.
 * `union_bound_monitoringPeriod`: over a monitoring period's periods, each period's protocols in
   `union_bound_update`'s form: `∑_j ∑_a δ j a`. `union_bound_monitoringPeriod_with` adds one more event bounded over the
-  whole product, such as acceptance over a monitoring period (`FlockSoundness.Audit.Law.pooled_escape_log`, in
-  `Claims.Pr`, which is `pr`: `Pr_eq_pr`); `pr_restrict_le` carries a bound proved over a block of the coordinates to the
+  whole product, such as acceptance over a monitoring period (`FlockSoundness.Audit.Law.pooled_escape`, in `prCoin`,
+  which is `pr`'s through `Claims.Sampling.Pr_eq_toReal_prCoin` and `Pr_eq_pr`); `pr_restrict_le` carries a bound proved over a block of the coordinates to the
   whole product.
 -/
+
+@[expose] public section
 
 namespace Pouw
 
@@ -108,7 +146,7 @@ theorem union_bound_monitoringPeriod {J A : Type} [Fintype J] [Fintype A] [∀ i
   exact (pr_mono fun _ ⟨j, a, hb⟩ => ⟨(j, a), hb⟩).trans this
 
 /-- **A monitoring period with one more event**, bounded over the whole product (`pr F ≤ η`), such as every period's
-draw accepting (`FlockSoundness.Audit.Law.pooled_escape_log`, carried over by `pr_restrict_le`): that event or some
+draw accepting (`FlockSoundness.Audit.Law.pooled_escape`, carried over by `pr_restrict_le`): that event or some
 protocol of some period failing has probability at most `η + ∑ j, ∑ a, δ j a`. -/
 theorem union_bound_monitoringPeriod_with {J A : Type} [Fintype J] [Fintype A] [∀ i, Nonempty (Ω i)]
     (F : ((i : I) → Ω i) → Prop) {η : ℝ} (hF : pr F ≤ η) (own : J → A → I)

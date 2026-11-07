@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Sampling.Select.Steps
-import Proofs.Flock.Claims.Sampling.Select.Take
-import Proofs.Flock.Soundness.ExecDrawOS
+module
+
+public import Proofs.Flock.Claims.Sampling.Select.Steps
+public import Proofs.Flock.Claims.Sampling.Select.Take
+public import Proofs.Flock.Soundness.ExecDrawOS
 
 /-!
 # `Select.select`'s subset draw is the live draw's (`Law.runOS`) on the same bytes
@@ -21,6 +23,8 @@ tape.
 A stratified or work draw reads one stream per stratum, which the code serves from the one sequence of coins and `runOS`
 from a tape each, so the agreement here is the subset law's, which a rate law resolves to (`Select.Rule.over`).
 -/
+
+@[expose] public section
 
 open SampledProofs
 
@@ -143,7 +147,7 @@ theorem tapeSim_drawWith (T : ℕ → ByteArray) (k n : ℕ) :
   unfold Flock.Draw.drawWith
   exact tapeSim_bind (tapeSim_onWith T _ (by omega) _) fun u => tapeSim_pure _
 
-/-- **The code's subset draw is the live draw's** (`Law.runOS`, `Flock.Draw.drawOS`'s `drawWith`): on the bytes `f 0`,
+/-- **The code's subset draw is the live draw's** (`Law.runOS`, `Flock.Draw.drawWith`): on the bytes `f 0`,
 `Draw.drawUnits` draws the units `runOS` draws on `f`, and fails exactly where `runOS` is `none`. -/
 theorem drawUnits_subset_runOS (k n : ℕ) {L : Fin 1 → ℕ} (f : (i : Fin 1) → Fin (L i) → Fin 256) :
     (Draw.drawUnits (.subset k) n (Law.streamOf (f 0))).toOption.map Prod.fst =

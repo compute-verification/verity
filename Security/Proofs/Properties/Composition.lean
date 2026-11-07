@@ -1,6 +1,9 @@
-import Properties.Composition
-import Proofs.Properties.Pouw.LiveSalt.Canon
-import Proofs.Flock.Claims.Complete.Json.Hex
+module
+
+public import Proofs.Flock.Claims.Complete.Json.Hex
+public import Proofs.Properties.Pouw.LiveSalt.Canon
+public import Properties.Composition
+import Batteries.Tactic.OpenPrivate
 
 /-!
 # The composition's properties, proved
@@ -16,6 +19,8 @@ and the zero byte, its JSON reads back entry by entry, each escaped string endin
 `acceptSame_nontrivial` and `acceptTied_nontrivial` their nontrivial ones, an input whose conclusion fails, which a
 verifier that accepts everything accepts.
 -/
+
+@[expose] public section
 
 open private hex4 from Flock.Canon
 
@@ -638,6 +643,7 @@ theorem msg_inj (id : String) {B B' : String}
   have e1 := congrArg (fun b : ByteArray => b.data.toList) e
   simp only [ByteArray.data_append, Array.toList_append, List.append_assoc] at e1
   have e2 := List.append_cancel_left (List.append_cancel_left e1)
+  simp only [String.toUTF8_eq_toByteArray] at e2
   exact String.toByteArray_inj.1 (ByteArray.ext (Array.ext' e2))
 
 end BindInj

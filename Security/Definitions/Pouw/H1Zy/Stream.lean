@@ -1,5 +1,6 @@
-import Definitions.Pouw.H1Zy.Chain
-import Definitions.Pouw.H1Zy.Tile
+module
+
+public import Definitions.Pouw.H1Zy.Chain
 
 /-!
 # `PouwH1LaneZy_v1{PouwH1Tile_v3}` on words (trusted)
@@ -10,6 +11,8 @@ import Definitions.Pouw.H1Zy.Tile
 `laneRow l s`'s and column `laneCol l t`'s blocks of seed_j's stream, as `laneNoise` reads them), and the lane's `ok` is
 `laneOk` with that z (`laneOkZ` at `laneZ3`).
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

@@ -1,8 +1,20 @@
-import Proofs.Flock.Soundness.Refine.Realizes
+module
+
+public import Proofs.Flock.Soundness.Refine.Realizes
+public import Flock.Verify
+public import Proofs.Flock.Level3.Fold
+public import Proofs.Flock.Level3.FoldStmt
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Level3.Assembly
 import Proofs.Flock.Level3.Folded
+import VCVio.Prelude.Core
 
 /-!
-# The statement decoding, part 1: the executable's layout is a block R1CS (PROTOCOL.md §10, §16.1)
+# The statement decoding, part 1: the executable's layout is a block R1CS (`Flock.Piop`, `Flock.Statement`)
 
 The executable never holds `A₀` and `B₀`: its lincheck fold (`Stmt.fold`) reads them off the circuit's layout. `stmtOf st`
 is the model statement those matrices make. Entry `(i, c)` of `A₀` or `B₀` counts, mod 2:
@@ -17,6 +29,8 @@ layout facts `StmtWF`: `6 ≤ k_log ≤ m`, the pin inside the block, and every 
 regions are a parameter here.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Refine
 
 open Flock FlockLevel3
@@ -30,7 +44,7 @@ width). -/
 def spCnt (m : Sparse) (i c : ℕ) : ℕ :=
   if i < m.rows ∧ c < m.width then ((Finset.range m.len[i]!).filter fun t => m.col i t = c).card else 0
 
-/-- The product rows a lookup table sends to column `c` (§16.5): row `prod0 + j·2^(n−lo) + h` for each set bit `j < bits`
+/-- The product rows a lookup table sends to column `c` (`Flock.Circuit`): row `prod0 + j·2^(n−lo) + h` for each set bit `j < bits`
 of word `(h, l)` with `loTop + l = c`. -/
 def lkCnt (lk : LookupTable) (i c : ℕ) : ℕ :=
   ((Finset.range (2 ^ (lk.n - lk.lo)) ×ˢ Finset.range (2 ^ lk.lo) ×ˢ Finset.range 32).filter fun x =>
@@ -460,7 +474,7 @@ structure StmtWF (st : Stmt) : Prop where
   pin : st.pin < 2 ^ st.c.kLog
   slots : ∀ r ∈ st.c.ranges.toList, 6 ≤ r.slotLog ∧ r.slotLog ≤ st.c.kLog
 
-/-- **The model statement of an executable statement** (§16.1): its `m`, `k_log` and pin, the matrices its layout
+/-- **The model statement of an executable statement** (`Flock.Statement`): its `m`, `k_log` and pin, the matrices its layout
 makes, and the given regions. -/
 def stmtOf (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
     Model.Statement where
@@ -473,7 +487,7 @@ def stmtOf (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st.c.kLog (
   B₀ := fun i c => matB st i.val c.val
   regions := regions
 
-/-- **The circuit fold realizes `stmtOf`** (§10, §16.1). When the executable's fold succeeds on `α`, `lw` and `ρ`, entry
+/-- **The circuit fold realizes `stmtOf`** (`Flock.Piop`'s lincheck, `Flock.Statement`). When the executable's fold succeeds on `α`, `lw` and `ρ`, entry
 `c` is `Σ_i e_i·(α·A₀[i, c] + B₀[i, c])` for the matrices `stmtOf` reads off the layout. -/
 theorem stmtOf_fold (st : Stmt) (h : StmtWF st) (regions : List (Model.Region st.c.kLog (st.m - st.c.kLog))) :
     FoldRealizes st.circuitFold (stmtOf st h regions) where

@@ -5,7 +5,8 @@ batched members), whether it is a template the rows commit (`serving_rows.templa
 `describe` cannot address, its port words (`serving_rows.members`' rule) and its Definition's word gates. No value is read.
 ``--estimate`` adds each family's C-Flock size to a census: every distinct primitive (or Boolean Definition) of the row's
 Definition lowered once on its own (`ir_lower.lower` on fresh inputs), its ANDs, table reads and assertions times how many
-times the Definition holds it. Constants folded and ANDs shared across leaves are not taken off, so it is an upper bound.
+times the Definition holds it, with its served MACs and each port's bits. Constants folded and ANDs shared across leaves are
+not taken off, so it is an upper bound.
 With it, M0's block for the unit (`block`): the in-circuit hashing of its rows alone bounds it from below, so a family whose
 ``rows_log`` passes `K_MAX` is refused whatever its ANDs.  The same is computed for each family's split units (its unit
 templates past the row itself: ``units``), and for each ``--also`` Definition (``candidates``: a split's unit main lacks).
@@ -26,8 +27,10 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-#: C-Flock's largest block (`circuit.K_MAX`) and the statement limit the brief measures against
-K_MAX, LIMIT_LOG = 27, 26
+from verity.ml.windows.interface import K_MAX
+
+#: the statement limit the brief measures against
+LIMIT_LOG = 26
 
 
 def _leaf_cost(fn, IL) -> dict:
@@ -44,9 +47,12 @@ def _leaf_cost(fn, IL) -> dict:
 
 def estimate(fn, memo: dict, leaves: dict) -> dict:
     """fn's ANDs, table reads and assertions as the sum of its leaves' (a primitive or a Boolean Definition, each lowered once
-    by `_leaf_cost`), each times how often fn holds it; ``unpieced`` the leaves C-Flock has no piece for."""
+    by `_leaf_cost`), each times how often fn holds it; ``unpieced`` the leaves C-Flock has no piece for; ``macs`` its served
+    MACs as the census counts them (`census.PRODUCTS` a tensor-core step, a family's `census.FAMILY_COUNTS` rule over it;
+    informational, as the census's are)."""
     from verity_flock import ir_lower as IL
 
+    from verity.ml.circuits.census import PRODUCTS, _rule, family
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.program import is_input
 
@@ -62,17 +68,21 @@ def estimate(fn, memo: dict, leaves: dict) -> dict:
                 r = {**_leaf_cost(fn, IL), "unpieced": []}
             except IL.NoPiece:
                 r = {"ands": 0, "reads": 0, "asserts": 0, "unpieced": [fn.id]}
+        r["macs"] = PRODUCTS.get(family(fn), 0)
         leaves[fn.id] = {k: v for k, v in r.items() if k != "unpieced"}
     else:
-        r = {"ands": 0, "reads": 0, "asserts": 0, "unpieced": []}
+        r = {"ands": 0, "reads": 0, "asserts": 0, "macs": 0, "unpieced": []}
         for nd in fn.body.nodes:
             if is_input(nd.fn):
                 continue
             n = nd.n if nd.form in ("batch", "scan") else 1
             s = estimate(nd.fn, memo, leaves)
-            for k in ("ands", "reads", "asserts"):
+            for k in ("ands", "reads", "asserts", "macs"):
                 r[k] += n * s[k]
             r["unpieced"] = sorted(set(r["unpieced"]) | set(s["unpieced"]))
+        if family(fn) in PRODUCTS:
+            r["macs"] = PRODUCTS[family(fn)]
+        r["macs"] = (_rule(fn) or {}).get("served_macs", r["macs"])
     memo[fn.id] = r
     return r
 
@@ -82,12 +92,14 @@ def block(fn, ands: int | None) -> dict:
     returned field), placed by C-Flock's own rule (`circuit._ranges`): its rows' compressions, the hm96 slots, the mask and
     the unit's slot, its table reads' slots left out, one unit to the block (the stager packs more while the block stays
     within 2^22). ``rows_log`` takes the unit's slot at its least, a lower bound for any number of ANDs; ``est_log`` sizes
-    it at the estimate's ANDs plus the port bits. The unit fits a block at most `K_MAX`."""
+    it at the estimate's ANDs plus the port bits. The unit fits a block at most `K_MAX`. ``in_bits`` and ``out_bits``: each
+    parameter's and each returned field's bits."""
     from verity_flock import circuit as FC
 
     params, ret = fn.signature()
     fields = [f[1] if isinstance(f, tuple) else f for f in ret.fields] if hasattr(ret, "fields") else [ret]
-    bits = [sum(t.leaf_widths()) for _n, t in params] + [16 * -(-sum(f.leaf_widths()) // 16) for f in fields]
+    ins, outs = [sum(t.leaf_widths()) for _n, t in params], [sum(f.leaf_widths()) for f in fields]
+    bits = ins + [16 * -(-b // 16) for b in outs]
     ports = [FC.Port(f"p{i}", -(-b // 16), b) for i, b in enumerate(bits)]
     n_sha = FC._row_slots(ports)[0]
 
@@ -95,8 +107,8 @@ def block(fn, ands: int | None) -> dict:
         return FC._ranges([("unit", FC.SHA_LOG, n_sha, {"packed": True}), ("unit", FC.HM_LOG, FC._pow2(len(ports)), {}),
                            ("unit", FC._slot_log(unit_rows), 1, {}), ("mask", FC.MASK_LOG, 1, {})])[1]
 
-    return {"row_bits": sum(bits), "compressions": sum(p.comps for p in ports), "rows_log": log(1),
-            "est_log": None if ands is None else log(ands + sum(bits))}
+    return {"row_bits": sum(bits), "in_bits": ins, "out_bits": outs, "compressions": sum(p.comps for p in ports),
+            "rows_log": log(1), "est_log": None if ands is None else log(ands + sum(bits))}
 
 
 def sized(spec: str, memo: dict) -> dict:
@@ -163,7 +175,7 @@ def main() -> int:
     ap.add_argument("--build-root", help="each rank's Programs of record in rank<r>/")
     ap.add_argument("--workload")
     ap.add_argument("--rank", type=int, default=0)
-    ap.add_argument("--steps", default="16", help="comma-separated request steps described per family")
+    ap.add_argument("--steps", default="16", help="comma-separated request steps described per family, or all")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     if a.estimate:
@@ -190,13 +202,15 @@ def main() -> int:
     load_s = round(time.time() - t0, 1)
     print(f"M1F loaded rank {a.rank} of {world}: {len(p.progs)} request Programs in {load_s} s", flush=True)
 
-    want = [int(s) for s in a.steps.split(",")]
-    out: dict = {"rank": a.rank, "world": world, "steps": want, "programs": dict(p.digs), "load_s": load_s, "requests": {}}
+    want = None if a.steps == "all" else [int(s) for s in a.steps.split(",")]
+    out: dict = {"rank": a.rank, "world": world, "steps": a.steps if want is None else want, "programs": dict(p.digs),
+                 "load_s": load_s, "requests": {}}
     for rid, inst in p.progs.items():
         pi = p.index if rid == next(iter(p.progs)) else None
         if pi is None:
             from verity_vllm.check.replay.index import ProgramIndex
             pi = ProgramIndex(inst, program_dir=p.dirs.get(rid), attention_paths=p.attn_paths, tp=p.tp)
+        want = range(len(pi.segs)) if a.steps == "all" else want
         all_steps: Counter = Counter()
         per_step: Counter = Counter()
         fam: dict[str, dict] = defaultdict(lambda: {"rows": 0, "undescribed": 0, "op_paths": Counter(), "steps": Counter()})
@@ -235,7 +249,9 @@ def main() -> int:
             fams[spec] = {"rows": f["rows"], "undescribed": f["undescribed"], "steps": dict(f["steps"]), "whole_request": all_steps[spec],
                           "unit_templates": [list(u) for u in units], "template": tmpl, "word_gates": gates, "ports": f.get("ports"),
                           "op_paths": dict(f["op_paths"].most_common(6)), "distinct_op_paths": len(f["op_paths"])}
+        q = next((q for q in reqs if q["request_id"] == rid), {})
         out["requests"][rid] = {"rows": len(pi.rows), "steps": len(pi.segs), "rows_per_step": [per_step[s] for s in range(len(pi.segs))],
+                                "prompt_len": q.get("prompt_len"), "max_tokens": q.get("max_tokens"),
                                 "families": fams, "seconds": round(time.time() - t1, 1)}
         print(f"M1F {rid}: {len(pi.rows)} rows, {len(pi.segs)} steps; steps {want}: {sum(f['rows'] for f in fams.values())} rows of "
               f"{len(fams)} Definitions ({round(time.time() - t1, 1)} s)", flush=True)

@@ -1,4 +1,23 @@
-import Proofs.Flock.C3.Reps.RoundSel
+module
+
+public import Proofs.Flock.C3.Reps.RoundReads
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.C3.Sparse.MsgsRead
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Recursive.HoloRepCoins
 
 /-!
 # A rep's message rounds along `holoRepShape`
@@ -17,6 +36,8 @@ top and absorbs elements is two messages there.
 * `roundOf_holoRepShape`: `hm`'s equation at each of those messages, at any Ligerito schedule (`roundOfB_append`: a
   message of the head is placed by the head alone).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps.RoundOfHolo
 

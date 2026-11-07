@@ -1,5 +1,17 @@
-import Proofs.Population.Exfiltration
-import Proofs.Population.Leakage
+module
+
+public import Definitions.Population.Dataflow
+public import Definitions.Population.Exfiltration
+public import Proofs.Population.Exfiltration
+public import Proofs.Population.Leakage
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
+import Mathlib.Logic.Equiv.PartialEquiv
+import Proofs.Population.Determinacy
+meta import Lean.Meta.Tactic.NormCast
 
 /-!
 # Exfiltration before detection: from the draw and the population to the probability of theft
@@ -23,6 +35,8 @@ import Proofs.Population.Leakage
   differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its faulty proof blocks'
   cone egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
 -/
+
+@[expose] public section
 
 namespace Population.Exfil
 

@@ -1,4 +1,6 @@
-import Definitions.Pous.Claims.StreamedWipeDisk
+module
+
+public import Definitions.Pous.Claims.StreamedWipeDisk
 
 /-!
 # The streamed-label wipe with a server's disks in the fill
@@ -21,6 +23,8 @@ fill doesn't overwrite (the root filesystem, filesystem metadata, the margin) co
 filesystem needs no premise of its own: it is in `R`. **What it covers:** the sequential reveal (batch size 1), the
 only one the verdict accepts.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 

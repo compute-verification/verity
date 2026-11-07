@@ -1,4 +1,40 @@
-import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
+module
+
+public import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.RecordCanon
+import Proofs.Flock.Claims.Recursion.VerdictRowDSide
+import Proofs.Flock.Claims.Recursion.VerdictRowG
 
 /-!
 # Each rep stream's round count is the schedule's
@@ -14,6 +50,8 @@ round count and coins to the coin server's, and `RecVStar.checkSchedule` the coi
 * `DecAt.hz`: row L's coin tie (`TargetZ`'s form): the stream's round-2 coin is the live one the reader read `z` from.
 * `DecAt.hsz_of_sched`: row R's `hsz`, where the schedule's coin counts are `roundSizes` at the table's shape.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

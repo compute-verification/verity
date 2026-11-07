@@ -1,8 +1,11 @@
-import Definitions.Accounting.Guarantees.JointLive
-import Proofs.Core.Game.Prob
-import Proofs.Core.Blocks
-import Proofs.Core.Circuit
-import Proofs.Pouw.PearlC.WholeCircuit
+module
+
+public import Definitions.Accounting.Guarantees.JointLive
+public import Proofs.Core.Game.Prob
+public import Proofs.Core.Blocks
+public import Proofs.Core.Circuit
+public import Proofs.Pouw.PearlC.WholeCircuit
+public import Proofs.Accounting.Lemmas.JointLive
 
 /-!
 # Proof of the joint guarantee over a causal game
@@ -29,6 +32,8 @@ opens every gate to it, so no unit is unbound and the integrity claim holds at e
 (`JointPeriodLive_honest`). A one-gate circuit whose extractor reads the wrong bit fails the integrity claim on its one
 run (`JointPeriodLive_nontrivial`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

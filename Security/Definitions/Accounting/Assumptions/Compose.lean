@@ -1,5 +1,38 @@
-import Definitions.Accounting.Compose
-import Definitions.Accounting.Assumptions.TS
+module
+
+public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Accounting.Compose
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The compiled circuit's named assumptions (trusted)
@@ -53,6 +86,8 @@ The physical layer's (`CreditOfWork`):
   bit-exact fold falsifies, and `FoldOpt` is it at `N_w` words, which a sampled cheater that skips whole units
   falsifies.
 -/
+
+@[expose] public section
 
 namespace Accounting.Assumptions.Compose
 
@@ -179,7 +214,7 @@ that for every `S ⊆ Wh q a` at most a share `e^{−Σ_{v∈S} h v}` of `q`'s a
 event `Break` of probability at most `δ_b`, off which, where the proofs' seed answers `q` (`sq a r = some q`), round
 `r`'s whole tiles are `Wh q a` and a whole tile whose checked values are honest (`same`) is in `Lk q a`.
 
-What a whole-skipped H1 + fx1 tile must reproduce (`verity/core/protocols/pouw/circuit/h1tile.py`): its served `z`,
+What a whole-skipped H1 + fx1 tile must reproduce (`verity/ml/protocols/pouw/circuit/h1tile.py`): its served `z`,
 each cell's exact product, which reads no salt, and the CP-W receipt, `2·(K/32 + m)` 32-bit words (`256` served at
 `K = 4096`, then `O′` and `D`), each set's pair the XOR over the tile's 32 lanes and 8 duo chains of `PouwXinFinal`
 of the fx1 state, which starts from the lane's 512 seed-derived key bits (16,384 a tile). The fold state itself is

@@ -1,5 +1,7 @@
-import Definitions.Accounting.ComposePeriod
-import Definitions.Accounting.Assumptions.Compose
+module
+
+public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.Assumptions.Compose
 
 /-!
 # PoUW's work over a monitoring period of `n` windows (trusted)
@@ -26,15 +28,6 @@ An honest period of 82,403 windows completes with probability `(1 − f)^n`, 44%
 is credited up to its first window with a refused proof (`Outcomes.Credited`), a stopping time, and the tail is taken
 at it (`PeriodTailMax`).
 
-* `PeriodBudget`: the composition lemma. If every window's `serviceGame` has its saving per unit of detection bounded by
-  `Λ` (`RoundGame.BudgetAt`, which `ServiceBudget` gives per window), whatever the earlier windows did, so does the
-  period's game (`periodGame`). Proved (`Proofs.Accounting.ComposePeriod`): a window's game is one round, and
-  `BudgetAt` over rounds is that condition at each round given the past.
-* `PeriodTailMax`: `budget_tail` at every prefix at once (Ville's inequality, finite form): when `Λ` bounds the play,
-  some prefix of its rounds is accepted with share at least `Λ·t` with probability at most `e^{−t}`. So a prefix
-  that ends at a stopping time the cheater steers pays `ln(1/δ_s)` once, as a fixed one does. Proved
-  (`Proofs.Accounting.ComposePeriod`): by induction on the game, conditioning on the first round's coins as
-  `expect_weight_le` does, with the bound for every threshold `D` in the induction.
 * `CircuitWorkPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
   (`Proofs.Accounting.ComposePeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
   can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
@@ -42,35 +35,15 @@ at it (`PeriodTailMax`).
   windows' live tiles and `WriterReads` (`PeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
   `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `UnitFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
-  realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkPeriod`'s
+  realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkMonitoringPeriod`'s
   assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.ComposePeriod
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-
-/-- **The period's budget from its windows'.** For a period of `n` windows of one circuit of `M` rounds over `N` tiles,
-any play (`WindowPlay`: each window's live tiles and split stages chosen after the earlier windows' coins), share
-weights `w live` at each window's live tiles `live`, costs `a, b` and `K` draws a window: if every window's one round
-(`serviceGame`) has its saving per unit of detection bounded by `Λ` (`RoundGame.BudgetAt`), whatever the past, then so
-has the period's game (`periodGame`). With `budget_tail` at `n` rounds, an accepted period's total share is below
-`Λ·ln(1/δ_s)` except with probability `δ_s`. -/
-def PeriodBudget : Prop :=
-  ∀ {C Ξ : Type} [Fintype C] [Fintype Ξ] {N M n : ℕ} (stg : Fin N → ℕ) (w : (Fin N → Bool) → Fin N → ℝ) (a b : ℝ)
-    (K : ℕ) (Λ : ℝ) (Wp : WindowPlay C (Paths C M × (Equiv.Perm (Fin N) × Ξ)) (Fin N) M n),
-    Wp.EveryWindow (fun live W => RoundGame.BudgetAt Λ (serviceGame (Ξ := Ξ) stg W (w live) a b K)) →
-    RoundGame.BudgetAt Λ (periodGame stg w a b K Wp)
-
-/-- **The budget's tail at every prefix at once** (Ville's inequality, finite form): for any play of `n` rounds on
-coins `Ω` with its saving per unit of detection bounded by `Λ > 0` (`RoundGame.BudgetAt`), the probability that some
-prefix of its rounds passes (`RoundGame.acceptsUpTo`) with share at least `Λ·t` (`RoundGame.deficiencyUpTo`) is at most
-`e^{−t}`. Its last prefix is `budget_tail`. A period credited up to its first failed window, a stopping time the
-cheater may steer, reads it at that window, so it pays `ln(1/δ_s)` once, and neither a fixed `n` nor a rule against
-dropping windows is needed for the tail. -/
-def PeriodTailMax : Prop :=
-  ∀ {Ω : Type} [Fintype Ω] {n : ℕ} (g : RoundGame Ω n) (Λ : ℝ), 0 < Λ → RoundGame.BudgetAt Λ g → ∀ t : ℝ,
-    prob (fun x => ∃ j : ℕ, RoundGame.acceptsUpTo g j x ∧ Λ * t ≤ RoundGame.deficiencyUpTo g j x) ≤ Real.exp (-t)
 
 /-- **(L) The circuit's work on its live tiles over a monitoring period's accepted prefix, live coins.** For every
 declared circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` windows in order, each window
@@ -230,7 +203,7 @@ cuts them; no period over windows run at once (above); no check that the service
 or kept its periods disjoint (above); nothing of seeded windows (*Live coins only*); and, as `CircuitWork`, nothing
 of a served workload until a `Declared` is built from a compiled Program and `Properties.Compose.UnitsOfLayout` is
 proved. -/
-def CircuitWorkPeriod : Prop :=
+def CircuitWorkMonitoringPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
@@ -257,7 +230,7 @@ def CircuitWorkPeriod : Prop :=
         (rOfPrefix Sc Cd Np (pr.prefixLen x) a b Λ δs) (n * (Pl.run x).fixed) (n * folded x)) ≤
         δs + n * (δbind + δks)
 
-/-- **(L)'s credit in live words over a monitoring period's accepted prefix, live coins.** Under `CircuitWorkPeriod`'s
+/-- **(L)'s credit in live words over a monitoring period's accepted prefix, live coins.** Under `CircuitWorkMonitoringPeriod`'s
 premises with `a, b > 0`, an accepted period has at least its credit `(1 − ε(j))₊·N_live` (`creditPrefix`) of its
 prefix's live words fixed right (`n·fixed`), `N_live` the prefix's live words (`creditedLive`) and
 `ε(j) = r(j)·N_w/(min(a, b)·N_live)` at the realized prefix `j = Outcomes.prefixLen` (`epsPrefix`), except with
@@ -274,7 +247,7 @@ and `ε(j) < 1%` from 8,513, 18,026 and 82,403 windows: the proved line. Compose
 physical costs `a = 0.218`, `b = 0.998` with `ε_♭ = 0.571%`, where `ε(j) ≥ 1` up to 20, 43 and 201 windows and
 `ε(j) < 1%` from 4,815, 10,195 and 46,604: that credit, `(1 − ε_♭ − ε_μ − r(j)·N_w/N_live)₊` of the prefix's live
 words' `T_cred`, needs `CreditOfWork` on each credited window's run, which the period's one `Pl.run` doesn't give, and
-is not stated. Everything `CircuitWorkPeriod` doesn't say, this doesn't either. -/
+is not stated. Everything `CircuitWorkMonitoringPeriod` doesn't say, this doesn't either. -/
 def CircuitCreditPeriod : Prop :=
   ∀ {ι K T L U C Ξ V : Type} [Fintype K] [Fintype T] [Fintype L] [Fintype U] [Fintype C] [Fintype Ξ]
     [Nonempty V] (Sc : Scheme K) (Cd : Declared ι) {n Np Kd : ℕ} (_hn : 0 < n) (_hN : Cd.units ≤ Np)

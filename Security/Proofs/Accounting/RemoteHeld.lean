@@ -1,9 +1,10 @@
-import Definitions.Accounting.Guarantees.RemoteHeld
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Accounting.Guarantees.RemoteHeld
 import Mathlib.Algebra.BigOperators.Intervals
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.Positivity
+import Mathlib.Algebra.BigOperators.Ring.Finset
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Prob
 
 /-!
 # The snapshot a remote audit shows held
@@ -17,6 +18,8 @@ are consecutive (`sum_passes`), so what came in during them came in over `[t_0, 
 `heldOverTime_of_links` reduces `HeldOverTime` to `HeldOverTimeLinks`, at links of rate 0, which is all Identity says.
 Both time-held forms are proved in `Proofs.Accounting.RemoteHeld.OverTime`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Remote
 

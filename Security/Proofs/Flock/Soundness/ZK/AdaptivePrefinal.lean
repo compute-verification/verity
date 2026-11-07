@@ -1,6 +1,8 @@
-import Proofs.Flock.Soundness.ZK.Refusal
-import Proofs.Flock.Soundness.ZK.Adaptivity
-import Proofs.Flock.Soundness.ZK.RealLeaves
+module
+
+public import Proofs.Flock.Soundness.ZK.Refusal
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+public import Proofs.Flock.Soundness.ZK.RealLeaves
 
 /-!
 # Zero knowledge: Lemma C, the pre-final views against an adaptive verifier
@@ -31,6 +33,8 @@ tables' randomness read from `(ω, U)` through a map `e c` with fibers of one si
 coin-dependent positions, so their randomness types vary with `c`, and `e c` keeps the part they read).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.ZK
 
 open Finset Game
@@ -46,9 +50,6 @@ section Generic
 def Strategy.comap {Ω Ω' M C : Type} {n : ℕ} (P : Strategy Ω M C n) (f : Ω' → Ω) : Strategy Ω' M C n where
   msg x := P.msg (f x)
   causal x := P.causal (f x)
-
-theorem run_comap {Ω Ω' M C : Type} {n : ℕ} [Inhabited M] (P : Strategy Ω M C n) (f : Ω' → Ω) (V : Responder M C n)
-    (x : Ω') : run (P.comap f) V x = run P V (f x) := rfl
 
 /-- On one space, equal distributions are equal fiber counts. -/
 theorem SameDist.card_eq {Ω V : Type} [Fintype Ω] [Nonempty Ω] [DecidableEq V] {f g : Ω → V} (h : SameDist f g)

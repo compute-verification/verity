@@ -1,4 +1,8 @@
-import Proofs.Flock.Soundness.Types.Program
+module
+
+public import Proofs.Flock.Soundness.Lowering
+public import Proofs.Flock.Soundness.Types.Program
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Each drawn unit's place, for a program of units (verified-lowering phase 1, S4d)
@@ -18,6 +22,8 @@ class's rows placed at each slot, each slot input's copy position and the forced
   (`TableClass.Copies`), the place is aliased (`aliased_of_copies`). A unit's instance wires each input to its source's
   gate (`instOf_wire`), and inputs on one gate read one source (`srcGate_inj`).
 -/
+
+@[expose] public section
 
 open Flock Flock.DeriveAll
 

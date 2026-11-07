@@ -1,7 +1,9 @@
-import NetworkCheck.Certificate
-import NetworkCertifier.Schedule
-import Lms.Verify
-import CoreProtocol.Cli
+module
+
+public import NetworkCheck.Certificate
+public import NetworkCertifier.Schedule
+public import Lms.Verify
+public import CoreProtocol.Cli
 
 /-!
 # The network certificate check, a core protocol: `verity/network-certificate/v4`
@@ -73,6 +75,10 @@ an accepted unit every head is settled by the deadline.
 `[0, …, W − 1]`, and `syncs`, the unit's clock, the sync declared for each window as `[δ, num, den]` (the advice the
 accepted-runs bound charges, `log2 #Σ_sync` bits per window); integers only.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace NetworkCheck.Check
 

@@ -2,14 +2,19 @@
 Level 3, L3-F: the GHASH polynomial `G` is irreducible, so `F128` is the field GF(2^128) (`GF128`, the field structure
 on the executable's representation, whose `+`, `*` and inverse are the executable's `add`, `mul` and `inv`). The certificate is Rabin's test,
 checked by the kernel on the executable's own multiplication:
-- `x^(2^128) = x` (128 squarings of `x`, `decide +kernel`), so every irreducible factor of `G` has degree dividing 128;
-- `x^(2^64) + x` has an inverse `w` (`w · (x^(2^64) + x) = 1`, 64 squarings and one multiplication), so no irreducible
-  factor of degree dividing 64 divides `G`.
+- `x^(2^128) = x` (`decide +kernel` on 64 squarings of `x`, giving `x64`, and 64 squarings of `x64`), so every
+  irreducible factor of `G` has degree dividing 128;
+- `x^(2^64) + x` has an inverse `w` (`w · (x64 + x) = 1`, one multiplication), so no irreducible factor of degree
+  dividing 64 divides `G`.
 The only divisor of 128 that does not divide 64 is 128 itself.
 -/
-import Proofs.Flock.Level3.GF128Ring
-import Mathlib.FieldTheory.Finite.Extension
-import Mathlib.Algebra.Field.TransferInstance
+module
+
+public import Proofs.Flock.Level3.GF128Ring
+public import Mathlib.FieldTheory.Finite.Extension
+public import Mathlib.Algebra.Field.TransferInstance
+
+@[expose] public section
 
 open Polynomial Flock
 
@@ -19,6 +24,11 @@ namespace FlockLevel3
 def sqIter : ℕ → F128 → F128
   | 0, a => a
   | k + 1, a => sqIter k (a * a)
+
+theorem sqIter_add (m n : ℕ) (a : F128) : sqIter (m + n) a = sqIter n (sqIter m a) := by
+  induction m generalizing a with
+  | zero => rw [Nat.zero_add]; rfl
+  | succ m ih => rw [Nat.add_right_comm]; exact ih (a * a)
 
 theorem toAdj_sqIter (k : ℕ) (a : F128) : toAdj (sqIter k a) = toAdj a ^ (2 ^ k) := by
   induction k generalizing a with
@@ -32,7 +42,15 @@ theorem toAdj_x : toAdj (F128.monomial 1) = AdjoinRoot.root G := by
   have hw : w128 2 0 = 1 <<< 1 := by decide +kernel
   rw [hw, natPoly_shiftLeft, natPoly_one, pow_one, mul_one, AdjoinRoot.mk_X]
 
-theorem sqIter_128_x : sqIter (2 ^ (6 + 1)) (F128.monomial 1) = F128.monomial 1 := by decide +kernel
+/-- `x^(2^64)`, checked below by 64 squarings of `x`. -/
+def x64 : F128 := ⟨0x44e598a795a299f6, 0x61651fea6b5832b9⟩
+
+theorem sqIter_64_x : sqIter (2 ^ 6) (F128.monomial 1) = x64 := by decide +kernel
+
+theorem sqIter_64_x64 : sqIter (2 ^ 6) x64 = F128.monomial 1 := by decide +kernel
+
+theorem sqIter_128_x : sqIter (2 ^ (6 + 1)) (F128.monomial 1) = F128.monomial 1 := by
+  rw [show 2 ^ (6 + 1) = 2 ^ 6 + 2 ^ 6 from rfl, sqIter_add, sqIter_64_x, sqIter_64_x64]
 
 theorem root_frob : AdjoinRoot.root G ^ (2 ^ (2 ^ (6 + 1))) = AdjoinRoot.root G := by
   rw [← toAdj_x, ← toAdj_sqIter, sqIter_128_x]
@@ -52,7 +70,8 @@ theorem G_dvd_frob : G ∣ X ^ (2 ^ (2 ^ (6 + 1))) - X := dvd_of_root_pow _ root
 /-- `(x^(2^64) + x)⁻¹`, computed once by the executable's `F128.inv` and checked below by one multiplication. -/
 def bezoutW : F128 := ⟨0x41a8cafd2c95b018, 0x9e4af928ddbc838a⟩
 
-theorem bezout_exec : bezoutW * (sqIter (2 ^ 6) (F128.monomial 1) + F128.monomial 1) = 1 := by decide +kernel
+theorem bezout_exec : bezoutW * (sqIter (2 ^ 6) (F128.monomial 1) + F128.monomial 1) = 1 := by
+  rw [sqIter_64_x]; decide +kernel
 
 theorem adj_add_self (y : AdjoinRoot G) : y + y = 0 := by
   obtain ⟨p, rfl⟩ := AdjoinRoot.mk_surjective y
@@ -157,7 +176,7 @@ theorem toAdj_inv (a : F128) : toAdj (F128.inv a) = toAdj a ^ (2 ^ (127 + 1) - 2
   rw [toAdj_mul, toAdj_invGo, toAdj_one, one_pow, one_mul, ← sq, ← pow_mul]
   congr 1
 
-theorem sqIter_frob : sqIter (127 + 1) (F128.monomial 1) = F128.monomial 1 := by decide +kernel
+theorem sqIter_frob : sqIter (127 + 1) (F128.monomial 1) = F128.monomial 1 := sqIter_128_x
 
 theorem root_frob' : AdjoinRoot.root G ^ (2 ^ (127 + 1)) = AdjoinRoot.root G := by
   rw [← toAdj_x, ← toAdj_sqIter, sqIter_frob]

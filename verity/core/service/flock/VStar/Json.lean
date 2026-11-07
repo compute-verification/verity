@@ -1,5 +1,6 @@
-import Lean.Data.Json
-import VStar.InnerRepCheck
+module
+
+public import VStar.InnerRepCheck
 
 /-!
 # V*'s structures as JSON
@@ -8,6 +9,8 @@ import VStar.InnerRepCheck
 ..]}, ..]}`, a term `["w", i]`, `["v", i]` or `["wt", i, u]`) and `InnerRepCheck`'s (`{"gf", "ports": [[name, n], ..]}`),
 read strictly: a key missing or extra, or a number that is not a natural, is refused.
 -/
+
+@[expose] public section
 
 namespace VStar
 
