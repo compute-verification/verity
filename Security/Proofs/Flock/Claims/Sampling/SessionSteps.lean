@@ -27,8 +27,8 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 acceptance, then Flock's verifier at the statement the prefix's prover messages name (`stmt`), on the later messages and
 coins; the prefix's last answer is a message only where that statement has `kS x` rounds; every unit's session rounds are
 the rounds after the prefix; and the session read off a transcript is the statement and the transcript after the prefix
-where the prefix answered with messages, and the refused run of `xR x` (`kS x` rounds, refusing the message `[]` at once)
-where the prefix refused. -/
+where the transcript shows the prefix answered with messages and the verifier answers its last round with a message at
+some coins, and the refused run of `xR x` (`kS x` rounds, refusing the message `[]` at once) where the prefix refused. -/
 structure SessionSteps (D : Deploy Coin Col T) where
   pre : Msg → ℕ
   kS : Msg → ℕ
@@ -46,7 +46,8 @@ structure SessionSteps (D : Deploy Coin Col T) where
   k_xR : ∀ x, D.flock.V.k (xR x) = kS x
   kS_pos : ∀ x, 0 < kS x
   refuses : ∀ x (c : Coin), D.flock.V.next (xR x) [[]] [c] = .ret .rej
-  session_pass : ∀ x u (ms : List (Msg × Out)) rest out, ms.length = pre x → (∀ e ∈ ms, ∃ m, e.2 = .msg m) →
+  session_pass : ∀ x u (ms : List (Msg × Out)) rest out (cs : List Coin) m, ms.length = pre x →
+    cs.length = ms.length → (∀ e ∈ ms, ∃ m, e.2 = .msg m) → D.V.next x (ms.map Prod.fst) cs = .ret (.msg m) →
     D.session x u ⟨ms ++ rest, out⟩ = some (stmt x (ms.map Prod.fst), ⟨rest, out⟩)
   session_refused : ∀ x u (ms : List (Msg × Out)) a, ms.length < pre x → (∀ e ∈ ms, ∃ m, e.2 = .msg m) →
     D.session x u ⟨ms ++ [(a, .rej)], .rej⟩ = some (xR x, ⟨[([], .rej)], .rej⟩)
@@ -152,14 +153,15 @@ theorem mem_rounds_iff (x : Msg) (u : ℕ) {k : ℕ} (hk : k = S.kS x) (t : Fin 
 
 omit [DecidableEq Col] [Zero Col] in
 /-- **The prefix's rounds**: from a transcript `ms` of answered rounds of the prefix, `j` more rounds either answer every
-prefix round, reaching a transcript `ms'` of all of it whose statement has the session's `kS x` rounds, or refuse one,
-ending the run; and both, with the transcript and the prover's calls, are the same at every coins `r'` that agree with
-`r` below the prefix. -/
+prefix round, reaching a transcript `ms'` of all of it whose last round the verifier answers with a message at `r`, or
+refuse one, ending the run; and both, with the transcript and the prover's calls, are the same at every coins `r'` that
+agree with `r` below the prefix. -/
 theorem run_prefix (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (j : ℕ) :
     ∀ (ms : List (Msg × Out)) (ps : List (Msg × Msg)), ms.length + j = S.pre x → (∀ e ∈ ms, ∃ m, e.2 = .msg m) →
       (ms ≠ [] → ∃ m, D.V.next x (ms.map Prod.fst) ((List.range ms.length).map (coinSeq r)) = .ret (.msg m)) →
       (∃ (ms' : List (Msg × Out)) (ps' : List (Msg × Msg)), ms'.length = S.pre x ∧
-          (∀ e ∈ ms', ∃ m, e.2 = .msg m) ∧ D.flock.V.k (S.stmt x (ms'.map Prod.fst)) = S.kS x ∧
+          (∀ e ∈ ms', ∃ m, e.2 = .msg m) ∧
+          (∃ m, D.V.next x (ms'.map Prod.fst) ((List.range ms'.length).map (coinSeq r)) = .ret (.msg m)) ∧
           ∀ r' : Fin (D.V.k x) → Coin, (∀ t : Fin (D.V.k x), t.val < S.pre x → r' t = r t) →
             stepWith H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r'))) (j + S.kS x)
                 (ms.map fun e => (e.1, msgOf e.2)) (ms.map Prod.fst) ⟨ms, ps, [], .rej⟩ =
@@ -179,9 +181,7 @@ theorem run_prefix (H : Msg → Msg) (x : Msg) {Ω : Type} (P : Prover Ω) (ω :
       have := S.pre_pos x
       simp at hlen
       omega
-    obtain ⟨m, hm⟩ := hlast hne
-    have hk := S.k_stmt x (ms.map Prod.fst) _ m (by simpa using hlen) (by simp) hm
-    exact Or.inl ⟨ms, ps, by simpa using hlen, hms, hk, fun r' _ => by rw [Nat.zero_add]⟩
+    exact Or.inl ⟨ms, ps, by simpa using hlen, hms, hlast hne, fun r' _ => by rw [Nat.zero_add]⟩
   | succ j ih =>
     intro ms ps hlen hms _
     have hle : (ms.map Prod.fst ++ [((P.next x (ms.map fun e => (e.1, msgOf e.2)) ω).eval H).1]).length ≤
@@ -244,8 +244,9 @@ theorem sessionRuns_of_steps {D : Deploy Coin Col T} (S : SessionSteps D) (H : M
     rw [← S.k_eq]
     rfl
   rcases S.run_prefix H x P ω r (S.pre x) [] [] (by simp) (by simp) (by simp) with
-    ⟨ms, ps, hlen, hms, hk, hpre⟩ | ⟨ms, a, ps, hlen, hms, hpre⟩
-  · let P' : Prover Unit := ⟨fun _ hist _ => P.next x (ms.map (fun e => (e.1, msgOf e.2)) ++ hist) ω⟩
+    ⟨ms, ps, hlen, hms, ⟨m, hm⟩, hpre⟩ | ⟨ms, a, ps, hlen, hms, hpre⟩
+  · have hk := S.k_stmt x (ms.map Prod.fst) _ m (by simpa using hlen) (by simp) hm
+    let P' : Prover Unit := ⟨fun _ hist _ => P.next x (ms.map (fun e => (e.1, msgOf e.2)) ++ hist) ω⟩
     have hcomp : ∀ r' : Fin (D.V.k x) → Coin, (∀ t : Fin (D.V.k x), t.val < S.pre x → r' t = r t) →
         run H P D.V x ω r' =
           ⟨ms ++ (run H P' D.flock.V (S.stmt x (ms.map Prod.fst)) () fun i => r' (S.emb x hk i)).msgs,
@@ -292,7 +293,7 @@ theorem sessionRuns_of_steps {D : Deploy Coin Col T} (S : SessionSteps D) (H : M
       fun r' hr' => ?_, fun r' hr' => ?_⟩
     · simp only [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega), iff_self]
     · rw [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega) fun i => show t.val < S.pre x + i.val by omega]
-      exact ⟨S.session_pass x u ms _ _ hlen hms, fun _ hq => hq⟩
+      exact ⟨S.session_pass x u ms _ _ _ m hlen (by simp) hms hm, fun _ hq => hq⟩
   · have hk : D.flock.V.k (S.xR x) = S.kS x := S.k_xR x
     let P' : Prover Unit := ⟨fun _ _ _ => .ret []⟩
     have hflock : ∀ c : Fin (D.flock.V.k (S.xR x)) → Coin,

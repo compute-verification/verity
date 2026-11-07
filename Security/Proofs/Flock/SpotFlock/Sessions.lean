@@ -95,7 +95,7 @@ noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Rea
   k_xR _ := rfl
   kS_pos _ := k₀_pos h
   refuses _ c := refuses_empty h.xS₀ c
-  session_pass x u ms rest out hlen hms := by
+  session_pass x u ms rest out _ _ hlen _ hms _ := by
     rcases ms with _ | ⟨⟨a₀, o₀⟩, _ | ⟨⟨a₁, o₁⟩, _ | ⟨⟨a₂, o₂⟩, _ | ⟨e, ms⟩⟩⟩⟩ <;> simp at hlen
     obtain ⟨m₀, h₀⟩ := hms (a₀, o₀) (by simp)
     obtain ⟨m₁, h₁⟩ := hms (a₁, o₁) (by simp)
