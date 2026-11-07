@@ -882,7 +882,7 @@ def preload(cap: Capture, pops: dict, tasks: list[tuple[str, int]], jobs: int) -
     return {"weights": len(want), "composed": len(want) - len(fails), "refused": fails[:20]}
 
 
-def every_call(cap: Capture, pops: dict, a) -> dict:
+def every_call(cap: Capture, pops: dict, a, unstaged: dict | None = None) -> dict:
     """The match gate on ``--every-call`` instances of every recorded call of every type (sampled by the coins within the call),
     over every layer when the step was kept whole (weight-reading types over the opened layers only), in ``--jobs``
     processes, stopping at ``--deadline``."""
@@ -931,13 +931,16 @@ def every_call(cap: Capture, pops: dict, a) -> dict:
                                    agree=sum(g["agree"] is True for g in gs), disagree=sum(g["agree"] is False for g in gs),
                                    errors=sum(g["agree"] is None for g in gs) - len(not_kept), not_kept=len(not_kept),
                                    failures=bad[:8] + not_kept[:2])
-    rep["gated_ops"], rep["not_gated_ops"] = op_coverage(cap)
+    rep["gated_ops"], rep["not_gated_ops"] = op_coverage(cap, unstaged)
     return rep
 
 
-def op_coverage(cap: Capture) -> tuple[dict[str, int], dict[str, int]]:
+def op_coverage(cap: Capture, unstaged: dict | None = None) -> tuple[dict[str, int], dict[str, int]]:
     """The step's recorded ops, nested ones included, that some population reads, and those that none reads and no op it
-    reads encloses (an op inside an ungated one, such as the router's top-k inside the MoE block, is listed itself)."""
+    reads encloses (an op inside an ungated one, such as the router's top-k inside the MoE block, is listed itself). A call a
+    population refused (listed in ``unstaged``, by rank and seq or by seq on every rank) counts as not gated."""
+    refused = {(c.get("rank", r), c["seq"]) for rec in (unstaged or {}).values() for c in rec.get("calls", ())
+               for r in ([c["rank"]] if "rank" in c else cap.ranks)}
     gated: dict[str, int] = {}
     other: dict[str, int] = {}
     for r in cap.ranks:
@@ -947,8 +950,8 @@ def op_coverage(cap: Capture) -> tuple[dict[str, int], dict[str, int]]:
                 continue
             x, inside = by_seq.get(e.get("parent")), False
             while x is not None and not inside:
-                inside, x = x["op"] in GATED_OPS, by_seq.get(x.get("parent"))
-            if e["op"] in GATED_OPS:
+                inside, x = x["op"] in GATED_OPS and (r, x["seq"]) not in refused, by_seq.get(x.get("parent"))
+            if e["op"] in GATED_OPS and (r, e["seq"]) not in refused:
                 gated[e["op"]] = gated.get(e["op"], 0) + 1
             elif not inside:
                 other[e["op"]] = other.get(e["op"], 0) + 1
@@ -1025,7 +1028,7 @@ def main() -> int:
     if a.every_call:
         if a.types:
             pops = {k: v for k, v in pops.items() if k.startswith(tuple(a.types.split(",")))}
-        rep = every_call(cap, pops, a)
+        rep = every_call(cap, pops, a, unstaged)
         rep["population_errors"] = report.get("population_errors", [])
         rep["unstaged"] = unstaged
         rep["allreduce_tree"] = report["allreduce_tree"]

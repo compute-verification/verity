@@ -192,5 +192,5 @@ def test_every_call_gates_each_cublas_call_and_names_any_other_mm(tmp_path, monk
         assert (t["calls"], t["calls_gated"], t["agree"], t["disagree"], t["errors"]) == (1, 1, 1, 0, 0), label
     assert rep["unstaged"]["AtenMm_other"]["calls"] == [{"rank": 0, "seq": seqs[-2]}]
     assert rep["unstaged"]["AtenLinear_other"]["calls"] == [{"rank": 0, "seq": seqs[-1]}]
-    assert rep["gated_ops"] == {"aten::linear": 2, "aten::mm": 2}
-    assert "aten::mm" not in rep["not_gated_ops"] and "aten::linear" not in rep["not_gated_ops"]
+    assert rep["gated_ops"] == {"aten::linear": 1, "aten::mm": 1}
+    assert rep["not_gated_ops"] == {"aten::linear": 1, "aten::mm": 1}
