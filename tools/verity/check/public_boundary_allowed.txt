@@ -72,6 +72,8 @@ integrations/vllm/tests/protocols/remote_bandwidth/test_remote_session.py -> ver
 integrations/vllm/tests/protocols/test_pous_option.py -> verity/core/protocols/pous/__init__.py
 integrations/vllm/tests/protocols/test_pous_option.py -> verity/core/protocols/pous/schemes/p2.py
 integrations/vllm/tests/protocols/test_pouw_h1_circuits.py -> benchmarks/live_challenger/auditor.py
+integrations/vllm/tests/regression/store_io.py -> tools/research/pyproject.toml
+integrations/vllm/tests/regression/store_io.py -> tools/research/src
 integrations/vllm/tests/regression/test_attempt_resolution.py -> tools/research/src/research/store/__init__.py
 integrations/vllm/tests/regression/test_attempt_resolution.py -> tools/research/src/research/store/local.py
 integrations/vllm/tools/migrate/superseded_quarantine.py -> tools/verity/circuit_check/src/circuit_check/__init__.py
