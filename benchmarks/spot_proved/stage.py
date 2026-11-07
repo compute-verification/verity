@@ -72,7 +72,7 @@ class Capture:
         for r in self.ranks:
             sd = d / f"rank{r}" / f"step{step}"
             ops = (sd / "ops.jsonl").read_bytes()
-            pj = (d / f"rank{r}" / "params.json").read_bytes()
+            pj = next(p for p in (sd / "params.json", d / f"rank{r}" / "params.json") if p.is_file()).read_bytes()
             meta = json.loads((sd / "meta.json").read_text())
             ops_sha, params_sha = hashlib.sha512(ops).hexdigest(), hashlib.sha512(pj).hexdigest()
             if (ops_sha, params_sha) != (meta["ops_sha512"], meta["params_sha512"]):
