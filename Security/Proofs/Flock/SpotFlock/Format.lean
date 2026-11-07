@@ -62,15 +62,18 @@ theorem decOf_eq {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β : 
 /-- **At an input gate** the block circuit's value is the input Flock's relation gives it. -/
 theorem valueAt_input {S : Claims.Flock.Stmt} {β j : ℕ} (w : Claims.Flock.Wit) (hj : j < S.C.N)
     (hin : (S.C.op ⟨j, hj⟩).isInput = true) : valueAt S β w j = Claims.Flock.val S w (S.inp β j) := by
-  rw [valueAt, dif_pos hj, Verity.Circuit.eval_input _ _ (g := (⟨j, hj⟩ : Fin S.C.toCircuit.N)) hin]
-  exact (fun b => by cases b <;> rfl : ∀ b : Bool, (BitVec.ofBool b).getLsbD 0 = b) _
+  have he := Verity.Circuit.eval_input S.C.toCircuit
+    (fun g => BitVec.ofBool (Claims.Flock.val S w (S.inp β g.val))) (g := ⟨j, hj⟩) hin
+  simp only [valueAt, hj, ↓reduceDIte]
+  exact (congrArg (fun v => BitVec.getLsbD v 0) he).trans
+    ((fun b => by cases b <;> rfl : ∀ b : Bool, (BitVec.ofBool b).getLsbD 0 = b) _)
 
 /-- **At an output gate** of a block, under a witness Flock's relation accepts, the block circuit's value is the
 output's value. -/
 theorem valueAt_output {S : Claims.Flock.Stmt} {β j : ℕ} {w : Claims.Flock.Wit} (hR : Claims.Flock.RelS S w)
     (hβ : β < S.nBlocks) (hj : j < S.C.N) (ho : (⟨j, hj⟩ : Fin S.C.N) ∈ S.C.outputs) :
     valueAt S β w j = Claims.Flock.val S w (S.out β j) := by
-  rw [valueAt, dif_pos hj]
+  simp only [valueAt, hj, ↓reduceDIte]
   exact hR β hβ ⟨j, hj⟩ ho
 
 /-- **A decoded value at an input wire** is the input's value: the hidden or public value the session statement
