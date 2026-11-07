@@ -143,16 +143,26 @@ class _Launch:
     """The batch a request's calls run in (`pipeline.launch_context.request_launch_batch`, parsed as `targets.parse_launch_context`
     parses the Build's `--launch-context`): per request step, every sequence the engine step schedules as (rows, start).  `step` is
     the request step being written; without a batch a call is its own launch.  `capture_sizes`: the breakable CUDA graphs'
-    (`graph_capture_sizes`), whose captured kernels run at the step's padded tokens."""
+    (`graph_capture_sizes`), whose captured kernels run at the step's padded tokens; `max_num_seqs` the engine's, up to which a uniform
+    decode step replays a FULL graph (`targets.graph_launch`)."""
 
-    def __init__(self, batch: list | None = None, capture_sizes: tuple[int, ...] = ()) -> None:
+    def __init__(self, batch: list | None = None, capture_sizes: tuple[int, ...] = (), max_num_seqs: int = 0) -> None:
         from verity_vllm.program.frontend import targets as TG
         self.ctx, self.step = TG.parse_launch_context({"batch": batch}) if batch else None, 0
-        self.capture_sizes = tuple(capture_sizes)
+        self.capture_sizes, self.max_num_seqs = tuple(capture_sizes), int(max_num_seqs)
 
     def with_batch(self, batch: list) -> _Launch:
         """This launch's graphs over the request's batch."""
-        return _Launch(batch, self.capture_sizes)
+        return _Launch(batch, self.capture_sizes, self.max_num_seqs)
+
+    def graph(self, own: int) -> tuple[str, int]:
+        """The CUDA-graph mode (FULL, PIECEWISE or NONE) of the step `own` rows run in, and the tokens its forward runs at
+        (`targets.launch_graph`)."""
+        from verity_vllm.program.frontend import targets as TG
+        try:
+            return TG.launch_graph(own, self.step, self.ctx, self.capture_sizes, self.max_num_seqs)
+        except ValueError as e:
+            raise Unexpressible(f"request step {self.step}: {e}") from None
 
     def tokens(self, own: int, sampled: bool = False) -> int:
         """The rows of the launch `own` rows run in (`targets.launch_tokens`); after the logits selection (`sampled`), its sequences."""
@@ -163,15 +173,18 @@ class _Launch:
             raise Unexpressible(f"request step {self.step}: {e}") from None
 
     def keys(self, own: list[int]) -> list[int]:
-        """Every query row's key count in the launch (`targets.launch_keys`), `own`'s without a batch."""
+        """Every query row's key count in the attention launch (`targets.launch_keys`), `own`'s without a batch.  A FULL graph
+        captures the attention at the padded batch, its padding rows without keys (their requests' seq_lens are 0, so the indexer's
+        top-k leaves them -1); PIECEWISE graphs and an uncaptured step run it on the real batch."""
         from collections import Counter
         from verity_vllm.program.frontend import targets as TG
         keys = TG.launch_keys(self.step, self.ctx)
         if keys is None:
-            return list(own)
-        if Counter(own) - Counter(keys):
+            keys = list(own)
+        elif Counter(own) - Counter(keys):
             raise Unexpressible(f"request step {self.step}: the launch batch's key counts {keys} do not hold this request's {own}")
-        return keys
+        mode, padded = self.graph(len(own))
+        return keys + [0] * (padded - len(keys)) if mode == "FULL" else keys
 
 
 def launch_batch(phi, LP: int, T: int) -> list | None:

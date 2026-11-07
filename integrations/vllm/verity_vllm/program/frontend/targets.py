@@ -436,6 +436,31 @@ def graph_tokens(n: int, capture_sizes: tuple[int, ...] = ()) -> int:
     return min(fits) if fits else int(n)
 
 
+def graph_launch(n: int, uniform_decode: bool, capture_sizes, max_num_seqs: int) -> tuple[str, int]:
+    """vLLM d9105ea80's CUDA-graph dispatch of a step of `n` tokens under FULL_AND_PIECEWISE (`CudagraphDispatcher.dispatch`):
+    (FULL | PIECEWISE | NONE, the tokens its forward runs at).  Past the largest capture size it runs uncaptured at n; otherwise at
+    its `graph_tokens`, as a FULL graph where it is a uniform decode (one row a sequence) padded to at most `max_num_seqs` (the FULL
+    decode keys are the capture sizes up to it), else as PIECEWISE graphs.  Both modes pad alike, so no launch's token count reads
+    the mode; what does is the attention and DSA indexer, eager breaks on the real batch under PIECEWISE but captured at the padded
+    batch under FULL (`gpu_model_runner`'s `pad_attn`), the padding rows without keys."""
+    sizes = tuple(int(s) for s in capture_sizes)
+    if not sizes or n > max(sizes):
+        return "NONE", int(n)
+    padded = graph_tokens(n, sizes)
+    return ("FULL" if uniform_decode and padded <= max_num_seqs else "PIECEWISE"), padded
+
+
+def launch_graph(own_rows: int, step: int, launch: dict[str, Any] | None, capture_sizes, max_num_seqs: int) -> tuple[str, int]:
+    """`graph_launch` of the step a request's `own_rows` run in at its request `step` (the declared batch's sequences, or the request
+    alone without one): its mode and the tokens its forward runs at (`launch_tokens`)."""
+    seqs = launch_sequences(step, launch)
+    rows = [int(own_rows)] if seqs is None else [int(r) for r, _ in seqs]
+    tokens = launch_tokens(own_rows, step, launch, capture_sizes=tuple(capture_sizes))
+    mode, padded = graph_launch(sum(rows), all(r == 1 for r in rows), capture_sizes, max_num_seqs)
+    assert padded == tokens, (padded, tokens)
+    return mode, padded
+
+
 def launch_tokens(own_rows: int, step: int, launch: dict[str, Any] | None, *, sampled: bool = False,
                   capture_sizes: tuple[int, ...] = ()) -> int:
     """The rows of the batched launch that a request's `own_rows` run in at its request `step`: the step's token count (every scheduled
