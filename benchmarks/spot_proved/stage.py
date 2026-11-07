@@ -1,6 +1,12 @@
 """Stage sampled proof blocks of one captured step (`capture.py`) as the one-stage audit's saved values (`a11.py --load-values`).
 
     python benchmarks/spot_proved/stage.py --capture DIR --step S --out DIR [--per-type 8] [--types T,...]
+    python benchmarks/spot_proved/stage.py --capture DIR --step S --out DIR --every-call N [--jobs J] [--deadline T]
+
+``--every-call`` stages nothing: it runs the match gate on N instances of every recorded call of every type, over every layer
+of a step the capture kept whole (``--keep all``, whose ``kept_params`` hold every layer's norm weights; FP8 linears and MoE
+launches only in the opened layers, whose weights are written), and writes ``gate.json``: per type its calls, agreements,
+disagreements, errors and first failures, and the recorded ops no type reads.
 
 * **Commitment.** Each rank's ``ops.jsonl`` and ``params.json`` are hashed again and held to its ``meta.json``'s rank root,
   the ranks' roots to the step root every rank's ``commit.json`` names, and the coins to one value on every rank. Every blob
@@ -85,6 +91,8 @@ class Capture:
             raise SystemExit("the step root is not SHA-512 over the ranks' roots")
         self.root, self.coins = c0["root"], bytes.fromhex(c0["coins"])
         self.layers = sorted(x for v in c0["layers"].values() for x in v)
+        self.whole = all(self.commit[r].get("kept") == "every recorded tensor" for r in self.ranks)
+        self.every = False
         self._params: dict = {}
 
     def tensor(self, r: int, ref: dict) -> np.ndarray:
@@ -102,7 +110,7 @@ class Capture:
     def param(self, r: int, name: str) -> np.ndarray:
         if (r, name) not in self._params:
             od = self.d / f"rank{r}" / f"step{self.step}" / "open"
-            meta = self.commit[r]["opened"].get(name)
+            meta = self.commit[r]["opened"].get(name) or self.commit[r].get("kept_params", {}).get(name)
             if meta is None:
                 raise LookupError(f"parameter {name} is not in an opened layer")
             raw = (od / f"{name}.bin").read_bytes()
@@ -121,8 +129,10 @@ class Capture:
         off = ref["byte_offset"] // item
         return np.lib.stride_tricks.as_strided(flat[off:], shape=ref["shape"], strides=[s * item for s in ref["stride"]])
 
-    def opened(self, e: dict) -> bool:
-        return e.get("layer") in self.layers
+    def opened(self, e: dict, weights: bool = False) -> bool:
+        """Whether a call's values are here: an opened layer's, or (`every`, a step kept whole) any layer's call that reads
+        no weights past the kept small parameters."""
+        return e.get("layer") in self.layers or (self.every and not weights)
 
     def tokens(self, r: int) -> int:
         return sum(self.meta[r]["scheduled"].values())
@@ -171,7 +181,7 @@ def quant_instances(cap: Capture):
 def flashinfer_linear_instances(cap: Capture):
     for r in cap.ranks:
         for e in cap.events[r]:
-            if e["op"] != "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm" or not cap.opened(e):
+            if e["op"] != "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm" or not cap.opened(e, weights=True):
                 continue
             a = e["in"]
             M, K = a["input"]["shape"]
@@ -192,7 +202,7 @@ def moe_w2_instances(cap: Capture, profile):
     from verity_vllm.program.frontend import targets as T
     for r in cap.ranks:
         for e in cap.events[r]:
-            if e["op"] != "moe_launch" or not cap.opened(e) or not e["in"].get("mul_routed_weight"):
+            if e["op"] != "moe_launch" or not cap.opened(e, weights=True) or not e["in"].get("mul_routed_weight"):
                 continue
             a, cfg = e["in"], e["in"]["config"]
             E, N, K = a["B"]["shape"]
@@ -401,6 +411,96 @@ def draw(coins: bytes, label: str, n: int, k: int) -> list[int]:
     return out
 
 
+def gate_instance(spec, key, args_of, want_of, full_gates: int) -> tuple[dict, dict | None]:
+    """One instance through the match gate: its Definition evaluated on the captured inputs against the captured outputs."""
+    import a11
+    try:
+        args = [words(x) for x in args_of()]
+        want = np.concatenate([words(x) for x in want_of()])
+        ev = a11.evaluate_units(spec, spec, args, 1, full_gates)
+        got = np.asarray([int(x) for x in ev["call_out"]], dtype=np.uint64)
+        same = got.shape == want.shape and bool(np.array_equal(got, want))
+        first = None if same else int(np.nonzero(got != want)[0][0]) if got.shape == want.shape else "shape"
+        return {"key": list(key), "agree": same, "words": int(want.size), "first_diff": first,
+                **({} if same or first == "shape" else {"got": int(got[first]), "want": int(want[first]),
+                                                         "differ": int(np.count_nonzero(got != want))})}, ev
+    except Exception as ex:  # noqa: BLE001
+        return {"key": list(key), "agree": None, "error": f"{type(ex).__name__}: {str(ex)[:300]}",
+                "trace": traceback.format_exc()[-800:]}, None
+
+
+#: the recorded ops some population reads; every other recorded op is listed by ``--every-call`` as not gated
+GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm", "moe_launch",
+             "vllm::flashinfer_trtllm_fused_allreduce_norm", "vllm::all_reduce", "_C::fused_add_rms_norm", "_vllm_fa3_C::fwd",
+             "fa3_sparse_mla"}
+_EVERY: dict = {}
+
+
+def call_of(label: str, key) -> tuple:
+    """The kernel call an instance is of: ``(seq,)`` for the types aligned across ranks, else ``(rank, seq)``."""
+    return tuple(key[:1]) if label.startswith(("AllReduce", "RmsNormMnnvl")) else tuple(key[:2])
+
+
+def _gate_task(task: tuple[str, int]) -> tuple[str, dict]:
+    label, i = task
+    _, _, key, args_of, want_of = _EVERY["pops"][label][i]
+    return label, gate_instance(_EVERY["specs"][label], key, args_of, want_of, _EVERY["full_gates"])[0]
+
+
+def every_call(cap: Capture, pops: dict, a) -> dict:
+    """The match gate on ``--every-call`` instances of every recorded call of every type (drawn by the coins within the call),
+    over every layer when the step was kept whole (weight-reading types over the opened layers only), in ``--jobs``
+    processes, stopping at ``--deadline``."""
+    import multiprocessing as mp
+    import random
+    rep: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "whole": cap.whole,
+                 "layers": "every layer" if cap.whole else cap.layers, "weight_layers": cap.layers, "per_call": a.every_call,
+                 "types": {}}
+    specs: dict = {}
+    tasks: list[tuple[str, int]] = []
+    for label, insts in sorted(pops.items()):
+        rec = rep["types"][label] = {"instances": len(insts)}
+        try:
+            specs[label] = insts[0][1] if not isinstance(insts[0][1], str) else block_fn(insts[0][1])
+            rec["unit"] = specs[label].id
+        except Exception as ex:  # noqa: BLE001
+            rec["why"] = f"no Definition binds: {type(ex).__name__}: {str(ex)[:300]}"
+            continue
+        calls: dict[tuple, list[int]] = {}
+        for i, inst in enumerate(insts):
+            calls.setdefault(call_of(label, inst[2]), []).append(i)
+        rec["calls"] = len(calls)
+        for c, idx in sorted(calls.items()):
+            tasks += [(label, idx[j]) for j in draw(cap.coins, f"every/{label}/{c}", len(idx), a.every_call)]
+    random.Random(cap.coins).shuffle(tasks)
+    _EVERY.update(pops=pops, specs=specs, full_gates=a.full_gates)
+    done: dict[str, list[dict]] = {k: [] for k in specs}
+    rep["instances"] = len(tasks)
+    with mp.get_context("fork").Pool(a.jobs) as pool:
+        it = pool.imap_unordered(_gate_task, tasks, chunksize=1)
+        for _ in tasks:
+            try:
+                label, g = it.next(timeout=max(1.0, a.deadline - time.time()) if a.deadline else None)
+            except mp.TimeoutError:
+                rep["deadline"] = f"stopped at the deadline after {sum(map(len, done.values()))} of {len(tasks)} instances"
+                break
+            done[label].append(g)
+        pool.terminate()
+    for label, gs in done.items():
+        bad = [g for g in gs if g["agree"] is not True]
+        rep["types"][label].update(gated=len(gs), calls_gated=len({call_of(label, g["key"]) for g in gs}),
+                                   agree=sum(g["agree"] is True for g in gs), disagree=sum(g["agree"] is False for g in gs),
+                                   errors=sum(g["agree"] is None for g in gs), failures=bad[:8])
+    ops: dict[str, int] = {}
+    for r in cap.ranks:
+        for e in cap.events[r]:
+            if e.get("parent") is None and (cap.whole or e.get("layer") in cap.layers):
+                ops[e["op"]] = ops.get(e["op"], 0) + 1
+    rep["gated_ops"] = {k: v for k, v in sorted(ops.items()) if k in GATED_OPS}
+    rep["not_gated_ops"] = {k: v for k, v in sorted(ops.items()) if k not in GATED_OPS}
+    return rep
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--capture", required=True)
@@ -413,6 +513,10 @@ def main() -> int:
     ap.add_argument("--of", default="", help="what the window is (window.json)")
     ap.add_argument("--link", default="", help="how its values link to serving (window.json)")
     ap.add_argument("--row", default="spot-glm53")
+    ap.add_argument("--every-call", type=int, default=0, metavar="N",
+                    help="instead of staging, gate N instances of every call of every type (OUT/gate.json)")
+    ap.add_argument("--jobs", type=int, default=1, help="--every-call's processes")
+    ap.add_argument("--deadline", type=float, default=0.0, help="--every-call stops at this Unix time (0: none)")
     a = ap.parse_args()
     import a11
     import a11_kinds as K
@@ -424,6 +528,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     cap = Capture(Path(a.capture), a.step)
+    cap.every = bool(a.every_call) and cap.whole
     profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     report: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "coins": cap.coins.hex(),
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {}}
@@ -437,6 +542,16 @@ def main() -> int:
                 pops.setdefault(inst[0], []).append(inst)
         except Exception as ex:  # noqa: BLE001
             report.setdefault("population_errors", []).append(f"{type(ex).__name__}: {ex}"[:400])
+    if a.every_call:
+        rep = every_call(cap, pops, a)
+        rep["population_errors"] = report.get("population_errors", [])
+        rep["seconds"] = round(time.time() - t0, 1)
+        (out / "gate.json").write_text(json.dumps(rep, indent=1, sort_keys=True, default=str))
+        for label, rec in rep["types"].items():
+            print(f"gate {label}: {rec.get('agree', 0)} agree, {rec.get('disagree', 0)} disagree, {rec.get('errors', 0)} errors "
+                  f"over {rec.get('calls_gated', 0)}/{rec.get('calls', 0)} calls {rec.get('why', '')}", flush=True)
+        print(f"gate: not gated ops {rep['not_gated_ops']}; population errors {rep['population_errors']}", flush=True)
+        return 0
     for family, prefer in FAMILIES.items():
         members = sorted((k for k in pops if k.startswith(family)), key=lambda k: (k != prefer, int(k[len(family):]), k))
         for k in members[1:]:
@@ -464,21 +579,11 @@ def main() -> int:
         ins, outs, gate = [], [], []
         for i in picks:
             _, _, key, args_of, want_of = insts[i]
-            try:
-                args = [words(x) for x in args_of()]
-                want = np.concatenate([words(x) for x in want_of()])
-                ev = a11.evaluate_units(spec, spec, args, 1, a.full_gates)
-                got = np.asarray([int(x) for x in ev["call_out"]], dtype=np.uint64)
-                same = got.shape == want.shape and bool(np.array_equal(got, want))
-                first = None if same else int(np.nonzero(got != want)[0][0]) if got.shape == want.shape else "shape"
-                gate.append({"key": list(key), "agree": same, "words": int(want.size), "first_diff": first,
-                             **({} if same or first == "shape" else {"got": int(got[first]), "want": int(want[first])})})
-                if same:
-                    ins += ev["in"]
-                    outs += ev["out"]
-            except Exception as ex:  # noqa: BLE001
-                gate.append({"key": list(key), "agree": None, "error": f"{type(ex).__name__}: {str(ex)[:300]}",
-                             "trace": traceback.format_exc()[-800:]})
+            g, ev = gate_instance(spec, key, args_of, want_of, a.full_gates)
+            gate.append(g)
+            if g["agree"]:
+                ins += ev["in"]
+                outs += ev["out"]
         rec["gate"] = gate
         if not ins:
             rec.update(staged=False, why="no drawn instance passed the match gate")
