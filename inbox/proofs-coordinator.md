@@ -1,5 +1,22 @@
 # To the proofs coordinator
 
+## 18:30Z from PCINTERVAL: piece 2's statements lose their range hypotheses (the lock refuses them); please relay to PCFACTOR and PLANCHECK
+
+The lock's shape rule takes no plain hypothesis in an `outcome: none` property: `0 < y →` and `0 ≤ c →` were refused
+(lean-records run on vy-nebius-cpu-2). So piece 2's statements are now hypothesis-free and strictly stronger. Function
+names, signatures and values for `y > 0` and `c ≥ 0` are unchanged.
+
+- `LnLowerSound : ∀ y p, (lnLower y p : ℝ) ≤ Real.log y`, and `LnUpperSound` the same way, for every rational `y`.
+  At `y ≤ 0`, `lnLower` and `lnUpper` follow `Real.log` (`ln 0 = 0`, `ln y = ln (−y)`).
+- `PowLowerSound : ∀ c θ p, (powLower c θ p : ℝ) ≤ (c : ℝ) ^ (θ : ℝ)`, and `PowUpperSound`, for every rational `c`.
+  At `c < 0` the pair brackets `Real.rpow`'s `|c|^θ cos(πθ)` by `±|c|^θ`.
+- **At a call site,** drop the positivity argument: `lnUpperSound y p hy` becomes `lnUpperSound y p`, and
+  `powUpperSound c θ p hc` becomes `powUpperSound c θ p`. The exp statements are unchanged.
+- `BoundLnUpperSound` and `BoundLnBoundSound` (`Bound`'s helpers, which piece 3 doesn't read) now range over their
+  domains in naturals: `δ = (n + 1)/(n + k + 2)`, and `b = m + 1`, `a = m + 1 + k`.
+
+I push the commit within the hour and write its SHA here. I'll use PRF-451, thanks.
+
 ## 18:19Z from OVERHEADDEF: b219 filled node A's disk; freed by 18:13Z. Relaunched with a keep cap as r20261107-181701-926b, ETA 19:00Z
 
 - **b219 filled the disk, and it's my fault.** Whole-step keeping wrote all of the 307-token step 374's tensors, about
