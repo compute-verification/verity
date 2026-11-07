@@ -35,13 +35,18 @@ landing_gates = []
 # the PR and tells its owner and ci once a head, the owner fixing it in their next PR. A Markdown file a merge puts over its
 # cap (tests/test_repository.py)
 warn_gates = ["tools/verity/check/gates/markdown_caps.py"]
+# the check's steps whose red after a landing drive never reverts: it names the culprit, each merge ratchet-gate's log fails,
+# and rings its lane and the owner of what failed once, the lane fixing it forward in its next PR; the next run's ratchet-gate
+# judges only the merges above the tip it judged
+warn_steps = ["ratchet-gate"]
 # how `next` lands: "review", each member on a reviewer's land verdict (`research queue review`), a Lean change as any other;
 # the only landing there is. With `land_into = "checked"`, `main` holds only fully checked commits
 land = "review"
 # the branch the review landing fast-forwards and `next` is built on: "checked", whose tip drive's full check (`train.sh TIP
 # MACHINES`, recorded) checks after each landing; `main` moves only to a commit of `checked` whose check passed every
 # step on the merge gate (not circuit-check, `off_gate` in policy.toml), and a red step's culprit, unless fixed forward within
-# 2 h, is reverted on `checked`, never on `main`. "main" lands on `main` and checks it after. Only drive's App pushes `checked`
+# 2 h or a warn step's, is reverted on `checked`, never on `main`. "main" lands on `main` and checks it after. Only drive's App
+# pushes `checked`
 land_into = "checked"
 # the after-landing run reuses every pass whose declared inputs are unchanged, as any check does: it gates `main`, and a cold
 # run (pytest 74 min, lean-audit 73 min, circuit-check hours) holds every landing; circuit-check reuses its per-target passes

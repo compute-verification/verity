@@ -180,11 +180,12 @@ a Lean declaration it names, else the failed suite's or step's declared inputs),
 forward, marking a fix within 2 h, or drive then reverts it on `checked`; a red naming several landings reverts none and
 rings each one's lane. A ready mark admits a PR: the sync's own merge onto `next` (a conflict, drive.toml's `landing_gates`)
 is the only check before it joins, and a body naming no live goal draws a warning, never a refusal. A change a `warn_gates`
-gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A
-Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s tip (its lock
-run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit whose records
-are the regenerated ones and whose gated steps all passed on it. The lock run never fails on a
-lock's bookkeeping: it repairs it in that commit, with a warning for each repair (The lock, under Lean).
+gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A red
+ratchet-gate step never reverts (drive.toml's `warn_steps`): drive rings the culprit's owner, who fixes it forward in their
+next PR. A Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s
+tip (its lock run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit
+whose records are the regenerated ones and whose gated steps all passed on it. The lock run never fails on a lock's
+bookkeeping: it repairs it in that commit, with a warning for each repair (The lock, under Lean).
 
 ## Lean
 

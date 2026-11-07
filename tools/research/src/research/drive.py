@@ -79,9 +79,11 @@ circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (po
 verified `checked` commit, below the tip, for ratchet-gate to judge the
 landings above, or above ratchet-gate's own base (`--ratchet-base JUDGED`, `_ratchet_base`): the tip of the newest run whose
 ratchet-gate ended with a verdict (`postland["ratchet_judged"]`: passed, or failed naming each change it fails,
-`_ratchet_judged`), once a revert undid each of those, so a red step elsewhere, which holds `verified`, doesn't make each run
-re-judge every landing since; while one stands, the base that run judged above; the last verified commit when none was
-judged or the judged tip left the tip's history (a revert or reset); with drive.toml's `after_landing_shards` N, as N runs at
+`_ratchet_judged`), so a red step elsewhere, which holds `verified`, doesn't make each run re-judge every landing since, and
+a merge the gate failed, never reverted while ratchet-gate is a warn step (drive.toml's `warn_steps`), is judged and rung
+once; were it not one, only once a revert undid each change it failed, and while one stands the base that run judged above;
+the last verified commit when none was judged or the judged tip left the tip's history (a revert or reset); with drive.toml's
+`after_landing_shards` N, as N runs at
 once (`--shard K/N` each, on machines of `on` no other
 shard has while there are N: `shard_machines`), passed once every shard passed, a step more than one shard holds (lean-audit's
 packages, lean-suites' suites and lean-build beside them) passed, for `main` and for its green, only once each of those passed
@@ -106,7 +108,8 @@ failing test, no read outside its inputs, no error line: a kill, a hang, a crash
 stopped and runs again once on the machines of `on` it didn't run on, `INFRA` rung with its run and what failed
 (`_rerun_nameless`), and failing so again it is red.  Each failed suite or step (`_red`, `postland["red"]`) names its culprit
 by what the failure names, among the landings since it last passed (`postland["green"]`, per suite or step, so a `checked`
-never verified whole still names one): for ratchet-gate, the merge the gate's log says it fails; else the landing whose own
+never verified whole still names one): for ratchet-gate, the merge the gate's log says it fails (each one, while it is a warn
+step); else the landing whose own
 diff touches what the failure names (`suite_paths`: failing tests, its log's failures, the read guard's `outside`; of a Lean
 failure, the files declaring each declaration it names: `_lean_declared`), else the declared inputs of the suite or step it
 names (`_input_rule`).  Nothing is bisected.  The ring (`_ring`) quotes the run, the first error line (`first_error`) and what
@@ -114,8 +117,10 @@ a cancel stopped (`not_run`, "not run").  One culprit: its lane and the owner of
 (`_red_owners`: the suite's in the registry, else the step's in ci.toml) to fix it forward by `FIX_FORWARD_S` after the red was
 named (`named_at`), by marking a fix (`_fixes`: a new head of it, a PR whose body names it or says `fixes suite NAME`, or one
 whose change touches what failed); drive reverts it on `checked`, never on `main`, only once that passed with no fix marked
-ready at its head (`_revert_reds`), and the same two told.  Several: each one's lane, `CI` and `TOP` are rung, naming them all,
-and none is reverted (`_several`); none: the owner of what failed is rung.  While circuit-check is red on `checked`
+ready at its head (`_revert_reds`), and the same two told.  A warn step's red (drive.toml's `warn_steps`: ratchet-gate) is
+never reverted: each culprit's lane and the owner of what failed are rung once, saying so, to fix it forward in their next PR
+(`_warns`).  Several: each one's lane, `CI` and `TOP` are rung, naming them all, and none is reverted (`_several`); none: the
+owner of what failed is rung.  While circuit-check is red on `checked`
 (`CIRCUIT_RED`) no PR whose own change touches its inputs lands (`_circuit_held`), every other one landing on.  A red run
 moves nothing on `main`.  The runners report each
 failure as it is; a failure an unexpired allowance of the tip's policy covers (policy.toml's `allow`, `research.policy`:
@@ -163,8 +168,8 @@ from . import policy
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, compare,
                        old_verdicts)
 from .gates import git_env
-from .queue import (IDENTITY, LANDED_WINDOW, PR, Entry, Member, Queue, QueueError, StoreLabels, _brought, _git, _out, _who, built_on,
-                    changed, forces_cold, lean_change, move_of, on_first_parents, queue_commit, unreviewed)
+from .queue import (CHECK_STEPS, IDENTITY, LANDED_WINDOW, PR, Entry, Member, Queue, QueueError, StoreLabels, _brought, _git, _out, _who,
+                    built_on, changed, forces_cold, lean_change, move_of, on_first_parents, queue_commit, unreviewed)
 from .queue_stats import ts
 from .store import vocab
 
@@ -217,10 +222,6 @@ LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lak
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
-#: the steps of a check (`tools/verity/check/check.py`)
-CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
-               "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
-               "ratchet-gate")
 #: the check step that runs the vLLM integration's ratchet gate on the merges above the check's base
 RATCHET_STEP = "ratchet-gate"
 #: the ratchet gate's line for a change it fails (`ratchet_gate.render`): its name (`#N`, or a range of commits), its top
@@ -253,7 +254,8 @@ LOST_AFTER_S = 3 * 3600
 #: how long after its mark a low-risk fix of a red on `checked` holds the after-landing run for it to land (`Driver._fix_wait`)
 FIX_WAIT_S = 45 * 60
 #: how long a red's culprit has from when the red was named (its record's `named_at`) for its lane to fix it forward: drive
-#: reverts it only once this passed with no fix marked ready at its head (`Driver._revert_reds`)
+#: reverts it only once this passed with no fix marked ready at its head (`Driver._revert_reds`), and never a warn step's
+#: (`Driver._warns`)
 FIX_FORWARD_S = 2 * 3600
 #: the declarations a Lean failure names (`Driver._lean_declared`): a dotted or plain Lean name in quotes or backticks
 #: (`unknown identifier 'Foo.bar'`), or the guarantee a Lean check's failure is about (`guarantees: Foo.bar's statement changed`)
@@ -1195,8 +1197,10 @@ class Driver:
                  ready_by: Callable[[int, str], str | None] | None = None,
                  stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (), close_unlandable: str = "off",
                  after_landing_shards: int | str = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
-                 lowrisk_excludes: tuple[str, ...] = (), executor_enqueue: tuple[str, ...] = ()):
+                 lowrisk_excludes: tuple[str, ...] = (), executor_enqueue: tuple[str, ...] = (), warn_steps: tuple[str, ...] = ()):
         self.q, self.on = q, on
+        #: drive.toml's `warn_steps`: the check's steps whose red is never reverted (`_warns`)
+        self.warn_steps = warn_steps
         #: drive.toml's `executor`: "off", "shadow" (beside the after-landing run: `_follow_shadow`) or "on" (in its place, but
         #: for `SLIM_STEPS`, a run of them alone beside it: `_follow_tasks`, `_follow_slim`); ``tasks``, the executor (default:
         #: infra's queue, `QueueTransport` running ``executor_enqueue``)
@@ -1796,8 +1800,9 @@ class Driver:
         its preflights, which no graph/v2 task runs, and its steps but those policy.toml's `off_gate` takes off it, as for a run
         of every step).  It judges only `SLIM_JUDGED` of its records (`_red`): each such step it failed is named red with its
         culprit as a run's is, ratchet-gate's the change its gate's log fails (`_name`), at once while it runs and once it
-        ended, and its culprit fixed forward or reverted (`_revert_reds`); a baseline's failure is named nothing.  One whose
-        records name no failure of those steps, that passed without passing one, or that was killed again is told to `CI`."""
+        ended, and its culprit fixed forward, or reverted unless it is a warn step's (`_revert_reds`); a baseline's failure is
+        named nothing.  One whose records name no failure of those steps, that passed without passing one, or that was killed
+        again is told to `CI`."""
         tip, base = run["tip"], bool(run.get("baseline"))
         slim = pl.get("slim")
         if not slim or slim["tip"] != tip or slim.get("relaunch"):
@@ -1935,9 +1940,10 @@ class Driver:
         whole tree, stands for suite ``key`` by its report row, as a run's suite does (`_name`): its failed test files, else,
         touching none, the suite's declared inputs (`suite_inputs`).  The ring (`_ring`), the record, the several (`_several`),
         the expired allowances and the revert after `FIX_FORWARD_S` with no fix marked (`_revert_reds`) are a run's red's
-        (`_name`); a key already named for this tip, or whose culprit is still on `checked` unreverted, is left as it is."""
+        (`_name`); a key already named for this tip, or whose culprit is still on `checked` unreverted, is left as it is, but a
+        warn step's at a newer tip is named afresh (`_warns`)."""
         red, tip = pl.setdefault("red", {}), run["tip"]
-        if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted")
+        if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted") and not self._warns(key)
                                                             and not self._undone(old["culprit"][3]))):
             if old["tip"] != tip:
                 old["seen"] = tip
@@ -2183,8 +2189,8 @@ class Driver:
         """A post-landing run of ``run["tip"]`` that failed.  Killed by the machine (``signalled``: by a signal or 128+N, or a
         failure that names no file and was a kill: `implicated`, `killed`), it runs again once, on `main`'s tip then, and killed
         again is told to `CI`.  A baseline run's failure is `_red_baseline`'s.  Else each failed suite or step is named red with
-        its culprit (`_red`), to be fixed forward or reverted (`_revert_reds`); a run whose records name none is told to `CI`.
-        The next run checks `main`'s tip."""
+        its culprit (`_red`), to be fixed forward or reverted, a warn step's never reverted (`_revert_reds`); a run whose
+        records name none is told to `CI`.  The next run checks `main`'s tip."""
         tip, ids, base = run["tip"], " ".join(run["ids"]), pl["verified"]
         members = self.landed_since(base, tip)
         was_killed = signalled or (bool(members) and any(implicated(d) is None and killed(d, why)
@@ -2335,9 +2341,10 @@ class Driver:
 
     def _ratchet_judged(self, pl: dict, run: dict, d: Path, st: dict) -> None:
         """``run``'s ratchet-gate step ended with a verdict at its tip: passed, or failed naming each change it fails
-        (`ratchet_failures`, whose culprit `_name` takes).  The tip becomes `postland["ratchet_judged"]` ({"tip", "base": the
-        commit its gate judged above, "failed": the commits it failed}) unless a newer tip is: `_ratchet_base` reads it.  A
-        failure that names no change, or one this clone doesn't hold, is no verdict."""
+        (`ratchet_failures`, whose merges `_name` takes as culprits).  The tip becomes `postland["ratchet_judged"]` ({"tip",
+        "base": the commit its gate judged above, "failed": the commits it failed}) unless a newer tip is: `_ratchet_base`
+        reads it, so the next run's gate judges only the merges above it.  A failure that names no change, or one this clone
+        doesn't hold, is no verdict."""
         failed: list[str] = []
         if st.get("status") == "failed":
             named = [c for _, c, _ in ratchet_failures(d, st)]
@@ -2351,12 +2358,14 @@ class Driver:
 
     def _ratchet_base(self, pl: dict, tip: str, below: str | None) -> str | None:
         """ratchet-gate's base in an after-landing run of ``tip`` (`train.sh --ratchet-base`): the newest tip whose run's
-        ratchet-gate gave a verdict (`ratchet_judged`) once a revert at or below ``tip`` undid each change it failed, so a
-        reverted culprit's revert lies above the base and is judged; while one stands, the base that run's gate judged above,
-        so the gate fails it again.  Either only strictly below ``tip`` and at or above ``below`` (the run's `--base`); else,
-        none judged or a revert or reset that left it off ``tip``'s history, ``below``."""
+        ratchet-gate gave a verdict (`ratchet_judged`), the changes it failed standing or not while ratchet-gate is a warn step
+        (`_warns`), which no revert undoes: a merge it failed is judged and rung once.  Not one, only once a revert at or below
+        ``tip`` undid each change it failed, so a reverted culprit's revert lies above the base and is judged; while one
+        stands, the base that run's gate judged above, so the gate fails it again until it is reverted.  Either only strictly
+        below ``tip`` and at or above ``below`` (the run's `--base`); else, none judged or a revert or reset that left it off
+        ``tip``'s history, ``below``."""
         j = pl.get("ratchet_judged") or {}
-        undone = all(self._undone(c, tip) for c in j.get("failed") or ())
+        undone = self._warns(f"step {RATCHET_STEP}") or all(self._undone(c, tip) for c in j.get("failed") or ())
         for c in (j.get("tip") if undone else None, j.get("base")):
             if c and c != tip and self._ancestor(c, tip) and (not below or self._ancestor(below, c)):
                 return c
@@ -2428,14 +2437,16 @@ class Driver:
         the one whose change touches a file it points at (its failing tests, the files its log names, what the read guard caught
         it reading and the test modules that read it, and of a Lean failure, `LEAN_NAMING`'s, the files declaring each
         declaration it names: `_lean_declared`), else the one touching the declared inputs of the suite or step it names
-        (`_input_rule`); for ratchet-gate, the oldest whose merge the gate's log says it fails (`ratchet_failures`) before
-        either.  One is rung with the owner of what failed (`_ring`), to be fixed forward within `FIX_FORWARD_S` of the red's
-        `named_at` or reverted then (`_revert_reds`); several are each rung, none reverted (`_several`).  The ``expired``
-        allowances that covered it are kept with the record (``expired``: each one's text, ``allowed_by``: its owner), so the
-        ring names them and rings their owners too.  A key already named for this tip, or whose culprit is still on `main`
-        unreverted, is left as it is."""
-        red, tip = pl.setdefault("red", {}), run["tip"]
-        if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted")
+        (`_input_rule`); for ratchet-gate, before either, the merge the gate's log says it fails (`ratchet_failures`): the
+        oldest, or each one, all culprits (`culprits`), while it is a warn step (`_warns`).  The culprit is rung with the owner
+        of what failed (`_ring`), to be fixed forward within `FIX_FORWARD_S` of the red's `named_at` or reverted then
+        (`_revert_reds`), a warn step's in its lane's next PR, never reverted; several a failure only touches are each rung,
+        none reverted (`_several`).  The ``expired`` allowances that covered it are kept with the record (``expired``: each
+        one's text, ``allowed_by``: its owner), so the ring names them and rings their owners too.  A key already named for
+        this tip, or whose culprit is still on `main` unreverted, is left as it is; a warn step's red at a newer tip is named
+        afresh, since no revert ends it and the gate judges only the merges above the tip it last judged (`_ratchet_base`)."""
+        red, tip, warn = pl.setdefault("red", {}), run["tip"], self._warns(key)
+        if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted") and not warn
                                                             and not self._undone(old["culprit"][3]))):
             if old["tip"] != tip:
                 old["seen"] = tip                       # red again here (`_behind`)
@@ -2448,7 +2459,7 @@ class Driver:
         red[key] = r
         gate = ratchet_failures(d, rec) if step == RATCHET_STEP else []
         if gate:
-            r["first"] = f"`{gate[0][0]} ({gate[0][1]}): failed: {gate[0][2][:200]}`"
+            r["first"] = "; ".join(f"`{n} ({c}): failed: {w[:200]}`" for n, c, w in (gate if warn else gate[:1]))
         # the gate judges every merge above its base (at or above the verified tip) and names the one it fails, wherever the step
         # last passed
         if (base := self._base_of(pl, key, step, tip) or (pl.get("verified") if gate else None)) is None:
@@ -2465,16 +2476,20 @@ class Driver:
         hits = [x for x in members if touches(self._own(x), paths)] if paths else []
         why = f"its change touches {', '.join(sorted({f for x in hits for f in touches(self._own(x), paths)})[:4])}"
         r["paths"] = sorted(paths or ()) + sorted({f for x in hits for f in touches(self._own(x), paths)})
-        if gate and (named := [x for x in members if x.commit[:12] in {c for _, c, _ in gate}][:1]):
-            hits, why = named, "the ratchet gate fails its merge"
+        named = [x for x in members if x.commit[:12] in {c for _, c, _ in gate}][:None if warn else 1]
+        if named:
+            hits = named
+            why = "the ratchet gate fails its merge" if len(named) == 1 else "the ratchet gate fails each one's merge"
         if not hits and (rule := self._input_rule(key, d, rec, tip)):
             label, ok = rule
             hits, why = [x for x in members if any(ok(f) for f in self._own(x))], f"its change touches {label}"
             r["paths"] += sorted({f for x in hits for f in self._own(x) if ok(f)})
         since = f"{len(members)} landing(s) since `{self.q.into}` {base[:12]}, where it last passed"
-        if len(hits) == 1:
-            r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit], why=why)
-            self._ring(drive, r, key, f"Culprit: #{hits[0].pr} ({why}), of the {since}")
+        if len(hits) == 1 or named:
+            culprits = [[x.pr, x.head, x.owner, x.commit] for x in hits]
+            r.update(culprit=culprits[0], why=why, **({"culprits": culprits} if len(culprits) > 1 else {}))
+            self._ring(drive, r, key, f"{'Culprits' if len(hits) > 1 else 'Culprit'}: {', '.join(f'#{x.pr}' for x in hits)} "
+                                      f"({why}), of the {since}")
         elif hits:
             self._several(drive, r, key, hits, f"each touch it ({since})")
         else:
@@ -2491,44 +2506,56 @@ class Driver:
     def _ring(self, drive: dict, r: dict, key: str, what: str) -> None:
         """Ring who acts on red ``key`` (`_red_owners`: its culprit's lane, or each candidate's, and the owner of what failed, in
         one post) with what failed, the run, its first error line and what drive does next, once per key and culprit: a
-        culprit's lane fixes it forward by `FIX_FORWARD_S` after the red was named, or drive reverts it then (`_revert_reds`)."""
+        culprit's lane fixes it forward by `FIX_FORWARD_S` after the red was named, or drive reverts it then (`_revert_reds`);
+        a warn step's culprits' lanes fix it forward in their next PR, and no revert comes (`_warns`)."""
         c = r.get("culprit")
         nr = f" Not run (a cancel stopped them): {', '.join(r['not_run'])}." if r.get("not_run") else ""
         if r.get("expired"):
             nr += (f" Its allowance in policy.toml expired, so it is red again: {'; '.join(r['expired'])}. Fix it, or extend "
                    "the allowance in a reviewed change.")
-        then = "" if not c else (
-            f" Fix it forward by {_hhmm(r.get('named_at', self.now()) + FIX_FORWARD_S)}: mark a fix (a new head of #{c[0]}, a PR "
-            f"whose body names #{c[0]} or says `fixes {key}`, or one whose change touches what failed), or drive reverts #{c[0]} "
-            "then.")
+        if c and self._warns(key):
+            then = (f" No revert is coming: drive never reverts {key}'s red (drive.toml's `warn_steps`), so "
+                    f"{'each culprit' if r.get('culprits') else f'#{c[0]}'}'s lane fixes it forward in its next PR.")
+        elif c:
+            then = (f" Fix it forward by {_hhmm(r.get('named_at', self.now()) + FIX_FORWARD_S)}: mark a fix (a new head of "
+                    f"#{c[0]}, a PR whose body names #{c[0]} or says `fixes {key}`, or one whose change touches what failed), or "
+                    f"drive reverts #{c[0]} then.")
+        else:
+            then = ""
         if key == CIRCUIT_RED:
             then += f" No PR touching circuit-check's inputs lands until it passes on `{self.q.into}`."
-        self.tell(drive, [f"red:{key}:{c[3] if c else r['tip']}"],
+        self.tell(drive, [f"red:{key}:{x[3]}" for x in r.get("culprits") or [c]] if c else [f"red:{key}:{r['tip']}"],
                   f"{key} is red on `{self.q.into}` {r['tip'][:12]} (run {' '.join(r['ids'])}): {r['first']}. {what[:1].upper()}{what[1:]}."
                   f"{then}{nr}", *self._red_owners(key, r))
 
     def _red_owners(self, key: str, r: dict) -> tuple[str | None, ...]:
-        """Who red record ``r`` of ``key`` rings, first who acts: its culprit's lane (`_owner`), or each candidate's, then the
-        owner of what failed, its suite's (the registry's, `r["owner"]`) else its step's (ci.toml's at its tip), then the owner
-        of each allowance of it that expired (`r["allowed_by"]`), and `CI` and `TOP` beside candidates; (None,) (`CI`) when
-        none is known."""
+        """Who red record ``r`` of ``key`` rings, first who acts: its culprit's lane (`_owner`), each culprit's of a warn step's
+        (`culprits`), or each candidate's, then the owner of what failed, its suite's (the registry's, `r["owner"]`) else its
+        step's (ci.toml's at its tip), then the owner of each allowance of it that expired (`r["allowed_by"]`), and `CI` and
+        `TOP` beside candidates; (None,) (`CI`) when none is known."""
         c, cands = r.get("culprit"), r.get("candidates") or ()
         what = r.get("owner") or self._step_owner(r.get("step") or key.split(" ", 1)[-1], r["tip"])
-        lanes = [self._owner(Member(*x)) for x in ([c] if c else cands)]
+        lanes = [self._owner(Member(*x)) for x in (r.get("culprits") or [c] if c else cands)]
         also = (CI[1:], TOP[1:]) if cands and not c else ()
         return tuple(dict.fromkeys(h for h in (*lanes, what, *(r.get("allowed_by") or ()), *also) if h)) or (None,)
+
+    def _warns(self, key: str) -> bool:
+        """Whether red ``key`` is a warn step's (drive.toml's `warn_steps`): drive names its culprits and rings their lanes,
+        which fix it forward in their next PR, and never reverts one (`_revert_reds`)."""
+        return key.startswith("step ") and key[len("step "):] in self.warn_steps
 
     def _revert_reds(self, drive: dict) -> None:
         """Revert each red record's culprit once `FIX_FORWARD_S` passed since the red was named (its `named_at`; one without it is
         taken as named now) with no open PR that fixes it marked ready at its head (`_marked_fix`), unless the landing branch
         undid it already: `git revert -m 1` of its merge onto `next` (`_revert_landed`), its culprit's lane and the owner of
-        what failed told (`_red_owners`).  Why a revert waits is logged."""
+        what failed told (`_red_owners`).  Why a revert waits is logged.  A warn step's red (`_warns`) is never reverted, at
+        `FIX_FORWARD_S` or later: its culprits' lanes fix it forward in their next PR."""
         pl = drive.get("postland") or {}
         if self.dry_run or self.q.shadow:
             return
         now = self.now()
         for key, r in list((pl.get("red") or {}).items()):
-            if not (c := r.get("culprit")) or r.get("reverted"):
+            if not (c := r.get("culprit")) or r.get("reverted") or self._warns(key):
                 continue
             one = Member(*c)
             if self._undone(one.commit):
@@ -2631,7 +2658,8 @@ class Driver:
         ago, unless a run that started under `POSTLAND_RUN_S` ago checks `main` (or, with none, the lock run whose records it
         waits for: `_target`) with nothing red and no launch of it that registered no run (`_launch_failed`, which the ring
         then counts): then verification is only under way (a cold run is ~4 h).  While something unreverted is red it rings who acts on each red (`_red_owners`: the
-        culprit's lane and the owner of what failed), else `CI` and `TOP`.  Drive's tick, not top's hourly sweep, rings it: drive holds the last verified
+        culprit's lane and the owner of what failed), else `CI` and `TOP`, as it does for a warn step's red, whose culprits were
+        rung once (`_warns`).  Drive's tick, not top's hourly sweep, rings it: drive holds the last verified
         `main`, its landings since and what is red."""
         if not (pl := drive.get("postland")) or self.dry_run or self.q.shadow:
             return
@@ -2667,7 +2695,7 @@ class Driver:
                  "no after-landing run is going")
         text = (f"`{self.q.into}`'s last verified commit {pl['verified'][:12]} is {(now - since) / 3600:.1f} h behind its tip {main[:12]} "
                 f"({len(pending)} landing(s) unverified); {state}; red: {reds}")
-        holders = [h for k, r in red.items() if not r.get("reverted") for h in self._red_owners(k, r)]
+        holders = [h for k, r in red.items() if not r.get("reverted") and not self._warns(k) for h in self._red_owners(k, r)]
         to = tuple(dict.fromkeys(f"@{h}" if h else CI for h in holders)) or (CI, TOP)
         if self.post(f"{' '.join(to)} queue: {text}", to):
             pl["rang_behind"] = now
@@ -3307,8 +3335,9 @@ class Driver:
         """When drive lands on `checked` (drive.toml's `land_into`), fast-forward `main` to the newest commit of `checked` whose
         after-landing run passed every step on the merge gate (`_promotable`), and run what a landing on `main` runs for what it
         brings (`_on_main`).  A step off the gate (circuit-check, ratchet-gate) holds nothing here: its red's culprit is fixed
-        forward or reverted on `checked` (`_revert_reds`), and `main` follows.  With `executor = "on"`, a tip is `gated` once
-        the executor's tasks on the gate passed and the run of `SLIM_STEPS` beside them passed its preflights and its steps on
+        forward, or reverted on `checked` unless the step is a warn step (ratchet-gate: `_revert_reds`), and `main` follows.
+        With `executor = "on"`, a tip is `gated` once the executor's tasks on the gate passed and the run of `SLIM_STEPS`
+        beside them passed its preflights and its steps on
         the gate, by the same `off_gate`, and verified once both passed everything (`_follow_tasks`).  `main` never moves to a
         commit no such run passed, and never back; one that isn't below it (pushed outside drive) waits for `_absorb`.  A push
         refused because `main` already holds the commit, moved there beside this tick (`queue.baseline`, `queue.promote`), is
