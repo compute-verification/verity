@@ -43,6 +43,7 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from verity.core.periods import block_count
 from verity.core.protocols.pous.wipe_monitoring import DELTAS, PERIODS
 from verity.core.protocols.profile import Stratified
 
@@ -189,8 +190,8 @@ def monitoring_period(deployment: Mapping[str, Any], error_sum: Fraction) -> dic
     """The monitoring period over all compute (module docstring), a block being one of a machine's ``window_s`` windows."""
     periods = {}
     for name, seconds in PERIODS:
-        per_machine = seconds // int(deployment["window_s"])
-        blocks = int(deployment["machines"]) * per_machine
+        window_s, machines = int(deployment["window_s"]), int(deployment["machines"])
+        per_machine, blocks = block_count(seconds, window_s), block_count(seconds, window_s, machines)
         union = error_sum * blocks
         periods[name] = {"seconds": seconds, "blocks_per_machine": per_machine, "blocks": blocks,
                          "joint_horizon": {"error_sum": str(union), "vacuous": union >= 1},
@@ -271,9 +272,19 @@ def check(record: Mapping[str, Any]) -> dict[str, str]:
 
 # --- the records from the runs' outputs ----------------------------------------------------------------------------------
 
-#: `benchmarks/census/deployments.json`'s reference deployment as the runs' monitoring reports recorded it
-REFERENCE = {"id": "dc-12500-machines-600s", "machines": 12500, "gpus_per_machine": 8, "window_s": 600, "role": "reference",
-             "label": "reference datacenter: 12,500 eight-GPU machines (100,000 GPUs), every machine audited in 10-minute windows"}
+#: the census's deployments, the one source of the reference deployment
+CENSUS = Path(__file__).resolve().parents[4] / "benchmarks" / "census" / "deployments.json"
+
+
+def _reference() -> dict[str, Any]:
+    refs = [d for d in json.loads(CENSUS.read_text()) if d.get("role") == "reference"]
+    if len(refs) != 1:
+        raise ValueError(f"{CENSUS}: {len(refs)} deployments with the role reference, not one")
+    return {k: refs[0][k] for k in ("id", "machines", "gpus_per_machine", "window_s", "role", "label")}
+
+
+#: the census's reference deployment as the runs' monitoring reports record it (its fields but its sources)
+REFERENCE = _reference()
 
 
 def from_runs(r2: Path, r1: Path, wipe: Path) -> dict[str, dict[str, Any]]:

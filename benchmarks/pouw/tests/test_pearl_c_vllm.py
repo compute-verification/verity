@@ -23,7 +23,7 @@ from typing import ClassVar
 
 import numpy as np
 import pytest
-from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
+from verity.ml.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity_vllm.protocols.pouw.pearl_c import host as PH
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
