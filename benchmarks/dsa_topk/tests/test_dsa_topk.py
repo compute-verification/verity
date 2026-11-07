@@ -3,6 +3,7 @@ keys with ties to the larger index, in ascending order, with NaN as -inf and bot
 agrees with it; the wrappers run the real op first and the pass only on calls that can hold a row longer than k, in
 the right row mode; install wraps once; the plugin is off unless asked; and, where Triton is importable, its kernels
 (in Triton's interpreter) rewrite any fast selection, right, wrong or garbage, into the reference."""
+import json
 import math
 import os
 import random
@@ -162,6 +163,24 @@ def test_register_is_off_unless_asked(monkeypatch):
     monkeypatch.delenv(dsa_topk.LOG_ENV, raising=False)
     dsa_topk.register()
     assert calls == [()]
+
+
+def test_log_rewrites_its_record_while_serving(monkeypatch, tmp_path):
+    monkeypatch.setattr(dsa_topk, "_capturing", lambda: False)
+    monkeypatch.setattr(dsa_topk, "FLUSH_EVERY", 3)
+    canon = dsa_topk.Canon()
+    dsa_topk.log_to(canon, str(tmp_path))
+    path = tmp_path / f"dsa_topk.{os.getpid()}.json"
+    canon.note("persistent_topk")
+    canon.note("persistent_topk")
+    assert not path.exists()
+    canon.note("cooperative_topk")
+    rec = json.loads(path.read_text())
+    assert rec["calls"]["persistent_topk"] == 2 and rec["calls"]["cooperative_topk"] == 1
+    monkeypatch.setattr(dsa_topk, "_capturing", lambda: True)
+    for _ in range(3):
+        canon.note("persistent_topk")
+    assert json.loads(path.read_text())["calls"]["persistent_topk"] == 2
 
 
 def test_site_declares_the_plugin(tmp_path):

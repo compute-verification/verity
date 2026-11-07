@@ -12,7 +12,7 @@ OUT=${OUT:?set OUT}
 mkdir -p "$OUT"
 check() {
   "$PY" "$HERE/stress.py" check --out "$OUT" --tag "$1" --reps "${DSA_TOPK_REPS:-4}" \
-    --dists "${DSA_TOPK_DISTS:-randn,bf16,int,relu,edge}" > "$OUT/check.$1.log" 2>&1
+    --dists "${DSA_TOPK_DISTS:-randn,bf16,int,relu,signed,edge}" > "$OUT/check.$1.log" 2>&1
 }
 nvidia-smi --query-gpu=name,driver_version,clocks.max.sm --format=csv > "$OUT/gpu.csv"
 check p0

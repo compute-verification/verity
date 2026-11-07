@@ -48,6 +48,10 @@ SEG_MIN_KEYS = 8192
 #: keys a program reads at a time (below 2**15: dsa_topk_kernels packs two block counts in an int32), and its warps
 BLOCK = 4096
 NUM_WARPS = 8
+#: programs a multiprocessor should get before a row is split
+FILL = 2
+#: `log_to` rewrites its record every this many calls (a device sync), since vLLM's workers may never reach atexit
+FLUSH_EVERY = 4096
 
 INT32_MIN = -(1 << 31)
 NEG_INF_BITS = -8388608  # 0xFF800000, the bits of -inf as an int32
@@ -123,15 +127,23 @@ class Canon:
     """The device pass, and its counters: `run` rewrites the rows of ``out`` (int32, rows x k) longer than ``k`` keys of
     ``logits`` (float32, rows x columns) in place."""
 
-    def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK, num_warps: int = NUM_WARPS) -> None:
+    def __init__(self, seg_min_keys: int = SEG_MIN_KEYS, block: int = BLOCK, num_warps: int = NUM_WARPS,
+                 fill: int = FILL) -> None:
         if not 0 < block < 1 << 15 or block & (block - 1):
             raise ValueError(f"block: a power of two below 2**15, not {block}")
-        self.seg_min_keys, self.block, self.num_warps = seg_min_keys, block, num_warps
+        self.seg_min_keys, self.block, self.num_warps, self.fill = seg_min_keys, block, num_warps, fill
         self.calls = {op: 0 for op in OPS}
         self.launches: dict[str, int] = {op: 0 for op in OPS}
         self._stats: dict[Any, Any] = {}
         self._sms: dict[Any, int] = {}
         self._ws: dict[Any, Any] = {}
+        #: called every `FLUSH_EVERY` calls outside a CUDA graph's capture (`log_to`)
+        self.on_flush: Callable[[], None] | None = None
+
+    def note(self, op: str) -> None:
+        self.calls[op] += 1
+        if self.on_flush is not None and sum(self.calls.values()) % FLUSH_EVERY == 0 and not _capturing():
+            self.on_flush()
 
     def stats(self, device: Any) -> Any:
         import torch
@@ -141,13 +153,13 @@ class Canon:
         return self._stats[device]
 
     def segments(self, device: Any, rows: int, ncols: int) -> int:
-        """Programs per row: one when the rows alone fill the device, else enough to fill it twice, each segment at
-        least `seg_min_keys` keys."""
+        """Programs per row: one when the rows alone give each multiprocessor `fill` programs, else enough to, each
+        segment at least `seg_min_keys` keys."""
         import torch
 
         if device not in self._sms:
             self._sms[device] = torch.cuda.get_device_properties(device).multi_processor_count
-        want = math.ceil(2 * self._sms[device] / max(rows, 1))
+        want = math.ceil(self.fill * self._sms[device] / max(rows, 1))
         return max(1, min(want, math.ceil(ncols / self.seg_min_keys)))
 
     def run(self, op: str, logits: Any, out: Any, k: int, mode: int, a: Any, b: Any = None, *, rows: int,
@@ -206,7 +218,7 @@ def wrappers(canon: Canon) -> dict[str, Callable[[Callable[..., Any]], Callable[
     def prefill(real: Callable[..., Any]) -> Callable[..., Any]:
         def top_k_per_row_prefill(logits, row_starts, row_ends, indices, num_rows, stride0, stride1, top_k):
             real(logits, row_starts, row_ends, indices, num_rows, stride0, stride1, top_k)
-            canon.calls["top_k_per_row_prefill"] += 1
+            canon.note("top_k_per_row_prefill")
             if num_rows > 0 and logits.shape[1] > top_k:
                 canon.run("top_k_per_row_prefill", logits, indices, top_k, 0, row_starts, row_ends, rows=num_rows,
                           ncols=logits.shape[1], ls0=stride0, ls1=stride1)
@@ -215,7 +227,7 @@ def wrappers(canon: Canon) -> dict[str, Callable[[Callable[..., Any]], Callable[
     def decode(real: Callable[..., Any]) -> Callable[..., Any]:
         def top_k_per_row_decode(logits, next_n, seq_lens, indices, num_rows, stride0, stride1, top_k):
             real(logits, next_n, seq_lens, indices, num_rows, stride0, stride1, top_k)
-            canon.calls["top_k_per_row_decode"] += 1
+            canon.note("top_k_per_row_decode")
             if num_rows > 0 and logits.shape[1] > top_k:
                 canon.run("top_k_per_row_decode", logits, indices, top_k, 1 if seq_lens.dim() == 2 else 2, seq_lens,
                           rows=num_rows, ncols=logits.shape[1], ls0=stride0, ls1=stride1, next_n=next_n)
@@ -227,7 +239,7 @@ def wrappers(canon: Canon) -> dict[str, Callable[[Callable[..., Any]], Callable[
         def wrap(real: Callable[..., Any]) -> Callable[..., Any]:
             def op(logits, lengths, output, workspace, k, max_seq_len):
                 real(logits, lengths, output, workspace, k, max_seq_len)
-                canon.calls[name] += 1
+                canon.note(name)
                 ncols = bound(logits, max_seq_len)
                 if logits.shape[0] == 0 or ncols <= k or (hint and max_seq_len <= k and not _capturing()):
                     return
@@ -273,12 +285,16 @@ def install(ns: Any = None, canon: Canon | None = None) -> Canon:
 
 
 def log_to(canon: Canon, d: str) -> None:
+    """Keep ``canon``'s record in ``d/dsa_topk.PID.json``: every `FLUSH_EVERY` calls and at exit."""
     path = Path(d) / f"dsa_topk.{os.getpid()}.json"
 
     def write() -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(canon.record(), indent=1) + "\n")
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(canon.record(), indent=1) + "\n")
+        tmp.replace(path)
 
+    canon.on_flush = write
     atexit.register(write)
 
 

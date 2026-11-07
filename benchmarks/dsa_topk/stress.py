@@ -40,7 +40,8 @@ def _gen(seed: int) -> torch.Generator:
 def logits(dist: str, rows: int, cols: int, seed: int) -> torch.Tensor:
     """The case's logits: ``randn`` (no ties), ``bf16`` (randn rounded to bf16: ties in the tail), ``int`` (32 values:
     a tie at the k-th of thousands of keys), ``relu`` (relu(randn - 2), the indexer's ReLU: under k keys above zero, so
-    the k-th is a zero tied with most of the row), ``edge`` (randn with NaN, +-0 and +-inf mixed in)."""
+    the k-th is a zero tied with most of the row), ``signed`` (relu's, with half its values negated, so its zeros are
+    +0 and -0, and +-inf mixed in), ``edge`` (randn with NaN, +-0 and +-inf mixed in)."""
     g = _gen(seed)
     x = torch.randn(rows, cols, generator=g, device=DEV)
     if dist == "bf16":
@@ -49,6 +50,12 @@ def logits(dist: str, rows: int, cols: int, seed: int) -> torch.Tensor:
         x = torch.randint(0, 32, (rows, cols), generator=g, device=DEV).float()
     elif dist == "relu":
         x = torch.relu(x - 2.0)
+    elif dist == "signed":
+        u = torch.rand(rows, cols, generator=g, device=DEV)
+        x = torch.relu(x - 2.0)
+        x = torch.where(u < 0.5, -x, x)
+        x = torch.where((u >= 0.9) & (u < 0.901), float("inf"), x)
+        x = torch.where((u >= 0.901) & (u < 0.902), float("-inf"), x)
     elif dist == "edge":
         u = torch.rand(rows, cols, generator=g, device=DEV)
         x = torch.where(u < 0.01, float("nan"), x)
@@ -226,7 +233,8 @@ def check(args) -> None:
             a, b = (case.lo, case.lo + case.n) if mode == 0 else (case.n, None)
             canon.run("garbage", case.x, junk, K, mode, a.to(torch.int32), None if b is None else b.to(torch.int32),
                       rows=case.x.shape[0], ncols=case.x.shape[1], ls0=case.x.stride(0), ls1=case.x.stride(1))
-            row["garbage_hint_ref"] = bool(torch.equal(junk, ref))
+            long = case.n > K
+            row["garbage_hint_ref"] = bool(torch.equal(junk[long], ref[long]))
             record["cases"].append(row)
             print(json.dumps({k: row[k] for k in ("case", "dist", "long_rows", "counters")}),
                   "unpatched", len(set(row["unpatched"])), "canonical", len(set(row["canonical"])),
@@ -269,7 +277,8 @@ def compare(args) -> None:
         "processes": len(runs), "outputs_per_case": total, "cases": len(table),
         "canonical_identical": all(s["canonical_distinct"] == 1 for s in table),
         "canonical_is_reference": all(s["canonical_ref"] for s in table),
-        "unpatched_set_up_to_ties": all(s["set_ok"] for s in table if s["dist"] != "edge"),
+        "unpatched_set_up_to_ties": {d: all(s["set_ok"] for s in table if s["dist"] == d)
+                                     for d in dict.fromkeys(s["dist"] for s in table)},
         "short_rows_unchanged": all(s["short_ok"] for s in table),
         "unpatched_varies_in": sum(s["unpatched_distinct"] > 1 for s in table),
     }
@@ -332,11 +341,12 @@ def time_cases() -> list[Case]:
 
 
 def variant(spec: str) -> dsa_topk.Canon:
-    """``BLOCK:WARPS:SEG_MIN_KEYS`` (``SEG_MIN_KEYS`` ``off``: one program a row), or ``default``."""
+    """``BLOCK:WARPS:SEG_MIN_KEYS[:FILL]`` (``SEG_MIN_KEYS`` ``off``: one program a row), or ``default``."""
     if spec == "default":
         return dsa_topk.Canon()
-    block, warps, seg = spec.split(":")
-    return dsa_topk.Canon(seg_min_keys=1 << 40 if seg == "off" else int(seg), block=int(block), num_warps=int(warps))
+    block, warps, seg, *fill = spec.split(":")
+    return dsa_topk.Canon(seg_min_keys=1 << 40 if seg == "off" else int(seg), block=int(block), num_warps=int(warps),
+                          fill=int(fill[0]) if fill else dsa_topk.FILL)
 
 
 def time_(args) -> None:
@@ -378,7 +388,7 @@ def main() -> None:
     p.add_argument("--out", required=True)
     p.add_argument("--tag", default="0")
     p.add_argument("--reps", type=int, default=4)
-    p.add_argument("--dists", default="randn,bf16,int,relu,edge")
+    p.add_argument("--dists", default="randn,bf16,int,relu,signed,edge")
     p.add_argument("--iters", type=int, default=50)
     p.add_argument("--variants", default="default", help="stress.py time: the pass's parameters (`variant`), by comma")
     args = p.parse_args()
