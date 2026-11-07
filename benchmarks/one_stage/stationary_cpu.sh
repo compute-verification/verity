@@ -7,6 +7,7 @@
 # Run from the verity tree in a proofs slot:
 #   bash benchmarks/one_stage/stationary_cpu.sh ST_UNITS="pe-w13 st-w13:M=8" ST_COUNTS=2,8
 # env: ST_UNITS (stage.py's type specs, each with its own counts as SPEC@C1,C2)  ST_COUNTS=2,8  ST_RUNS=2
+#   ST_THREADS=16 (the prover's threads, fixed so that slots of different sizes time alike)
 # The prover pads a statement to at least 2^27 dense bits, so both counts of a type should be past that: 8,32 at k_log 24.
 # Kept in $OUT: per type and count its stage.json and the sessions' prove.out, prove.err and serve.log, and the records;
 # never a circuit, a prover's file or a proof.
@@ -17,7 +18,7 @@ W=$(mktemp -d); trap 'rm -rf "$W"' EXIT
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH PYTHONDONTWRITEBYTECODE=1
 { hostname; lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; free -g; git rev-parse HEAD; } > "$O/host.txt" 2>&1
-log "host: $(nproc) CPUs, $(free -g | awk '/Mem:/{print $2}') GB"
+log "host: $(nproc) CPUs ($(lscpu | sed -n 's/^Model name: *//p')), $(free -g | awk '/Mem:/{print $2}') GB, ${ST_THREADS:-16} threads"
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 PY=$REPO/.venv/bin/python
@@ -27,7 +28,7 @@ RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=0 bash verity/ml/flock
 BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
 sha256sum "$BIN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
-export RAYON_NUM_THREADS=$(nproc) RUST_MIN_STACK=$((64 << 20)) FC_PHASE_TIMES=1 FLOCK_PHASE_TIMES=1
+export RAYON_NUM_THREADS=${ST_THREADS:-16} RUST_MIN_STACK=$((64 << 20)) FC_PHASE_TIMES=1 FLOCK_PHASE_TIMES=1
 Z=$W/zk; mkdir -p "$Z/records"; echo '[]' > "$Z/plan.json"
 rc=0
 keep() {
