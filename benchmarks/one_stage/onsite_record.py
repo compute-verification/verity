@@ -1693,8 +1693,9 @@ def completed_from(key: str, entry: Mapping[str, Any], public: Path) -> str | No
         head, rest = f.readline(), f.read()
     try:
         n = json.loads(head)["instances"]
-    except (KeyError, TypeError, ValueError):
-        n = None
+    except (KeyError, TypeError, ValueError) as e:
+        return (f"--public-pin's completed file for {key} isn't completed from its staged one: its header names no "
+                f"instances: {type(e).__name__}")
     staged = FI.unrelay(rest, n) if type(n) is int else None
     if staged is None or hashlib.sha512(staged).hexdigest() != entry["body"]:
         return (f"--public-pin's completed file for {key} isn't completed from its staged one: its body isn't the staged "

@@ -2159,6 +2159,8 @@ RELAY_NOT = ("--public-pin's completed file for m0 isn't completed from its stag
     ("completed, another body re-laid", True, "another re-laid", RELAY_NOT),
     ("completed, re-laid, a ref not the identity's", True, "a ref off", RELAY_NOT),
     ("completed, its staged body, the member re-laid", True, "staged", RELAY_NOT),
+    ("completed, re-laid, its header naming no instances", True, "re-laid",
+     "--public-pin's completed file for m0 isn't completed from its staged one: its header names no instances: KeyError"),
     ("completed, re-laid, the member not re-laid", False, "re-laid",
      "--public-pin's completed file for m0 isn't completed from its staged one: its body isn't the staged body"),
     ("completed, the pin not saying whether it re-lays", None, "re-laid",
@@ -2184,7 +2186,8 @@ def test_a_completed_public_file_is_held_to_its_members_staged_body(tmp_path, ho
     public = tmp_path / "pub-4.bin"
     public.write_bytes(staged)
     if done is not None:
-        public.write_bytes(b'{"instances": 4, "completed": true}\n' + bodies[done])
+        head = b'{"completed": true}\n' if how.endswith("naming no instances") else b'{"instances": 4, "completed": true}\n'
+        public.write_bytes(head + bodies[done])
         entry["completed"] = {"file": sha512_hex(public.read_bytes()), "body": sha512_hex(bodies[done])}
     if how.endswith("no staged entry"):
         entry = {"k": 0, "completed": entry["completed"]}
