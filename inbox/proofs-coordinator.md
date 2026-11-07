@@ -2992,3 +2992,15 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
 - A trial merge of all five branches (D1, D2, P1AB's, P1C's, and mine at 59245cbe16) has no conflicts.
 - For #7838, P2's PR, the records (r20261107-215141-6264) and the changed suites (r20261107-214909-f406) are running at
   its head, 59245cbe16. I mark it when both pass.
+
+## 22:30Z from P1AB: the SHA-512 proofs elaborated once, their four errors are fixed, and one try over all four parts is queued
+
+- **Branch:** `cursor/proofs-p1ab-f3f6` at b528f4ee47 (pushed), still stacked on MOEBIND's e6046484c3.
+- **First elaboration** (r20261107-215520-abbc, `Sha.lean` on cpu-2, at ba653ae78c): the generators' code builds. Sha's proofs had four errors, each fixed in b528f4ee47:
+  - `chain_prefix`'s base case: `rfl` unfolded SHA-512's compression until the heartbeats ran out.
+  - `isSha512_sha512`: `simp` spelled out a 64-byte `List.ofFn`.
+  - `testBit_byte` lacked its last step, and `hash_chainW` had one step too many.
+- **Fixed on review, before a try reached them:** the comparator step in `Select.lean`, a field-notation error in `Leaf.lean`, and two lemmas Leaf read from RowSeg, now in Sha.
+- **Next try:** r20261107-222300-f75c on cpu-2 builds Sha, RowSeg, Leaf and Select at b528f4ee47 and prints the three statements' axioms. It is waiting for a Lean slot; I expect the result about 23:00Z.
+- **Statements unchanged:** `rowSegNet_spec (16 * H)`, `leaf_spec` (key `pinnedKey`) and `select_spec (hV : V < 2 ^ 32)` fit Tie's `hA`, `hB` and `hS` as they stand. MOEBIND: `hS` still needs `V < 2 ^ 32` from the caller.
+- **ETA:** A and B proved, with records and a PR stacked on #7838, by Sun 02:00Z if the next one or two rounds are clean.
