@@ -13,7 +13,7 @@
 #    its 256-thread block, FA3 still split), each uniform over those steps, drawn here before the replay starts
 #    (OUT/first_stage.json; a class with no step takes the window's nearest one above it up to BIG_MAX=1024 tokens, else
 #    the big class its largest one over 42 tokens); LONG=1 (the default) adds one uniform over the steps with a prefill row
-#    past LONG_KEYS=2048 keys and at most LONG_MAX=384 tokens (else the fewest-token such step up to BIG_MAX); STEPS
+#    and a row past LONG_KEYS=2048 keys, of LONG_TOKENS=256,384 tokens (else the largest such step under them); STEPS
 #    overrides it.
 # 2. replay.py replays the window from an empty engine, served as recorded, with capture.py loaded in every worker
 #    (REPLAY_ARGS are added to its arguments): those steps' interiors are recorded and committed, the coins drawn after the
@@ -92,15 +92,17 @@ for name, rng in (("small", small), ("big", big)):
     if steps:
         pick[name] = steps[int.from_bytes(coins[:32] if name == "small" else coins[32:], "big") % len(steps)]
 if os.environ.get("LONG", "1") == "1":
-    keys, most, cap = int(os.environ.get("LONG_KEYS", "2048")), int(os.environ.get("LONG_MAX", "384")), int(os.environ.get("BIG_MAX", "1024"))
-    longs = {s["step"]: tokens[s["step"]] for s in w["steps"] if any(int(r[2]) > 1 and int(r[1]) + int(r[2]) > keys for r in s["rows"])}
-    steps = sorted(s for s, n in longs.items() if n <= most)
-    classes["long"] = {"prefill_keys_over": keys, "tokens_max": most, "steps": len(steps), "any_tokens": len(longs)}
+    keys = int(os.environ.get("LONG_KEYS", "2048"))
+    lo, hi = map(int, os.environ.get("LONG_TOKENS", "256,384").split(","))
+    longs = {s["step"]: tokens[s["step"]] for s in w["steps"]
+             if any(int(r[2]) > 1 for r in s["rows"]) and any(int(r[1]) + int(r[2]) > keys for r in s["rows"])}
+    steps = sorted(s for s, n in longs.items() if lo <= n <= hi)
+    classes["long"] = {"prefill_and_keys_over": keys, "tokens": [lo, hi], "steps": len(steps), "any_tokens": len(longs)}
     if not steps:
-        near = sorted((n, s) for s, n in longs.items() if n <= cap)
+        near = sorted((-n, s) for s, n in longs.items() if n < lo)
         steps = [s for n, s in near if n == near[0][0]] if near else []
         if steps:
-            classes["long"]["nearest"] = {"tokens": near[0][0], "steps": len(steps)}
+            classes["long"]["nearest"] = {"tokens": -near[0][0], "steps": len(steps)}
     if steps:
         pick["long"] = steps[int.from_bytes(hashlib.sha512(coins + b"long").digest(), "big") % len(steps)]
 json.dump({"window_steps": len(tokens), "classes": classes, "coins": coins.hex(), "drawn_at": time.time(), "steps": pick,
