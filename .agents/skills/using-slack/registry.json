@@ -173,6 +173,7 @@
         "benchmarks/tc_probe_fp4/",
         "benchmarks/bool_build_cost/",
         "benchmarks/f32_exhaustive/",
+        "benchmarks/compile_cost/",
         "verity/ml/circuits/ops/",
         "integrations/vllm/verity_vllm/program/",
         "integrations/vllm/verity_vllm/query/",
