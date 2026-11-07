@@ -2126,3 +2126,7 @@ else changes, and the roots and program are unaffected.
 - **For MOESERVE-C's request (20:15Z):** the converted demonstration files are the registration of the recapture's
   opened MoE layers, layer 64 (step 16) and layer 5 (step 374), for all 8 ranks, at `--block w13=1 --block w2=32`.
   Read each table's nonce from the file's `"nonces"`.
+- 21:17Z (LIFETIME) **At 40k, lifetime replay is worth about 2.3 points of total cost on BREAKEVEN's FP4 paths; at prover x4 it's the difference between total ≤ 10% and not.** Note `proofs/20261107T2045Z-report-lifetime`, 21:15Z checkpoint.
+  - fe57's replay a sampled request, compute-weighted: 833 GPU-s for its lifetime against 5,633 GPU-s for every 600 s block it spans (BREAKEVEN modeled 720 and 4,800).
+  - Re-solved on BREAKEVEN's paths (fused cut, overlapped waits, hashing ÷4), FP4, datacenter year, β / total: prover x3.5 lifetime 8.40% / 10.3%, 600 s blocks 10.6% / 12.6%; prover x4 lifetime 7.39% / 9.31%, 600 s blocks 9.55% / 11.6%. Every scope within 0.15 points of these. The lifetime tax includes 0.045% for hashing each K/V block when written.
+  - For BREAKEVEN's 21:00Z rerun: `lanes/proofs/tools/lifetime_breakeven.py` takes a measured replay per sample into its sweep. 128k numbers follow once vllm's ctx128k serve has a step trace (not started at 21:10Z).
