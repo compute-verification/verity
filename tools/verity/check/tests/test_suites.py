@@ -229,7 +229,8 @@ def test_jobs_default_to_no_more_test_processes_than_available_memory_holds(tmp_
 
 
 def test_jobs_default_to_no_more_test_processes_than_the_runs_own_memory_limit_holds(tmp_path, monkeypatch):
-    """r20261019-045749-398f: an `--on auto` agent-test's 16 GiB scope on a node with 1.5 TB available started 32 processes."""
+    """The run's own memory limit, not the node's available memory, bounds the default jobs: an `--on auto` agent-test's
+    16 GiB scope on a node with 1.5 TB available would otherwise start 32 processes."""
     S = _suites(monkeypatch, tmp_path)
     monkeypatch.setattr(S, "cpus", lambda: 32)
     meminfo = tmp_path / "meminfo"
@@ -851,9 +852,9 @@ def _env_workspace(root: Path, members: dict[str, str]) -> None:
 
 
 def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_prefix(tmp_path):
-    """Inside a `research run`, the run's RESEARCH_* and the machine's PYTHONPYCACHEPREFIX reached the tests, which check's steps
-    never get: test_remote_cwd's inner run inherited the prefix and wrote no bytecode where it looked (r20261008-010104-2b69,
-    passing with the prefix unset in r20261008-010441-bb7b). A VERITY_ switch still reaches them."""
+    """Inside a `research run`, the tests get neither the run's RESEARCH_* nor the machine's PYTHONPYCACHEPREFIX, which check's
+    steps never get either: an inner run that inherits the prefix writes no bytecode where test_remote_cwd looks for it. A
+    VERITY_ switch still reaches them."""
     root = tmp_path / "tree"
     _env_workspace(root, {"pkg": "import os\n\ndef test_env():\n    assert os.environ.get('VERITY_SWITCH') == '1'\n"
                                  "    assert not [k for k in os.environ if k.startswith('RESEARCH_') or k == 'PYTHONPYCACHEPREFIX']\n"})
@@ -863,9 +864,9 @@ def test_the_tests_get_neither_the_runners_research_variables_nor_its_pycache_pr
 
 
 def test_inside_a_research_run_the_tests_get_its_custody_key_and_require_the_store(tmp_path):
-    """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch skipped as "the evidence store is not
-    reachable" here and passed under a bare pytest (r20261024-030225-1ea6). With the run's custody key staged they get it as
-    check's steps do, and the store is required; with none, neither."""
+    """The tests lose RESEARCH_*, the machine's store among them, so a fixture fetch would skip as "the evidence store is not
+    reachable" here and pass under a bare pytest. With the run's custody key staged they get it as check's steps do, and the
+    store is required; with none, neither."""
     root = tmp_path / "tree"
     run = tmp_path / "research" / "runs" / "r1"
     custody = tmp_path / "research" / "requests" / "r1" / "custody"
@@ -1795,8 +1796,9 @@ def test_a_parallel_suite_starts_the_test_its_kept_pass_says_is_longest(tmp_path
 
 
 def test_a_run_of_some_files_starts_the_longest_test_it_collects(tmp_path):
-    """The guard got the suite's `workers` longest kept tests, and a run of some of its files collected none of them: a sixth of
-    verity-vllm's files (r20261025-202541-cb5f) ran its own longest two back to back on one worker while three sat idle."""
+    """The guard gets more of the suite's longest kept tests than its `workers` (`HEAVY_CANDIDATES`), so a run of some of its
+    files that collects none of the `workers` longest still starts its own longest at the workers' heads, rather than two
+    back to back on one worker while the others sit idle."""
     import json
 
     root, tests = tmp_path / "tree", tmp_path / "tree" / "pkg" / "tests"
@@ -1850,7 +1852,7 @@ def test_a_parallel_suite_that_declares_worker_gb_runs_as_many_workers_as_mem_gb
     assert S.wide_workers(heavy, 69, 350) == 21 and S.wide_workers(heavy, 8, 350) == 8 and S.wide_workers(heavy, 69, 10) == 1
     assert S.wide_workers(heavy, 69, None) == 69, "no --mem-gb: the lane's processes"
     assert S.wide_workers(S.Suite("light", "l", (), (), parallel=True), 69, 350) == 350 // S.TEST_PROCESS_GB, \
-        "no worker_gb: TEST_PROCESS_GB each (r20261016-140947-47fc: pous_check's undeclared workers reached 11 GB)"
+        "no worker_gb: TEST_PROCESS_GB each (pous_check's undeclared workers can reach 11 GB)"
 
 
 def test_parallel_suites_share_what_mem_gb_leaves_beside_the_one_process_suites(tmp_path, monkeypatch):
@@ -2006,7 +2008,7 @@ def test_a_failure_red_on_main_is_reported_failed_and_says_whether_it_failed_for
 
 def test_a_report_a_dying_pytest_left_empty_or_cut_short_is_no_report(monkeypatch, tmp_path):
     """A suite whose pytest dies in its session finish leaves its report empty or half-written; reading it must not raise,
-    which took the invocation's other suites down before they reported (r20261027-114144-e99b)."""
+    which would take the invocation's other suites down before they report."""
     S = _suites(monkeypatch, tmp_path)
     report = tmp_path / "report.json"
     assert S.read_report(report) is None
