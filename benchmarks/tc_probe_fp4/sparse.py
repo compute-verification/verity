@@ -297,7 +297,7 @@ def families(rng, n_random: int, instr: str):
     families are k64 NVF4 atoms with 32 zero lanes on both operands (A's and B's zeros on the unselected pairs; one scale per 32
     logical columns, so each atom's four 16-column scales come in equal pairs): ``noise_atom_single`` holds one atom in logical
     columns 0..63 and zeros after it (twin ``dense_atom``: the dense instruction on the atom), ``noise_atom_pair`` two atoms
-    (twin ``dense_two_atoms``: two dense MMAs, the atoms in order).  Then families with metadata drawn per row and chunk (the shared
+    (twin ``dense_two_atoms``: two dense MMAs, the atoms in order).  Then families with metadata sampled per row and chunk (the shared
     metadata never exercises the per-row gather)."""
     sk = SCALE_KIND[instr]
     nb = NBLK[instr]

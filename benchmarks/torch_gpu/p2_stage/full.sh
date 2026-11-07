@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The whole encoded store through the staging decode on the demo card (full.py), in place and read only, from build.sh's
+# The whole encoded store through the store's load on the demo card (full.py), in place and read only, from build.sh's
 # lib, the weights manifest with digests memory-accounting held W to, and the store's layout; cwd = the source
 # tree's root:
 #
@@ -17,7 +17,7 @@
 # MANIFEST_SHA256 and to the store's own record of it, the store's setup and record copied out; with RECEIPTS=1, the
 # receipts' and sha512_rows' kernels built for ARCH (default 90a). Under one untimed lease of at most LEASE_MIN minutes
 # (default 20), refused if it could reach one of QUIET's periods: full.py, every tensor of LAYERS (default all 52
-# layers and the head) staged and held to the manifest's SHA-256, with RECEIPTS=1 the bandwidth audit's pass beside it
+# layers and the head) loaded and held to the manifest's SHA-256, with RECEIPTS=1 the bandwidth audit's pass beside it
 # (`--receipts`, its σ, y and salts kept in scratch), then GEMM_LAYER's matrices (default 51; empty for none) through
 # the exact W8A8 GEMM at each batch of M (default 16384). After the lease, niced on half the host's cores: check.py on the GEMM's
 # samples and SAMPLE blocks of every tensor (default 128; 0 skips it) against P2's reference, and with RECEIPTS=1

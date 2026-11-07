@@ -15,7 +15,7 @@ the router's row ``o{TOPK + k}``, ``g`` its row ``o{k}``, and ``w`` and ``ws`` t
 
 * the cut computes the gather form: the router's slots, the reads of the experts they name and the per-expert GEMMs over the
   rows read are `MoeExpertFp8Gemm(W)_v1` over the whole stack, at small statics; a row read at another expert does not open;
-* the window interface takes it at GLM-5.3's TP8 statics: each template is a proof block C-Flock composes
+* the window interface takes it at GLM-5.3's TP8 statics: each template is a proof block Flock composes
   (`check_proof_block`), the wires and declarations check (`Circuit`), a window commits its tables, and with the tables'
   parameters pinned the free input bits are the router's logits and bias and the GEMMs' activations alone, which the served
   circuit wires from the blocks before; unpinned, the openings are free too.

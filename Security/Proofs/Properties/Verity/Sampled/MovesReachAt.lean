@@ -7,7 +7,7 @@ public import Proofs.Properties.Verity.Sampled.SampleNamed
 # `MovesReach` at the deployment
 
 `couplingTarget_assembled_src`'s `hM` at the deployment's constructions (`movesReachAt`), at the coupling's cut (v2's
-read of the log is the device's, and v2 draws at the strategy's digest `afterAt`, `SampledDigest`): the readings and
+read of the log is the device's, and v2 samples at the strategy's digest `afterAt`, `SampledDigest`): the readings and
 the decoders at the session's layout (`readingAt`, `decodersAt`), the sample-coupled coin map under `fieldEnc` at the
 family v2's parameters name (`labelAt`), the digest `afterAt` and the session's bytes as `MAX_COINS` fresh frames
 (`srcCoinsAt`), the deployed session's sample (`deployedLb`).

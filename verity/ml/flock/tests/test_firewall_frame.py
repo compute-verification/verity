@@ -1,8 +1,8 @@
 """The outer ZK server's frame (`Flock/Firewall/Frame.lean`, `flock-firewall frame`, live PROTOCOL.md §10.1) on hand-made reps.
-At its start the frame draws the rep's randomness from the OS and commits it: the pads `h` (with `h_ab = h_a h_b` and the
-triple's `w = x y`), `μ`, the rows' padding, `τ`'s salt and the pads tree's salts. It answers the pads' root alone, the draws
+At its start the frame samples the rep's randomness from the OS and commits it: the pads `h` (with `h_ab = h_a h_b` and the
+triple's `w = x y`), `μ`, the rows' padding, `τ`'s salt and the pads tree's salts. It answers the pads' root alone, the samples
 never leaving it, and a start that brings any of them is refused. The tests that need the pads run the same frame as
-`flock-frame-tape`, which reads the draws from a file the test writes in place of the OS's bytes, and read the pads from that
+`flock-frame-tape`, which reads the samples from a file the test writes in place of the OS's bytes, and read the pads from that
 file as the frame does (`Draws.ofBytes`). Each value absorbed in a masked phase leaves as `v + h_i` under the next pad of `zk_veil::Layout::absorbed`'s
 order (written out here from the layout's index formulas), the pads' label and root follow the zerocheck's label, the domain
 frame stays home, everything outside the masked phases leaves as the device framed it, and a round that breaks the masking
@@ -112,8 +112,8 @@ def draw_bytes(lay: dict) -> int:
 
 
 class Frame:
-    """A rep's frame: `flock-frame-tape` on the draws `tape` (by default seeded bytes of the layout's size), whose pads it
-    reads as the frame does; or, with `os`, `flock-firewall frame`, which draws from the OS and sends only the root."""
+    """A rep's frame: `flock-frame-tape` on the samples `tape` (by default seeded bytes of the layout's size), whose pads it
+    reads as the frame does; or, with `os`, `flock-firewall frame`, which samples from the OS and sends only the root."""
 
     def __init__(self, lay=LAY, mask=None, start=None, tape: bytes | None = None, os: bool = False):
         path = None
@@ -295,7 +295,7 @@ def test_the_frame_draws_the_reps_randomness_sends_only_the_pads_root_and_refuse
 
 
 def test_the_frame_commits_the_draws_it_read_and_sets_h_ab_and_w_itself():
-    """`Draws.ofBytes` and `padsRoot`, through `flock-frame-tape`: the same draws give the same root; the draws' words at
+    """`Draws.ofBytes` and `padsRoot`, through `flock-frame-tape`: the same samples give the same root; the samples' words at
     `h_ab` and `w` are not read (the frame sets them to `h_a h_b` and `x y`), and the root commits `h`, `μ`, the rows'
     padding and the leaf salts; a read of any other size is refused."""
     s = slots(**LAY)

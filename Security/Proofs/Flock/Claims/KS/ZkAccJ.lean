@@ -420,7 +420,7 @@ theorem zkLiveJ_of_acc {x : Claims.Msg} (hl : ZkLiveAccJ x) : ZkLiveJ x :=
 
 /-- **Every masked table's bound at a statement in scope, with escapes on accepted runs**: at tables of full-width
 columns, where the statement parses in scope and sets up at least one table, `zk_tableBoundJAccAt_of_liveJ` at
-C-Flock ZK's padded tables (`zk_atTabs`). -/
+Flock ZK's padded tables (`zk_atTabs`). -/
 theorem zk_tableBoundJAccAt_live {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse true Readable.relation x = some s) (hin : Claims.Flock.InScope true s) {ins : Ins}
     {spec : SessionSpec} {sts : Array Stmt} (hset : setupOf true x = some (ins, spec, sts)) (h0 : 0 < sts.size)

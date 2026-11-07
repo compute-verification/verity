@@ -51,7 +51,7 @@ The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence
 
 * `x` decodes (`RecDeploy.decodeX`) to `w`, and `w`'s inner statement to Flock's plain statement `ri`
   (`FlockDeploy.decode`);
-* `InnerNames`: `ri` is the inner session `innerHeld` reads: the inner circuit, public file and draw are the blobs the
+* `InnerNames`: `ri` is the inner session `innerHeld` reads: the inner circuit, public file and sample are the blobs the
   verifier's own digests name (`Own`), its partition and program the verifier's own, its statement `INNER_STATEMENT`
   without `--coins` (a seed's, as `Raw.ins` reads a plain statement) at one table with no lookup table, `--stratified` at the population the verifier's partition and
   program give (`HmRow.stratifiedLaw` at `K = 1`, as the compiled `innerOk` sets it up) and none of `verify`'s other
@@ -60,7 +60,7 @@ The compiled component (`VStar.Recursive.checkBlobs`) reads parameters, evidence
 * `PartNames`: one part per part of the verifier's, part `j`'s raw statement the one `partVerdict` runs: its circuit
   the part's circuit blob, its form `PartForm` (statement `STATEMENT` under `--zk` at one table), the part's partition,
   program and registered reads, the part's own bindings (`PartX.bindings`) the verifier's bindings of that part, and
-  its draw the one compiled part `j` reads off the part's record blob. The part's public file and V*'s shared rows are
+  its sample the one compiled part `j` reads off the part's record blob. The part's public file and V*'s shared rows are
   the staged ones (`Stage.pub`, `Stage.rows`), which `PartStatement` and `RowsShow` relate to the run.
 
 `readX_of_names`: where the component's inner session is held (`innerHeld`), V*'s list at its shape has one statement
@@ -124,8 +124,8 @@ def PartForm (b : FlockDeploy.Raw) : Prop :=
 
 /-- **Part `j`'s statement is the one the component's part `j` runs**, but for its staged public file and the staged
 shared rows: its circuit, form, partition, program and registered reads `po`'s, its own bindings `po`'s bindings, and its
-draw the one compiled part `j` reads off its record `pp.record` (`if tags.hm96Rows then Witness.recordDraw record else
-none`, at the part's tags), as the model's `Raw.ins` reads a draw. Its public file is the one the component reads for
+sample the one compiled part `j` reads off its record `pp.record` (`if tags.hm96Rows then Witness.recordDraw record else
+none`, at the part's tags), as the model's `Raw.ins` reads a sample. Its public file is the one the component reads for
 part `j` (`publicFile`; the model's part session replaces it with the staged one), and each parsed field's bytes are the
 canonical bytes of what the component read (`partitionB`, `registeredB`, `bindingsB`, `drawB`). -/
 structure PartNames (po : VStar.Recursive.PartOwn) (pp : VStar.Recursive.PartProof) (bs : Core.Blobs) (j : ℕ)
@@ -161,8 +161,8 @@ def Names (p : VStar.Recursive.Params) (e : VStar.Recursive.Evidence) (bs : Core
     ∀ j q po pp, w.parts[j]? = some q → p.own.parts[j]? = some po → e.proofs.parts[j]? = some pp →
       PartNames po pp bs j q
 
-/-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`: Flock's plain setup with the draw, partition
-and program, its scope check, a draw, the header's draw at one table), which `Names` reads. The compiled `innerHeld`
+/-- **Flock's own checks on the inner statement** (`RecDeploy.innerOk`: Flock's plain setup with the sample, partition
+and program, its scope check, a sample, the header's sample at one table), which `Names` reads. The compiled `innerHeld`
 runs them as `VStar.Recursive.innerOk`, at `--stratified` the population the verifier's partition and program give
 (`InnerNames.stratified`), so its acceptance gives it (`RefusalsOf.innerOkAt_of_compiled`). -/
 def InnerOkAt (x : Msg) : Prop := ∀ w, decodeX x = some w → innerOk w.inner = .ok ()
