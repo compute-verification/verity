@@ -1,0 +1,88 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "partition",
+ "model": "GLM-5.3",
+ "status": "modeled",
+ "provisional": true,
+ "source": "GLM-5.3's MoE cut per expert at its TP8 statics (the circuit glm53-moe-per-expert): the router's slots, one output field a slot; each slot's w13 and w2 rows and scales read from tables registered one expert a row (EmbeddingRead_v1 at the leaf the router's committed slot index names); per-expert GEMMs over the rows read. Units a token are 75 layers x 8 slots on each of 8 ranks; ANDs and staged k_log as circuit-check reports them at those statics; output bits from each Definition's outputs (a read's h, H 16-bit words, and ok; a GEMM's N bf16 words). The proof_overhead card measures its seven types under these names (one H200, the deployed prover, full statements), so Figure 1 prices them measured. Its Definitions and circuit are built and circuit-checked per block type (in review); the cut is not yet proved or served, and the expert's binding is proved for the read's reference, not yet for its gates.",
+ "runs": [
+  "r20261106-131055-0e29",
+  "r20261106-131003-3028"
+ ],
+ "owner": "@proofs",
+ "value": {
+  "name": "per-expert",
+  "label": "Definitions and circuit built and circuit-checked per block type (in review); h measured; not yet proved or served; the expert's binding proved for the read's reference, not yet for its gates",
+  "replaces": [
+   "MoeExpertFp8Gemm_v1",
+   "MoeExpertFp8GemmW_v1",
+   "MoeRouterSigmoidBias_v1"
+  ],
+  "strata": [
+   {
+    "block": "MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={\"f64\":\"0x1.4000000000000p+1\"},KERNEL=\"block\"}",
+    "kind": "MoeRouterSigmoidBiasSlots_v2",
+    "per_token": 600,
+    "macs": 0,
+    "out_bits": 512,
+    "ands": 8324843,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=3072}",
+    "kind": "EmbeddingRead_v1",
+    "per_token": 2457600,
+    "macs": 0,
+    "out_bits": 49153,
+    "ands": 4974722,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=96}",
+    "kind": "EmbeddingRead_v1",
+    "per_token": 19200,
+    "macs": 0,
+    "out_bits": 1537,
+    "ands": 1829335,
+    "k_log": 23
+   },
+   {
+    "block": "MoeExpertFp8BlockGemm_v4{K=6144,N=1,G=128,KB=128,SWAP=false,DOT={\"fn\":\"HopperE4m3MmaV2Dot32_v2\"}}",
+    "kind": "MoeExpertFp8BlockGemm_v4",
+    "per_token": 2457600,
+    "macs": 6144,
+    "out_bits": 16,
+    "ands": 2196306,
+    "k_log": 24
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=4096}",
+    "kind": "EmbeddingRead_v1",
+    "per_token": 921600,
+    "macs": 0,
+    "out_bits": 65537,
+    "ands": 6065561,
+    "k_log": 25
+   },
+   {
+    "block": "EmbeddingRead_v1{V=256,H=4}",
+    "kind": "EmbeddingRead_v1",
+    "per_token": 230400,
+    "macs": 0,
+    "out_bits": 65,
+    "ands": 1768575,
+    "k_log": 23
+   },
+   {
+    "block": "MoeExpertFp8BlockGemmW_v4{K=256,N=32,G=128,KB=128,SWAP=true,DOT={\"fn\":\"HopperE4m3QgmmaDot32_v2\"}}",
+    "kind": "MoeExpertFp8BlockGemmW_v4",
+    "per_token": 921600,
+    "macs": 8192,
+    "out_bits": 512,
+    "ands": 2262976,
+    "k_log": 24
+   }
+  ]
+ },
+ "art": "art:503a55396a396466f27ee52c7dae7186470fc09c0d769e206616aa86468e8936"
+}

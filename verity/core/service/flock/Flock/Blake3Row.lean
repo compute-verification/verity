@@ -8,6 +8,7 @@ port's row digest. Regions: every compression's counter, block length and flags;
 module
 
 public import Flock.RowLeaf
+public import Flock.FV3
 
 @[expose] public section
 

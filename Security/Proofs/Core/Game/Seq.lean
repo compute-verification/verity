@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Core.Game.Runs
+import Mathlib.Tactic.Positivity.Finset
 public import Definitions.Core.Game.Seq
 
 /-!

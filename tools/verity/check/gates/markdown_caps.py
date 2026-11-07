@@ -1,19 +1,21 @@
-"""The Markdown caps as a landing gate: no change leaves a Markdown file over its cap (`tests/test_repository.py`'s
-`markdown_cap`, the rule `test_markdown_size_caps` holds the tree to).
+"""The Markdown caps as a warn gate: a change that leaves a Markdown file over its cap (`tests/test_repository.py`'s
+`markdown_cap`, the rule `test_markdown_size_caps` holds the tree to) is named, with how far over and the fix, and lands all
+the same.
 
     python3 tools/verity/check/gates/markdown_caps.py BASE TOP [--json]
 
 Only the change's own effect is judged, against the commit below it: when TOP is the queue's merge of a PR (two parents, a
 ``Queue: #N`` subject: `research.queue._message`), its first parent, the tip of `next` it merged onto; else TOP's merge base
-with BASE.  Each ``.md`` file that differs between the two (deletions aside) is refused when it is over its cap in TOP and the
+with BASE.  Each ``.md`` file that differs between the two (deletions aside) fails when it is over its cap in TOP and the
 change put it there: it was within the cap (or absent) below, or it grew.  One already over below that doesn't grow passes,
-with a note, so a file over its cap on `main` or in a member below never refuses every PR above it.  The caps and fixes are
+with a note, so a file over its cap on `main` or in a member below is never laid on every PR above it.  The caps and fixes are
 BASE's ``tests/test_repository.py`` (read with ``git show`` and run with the standard library alone), so a change can't raise
 its own cap.
 
-The merge queue runs `main`'s copy of it as a landing gate (drive.toml's ``landing_gates``): on a PR's head at
-`research queue ready`'s preflight, and at the sync on the PR's merge onto `next`, where the members below add their bytes too
-(a merge over its cap fails the after-landing run at `preflight-lints`).  Before marking a branch, run ``python3 tools/verity/check/gates/markdown_caps.py origin/main HEAD``.
+The merge queue runs `main`'s copy of it as a warn gate (drive.toml's ``warn_gates``), which keeps no PR out: on a PR's head at
+`research queue ready`'s preflight, which prints its failure as a warning, and at the sync on the PR's merge onto `next`, where
+the members below add their bytes too, which drive tells the PR's owner once a head, to trim in their next PR.  Before marking
+a branch, run ``python3 tools/verity/check/gates/markdown_caps.py origin/main HEAD``.
 Exit 0 when no change puts a file over its cap, 1 when one does (with the fix), 2 on a usage or git error; ``--json`` prints
 `KIND`.
 """

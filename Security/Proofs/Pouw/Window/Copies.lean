@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Pouw.Window
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The service's units read the tile, not the session: its wrong sets are copy-closed

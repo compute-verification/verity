@@ -259,7 +259,7 @@ PROFILE_B1_EAGER_V2 = Vocabulary(
 # UNFUSED under the eager batch-invariant profile when a model's norm is `forward_native` (`ir.ops.rms_norm` / `fused_add_rms_norm` as
 # an ATen chain on an f32 copy), its activation is GeGLU, its attention has a logit soft cap, or its logits are soft-capped. Every kind
 # is op-shaped (an ATen CUDA kernel on a bf16 / f32 row, a Triton reduction, a softcapped FA2 head) — nothing here names a model; the
-# Definitions live in `verity.ml.definitions.registry.dense` (promoted from `quarantine.dense`, the X-08 pattern: same name / version / body, so the
+# Definitions live in `verity.ml.definitions.registry.dense` (promoted from `quarantine.dense` with the same name, version and body, so the
 # specialization ids the accepted `GEMMA2_2B` record resolved to are unchanged). `rules/vllm_bindings.py` asks for them. ----------------
 def _dense_kinds() -> tuple[dict, dict]:
     from verity.ml.definitions.registry import dense as DN

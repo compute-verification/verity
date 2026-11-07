@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Refine.LiveSim
-public import Proofs.Flock.Soundness.Discharge.Exec.Tables
+public import Proofs.Flock.Soundness.Refine.Regions
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # Pieces of `DecodesAll`: the aligned tape and the cap

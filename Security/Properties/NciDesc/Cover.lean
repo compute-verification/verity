@@ -9,8 +9,8 @@ public import Properties.NciDesc.Verdict
 /-!
 # A verdict of compliance of the check of record carries the cover theorem's factor
 
-`CoverTrained` is `Nci.Cover.Guarantees.CoverTraining`'s conclusion on a verdict, at the gate budget
-`c = gamma` and the fresh-input budget `k = α c`, `α = num / den`, in the shape of `Properties.Nci.Threads`'s
+`CoverTrained` is `Nci.Cover.Guarantees.CoverTraining`'s conclusion on a verdict, multiplied out by the gate budget
+`c = gamma`, at the fresh-input budget `k = α c`, `α = num / den`, in the shape of `Properties.Nci.Threads`'s
 statements: its premises on the reference training circuit's bit view (`UpdateHardness`, the upstream certificate
 `MulBlocks.Upstream`) and on the registered information (`ThetaRegistered`) are named assumptions, which the check
 does not see.
@@ -34,8 +34,8 @@ open Flock.Program (Prog)
 /-- When the verdict `out` on `j` has `complies` `true`, every declaration `d` the Program lays out with the registered
 information `theta` names, containing a reference training circuit `r` with none of its fresh input registered
 (`ThetaRegistered`), pays the cover theorem's factor at `c = gamma`, `α = num / den` and `k = α c`,
-`α₀ b c size(r) ≤ (k² + b k) size(d)` (`Nci.Cover.Guarantees.CoverTraining`'s conclusion, under its premises
-on `r`'s bit view). -/
+`α₀ b c size(r) ≤ (k² + b k) size(d)` (`c` times `Nci.Cover.Guarantees.CoverTraining`'s conclusion
+`α₀ b size(r) ≤ (α² c + b α) size(d)`, under its premises on `r`'s bit view). -/
 def CoverTrained (j out : Json) : Prop :=
   ∀ (i : Instance) (P : Prog) (d : Verity.RegisteredCircuit),
     Parses j i → Flock.Program.decode i.program.toUTF8 = .ok P → LaysOut P d.D → Names i.theta d.θ →

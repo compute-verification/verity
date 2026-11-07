@@ -25,7 +25,7 @@ import numpy as np
 
 from verity.ml.circuits.evaluation.batch import type_dtype, type_shape
 from verity.ml.definitions.evidence import EVIDENCE
-from verity.ml.definitions.numerics.kernel_registry import Declined, prim_static, register
+from verity.ml.definitions.numerics.kernel_registry import Declined, prim_static, register, register_rows
 from verity.ml.definitions.numerics.moe_router_rows import moe_router_topk
 from verity.ml.definitions.numerics import value_rows as VR
 
@@ -781,10 +781,10 @@ for m, fn in ((softcap_rows, attention_softcap), (act_rows, act_rows.silu_mul_ex
               (batched_gemm_rows, batched_gemm_rows.batched_gemm)):
     _row(m.FAMILY, fn, ("out",), check_targets=m.check_targets)
 EVALUATOR_PROVENANCE[batched_gemm_rows.FAMILY] = batched_gemm_rows.PROVENANCE
-int8_rows.register_rows(EVALUATORS, _row)
+register_rows(int8_rows, EVALUATORS, _row)
 from verity.ml.definitions.numerics import marlin_moe_rows  # noqa: E402
 marlin_moe_rows.register_rows(EVALUATORS, _row)
-deepgemm_rows.register_rows(EVALUATORS, _row)
+register_rows(deepgemm_rows, EVALUATORS, _row)
 moe_align_rows.register_rows(EVALUATORS, _row)
 glm53_rows.register_rows(EVALUATORS, _row, _sample, EVALUATOR_PROVENANCE)
 cublas_gemm_rows.register_rows(EVALUATORS, _row, EVALUATOR_PROVENANCE)

@@ -117,7 +117,7 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
     w = window(9, 4)
     c = SR.commit(w, data(w), salt_key=bytes(32))
     idx = IX.index_doc(w.members, [[[0, 9, "r0", 3, 0, "model.layers.0.self_attn.rotary_emb", "0", 0, 768]], []], RUN)
-    win = SR.write(c, tmp_path, {"row": 101, "commitment": "vllm-v1"}, idx, registrar=R)
+    win = SR.write(c, tmp_path, {"row": 101, "commitment": "rows-sha512"}, idx, registrar=R)
     rec = json.loads((tmp_path / "registration.json").read_text())
     assert (rec["format"], rec["population"], rec["partition"], rec["window"]["kind"], rec["window"]["run"]) == (
         R.FORMAT, 13, w.partition_digest, "served", RUN)
@@ -153,7 +153,7 @@ def test_the_registration_is_cores_v1_record_over_served_domains(tmp_path):
 
 def test_the_index_is_the_provers_and_the_registration_binds_its_hiding_leaf(tmp_path):
     """``index.json`` names what was served (a request, its engine step, its token row), so the registration binds its
-    salted leaf and never a digest of it: the leaf opens under ``index-salt.bin``, a given salt fixes it, a fresh one or
+    hiding leaf and never a digest of it: the leaf opens under ``index-salt.bin``, a given salt fixes it, a fresh one or
     another index moves it, no public file holds the index's SHA-512, and the index and its salt are the owner's alone,
     a rewrite over a world-readable index included."""
     w = window(9, 4)

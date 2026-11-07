@@ -1,7 +1,10 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceRev1Gamma
 public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TileGamma
 
 /-!
 # γ against the honest kernel's `W_ref`, from the record's TT_OUT (staged)

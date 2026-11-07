@@ -44,9 +44,8 @@ theorem PartitionCovers : Guarantees.PartitionCovers := by
   refine ⟨completion P hP.boolean.fanin_pos, ⟨fun u => ⟨?_, hP.reads u⟩, ?_⟩, fun u => ⟨rfl, rfl⟩⟩
   · calc (P.gates u ∪ d.D.into (P.gates u)).card ≤ (P.gates u).card + (d.D.into (P.gates u)).card :=
           card_union_le _ _
-      _ ≤ c + univ.sup fun u => (d.D.into (P.gates u)).card := by
-          rw [hP.card u]
-          exact Nat.add_le_add_left (le_sup (f := fun u => (d.D.into (P.gates u)).card) (mem_univ u)) c
+      _ ≤ c + univ.sup fun u => (d.D.into (P.gates u)).card :=
+          Nat.add_le_add (hP.card u) (le_sup (f := fun u => (d.D.into (P.gates u)).card) (mem_univ u))
   · intro g hg
     have hi : d.D.isInput g = false := by
       cases h : d.D.isInput g

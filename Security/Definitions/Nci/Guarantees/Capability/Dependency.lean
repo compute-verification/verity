@@ -11,11 +11,7 @@ consumer's region) or **recomputed** (the block contains the consumer's required
 
 * `ImportOrRecompute`: served weight ≤ fresh bits + recomputed weight;
 * `RecomputeByGates`: recomputed weight ≤ gates / `g`, `g` the fewest required gates of a consumer;
-* `RecomputeByState`: no recomputation when it needs more updated state than the budget;
-* `WeightedProductCap`: a block's price-weighted products ≤ its held slot budget × its served weight.
-
-Together, for the uses of counted products: weighted products ≤ `h (k + c/g)`, or `h k` when recomputing is priced out.
-The bound degrades with the gate budget instead of failing at a threshold.
+* `RecomputeByState`: no recomputation when it needs more updated state than the budget.
 -/
 
 @[expose] public section
@@ -47,13 +43,5 @@ consumer needs more, no proof block contains a consumer's required gates: every 
 def RecomputeByState : Prop :=
   ∀ (R : Committed) {ι : Type} (W : Items R.d.D ι) {κ : Type} (K : Consumers R.d κ) (h : ℝ),
     HeldPriceAtMost R W h → K.RequiresState W h → ∀ (u : Fin R.d.n) (c : κ), ¬ K.G c ⊆ R.d.𝓘.gates u
-
-/-- **The weighted product cap.** Weight each counted product `(i, j)` by its slot's price times its use's weight. If every
-proof block holds slots priced at most `h`, a proof block's weighted products are at most `h` times the weight of the uses
-it serves. The uses it serves are the consumers it finishes in `Consumers.ofUses`. -/
-def WeightedProductCap : Prop :=
-  ∀ (R : Committed) (B : Nci.Covering.MulBlocks R.d) (W : Items R.d.D (Fin B.nw)) (ω : Fin B.nt → ℝ) (h : ℝ),
-    SlotsRead B W → (∀ j, 0 ≤ ω j) → HeldPriceAtMost R W h →
-    ∀ u, ∑ q ∈ completedIn B (R.d.𝓘.gates u), W.price q.1 * ω q.2 ≤ h * ∑ j ∈ served B (R.d.𝓘.gates u), ω j
 
 end Nci.Guarantees

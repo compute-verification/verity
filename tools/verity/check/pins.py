@@ -131,6 +131,8 @@ PINS = (
         "Security/Proofs"),
     Pin("verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json", "inputs", "",
         "bash verity/core/protocols/sampled_proofs/tests/lean/generate.sh", "Security/Proofs"),
+    Pin("verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_two_lean.json", "inputs", "",
+        "bash verity/core/protocols/sampled_proofs/tests/lean/generate.sh", "Security/Proofs"),
     Pin("verity/ml/flock/tests/fixtures/inner_claims.json", "inputs", "",
         "bash verity/ml/flock/tests/lean/generate_inner_claims.sh", "verity/core/service/flock"),
     Pin("verity/core/protocols/pouw/tests/vectors/ncp_lean.json", "sources_sha256", "Security",
@@ -165,6 +167,8 @@ WRITERS = (
         ("template_instance_vectors.json", "test_template_instance.py"),
     )),
     Writer(VLLM_PROGRAM_TESTS + "data/sampling_split_digests.json", VLLM_PROGRAM_TESTS + "test_sampling_split.py"),
+    Writer("tools/verity/circuit_check/tests/fixtures/split/prims_serve.json",
+           "tools/verity/circuit_check/tests/test_split_prims_serve.py"),
 )
 #: the directories whose every test module with a ``--write`` is a `Writer`'s (`tests/test_pins.py`)
 WRITER_DIRS = (CIRCUITS_TESTS, VLLM_PROGRAM_TESTS)

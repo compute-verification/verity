@@ -4,29 +4,30 @@ public import Proofs.Flock.Soundness.Refine.LiveCompiled
 public import Proofs.Flock.Soundness.Discharge.Exec.HeadlineL
 
 /-!
-# R11 for one-table sessions: the live audit simulated in the salted audit
+# The refinement for one-table sessions: the live audit simulated in the salted audit
 
-`ExecRefines` (`Event.lean`) is R11 at one strategy pair. This file proves it, with `bad = ⊥`, for the live audit whose
-session is one table's live session (`liveTable`, the challenger with retained round bytes, `Refine/Live.lean`) written
-out as a session directory by `wr`, against the audit with the salted session `batchedSessionL` on one-table plans. What
-it takes is `Decodes` (`Refine/LiveSim.lean`) at each draw and registration: on every live outcome flock-verify
-accepts, each rep's game runs on the tape decoded from its stream and its proof file, and the salted table's verdict on
-those runs holds.
+`ExecRefines` (`Event.lean`) is the refinement at one strategy pair. This file proves it, with `bad = ⊥`, for the live
+audit whose session is one table's live session (`liveTable`, the challenger with retained round bytes,
+`Refine/Live.lean`) written out as a session directory by `wr`, against the audit with the salted session
+`batchedSessionL` on one-table plans. What it takes is `Decodes` (`Refine/LiveSim.lean`) at each draw and registration:
+on every live outcome flock-verify accepts, each rep's game runs on the tape decoded from its stream and its proof file,
+and the salted table's verdict on those runs holds.
 
 * `sessionBL_one`: the salted session on one table is `modelTable`'s shape, with the reps of `tableAfterL` and the
   output `[tableOutL …]`.
 * `live_le_sessionBL`: against any live prover of `liveTable`, the live verdict is no likelier than the salted
   session's acceptance against the simulated prover (`live_le` at `sessionBL_one`).
 * `simAudit`, `execRefines_one`: the audit strategy built from a live one (the registration it sends, and at each draw
-  the simulated session strategy), and R11 at it, `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL …)) …`.
+  the simulated session strategy), and the refinement at it,
+  `ExecRefines … (LiveAccepts I) ⊥ (audit … (batchedSessionL …)) …`.
 * `Prog.flock_headline_live`: `Prog.flock_headline_execL` with `hRef` discharged by `execRefines_one`. For one-table
   plans and the live session `liveTable` written by `wr`, flock-verify accepts with at least `K` wrong units of the
   simulated prover's committed values with probability at most `miss(K) + ksAvgStrict + linkBoundE`, given `Decodes`.
 
-What R11 still needs past this: `Decodes` itself, which is deterministic (R11b, the framing: the round bytes the coin
-server retains decode to the messages the proof files replay, and `wr` is the server's record); sessions of more than
-one table (the circuit prover's default is one, `--session-tables 1`); and that the challenger's session is `liveTable`,
-whose coins are uniform and drawn after each round's bytes (A6).
+What the refinement still needs past this: `Decodes` itself, which is deterministic (R11b, the framing: the round bytes
+the coin server retains decode to the messages the proof files replay, and `wr` is the server's record); sessions of
+more than one table (the circuit prover's default is one, `--session-tables 1`); and that the challenger's session is
+`liveTable`, whose coins are uniform and drawn after each round's bytes (A6).
 -/
 
 @[expose] public section
@@ -195,10 +196,10 @@ noncomputable def simAudit (hdec : DecodesAll H E Lf T I wr opn dec one fin capO
       (Strategy.ofMap (wr (L.draw ω) τ.1) _
         (Strategy.ofMap (fun t => (τ.1, L.draw ω, t)) _ (τ.2 ω)))))⟩
 
-/-- **R11 for one-table sessions.** Against any live prover `τ` of the live audit whose session is `liveTable` written
-out by `wr`, flock-verify's acceptance is no likelier than the salted audit's acceptance against the simulated prover
-`simAudit … τ`, with no live event added (`bad = ⊥`), whenever the decoder is right on accepted sessions
-(`DecodesAll`). -/
+/-- **The refinement for one-table sessions.** Against any live prover `τ` of the live audit whose session is
+`liveTable` written out by `wr`, flock-verify's acceptance is no likelier than the salted audit's acceptance against the
+simulated prover `simAudit … τ`, with no live event added (`bad = ⊥`), whenever the decoder is right on accepted
+sessions (`DecodesAll`). -/
 theorem execRefines_one (hdec : DecodesAll H E Lf T I wr opn dec one fin capOf)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) :
     ExecRefines (auditLive L Reg (liveOf dg mPts N wr)) τ (LiveAccepts I) (fun _ => False)

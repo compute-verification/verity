@@ -1,6 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Tables.Steps
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The simulation of a session of `J` tables (the transfer, R11c, at `--session-tables J`)

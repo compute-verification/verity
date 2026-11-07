@@ -5,7 +5,7 @@ template's parameter leaves as its input gates. `lean_rows` restates `RowCircuit
 about those tables, so this test and the pinned descriptor digests are what tie them to the Programs. Unlike the tile's
 check (`test_circuit_tile_lean.py`) this one reads each gate's operand order and constants from the template's own gates,
 since `CallGraph` keeps neither. Each primitive's semantics is the trusted step: core's are `RowOps`' fields, PoUW's are
-`RowPrims` (held to `verity.core.protocols.pouw.circuit.words` by `test_row_prims_lean.py`), the atoms are `p.step` and `nvf4Word`, and
+`RowPrims` (held to `verity.ml.protocols.pouw.circuit.words` by `test_row_prims_lean.py`), the atoms are `p.step` and `nvf4Word`, and
 `F32Add_v2` is `f32Add`."""
 from __future__ import annotations
 
@@ -17,8 +17,8 @@ from verity.ml.circuits import Program
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.cut import WIRING, CallGraph, call_scope
 
-pc8 = pytest.importorskip("verity.core.protocols.pouw.circuit.pc8", reason="the row templates are `verity.core.protocols.pouw.circuit.pc8`'s")
-pc4 = pytest.importorskip("verity.core.protocols.pouw.circuit.pc4", reason="the row templates are `verity.core.protocols.pouw.circuit.pc4`'s")
+pc8 = pytest.importorskip("verity.ml.protocols.pouw.circuit.pc8", reason="the row templates are `verity.ml.protocols.pouw.circuit.pc8`'s")
+pc4 = pytest.importorskip("verity.ml.protocols.pouw.circuit.pc4", reason="the row templates are `verity.ml.protocols.pouw.circuit.pc4`'s")
 
 #: each Lean `Prim` (its constructor) as the template's primitive id and width; `atom8` is the device's atom
 PRIMS = {"add": ("F32Add_v2", 32), "mul": ("F32Mul_v2", 32), "div": ("F32Div_v2", 32), "fma": ("F32Fma_v2", 32),

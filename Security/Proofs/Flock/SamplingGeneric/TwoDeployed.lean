@@ -1,6 +1,10 @@
 module
 
 public import Proofs.Flock.SamplingGeneric.Masked
+public import Definitions.Claims.SamplingTwo
+import Proofs.Flock.Masked
+import Proofs.Flock.SamplingGeneric
+import Proofs.Flock.SamplingGeneric.Two
 
 /-!
 # The two-stage compiler at the deployed sampled record

@@ -1,12 +1,12 @@
 module
 
-public import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # Pearl-C4 v2's accounting at an FP4 record (definitions only, staged)
 
 Pearl-C4 v2 is T1: the hot word's H is removed before the clean-up by one exact FP32 add per word, credited as forced
-clean-up (`pearlc4-domain-gamma.py`'s `hot = "credited"`). The v2 protocol isn't staged, so
+clean-up. The v2 protocol isn't staged, so
 these definitions fix only what its price twins read:
 * **The credit** (`creditFp4Hot d a s`): `creditFp4` plus the removal, `a` per word in FP4 units (`a = 2·FADD`). The
   cap is on this credit.
