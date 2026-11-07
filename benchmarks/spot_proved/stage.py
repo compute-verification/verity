@@ -193,23 +193,31 @@ def quant_instances(cap: Capture):
                        lambda r=r, e=e, t=t: [cap.tensor(r, e["out"]["output_q"])[t], cap.tensor(r, e["out"]["output_s"])[t]])
 
 
-def flashinfer_linear_instances(cap: Capture):
+def fp8_linear_instances(cap: Capture):
+    """The block-scaled FP8 linear per output word, on the branch vLLM takes at its row count M: FlashInfer's below 32 rows,
+    DeepGEMM's from 32 (deepgemm.py's module docstring), whose quantised row and scales, its inner
+    ``_C::per_token_group_fp8_quant``'s outputs, are outputs of its Definition too."""
     for r in cap.ranks:
+        quant = {x["parent"]: x for x in cap.events[r] if x["op"] == "_C::per_token_group_fp8_quant" and x.get("parent") is not None}
         for e in cap.events[r]:
             if e["op"] != "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm" or not cap.opened(e, weights=True):
                 continue
             a = e["in"]
             M, K = a["input"]["shape"]
-            if M >= 32 or "param" not in a["weight"]:
+            if "param" not in a["weight"] or (M >= 32 and e["seq"] not in quant):
                 continue
             N = a["weight"]["shape"][0]
-            block = f"FlashInferFp8Linear_v1{{K={K},N=1}}"
-            for t, col in cap.cells("FlashInferFp8Linear", (r, e["seq"]), cap.real_rows(r, M), N):
-                yield (f"FlashInferFp8Linear_K{K}", block, (r, e["seq"], t, col),
+            q = quant[e["seq"]] if M >= 32 else None
+            name = "FlashInferFp8Linear" if M < 32 else "DeepGemmFp8Linear"
+            block = f"{name}_v1{{K={K},N=1}}"
+            for t, col in cap.cells(name, (r, e["seq"]), cap.real_rows(r, M), N):
+                yield (f"{name}_K{K}", block, (r, e["seq"], t, col),
                        lambda r=r, e=e, t=t, col=col: [cap.tensor(r, e["in"]["input"])[t],
                                                        cap.tensor(r, e["in"]["weight"])[col:col + 1],
                                                        cap.tensor(r, e["in"]["weight_scale"])[col // 128:col // 128 + 1]],
-                       lambda r=r, e=e, t=t, col=col: [cap.tensor(r, e["out"]["ret0"])[t, col:col + 1]])
+                       lambda r=r, e=e, t=t, col=col, q=q: (
+                           [] if q is None else [cap.tensor(r, q["out"]["output_q"])[t], cap.tensor(r, q["out"]["output_s"])[t]])
+                       + [cap.tensor(r, e["out"]["ret0"])[t, col:col + 1]])
 
 
 def moe_w2_instances(cap: Capture, profile):
@@ -235,7 +243,7 @@ def moe_w2_instances(cap: Capture, profile):
             for j, col in cap.cells("MoeExpertFp8GemmW", (r, e["seq"]), cap.real_rows(r, S), N):
                 yield (label, spec, (r, e["seq"], j, col),
                        lambda r=r, e=e, j=j, col=col: moe_args(cap, r, e, j, col),
-                       lambda r=r, e=e, j=j, col=col, topk=topk: [cap.tensor(r, e["out"]["C"]).reshape(-1, topk, N)[j // topk, j % topk, col:col + 1]])
+                       lambda r=r, e=e, j=j, col=col, topk=topk, N=N: [cap.tensor(r, e["out"]["C"]).reshape(-1, topk, N)[j // topk, j % topk, col:col + 1]])
 
 
 def moe_args(cap: Capture, r: int, e: dict, j: int, col: int) -> list:
@@ -642,7 +650,7 @@ def main() -> int:
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {}}
     pops: dict[str, list] = {}
     unstaged: dict[str, dict] = {}
-    sources = [quant_instances(cap), flashinfer_linear_instances(cap), moe_w2_instances(cap, profile),
+    sources = [quant_instances(cap), fp8_linear_instances(cap), moe_w2_instances(cap, profile),
                fused_ar_norm_instances(cap), allreduce_instances(cap, unstaged), cublas_instances(cap, profile, unstaged),
                fused_add_rms_norm_instances(cap),
                mla_combine_instances(cap), mla_split_part_instances(cap)]
