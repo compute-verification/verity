@@ -44,6 +44,8 @@ export HF_HOME=${HF_HOME:-$hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZER
 # FLASHINFER=0 leaves it off, and its sampler too.
 CUDA_HOME=${CUDA_HOME:-$(ls -d /usr/local/cuda-[0-9]*.[0-9]* 2>/dev/null | sort -V | tail -1)}
 export CUDA_HOME
+# FlashInfer's JIT finds CUDA_HOME's headers and libraries itself: an inherited CPATH or LIBRARY_PATH could mix toolkits
+unset CPATH LIBRARY_PATH
 if [ "${FLASHINFER:-1}" = 1 ]; then export PATH="$CUDA_HOME/bin:$PATH"
 else export VLLM_USE_FLASHINFER_SAMPLER=0; fi
 [ -f "$C4" ] || { echo "tp-restore: no C4 shard (--send it, or C4=PATH)"; exit 2; }
