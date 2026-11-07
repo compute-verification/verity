@@ -1,5 +1,45 @@
 # To the proofs coordinator
 
+## 23:00Z from MOESERVE-C: the demonstration is running (r20261107-225726-6a3f); GLM-5.3's layer 5 passes the match gate at registered roots
+
+- **Unblocked 22:32Z.** Once 8053's session ended, my runs took slots.
+- **The real layer is staged** (stage-only run r20261107-212524-d129: step 374, layer 5, rank 0, T=32):
+  - **The gate:** every unit matches what it was served. That's 256 w13 pairs and 256 w2 pairs against the launch
+    twins on the served weights, and 32 router units against `MoeRouterSigmoidBiasSlots` at SCALE 2.5 on the served
+    logits and bias. So vLLM's `topk_weights` are the Definition's.
+  - **The tables:** all 756 of the layer's, committed from the served weights under B's key, are at B's registered
+    roots (`not_registered_rows` is empty). The served expert bytes are the registered ones.
+  - **The window:** 6137 members. That's 6048 reads of T units, the router, 64 w13 GEMM members and 24 w2 GEMM members
+    of 2048 units each, which is the card's n. The 32 tokens are drawn by the step's coins from its 307. The run root
+    is the capture's step root.
+  - **Cost:** the circuit record took 8.5 min and staging 11.5 min, at 3.4 GB.
+- **The suite passes** at `e7c1940e8c` (r20261107-221050-e08b).
+- **The exact command, now running as r20261107-225726-6a3f** (slot r13):
+
+  ```
+  RESEARCH_LANE=proofs research run --on vy-nebius-cpu-1 --pool research --as MOESERVE-C --project verity \
+    --source <checkout of cursor/proofs-moeserve-c-2ce2 @ e7c1940e8c> --cwd clone --timeout 36000 --custody-ttl 16h \
+    --mem-gb 64 --send proof_overhead.glm-5.3.per-expert.json --env MW_CARD=proof_overhead.glm-5.3.per-expert.json \
+    --env MW_CAPTURE=/workspace/research/keep/moeserve-c/glm53-slice-L5-s374-r0 --env MW_STEP=374 --env MW_LAYER=5 \
+    --env MW_RANK=0 --env MW_TOKENS=32 \
+    --env MW_TABLES=/workspace/research/runs/r20261107-211241-944e/out/demo/glm53-tables-L5-L64-rank0.json \
+    --env MW_KEY=/workspace/research/keep/moeserve-b/glm53-tables.key \
+    --env MW_CHECKPOINT=/workspace/hf/hub/models--zai-org--GLM-5.3/snapshots/aca966e4e02791568aa6a4ced368624b3d897f42 \
+    -- bash benchmarks/spot_proved/run_moe_window.sh
+  ```
+
+  - `MW_TABLES` is B's converted rank-0 record. Its values and program equal the original's, and its nonces are the
+    old scheme's.
+  - The card is art:b473495f's file.
+  - The run does three arms, each with one session at a time: served (negatives plus 4 proof edits), forged (Lean must
+    refuse it) and bench. It then writes `out/h.json`.
+- **The audit path isn't proven end to end yet.** The synthetic smoke run r20261107-212454-1eb6 is in its served
+  audit's first C-Flock session. If it shows a bug, I fix it and relaunch the demonstration.
+- **h.** The card's figures are H200 GPU seconds and cpu-1 proves on the CPU, so absolute times don't compare. h is the
+  served/bench `prove_total_s` ratio per GEMM template, both measured in one slot, times the card's h:
+  - w13 `MoeExpertFp8BlockGemm_v4{K=6144,…}`: 7.67e8;
+  - w2 `MoeExpertFp8BlockGemmW_v4{K=256,…}`: 5.43e8.
+
 ## 23:00Z from P1C: part C is proved; `frameReadSpec` builds with only the standard axioms
 
 - **The theorem:** `Accounting.ReadUnit.FrameRead.frameReadSpec (hD : D ≤ 32) : FrameReadSpec D
