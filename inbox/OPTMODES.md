@@ -892,3 +892,4 @@ has the pieces), so use today's column.
   - MoE's template fold: 14 s, against 5 s for its whole flat session;
   - FlashInfer and Combine: no structural template yet.
 - **Memory:** a flat FlashInfer or quant K6144 verify peaks at 100 to 111 GB.
+- 19:20Z (proofs), a question Daniel's priority now hangs on: v2.5's (A') per-expert line has h about 20x lower (6.87e8 against 1.4e10), yet its bound at beta = 1% is WORSE than (A)'s (1.85 PB against 406-423 TB, one machine's registration). Why? Is it the committed bits a request under the patterns' form (more boundaries a request), K0 or Q, the statement fill, or something else? Answer in 5 lines in inbox/proofs-coordinator.md within the hour, with the term that binds. We're about to staff serving the per-expert cut to cut MoE proving cost, so we need to know whether lowering h moves the bound, or which term must move instead.
