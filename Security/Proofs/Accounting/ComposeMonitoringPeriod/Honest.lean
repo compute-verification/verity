@@ -1,13 +1,13 @@
 module
 
-public import Proofs.Accounting.ComposePeriod
+public import Proofs.Accounting.ComposeMonitoringPeriod
 public import Proofs.Accounting.Compose.SplitRateClosed
 public import Proofs.Accounting.Lemmas.Compose
 
 /-!
 # An honest period meets `CircuitWorkMonitoringPeriod`'s premises
 
-The positive twin of `Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod` and `CircuitCreditPeriod` (brief rule I,
+The positive twin of `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod` and `CircuitCreditPeriod` (brief rule I,
 as I8-COIN's `Keyed.lean` twins are of their layers), whose premises are the same at `a, b > 0`: a period of `n ≥ 1`
 windows of a circuit of one gate, one credited word, one tile and one
 live round, every tile live in every window, every stage paid with its words right and its checked values honest, and
@@ -26,7 +26,7 @@ the second is, and all `n + 1` when none is, with `n` credited live words then, 
 
 @[expose] public section
 
-namespace Accounting.SecurityProofs.ComposePeriod.Honest
+namespace Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
@@ -303,7 +303,7 @@ theorem honest_conclusion (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
       δs + n * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -, -, -⟩ :=
     honest_meets n hn hδs
-  exact Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
+  exact Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
     (play n) (run n) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk zero_le_one zero_le_one
     (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
@@ -314,7 +314,7 @@ theorem honest_credit (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) :
         δs) ≤ δs + n * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -, -, -⟩ :=
     honest_meets n hn hδs
-  exact Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
+  exact Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod scheme circuit hn hN Nat.one_pos le_rfl (period n)
     (play n) (run n) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax hlk one_pos one_pos
     (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
@@ -488,7 +488,7 @@ theorem real_conclusion (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
       δs + ((n + 1 : ℕ) : ℝ) * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -⟩ :=
     real_meets n hδs
-  exact Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod scheme circuit (Nat.succ_pos n) hN Nat.one_pos
+  exact Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod scheme circuit (Nat.succ_pos n) hN Nat.one_pos
     le_rfl (periodR n) (playR n) (runR (n + 1)) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax
     hlk zero_le_one zero_le_one (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
@@ -499,8 +499,8 @@ theorem real_credit (n : ℕ) {δs : ℝ} (hδs : 0 < δs) :
         (creditedLive scheme circuit (periodR n) (runR (n + 1)) x) 1 1 4 δs) ≤ δs + ((n + 1 : ℕ) : ℝ) * (0 + 0) := by
   obtain ⟨hN, hS, hρN, hwmax, hlk, hSR, hG, hDD, hPre, hMoved, hJS, hPins, hMu, hRB, hGs, hUF, -⟩ :=
     real_meets n hδs
-  exact Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod scheme circuit (Nat.succ_pos n) hN Nat.one_pos
+  exact Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod scheme circuit (Nat.succ_pos n) hN Nat.one_pos
     le_rfl (periodR n) (playR n) (runR (n + 1)) (fun _ => 1) 1 (1 / 2) (1 / 2) 1 1 1 4 δs 0 0 hS one_pos hρN hwmax
     hlk one_pos one_pos (by norm_num) hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
 
-end Accounting.SecurityProofs.ComposePeriod.Honest
+end Accounting.SecurityProofs.ComposeMonitoringPeriod.Honest

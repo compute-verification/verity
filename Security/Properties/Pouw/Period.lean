@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.ComposeMonitoringPeriod
 public import Definitions.Accounting.Assumptions.Compose
 public import PouwCheck
 
@@ -8,7 +8,7 @@ public import PouwCheck
 # A period's work over the windows PoUW's deployed check accepts (`PouwCheck.protocol.check`)
 
 PoUW's per-period statement about its deployed Lean code, for the all-protocols period (one loop audited every period by
-each protocol, composed in the causal game, `Accounting.Guarantees.JointPeriodLive`). `Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod`
+each protocol, composed in the causal game, `Accounting.Guarantees.JointPeriodLive`). `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod`
 is stated over the accounting model's abstract proofs (`Outcomes`): whether window `w`'s proof of its `i`-th drawn tile
 was accepted is a parameter. Here it is the deployed check's verdict on the window: `protocol.check` (`verity/pouw/v1`,
 `core_check.py`'s port, the `Core.Protocol` that `CoreRemote` composes; onsite composes the period's,
@@ -28,13 +28,13 @@ them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
   windows before the first refusal; their live tiles' words.
 * `checkedRun`, `checkedLayer`: the period's proofs with the check's verdict as every drawn proof's acceptance, each
   drawn tile's opening the service's opening of that unit; `Declared.periodLayer` at that run.
-* `DrawIsCoin`, `ServiceSound`: on every window the check accepts, the units it publishes as drawn (`Public.drawn`) are
+* `SampleIsCoin`, `ServiceSound`: on every window the check accepts, the units it publishes as drawn (`Public.drawn`) are
   the model's draw at the window's draw coin (`drawOf`), of the population `N_p`, `K_d` of them; and the service's
   soundness against the check: a window is accepted with a published unit whose opening fails its relation with
   probability at most `δ_ks`.
 * `RegisteredBeforeDraw`: each window's registration is fixed before the window's draw coin.
 * `CheckedWorkPeriod`, `CheckedCreditPeriod`: `CircuitWorkMonitoringPeriod`'s and `CircuitCreditPeriod`'s conclusions at the
-  check's accepted prefix, under their premises at `checkedRun`, with `JointSound` replaced by `DrawIsCoin` and
+  check's accepted prefix, under their premises at `checkedRun`, with `JointSound` replaced by `SampleIsCoin` and
   `ServiceSound`, and with `RegisteredBeforeDraw`.
 * `SaltIsLiveCoin`, `StagedPins`, `stagedAt`, `flatAtCoin`, `H1CheckedCreditPeriod`: H1's instance. Each window's salt
   is its round's live coin; the staged statement the leg proves pins the pinned flat tile at one salt; the unit's
@@ -44,7 +44,7 @@ them: `H1CheckedCreditPeriod` is H1's tile unit on the torch loop (below).
 *What the check discharges.* The accepted prefix (`Outcomes.Credited`, `prefixLen`) and the credited words are the
 check's, defined from `protocol.check` and nothing else. `JointSound` at the checked run is about the model's drawn
 tiles; the service proves the units the check publishes, so it follows from `ServiceSound` about those units and
-`DrawIsCoin`, which says they are the model's. Every other premise is `CircuitWorkMonitoringPeriod`'s at the checked run, and the
+`SampleIsCoin`, which says they are the model's. Every other premise is `CircuitWorkMonitoringPeriod`'s at the checked run, and the
 check doesn't discharge it:
 
 * `Scope Sc Cd δs` and the static numbers (`ρ`, `w_max`, the lucks `p, p0`, `SplitRate`), and `DeadConeDead`: facts of the
@@ -69,7 +69,7 @@ check doesn't discharge it:
   for one session) with one-stage's acceptance (`Properties.SampledProofs.AcceptMeans`) and the check's
   (`Properties.Pouw.Check.AcceptMeans`), both proved; `rel` the relation of the statement the service proves (H1's
   leg: the window's staged statement, `stagedAt`).
-* `DrawIsCoin`: the service's `subset:K′` draw from the challenger's draw coin (`SampledProofs.Select.select`) read as
+* `SampleIsCoin`: the service's `subset:K′` draw from the challenger's draw coin (`SampledProofs.Select.select`) read as
   the model's uniform permutation coin, with `K′ = K_d` and `N = N_p` (`Properties.Pouw.Check.AcceptedDraw` gives the
   published draw `K′` distinct units below `N`; `Properties.Served.DrawMissesSubset` bounds its misses by the model's).
 * `Pins` (`rel` gives `right`): the relation of the statement the service proves pins the declared tile's rightness, a
@@ -120,7 +120,7 @@ loop's activations rests on the loop's own assertion (`H1Loop.run`). Its credit 
 tying them to integrity's values is the joint statement's.
 
 The proofs are in `Proofs.Pouw.Period`: `CircuitWorkMonitoringPeriod` at `checkedRun`, `Credited` there being `AcceptedUpTo` at
-`K_d > 0`, and `JointSound` from `ServiceSound` and `DrawIsCoin` by monotonicity; H1's instance is `CheckedCreditPeriod`
+`K_d > 0`, and `JointSound` from `ServiceSound` and `SampleIsCoin` by monotonicity; H1's instance is `CheckedCreditPeriod`
 at its numbers with `SplitRateClosed` for `SplitRate` and `Pins` from `SaltIsLiveCoin` and `StagedPins`.
 `Proofs.Pouw.Period.Accept` runs the deployed check to an accept at H1's parameters (`N_p = 144`, `K_d = 24` on every
 accepted window), and `Proofs.Pouw.Period.Honest` is a live-salt period of those windows meeting every premise of
@@ -199,7 +199,7 @@ service's) are the units of the model's draw at the window's draw coin (`drawOf`
 permutation coin is read as the service's `subset:K′` draw from the challenger's draw coin
 (`SampledProofs.Select.select`), at one work level for every window. A named assumption in the lock: a
 protocol-code fact to prove. -/
-def DrawIsCoin {C Ξ : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
+def SampleIsCoin {C Ξ : Type} {m Kd Np n : ℕ} (hK : Kd ≤ Np) (p : Params)
     (ws : Executions (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) : Prop :=
   ∀ (x : Paths (Paths C m × (Equiv.Perm (Fin Np) × Ξ)) n) (w : Fin n) (pub : Public) (prof : Core.Integrity),
     protocol.check p (ws.reg x w) (ws.ev x w) = .accept pub prof →
@@ -234,8 +234,8 @@ def RegisteredBeforeDraw {C Ξ : Type} {m Np n : ℕ} (ws : Executions (Paths C 
 /-- **(L) The circuit's work on its live tiles over the windows PoUW's deployed check accepts, live coins.** For every
 declared circuit `Cd` and scheme `Sc` run as a period of at most `n ≥ 1` windows, each window's registration and the
 proof system's answer any function of the period's coins (`Executions`), with the check's parameters `prm`: under
-`CircuitWorkPeriod`'s premises at the period's proofs with the check's verdict (`checkedRun`, `checkedLayer`), its
-`JointSound` replaced by the check's draw being the period's draw coin (`DrawIsCoin`) and the service's soundness
+`CircuitWorkMonitoringPeriod`'s premises at the period's proofs with the check's verdict (`checkedRun`, `checkedLayer`), its
+`JointSound` replaced by the check's draw being the period's draw coin (`SampleIsCoin`) and the service's soundness
 against the check (`ServiceSound`), with each registration fixed before its window's draw coin
 (`RegisteredBeforeDraw`), and at `K_d > 0`, an accepted period (`Pl.accepts`) has, over the windows before
 the check's first refusal (`Executions.prefixLen`, `j` of them), all but `(d_F + d₀)·N_w` of their live words
@@ -260,7 +260,7 @@ def CheckedWorkPeriod : Prop :=
     Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd Np live) →
     PrefixOf (checkedLayer Cd hr hK prm ws opened rel right) Pl.game →
     (∀ w, prob (fun x => (checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → DrawIsCoin hK prm ws → ServiceSound prm ws opened rel δks →
+    RegisteredBeforeDraw ws → SampleIsCoin hK prm ws → ServiceSound prm ws opened rel δks →
     (∀ x w j v, rel x w j v → right x w j v) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
@@ -295,7 +295,7 @@ def CheckedCreditPeriod : Prop :=
     Wp.EveryWindow (fun live _ => DeadConeDead Sc Cd Np live) →
     PrefixOf (checkedLayer Cd hr hK prm ws opened rel right) Pl.game →
     (∀ w, prob (fun x => (checkedLayer Cd hr hK prm ws opened rel right).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → DrawIsCoin hK prm ws → ServiceSound prm ws opened rel δks →
+    RegisteredBeforeDraw ws → SampleIsCoin hK prm ws → ServiceSound prm ws opened rel δks →
     (∀ x w j v, rel x w j v → right x w j v) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →
@@ -369,7 +369,7 @@ def H1CheckedCreditPeriod : Prop :=
     PrefixOf (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)) Pl.game →
     (∀ w, prob (fun x =>
       (checkedLayer Cd hr hK prm ws opened (stagedAt salt staged) (flatAtCoin hr enc flat)).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → DrawIsCoin hK prm ws → ServiceSound prm ws opened (stagedAt salt staged) δks →
+    RegisteredBeforeDraw ws → SampleIsCoin hK prm ws → ServiceSound prm ws opened (stagedAt salt staged) δks →
     SaltIsLiveCoin hr salt enc → StagedPins staged flat →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => OperandHMu (Sc.mu k) G)) →
     Wp.EveryWindow (fun live W => PerLiveTile Sc Cd live W (fun k G _ => ReceiptLuckAt (Sc.rB k) G)) →

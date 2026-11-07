@@ -1,28 +1,28 @@
 module
 
-public import Definitions.Accounting.Guarantees.ComposePeriod
+public import Definitions.Accounting.Guarantees.ComposeMonitoringPeriod
 public import Proofs.Accounting.TS.Rounds
 public import Proofs.Accounting.Compose.CircuitWork
-public import Proofs.Accounting.ComposePeriod.Covers
+public import Proofs.Accounting.ComposeMonitoringPeriod.Covers
 public import Proofs.Accounting.Lemmas.TS.Receipt
-public import Proofs.Accounting.Lemmas.ComposePeriod
+public import Proofs.Accounting.Lemmas.ComposeMonitoringPeriod
 public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # PoUW's work over a monitoring period: proofs
 
-`Accounting.Guarantees.ComposePeriod.PeriodBudget` is proved here: a window's `serviceGame` is one round
+`Accounting.Guarantees.ComposeMonitoringPeriod.PeriodBudget` is proved here: a window's `serviceGame` is one round
 `.round d pass (fun _ => .done)`, `periodGame` puts the next window's game in place of its end (`consGame`), and
 `RoundGame.BudgetAt` of `.round d pass next` is the round's two conditions and `BudgetAt` of every `next ω`, so the
 period's budget is its windows', by induction on the period. The window's live tiles only pick its weights.
 
-`Accounting.Guarantees.ComposePeriod.PeriodTailMax` is proved here too, by induction on the game for every threshold
+`Accounting.Guarantees.ComposeMonitoringPeriod.PeriodTailMax` is proved here too, by induction on the game for every threshold
 `D` at once (`prob_prefix_le`): a prefix reaching `D > 0` passes its first round and has the rest reach `D − d`, so,
 conditioning on the first round's coins as `expect_weight_le` does, its probability is at most
 `E[1{pass}·e^{c·d}]·e^{−c·D} ≤ e^{−c·D}`. At `c = 1/Λ` the round bound is `BudgetAt`'s (`expBound_of_budgetAt`).
 
 `CircuitWorkMonitoringPeriod` is proved here from the period layer's covers (`PeriodCoversStmt`, which
-`circuitWorkMonitoringPeriod_of_covers` reads as a hypothesis and `ComposePeriod/Covers.lean` proves as `periodCovers`), and
+`circuitWorkMonitoringPeriod_of_covers` reads as a hypothesis and `ComposeMonitoringPeriod/Covers.lean` proves as `periodCovers`), and
 `CircuitCreditPeriod` from its assembly at `a, b > 0`. It is `CircuitWork`'s proof at `n` rounds, on the accepted
 prefix's live tiles:
 * per window, `ServiceBudget` at the detected live weights (`liveShare`: `0` on a tile of no live words, else
@@ -43,7 +43,7 @@ prefix's live tiles:
 
 open Claims renaming Ex → expect
 
-namespace Accounting.SecurityProofs.ComposePeriod
+namespace Accounting.SecurityProofs.ComposeMonitoringPeriod
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
@@ -57,7 +57,7 @@ theorem budgetAt_consGame {Ω : Type} [Fintype Ω] {n : ℕ} {Λ : ℝ} (g : Rou
     exact ⟨hg.1, hg.2.1, hn⟩
 
 /-- `PeriodBudget`: by induction on the period, `budgetAt_consGame` at each window. -/
-theorem PeriodBudget : Accounting.Guarantees.ComposePeriod.PeriodBudget := by
+theorem PeriodBudget : Accounting.Guarantees.ComposeMonitoringPeriod.PeriodBudget := by
   intro C Ξ _ _ N M n stg w a b K Λ Wp h
   induction Wp with
   | done => simp only [periodGame, RoundGame.BudgetAt]
@@ -119,7 +119,7 @@ theorem prob_prefix_le {Ω : Type} [Fintype Ω] {c : ℝ} (hc : 0 ≤ c) :
         exact hpa hj1.1
 
 /-- `PeriodTailMax`: `prob_prefix_le` at `c = 1/Λ`, whose round bound `BudgetAt` gives. -/
-theorem PeriodTailMax : Accounting.Guarantees.ComposePeriod.PeriodTailMax := by
+theorem PeriodTailMax : Accounting.Guarantees.ComposeMonitoringPeriod.PeriodTailMax := by
   intro Ω _ n g Λ hΛ hB t
   have h := prob_prefix_le (c := 1 / Λ) (by positivity) g
     (Accounting.SecurityProofs.TS.Rounds.expBound_of_budgetAt g hB) (Λ * t)
@@ -715,7 +715,7 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
 (`periodCovers` proves it). Off `DrawnRightOff`'s event and the period budget's tail at its accepted prefix,
 `work_step`. -/
 theorem circuitWorkMonitoringPeriod_of_covers (hC : PeriodCoversStmt) :
-    Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod := by
+    Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn _ hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
     hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
   obtain ⟨hwf, -, hδs, hLP, hlc⟩ := hS
@@ -784,7 +784,7 @@ theorem creditPrefix_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j :
 /-- **`CircuitCreditPeriod` from the period layer's covers**: `circuitWorkMonitoringPeriod_of_covers` at `a, b > 0`; on an
 accepted run `UnitFixed`'s sums keep `fixed` nonnegative, so the credit is below the work (`creditPrefix_le`). -/
 theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
-    Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod := by
+    Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
     hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
   have hW := circuitWorkMonitoringPeriod_of_covers hC Sc Cd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
@@ -812,11 +812,11 @@ theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
   exact (prob_mono hsub).trans hW
 
 /-- `CircuitWorkMonitoringPeriod`: the assembly at the period layer's covers (`periodCovers`). -/
-theorem CircuitWorkMonitoringPeriod : Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod :=
+theorem CircuitWorkMonitoringPeriod : Accounting.Guarantees.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod :=
   circuitWorkMonitoringPeriod_of_covers periodCovers
 
 /-- `CircuitCreditPeriod`: the assembly at the period layer's covers (`periodCovers`). -/
-theorem CircuitCreditPeriod : Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod :=
+theorem CircuitCreditPeriod : Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod :=
   circuitCreditPeriod_of_covers periodCovers
 
-end Accounting.SecurityProofs.ComposePeriod
+end Accounting.SecurityProofs.ComposeMonitoringPeriod

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Accounting.ComposePeriod
+public import Definitions.Accounting.ComposeMonitoringPeriod
 public import Definitions.Accounting.Assumptions.Compose
 
 /-!
@@ -28,20 +28,20 @@ An honest period of 82,403 windows completes with probability `(1 − f)^n`, 44%
 is credited up to its first window with a refused proof (`Outcomes.Credited`), a stopping time, and the tail is taken
 at it (`PeriodTailMax`).
 
-* `CircuitWorkPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
-  (`Proofs.Accounting.ComposePeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
+* `CircuitWorkMonitoringPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
+  (`Proofs.Accounting.ComposeMonitoringPeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
   can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
   `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at `n` rounds, the period layer's `Covers` on the credited
   windows' live tiles and `WriterReads` (`PeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
-  `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `UnitFixed`'s sums.
+  `periodCovers` in `Proofs.Accounting.ComposeMonitoringPeriod.Covers`) and `UnitFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
-  realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposePeriod`) from `CircuitWorkMonitoringPeriod`'s
+  realized prefix `j` (`creditPrefix`). Proved (`Proofs.Accounting.ComposeMonitoringPeriod`) from `CircuitWorkMonitoringPeriod`'s
   assembly at `a, b > 0`. Not the time credit (`CircuitCredit`'s `(1 − ε)·T_cred`), which no statement here gives.
 -/
 
 @[expose] public section
 
-namespace Accounting.Guarantees.ComposePeriod
+namespace Accounting.Guarantees.ComposeMonitoringPeriod
 
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
 
@@ -273,4 +273,4 @@ def CircuitCreditPeriod : Prop :=
     prob (fun x => Pl.accepts x ∧ n * (Pl.run x).fixed <
       creditPrefix Sc Cd Np (pr.prefixLen x) (creditedLive Sc Cd Wp pr x) a b Λ δs) ≤ δs + n * (δbind + δks)
 
-end Accounting.Guarantees.ComposePeriod
+end Accounting.Guarantees.ComposeMonitoringPeriod

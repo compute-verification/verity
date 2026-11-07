@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pouw.Period
-public import Proofs.Accounting.ComposePeriod
+public import Proofs.Accounting.ComposeMonitoringPeriod
 public import Proofs.Accounting.Compose.SplitRateClosed
 public import Proofs.Pouw.RelativeSecurity
 public import Proofs.Accounting.Lemmas.Compose
@@ -13,7 +13,7 @@ public import Proofs.Accounting.Lemmas.Compose
 with the check's verdict (`checkedRun`). There a window is credited exactly when it and every earlier window are
 accepted (`credited_iff`, at `K_d > 0`: the check's verdict is every drawn tile's), so the run's accepted prefix and its
 live words are the check's (`prefixLen_eq`, `creditedLive_eq`). `JointSound` holds at `δ_ks`: an unsound drawn tile of
-an accepted window is a unit the check publishes as drawn (`DrawIsCoin`) whose opening fails its relation, which
+an accepted window is a unit the check publishes as drawn (`SampleIsCoin`) whose opening fails its relation, which
 `ServiceSound` bounds (`jointSound_checked`). `Pins` is the hypothesis itself, and `RegisteredBeforeDraw`, protocol
 structure, is not read.
 
@@ -67,13 +67,13 @@ theorem creditedLive_eq {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) 
   exact Finset.sum_congr rfl fun w _ => if_congr (credited_iff hK hKd p ws opened rel right x w) rfl rfl
 
 /-- **Joint soundness at the check's run from the service's**: in each window, an accepted window with a drawn tile
-whose opening fails its relation is one the check accepts with a published unit (`DrawIsCoin`: the drawn tile's unit is
+whose opening fails its relation is one the check accepts with a published unit (`SampleIsCoin`: the drawn tile's unit is
 among `Public.drawn`) whose opening fails its relation, which `ServiceSound` bounds at `δ_ks`. -/
 theorem jointSound_checked {ι C Ξ V : Type} [Fintype C] [Fintype Ξ] (Cd : Declared ι) {Kd Np n : ℕ}
     (hr : 0 < Cd.rounds) (hK : Kd ≤ Np) (p : Params) (ws : Executions (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n)
     (opened : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Paths C Cd.rounds × (Equiv.Perm (Fin Np) × Ξ)) n → Fin n → Fin Np → (ℕ → V) → Prop)
-    {δks : ℝ} (hD : DrawIsCoin hK p ws) (hS : ServiceSound p ws opened rel δks) :
+    {δks : ℝ} (hD : SampleIsCoin hK p ws) (hS : ServiceSound p ws opened rel δks) :
     (checkedLayer Cd hr hK p ws opened rel right).JointSound δks := by
   intro w
   refine (Pouw.RelativeSecurity.prob_mono fun x hx => ?_).trans (hS w)
@@ -86,7 +86,7 @@ theorem checkedWorkPeriod : CheckedWorkPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK hKd prm ws opened rel right Wp Pl folded
     ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved _hReg hDraw hServ hPins
     hMu hRB hGs hUF
-  have h := Accounting.SecurityProofs.ComposePeriod.CircuitWorkMonitoringPeriod Sc Cd hn hN hr hK Wp Pl
+  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod Sc Cd hn hN hr hK Wp Pl
     (checkedRun hK prm ws opened rel right) folded ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG
     hDD hPre hMoved (jointSound_checked Cd hr hK prm ws opened rel right hDraw hServ) hPins hMu hRB hGs hUF
   simp only [prefixLen_eq hK hKd prm ws opened rel right,
@@ -99,7 +99,7 @@ theorem checkedCreditPeriod : CheckedCreditPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK hKd prm ws opened rel right Wp Pl folded
     ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved _hReg hDraw hServ hPins
     hMu hRB hGs hUF
-  have h := Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod Sc Cd hn hN hr hK Wp Pl
+  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod Sc Cd hn hN hr hK Wp Pl
     (checkedRun hK prm ws opened rel right) folded ρ p p0 a b wmax Λ δs δbind δks hS hρ hρN hwmax hlk ha hb hΛ hSR hG
     hDD hPre hMoved (jointSound_checked Cd hr hK prm ws opened rel right hDraw hServ) hPins hMu hRB hGs hUF
   simp only [prefixLen_eq hK hKd prm ws opened rel right,

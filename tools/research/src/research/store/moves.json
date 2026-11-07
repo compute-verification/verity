@@ -1579,6 +1579,15 @@
         "benchmarks/torch_gpu/commit_slots/fixtures/commit-slots-v1.json": "verity/ml/commitments/tests/fixtures/commit-slots-v1.json",
         "benchmarks/numerical/tests/bench/data/captured-101/": "verity/ml/flock/tests/data/captured-101/"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/Accounting/ComposePeriod.lean": "Security/Definitions/Accounting/ComposeMonitoringPeriod.lean",
+        "Security/Definitions/Accounting/Guarantees/ComposePeriod.lean": "Security/Definitions/Accounting/Guarantees/ComposeMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/ComposePeriod.lean": "Security/Proofs/Accounting/ComposeMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/ComposePeriod/": "Security/Proofs/Accounting/ComposeMonitoringPeriod/",
+        "Security/Proofs/Accounting/Lemmas/ComposePeriod.lean": "Security/Proofs/Accounting/Lemmas/ComposeMonitoringPeriod.lean"
+      }
     }
   ]
 }
