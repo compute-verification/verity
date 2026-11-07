@@ -195,6 +195,50 @@ def test_a_v2_answer_whose_query_is_a_digest_its_evidence_carries_stays_private(
     assert partition in (tmp_path / "private" / "answer.json").read_text()
 
 
+def network_cases(tmp_path: Path, reason: str | None = None) -> list[str]:
+    """remote-network-no-pouw's cases as a V3c window's follow-on hands them over, in served_composite.sh's order (the
+    serve dir's cases, then the network certifier's piece): the policy and sampled proofs each commit to V3c's
+    registration, and the network certifier's commitment holds that registration beside its scan window's, which its
+    evidence carries again."""
+    reg = C.canonical({"format": "verity/registration/v1", "roots": {f"w{i}": os.urandom(64).hex() for i in range(8)}})
+    scan = C.canonical({"format": "verity/registration/v1", "roots": {"scan/state": os.urandom(64).hex()}})
+    commitment = C.canonical({"audits": [json.loads(reg)], "windows": [json.loads(scan)]})
+    evidence = C.canonical({"windows": [{"certificates": [os.urandom(64).hex()], "registrations": [json.loads(scan)]}]})
+    pol = put(tmp_path / "private" / "inference-only", POLICY, {"g": 1}, reg, b"{}", os.urandom(64), verdict="accept")
+    v1 = put(tmp_path / "private" / "sampled-proofs", SAMPLED, {}, reg, os.urandom(300), os.urandom(64), verdict="accept")
+    cert = put(tmp_path / "pieces" / "certifier", "verity/certifier/v0", {"w": 1}, commitment, evidence, os.urandom(64),
+               verdict="reject" if reason else "accept", reason=reason)
+    return ["--cases", str(pol), "--cases", str(v1), "--cases", str(cert)]
+
+
+def test_a_commitment_inside_another_s_is_masked_with_it(tmp_path):
+    """The network certifier's commitment holds V3c's registration, the policy's and sampled proofs' commitment: masked
+    whole, longest first, it leaves nothing of itself to meet the scan registration its evidence carries, and the public
+    record holds each commitment whole."""
+    args = network_cases(tmp_path)
+    assert C.main(["remote-network-no-pouw", *args, *outs(tmp_path, "-out")]) == 0
+    record = json.loads((tmp_path / "public-out" / "composite.json").read_bytes())
+    found = [C.piece(Path(d)) for d in args[1::2]]
+    assert {c["id"]: c["commitment"] for c in record["cases"]} == {p["id"]: p["commitment"].hex() for p in found}
+    assert found[0]["commitment"] == found[1]["commitment"] and found[0]["commitment"] in found[2]["commitment"]
+
+
+def test_evidence_beside_nested_commitments_is_still_refused(tmp_path):
+    """Masking the commitments whole leaves the guard on every other public byte: a refusal's name quoting 64 bytes of a
+    case's evidence is refused with them in place."""
+    quoted = "the scan window refused at its certificate of the cell rows here"
+    assert len(quoted) == 64 and C.NAME.fullmatch(quoted) and not C.VALUE.search(quoted)
+    args = network_cases(tmp_path, reason=f"{quoted}: x")
+    found = [C.piece(Path(d)) for d in args[1::2]]
+    found[1]["evidence"] = quoted.encode() + found[1]["evidence"]
+    record = C.canonical(C.public_record("remote-network-no-pouw", b"\0" * 64, sorted(found, key=lambda p: p["id"]), [],
+                                         None))
+    with pytest.raises(C.Leak, match=SAMPLED):
+        C.check_public(record + f"\nPIECE verity/certifier/v0 reject {quoted}\n".encode(), found)
+    found[1]["evidence"] = found[1]["evidence"][64:]
+    C.check_public(record, found)
+
+
 def test_a_refusal_is_public_by_its_name_only(tmp_path):
     secret = os.urandom(100)
     v1 = put(tmp_path / "v1", SAMPLED, {}, b"\x01", secret, b"\xaa" * 64, verdict="reject",
