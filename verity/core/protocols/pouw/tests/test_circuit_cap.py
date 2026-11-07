@@ -208,7 +208,7 @@ def _rev1_cap(dev: str, k: int, n: int, rho: int, rows: int, cols: int) -> Fract
     """ρ·creditDevRev1·tileShare: the device's `cap` (ρ = 1/rho here) times `credit_of` (rev1's credit), at an m that
     cancels."""
     d, m = replace(DEVICES[dev], cap=Fraction(1, rho)), 64
-    return d.cap * C.PearlC(forming="v1", device=d).credit_of(Shape(m, k, n)) * rows * cols / (m * n)
+    return d.cap * C.PearlC(forming="v1", device=d, hashing="h0").credit_of(Shape(m, k, n)) * rows * cols / (m * n)
 
 
 def _reference(dev: str, k: int, n: int, rho: int, ac, bc, ok, sd) -> bool:
@@ -506,7 +506,7 @@ def test_the_served_shape_takes_the_schemes_row_cap():
     1,024 at ρr = ρ (400), as `PearlC.row_cap_at`; `pearl-c-sm120-v1-h3` at ρ (1,000); -h0, which caps the tile alone,
     is v1 and refuses k = 256.  A per-row cap without the cap, or not 1/RHOR, is refused; v1's Programs are unchanged."""
     h100, sm120 = DEVICES["h100"], DEVICES["sm120"]
-    h3, h0 = C.PearlC(forming="v1", device=h100, hashing="h3"), C.PearlC(forming="v1", device=h100)
+    h3, h0 = C.PearlC(forming="v1", device=h100, hashing="h3"), C.PearlC(forming="v1", device=h100, hashing="h0")
     for scheme, k, rr in ((h3, 256, 100), (h3, 1024, 400), (C.PearlC(forming="v1", device=sm120, hashing="h3"), 1024, 1000),
                           (h0, 1024, None)):
         shape = cap.served(scheme, Shape(64, k, 6144))

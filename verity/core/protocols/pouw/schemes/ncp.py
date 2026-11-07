@@ -229,6 +229,9 @@ class NCP:
             raise ValueError("perm is 'word' or 'shift24'")
         self.perm, self.k_min, self.n_min, self.tile = perm, k_min, n_min, tile
         self.name = NAME if perm == "word" else NAME_SHIFT24
+        #: the frame hash of its row and transcript trees: SHA-256, since its tile digests are 32 bytes (`audit`'s default
+        #: tree, hm96-sha512, takes 64)
+        self.commitment_hash = "sha256"
         self.beta = BETA
         lead = k_min >= 1088 and n_min >= 1600
         self.certificate = Certificate(

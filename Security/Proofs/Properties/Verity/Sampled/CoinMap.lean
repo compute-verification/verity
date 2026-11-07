@@ -988,12 +988,14 @@ theorem sampleMap_couples (A : Live) (rd : Reading A.rounds) (σ : Strategy (V.g
 
 omit θ F c in
 /-- **The sample-coupled coin maps** at the readings `rd`: at each session, commitment and strategy, `sampleMap` at the
-family `label θ F c` answering `after θ F c` and the session's coins `κ A`. -/
-noncomputable def sampleMaps (rd : Readings) (label : ByteArray → Array ByteArray → ByteArray → String)
-    (after : ByteArray → Array ByteArray → ByteArray → ByteArray) {m : ℕ}
+family `label θ F c σ` answering `after θ F c σ` and the session's coins `κ A`. The family and the digest it answers
+are the strategy's: the commitment `c` fixes the registration digest only as a preimage, and the play reads it. -/
+noncomputable def sampleMaps (rd : Readings)
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
+    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (θ : ByteArray) (F : Array ByteArray)
     (c : ByteArray) (σ : Strategy (V.game θ F c)) : CoinMap (V.game θ F c) σ A.Ω A.rounds A.mP :=
-  sampleMap e V θ F c A (rd A θ F c) σ (label θ F c) (after θ F c) (κ A)
+  sampleMap e V θ F c A (rd A θ F c) σ (label θ F c σ) (after θ F c σ) (κ A)
 
 variable (k : Verity.Registration.Composite)
 
@@ -1030,8 +1032,8 @@ uniform (`sampleMap_couples`), at each commitment and strategy where those gaps 
 theorem couplingTarget_withProject_of_sample (rd : Readings) (K : Constructions V)
     (D : (A : Live) → (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) →
       Decoders A.rounds A.Reg)
-    (label : ByteArray → Array ByteArray → ByteArray → String)
-    (after : ByteArray → Array ByteArray → ByteArray → ByteArray) {m : ℕ}
+    (label : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → String)
+    (after : (θ : ByteArray) → (F : Array ByteArray) → (c : ByteArray) → Strategy (V.game θ F c) → ByteArray) {m : ℕ}
     (κ : (A : Live) → A.Ω → Fin m → Fin 512 → Bool) (A : Live) (P : Exchange → Prop) (θ : ByteArray)
     (F : Array ByteArray) (hκ : ∀ H : (Fin m → Fin 512 → Bool) → ℝ≥0∞, avg (fun ω => H (κ A ω)) = avg H)
     (ha : LoggedBound V k (K.withProject V rd D (sampleMaps e V rd label after κ)) P θ F)
@@ -1041,7 +1043,7 @@ theorem couplingTarget_withProject_of_sample (rd : Readings) (K : Constructions 
     (hD : ∀ c σ, Decodes V θ F c k P A (rd A θ F c) σ (D A θ F c σ) (sampleMaps e V rd label after κ A θ F c σ)) :
     CouplingTarget V k ((K.withProject V rd D (sampleMaps e V rd label after κ)).withMessages rd) A θ F :=
   couplingTarget_withProject V k rd K D (sampleMaps e V rd label after κ) A P θ F ha
-    (fun c σ => couples_of_within V θ F c (sampleMap_couples e V θ F c A (rd A θ F c) σ (D A θ F c σ) (label θ F c)
-      (after θ F c) (κ A) hκ) (hε c σ)) hD
+    (fun c σ => couples_of_within V θ F c (sampleMap_couples e V θ F c A (rd A θ F c) σ (D A θ F c σ)
+      (label θ F c σ) (after θ F c σ) (κ A) hκ) (hε c σ)) hD
 
 end Verity.Sampled

@@ -182,7 +182,7 @@ def tile(job: Job, name: str, t: int) -> dict:
     if fast:
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         import f1_fast
-    s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None)
+    s = F.PearlC4("nvfp4", f1=f1_fast.row_units if fast else None, hashing="h0")
     unit = Matmul(0, Shape(m, k_unit, n), 0)
     lab = lambda part: hashlib.sha256(f"pearl-c4-real/{name}/{t}/{part}".encode()).digest()  # noqa: E731
     noise = s.noise(Context(lab("salt"), unit, lab("root_a"), lab("root_b")))

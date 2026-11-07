@@ -59,14 +59,14 @@ _FP4 = re.compile(r"pearl-c-(?P<precision>nvfp4|mxfp4)-(?P<forming>v[0-9]+)(?:-(
 
 @dataclass(frozen=True)
 class SchemeId:
-    """A Pearl-C scheme by its parts.  ``hashing`` h0 is left out of the name, and ``prices`` names another device's W1
-    prices (``@sm_120``), as `PearlC` names its instances."""
+    """A Pearl-C scheme by its parts.  ``hashing`` is h3 unless named; h0 is left out of the name, and ``prices`` names
+    another device's W1 prices (``@sm_120``), as `PearlC` names its instances."""
 
     family: str
     device: str
     forming: str
     precision: str
-    hashing: str = "h0"
+    hashing: str = "h3"
     prices: str | None = None
 
     def __post_init__(self) -> None:
