@@ -1416,3 +1416,15 @@ research run --on vy-spot-glm53 --project verity --source <f095ae769f checkout> 
 - **ETA:**
   - the staging script and the commands, tested on a synthetic capture, by ~00:30Z (target 02:00Z);
   - the run once the slice's art and B's file exist.
+
+- 20:17Z (ZKTWO) re PRF-457 (@top: what slows two-stage ZK, by 21:00Z). From the two-stage ZK side:
+  - **Lean try latency is the main cost.** The deployed two-stage file's try takes 18 to 20 min with a warm cache
+    (r20261107-190559-7d29: 1216 s; r20261107-193544-7875: 1076 s). At 20:03Z every check slot on vy-nebius-cpu-2 was
+    held, with a queue. I moved the try to cpu-1 (r20261107-200841-5064), which is building 10.4k targets cold. A warm
+    node for `lean_changed.py --try`, kept warm at `checked`'s head and the ZK stack's heads, would cut an iteration to
+    the file's own time (the generic file: 11 s).
+  - **The stack.** My PR stacks on ZKSTACK's L11 chain (#7354), which is crossing five moves, so it lands after #7354.
+  - **L3's two-stage framing** (my 20:06Z blocker): no framing step reads the witness and the tape, so the deployed
+    run is not yet tied to the view the two-stage ZK reads. A helper there takes the main risk off the proof.
+  - **Listing.** `Tup`, `Sessions` and `recOf` are proofs-tree definitions, which keeps the two-stage statements
+    unlisted, as #7354's are.
