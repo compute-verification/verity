@@ -1,7 +1,7 @@
 """The verifier process of the harness's timed audit: a client of the responder (`pous_native.cu`'s wire format, or the
 harness's `ControlResponder`) and `verity.core.protocols.pous.protocol.TimedAudit`'s audits against it.
 
-    python benchmarks/pous/band_gpu/memory_challenger.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
+    python verity/core/devices/memory_challenger/timed_audit.py --ready READY.json --leaves LEAVES.bin --out AUDIT.json [--audits N] [--pings N]
         [--k K] [--verifier-cpu C] [--allowance p99.9] [--deadline-ns N] [--limit-ns N] [--calibrate-only] [--clock logical]
         [--seed HEX]
 
@@ -421,29 +421,35 @@ def verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
             "profile": audits[0][0].profile().to_json() if audits and audits[0][1].accepted else None}
 
 
-def lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
-    """`verdict`, by `pous_check`'s `pous-timed-audit`."""
+def pous_check() -> Any:
+    """`pous_check`'s `timed_audit.py`, which runs `pous-timed-audit` through `verity_difftest`, loaded by path: the Lean
+    check is a tree of its own (`tests/test_boundaries.py`'s `SEPARATE`)."""
     import importlib.util
 
-    path = Path(__file__).resolve().parents[3] / "verity/core/protocols/pous/check/timed_audit.py"
+    path = Path(__file__).resolve().parents[4] / "verity/core/protocols/pous/check/timed_audit.py"
     spec = importlib.util.spec_from_file_location("pous_check_timed_audit", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.lean_verdict(ready, leaves, doc)
+    return module
+
+
+def lean_verdict(ready: Any, leaves: bytes, doc: Any) -> dict[str, Any]:
+    """`verdict`, by `pous_check`'s `pous-timed-audit`."""
+    return pous_check().lean_verdict(ready, leaves, doc)
 
 
 VERDICTS = {"python": verdict, "lean": lean_verdict}
 
 
 def lean_unavailable() -> str | None:
-    """Why the Lean verdict can't run in this process (no `lake` on the PATH, or `verity_difftest`, which serves it, not
-    importable beside this Python), or None."""
+    """Why the Lean verdict can't run in this process (no `lake` on the PATH, or `pous_check`'s `timed_audit.py`, which
+    serves it, not loadable beside this Python, which it is where `verity_difftest` isn't importable), or None."""
     import shutil
 
     if shutil.which("lake") is None:
         return "lake is not on the PATH"
     try:
-        import verity_difftest  # noqa: F401
+        pous_check()
     except ImportError as e:
         return f"verity_difftest is not importable here ({e})"
     return None
