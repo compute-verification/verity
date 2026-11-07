@@ -35,12 +35,12 @@ def _listing(arch: str = "sm_90a", skip: str = "") -> tuple[str, str]:
     return "".join(ptxas), "".join(sass)
 
 
-def test_the_gate_wants_every_kernel_attn_loads():
+def test_the_gate_wants_every_kernel_attn_loads() -> None:
     assert set(sass_gate.WANT) == set(attn.KERNELS)
 
 
 @pytest.mark.parametrize("arch", ["sm_90a", "sm_120a"])
-def test_gate_passes_a_clean_listing(arch):
+def test_gate_passes_a_clean_listing(arch: str) -> None:
     funcs, problems = sass_gate.gate(arch, *_listing(arch))
     assert problems == []
     assert funcs["attn_qk_d64_ref"]["HMMA"] == 1 and funcs["attn_pv_d128_ref"]["F2FP"] == 1
@@ -65,19 +65,19 @@ REF_PV = "        Function : attn_pv_d64_ref\n"
     (PTXAS.replace("Used 40 registers", "", 1), SASS, "no ptxas resource line"),
     (PTXAS, SASS.replace("HMMA.16816.F32.BF16 R4, R8, R12, R4 ;\n", "", 1), "HMMA.16816.F32.BF16, want 4"),
 ])
-def test_gate_refuses(ptxas, sass, why):
+def test_gate_refuses(ptxas: str, sass: str, why: str) -> None:
     _, problems = sass_gate.gate("sm_90a", ptxas, sass)
     assert any(why in p for p in problems), problems
 
 
-def test_ref_grid_covers_every_column_of_every_kv_head():
+def test_ref_grid_covers_every_column_of_every_kv_head() -> None:
     assert attn.grid("ref", 7, 256, 1, cols=33, Hkv=1) == (5, 1, 7)
     assert attn.grid("ref", 3, 16, 9, cols=128, Hkv=2) == (16, 2, 3)
     assert all(attn.serves("ref", g, t, k) for g in (1, 2, 256) for t in (1, 33, 4096) for k in (0, 32, 48))
 
 
 @pytest.fixture(scope="module")
-def kinds():
+def kinds() -> tuple[dict[str, np.ndarray], int]:
     inp, D = F.build("kinds_d64")
     return inp, D
 
@@ -94,7 +94,7 @@ def _pad_definition(x: np.ndarray, w: np.ndarray, n: int) -> np.ndarray:
 
 
 @pytest.mark.parametrize("kind", ["specials", "tiny", "subacc"])
-def test_kind_words_are_the_definitions(kinds, kind):
+def test_kind_words_are_the_definitions(kinds: tuple[dict[str, np.ndarray], int], kind: str) -> None:
     """A kind's sequence at KV lengths on and off the 16-grid: the reference sample `fixture.py` holds S and O to, and O as
     GemmCoordinatePad{T=n, K=32} on the first n keys (the H200 circuit's PV)."""
     inp, D = kinds
@@ -114,7 +114,7 @@ def test_kind_words_are_the_definitions(kinds, kind):
         assert (_pad_definition(x, w, n) == O[j, h, 0, d]).all()
 
 
-def test_subacc_reaches_the_padding_step_with_subnormal_accumulators():
+def test_subacc_reaches_the_padding_step_with_subnormal_accumulators() -> None:
     """The constructed case: at n <= 16 most of PV's accumulators after the one live step are nonzero FP32 subnormals, the
     words GemmCoordinatePad{K=32}'s all-+0 second step reads; and its words there equal one step's, K = pad16(n)."""
     seq = F.kind_sequence(F.KINDS.index("subacc"))
@@ -131,7 +131,7 @@ def test_subacc_reaches_the_padding_step_with_subnormal_accumulators():
 
 
 @pytest.mark.slow
-def test_every_kind_agrees_with_the_reference(kinds):
+def test_every_kind_agrees_with_the_reference(kinds: tuple[dict[str, np.ndarray], int]) -> None:
     """Every kind's first sequence at every KV length 1..32 against the reference sample (about 2 s a kind): what the
     quick kinds above don't reach (cancellations, overflow, uniform words)."""
     inp, D = kinds

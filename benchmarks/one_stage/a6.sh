@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# One-stage audit, run A6, on a CPU machine: the W8A8 coordinates of an int8 decoder layer under the stratified law (a6.py),
+# One-stage audit, run A6, on a CPU machine: the W8A8 coordinates of an int8 decoder layer under the stratified sampling design (a6.py),
 # on hidden_zk's builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify, cached under $A6_CACHE). From
-# a clone, since the verifier of record builds the sampled-proofs Lean in the tree:
+# a clone, since the verifier builds the sampled-proofs Lean in the tree:
 #   A6_MEM_GB=96 bash benchmarks/one_stage/a6.sh
 #   (a job run from a clone of the tree, 96 GB)
 # env: A6_MEM_GB (the job's memory, GB)  A6_MEMBERS (a6.py's --members)  A6_K (its --k)  A6_CHUNK (its --chunk)

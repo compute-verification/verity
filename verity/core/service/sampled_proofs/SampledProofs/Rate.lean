@@ -1,6 +1,6 @@
 /-
-The rate law's count (`draw.rate_count`): a public rate `q = NUM/DEN` over `T` tables draws a uniform `k`-subset of a
-registration's `n` units at `k = T·⌈NUM·n/(DEN·T)⌉`, `⌈q·n⌉` rounded up to a multiple of `T`. Every unit is drawn with
+The rate law's count (`draw.rate_count`): a public rate `q = NUM/DEN` over `T` tables samples a uniform `k`-subset of a
+registration's `n` units at `k = T·⌈NUM·n/(DEN·T)⌉`, `⌈q·n⌉` rounded up to a multiple of `T`. Every unit is sampled with
 probability `k/n ≥ q` whatever `n` the prover registers (`count_ge`), each of the `T` tables proves `k/T` of them
 (`count_dvd`), `k ≥ 1` once `q > 0` and `n ≥ 1` (`count_pos`), and `k ≤ n` whenever `T` divides `n` (`count_le`).
 -/

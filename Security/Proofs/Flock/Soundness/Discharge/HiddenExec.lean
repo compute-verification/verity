@@ -51,7 +51,7 @@ headline (`Discharge/Integrate`) are about `Stmt.setupH`'s statements (`hh : I.t
 * `CopiesP`: `Copies` at public inputs: kept rows read the flat twin's, a public leaf's bits its instance's public word.
 * `PlacedP`: `Placed` at public inputs: `AcceptedHP`, `SitesHP` and `ProgPlaces` for `Placed.keyProgP`.
 * `Ret`, `SiteH`: where the circuit computes each output word (the unit copy and port `HmOut.outCol` reads), and the
-  site of a drawn unit (`BcSiteH`, every row's registered `b ‖ c` through `Hidden.bc_drawnW`).
+  site of a sampled proof block (`BcSiteH`, every row's registered `b ‖ c` through `Hidden.bc_drawnW`).
 * `SiteHP`: `SiteH` at public inputs, through the flat twin off the unit input rows (`Hidden.Any.sat_flatFP`): copies
   off a public leaf, returned outputs and the rows' `b ‖ c`.
 * `KeyH`: `lay` and `rs` at `keyProg`'s places (`keyLayoutH`, `keyRowsH`, `keyRowsH_computes`): every row a commit
@@ -68,7 +68,7 @@ headline (`Discharge/Integrate`) are about `Stmt.setupH`'s statements (`hh : I.t
 * `LiveOnP`: the execution refinement for one-table sessions at `own` (`AcceptsP`, `DecodesOnP`,
   `Prog.flock_headline_live_onXP`).
 * `HeadlineExecP`: `flock_headline_exec_hiddenP`, `flock_headline_exec_hidden` at `own` and `Placed.keyProgP`.
-* `SetupP`: what a setup at `own` establishes (its tags, leaf scheme, well-formedness and drawn public file, the
+* `SetupP`: what a setup at `own` establishes (its tags, leaf scheme, well-formedness and sampled public file, the
   session's rounds and link points), and `drawSetupHP_of_setupHiddenI`.
 -/
 

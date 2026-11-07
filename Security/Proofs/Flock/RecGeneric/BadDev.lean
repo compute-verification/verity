@@ -6,14 +6,14 @@ public import Proofs.Flock.Claims.Recursion.Hybrid
 public import Proofs.Flock.Claims.Recursion.Gap
 
 /-!
-# `P_O`'s bad draws, linearly, through the gated link
+# `P_O`'s bad samples, linearly, through the gated link
 
-A draw `P_O`'s runs don't show (`Comp.BadO`) misses the plurality of what `P_O` reads (`Comp.fAt`) at some inner round
-`j`. By `Pr_plur_fork_lin`, at each `j` that costs at most the link at the fork at `j` plus `1/(M+1)`, the link drawing
+A sample `P_O`'s runs don't show (`Comp.BadO`) misses the plurality of what `P_O` reads (`Comp.fAt`) at some inner round
+`j`. By `Pr_plur_fork_lin`, at each `j` that costs at most the link at the fork at `j` plus `1/(M+1)`, the link sampling
 `M` more forks at `j` until the first where `R_O` holds. The gated link (`linkPlan` at `verModel`) asks only whether
 `E_O` gives witnesses, so its first giving fork is in `R_O`, where two forks at `j` that read differently collide
 (`Comp.pair_coll`), or outside it, which over the loop costs at most `PrOut` (`Pr_outLoop_le`, Wald's bound on the
-loop's first giving draw). Two forks that read differently collide: before the last inner round their openings differ,
+loop's first giving sample). Two forks that read differently collide: before the last inner round their openings differ,
 so either their round messages differ (`ForksBind`) or one commit string opens to two rows (`Server.Binds`, through
 `binds_tied`, the openings' calls among the inner verifier's and so among `calls`, `CallsLogColl`); at the last round
 their classes differ, so their views differ at some round (`Server.run_ivstar_lastCoin`, from `Proto.LastCoinFree`),
@@ -219,7 +219,7 @@ theorem linkLoop_exec {Coin Ω C : Type} {n : ℕ} (m : RunModel Coin Ω n C) (�
       simp only [linkLoop, Plan.exec, RunModel.named, decide_eq_true_eq, ha, ↓reduceIte]
       exact he
 
-/-- The link's slots, read as its first run's coins, its first fork and the loop's draws, are uniform. -/
+/-- The link's slots, read as its first run's coins, its first fork and the loop's samples, are uniform. -/
 theorem unifMap_link {A B : Type} [Fintype A] [Fintype B] [Nonempty B] (M : ℕ) :
     UnifMap (fun sl : Fin (M + 1 + 1) → A × B => ((sl 0).1, Fin.tail sl 0, Fin.tail (Fin.tail sl))) := by
   have h1 : UnifMap (fun sl : Fin (M + 1 + 1) → A × B => (sl 0, Fin.tail sl)) :=
@@ -229,8 +229,8 @@ theorem unifMap_link {A B : Type} [Fintype A] [Fintype B] [Nonempty B] (M : ℕ)
   exact h1.comp h2
 
 open Classical in
-/-- **A loop over `gR`'s draws, read through `gv ⊇ gR`**: where the first `gR` draw differs, the first `gv` draw is a `gR`
-draw that differs, or a `gv` draw outside `gR`, there in `o`. -/
+/-- **A loop over `gR`'s samples, read through `gv ⊇ gR`**: where the first `gR` sample differs, the first `gv` sample is a `gR`
+sample that differs, or a `gv` sample outside `gR`, there in `o`. -/
 theorem firstDiffers_split {U : Type} {gR gv o : U → Prop} {f : U → Msg} {a : Msg} (hg : ∀ u, gR u → gv u)
     (hgo : ∀ u, gv u → ¬ gR u → o u) : ∀ M (us : Fin M → U), firstDiffers gR f a M us →
       (∃ v, firstPick gv M us = some v ∧ gR v ∧ f v ≠ a) ∨
@@ -251,7 +251,7 @@ theorem firstDiffers_split {U : Type} {gR gv o : U → Prop} {f : U → Msg} {a 
         · exact Or.inr (Or.inr ⟨hv, h'⟩)
 
 open Classical in
-/-- **Wald's bound on the loop's first `gv` draw**: a `gR` draw, then a loop whose first `gv` draw is in `o`, has
+/-- **Wald's bound on the loop's first `gv` sample**: a `gR` sample, then a loop whose first `gv` sample is in `o`, has
 probability at most `Pr[o]`: `Pr[gR]·Pr[gv ∧ o]·G_M ≤ Pr[o]·(1 − (1 − Pr[gv])^M)`. -/
 theorem Pr_firstLoop_le {U : Type} [Fintype U] [Nonempty U] (gR gv o : U → Prop) (hR : ∀ u, gR u → gv u) (M : ℕ) :
     Pr (fun p : U × (Fin M → U) => gR p.1 ∧ firstDiffers gv (fun u => if o u then [0] else []) [] M p.2) ≤
@@ -292,7 +292,7 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] {Ω C : Type} [Fintype Ω]
 omit [Nonempty Ω] in
 open Classical in
 /-- **The loop's first giving fork in `o` costs `Pr[o]`**: over a tape, a prefix, a `gR` fork and `M` more forks at `j`,
-the first `gv` fork in `o` has probability at most `Pr[o]` over one draw. -/
+the first `gv` fork in `o` has probability at most `Pr[o]` over one sample. -/
 theorem Pr_outLoop_le (j M : ℕ) (gR gv o : Ω → (Fin N → Coin) × C → Prop) (hR : ∀ ω d, gR ω d → gv ω d) :
     Pr (fun t : Ω × (Fin N → Coin) × ((Fin N → Coin) × C) × (Fin M → (Fin N → Coin) × C) =>
       gR t.1 (fork j t.2.1 t.2.2.1.1, t.2.2.1.2) ∧
@@ -355,7 +355,7 @@ theorem Pr_link_split (j M : ℕ) (gR gv o : Ω → (Fin N → Coin) × C → Pr
 
 end Loop
 
-/-! ## `P_O`'s bad draws -/
+/-! ## `P_O`'s bad samples -/
 
 namespace Comp
 
@@ -386,8 +386,8 @@ theorem view_raw {r : Fin (K.V.k x) → Coin} {w : K.WO} {i : ℕ} (hi : i < I.V
     ((K.view (S.IVStar I.V I.ans) H x r w).msgs.map Prod.fst).getD i [] = (K.msgs x w).getD i [] :=
   Server.run_ivstar_raw S I.V I.ans H (K.xI x) (K.msgs x w) (fun i => coinSeq r i.val) hi
 
-/-- **Two forks that `P_O` reads differently collide**: two draws whose witnesses are in `R_O`, the second forked from
-the first at the inner round `j`, where `fAt` differs, show a collision in any true list holding both draws'
+/-- **Two forks that `P_O` reads differently collide**: two samples whose witnesses are in `R_O`, the second forked from
+the first at the inner round `j`, where `fAt` differs, show a collision in any true list holding both samples'
 evaluations. -/
 theorem pair_core (hB : S.Binds) (hCF : I.LastCoinFree H)
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) {j : ℕ}
@@ -600,7 +600,7 @@ theorem Pr_linkPick_le (hB : S.Binds) (hCF : I.LastCoinFree H)
   exact link_out hB hCF hK j s.1 (slotRuns s.2) (by rw [h0, h1]; exact hg) (by rw [h2, h0]; exact hv)
     (by rw [h0]; exact hgv) (by rw [h0, h1]; exact hne)
 
-/-- **`P_O`'s bad draws, linearly**: a draw where `E_O` gives witnesses in `R_O` and `P_O`'s runs don't show it has
+/-- **`P_O`'s bad samples, linearly**: a sample where `E_O` gives witnesses in `R_O` and `P_O`'s runs don't show it has
 probability at most `k_Π·(Pr[link] + 1/(M+1) + PrOut)`, the link the gated link on the composite's reruns. -/
 theorem Pr_badO_le_link (hB : S.Binds) (hCF : I.LastCoinFree H)
     (hK : K.Contract H (S.IVStar I.V I.ans) (fun v => I.opens (S.openView v)) x) [Fintype Ω] [Nonempty Ω] (M : ℕ) :

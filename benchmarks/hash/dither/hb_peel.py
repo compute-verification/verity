@@ -2,7 +2,7 @@
 peeled unit (h1u.cu's kh_one_peel: z = O' - sum_d 128^d D_d + 256 (X WB^T + xa B^T) - (X c^T + b B^T) = A B^T, xa where
 the int8 X = A + b wraps). `llm.dither_mod` for that arm, so sbench runs this module's `check` on the gate, control,
 fault, fault_wb and fault_xa captures and `gate_verdict` over them; `install()` (before the engine is built) makes the
-window raise F_FAULT_XA on the fault_xa step.
+execution phase raise F_FAULT_XA on the fault_xa step.
 
 Unchanged from `dither_one.check`: every call's A, admit and z roots and the step's round against commit.py; every receipt
 against h1r v1 (the receipts don't move with the peel); y (dumped) = dequant of the kernel's own z; wb's density by
@@ -44,7 +44,7 @@ F_FAULT_XA = 32     # h1u.cu's: xa of unit 0's row 0 at k = 0 flipped (kh_one_pe
 
 
 def install() -> None:
-    """The window's step hook raises F_FAULT_XA on the fault_xa capture (dither_one's sets the other captures' flags)."""
+    """The execution phase's step hook raises F_FAULT_XA on the fault_xa capture (dither_one's sets the other captures' flags)."""
     before = DO.DitherState.before
 
     def before_xa(self: DO.DitherState, m: int) -> None:

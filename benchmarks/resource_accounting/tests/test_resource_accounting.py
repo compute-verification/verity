@@ -530,7 +530,7 @@ def test_proof_only_reads_time_every_tag_and_reject_the_skip_control(small_store
 
 def test_joint_windows_commit_while_the_audit_runs_and_are_judged_after(small_store, tmp_path):
     """(e): windows open at random gaps until the honest audit ends, each in a workspace of its own, and are judged once
-    closed; one past the granted 1.2 ms is late (no samples drawn) though on time at T, one past T is neither; a window
+    closed; one past the granted 1.2 ms is late (no samples sampled) though on time at T, one past T is neither; a window
     that fails stops the thread and is recorded."""
     gaps: list[float] = []
     prover = _device(small_store)

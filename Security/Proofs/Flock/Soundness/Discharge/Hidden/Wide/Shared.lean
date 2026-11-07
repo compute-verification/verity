@@ -32,7 +32,7 @@ import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
 /-!
 # Shared rows (`OutputsCommittedWide`, `OutputsBindingWide`)
 
-A shared-row population's drawn `b ‖ c` are its proved units' (`Layout.drawn_digestW`, `Layout.bcChunk_drawnW` and
+A shared-row population's sampled `b ‖ c` are its proved units' (`Layout.drawn_digestW`, `Layout.bcChunk_drawnW` and
 `Layout.pop_digest_sizeW`, in `Layout/SharedRows.lean`). `bc_drawnW` is `bc_drawnH` without `pop.tables = none`, and
 `outputs_committed_wide'` is `outputs_committed_v2'`'s argument through it.
 -/
@@ -47,9 +47,9 @@ namespace FlockSoundness.Discharge.Hidden
 
 open FlockSoundness.Discharge.Layout
 
-/-! ## The registered `b ‖ c` at a drawn unit -/
+/-! ## The registered `b ‖ c` at a sampled proof block -/
 
-/-- **`bc_drawnH` with or without shared rows, at any session's `SpecOf`**: the `b ‖ c` a satisfying witness of a drawn
+/-- **`bc_drawnH` with or without shared rows, at any session's `SpecOf`**: the `b ‖ c` a satisfying witness of a sampled
 hidden-output statement holds at a proved unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public
 file, at every row. It reads the session's public file and regions alone, so a templated session's too. -/
 theorem bc_drawnS {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : Coins} {d : Lean.Json} {st : Stmt}
@@ -86,7 +86,7 @@ theorem bc_drawnS {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {coins : C
   rw [← hchunk g hr]
   exact bc_pinned' L regs hregs hz o hg hg2 (Array.getElem_mem_toList hpr) (hall _ hpr) hsz128
 
-/-- **`bc_drawnH` with or without shared rows**: the `b ‖ c` a satisfying witness of a drawn hidden-output statement
+/-- **`bc_drawnH` with or without shared rows**: the `b ‖ c` a satisfying witness of a sampled hidden-output statement
 holds at a proved unit's `hm96` slot is the unit's `b ‖ c` in the registered population's public file, at every row. -/
 theorem bc_drawnW {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
     {partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}
