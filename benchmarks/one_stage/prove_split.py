@@ -66,7 +66,8 @@ def session_split(conv: dict, wit: dict, phases: dict, live: dict, cl: dict, set
     return {"hash_s": w_hash + p_hash, "arith_s": w_arith + p_arith, "witness_hash_s": w_hash, "witness_arith_s": w_arith,
             "piop_hash_s": p_hash, "piop_arith_s": p_arith, "mask_unused_s": w_other + p_other, "zk_s": zk,
             "other_prover_s": upstream_rest + w_rest, "witness_s": witness, "prove_total_s": prove, "piop_s": piop,
-            "phases": {k: phases.get(k, 0.0) for k in PIOP}, "e2e_s": live.get("e2e_s"), "wait_e2e_s": live.get("wait_e2e_s"),
+            "phases": {k: phases.get(k, 0.0) for k in PIOP}, "laps": {**conv, **wit},
+            "e2e_s": live.get("e2e_s"), "wait_e2e_s": live.get("wait_e2e_s"),
             # before the witness: Register (the verifier's draw and its statement) and the prover's drawn statement
             "setup_s": (live.get("e2e_s") or 0.0) - witness - (live.get("tp_s") or 0.0),
             "register_s": (setup or {}).get("register_s"), "tables_s": (setup or {}).get("tables_s"),
