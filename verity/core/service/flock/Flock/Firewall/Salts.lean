@@ -13,10 +13,12 @@ domain, leaf count, schema and root, by which the server knows a table it commit
 Every salt message is 205 bytes and every tag message 333, under different constants, so no two share an input.
 
 * `parseCommit`, `commitAnswer`: a commit request's tables, and their leaves, roots and tags at the session `s`.
+* `interiorKey`, `interiorAnswer`, `Held`: an interior commit's (below).
 * `parseRefs`, `saltsAnswer`: the salts of the rows a refs file names, every table ref's tag checked (`TableRef.valid`).
 * `Epoch`, `recordOf`: the commit sessions the service opened since its last registration, and a registration's
   record: its number `n` on the ZK server's record, the number `m` of sessions its epoch opened, the registered
-  session's table refs and a record tag under `k` over all three (`recordTagOf`). A registration closes the epoch, so the
+  session's table refs and a record tag under `k` over all three (`recordTagOf`; an interior session's under its own
+  key). A registration closes the epoch, so the
   stack registers one session of the `m` it had and no other; the service of record opens one an epoch, so `m` is 1
   (`Values.answer`). The number is the record's: registrations are numbered
   0, 1, 2, … in the order the ZK server's record holds them, with no gap (`core-firewall values`).
@@ -26,6 +28,14 @@ Every salt message is 205 bytes and every tag message 333, under different const
   whose trees a registration of the server's holds is refused (`Core.Firewall.admitReads`, `core-firewall session
   --salt-key`).
 * `loadKey`: the key file.
+
+**Interior commits.** A two-stage audit's interior registration holds values that may follow the auditor's first-stage
+sample (`Values.answer`'s `interior`). Its leaves' salts are not derived from `k`: they are drawn from the operating
+system, 192 bytes a leaf, once the request is whole, and held by session while the service runs (`Held`). Its tags and
+its record tag are under the session's own key `interiorKey k s = SHA-512(k ‖ L' ‖ s)`,
+`L' = SHA-512("verity/zk-server/interior-key/v1\0")`, which the release side derives from `k` and the record's session
+(`RegistrationRecord.valid`). So nothing made under `k` reads a value or a root that may follow the sample: `k` meets
+the interior only at `s`.
 
 No request takes a salt from the stack: a commit request's body is its digests and nothing else (`commitBody`). A
 statement whose leaves were made under salts of the stack's has roots no record of the server's holds, so the release
@@ -76,6 +86,7 @@ private def label (s : String) : ByteArray := Sha512.hash (s.toUTF8.push 0)
 
 def SALT_LABEL : ByteArray := label "verity/zk-server/value-salt/v1"
 def TAG_LABEL : ByteArray := label "verity/zk-server/value-commitment/v1"
+def INTERIOR_LABEL : ByteArray := label "verity/zk-server/interior-key/v1"
 
 /-- **The salt of leaf `i` of table `j` of the commit session `s`** under the key `k`: three SHA-512 blocks in counter mode,
 each `Hash.Keyed`'s keyed digest `H(k ‖ L ‖ top)` with `top = s ‖ be32 j ‖ be64 i ‖ ctr`. -/
@@ -95,6 +106,11 @@ def Table.schemaName (t : Table) : String := Registered.SCHEMAS.getD t.schema ""
 /-- **The tag of table `j` of the commit session `s`**, of root `root`, under the key `k`. -/
 def tagOf (k s : ByteArray) (j : Nat) (t : Table) (root : ByteArray) : ByteArray :=
   Sha512.hash (k ++ TAG_LABEL ++ s ++ be32 j.toUInt32 ++ t.dom ++ be64 t.n.toUInt64 ++ ByteArray.mk #[t.schema.toUInt8] ++ root)
+
+/-- **The key of the interior commit session `s`** under the key `k`, its tags' and its record tag's:
+`SHA-512(k ‖ L ‖ s)`, `L = SHA-512("verity/zk-server/interior-key/v1\0")`, a 192-byte message, the length of no salt,
+tag or record tag message. -/
+def interiorKey (k s : ByteArray) : ByteArray := Sha512.hash (k ++ INTERIOR_LABEL ++ s)
 
 /-- Whether `a` and `b` are equal, every byte compared whatever the first difference. -/
 def ctEq (a b : ByteArray) : Bool :=
@@ -129,20 +145,41 @@ where
 /-- The bytes a commit request's body is, after its line: every table's digests, 64 bytes a leaf, and nothing else. -/
 def commitBody (ts : Array Table) : Nat := DIGEST_BYTES * ts.foldl (· + ·.n) 0
 
+/-- Table `j` of the commit session `s`, leaf `i`'s salt `salt i` and its tag under the key `tk`, its digests from byte
+`o` of `xs`: its root, its tag and its leaves' `b ‖ c` in leaf order. -/
+def commitTableWith (salt : Nat → ByteArray) (tk s : ByteArray) (j : Nat) (t : Table) (xs : ByteArray) (o : Nat) :
+    ByteArray × ByteArray × ByteArray :=
+  let bcs := (Array.range t.n).map fun i =>
+    Hm96.Default512.commitString (xs.extract (o + DIGEST_BYTES * i) (o + DIGEST_BYTES * (i + 1))) (salt i)
+  let leaves := (Array.range t.n).map fun i => FV3.Sha512.leafAs t.schemaName t.dom i (Hm96.Default512.treeLeaf bcs[i]!)
+  let root := FV3.root t.dom leaves Sha512.hash
+  (root, tagOf tk s j t root, bcs.foldl (· ++ ·) .empty)
+
 /-- Table `j` of the commit session `s` under the key `k`, its digests from byte `o` of `xs`: its root, its tag and its
 leaves' `b ‖ c` in leaf order. -/
 def commitTable (k s : ByteArray) (j : Nat) (t : Table) (xs : ByteArray) (o : Nat) : ByteArray × ByteArray × ByteArray :=
-  let bcs := (Array.range t.n).map fun i =>
-    Hm96.Default512.commitString (xs.extract (o + DIGEST_BYTES * i) (o + DIGEST_BYTES * (i + 1))) (saltOf k s j i)
-  let leaves := (Array.range t.n).map fun i => FV3.Sha512.leafAs t.schemaName t.dom i (Hm96.Default512.treeLeaf bcs[i]!)
-  let root := FV3.root t.dom leaves Sha512.hash
-  (root, tagOf k s j t root, bcs.foldl (· ++ ·) .empty)
+  commitTableWith (saltOf k s j) k s j t xs o
+
+/-- Each table's first leaf among its session's leaves, table-major, and the session's leaf count. -/
+def leafOffsets (ts : Array Table) : Array Nat × Nat :=
+  ts.foldl (fun (acc : Array Nat × Nat) t => (acc.1.push acc.2, acc.2 + t.n)) (#[], 0)
 
 /-- **A commit session's tables** `ts` at the session `s`, their digests `xs` table-major: each table's root, tag and
 leaves' `b ‖ c`, in table order. -/
 def commitAnswer (k s : ByteArray) (ts : Array Table) (xs : ByteArray) : Array (ByteArray × ByteArray × ByteArray) :=
-  let offs := (ts.foldl (fun (acc : Array Nat × Nat) t => (acc.1.push acc.2, acc.2 + DIGEST_BYTES * t.n)) (#[], 0)).1
-  (Array.range ts.size).map fun j => commitTable k s j ts[j]! xs offs[j]!
+  let lo := (leafOffsets ts).1
+  (Array.range ts.size).map fun j => commitTable k s j ts[j]! xs (DIGEST_BYTES * lo[j]!)
+
+/-- The salt `ys` holds for leaf `i` of the table whose first leaf is `lo` among its session's. -/
+def heldSalt (ys : ByteArray) (lo i : Nat) : ByteArray := ys.extract (SALT_BYTES * (lo + i)) (SALT_BYTES * (lo + i + 1))
+
+/-- **An interior commit session's tables** `ts` at the session `s`, their digests `xs` and their leaves' salts `ys`,
+both table-major: each table's root, its tag under the session's own key (`interiorKey k s`) and its leaves' `b ‖ c`, in
+table order. -/
+def interiorAnswer (k s ys : ByteArray) (ts : Array Table) (xs : ByteArray) : Array (ByteArray × ByteArray × ByteArray) :=
+  let lo := (leafOffsets ts).1
+  (Array.range ts.size).map fun j =>
+    commitTableWith (heldSalt ys lo[j]!) (interiorKey k s) s j ts[j]! xs (DIGEST_BYTES * lo[j]!)
 
 /-! ### Refs and salts -/
 
@@ -184,13 +221,31 @@ def parseRefs (b : ByteArray) : Except String (Array TableRef × Array (Nat × N
   if let some (t, i) := rs.find? past then throw s!"a row ref to leaf {i} of table ref {t}, past it"
   return (ts, rs)
 
-/-- **The salts of the rows a refs file names**, in its row refs' order, under the key `k`; refused whole where any table
-ref's tag is not the server's. -/
-def saltsAnswer (k refs : ByteArray) : Except String ByteArray := do
+/-- An interior commit session's salts, which the service holds while it runs: its session, each table's first leaf
+among the session's leaves, and the leaves' salts, table-major. -/
+structure Held where
+  s : ByteArray
+  lo : Array Nat
+  ys : ByteArray
+  deriving Inhabited
+
+/-- **The salts of the rows a refs file names**, in its row refs' order, under the key `k`: a table whose tag is the
+server's under `k` takes the salts derived from `k`, and one whose tag is under its interior session's own key
+(`interiorKey`) the salts `held` holds for that session. Refused whole where any table ref's tag is the server's under
+neither, or is an interior session's whose salts `held` does not hold. -/
+def saltsAnswer (k : ByteArray) (held : Array Held) (refs : ByteArray) : Except String ByteArray := do
   let (ts, rs) ← parseRefs refs
-  if let some t := (List.range ts.size).find? fun t => !(ts[t]!.valid k) then
-    throw s!"table ref {t}: its tag is not the ZK server's for its session, table, domain, leaf count, schema and root"
-  return rs.foldl (fun acc (t, i) => let r := ts[t]!; acc ++ saltOf k r.s r.j i) .empty
+  let src ← (Array.range ts.size).mapM fun t => show Except String (Option (ByteArray × Nat)) from do
+    let r := ts[t]!
+    if r.valid k then return none
+    unless r.valid (interiorKey k r.s) do
+      throw s!"table ref {t}: its tag is not the ZK server's for its session, table, domain, leaf count, schema and root"
+    let some h := held.find? (·.s == r.s)
+      | throw s!"table ref {t}: an interior session's, whose salts the service holds only while it runs"
+    return some (h.ys, h.lo[r.j]!)
+  return rs.foldl (fun acc (t, i) => let r := ts[t]!; acc ++ match src[t]! with
+    | none => saltOf k r.s r.j i
+    | some (ys, lo) => heldSalt ys lo i) .empty
 
 /-! ### Registrations -/
 
@@ -204,11 +259,17 @@ def RECORD_TAG_BYTES : Nat := 64
 def TableRef.bytes (r : TableRef) : ByteArray :=
   r.s ++ be32 r.j.toUInt32 ++ r.t.dom ++ be64 r.t.n.toUInt64 ++ ByteArray.mk #[r.t.schema.toUInt8] ++ r.root ++ r.tag
 
-/-- A commit session the service opened: its sample, and each of its tables with the root it answered, in table order. -/
+/-- A commit session the service opened: its sample, each of its tables with the root it answered, in table order, and
+whether it is an interior session. -/
 structure Opened where
   s : ByteArray
   tables : Array (Table × ByteArray)
+  interior : Bool := false
   deriving Inhabited
+
+/-- The key the session `o`'s tags and record tag are under: its own (`interiorKey k o.s`) where it is an interior
+session, else `k`. -/
+def Opened.key (k : ByteArray) (o : Opened) : ByteArray := if o.interior then interiorKey k o.s else k
 
 /-- **The value service's epoch**: the commit sessions it opened since its last registration, or since it started, in the
 order it drew them, one at most where it numbers registrations (`Values.answer`). A registration closes it, so a session
@@ -223,14 +284,15 @@ def recordTagOf (k : ByteArray) (n m T : Nat) (trefs : ByteArray) : ByteArray :=
   Sha512.hash (k ++ REG_LABEL ++ be64 n.toUInt64 ++ be64 m.toUInt64 ++ be32 T.toUInt32 ++ trefs)
 
 /-- **The record of registration `n`**, the session `o` of an epoch that opened `m` commit sessions, under the key `k`:
-`be64 n ‖ be64 m ‖ be32 T ‖` the session's `T` table refs, each with its tag, `‖` the record tag. `n` and `m` are public:
-`n` is the registration's place among the ZK server's, and `m` the number of sessions among which the stack chose the one
-it registers. -/
+`be64 n ‖ be64 m ‖ be32 T ‖` the session's `T` table refs, each with its tag, `‖` the record tag, the tags and the
+record tag under the session's key (`Opened.key`). `n` and `m` are public: `n` is the registration's place among the ZK
+server's, and `m` the number of sessions among which the stack chose the one it registers. -/
 def recordOf (k : ByteArray) (n m : Nat) (o : Opened) : ByteArray :=
+  let tk := o.key k
   let trefs := (Array.range o.tables.size).foldl (fun acc j =>
     let (t, root) := o.tables[j]!
-    acc ++ ({ s := o.s, j, t, root, tag := tagOf k o.s j t root } : TableRef).bytes) .empty
-  be64 n.toUInt64 ++ be64 m.toUInt64 ++ be32 o.tables.size.toUInt32 ++ trefs ++ recordTagOf k n m o.tables.size trefs
+    acc ++ ({ s := o.s, j, t, root, tag := tagOf tk o.s j t root } : TableRef).bytes) .empty
+  be64 n.toUInt64 ++ be64 m.toUInt64 ++ be32 o.tables.size.toUInt32 ++ trefs ++ recordTagOf tk n m o.tables.size trefs
 
 /-- A registration's record: its number, its epoch's session count, its table refs, their bytes and its record tag. -/
 structure RegistrationRecord where
@@ -241,9 +303,11 @@ structure RegistrationRecord where
   tag : ByteArray
   deriving Inhabited
 
-/-- Whether `r`'s record tag is the server's for its number, session count and table refs, under the key `k`. -/
+/-- Whether `r`'s record tag is the server's for its number, session count and table refs, under the key `k` or, for an
+interior session, under that session's own key (`interiorKey k s`, `s` its first table ref's session). -/
 def RegistrationRecord.valid (k : ByteArray) (r : RegistrationRecord) : Bool :=
-  ctEq r.tag (recordTagOf k r.n r.m r.tables.size r.trefs)
+  let tag := fun k => recordTagOf k r.n r.m r.tables.size r.trefs
+  ctEq r.tag (tag k) || ctEq r.tag (tag (interiorKey k r.tables[0]!.s))
 
 /-- **A registration's record**, exactly `be64 n ‖ be64 m ‖ be32 T ‖ T table refs ‖ tag`, `T` at least one. -/
 def RegistrationRecord.parse (b : ByteArray) : Except String RegistrationRecord := do
