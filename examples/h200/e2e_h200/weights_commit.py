@@ -146,7 +146,7 @@ def commit(shape: SW.Shape, seed: bytes, digest: str, state: str | Path, *, sour
            witness: str | None = None, salts: str = "os", workers: int = 1, chunk_bytes: int = SW.CHUNK_BYTES,
            progress: Any = None) -> dict[str, Any]:
     """Every tensor registered for the Program of `digest` at `shape` (module docstring), its state written to `state`:
-    -> ``commit.json``'s document. ``salts``: ``os`` draws them into a new witness (default ``state/salts.bin``),
+    -> ``commit.json``'s document. ``salts``: ``os`` samples them into a new witness (default ``state/salts.bin``),
     ``witness`` reads an existing one."""
     if salts not in ("os", "witness"):
         raise ValueError(f"salts are the operating system's (os) or an existing witness's (witness), not {salts!r}")

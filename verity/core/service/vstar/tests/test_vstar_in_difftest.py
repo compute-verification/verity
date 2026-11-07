@@ -2,11 +2,11 @@
 writes to each part's ``inst.bin``: per port of the part's circuit, in order, its table rows (u16 words) and their salts as
 fingerprints (the first 8 bytes of SHA-512), and the row each instance reads.
 
-The drawn cases stage one statement each with the stager's own code on a small consistent session (openings that climb to
+The sampled cases stage one statement each with the stager's own code on a small consistent session (openings that climb to
 their tops, both reps' running sums on one chain, the inner prover's message rows registered as ``rec-c<i>``): a level
 (`rec_outer.stage` at the stager's `rec_vstage.coefficients` and `rec_outer.Chain.build`), a part of the algebra
 (`rec_vstage._stage_part`, reading what `rec_vstage.stage` hands it) and a cap (`rec_cap.stage`). The link table's part
-(`rec_vstage.link_part`) is staged over drawn populations (`rec_vstage.drawn_rows`): links both ways between two units, its
+(`rec_vstage.link_part`) is staged over sampled populations (`rec_vstage.drawn_rows`): links both ways between two units, its
 forgery, a unit reading its own output, and a table with a filler row. The prover's fresh salts (a level's ``row`` and
 ``aux``, the link part's ``xyr``, ``raux``, ``xyw`` and ``waux``) are the case's, handed to the stager through ``hm96``'s
 salt source. With
@@ -205,7 +205,7 @@ _STAGED: dict[str, dict] = {}
 
 
 def staged(seed: int, kind: str, levels: list) -> dict:
-    """One statement of a drawn session staged with the stager's own code: the input Lean reads (the session's ``src``, the
+    """One statement of a sampled session staged with the stager's own code: the input Lean reads (the session's ``src``, the
     staged program's SHA-512 and the statement), the stager's ports kept under it for `stager`. ``levels``: (H, c, openings a
     rep), the openings capped to what a top of ``2^c`` nodes holds."""
     lv = [(H, c, max(1, min(q, 2 ** c // (2 if i == 0 else 1)))) for i, (H, c, q) in enumerate(levels)]
@@ -235,7 +235,7 @@ server = D.server_fixture(PART_IN)
 
 @pytest.mark.parametrize("kind", ["level", "inner", "cap"])
 def test_part_in_agrees_with_the_stagers_inst_bin(server, kind):
-    """Each kind of part on drawn sessions: Lean's port inputs are the stager's ``inst.bin``, port for port."""
+    """Each kind of part on sampled sessions: Lean's port inputs are the stager's ``inst.bin``, port for port."""
     g = random.Random(SEED)
     for _ in range(4):
         levels = [(g.randint(0, 2), g.randint(1, 2), g.randint(1, 2)) for _ in range(g.randint(1, 2))]
@@ -292,7 +292,7 @@ def link_src(rows: SimpleNamespace, links: list, salts: list[bytes], fresh: dict
 
 
 def staged_link(seed: int, units: int, n_in: int, n_out: int, links: list, forge: str | None = None) -> dict:
-    """The link table's part over a drawn population (`rec_vstage.drawn_rows`) staged with `rec_vstage.link_part`: the input
+    """The link table's part over a sampled population (`rec_vstage.drawn_rows`) staged with `rec_vstage.link_part`: the input
     Lean reads (``src`` over the table the stager registered, forged or not, the part's program's SHA-512 and the
     statement), the stager's ports kept under it for `stager`. The table's registered salts and the part's fresh salts are
     the case's."""
@@ -324,7 +324,7 @@ def _flip(h: str) -> str:
 
 @pytest.mark.slow
 def test_link_in_agrees_with_the_stagers_inst_bin(server, link_cache):
-    """The link table's part (`VStar.In.linkIn`) on two drawn populations whose links run both ways and on the forgery
+    """The link table's part (`VStar.In.linkIn`) on two sampled populations whose links run both ways and on the forgery
     (``forge="link"``: the first row names a writer whose output is not its reader's row): Lean's port inputs are the
     stager's ``inst.bin``, port for port; and one bit of a sibling, a salt or a root moves exactly the port that reads it.
     About a minute: the stager writes ``inst.bin`` only through `RecLink{1, 1}`'s composed circuit."""

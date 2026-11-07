@@ -3,7 +3,7 @@ module
 public import Properties.Identity
 
 /-!
-# Proofs that core's identity hash is C-Flock's SHA-512 (`Properties.Identity`)
+# Proofs that core's identity hash is Flock's SHA-512 (`Properties.Identity`)
 
 A state `Rep`resents the message it absorbed: its length, its pending bytes (the message's tail after its whole blocks)
 and its chaining value (`chain`, the compressions over those blocks). `init` represents the empty message and `update`

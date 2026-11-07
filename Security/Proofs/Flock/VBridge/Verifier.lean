@@ -271,7 +271,7 @@ theorem length_recOpenOuts (LANES H : ℕ) (p : Ports) (hacc : p.acc = 1024) : (
 
 /-! ## The verifier's unit -/
 
-/-- **The verifier's laid-out opening computes the verifier of record's climb and the opening's consistency term**:
+/-- **The verifier's laid-out opening computes the verifier's climb and the opening's consistency term**:
 `laid_recOpen` at `RecOpen.unitLaid`, M0's ports one 16-bit port per word. Whenever its rows hold at the column values
 `v`, if the `row` columns hold the bytes of the `LANES` elements `r`, the `aux` columns the 64-byte siblings `ss` one after
 another (`64 max(1, ⌈H / 2⌉)` words), the `acc` columns two elements `a` and then 96 bytes `rest`, the `coef` columns

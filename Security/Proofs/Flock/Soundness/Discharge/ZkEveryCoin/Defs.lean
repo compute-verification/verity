@@ -20,7 +20,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 # One `--zk` session at every coin vector: what the prover sends and what the simulator outputs
 
 `Composed.ZkViewAt` is the view statement at the coin vectors the honest prover doesn't refuse (`CoinedSetup.Admits`).
-Here the statement at every coin vector, with the verifier's coins uniform and drawn independently of the prover's
+Here the statement at every coin vector, with the verifier's coins uniform and sampled independently of the prover's
 randomness:
 
 * `sentAt`: the guarded messages a table sent before the session's first failing check (`Session.sent`, one table).
@@ -33,8 +33,8 @@ randomness:
   coins, which are public, so the simulator aborts exactly when the prover does.
 * `ZkViewAll`: every event on the coins and the output has, averaged over uniform coins, probabilities within
   `2·|LeafPos|·δ₁` under the prover and the simulator, both ways.
-* `instFintypeF128`, `instFintypeF256`, `instFintypeRestZK`, `instFintypeCoinsZK` (and `instFintypeRestCoinedOf` at a draw's tables): the uniform distribution on a
-  draw's coins.
+* `instFintypeF128`, `instFintypeF256`, `instFintypeRestZK`, `instFintypeCoinsZK` (and `instFintypeRestCoinedOf` at a sample's tables): the uniform distribution on a
+  sample's coins.
 -/
 
 @[expose] public section
@@ -71,7 +71,7 @@ noncomputable def simAll (C : CoinedSetup) (c : CoinsZK C.Rest) (w0 : Witness C.
 registered values are the public ones (at every coin vector's link points), any dummy witness `w0` and any event `E` on
 the coins and the output, the probability under uniform coins `c` and the honest prover's randomness (`outExe`) and
 under uniform coins and the simulator's (`simAll`) are within `2·|LeafPos|·δ₁`, both ways.
-The coins are drawn independently of either party's randomness, so each probability is the average over `c` of the
+The coins are flipped independently of either party's randomness, so each probability is the average over `c` of the
 probability at `c`. -/
 def ZkViewAll (C : CoinedSetup) [Fintype (CoinsZK C.Rest)] (δ₁ : ℝ≥0∞) : Prop :=
   ∀ (w w0 : Witness C.S.m), C.Valid w → (∀ c, (C.T c).tab.sReg w = (C.T c).tab.pubReg) →
@@ -85,7 +85,7 @@ def ZkViewAll (C : CoinedSetup) [Fintype (CoinsZK C.Rest)] (δ₁ : ℝ≥0∞) 
           ≤ avg (fun c => prCoin fun p : (C.T c).tab.Rand × ((C.T c).tab.Hid → ZkView.Salt) => E c (outExe C c w p.1 p.2))
             + 2 * Fintype.card (LeafPos C.z) * δ₁
 
-/-! ## The uniform distribution on a draw's coins -/
+/-! ## The uniform distribution on a sample's coins -/
 
 /-- F128 as its two 64-bit words. -/
 def f128Equiv : Flock.F128 ≃ Fin (2 ^ 64) × Fin (2 ^ 64) :=
