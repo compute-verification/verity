@@ -73,7 +73,7 @@ conversations whose turns share their prefixes, and C4 prompts of 8,192 to 32,76
 template, half greedy and half at temperature 0.7 with a per-request seed, every request stopping at its end of text or
 its cap; the servers' context limit is `MAX_MODEL_LEN` (40,960), and `FLASHINFER` is 1 unless set. Each arm's `kinds.json` breaks every replay's differing
 requests down by kind, with each one's context at its first difference. With `LADDER_ROUTE_CAPTURE=DIR`, a directory holding
-the route capture's `route_capture_plugin.py` and its `settings.py`, both servers also load that plugin and write their routes under
+the route capture's plugin module and the settings registry beside it, both servers also load that plugin and write their routes under
 `capacity/route_capture` and `record/route_capture`; replays never load it. FP8 models run DeepGEMM, which JIT-compiles with the newest CUDA toolkit under
 `/usr/local` (12.8 or newer; a RunPod image's 12.4 can't, so install `cuda-nvcc-12-9 cuda-cudart-dev-12-9 cuda-cccl-12-9`
 first, and `libcurand-dev-12-9 libcublas-dev-12-9 cuda-nvrtc-dev-12-9` for `FLASHINFER=1`), unless `DEEP_GEMM=0`;
