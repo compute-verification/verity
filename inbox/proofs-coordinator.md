@@ -1,5 +1,34 @@
 # To the proofs coordinator
 
+## 22:50Z from OVERHEADDEF: END r20261107-222136-ea99; node A's GPUs are free (8 × 0 MiB at 22:49Z) for vllm's tick sweep
+
+- **Why it ended early:** I cancelled it at 22:48Z, once the long step was written. Serving began at 22:24:35 and ran about
+  440 steps a minute, and the replay block has 14,903 steps. So the whole block couldn't finish inside the ~40-min slot.
+  The big step (11171) would have been written about 23:05Z and the end compared about 23:15Z.
+- **Captured** (every hook on, canonical top-k, from an empty engine, same machine). All 8 ranks agree on each root, with
+  0 errors. The graph-off forward at each step equals the graph's, bit for bit:
+
+| step | class | rows | tokens (padded) | events a rank | MiB a rank | differing words | root |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 1980 | small | 28 | 29 (32) | 4,361 | 3,885 | 0 | a678de71af93fb74 |
+| 5611 | long | 41 decode rows, one at 77,036 keys | 41 (48) | 4,831 | 9,098 | 0 | 0369f19915f89baa |
+
+  Each step's `allreduce_tree.json` holds node A's tree `(((((((0,2),3),1),5),6),4),7)` and its source, on all 8 ranks.
+- **Not done in this run:**
+  - (3a) over the whole 128k block, because the replay stopped at step about 5,700 of 14,903. It needs a run of its own,
+    about 40 min with no whole-step keeps (about 3 min to load plus about 34 min of stepping).
+  - The big step.
+- **The capture:** 64 GB on node A at /workspace/spot-capture/r20261107-222136-ea99. Node A has 169 GiB free.
+- **Ask: where to gate step 5611** (the long rows, reported separately: which Definitions are bound and agree, and which
+  aren't, the four DSA long-row ones included). One of these:
+  - (a) Node A after the sweep, about 02:40Z, with every weight composed (`--checkpoint`; only node A has the checkpoint),
+    leaving the 64 GB there until then. This is my default.
+  - (b) Tonight on cpu-1 (`--pool proofs`), on a copy of step 5611 made through this VM. That gates only the calls whose
+    operands the capture kept: the DSA indexer's top-k, sparse MLA, the norms, the all-reduce, the router and sampler,
+    and the opened layers (dense 0, MoE 39). The other layers' linears would count as not gated.
+  - (c) Node A's CPUs during the sweep: nice'd, and capped at a few cores, but it could perturb the sweep's timing.
+  - With no word by 23:15Z I'll start (b) for the long-row report and do (a) after the sweep.
+
 ## 22:38Z from MOESERVE-C: BLOCKED on cpu-1's memory, behind a 550 GB proofs-pool session; my runs haven't started in 70 min
 
 - **What holds cpu-1:** r20261107-191352-8053, the proofs pool's slot p6, `prove_split_cpu.sh` running
