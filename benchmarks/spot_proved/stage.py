@@ -32,6 +32,7 @@ import hashlib
 import json
 import re
 import sys
+import threading
 import time
 import traceback
 from pathlib import Path
@@ -58,6 +59,21 @@ def multimem_trees(world: int) -> str:
     from verity.ml.definitions.registry import tp_allreduce as AR
     tree = AR.GLM53_H200_TREE if world == 8 else AR.chain(world)
     return json.dumps([tree] * world, separators=(",", ":"))
+
+
+def load_roles(params: dict) -> dict:
+    """The served fields vLLM rewrites at load, by `verity_vllm.check.fp8_ue8m0`'s roles: each block-FP8 linear outside the routed
+    experts (a DeepGEMM linear: its weight and ``weight_scale_inv`` requantised to ue8m0), and MLA's ``W_UK_T`` / ``W_UV``
+    (absorbed from the requantised ``kv_b_proj``)."""
+    roles = {}
+    for n, x in params.items():
+        if ".experts." in n:
+            continue
+        if n.endswith(".weight") and x["dtype"] == "torch.float8_e4m3fn" and n + "_scale_inv" in params:
+            roles[n], roles[n + "_scale_inv"] = {"role": "fp8_w_requant_ue8m0"}, {"role": "fp8_ws_requant_ue8m0"}
+        elif n.endswith((".W_UK_T", ".W_UV")):
+            roles[n] = {"role": "mla.absorb"}
+    return roles
 
 
 class Capture:
@@ -97,7 +113,11 @@ class Capture:
         self.whole = all(self.commit[r].get("whole", self.commit[r].get("kept") == "every recorded tensor") for r in self.ranks)
         self.every = False
         self.per_call = 0
+        self.checkpoint: str | None = None
         self._params: dict = {}
+        self._composers: dict = {}
+        self._ck = None
+        self._lock = threading.Lock()
 
     def tensor(self, r: int, ref: dict) -> np.ndarray:
         """A recorded tensor's words (its logical order), checked against its SHA-512."""
@@ -119,6 +139,9 @@ class Capture:
         if (r, name) not in self._params:
             od = self.d / f"rank{r}" / f"step{self.step}" / "open"
             meta = self.commit[r]["opened"].get(name) or self.commit[r].get("kept_params", {}).get(name)
+            if meta is None and self.checkpoint is not None and name in self.params[r]:
+                self._params[(r, name)] = self.from_checkpoint(r, name)
+                return self._params[(r, name)]
             if meta is None:
                 raise LookupError(f"parameter {name} is not in an opened layer")
             raw = (od / f"{name}.bin").read_bytes()
@@ -127,6 +150,30 @@ class Capture:
                 raise SystemExit(f"rank {r}: opened {name} is not the committed bytes")
             self._params[(r, name)] = np.frombuffer(raw, dtype=NP[meta["dtype"]]).reshape(meta["shape"])
         return self._params[(r, name)]
+
+    def from_checkpoint(self, r: int, name: str) -> np.ndarray:
+        """Rank ``r``'s served ``name`` composed from ``checkpoint`` by `verity_vllm.check.weights_of_record` (TP slices, fused
+        parts, the experts' scale grid), with vLLM's load-time ue8m0 requant of each DeepGEMM linear and MLA's absorbed
+        ``W_UK_T`` / ``W_UV``, held to the SHA-512 the step's ``params.json`` committed."""
+        with self._lock:
+            if r not in self._composers:
+                self._composers[r] = self._composer(r)
+        rec = self.params[r][name]
+        raw = np.ascontiguousarray(self._composers[r](name)).tobytes()
+        if hashlib.sha512(raw).hexdigest() != rec["sha512"]:
+            raise LookupError(f"rank {r}: {name} composed from the checkpoint is not the committed bytes")
+        return np.frombuffer(raw, dtype=NP[rec["dtype"]]).reshape(rec["shape"])
+
+    def _composer(self, r: int):
+        from verity_vllm.check import fp8_ue8m0
+        from verity_vllm.check.checkpoint_index import CheckpointIndex
+        from verity_vllm.check.weights_of_record import compose
+        if self._ck is None:
+            self._ck = CheckpointIndex(self.checkpoint, verify_shards=False)
+        ck, P, world = self._ck, self.params[r], len(self.ranks)
+        dims = {n: (x["shape"], 8 * np.dtype(NP[x["dtype"]]).itemsize) for n, x in P.items()}
+        rw = fp8_ue8m0.Rewrites(list(dims), load_roles(P), lambda f: compose(f, *dims[f], ck, world=world, rank=r), ck.config)
+        return lambda n: (rw.compose(n, dims[n][0]) if rw.covers(n) else compose(n, *dims[n], ck, world=world, rank=r))[0]
 
     def param_view(self, r: int, ref: dict) -> np.ndarray:
         base = self.param(r, ref["param"])
@@ -140,7 +187,7 @@ class Capture:
     def opened(self, e: dict, weights: bool = False) -> bool:
         """Whether a call's values are here: an opened layer's, or (`every`, a step kept whole) any layer's call that reads
         no weights past the kept small parameters."""
-        return e.get("layer") in self.layers or (self.every and not weights)
+        return e.get("layer") in self.layers or (self.every and (not weights or self.checkpoint is not None))
 
     def cells(self, label: str, call: tuple, *dims: int):
         """A call's instance indices over ``dims``: every one, or with `per_call` set (``--every-call``) that many drawn by
@@ -562,6 +609,30 @@ def _gate_task(task: tuple[str, int]) -> tuple[str, dict]:
     return label, gate_instance(_EVERY["specs"][label], key, args_of, want_of, _EVERY["full_gates"])[0]
 
 
+def preload(cap: Capture, pops: dict, tasks: list[tuple[str, int]], jobs: int) -> dict:
+    """Compose from ``--checkpoint``, before the fork, each unkept weight a drawn call reads, so the workers share it; a weight
+    whose composition is not the committed bytes is left to fail its instances."""
+    if cap.checkpoint is None:
+        return {}
+    from concurrent.futures import ThreadPoolExecutor
+    by_seq = {(r, e["seq"]): e for r in cap.ranks for e in cap.events[r]}
+    want = set()
+    for label, i in tasks:
+        key = pops[label][i][2]
+        e = by_seq.get(tuple(key[:2])) if isinstance(key, tuple) and len(key) > 1 else None
+        want |= {(key[0], v["param"]) for v in (e or {}).get("in", {}).values() if isinstance(v, dict) and "param" in v}
+
+    def one(k: tuple[int, str]) -> str | None:
+        try:
+            cap.param(*k)
+        except LookupError as ex:
+            return str(ex)
+        return None
+    with ThreadPoolExecutor(max(1, jobs)) as ex:
+        fails = [x for x in ex.map(one, sorted(want)) if x]
+    return {"weights": len(want), "composed": len(want) - len(fails), "refused": fails[:20]}
+
+
 def every_call(cap: Capture, pops: dict, a) -> dict:
     """The match gate on ``--every-call`` instances of every recorded call of every type (drawn by the coins within the call),
     over every layer when the step was kept whole (weight-reading types over the opened layers only), in ``--jobs``
@@ -569,7 +640,7 @@ def every_call(cap: Capture, pops: dict, a) -> dict:
     import multiprocessing as mp
     import random
     rep: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "whole": cap.whole,
-                 "layers": "every layer" if cap.whole else cap.layers, "weight_layers": cap.layers, "per_call": a.every_call,
+                 "layers": "every layer" if cap.whole else cap.layers, "weight_layers": "every layer (--checkpoint)" if cap.checkpoint else cap.layers, "per_call": a.every_call,
                  "types": {}}
     specs: dict = {}
     tasks: list[tuple[str, int]] = []
@@ -588,6 +659,7 @@ def every_call(cap: Capture, pops: dict, a) -> dict:
         for c, idx in sorted(calls.items()):
             tasks += [(label, idx[j]) for j in draw(cap.coins, f"every/{label}/{c}", len(idx), a.every_call)]
     random.Random(cap.coins).shuffle(tasks)
+    rep["from_checkpoint"] = preload(cap, pops, tasks, a.jobs)
     _EVERY.update(pops=pops, specs=specs, full_gates=a.full_gates)
     done: dict[str, list[dict]] = {k: [] for k in specs}
     rep["instances"] = len(tasks)
@@ -635,6 +707,8 @@ def main() -> int:
     ap.add_argument("--every-call", type=int, default=0, metavar="N",
                     help="instead of staging, gate N instances of every call of every type (OUT/gate.json)")
     ap.add_argument("--jobs", type=int, default=1, help="--every-call's processes")
+    ap.add_argument("--checkpoint", default=None,
+                    help="the served checkpoint: a weight the capture didn't keep is composed from it and held to params.json")
     ap.add_argument("--deadline", type=float, default=0.0, help="--every-call stops at this Unix time (0: none)")
     a = ap.parse_args()
     import a11
@@ -648,6 +722,7 @@ def main() -> int:
     t0 = time.time()
     cap = Capture(Path(a.capture), a.step)
     cap.every, cap.per_call = bool(a.every_call) and cap.whole, a.every_call
+    cap.checkpoint = a.checkpoint
     profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     report: dict = {"capture": a.capture, "step": a.step, "ranks": cap.ranks, "root": cap.root, "coins": cap.coins.hex(),
                     "layers": cap.layers, "checks": {r: cap.meta[r]["check"] for r in cap.ranks}, "types": {}}
