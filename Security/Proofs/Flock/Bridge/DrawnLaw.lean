@@ -12,12 +12,12 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 
 The deployed sample (`SampledProofs.OneStage.drawnFrom`) samples under the sampling design the registration's law object expands to
 over its strata (`Draw.deriveLaw` over `Partition.strata`), else the sampling design `flockLaw` parses from the sampling design object,
-and refuses a Bernoulli one (`OneStage.coveredLaw`).
+and refuses a Bernoulli one (`OneStage.coveredDesign`).
 `drawnLaw desc q lj tb n` is that sampling design, from the registration's descriptor bytes `desc`, query `q`, law object `lj` and
 work table `tb`, at the population `n`:
 
 * `drawnFrom_drawnLaw`: the deployed sample is `drawUnits` under `drawnLaw`, at a verifier whose program `desc` parses to;
-* `notBernoulli_drawnLaw`, `notBernoulli_drawsUnder`: it is no Bernoulli law (`NotBernoulli`);
+* `notBernoulli_sampledDesign`, `notBernoulli_drawsUnder`: it is no Bernoulli law (`NotBernoulli`);
 * `lawK law`: the units a sampling design samples, a subset sampling design's `k` or its strata's `k`s summed;
 * `DrawsUnder desc q lj tb n law kd`: the verifier samples `kd` units under `law`: `law` is `drawnLaw`'s, and `kd` its
   `lawK`; it holds at every sample the one-stage verifier draws (`drawsUnder_of_drawnFrom`);
@@ -29,8 +29,8 @@ work table `tb`, at the population `n`:
   (`LawSized`) at `lawK`, at any population;
 * `lawOn_drawnLaw`, `lawOn_drawsUnder`: at `PopMatches`, it is on the registration's strata (`LawOn` at `nsOf`), sampling
   `lawK` units;
-* `lawOf desc q lj tb n`: `drawnLaw`'s sampling design, or `subset 0` where it errs (`lawOf_cases`), under which every sample
-  `drawnFrom` draws is drawn (`drawnFrom_lawOf`), no Bernoulli law (`notBernoulli_lawOf`) and sized (`lawSized_lawOf`).
+* `designAt desc q lj tb n`: `drawnLaw`'s sampling design, or `subset 0` where it errs (`designAt_cases`), under which every sample
+  `drawnFrom` draws is drawn (`drawnFrom_designAt`), no Bernoulli law (`notBernoulli_designAt`) and sized (`sized_designAt`).
 -/
 
 @[expose] public section
@@ -46,20 +46,20 @@ def drawnLaw (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n :
   let p ← SampledProofs.Program.parse ⟨desc.toArray⟩
   let derived ← SampledProofs.Draw.deriveLaw p q lj tb
   let parsed ← SampledProofs.Draw.flockLaw (SecurityProofs.lawObj lj derived) n
-  SampledProofs.OneStage.coveredLaw (derived.getD parsed)
+  SampledProofs.OneStage.coveredDesign (derived.getD parsed)
 
-/-- `OneStage.coveredLaw` refuses a Bernoulli sampling design. -/
-theorem coveredLaw_bernoulli (a b : ℕ) :
-    SampledProofs.OneStage.coveredLaw (.bernoulli a b) =
+/-- `OneStage.coveredDesign` refuses a Bernoulli sampling design. -/
+theorem coveredDesign_bernoulli (a b : ℕ) :
+    SampledProofs.OneStage.coveredDesign (.bernoulli a b) =
       .error "the law is bernoulli, which the sampled audit's soundness statement doesn't cover" :=
   rfl
 
-/-- `OneStage.coveredLaw` passes exactly the sampling designs that are no Bernoulli law, as they are. -/
-theorem coveredLaw_ok {l law : Flock.Draw.Law} (h : SampledProofs.OneStage.coveredLaw l = .ok law) :
+/-- `OneStage.coveredDesign` passes exactly the sampling designs that are no Bernoulli law, as they are. -/
+theorem coveredDesign_ok {l law : Flock.Draw.Law} (h : SampledProofs.OneStage.coveredDesign l = .ok law) :
     law = l ∧ NotBernoulli l := by
   cases l
   case bernoulli a b =>
-    rw [coveredLaw_bernoulli] at h
+    rw [coveredDesign_bernoulli] at h
     cases h
   all_goals exact ⟨(Except.ok.inj h).symm, fun _ _ h' => by cases h'⟩
 
@@ -117,16 +117,16 @@ theorem drawnLaw_ok {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Jso
   obtain ⟨p, hp, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨derived, hd, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨parsed, hpar, h⟩ := SecurityProofs.bind_eq_ok.1 h
-  exact ⟨p, derived, parsed, hp, hd, hpar, (coveredLaw_ok h).1⟩
+  exact ⟨p, derived, parsed, hp, hd, hpar, (coveredDesign_ok h).1⟩
 
-/-- **The audit samples under no Bernoulli law**: `drawnLaw` refuses one (`OneStage.coveredLaw`). -/
-theorem notBernoulli_drawnLaw {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
+/-- **The audit samples under no Bernoulli law**: `drawnLaw` refuses one (`OneStage.coveredDesign`). -/
+theorem notBernoulli_sampledDesign {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
     {law : Flock.Draw.Law} (h : drawnLaw desc q lj tb n = .ok law) : NotBernoulli law := by
   unfold drawnLaw at h
   obtain ⟨_, -, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨_, -, h⟩ := SecurityProofs.bind_eq_ok.1 h
   obtain ⟨_, -, h⟩ := SecurityProofs.bind_eq_ok.1 h
-  obtain ⟨rfl, hb⟩ := coveredLaw_ok h
+  obtain ⟨rfl, hb⟩ := coveredDesign_ok h
   exact hb
 
 /-- **`drawnLaw`'s cases**: a subset sampling design within the population, a Bernoulli law, or the sampling design `Flock.Draw.derive` or
@@ -282,51 +282,51 @@ theorem lawOn_drawsUnder {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lea
 /-- **The sampling design the verifier samples under at a registration**: `drawnLaw`'s, and `subset 0`, which samples no
 proof block, at a registration whose law `drawnLaw` refuses, where `drawnFrom` refuses every sample
 (`drawnFrom_drawnLaw`). -/
-def lawOf (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Flock.Draw.Law :=
+def designAt (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) : Flock.Draw.Law :=
   match drawnLaw desc q lj tb n with
   | .ok law => law
   | .error _ => .subset 0
 
-/-- `lawOf` is the sampling design the verifier samples under (`DrawsUnder`, at its `lawK`), or `subset 0`. -/
-theorem lawOf_cases (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) :
-    DrawsUnder desc q lj tb n (lawOf desc q lj tb n) (lawK (lawOf desc q lj tb n)) ∨
-      lawOf desc q lj tb n = .subset 0 := by
-  unfold lawOf
+/-- `designAt` is the sampling design the verifier samples under (`DrawsUnder`, at its `lawK`), or `subset 0`. -/
+theorem designAt_cases (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) :
+    DrawsUnder desc q lj tb n (designAt desc q lj tb n) (lawK (designAt desc q lj tb n)) ∨
+      designAt desc q lj tb n = .subset 0 := by
+  unfold designAt
   cases h : drawnLaw desc q lj tb n with
   | ok law => exact Or.inl ⟨h, rfl⟩
   | error _ => exact Or.inr rfl
 
-/-- **Every sample the one-stage verifier draws is under `lawOf`**: where `drawnFrom` samples, at a verifier whose program
+/-- **Every sample the one-stage verifier draws is under `designAt`**: where `drawnFrom` samples, at a verifier whose program
 the descriptor `desc` parses to and under the sampling design object `Draw.derive` writes, its sample is `drawUnits` under
-`lawOf desc v.query v.law v.workTable n`. -/
-theorem drawnFrom_lawOf {desc : Claims.Msg} {v : SampledProofs.Registration.Verifier} {lo : Lean.Json}
+`designAt desc v.query v.law v.workTable n`. -/
+theorem drawnFrom_designAt {desc : Claims.Msg} {v : SampledProofs.Registration.Verifier} {lo : Lean.Json}
     (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok v.program)
     (hlo : SampledProofs.Draw.derive v.program v.query v.law v.workTable = .ok lo) {n : ℕ} {src : ByteArray}
     {r : Array ℕ × ℕ} (h : SampledProofs.OneStage.drawnFrom v lo n src = .ok r) :
-    SampledProofs.Draw.drawUnits (lawOf desc v.query v.law v.workTable n) n src = .ok r := by
+    SampledProofs.Draw.drawUnits (designAt desc v.query v.law v.workTable n) n src = .ok r := by
   obtain ⟨law, ⟨hl, -⟩, hd⟩ := drawsUnder_of_drawnFrom hp hlo h
-  unfold lawOf
+  unfold designAt
   rw [hl]
   exact hd
 
-/-- **The verifier samples under no Bernoulli law** (`notBernoulli_drawnLaw`). -/
+/-- **The verifier samples under no Bernoulli law** (`notBernoulli_sampledDesign`). -/
 theorem notBernoulli_drawsUnder {desc : Claims.Msg} {q lj : Lean.Json} {tb : Option Lean.Json} {n : ℕ}
     {law : Flock.Draw.Law} {kd : ℕ} (h : DrawsUnder desc q lj tb n law kd) : NotBernoulli law :=
-  notBernoulli_drawnLaw h.1
+  notBernoulli_sampledDesign h.1
 
-/-- **`lawOf` is no Bernoulli law** (`notBernoulli_drawsUnder`; `subset 0` is none). -/
-theorem notBernoulli_lawOf (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) :
-    NotBernoulli (lawOf desc q lj tb n) := by
-  rcases lawOf_cases desc q lj tb n with h | h
+/-- **`designAt` is no Bernoulli law** (`notBernoulli_drawsUnder`; `subset 0` is none). -/
+theorem notBernoulli_designAt (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) :
+    NotBernoulli (designAt desc q lj tb n) := by
+  rcases designAt_cases desc q lj tb n with h | h
   · exact notBernoulli_drawsUnder h
   · rw [h]
     intro _ _ h'
     cases h'
 
-/-- **`lawOf` is sized** at its `lawK` (`lawSized_drawsUnder`; `subset 0` at `0`). -/
-theorem lawSized_lawOf (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) :
-    LawSized (lawOf desc q lj tb n) (lawK (lawOf desc q lj tb n)) := by
-  rcases lawOf_cases desc q lj tb n with h | h
+/-- **`designAt` is sized** at its `lawK` (`lawSized_drawsUnder`; `subset 0` at `0`). -/
+theorem sized_designAt (desc : Claims.Msg) (q lj : Lean.Json) (tb : Option Lean.Json) (n : ℕ) :
+    LawSized (designAt desc q lj tb n) (lawK (designAt desc q lj tb n)) := by
+  rcases designAt_cases desc q lj tb n with h | h
   · exact lawSized_drawsUnder h (notBernoulli_drawsUnder h)
   · rw [h]
     exact rfl
