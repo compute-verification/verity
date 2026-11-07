@@ -22,8 +22,9 @@ The snapshot, through ``collective_rpc`` on every rank (`tp_state`), runs in fiv
 ``edge.json`` records the step, the block ids, the pool's counts, every rank's record and the check.
 
 `install` puts `Edges` on an engine core in this process (the restored engine's, in-process). `register`, a vLLM general
-plugin, puts it on every engine core a ``vllm serve`` process builds, configured by ``VERITY_TPEDGE`` (JSON:
-``out``, ``steps``, and optionally ``dump``, defaulting to every edge).
+plugin, puts it on every engine core a ``vllm serve`` process builds, configured by ``VERITY_TPEDGE`` (JSON: ``out``;
+``steps`` or ``at_s``; ``dump``, how many of the first edges write their blocks, 1 by default; ``savers``, each a
+``module:function`` the snapshot calls with the engine core and the edge's directory).
 """
 from __future__ import annotations
 
@@ -109,23 +110,34 @@ def _rpc(core: Any) -> Callable[..., list[Any]]:
 
 
 class Edges:
-    """The drained edges at scheduler steps ``steps`` of one engine core, each snapshotted under ``out/edge-<step>``."""
+    """The drained edges of one engine core, each snapshotted under ``out/edge-<step>``: at scheduler steps ``steps``
+    (a replay, which knows the served edges' steps), or at the first step ``at_s`` seconds after the engine's first
+    scheduled step (serving, which doesn't). The first ``dump`` edges taken also write their blocks."""
 
-    def __init__(self, out: str | Path, steps: Iterable[int], dump: Iterable[int] | None = None,
+    def __init__(self, out: str | Path, steps: Iterable[int] = (), at_s: Iterable[float] = (), dump: int = 1,
                  savers: Sequence[Callable[[Any, Path], Any]] = (), clock: Callable[[], float] = time.monotonic):
         self.out = Path(out)
-        self.steps = sorted(set(int(s) for s in steps))
-        self.dump = set(self.steps if dump is None else (int(s) for s in dump))
+        self.pending: list[int] = sorted(set(int(s) for s in steps))
+        self.times: list[float] = sorted(float(t) for t in at_s)
+        if not self.pending and not self.times:
+            raise ValueError("tp_edge.Edges: no edge (give steps or at_s)")
+        self.dump = int(dump)
         self.savers = list(savers)
         self.clock = clock
-        self.pending: list[int] = list(self.steps)
+        self.t_first: float | None = None
         self.draining: int | None = None
         self.taken: list[dict[str, Any]] = []
 
     def due(self, current_step: int) -> int | None:
-        """The edge the scheduler has reached (its step scheduled), if any is pending."""
+        """The edge the scheduler has reached (its step scheduled), if any is pending: its step."""
+        if current_step >= 1 and self.t_first is None:
+            self.t_first = self.clock()
         if self.pending and current_step >= self.pending[0]:
-            return self.pending.pop(0)
+            self.pending.pop(0)
+            return current_step
+        if self.times and self.t_first is not None and self.clock() - self.t_first >= self.times[0]:
+            self.times.pop(0)
+            return current_step
         return None
 
     def wrap(self, core: Any, step_fn: Callable[[], Any]) -> Callable[[], Any]:
@@ -169,7 +181,7 @@ class Edges:
         t1 = self.clock()
         check = agree(recs, d, ids)
         wrote: list[Any] = []
-        if edge in self.dump:
+        if len(self.taken) < self.dump:
             ranks = [0] if check["kv_equal"] else check["ranks"]
             wrote = [w for w in _rpc(core)(tp_state.dump, args=(str(d), ids, ranks)) if w]
         t2 = self.clock()
@@ -202,9 +214,19 @@ def config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | None:
     if not raw:
         return None
     cfg = json.loads(raw)
-    if "out" not in cfg or not cfg.get("steps"):
-        raise ValueError(f"{ENV} needs out and steps, got {sorted(cfg)}")
+    if "out" not in cfg or not (cfg.get("steps") or cfg.get("at_s")):
+        raise ValueError(f"{ENV} needs out, and steps or at_s; got {sorted(cfg)}")
     return cfg
+
+
+def resolve(name: str) -> Callable[..., Any]:
+    """A ``module:function`` name's function (a saver ``VERITY_TPEDGE`` names, run in the engine core)."""
+    import importlib
+
+    mod, _, fn = name.partition(":")
+    if not fn:
+        raise ValueError(f"{ENV}: a saver is module:function, not {name!r}")
+    return getattr(importlib.import_module(mod), fn)
 
 
 def register() -> None:
@@ -218,7 +240,8 @@ def register() -> None:
 
     def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
         orig(self, *args, **kwargs)
-        install(self, Edges(cfg["out"], cfg["steps"], cfg.get("dump")))
+        install(self, Edges(cfg["out"], cfg.get("steps", ()), cfg.get("at_s", ()), cfg.get("dump", 1),
+                            [resolve(n) for n in cfg.get("savers", ())]))
 
     EngineCore.__init__ = __init__
     _PLUGIN.append(orig)

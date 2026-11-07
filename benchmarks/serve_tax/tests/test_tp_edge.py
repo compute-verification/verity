@@ -132,11 +132,29 @@ def test_a_rank_map_that_moved_is_reported_per_rank_and_field():
     assert E.check_rank_map(served, served[:1]) == ["2 served ranks, 1 restored"]
 
 
-def test_the_plugin_config_needs_out_and_steps():
+def test_the_plugin_config_needs_out_and_an_edge_and_savers_resolve():
     assert E.config({}) is None
     assert E.config({E.ENV: json.dumps({"out": "/o", "steps": [3]})}) == {"out": "/o", "steps": [3]}
-    with pytest.raises(ValueError, match="needs out and steps"):
+    assert E.config({E.ENV: json.dumps({"out": "/o", "at_s": [60]})}) == {"out": "/o", "at_s": [60]}
+    with pytest.raises(ValueError, match="needs out, and steps or at_s"):
         E.config({E.ENV: json.dumps({"out": "/o"})})
+    assert E.resolve("tp_edge:live_blocks") is E.live_blocks
+    with pytest.raises(ValueError, match="module:function"):
+        E.resolve("tp_edge.live_blocks")
+    with pytest.raises(ValueError, match="no edge"):
+        E.Edges("/o")
+
+
+def test_an_edge_at_a_time_falls_on_the_first_step_after_it():
+    now = [0.0]
+    core, seen = Core(work=12), []
+    edges = E.Edges("/unused", at_s=[2.5, 5.0], clock=lambda: now[0])
+    edges.snapshot = lambda c, edge: seen.append((edge, list(c.scheduler.processed)))
+    E.install(core, edges)
+    for _ in range(30):
+        core.step_fn()
+        now[0] += 1.0
+    assert seen == [(4, [1, 2, 3, 4]), (5, [1, 2, 3, 4, 5])]
 
 
 def test_a_snapshot_checks_the_ranks_dumps_one_copy_and_records_the_edge(tmp_path):
@@ -162,9 +180,10 @@ def test_a_snapshot_checks_the_ranks_dumps_one_copy_and_records_the_edge(tmp_pat
     assert [w["rank"] for w in got["dump"]] == [0] and saved == ["edge-000005"]
     assert json.loads((tmp_path / "edge-000005" / "edge.json").read_text())["ids"] == got["ids"]
     assert got["seconds"] == {"digest": 1, "dump": 1, "savers": 1}
+    assert edges.snapshot(core, 9)["dump"] == []
 
     T.tensors(workers[2])[2][7, 1, 1] += 1
-    got = E.Edges(tmp_path, steps=[6]).snapshot(core, 6)
+    got = E.Edges(tmp_path, steps=[6], dump=1).snapshot(core, 6)
     assert got["check"]["kv_equal"] is False
     assert got["check"]["kv_first_difference"] == {2: {"layer": 2, "name": "model.layers.10.self_attn.attn", "block": 7,
                                                        "index": 6, "blocks_differing": 1}}
