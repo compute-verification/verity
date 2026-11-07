@@ -124,6 +124,28 @@ def test_a_batch_of_composites_runs_in_chunks_of_members_within_the_row_budget(m
     assert set(widths) == {1}  # one member of one word of instances at a time
 
 
+#: (x, y) -> W full adders, member i on (x0 & y0, x[i], y[i]): a batch of a composite over a shared argument
+SHARED_CARRY = CompositeDefinition(
+    "BitsTestSharedCarry", 1, (), lambda S: ((("x", Array(W, BIT)), ("y", Array(W, BIT))), Array(W, Tuple(BIT, BIT))),
+    lambda B, S, x, y: B.batch(FULL_ADDER, B.call(BL.AND, ops(x[0], y[0])), x, y, axes=(None, 0, 0)), register=False)
+
+
+def test_a_batch_holds_a_shared_argument_once(monkeypatch) -> None:
+    """A batch's member rows hold each argument it shares once, not once a member, and read as the copies would."""
+    c = BS.compile(SHARED_CARRY)
+    (members,) = [s[2] for s in c.steps if s[0] == "call"]
+    assert isinstance(members, BS.Members) and members.shape == (W, 3) and len(members) == W
+    assert [p.ndim for p in members.parts] == [1, 2, 2]
+    rows = np.asarray(members.tolist())
+    assert np.array_equal(members[2:5], rows[2:5]) and np.array_equal(members[-1], rows[-1])
+    assert np.array_equal(np.stack(list(members)), rows) and len(set(rows[:, 0])) == 1
+    inputs = [_bits(np.random.default_rng(5), 200, t) for _, t in bind(SHARED_CARRY).signature()[0]]
+    ref = E.evaluate_batch(bind(SHARED_CARRY), *inputs, kernel="reference")
+    assert np.array_equal(BS.evaluate_bits(SHARED_CARRY, *inputs), ref)
+    monkeypatch.setattr(BS, "_ROW_BUDGET", 1)
+    assert np.array_equal(BS.evaluate_bits(SHARED_CARRY, *inputs), ref)
+
+
 def test_the_word_view_adds() -> None:
     rng = np.random.default_rng(1)
     x = rng.integers(0, 1 << W, size=1000, dtype=np.uint16)
