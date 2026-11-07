@@ -267,6 +267,9 @@ def allreduce_instances(cap: Capture):
             continue
         T, H = shape
         half = H // 2
+        kids = sorted({x["op"] for x in cap.events[cap.ranks[0]] if x.get("parent") == e0["seq"]})
+        if not any("multimem" in k for k in kids):
+            raise LookupError(f"vllm::all_reduce (seq {e0['seq']}, {T}x{H}) ran {kids}, not symm-mem's multimem all-reduce")
         trees = multimem_trees(W)
         for t in range(cap.real_rows(cap.ranks[0], T)):
             for c in range(2):
