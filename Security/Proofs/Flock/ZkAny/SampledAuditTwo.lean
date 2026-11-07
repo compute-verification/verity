@@ -255,11 +255,9 @@ theorem SampledAuditTwoAny_honest :
       (∀ (_ : Bool × ((i : Fin 2) → Fin 1 → Unit)) (_ : Bool) (_ : Unit),
         PerOutcome (fun _ : Unit => ()) (fun _ : Unit => ()) (fun (_ : Unit) (_ : Unit) => ()) fun _ => 0) ∧
       ∀ (χ₁ : Bool) (P : Finset (Fin 2)) (A : StreamRecord 2 Unit Bool Unit Bool → Prop),
-        toyB.streamIdeal (fun _ => 1) (fun i => if (i : ℕ) = 1 then χ₁ else false) P A ≤
-          toyB.streamIdeal (fun _ => 1) (fun _ => false) P A + 0 := by
-  refine ⟨fun _ _ _ => rfl, fun _ _ _ _ _ => le_add_right (prCoin_mono fun _ h => h.2), fun _ _ _ => ?_⟩
-  rw [add_zero]
-  exact le_rfl
+        Service.streamIdeal toyB (fun _ => 1) (fun i => if (i : ℕ) = 1 then χ₁ else false) P A ≤
+          Service.streamIdeal toyB (fun _ => 1) (fun _ => false) P A + 0 :=
+  ⟨fun _ _ _ => rfl, fun _ _ _ _ _ => le_add_right (prCoin_mono fun _ h => h.2), fun _ _ _ => le_add_right le_rfl⟩
 
 -- The nontrivial witness's instance, `RegisteredStreamLeakage_nontrivial`'s: its value service, and its stack that
 -- hands a record of its own, public commitment `true` and record tag the key.
@@ -275,18 +273,19 @@ commitment `true` and record tag the key (`RegisteredStreamLeakage_nontrivial_st
 admitted with a `true` commitment, while the bound is that stream's, `1 ≤ 0 + 1/2`. -/
 theorem SampledAuditTwoAny_nontrivial :
     ¬ prCoin (fun q : (Bool × ((i : Fin 1) → Fin 1 → Unit)) × Unit × Unit × Unit =>
-          toyS₁.streamAdmits q.1.1 0 (streamRecOf toyS₁ (fun _ => ()) toyF₁ q.1) ∧ () = () ∧
+          Service.streamAdmits toyS₁ q.1.1 0 (streamRecOf toyS₁ (fun _ => ()) toyF₁ q.1) ∧ () = () ∧
             ∃ ρ, streamRecOf toyS₁ (fun _ => ()) toyF₁ q.1 0 = some ρ ∧ ρ.2.2.1.2.1 = true) ≤
         (∑ d ∈ streamChoices 1 (fun _ => 1) 0,
           (avg (fun _ : Unit × Unit × Unit =>
-              toyS₁.streamIdeal (fun _ => 1) (fun _ => ()) (passed d)
+              Service.streamIdeal toyS₁ (fun _ => 1) (fun _ => ()) (passed d)
                   (fun ρs => ∃ ρ, ρs 0 = some ρ ∧ ρ.2.2.1.2.1 = true) +
-                toyS₁.streamPrfAdvantage (fun _ => ()) d (fun ρs => ∃ ρ, ρs 0 = some ρ ∧ ρ.2.2.1.2.1 = true)) +
+                Service.streamPrfAdvantage toyS₁ (fun _ => ()) d
+                  (fun ρs => ∃ ρ, ρs 0 = some ρ ∧ ρ.2.2.1.2.1 = true)) +
             0)) +
-          avg (fun _ : Unit => toyS₁.streamForgeAdvantage (fun _ => ()) (toyF₁ false fun _ => ())) + 0 := by
+          avg (fun _ : Unit => Service.streamForgeAdvantage toyS₁ (fun _ => ()) (toyF₁ false fun _ => ())) + 0 := by
   intro h
   have hone : ∀ p : Bool × ((i : Fin 1) → Fin 1 → Unit),
-      toyS₁.streamAdmits p.1 0 (streamRecOf toyS₁ (fun _ => ()) toyF₁ p) ∧
+      Service.streamAdmits toyS₁ p.1 0 (streamRecOf toyS₁ (fun _ => ()) toyF₁ p) ∧
         ∃ ρ, streamRecOf toyS₁ (fun _ => ()) toyF₁ p 0 = some ρ ∧ ρ.2.2.1.2.1 = true := by
     intro p
     refine ⟨⟨?_, ?_⟩, _, rfl, rfl⟩
@@ -296,7 +295,7 @@ theorem SampledAuditTwoAny_nontrivial :
       cases h
       exact ⟨rfl, rfl⟩
   have hL : prCoin (fun q : (Bool × ((i : Fin 1) → Fin 1 → Unit)) × Unit × Unit × Unit =>
-      toyS₁.streamAdmits q.1.1 0 (streamRecOf toyS₁ (fun _ => ()) toyF₁ q.1) ∧ () = () ∧
+      Service.streamAdmits toyS₁ q.1.1 0 (streamRecOf toyS₁ (fun _ => ()) toyF₁ q.1) ∧ () = () ∧
         ∃ ρ, streamRecOf toyS₁ (fun _ => ()) toyF₁ q.1 0 = some ρ ∧ ρ.2.2.1.2.1 = true) = 1 :=
     Verity.ValueSalts.prCoin_of_forall fun q => ⟨(hone q.1).1, rfl, (hone q.1).2⟩
   have hreal : Service.streamReal toyS₁ 0 (fun _ => ()) toyF₁ (fun ρs => ∃ ρ, ρs 0 = some ρ ∧ ρ.2.2.1.2.1 = true) = 1 :=
