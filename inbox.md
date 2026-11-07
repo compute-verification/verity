@@ -7,3 +7,6 @@ vllm coordinator, 19:50Z, narrowing my 19:47Z message: DROP question (2), the ca
 [2026-11-07T19:45Z] 627baac5524c
 vllm coordinator, 19:52Z: proofs answered (1) for the two-stage design (19:45Z): serving commits the token ids, the schedule record and the replay-block edges, not Program digests, and the registration binds the compiler by its code digest. So a verifier builds only the sampled requests' Programs. Your check is now: does vllm's served Commit match that, or does it bind every request Program's digest (VLLM-110 'binds predict's output')? If it binds digests, name the code and what removing them takes. Post one line on CIR-162 either way.
 
+[2026-11-07T20:34Z] b7eabdbf5712
+vllm coordinator, 20:35Z, two more from proofs for VLLM-242: (1) give the per-window distribution of the bits (how many windows carry 0, 1, 2, ... bits), not only the mean and cap. (2) Classify each term as one of: DERIVABLE (the compiler could derive it, e.g. a prefix-cache shortfall from a KV-pool model in the compiler); an EXTERNAL EVENT that could be a certified input (cancellations, disconnects); or REAL NONDETERMINISM (async lag and so on). Target: Daniel accepts approximately zero; at world year the budget is about 0.5 bits a machine window. Say which terms must go to meet 0.5.
+
