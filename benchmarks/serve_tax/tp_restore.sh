@@ -2,7 +2,7 @@
 # A model served mid-traffic, restored at its first edge into a fresh engine and replayed to its second (tp_restore.py),
 # on one node under `research run`, from the shipped tree's root, the C4 shard sent with --send (or C4=PATH):
 #   [MODEL_ID=glm53] [RATE=10] [SPAN_S=240] [EDGES_AT=150,210] [SAMPLING=production] [LONG_SHARE=0.03]
-#     [MAX_MODEL_LEN=40960] [FLASHINFER=0]
+#     [LONG_TOKENS=8192,32768] [MAX_MODEL_LEN=40960] [FLASHINFER=0]
 #     [SAVER=boundary:save_edge] [LOADER=boundary:load_edge] [PERMUTE=1] [KEEP=1] [MAX_MIN=150]
 #     bash benchmarks/serve_tax/tp_restore.sh
 # The plan (OUT/plan.jsonl) is made before the GPUs are held, LONG_SHARE of its requests then given prompts of 8k-32k
@@ -11,7 +11,8 @@
 # OUT/restore/restore.json). PERMUTE=1 restores again with the GPUs in reverse order into OUT/restore-permuted. Each edge's
 # blocks (tens of GB at TP8) go to a scratch directory outside the run's, removed at the end unless KEEP=1. The GPUs are
 # held under gpu-lease where the node has it. VENV's vLLM must be d9105ea80, the integration's pin.
-# MODEL_ID=moonlight TP=2 is a smoke of the same path on two ranks.
+# MODEL_ID=moonlight (8,192 tokens of context: LONG_TOKENS=4096,7680 MAX_MODEL_LEN=8192) is a smoke of the same path
+# on one GPU, TP=2 on two ranks.
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -29,7 +30,7 @@ VENV=${VENV:-$venv}; PY=$VENV/bin/python
 export PATH="$VENV/bin:$PATH"
 C4=${C4:-$(ls "$D"/inputs/*.json.gz 2>/dev/null | head -1)}
 RATE=${RATE:-10}; SPAN_S=${SPAN_S:-240}; EDGES_AT=${EDGES_AT:-150,210}; SAMPLING=${SAMPLING:-production}
-LONG_SHARE=${LONG_SHARE:-0.03}; MAX_MODEL_LEN=${MAX_MODEL_LEN:-40960}
+LONG_SHARE=${LONG_SHARE:-0.03}; LONG_TOKENS=${LONG_TOKENS:-8192,32768}; MAX_MODEL_LEN=${MAX_MODEL_LEN:-40960}
 # the scheduler's, block pool's and each rank's runner state at an edge, and its restore (boundary.py); LOADER= (empty)
 # restores only the blocks and generators and replays nothing
 SAVER=${SAVER-boundary:save_edge}; LOADER=${LOADER-boundary:load_edge}
@@ -62,7 +63,7 @@ if [ "${1:-}" = leased ]; then
   nvidia-smi --query-gpu=index,name,uuid,pci.bus_id,memory.used,memory.total --format=csv
   echo "== serve $(date -u +%FT%TZ)"
   "$PY" "$here/tp_restore.py" serve --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" --plan "$PLAN" --docs "$DOCS" \
-    --rate "$RATE" --span-s "$SPAN_S" --edges-at "$EDGES_AT" --sampling "$SAMPLING" --long-share "$LONG_SHARE" \
+    --rate "$RATE" --span-s "$SPAN_S" --edges-at "$EDGES_AT" --sampling "$SAMPLING" --long-share "$LONG_SHARE" --long-tokens "$LONG_TOKENS" \
     ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} ${TP:+--tp "$TP"} ${SAVER:+--saver "$SAVER"} \
     --out "$OUT/serve" --scratch "$SCRATCH/serve" || exit 1
   rc=0
