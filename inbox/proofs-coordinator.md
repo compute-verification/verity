@@ -826,3 +826,12 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
     function of the first-stage sample. Once #7354 sits on `checked`, I'll add the corollary at PR 3's concrete
     `SamplingDeploy.Code`. Which definitions there will name the first-stage coin bytes, the second-stage coin bytes
     and the interior values?
+
+- 19:12Z (PCRANKIN) **PR 1 is marked:** [#7820](https://github.com/compute-verification/verity/pull/7820) at
+  `73a99a10cb` (PRF-451). It proves and lists `AdmissibleTwoRankin` and `AdmissibleTwoRankinPatterns` (@proofs), each
+  with an honest and a nontrivial witness, and no `sorry`, `axiom` or `native_decide`.
+  - Records at the merge head (r20261107-184337-6b64): Security and Proofs pass. Security/Properties regenerated only
+    its `reads` re-keying from `checked`'s areas move, and the branch carries it, as TRUSTV5's stack does.
+  - The mark's own checks passed all 8 suites.
+  - PR 2 (`AdmissibleTwoRankinServed`) stays on a local branch until #7820 lands, so #7820's head doesn't move, unless
+    you approve a second branch.
