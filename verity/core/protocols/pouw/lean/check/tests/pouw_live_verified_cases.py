@@ -1,11 +1,11 @@
 """The live statements difftest's cases: the arguments of `credit._live_verified`'s `lived` (the Lean
-`PouwCheck.LiveVerified`), a served window's live@<s> statements, its period's committed circuit files, the tables its
-live units read and the verifier of record's answers.
+`PouwCheck.LiveVerified`), a served execution phase's live@<s> statements, its credit period's committed circuit files, the tables its
+live units read and the verifier's answers.
 
 A `live_verified` case is a live Program (`pouw_credit_cases.live_program`, at T of one to four rows, one to three
 rounds, under a prefix or none), its registered entries (each round's slot table and round 0's request table, T rows
-each, `credit._live_roots`', with other values beside them), each step's m_s (at most T), the window Program's digest,
-its open root, its session and its period's committed max_tokens (fewer or more requests than T), one statement a round in a shuffled order (its circuit and public files' paths and one or
+each, `credit._live_roots`', with other values beside them), each step's m_s (at most T), the execution phase Program's digest,
+its open root, its session and its credit period's committed max_tokens (fewer or more requests than T), one statement a round in a shuffled order (its circuit and public files' paths and one or
 two sessions' directories), the committed circuit files (the live template's among them, and perhaps a K in the lanes
 form, `lanes_files`), and `runs`: null, the first
 of the Lean's two calls (`credit._lean_live_verified`), or the answers the served path gives: one a statement
@@ -13,12 +13,12 @@ of the Lean's two calls (`credit._lean_live_verified`), or the answers the serve
 its registered finding the ``--registered`` file's ports at their values and roots.
 
 Its mutations before any run (`PRE_NAMES`, with `runs` null or answered) break the circuit files' form or their lanes
-form (``files-lanes``), drop the live circuit file, break the statements' form, name a round past the window's or one twice, give a descriptor that is no
+form (``files-lanes``), drop the live circuit file, break the statements' form, name a round past the execution phase's or one twice, give a descriptor that is no
 v2 live Program (``not-live``, a v1 Program among them), and leave a live table unregistered, registered twice or at other than T rows
 (``no-table``). Its mutations of the answers (`RUN_NAMES`) make one statement's verifier fail to run (``error``) or
 refuse it (``refused``), reject one session (``rejected``), and prove another unit than its round's (``unit-other``).
 
-`tests/test_live_verified_difftest.py` draws them for the harness, replaying `runs` as the verifier
+`tests/test_live_verified_difftest.py` samples them for the harness, replaying `runs` as the verifier
 (`pouw_verified_cases.replay`).
 """
 from __future__ import annotations
@@ -28,7 +28,7 @@ import random
 
 import pouw_credit_cases as C
 from verity.core.protocols.pouw import credit as Cr
-from verity.core.protocols.pouw.circuit import live_reads as LR
+from verity.core.protocols.pouw import live_reads as LR
 
 PRE_NAMES = ["files-form", "files-lanes", "no-live-file", "statements-form", "round-past", "twice", "not-live",
              "no-table"]
@@ -161,7 +161,7 @@ def broken_lanes(rng: random.Random, files: dict) -> dict:
                        {**{x: v for x, v in files.items() if x != Cr.LEAF_PROGRAMS}, Cr.LEAF_PROGRAMS: {}}])
 
 
-#: each way a period's open commits no circuit files of `credit.committed_files`' form: none, null, empty, a list, a key
+#: each way a credit period's open commits no circuit files of `credit.committed_files`' form: none, null, empty, a list, a key
 #: that is no template (``k0``, ``k064``, ``K64``, ``x``, ``lane0``), a digest that is none (upper case, short, a
 #: number), or files not in the lanes form (``files-lanes``, `broken_lanes`); ``lanes``, a K in that form
 FILES_NAMES = ["honest", "lanes", "files-none", "files-null", "files-empty", "files-list", "files-key", "files-digest",

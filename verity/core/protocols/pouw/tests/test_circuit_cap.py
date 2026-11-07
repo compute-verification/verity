@@ -1,4 +1,4 @@
-"""Pearl-C's per-tile cap on a circuit (`verity.core.protocols.pouw.circuit.cap`) against the scheme's replay: a word's flags and later
+"""Pearl-C's per-tile cap on a circuit (`verity.ml.protocols.pouw.circuit.cap`) against the scheme's replay: a word's flags and later
 +0 promotions are `pearl_c_debit.word_debit`'s, its C̃ `pearl_c.chain`'s, and only the exact certificates pass; a tile's
 verdict is rev1's capOK (`pearlCTilesDevRev1`) on `chain_debit` and `debit_units` against the device's `cap` times
 `credit_of`, on random tiles and adversarial ones (zero rows, absorbed groups, a total cancelled to zero, refused rows,
@@ -6,7 +6,7 @@ and the cap's boundary).  Codes are finite E4M3: the atom has no NaN operand (`v
 the replay.  A row's salt-dead counts are its elements whose code has one value over a sample of P3's support, by the
 scheme's own forming, and its other outputs `Pc8RowA`'s.  The split (`pc8.Shape.cap`) composes to the one-unit cap, its
 h0 is `PearlTileDigest`'s on honest and edge tiles, its units' rows are their ports' words, it computes every value in
-one unit, no unit of a deployed tile has more rows than Flock's block holds, a drawn tile's closure holds its strip,
+one unit, no unit of a deployed tile has more rows than Flock's block holds, a sampled tile's closure holds its strip,
 every word, its rows' digests and sums and its tally, and a short last tile row is refused.  The per-row cap (v2,
 ``row_rho``) is v1's verdict and each admitted row's own capOK at ρr, in one unit and split, and `cap.served` binds the
 scheme's ρr (`benchmarks/pouw/tests/test_pearlc_cap_agreement.py` holds it to the clear path's)."""
@@ -29,13 +29,13 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.silicon import fp32
 from verity.ml.randomness import derive
-from verity.core.protocols.pouw.circuit import cap, pc8, plan
-from verity.core.protocols.pouw.circuit import leaves as L
+from verity.ml.protocols.pouw.circuit import cap, pc8, plan
+from verity.ml.protocols.pouw.circuit import leaves as L
 from verity.core.protocols.pouw.protocol import DomainError, Shape
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_c_debit as D
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_c_debit as D
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES
 
 FINITE = [c for c in range(256) if c not in (0x7F, 0xFF)]
 SMALL = [c for c in FINITE if c & 0x7F < 0x10]                     # E4M3 subnormals and the smallest normals
@@ -632,7 +632,7 @@ def test_the_split_computes_every_value_in_exactly_one_unit(side, row_rho):
 def test_no_unit_of_a_deployed_tiles_closure_has_more_than_66_rows():
     """Flock's composer gives each row a unit reads or writes an hm96 slot of 2^18 bits, a unit at most 2^27 bits
     (`circuit.K_MAX`, so at most 256 rows), and refuses a unit none of whose rows hashes a SHA-512 block before its last.
-    At the deployed 64 × 64 tile and K = 8,192 a drawn tile's closure is 4,291 units (its 64 rows of A, its strip, 4,096
+    At the deployed 64 × 64 tile and K = 8,192 a sampled tile's closure is 4,291 units (its 64 rows of A, its strip, 4,096
     word units, 64 row digests and 64 row tallies, the tile and the tally), none with more than 66 rows (the row tally's;
     128 slots, 2^25 bits), and each with a row-seg row or a v2 row past one block."""
     shape = pc8.Shape(64, 8192, 64, tile=(64, 64), dev="sm120", hidden=True, cap=True)
@@ -716,7 +716,7 @@ def test_the_split_call_is_the_hiding_call_with_each_tiles_cap(dev):
 
 def test_a_drawn_tile_proves_its_strip_every_word_and_its_tally():
     """`plan.tile_layout` under ``cap``: a tile's closure is itself, its TM `RowA` units, its strip, its TM·TN word units
-    row by row, its TM rows' digests and sums and its tally, so a sample proves every cap word of each drawn tile
+    row by row, its TM rows' digests and sums and its tally, so a sample proves every cap word of each sampled tile
     (`Plan.proved`), never sampling one; the tile stratum alone carries W_ref.  With the cap off the layout is pc8's."""
     tm, tn = SPLIT.tile
     lay = plan.tile_layout(SPLIT, 1000)

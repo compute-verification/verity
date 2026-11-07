@@ -11,18 +11,18 @@ the group's windows are made final (`finalize`), or the draw, which gives each w
 (`drawStep`). `drawIsSubset` reads the draw off it and `Properties.RemoteAudit.drawIsSubset`, on the same `draws`.
 
 At `g ≤ 1`, `Shared.step g` is `Session.step` (`step_le_one`), and the session properties are today's. At `g ≥ 2`,
-each event keeps the invariant, the coins and every draw, and `DP`: a drawn window is below `W`, and so is drawn
-each window below `W` of its draw or an earlier one (`sstep`). With draw `c`'s first window undrawn, no window of
-draw `c` or later is drawn, so no close has read `coins[W + c]` or above, and the run is the same on coins that
+each event keeps the invariant, the coins and every draw, and `DP`: a sampled window is below `W`, and so is sampled
+each window below `W` of its draw or an earlier one (`sstep`). With draw `c`'s first window unsampled, no window of
+draw `c` or later is sampled, so no close has read `coins[W + c]` or above, and the run is the same on coins that
 agree below it (`sclose_coins`, `sfold_coins`, `openingsUnreadUntilDrawn`). And `Frozen`'s argument goes through
-with `Shared.close` (`frz_sclose`): under `DP` the windows a draw draws are undrawn before it, and it makes them final;
-it draws windows in order (`sclose_prefix`), so a drawn window's record is kept (`recordKeptAfterDraw`). `liveUnder`
+with `Shared.close` (`frz_sclose`): under `DP` the windows a draw draws are unsampled before it, and it makes them final;
+it draws windows in order (`sclose_prefix`), so a sampled window's record is kept (`recordKeptAfterDraw`). `liveUnder`
 is `Order`'s argument over `Shared.run g` (`srunL`): the event that draws window `t` is its draw's close, which keeps
-its record (`sdraw_keeps`), and with `t` undrawn so is its draw's first window (`undrawn_first`), which is what
+its record (`sdraw_keeps`), and with `t` unsampled so is its draw's first window (`undrawn_first`), which is what
 `OpeningsUnreadUntilDrawn` and `ReleaseOrder` read. It needs `1 ≤ g`: at `g = 0` every window is draw 0, and coins that
 agree below `W` leave every window's openings coin free.
 
-`acceptDrawsOpenable` is `Properties.RemoteAudit.acceptDrawsOpenable`'s argument across a draw's windows: each drawn
+`acceptDrawsOpenable` is `Properties.RemoteAudit.acceptDrawsOpenable`'s argument across a draw's windows: each sampled
 `(i, p)` falls in the passes of one window `k` (`locatePass`), its share holds `(i − passCount, p)` (`shareOf_mem`),
 whose opening `checkWindow` passed (`checkWindow_accept`), and its number in the draw is the receipts before window `k`
 plus its number there (`flatMap_split`, `sum_take_mid`).
@@ -403,7 +403,7 @@ theorem sclose_coins {g : Nat} {s : State} {c : Array ByteArray} {t : Int} {now 
       rfl
     · cases h₁
 
-/-! ## The windows drawn -/
+/-! ## The windows sampled -/
 
 theorem dr_finalize (first m : Nat) (ws : Array Win) (u : Nat) :
     dr (finalize ((List.range m).map (first + ·)) ws) u = dr ws u := by
@@ -437,7 +437,7 @@ theorem dr_drawn {g : Nat} {s : State} {t : Int} {drawn : Array (Nat × Nat)} {n
   · rename_i h
     rw [ite_eq_right (by omega), ← dr_eq, dr_finalize]
 
-/-- The drawn windows are below `W`, and with a window drawn so is each window below `W` of its draw or an earlier
+/-- The sampled windows are below `W`, and with a window sampled so is each window below `W` of its draw or an earlier
 one. -/
 def DP (g W : Nat) (ws : Array Win) : Prop :=
   (∀ u, (dr ws u).isSome → u < W) ∧ ∀ u j, (dr ws u).isSome → j / g ≤ u / g → j < W → (dr ws j).isSome
@@ -456,7 +456,7 @@ theorem range_of_div {g j : Nat} (hg : 0 < g) : j / g * g ≤ j ∧ j < j / g * 
   have h3 : j / g * g = g * (j / g) := Nat.mul_comm _ _
   omega
 
-/-- What `Shared.close` does to the windows drawn: keeps each, and draws its group, which keeps `DP`. -/
+/-- What `Shared.close` does to the windows sampled: keeps each, and draws its group, which keeps `DP`. -/
 theorem sclose_dr {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : State}
     (h : Shared.close g s t now = .ok (r, s₁)) :
     (∀ u, (dr s.windows u).isSome → (dr s₁.windows u).isSome) ∧
@@ -489,7 +489,7 @@ theorem sclose_dr {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁
         split
         · simp_all
         · rename_i hc; simp only [hc, false_or]
-      -- no window at or past the group's first is drawn before the close
+      -- no window at or past the group's first is sampled before the close
       have hnone : ∀ v, t.toNat / g * g ≤ v → (dr s.windows v).isSome → False := by
         intro v hv hd
         have hv' : v < s.params.windows := hD.1 v hd
@@ -519,21 +519,6 @@ theorem samePasses_of (P : Params) (ws ws' : Array Win) (hs : ws'.size = ws.size
   have := h v hv
   rw [getElem!_pos ws v hv, getElem!_pos ws' v hv'] at this
   exact this
-
-theorem keeps_trans' {P : Params} {a b c : Win} (h₁ : Keeps P a b) (h₂ : Keeps P b c) : Keeps P a c := by
-  obtain ⟨r1, p1, s1, h1, d1, k1, v1⟩ := h₁
-  obtain ⟨r2, p2, s2, h2, d2, k2, v2⟩ := h₂
-  refine ⟨r2.trans r1, p2.trans p1, s2.trans s1, h2.trans h1, fun hd => ?_, fun hd => k2 (k1 hd), fun hv => ?_⟩
-  · rcases d2 hd with hb | hb
-    · rcases d1 hb with ha | ha
-      · exact Or.inl ha
-      · exact Or.inr ha
-    · rw [r1] at hb; exact Or.inr hb
-  · rcases v2 hv with hb | hb
-    · rcases v1 hb with ha | ha
-      · exact Or.inl ha
-      · exact Or.inr (k2 ha)
-    · exact Or.inr hb
 
 theorem sclose_inv {g : Nat} {s : State} {t : Int} {now : Nat} {r : Result} {s₁ : State} (h : Inv s)
     (he : Shared.close g s t now = .ok (r, s₁)) : Inv s₁ ∧ Frame s s₁ := by
@@ -738,7 +723,7 @@ theorem openingsUnreadUntilDrawn : OpeningsUnreadUntilDrawn := by
     exact sfold_coins hg c coins' _ (#[], Session.State.init params reg coins appendCoins notBeforeNs) (rs, s) hrun
       (inv_init ..) hW hag hlt
 
-/-! ## A drawn window's record is kept -/
+/-! ## A sampled window's record is kept -/
 
 theorem keepsF_finalize (first m : Nat) (ws : Array Win) :
     KeepsF ws (finalize ((List.range m).map (first + ·)) ws) := by
@@ -748,7 +733,7 @@ theorem keepsF_finalize (first m : Nat) (ws : Array Win) :
   · exact keepW_of ⟨rfl, rfl, rfl, rfl, rfl⟩ (fun _ => rfl)
   · exact keepW_refl _
 
-/-- `Shared.close` keeps each window's `KeepW`: under `DP` the windows it draws are undrawn, and it makes them final. -/
+/-- `Shared.close` keeps each window's `KeepW`: under `DP` the windows it draws are unsampled, and it makes them final. -/
 theorem frz_sclose {g : Nat} (hg : 0 < g) {s : State} {t : Int} {now : Nat} {r : Result} {s' : State}
     (hD : DP g s.params.windows s.windows) (he : Shared.close g s t now = .ok (r, s')) : Frz s s' := by
   rcases sclose_spec he with ⟨-, rfl⟩ | ⟨u, f, -, rfl⟩ | ⟨d, -, ht0, hts, hund, hm, hpre, hfew, hdraws, rfl⟩
@@ -905,15 +890,6 @@ theorem drawLengths_one {s : State} {c : Nat} (h : c < s.params.windows) :
   rw [drawWindows_one h]
   simp
 
-theorem openingsUnreadUntilDrawn_one (h : OpeningsUnreadUntilDrawn) :
-    Properties.RemoteAudit.OpeningsUnreadUntilDrawn :=
-  fun params reg coins appendCoins notBeforeNs events rs s hrun t coins' hW hnd hag =>
-    h 1 params reg coins appendCoins notBeforeNs events rs s hrun t coins' hW (by rw [Nat.mul_one]; exact hnd) hag
-
-theorem recordKeptAfterDraw_one (h : RecordKeptAfterDraw) : Properties.RemoteAudit.RecordKeptAfterDraw :=
-  fun params reg coins appendCoins notBeforeNs events events' rs rs' s s' h₁ h₂ =>
-    h 1 params reg coins appendCoins notBeforeNs events events' rs rs' s s' h₁ h₂
-
 theorem releaseOrder_one (params : Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (D : Array ByteArray → Array Event) :
     ReleaseOrder 1 params reg appendCoins notBeforeNs D ↔
@@ -1057,7 +1033,7 @@ theorem sreach {g : Nat} (hg : 2 ≤ g) {params : Params} {reg : Registration} {
     rw [← hpx] at hD ⊢; exact hD' hD
   · exact ⟨inv_init .., rfl, fun u h => by simp [dr, State.init] at h, fun u j h => by simp [dr, State.init] at h⟩
 
-/-- Under `DP`, an undrawn window below `W` leaves its draw's first window undrawn. -/
+/-- Under `DP`, an unsampled window below `W` leaves its draw's first window unsampled. -/
 theorem undrawn_first {g W : Nat} (hg : 0 < g) {ws : Array Win} (hD : DP g W ws) {t : Nat} (ht : t < W)
     (h : dr ws t = none) : dr ws (t / g * g) = none := by
   cases e : dr ws (t / g * g) with

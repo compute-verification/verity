@@ -1,10 +1,10 @@
 """a5's challenger reserve (`a5_coins.need`, `families`, `reserve_reason`) and the session `a5_coins.start` opens on it.
 
-A rank's need is the coins its `service.Stream` draw reads for its law over its window's counts, plus its longest stream
+A rank's need is the coins its `service.Stream` sample reads for its sampling design over its window's counts, plus its longest stream
 once more, known before anything opens. The windows are toy templates at the counts of record. One is 38b2's step-16
 SiluMul_v2 window (675 + 3 units a rank under `stratified:4`, the stratified SiluMul partition). The other is the 18-family
 partition's rank-0 window at step 16 (`glm53_all_families_tp8_step16.json` before EmbeddingShard_v2 rejoined it: 179,552 units
-under `stratified:1`), whose draw reads more than the 16 coins a rank the old reserve held."""
+under `stratified:1`), whose sample reads more than the 16 coins a rank the old reserve held."""
 
 from __future__ import annotations
 
@@ -108,7 +108,7 @@ def test_the_18_family_window_needs_more_coins_than_todays_reserve():
 
 
 def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
-    """On a challenger of one rank's old reserve (17 coins), the 18-family draw runs out of coins (`every sampling coin of the
+    """On a challenger of one rank's old reserve (17 coins), the 18-family sample runs out of coins (`every sampling coin of the
     epoch is open`), as the 18-family run did. On its need's reserve (`families`) it samples, opening 24 coins after the
     rank's commitment."""
     rule, law, n = "stratified:1", law_of("stratified:1", ALL_FAMILIES), sum(ALL_FAMILIES)
@@ -120,9 +120,9 @@ def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
 
 
 def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_with():
-    """A window whose first template holds transfer gates (32 units at work 0 and floor 32, drawn whole) beside 8 sampled by
+    """A window whose first template holds transfer gates (32 units at work 0 and floor 32, sampled whole) beside 8 sampled by
     ``work:2``: its sample reads 640 bytes for the whole stratum and 100 for the rest, so the need is 22 coins, and its reserve
-    holds the sample. A work law has no need without the table (`draw.derive` refuses it)."""
+    holds the sample. A work sampling design has no need without the table (`draw.derive` refuses it)."""
     program, query, n = window([32, 8])
     t0, t1 = (P.template_id(template(i)) for i in range(2))
     table = {t0: {"work": 0, "floor": 32}, t1: {"work": 1, "floor": 1}}
@@ -165,7 +165,7 @@ def nothing_reserved(tmp_path: Path) -> bool:
 
 def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_path, monkeypatch):
     """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins). The
-    18-family draw reads its 24 coins after the rank's commitment, and its coins' evidence holds (`coins.coins_reason`)."""
+    18-family sample reads its 24 coins after the rank's commitment, and its coins' evidence holds (`coins.coins_reason`)."""
     rule, law, n = "stratified:1", law_of("stratified:1", ALL_FAMILIES), sum(ALL_FAMILIES)
     manager, draws, opener = local(tmp_path, monkeypatch, [0])
     try:
@@ -189,7 +189,7 @@ def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_
 
 def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch):
     """Rank 1's plan waits for rank 0's; then the session opens on both needs' layout (16 coins a rank and one, 33), and each
-    rank draws in its turn, 4 coins for SiluMul's 226 bytes, as 38b2's gate run did on each of its 8 ranks."""
+    rank samples in its turn, 4 coins for SiluMul's 226 bytes, as 38b2's gate run did on each of its 8 ranks."""
     rule, law, n = "stratified:4", law_of("stratified:4", SILU_MUL), sum(SILU_MUL)
     manager, draws, opener = local(tmp_path, monkeypatch, [0, 1])
     segments: dict[int, dict] = {}

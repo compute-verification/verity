@@ -5,7 +5,7 @@ public import Proofs.Flock.RecGeneric.AtFlock
 /-!
 # L2 at Flock: the compiler at today's compiled record, over Flock `--zk`
 
-The compiler statement (`Flock.Guarantees.GenericRecursiveKSCompiled`) at today's recursion: the outer argument is
+The compiler statement (`Claims.RecGeneric.CompilerKS`) at today's recursion: Π_out is
 Flock `--zk` at the outer record's deployed decoder (`Claims.SamplingGeneric.Arg.ofFlock DO`, its assemble step
 counted), and the compiler is today's compiled record read session by session (`Compiled.ofRec`, `recCompiler`):
 
@@ -131,7 +131,7 @@ def RecursiveKSCompiledAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → Opt
     (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep fun _ => True
 
 /-- **L2 at the deployment**: `RecursiveKSCompiledAtRec` at the deployment's record and values, for every other field
-of the brings and every record the coin server keeps (as `RecursiveKSEvery` quantifies them). -/
+of the brings and every record the challenger's live-coin part keeps (as `RecursiveKSEvery` quantifies them). -/
 def RecursiveKSCompiledEvery : Prop :=
   ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),
@@ -159,7 +159,7 @@ def ContractCompiledDenseAtRec (D : Claims.Recursion.RecAt Coin) (rd : Msg → O
     (RecDeploy.deployZkRec _root_.Flock.Readable.relation) FlockDeploy.KS.CpDep RecDeploy.DenseAt
 
 /-- **The compiler's contract at the deployment**: `ContractCompiledDenseAtRec` at the deployment's record and values,
-for every other field of the brings and every record the coin server keeps. -/
+for every other field of the brings and every record the challenger's live-coin part keeps. -/
 def ContractCompiledDense : Prop :=
   ∀ (b : RecDeploy.Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8),

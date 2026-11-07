@@ -10,8 +10,8 @@ adopt it, how fast can a determined actor still advance frontier capability? Fou
 - the board: one training method in one configuration per row, with a slowdown bracket (`rows.json`, `slowdown.py`).
 
 Nothing in `verity` reads this directory. The theorems it cites are in `Security/`: `Nci.SecurityProofs.ThreadedTraining`
-(`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.ContainedTraining`
-(`Security/Definitions/Nci/Guarantees/Contained.lean`).
+(`Security/Definitions/Nci/Guarantees/Threads.lean`) and `Nci.SecurityProofs.IncompressibleContainedTraining`
+(`Security/Definitions/Nci/Guarantees/Training.lean`).
 
 The slowdown lower bound's numbers come from [`benchmarks/rho`](../rho/README.md), the one slowdown calculator.
 `tiers.py` gives the remote composition's terms per tier (`remote_terms`), and the slowdown on them is rho's
@@ -30,7 +30,7 @@ hosts assumption 2.19 and 2.80, and without both 1 and 1.12. The code and its ou
 | `sources/<topic>.json` | sources filed under their first topic, each with `findings`: `claim` (ours), `quote` (verbatim), `location`, `quantities`, `grade`, `bears_on`. A fetched fixture (`fixtures/artifacts.json`), since it would put the tree over its data budget: `research data fetch-fixtures benchmarks/nci/sources` brings it; after an edit, `research data put --kind fixture/v1 --tree benchmarks/nci/sources --preserve` and the new id in the registry (the control pod exports it once the PR is admitted) |
 | `parameters.json` | parameters, each with estimates: `low`, `central`, `high`, `confidence`, `evidence` (finding ids), `merge` |
 | `calibrations.json` | a policy (`K`, a block's fresh-input budget in bits; `Gamma`, its gate budget; `b_tok`) and the model it is calibrated to |
-| `rows.json` | the board's rows: method, configuration, state representation, calculator inputs (a number or `estimate-id:low|central|high`), notes, sources, demonstrated capability |
+| `rows.json` | the board's rows: method, configuration, state representation, calculator inputs (a number or `estimate-id:low|central|high`), notes, sources |
 | `algorithms.json` | the algorithm library: training algorithms by architecture-agnostic traits (`library.TRAITS`), measured multipliers and their evidence |
 | `models.json` | model shapes the library queries against |
 | `arguments.json` | the argument map: claims on a ladder, the premises each rests on, the attacks against it, and the proposed evidence with its review |
@@ -102,7 +102,7 @@ R \;=\; \frac{1}{g}\,\min_A \frac{\text{slowdown}_A}{m_A}.
 - \(m_A(C) = C_{\text{ref}}(L_A(C))/C\) is \(A\)'s compute multiplier: the compute the reference recipe needs to reach the
   held-out loss \(A\) reaches with compute \(C\), divided by \(C\). It is the compute-equivalent gain (`davidson-2023-ceg/1`),
   with the reference and the test set made explicit. The reference is a compute-optimal dense AdamW Transformer (`hoffmann-2022-chinchilla/1`), with
-  \(C_{\text{ref}}(L)\) from a Chinchilla-form law (`besiroglu-2024-chinchilla-replication/2`).
+  \(C_{\text{ref}}(L)\) from a Chinchilla-form sampling design (`besiroglu-2024-chinchilla-replication/2`).
 - \(g\) is algorithmic progress in the base recipe (architecture, data, optimizer, allocation) since the last pretrain. It
   applies with or without the policy, so the talk shows it and then brackets it. Loss-based estimates put it near 2.5x
   per year, range 1.1-5x (`ho-2024-algorithmic-progress/3`, `gundlach-2025-origin/14`, `whitfill-2025-selection-bias/1`).
@@ -165,10 +165,11 @@ For each row under each calibration of its model, `slowdown.py` computes a brack
   result is labeled `fit` (one block holds the whole computation), `shard` (slices split the state) or `decode-shard`
   (each slice reads a whole description and decodes its part). One sequential chain of blocks is assumed. The
   constructions are analytic; none has been run.
-- `chain` is the partial-sum law, `Nci.SecurityProofs.ContainedTraining`:
+- `chain` is the partial-sum rule, `Nci.SecurityProofs.IncompressibleContainedTraining`:
   \(\text{slowdown} \ge \kappa_{\text{chain}} f(K)/(2\alpha)\),
-  with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumptions are that
-  one chain of the reference training algorithm's circuit is incompressible at \(b_w\) and \(b_a\), in support form. A
+  with \(f\) the read factor of \(b_w\), \(b_a\) and the chain's smallest inner dimension. Its only assumption is that
+  one chain of the reference training algorithm's circuit is incompressible at \(b_w\) and \(b_a\)
+  (`TrainingIncompressible`). A
   chain charges each weight once per layer, so it is one forward path, and a row's `chain` gives that path's share
   \(\kappa_{\text{chain}}\) and inner dimension. For Kimi K2 the path is the dense one (MLA projections and the shared
   expert), 7% of training's work. The activation rate is capped by a compressed boundary's bits per residual entry.
@@ -199,7 +200,7 @@ additions are left to another block.
 `--sweep` prints the bracket over a grid of `b_w` and `b_a`. `--efficiency` prices training recipes (BF16, FP8,
 4-bit, ternary, and extrapolated 2- and 1-bit) at the rates their matmuls read, each with its compute multiplier
 `train.compute_multiplier`, and gives each recipe's multiplier over its slowdown, \(m/\text{slowdown}\): a ceiling from
-the partial-sum law and the attack's from the construction. The attacker picks the best recipe.
+the partial-sum rule and the attack's from the construction. The attacker picks the best recipe.
 
 The invariant `lower <= upper` is tested on every row. The two caps on threading and token rates exist because rows
 violated it without them, so a violation means a row's inputs break the theorem. A tight bracket settles a row; a wide
@@ -229,7 +230,7 @@ What registered hardware computes is one circuit, built by appending as it strea
 red teams' top attack, recommitting θ partway through, is closed by that: nothing computed under monitoring ever enters
 θ, so a run of any length is charged inside the one circuit. Any later re-registration channel would reopen the attack,
 so it would have to be slow and priced. A proposed rule puts every multiplication in a public matmul template, which
-would let the partial-sum law apply to the registered circuit directly rather than to one contained recipe. The proposed evidence carries the round-2 red team's verdicts. Render the index
+would let the partial-sum rule apply to the registered circuit directly rather than to one contained recipe. The proposed evidence carries the round-2 red team's verdicts. Render the index
 for the full map.
 
 ## What the literature says now
@@ -362,7 +363,6 @@ at most the bits of data the budgets allow.
 ## Not yet here
 
 - Scenario columns (today, ordinary progress to 2028, a crash program) and capability ratings on agreed scales.
-  Rows record only the capability the literature has demonstrated.
 - Constructions run at small scale.
 - Rows for distillation, model merging, test-time training and offline RL.
 

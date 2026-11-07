@@ -7,14 +7,18 @@ public import Properties.SampledProofs.Second
 import all SampledProofs.Draw
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+import Mathlib.Data.List.GetD
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Sampling.Select.Bounds
+import Proofs.Flock.Claims.Sampling.Select.Take
 
 /-!
 # The second stage misses proof blocks no more often than the replay blocks' escapes (`SecondMisses`)
 
-* `flockLaw_second`: `secondLaw`'s C-Flock law is stratified, its `i`-th stratum exactly `[i·n, (i+1)·n)` drawing `k`.
-* `selectSecond_ok`: an accepted second stage has `1 ≤ k < n`, drew its units from the coins under that law, and proves
+* `flockLaw_second`: `secondLaw`'s Flock law is stratified, its `i`-th stratum exactly `[i·n, (i+1)·n)` sampling `k`.
+* `selectSecond_ok`: an accepted second stage has `1 ≤ k < n`, drew its units from the coins under that sampling design, and proves
   each of them.
-* `strataPa_replicate`: `strataPa` of `S` strata of `n` drawing `k` is the product of their windows' escapes.
+* `strataPa_replicate`: `strataPa` of `S` strata of `n` sampling `k` is the product of their windows' escapes.
 * `secondMisses`: the second stage is accepted and proves no proof block of `X` with probability at most
   `∏_i escCell n k |X ∩ [i·n, (i+1)·n)|`.
 -/
@@ -66,7 +70,7 @@ private theorem natRanges_pair {a b : Int} {rs : Array (ℕ × ℕ)} (h : Sample
   by_cases ha : 0 ≤ a <;> simp [ha, Array.mapM_eq_mapM_toList] at h
   exact h.symm
 
-/-- A stratum object of `secondLaw` that parses is `[i·n, (i+1)·n)` drawing `k`. -/
+/-- A stratum object of `secondLaw` that parses is `[i·n, (i+1)·n)` sampling `k`. -/
 private theorem stratum_second {n k i r : ℕ} {ws : Flock.Draw.WorkStratum}
     (h : SampledProofs.Draw.stratum? false (secondObj n k i r) = some ws) :
     ws.units = #[(i * n, (i + 1) * n)] ∧ ws.k = k := by
@@ -100,7 +104,7 @@ theorem mapM_forall₂ {α β : Type} (f : α → Option β) (xs : Array α) (ys
     obtain rfl : ys = ys'.toArray := (Option.some.inj h).symm
     exact list_mapM_forall₂ f _ _ hl
 
-/-- **`secondLaw`'s C-Flock law**: stratified, at `K = |sample|·k`, its `i`-th stratum `[i·n, (i+1)·n)` drawing `k`. -/
+/-- **`secondLaw`'s Flock law**: stratified, at `K = |sample|·k`, its `i`-th stratum `[i·n, (i+1)·n)` sampling `k`. -/
 theorem flockLaw_second (sample : Array ℕ) (n k m : ℕ) (parsed : Flock.Draw.Law)
     (h : Draw.flockLaw (Select.secondLaw sample n k) m = .ok parsed) :
     ∃ St : Array Flock.Draw.Stratum, parsed = .stratified (sample.size * k) St ∧
@@ -141,7 +145,7 @@ theorem getD_draw_units (sample : Array ℕ) (n k m : ℕ) (units : Array ℕ) :
     getD (Json.mkObj ((entries (Select.secondLaw sample n k)).toList ++
       [("population", Lean.toJson m), ("units", natsJson units)])) "units" = natsJson units := (rfl)
 
-/-- A draw object whose `units` are `units` proves each of them. -/
+/-- A sample object whose `units` are `units` proves each of them. -/
 theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" = natsJson units)
     (u : ℕ) (hu : u ∈ units) : (u : Int) ∈ Draw.proved draw := by
   unfold Draw.proved
@@ -153,7 +157,7 @@ theorem proved_units (draw : Json) (units : Array ℕ) (hd : getD draw "units" =
   exact ⟨_, ⟨u, hu, rfl⟩, int_toJson u⟩
 
 /-- **`Select.selectSecond`'s steps**: an accepted second stage has `2 ≤ n` and `1 ≤ k < n`, drew its units from the
-coins under `secondLaw`'s C-Flock law over the `|sample|·n` proof blocks, and proves each of them. -/
+coins under `secondLaw`'s Flock law over the `|sample|·n` proof blocks, and proves each of them. -/
 theorem selectSecond_ok {sample : Array ℕ} {n k : ℕ} {src : ByteArray} {draw : Json} {read : ℕ}
     (h : Select.selectSecond sample n k src = .ok (draw, read)) :
     2 ≤ n ∧ 0 < k ∧ k < n ∧ ∃ parsed units, Draw.flockLaw (Select.secondLaw sample n k) (sample.size * n) = .ok parsed ∧
@@ -200,7 +204,7 @@ theorem positions_second {St : Array Flock.Draw.Stratum} {S n k : ℕ}
   funext i
   simp [expand, Nat.succ_mul]
 
-/-- `secondLaw`'s strata are `S` of `n` units, each drawing `k`. -/
+/-- `secondLaw`'s strata are `S` of `n` units, each sampling `k`. -/
 theorem sizes_second {St : Array Flock.Draw.Stratum} {S n k : ℕ}
     (hmap : St.toList.map (fun s => (s.units, s.k)) = (List.range S).map fun i => (#[(i * n, (i + 1) * n)], k)) :
     St.toList.map (fun s => (s.size, s.k)) = List.replicate S (n, k) := by

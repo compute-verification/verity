@@ -78,8 +78,8 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
     assert DriveFlags.parse("after_landing_shards = 3\n").after_landing_shards == 3
     assert [DriveFlags.parse(f'after_landing_shards = "{v}"\n').after_landing_shards for v in ("auto", "auto:4")] == ["auto", "auto:4"]
     assert f.line() == ("on=m1,m2 marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
-                        "land_into=None after_landing_no_cache=True landing_gates=gates/g.py verdict_first=False stale_days=3 "
-                        "stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
+                        "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= verdict_first=False "
+                        "stale_days=3 stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
                         "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= signed_verdicts=False")
     assert [DriveFlags.parse(f'executor = "{v}"\n').executor for v in ("off", "shadow", "on")] == ["off", "shadow", "on"]
     assert [DriveFlags.parse(f'close_unlandable = "{v}"\n').close_unlandable for v in ("off", "log", "on")] == ["off", "log", "on"]
@@ -109,6 +109,8 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('landing_gates = ["../g.py"]', "landing_gates = ['../g.py']: a list of Python scripts"),
                       ('landing_gates = ["/g.py"]', "landing_gates = ['/g.py']: a list of Python scripts"),
                       ('landing_gates = ["g.sh"]', "landing_gates = ['g.sh']: a list of Python scripts"),
+                      ('warn_gates = "g.py"', "warn_gates = 'g.py': a list of Python scripts by their path"),
+                      ('warn_gates = ["../g.py"]', "warn_gates = ['../g.py']: a list of Python scripts"),
                       ("stale_days = -1", "stale_days = -1: a whole number of days, 0 for off"),
                       ("stale_days = 3.5", "stale_days = 3.5: a whole number of days"),
                       ("stale_close_days = 7", "stale_close_days = 7: 0, or at least stale_days, which must be on"),
@@ -129,8 +131,8 @@ def test_drive_refuses_an_unknown_key_naming_the_keys_it_reads_and_the_one_it_li
         DriveFlags.parse("stale_day = 4\n", "d.toml", strict=True)
     assert str(e.value) == ("d.toml: unknown key 'stale_day' (did you mean 'stale_days'?): drive reads only on, "
                             "marked_after, regenerate_locks, land, land_into, after_landing_no_cache, landing_gates, "
-                            "verdict_first, stale_days, stale_close_days, stale_keep, close_unlandable, after_landing_shards, "
-                            "command_line, lowrisk_lane, "
+                            "warn_gates, verdict_first, stale_days, stale_close_days, stale_keep, close_unlandable, "
+                            "after_landing_shards, command_line, lowrisk_lane, "
                             "lowrisk_per_tick, lowrisk_excludes, executor, executor_enqueue, signed_verdicts; "
                             "rename or remove it, or update this research")
 
@@ -168,8 +170,8 @@ def test_drive_reads_the_flags_at_main_in_its_clone_never_the_callers_tree_and_t
     lines = [x for x in capsys.readouterr().out.splitlines() if "flags from" in x]
     assert lines == [f"research queue drive: flags from {DRIVE_FLAGS} at main {sha[:12]}: on=m1,m2 "
                      "marked_after=2026-10-12T06:00:00Z regenerate_locks=True land=review "
-                     "land_into=None after_landing_no_cache=True landing_gates=gates/g.py verdict_first=False stale_days=3 "
-                     "stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
+                     "land_into=None after_landing_no_cache=True landing_gates=gates/g.py warn_gates= verdict_first=False "
+                     "stale_days=3 stale_close_days=7 stale_keep= close_unlandable=log after_landing_shards=1 command_line=on lowrisk_lane=True "
                      "lowrisk_per_tick=20 lowrisk_excludes= executor=off executor_enqueue= signed_verdicts=False"]
     assert drive(world, "--config", DRIVE_FLAGS) == 0 and driven[-1] == FROM_FLAGS
 
@@ -274,12 +276,17 @@ def test_a_landing_branch_drive_cant_push_refuses_the_tick(world, driven, monkey
     assert drive(world, "--dry-run") == 0 and len(driven) == 1
 
 
-def test_a_landing_gate_missing_at_main_refuses_the_tick(world, driven, monkeypatch, capsys):
+def test_a_landing_or_warn_gate_missing_at_main_refuses_the_tick(world, driven, monkeypatch, capsys):
     on_main(world, FLAGS.replace('landing_gates = ["gates/g.py"]', 'landing_gates = ["gates/g.py", "gates/gone.py"]'))
     assert drive(world) == 1
     assert capsys.readouterr().err == (
         "research queue: drive's flags name what doesn't exist, so this tick does nothing: landing gate gates/gone.py isn't at "
         f"`main`: land it first, or remove it from `landing_gates` in {DRIVE_FLAGS}\n")
+    on_main(world, FLAGS + 'warn_gates = ["gates/g.py", "gates/w.py"]\n')
+    assert drive(world) == 1
+    assert capsys.readouterr().err == (
+        "research queue: drive's flags name what doesn't exist, so this tick does nothing: warn gate gates/w.py isn't at "
+        f"`main`: land it first, or remove it from `warn_gates` in {DRIVE_FLAGS}\n")
     assert driven == []
 
 
@@ -388,10 +395,11 @@ def test_the_gates_are_read_whatever_other_keys_drive_toml_holds(tmp_path):
 
     _git(tmp_path, "init", "-q", "-b", "main")
     (tmp_path / DRIVE_FLAGS).parent.mkdir(parents=True, exist_ok=True)
-    (tmp_path / DRIVE_FLAGS).write_text('landing_gates = ["gates/g.py"]\nmax_lean_checks_of_the_future = 9\n')
+    (tmp_path / DRIVE_FLAGS).write_text('landing_gates = ["gates/g.py"]\nwarn_gates = ["gates/w.py"]\n'
+                                        'max_lean_checks_of_the_future = 9\n')
     _git(tmp_path, "add", "-A")
     _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "x")
-    assert gates_at(tmp_path, "main") == ("gates/g.py",)
+    assert gates_at(tmp_path, "main") == ("gates/g.py",) and gates_at(tmp_path, "main", "warn_gates") == ("gates/w.py",)
     (tmp_path / DRIVE_FLAGS).write_text('landing_gates = "gates/g.py"\n')
     _git(tmp_path, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "y")
     with pytest.raises(QueueError, match="landing_gates"):

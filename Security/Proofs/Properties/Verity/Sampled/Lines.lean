@@ -4,12 +4,15 @@ public import Properties.Challenger
 public import Proofs.Properties.Verity.Sampled.Trees
 public import Proofs.Properties.Challenger.CanonLine
 public import Proofs.Flock.Claims.Complete.Json.Hex
+import all Lean.Data.Json.Basic
+import all Init.Data.Ord.String
 
 /-!
 # The log v2 reads is the one the device printed, but for openings' coins of one SHA-512
 
-v2's check reads the device's log from the lines of the challenger session's release log after its head
-(`Verity.Sampled.readLines`). Where the device printed each release as the challenger does, the read is the device's
+v2's check reads the device's log from the lines of the challenger session's release log (`Verity.Sampled.readLog`),
+whose head, the coin commitment's line, is no coin tree's line (`treeLine_head`), so it reads the lines after the head
+(`Verity.Sampled.readTail`). Where the device printed each release as the challenger does, the read is the device's
 log release for release, but for a round opened's coins, which the read takes from a session's record: those hash as the
 coins the device opened, so they are the device's or bytes of one SHA-512 with them.
 
@@ -22,19 +25,21 @@ coins the device opened, so they are the device's or bytes of one SHA-512 with t
   device's history at a play is to have.
 * **A line reads back** (`CanonLine.event_getD`): where v2's line reader (`SampledProofs.Challenger.event`) accepts a
   line that is a sorted value's `canon` text, it reads the value's fields (`str_of`, `nat_of`, `spec_of`). The reader's
-  parse can't be seen into, so that it accepts a printed line is what `readLines`'s success shows: a line it refuses is
+  parse can't be seen into, so that it accepts a printed line is what `readTail`'s success shows: a line it refuses is
   no tree's (`treeLine_error`), and a root's line it refuses is pending with no root (`rootOf_error`), which no read
-  survives (`pending_none`).
+  survives (`pending_none`). The head is the commitment's value's text (`head_canon`), so where `releasedRootsOf`
+  accepts a log, `readLog` reads it as `readTail` reads the lines after its head (`readLog_head`).
 * **The trees v2 accepts** (`TreesOf`, `trees_log`): `coinTreesOf`'s acceptance gives each tree a root no other tree
   has, a spec of distinct streams, and each round opened once, so where a session's record passes `sessionTreeReason`,
   each round it gives coins of has the coins whose SHA-512 the round's line shows (`TreeLines`, `tree_lines`).
-* **The induction** (`read_prints`, `read_run`): over what the device printed, `readLines` reads each release
+* **The induction** (`read_prints`, `read_run`): over what the device printed, `readTail` reads each release
   (`ReadOf`): its frame and the bytes it answered, and its coins where it read any, the device's, or, at a round opened,
-  other bytes than the device's with their SHA-512 (`coinBytes`, `coinBytes_bits`).
-* **The openings without the draw's coins** (`opensRead`, `opens_read`): v2's read with none of the draw's coins
-  placed reads the same frames, bytes and openings' coins (`readLines_agree`), and verifies no signature. The first
-  opening whose coins it reads other than the device's (`openCollision`) is a SHA-512 collision wherever v2's read of
-  the device's log isn't the device's (`open_collision`).
+  other bytes than the device's with their SHA-512 (`coinBytes`, `coinBytes_bits`). The trees it reads are the ones the
+  device sampled, each its root's hex and its spec's value (`TreesRead`).
+* **The openings without the sample's coins** (`opensRead`, `opens_read`): v2's read with none of the sample's coins
+  placed reads the same frames, bytes and openings' coins (`readTail_agree`, `readLog_agree`), and verifies no
+  signature. The first opening whose coins it reads other than the device's (`openCollision`) is a SHA-512 collision
+  wherever v2's read of the device's log isn't the device's (`open_collision`).
 -/
 
 @[expose] public section
@@ -370,6 +375,85 @@ theorem rootOf_value {l : String} {j d : Json} {label : String} {b : ByteArray} 
   simp only [Except.toOption, Option.bind_eq_bind, Option.bind_some, str_of hev hd hr.label, str_of hev hd hr.root,
     FlockComplete.JsonRT.unhex_hexOf, Option.pure_def]
 
+/-! ## The release log's head -/
+
+theorem esc_hd : ∀ x < 16, Properties.Composition.Esc.esc (FlockComplete.JsonRT.hd x) = [FlockComplete.JsonRT.hd x] := by
+  decide +kernel
+
+theorem esc_hexs : ∀ l : List UInt8,
+    (l.flatMap fun x => [FlockComplete.JsonRT.hd (x.toNat / 16), FlockComplete.JsonRT.hd (x.toNat % 16)]).flatMap
+        Properties.Composition.Esc.esc =
+      l.flatMap fun x => [FlockComplete.JsonRT.hd (x.toNat / 16), FlockComplete.JsonRT.hd (x.toNat % 16)]
+  | [] => rfl
+  | x :: l => by
+    have hx : x.toNat < 256 := x.toNat_lt
+    simp only [List.flatMap_cons, esc_hexs l, esc_hd (x.toNat / 16) (by omega),
+      esc_hd (x.toNat % 16) (Nat.mod_lt _ (by decide)), List.cons_append, List.nil_append]
+
+/-- **A hex string is its own `canonStr` text, quoted**: each digit prints as itself. -/
+theorem canonStr_hex (b : ByteArray) : Flock.canonStr (Flock.hexOf b) = "\"" ++ Flock.hexOf b ++ "\"" := by
+  apply String.toList_injective
+  rw [Properties.Composition.Esc.canonStr_toList, String.toList_append, String.toList_append,
+    FlockComplete.JsonRT.hexOf_toList, esc_hexs]
+  rfl
+
+theorem head_sort {β : Type} (a b : β) :
+    #[("event", a), ("root", b)].qsort (fun x y => decide (x.1 < y.1)) = #[("event", a), ("root", b)] := by
+  refine Verity.QSort.qsort_sorted _ _ fun i hi j hj => ?_
+  simp only [List.size_toArray, List.length_cons, List.length_nil] at hi hj
+  obtain _ | _ | i := i <;> obtain _ | _ | j := j <;> first | omega |
+    (simp only [List.getElem_toArray, List.getElem_cons_zero, List.getElem_cons_succ]
+     exact decide_eq_decide.2 (by decide))
+
+theorem canon_str (s : String) : Flock.canon (.str s) = pure (Flock.canonStr s) := by
+  simp only [Flock.canon]
+
+/-- **The release log's head is the coin commitment's value's text**: `{"event":"commitment","root":…}` with its
+root's hex, as the challenger writes it and `releasedRootsOf` reads it. -/
+theorem head_canon (b : ByteArray) :
+    Canon (Json.mkObj [("event", .str "commitment"), ("root", .str (Flock.hexOf b))])
+      ("{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf b ++ "\"}") := by
+  have ht : (Std.TreeMap.Raw.ofList [("event", Json.str "commitment"), ("root", Json.str (Flock.hexOf b))] :
+      Std.TreeMap.Raw String Json).toArray = #[("event", .str "commitment"), ("root", .str (Flock.hexOf b))] := rfl
+  refine ⟨Properties.Challenger.CanonRead.sortedKeys_obj.2 ⟨?_, fun p hp => ?_⟩, ?_⟩
+  · rw [ht]
+    exact (by decide : increasing ["event", "root"] = true)
+  · rw [ht] at hp
+    simp only [List.mem_toArray, List.mem_cons, List.not_mem_nil, or_false] at hp
+    rcases hp with rfl | rfl <;> (unfold sortedKeys; rfl)
+  · rw [Json.mkObj, Properties.Challenger.CanonLine.canon_obj, ht]
+    simp only [List.mapM_toArray, List.mapM_cons, List.mapM_nil, canon_str, pure_bind, map_pure]
+    rw [head_sort, canonStr_hex]
+    show Except.ok _ = Except.ok _
+    congr 1
+    apply String.toList_injective
+    simp only [List.map_cons, List.map_nil, String.intercalate_cons_cons, String.intercalate_singleton,
+      String.toList_append, List.append_assoc]
+    rfl
+
+theorem head_plain (b : ByteArray) :
+    PlainValue (Json.mkObj [("event", .str "commitment"), ("root", .str (Flock.hexOf b))]) := by
+  refine ⟨"commitment", ?_, by decide, by decide⟩
+  rw [Json.mkObj, Properties.Challenger.CanonRead.getD_obj,
+    Properties.Challenger.CanonRead.get?_ofList (l := [("event", Json.str "commitment"), ("root", Json.str (Flock.hexOf b))])
+      (by simp only [List.map_cons, List.map_nil]; decide)]
+  rfl
+
+/-- **The release log's head is no coin tree's line.** -/
+theorem treeLine_head (b : ByteArray) :
+    treeLine ("{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf b ++ "\"}") = false :=
+  treeLine_plain (head_canon b) (head_plain b)
+
+/-- **A log `releasedRootsOf` accepts at the coin commitment `c` opens with `c`'s line.** -/
+theorem head_of_roots {c : LiveCommitment} {log : List String} {roots : Roots} (h : releasedRootsOf c log = .ok roots) :
+    log.head? = some ("{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}") := by
+  by_cases hc : (log.head? == some ("{\"event\":\"commitment\",\"root\":\"" ++ Flock.hexOf c.root ++ "\"}")) = true
+  · exact beq_iff_eq.1 hc
+  · rw [Bool.not_eq_true] at hc
+    unfold releasedRootsOf at h
+    simp only [hc, Bool.false_eq_true, ↓reduceIte] at h
+    cases h
+
 /-- The root a coin tree's hello line names, as `coinTreesOf` reads it; `none` on every other line. -/
 def helloRoot (l : String) : Option String :=
   match event l with
@@ -401,59 +485,76 @@ theorem helloRoot_tree {l s : String} (h : helloRoot l = some s) : treeLine l = 
       rfl
     · cases h
 
-/-! ## `readLines` one line at a time -/
+/-! ## `readTail` one line at a time -/
 
 variable {label : String} {after : ByteArray} {recs : List Json}
 
-theorem readLines_none {l : String} {ls : List String} {ts : List (String × Flock.CoinTree.Spec)} {ξ : ByteArray}
+theorem readTail_none {l : String} {ls : List String} {ts : List (String × Json)} {ξ : ByteArray}
     (ht : treeLine l = false) :
-    readLines label after recs (l :: ls) ts none ξ = readLines label after recs ls ts (some l) ξ := by
-  rw [Verity.Sampled.readLines, if_neg (by simp [ht])]
+    readTail label after recs (l :: ls) ts none ξ = readTail label after recs ls ts (some l) ξ := by
+  rw [Verity.Sampled.readTail, ite_eq_right (by simp [ht])]
 
 /-- **A pending root's line with no root survives no read.** -/
 theorem pending_none {a : String} (ha : Verity.Sampled.rootOf a = none) {ls : List String} :
-    ∀ {ts : List (String × Flock.CoinTree.Spec)} {ξ : ByteArray}, readLines label after recs ls ts (some a) ξ = none := by
+    ∀ {ts : List (String × Json)} {ξ : ByteArray}, readTail label after recs ls ts (some a) ξ = none := by
   induction ls with
   | nil => intro ts ξ; rfl
   | cons l ls ih =>
     intro ts ξ
     by_cases ht : treeLine l = true
-    · rw [Verity.Sampled.readLines, if_pos ht]
-      cases (event l).toOption.bind (treeRelease recs ts) with
+    · rw [Verity.Sampled.readTail, ite_eq_left ht]
+      cases (event l).toOption.bind (treeStep recs ts) with
       | none => rfl
       | some p =>
         obtain ⟨r, ts'⟩ := p
         simp only [Option.bind_eq_bind, Option.bind_some, ih, Option.bind_none]
-    · rw [Verity.Sampled.readLines, if_neg ht]
+    · rw [Verity.Sampled.readTail, ite_eq_right ht]
       simp only [ha, Option.bind_eq_bind, Option.bind_none]
 
-theorem treeRelease_hello {ts : List (String × Flock.CoinTree.Spec)} {j : Json} {spec : Flock.CoinTree.Spec}
+/-- **v2's read of a log `releasedRootsOf` accepts is `readTail`'s of the lines after its head**: the head is the coin
+commitment's line (`head_of_roots`), no coin tree's (`treeLine_head`). -/
+theorem readLog_head {c : LiveCommitment} {log : List String} {roots : Roots} (h : releasedRootsOf c log = .ok roots)
+    {ξ : ByteArray} : readLog label after recs ξ log = readTail label after recs log.tail [] none ξ := by
+  have hh := head_of_roots h
+  cases log with
+  | nil => cases hh
+  | cons l ls =>
+    obtain rfl : l = _ := Option.some.inj hh
+    simp only [Verity.Sampled.readLog, treeLine_head, Bool.false_eq_true, ↓reduceIte, List.tail_cons]
+
+theorem treeStep_hello {ts : List (String × Json)} {j : Json} {spec : Flock.CoinTree.Spec}
     {ν root key : ByteArray} (he : getD j "event" = .str TREE_EVENT) (hk : getD j "key" = .str (Flock.hexOf key))
     (hn : getD j "nonce" = .str (Flock.hexOf ν)) (hr : getD j "root" = .str (Flock.hexOf root))
     (hs : Verity.Sampled.specOf (getD j "spec") = some spec) :
-    treeRelease recs ts j = some (⟨.hello spec, ν, bitsOfBytes (root ++ key)⟩, ts ++ [(Flock.hexOf root, spec)]) := by
-  unfold Verity.Sampled.treeRelease
-  simp only [he, beq_self_eq_true, ↓reduceIte, hk, hn, hr, hs, FlockComplete.JsonRT.unhex_hexOf, Except.toOption,
-    Option.bind_eq_bind, Option.bind_some, Option.pure_def]
+    treeStep recs ts j =
+      some (⟨.hello spec, ν, bitsOfBytes (root ++ key)⟩, ts ++ [(Flock.hexOf root, getD j "spec")]) := by
+  unfold Verity.Sampled.treeStep
+  simp only [he, jsonStrIs, beq_self_eq_true, ↓reduceIte, hk, hn, hr, hs, FlockComplete.JsonRT.unhex_hexOf,
+    Except.toOption, Option.bind_eq_bind, Option.bind_some, Option.pure_def]
 
 /-- The coins v2 reads of round `k` of stream `stream` of the tree of root `root`: a record's of that tree, else none
-(`Verity.Sampled.treeRelease`'s). -/
+(`Verity.Sampled.treeStep`'s). -/
 def openCoins (recs : List Json) (root stream : String) (k : ℕ) : List Bool :=
   match recs.find? (Verity.Sampled.recordTree · == root) with
   | some rec => ((Verity.Sampled.recordRound rec stream k).map bitsOfBytes).getD []
   | none => []
 
-theorem treeRelease_open {ts : List (String × Flock.CoinTree.Spec)} {j : Json} {R S R' : String} {k n i s : ℕ}
-    {b : ByteArray} {spec : Flock.CoinTree.Spec} (he : getD j "event" = .str OPEN_EVENT)
+theorem treeStep_open {ts : List (String × Json)} {j x : Json} {R S R' : String} {k n i s : ℕ}
+    {b : ByteArray} (he : jsonStrIs (getD j "event") TREE_EVENT = false)
     (ht : getD j "tree" = .str R) (hs : getD j "stream" = .str S) (ha : getD j "after" = .str (Flock.hexOf b))
     (hk : nat? (getD j "round") = some k) (hn : nat? (getD j "n") = some n)
-    (hi : ts.findIdx? (·.1 == R) = some i) (hti : ts[i]? = some (R', spec))
-    (hsi : spec.streams.findIdx? (· == S) = some s) :
-    treeRelease recs ts j = some (⟨.opening i s n, b, openCoins recs R S k⟩, ts) := by
-  unfold Verity.Sampled.treeRelease
-  simp only [he, open_tree, Bool.false_eq_true, ↓reduceIte, beq_self_eq_true, ht, hs, ha, hk, hn, hi, hti, hsi,
+    (hi : ts.findIdx? (·.1 == R) = some i) (hti : ts[i]? = some (R', x))
+    (hsi : (Verity.Sampled.specStreams x).findIdx? (jsonStrIs · S) = some s) :
+    treeStep recs ts j = some (⟨.opening i s n, b, openCoins recs R S k⟩, ts) := by
+  unfold Verity.Sampled.treeStep
+  simp only [he, Bool.false_eq_true, ↓reduceIte, ht, hs, ha, hk, hn, hi, hti, hsi,
     FlockComplete.JsonRT.unhex_hexOf, Except.toOption, Option.bind_eq_bind, Option.bind_some, Option.pure_def]
   rfl
+
+theorem specStreams_value {x : Json} {spec : Flock.CoinTree.Spec} (h : SpecValue x spec) :
+    Verity.Sampled.specStreams x = spec.streams.map .str := by
+  unfold Verity.Sampled.specStreams
+  rw [h.streams]
 
 theorem findIdx_nodup {β : Type} [BEq β] [LawfulBEq β] {l : List β} {i : ℕ} {x : β} (hn : l.Nodup)
     (hi : l[i]? = some x) : l.findIdx? (· == x) = some i := by
@@ -462,14 +563,49 @@ theorem findIdx_nodup {β : Type} [BEq β] [LawfulBEq β] {l : List β} {i : ℕ
   have := (hn.getElem_inj (hi := Nat.lt_trans hj h) (hj := h)).1 (beq_iff_eq.1 e)
   omega
 
-theorem findIdx_root {ts : List (ByteArray × Flock.CoinTree.Spec)} {i : ℕ} {root : ByteArray}
-    {spec : Flock.CoinTree.Spec} (hn : (ts.map fun p => Flock.hexOf p.1).Nodup) (hi : ts[i]? = some (root, spec)) :
-    (ts.map fun p => (Flock.hexOf p.1, p.2)).findIdx? (·.1 == Flock.hexOf root) = some i := by
-  have e : (ts.map fun p => (Flock.hexOf p.1, p.2)).findIdx? (·.1 == Flock.hexOf root) =
-      (ts.map fun p => Flock.hexOf p.1).findIdx? (· == Flock.hexOf root) := by
+/-- **The trees v2's read holds are the ones the device sampled**: each the hex of its root and a value of its spec
+(`SpecValue`), in order. -/
+abbrev TreesRead (tsj : List (String × Json)) (ts : List (ByteArray × Flock.CoinTree.Spec)) : Prop :=
+  List.Forall₂ (fun q p => q.1 = Flock.hexOf p.1 ∧ SpecValue q.2 p.2) tsj ts
+
+theorem TreesRead.push {tsj : List (String × Json)} {ts : List (ByteArray × Flock.CoinTree.Spec)}
+    {q : String × Json} {p : ByteArray × Flock.CoinTree.Spec} (h : TreesRead tsj ts)
+    (hq : q.1 = Flock.hexOf p.1 ∧ SpecValue q.2 p.2) : TreesRead (tsj ++ [q]) (ts ++ [p]) := by
+  induction h with
+  | nil => exact .cons hq .nil
+  | cons h _ ih => exact .cons h ih
+
+theorem TreesRead.roots {tsj : List (String × Json)} {ts : List (ByteArray × Flock.CoinTree.Spec)}
+    (h : TreesRead tsj ts) : tsj.map Prod.fst = ts.map fun p => Flock.hexOf p.1 := by
+  induction h with
+  | nil => rfl
+  | cons h _ ih => rw [List.map_cons, List.map_cons, ih, h.1]
+
+theorem TreesRead.get {tsj : List (String × Json)} {ts : List (ByteArray × Flock.CoinTree.Spec)}
+    (h : TreesRead tsj ts) : ∀ {i : ℕ} {p : ByteArray × Flock.CoinTree.Spec}, ts[i]? = some p →
+      ∃ x, tsj[i]? = some (Flock.hexOf p.1, x) ∧ SpecValue x p.2 := by
+  induction h with
+  | nil => intro i p hp; simp at hp
+  | @cons q p' tsj' ts' hqp _ ih =>
+    intro i p hp
+    cases i with
+    | zero =>
+      rw [List.getElem?_cons_zero, Option.some.injEq] at hp
+      subst hp
+      exact ⟨q.2, by rw [List.getElem?_cons_zero, ← hqp.1], hqp.2⟩
+    | succ i =>
+      rw [List.getElem?_cons_succ] at hp
+      obtain ⟨x, hx, hs⟩ := ih hp
+      exact ⟨x, by rw [List.getElem?_cons_succ]; exact hx, hs⟩
+
+theorem findIdx_root {tsj : List (String × Json)} {ts : List (ByteArray × Flock.CoinTree.Spec)} {i : ℕ}
+    {root : ByteArray} {spec : Flock.CoinTree.Spec} (hR : TreesRead tsj ts)
+    (hn : (ts.map fun p => Flock.hexOf p.1).Nodup) (hi : ts[i]? = some (root, spec)) :
+    tsj.findIdx? (·.1 == Flock.hexOf root) = some i := by
+  have e : tsj.findIdx? (·.1 == Flock.hexOf root) = (tsj.map Prod.fst).findIdx? (· == Flock.hexOf root) := by
     simp only [List.findIdx?_map]
     rfl
-  rw [e]
+  rw [e, hR.roots]
   exact findIdx_nodup hn (by simp [hi])
 
 theorem findIdx_stream {xs : Array String} {i : ℕ} {x : String} (hn : xs.toList.Nodup) (hi : xs[i]? = some x) :
@@ -480,6 +616,13 @@ theorem findIdx_stream {xs : Array String} {i : ℕ} {x : String} (hn : xs.toLis
     simpa using beq_iff_eq.1 e
   have := (hn.getElem_inj).1 e'
   omega
+
+/-- **A spec's stream is the one v2 finds in the spec's value**, where its streams are distinct. -/
+theorem findIdx_spec {x : Json} {spec : Flock.CoinTree.Spec} {i : ℕ} {S : String} (hx : SpecValue x spec)
+    (hn : spec.streams.toList.Nodup) (hi : spec.streams[i]? = some S) :
+    (Verity.Sampled.specStreams x).findIdx? (jsonStrIs · S) = some i := by
+  rw [specStreams_value hx, Array.findIdx?_map]
+  exact findIdx_stream hn hi
 
 theorem holds_cons {ξ : ByteArray} {cs : List Bool} {css : List (List Bool)} (h : Holds ξ (cs :: css)) :
     ∃ cb ξ', ξ = cb ++ ξ' ∧ cb.size = COIN_BYTES ∧ cs = bitsOfBytes cb ∧ Holds ξ' css := by
@@ -636,7 +779,7 @@ theorem trees_log {log : List String} {trees : Array LoggedTree} (h : coinTreesO
         unfold helloRoot
         rw [hev]
         dsimp only
-        rw [if_pos htree, hR]
+        rw [ite_eq_left htree, hR]
       have hnew : ∀ t ∈ ts, t.root ≠ R := by
         intro t ht e
         apply hany
@@ -701,7 +844,7 @@ theorem trees_log {log : List String} {trees : Array LoggedTree} (h : coinTreesO
         unfold helloRoot
         rw [hev]
         dsimp only
-        rw [if_neg hopen]
+        rw [ite_eq_right hopen]
       split at hr
       all_goals
         try dsimp only at hr
@@ -770,28 +913,27 @@ theorem tree_lines {log : List String} {ts : Array LoggedTree} (h : coinTreesOf 
 
 /-! ## The induction -/
 
-/-- **`readLines` reads what the device printed** (`Prints`) as its releases (`ReadOf`): after the trees `ts` the device
-sampled, whose roots are distinct from each other and from the hello lines' to come and whose streams are distinct, on
-lines a round's coins are read against (`TreeLines`), with the coins the device released of the draw's family after its
-digest held in `ξ` (`Holds`). -/
+/-- **`readTail` reads what the device printed** (`Prints`) as its releases (`ReadOf`): after the trees `ts` the device
+sampled, which the read holds (`TreesRead`), whose roots are distinct from each other and from the hello lines' to come
+and whose streams are distinct, on lines a round's coins are read against (`TreeLines`), with the coins the device
+released of the sample's family after its digest held in `ξ` (`Holds`). -/
 theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines : List String} {log : List Release},
-    Prints ts lines log → ∀ {ξ : ByteArray} {out : List Release}, TreeLines recs lines →
-    ((ts.map fun p => Flock.hexOf p.1) ++ lines.filterMap helloRoot).Nodup →
+    Prints ts lines log → ∀ {tsj : List (String × Json)} {ξ : ByteArray} {out : List Release}, TreesRead tsj ts →
+    TreeLines recs lines → ((ts.map fun p => Flock.hexOf p.1) ++ lines.filterMap helloRoot).Nodup →
     (∀ p ∈ ts, p.2.streams.toList.Nodup) → Holds ξ (freshOf label after log) →
-    readLines label after recs lines (ts.map fun p => (Flock.hexOf p.1, p.2)) none ξ = some out →
-    List.Forall₂ ReadOf out log := by
+    readTail label after recs lines tsj none ξ = some out → List.Forall₂ ReadOf out log := by
   intro ts lines log hp
   induction hp with
   | nil ts =>
-    intro ξ out _ _ _ _ h
-    rw [Verity.Sampled.readLines] at h
+    intro tsj ξ out _ _ _ _ _ h
+    rw [Verity.Sampled.readTail] at h
     cases h
     exact .nil
   | @fresh ts lines log d d' l l' lab b cs hd hr hd' hp' _ ih =>
-    intro ξ out htl hn hst hξ h
+    intro tsj ξ out hR htl hn hst hξ h
     have ht1 := treeLine_plain hd hr.plain
     have ht2 := treeLine_plain hd' hp'
-    rw [readLines_none ht1, Verity.Sampled.readLines, if_neg (by simp [ht2])] at h
+    rw [readTail_none ht1, Verity.Sampled.readTail, ite_eq_right (by simp [ht2])] at h
     dsimp only at h
     have hn' : ((ts.map fun p => Flock.hexOf p.1) ++ lines.filterMap helloRoot).Nodup := by
       rwa [List.filterMap_cons_none (helloRoot_plain hd hr.plain),
@@ -811,25 +953,25 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
         cases h
         rw [ByteArray.extract_append_eq_right hsz.symm ByteArray.size_append] at hrest
         rw [ByteArray.extract_append_eq_left hsz.symm]
-        exact .cons ⟨rfl, rfl, fun _ => .inl rfl⟩ (ih htl' hn' hst hξ' hrest)
+        exact .cons ⟨rfl, rfl, fun _ => .inl rfl⟩ (ih hR htl' hn' hst hξ' hrest)
       · rename_i hc
         obtain ⟨rest, hrest, h⟩ := Option.bind_eq_some_iff.1 h
         cases h
         have hξ' : Holds ξ (freshOf label after log) := by simpa [freshOf, hc] using hξ
-        exact .cons ⟨rfl, rfl, fun h => absurd rfl h⟩ (ih htl' hn' hst hξ' hrest)
+        exact .cons ⟨rfl, rfl, fun h => absurd rfl h⟩ (ih hR htl' hn' hst hξ' hrest)
   | @hello ts lines log d l spec ν root key hd hh _ ih =>
-    intro ξ out htl hn hst hξ h
+    intro tsj ξ out hR htl hn hst hξ h
     cases hev : event l with
     | error e =>
-      rw [readLines_none (treeLine_error hev), pending_none (rootOf_error hev)] at h
+      rw [readTail_none (treeLine_error hev), pending_none (rootOf_error hev)] at h
       cases h
     | ok j =>
       have hE := str_of hev hd hh.event
       have hT : treeLine l = true := by rw [treeLine_ok hev, hE]; simp [jsonStrIs]
       have hS := spec_of hev hd hh.spec
-      have hrel := treeRelease_hello (recs := recs) (ts := ts.map fun p => (Flock.hexOf p.1, p.2)) hE
-        (str_of hev hd hh.key) (str_of hev hd hh.nonce) (str_of hev hd hh.root) (specOf_value hS)
-      rw [Verity.Sampled.readLines, if_pos hT, hev] at h
+      have hrel := treeStep_hello (recs := recs) (ts := tsj) hE (str_of hev hd hh.key) (str_of hev hd hh.nonce)
+        (str_of hev hd hh.root) (specOf_value hS)
+      rw [Verity.Sampled.readTail, ite_eq_left hT, hev] at h
       simp only [Except.toOption, Option.bind_eq_bind, Option.bind_some, hrel, Option.pure_def] at h
       obtain ⟨rest, hrest, h⟩ := Option.bind_eq_some_iff.1 h
       cases h
@@ -840,7 +982,8 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
         rw [hE, str_of hev hd hh.root]
         simp [jsonStrIs]
       refine .cons ⟨rfl, rfl, fun _ => .inl rfl⟩
-        (ih (ξ := ξ) (out := rest) (htl.sub fun l hl => List.mem_cons_of_mem _ hl) ?_ ?_ ?_ ?_)
+        (ih (tsj := tsj ++ [(Flock.hexOf root, getD j "spec")]) (ξ := ξ) (out := rest) (hR.push ⟨rfl, hS⟩)
+          (htl.sub fun l hl => List.mem_cons_of_mem _ hl) ?_ ?_ ?_ hrest)
       · rw [List.filterMap_cons_some hroot] at hn
         simpa [List.map_append, List.append_assoc] using hn
       · intro p hp
@@ -849,12 +992,11 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
         · rw [List.mem_singleton.1 hp]
           exact streams_nodup hS.streams (htl.spec l List.mem_cons_self j hev (by rw [hE]; simp [jsonStrIs]))
       · simpa [freshOf] using hξ
-      · simpa [List.map_append] using hrest
   | @opening ts lines log d l i s n k root b cb spec stream hi hs hd ho _ ih =>
-    intro ξ out htl hn hst hξ h
+    intro tsj ξ out hR htl hn hst hξ h
     cases hev : event l with
     | error e =>
-      rw [readLines_none (treeLine_error hev), pending_none (rootOf_error hev)] at h
+      rw [readTail_none (treeLine_error hev), pending_none (rootOf_error hev)] at h
       cases h
     | ok j =>
       have hE := str_of hev hd ho.event
@@ -862,12 +1004,12 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
       have hop : jsonStrIs (getD j "event") OPEN_EVENT = true := by rw [hE]; simp [jsonStrIs]
       have hT : treeLine l = true := by rw [treeLine_ok hev, hop, Bool.or_true]
       have hpre : (ts.map fun p => Flock.hexOf p.1).Nodup := hn.sublist (List.sublist_append_left _ _)
-      have hget : (ts.map fun p => (Flock.hexOf p.1, p.2))[i]? = some (Flock.hexOf root, spec) := by simp [hi]
+      obtain ⟨x, hget, hx⟩ := hR.get hi
       have hsn : spec.streams.toList.Nodup := hst (root, spec) (List.mem_of_getElem? hi)
-      have hrel := treeRelease_open (recs := recs) hE (str_of hev hd ho.tree) (str_of hev hd ho.stream)
-        (str_of hev hd ho.after) (nat_of hev hd ho.round) (nat_of hev hd ho.n) (findIdx_root hpre hi) hget
-        (findIdx_stream hsn hs)
-      rw [Verity.Sampled.readLines, if_pos hT, hev] at h
+      have hrel := treeStep_open (recs := recs) hnt (str_of hev hd ho.tree) (str_of hev hd ho.stream)
+        (str_of hev hd ho.after) (nat_of hev hd ho.round) (nat_of hev hd ho.n) (findIdx_root hR hpre hi) hget
+        (findIdx_spec hx hsn hs)
+      rw [Verity.Sampled.readTail, ite_eq_left hT, hev] at h
       simp only [Except.toOption, Option.bind_eq_bind, Option.bind_some, hrel, Option.pure_def] at h
       obtain ⟨rest, hrest, h⟩ := Option.bind_eq_some_iff.1 h
       cases h
@@ -875,8 +1017,8 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
         unfold helloRoot
         rw [hev]
         dsimp only
-        rw [if_neg (by rw [hnt]; decide)]
-      refine .cons ⟨rfl, rfl, fun hne => ?_⟩ (ih (htl.sub fun l hl => List.mem_cons_of_mem _ hl)
+        rw [ite_eq_right (by rw [hnt]; decide)]
+      refine .cons ⟨rfl, rfl, fun hne => ?_⟩ (ih hR (htl.sub fun l hl => List.mem_cons_of_mem _ hl)
         (by rwa [List.filterMap_cons_none hnone] at hn) hst (by simpa [freshOf] using hξ) hrest)
       unfold openCoins at hne ⊢
       cases hf : recs.find? (Verity.Sampled.recordTree · == Flock.hexOf root) with
@@ -898,47 +1040,50 @@ theorem read_prints : ∀ {ts : List (ByteArray × Flock.CoinTree.Spec)} {lines 
 
 /-- **A run the device printed reads as its log** (`ReadOf`): where the device printed its log `log` (`PrintsLog`), on
 a run its ledger opens withheld on a window, whose release log reads as its coin commitment's (`releasedRootsOf`) and
-whose log `coinTreesOf` reads trees from that each record passes, `readLines` reads the run's lines after their head,
-at the run's released coins, as `log`. -/
+whose log `coinTreesOf` reads trees from that each record passes, `readLog` reads the run's log, at the run's released
+coins, as `log`: its head is the commitment's line (`readLog_head`), and the lines after it are what the device
+printed. -/
 theorem read_run {dev : History} {log : List Release} (hP : PrintsLog dev log) {pk : ByteArray} {w : String}
     {r : Properties.Challenger.Run} (hr : r ∈ dev.runs pk) (ho : OpensOn dev pk w r.id)
     (hcr : ∃ c roots, r.commitment = some c ∧ releasedRootsOf c r.log = .ok roots) {ts : Array LoggedTree}
     (hts : coinTreesOf r.log = .ok ts) (hrecs : ∀ rec ∈ recs, ∃ tabs, sessionTreeReason ts tabs rec = none)
-    {out : List Release} (h : readLines label after recs r.log.tail [] none (r.released label after) = some out) :
+    {out : List Release} (h : readLog label after recs (r.released label after) r.log = some out) :
     List.Forall₂ ReadOf out log := by
   obtain ⟨hp, hξ⟩ := hP pk w r hr ho
+  obtain ⟨c, roots, -, hroots⟩ := id hcr
+  rw [readLog_head hroots] at h
   have hT := trees_log hts
   have hn : (r.log.filterMap helloRoot).Nodup := hT.roots ▸ hT.nodup
-  refine read_prints hp ((tree_lines hts hrecs).sub fun _ hl => List.mem_of_mem_tail hl) ?_
+  refine read_prints hp .nil ((tree_lines hts hrecs).sub fun _ hl => List.mem_of_mem_tail hl) ?_
     (fun _ h => absurd h List.not_mem_nil) (hξ hcr label after) h
   simpa using hn.sublist ((List.tail_sublist r.log).filterMap _)
 
-/-! ## The openings without the draw's coins -/
+/-! ## The openings without the sample's coins -/
 
-/-- **Two reads of one release agree but for the draw's coins**: the same frame and bytes answered, and at a round
+/-- **Two reads of one release agree but for the sample's coins**: the same frame and bytes answered, and at a round
 opened the same coins. -/
 def Agree (y y' : Release) : Prop :=
   y'.frame = y.frame ∧ y'.answers = y.answers ∧ (opening? y.frame = true → y'.coins = y.coins)
 
-/-- **`readLines` reads the same frames, bytes and openings' coins at any of the draw's coins.** -/
-theorem readLines_agree {lines : List String} : ∀ {ts : List (String × Flock.CoinTree.Spec)}
+/-- **`readTail` reads the same frames, bytes and openings' coins at any of the sample's coins.** -/
+theorem readTail_agree {lines : List String} : ∀ {ts : List (String × Json)}
     {pending : Option String} {ξ : ByteArray} {out : List Release} (ξ' : ByteArray),
-    readLines label after recs lines ts pending ξ = some out →
-    ∃ out', readLines label after recs lines ts pending ξ' = some out' ∧ List.Forall₂ Agree out out' := by
+    readTail label after recs lines ts pending ξ = some out →
+    ∃ out', readTail label after recs lines ts pending ξ' = some out' ∧ List.Forall₂ Agree out out' := by
   induction lines with
   | nil =>
     intro ts pending ξ out ξ' h
     cases pending with
-    | none => rw [Verity.Sampled.readLines] at h; cases h; exact ⟨[], rfl, .nil⟩
-    | some _ => rw [Verity.Sampled.readLines] at h; cases h
+    | none => rw [Verity.Sampled.readTail] at h; cases h; exact ⟨[], rfl, .nil⟩
+    | some _ => rw [Verity.Sampled.readTail] at h; cases h
   | cons l ls ih =>
     intro ts pending ξ out ξ' h
     by_cases ht : treeLine l = true
     · cases pending
       all_goals
-        rw [Verity.Sampled.readLines, if_pos ht] at h
-        rw [Verity.Sampled.readLines, if_pos ht]
-        cases hX : (event l).toOption.bind (treeRelease recs ts) with
+        rw [Verity.Sampled.readTail, ite_eq_left ht] at h
+        rw [Verity.Sampled.readTail, ite_eq_left ht]
+        cases hX : (event l).toOption.bind (treeStep recs ts) with
         | none => rw [hX] at h; cases h
         | some p =>
           obtain ⟨r, ts'⟩ := p
@@ -950,12 +1095,12 @@ theorem readLines_agree {lines : List String} : ∀ {ts : List (String × Flock.
           exact ⟨r :: rest', by rw [hrest']; rfl, .cons ⟨rfl, rfl, fun _ => rfl⟩ hag⟩
     · cases pending with
       | none =>
-        rw [Verity.Sampled.readLines, if_neg ht] at h
-        rw [Verity.Sampled.readLines, if_neg ht]
+        rw [Verity.Sampled.readTail, ite_eq_right ht] at h
+        rw [Verity.Sampled.readTail, ite_eq_right ht]
         exact ih ξ' h
       | some a =>
-        rw [Verity.Sampled.readLines, if_neg ht] at h
-        rw [Verity.Sampled.readLines, if_neg ht]
+        rw [Verity.Sampled.readTail, ite_eq_right ht] at h
+        rw [Verity.Sampled.readTail, ite_eq_right ht]
         dsimp only at h ⊢
         cases hR : Verity.Sampled.rootOf a with
         | none => rw [hR] at h; cases h
@@ -964,7 +1109,7 @@ theorem readLines_agree {lines : List String} : ∀ {ts : List (String × Flock.
           simp only [hR, Option.bind_eq_bind, Option.bind_some, Option.pure_def] at h ⊢
           split at h
           · rename_i hc
-            rw [if_pos hc]
+            rw [ite_eq_left hc]
             obtain ⟨rest, hrest, h⟩ := Option.bind_eq_some_iff.1 h
             cases h
             obtain ⟨rest', hrest', hag⟩ := ih (ξ'.extract COIN_BYTES ξ'.size) hrest
@@ -973,7 +1118,7 @@ theorem readLines_agree {lines : List String} : ∀ {ts : List (String × Flock.
             rw [hrest']
             rfl
           · rename_i hc
-            rw [if_neg hc]
+            rw [ite_eq_right hc]
             obtain ⟨rest, hrest, h⟩ := Option.bind_eq_some_iff.1 h
             cases h
             obtain ⟨rest', hrest', hag⟩ := ih ξ' hrest
@@ -981,16 +1126,41 @@ theorem readLines_agree {lines : List String} : ∀ {ts : List (String × Flock.
             rw [hrest']
             rfl
 
-/-- **The openings as v2's check reads them, without the draw's coins**: `Verity.Sampled.coinsRead`'s read with none
-of the draw's coins placed (`.empty`), so it verifies no signature of the draw; it hashes only the blobs it reads the
+/-- **`readLog` reads the same frames, bytes and openings' coins at any of the sample's coins**, its head's tree's line
+included. -/
+theorem readLog_agree {lines : List String} {ξ : ByteArray} {out : List Release} (ξ' : ByteArray)
+    (h : readLog label after recs ξ lines = some out) :
+    ∃ out', readLog label after recs ξ' lines = some out' ∧ List.Forall₂ Agree out out' := by
+  cases lines with
+  | nil => rw [Verity.Sampled.readLog] at h; cases h; exact ⟨[], rfl, .nil⟩
+  | cons l ls =>
+    by_cases ht : treeLine l = true
+    · rw [Verity.Sampled.readLog, ite_eq_left ht] at h
+      rw [Verity.Sampled.readLog, ite_eq_left ht]
+      cases hX : (event l).toOption.bind (treeStep recs []) with
+      | none => rw [hX] at h; cases h
+      | some p =>
+        obtain ⟨r, ts⟩ := p
+        rw [hX] at h
+        simp only [Option.bind_eq_bind, Option.bind_some, Option.pure_def] at h ⊢
+        obtain ⟨rest, hrest, h⟩ := Option.bind_eq_some_iff.1 h
+        cases h
+        obtain ⟨rest', hrest', hag⟩ := readTail_agree ξ' hrest
+        exact ⟨r :: rest', by rw [hrest']; rfl, .cons ⟨rfl, rfl, fun _ => rfl⟩ hag⟩
+    · rw [Verity.Sampled.readLog, ite_eq_right ht] at h
+      rw [Verity.Sampled.readLog, ite_eq_right ht]
+      exact readTail_agree ξ' h
+
+/-- **The openings as v2's check reads them, without the sample's coins**: `Verity.Sampled.coinsRead`'s read with none
+of the sample's coins placed (`.empty`), so it verifies no signature of the sample; it hashes only the blobs it reads the
 records from. -/
 def opensRead (s : Sent) : Option (List Release) := do
   let (p, c, e) ← (caseOf s).toOption
   let (_, label) ← p.base.challenger
   let lines ← (linesOf e).toOption
-  readLines label c.digest (← recordsOf s e) lines.tail [] none .empty
+  readLog label c.digest (← recordsOn (_root_.Core.Blobs.ofArray s.blobs) e) .empty lines
 
-/-- **Where v2's check reads a log, the read without the draw's coins agrees with it** (`Agree`). -/
+/-- **Where v2's check reads a log, the read without the sample's coins agrees with it** (`Agree`). -/
 theorem opens_read {s : Sent} {out : List Release} (h : coinsRead s = some out) :
     ∃ out', opensRead s = some out' ∧ List.Forall₂ Agree out out' := by
   unfold Verity.Sampled.coinsRead at h
@@ -1003,10 +1173,10 @@ theorem opens_read {s : Sent} {out : List Release} (h : coinsRead s = some out) 
   obtain ⟨recs, h5, h⟩ := Option.bind_eq_some_iff.1 h
   have h2' : p.base.challenger = some (kk, lab) := h2
   have h4' : (linesOf e).toOption = some lines := h4
-  have h5' : recordsOf s e = some recs := h5
-  have h' : readLines lab c.digest recs lines.tail [] none ξ = some out := h
+  have h5' : recordsOn (_root_.Core.Blobs.ofArray s.blobs) e = some recs := h5
+  have h' : readLog lab c.digest recs ξ lines = some out := h
   simp only [h1, h2', h4', h5', Option.bind_some]
-  exact readLines_agree .empty h'
+  exact readLog_agree .empty h'
 
 /-- **The first round opened whose coins the read shows other than the device released**: the read's bytes and the
 device's, at a round opened whose coins the read shows. -/
@@ -1018,7 +1188,7 @@ def openCollision : List Release → List Release → Option (ByteArray × ByteA
   | _, _ => none
 
 /-- **Where v2 reads a log of the device's releases but for openings' coins of one SHA-512, and it isn't the device's,
-the first opening read without the draw's coins other than the device's is a SHA-512 collision.** -/
+the first opening read without the sample's coins other than the device's is a SHA-512 collision.** -/
 theorem open_collision : ∀ {out log out' : List Release}, List.Forall₂ ReadOf out log →
     List.Forall₂ Agree out out' → ¬ List.Forall₂ (fun y x => y.coins ≠ [] → y.coins = x.coins) out log →
     ∃ u v, openCollision out' log = some (u, v) ∧ u ≠ v ∧ Flock.Sha512.hash u = Flock.Sha512.hash v := by
@@ -1031,7 +1201,7 @@ theorem open_collision : ∀ {out log out' : List Release}, List.Forall₂ ReadO
     | @cons _ y' _ ys' hag ha =>
       rw [openCollision]
       by_cases hc : opening? y'.frame = true ∧ y'.coins ≠ [] ∧ coinBytes y'.coins ≠ coinBytes x.coins
-      · rw [if_pos hc]
+      · rw [ite_eq_left hc]
         refine ⟨_, _, rfl, hc.2.2, ?_⟩
         have hop : opening? y.frame = true := hag.1 ▸ hc.1
         have hco : y'.coins = y.coins := hag.2.2 hop
@@ -1039,7 +1209,7 @@ theorem open_collision : ∀ {out log out' : List Release}, List.Forall₂ ReadO
         rcases hyx.2.2 hc.2.1 with e | ⟨-, -, hh⟩
         · exact (hc.2.2 (by rw [e])).elim
         · exact hh
-      · rw [if_neg hc]
+      · rw [ite_eq_right hc]
         refine ih ha fun hrest => hn (.cons (fun hne => ?_) hrest)
         rcases hyx.2.2 hne with e | ⟨hop, hne', -⟩
         · exact e

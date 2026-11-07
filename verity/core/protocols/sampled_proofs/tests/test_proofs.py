@@ -1,6 +1,6 @@
-"""The proof system's own run of C-Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
+"""The proof system's own run of Flock's Lean verifier (`one_stage.proofs`), on a pinned `--zk --registered`
 session: a RoPE d64 statement of 32 proof blocks, each reading its `cs` row from a registered served tree, its `x` row and
-output row registered too, proved by C-Flock in one loopback session under a subset sample of 16
+output row registered too, proved by Flock in one loopback session under a subset sample of 16
 (`verity/ml/flock/pod/89-served-registered.sh`'s row/v1 fixture). The verifier's own program, partition and `--registered`
 file are the fixture's `stage/`, the ones
 `verity/ml/flock/tests/test_lean_served_registered.py` holds to `register_served`.
@@ -8,7 +8,7 @@ file are the fixture's `stage/`, the ones
 Each verify sets up an m = 25 table (about 10 s), so the fixture's tests are slow. They are the one test that a protocol's
 verdict comes from core's own verifier run: the honest session, whose public file is a shared-row file in the form
 `SampledKSLiveV5` covers (`Flock.KsScope.sharedWhy`), is accepted with its program and registered finding read off that
-run, and proves the proof blocks its draw drew; a circuit file other than the committed one
+run, and proves the proof blocks its sample holds; a circuit file other than the committed one
 is refused before the verifier runs, tampered proof bytes
 are rejected by the verifier itself, with the record's proof digests kept or rewritten to match, and the statement, whose
 ``cs`` reads are registered by the verifier's own file, is refused by Lean without that file, whether its public file
@@ -52,7 +52,7 @@ REGISTERED_ROOTS = {
     "out": {"value": "rope_out", "root": "cffcc31602347cbafa44022c617bae5506de1f8f800b5b0c4b75559020f3c50a"
                                          "2960e8ff8e0968d9d4adf7281c8739366165795a5a72c1dd55d6798aaf1dd4fb"},
 }
-#: the instances the session's own draw drew, which are the proof blocks, the public file's indices being 0..31
+#: the instances the session's own sample holds, which are the proof blocks, the public file's indices being 0..31
 DRAWN = (1, 4, 6, 7, 9, 14, 16, 18, 19, 20, 21, 22, 23, 24, 27, 29)
 
 #: a test that runs Lean on the fixture
@@ -144,6 +144,51 @@ def test_a_session_lean_accepts_in_a_form_the_mirror_refuses_is_refused(tmp_path
     assert got is None and why[0] == "form" and why[1].endswith(SCOPE), why
 
 
+def _template(d: Path, const: int, meta: dict) -> Path:
+    """A circuit file's head: META and a ``unit`` circuit of one input group of one word, its constant at row
+    `const`."""
+    circuit = d / "circuit.txt"
+    circuit.write_text(f"flock-circuit/v1 u\nMETA {json.dumps(meta)}\nCIRCUIT unit 2\n"
+                       f"flock-ir-unit/v2 u {const + 1} {const} 1 0 1 1 16 1 1 1 1 16\n0 0\n")
+    return circuit
+
+
+TEMPLATES = {"one unit, 16 bits": (129, {"units_per_vu": 1, "leaves_out": [[0]]}, None),
+             "one unit, no computed row of its net's own": (128, {"units_per_vu": 1, "leaves_out": [[0]]}, None),
+             "no unit": (129, {"units_per_vu": 0, "leaves_out": []}, PF.NO_ROW_WHY),
+             "the widest class": (129, {"units_per_vu": 2, "leaves_out": [list(range(8192))] * 2}, None),
+             "one leaf past it": (129, {"units_per_vu": 2, "leaves_out": [list(range(8192)), list(range(8193))]},
+                                  PF.WIDE_WHY),
+             "a leaf map past units_per_vu is no unit's": (
+                 129, {"units_per_vu": 1, "leaves_out": [[0], list(range(16384))]}, None)}
+
+
+@pytest.mark.parametrize("const, meta, want", TEMPLATES.values(), ids=TEMPLATES.keys())
+def test_the_mirror_of_the_template_check_refuses_what_lean_refuses(tmp_path, const, meta, want):
+    """`template_why` on a circuit file's head: `OneStageZk.templateOk`'s two refusals with their reasons, at the widest
+    class's edge, and only over the ``units_per_vu`` units' leaf maps."""
+    assert PF.template_why(_template(tmp_path, const, meta)) == want
+
+
+def test_a_session_lean_accepts_on_a_template_the_mirror_refuses_is_rejected_with_its_reason(tmp_path, monkeypatch):
+    """`verify` rejects a session the verifier accepts on a circuit `template_why` refuses, with v2's reason, as a
+    finding rather than a refusal of the run."""
+    circuit = _template(tmp_path, 129, {"units_per_vu": 0, "leaves_out": []})
+    public = tmp_path / "pub.bin"
+    public.write_bytes(b"{}\n")
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_text("{}")
+    verdict = {"session": str(tmp_path / "s"), "accepted": True, "why": "", "program_sha512": "p"}
+    monkeypatch.setattr(PF, "executable", lambda: Path("flock-verify"))
+    monkeypatch.setattr(PF.subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(
+        a, 0, f"VERDICT {json.dumps(verdict)}\n", ""))
+    got, why = PF.verify(PF.Proof(circuit, public, (tmp_path / "s",)), circuit_sha512=PF.file_sha512(circuit),
+                         program=RUN_ONLY, partition={"program": "p"}, registered=None)
+    assert why is None, why
+    (f,) = got
+    assert (f.accepted, f.why, f.units) == (False, PF.NO_ROW_WHY, ()), f
+
+
 @pytest.fixture(scope="module")
 def fx(tmp_path_factory) -> Path:
     sys.path.insert(0, str(VERIFIER))
@@ -169,9 +214,9 @@ def _verify(fx: Path, session: Path, circuit: str = CIRCUIT, public: str = "pub-
 @lean
 @pytest.mark.slow
 def test_the_honest_session_is_accepted_by_cores_own_verifier_run_at_its_shared_rows(fx):
-    """The honest session's draw is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
+    """The honest session's sample is `DRAWN` (the record's `unit_draw`), and its verdict names the partition's program and
     the registered root; its shared-row public file is in the form `SampledKSLiveV5` covers, so the verifier accepts it
-    and it proves the drawn proof blocks."""
+    and it proves the sampled proof blocks."""
     got, why = _verify(fx, fx / "session")
     assert why is None, why
     (f,) = got
@@ -280,7 +325,7 @@ def _same(v1, v2):
 @pytest.mark.slow
 def test_the_v2_audits_own_run_on_blobs_agrees_with_verify(fx, tmp_path):
     """The v2 audit (`SampledProofs.OneStageZk`) runs `flock-verify verify --zk`'s one-stage path inside its own Lean, on
-    the files as blobs: on the honest session (accepted at its shared rows, proving its drawn proof blocks), a session
+    the files as blobs: on the honest session (accepted at its shared rows, proving its sampled proof blocks), a session
     whose proof bytes were tampered with (record kept or rehashed), and the honest session without the verifier's
     registered file, its finding is `verify`'s, reason and proof blocks included."""
     for session, own in ((fx / "session", True), (_tampered(fx, tmp_path / "kept", False), True),

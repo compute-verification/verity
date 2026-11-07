@@ -1,11 +1,40 @@
 module
 
+public import Definitions.Core.Assumptions
 public import Definitions.NetworkCertifier.Guarantees.SampledCharge
 public import Definitions.NetworkCertifier.Period
 public import Definitions.NetworkCertifier.Tap
-public import Definitions.Core.Assumptions
-public import Mathlib.Data.Set.Card
-public import Mathlib.Algebra.BigOperators.Fin
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The leak through the network certifier over a monitoring period of sampled audits
@@ -33,9 +62,9 @@ audits, not from a premise:
 The union of the windows' failures over the monitoring period's live coins is not stated here. `WindowGood` is the
 event the first part bounds, plus one condition no proof here gives: the registration's values at the prover's
 registered inputs, which the registration's commitment binds. The network certifier's rows are not pinned: they vary
-with the secret. The first part covers an extracted trace that leaves them outside the faulty units, where every
-transfer gate is opened; the count charges a faulty proof block's rows through the Program, from the free inputs, the
-faulty sets, their committed bits and the timing. A proof block the sample missed is in the faulty set.
+with the secret. The first part covers an extracted trace that leaves them outside the incorrect proof blocks, where every
+transfer gate is opened; the count charges an incorrect proof block's rows through the Program, from the free inputs, the
+incorrect sets, their committed bits and the timing. A proof block the sample missed is in the incorrect set.
 -/
 
 @[expose] public section
@@ -51,7 +80,7 @@ set_option linter.unusedVariables false
 deployment `D` of the sampled verifier where `Claims.Sampling.KS` holds and the trace's commitment binds
 (`CommitmentScheme.Binds`), with a decoder that lists every trace within Flock's radius, over a monitoring period of `n`
 windows registered as `sw i` (partition `Pw i`, registered values `ρ i`, operator `op i`, and `β i` bounding the
-committed bits of each of its possible faulty sets), with the network certifier's openings `tops s` at each statement,
+committed bits of each of its possible incorrect sets), with the network certifier's openings `tops s` at each statement,
 and a network certifier that runs its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
 (`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
 and the observations of the monitoring period's windows (its record of those cells, in the format `f`):

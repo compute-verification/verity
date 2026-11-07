@@ -25,7 +25,7 @@ from torch import nn
 from verity.core.protocols.pouw import credit as CR
 from verity.core.protocols.pouw import weights as Wt
 from verity.core.protocols.pouw import window as Wd
-from verity.core.protocols.pouw.circuit import h1window as HW
+from verity.ml.protocols.pouw.circuit import h1window as HW
 from verity.core.protocols.sampled_proofs import remote as R
 from verity.ml.circuits.codec import canonical_json
 from verity_vllm import protocols as PO
@@ -217,16 +217,16 @@ def _ids(run, s):
     return out
 
 
-class _Laid(dict):
-    """`Served`'s open step tables (``_a``, each call's block by call) laid out by ``lay`` when a step's table of K is
+def _laid(served, lay):
+    """``served``'s step tables of K (`Served._a_rows`, each call's block in call order) laid out by ``lay`` when one is
     taken whole: the rows the window registers and hands the tap as its table, the Commit's own rows untouched."""
+    whole = served._a_rows
 
-    def __init__(self, lay):
-        super().__init__()
-        self.lay = lay
+    def laid(call, value, mine, codes, scales):
+        table = whole(call, value, mine, codes, scales)
+        return None if table is None else np.concatenate(lay(np.split(table, len(mine))))
 
-    def pop(self, key, *default):
-        return dict(enumerate(self.lay([b for _c, b in sorted(super().pop(key, *default).items())])))
+    served._a_rows = laid
 
 
 #: the server's step-input port's T (`served_record.StepInputPort`: whole 4096-byte chunks of i64 ids)
@@ -278,7 +278,7 @@ def _window(tmp_path, monkeypatch, edit=None, ids=lambda s, x: x, lay=None, mode
         port = next(s for s in com.sources if isinstance(s, StepInputPort))
     served = SV.Served(PH.TILE, _unit(), window=key, tap=tap)
     if lay is not None:
-        served._a = _Laid(lay)
+        _laid(served, lay)
     kw = {"transcript_dir": str(tmp_path / "w"), "served": served}
     settings = (_remote(rows=ROWS, steps=STEPS, **kw) if coins is None
                 else coins(SimpleNamespace(runner=Runner()), {**kw, "admission": "round-0"}))
@@ -649,24 +649,23 @@ def test_attach_builds_a_rows_sha512_commit_whose_port_is_the_steps_one_copy_of_
 
 
 def test_h1s_commit_refuses_a_sha256_run_root(monkeypatch):
-    """vllm-v1's committer (SHA-256 rows, 32-byte roots) is no Commit of H1's. `h1_commit.attach` refuses one built under
-    it, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run records of the Commit
-    (the GPU harness's ``committer`` and each rank's release), refuses vllm-v1's real 32-byte run root, and a
+    """A committer of another scheme (an old record's vllm-v1: SHA-256 rows, 32-byte roots) is no Commit of H1's.
+    `h1_commit.attach` refuses one, closed before anything is put on the engine; and `pouw_h1_commit.committed`, what a run
+    records of the Commit (the GPU harness's ``committer`` and each rank's release), refuses its 32-byte run root, and a
     rows-sha512 committer's root of any length but 64. The offline core's rows-sha512 run root passes."""
     from tests.check import opened as O
-    steps = {0: [("step.input/ids", bytes(range(64)))]}
-    sha512 = O.commit_steps(steps, commit_scheme=CT.SCHEME, run_id="h1-rows")
-    sha256 = O.commit_steps(steps, run_id="h1-v1")
+    sha512 = O.commit_steps({0: [("step.input/ids", bytes(range(64)))]}, run_id="h1-rows")
+    old = O.committer(run_id="h1-v1")
+    old.commit_scheme = "vllm-v1"
     assert (sha512[0].commit_scheme, len(sha512[1].run_root)) == (CT.SCHEME, CT.ROOT_BYTES)
-    assert (sha256[0].commit_scheme, len(sha256[1].run_root)) == ("vllm-v1", 32)
     assert CT.committed(*sha512) == {"run_root": sha512[1].run_root.hex(), "commit_scheme": CT.SCHEME,
                                      "name": sha512[0].name}
-    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
-        CT.committed(*sha256)
     short = SimpleNamespace(run_root=bytes(32), extra={})
+    with pytest.raises(ValueError, match=f"committed under vllm-v1 to a 32-byte run root, not under {CT.SCHEME} to a 64-byte"):
+        CT.committed(old, short)
     with pytest.raises(ValueError, match=f"committed under {CT.SCHEME} to a 32-byte run root"):
         CT.committed(Committer(), short)
-    old, model = sha256[0], Model()
+    model = Model()
     closed = []
     monkeypatch.setattr(old, "close", lambda: closed.append(True))
     monkeypatch.setattr(HC, "committer", lambda engine, run_id: old)
@@ -722,8 +721,8 @@ def test_a_forward_out_of_module_order_ties_and_its_a_zero_is_refused_at_arow(tm
 class _Gate:
     """The challenger gate for a run of several windows (`pouw_h1_gpu.window_sessions`): each ``reserve`` is a challenge phase of its own
     on a challenger host of its own (`challenger_host.Host`, gated), all under one auditor key and one ledger, which
-    reserves, opens and ends them in turn; a reserve of no `steps` is a window's draw's challenge phase, whose host, over
-    the draw's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
+    reserves, opens and ends them in turn; a reserve of no `steps` is a window's sample's challenge phase, whose host, over
+    the sample's coins (`window.draw_challenger`) and withheld, starts (and the ledger reserves it) at its open, since the
     window's open is signed at a leaf held from its reserve. Calling it is the gate's open (`pouw_h1_window.Gate`), the
     serving side reaches the challenge phase opened last, and ``ended`` is the challenge phase's ``status`` once its end
     is in the ledger."""
@@ -765,7 +764,7 @@ class _Gate:
 
 def _live(gate, sessions, name):
     """``coins`` for `_window`: window `name`'s settings as the GPU harness makes them with ``--challenger --gate --peer``,
-    its challenge phase and its draw's the ones `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
+    its challenge phase and its sample's the ones `sessions` (`pouw_h1_gpu.window_sessions`) reserves for it."""
     from tests.protocols import pouw_h1_gpu as G
 
     def settings(eng, kw):
@@ -782,7 +781,7 @@ def _in_process(eng, kw):
 
 def _summary_row(gate, sessions, name, record, run):
     """Window `name` as the GPU harness's record keeps it for `pouw_h1_gpu.coins_summary`, its challenge phase and its
-    draw's ended."""
+    sample's ended."""
     from tests.protocols import pouw_h1_gpu as G
     ends = {}
     if name in getattr(sessions, "held", {}):

@@ -2,8 +2,21 @@ module
 
 public import Proofs.Flock.VBridge.Family.Encode
 public import Proofs.Flock.VBridge.Family.Openings
-public import Proofs.Flock.Soundness.Refine.Setup
-public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The proof files' cap and Ligerito openings, read off V*'s layers and the inner messages
@@ -41,6 +54,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## The region count -/
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`Stmt.setupH` checks the statement range** (HmRow.lean:1339): every statement it returns passed `checkInRange`
 at its `k_log`, its regions and its link points. -/

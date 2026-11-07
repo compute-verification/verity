@@ -1,7 +1,48 @@
 module
 
+public import Proofs.Flock.Claims.KS.BatchSched
 public import Proofs.Flock.Claims.KS.SlotDistOn
+public import Proofs.Flock.Claims.KS.ZkBatch
 public import Proofs.Flock.Claims.KS.ZkKSAlign
+public import Proofs.Flock.Claims.KS.ZkTauFork
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.RepDistZ
+import Proofs.Flock.Claims.KS.ZkBatchSim
+import Proofs.Flock.Claims.KS.ZkLiveSched
+import Proofs.Flock.Claims.KS.ZkStep
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # The masked simulated fork's alignment at `τ`
@@ -117,7 +158,7 @@ theorem coinsK_tailShape (F K D : Type) (sch : Schedule) (lv₀ lv₁ : Level) (
   simp only [tailShape, Lock.coinsK, Lock.coinsK_append, coinsK_oodShape, coinsK_qbShape, this]
   omega
 
-/-- **The masked level 0's coins**: its two first coins, its `k0` lane rounds, its `e` extra draws and levels 1+. -/
+/-- **The masked level 0's coins**: its two first coins, its `k0` lane rounds, its `e` extra samples and levels 1+. -/
 theorem coinsK_ligPadShape (F K D : Type) (sch : Schedule) (e t : ℕ) (lv₀ lv₁ : Level) (rest : List Level)
     (hlevs : sch.levels = lv₀ :: lv₁ :: rest) (hl : ∀ l ∈ lv₁ :: rest, l.lanes = 4) :
     Lock.coinsK (ligPadShape F K D sch e t) = sch.k0 + e + 16 + 11 * rest.length := by

@@ -1,11 +1,12 @@
 module
 
 public import Proofs.Flock.Soundness.Audit.FlockLink
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Collision resistance alone: the definitions
 
-The link term is stated under `SHA512CRExpected` (`ecr/sha-512`): its finders stop adaptively, rerunning the prover until
+The binding error is stated under `SHA512CRExpected` (`ecr/sha-512`): its finders stop adaptively, rerunning the prover until
 a rerun reads the commit string. `CROnly` derives that bound, with an explicit loss, from `SHA512CRStrict` (`cr/sha-512`)
 of the same finders stopped at a budget `q` fixed in advance. These are the definitions its guarantees read.
 
@@ -47,7 +48,7 @@ end Truncate
 
 /-- **The per-run cost at which the strict bound reads as A2's**: `2^256·(t'/q + q²/2^513)`, for link finders stopped at
 `q` whose runs cost `t'` each. `LinkCR` at this cost follows from `LinkCRStrict` at `(t', q)`
-(`CROnly.linkCR_of_strict`), so the link term's `2t'(1 + k)/2^256` becomes `2(1 + k)·(t'/q + q²/2^513)`. -/
+(`CROnly.linkCR_of_strict`), so the binding error's `2t'(1 + k)/2^256` becomes `2(1 + k)·(t'/q + q²/2^513)`. -/
 noncomputable def strictRunCost (t' q : ℝ) : ℝ :=
   2 ^ (256 : ℝ) * (t' / q + q ^ 2 / 2 ^ (513 : ℝ))
 
@@ -60,7 +61,7 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
   (R : Reg) (τ : Cont L Reg (batchedSession H E plan) R)
 
 /-- **`cr/sha-512` for one prover's link finders** (`Assumptions.SHA512CRStrict`): at the registration `R` and the prover's
-continuation `τ`, for the finder `Partition.LinkCR` builds for each commit string a draw can read, stopped at `q`
+continuation `τ`, for the finder `Partition.LinkCR` builds for each commit string a sample can read, stopped at `q`
 evaluations (`truncOut`, `truncCost`), with each run costing `t'` (`cT`). It asks of each finder what `LinkCR` asks,
 but in the strict form: the stopped finder makes at most `q` evaluations on every outcome, so it finds a collision with
 probability at most `q²/2^513`. As `LinkCR`, it is a hypothesis about the finders built from one prover, not about every

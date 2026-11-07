@@ -1,4 +1,4 @@
-"""C-Flock over an arbitrary partition: every unit class (`verity.ml.circuits.units`) lowered once to AND/XOR/NOT with C-Flock's pieces,
+"""Flock over an arbitrary partition: every size class (`verity.ml.circuits.units`) lowered once to AND/XOR/NOT with Flock's pieces,
 and checked against the reference evaluator on synthetic inputs lifted through the unit's flat Definition.
 
     uv run python -m verity_flock.partition_units --model tiny [--partition q-word|blocks:64|scatter:8]
@@ -6,8 +6,8 @@ and checked against the reference evaluator on synthetic inputs lifted through t
 
 * **Lowering.**  `lower_class` lays one unit of a class out as a `gf2.Circuit` (inputs ``in0 ..``, outputs ``out0 ..``, one word per
   port) through `ir_lower.lower_gates`, so a primitive without a piece names itself.
-* **Synthetic inputs.**  Drawn where they are a flat Definition's parameters, never at the unit: a unit's inputs are interior values
-  (a softmax's max, sum and probabilities are correlated).  `synthetic_words` draws every parameter leaf uniformly from a counter
+* **Synthetic inputs.**  Sampled where they are a flat Definition's parameters, never at the unit: a unit's inputs are interior values
+  (a softmax's max, sum and probabilities are correlated).  `synthetic_words` samples every parameter leaf uniformly from a counter
   stream; since circuits are total, every word is a valid input.  The flat Definition is evaluated on each sample (`Activation.evaluate`)
   and every unit's boundary values are sliced out of the transcript.
 * **Partitions.**  Any query `partition_object` evaluates, or an owner function over each Call's `CallGraph`.  `blocks` and `scatter`
@@ -32,7 +32,7 @@ from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.cut import CallGraph, check_cut
 from verity.ml.circuits.program import input_id
-from verity.ml.circuits.units import Activation, PartitionUnits, UnitCircuit
+from verity.ml.circuits.units import Activation, PartitionUnits, ProofBlockCircuit
 from verity.ml.randomness import derive
 
 from . import gf2
@@ -104,7 +104,7 @@ class ClassCircuit:
     reason: str = ""
 
 
-def lower_class(act: Activation, uc: UnitCircuit, max_gates: int = 1 << 20) -> ClassCircuit:
+def lower_class(act: Activation, uc: ProofBlockCircuit, max_gates: int = 1 << 20) -> ClassCircuit:
     """C-Flock's Boolean lowering of one unit (inputs ``in0 ..``, outputs ``out0 ..``, one word per port), or why not."""
     prims = {act.gate(j).prim.id for j in uc.gates}
     missing = tuple(sorted(p for p in prims if p not in IL.PIECES and not p.startswith("Const") and input_id(p) is None))
@@ -126,7 +126,7 @@ def lower_class(act: Activation, uc: UnitCircuit, max_gates: int = 1 << 20) -> C
 # --- synthetic inputs, lifted through the flat Definition ---------------------------------------------------------------------
 
 def synthetic_words(key: Any, fn_id: str, widths: Sequence[int], T: int) -> list[list[int]]:
-    """T draws of a flat Definition's parameter leaves: uniform words of each leaf's width, from the stream at (Definition, draw)."""
+    """T samples of a flat Definition's parameter leaves: uniform words of each leaf's width, from the stream at (Definition, sample)."""
     nbytes = [(w + 7) // 8 for w in widths]
     out = []
     for t in range(T):
@@ -151,15 +151,15 @@ def evaluate(act: Activation, words: Sequence[int]) -> dict[int, int]:
     return t
 
 
-def lanes(act: Activation, units: Sequence[UnitCircuit], key: Any, T: int) -> dict[tuple[str, int], tuple[list, list]]:
-    """Per unit of one flat Definition: its input and output words over T synthetic draws (per port, one word per draw)."""
+def lanes(act: Activation, units: Sequence[ProofBlockCircuit], key: Any, T: int) -> dict[tuple[str, int], tuple[list, list]]:
+    """Per unit of one flat Definition: its input and output words over T synthetic samples (per port, one word per sample)."""
     widths = [act.width(-1 - p) for p in range(act.params)]
     runs = [evaluate(act, w) for w in synthetic_words(key, act.fn.id, widths, T)]
     return {(uc.definition, uc.unit): ([[r[x] for r in runs] for x in uc.inputs], [[r[j] for r in runs] for j in uc.outputs])
             for uc in units}
 
 
-def class_mismatches(C: gf2.Circuit, uc: UnitCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]]) -> int:
+def class_mismatches(C: gf2.Circuit, uc: ProofBlockCircuit, ins: Sequence[Sequence[int]], want: Sequence[Sequence[int]]) -> int:
     """Output words of the class circuit C that differ from ``want`` on the lanes ``ins`` (per port, one word per lane)."""
     n = len(want[0]) if want else 0
     got, _fail = C.evaluate({f"in{i}": IL.slice_words(v, w) for i, (v, w) in enumerate(zip(ins, uc.in_widths))}, n)
@@ -168,7 +168,7 @@ def class_mismatches(C: gf2.Circuit, uc: UnitCircuit, ins: Sequence[Sequence[int
 
 def check(units: PartitionUnits, T: int = 16, seed: int = 0, max_gates: int = 1 << 20, log: Callable[[str], None] | None = None) -> dict:
     """Lower one unit per class, then check every distinct unit circuit of every lowered class (each flat Definition once) against
-    the reference on T synthetic draws lifted through its flat Definition.  A summary with per-class rows and the mismatches
+    the reference on T synthetic samples lifted through its flat Definition.  A summary with per-class rows and the mismatches
     (expected 0)."""
     t0 = time.time()
     classes = units.classes()

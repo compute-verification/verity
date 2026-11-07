@@ -1,4 +1,4 @@
-"""The build family: the check's steps that build the Flock verifier and run what it built, and C-Flock's Rust, as
+"""The build family: the check's steps that build the Flock verifier and run what it built, and Flock's Rust, as
 `tools/verity/check/check.py` runs them (its `lean_steps` and `groups`), each step one task.
 
 - `lean-build:verity/core/service/flock`: `lake build` of the Lean verifier; its outputs are the executables its lakefile's

@@ -7,7 +7,7 @@
                      kernel (`verity.ml.circuits.evaluation.self_check`, which must be `SelfCheck.ok`: some vector compared, and
                      none declined inside the reference's domain unless the kernel is partial; else ``kernel-<fault>``), a
                      template's evaluated target where it is another Definition, and
-                     the C-Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
+                     the Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
                      proof blocks otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
                      (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
                      Boolean Definition names
@@ -17,7 +17,7 @@
                      entries (`vectors.table_instances`), recorded under ``table`` with the words the vectors read
     ports            a Definition's declared return intervals (`verity.ml.circuits.ports`, PROTOCOL.md §12), which the Build takes
                      as facts about a primitive: its reference on edge and random operands, each leaf of a bounded parameter
-                     folded into its bound, returns every leaf within its interval; and a primitive's transfer, on drawn
+                     folded into its bound, returns every leaf within its interval; and a primitive's transfer, on sampled
                      operand intervals within its bounds with every operand leaf folded into its interval, returns within the
                      interval the transfer gives; recorded only for a Definition that declares either
     redundant gates  a value computed twice inside one proof block: the gates `verity.ml.definitions.word.Graph` finds recomputed
@@ -40,12 +40,12 @@
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
                      `sidecars`; a Boolean Definition's lowering has at most its own And gates, besides its builder's
-                     commits), a template proof block's circuit digest against its C-Flock module's `PINS`, and the Boolean
+                     commits), a template proof block's circuit digest against its Flock module's `PINS`, and the Boolean
                      export's gate lists checked against the proof block's circuit (`verity_flock.boolean_export`); a gated
                      Definition's circuit digest (``gated``: a Program holds it as one gate naming the digest, such as N2's
                      head check) against its ``digests`` pin
-    block            the witness bits a whole Definition needs as one C-Flock unit, read off it (its ANDs and port bits,
-                     `verity_flock.circuit.unit_witness`), within C-Flock's proved range of 2^``K_MAX`` (`block_range`): past
+    block            the witness bits a whole Definition needs as one Flock unit, read off it (its ANDs and port bits,
+                     `verity_flock.circuit.unit_witness`), within Flock's proved range of 2^``K_MAX`` (`block_range`): past
                      it, `UnitStager` refuses the unit before lowering, and `compose` would have refused it after.  Failed
                      for the Definitions staged whole as one unit (PoUW's, `UNIT_OWNERS`), recorded for the rest
 
@@ -103,7 +103,7 @@ class Options:
     partition_max_gates: int = 5_000_000
     partition_max_leaves: int = 1 << 22
     lower_max_gates: int = 256
-    lower_max_ands: int = 60_000
+    lower_max_ands: int = 1 << 16
     input_budget: int = 1 << 22
     lane_budget: int = 1 << 16
     dead_ids: int = 1 << 17
@@ -275,7 +275,7 @@ def _bounds(rs: Sequence, full: Callable) -> list:
 
 
 def _folded(arrays: list, params: Sequence, pt: Any, n: int, draw: Sequence[tuple[int, int] | None] = ()) -> list:
-    """`arrays` with each parameter's leaves folded into its drawn interval (`draw[j]`), else each leaf of a bounded parameter
+    """`arrays` with each parameter's leaves folded into its sampled interval (`draw[j]`), else each leaf of a bounded parameter
     into its bound: an interval's two ends first, then the vectors' values within it."""
     from verity.ml.circuits import ports as P
 
@@ -631,7 +631,7 @@ def _topp_word(t: Any, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> 
 
 def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, opts: Options, F: Findings, pins: dict,
                    memo: dict | None = None) -> dict:
-    """The C-Flock lowering of the whole Definition (a primitive's piece, or a small composite piece by piece) against the
+    """The Flock lowering of the whole Definition (a primitive's piece, or a small composite piece by piece) against the
     reference on the correspondence vectors; its redundant ANDs; a primitive's AND count and digest against the piece pins.  A composite's
     mismatch names the pieces that already differ from their own primitive (``memo["pieces"]``: piece -> mismatching vectors)."""
     from verity_flock import gf2
@@ -985,7 +985,7 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     return entry
 
 
-#: the packages whose Definitions are each staged whole as one C-Flock unit (`verity_flock.class_statement.UnitStager`), so
+#: the packages whose Definitions are each staged whole as one Flock unit (`verity_flock.class_statement.UnitStager`), so
 #: `block_range` fails one past the range: PoUW's.  A served Program's Call is proved as its partition's proof blocks
 #: (`partition`), so a Call's whole count bounds none of them and is recorded, not failed.
 UNIT_OWNERS = ("verity.core.protocols.pouw.",)
@@ -998,8 +998,8 @@ def unit_block(t: Any, F: Findings, lower_whole: bool = True) -> dict:
 
 
 def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
-    """The witness bits ``t`` needs as one C-Flock unit, read off its Definition (`verity_flock.circuit.unit_witness`), against
-    C-Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is one unit (``applies``: checked whole, not as a
+    """The witness bits ``t`` needs as one Flock unit, read off its Definition (`verity_flock.circuit.unit_witness`), against
+    Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is one unit (``applies``: checked whole, not as a
     subcircuit whose units are its template's proof blocks, and owned under `UNIT_OWNERS`), the one `UnitStager` raises
     before lowering."""
     from verity_flock import circuit as FC
@@ -1052,7 +1052,7 @@ def _export_counts(build: Callable[[], Any], name: str, C: Any = None) -> dict:
 
 
 def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pins: dict) -> dict:
-    """A subcircuit's C-Flock proof blocks: one proof block's circuit digest against its module's pin, its counts against
+    """A subcircuit's Flock proof blocks: one proof block's circuit digest against its module's pin, its counts against
     their pin and the Boolean export, its redundant ANDs, and the laid-out proof blocks against the reference on the edge and
     random vectors."""
     from verity_flock import ir_lower as IL
@@ -1140,7 +1140,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
 def check_subcircuit(sub: Any, opts: Options = DEFAULTS, *, instance_statics: Sequence[dict] = ({},), memo: dict | None = None,
                      pins: dict | None = None) -> dict:
     """Every check on a subcircuit: its Definition (and its evaluated target where that is another Definition) at each binding of
-    its instance statics, and its C-Flock lowering."""
+    its instance statics, and its Flock lowering."""
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
     F = Findings()

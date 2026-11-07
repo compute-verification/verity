@@ -158,7 +158,7 @@ retried; a task whose read didn't pass is cancelled. Each task's last result/v1 
 
 ## The build family
 
-The check's steps that build the Flock verifier and run what it built, and C-Flock's Rust, as `tools/verity/check/check.py`
+The check's steps that build the Flock verifier and run what it built, and Flock's Rust, as `tools/verity/check/check.py`
 runs them, one task a step:
 
 | task | env | runs | inputs | outputs |

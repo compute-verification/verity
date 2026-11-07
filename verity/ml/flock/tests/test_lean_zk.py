@@ -1,8 +1,8 @@
 """`verify --zk` (`Flock.Zk`): the Lean verifier on `flock-circuit --zk` sessions, the masked
 protocol (M1) on the keyed coin tree (M2). The sessions are the live build's on RoPE d64 (m = 25 and 26), each with the
 verdict its server reached: a `selftest --zk --record-dir` run (`selftest_records.py`), and `serve`/`prove --zk` sessions of
-two tables, of one m = 26 table and of a drawn one. Tampered copies come from `zk_mutants.py`; `agree.py --zk` compares all of
-them with upstream's offline verdict (`verity/ml/flock/verifier/vectors.json`). None is accepted: the circuit is no Program's, so the drawn session is refused for
+two tables, of one m = 26 table and of a sampled one. Tampered copies come from `zk_mutants.py`; `agree.py --zk` compares all of
+them with upstream's offline verdict (`verity/ml/flock/verifier/vectors.json`). None is accepted: the circuit is no Program's, so the sampled session is refused for
 want of the verifier's program (`NO_PROGRAM`) once every check has passed, and the others have no sample, which `verify` refuses
 first (`Flock.ProvedScope`, D12), so a session the server accepted gets that refusal (`DRAWLESS`) and every other session its own reason."""
 from __future__ import annotations
@@ -139,7 +139,7 @@ def test_zk_takes_no_coins_flag(zk):
 
 @pytest.mark.slow
 def test_a_draw_is_accepted_and_two_tables_and_m26_pass_every_check(zk):
-    """The drawn session passes every check and, verified without the verifier's program (the fixture's circuit is no
+    """The sampled session passes every check and, verified without the verifier's program (the fixture's circuit is no
     Program's), is refused for that alone; the sessions of two tables and of one m = 26 table, which have no sample, pass
     every check and are refused for that alone."""
     [j2] = _verify(zk, _one(zk, "j2"), public="pub-32.bin", tables=2)
@@ -165,7 +165,8 @@ def test_another_table_count_is_refused(zk, tmp_path):
 
 #: one tampered copy per check that catches it (`zk_mutants.py`'s names)
 TAMPERED = ["zk-zc-final-a", "zk-lig-lane-message", "zk-l0-ybar", "zk-l0-missing", "zk-lig-row-extra-lane", "zk-pads-root",
-            "zk-tau", "zk-inner-opened", "zk-coin-tree-nonce", "zk-coin-tree-key", "zk-trailing-bytes", "zk-lig-claim-nonce"]
+            "zk-tau", "zk-inner-opened", "zk-coin-tree-nonce", "zk-coin-tree-key", "zk-trailing-bytes", "zk-lig-claim-nonce",
+            "zk-round-count"]
 
 
 @pytest.mark.slow

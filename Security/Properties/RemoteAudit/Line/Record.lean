@@ -2,9 +2,38 @@ module
 
 public import Definitions.Accounting.Remote.Held
 public import Definitions.Accounting.Remote.Draw
-public import RemoteAudit.Session
-public import RemoteAudit.Shared
 public import RemoteAudit.Line
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The line of record's inputs, read as the memory model's (`Properties.RemoteAudit.Line`)
@@ -56,7 +85,7 @@ open Accounting.Remote.Held _root_.RemoteAudit.Line
 structure Node where
   /-- the session's parameters: its windows, one group each, and the receipts each draw draws -/
   params : RemoteAudit.Session.Params
-  /-- the windows a draw, `groups_per_coin`: windows `c·g … (c + 1)·g − 1` are drawn from one openings coin; at most 1,
+  /-- the windows a draw, `groups_per_coin`: windows `c·g … (c + 1)·g − 1` are sampled from one openings coin; at most 1,
   one a window -/
   groupsPerCoin : ℕ
   /-- the registration the session runs on, its registered blocks among it -/
@@ -139,7 +168,7 @@ def Record.groups (node : Node) (r : Record) : Array Group :=
     | .error _ => #[]
   | none => #[]
 
-/-- Each draw's receipts among windows `ws` drawn `g` windows a coin: each window's `Σ lengths_t` at g ≤ 1, and above
+/-- Each draw's receipts among windows `ws` sampled `g` windows a coin: each window's `Σ lengths_t` at g ≤ 1, and above
 it draw `c`'s windows' summed (`RemoteAudit.Line.drawsOf`). -/
 def drawReceipts (g : ℕ) (ws : Array RemoteAudit.Session.WindowSummary) : Array ℕ :=
   if g ≤ 1 then ws.map _root_.RemoteAudit.Line.receipts else (_root_.RemoteAudit.Line.drawsOf g ws).map (·.1)
@@ -185,7 +214,7 @@ def Record.drawReceiptsAt (node : Node) (r : Record) (c : ℕ) : ℕ :=
 def receiptMax : ℕ := RemoteAudit.Session.RECEIPT_LIMIT - 1
 
 /-- **The record's opening draw**: the session's draws, draw `c` of outcome `ω` with the receipts its windows have in
-the state the record's session reaches at `ω` (at most `receiptMax`), drawing `min(s, U_c)` at the session's
+the state the record's session reaches at `ω` (at most `receiptMax`), sampling `min(s, U_c)` at the session's
 `samples`, with the correct receipts `correct`. -/
 def recordDraw {κ : ℕ} {X : Type} (node : Node) (rec : Accounting.Remote.Draw.Coins node.draws κ X → Record)
     (correct : Fin node.draws → Accounting.Remote.Draw.Coins node.draws κ X → Finset ℕ) :

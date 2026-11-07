@@ -1,8 +1,10 @@
 module
 
 public import Properties.CertifierNetwork
-public import Definitions.NetworkCertifier
 public import Mathlib.Data.Set.Card
+public import Definitions.NetworkCertifier.Premises
+public import Definitions.NetworkCertifier.Schedule
+public import Properties.NetworkCertifier
 
 /-!
 # What an accepted run of the certifier device is
@@ -23,9 +25,9 @@ two distinct strings of `runStrings`, the strings the check and the device hash,
 this run's certifier session (`certMessage x.issuer.session`) though the device never signed that message in this run
 (`Signed`, `euf-cma/lms-sha512-n64`).
 
-**Other runs of the key.** The session id is the challenger's draw, and the check's parameters name it, so the
+**Other runs of the key.** The session id is the challenger's sample, and the check's parameters name it, so the
 forgery disjunct names a message of this run alone. Reading it as a forgery of the key also needs that no other run of
-the key signed that message: (a) the ids of two sessions differ, by the challenger's draw; (b) the device runs once per
+the key signed that message: (a) the ids of two sessions differ, by the challenger's sample; (b) the device runs once per
 session id: it signs nothing when its signing state has already started its issuer's session (`DeviceInput.sessions`,
 `deviceCode`); (c) no other run's message input has the SHA-512 digest of this run's. (c) is `cr/sha-512` over the
 key's whole signing history, the hash-then-sign composition behind `euf-cma/lms-sha512-n64`, not a break tied to the
@@ -53,7 +55,7 @@ namespace Properties.NetworkCertifier
 /-! ## The device -/
 
 /-- What the certifier device is given in one run: its configuration, its issuer (its key and certifier session), the
-signer's state (its next unused leaf and the session ids it has started), its own coins (`salts n`, the salt it draws
+signer's state (its next unused leaf and the session ids it has started), its own coins (`salts n`, the salt it samples
 for the `n`-th record it certifies) and the trace of events the world gives it. -/
 structure DeviceInput where
   config : Config

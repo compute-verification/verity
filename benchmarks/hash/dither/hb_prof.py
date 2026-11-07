@@ -6,7 +6,7 @@ issue bound. Run under ncu (job.sh's prof mode):
     python hb_prof.py --pages OUT/prof.ncu-rep --ncu NCU --out OUT     # the report's text pages, under OUT/prof/
 
 Each build (and its two-launch kh_unit_ws, arm NAME-ws) passes h1ubench.py's gate on each shape first (0xA5 poison, its
-receipts against receipts.py's on sampled units, the no-write control refused); a build whose gate fails is not
+receipts against receipts.py's on sampled proof blocks, the no-write control refused); a build whose gate fails is not
 profiled. It then runs once warm and once between torch.cuda.profiler.start and stop, which is all ncu profiles; an NVTX
 range names arm, linear and M. Nothing here is timed: ncu replays each kernel under its own counters.
 """

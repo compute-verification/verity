@@ -1,8 +1,8 @@
 # Honest lateness of the timed audit
 
 How late an honest answer to a timed PoUS challenge arrives, p(τ) = P(answer later than τ after the challenge was sent),
-with the challenger on the prover's node (the lower bound) and on another machine (the deployed shape: the memory
-challenger is auditor hardware and never runs on the prover's node). It also measures the wire's floor, the fastest an
+with the challenger on the developer's node (the lower bound) and on another machine (the deployed shape: the memory
+challenger is auditor hardware and never runs on the developer's node). It also measures the wire's floor, the fastest an
 answer of a given size can cross the path, which bounds a timed read from below. `lat.cu` is the tree's only UDP
 challenger and responder, with one challenge datagram and a per-challenge answer datagram size; the memory challenger
 (`verity/core/devices/memory_challenger`) has no network transport yet.

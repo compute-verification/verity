@@ -63,13 +63,13 @@ commitments and never published.
    - The advice can only choose among Programs the compiler emits. Every unit's values are still committed under hiding leaves
      and opened only inside the proof.
 7. **Transfer gates are proved whole** (`--transfer-gate T`, both sides). The compiler lists the templates whose units hold
-   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` law samples every unit of theirs beside
+   transfer gates (the I/O shell's), and its digest covers the list. The window's `work:K` sampling design samples every unit of theirs beside
    K of the rest, and the stream registers with that work table. a5's `transfer_gate_negatives` refuse a proved set short of one
    of them, a sample trading one away, and a registration sampling them as the rest. Until the compiler lists the I/O shell's
    units, a stand-in template stands for them; on Llama TP1 that is layer 0's 160 RoPE heads (`llama32_1b_tg_l0_step1.json`).
 
 What doesn't change:
-- the sample: the service's rule, the partition file's law, on live coins read after the receipt, with ε surfaced at δ by the
+- the sample: the service's rule, the partition file's sampling design, on live coins read after the receipt, with ε surfaced at δ by the
   outcome;
 - the per-member `--zk` sessions behind the ZK server;
 - Lean's verdicts, the audit record and the Lean `Run.run` agreement.
@@ -84,7 +84,7 @@ reads and its named assumptions.
 files (their ports `sha512/row/v1`, `row/v2` or `row-seg/v1` rows of distinct names, no root registered under two domains)
 and the sampled-proofs run passes the registration's population, the committed transcript, read as the sampling witness, is
 outside the sampling relation `RelS` at δ with probability at most δ + ε_ks + δ_link. It takes no hypothesis on the files.
-It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier of record reads. Its named assumptions
+It follows from `SampledKSLiveV2`, the same bound at the circuit files the verifier reads. Its named assumptions
 are the coins (A3, `FlockSoundness.Assumptions.UniformRandomBytes`), the live verifier, and SHA-512's collision resistance.
 
 **The property.** `NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`, at any

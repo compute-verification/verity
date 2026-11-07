@@ -25,7 +25,7 @@ open PouwCheck.Credit (callWork servedWork)
 theorem nat_toJson (K : Nat) : PouwCheck.nat? (toJson K) = some K := by
   simp [PouwCheck.nat?, PouwWindow.natOf?, PouwWindow.intOf?, toJson, Lean.JsonNumber.fromNat]
 
-/-- Stratum `t` under the work law at `K` over the work `W`. -/
+/-- Stratum `t` under the work sampling design at `K` over the work `W`. -/
 def lawOf (K W : Nat) (t : Flock.Draw.WorkStratum) : Flock.Draw.Stratum :=
   { t.toStratum with k := Flock.Draw.workK K t.work t.size W t.floor }
 
@@ -95,7 +95,7 @@ theorem epsAt_ok {K : Int} {δ e : Rat} {C W w : Int} (h : PouwWindow.epsAt K δ
 
 theorem workK_le (K w n W fl : Nat) : Flock.Draw.workK K w n W fl ≤ n := Nat.min_le_left _ _
 
-/-- A stratum draws all its units, or at least `K w n / W` of them. -/
+/-- A stratum samples all its units, or at least `K w n / W` of them. -/
 theorem workK_ge (K w n W fl : Nat) (hW : 0 < W) :
     Flock.Draw.workK K w n W fl = n ∨ K * w * n ≤ W * Flock.Draw.workK K w n W fl := by
   unfold Flock.Draw.workK
@@ -113,7 +113,7 @@ theorem workK_pos (K w n W fl : Nat) (h : 0 < K * w * n) (hW : 0 < W) : 1 ≤ Fl
   have hc : 1 ≤ (K * w * n + W - 1) / W := (Nat.le_div_iff_mul_le hW).2 (by omega)
   exact Nat.le_min.2 ⟨hn, Nat.le_trans hc (Nat.le_max_right _ _)⟩
 
-/-- At `K` at least the window's work, a stratum whose units do work draws all of them. -/
+/-- At `K` at least the window's work, a stratum whose units do work samples all of them. -/
 theorem workK_cap (K w n W fl : Nat) (hWK : W ≤ K) (hw : 1 ≤ w) (hW : 0 < W) : Flock.Draw.workK K w n W fl = n := by
   unfold Flock.Draw.workK
   have hKw : W ≤ K * w := Nat.le_trans hWK (Nat.le_mul_of_pos_right K hw)
@@ -133,15 +133,6 @@ theorem unitWork_pos {ss : Array Flock.Draw.WorkStratum} {u : Nat} (hu : 0 < uni
   | some t =>
     obtain ⟨i, hi, rfl⟩ := Array.getElem_of_mem (Array.mem_of_find?_eq_some h)
     exact ⟨i, hi, (Array.find?_some h :), by simp⟩
-
-theorem unitWork_eq {ss : Array Flock.Draw.WorkStratum} {u w : Nat} (hex : ∃ s ∈ ss, holds s.toStratum u = true)
-    (hall : ∀ s ∈ ss, holds s.toStratum u = true → s.work = w) : unitWork ss u = w := by
-  unfold unitWork
-  cases h : ss.find? (fun s => holds s.toStratum u) with
-  | none =>
-    obtain ⟨s, hs, hh⟩ := hex
-    exact absurd hh (by simpa using Array.find?_eq_none.1 h s hs)
-  | some t => simpa using hall t (Array.mem_of_find?_eq_some h) (Array.find?_some h :)
 
 theorem foldl_add {α : Type} (φ : α → Nat) : ∀ (l : List α) (a : Nat),
     l.foldl (fun acc x => acc + φ x) a = a + (l.map φ).sum

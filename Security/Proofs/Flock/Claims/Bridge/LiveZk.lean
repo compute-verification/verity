@@ -2,8 +2,41 @@ module
 
 public import Proofs.Flock.Claims.Bridge.Live
 public import Proofs.Flock.Claims.DeployOC
-public import Flock.With.Deployed
 public import Proofs.Flock.Soundness.Discharge.Composed.DefsJ
+import Flock.With.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.Game.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The live `--zk` session decided by flock-verify, and the old transfer
@@ -12,7 +45,7 @@ The live session (`Live.liveV`) decided by flock-verify `--zk`'s verdict on the 
 written as, every SHA-512 call an oracle query (`Hashes.oc`, `DeployOC`):
 
 * `verdictZK I t`: `AcceptsZK`'s steps as an `OC` program: the session's statement set up from `zkInputs I` and the
-  record's draw, every table's shape check, then `Zk.verifyWithM Hashes.oc`. `verdictZK_eval`: against `H`, it accepts
+  record's sample, every table's shape check, then `Zk.verifyWithM Hashes.oc`. `verdictZK_eval`: against `H`, it accepts
   exactly when `Zk.verifyWith (hOf H)` does; `verdictZK_sha`: against SHA-512 (`shaH`), exactly when `AcceptsZK` holds.
 * `Pr_acc_zk`: `Claims.run`'s acceptance with an event `Q` of the outcome, against SHA-512, is `liveSession`'s
   probability of `AcceptsZK I (wr x o) ∧ Q o`, the event the old theorems bound.
@@ -20,12 +53,12 @@ written as, every SHA-512 call an oracle query (`Hashes.oc`, `DeployOC`):
   simulated strategy, whenever every table's decoder is right on the outcomes flock-verify accepts (`hdec`; at the
   deployed decoders and the writer `Custody.wrD`, `Custody.decodesOnZKJ_wrD`).
 
-The setup's SHA-512 (`setupOf`'s statement digest and Σ) is not an oracle query. It reads `I x` and the draw of the
-record `wr x o`, and a drawn statement's digest covers its draw (`HmRow.drawn`'s public statement), so it is a function
-of `x` only where that draw is. `Deploy.V`'s checks pin the record's draw to the statement's whatever its key order
+The setup's SHA-512 (`setupOf`'s statement digest and Σ) is not an oracle query. It reads `I x` and the sample of the
+record `wr x o`, and a sampled statement's digest covers its sample (`HmRow.drawn`'s public statement), so it is a function
+of `x` only where that sample is. `Deploy.V`'s checks pin the record's sample to the statement's whatever its key order
 (`Custody.checks_draw`), and where the two are equal as values the setup of a record it accepts is the one it made of
-`x` before the first message (`Custody.setupOf_record`). At an equivalent draw with its keys in another order the setup
-is another value (its `unitDraw` is the record's draw), and its digests agree only through `canon`.
+`x` before the first message (`Custody.setupOf_record`). At an equivalent sample with its keys in another order the setup
+is another value (its `unitDraw` is the record's sample), and its digests agree only through `canon`.
 -/
 
 @[expose] public section

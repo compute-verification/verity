@@ -1,4 +1,4 @@
-"""Pearl-C's tile check as a Program (`verity.core.protocols.pouw.circuit.pc8`): its primitives are the scheme's operations on the domain
+"""Pearl-C's tile check as a Program (`verity.ml.protocols.pouw.circuit.pc8`): its primitives are the scheme's operations on the domain
 the row's admission bit admits, its units evaluate to `schemes.pearl_c`'s forming v1, clean-up and checked words (the pinned
 ``test-16-v1`` vector on the H100, the scheme itself on both sm_120 records), its admission bit is the scheme's on every row
 (finiteness, the noise floor and `live_row`, each at its boundary), and its partition computes every value in exactly one
@@ -29,13 +29,13 @@ from verity.ml.circuits.ops.scalar import I32Le
 from verity.ml.circuits.silicon.models import BLACKWELL_SM120_E4M3_M16N8K32, HOPPER_E4M3_K32
 from verity.ml.commitments.rowleaf import sha512_row_seg_digest
 from verity.ml.randomness import derive
-from verity.core.protocols.pouw.circuit import pc8, plan
-from verity.core.protocols.pouw.circuit.anchors import TileAnchors
-from verity.core.protocols.pouw.circuit import words as W
+from verity.ml.protocols.pouw.circuit import pc8, plan
+from verity.ml.protocols.pouw.circuit.anchors import TileAnchors
+from verity.ml.protocols.pouw.circuit import words as W
 from verity.core.protocols.pouw.protocol import DomainError, Tile
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
-from verity.core.protocols.pouw.schemes.pearl_c_device import DEVICES, SM120_UNPROMOTED
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes.pearl_c_device import DEVICES, SM120_UNPROMOTED
 
 K = 128
 CASE = next(c for c in json.loads(V.OUT.read_text())["cases"] if c["case"] == "test-16-v1")
@@ -389,7 +389,7 @@ def test_the_window_tile_reads_its_side_rows_index_fields():
     hiding tile's whatever the indices, and the rows its ports make (`SIDE_PORTS`: codes, P, then the index field, each
     leaf's bits in order) are the window's side rows (`window.side_row`), A's row-seg and B's v2, k/2 + 72 words each."""
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.pouw.circuit import leaves as L
+    from verity.ml.protocols.pouw.circuit import leaves as L
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2
     tm, tn = 2, 3
     fn, hidden = pc8.side_tile(K, (tm, tn)), pc8.templates(K, (tm, tn), "sm120", True, "h0")["tile"]
@@ -523,8 +523,8 @@ def test_a_short_tile_row_is_its_own_template_instance(side, hidden):
 
 def test_a_short_tile_is_proved_with_its_rows_in_its_own_stratum():
     """`plan.tile_layout` at m = 80 proves a 16-row tile with its 16 `RowA` units, in its own stratum at 16/64 of a whole
-    tile's W_ref.  That is two tile strata, which the work law refuses (`check_work_strata`, the window pin's `hone`) and
-    the count law draws; a W_ref with no whole quarter is refused.  At m = 32, one tile row, the work law draws, and
+    tile's W_ref.  That is two tile strata, which the work sampling design refuses (`check_work_strata`, the window pin's `hone`) and
+    the count law samples; a W_ref with no whole quarter is refused.  At m = 32, one tile row, the work sampling design samples, and
     `unsound_work_bound` reads the short tile's W_ref."""
     key = derive(bytes(32), plan.DRAW_DOMAIN, {"test": "pc8-short"})
     lay = plan.tile_layout(replace(SHORT, hidden=True), 64)

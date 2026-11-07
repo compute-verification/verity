@@ -237,24 +237,19 @@ theorem DampenerThreadedSlots_rate :
     b_w b_a hκ hC hU hH hL hR hα (Nat.cast_nonneg _) (Nat.cast_pos.2 hdd) hbw hba hM hu hr
     (declared_le_slots hα hbw hba hdd hcomp hB hT hW hsize) hx hnC hRL he hcap
 
-theorem DampenerThreadedSlots : Guarantees.DampenerThreadedSlots := by
-  intro κ C U W χ M Mu Mr Mx n c k F H L R b_w b_a r d T σ dd e Mc hκ hC hU hH hL hR hc hbw hba hdd hcomp hB hT hW
-    hsize hM hu hr hx hnC hRL he hcap
-  have h := DampenerThreadedSlots_rate κ C U W χ M Mu Mr Mx n c F H L R (k / c) b_w b_a r d T σ dd e Mc hκ hC hU hH hL
-    hR (by positivity) hbw hba hdd (compliesRate_of_complies hcomp) hB (by rwa [rate_mul _ hc])
-    (by rwa [rate_mul _ hc]) hsize hM hu hr hx hnC hRL he hcap
-  rwa [rate_mul _ hc] at h
+theorem DampenerThreadedSlots : Guarantees.DampenerThreadedSlots :=
+  DampenerThreadedSlots_rate
 
 /-- `DampenerThreadedSlots` at one slot per weight gate. -/
 theorem DampenerThreaded : Guarantees.DampenerThreaded := by
-  intro κ C U W χ M Mu Mr Mx n c k F H L R b_w b_a r d T dd e Mc hκ hC hU hH hL hR hc hbw hba hdd hcomp hB hT hW
+  intro κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a r d T dd e Mc hκ hC hU hH hL hR hα hbw hba hdd hcomp hB hT hW
     hsize hM hu hr hx hnC hRL he hcap
-  exact DampenerThreadedSlots κ C U W χ M Mu Mr Mx n c k F H L R b_w b_a r d T (Fit.idSlots T) dd e Mc hκ hC hU hH hL
-    hR hc hbw hba hdd hcomp hB hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize hM hu hr hx hnC hRL he
+  exact DampenerThreadedSlots κ C U W χ M Mu Mr Mx n Γ F H L R α b_w b_a r d T (Fit.idSlots T) dd e Mc hκ hC hU hH hL
+    hR hα hbw hba hdd hcomp hB hT (weightsIncompressibleSlots_of (Fit.idSlots T) hbw.le hW) hsize hM hu hr hx hnC hRL he
     hcap
 
 /-- **The bound is attained** (completeness, not a claim): at `κ = 2`, `C = 4`, `U = 0`, `W_cert = 3`, `ρ = 4`, `μ = 1`
-and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and a faulty proof
+and `χ = 1/4`, with one counted multiplication in each of the residual, the declared computation and an incorrect proof
 block, every hypothesis of `Nci.Guarantees.Dampener` holds and `η = 3/4 = s + min(r, μ) + ν + χ`: the hypotheses can
 hold together, and the inequality is not loose there. -/
 theorem dampener_attained :

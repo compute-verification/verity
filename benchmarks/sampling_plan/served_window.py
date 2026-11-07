@@ -1,7 +1,7 @@
 """The served window's partition in the planner's two modes: Llama-3.2-1B int8 at T 8,192 on the H200, one step
 a window, cut into proof blocks at each rung of a ladder, for the free-compute target and the exfiltration target,
 priced proving only (`PROVING_ONLY`, Lean's `GranularityOptimum`) and proving plus `w` times the serve-time commitment
-(`n b(s) h`, paid on every proof block, drawn or not) at two readings of h, a hashed byte's cost; and the second mode
+(`n b(s) h`, paid on every proof block, sampled or not) at two readings of h, a hashed byte's cost; and the second mode
 again under a code-based commitment at each rate ρ of `RATES`.
 
 A model, not a measurement: each input carries its status (M measured, D derived, A assumed) and source (`IN`, read
@@ -10,18 +10,18 @@ from `served_window_inputs.json`).
 **The ladder.**  Every rung covers the window's work; per token and layer:
 
 - `chunk L`, `coord`, `tile RxC`: the int8 linears (qkv, o_proj, gate_up, down) as K-chunks of L MACs that commit their
-  32-bit running sums, as output coordinates (the served draw's `ScaledMmS8Coordinate`), or as tiles of R tokens by C
+  32-bit running sums, as output coordinates (the served sample's `ScaledMmS8Coordinate`), or as tiles of R tokens by C
   output channels, opening each operand row once; the row ops stay at today's units (one an output coordinate), and
-  attention is a query head's row in key blocks, the most keys a power of two whose block C-Flock holds, each block
+  attention is a query head's row in key blocks, the most keys a power of two whose block Flock holds, each block
   opening the running softmax state (its f32 output row, max and sum) and committing it, the last its output row.  The
   window commits what it commits today (every Call's outputs, `Q_word_v1`), plus the chunks' sums and attention's states.
 - `attn|mlp token`, `layer token`, `4 layers token`: fused proof blocks that commit only their boundary, the residual
   stream and the K and V a later token reads: every interior value stays inside a proof block.
 
 A proof block costs its ANDs (int8 MACs at `BlackwellS8ImmaDot32_v1`'s 4,190 per 32, bf16 MACs at `F32Fma_v2`'s 4,498, the row
-ops at their pieces, and every row it opens at hm96's `row_ands`) at the cost model fitted from C-Flock's zero-knowledge
+ops at their pieces, and every row it opens at hm96's `row_ands`) at the cost model fitted from Flock's zero-knowledge
 sessions (`inputs.observations`, GPU-seconds of an RTX PRO 6000), with its statement's share when statements are full.
-`fits` is false for a rung with a proof block C-Flock's block can't hold (`inputs.cap`: its ANDs and rows at the composer's
+`fits` is false for a rung with a proof block Flock's block can't hold (`inputs.cap`: its ANDs and rows at the composer's
 occupancy past 2^`K_MAX`) or wider than the widest size class (`UNIT_CLASS_MAX` bits); such a rung is priced one proof
 block a statement, what lifting the limit would buy.
 
@@ -35,27 +35,16 @@ columns Merkle-hashed at serve time (about 1/ρ the bytes, at h), and opened by 
 claims: no proof block hashes a row in circuit (`Part.hashed` leaves its ANDs), and the hm96 commitment is gone.  The
 encoding and the openings' own work in Flock are not priced, so its proving is a floor.  Each proof block's fit and its
 statement's share stay today's (`inputs.cap`, which the hm96 and SHA-512 slots only enlarge), and no rung's fit turns on
-those slots: a rung that misses C-Flock's block misses it on its own ANDs and rows' bits.
+those slots: a rung that misses Flock's block misses it on its own ANDs and rows' bits.
 
 **Replay.**  Serving keeps only the requests' tokens and the weights (a commitment is a hash), so every mode's total adds the
-rebuilding of the drawn proof blocks' witnesses (`replay`): each request a drawn proof block lies in, re-run whole from its
+rebuilding of the sampled proof blocks' witnesses (`replay`): each request a sampled proof block lies in, re-run whole from its
 prompt at the stock step's share, under either commitment (`optimize.met_replay` on the `request` replay grain).  A
 request's values are its own tokens' alone (the served engine is batch-invariant), so no co-scheduled request is re-run
-with it.  The draws barely differ between rungs, so the replay moves the totals, not s*.
-
-**Two-stage.**  The same rungs under a two-stage design (`optimize.two_stage`, the lean view, hm96, proving plus w times
-the commitment) at each replay grain of `replay_grains`: serving commits only the replay blocks' boundaries, the
-first stage samples replay blocks at rate q, the prover commits each sampled one's interior, and the second stage samples
-k of its proof blocks.  Each sampled replay block is re-run from its request's tokens (the `request` grain's cost, an
-upper bound where two share a request).  `request`'s boundary is its tokens and it exports at most a session's output
-cap (`OUTPUT_CAP`), so it serves the exfiltration target only: a sampled request's work can be done after the first stage,
-so compute credit stays PoUW's.  `layer token`'s boundary is the residual stream and the K and V a later token reads, which a
-correct boundary needs each layer to have computed at serve time, so it serves both targets, on the rungs whose proof
-blocks lie inside one layer of one token (`within`).  The two-stage table sets each beside today's one-stage design at
-the same scope, also pooled over a datacenter's and the world's GPUs (`all_scopes`).
+with it.  The samples barely differ between rungs, so the replay moves the totals, not s*.
 
 **Targets.**  Free compute: C = `EPS` of the scope's MACs, at the window and pooled over each monitoring period
-(`wipe_monitoring.PERIODS`: a week, a month and a year) of windows at the stock step; the draws are about Λ/ε whatever
+(`wipe_monitoring.PERIODS`: a week, a month and a year) of windows at the stock step; the samples are about Λ/ε whatever
 the scope, the commitment grows with it.  Exfiltration: ℓ = `LEAK_BITS` a window.
 
     uv run python benchmarks/sampling_plan/served_window.py --out DIR [--weight W] [--rates R ...] [--no-planner]
@@ -65,7 +54,6 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-import tomllib
 from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import log, log2
@@ -84,11 +72,6 @@ from verity.core.protocols.sampled_proofs.optimize import (PROVING_ONLY, Candida
                                                            loc_bits, met_replay, row_ands, sqrt_grain)
 
 ROOT = Path(__file__).resolve().parents[2]
-_RHO = tomllib.loads((ROOT / "benchmarks/rho/data/reference.toml").read_text())
-#: a request's output cap, the bits a session returns at most (rho's reference, ruled)
-OUTPUT_CAP = _RHO["policy"]["v4-pro-session"]["k"]["value"]
-#: the datacenter (the census's) and the world's fleet (rho's reference), whose GPUs `all_scopes` pools
-DATACENTER, WORLD = "dc-12500-machines-600s", "world-h200"
 
 DELTA = float(WINDOW_DELTA)
 LAMBDA = log(1 / DELTA)
@@ -120,7 +103,7 @@ TILES = ((2, 2), (4, 4), (16, 16), (64, 64), (128, 128))
 class Part:
     """One stratum of a rung: `units` proof blocks a window of `work` MACs each, `out_bits` wide, committing `commit_bytes`
     at serve time, of `ands` ANDs, the rows they open included (`hashed` of them, their openings at hm96's `row_ands`);
-    `gates` and `rows` are its widest proof block's own ANDs and the rows it opens (bytes each), what C-Flock's block
+    `gates` and `rows` are its widest proof block's own ANDs and the rows it opens (bytes each), what Flock's block
     holds."""
 
     name: str
@@ -143,7 +126,7 @@ class Part:
 
     @property
     def per_statement(self) -> int:
-        """A statement's proof blocks (`inputs.cap`), one for a block C-Flock can't hold."""
+        """A statement's proof blocks (`inputs.cap`), one for a block Flock can't hold."""
         return cap(round(self.gates), self.rows) or 1
 
 
@@ -202,7 +185,7 @@ def attention_block(keys: float, last: bool) -> tuple[float, tuple[float, ...]]:
 
 
 def attention_keys() -> int:
-    """A key block's keys: the most, a power of two, whose block C-Flock holds."""
+    """A key block's keys: the most, a power of two, whose block Flock holds."""
     positions = round(IN["tokens"].value / IN["sequences"].value)
     return next(kb for kb in (positions >> i for i in range(positions.bit_length()))
                 if all(cap(round(g), rows) for g, rows in (attention_block(kb, last) for last in (False, True))))
@@ -317,7 +300,7 @@ def fitted() -> Fitted:
 
 
 def unit_cost(m: CostModel, ands: float, per: int, marginal: bool = False) -> float:
-    """A drawn proof block's GPU-seconds in a full statement of `per` of them: proved and staged, and 1/per of the
+    """A sampled proof block's GPU-seconds in a full statement of `per` of them: proved and staged, and 1/per of the
     statement.  The fit's per-statement term grows with the subcircuit's ANDs, which a statement of one proof block pays
     whole; `marginal` leaves it out, the reading where that term is fixed."""
     statement = m.statement_fixed + (0.0 if marginal else m.statement_per_and * ands)
@@ -330,7 +313,7 @@ def scale(parts: list[Part], windows: float) -> list[Part]:
 
 def grain(name: str, parts: list[Part], m: CostModel, by: str, marginal: bool = False) -> Grain:
     """The rung as n equal proof blocks of its mean work and width, its proving cost weighted by work (`by` "work") or by
-    width ("bits"): the cost the laws pay, which draw a proof block in proportion to it."""
+    width ("bits"): the cost the laws pay, which sample a proof block in proportion to it."""
     n = sum(p.units for p in parts)
     weight = {p.name: p.units * (p.work if by == "work" else p.out_bits) for p in parts}
     total = sum(weight.values())
@@ -360,33 +343,17 @@ def planner(rung: str, parts: list[Part], m: CostModel, *, h: float, weight: flo
             "commit": p.cost["commit"], "draws": sum(p.sizes.values())}
 
 
-def replay_grains(windows: float) -> dict[str, ReplayGrain]:
-    """The scope's replay grains, each replay block re-run from its request's prompt at `step_s` / `sequences` (the
-    requests are alike): `request`, a request's share of the window, its boundary the ids of its prompt and of the token
-    it is served, exporting at most `OUTPUT_CAP`; and `layer token`, one layer of one token, its boundary the residual
-    stream it writes and its K and V (`fused_parts`' boundary), which it exports."""
-    d, kv = LLAMA_1B["hidden"], 2 * 2 * LLAMA_1B["kv_heads"] * LLAMA_1B["head_dim"]
-    per_request = IN["step_s"].value / IN["sequences"].value
-    ids = (IN["tokens"].value / IN["sequences"].value + 1) * IN["token_bytes"].value
-    return {"request": ReplayGrain(round(IN["sequences"].value * windows), per_request, ids, OUTPUT_CAP),
-            "layer token": ReplayGrain(round(token_layers() * windows), per_request, 2 * d + kv, 8 * (2 * d + kv))}
-
-
-def within(rung: str, grain: str) -> bool:
-    """Whether every proof block of the rung lies inside one replay block of the grain: a tile spans tokens and a fused
-    block of 4 layers spans layers, and every proof block lies inside one request."""
-    return grain == "request" or rung.startswith("chunk") or rung in ("coord", "attn|mlp token", "layer token")
-
-
-#: the replay grains that certify each target under a two-stage design (`request` pins no serve-time work)
-TWO_STAGE_GRAINS = {"work": ("layer token",), "leak": ("request", "layer token")}
+def request_grain(windows: float) -> ReplayGrain:
+    """The scope's requests as replay blocks, each re-run from its prompt at `step_s` / `sequences` (the requests are
+    alike)."""
+    return ReplayGrain(round(IN["sequences"].value * windows), IN["step_s"].value / IN["sequences"].value)
 
 
 def replayed(cost: dict | None, windows: float) -> dict | None:
-    """``cost`` with its draws' `replay` (the `request` replay grain's blocks they meet) in its total."""
+    """``cost`` with its samples' `replay` (the `request` replay grain's blocks they meet) in its total."""
     if cost is None:
         return None
-    r = met_replay(replay_grains(windows)["request"], cost["draws"])
+    r = met_replay(request_grain(windows), cost["draws"])
     return {**cost, "replay": r, "total": cost["total"] + r}
 
 
@@ -402,50 +369,6 @@ def readings() -> dict[str, float]:
 
 def scopes() -> dict[str, float]:
     return {"window": 1.0} | {name: seconds / IN["step_s"].value for name, seconds in wipe_monitoring.PERIODS}
-
-
-def fleet_gpus() -> dict[str, float]:
-    """The GPUs of the census's datacenter and of rho's world fleet, its locations' devices each."""
-    dc = next(d for d in json.loads((ROOT / "benchmarks/census/deployments.json").read_text()) if d["id"] == DATACENTER)
-    world = _RHO["fleet"][WORLD]
-    devices = tomllib.loads((ROOT / "benchmarks/rho/data/hardware.toml").read_text())["location"][world["location"]]
-    return {"datacenter": dc["machines"] * dc["gpus_per_machine"],
-            "world": world["count"]["value"] * devices["devices"]["value"]}
-
-
-def all_scopes() -> dict[str, float]:
-    """`scopes`, and each monitoring period's windows over every GPU of the datacenter and of the world, one H200's model
-    scaled by GPU-seconds."""
-    return scopes() | {f"{who} {name}": gpus * seconds / IN["step_s"].value
-                       for who, gpus in fleet_gpus().items() for name, seconds in wipe_monitoring.PERIODS}
-
-
-def two_stage_results(m: CostModel, ladder: dict[str, list[Part]], weight: float) -> list[dict]:
-    """Each scope and target at each `TWO_STAGE_GRAINS` replay grain, every rung's cheapest two-stage design beside its
-    one-stage cost (hm96, the lean view, proving plus `weight` times the commitment, the replay in both)."""
-    work_window = sum(p.units * p.work for p in ladder["coord"])
-    out = []
-    cases = [(scope, "work", windows) for scope, windows in all_scopes().items()] + [("window", "leak", 1.0)]
-    for scope, target, windows in cases:
-        kw = {"work": EPS * work_window * windows} if target == "work" else {"leak": LEAK_BITS}
-        by = "work" if target == "work" else "bits"
-        grains = replay_grains(windows)
-        for hname, h in readings().items():
-            rows = []
-            for name, parts in ladder.items():
-                g = grain(name, scale(parts, windows), m, by)
-                row = {"rung": name, "fits": all(p.fits for p in parts),
-                       "one-stage": grain_costs([g], DELTA, h=h, weight=weight, replay=grains["request"], **kw)[0]}
-                for rg in TWO_STAGE_GRAINS[target]:
-                    if within(name, rg):
-                        row[rg] = grain_costs([g], DELTA, h=h, weight=weight, replay=grains[rg], design="two-stage",
-                                              **kw)[0]
-                rows.append(row)
-            best = {d: min((r for r in rows if r["fits"] and d in r), key=lambda r: r[d]["total"])["rung"]
-                    for d in ("one-stage", *TWO_STAGE_GRAINS[target])}
-            out.append({"scope": scope, "target": target, "h": hname, "weight": weight, "windows": windows,
-                        "serve_s": windows * IN["step_s"].value, "rows": rows, "best": best})
-    return out
 
 
 def run(weight: float = 1.0, *, rates: tuple[float, ...] = RATES, plan: bool = True) -> dict:
@@ -476,7 +399,7 @@ def run(weight: float = 1.0, *, rates: tuple[float, ...] = RATES, plan: bool = T
                 h = h_byte / (rho or 1.0)
                 for mode, w in modes.items():
                     rows = []
-                    request = replay_grains(windows)["request"]
+                    request = request_grain(windows)
                     for name, parts in ladder_s.items():
                         parts_s = scale(parts, windows)
                         kw = {"work": EPS * work_window * windows} if target == "work" else {"leak": LEAK_BITS}
@@ -501,8 +424,6 @@ def run(weight: float = 1.0, *, rates: tuple[float, ...] = RATES, plan: bool = T
                             (r for r in fit_rows if r["planner"]), key=lambda r: r["planner"]["total"])["rung"],
                         "serve_s": windows * IN["step_s"].value})
     out["sqrt_law"] = sqrt_law(m, weight)
-    out["two_stage"] = two_stage_results(m, ladder, weight)
-    out["fleet_gpus"] = fleet_gpus()
     return out
 
 
@@ -573,29 +494,6 @@ def render(out: dict) -> str:
         lines.append(f"| {name} | {'yes' if info['fits'] else 'no'} | {widest['k_log']} ({widest['name']}) | "
                      f"{info['units']:,} | "
                      f"{info['committed'] / 1e9:.3g} | " + " | ".join(cells) + " |")
-    lines += ["", "Two-stage designs beside today's one-stage, GPU-seconds (lean view, hm96, h 398 GB/s, proving + "
-              "w x commit + replay): each design's cheapest fitting rung; q is the first stage's rate over replay blocks "
-              "and k the second stage's sample in each; 'serve-time commit' is every proof block's outputs one-stage and "
-              "the replay blocks' boundaries two-stage, 'interior commit' the sampled replay blocks' interiors. The "
-              "datacenter and world rows scale one H200's model by GPU-seconds (scaled, not measured), the samples "
-              "pooled over the period.", "",
-              "| scope | target | design | replay grain | s* | q | k | replay blocks sampled | proof blocks proved | "
-              "total | prove | replay | serve-time commit | interior commit | x serve |",
-              "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
-    for r in out["two_stage"]:
-        if r["h"] != "h 398 GB/s":
-            continue
-        for design, rung in r["best"].items():
-            row = next(x for x in r["rows"] if x["rung"] == rung)[design]
-            if design == "one-stage":
-                cells = ["one-stage", "-", "-", "-", "-", _g(row["draws"]), _g(row["total"]), _g(row["prove"]),
-                         _g(row["replay"]), _g(row["commit"]), "-"]
-            else:
-                k = "all" if row["q"] == 1 and row["k"] == row["n_rho"] else f"{row['k']:,.0f}"
-                cells = ["two-stage", design, _g(row["q"]), k, _g(row["replay_sample"]), _g(row["draws"]),
-                         _g(row["total"]), _g(row["prove"]), _g(row["replay"]), _g(row["boundary"]), _g(row["interior"])]
-            lines.append(f"| {r['scope']} | {r['target']} | {cells[0]} | {cells[1]} | {rung} | "
-                         + " | ".join(cells[2:]) + f" | {_g(row['total'] / r['serve_s'])} |")
     lines += ["", "The work target on the chunk family alone: the cheapest L against √(w β h C/(o Λ)), β = 4 B:", "",
               "| h | windows pooled | C (MACs) | best L | √ law L | proving only L |", "|---|---|---|---|---|---|"]
     for r in out["sqrt_law"]:

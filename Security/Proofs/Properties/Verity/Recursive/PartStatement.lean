@@ -1,14 +1,43 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Encode
-public import Proofs.Flock.Claims.Recursion.Deploy
 public import Proofs.Properties.Verity.Recursive.Names
-public import VStarRecursive
 import all Init.Data.String.Defs
 import all Init.Data.String.TakeDrop
 import all Init.Data.String.Slice
 import all Init.Data.String.Pattern.String
 import all Init.Data.String.Pattern.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Encode
 
 /-!
 # A step of `acc_of_accepts`: V\* part `s`'s statement is the compiled part's inputs
@@ -17,7 +46,7 @@ The model's V\* statement of part `s` (`RecDeploy.staged st x ms s`, the encodin
 outer verifier's readers (`RecDeploy.insO`, `RecRaw.ins`) as exactly the recursive inputs compiled part `s`'s
 `VStar.Recursive.partVerdict` sets its session up on (`partIns`): the part's circuit and staged public file, its
 partition, program, registered reads, bindings and rows, the verifier's inner shape, check 5's source, the inner
-circuit's binding, the inner session's commits and link points, and the part's draw. `SetupChecks` holds `partIns`' setup to
+circuit's binding, the inner session's commits and link points, and the part's sample. `SetupChecks` holds `partIns`' setup to
 the compiled `setupOf` and so concludes `setupO (staged st x ms s) = some _`.
 
 * **Round trip** (`decode_encode_fits`, `decodeRec_encode_fits`): a statement whose lengths fit their 8-byte words reads
@@ -631,7 +660,7 @@ theorem rows_model {b : ByteArray} {rows : Array Registered.Port}
     try rfl
 
 /-- **What `innerHeld` holds**, read off the blobs: the inner circuit, the inner public file, the inner session's
-record, the inner statement's draw, the coin server's transcript and the registration, each as text where `innerHeld`
+record, the inner statement's sample, the challenger's live-coin part's transcript and the registration, each as text where `innerHeld`
 reads text; its shape (`shapeOf`), check 5's source, the inner circuit's binding, the commits and the link points; V*'s
 staged shared rows, read as `RecRaw.ins` reads `--rec-rows`; Flock's own checks on the inner statement (`innerOk`);
 and the record, transcript and staged rows each under `FIELD_MAX` bytes (`fits`). -/
@@ -702,7 +731,7 @@ theorem innerHeld_ok {o : VStar.Recursive.Own} {pr : VStar.Recursive.Proofs} {bs
 /-! ## The correspondence -/
 
 /-- **Compiled part `j`'s recursive inputs**, as `partVerdict` hands them to its setup: the statement's tags `tags0`,
-the part's circuit `circuitB` and public file `pubB`, its partition and program (`pj`'s), its registered reads, its draw,
+the part's circuit `circuitB` and public file `pubB`, its partition and program (`pj`'s), its registered reads, its sample,
 the inner session held (`h`: the verifier's inner shape, check 5's source, the inner circuit's binding, the commits and
 the link points), `--rec-part j`, the bindings, the rows and no link table. -/
 def partIns (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
@@ -740,7 +769,7 @@ theorem partIns_tags (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recu
 
 /-- **What the recursive setup reads of `partIns`** (`SetupChecks`'s `SetupMatch`, field by field, in its order): `--zk`, the
 statement's and the session's tags, the part's circuit and staged public file, no lookup table, one table, the part's
-partition and program, no public input words, the registered reads, the draw `draw`, the inner shape, check 5's
+partition and program, no public input words, the registered reads, the sample `draw`, the inner shape, check 5's
 source, the commits, the link, `--rec-part j`, the bindings, the rows and no link table. -/
 theorem partIns_fields (tags0 : Tags) (circuitB pubB : ByteArray) (pj : VStar.Recursive.PartOwn)
     (registered : Option (Array Registered.Port)) (draw : Option Json) (h : VStar.Recursive.InnerHeld) (j : ℕ)
@@ -957,11 +986,11 @@ theorem ins_partRaw {r : XR} {st : Stage} {x : Claims.Msg} {ms : List (Claims.Ms
 and its part `s`, `q`; the compiled check's inner session held (`innerHeld`), and part `s`'s own inputs `pj` with what
 the compiled `partVerdict` reads of them (`registered`, `bindings`, the statement's tags `tags0`, the part's circuit and
 public file; its rows are `innerHeld`'s). Suppose:
-* `Names`' clauses: the inner statement's circuit, public file, partition and draw are the blobs' and `p.own`'s, its
-  statement and form those `innerHeld` sets up (`INNER_STATEMENT`, the coin server's coins, no tables), its own inner
+* `Names`' clauses: the inner statement's circuit, public file, partition and sample are the blobs' and `p.own`'s, its
+  statement and form those `innerHeld` sets up (`INNER_STATEMENT`, the challenger's live-coin part's coins, no tables), its own inner
   shape `innerHeld`'s, the registration the blobs', no link table; part `s`'s circuit, partition, program and registered reads
-  `pj`'s, its own bindings `pj`'s, its form `PartForm`, and its draw, read as the verifier reads one, `draw`;
-* `Shows`' clauses: part `s`'s staged public file is `pubB`, the inner session's record and the coin server's
+  `pj`'s, its own bindings `pj`'s, its form `PartForm`, and its sample, read as the verifier reads one, `draw`;
+* `Shows`' clauses: part `s`'s staged public file is `pubB`, the inner session's record and the challenger's live-coin part's
   transcript the blobs', and V*'s staged shared rows the evidence's `rows` blob (`hSrows`, `RowsShow`), which
   `innerHeld` reads once for every part;
 * `hplain`: the statement's tags `tags0` don't have plain SHA-512 leaves, which `Raw.ins` refuses under `--zk`. Lean

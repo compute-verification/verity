@@ -1,10 +1,48 @@
 module
 
 public import Properties.NetworkCertifier.LinkWindow
-public import Proofs.Properties.CertifierDevice.Lms
-public import Std.Data.TreeMap.Raw.WF
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
+public import Aesop.BuiltinRules
+public import Batteries.Data.ByteArray
+public import Mathlib.Data.Subtype
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.String.Basic
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Properties.CertifierDevice.Lms
+import Std.Data.TreeMap.Raw.Lemmas
+import Std.Data.TreeMap.Raw.WF
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # N2's link-window verdict: what an acceptance establishes
@@ -21,8 +59,8 @@ Its two lemmas:
   link a window proved and opened whose two certificates the certifier's device signed (`CertifierSigned`, under a key
   `Lms.key` derives at parameters `Lms.Params.make` admits) is accepted whatever syncs it declares, by LMS's
   completeness (`Properties.CertifierDevice.Proofs.Lms.lmsCorrect`). What stays a hypothesis is the proof system's:
-  the findings of its run of C-Flock's verifier (`WindowProved`) and the statement's public file holding the drawn
-  unit's row commitments (`WindowOpened`, whose header line `commitments` reads through C-Flock's JSON parser, which no proof
+  the findings of its run of Flock's verifier (`WindowProved`) and the statement's public file holding the sampled
+  proof block's row commitments (`WindowOpened`, whose header line `commitments` reads through Flock's JSON parser, which no proof
   here evaluates, so no concrete file is shown to open here; the replays over recorded runs exhibit them);
 * nontrivial: `linkWindowAcceptMeans_nontrivial`, that a verifier accepting every link-window doesn't have the property
   (`LinkWindowAcceptMeansBy`, which is the property at the verdict, `linkWindowAcceptMeans_by`): it accepts a warden

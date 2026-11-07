@@ -1,10 +1,10 @@
-"""The proof system's challenger in Lean (`SampledProofs.Challenger`, the verifier of record) against its Python mirror
+"""The proof system's challenger in Lean (`SampledProofs.Challenger`, the verifier) against its Python mirror
 (`verity.core.protocols.sampled_proofs.challenger`), through `sampled-proofs-difftest`'s challenger pieces: a coin
 commitment and an opening as `from_json` reads them, `live_reason` and `order_reason`; and the challenger's signed record
 (`SampledProofs.ChallengerRecord`): the verifier's key and a record as `from_json` reads them, with `record_message`, and
 `trusted_reason`.
 
-The cases are a challenger's honest coins over drawn layouts (labels of several clients: PoUW's, vLLM's, memory's), then
+The cases are a challenger's honest coins over sampled layouts (labels of several clients: PoUW's, vLLM's, memory's), then
 one mutation each (`COMMITMENT`, `OPENING`, `REASON`, `ORDER`): a coin opened twice, one opened before its root was
 recorded, a foreign epoch's or challenger's, a tampered salt or path, a coin the layout doesn't hold, each malformed
 form. The record's (`KEY`, `RECORD`, `TRUSTED`) are a record the challenger signed with a small LMS key, then a missing
@@ -15,7 +15,10 @@ v1 session and inside a period of its lane, then a close, log or ledger entry ed
 another key, a ledger signed under its own key, one cut before the session's end, a second session for the window, a v1
 window, a v1 entry after a v2, a record leaf outside its session, an entry's or used twice, a period named twice, past
 its cap, committing no cap or circuit or closing with other windows, a record on another host or at another leaf, a log
-or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. The pins log's
+or refused hellos the ledger didn't seal, the ledger's published heads forked, each malformed form. A lane's days (`LEDGER`,
+`DAY`: `declared_day`) are a declaration in the ledger before the opens of each day it names, then a declaration
+malformed, v1 or in a session, a day declared twice, an open on a day its lane hasn't declared or on no day, and the day
+of a window no session opens, a v1 open's or a dayless one's. The pins log's
 (`PINNED`) are a session whose open seals the host's pins log and pins its commit, then a commit off main or pinned
 after the open, no pins log, a malformed one or line, one cut or with a sealed line edited, and an open sealing
 none. A sample's coins (`READ`, `DRAW_COINS`: `read_reason` and `coins_reason`, `SampledProofs.ChallengerCoins`) are
@@ -32,9 +35,12 @@ round of no tree sampled earlier, of a stream the tree lacks, out of order, open
 block; a record on no logged tree or on another than the one logged under its root, its link's roots or points edited,
 a ``root_B`` not its table's length (`LINK_ROOT_LEN`), its link's roots split at other points with the hashed message
 kept among them, a round's coins, count or message edited, a round added or swapped, a stream renamed, each malformed form, its link
-unopened, a tree two sessions use, or one none does. The release logs of `RELEASED`, `READ` and `DRAW_COINS` hold tree
-lines among their roots and releases too, and `RELEASED` a root or a release relabelled a tree's. Each piece answers
-``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
+unopened, a tree two sessions use, or one none does. A sample's release log's order (`SAMPLE_LINK_FIRST`:
+`sample_link_first`, `SampledProofs.Challenger.sampleLinkFirst`) is a sample's coins as `READ`'s with every tree round
+after the sample and each tree's link first (`_release_log`), then a link opened before the sample's last coin, a round
+of another stream opened first, each malformed request. The release logs of `RELEASED`, `READ` and `DRAW_COINS` hold
+tree lines among their roots and releases too, and `RELEASED` a root or a release relabelled a tree's. Each piece
+answers ``{"refused": why}`` where the challenger refuses, so the reasons are compared too.
 """
 
 from __future__ import annotations
@@ -414,7 +420,7 @@ def lms_verify(key: Ch.ChallengerKey, message: bytes, signature: bytes) -> bool:
 
 
 def _signed(rng: random.Random) -> tuple[Ch.ChallengerKey, Ch.LiveChallenger, Ch.ChallengerRecord]:
-    """A challenger's record, signed at a drawn leaf of a small key, and the verifier's key for it."""
+    """A challenger's record, signed at a sampled leaf of a small key, and the verifier's key for it."""
     w, h = rng.choice(PARAMS)
     k = _key(w, h, 0)
     ch = _challenger(rng)
@@ -609,6 +615,14 @@ def ledger(j: Any) -> Any:
     return _refusing(go)
 
 
+def day(j: Any) -> Any:
+    _request(j, ["key", "ledger", "window"])
+
+    def go():
+        return Ch.declared_day(j["ledger"], j["window"], Ch.ChallengerKey.from_json(j["key"]), lms_verify)
+    return _refusing(go)
+
+
 def head(j: Any) -> Any:
     _request(j, ["heads", "key"])
 
@@ -650,8 +664,8 @@ HELLOS = ['{"error":"a client\'s frames are hello","peer":"10.0.0.7"}', "x", "",
 
 
 class Session:
-    """A challenger's session as its host leaves it: a record signed at leaf q of a key (drawn, or `q`), a release log
-    over drawn roots in canonical JSON on an integer clock, the close signed at leaf q + 1 (None: its client closed it),
+    """A challenger's session as its host leaves it: a record signed at leaf q of a key (sampled, or `q`), a release log
+    over sampled roots in canonical JSON on an integer clock, the close signed at leaf q + 1 (None: its client closed it),
     under the key of `seed` at one of `params`, and the lines of the hellos it refused."""
 
     def __init__(self, rng: random.Random, ended: str | None = None, params=PARAMS, q: int | None = None,
@@ -725,19 +739,22 @@ class Ledger:
     """The auditor's ledger of session `s`'s window and up to two others' sessions, each opened, then ended, interleaved,
     sometimes after an older v1 session's, and sometimes (always when `period` is set: "open" or "closed") inside a
     period of `s`'s lane, its close when it has one listing its windows: `events` its entries' (kind, session, body),
-    `lines` them chained and signed at drawn increasing leaves of `s`'s key, `s`'s record's leaf between its open's and
+    `lines` them chained and signed at sampled increasing leaves of `s`'s key, `s`'s record's leaf between its open's and
     its end's (or at `leaves`, or under `signer`, an `edit(i, entry)` applied to each entry before it is signed).  When
-    `two_step` (drawn when `s`'s id is a reserved one, unless set), every v2 session is reserved before it is opened, its
+    `two_step` (sampled when `s`'s id is a reserved one, unless set), every v2 session is reserved before it is opened, its
     open binding the reserve, and sometimes another reserve is never opened.  When `withheld`, `s`'s open marks it a
-    withheld session (`withheld: true`)."""
+    withheld session (`withheld: true`).  The older v1 session is chosen at random unless `v1` says.  When `declare`, `s`'s lane
+    declares its days (`declare_days`)."""
 
     def __init__(self, rng: random.Random, s: Session, closed: bool = True, period: str | None = None,
-                 two_step: bool | None = None, withheld: bool = False) -> None:
+                 two_step: bool | None = None, withheld: bool = False, v1: bool | None = None,
+                 declare: bool = False) -> None:
         self.rng, self.s, self.window = rng, s, _window(rng)
         self.two_step = (Ch._RESERVED_SESSION.fullmatch(s.id) is not None
                          and (rng.random() < 0.8 if two_step is None else two_step))
         self._ids = itertools.count()
         self.v1: list[dict] = []
+        self.declarations: list[dict] = []
         files = {Ch.LOG_FILE: Ch.log_digest(s.lines), Ch.HELLOS_FILE: Ch.log_digest(s.hellos),
                  Ch.RECORD_FILE: rng.randbytes(64).hex(), Ch.CLOSE_FILE: rng.randbytes(64).hex()}
         if rng.random() < 0.5:
@@ -772,12 +789,56 @@ class Ledger:
                 opens = [k for k, (kind, _, _) in enumerate(self.events) if kind == "open"]
                 at = rng.randint(max([self.index("end", s.id)] + opens) + 1, len(self.events))
                 self.events.insert(at, ("period-close", None, self.close_body(self.events[:at])))
-        if rng.random() < 0.3:
+        if v1 or v1 is None and rng.random() < 0.3:
             old = {"commit": rng.randbytes(64).hex(), "period": rng.choice(PERIODS)}
             self.v1 = [{"host": "challenger-host", "key_sha512": hashlib.sha512(s.pub).hexdigest(),
                         "pinned": rng.randbytes(20).hex(), "port": 7811, "window": old},
                        {"closed": True, "files": {}, "rc": 0}]
             self.events = [("open", "v1-0", self.v1[0]), ("end", "v1-0", self.v1[1])] + self.events
+        if declare:
+            self.declare_days()
+
+    def dated(self, sid: str) -> int:
+        """Session `sid`'s open's UTC day (`day_of`), first moving its start (and its reserve's) to one of 1970 or later
+        when it names none."""
+        rng, o = self.rng, self.events[self.index("open", sid)][2]
+        if (d := Ch.day_of(o.get("started_utc"))) is not None:
+            return d
+        start = rng.choice([t for t in STARTS if Ch.day_of(t) is not None])
+        if "reserve" in o:
+            r = self.events[self.index("reserve", sid)][2]
+            r.update(started_utc=start, expires_utc=Ch.later(start, r["minutes"]))
+            start = Ch.later(start, rng.randint(0, r["minutes"]))
+        o["started_utc"] = start
+        return Ch.day_of(start)
+
+    def declaration_body(self, lane: str, day: int, start: str) -> dict:
+        """Lane `lane`'s declaration of `day`, by the lane or by an operator for it, at a time no later than `start`'s day."""
+        rng = self.rng
+        body = rng.choice([{"by": lane}, {"by": "operator", "for": lane}])
+        body.update(blocks=rng.choice([[], ["b0"], ["unit/0", "unit/1"], [rng.choice(NOTES)]]), day=day,
+                    declared_utc=rng.choice([start, "1970-01-01T00:00:00Z", f"{start[:10]}T00:00:00Z"]),
+                    pinned=rng.randbytes(20).hex(), program=rng.randbytes(64).hex())
+        return body
+
+    def declare_days(self) -> None:
+        """`s`'s lane declares each day an open of it after the declarations opens on (each dated first), together at a
+        random place after any v1 entry and before `s`'s open; sometimes the lane, or another that never opens, declares a
+        later day after every entry."""
+        rng, lane = self.rng, self.opened.get("for") or self.opened["by"]
+        at = rng.randint(2 if self.v1 else 0, self.index("open", self.s.id))
+        days: dict[int, str] = {}
+        for kind, sid, b in self.events[at:]:
+            if kind == "open" and (b.get("for") or b["by"]) == lane:
+                days.setdefault(self.dated(sid), b["started_utc"])
+        order = list(days)
+        rng.shuffle(order)
+        self.declarations = [self.declaration_body(lane, d, days[d]) for d in order]
+        self.events[at:at] = [("declaration", None, b) for b in self.declarations]
+        if rng.random() < 0.3:
+            d = max(days)
+            self.events.append(("declaration", None, self.declaration_body(rng.choice([lane, "other"]),
+                                                                           d + rng.randint(1, 3), days[d])))
 
     def open_body(self, window: dict, host: str, lane: str, public: bytes | None = None) -> dict:
         body = {"window": window, "host": host, "pinned": self.rng.randbytes(20).hex(),
@@ -869,7 +930,7 @@ class Ledger:
 
 def _ledger_session(rng: random.Random, reserved: bool | None = None, params=LEDGER_PARAMS, seed: int = 0) -> Session:
     """A session under the key of `seed` at one of `params`, whose record's leaf leaves room on either side for a
-    ledger's entries, its id a reserved one (drawn, unless `reserved` says)."""
+    ledger's entries, its id a reserved one (sampled, unless `reserved` says)."""
     s = Session(rng, params=params, q=rng.randrange(20, 40), seed=seed)
     if reserved or reserved is None and rng.random() < 0.5:
         s.id = f"s20261019T{rng.randrange(10 ** 6):06d}Z-{rng.randbytes(2).hex()}"
@@ -1004,10 +1065,26 @@ LEDGER_NAMES = ["honest", "no-ledger", "ledger-type", "line-type", "non-canonica
                 "request", "reused-leaf", "v1-ledger", "v1-after-v2", "record-outside", "record-entry", "record-twice",
                 "period-form", "period-v1", "period-twice", "period-close", "past-cap", "cap", "circuit", "no-cap",
                 "reserve-form", "reserve-again", "open-unbound", "open-request", "opened-by", "open-late",
-                "open-after-close", "one-step-after-reserve"]
+                "open-after-close", "one-step-after-reserve", "declaration-form", "declaration-v1", "declared-twice",
+                "undeclared-day", "dayless-open"]
 #: the cases whose ledger is two-step
 RESERVE_NAMES = {"reserve-form", "reserve-again", "open-unbound", "open-request", "opened-by", "open-late",
                  "open-after-close", "one-step-after-reserve"}
+#: the cases whose window's lane declares its days
+DECLARED_NAMES = {"declaration-form", "declaration-v1", "declared-twice", "undeclared-day", "dayless-open"}
+
+
+def _declaration_form(rng: random.Random, b: dict) -> dict:
+    """A change that leaves declaration `b` out of `DECLARATION_FORM`."""
+    after = "9999-12-31T23:59:59Z" if b["day"] < Ch.day_of("9999-12-31T00:00:00Z") else "1969-12-31T23:59:59Z"
+    return rng.choice([
+        {"by": rng.choice([None, "", ".x", 5, DROP])}, {"for": rng.choice([None, "", "a b", 5])},
+        {"program": rng.choice(["AB" * 64, "ab" * 63, "ab" * 65, None, 5, DROP])},
+        {"blocks": rng.choice([None, "b0", [1], [None], {"b0": "x"}, DROP])},
+        {"pinned": rng.choice(["ab" * 19, "AB" * 20, None, DROP])},
+        {"day": rng.choice([-1, True, "3", None, [3], DROP])},
+        {"declared_utc": rng.choice([after, "0001-01-01T00:00:00Z", "2026-02-30T00:00:00Z", "2026-10-20 12:00:00Z",
+                                     5, None, DROP])}])
 
 
 def _entry_edit(target: int, f):
@@ -1026,7 +1103,9 @@ def ledger_case(rng: random.Random, name: str) -> Any:
     s = _ledger_session(rng, reserved=True if two else None)
     period = {"period-form": "closed", "period-twice": "open", "period-close": "closed", "past-cap": "open",
               "cap": "open", "circuit": "open", "no-cap": "open", "open-after-close": "open"}.get(name)
-    lg = Ledger(rng, s, closed=name != "unclosed", period=period, two_step=True if two else None)
+    lg = Ledger(rng, s, closed=name != "unclosed", period=period,
+                two_step=True if two else False if name == "dayless-open" else None,
+                declare=name in DECLARED_NAMES or name == "honest" and rng.random() < 0.5)
     j = {"key": s.key.to_json(), "ledger": None, "window": lg.window}
     i = rng.randrange(len(lg.events))
     o, end = lg.index("open", s.id), lg.index("end", s.id)
@@ -1276,8 +1355,78 @@ def ledger_case(rng: random.Random, name: str) -> Any:
             j["ledger"] = lg.lines(events)
         case "one-step-after-reserve":
             j["ledger"] = lg.lines(edit=_body_edit(o, reserve=DROP))
+        case "declaration-form":
+            k = rng.choice([k for k, (kind, _, _) in enumerate(events) if kind == "declaration"])
+            b = events[k][2]
+            events[k] = (("declaration", rng.choice(["s-1", ""]), b) if rng.random() < 0.3
+                         else ("declaration", None, _body(b, **_declaration_form(rng, b))))
+            j["ledger"] = lg.lines(events)
+        case "declaration-v1":
+            b = lg.declaration_body(lg.lane, rng.randrange(1 << 22), "1970-01-01T00:00:00Z")
+            lg.v1 = lg.v1 + [b]
+            events.insert(0, ("declaration", None, b))
+            j["ledger"] = lg.lines(events)
+        case "declared-twice":
+            b = rng.choice(lg.declarations)
+            k = next(k for k, (_, _, x) in enumerate(events) if x is b)
+            who = {"by": b["for"], "for": DROP} if "for" in b else {"by": "operator", "for": b["by"]}
+            again = _body(b, **rng.choice([{}, {"program": rng.randbytes(64).hex()}, who]))
+            events.insert(rng.randint(k + 1, len(events)), ("declaration", None, again))
+            j["ledger"] = lg.lines(events)
+        case "undeclared-day":
+            day = Ch.day_of(lg.opened["started_utc"])
+            b = next(b for b in lg.declarations if b["day"] == day)
+            j["ledger"] = lg.lines(events, edit=lambda _, e: e["body"] is b and e.update(
+                body=_body(b, day=day + rng.randint(1 << 22, 1 << 23))))
+        case "dayless-open":
+            j["ledger"] = lg.lines(edit=_body_edit(o, started_utc=rng.choice(
+                [DROP, None, "0001-01-01T00:00:00Z", "1969-12-31T23:59:59Z", "2026-02-30T12:00:00Z", 5])))
         case _:
             j["ledger"] = lg.lines()
+    return j
+
+
+DAY_NAMES = ["honest", "no-ledger", "ledger-refused", "no-open", "no-day", "v1-open", "window-form", "key-form",
+             "request"]
+
+
+def day_case(rng: random.Random, name: str) -> Any:
+    s = _ledger_session(rng)
+    lg = Ledger(rng, s, two_step=False if name == "no-day" else None, v1=True if name == "v1-open" else None,
+                declare=name == "ledger-refused" or name == "honest" and rng.random() < 0.7)
+    j = {"key": s.key.to_json(), "ledger": None, "window": lg.window}
+    o = lg.index("open", s.id)
+    events = list(lg.events)
+    match name:
+        case "honest":
+            lg.dated(s.id)
+            dated = [b["window"] for k, _, b in lg.events
+                     if k == "open" and "root" in b["window"] and Ch.day_of(b.get("started_utc")) is not None]
+            j["ledger"], j["window"] = lg.lines(), rng.choice(dated)
+        case "no-ledger":
+            pass
+        case "ledger-refused":
+            b = rng.choice(lg.declarations)
+            events.insert(rng.randint(events.index(("declaration", None, b)) + 1, len(events)), ("declaration", None, b))
+            j["ledger"] = lg.lines(events)
+        case "no-open":
+            j["ledger"] = lg.lines()
+            j["window"] = _window(rng)
+        case "no-day":
+            j["ledger"] = lg.lines(edit=_body_edit(o, started_utc=rng.choice(
+                [DROP, None, "0001-01-01T00:00:00Z", "1969-12-31T23:59:59Z", "2026-02-30T12:00:00Z", 5])))
+        case "v1-open":
+            j["ledger"], j["window"] = lg.lines(), {"root": lg.v1[0]["window"]["commit"]}
+        case "window-form":
+            j["ledger"] = lg.lines()
+            w = lg.window["root"]
+            j["window"] = rng.choice([{"root": w, "period": "p-0"}, {"root": w.upper()}, {"root": w[:-2]}, None, [w]])
+        case "key-form":
+            j["ledger"] = lg.lines()
+            j["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "request":
+            j["ledger"] = lg.lines()
+            del j[rng.choice(sorted(j))]
     return j
 
 
@@ -1582,15 +1731,16 @@ class Drawn:
     """A sample's coins from family `draw` of a ledger session's challenger, as `ChallengerCoins` opens them after `after`
     (one read, or a read and a rerun's extension), between other roots: the other family's, `draw` coins opened before
     the commitment (at least one when `before`), and later ones. `ledger` opens the session for its window. `after` is
-    the commitment (drawn, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
+    the commitment (sampled, by default), and `reads` reads the coins (`reads(coins)`, the bytes read), by default in one
     or two reads of random lengths.  The ledger opens the session withheld unless `withheld` is false.  The challenger
     samples and opens `trees` coin trees too (`TreeSession` on `tables`, its link opened after `keys`; sampled, by
-    default), their lines among the others.  Its key is the key of `seed` at one of `params`."""
+    default), their lines among the others in `order` (`_release_log`; the sample, then the link, then the other rounds,
+    by default).  Its key is the key of `seed` at one of `params`."""
 
     def __init__(self, rng: random.Random, before: bool = False, after: bytes | None = None,
                  reads: Callable[[Callable[[int], bytes]], bytes] | None = None, withheld: bool = True,
                  trees: int | None = None, tables: list[str] | None = None, keys: list[str] | None = None,
-                 params=LEDGER_PARAMS, seed: int = 0) -> None:
+                 params=LEDGER_PARAMS, seed: int = 0, order: str = "honest") -> None:
         s = self.s = _ledger_session(rng, params=params, seed=seed)
         s.ch = _challenger(rng, [("other", 2), ("draw", 12)])
         s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
@@ -1611,11 +1761,12 @@ class Drawn:
                                  for _ in range(rng.choice([1, 1, 2])))
         else:
             self.read = self._step("draw", lambda: reads(coins))
+        cut = len(s.lines)
         for _ in range(rng.randint(0, 2)):
             self._step("draw", lambda: self.records["draw"].record(rng.randbytes(64)))
         self.trees = [TreeSession(rng, s.ch, tables, keys)
                       for _ in range(rng.choice([0, 0, 1, 2]) if trees is None else trees)]
-        s.lines = _interleave(rng, s.lines, [t.lines for t in self.trees])
+        s.lines = _release_log(rng, s.lines, cut, [t.lines for t in self.trees], order)
         s.close = s.signed(None)
         self.ledger = Ledger(rng, s, withheld=withheld)
         self.pins, self.main = _pinned(rng, self.ledger, "honest")
@@ -1858,6 +2009,15 @@ def session_trees(j: Any) -> Any:
     return _refusing(lambda: {"reason": Ch.sessions_tree_reason(Ch.coin_trees_of(log), records)})
 
 
+def sample_link_first(j: Any) -> Any:
+    _request(j, ["after", "label", "log"])
+    log = _log(j["log"])
+    if type(j["label"]) is not str:
+        raise D.Reject("label is not a string")
+    after = _hex(j["after"])
+    return {"reason": None if Ch.sample_link_first(j["label"], after, log[1:]) else Ch.SAMPLE_LINK_FIRST}
+
+
 TABLES = ["circuit", "circuit-00", "circuit-01", "circuit-63"]
 
 
@@ -1866,14 +2026,43 @@ def _f128(w: int) -> str:
     return format(w, "032x")
 
 
-def _interleave(rng: random.Random, lines: list[str], runs: Sequence[list[str]]) -> list[str]:
-    """`lines` with each of `runs` merged in after its head, as one release log writes them: the rest of `lines` and
-    each run in its own order."""
-    queues = [list(lines[1:])] + [list(r) for r in runs]
-    out = list(lines[:1])
+def _merge(rng: random.Random, runs: Sequence[list[str]]) -> list[str]:
+    """`runs` merged at random, each in its own order."""
+    queues = [list(r) for r in runs]
+    out: list[str] = []
     while any(queues):
         out.append(rng.choice([q for q in queues if q]).pop(0))
     return out
+
+
+def _interleave(rng: random.Random, lines: list[str], runs: Sequence[list[str]]) -> list[str]:
+    """`lines` with each of `runs` merged in after its head, as one release log writes them: the rest of `lines` and
+    each run in its own order."""
+    return list(lines[:1]) + _merge(rng, [lines[1:], *runs])
+
+
+#: the orders `_release_log` writes a sample's release log in: the sample, then the link, then the other rounds
+#: (`challenger.sample_link_first`), and the two it refuses
+ORDERS = ["honest", "sample-late", "link-late"]
+
+
+def _release_log(rng: random.Random, lines: list[str], cut: int, trees: Sequence[list[str]],
+                 order: str = "honest") -> list[str]:
+    """`lines`, a session's head, roots and releases whose sample is released by line `cut`, with each coin tree's lines
+    of `trees` (`TreeSession.lines`: its own line, then its link, then its other rounds) merged in as one release log
+    writes them in `order`: a tree's own line anywhere before its rounds and every round after the sample (`honest`);
+    a tree's link opened before the sample's last coin (`sample-late`); or a round of a tree's other stream opened
+    first, after the sample (`link-late`)."""
+    first = rng.randrange(len(trees)) if order != "honest" else -1
+    early = [i == first or rng.random() < 0.5 for i in range(len(trees))]
+    runs = [list(t[1:]) if e else list(t) for t, e in zip(trees, early)]
+    head = _interleave(rng, lines[:cut - 2 if order == "sample-late" else cut], [t[:1] for t, e in zip(trees, early) if e])
+    if order == "sample-late":
+        head += [runs[first].pop(0), *lines[cut - 2:cut]]
+    elif order == "link-late":
+        k = next(i for i, line in enumerate(runs[first]) if json.loads(line)["stream"] != CT.SESSION)
+        head.append(runs[first].pop(k))
+    return head + _merge(rng, [lines[cut:], *runs])
 
 
 class TreeSession:
@@ -2205,6 +2394,26 @@ def session_trees_case(rng: random.Random, name: str) -> Any:
     return j
 
 
+SAMPLE_LINK_FIRST_NAMES = ["honest", "sample-late", "link-late", "request"]
+
+
+def sample_link_first_case(rng: random.Random, name: str) -> Any:
+    """A sample's release log (`Drawn`) in order `name` (`_release_log`), at least one coin tree in a refused order, at
+    the sample's family and commitment; or (`request`) a malformed request."""
+    rng = _seeded(rng)
+    order = name if name in ORDERS else "honest"
+    d = Drawn(rng, trees=None if order == "honest" else rng.randint(1, 2), order=order)
+    j = {"after": d.after.hex(), "label": "draw", "log": d.s.lines}
+    if name == "request":
+        k = rng.choice(["after", "label", "log", None])
+        if k is None:
+            j = rng.choice([_body(j, label=DROP), {**j, "x": 1}])
+        else:
+            j[k] = {"after": rng.choice(["AB", "0", 5, None]), "label": rng.choice([5, None, ["draw"]]),
+                    "log": rng.choice([None, "x", d.s.lines + [5]])}[k]
+    return j
+
+
 COMMITMENT = D.Port(PIECES, "challenger_commitment", commitment, _cases(commitment_case, COMMITMENT_NAMES),
                     package=PACKAGE, need_rejects=False, of_record="lean")
 OPENING = D.Port(PIECES, "challenger_opening", opening, _cases(opening_case, OPENING_NAMES), package=PACKAGE,
@@ -2222,6 +2431,8 @@ RELEASED = D.Port(PIECES, "challenger_released", released, _cases(released_case,
                   of_record="lean")
 LEDGER = D.Port(PIECES, "challenger_ledger", ledger, _cases(ledger_case, LEDGER_NAMES), package=PACKAGE,
                 need_rejects=False, of_record="lean")
+DAY = D.Port(PIECES, "challenger_day", day, _cases(day_case, DAY_NAMES), package=PACKAGE, need_rejects=False,
+             of_record="lean")
 HEAD = D.Port(PIECES, "challenger_head", head, _cases(head_case, HEAD_NAMES), package=PACKAGE, need_rejects=False,
               of_record="lean")
 SESSION = D.Port(PIECES, "challenger_session", session, _cases(session_case, SESSION_NAMES), package=PACKAGE,
@@ -2239,6 +2450,8 @@ COIN_TREES = D.Port(PIECES, "challenger_coin_trees", coin_trees, _cases(coin_tre
                     package=PACKAGE, of_record="lean")
 SESSION_TREES = D.Port(PIECES, "challenger_session_trees", session_trees,
                        _cases(session_trees_case, SESSION_TREES_NAMES), package=PACKAGE, of_record="lean")
+SAMPLE_LINK_FIRST = D.Port(PIECES, "challenger_sample_link_first", sample_link_first,
+                           _cases(sample_link_first_case, SAMPLE_LINK_FIRST_NAMES), package=PACKAGE, of_record="lean")
 
 pieces = D.server_fixture(COMMITMENT)
 
@@ -2246,17 +2459,18 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (REASON, reason_case, REASON_NAMES, 400), (ORDER, order_case, ORDER_NAMES, 400), (KEY, key_case, KEY_NAMES, 200),
         (RECORD, record_case, RECORD_NAMES, 200), (TRUSTED, trusted_case, TRUSTED_NAMES, 300),
         (CLOSE, close_case, CLOSE_NAMES, 200), (RELEASED, released_case, RELEASED_NAMES, 300),
-        (LEDGER, ledger_case, LEDGER_NAMES, 300), (HEAD, head_case, HEAD_NAMES, 100),
+        (LEDGER, ledger_case, LEDGER_NAMES, 300), (DAY, day_case, DAY_NAMES, 200), (HEAD, head_case, HEAD_NAMES, 100),
         (SESSION, session_case, SESSION_NAMES, 300), (CREDITED, credited_case, CREDITED_NAMES, 200),
         (PINNED, pinned_case, PINNED_NAMES, 200), (READ, read_case, READ_NAMES, 200),
         (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200), (WITHIN, within_case, WITHIN_NAMES, 100),
         (COIN_TREES, coin_trees_case, COIN_TREES_NAMES, 200),
-        (SESSION_TREES, session_trees_case, SESSION_TREES_NAMES, 200)]
+        (SESSION_TREES, session_trees_case, SESSION_TREES_NAMES, 200),
+        (SAMPLE_LINK_FIRST, sample_link_first_case, SAMPLE_LINK_FIRST_NAMES, 200)]
 
 
 @pytest.mark.parametrize("port, make, names, examples", RUNS, ids=[r[0].fn for r in RUNS])
 def test_a_challenger_piece_agrees(pieces, port, make, names, examples):
-    """Each piece agrees on drawn cases and on every mutation over a few seeds, the honest ones accepted (no reason, no
+    """Each piece agrees on sampled cases and on every mutation over a few seeds, the honest ones accepted (no reason, no
     refusal) and each mutation refused."""
     stats = D.run(port, examples=examples, server=pieces)
     outcomes = Counter()

@@ -12,6 +12,9 @@ bits (I32 = F32 = Array<32, Value<1>>, BF16 = Array<16, Value<1>>).
     MoeRouterSigmoidBias_v2{E,TOPK,SCALE,KERNEL}
                                           (logits, bias: Array<E, F32>) -> (Array<TOPK, F32>, Array<TOPK, I32>)
                                                                                                word view: MoeRouterSigmoidBias_v1{...}
+    MoeRouterSigmoidBiasSlots_v2{E,TOPK,SCALE,KERNEL}
+                                          (logits, bias: Array<E, F32>) -> (F32 x TOPK, I32 x TOPK), one field a slot
+                                                                                       word view: MoeRouterSigmoidBiasSlots_v1{...}
 
 `MoeSumCoordinate_v2{TOPK}` is traced for each TOPK (`elementwise.specialized`) from ``bf16_rn(((0 + f32(col[0])) + f32(col[1])) +
 ...)`` through `verity.ml.circuits.silicon.fp`, the first add written as what it does (``+0 + x`` is x but for -0, which becomes +0). Its
@@ -46,6 +49,7 @@ GLM-5.3's sigmoid router is cut the same way, at its two MUFUs, and each value i
                                   `MoeRouterSigmoidOut_v1` (the sigmoid ``0.5 * t + 0.5`` and the selection score)
     MoeRouterSigmoidBias_v2       E `MoeRouterSigmoidScore_v2`, then `MoeRouterBiasTopK_v1` (the TOPK slots of `MoeRouterFirst_v1`,
                                   `MoeRouterBiasNext_v1` and `MoeRouterPickPair_v1` by keys, and `MoeRouterSigmoidNorm_v1`)
+    MoeRouterSigmoidBiasSlots_v2  `MoeRouterSigmoidBias_v2`, its outputs one field a slot, no gate of its own
 
 The sigmoid is `NvSigmoid_v1` on every word: a NaN anywhere inside makes the last FFMA's 0x7FC00000, so the pieces make canonical
 NaNs; the selection score and `write_outputs` keep the word primitives' NaN words.  `MoeRouterBiasTopK_v1` is the word slots on
@@ -66,9 +70,10 @@ from verity.ml.definitions.registry import moe as M
 from verity.ml.definitions.registry import prims as P
 
 __all__ = ["MoeRouterBiasTopK", "MoeRouterNormalize", "MoeRouterProbs", "MoeRouterSelect", "MoeRouterShift", "MoeRouterSigmoidBias",
-           "MoeRouterSigmoidIn", "MoeRouterSigmoidMid", "MoeRouterSigmoidOut", "MoeRouterSigmoidScore", "MoeRouterTopKOrdered", "MoeSum",
-           "MoeSumCoordinate", "MoeSumV3", "NvExpf", "NvExpfIn", "NvExpfOut", "SUM_CHUNK", "jb_low_byte", "moe_sum", "nv_expf_in",
-           "nv_expf_out", "router_bias_topk", "router_sigmoid_in", "router_sigmoid_mid", "router_sigmoid_out"]
+           "MoeRouterSigmoidBiasSlots", "MoeRouterSigmoidIn", "MoeRouterSigmoidMid", "MoeRouterSigmoidOut", "MoeRouterSigmoidScore",
+           "MoeRouterTopKOrdered", "MoeSum", "MoeSumCoordinate", "MoeSumV3", "NvExpf", "NvExpfIn", "NvExpfOut", "SUM_CHUNK",
+           "jb_low_byte", "moe_sum", "nv_expf_in", "nv_expf_out", "router_bias_topk", "router_sigmoid_in", "router_sigmoid_mid",
+           "router_sigmoid_out"]
 
 BF16 = Array(16, BL.BIT)
 F32 = I32 = Array(32, BL.BIT)
@@ -502,3 +507,12 @@ MoeRouterSigmoidBias = EW.on_bits("MoeRouterSigmoidBias", 2, ("E", "TOPK", "SCAL
                                   lambda S: ((("logits", Array(S.E, F32)), ("bias", Array(S.E, F32))),
                                              Tuple(Array(S.TOPK, F32), Array(S.TOPK, I32))),
                                   _sigmoid_bias, M.MoeRouterSigmoidBias)
+
+
+def _sigmoid_bias_slots(B, S, logits, bias):
+    """`MoeRouterSigmoidBiasSlots_v1` on bits: `MoeRouterSigmoidBias_v2`, its outputs one field a slot."""
+    return M.slots(B.call(bind(MoeRouterSigmoidBias, E=S.E, TOPK=S.TOPK, SCALE=S.SCALE, KERNEL=S.KERNEL), logits, bias), S.TOPK)
+
+
+MoeRouterSigmoidBiasSlots = EW.on_bits("MoeRouterSigmoidBiasSlots", 2, ("E", "TOPK", "SCALE", "KERNEL"), M.slots_signature(F32, I32),
+                                       _sigmoid_bias_slots, M.MoeRouterSigmoidBiasSlots)

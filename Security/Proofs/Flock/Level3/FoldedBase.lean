@@ -8,6 +8,11 @@ it read the block's structure (`foldedPartial`) or folded flat.
 module
 
 public import Proofs.Flock.Level3.FoldStmt
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.Fold
+import Proofs.Flock.Level3.Nodes
 
 @[expose] public section
 

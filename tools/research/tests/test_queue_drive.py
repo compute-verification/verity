@@ -6,7 +6,7 @@ from __future__ import annotations
 import pytest
 
 from research import merge
-from research.drive import Driver
+from research.drive import AFTER_LANDING, Driver
 from test_queue import World, _git
 
 
@@ -43,6 +43,17 @@ class Harness:
 
     def tick(self, **kw) -> str:
         return self.d.tick(**kw)
+
+    def baseline(self) -> None:
+        """Drive's state with `main` verified on every after-landing step, as a passed after-landing run of it leaves it, so a
+        tick lands without first running one."""
+        self.q._clone()
+        self.q.fetch()
+        state = self.q.load_state()
+        state.setdefault("drive", {})["postland"] = {
+            "verified": _git(self.world.origin, "rev-parse", "main"), "pending": [], "run": None,
+            "verified_as": {"steps": list(AFTER_LANDING), "no_cache": None}}
+        self.q.save_state(state)
 
 
 def _tip(world: World) -> str:
@@ -106,15 +117,15 @@ def _killed_run(tmp_path, name: str):
 
 LINT_LOG = """..........F........                                                      [100%]
 =================================== FAILURES ===================================
-___________________________ test_markdown_size_caps ____________________________
+________________________ test_no_report_genre_basenames ________________________
 
->       assert not offenders, "maintained documents are small:\\n" + "\\n".join(offenders)
-E       AssertionError: maintained documents are small:
-E         tools/research/src/research/store/README.md: 48 KB > 48 KB, 17 bytes over; move detail to the notes store
+>       assert not offenders, "report-genre files belong in ~/.research/notes/lanes/<lane>/:\\n" + "\\n".join(offenders)
+E       AssertionError: report-genre files belong in ~/.research/notes/lanes/<lane>/:
+E         tools/research/src/research/store/status.md
 
-tests/test_repository.py:180: AssertionError
+tests/test_repository.py:110: AssertionError
 =========================== short test summary info ============================
-FAILED tests/test_repository.py::test_markdown_size_caps - AssertionError: ma...
+FAILED tests/test_repository.py::test_no_report_genre_basenames - AssertionError: re...
 1 failed, 18 passed in 17.49s
 """
 
@@ -131,7 +142,7 @@ def _lint_run(tmp_path, log: str = LINT_LOG):
 def test_a_failed_pytest_step_points_at_its_tests_and_the_paths_its_failures_name(tmp_path):
     from research.drive import implicated
 
-    assert implicated(_lint_run(tmp_path)) == {"tests/test_repository.py", "tools/research/src/research/store/README.md"}
+    assert implicated(_lint_run(tmp_path)) == {"tests/test_repository.py", "tools/research/src/research/store/status.md"}
     assert implicated(_lint_run(tmp_path / "b", "error: lock is stale\n")) is None
 
 

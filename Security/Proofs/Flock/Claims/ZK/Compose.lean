@@ -13,7 +13,7 @@ from `A`'s history, picks. `zkmalR_seqU` proves the composed protocol `ZKmalR` f
 (Goldreich–Oren's sequential composition, with the hybrids in Wee's order): the hybrid that changes `B` keeps `A` real,
 so `B`'s `Fork` is charged against a verifier whose tape is `A`'s real run, and the one that changes `A` runs `B`'s
 simulator after it, a function of `A`'s transcript and fresh coins. `zkmalR_seq` is its corollary for finitely many
-units and `B` one `ZKmalR` protocol, whose simulator draws coins for every unit.
+units and `B` one `ZKmalR` protocol, whose simulator flips coins for every unit.
 
 The composed tape is `forkTape a`: a guess `j < a + 1`, both nonces, and two rests for `A`, of which `A` reads the
 second when `j < a` and the first when `j = a`. `Fork` then shares `A`'s run at `j = a`, so its collision is `B`'s at
@@ -188,16 +188,6 @@ theorem Seq.simG_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (C
   · simp only [hg, ite_true, spBind_eval, spUnder_eval, SP.eval]
   · simp only [hg, ite_false, Bool.false_eq_true, SP.eval]
 
-theorem Seq.simU_out {WA WB TA Θ : Type} (Q : Seq WA WB TA) (SA : Simulator) (CB : Msg → Type)
-    [∀ x, Fintype (CB x)] [∀ x, Nonempty (CB x)] (progB : (x : Msg) → Q.U x → CB x → SP (List (Msg × Out)))
-    (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB : Msg → ℕ) (c : (Q.simU SA CB progB).C x) :
-    (Q.simU SA CB progB).out H Vs θ x c =
-      cont (Q.kA x) (SA.out H (Vs.head Q.kA) θ x c.1)
-        (spOut H (Vs.after x kB) (θ, (SA.out H (Vs.head Q.kA) θ x c.1).map Prod.fst)
-          (Q.xB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))))
-          (progB x (Q.sel x (histOf (SA.out H (Vs.head Q.kA) θ x c.1))) c.2)) :=
-  Q.simG_out SA CB progB _ H Vs θ x kB c
-
 /-- **The composed run is `A`'s run, then where it goes on `B`'s run** against `V*` after `A`'s messages. -/
 theorem Seq.msgs_eq {WA WB ΩA ΩB Θ : Type} (Q : Seq WA WB ΩA) (PA : WA → Prover ΩA) (PB : WB → Prover ΩB)
     (w : WA) (H : Msg → Msg) (Vs : VStar Θ) (θ : Θ) (x : Msg) (kB nB : Msg → ℕ)
@@ -369,7 +359,7 @@ theorem Pr_forkTape (a : ℕ) {NA ΩA NB ΩB : Type} [Fintype NA] [Fintype ΩA] 
   simp only [Pr_fst p]
   exact Ex_const _
 
-/-- **One unit's coins among every unit's** have the law of that unit's. -/
+/-- **One unit's coins among every unit's** have the sampling design of that unit's. -/
 theorem Pr_pi_at {ι : Type} [Fintype ι] [DecidableEq ι] {β : ι → Type} [∀ i, Fintype (β i)]
     [∀ i, Nonempty (β i)] (i : ι) (p : β i → Prop) : Pr (fun c : (j : ι) → β j => p (c i)) = Pr p := by
   have e := Pr_equiv (Equiv.piSplitAt i β) fun q => p q.1
@@ -500,12 +490,6 @@ def Seq.Reach {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA �
   ∃ w, RA x w ∧ ∃ (Θ : Type) (Vs : VStar Θ) (θ : Θ) (ωA : TA),
     goesOn (Q.kA x) (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs = true ∧
       Q.sel x (histOf (runStar H (PA w) (Vs.head Q.kA) x ωA θ).msgs) = u
-
-/-- `RelOn` where `B`'s relation holds at every unit and tape. -/
-theorem Seq.relOn_of_forall {WA WB TA : Type} (Q : Seq WA WB TA) (H : Msg → Msg) (PA : WA → Prover TA)
-    (RA : Rel WA) (RB : Rel WB) (h : ∀ x w, RA x w → ∀ ωA u, RB (Q.xB x u) (Q.wB w ωA x u)) :
-    Q.RelOn H PA RA RB :=
-  fun x w hw _ _ _ ωA _ => h x w hw ωA _
 
 theorem Finder.pr_nonneg (H : Msg → Msg) (F : Finder) : 0 ≤ F.Pr H := Pr_nonneg _
 

@@ -1,6 +1,14 @@
 module
 
-public import Proofs.Nci.Cover.FanOutWalk
+public import Proofs.Nci.Cover.FanOutPlan
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Nci.Cover.FanOutWalk
+import Proofs.Nci.Cover.Paths
 
 /-!
 # The fan-out proof: a held root costs `d`

@@ -319,7 +319,7 @@ theorem εtable_one_plain {x : Claims.Msg} {spec : SessionSpec} {st : Stmt} (h :
   simp only [tableErr, Bool.false_eq_true, ↓reduceIte, hsch, Option.getD_some]
 
 open FlockSoundness.Discharge.ZkSession in
-/-- **The masked table error at one table**: the old padded table's bound, at C-Flock ZK's parameters at table 0's
+/-- **The masked table error at one table**: the old padded table's bound, at Flock ZK's parameters at table 0's
 `m` and shape over a field of order `2^128`, is at most the deployed `ε_table`, whose inner proof's error is `innerUp`
 (`εInner_le_innerUp`). -/
 theorem bound_le_εtable_zk {F : Type} [Field F] [Fintype F] [DecidableEq F] (hF : Fintype.card F = 2 ^ 128)
@@ -361,22 +361,6 @@ theorem weightNat_cast (sch : FlockSoundness.Accounting.Schedule) (Np : ℕ) :
       2 * (sch.levels.map fun l => (2 : ℝ) ^ l.logLen * l.queries).sum + 2 * (Np : ℝ) ^ 2 + 2 := by
   unfold Claims.Flock.Numbers.weightNat
   simp [Nat.cast_list_sum, List.map_map, Function.comp_def]
-
-/-- A table's weight is at most the session's, at table 0. -/
-theorem tableWeight_le_weight {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
-    (h0 : (tables zk x).head? = some (spec, st)) : tableWeight zk st ≤ weight zk x := by
-  unfold weight
-  cases ht : tables zk x with
-  | nil => rw [ht] at h0; cases h0
-  | cons p rest =>
-    rw [ht, List.head?_cons, Option.some.injEq] at h0
-    subst h0
-    simp only [List.map_cons, List.sum_cons]
-    have : 0 ≤ (rest.map fun p => tableWeight zk p.2).sum :=
-      List.sum_nonneg fun a ha => by
-        obtain ⟨q, -, rfl⟩ := List.mem_map.1 ha
-        exact tableWeight_nonneg zk q.2
-    linarith
 
 /-- **Table 0's weight and the other tables' share of `k`** fit in the weight (`lens_le_weights`). -/
 theorem weight_split {zk : Bool} {x : Claims.Msg} {spec : SessionSpec} {st : Stmt}
@@ -575,13 +559,13 @@ theorem mean_epsSL_le {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field 
 
 /-! ## The masked escapes fit the masked weight -/
 
-/-- C-Flock ZK's level 0 reads at least one position at every `m` it serves. -/
+/-- Flock ZK's level 0 reads at least one position at every `m` it serves. -/
 theorem m1_queries₀_pos : ∀ m : Fin 11,
     1 ≤ ((FlockSoundness.Accounting.m1Schedule (m.val + 25)).levels.headD default).queries := by
   decide +kernel
 
 /-- **The old masked escapes fit the masked weight with the fork event of weight `k`**, at a statement whose table 0
-has C-Flock ZK's schedule, when no two of them share a round and the pads' weight `N_p` is at most the deployed pads'
+has Flock ZK's schedule, when no two of them share a round and the pads' weight `N_p` is at most the deployed pads'
 domain: the fork events' weights are `2·Σ_{ℓ ≥ 1} 2^{d_ℓ}·Q_ℓ + 2·N_p² + 2`, within the weight's
 `2·Σ_ℓ 2^{d_ℓ}·Q_ℓ + 2·N² + 2`, and `k < 4·N₀/e + 1` within `4·2^{d₀}/e` and level 0's `2·2^{d₀}·Q₀ ≥ 2`. -/
 theorem oldEscZ_fitsFork_zk (rel : Readable.Parsed → Readable.Relation) {Ω : Type} (P : Claims.Prover Ω)

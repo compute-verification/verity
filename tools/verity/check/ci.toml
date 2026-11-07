@@ -39,7 +39,7 @@ group = 2
 # (`circuit-check --combine`), whose verdict is the unsharded run's
 shards = 4
 # Off the merge gate by drive's policy (policy.toml's `off_gate`): the plans keep it, so putting it back is one line there. Its red
-# in drive's after-landing run reverts its culprit at once and lands no PR touching its inputs until it passes.
+# in drive's after-landing run names its culprit as any red does, and lands no PR touching its inputs until it passes.
 
 # Group 3: the Lean verifier, its partition check, then the agreement with upstream's Rust verifier.
 [[job]]
@@ -100,8 +100,8 @@ owner = "vllm"
 part = "tests"
 group = 7
 # Off the merge gate by drive's policy (policy.toml's `off_gate`) and out of the plans. It runs in drive's after-landing run
-# (`--deferred`, every job, its base the last verified commit; sharded, in its last shard), where a red reverts the landing
-# whose merge it names.
+# (`--deferred`, every job, its base the last verified commit; sharded, in its last shard), where a red's culprit is the
+# landing whose merge it names.
 
 # The shard plans: `check.py --record --shard K/N --on POD` runs shard K of the plan with N shards, on a pod of the lander's
 # choosing, and `check.py --record --combine RUN...` records their union as the commit's check (`research merge` re-reads the

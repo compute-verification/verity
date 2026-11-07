@@ -18,15 +18,15 @@ DIR``).
    adds: the KV cache's pages and the activations, which the weights-only obligation doesn't cover and an honest run
    doesn't need.
 2. **Setup** by the vLLM adapter (`verity_vllm.protocols.pous`, ``pous:p2-16448/v4``, its registered point): the
-   commitment to ``W``, then the salt, which the memory challenger draws after it from its own host's OS and logs under
+   commitment to ``W``, then the salt, which the memory challenger samples after it from its own host's OS and logs under
    the window's binding (`binding`; `challenger_party.salt`, the gate's ``challenger_party`` verb on a salt request),
    ``C*`` encoded on the card (``libp2v1.so``, ``--p2-lib``), the memory challenger's table and the root. Setup's own
-   inputs are kept as it sent them, for the tie. A challenger that draws no salt leaves the period undecided.
+   inputs are kept as it sent them, for the tie. A challenger that samples no salt leaves the period undecided.
 3. **The session**: the memory challenger's side started on its host by ``--challenger-command`` (the auditor gate's
    ``challenger_party`` verb), the prover connecting to ``--challenger-address`` and answering each of ``--rounds``
    indices (`ROUNDS` by default) from ``C*`` on the card (`challenger_party.session`). The request names the window's
    binding and setup's published outputs; the challenger refuses it unless they carry the salt it logged and the
-   commitment it was drawn after, and runs one session a binding, under the id derived from them
+   commitment it was sampled after, and runs one session a binding, under the id derived from them
    (`challenger_party.session_id`).
 4. **The verdict**: the run protocol's case (`period.case`: setup's published outputs, the session, the table and setup's
    own inputs) under the session id the verdict derives itself from the window's binding and what setup published,
@@ -175,7 +175,7 @@ class NoSalt(Exception):
 
 
 def _salt_source(party: Side, audit: bytes):
-    """The salt's source: drawn by the memory challenger on ``party`` once the commitment exists, and logged there under
+    """The salt's source: sampled by the memory challenger on ``party`` once the commitment exists, and logged there under
     the window's binding ``audit`` (`challenger_party.salt`)."""
 
     def source(commitment: bytes) -> bytes:
@@ -282,7 +282,7 @@ def _no(verdict: str, reason: str, commitment: str | None = None, protocol: str 
             "verdict": verdict}
 
 
-def _latencies(session: R.Session, limit_ns: int) -> dict[str, Any]:
+def _latencies(session: R.ChallengePhaseRecord, limit_ns: int) -> dict[str, Any]:
     ns = [r.receipt_ns - r.send_ns for r in session.signed.rounds]
     if not ns:
         return {"rounds": 0}
@@ -389,7 +389,7 @@ def run(serve_dir: Path, window: int, out: Path, *, hf_home: Path, device: str =
                 rep = CP.session(party, CP.request_of(node, point, s.root, audit=bind, published=published),
                                  opt.prover(()))
                 key = bytes.fromhex(rep["public_key"])
-                session = R.Session.from_json(rep["session"])
+                session = R.ChallengePhaseRecord.from_json(rep["session"])
             except (OSError, RuntimeError, ValueError, KeyError, TypeError) as e:
                 why = (f"the memory challenger's session on {party.host} did not complete: "
                        f"{type(e).__name__}: {e}"[:1000])

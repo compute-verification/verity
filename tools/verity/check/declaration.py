@@ -19,7 +19,7 @@ duplicate name, or an owner the registry doesn't know. Reading the file runs non
 
 Which jobs gate a merge is drive's policy, not this file's: `policy.toml`'s `off_gate` (`POLICY`, `off_gate`) names the jobs off
 the merge gate, each a `Job` with `gate` false (`gated`): a recorded check, whole or a shard, skips it, `research merge` requires
-it of no check, and it runs in drive's after-landing run (`check.py --deferred`), whose red reverts its culprit. Such a job has
+it of no check, and it runs in drive's after-landing run (`check.py --deferred`), whose red names its culprit. Such a job has
 no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
 
 A `[[plan]]` is one way to split a check over several machines (`check.py --shard K/N`): `shards`, a list of N lists of

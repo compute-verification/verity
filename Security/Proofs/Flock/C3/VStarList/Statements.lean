@@ -1,8 +1,22 @@
 module
 
-public import Proofs.Flock.Recursive.AuditC3
 public import Proofs.Flock.C3.VStarList.Default
 public import Proofs.Flock.C3.VStarList.Parse
+public import Proofs.Flock.Recursive.HoloExec
+public import Proofs.Flock.Recursive.VStarCheck
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # Piece (h): V*'s statements over the verifier's list (gap 4(c)), and R's shape
@@ -37,7 +51,7 @@ theorem vstarCount_eq {ish : Flock.RecVStar.Inner} {ss : Array VStar.Stmt}
   rw [h]
 
 /-- **(h) V*'s statements over the verifier's list**: at every binding of each, a family whose files, where the
-verifier parses them into scope, parse to its circuits, at the outer law's points, rounds and draws. -/
+verifier parses them into scope, parse to its circuits, at the outer law's points, rounds and samples. -/
 theorem vstarParsesScoped_of_list (ish : Flock.RecVStar.Inner) (bind : Fin (vstarCount ish) → VStar.Bindings)
     (mPts J : ℕ) (law : (nv : ℕ) → VLaw nv) :
     ∃ Vs : Fin (vstarCount ish) → VStmt, VStarParsesScoped Flock.Tags.circuit ish bind Vs ∧

@@ -1,4 +1,4 @@
-"""Advice-driven serving-rows windows, for network accounting under arbitrary vLLM usage: a TP rank's window over the Programs a
+"""Advice-driven serving-rows windows, for network certification under arbitrary vLLM usage: a TP rank's window over the Programs a
 registered compiler makes from the advice (everything serving made unpredictable, network-accounting's I1), with the registration
 binding both.
 
@@ -32,7 +32,7 @@ record, by the manifest's lookup of record.  The ahead-of-time compiler takes it
 proved with selection All, never sampled; every other unit is sampled as before.  The compiler lists them (``transfer_gates``: the
 templates whose units hold them, which its digest covers), and a ``work:K`` window samples by the work table
 `serving_rows.work_table_of` derives from that list and the window's own counts: each transfer-gate template works 0 with its
-floor all its units, so its whole stratum is in the sample, beside the rest's strata at the stratified share of K.  Core's work law
+floor all its units, so its whole stratum is in the sample, beside the rest's strata at the stratified share of K.  Core's work sampling design
 (`draw.work_k`) is the All stratum, with no new verifier form; both sides derive the table, the registration's law is expanded
 under it (R1), and the Stream registers with it.  A partition that leaves a transfer-gate template out, or samples it by another law,
 is refused by name.  Until COMPILER lists the I/O shell's units, the stand-in's list is given (``--transfer-gate``), a template

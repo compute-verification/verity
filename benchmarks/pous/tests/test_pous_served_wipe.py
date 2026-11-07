@@ -118,7 +118,7 @@ def test_the_wipe_on_the_serves_card_writes_its_core_answer(node, tmp_path) -> N
     assert public["k"] == W.READS and public["memory_bits"] == W.SEGMENT_LABELS * sw.LABEL_BITS
     assert public["certified"] is False and public["foreign_bits"] > 0
     placement = answer["profile"]["placement"]
-    assert placement["trusted-host"] == "holds: the memory challenger ran on vy-auditor-2, not the prover's vy-dc-h200"
+    assert placement["trusted-host"] == "holds: the memory challenger ran on vy-auditor-2, not the developer's vy-dc-h200"
     profile = {k: v for k, v in answer["profile"].items() if k != "placement"}
     private = tmp_path / "pieces" / "serve-run" / "private" / "wipe"
     case = json.loads((private / "wipe.case.json").read_text())

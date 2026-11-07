@@ -10,7 +10,7 @@ end-to-end vectors through it, and the Lean's samples (`PouwCommit.Draws`) are d
    derives its noise from (salt, matmul, roots), and every tile yields checked values and a digest.  The useful output is
    assembled from the tiles.
 4. **Transcript.**  A Merkle root over every tile's digest, in matmul order and then tile order (core's `tile_refs`).
-5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` draws t
+5. **Selection.**  `Sampled`: ``derive(source, "verity/pouw/audit/v1", {"transcript": root, "salt": salt})`` samples t
    tiles independently, each with probability ``W_ref(tile)/W`` (Lean `WorkWeightedSampling`); on an epoch with coins the
    source is the epoch's sampling coin, which the challenger opens after the verifier recorded the transcript.  `Lottery` is
    Pearl's mining rule, not one of the audit's laws, and stays unwired: the tiles whose digest, read little-endian, is at
@@ -99,12 +99,15 @@ class Prover:
 
     def __init__(self, scheme: PoUWScheme, weights: Mapping[int, Sequence[bytes]],
                  kernel: Callable[..., list[tuple[bytes, list[list]]]] = reference_kernel, salt_key: bytes | None = None):
-        """`salt_key` is the prover's key of its hm96 salts under `HM96` (fresh by default)."""
+        """`salt_key` is the prover's key of its hm96 salts under `HM96` (fresh by default).  A scheme of a plain format (h0, or
+        no ``commitment_hash``) has trees that are not hiding, which this reference tool replays as `audit.commit_rows`'
+        ``public`` trees; a served commitment is never one."""
         self.scheme, self.kernel = scheme, kernel
         self.weights = {w: list(rows) for w, rows in weights.items()}
         self.hash = commitment_hash(scheme)
         self.salt_key = (salt_key or os.urandom(32)) if self.hash == HM96 else None
-        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash, self.salt_key, HM96_WEIGHTS + w)
+        self.plain = plain = self.hash != HM96
+        self.weight_trees = {w: commit_rows(weight_binding(w), -2, rows, self.hash, self.salt_key, HM96_WEIGHTS + w, public=plain)
                              for w, rows in self.weights.items()}
         self._act_trees: list[MerkleTree] = []
         self._refs: list[TileRef] = []
@@ -125,7 +128,8 @@ class Prover:
             rows = list(activations[u.index])
             if len(rows) != u.shape.m:
                 raise DomainError(f"matmul {u.index} has {u.shape.m} activation rows")
-            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index)
+            tree = commit_rows(activation_binding(epoch.salt, u.index), u.index, rows, self.hash, self.salt_key, u.index,
+                               public=self.plain)
             self._act_trees.append(tree)
             ctx = Context(epoch.salt, u, tree.commitment.root, epoch.weight_roots[u.weight])
             tiles = scheme.tiles(u.shape)
@@ -163,7 +167,7 @@ def tickets(scheme: PoUWScheme, workload: Workload, refs: Sequence[TileRef]) -> 
 
 @dataclass(frozen=True, slots=True)
 class Sampled:
-    """t independent work-weighted draws with replacement (Lean `WorkWeightedSampling`: δ_s = (1 − ε_s)^t)."""
+    """t independent work-weighted samples with replacement (Lean `WorkWeightedSampling`: δ_s = (1 − ε_s)^t)."""
 
     t: int
 
@@ -284,7 +288,7 @@ class Verifier:
 
     def audit(self, prover: Prover, transcript: Transcript, selection: Sampled | Lottery, source: bytes | Challenger
               ) -> Audit:
-        """Draw, open and check the selected tiles.  On an epoch with a coin commitment `source` is the challenger, asked
+        """Sample, open and check the selected tiles.  On an epoch with a coin commitment `source` is the challenger, asked
         for the epoch's sampling coin after the transcript is recorded; on one without, the sample's bare source bytes."""
         if len(transcript.activation_roots) != len(self.epoch.workload.matmuls):
             return Audit(False, (), (), None)

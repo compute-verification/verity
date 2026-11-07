@@ -61,8 +61,9 @@ CLASSES = [
                                     r"matmul_kernel_persistent"),
     ("Commit hashing", None, r"rows_leaf|rows_level|chunk_leaves|tree_level|pos_leaves|sha512|hm96"),
     ("Commit gather", None, r"gather_copy|native_collect"),
-    ("H1", None, r"\bkf?_(midstates|leaves|level|pads|public_salts|top|rows|segments|step|trees|tiles|strips|tree_key|"
-                 r"units_level|form_leaves|node_leaves|key_leaf|dequant|x|y|ceiling|f1|fill|hash|row_digests|tile_leaves)\b"),
+    ("H1", None, r"\bkf?_(midstates|leaves|level|pads|public_salts|ok_salts|top|rows|segments|step|trees|tiles|strips|"
+                 r"tree_key|units_level|form_leaves|node_leaves|key_leaf|dequant|x|y|ceiling|f1|fill|hash|row_digests|"
+                 r"tile_leaves)\b"),
     ("quantize", None, r"exactlin_quant_rows|scaled_int8_quant|int8_quant|kv_quant"),
     ("norms", None, r"rms_norm|rmsnorm|layer_norm|add\d?_norm|embed_norm|final_norm|triton_(red|per)_"),
     ("activation", None, r"silu|act_and_mul|gelu|swiglu"),
@@ -210,7 +211,7 @@ def overlap_with_tensor(iv: list[tuple], a: int, b: int) -> dict[str, int]:
 
 def analyse(path: str, tokens: int, prompt: int, config: dict, theta: float, target: float, steady: bool = False,
             theta_mhz: float = SHEET_MHZ) -> dict:
-    """With `steady`, a step longer than 1.5 times the median step (a window's close or a learning pass) is dropped and
+    """With `steady`, a step longer than 1.5 times the median step (an execution phase's close or a learning pass) is dropped and
     listed in the summary's `dropped`.  `theta_mhz` is the SM clock `theta` is quoted at."""
     m = model(config)
     data = load(path)

@@ -80,7 +80,7 @@ def test_a_hand_written_section_one_side_extends_is_kept():
     merged, why = M.merge(base, ours, theirs)
     assert why == [] and merged["meaning"] == ["P", "P.More"] and "P.v" in merged["guarantees"]
     both, why = M.merge(base, ours, base | {"meaning": ["P", "P.Other"]})
-    assert why == [] and set(both["meaning"]) == {"P", "P.More", "P.Other"}, "two sides that each extend it merge (#2600)"
+    assert why == [] and set(both["meaning"]) == {"P", "P.More", "P.Other"}, "two sides that each extend it merge"
 
 
 def test_a_derived_record_both_sides_changed_merges_as_ours_and_the_merged_build_regenerates_it():
@@ -138,6 +138,20 @@ def test_what_only_a_person_writes_still_refuses_beside_derived_candidates():
         return rec | {"assumptions": {"P.Hyp": {"owner": who, "digest": "a" * 64}}}
     assert M.merge(hyp(base, "@lean"), hyp(ours, "@proofs"), hyp(theirs, "@circuits"))[1] == [
         "assumptions[P.Hyp].owner: changed on both sides, differently"]
+    def opened(rec, issue, due="2026-11-30"):
+        return rec | {"open": {"P.Sound": {"owner": "@lean", "digest": "a" * 64, "issue": issue, "due": due}}}
+    assert M.merge(opened(base, "LEAN-1"), opened(ours, "LEAN-2"), opened(theirs, "LEAN-3"))[1] == [
+        "open[P.Sound].issue: changed on both sides, differently"]
+    merged, why = M.merge(opened(base, "LEAN-1"), opened(ours, "LEAN-2"), opened(theirs, "LEAN-1", "2026-12-31"))
+    assert why == [] and merged["open"]["P.Sound"] == {"owner": "@lean", "digest": "a" * 64, "issue": "LEAN-2",
+                                                       "due": "2026-12-31"}, "one side's issue, the other's due date"
+    def scoped(rec, why, cites=None):
+        return rec | {"domain": {"P.Scope": {"owner": "@lean", "digest": "a" * 64, "why": why}
+                                 | ({"cites": cites} if cites else {})}}
+    assert M.merge(scoped(base, "x"), scoped(ours, "y"), scoped(theirs, "z"))[1] == [
+        "domain[P.Scope].why: changed on both sides, differently"]
+    merged, why = M.merge(scoped(base, "x"), scoped(ours, "y"), scoped(theirs, "x", "P.u"))
+    assert why == [] and merged["domain"]["P.Scope"] == {"owner": "@lean", "digest": "a" * 64, "why": "y", "cites": "P.u"}
 
 
 def test_an_owner_merges_apart_from_the_statement():
@@ -151,10 +165,10 @@ def test_an_owner_merges_apart_from_the_statement():
 
 
 def test_a_definition_one_side_stops_reading_leaves_the_merge_unless_the_other_side_changed_its_hash():
-    """A reads-only clash (lean's One-vocabulary PRs move definitions out of a module that queued PRs' new guarantees read).
-    No guarantee of the side that stopped reading the definition reads it, so in the merged tree only the other side's new
+    """A reads-only clash (one side moves definitions out of a module that the other side's new guarantees read).  No
+    guarantee of the side that stopped reading the definition reads it, so in the merged tree only the other side's new
     ones may: the removal applies, named as a candidate, unless that side also changed the definition's hash, where the
-    union stays with its hash and the train's Lean check regenerates."""
+    union stays with its hash and the Lean check of `next` regenerates."""
     base = record(t=thm([F, G]))
     ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
     theirs = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
@@ -240,16 +254,60 @@ def test_a_guarantee_one_side_removed_stays_removed_unless_the_other_side_change
     assert M.merge(base, ours, owner)[1] == ["guarantees[P.u]: removed on one side and changed on the other"]
 
 
+def claims(**sections: dict) -> dict:
+    return {"claims": {"modules": ["Definitions.Claims"], "witnesses": {}, "not": {}, "generic": {}} | sections}
+
+
+def test_proofs_zkoutleak_main_moved_to_claims_generic_leaves_claims_not_where_the_branch_still_has_it():
+    """Merging `main` into a branch: `main` moved `Claims.ZKOutLeak` from `claims.not` to `claims.generic`, and the
+    branch still had it under `claims.not`, with the base's reason or an older one. The merged record lists it under
+    `claims.generic` alone; the driver had kept both, which the Lean check refuses (`claims.generic-both`)."""
+    leak, excuse = "Claims.ZKOutLeak", {"Claims.Bits": "a helper"}
+    base = claims(**{"not": excuse | {leak: "a corollary of `ZKOut`, proved of every `ZKOut`"}})
+    main = claims(**{"not": excuse, "generic": {leak: "Claims.zkOutLeak"}})
+    for reason in ("a corollary of `ZKOut`, proved of every `ZKOut`", "proved of every protocol zero knowledge"):
+        branch = claims(**{"not": excuse | {leak: reason}})
+        merged, why = M.merge(base, branch, main)
+        assert why == [] and merged["claims"]["not"] == excuse and merged["claims"]["generic"] == {leak: "Claims.zkOutLeak"}
+
+
+def test_a_premise_one_side_moved_to_another_section_leaves_the_one_the_other_side_changed_it_in():
+    """Ours made `P.Hyp` a domain hypothesis while theirs gave the named assumption another owner: it is a domain
+    hypothesis alone, as ours put it, and the other sections' entries merge as before."""
+    hyp, other = {"owner": "@lean", "digest": "a" * 64}, {"P.Other": {"owner": "@lean", "digest": "b" * 64}}
+    domain = {"owner": "@lean", "digest": "a" * 64, "why": "a deployment's choice"}
+    base = {"assumptions": {"P.Hyp": hyp} | other}
+    ours = {"assumptions": other, "domain": {"P.Hyp": domain}}
+    theirs = {"assumptions": {"P.Hyp": hyp | {"owner": "@proofs"}} | other}
+    merged, why = M.merge(base, ours, theirs)
+    assert why == [] and merged["assumptions"] == other and merged["domain"] == {"P.Hyp": domain}
+
+
+def test_an_entry_both_sides_placed_in_different_sections_is_refused_naming_both():
+    """A claim ours witnessed and theirs made generic, and a premise each side brought into a different section: neither
+    side's placement is the base's, so the record can't say which stands."""
+    base = claims(**{"not": {"Claims.C": "no claim yet"}})
+    ours = claims(witnesses={"Claims.C": {"fails": "Claims.C_fails", "meets": ["Claims.C_meets"]}}) \
+        | {"open": {"P.Hyp": {"owner": "@lean", "digest": "a" * 64, "issue": "LEAN-1", "due": "2026-11-06"}}}
+    theirs = claims(generic={"Claims.C": "Claims.c"}) \
+        | {"domain": {"P.Hyp": {"owner": "@lean", "digest": "a" * 64, "why": "a deployment's choice"}}}
+    _, why = M.merge(base, ours, theirs)
+    assert why == [
+        "Claims.C: ours put it under witnesses and theirs under generic, from not in the base (claims.witnesses[Claims.C] and "
+        "claims.generic[Claims.C]): it sits in one of witnesses, not, generic",
+        "P.Hyp: ours put it under open and theirs under domain, from neither in the base (open[P.Hyp] and domain[P.Hyp]): it "
+        "sits in one of assumptions, domain, open"]
+
+
 FIXTURES = HERE / "fixtures" / "merge"
 
 
-def test_4406_onto_next_takes_the_side_that_changed_the_definitions(tmp_path, capsys):
-    """#4406 (cursor/lean-vocab-hash-fc8d at 172198e129) onto `next` at aa5d70a9f1, base main's b6b9338dcb (26 Oct): #4406
-    moves `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there, and the driver refused the train.
+def test_a_definition_taken_out_of_a_module_next_adds_readers_to_merges_as_the_side_that_took_it_out(tmp_path, capsys):
+    """A branch merged onto `next` moves `Hash.Digest` out of `Definitions.Hash.Basic` while `next` adds readers there.
     The fixture is that group on each side with the records of its readers (a sample of the moving side's new ones), as
-    locks listed them then. Read without them, `next`'s group is the base's, so the merge is the moving side's group,
+    locks once listed them.  Read without them, `next`'s group is the base's, so the merge is the moving side's group,
     cleanly."""
-    sides = json.loads((FIXTURES / "hash-basic-4406-onto-next.json").read_text())
+    sides = json.loads((FIXTURES / "hash-basic-definition-taken-out-onto-next.json").read_text())
     for n in ("base", "ours", "theirs"):
         (tmp_path / n).write_text(A.text(sides[n]))
     assert M.main([*(str(tmp_path / n) for n in ("base", "ours", "theirs")), "Security/lean-audit.json"]) == 0
@@ -262,13 +320,13 @@ def test_4406_onto_next_takes_the_side_that_changed_the_definitions(tmp_path, ca
                      "definitions": dict(sorted(hash_basic["theirs"]["definitions"].items()))}
 
 
-def test_5977_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
-    """A branch that renames `J10R.Layout` to `NoiseLayout` (fcfc2901b9) merged onto `next` (e50948ba0c, base 5f41e99513) as
-    drive merged it (9a58b81858): `next` added readers of `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its
-    four fields beside the new names, which `next`'s after-landing Lean check, with no regenerate, fails on.  The fixture is
-    that group on each side with the records of its readers, as locks listed them then.  Read without them, `next`'s group
-    is the base's, so the merge is the renaming branch's group, cleanly."""
-    sides = json.loads((FIXTURES / "j10r-5977-onto-next.json").read_text())
+def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
+    """A branch that renames `J10R.Layout` to `NoiseLayout`, merged onto `next` as drive merged it: `next` added readers of
+    `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
+    after-landing Lean check, with no regenerate, fails on.  The fixture is that group on each side with the records of its
+    readers, as locks once listed them.  Read without them, `next`'s group is the base's, so the merge is the renaming
+    branch's group, cleanly."""
+    sides = json.loads((FIXTURES / "j10r-layout-renamed-onto-next.json").read_text())
     m = "Definitions.Accounting.TS.J10R"
     old = [d for d in sides["base"]["reads"][m]["definitions"] if ".Layout" in d]
     assert len(old) == 5 and all(d in sides["ours"]["reads"][m]["definitions"] for d in old)
@@ -617,7 +675,7 @@ def test_a_checkout_whose_merge_rules_predate_origin_main_s_merges_by_origin_mai
 
 
 def test_two_branches_that_each_widen_a_layer_merge_its_imports_and_reasons():
-    """#1860 against #1842 (12 Oct): each side added imports to `Definitions.Accounting` and a clause to its `why`."""
+    """Each side added imports to `Definitions.Accounting`'s layer and a clause to its `why`."""
     base = {"layers": {"D": {"imports": ["Mathlib", "D"], "except": [], "why": "trusted text; they import no proof"},
                        "E": {"imports": ["E"], "except": [], "why": "e"}}}
     ours = {"layers": {"D": {"imports": ["Mathlib", "P.Audit", "D"], "except": [], "why": "trusted text; M reads P; they import no proof"},
@@ -737,7 +795,7 @@ def test_a_branch_from_before_the_port_merges_as_its_codemod_rerun_would(tmp_pat
 def test_4690_onto_next_drops_the_import_4690_retired(tmp_path):
     """`Security/Definitions/Accounting.lean` as git gave it to the driver in a merge where one side retired a module and the
     other moved its import: the merge drops the retired import, which would otherwise stop Security building."""
-    sides = json.loads((FIXTURES / "accounting-4690-onto-next.json").read_text())
+    sides = json.loads((FIXTURES / "accounting-retired-import-onto-next.json").read_text())
     text, left = _lean(tmp_path, sides["base"], sides["ours"], sides["theirs"])
     gone = "import Definitions.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod\n"
     assert left == 0 and gone in sides["base"] and gone in sides["ours"] and gone not in sides["theirs"]
@@ -868,6 +926,82 @@ def test_a_lakefile_whose_sides_each_require_a_package_and_add_roots_merges():
     assert left == 1, "so does a value"
 
 
+PYPROJECT = '''[project]
+name = "p"
+version = "0.1.0"
+dependencies = ["numpy>=1.26",
+  "torch"]
+
+[tool.verity.tests]
+paths = ["tests"]
+inputs = ["verity/__init__.py", "verity/settings.py",
+          "verity/ml/circuits",
+          # the H1 units read both.
+          "verity/core/protocols/pouw/core_check.py", "verity/core/protocols/pouw/leaf_lanes.py",
+          "verity/ml/protocols/pous/circuit.py"]
+untraced = ["fixtures"]
+'''
+
+
+def _pyproject(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
+    for n, t in (("base", base), ("ours", ours), ("theirs", theirs)):
+        (tmp / n).write_text(t)
+    return M.pyproject(tmp / "base", tmp / "ours", tmp / "theirs")
+
+
+def test_a_pyproject_whose_sides_each_add_a_suite_input_merges_and_any_other_conflict_stays_gits(tmp_path):
+    """Two PRs that each add a file a suite reads, at the same place in `inputs`, conflict line by line; they
+    merge as a list.  A value both sides changed, and a list outside `[tool.verity.tests]` both sides added to, stay git's."""
+    import tomllib
+    tail = '"verity/ml/protocols/pous/circuit.py"]'
+    def add(*xs):
+        return PYPROJECT.replace(tail, tail[:-1] + "".join(f',\n          "{x}"' for x in xs) + "]")
+    text, left = _pyproject(tmp_path, PYPROJECT, add("verity/a.py"), add("verity/b.py"))
+    assert left == 0, text
+    doc = tomllib.loads(text)
+    assert doc["tool"]["verity"]["tests"]["inputs"][-3:] == ["verity/ml/protocols/pous/circuit.py", "verity/b.py",
+                                                             "verity/a.py"]
+    assert doc["project"] == tomllib.loads(PYPROJECT)["project"] and "# the H1 units read both." in text
+    gone = PYPROJECT.replace(tail, '"verity/a.py"]')
+    text, left = _pyproject(tmp_path, PYPROJECT, gone, add("verity/b.py"))
+    assert left == 0, text
+    assert set(tomllib.loads(text)["tool"]["verity"]["tests"]["inputs"][-3:]) == {
+        "verity/core/protocols/pouw/leaf_lanes.py", "verity/a.py", "verity/b.py"}, "what ours removed stays removed"
+    def version(v):
+        return add(f"verity/{v}.py").replace('version = "0.1.0"', f'version = "{v}"')
+    text, left = _pyproject(tmp_path, PYPROJECT, version("1"), version("2"))
+    assert left and "<<<<<<< ours" in text, "a version both sides changed stays git's"
+    def dep(d):
+        return PYPROJECT.replace('"torch"]', f'"torch", "{d}"]')
+    text, left = _pyproject(tmp_path, PYPROJECT, dep("scipy"), dep("jax"))
+    assert left and "<<<<<<< ours" in text, "a dependency both sides added stays git's"
+
+
+def test_git_merges_two_branches_that_each_add_a_suite_input_with_the_installed_driver(tmp_path, monkeypatch):
+    import tomllib
+    for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                 "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
+        monkeypatch.setenv(k, v)
+    repo = tmp_path / "repo"
+    (repo / "tools" / "verity" / "lean").mkdir(parents=True)
+    for f in ("merge.py", "check.py", "modules.py"):
+        shutil.copy(HERE.parent / f, repo / "tools" / "verity" / "lean" / f)
+    (repo / ".gitattributes").write_text(f"pyproject.toml merge={M.PYPROJECT}\n")
+    pp = repo / "pyproject.toml"
+    tail = '"verity/ml/protocols/pous/circuit.py"]'
+    git(repo, "init", "-q", "-b", "main")
+    for name in ("main", "a", "b"):
+        if name != "main":
+            git(repo, "checkout", "-q", "-b", name, "main")
+        pp.write_text(PYPROJECT if name == "main" else PYPROJECT.replace(tail, tail[:-1] + f', "verity/{name}.py"]'))
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", name)
+    git(repo, "checkout", "-q", "a")
+    subprocess.run([sys.executable, "tools/verity/lean/merge.py", "--install"], cwd=repo, check=True, capture_output=True)
+    git(repo, "merge", "--no-edit", "b")
+    assert {"verity/a.py", "verity/b.py"} <= set(tomllib.loads(pp.read_text())["tool"]["verity"]["tests"]["inputs"])
+
+
 def test_git_merges_two_branches_that_each_require_a_package_with_the_installed_driver(tmp_path, monkeypatch):
     for k, v in {"HOME": str(tmp_path), "GIT_CONFIG_NOSYSTEM": "1", "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
                  "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}.items():
@@ -987,6 +1121,20 @@ def test_a_cap_whose_comment_both_sides_reword_merges_as_counters_under_theirs_c
     assert (text, left) == (packages({SEC: 411, PROPS: 190}, inline, above="both"), 0)
     alike = packages({SEC: 381, PROPS: 188}, inline, above="both")
     assert _caps(tmp_path, base, alike, alike) == (alike, 0), "a line both sides changed alike is that line, not twice"
+
+
+def test_a_cap_one_side_brings_is_that_side_s_beside_the_caps_that_merge_as_counters(tmp_path):
+    """A branch that brings a new cap (a new check's count) and a branch that moves an old cap and rewords its comment
+    merge as when both hold the same caps: the new cap is its side's line, whichever side brings it, and the old one
+    merges as counters under theirs' comment."""
+    inline = {SEC: 1422}
+    base = packages({SEC: 354, PROPS: 184}, inline)
+    new = '\n\n#: the spec\'s theorems\nSPEC_THEOREMS = {"Security": 154}\n'
+    ours, theirs = packages({SEC: 355, PROPS: 184}, inline, above="ours"), packages({SEC: 380, PROPS: 185}, inline, above="theirs")
+    assert _caps(tmp_path, base, ours, theirs + new) == (packages({SEC: 381, PROPS: 185}, inline, above="theirs") + new, 0)
+    assert _caps(tmp_path, base, ours + new, theirs) == (packages({SEC: 381, PROPS: 185}, inline, above="theirs") + new, 0)
+    text, left = _caps(tmp_path, base + new, ours, theirs + new)
+    assert left == 1 and "<<<<<<< ours\n" in text, "a cap the base holds and a side dropped stays git's"
 
 
 def test_caps_both_sides_brought_over_a_base_without_them_merge_as_the_larger_count(tmp_path):

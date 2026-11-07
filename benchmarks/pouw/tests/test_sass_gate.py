@@ -3,7 +3,8 @@
 and the approximate -prec-div=false -prec-sqrt=false fail, as does every kernel of `ftz_refused.cu`; a cubin whose ptxas
 (version, build, arguments) isn't pinned with a numeric run exempts nothing; an instruction a toolkit excepts (MUFU.EX2
 under 13.0.1-sm_90a, on kernels' units_softmax) passes alone, in its one form, and nothing else does; kernels' units.cu
-at sm_90a passes, its calls reloading operands from their constant-bank slots, and fails under each mutation; each sequence
+at sm_90a passes, its calls reloading operands from their constant-bank slots, and fails under each mutation; a div body
+with a folded constant numerator passes pinned for that constant alone; each sequence
 breaks under a mutation; a read the gate can't tell from a merge passes and is listed; the pins regenerate; the two disassemblies must agree; the fatbin
 parser finds every cubin and refuses what it can't read; passes are cached and failures aren't; an arm must declare its
 binaries; and, where a CUDA toolkit is present, real builds."""
@@ -413,12 +414,14 @@ def test_an_sm90a_build_without_flags_passes_under_its_own_entry_and_no_other(pi
 
 def test_the_shipped_sm90a_entry_exempts_only_the_bodies_its_numeric_run_tested():
     """The shipped entry is found for an sm_90a build of its ptxas and exempts the seeds and the bodies ieee_pin.cu's builds
-    pinned: sqrt_k's sqrt calls reach the body units_sqrt tests, and rho_k's a __cuda_sm20_sqrt_rn_f32_slowpath that ptxas
-    specialized otherwise, which no numeric run tested, so they stay refused, and so does every refused kernel but
-    __expf's, whose one flagged instruction is a bare MUFU.EX2 between IEEE FMULs, which the entry excepts."""
+    pinned, hash_decode.cuh's two div bodies (norm_two's and norm_one's) for its numerator 8192 alone: sqrt_k's sqrt calls
+    reach the body units_sqrt tests, and rho_k's a __cuda_sm20_sqrt_rn_f32_slowpath that ptxas specialized otherwise,
+    which no numeric run tested, so they stay refused, and so does every refused kernel but __expf's, whose one flagged
+    instruction is a bare MUFU.EX2 between IEEE FMULs, which the entry excepts."""
     entry = SG.load_pins()["toolkits"]["13.0.1-sm_90a"]
     assert entry["args"] == ["-arch sm_90a -m 64", "-arch sm_90a -m 64 -fmad false"]
-    assert entry["numeric"]["run"] == "r20261026-085046-75c4"
+    assert entry["numeric"]["run"]
+    assert entry["numerators"] == dict.fromkeys(["0506fcf4d209d4af", "d72da770af0af38d"], ["0x46000000"])
     v = verdict("plain90")
     assert v["toolkit"] == "13.0.1-sm_90a" and v["unpinned"] is None and v["covered"]["int-seed"] == 12
     assert [c.split(" ")[0] for c in v["unmatched_calls"]] == ["rho_k"] and v["covered"]["sqrt-fast-path"] == 3
@@ -433,6 +436,33 @@ def test_every_refused_kernel_fails_at_sm90a_too(pins90):
     assert v["covered"] == {} and v["offending_n"] == v["flagged"] == 18
     assert {o["function"] for o in v["offending"]} == {"frsqrt_k", "rsqrtf_k", "expf_k", "fdividef_k", "sqrt_approx_k",
                                                        "add_ftz_k", "min_ftz_k", "setp_ftz_k", "cvt_ftz_k", "cdiv1_k"}
+
+
+def test_a_body_folding_a_constant_numerator_is_pinned_for_that_constant_alone(tmp_path, records):
+    """cdiv1_k's one division divides 3.0f, which ptxas folds into the function's div body, so the call passes it the
+    divisor alone: pinned from its build, the body carries 3.0f's bits as its one numerator and the call passes; pinned for
+    another constant, or with no numerators, the call is refused."""
+    entry = SG.update_pins(records("refused90"), "13.0.1-sm_90a", tmp_path / "pins.json")
+    (sid,) = entry["subroutines"][SG.DIV["slowpath"]]
+    assert entry["numerators"] == {sid: ["0x40400000"]}
+    p = {"version": SG.PINS_VERSION, "toolkits": {"13.0.1-sm_90a": {**entry, "numeric": TEST_RUN}}}
+    v = verdict("refused90", p=p)
+    assert v["covered"] == {"div-fast-path": 1, SG.DIV["slowpath"]: 7} and "cdiv1_k" not in {o["function"] for o in v["offending"]}
+    for nums, why in (({sid: ["0x46000000"]}, "pinned for the constant numerator 0x46000000 alone, and this one's is 0x40400000"),
+                      ({}, "the slow path isn't passed the fast path's operands")):
+        p["toolkits"]["13.0.1-sm_90a"]["numerators"] = nums
+        o, = [o for o in verdict("refused90", p=p)["offending"] if o["function"] == "cdiv1_k"]
+        assert o["instruction"] == "MUFU.RCP R0, R5" and why in o["why"]
+
+
+@pytest.mark.parametrize("sid,num", [("0" * 16, "0x46000000"), (None, "8192.0")])
+def test_pins_refuse_numerators_of_an_unpinned_body_or_not_a_constants_bits(tmp_path, sid, num):
+    p = SG.load_pins()
+    tk = p["toolkits"]["13.0.1-sm_90a"]
+    tk["numerators"] = {sid or tk["subroutines"][SG.DIV["slowpath"]][0]: [num]}
+    (tmp_path / "pins.json").write_text(json.dumps(p))
+    with pytest.raises(SG.SassGateFailed, match="numerators name"):
+        SG.load_pins(tmp_path / "pins.json")
 
 
 RCP90 = {("rcp_k", "MUFU.RCP R7, R0"), ("rcp_k", "FADD.FTZ R2, -R2, -RZ")}
@@ -684,6 +714,18 @@ def test_instructions_name_what_they_read_and_where_they_branch():
     assert SG.Insn(0x210, "BRX R2 -0x220").indirect and SG.Insn(0, "JMX R2").indirect
 
 
+def test_a_warpgroup_mma_spans_its_shapes_accumulator_and_an_mbarrier_wait_one_register_an_operand():
+    """An m64nNk accumulator is N/2 registers a thread at F32 (N/4 at F16), and an mbarrier wait reads its address and
+    parity alone: wider spans would read an integer-division seed beside them, as in a GEMM's mainloop."""
+    acc = {f"R{r}" for r in range(24, 40)}
+    for text in ("QGMMA.64x32x32.F32.E4M3.E4M3 R24, gdesc[UR8], R24, gsb0", "HGMMA.64x64x16.F16.BF16 R24, gdesc[UR8], R24"):
+        g = SG.Insn(0, text)
+        assert g.maydef == acc and {r for r in g.reads if r[0] == "R"} == acc, text
+    assert SG.Insn(0, "QGMMA.64x32x32.E4M3.E4M3 R24, gdesc[UR8], R24").maydef >= {f"R{r}" for r in range(24, 152)}
+    w = SG.Insn(0, "SYNCS.PHASECHK.TRANS64.TRYWAIT P0, [R42+URZ+0x8], R23")
+    assert w.reads == {"R42", "R23"} and w.maydef == {"P0"}
+
+
 @pytest.mark.parametrize("exc,why", [({"MUFU.RSQ": {"definition": "d", "numeric": {"runs": ["r"]}}},
                                       "excepts MUFU.RSQ, which sass_gate.EXCEPTABLE doesn't list"),
                                      ({"MUFU.EX2": {"definition": "d", "numeric": {"runs": []}}}, "no numeric runs"),
@@ -864,7 +906,7 @@ def test_the_gate_names_the_failing_binary_function_and_instruction(tmp_path, mo
     lib = a_library(tmp_path / "libarm.so")
     fake_tools(monkeypatch, "fast_math")
     logged: list[str] = []
-    g = SG.Gate(log=logged.append, tools=TOOLS, cache=None, pins=pins_file(tmp_path / "pins.json"))
+    g = SG.SassChecker(log=logged.append, tools=TOOLS, cache=None, pins=pins_file(tmp_path / "pins.json"))
     with pytest.raises(SG.SassGateFailed, match=r"libarm\.so: 42 flagged instruction\(s\) .* first \w+ 0x[0-9a-f]+: "):
         g.check([str(lib)], "arm:x")
     assert logged[0].startswith(f"sass gate: FAIL {lib} (ptxas 12.9.1; 55 flagged, covered ")
@@ -886,7 +928,7 @@ def test_discovery_takes_mapped_device_code_and_leaves_nvidias_libraries_unscann
     libs = [a_library(tmp_path / "libcublasLt.so.12"), a_library(tmp_path / "libarm.so"), tmp_path / "libhost.so"]
     libs[2].write_bytes(elf(62, {".text": b"\x90" * 16}))
     monkeypatch.setattr(SG, "mapped", lambda: [str(p) for p in libs])
-    g = SG.Gate(tools=TOOLS, cache=None)
+    g = SG.SassChecker(tools=TOOLS, cache=None)
     assert g.discover() == [str(libs[1])]
     assert g.report()["not_scanned"] == [{"path": str(libs[0]), "reason": "NVIDIA's library"}]
     for gone in (str(tmp_path / "libgone.so") + " (deleted)", "/memfd:lib (deleted)", "/dev/shm/x (deleted)"):
@@ -899,7 +941,7 @@ def test_shared_anonymous_memory_is_not_a_library(tmp_path, monkeypatch):
     """The CUDA driver maps shared anonymous memory, which /proc/self/maps names '/dev/zero (deleted)'."""
     anon = ["/dev/zero (deleted)", "/SYSV0000a1b2 (deleted)"]
     monkeypatch.setattr(SG, "mapped", lambda: [*anon, str(a_library(tmp_path / "libarm.so"))])
-    g = SG.Gate(tools=TOOLS, cache=None)
+    g = SG.SassChecker(tools=TOOLS, cache=None)
     assert g.discover() == [str(tmp_path / "libarm.so")]
     assert g.report()["not_scanned"] == [{"path": p, "reason": "shared anonymous memory, not a file"} for p in anon]
 
@@ -912,7 +954,7 @@ def test_a_deleted_posix_semaphore_is_not_a_library_but_a_bigger_or_code_bearing
     sems = [p for p in SG.mapped() if SG.POSIX_SEM.fullmatch(p)]
     assert sems, "a multiprocessing lock maps no /dev/shm/sem.* (deleted)"
     monkeypatch.setattr(SG, "mapped", lambda: sems[:1])
-    g = SG.Gate(tools=TOOLS, cache=None)
+    g = SG.SassChecker(tools=TOOLS, cache=None)
     assert g.discover() == [] and g.report()["not_scanned"][0]["reason"].startswith("a POSIX semaphore")
     fake = "/dev/shm/sem.mp-planted (deleted)"
     monkeypatch.setattr(SG, "mapped", lambda: [fake])
@@ -920,7 +962,7 @@ def test_a_deleted_posix_semaphore_is_not_a_library_but_a_bigger_or_code_bearing
         monkeypatch.setattr(SG, "regions", lambda p, size=size: [(0x1000, 0x1000 + size)])
         monkeypatch.setattr(SG, "read_mapped", lambda s, n, data=data: data.ljust(n, b"\0"))
         with pytest.raises(SG.SassGateFailed, match="mapped but deleted"):
-            SG.Gate(tools=TOOLS, cache=None).discover()
+            SG.SassChecker(tools=TOOLS, cache=None).discover()
 
 
 def test_this_process_maps_the_python_interpreter():

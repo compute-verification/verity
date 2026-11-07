@@ -229,7 +229,8 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
             registered: Mapping[str, int] | None, supplied: Mapping[str, Any] | None = None,
             pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
             schemas: Mapping[str, str] | None = None, window_root: str | None = None,
-            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None) -> dict[str, Any]:
+            held: Sequence[str] | None = None, outputs: Mapping[str, Mapping[str, str]] | None = None,
+            day: int | None = None, declarations: Sequence[Mapping[str, Any]] | None = None) -> dict[str, Any]:
     """`registration.check`'s copies as the Lean's parameters (`OneStage.paramsOfJson`)."""
     p = {"anchors": list(anchors), "delta": REGISTRATION_DELTA, "law": dict(law), "leaf_layer": leaf_layer,
          "log": [dict(r) for r in log], "partition": None if partition is None else dict(partition),
@@ -252,6 +253,9 @@ def _params(program: Program, query: Mapping[str, Any], law: Mapping[str, Any], 
         p["held"] = list(held)
     if outputs is not None:
         p["outputs"] = {v: dict(o) for v, o in outputs.items()}
+    if day is not None or declarations is not None:
+        p["day"] = day
+        p["declarations"] = None if declarations is None else [dict(d) for d in declarations]
     return p
 
 
@@ -262,14 +266,16 @@ def check(rec: Mapping[str, Any], program: Program, query: Mapping[str, Any], la
           supplied: Mapping[str, Any] | None = None, pinned: Mapping[str, str] | None = None,
           binding: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
           window_root: str | None = None, held: Sequence[str] | None = None,
-          outputs: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
-    """`registration.check` (R1-R7) by the verifier."""
+          outputs: Mapping[str, Mapping[str, str]] | None = None, day: int | None = None,
+          declarations: Sequence[Mapping[str, Any]] | None = None) -> Verdict:
+    """`registration.check` (R1-R7) by the verifier, with R2's declared day when it passes `day` and `declarations`."""
     log = list(log)
     py = R.check(rec, program, query, law, scheme, ports, leaf_layer, anchors, log, partition, work_table, registered,
-                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held)
+                 supplied, pinned, binding, outputs=outputs, schemas=schemas, window_root=window_root, held=held,
+                 day=day, declarations=declarations)
     got = lean("registration", {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, partition,
                                                   work_table, registered, supplied, pinned, binding, schemas,
-                                                  window_root, held, outputs),
+                                                  window_root, held, outputs, day, declarations),
                        "record": dict(rec)})
     if "codes" in got:
         got = {"ok": not got["codes"], "codes": got["codes"]}
@@ -316,10 +322,10 @@ def hello(own: Mapping[str, Any], received: str, coin_tree: Any, seen: Sequence[
 def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], program: Program, query: Mapping[str, Any],
            work_table: Mapping[str, Any] | None = None,
            closure: Mapping[int, Sequence[int]] | None = None) -> tuple[dict[str, Any], Verdict]:
-    """The challenger's draw by the verifier: the Lean's `Select.select` on `read`, the bytes of the challenger's
-    coins that the Python draw `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
+    """The challenger's sample by the verifier: the Lean's `Select.select` on `read`, the bytes of the challenger's
+    coins that the Python sample `python` (`service.select_draw`'s) read in order, under the Spec's selection rule (its
     `to_json`) over the population `program` and the check's `query`, with the work table and the closure map. The two
-    agree when the Lean draws the same object and reads exactly `read`; the sample of record is then `RECORD_VERDICT`'s. Where
+    agree when the Lean samples the same object and reads exactly `read`; the sample of record is then `RECORD_VERDICT`'s. Where
     they disagree, or the Lean refuses, the verdict fails with `DISAGREE` alone (the sample returned is Python's, and the
     caller refuses it)."""
     got = lean("select", {"rule": dict(rule), "program": codec.encode_program(program), "query": dict(query),

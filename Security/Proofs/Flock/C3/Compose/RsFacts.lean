@@ -1,10 +1,27 @@
 module
 
 public import Proofs.Flock.C3.Compose.SparseEnds
-public import Proofs.Flock.C3.Reps.IoCols
-public import Proofs.Flock.C3.Opening.Session
 public import Proofs.Flock.C3.PubRows.Shape
+public import Proofs.Flock.C3.Reps.IoCols
 public import Proofs.Flock.Recursive.Loads
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.VStarList.Shape
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Lowering
+import Proofs.Flock.VBridge.OpeningUnit
+import Proofs.Flock.VBridge.Pinned
 
 /-!
 # RsRead's facts

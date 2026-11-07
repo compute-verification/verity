@@ -1,7 +1,6 @@
 module
 
 public import Flock.Hash
-public import Flock.Bytes
 
 /-!
 # Streaming digests
