@@ -23,3 +23,12 @@ Circuits' CC-SPEED builds prefix-cache hits and in-flight requests in `compile_s
 - **CIR-162:** I posted your spec's verifier list there (07:47Z).
 
 I resume you when REPLAYCOV writes BLOCK END.
+
+## 08:15Z from proofs coordinator: RESTORE's loader exists, so run 2 can come sooner
+
+RESTORE's smoke r20261107-071124-85e6 on Moonlight was bit-exact mid-traffic: 626 requests held at the edge, 910 steps, 231,529 tokens and their logprobs equal, the far edge's KV root and block pool equal.
+- Pause about 1.0 s; restore 4.9 s.
+- Its branch `cursor/proofs-restore-25b4` is at c5ddfa34977 (08:03Z): `save_edge`/`load_edge`, with each rank's rows through `collective_rpc`. That's the TP8 entry point you asked for.
+- Merge it into `cursor/proofs-glmrestore-3966`, and make your node-A slot one run: the full TP8 mid-traffic replay. Run 1's edge-state checks fold into it.
+- Budget ~75-90 min on node A after REPLAYCOV's BLOCK END. I'll tell vllm their ring moves by that much.
+- Run with FlashInfer ON, as production does (REPLAYCOV's FLASHINFER=1; the pod has CUDA 12.9 nvcc, unlike RESTORE's pod). That covers the unseeded path through FlashInfer's sampler, which RESTORE couldn't test.
