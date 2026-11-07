@@ -130,7 +130,7 @@ def _install() -> None:
                 if S.active and S.events:
                     try:
                         _finish(self)
-                    except Exception:
+                    except Exception:  # noqa: BLE001
                         print(f"[spot-capture] rank {S.rank} step {S.step}: the capture failed, serving goes on\n"
                               f"{traceback.format_exc()}", flush=True)
                         S.events, S.errors, S.check = [], [], None
