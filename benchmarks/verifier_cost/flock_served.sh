@@ -60,7 +60,7 @@ if [ -n "$session" ] && [ -z "$layout" ]; then
   if command -v perf > /dev/null; then
     /usr/bin/time -v -o "$O/verify.time" perf record -F 49 -o "$S/perf.data" -- "${cmd[@]}" > "$O/verify.log" 2>&1 || true
     perf report -i "$S/perf.data" --stdio --no-children --sort symbol --percent-limit 0.3 2> /dev/null | head -400 > "$O/perf.txt" || true
-    perf script -i "$S/perf.data" -F time,sym 2> /dev/null | gzip > "$O/perf-samples.txt.gz" || true
+    perf script -i "$S/perf.data" -F time,ip,sym 2> /dev/null | gzip > "$O/perf-samples.txt.gz" || true
   else
     /usr/bin/time -v -o "$O/verify.time" "${cmd[@]}" > "$O/verify.log" 2>&1 || true
   fi
