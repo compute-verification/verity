@@ -112,13 +112,13 @@ verity/core/protocols/pouw/lean/check/PouwCheck/WindowSalt.lean -> verity/core/p
 verity/core/protocols/pouw/lean/commit/PouwCommit/Bindings.lean -> verity/core/primitives/randomness/Randomness/Domains.lean
 verity/core/protocols/pouw/lean/commit/PouwCommit/Coins.lean -> verity/core/primitives/randomness/Randomness/Domains.lean
 verity/core/protocols/pouw/lean/commit/PouwCommit/Draws.lean -> verity/core/primitives/randomness/Randomness/Domains.lean
-verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean -> verity/core/primitives/randomness/Randomness/Domains.lean
 verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean -> verity/core/primitives/identity/Identity/Tagged.lean
+verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean -> verity/core/primitives/randomness/Randomness/Domains.lean
 verity/core/protocols/pouw/lean/commit/PouwCommit/Rows.lean -> verity/core/primitives/randomness/Randomness/Domains.lean
 verity/core/protocols/pouw/lean/window/PouwWindow/Inputs.lean -> verity/core/primitives/randomness/Randomness/Domains.lean
 verity/core/protocols/pouw/lean/window/PouwWindow/Rounds.lean -> verity/core/primitives/randomness/Randomness/Domains.lean
-verity/core/protocols/pouw/lean/window/PouwWindow/Side.lean -> verity/core/primitives/randomness/Randomness/Domains.lean
 verity/core/protocols/pouw/lean/window/PouwWindow/Side.lean -> verity/core/primitives/identity/Identity/Tagged.lean
+verity/core/protocols/pouw/lean/window/PouwWindow/Side.lean -> verity/core/primitives/randomness/Randomness/Domains.lean
 verity/core/protocols/pouw/lean/window/tests/test_known_rows.py -> benchmarks/pouw/h1_lanes/run.py
 verity/core/protocols/pouw/tests/epoch_coins_vectors.py -> benchmarks/pouw/clear
 verity/core/protocols/pouw/tests/test_h1device.py -> benchmarks/hash/dither/h1u.cu
