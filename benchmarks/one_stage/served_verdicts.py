@@ -1,5 +1,5 @@
 """The verdicts on one served window (`served_verdicts.sh`): the window it audits, the subprotocols after
-sampled proofs, and the one record of every verdict (the block record).
+SPOT, and the one record of every verdict (the block record).
 
     served_verdicts.py window SERVE_DIR [--slots N] [--window K]
     served_verdicts.py gate [--gate CMD] [--lane vllm] [--main FILE]
@@ -37,7 +37,7 @@ circuit refuses a request carried across windows), at most ``--slots`` of them (
 earliest. ``--window K`` holds K to the same rules. Prints the pick (`pick`): ``{window, requests, users, steps,
 refused}``, which the run keeps in the serve dir's ``private/window.json``.
 
-``pieces``: each subprotocol after sampled proofs (`PIECES`: PoUW, PoUS, the bandwidth audit, the network certifier) runs
+``pieces``: each subprotocol after SPOT (`PIECES`: PoUW, PoUS, the bandwidth audit, the network certifier) runs
 its piece where one is named (``POUW_CMD``, ``POUS_CMD``, ``BANDWIDTH_CMD``, ``CERTIFIER_CMD``: a command run in the tree as
 ``bash -c CMD _ SERVE_DIR WINDOW DIR``, which writes its core answer to ``DIR/answer.json``), one at a time, each within
 ``<COMPONENT>_TIMEOUT`` (else ``PIECE_TIMEOUT``, default `PIECE_TIMEOUT`), else prints a ``MISSING`` line naming it, the
@@ -51,7 +51,7 @@ that audited another server than the node it ran on says so in ``DIR/served.json
 ``source`` ``fixture`` for an answer brought from a recorded run); one that names no server there leaves its answer about
 the node it ran on. ``--only`` and ``--skip`` (a component each, repeatable) run those pieces alone, or all but those.
 ``--product`` (default onsite; served_verdicts.sh passes its PRODUCT) is the product the run composes (`block_record.PRODUCTS`): onsite's
-every subprotocol, remote's sampled proofs and PoUW alone. A piece the product drops isn't run, whatever its command,
+every subprotocol, remote's SPOT and PoUW alone. A piece the product drops isn't run, whatever its command,
 and prints a ``DROPPED`` line naming it.
 
 ``gate``: before serving with H1's coins from infra's gate (``--gate``, default ``H1_GATE``): refused while the key's lane
@@ -89,11 +89,11 @@ the sampled calls' statements (``--statements``) and the window's live evidence 
 window meets the two premises of `Security`'s that no check here discharges, ``AcceptedLive`` and ``SaltIsLiveCoin``
 (`premises`): each ``{met, why}``, met only where this run's checks show it.
 
-``record``: sampled proofs' answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
+``record``: SPOT's answer from the records audit `prove_path/run.sh` (``PP_RECORDS=1``) kept under
 ``--sampled-proofs`` (its ``NAME`` dir: ``summary.json``, ``window/audit.json``, ``windows/rank0/registration.json``), read
 as `served_integrity.answer` reads it; each other subprotocol's from
 ``--pieces/<component>/answer.json`` (`piece_row`), else a ``missing`` row naming why. Each answer is about the server
-`piece_server` names: sampled proofs' the record's node, a piece's the one its ``served.json`` names, else the node it ran
+`piece_server` names: SPOT's the record's node, a piece's the one its ``served.json`` names, else the node it ran
 on, and the wipe's the one its ``served.json`` names. They go into the window report (``verdicts.json``, `row_of`'s rows,
 with each one's server) and from it the block record (``block-record.json``, `block_record.from_period`, held by
 `block_record.check`), which composes only the answers about the record's node and carries the others as ``elsewhere``;
@@ -104,7 +104,7 @@ the verdict is the block record's, which is the Lean ``onsite check`` or ``remot
 here, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line name ``pending``.
 The subprotocols are those of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
 product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and in no block record's
-``missing``, so remote's is ``pending`` with nothing missing when sampled proofs and PoUW accepted here, whatever the
+``missing``, so remote's is ``pending`` with nothing missing when SPOT and PoUW accepted here, whatever the
 onsite pieces. The report's ``composed`` gives that verdict with its reason (`said`), one clause
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
 (`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
@@ -143,10 +143,10 @@ for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interf
 REPORT_FORMAT = "verity/all-protocols-window/v1"
 #: the block record's verdict by the window report's name for it: ``-window/v1`` calls an undecided window pending
 WINDOW_VERDICT = {"undecided": "pending"}
-#: sampled proofs' owner, its row's
+#: SPOT's owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
-#: each subprotocol after sampled proofs, by its runner name: (its name, its component, its verifier's owner, what its piece
+#: each subprotocol after SPOT, by its runner name: (its name, its component, its verifier's owner, what its piece
 #: does), in the chain's order
 PIECES: dict[str, tuple[str, str, str, str]] = {
     "work": ("PoUW", "pouw", "compute-accounting",
@@ -859,7 +859,7 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
 
 
 def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
-    """Sampled proofs' row from the records audit kept under ``audit_dir`` (module docstring)."""
+    """SPOT's row from the records audit kept under ``audit_dir`` (module docstring)."""
     import served_integrity as SI
 
     reg = audit_dir / "windows" / "rank0" / "registration.json"
@@ -992,7 +992,7 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
            deferred: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
-    drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
+    drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; SPOT's
     answer is about ``node``, and a piece's that names no server isn't carried. ``deferred``: what the run left to a
     follow-on and why, which the report and the line carry."""
     from verity_e2e_demo import block_record as BR

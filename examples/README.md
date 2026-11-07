@@ -11,7 +11,7 @@ or `run.sh`.
 Remote Verity (`verity/remote/v0`, `Core.Remote` in `verity/core/protocols/remote/CoreRemote.lean`) is what the verifier
 establishes with no hardware of its own at the prover's site. It composes three protocols (`Core.Remote.components`):
 
-- integrity, by sampled proofs (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
+- integrity, by SPOT (`verity/sampled-proofs/v1`, in its one-stage form): the prover commits every value of
   a served window under hiding leaves, a live coin from the challenger samples proof blocks, the prover proves each sampled
   proof block in Flock `--zk`, and the Lean verifier checks each proof against the committed roots;
 - work, by PoUW's period check (`verity/pouw/period/v1`, onsite's work subprotocol too): the GPU's time is credited
@@ -27,7 +27,7 @@ guarantee assumes; each subprotocol states its guarantee in `Security/`, and the
 yet, so no demo's `proof` is past `none`. Its verifier, `remote check`, has no run of record yet; its first is due
 Wed 28 Oct, 11 AM PDT. `lifecycle/` is the only demo that steps through the whole remote composite, on CPU with a
 stand-in prover. Its demo is the vLLM demo (`verity demo vllm`): one served run of Llama-3.2-1B INT8 on one H200,
-sampled proofs and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs
+SPOT and PoUW on the served model, whose PoUW verdict is a development run that credits nothing; `h200/` runs
 remote's sampled-proofs half. The inference-only policy runs in `lifecycle/` only: no served run produces the declared
 division yet. Five other things are called "remote" (PoUB among them);
 `verity/core/protocols/remote/README.md`, "Which remote", lists them.
@@ -90,7 +90,7 @@ checks are `tools/verity/cli/verity_cli/examples.py`'s; a new role goes in its `
   replay bundle and a block record; `phases.sh` runs the sampled-proof-block proving, one phase a run, from the step's commit on
   the H200 to its sampled proof blocks proved. In its run of record, 8 proof blocks sampled by one live coin are each proved by
   Flock `--zk` and accepted by the Lean verifier, and a flipped bit is refused. It is not `placed`: the Lean verifier ran
-  on a CPU node beside the prover. It claims only sampled proofs: PoUS and network certification (onsite's
+  on a CPU node beside the prover. It claims only SPOT: PoUS and network certification (onsite's
   subprotocols), the memory wipe (onsite's) and the bandwidth audit over PoUS's store (neither composite's yet), exist
   here as a skeleton on fixture coins, not as runs, and nothing claims them.
 - `onsite_served/` (`run` `moved`, `proof` `none`): onsite's run configuration for the served window. One

@@ -1418,7 +1418,7 @@ def listed_ingress(members: Sequence[CS.Member], templates: Sequence[Sequence[An
     """The bits a record that lists its ``members`` declares as its window's ingress (``templates``: each ``(descriptor id,
     units)`` in the program's order, a template's units the members' from its first): each declaration's units times its
     port's row bits. The window's ingress is what its members read whole from rows before the window, committed there: the
-    link checks bind it to its writers' outputs (sampled proofs' wiring, ε_bind), so it is not the run's ingress (`Ingress`
+    link checks bind it to its writers' outputs (SPOT's wiring, ε_bind), so it is not the run's ingress (`Ingress`
     in a stated record, the ingress gates Lean's ``freeInputs`` reads) and leaves the run's count free (`input_count`).
     Refused (ValueError) where one names no template, reads outside its units or units no member holds, or a port that
     isn't an input row of every member holding those units, or is one a wire or a shared-row table fills (`CS.Member`'s

@@ -215,7 +215,7 @@ class LLM:
     * ``seed`` (int, default 0): the engine seed.
     * ``protocols`` (str or mapping): protocol options installed on the engine once it is built
       (:mod:`verity_vllm.protocols`), ``"pouw:<scheme>,pous:<scheme>"`` or ``{"pous": "<scheme>"}``; default none.
-      A set the options refuse raises ``ValueError`` before the engine is built.  Sampled proofs runs in the Commit stage
+      A set the options refuse raises ``ValueError`` before the engine is built.  SPOT runs in the Commit stage
       of a row, not here.  Settings an option takes from the engine are filled from this one after the build
       (`protocol_options.from_engine`), and one it can't fill there is refused by name: PoUW's H1
       (``protocols="pouw:eps1-sm120-h1fx1", protocols_config={"pouw": {"rows": T, "steps": S}}``) gets the engine's

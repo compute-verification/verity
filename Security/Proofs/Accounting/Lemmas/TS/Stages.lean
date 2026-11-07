@@ -3,7 +3,7 @@ module
 public import Definitions.Accounting.Guarantees.TS.Stages
 
 /-!
-# Sampled proofs under per-stage coins: lemmas
+# SPOT under per-stage coins: lemmas
 
 The statements of `Definitions.Accounting.Guarantees.TS.Stages` that are steps of its guarantees' proofs rather than
 guarantees. Each is a `def G : Prop` under the guarantees' namespace, proved by the `SecurityProofs` theorem of the same

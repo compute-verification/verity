@@ -1,6 +1,6 @@
 """The logical layer's objects: a Program, its values, its inputs, and the commitments the values sit under.
 
-The circuit is a `verity.ml.circuits` `Program`, the format the rest of Verity reads: the sampled proofs partition it into
+The circuit is a `verity.ml.circuits` `Program`, the format the rest of Verity reads: SPOT partitions it into
 proof blocks, PoUW's compiler rewrites its matmuls into tile units, the census counts it and memory accounting derives its
 requirement from it. It is Boolean, its semantics And, Xor and Not on bits, built constructively from registered
 Definitions (`verity/ml/circuits/PROTOCOL.md`):

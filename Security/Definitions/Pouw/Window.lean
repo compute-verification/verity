@@ -52,7 +52,7 @@ guarantee `audit_window_split_of_record` is stated over), on its own so that a g
   transcript whose inputs are the anchors' and whose outputs are the served leaves' words;
 * `ServedTie` (premise `δ_in`, open on main): the window accepts while its committed transcript isn't anchored and
   served with probability at most a term of the window's state;
-* the deployed sample, sampled proofs' service (`verity/core/protocols/pouw/window.py`): `subsetDraw`, one uniform `K`-of-`N`
+* the deployed sample, SPOT's service (`verity/core/protocols/pouw/window.py`): `subsetDraw`, one uniform `K`-of-`N`
   tile subset; `sessions`, `chunk` and `serviceLaw`, its rank-ordered sessions, each a call of the window whose units are
   the `N` tiles; `share` and `sessionLaw`, each session's own uniform law; `CopyClosed`, the unit sets that hold a tile
   in every session or in none; `UnitStmts.copies`, the tiles' statements read in every session, and `WrongCopyClosed`,
@@ -388,9 +388,9 @@ def ServedTie {Reg Tr : Type} (Lw : Reg → Law (WUnit n)) (sess : (c : Fin C) �
 
 end Window
 
-/-! ## The deployed sample: sampled proofs' service
+/-! ## The deployed sample: SPOT's service
 
-PoUW runs on sampled proofs' service (decision 102; `verity/core/protocols/pouw/window.py`): after the receipt the
+PoUW runs on SPOT's service (decision 102; `verity/core/protocols/pouw/window.py`): after the receipt the
 verifier samples one uniform `K′`-of-`N` subset of the window's equal tiles (`subset:K′`), and the service proves the sampled
 tiles in `⌈K′/cap⌉` sessions of `cap` instances, session `σ` holding the sampled indices of rank `σ·cap` to `σ·cap + cap − 1`
 in ascending order and padding with the filler tile `N − 1` (`instance_ts`). A session mixes tiles of every call, so the

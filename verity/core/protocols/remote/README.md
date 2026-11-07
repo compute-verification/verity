@@ -2,7 +2,7 @@
 
 The remote protocol audits a datacenter whose auditor has no devices at the site: the developer commits everything its
 hardware computes, and the auditor checks it from outside with live coins and a Lean verifier. It composes three
-subprotocols into one verdict over one commitment: sampled proofs (the committed values satisfy the registered circuit,
+subprotocols into one verdict over one commitment: SPOT (the committed values satisfy the registered circuit,
 except on few proof blocks), PoUW (the hardware's time went to the registered work) and the inference-only policy (the
 registered circuit is inference, not training).
 
@@ -56,13 +56,12 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
+| SPOT ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered work's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/core/protocols/pouw/lean/check`), onsite's work subprotocol too | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`, `protocol = tiedSameB "verity/remote/v0" tied [windows] components` over `components =
-[NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]`. The policy and sampled
-proofs commit to the run's record, which names the registered circuit; once the cases fit, two different records reject
+[NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]`. The policy and SPOT commit to the run's record, which names the registered circuit; once the cases fit, two different records reject
 remote whatever the subprotocols answer (`Core.Composition.same`). The period's commitment is the auditor's ledger, not
 the record, so it joins through a tie (`Core.Remote.windows`): every window of the period must name the policy's record
 as its Commit record (`windowRecords`, which `PouwCheck.Credit.commitOf?` reads), and a window on another record
@@ -89,8 +88,8 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
       inference-only policy's check.
    2. Only then does the challenger flip the coins that select the sample, so the partition is fixed before any coin.
    3. The developer proves each sampled proof block with Flock `--zk` behind the ZK server, and the Lean verifier
-      `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment and its sampled
-      proofs and receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
+      `flock-verify` checks each proof. PoUW's check (`pouw-check`) reads each PoUW period's commitment, proofs and
+      receipts, and credits the phase's work. No proof is retried, and a failed proof is a visible failure.
    4. The composition accepts only if every subprotocol accepts and the commitments match (the verdict, below), and
       accounting adds the phase's share (Accounting, below).
 4. **The verdict**, by the composition rule (`verity/core/protocols/composition/README.md`). The composite rejects if
@@ -99,7 +98,7 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
    outputs.
 5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
-   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`
+   (`Flock.Guarantees.IntegrityHorizon` for SPOT, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`
    for PoUW), and the overhead calculator turns them into overhead (see Results).
 
 ## The security argument, end to end
@@ -147,7 +146,7 @@ else is a theorem or a named gap.
 | The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `DampenerRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
-| Enforcement | Sampled proofs catch each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Nci.Assumptions.SampledDetection`, `Nci.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
+| Enforcement | SPOT catches each incorrect proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Nci.Assumptions.SampledDetection`, `Nci.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
 | The baseline | The data the registration names was public, not computed off the books before. | `Nci.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
 | Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Nci.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
 | Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `Nci.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
@@ -203,7 +202,7 @@ meet, V3 with those preconditions discharged by what `verify --zk` refuses, is n
 
 ### 3. The audit of each verification phase
 
-**Establishes.** Sampled proofs bound the incorrect proof blocks. PoUW establishes that the phase's credited live work is
+**Establishes.** SPOT bound the incorrect proof blocks. PoUW establishes that the phase's credited live work is
 at least (1 − ε) of the registered circuit's work, crediting only noised calls: an un-noised call has no live coin, so nothing forces
 its work. The composition accepts only if every subprotocol accepts and their commitments bind into one: any rejection rejects
 the whole, and nothing is retried.
@@ -224,7 +223,7 @@ The time credit adds the data sheet's rates.
 
 - Remote's rule, the composition's product rule `check`: `Properties.Composition.AcceptMeans`, **proved**. What it
   accepts fits its subprotocols, each accepts its own case, and the commitment binds their digests.
-- Sampled proofs: `Properties.SampledProofs.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
+- SPOT: `Properties.SampledProofs.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
   form (v2) ends, on its own run's verdicts.
 - PoUW's period credit: `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, `CheckedCreditPeriod`'s conclusion
   at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
@@ -251,7 +250,7 @@ expansion meets it at Γ·W gates and k = ⌊α_f·Γ·W⌋. `DampenerRemote` ta
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
 - *From which coins.* None. The check is deterministic, so it adds no failure probability of its own. What is to bind
-  it to the other subprotocols is a commitment to the registration PoUW and sampled proofs commit to; no composite rule
+  it to the other subprotocols is a commitment to the registration PoUW and SPOT commit to; no composite rule
   ties them yet.
 - *In the clear.* The check reads the inference partition and θ's provenance in the clear. Before a composite may run
   it, it needs a private form: the partition committed under hiding commitments, and compliance proved in zero
@@ -267,7 +266,7 @@ part 6's premises say why that shape trains little.
 **Lean, and how it discharges `CompliesRate`, link by link.**
 
 1. *Remote's verdict means the policy accepted the same registration.* **Open**: remote doesn't run the policy, and no
-   composite rule ties the policy's registration to the one sampled proofs and PoUW bind. The composition's proved
+   composite rule ties the policy's registration to the one SPOT and PoUW bind. The composition's proved
    property, `Properties.Composition.AcceptMeans`, makes a composite accept each subprotocol's accept, so this link
    needs the policy among remote's subprotocols, with that tie.
 2. *The policy's check accepts ⇒ `Baseline.evaluate` complies ⇒ `Desc.evaluate` complies.* The bridge `baseline_desc`
@@ -283,7 +282,7 @@ part 6's premises say why that shape trains little.
    bit-level expansion `Nci.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
    is open with links 1 and 2.
 5. *A block's effective fresh input:* k plus k_F, the bits incorrect proof blocks inject into it, plus k_a, the advice bits
-   its structure depends on. Sampled proofs bound the incorrect proof blocks and the advice's length is public, but no
+   its structure depends on. SPOT bound the incorrect proof blocks and the advice's length is public, but no
    statement bounds either per inference block yet: **open**.
 6. *The displayed bound reading the result instead of assuming `CompliesRate`:* **open** (part 6).
 
@@ -291,18 +290,17 @@ part 6's premises say why that shape trains little.
 
 **Establishes.** The verification phases' bounds pool over a monitoring period, even when the developer adapts each
 phase to the coins before it: the chance that some subprotocol of some phase accepts while its claim fails is at most the
-sum of their errors. For sampled proofs,
+sum of their errors. For SPOT,
 Pr[every phase accepted ∧ incorrect proof blocks ≥ ln(1/δ)/q_s] ≤ δ + Σ_t (ε_ks,t + ε_bind,t), q_s the sample's coverage.
 PoUW reports ε at δ_s = 2⁻⁴⁰ (`verity/core/protocols/pouw/credit.py`'s `DELTA`), the sample's error alone. Its pooled
-failure over n verification phases is δ_s + n·(δ_bind + δ_ks), PoUW's own binding and proof-system errors (not sampled
-proofs' ε_bind and ε_ks above). δ_ks rests on the undischarged `ServiceSound`, and δ_bind has no deployed bound, so
+failure over n verification phases is δ_s + n·(δ_bind + δ_ks), PoUW's own binding and proof-system errors (not SPOT's ε_bind and ε_ks above). δ_ks rests on the undischarged `ServiceSound`, and δ_bind has no deployed bound, so
 neither has a number yet. Over a week, a month and a year, at one verification phase an hour (n = 168, 730 and 8,766), the
 total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): for a year's total below 1%, δ_bind + δ_ks must stay below about 1.1·10⁻⁶ a phase.
 
 **Assumes.** Parts 1 to 4's assumptions.
 
 **Lean.** `Accounting.Guarantees.JointHorizonLive` (onsite's five audits in one adaptive game; the inference-only policy is not among them), `Flock.Guarantees.IntegrityHorizon`
-(sampled proofs) and `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
+(SPOT) and `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
 ### 6. The slowdown bound
@@ -322,7 +320,7 @@ older formula (below), and the Results table comes from a third route, the calcu
 
 $$ \eta + \delta + \delta_s + n\,(\varepsilon_{ks} + \varepsilon_{bind} + \delta_{ks} + \delta_{bind}) $$
 
-plus part 1's cryptographic terms: coverage's η, sampled proofs' δ with their per-phase knowledge-soundness and binding
+plus part 1's cryptographic terms: coverage's η, SPOT's δ with their per-phase knowledge-soundness and binding
 errors (part 5), and PoUW's δ_s = 2⁻⁴⁰ with its per-phase δ_ks and δ_bind. δ_ks and δ_bind have no number yet, so
 neither does the total. With e the per-phase sum, a week, a month and a year at one verification phase an hour give
 η + δ + 2⁻⁴⁰ + 168·e, + 730·e and + 8,766·e.
@@ -380,14 +378,14 @@ the local bound (an activation price, a joint price, a recoverable source), each
 - The block-description bound (`Verity.Guarantees.BlockDescription`) and the counting bound
   (`Verity.Guarantees.Counting`): **proved**.
 
-Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the composed soundness the bounds would rest on
+SPOT's accept rule and theorems, the Lean slowdown bounds, and the composed soundness the bounds would rest on
 (the last column is the chain's status in `benchmarks/prove_path/e2e_chains/README.md`):
 
 | Piece | Lean declaration | Lock | End to end |
 |---|---|---|---|
-| Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
-| Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
+| SPOT's accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
+| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | SPOT `--zk`: proved |
+| SPOT over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
 | The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each declared run within `Throttled`'s bound | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
@@ -411,7 +409,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   - `ServiceSound` and `PouwSound` are undischarged premises.
   - `JointHorizonLive` isn't instantiated with parts 2 and 3.
   - Today the parts compose by hand.
-- **The verifier's verdicts.** Sampled proofs' one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
+- **The verifier's verdicts.** SPOT's one-stage form is v2 (`verity/sampled-proofs/one-stage/v2`), which runs
   the proof check (`verity verify proof`, today's `flock-verify --zk`) itself, and the recursive form runs V*'s
   compiled check; v1, which takes the verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance
   to `SampledKSLiveV3`'s event.
@@ -419,7 +417,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
-  with a rule tying its registration to the one sampled proofs and PoUW bind; the policy's check accepting as a
+  with a rule tying its registration to the one SPOT and PoUW bind; the policy's check accepting as a
   property (`baseline_desc` is a proof lemma); bounds on k_F and k_a per inference block; and the bound reading a
   verdict's rate.
 - **The inference-only policy in zero knowledge.** Its check reads the partition into inference blocks in the clear;
@@ -451,7 +449,7 @@ read; each theorem's full hypotheses are its Lean, among them `TagsOkZHJ`, `Buil
 `DrawnLayer.JointSound` and `.Pins` (which `CircuitCredit` also reads), and the local bounds' structural
 hypotheses `HeldPriceAtMost`, `OverlapWeights` and `RequiresState`.
 
-Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
+SPOT (`benchmarks/prove_path/README.md`, "What an accepted audit means"):
 
 - `FlockSoundness.Assumptions.UniformRandomBytes`: the verifier's coins are uniform random bytes.
 - `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ` (`live-verifier`): the record the verifier reads is the one the
@@ -501,7 +499,7 @@ The slowdown, `DampenerRemote`:
 - In `Security/Definitions/Nci/Assumptions/Remote.lean`, three:
   - `Nci.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
     the time credit `CircuitCredit`, which reads the data sheet; no PoUW guarantee instantiates it yet.
-  - `Nci.Assumptions.SampledDetection`: sampled proofs catch each incorrect proof block with probability at least q,
+  - `Nci.Assumptions.SampledDetection`: SPOT catches each incorrect proof block with probability at least q,
     whatever came before.
   - `Nci.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
 - `Nci.Assumptions.ThetaRegistered` (`Security/Definitions/Nci/Assumptions/Baseline.lean`): the data the

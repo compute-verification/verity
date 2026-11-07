@@ -4,7 +4,7 @@ public import Proofs.Properties.Verity.Sampled.Project
 public import Proofs.Properties.Verity.SampledCoins
 
 /-!
-# Sampled proofs' coupling: the coin map
+# SPOT's coupling: the coin map
 
 The coin map the projection reads (`CoinMap`, in `Proofs.Properties.Verity.Sampled.Project`) writes the live audit's
 coins into the period's tape at the projection's stops. A stop is an opening's coin node, where the device flips the

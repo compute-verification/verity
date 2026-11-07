@@ -6,7 +6,7 @@ of record, from whose coins each rank's registration samples once (`sampled_proo
   (`benchmarks/live_challenger/auditor.py`'s reserve, admit and run, then `serve.py`, with no tunnel) on a scratch root under an
   LMS key made there at `LOCAL_PARAMS`, never under the run's out/: its ledger and the session's out/ are what the challenger host
   writes, and its key is this run's alone, so its samples show the path, not an auditor's coins; and since that key is
-  not at `Lms.deployed`, sampled proofs' v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Its pins log pins main's
+  not at `Lms.deployed`, SPOT's v2 refuses its audit's case (`OneStageZk.KEY_PARAMS`). Its pins log pins main's
   first-parent commit this tree is built on (`on_main`), as pin.sh pins the challenger host only to such a commit; its code is this
   tree's. ``loopback:HOST:PORT``: the same development session on the challenger party's host
   (`challenger_party.py`, `Loopback`), asked for its open and finish over loopback TCP. ``gate:USER@HOST``: the challenger host through infra's gate with the lane's gate key: `reserve` with this machine as its
@@ -616,7 +616,7 @@ class GateClient:
 
 
 class Loopback:
-    """The challenger party's host on this machine (`challenger_party.Host`, the ``host`` of sampled proofs' challenger)
+    """The challenger party's host on this machine (`challenger_party.Host`, the ``host`` of SPOT's challenger)
     at `address` (HOST:PORT): `Local`'s session, asked for over one JSON line each way. Its key comes
     from the party itself, so its coins are a development session's, not an auditor's (`simulated`)."""
 

@@ -6,7 +6,7 @@ public import Mathlib.Algebra.Order.Sub.Basic
 public import Proofs.Core.Circuit
 
 /-!
-# Sampled proofs' partitions as populations
+# SPOT's partitions as populations
 
 * `singleAssignment`: a partition's population is always single assignment: every computed gate is in exactly one unit,
   and input gates in none.
@@ -15,7 +15,7 @@ public import Proofs.Core.Circuit
 * `ordered_of_inLayoutOrder`: units that are intervals of gates numbered in layout order, as `Q_call` v1 cuts them, are
   ordered.
 * `wrong_eq`, **the bridge**: with every value carried in `W` bits, a unit is wrong in the population exactly when it is
-  wrong in the partition (`correct_iff`), so the population's hypothesis `|wrong| ≤ m` is sampled proofs' guarantee.
+  wrong in the partition (`correct_iff`), so the population's hypothesis `|wrong| ≤ m` is SPOT's guarantee.
 * `not_acyclic_of_sandwich`, **what fails**: a unit holding a gate before and a gate after a gate of another unit, on
   one path of wires, makes a cycle. `Q_word` v1 cuts such units: it packs a Call's returned gates into output units in
   return order, so a chain `g₁ → g₂ → g₃` returned as `[g₁, g₃, g₂]` at 8 bits a gate and `X = 16` puts `g₁` and `g₃` in

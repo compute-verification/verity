@@ -183,7 +183,7 @@ def test_a_regime_table_with_a_stray_key_or_a_base_loop_is_refused():
         envelopes.regime(REG.override({"regime.onsite-links.form": "widths"}), "onsite-links")
     with pytest.raises(ValueError, match="wipe per"):
         envelopes.regime(REG.override({"regime.onsite.per": "rack"}), "onsite")
-    with pytest.raises(ValueError, match="sampled proofs need"):
+    with pytest.raises(ValueError, match="SPOT needs"):
         Detection(1, 3600, sampled=True)
 
 
@@ -383,7 +383,7 @@ def test_every_uncertified_term_is_keyed_by_the_route_it_escapes_by():
 
 def test_pouws_delta_splits_into_coins_and_cryptography():
     """`p = δ_s + δ_bind + δ_ks` per window, by Markov at `ε'`: the coins' share and the cryptography's add to the
-    theorem's `δ = p/ε'` (2.7e-8 at `p = 3 · 2⁻⁴⁰`, `ε' = 10⁻⁴`), and sampled proofs add their escape bound's `δ`."""
+    theorem's `δ = p/ε'` (2.7e-8 at `p = 3 · 2⁻⁴⁰`, `ε' = 10⁻⁴`), and SPOT adds its escape bound's `δ`."""
     ctx = context("reference-h200")
     remote, sampled = envelopes.regime(REG, "remote"), envelopes.regime(REG, "remote-sampled")
     d = remote.delta(ctx)

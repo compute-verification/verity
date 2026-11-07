@@ -12,9 +12,9 @@ An adapter is one module of this package (`sampled_proofs`, `pous`, `pouw`) that
   settings that select different kernels;
 * optionally ``EXECUTES: tuple[str, ...]``: the sites where the option replaces the computation rather than wrapping
   it (PoUW: ``LinearBase.quant_method.apply``).  A site has at most one executor, innermost; the others wrap it from
-  outside (`protocol_options.SITES`).  What sampled proofs traces an executed site as is not the adapter's to say: it
+  outside (`protocol_options.SITES`).  What SPOT traces an executed site as is not the adapter's to say: it
   is the protocol package's circuit (`protocol_options.CIRCUITS`, `protocol_options.traced_as`), and an executor whose
-  scheme has none is refused beside sampled proofs, since it would be traced as the stock computation.  An adapter
+  scheme has none is refused beside SPOT, since it would be traced as the stock computation.  An adapter
   whose sites depend on the scheme defines ``executes(scheme) -> tuple[str, ...]`` instead (PoUW's H1 executes nowhere);
 * optionally ``keeps_weight_copy(scheme, ctx) -> bool``: True when the installed option keeps a weight-derived copy
   (PoUW's prepared int7 or FP10 operands) resident across forwards.  With POUS enabled, the selector refuses such an

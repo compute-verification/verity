@@ -10,7 +10,7 @@ import Mathlib.Data.EReal.Inv
 /-!
 # Weight exfiltration before detection: the windowed audit as a game
 
-A lab serves its model through sampled proofs. The adversary controls the serving stack and knows the weights. The
+A lab serves its model through SPOT. The adversary controls the serving stack and knows the weights. The
 deployment is a sequence of audit windows (a request, or a batch of them). In each window the prover commits the
 window's values; the commitment fixes which units are wrong, and so what the window's egress carries beyond the honest
 run. Then the challenger flips the window's coins, live and fresh, and a sampled incorrect proof block fails visibly. The egress of

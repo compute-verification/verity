@@ -35,7 +35,7 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# Sampled proofs' sample in the claims' slots: it misses proof blocks no more often than `P_a` (`SampledProofs.Slots.select`)
+# SPOT's sample in the claims' slots: it misses proof blocks no more often than `P_a` (`SampledProofs.Slots.select`)
 
 The property of the challenger's sample as the claims read it (`Deploy.checked`, `Claims.Sampling.KS`'s `DrawLaw`): the
 sample `Slots.select` makes from `L` uniform bytes under a Spec's selection rule, over the verifier's own program and query,

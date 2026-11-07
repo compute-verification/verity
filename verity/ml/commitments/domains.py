@@ -168,7 +168,7 @@ RANDOMNESS_SHARD = "verity/randomness/shard/v2"
 RANDOMNESS_DERIVE_V1 = "verity/randomness/derive/v1"
 RANDOMNESS_STREAM_V1 = "verity/randomness/stream/v1"
 
-# Shared: sampled proofs' one-stage statement, registrations and partitions; Flock's public inputs and descriptors
+# Shared: SPOT's one-stage statement, registrations and partitions; Flock's public inputs and descriptors
 ONE_STAGE_PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 ONE_STAGE_PROTOCOL_V2 = "verity/sampled-proofs/one-stage/v2"
 ONE_STAGE_SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
@@ -213,7 +213,7 @@ WORD_CODEC_KV = "verity/word-codec/kv/v0"
 # Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 LMS_I = "verity/lms/v0/I"
 
-# Not yet read from here: sampled proofs and the proof system's challenger
+# Not yet read from here: SPOT and the proof system's challenger
 CHALLENGER_KEY = "challenger-key/v1"
 COIN_TREE_HM96_SHA512 = "coin-tree/hm96-sha512/v2"
 CHALLENGER_AUDITOR_RECORD = "verity/challenger-auditor-record/v1"

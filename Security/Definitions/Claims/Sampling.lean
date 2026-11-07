@@ -5,7 +5,7 @@ public import Definitions.Claims
 /-!
 # Claims: the sampling compiler (frozen before any proof work)
 
-The claims block of sampled proofs (`verity/core/protocols/sampled_proofs/`), one-stage sampling, on the
+The claims block of SPOT (`verity/core/protocols/sampled_proofs/`), one-stage sampling, on the
 shared definitions of `Definitions.Core.Interaction`, in the template's eight items and the README glossary's terms. Parametric in
 the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
 the code side's.

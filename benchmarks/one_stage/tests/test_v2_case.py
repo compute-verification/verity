@@ -1,4 +1,4 @@
-"""v2_case.py: sampled proofs v2's case of a served window from its kept files. The rebuild reads what a served run's
+"""v2_case.py: SPOT v2's case of a served window from its kept files. The rebuild reads what a served run's
 ``m0/compose.log`` (``fixtures/served-window-m0``, a served H200 run's) records, and the case is written private as
 `composite.py` reads it, or, when a blob has no file, only ``missing.json``, which `composite.py` leaves out."""
 

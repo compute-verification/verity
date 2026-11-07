@@ -1,6 +1,6 @@
 /-
 Onsite Verity (`verity/onsite/v0`): remote Verity's accounting with the verifier's hardware at the site, so it also
-accounts for space, bandwidth and communication. Its subprotocols are integrity by sampled proofs
+accounts for space, bandwidth and communication. Its subprotocols are integrity by SPOT
 (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`, in the form its params name: one-stage v2's audit on
 the proofs themselves, or the recursive audit, V*'s compiled check run on the recursive session's parts, each on the
 blobs the caller hands in; one-stage v1, whose verdicts are the evidence's, is refused), the
@@ -14,7 +14,7 @@ by the remote bandwidth audit's P2 session on PoUS's store (`RemoteAudit.P2Proto
 `K` on what left the site), and the wipe by the memory challenger's streamed-label wipe of the period
 (`MemoryChallenger.WipeProtocol.protocol`, `verity/wipe/v0`). `Core.Composition.tiedSameB` composes them on the caller's
 blobs: every subprotocol accepts or onsite doesn't, and any subprotocol's rejection rejects onsite whatever the others
-answer. The policy's commitment and sampled proofs' are the run's registration record (in either form, the one-stage
+answer. The policy's commitment and SPOT's are the run's registration record (in either form, the one-stage
 one), and both must commit to the same one; every window of the period must name that record as its Commit record,
 remote's tie (`Core.Remote.windows`). Two records reject onsite whatever the subprotocols answer. PoUS and the remote
 bandwidth audit must also be on one store (`store`): two stores reject onsite unless it rejects already.
@@ -64,7 +64,7 @@ def components : List BlobProtocol :=
   [NetworkCheck.Period.protocol, NciCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
     RemoteAudit.P2Protocol.protocol, VStar.Recursive.Sampled.protocol, MemoryChallenger.WipeProtocol.protocol]
 
-/-- The subprotocols that must commit to one record: the policy and sampled proofs. -/
+/-- The subprotocols that must commit to one record: the policy and SPOT. -/
 def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
 /-- PoUS and the remote bandwidth audit on one store: the root of `C*` PoUS's setup published (its commitment's `root`)
@@ -119,7 +119,7 @@ private def allRefused : Answer := answer (components.map refused)
     [refused SampledProofs.OneStageZk.protocol, refused MemoryChallenger.WipeProtocol.protocol])).reason ==
   some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
 -- one-stage v1, whose verdicts are the evidence's, is refused by name: a one-stage statement naming no proofs is v1's,
--- and onsite rejects on it with sampled proofs' refusal (`VStar.Recursive.Sampled.V1_REFUSED`)
+-- and onsite rejects on it with SPOT's refusal (`VStar.Recursive.Sampled.V1_REFUSED`)
 private def v1 : Answer := answer (components.map fun P =>
   if P.id == VStar.Recursive.Sampled.protocol.id then { refused P with params := "{\"form\":\"one-stage\",\"law\":{}}" }
   else refused P)
@@ -127,7 +127,7 @@ private def v1 : Answer := answer (components.map fun P =>
 #guard (v1.reason.map (contains · (s!"verity/sampled-proofs/v1 reject: params: the parameters name no proofs: " ++
   VStar.Recursive.Sampled.V1_REFUSED))).getD false
 
--- the policy and sampled proofs committing to one record leave each subprotocol to answer as itself; two records
+-- the policy and SPOT committing to one record leave each subprotocol to answer as itself; two records
 -- reject onsite, naming both, whatever the subprotocols answer
 private def record (p : String) : ByteArray :=
   ("{\"format\":\"verity/registration/v1\",\"law\":{},\"partition\":\"p\",\"population\":1,\"program\":\"" ++ p ++

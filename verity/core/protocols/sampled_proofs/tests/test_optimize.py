@@ -64,7 +64,7 @@ def test_density_bound_is_above_core_harm_bound():
 
 
 def test_density_bound_is_its_exact_value_rounded_up():
-    """`density_bound`'s float is at least `density_exact`, Lean's rational (the sampled proofs service's `harm_bound`
+    """`density_bound`'s float is at least `density_exact`, Lean's rational (the SPOT service's `harm_bound`
     difftest holds the two equal), and within 2^-18 of it unless delta is within 2^-40 of 1, where the budget's 2^-60
     is most of ln(1/delta)."""
     assert ln_upper(Fraction(1, 2)) == Fraction(3196577161300663915, 2 ** 62)

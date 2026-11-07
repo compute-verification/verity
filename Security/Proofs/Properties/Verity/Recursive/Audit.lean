@@ -41,9 +41,9 @@ import Proofs.Flock.Recursive.FirewallZK
 import Proofs.Flock.Recursive.KSProved
 
 /-!
-# The recursive audit over sampled proofs' recursive form
+# The recursive audit over SPOT's recursive form
 
-`Flock.Guarantees.RecursiveAuditC3` is sampled proofs at the recursive configuration, the sample checked by V\*'s
+`Flock.Guarantees.RecursiveAuditC3` is SPOT at the recursive configuration, the sample checked by V\*'s
 compiled check (`verity/sampled-proofs/recursive/v1`, the recursive form of onsite's and remote's sampled-proofs
 component), at every composite, with zero knowledge (`RecursiveFirewallPrivate`).
 
@@ -133,10 +133,10 @@ theorem calls_lam (q : Dep) {x : Msg} (h : q.RunAccepts x) :
       { deployedB q.b with tr := recTr q.aux q.nOf q.hd q.recRest } (DeployedR.layR OpenRows.elemR)
       (boundAt q.wE q.w).IVStar FlockDeploy.sha512 x ps, hcap⟩
 
-/-- **Sampled proofs at the recursive configuration, at the deployment `q` and the verdict `Acc`**: for decoders meeting
+/-- **SPOT at the recursive configuration, at the deployment `q` and the verdict `Acc`**: for decoders meeting
 the list-decoding spec, at every composite `k` (as `Verity.SoundnessOf` quantifies it), the parameters `θ`, the
 committed files `F`, the commitment `c`, a strategy `σ` and its recursive session `S` at `k` (`SessionIn`), the
-probability that `Acc` at `k` holds of the play's outcome while sampled proofs' claim at `k` fails on the extracted
+probability that `Acc` at `k` holds of the play's outcome while SPOT's claim at `k` fails on the extracted
 transcript is at most `Dep.errAt` at `S`, the call bounds `nI₀`, `vS₀` and `λ = 135.7`. Its
 hypotheses are `sampledProofsRecursive`'s: `K₀` covers the claim's `ε` share and the sample misses any `K₀` units with
 probability at most `δs`; the vocabulary's extractor is the recursive configuration's (`Dep.extract`); the reading
@@ -167,7 +167,7 @@ def SampledProofsRecursiveAt
     Game.prob (fun o => Acc V k o ∧ ¬ V.Holds k θ F c σ .sampled o) (V.game θ F c) σ ≤
       q.errAt V S collOf dColl nI₀ vS₀ δs 135.7
 
-/-- **Sampled proofs at the recursive configuration, at the verdict `Acc`**: `SampledProofsRecursiveAt` at every
+/-- **SPOT at the recursive configuration, at the verdict `Acc`**: `SampledProofsRecursiveAt` at every
 deployment `RecursiveKS` is stated at, at every composite. -/
 def SampledProofsRecursive
     (Acc : ∀ {ι : Type} {d : Device ι} {α : Type} [Fintype α], Vocab d α → Verity.Registration.Composite →
@@ -189,7 +189,7 @@ theorem sampledProofsRecursive_at (q : Dep)
     (fun _ h => (calls_lam q h).2.2.1) (fun _ h => (calls_lam q h).2.1) (fun _ h => (calls_lam q h).2.2.2) V k θ F c
     σ S readX collOf dColl K₀ δs hK₀ hdraw hX hread hcoll hlive
 
-/-- **`RecursiveKS` gives sampled proofs at the recursive configuration.** -/
+/-- **`RecursiveKS` gives SPOT at the recursive configuration.** -/
 theorem sampledProofsRecursive_of_ks (hKS : Flock.Guarantees.RecursiveKS) : SampledProofsRecursive RecVerdict :=
   fun b aux nOf hd recRest decI decO =>
     sampledProofsRecursive_at (Dep.deployed b aux nOf hd recRest decI decO) (hKS b aux nOf hd recRest)
@@ -198,10 +198,10 @@ end Verity.Recursive
 
 namespace Flock.Guarantees
 
-/-- **The recursive audit**: (i) sampled proofs at the recursive configuration (`SampledProofsRecursive` at the
-recursive configuration's verdict `RecVerdict`), at every composite `k`: wherever sampled proofs' case in what the
+/-- **The recursive audit**: (i) SPOT at the recursive configuration (`SampledProofsRecursive` at the
+recursive configuration's verdict `RecVerdict`), at every composite `k`: wherever SPOT's case in what the
 prover sent `k` names the recursive form, V\*'s compiled check (`verity/sampled-proofs/recursive/v1`), the probability
-that the play is accepted while sampled proofs' claim fails on the extracted transcript is at most
+that the play is accepted while SPOT's claim fails on the extracted transcript is at most
 `δs + E_ξ[ksAt] + √(min(bits, 2n)·E[bindBudget]/2^256)`, `n` the units, where the finders built from the strategy
 meet `FinderCR`, and `⊤` elsewhere; and (ii) zero knowledge, `RecursiveFirewallPrivate`.
 

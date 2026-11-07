@@ -1,4 +1,4 @@
-"""Sampled proofs as a protocol option: the Commit's own commitment and replay, declared here, with no hooks of its own.
+"""SPOT as a protocol option: the Commit's own commitment and replay, declared here, with no hooks of its own.
 
 Its scheme, ``rows-sha512``, names what the Commit commits under: hm96-sha512 rows in frame-v3-sha512 trees, 64-byte run
 roots (`verity_vllm.commit.step_rows`), over the required values of the row's Program, and the replay's sample: up to
@@ -31,7 +31,7 @@ def schemes() -> tuple[str, ...]:
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     if ctx.stage != "commit":
-        return ("sampled proofs runs in the Commit stage of a row (`verity-vllm row`, declared by the target's `protocols`); "
+        return ("SPOT runs in the Commit stage of a row (`verity-vllm row`, declared by the target's `protocols`); "
                 "verity_vllm.LLM commits nothing",)
     if scheme == RECORDED:
         return (f"{RECORDED} (SHA-256, 32-byte roots) is kept only to read recorded runs: a Commit commits under "
@@ -40,7 +40,7 @@ def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
 
 
 def requires_build(scheme: str, ctx: Context) -> bool:
-    """Sampled proofs verifies the Program emitted by the row's Build."""
+    """SPOT verifies the Program emitted by the row's Build."""
 
     return True
 

@@ -1,5 +1,5 @@
 /-
-Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v1's audit
+SPOT's recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v1's audit
 (`SampledProofs.OneStage.checkLive`) with its one verdict of record computed by V*'s compiled check, the recursive
 verifier the auditor runs (`flock-verify verify --zk` once per V* part with that part's recursive inputs), on the blobs.
 

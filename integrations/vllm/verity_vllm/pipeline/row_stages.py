@@ -68,7 +68,7 @@ class SingleRow(Row):
                  build: BuildConfig, match: MatchConfig, commit: CommitConfig, protocols: tuple[str, ...] | None = None):
         super().__init__(row=row, role=role, repo=repo, rev=rev, stages=stages, env=env, proc="row_pod")
         self.gpu_util, self.cb, self.cm, self.ck_ = gpu_util, build, match, commit
-        self.protocols = protocols            # the workload's protocol set beside sampled proofs (protocol_options.at_row), None by default
+        self.protocols = protocols            # the workload's protocol set beside SPOT (protocol_options.at_row), None by default
         self.trap = False
         self.config_run = commit.config_run == "1"
         self.replay_pending = False

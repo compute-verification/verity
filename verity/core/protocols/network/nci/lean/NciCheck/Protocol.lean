@@ -18,7 +18,7 @@ zero-knowledge, so they compose it only as a stated exception, which v1, the pri
 and reads no coins: it answers from the declared circuit, the declared division and the
 registered information it is handed, and is never undecided.
 
-Its case splits the check's instance and trusted input as sampled proofs' one-stage audit splits its own
+Its case splits the check's instance and trusted input as SPOT's one-stage audit splits its own
 (`SampledProofs.OneStage`):
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `alpha` (`α` as `[num, den]`), `gamma`
@@ -27,7 +27,7 @@ Its case splits the check's instance and trusted input as sampled proofs' one-st
   function's `[[name, type], ...]`, which the descriptor does not carry) and `program` (the declared circuit, a
   `verity-ir/descriptor/v1` Program, as text);
 * **commitment**: the run's own registration record, canonical JSON, an object, fixed before the run: the record whose
-  digest sampled proofs' one-stage audit commits to. Its digest is `SHA-512(format || 0 || canon(record))`
+  digest SPOT's one-stage audit commits to. Its digest is `SHA-512(format || 0 || canon(record))`
   (`NciCheck.Baseline.digest`, as one-stage's). Its `program` must be the declared circuit's SHA-512 (`names`), and
   θ's provenance reads the roots its `registered` entries give the program function's parameters;
 * **evidence**: canonical JSON with exactly the keys `owner` (the declared division: per root node of the declared
@@ -131,8 +131,7 @@ circuit's gates. -/
 def reportOf (out : Json) : Json :=
   Json.mkObj [("blocks", Baseline.getD out "ius"), ("gates", Baseline.getD out "gates")]
 
-/-- The run's record names the declared circuit: its `program` is the circuit's SHA-512 (`Prog.sha512`), what sampled
-proofs' one-stage audit asks of its own record and program (R2-program). θ's provenance asks it only of a case with
+/-- The run's record names the declared circuit: its `program` is the circuit's SHA-512 (`Prog.sha512`), what SPOT's one-stage audit asks of its own record and program (R2-program). θ's provenance asks it only of a case with
 registered information; here every case is bound to its circuit. A program that doesn't decode is left to the check,
 which refuses it (`program`). -/
 def names (p : Params) (c : Commitment) : Bool :=

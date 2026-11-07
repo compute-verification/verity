@@ -9,7 +9,7 @@ public import Definitions.Core.Partition
 A period is one window of one node's run, over one circuit (`Verity.Circuit`, core's) and one device
 (`Accounting.Device`, the device model). Five audits decide it, each separately, on its own coins (`Audit`):
 
-* sampled proofs, on the integrity of the circuit's committed transcript: at most a share `ε` of the units of its
+* SPOT, on the integrity of the circuit's committed transcript: at most a share `ε` of the units of its
   partition are wrong (`Verity.Partition.wrong`);
 * PoUW, on work: the compute account did at least `W` of work at price `p`;
 * PoUS, on space: the capacity account held at least `S` bits of device memory on average;
@@ -37,7 +37,7 @@ namespace Accounting
 
 /-- The audits that decide a period, one per protocol. -/
 inductive Audit
-  /-- sampled proofs: the integrity of the circuit's committed transcript -/
+  /-- SPOT: the integrity of the circuit's committed transcript -/
   | sampled
   /-- PoUW: work -/
   | pouw

@@ -20,7 +20,7 @@ uv run --directory examples/lifecycle pytest tests/test_lifecycle.py     # hones
 (`SampledProofs.OneStage`). `prove(statement, witness) -> proof` returns the sampled proof block's openings, and
 `verify(statement, proof) -> verdict` checks them against the commitments and re-evaluates the unit's circuit in the clear.
 It is sound for the example and not zero-knowledge, though its answer carries the id both composites run for integrity,
-sampled proofs (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`); Flock's zero-knowledge proofs behind the ZK
+SPOT (`VStar.Recursive.Sampled`, `verity/sampled-proofs/v1`); Flock's zero-knowledge proofs behind the ZK
 server replace it (`verity/ml/flock/`, `verity/core/service/flock/`). Everything else is the repository's own code, as
 (b) says.
 
@@ -65,7 +65,7 @@ chained through the state wire. The monitoring period is three execution phases 
    parse it), `prefix` (it doesn't extend the circuit so far), `placement-off-layout` (another head, or a leaf no entry
    holds yet), `placement-auditor`, `placement-kind`, `placement-capacity`, `record`. The record binds the previous
    record, the placement, the block's Program digest and its values' root, all before any coin.
-5. **Audit of declaration k.** After the `Declare`, the verifier flips its live coins and sampled proofs' `draw_first`
+5. **Audit of declaration k.** After the `Declare`, the verifier flips its live coins and SPOT's `draw_first`
    picks subset:K′ of the block's units, at PoUW's `k_prime` for ε = 1/2, δ = 1/4 (`Draw`). The developer proves each
    sampled proof block (`Proofs`: the stand-in), whose statement reads three commitments: the block's row, the unit's input state
    (the row before, the previous block's last row, or the registered initial state), and theta. Onsite, the certifier's signed view
@@ -82,7 +82,7 @@ chained through the state wire. The monitoring period is three execution phases 
    into inference blocks, one per request (19,620 gates reading 48 bits of fresh input: its input and the state word),
    within Γ = 2^15 gates and α = 1/256 fresh-input bits per gate, with theta registered. Each subprotocol answers in
    `Core.Protocol`'s shape, and the composite is the composition's rule and binding over exactly its subprotocols, after
-   its record tie: the subprotocols it ties (remote all three, onsite the policy and sampled proofs) committed to one
+   its record tie: the subprotocols it ties (remote all three, onsite the policy and SPOT) committed to one
    record, or it rejects (`Core.Composition.same`).
 6. **Accounting** (`account`). The chain from the registration through every record, each declaration's composite, the
    period's verdict by the same rule, the credited AND gates (PoUW's grid point at or below the real units, fillers
@@ -133,7 +133,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
 | `unreported`: one request served and left out of the advice | operation | onsite: the certifier's count; remote: accepted, uncredited |
 | `advice-cap`: 33 bits of advice | declaration | refused `advice-cap` |
 | `recommit`: a second commitment after the sample | declaration | refused `recommit` |
-| `wrong-value`: every output of block 2 off by one | audit | sampled proofs, and PoUW, which reads it (onsite also the I/O check) |
+| `wrong-value`: every output of block 2 off by one | audit | SPOT, and PoUW, which reads it (onsite also the I/O check) |
 | `io-mismatch`: the wire carries other outputs than the committed ones | audit | the certifier's frames, onsite |
 | `lost-theta`: an answer with a row that isn't theta's | audit | PoUS, onsite |
 | `off-node`: theta fetched from elsewhere, 3 ms a round trip | audit | the bandwidth audit, onsite |
@@ -211,7 +211,7 @@ The deviations, one or more a phase, each refused or rejected (`tests/test_lifec
   credited units): 1.0 % over the three declarations, 10^-6017 over a week of declarations like these. The theorem from
   a declaration's audit to the period's is the layer the modular math still needs.
 - **Per-declaration subprotocol checks don't exist yet.** PoUW's `core_check` and `period_check`, and PoUS's, the bandwidth
-  audit's and the wipe's verifiers take whole-run cases; the example writes one answer each a declaration. Only sampled proofs samples from the execution
+  audit's and the wipe's verifiers take whole-run cases; the example writes one answer each a declaration. Only SPOT samples from the execution
   block; the memory challenger samples theta rows.
 - **The advice is charged but the toy's circuit doesn't depend on it beyond the count.** Batching enters B only as
   validation; a batched matmul would make B's output depend on it.

@@ -19,7 +19,7 @@ Stated, not proved: the order is statement, review, card, then proof, so `lean-a
   prover's registration sampled independently, `η` the sample's distance from that product on `𝓑`, `κ_c + g_c(state)`
   call `c`'s knowledge bound in a compiled table's shape, `coll(R, τ)` the calls' `g_c` summed along the window's run
   (`Pouw.Window.coll`), and `δlink_c(R, τ)` call `c`'s binding error in the window at the window's state.
-* `ServiceEscapes`: the deployed sample, sampled proofs' service, is within `η = 0` of its sessions' own laws on the
+* `ServiceEscapes`: the deployed sample, SPOT's service, is within `η = 0` of its sessions' own laws on the
   copy-closed sets, so `WindowEps` reads it with each session a call.
 
 Knowledge soundness enters at its largest call's constant: whatever the sample, the rule picks one unit, of one call,

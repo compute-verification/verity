@@ -1,6 +1,6 @@
 """`IntegrityProfile`: the audit's output, bounds on the incorrect proof blocks of a partition, per stratum, at `delta`.
 
-An audit protocol (one-stage, sampled proofs) produces it: the facts checked exhaustively, and the verifier's sampling
+An audit protocol (one-stage, SPOT) produces it: the facts checked exhaustively, and the verifier's sampling
 design (decision 43) with its failure probability, from which the bounds on incorrect proof blocks follow (`bound`, `stratum_bounds`).
 It counts incorrect proof blocks and weights nothing.  Applications consume it without importing the protocol that produced it:
 each weights incorrect proof blocks by what one costs it, through the generic weighted bounds (`harm_bound`, `worst_case`), and
@@ -9,7 +9,7 @@ union counts it once.
 
 The sampling design is stated over named levels of a partition hierarchy (`verity.ml.circuits.partition.Level`): each level's members
 partition the members of the level above, and a level is either sampled (`Bernoulli`, `Subset`, `Stratified`) or only
-groups.  The names are the producer's labels (sampled proofs' one-stage profile is one level "unit"); the profile
+groups.  The names are the producer's labels (SPOT's one-stage profile is one level "unit"); the profile
 carries samples, never roles.
 """
 

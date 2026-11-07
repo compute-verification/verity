@@ -1,4 +1,4 @@
-"""`pouw:ncp-v2` beside sampled proofs, end to end on a small model (CPU).
+"""`pouw:ncp-v2` beside SPOT, end to end on a small model (CPU).
 
 A two-request Program, lowered at its PoUW site by the Build's `pouw_circuit.lower`:
 Embedding → RMSNorm → up_proj (the PoUW linear, 64 → 16) → logits → TokenSelect, over a 16-token prefill and one decode
@@ -18,7 +18,7 @@ template by the IR reference, and each sampled Y strip linked to the weight side
   and an A strip that is not the quantized input are each rejected, each committed by a prover that commits and opens its
   wrong values and recomputes its root.
 - Without the delegate the PoUW rows are not evaluable, so the run fails closed.
-- Every other PoUW scheme stays refused beside sampled proofs.
+- Every other PoUW scheme stays refused beside SPOT.
 """
 from __future__ import annotations
 

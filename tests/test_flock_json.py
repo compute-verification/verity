@@ -1,4 +1,4 @@
-"""C-Flock's Lean, sampled proofs' and the proofs of `Verity`'s properties read JSON only through `Flock.JsonParse.parse`,
+"""C-Flock's Lean, SPOT's and the proofs of `Verity`'s properties read JSON only through `Flock.JsonParse.parse`,
 the total parser the kernel can evaluate.
 
 `Lean.Json.parse` is a `partial def`, an opaque constant to the kernel, so no proof can show that a text it reads parses;

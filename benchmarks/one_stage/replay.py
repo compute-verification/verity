@@ -1,4 +1,4 @@
-"""Replay every recorded one-stage run through sampled proofs' Lean protocol and the current Python, against the verdict the
+"""Replay every recorded one-stage run through SPOT's Lean protocol and the current Python, against the verdict the
 run recorded.
 
     python benchmarks/one_stage/replay.py --index INDEX.json --runs DIR [--fetch] --lean EXE --out DIR [--only RUN ...]

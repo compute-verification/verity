@@ -1,7 +1,7 @@
 """`protocol_options.pouw_h1`: each served int8_exact linear call is a Program on bits that `pouw.circuit.compile` takes to
 H1 tile proof blocks, every proof block a full 32 x 32 grid at decode's one row, a partial block and an off-tile column count; a call is one
 seed group, the calls sit at positions fixed by the public parameters (T rows, S steps), and the `pouw` option serves the
-arm's own y beside sampled proofs.
+arm's own y beside SPOT.
 
 The first compile builds the H1 tile proof block (its seeds' and noise blocks' SHA-512 in gates), about 40 s once per process;
 every later shape reuses it."""

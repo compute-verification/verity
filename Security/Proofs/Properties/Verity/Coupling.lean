@@ -740,7 +740,7 @@ theorem wipe_target_nontrivial : ¬ Idle.exact.TargetFor (fun _ => True) .onsite
     (fun _ h => h ⟨Nat.le_refl 0, funext fun i => i.elim0⟩) (lt_of_eq_of_lt (Idle.error_exact _ _ _ _ _) zero_lt_one)
 
 /-- **`SoundnessOfUpFront`'s honest lemma**: its hypotheses hold at the idle deployment's compiled remote composite,
-sampled proofs, PoUW and the inference-only policy each meeting its bound at its component. -/
+SPOT, PoUW and the inference-only policy each meeting its bound at its component. -/
 theorem soundness_of_upFront_honest :
     Idle.unbounded.SubprotocolBound .remote .sampled ∧ Idle.unbounded.SubprotocolBound .remote .pouw ∧
       Idle.unbounded.SubprotocolBound .remote .inferenceOnly :=

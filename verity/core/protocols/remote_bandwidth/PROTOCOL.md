@@ -1263,7 +1263,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
     heads, the stale bounds it keeps and the hook.
 - **KV registered mid-session.** A KV page's payload is chosen after the codec seed, so registration order can't bind
   its encoding the way it binds the weights' and filler's. Its bound key stops its writer picking its encoding (§3),
-  but not stacking: sampled proofs show a payload is the circuit's actual computation, and an arbitrary circuit that
+  but not stacking: SPOT shows a payload is the circuit's actual computation, and an arbitrary circuit that
   can learn the key can compute another registered block's encoding as that payload. So a KV page is credited only
   on the property's verdict on its writers (§3, `credit_post_seed`), and then \(\mu_{\text{carrier}}\) charges what
   its carriers can hold (§1). Only bound blocks may be registered after the seed. The reference appends them (§4):
@@ -1272,7 +1272,7 @@ over them. Until `public()` is trimmed to match (it already keeps `stale` out), 
   under with the coin, and releases that keep a block out of every later plan. Open:
   - *The verdict's binding.* `ledger` takes the verdict as given (`PostSeedVerdict`: whether it holds, and its carrier
     bytes for a window's certified reads). That it is of the circuits that wrote this session's appends, and that
-    their payloads are those circuits' values (sampled proofs), are I2's and I4's to check. That no appended block is
+    their payloads are those circuits' values (SPOT), are I2's and I4's to check. That no appended block is
     credited past \(L\) the session checks itself (§4, `lifetime`); that the verdict was computed at the record's
     \(L\) is the verdict's to say.
   - *Appends across sessions.* A session's appends end with it, and the next session starts again from \(N\), so a

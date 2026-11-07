@@ -10,7 +10,7 @@ public import Proofs.Properties.Verity.Sampled.Deployed
 public import Proofs.Properties.Verity.Sampled.Leaves
 
 /-!
-# Sampled proofs' leg of `Verity.Soundness`: the session v2 sets up
+# SPOT's leg of `Verity.Soundness`: the session v2 sets up
 
 The leg is `Verity.Vocab.SampledProofsSound` at the one-stage form of a composite's sampled component
 (`VStar.Recursive.Sampled.protocol`), v2's audit (`SampledProofs.OneStageZk`), from Flock's knowledge soundness of the
@@ -254,7 +254,7 @@ theorem rounds_tree : 2 * 2 ^ A.coinSpec.roundsLog + 1 ≤ A.rounds := le_rfl
 
 /-- **The registration** the live audit's prover sends before the sample: the registration record's digest, the head of
 the registration log after it (`SampledProofs.Registration.digest`), which the period's composite commitment binds
-under sampled proofs' id (`Core.Composition.bind`) and the sample's coins are released after (`coinsRead`'s `after`). -/
+under SPOT's id (`Core.Composition.bind`) and the sample's coins are released after (`coinsRead`'s `after`). -/
 abbrev Reg (_ : Live) : Type := ByteArray
 
 /-- **The coin trees' hiding term**: each leaf the device's coin trees hold in a play, twice, at `2^-257`, the leftover
@@ -598,14 +598,14 @@ def CouplingTarget (V : Vocab d α) (k : Verity.Registration.Composite) (K : Con
           ENNReal.ofReal ((K.readFinder θ F c σ).Pr Verity.sha512Msg) +
           ENNReal.ofReal ((K.forger θ F c σ).Pr Verity.lmsVerify))
 
-/-- **Composite `k` reads sampled proofs at v2**: its `.sampled` component is `VStar.Recursive.Sampled.protocol`. Its
+/-- **Composite `k` reads SPOT at v2**: its `.sampled` component is `VStar.Recursive.Sampled.protocol`. Its
 one-stage form is one-stage v2's audit (`SampledProofs.OneStageZk.checkBlobs`), whose check computes each session's
 verdict from the session's files; one-stage v1, whose verdicts are the prover's, is refused
 (`VStar.Recursive.Sampled.V1_REFUSED`). -/
 def ReadsV2 (k : Verity.Registration.Composite) : Prop :=
   Verity.component k .sampled = some VStar.Recursive.Sampled.protocol
 
-/-- Both composites read sampled proofs at v2. -/
+/-- Both composites read SPOT at v2. -/
 theorem composite_readsV2 (k : Verity.Registration.Composite) : ReadsV2 k := by
   cases k <;> rfl
 

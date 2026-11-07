@@ -6,7 +6,7 @@ context.  A sample without its coin is refused by name:
 
 * opening positions (`challenge_positions`): `verity/vllm-commit/opening-positions/v1`;
 * opening identities from the expected population (`identity_picker`): `verity/vllm-commit/opening-identities/v1`;
-* the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of sampled proofs' former derived
+* the replay sample (`replay_key`): `verity/sampled-proofs/vu-sample/v1`, the domain of SPOT's former derived
   proof-block sample, with `per_stratum` units of each stratum sampled uniformly at the stratum's index (`stratum_picks`).
 
 The legacy seeds of the other drivers (replay's tiers, the compiled-kernel check, recompute's reference rows,

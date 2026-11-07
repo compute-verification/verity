@@ -1,7 +1,7 @@
-"""Sampled proofs' answer on a served window, from the one-stage records audit
+"""SPOT's answer on a served window, from the one-stage records audit
 (`benchmarks/prove_path/records_audit.py`) that ran on it.
 
-`answer` turns what the audit wrote into sampled proofs' core answer (``verity/sampled-proofs/one-stage/v1``): the
+`answer` turns what the audit wrote into SPOT's core answer (``verity/sampled-proofs/one-stage/v1``): the
 commitment is the registration's digest, the verdict the audit record's, and on acceptance the public outputs and profile
 are the ones `SampledProofs.OneStage.check` makes public (the sampled and proved units, the bound on incorrect proof blocks at δ, each
 template's under a stratified or work sampling design; `audit.profile` as `Core.Integrity`, δ an exact ratio). A refusal before the
@@ -57,7 +57,7 @@ def unproved(rec: Mapping[str, Any]) -> str:
 
 
 def answer(out: Path, registration: Mapping[str, Any] | None) -> dict[str, Any]:
-    """Sampled proofs' answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
+    """SPOT's answer from the audit `records_audit.py` wrote under ``out`` (its ``summary.json``, and the audit
     record ``window/audit.json`` when the sample ran). On acceptance its public ``bound`` is the most of the profile's
     units that are wrong, except with probability δ."""
     commitment = R.digest(registration) if registration is not None else None

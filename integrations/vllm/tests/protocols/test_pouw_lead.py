@@ -5,7 +5,7 @@
 - Each linear call's rows are committed (root(A_j)) before its coins are released, and the backend serves the call's y
   on them.
 - The forward's one words root comes at the step's end, and then the pass's `PassCommitment` is published.
-- The option is refused where it can't be what it says: no backend, other schemes' settings, or beside sampled proofs or
+- The option is refused where it can't be what it says: no backend, other schemes' settings, or beside SPOT or
   PoUS. It uninstalls to the plain arm."""
 from __future__ import annotations
 
@@ -160,7 +160,7 @@ def test_the_lead_refuses_what_it_cannot_be():
 
 
 def test_the_lead_is_refused_beside_sampled_proofs_and_pous():
-    """Sampled proofs would trace the lead's call as the stock computation, and under PoUS its GEMMs would read the
+    """SPOT would trace the lead's call as the stock computation, and under PoUS its GEMMs would read the
     backend's loaded weights, not what PoUS stores."""
     beside = PO.refusals(_ctx(enabled=(ENTRY, "sampled-proofs:rows-sha512"), backend=Backend()))
     assert any("the Program has no Definition for what it computes there" in r for r in beside)

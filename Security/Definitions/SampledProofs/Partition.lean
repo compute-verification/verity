@@ -6,7 +6,7 @@ public import Definitions.SampledProofs.Dataflow
 /-!
 # A partition as a population
 
-A partition of a circuit (`Verity.Partition`, sampled proofs' units) is a population (`toDataflow`) over its committed
+A partition of a circuit (`Verity.Partition`, SPOT's units) is a population (`toDataflow`) over its committed
 wires: the slots are the committed gates, the inputs are the input gates, and unit `u` writes its committed gates,
 out(R) for its gates `R`, and reads the gates outside it that its gates read, in(R). Both sets come from the circuit's
 wiring, so they are public and fixed before any value exists.

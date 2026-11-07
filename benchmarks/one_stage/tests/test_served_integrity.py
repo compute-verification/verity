@@ -1,6 +1,6 @@
-"""Sampled proofs' answer on a served window from what the records audit wrote (`served_integrity.answer`):
+"""SPOT's answer on a served window from what the records audit wrote (`served_integrity.answer`):
 
-* an accepted audit record is sampled proofs' accept: the registration's digest, the sampled and proved units with the bound
+* an accepted audit record is SPOT's accept: the registration's digest, the sampled and proved units with the bound
   on incorrect proof blocks at δ, and the profile as `Core.Integrity` with δ an exact ratio, all read back by the core answer's
   decoder; the report's ε is that bound over the window's units;
 * a refusal of the records, a check before the sample that failed, an audit record that doesn't accept and advice fixed

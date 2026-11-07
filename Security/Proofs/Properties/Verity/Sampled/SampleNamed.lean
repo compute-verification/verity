@@ -13,7 +13,7 @@ name, at the coins of its family released after the registration's digest (`sour
 
 * **The family** (`draw_label`, `labelAt`): the parameters' challenger family, a function of the parameters `θ` alone,
   since v2's case reads the parameters `θ` names for it (`params_of_case`).
-* **The digest**: sampled proofs' entry in the components' digests that the prover's commitment binds (`draw_after`),
+* **The digest**: SPOT's entry in the components' digests that the prover's commitment binds (`draw_after`),
   fixed only up to the cut at the commitment, where the play's digests are the most likely ones (`SampledDigest`,
   `afterAt`, bounded by a SHA-512 collision on `bind`'s messages).
 

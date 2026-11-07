@@ -38,7 +38,7 @@ import Mathlib.Topology.Sheaves.Init
 # The sampled audit and acceptance: what an accepted audit says about the egress, at `δ`
 
 Definitions only. Network accounting writes the whole computation as one program `C` of the Boolean profile,
-each machine a subcircuit, and audits its committed trace with sampled proofs (`Claims.Sampling`). The transfer-gate
+each machine a subcircuit, and audits its committed trace with SPOT (`Claims.Sampling`). The transfer-gate
 units and N2's head checks are classes sampled `all`, and the internal step units are sampled. This module says what an
 accepted audit then establishes about the egress, in the network certifier's terms (`Program`, `Accepted`), on
 sampling's own vocabulary: its statement, partition, design, incorrect set and `M_δ`.

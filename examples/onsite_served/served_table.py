@@ -229,7 +229,7 @@ def _serve(cfg, params, bound):
             "WINDOW_STEPS": str(w["window-steps"]), "LOAD": w["load"], "V3C_LAW": cfg["service"]["law"]}
 
 
-#: served_verdicts.sh's variable for each optional binding of sampled proofs' live challenger
+#: served_verdicts.sh's variable for each optional binding of SPOT's live challenger
 _PP = {"gate": "PP_CHALLENGER", "peer": "PP_PEER", "key": "PP_CHALLENGER_KEY", "gate-key": "PP_GATE_KEY"}
 
 
@@ -264,7 +264,7 @@ def _certifier_piece(cfg, params, bound):
 
 
 SERVE = Piece(SERVED_WINDOW, WORKERS, SERVED_WINDOW, "Execution: serve-openai on the prover node under its GPU lease, the "
-              "requests, every closed window sealed and the audited window picked; then sampled proofs' records audit "
+              "requests, every closed window sealed and the audited window picked; then SPOT's records audit "
               "(C-Flock --zk behind the Lean firewall, the Lean verifier) and each listed component's piece",
               scripts=(RUNNER, VERDICTS_SCRIPT), hooks=_serve)
 #: each listed component's party -> its piece

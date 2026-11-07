@@ -12,9 +12,8 @@ public import Properties.SampledProofs
 
 `Core.Remote.protocol` (`verity/remote/v0`) is `Core.Composition.tiedSameB` over three subprotocols, in the order of
 their ids: the inference-only policy (`NciCheck.Protocol.protocol`), PoUW's period credit
-(`PouwCheck.Period.protocol`) and sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
-one-stage v2's audit or the recursive audit, whichever form its params name. The policy's commitment and sampled
-proofs' (the one-stage registration record, `SampledProofs.OneStage.commitmentOf`, in both forms) are the run's
+(`PouwCheck.Period.protocol`) and SPOT (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
+one-stage v2's audit or the recursive audit, whichever form its params name. The policy's commitment and SPOT's (the one-stage registration record, `SampledProofs.OneStage.commitmentOf`, in both forms) are the run's
 registration record, and the composite rejects unless both decode to one digest (`Core.Composition.strays` over
 `Core.Remote.tied`);
 the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
@@ -24,7 +23,7 @@ registered circuit's SHA-512 (`names`), then runs
 the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size of the description
 (`NciCheck.Desc.evaluate`), then θ's provenance against the registration log through the run's record.
 
-* `AcceptInferenceOnly`: on every input remote's check accepts, the policy's and sampled proofs' records have
+* `AcceptInferenceOnly`: on every input remote's check accepts, the policy's and SPOT's records have
   one digest, which every Commit record the period's windows name has, the record the policy's case commits to names the registered circuit by its SHA-512, θ holds what the log's first record
   registers (`NciCheck.Properties.ProvenanceHeld`), and the instance the policy checked, expanded gate by gate
   (`NciCheck.Properties.Expands`), has a parse and a registered circuit the program lays out with θ, whose inference
@@ -33,10 +32,10 @@ the check of record, `NciCheck.Baseline.evaluate`: the policy check at the size 
   at most `Γ` gates and reads at most `α` fresh input bits per gate, so the registered circuit complies
   (`Nci.CompliesRate Γ α`), and it has a `(Γ, ⌊αΓ⌋)`-partition when Boolean, its bit-level expansion a
   `(ΓW, ⌊αΓW⌋)`-partition when its gates are 1 to
-  `W` bits wide; and the record sampled proofs' case commits to names, by its SHA-512, the program the form its params
+  `W` bits wide; and the record SPOT's case commits to names, by its SHA-512, the program the form its params
   name verifies the sessions against (`StageHeld`): one-stage v2's verifier's, or in the recursive form the inner
   statement's, whose one verdict of record V*'s compiled check computes. With one digest for the two records, the
-  registered circuit the policy checked and the program sampled proofs verifies have one SHA-512.
+  registered circuit the policy checked and the program SPOT verifies have one SHA-512.
 * `AcceptComplies`: its corollary in the form `Nci.Guarantees.DampenerRemote` reads, `Nci.CompliesRate Γ α d` from
   acceptance, on a declaration acceptance exhibits and on every other.
 
@@ -44,7 +43,7 @@ A check that accepts every input accepts `ev = []`, where neither conclusion hol
 `CompliesHeld` take three cases): the proofs show both fail there.
 
 `Γ` and `α = num / den` are the verifier's own: the parameters the composite names for the policy. No statement takes an
-assumption: the digests are those the code computes and compares, so that PoUW and sampled proofs read the policy's
+assumption: the digests are those the code computes and compares, so that PoUW and SPOT read the policy's
 record is up to a SHA-512 collision between two records the run carries, which the statements leave to their readers.
 
 The registered circuit is the program the policy's parameters carry and the record names by its SHA-512. That it is the
@@ -105,7 +104,7 @@ def CaseHeld (k : Case) : Prop :=
     NciCheck.Protocol.commitmentOf k.commitment = .ok c ∧ NciCheck.Protocol.evidenceOf k.evidence = .ok e ∧
     PolicyHeld p c e
 
-/-- Sampled proofs' case `k` decodes under sampled proofs' own decoders (`VStar.Recursive.Sampled`, whose params name
+/-- SPOT's case `k` decodes under SPOT's own decoders (`VStar.Recursive.Sampled`, whose params name
 the form), and the record it decodes to names, by its SHA-512, the program the named form verifies the sessions against
 (`Properties.SampledProofs.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
 params, `SampledProofs.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
@@ -120,16 +119,15 @@ def StageHeld (k : Case) : Prop :=
     SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record q.base.verifier)
 
 /-- What remote's acceptance establishes about its cases `ev`: they are the three subprotocols' cases in order, the
-policy's `kI`, PoUW's period's `kW` and sampled proofs' `kS`; the policy's and sampled proofs' commitments decode,
-each under its own subprotocol's decoder (sampled proofs' is the one-stage registration record's), to one digest `r`,
+policy's `kI`, PoUW's period's `kW` and SPOT's `kS`; the policy's and SPOT's commitments decode,
+each under its own subprotocol's decoder (SPOT's is the one-stage registration record's), to one digest `r`,
 the run's record's;
 every Commit record the
 period's windows name, when they decode, has digest `r` (a period whose windows don't decode is the period's own
 refusal, `PouwCheck.Period.check`, which this doesn't read); the policy's case is `CaseHeld`: the record names the
 registered circuit by its SHA-512, θ holds what the log's first record registers, the instance checked has a parse, a
 declaration the registered circuit lays out and a division, every parse carries the policy's `program`, `Γ` and `α`,
-and every declaration the registered circuit lays out, with the declared division, meets the policy; and sampled
-proofs' case is `StageHeld`: its record names, by its SHA-512, the program its named form verifies the sessions
+and every declaration the registered circuit lays out, with the declared division, meets the policy; and SPOT's case is `StageHeld`: its record names, by its SHA-512, the program its named form verifies the sessions
 against. -/
 def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧

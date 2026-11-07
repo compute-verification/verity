@@ -1,12 +1,12 @@
 """`served_verdicts.py`'s window pick, its subprotocols' pieces and its record, on toy serve dirs and answers:
 the window it audits holds the most requests and none carried across windows; a subprotocol with no piece is named missing
 with the command it lacks and given no verdict, one that refused to run is missing, and one that ran out of its limit or
-wrote no answer errs; and sampled proofs' accepted answer composes, with the others missing, to an undecided block record that
+wrote no answer errs; and SPOT's accepted answer composes, with the others missing, to an undecided block record that
 `block_record.check` holds and its schema admits, while a refusal or an audit that wrote nothing composes to reject with no
 block record. The block record's verdict is the Lean check's answer, so with none here it is undecided (the window's
 pending) even when every subprotocol accepted on its node; the record names each one missing, rejecting, malformed or
 about another server. The wipe composes only when its answer accepts on the record's server. Remote's
-product runs no onsite piece and composes sampled proofs and PoUW alone, the others dropped. PoUW's
+product runs no onsite piece and composes SPOT and PoUW alone, the others dropped. PoUW's
 development piece checks the window's gate session and credits nothing, and the gate is refused while the lane has a period
 open. The period the served windows join opens, through infra's own gate, on the Program serve-openai declared and
 the circuit files built for it, as core's credit reads them, and is refused on files of anything else.
@@ -698,7 +698,7 @@ def test_the_record_is_pending_without_a_lean_answer_and_names_each_subprotocol_
 def test_remote_runs_no_onsite_piece_and_composes_sampled_proofs_and_pouw_alone(tmp_path, monkeypatch, capsys):
     """PRODUCT=remote: `pieces` runs PoUW's piece and no onsite one, whatever its command, printing a DROPPED line for
     each; the record names PoUS, the bandwidth audit, the network certifier and the wipe dropped, neither missing nor
-    composed, whatever their pieces left, and sampled proofs' and PoUW's accepts on its node leave it pending with nothing
+    composed, whatever their pieces left, and SPOT's and PoUW's accepts on its node leave it pending with nothing
     missing, the block record undecided until the remote check answers. The same pieces composed for onsite reject on the
     wipe's answer. The report and the line say they were composed on the served node, from the answer files it wrote, and
     the published line keeps that."""
@@ -1382,7 +1382,7 @@ V3C_COINS = " V3c's audit: a local development challenger session where it runs;
     ({"V3C_CLASS": "", "CERTIFIER_CHAIN_CMD": None, "CERTIFIER_PERIOD_CMD": None}, LOCAL_COINS, ""),
 ])
 def test_the_coins_line_says_whose_coins_each_sample_is_on(tmp_path, extra, coins, v3c):
-    """Before step 0 the run says whose coins each sample is on: sampled proofs' (run.sh's local development session
+    """Before step 0 the run says whose coins each sample is on: SPOT's (run.sh's local development session
     unless PP_CHALLENGER names a challenger), PoUW H1's, and V3c's audit's when it runs. Here step 0's `predict row` then
     fails, and the run stops there."""
     venv = tmp_path / "toy-venv" / "bin"

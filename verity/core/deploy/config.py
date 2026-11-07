@@ -15,7 +15,7 @@ workload declares (``default_params``), and `check` returns the configuration wi
 covers, so stating a default changes no hash.
 
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
-composite's (`COMPOSITES`): onsite's, or remote's (sampled proofs, PoUW and the inference-only policy). Protocol
+composite's (`COMPOSITES`): onsite's, or remote's (SPOT, PoUW and the inference-only policy). Protocol
 soundness covers those two composites and no other, so `check` refuses any other set (``composite``).
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and

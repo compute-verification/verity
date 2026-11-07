@@ -23,7 +23,7 @@ which adds SAK to H1.
   which are outputs of its block. Each unit is one instance of its `K`'s `PouwH1WindowTile_v1{UNIT=…,K=…}`
   (`Credit.layoutOf`), and its proof block is that instance's gates.
 * `BlockMap.size`: block `t`'s credit size, the AND count (`Verity.Circuit.andSize`) of its gates outside `ledger`,
-  the gates of `lower D` another protocol already credits (sampled proofs certify the served GEMMs too). One
+  the gates of `lower D` another protocol already credits (SPOT certifies the served GEMMs too). One
   ledger, so no gate is counted twice, and the blocks' sizes sum to at most the credit `Verity.creditSize lower D`
   (`Proofs.Pouw.ServedValues`' `sum_size_le_creditSize`).
 * `liveSize`, `creditedSize`: the credited size `S`, the size of each live block of credited words over the windows

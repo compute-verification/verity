@@ -17,7 +17,7 @@ meta import NciCheck.Desc
 # The network certifier over a period, a core protocol: `verity/certifier/v0`
 
 The network certifier, one of onsite's subprotocols (`Core.Onsite.components`). A period is one node's link over `m`
-link-windows beside the period's compute audits (sampled proofs' one-stage, one answer per registered window of the
+link-windows beside the period's compute audits (SPOT's one-stage, one answer per registered window of the
 workload). Its link-windows come in one of two forms, which the parameters name:
 
 * **the clock form**: N2's link-windows (`service.LinkWindows`, Selection `All`), each proved, both its ends certified

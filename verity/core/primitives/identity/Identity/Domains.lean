@@ -167,7 +167,7 @@ abbrev RANDOMNESS_SHARD : String := "verity/randomness/shard/v2"
 abbrev RANDOMNESS_DERIVE_V1 : String := "verity/randomness/derive/v1"
 abbrev RANDOMNESS_STREAM_V1 : String := "verity/randomness/stream/v1"
 
--- Shared: sampled proofs' one-stage statement, registrations and partitions; Flock's public inputs and descriptors
+-- Shared: SPOT's one-stage statement, registrations and partitions; Flock's public inputs and descriptors
 abbrev ONE_STAGE_PROTOCOL : String := "verity/sampled-proofs/one-stage/v1"
 abbrev ONE_STAGE_PROTOCOL_V2 : String := "verity/sampled-proofs/one-stage/v2"
 abbrev ONE_STAGE_SERVED_DOMAIN : String := "verity/one-stage/served-domain/v1"
@@ -212,7 +212,7 @@ abbrev WORD_CODEC_KV : String := "verity/word-codec/kv/v0"
 -- Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 abbrev LMS_I : String := "verity/lms/v0/I"
 
--- Not yet read from here: sampled proofs and the proof system's challenger
+-- Not yet read from here: SPOT and the proof system's challenger
 abbrev CHALLENGER_KEY : String := "challenger-key/v1"
 abbrev COIN_TREE_HM96_SHA512 : String := "coin-tree/hm96-sha512/v2"
 abbrev CHALLENGER_AUDITOR_RECORD : String := "verity/challenger-auditor-record/v1"

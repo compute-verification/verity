@@ -7,13 +7,13 @@ public import Proofs.Flock.Claims.Recursion.DeployFacts
 public import Proofs.Core.Circuit
 
 /-!
-# The target, proved: sampled proofs at the recursive configuration
+# The target, proved: SPOT at the recursive configuration
 
 `sampledProofsRecursive` proves the target's bound at each strategy from the property `acc_of_accepts` states
 (`AccOfAccepts`, the statement of `acc_of_accepts` at the deployment), at `acc_of_accepts`.
 
 The proof, at a strategy `σ` whose finders meet `FinderCR` (elsewhere the error is `⊤`), where the files pass the
-commit phase's check (elsewhere no play is accepted) and sampled proofs' claim fails on the extracted transcript `X`
+commit phase's check (elsewhere no play is accepted) and SPOT's claim fails on the extracted transcript `X`
 (elsewhere the event is empty), so that the unbound units `U` number more than `ε n`:
 * each accepted play shows, through the coupling (`SessionIn.names_shows`) and G, an accepted run of the recursive
   verifier at a dense statement (`verdict_run`);
@@ -683,10 +683,10 @@ theorem ex_verdict_le (q : Dep) (hG : AccOfAccepts q)
   · rw [min_eq_right h]
     exact ex_off_le_units q V S readX collOf dColl hcoll hcr.2
 
-/-- **The target: sampled proofs at the recursive configuration**, in the per-prover form over the causal game (R4′,
+/-- **The target: SPOT at the recursive configuration**, in the per-prover form over the causal game (R4′,
 R5, R6), with the recursive configuration's verdict (`RecVerdict`). At composite `k`, the parameters `θ`, the
 committed files `F`, the commitment `c` and a strategy `σ`, with `S` its recursive session (`SessionIn`), the
-probability that the recursive component accepts while sampled proofs' claim fails on the extractor's transcript
+probability that the recursive component accepts while SPOT's claim fails on the extractor's transcript
 (`¬ Holds k .sampled`) is at most `Dep.errAt` at `S`, the shared `condError FinderCR δ`: where `FinderCR` holds at
 the finders built from `σ`, `δs + E_ξ[ksAt] + √(min(bits, 2n) · E[bindBudget(σ)] / 2^256)` with `n` the units,
 and `⊤` elsewhere, where `ksAt` is `t'(σ) · 2^{-λ}`, and at a sample whose statement is at the deployment's tables the

@@ -14,8 +14,7 @@ steps, every leg in one shape, the Lean verdict with the JointHorizonLive error 
   and ratio ``r``, ``r`` null in a wipe from before ``verity/wipe/v0`` published it); ``error`` the probability over the leg's
   own coins that it accepts while its claim fails, as the run established it, read from ``error_from``; ``at`` the
   certificate at δ = 1/100 and 1/10^6 (core's `DELTAS`): the run's own wherever ``error`` ≤ δ (a claim holding except with
-  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound sampled
-  proofs' Lean ``countBound`` gives), else not established. A leg whose ``server`` is not the
+  ``error`` holds except with δ), integrity's recomputed from its sample at δ (`integrity_bound`, the bound SPOT's Lean ``countBound`` gives), else not established. A leg whose ``server`` is not the
   block's is carried but not composed.
 * ``composed``: ``answer``, the Lean check of the block's product (`CHECKS`: ``onsite check`` or ``remote check``)'s
   answer on the block (protocol, verdict, reason, commitment), None when it didn't run; ``verdict``, that answer's
@@ -24,7 +23,7 @@ steps, every leg in one shape, the Lean verdict with the JointHorizonLive error 
   ``missing`` on the block's server and what ran ``elsewhere``; ``joint_horizon`` is `JOINT_HORIZON`'s error over this
   block, the accepted legs' errors summed, and at each δ of `DELTAS` that δ times the legs established at it. The
   statement names five audits; the wipe is ``outside_statement``. The product (`PRODUCTS`) is onsite's, every leg, unless
-  ``product`` names another: remote's composes sampled proofs and PoUW, and its other legs are ``dropped``, not run and
+  ``product`` names another: remote's composes SPOT and PoUW, and its other legs are ``dropped``, not run and
   not composed, so they are never ``missing``.
 * ``monitoring_period``: the census deployment (a parameter: ``{id, machines, window_s, ...}``) and, per period of
   core's `PERIODS`, its blocks over all compute (machines × blocks a machine) and JointHorizonLive's union bound over them at this

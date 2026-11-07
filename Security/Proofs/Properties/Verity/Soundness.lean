@@ -21,7 +21,7 @@ Beside it, the two checks every guarantee carries, for any names `V`: `soundness
 (the deployment's honest prover at registered files, each subprotocol's honest lemma `Vocab.HonestHolds`) every target's
 event and the theorem's own have probability `0`; and `soundness_nontrivial_of`, its conclusion fails for a verifier
 that accepts everything, wherever a claim fails on every play of a strategy whose files pass the commit phase's check and
-the errors sum below one. `Vocab.holds_sampled_of_opens` is the honest commitment's case of sampled proofs' claim: a
+the errors sum below one. `Vocab.holds_sampled_of_opens` is the honest commitment's case of SPOT's claim: a
 correct transcript that the commitment opens everywhere, the constants by their constants, has no unbound unit.
 
 The event isn't restricted to some input shape: the prover sends the committed files before any coin and the
@@ -319,7 +319,7 @@ theorem target_audit (k : Verity.Registration.Composite) (b : Audit) :
     V.Target k (.ofAudit b) ↔ ∀ θ F c, (V.live k θ F c).Sound (V.certOf θ) b (V.error (.ofAudit b) θ F c) := by
   cases b <;> exact Iff.rfl
 
-/-- **The honest commitment's case of sampled proofs' claim**: when the extractor's transcript is correct on every unit
+/-- **The honest commitment's case of SPOT's claim**: when the extractor's transcript is correct on every unit
 and the commitment opens every gate to it (a registered constant to its constant), no unit is unbound, and the claim
 holds at any `ε ≥ 0`. -/
 theorem holds_sampled_of_opens (k : Verity.Registration.Composite) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray)

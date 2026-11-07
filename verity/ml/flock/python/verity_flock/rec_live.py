@@ -731,7 +731,7 @@ def tree_held_reason(log: list[str], sessions: list[tuple[str, dict, dict]]) -> 
     its record its stream's round, opened after `round_after` of the round; and the log must show no tree and no opening
     that no session records, and no round read twice. `challenger.sessions_tree_reason` holds a `flock-circuit serve`
     session to the log the same way, after what that server answers. It mirrors `SampledProofs.Challenger.innerTreesReason`,
-    the verifier, which the recursive audit reads (`test_challenger_inner_trees.py` in the sampled proofs
+    the verifier, which the recursive audit reads (`test_challenger_inner_trees.py` in the SPOT
     service's tests holds the two together)."""
     from verity.core.protocols.sampled_proofs import challenger as C
 
