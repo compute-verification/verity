@@ -5,6 +5,7 @@ public import Proofs.Flock.SessionLoop.FinRepPads
 public import Proofs.Flock.SessionLoop.RoundOffL0
 public import Proofs.Flock.SessionLoop.RoundOffOpenBind
 public import Proofs.Flock.SessionLoop.RoundLig
+public import Proofs.Flock.Claims.ZK.PadsRoot
 import all Init.Data.String.Defs
 import all Init.Data.Array.Basic
 
