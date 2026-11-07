@@ -1,7 +1,28 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkReg.Sound
-public import Proofs.Flock.Soundness.Discharge.ZkReg.BindHJ
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkExec.RunsLive
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Bind
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.ZkLink.Inh
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Game.Prob
+public import Proofs.Flock.Soundness.Discharge.Composed.Sound
+public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The drawn units of one `--zk --registered` session
@@ -19,7 +40,7 @@ simulation keeps both (`simAuditZKOn`):
 * `zk_flock_drawnC_cr`: the compiled audit's drawn bound, `Pr[accept ∧ a drawn unit is wrong] ≤ ε_ks + δ_link`
   (`extraction_audit_drawn` at `analysisZC`), every term on the accepted assumptions;
 * `zk_session_drawnR`: `hwrong` for `flock-verify verify --zk --registered F` sessions: no drawn unit is wrong in the
-  committed values `zk_session_soundR` reads, except with probability `ε_ks + δ_link`.
+  committed values `XplurZC` decodes from the rows `rsZAtS` at `simZ … τ`, except with probability `ε_ks + δ_link`.
 -/
 
 @[expose] public section
@@ -224,9 +245,10 @@ end Drawn
 variable {mPts n : ℕ} {Reg : Type}
 
 /-- **No drawn unit of a `--zk --registered` session is wrong, except with probability `ε_ks + δ_link`**: in
-`flock-verify verify --zk --registered F` sessions, `own` F's ports, at the committed values `zk_session_soundR` reads
-(`XplurZC` at `simZ … τ`), `Pr[accept ∧ some drawn unit is wrong] ≤ ε_ks + δ_link`, on `zk_session_soundR`'s
-assumptions without A3 (the law's count curve is not read). This is the `hwrong` a registered-reads core theorem takes. -/
+`flock-verify verify --zk --registered F` sessions, `own` F's ports, at the committed values `XplurZC` decodes from the
+rows `rsZAtS` (the `--zk` rows without `pub.tables = none`) at `simZ … τ`, `Pr[accept ∧ some drawn unit is wrong] ≤
+ε_ks + δ_link`, on `Composed.zk_session_sound`'s assumptions without A3 (the law's count curve is not read). This is the
+`hwrong` a registered-reads core theorem takes. -/
 theorem zk_session_drawnR
     (I : Inputs) (ht : I.tags.typed = false) (own : Array Flock.Registered.Port)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZK I mPts S₀ (dj S₀))

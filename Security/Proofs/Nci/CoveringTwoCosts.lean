@@ -10,8 +10,7 @@ public import Proofs.Nci.Covering
 to a block `S` of the covering that computes its output gate; at most `k` are not completed by `S`. The completed ones lie
 in `θ'_S × J_S`: `|θ'_S| ≤ k / c_w` by parameter-hardness at `c_w`, so `|θ'_S| < D` since `c_w D > k`; with `Q = θ'_S`
 the inputs of `S` in `T_j` cut the activation off for each token `j ∈ J_S`, so they are at least `c_a` and
-`|J_S| ≤ k / c_a`. That count for one block is `CoveringTwoCosts.card_charged_le`, which the cover theorem's join to
-the NCI policy uses at each block's own `k` (`Proofs.Nci.Cover.Chained`).
+`|J_S| ≤ k / c_a`. That count for one block is `CoveringTwoCosts.card_charged_le`.
 
 At `c_w = c_a = r · b` the assumptions are `ParameterHard` and `ActivationChained` by definition, and the bound is
 `CoveringBound`'s (`coveringBound_of_twoCosts`). `CoveringBound` keeps its own proof.
@@ -27,9 +26,6 @@ variable {d : RegisteredCircuit} (B : MulBlocks d)
 
 theorem parameterHard_iff (s : ℕ) (r b : ℝ) :
     Assumptions.ParameterHard d B s r b ↔ Assumptions.ParameterHardAt d B s (r * b) := Iff.rfl
-
-theorem activationChained_iff (D : ℕ) (r b : ℝ) (p : Fin B.nw × Fin B.nt) :
-    Assumptions.ActivationChained d B D r b p ↔ Assumptions.ActivationChainedAt d B D (r * b) p := Iff.rfl
 
 theorem chainedBlocks_eq (D : ℕ) (r b : ℝ) :
     Assumptions.chainedBlocks d B D r b = Assumptions.chainedBlocksAt d B D (r * b) := rfl

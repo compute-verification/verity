@@ -20,10 +20,11 @@ sampled proofs, and the one record of every verdict (the block record).
     served_verdicts.py publish OUT --private DIR
 
 What leaves the node names no window and counts none of a window's own: no window's number, no count of the windows closed,
-sealed or refused, and no engine step, request count or user of one. ``public-lines`` prints each line of stdin in its
-published form (`public_line`), the line in full appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and
-``publish`` holds each file of OUT, once the run is done, in full under DIR where it names or counts a window (`publish`),
-its public form in its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
+sealed or refused, and no engine step, request count or user of one; nor a load's tokens or span (`OWN_AT`), whose tokens
+count its blocks. ``public-lines`` prints each line of stdin in its published form (`public_line`), the line in full
+appended to ``--private`` (the serve dir's ``private/verdicts.txt``), and ``publish`` holds each file of OUT, once the run
+is done, in full under DIR where it names or counts a window or holds a load's own field (`publish`), its public form in
+its place. The class's padded counts, the period's declared T and S, the bench Build's requests and the
 verifier's coins and draws are public. ``public-registration`` prints what the run publishes of a window's advice
 registration (`public_registration`: the advice's length padded to its compiler's cap), ``sampled-line`` the
 SAMPLED-PROOFS line from the records audit's log
@@ -97,12 +98,13 @@ with each one's server) and from it the block record (``block-record.json``, `bl
 `block_record.check`), which composes only the answers about the record's node and carries the others as ``elsewhere``;
 an answer that names no server isn't carried. An accepted answer whose outputs are not its leg's certificate
 (`block_record.leg`) is its subprotocol's error. `block_record` carries only an accepted subprotocol's certificate, so
-where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written; it is
-``accept`` only when every subprotocol accepted here.
-Those are the subprotocols of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
-product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and composed into no
-verdict, so remote's verdict is ``accept`` when sampled proofs and PoUW accepted here, whatever the onsite pieces.
-The report's ``composed`` and the block record's ``composed.onsite`` give that verdict with its reason (`said`), one clause
+where one about this node rejects or errs the composed verdict is ``reject`` and no block record is written. Otherwise
+the verdict is the block record's, which is the Lean ``onsite check`` or ``remote check``'s answer; no Lean check runs
+here, so it is ``undecided``, which the window report (``-window/v1``) and the ``RECORD`` line name ``pending``.
+The subprotocols are those of ``--product`` (default onsite; `block_record.PRODUCTS`): each one the
+product drops is ``dropped`` in the report (`dropped_row`, whatever its piece left), not run and in no block record's
+``missing``, so remote's is ``pending`` with nothing missing when sampled proofs and PoUW accepted here, whatever the
+onsite pieces. The report's ``composed`` gives that verdict with its reason (`said`), one clause
 a subprotocol: its verdict and, unless it accepted here, why; an accept here with what it holds beyond its verdict
 (`terms`: when its weights were held and their share of the checkpoint, where its profile says, and each δ of the block
 record's at which its quantity is not established); PoUW's development piece reads ``development run, credits nothing``
@@ -135,6 +137,8 @@ for _p in (Path(__file__).resolve().parent, ROOT / "examples" / "h200" / "interf
 
 #: the window report's format, kept from the all-protocols runner whose report it was
 REPORT_FORMAT = "verity/all-protocols-window/v1"
+#: the block record's verdict by the window report's name for it: ``-window/v1`` calls an undecided window pending
+WINDOW_VERDICT = {"undecided": "pending"}
 #: sampled proofs' owner, its row's
 INTEGRITY_OWNER = "compute-accounting"
 
@@ -250,6 +254,11 @@ OWN = frozenset({"windows", "users", "engine_steps", "every_slot", "population",
 #: requests' count, the windows refused. A window named ``all``, the bench Build's requests by name and a refusal's reason
 #: stay.
 NUMBERED = frozenset({"window", "steps", "requests", "refused"})
+#: A load's own fields, held by path as (parent, key), the parent the nearest key above the field through lists: the
+#: tokens of each load of `served_overhead.py metrics`' aggregate, which over a block's outputs are the exact block
+#: count, and its span. Held by path, not as bare keys, so the inference-only policy's ``n_inputs.span_s`` stays as
+#: written, and with it the policy digest its verdict cites.
+OWN_AT = frozenset({("loads", "tokens"), ("loads", "span_s")})
 #: A window's number, step range or count in text, each with what the published text says in its place
 WINDOW_TEXT = (
     (re.compile(r'\\?"(?:%s)\\?": ?(?:-?\d+(?:\.\d+)?|\[[^\]]*\]|\{[^{}]*\}|true|false)(?:, ?)?'
@@ -265,7 +274,15 @@ WINDOW_TEXT = (
 NAMED = re.compile(r"(?<![A-Za-z0-9])w\d+(?![A-Za-z0-9])")
 _OPEN = re.compile(r'\{\s*"')
 _FIELD = re.compile(r'\\?"(?:%s)\\?":' % "|".join(sorted(OWN | NUMBERED)))
-#: what a published line says in place of a JSON object cut short that names a window's field
+_AT_KEYS = {p: "|".join(sorted(k for q, k in OWN_AT if q == p)) for p in sorted({p for p, _ in OWN_AT})}
+#: An `OWN_AT` field in text, by parent: the parent's list opening, and each of its keys holding a number inside that list
+AT_TEXT = tuple((re.compile(r'\\?"%s\\?": ?\[' % re.escape(p)),
+                 re.compile(r'\\?"(?:%s)\\?": ?-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?(?:, ?)?' % keys))
+                for p, keys in _AT_KEYS.items())
+_BRACKET = re.compile(r"[\[\]]")
+#: an `OWN_AT` field in a JSON object cut short: its parent's key, then one of its keys
+_AT_FIELD = re.compile("|".join(r'\\?"%s\\?":.*?\\?"(?:%s)\\?":' % (re.escape(p), keys) for p, keys in _AT_KEYS.items()))
+#: what a published line says in place of a JSON object cut short that names a window's or a load's own field
 CUT = "{…} (cut short; in full in the serve dir's private/verdicts.txt)"
 #: a file `publish` reads larger than this is held whole
 PUBLISH_MAX = 256 << 20
@@ -287,38 +304,59 @@ def _numbered(v: Any) -> bool:
     return isinstance(v, list) and any(_numbered(x) for x in v)
 
 
-def _held(key: Any, value: Any) -> bool:
+def _held(key: Any, value: Any, parent: Any = None) -> bool:
+    if (parent, key) in OWN_AT:
+        return True
     if key == "refused":
         return not isinstance(value, str)
     return key in OWN or (key in NUMBERED and _numbered(value))
 
 
-def public_text(s: str) -> str:
-    """``s`` with each window number, step range and window count `WINDOW_TEXT` finds in its published form."""
-    for pat, sub in WINDOW_TEXT:
-        s = pat.sub(sub, s)
+def _at_text(s: str) -> str:
+    """``s`` with no `OWN_AT` field in the list its parent's key opens (to the text's end where the list is cut short)."""
+    for opening, field in AT_TEXT:
+        out, i = [], 0
+        while m := opening.search(s, i):
+            end, depth = len(s), 1
+            for b in _BRACKET.finditer(s, m.end()):
+                depth += 1 if b.group() == "[" else -1
+                if not depth:
+                    end = b.end()
+                    break
+            out += [s[i:m.end()], field.sub("", s[m.end():end])]
+            i = end
+        s = "".join(out) + s[i:]
     return s
 
 
-def public_json(o: Any) -> Any:
-    """``o`` with no field of a window's own (`OWN`, `NUMBERED`) and each string in its `public_text` form."""
+def public_text(s: str) -> str:
+    """``s`` with each window number, step range and window count `WINDOW_TEXT` finds in its published form, and no load's
+    own field (`OWN_AT`)."""
+    for pat, sub in WINDOW_TEXT:
+        s = pat.sub(sub, s)
+    return _at_text(s)
+
+
+def public_json(o: Any, parent: Any = None) -> Any:
+    """``o`` with no field of a window's own (`OWN`, `NUMBERED`) or of a load's (`OWN_AT`, by ``parent``, the key ``o``
+    is under) and each string in its `public_text` form."""
     if isinstance(o, Mapping):
-        return {public_text(k) if isinstance(k, str) else k: public_json(v) for k, v in o.items() if not _held(k, v)}
+        return {public_text(k) if isinstance(k, str) else k: public_json(v, k) for k, v in o.items() if not _held(k, v, parent)}
     if isinstance(o, list):
-        return [public_json(v) for v in o]
+        return [public_json(v, parent) for v in o]
     return public_text(o) if isinstance(o, str) else o
 
 
 def public_line(line: str) -> str:
     """A verdict line as the run publishes it: each JSON object in it in its `public_json` form, one cut short that names a
-    window's field replaced by `CUT` to the line's end, and the rest in its `public_text` form."""
+    window's or a load's own field replaced by `CUT` to the line's end, and the rest in its `public_text` form."""
     dec, out, i = json.JSONDecoder(), [], 0
     while (j := line.find("{", i)) >= 0:
         out.append(public_text(line[i:j]))
         try:
             obj, end = dec.raw_decode(line, j)
         except ValueError:
-            if _OPEN.match(line, j) and _FIELD.search(line, j):
+            if _OPEN.match(line, j) and (_FIELD.search(line, j) or _AT_FIELD.search(line, j)):
                 out.append(CUT + ("\n" if line.endswith("\n") else ""))
                 return "".join(out)
             out.append("{")
@@ -353,7 +391,7 @@ def public_lines(src: Any, dst: Any, private: Path | None) -> None:
 
 def public_doc(text: str) -> str:
     """A published file's text in its public form: a JSON document's `public_json`, else each line's `public_line`; ``text``
-    itself where nothing in it names or counts a window."""
+    itself where nothing in it names or counts a window or holds a load's own field."""
     try:
         doc = json.loads(text)
     except ValueError:
@@ -364,9 +402,9 @@ def public_doc(text: str) -> str:
 
 def publish(out: Path, private: Path) -> list[str]:
     """Every file under ``out``, the dir that leaves the node, in its public form: one whose path names a window, or that
-    `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window (`public_doc`) held in
-    full, under ``private`` at its path under ``out``, its public form left in its place. A file that isn't UTF-8 text is
-    held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
+    `PUBLISH_MAX` keeps from being read, held whole, and one whose text names or counts a window or holds a load's own
+    field (`public_doc`) held in full, under ``private`` at its path under ``out``, its public form left in its place. A
+    file that isn't UTF-8 text is held whole. Only `PUBLIC_FILES` stay as they are, unread. The paths held, in order."""
     held: list[str] = []
     for p in sorted(out.rglob("*")):
         if p.is_symlink() or not p.is_file():
@@ -982,9 +1020,9 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
              for k, r in rows.items() if k != "integrity" and r.get("verdict") == "accept" and at[k][0] is not None}
     composing = {**report, "protocols": {k: r if k == "integrity" else {"verdict": "missing"} for k, r in rows.items()}}
     rec = BR.from_period(composing, steps=steps, deployment=BR.REFERENCE, extra=extra, product=product)
-    report["composed"] = rec["composed"]["onsite"] = {"protocol": REPORT_FORMAT, "verdict": rec["composed"]["verdict"],
-                                                      "reason": said(rows, at, node, built)}
-    line = {"composed": rec["composed"]["verdict"], **named, "reason": report["composed"]["reason"],
+    verdict = WINDOW_VERDICT.get(rec["composed"]["verdict"], rec["composed"]["verdict"])
+    report["composed"] = {"protocol": REPORT_FORMAT, "verdict": verdict, "reason": said(rows, at, node, built)}
+    line = {"composed": verdict, **named, "reason": report["composed"]["reason"],
             "record_missing": rec["composed"]["missing"],
             "check": BR.check(rec), "steps": list(steps), "node": node,
             "deployment": rec["monitoring_period"]["deployment"]["id"]}

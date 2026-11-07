@@ -1,6 +1,10 @@
 module
 
+public import Definitions.Core.Game
+public import Mathlib.Data.Fintype.Pi
 public import Proofs.Core.Game.Union
+import Mathlib.Basic.ENNReal.BigOperators
+import Proofs.Core.Game.Basic
 public import Definitions.Core.Game.Prob
 
 /-!

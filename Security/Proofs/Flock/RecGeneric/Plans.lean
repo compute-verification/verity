@@ -1,20 +1,14 @@
 module
 
-public import Proofs.Flock.RecGeneric.Plan
+public import Definitions.Claims.RecursionGeneric.Plans
 
 /-!
-# Run finders every recursion reads, and Flock's
+# Flock's run finders, and a finder's expected cost
 
-Plans that need no inner protocol:
-
-* `forkPlan k`: `B`'s plan, guess a round below `k(x)` and search a run and its fork there. At the composite's reruns it is
-  `B_I` (`Claims.Recursion.BinnerV`'s finder).
-* `linkPlan k M`: the deviation finder's plan, gated: guess a round `j`, ask whether a rerun forked at `j` from a shared
-  prefix gives; only if it does, ask up to `M` more forks at `j` and search the first and the first of them that gives.
-  At the composite's reruns it is `Claims.Recursion.FdevV`'s finder with its search gated by the first rerun (`FdevV`
-  searches the loop even where the first rerun gives nothing, which its declared cost doesn't charge).
-
-Flock's terms are plans too, at any caps (`Claims.Recursion.Caps`): `capPlan Cp M` (`FC`) and `conflictPlan k R` (`F0`).
+The generic statements read run finders only through `Proto`'s terms and the composite's `forkPlan` and `linkPlan`
+(`Definitions.Claims.RecursionGeneric.Plans`). Flock's own terms are plans too, at any caps (`Claims.Recursion.Caps`):
+`capPlan Cp M` (`FC`) and `conflictPlan k R` (`F0`). A finder's expected cost (`RunFinder.ExCost`) and its bound in
+runs named (`RunFinder.MadeLe`) are what its bits read (`Cost`, `LinkBits`, `AtFlockBits`).
 
 Statements only: definitions, no proofs.
 -/
@@ -25,28 +19,30 @@ namespace Claims.RecGeneric
 
 open Claims
 
+section Finder
+
+variable {Coin Ω C : Type} [Fintype Coin] [Nonempty Coin] [Fintype Ω] [Nonempty Ω] [Fintype C] [Nonempty C]
+  {n : ℕ}
+
+/-- `E[F's cost]` in the model `m`: the expected SHA-512 calls of the runs it names, `0` where its selector is
+empty. -/
+noncomputable def RunFinder.ExCost (F : RunFinder Coin) (m : RunModel Coin Ω n C) (x : Msg) : ℝ :=
+  if h : 0 < F.sel x then Ex fun s => ((F.finder m x h).cost s : ℝ) else 0
+
+end Finder
+
+/-- **`F` names at most `e` runs in expectation, each of cost at most `c`**: in every model whose runs cost at most
+`c` calls each on average over every fork the plan can make, `E[F's cost] ≤ e(x) · c`. What a run finder's bits read
+(`ExpectedCR` turns its expected cost into its collision bound). -/
+def RunFinder.MadeLe {Coin : Type} [Fintype Coin] [Nonempty Coin] (F : RunFinder Coin) (e : Msg → ℕ) : Prop :=
+  ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (n : ℕ) (C : Type) [Fintype C] [Nonempty C] (m : RunModel Coin Ω n C)
+    (x : Msg) (c : ℝ), (∀ (ω : Ω) (j : ℕ) (u₀ : (Fin n → Coin) × C),
+      Ex (fun v : (Fin n → Coin) × C =>
+        (m.cost ω (Claims.Recursion.fork (m.cut j) u₀.1 v.1, v.2) : ℝ)) ≤ c) →
+    (∀ ω, Ex (fun u => (m.cost ω u : ℝ)) ≤ c) →
+    F.ExCost m x ≤ e x * c
+
 variable {Coin : Type}
-
-/-- **`B`'s plan** at `k` rounds: guess a round `j < k(x)`, and search the run `u₀` and its fork at `j` with `u₁`. -/
-def forkPlan (k : Msg → ℕ) : RunFinder Coin where
-  sel := k
-  slots _ := 1
-  plan _ j := .done [.fresh 0, .fork j.val (.fresh 0) (.fresh 1)]
-
-/-- The link's loop: up to `n` forks at `j` of the shared prefix `u₀`, from the fresh run `i` on; the first that is
-accepted is searched with `first`, and `first` alone where none is. -/
-def linkLoop (j : ℕ) (first : RunExp) : ℕ → ℕ → Plan Coin
-  | 0, _ => .done [first]
-  | n + 1, i => .ask (.fork j (.fresh 0) (.fresh i)) fun b =>
-    if b then .done [first, .fork j (.fresh 0) (.fresh i)] else linkLoop j first n (i + 1)
-
-/-- **The link's plan** at `k` rounds and `M` tries: guess `j < k(x)`; ask whether `fork_j(u₀, u₁)` is accepted; if
-it is, the loop over `fork_j(u₀, u₂), …, fork_j(u₀, u_{M+1})`; if it isn't, search nothing. -/
-def linkPlan (k : Msg → ℕ) (M : ℕ) : RunFinder Coin where
-  sel := k
-  slots _ := M + 1
-  plan _ j := .ask (.fork j.val (.fresh 0) (.fresh 1)) fun b =>
-    if b then linkLoop j.val (.fork j.val (.fresh 0) (.fresh 1)) M 2 else .done []
 
 /-- The caps' loop at cap position `q` of round `j`: up to `n` forks at `j` of `u₀`, from the fresh run `i` on; the
 first that is accepted and whose coins query `q` (`opens`) is searched with `u₀`, and `u₀` twice where none is. -/

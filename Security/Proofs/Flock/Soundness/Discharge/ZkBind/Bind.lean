@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
-public import Proofs.Flock.Soundness.Binding.Rows
+public import Proofs.Flock.Soundness.Binding.Layout
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Lowering
 
 /-!
 # `--zk` value binding: the committed values are the drawn units' own

@@ -5,28 +5,13 @@ from __future__ import annotations
 import torch
 
 from verity.ml.circuits.refs import Coll
-from verity_vllm.program.frontend.derive import Alloc, refuse
+from verity_vllm.program.frontend.derive import refuse
 from verity_vllm.program.frontend.strided_views import _permute
-from verity_vllm.program.frontend.rules.common import dtype_is, shape
+from verity_vllm.program.frontend.rules.common import shape
 
 
 aten = torch.ops.aten
 BF16 = torch.bfloat16
-
-
-def _row_value(ctx, a, name: str, dtype=BF16) -> str | None:
-    if not isinstance(a, torch.fx.Node):
-        return f"{name} is not a graph value"
-    v = ctx.val(a)
-    if isinstance(v, Alloc):
-        return None
-    if not isinstance(v, Coll):
-        return f"{name} is not a value collection ({type(v).__name__})"
-    if not dtype_is(ctx, a, dtype):
-        return f"numerics_unregistered: {name} has dtype {ctx.dtype_of(a)}; the profile's kinds are {dtype}"
-    if not shape(ctx, a):
-        return f"{name} is a scalar"
-    return None
 
 
 def _strides(n) -> tuple[int, ...] | None:

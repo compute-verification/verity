@@ -8,7 +8,7 @@ up only as `verity/flock-circuit`, so that outer session is refused at the recor
 check has passed at setup. The honest level, restaged under SHA-512's salts (`rec_residuals.salt_of`), is the recorded
 one but for its own rows' fresh salts, and passes setup at the honest inner session and the coin server's transcript of
 it (`--rec-inner-transcript`), and is refused without either, at a transcript whose level-3 tops or link points are not
-the ones it climbs to and the record's (`RecVStar.checkTopRows`, `RecVStar.innerLink`) or not in the coin server's
+the ones it climbs to and the record's (`RecVStar.checkTopRows`, `RecVStar.innerLink`) or not in the challenger's
 format (`RecSetup.checkReads`), and where V* registered its
 `rec-coef` one bit off, at that opening, though its registration is consistent. Set up as another statement than V*'s `verity/flock-circuit`, or with a lookup table held,
 the honest level is refused. Every verify names the session's statement (`--rec-part J`, its index in `rec-statements`'
@@ -120,7 +120,7 @@ def restaged(built, once) -> Path:
 @pytest.fixture(scope="module")
 def shape(built, tmp_path_factory) -> Path:
     """The verifier's own inner shape (`rec-inner`) from the inner statement, which `verify` needs for any V* statement,
-    and beside it the coin server's record of the honest inner session in its own format (``transcript.json``,
+    and beside it the challenger's record of the honest inner session in its own format (``transcript.json``,
     `rec_live.record_bytes`: the fixture's record predates it, and the verifier reads that format at the inner shape,
     `RecSetup.checkReads`)."""
     u = SET / "u" / "stage"
@@ -181,7 +181,7 @@ def _files(level: Path, public: Path, registered: Path, shape: Path, rows: Path 
 def _args(level: Path, public: Path, registered: Path, shape: Path, inner: str | Path | None, *extra: str,
           session: Path = SET / "outer-L3" / "session", rows: Path | None = None,
           statement: str = "verity/flock-circuit", transcript: bool = True) -> list[str]:
-    """`verify`'s arguments for a staged statement; with an inner session, the coin server's record of the honest one
+    """`verify`'s arguments for a staged statement; with an inner session, the challenger's record of the honest one
     (`--rec-inner-transcript`, whose link points and tops every V* statement is held to) unless `extra` names another or
     `transcript` is false."""
     u = SET / "u" / "stage"
@@ -219,7 +219,7 @@ def _acc_rows(dst: Path, level: Path) -> Path:
 
 def test_the_honest_level_passes_setup_at_the_honest_inner_session(forged, shape, tmp_path, restaged):
     """Its VERDICT names its part (`rec_part`), the SHA-512 of the shared rows file it read (`rec_rows_sha512`), of
-    the verifier's inner shape file (`rec_inner_sha512`), and of the inner session's record and the coin server's
+    the verifier's inner shape file (`rec_inner_sha512`), and of the inner session's record and the challenger's
     transcript of it (`rec_inner_session_sha512`, `rec_inner_transcript_sha512`). `rec-compose` holds every part to
     those inputs through `rec_shared` (`test_lean_rec_compose.py`), which `rec_compose.shared_of_args` derives from the
     same arguments, as the pod stages it in a run's record."""
@@ -298,7 +298,7 @@ def test_a_level_at_link_points_the_coin_server_did_not_draw_is_refused(forged, 
 def test_a_level_over_a_transcript_not_in_the_coin_servers_format_is_refused(forged, shape, tmp_path, restaged):
     """`RecSetup.checkReads` among `verify`'s inputs (`RecSetup.commits`): the honest level against the honest inner
     transcript's values written as compact JSON is refused before setup, since the recursion's transcript model reads
-    the record in the coin server's own format."""
+    the record in the challenger's own format."""
     t = json.loads((SET / "inner-honest" / "public.json").read_text())
     f = tmp_path / "transcript.json"
     f.write_text(json.dumps(t))
@@ -510,7 +510,7 @@ def test_rec_cap_holds_every_node_of_level_0s_cap_at_the_level_0_registration(ca
     statement passes setup (`undrawn`'s session is refused after it). Without that entry it is refused, since then nothing
     ties its rows to the ones level 0's openings read; at an entry of another root (level 0's queries reading another
     registration of the cap than RecCap holds) it is refused by the root; and at an inner transcript whose `root_B` differs
-    at node 5 it is refused at the row reading that node, so every node RecCap holds is the coin server's. Each verify sets
+    at node 5 it is refused at the row reading that node, so every node RecCap holds is the challenger's. Each verify sets
     RecCap up over its 128 instances; they run at once."""
     rows = tmp_path / "rows.json"
     rows.write_text(json.dumps(S.shared_rows([], (), [cap])))
@@ -579,7 +579,7 @@ def _transcript(dst: Path, change) -> Path:
 
 def test_a_parts_message_rows_are_the_c_k_of_the_inner_transcript(algebra, shape, undrawn, rows, tmp_path):
     """`HPubRows`' check (`RecVStar.checkPubRows`): the `pub.bin` rows of the first algebra part that reads `rec-c0` are,
-    at its `rec-c<k>` reads, the `c_k` the coin server recorded. The honest part passes setup with the inner transcript
+    at its `rec-c<k>` reads, the `c_k` the challenger recorded. The honest part passes setup with the inner transcript
     (`undrawn`'s session is refused after it), is refused without it, and is refused at a transcript whose rep 0 `c_0` is
     one bit off, or whose coins there are not the inner session's."""
     reads = lambda p: {k: x["value"] for k, x in json.loads((p / "registered.json").read_text())["ports"].items()}

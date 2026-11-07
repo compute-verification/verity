@@ -26,7 +26,8 @@ exclude = ["archive/**", "**/CHANGELOG.md"]
 ~~~
 
 The docstrings give the full format: `[roots]`, `[modules]`, `[split]` and `[rewrite]` for `layout.py`, `[[words_in]]`,
-`[keep]`, `[keep_in]` and `scope` for `rename.py`. A word map with `scope = "prose"` renames words only where they stand in
+`[keep]`, `[keep_in]` and `scope` for `rename.py`, which refuses a map whose `[[words_in]]` files, `[keep_in]` or
+`[keep_paths]` name a path no tracked file matches, since its move would skip what the map says of it. A word map with `scope = "prose"` renames words only where they stand in
 prose (comments, docstrings, Markdown's text), so its move moves no path and leaves every lock and pin as it was;
 `move_check.py` judges that move by the map its commit's `Move:` line names (`Terms`). Neither script rewrites research's
 `moves.json`, to which each move appends its renamed paths.

@@ -2,12 +2,12 @@
 for refusal, on Programs encoded as descriptor v1 (`verity/ml/circuits/PROTOCOL.md`), through the difftest harness
 (`verity_difftest`: one server open per module, reject parity, Hypothesis sampling deterministically).
 
-The reference is `python_answer`: `codec.decode_program`, then `evaluate.evaluate_region` over each of the root's nodes that
+The reference is `python_answer`: `codec.decode_program`, then `reference.evaluate_region` over each of the root's nodes that
 is not an input node, with the inputs bound by runs (a registered table as `reference`'s `RegisteredTable`, read where a gate
 reads it), the gate-by-gate oracle that `reference.evaluate` runs on a target's one-call Program; for those Programs
 `reference.evaluate` itself is checked too. Two of the Lean evaluator's refusals are not the oracle's, so `python_answer`
-applies them by name: a primitive the Lean does not implement (one outside the registry's 172 and the lazy families it
-reads), and an input word at or above `2^w` (the oracle stores whatever it is given).
+applies them by name: a primitive the Lean does not implement (one outside the registry's gate primitives and the lazy
+families it reads), and an input word at or above `2^w` (the oracle stores whatever it is given).
 
 The Programs: seeded random Boolean composites built with the IR builder, which reach every node form (primitive, call,
 batch of a gate and of a composite over an axis, scan with xs and a shared argument) and both constants, sampled by a
@@ -26,6 +26,12 @@ E4's primitives (PoUW's and NCP's words, the sampler, MUFU, the reference kinds'
 run batched the same way, on their captures where the fixtures hold them; the tables they read are held to their pins; the
 registered tables are bound by name and read by the composites that take them; the lazy families run on their one-call
 Programs.
+
+The same server answers two readings of a decoded Program, which hold two Python classes to their Lean as mirrors: `gate`
+(`Evaluate.gateFn`, `Flock.Program.Gate`) against `layout.Circuit.gate`'s `layout.Gate`, on every gate of random composites
+and on gates past their last; and `partition` (`Evaluate.partitionFn`, `Flock.Extract.Partition`) against
+`partition_object.evaluate`'s `Partition` under `Q_word`, on the composites' one-call Programs and on their inlined ones, whose
+root batches and scans both refuse.
 """
 from __future__ import annotations
 
@@ -48,12 +54,12 @@ import verity_difftest as DT
 from hypothesis import strategies as st
 from verity_difftest import settings
 
-from verity.core.protocols.pouw.circuit import words as W
+from verity.ml.protocols.pouw.circuit import words as W
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
+from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.defs import REGISTRY, CompositeDefinition, PrimitiveDefinition, bind
-from verity.ml.circuits.evaluate import evaluate_region
 from verity.ml.circuits.evaluation import reference
 from verity.ml.circuits.ops import fp32 as FP
 from verity.ml.circuits.ops import mufu as MU
@@ -112,7 +118,7 @@ SAMPLER = (TW.NvLogf, TW.NvLogfV2, SPL.GumbelStreamKey, SPL.GumbelNoiseLane, SPL
 #: E4's MUFU primitives (`Evaluate.Mufu`)
 MUFU = (MU.MufuEx2Ftz, MU.MufuRcpFtz, MU.Fa2InvSum, HOP.Fa3InvSum, MU.MufuSqrtFtz, MU.DivFullRcp, MU.RsqrtApprox, MU.MufuTanh)
 #: E4's correctly rounded transcendentals of the reference kinds (`Evaluate.Decimal`)
-DECIMALS = (RP.F32ExpRn, RP.F32ErfRn, RP.F32TanhRn)
+DECIMALS = (RP.F32ExpRn, RP.F32LogRn, RP.F32ErfRn, RP.F32TanhRn)
 #: E4's activations and RoPE's outputs (`Evaluate.Act`)
 ACTS = (VP.SiluMulBf16, ACT.SiluMulBf16, VP.RopeOut, VP.RopeOutAdd, DENSE.TanhF32Rn, DENSE.GeluTanhMulBf16, ACT.GeluErfBf16)
 _E4_IDS = frozenset(p.id for p in WORDS + SAMPLER + MUFU + DECIMALS + ACTS)
@@ -138,8 +144,8 @@ REGISTERED_TABLES = {
 }
 
 
-def _bind(D, inputs: list) -> reference._Transcript:
-    """The transcript of the root's Input gates bound to `inputs` (`Evaluate.bind`): each argument a list of words, or
+def _bind(D, inputs: list) -> reference._TableTrace:
+    """The trace of the root's Input gates bound to `inputs` (`Evaluate.bind`): each argument a list of words, or
     `{"table": name}` binding as many consecutive `RegisteredInput16_v1` gates as the table has leaves, read on demand."""
     body = D.root.body
     runs = [(body.offsets[k], n.gates, *input_id(n.fn.id)[::-1]) for k, n in enumerate(body.nodes)
@@ -153,7 +159,7 @@ def _bind(D, inputs: list) -> reference._Transcript:
     total = sum(n for _, n, _, _ in runs)
     if given != total:
         raise ValueError(f"expected {total} input words, got {given}")
-    t = reference._Transcript()
+    t = reference._TableTrace()
     ri = ro = 0
     for p in inputs:
         if isinstance(p, list):
@@ -189,7 +195,7 @@ def python_answer(desc: dict, inputs: list) -> dict:
         body = D.root.body
         for k, n in enumerate(body.nodes):
             if not (isinstance(n.fn, PrimitiveDefinition) and input_id(n.fn.id)):
-                evaluate_region(D.circuit, D.circuit[body.offsets[k]:body.offsets[k] + n.gates], t)
+                reference.evaluate_region(D.circuit, D.circuit[body.offsets[k]:body.offsets[k] + n.gates], t)
         return {"output": [t[g] for g in D.circuit.root_outputs()]}
     except (ValueError, KeyError, TypeError, IndexError) as e:
         return {"reject": f"{type(e).__name__}: {e}"}
@@ -503,6 +509,125 @@ def test_a_malformed_input_is_rejected_and_the_next_request_answered(server):
     assert kind == "output" and _words(json.loads(out), [4]) == [1 + 1 + 8]
 
 
+# ---- the layout's gates and the partition: the Python mirrors of `Flock.Program.Gate` and `Flock.Extract.Partition` -----
+
+def _keys(D) -> dict[int, str]:
+    """Each decoded Definition's `definitions` key, by object: the key `Flock.Program.Defn.key` holds."""
+    return {id(f): k for k, f in D.defs.items()}
+
+
+def _scope(s, key: dict[int, str]) -> list[list]:
+    """An activation from the innermost up to the root, as `Evaluate.scopeJson` writes it."""
+    out = []
+    while s.parent is not None:
+        out.append([key[id(s.spec)], s.offset, s.node_idx, s.member])
+        s = s.parent
+    return out + [[key[id(s.spec)], s.offset]]
+
+
+def _decoded(value: dict, field: str):
+    if not (isinstance(value, dict) and set(value) == {"program", field} and isinstance(value["program"], dict)):
+        raise DT.Reject(f"input: a program object and {field}")
+    try:
+        return codec.decode_program(copy.deepcopy(value["program"]), REGISTRY)
+    except (ValueError, KeyError, TypeError, IndexError) as e:
+        raise DT.Reject(f"{type(e).__name__}: {e}") from None
+
+
+def gate_reference(value: dict) -> dict:
+    """`layout.Circuit.gate` on the decoded Program: the `layout.Gate` as `Evaluate.gateFn` answers it, its primitive by key."""
+    D, i = _decoded(value, "gate"), value["gate"]
+    if not (isinstance(i, int) and not isinstance(i, bool)):
+        raise DT.Reject(f"input: gate {i!r} is not a gate index")
+    try:
+        g = D.circuit.gate(i)
+    except IndexError as e:
+        raise DT.Reject(f"gate {e} outside the circuit") from None
+    key = _keys(D)
+    return {"index": g.index, "prim": key[id(g.prim)], "operands": list(g.operands), "scope": _scope(g.scope, key)}
+
+
+def partition_reference(value: dict) -> dict:
+    """`partition_object.evaluate` under `Q_word{X, 32}` on the decoded Program: the `Partition` as `Evaluate.partitionFn`
+    answers it, each Call `[root-body index, its Definition's key, units, owner]`."""
+    D = _decoded(value, "X")
+    try:
+        part = PO.evaluate(D, PO.query(value["X"], 32))
+    except (ValueError, KeyError, TypeError, IndexError) as e:
+        raise DT.Reject(f"{type(e).__name__}: {e}") from None
+    key = _keys(D)
+    return {"population": part.population, "calls": [[k, key[id(c.fn)], c.units, list(c.owner())] for k, c in part.calls]}
+
+
+@functools.cache
+def _layout_desc(seed: int, one_call: bool) -> tuple[str, int]:
+    """A random composite's Program, inlined into the root or as its one-call Program, and its gate count."""
+    program, main, _ = _random_program(seed)
+    if one_call:
+        program = reference.standalone_call(bind(main))[0]
+    return json.dumps(desc_of(program)), program.circuit.size
+
+
+@st.composite
+def gate_requests(draw) -> dict:
+    """A random composite's Program and one of its gates, or a gate past its last (about one draw in three: Hypothesis
+    draws an integer range's lower bound more often than its share)."""
+    text, size = _layout_desc(draw(st.integers(0, RANDOM_SEEDS - 1)), draw(st.booleans()))
+    g = draw(st.integers(size, size + 3)) if draw(st.integers(0, 7)) == 0 else draw(st.integers(0, size - 1))
+    return {"program": json.loads(text), "gate": g}
+
+
+@st.composite
+def partition_requests(draw) -> dict:
+    """A random composite's one-call Program, whose one Call `Q_word` cuts, or one draw in four its inlined Program, whose
+    root batches and scans `Q_word` refuses; at an X from 1 to 64."""
+    text, _ = _layout_desc(draw(st.integers(0, RANDOM_SEEDS - 1)), draw(st.integers(0, 3)) > 0)
+    return {"program": json.loads(text), "X": draw(st.sampled_from((1, 2, 3, 4, 8, 16, 64)))}
+
+
+GATE_PORT = DT.Port("verity-evaluate", "gate", reference=gate_reference, inputs=gate_requests(), package=PKG)
+PARTITION_PORT = DT.Port("verity-evaluate", "partition", reference=partition_reference, inputs=partition_requests(),
+                         package=PKG)
+
+
+@pytest.mark.slow
+def test_layout_gates_drawn(server):
+    stats = DT.run(GATE_PORT, examples=400, seed=0, server=server)
+    assert stats.outputs >= 200 and stats.rejects >= 20, stats
+
+
+def test_every_gate_of_some_programs(server):
+    """Every gate of eight random composites, inlined and as one-call Programs, and the first index past each."""
+    n = 0
+    for seed, one_call in itertools.product(range(8), (False, True)):
+        text, size = _layout_desc(seed, one_call)
+        desc = json.loads(text)
+        for g in range(size + 1):
+            assert DT.replay(GATE_PORT, {"program": desc, "gate": g}, server)[0] == ("output" if g < size else "reject")
+        n += size
+    assert n >= 200, n
+
+
+def test_partitions_drawn(server):
+    stats = DT.run(PARTITION_PORT, examples=300, seed=0, server=server)
+    assert stats.outputs >= 150 and stats.rejects >= 20, stats
+
+
+def test_layout_and_partition_refusals(server):
+    """A malformed request, an X outside 1..2^16 and an unordered program are refused by both sides."""
+    text, _ = _layout_desc(0, True)
+    desc = json.loads(text)
+    cases = [(GATE_PORT, {"program": desc, "gate": -1}), (GATE_PORT, {"program": desc, "gate": True}),
+             (GATE_PORT, {"program": desc}), (GATE_PORT, {"program": 3, "gate": 0}),
+             (PARTITION_PORT, {"program": desc, "X": 0}), (PARTITION_PORT, {"program": desc, "X": 65537}),
+             (PARTITION_PORT, {"program": desc, "X": True}), (PARTITION_PORT, {"program": desc})]
+    forward = json.loads(_random_desc(0)[0])
+    _forward(forward)
+    cases.append((PARTITION_PORT, {"program": forward, "X": 16}))
+    assert [DT.replay(port, c, server)[0] for port, c in cases] == ["reject"] * len(cases)
+    assert DT.replay(PARTITION_PORT, {"program": desc, "X": 65536}, server)[0] == "output"
+
+
 # ---- E1: the constants and the scalar primitives ------------------------------------------------------------------------
 
 #: every constant the registry holds with every module of `verity` and `verity_vllm` imported (172 primitives besides the
@@ -791,7 +916,7 @@ def test_float_words_out_of_range_are_refused(server):
 
 
 FIXTURES = Path(__file__).resolve().parents[4] / "ml/circuits/ops/tests/fixtures"
-#: the GPU probe's instructions (`fixtures/gpu-nan-2026-09-28/fp32_ops.json`) by the `_v2` primitive each is
+#: the GPU NaN probe's instructions (its `fp32_ops.json`) by the `_v2` primitive each is
 GPU_OPS = {"add.rn.f32": FP.F32AddV2, "add.rn.ftz.f32": FP.F32AddFtzV2, "sub.rn.f32": VP.F32SubV2, "sub.rn.ftz.f32": FP.F32SubFtzV2,
            "mul.rn.f32": FP.F32MulV2, "mul.rn.ftz.f32": FP.F32MulFtzV2, "div.rn.f32": FP.F32DivV2, "fma.rn.f32": FP.F32FmaV2,
            "fma.rn.ftz.f32": FP.F32FmaFtzV2}
@@ -1094,7 +1219,7 @@ MMA_SPECIAL = sorted(FIXTURES.glob("tc-total-2026-09-07/*/mma_special.reduced.js
 @pytest.mark.slow
 @pytest.mark.skipif(not MMA_SPECIAL, reason="the A100 / RTX 4090 special-value campaign is a fetched fixture")
 def test_the_a100_and_rtx4090_special_value_captures(server):
-    """The A100 and RTX 4090 special-value campaign (`tc-total-2026-09-07`): 31,290 cases and 906 positional cases per
+    """The A100 and RTX 4090 special-value campaign: 31,290 cases and 906 positional cases per
     device, every NaN, infinity, signed zero and saturation rule of `AmpereBF16TcDot16_v2`."""
     total = 0
     for path in MMA_SPECIAL:
@@ -1111,8 +1236,8 @@ H100_WGMMA = FIXTURES / "tc-hopper-wgmma-bf16-2026-09-26/records.json.gz"
 @pytest.mark.slow
 @pytest.mark.skipif(not (H100.exists() and H100_WGMMA.exists()), reason="the H100 captures are fetched fixtures")
 def test_the_h100_captures(server):
-    """The H100 `HGMMA.64x128x16.F32.BF16` record (`tc-hopper-2026-09-07`: 44,046 records in 14 families) and lane
-    wgmma-bf16's `wgmma m64n8k16` sample (20,880 one-step records and 840 four-step chains on one accumulator), through
+    """The H100 `HGMMA.64x128x16.F32.BF16` record (`H100`: 44,046 records in 14 families) and the
+    `wgmma m64n8k16` sample (`H100_WGMMA`: 20,880 one-step records and 840 four-step chains on one accumulator), through
     `HopperBF16WgmmaDot16_v1`."""
     with gzip.open(H100, "rt") as f:
         doc = json.load(f)
@@ -1145,9 +1270,9 @@ def _tiles(z, *scales: str) -> tuple[list[tuple], list[int]]:
 
 @pytest.mark.slow
 def test_the_sm120_captures(server):
-    """The RTX PRO 6000's E5M2 specials and signed-zero tiles (`tc-sm120-e5m2-2026-09-30`: 38,912 words, NaN and infinite
+    """The RTX PRO 6000's E5M2 specials and signed-zero tiles (38,912 words, NaN and infinite
     operands and accumulators included) through `BlackwellE5m2QmmaDot32_v1`, and its four MXFP4 edge families
-    (`tc-sm120-mxf4-2026-10-01`: 73,728 words, a 0xFF scale byte, overflowing and cancelling blocks, ±inf and NaN
+    (73,728 words, a 0xFF scale byte, overflowing and cancelling blocks, ±inf and NaN
     accumulators) through `BlackwellMxf4OmmaDot64_v1`."""
     import numpy as np
 
@@ -1696,7 +1821,7 @@ def test_mufu_words_out_of_range_are_refused(server):
     assert agree(server, cases) == (0, len(cases)) == (0, 3 * 8)
 
 
-# ---- E4: the correctly rounded transcendentals of the reference kinds: exp, erf and tanh at 100 digits -------------------
+# ---- E4: the correctly rounded transcendentals of the reference kinds: exp, log, erf and tanh at 100 digits --------------
 
 def _f32w(v):
     return struct.unpack("<I", struct.pack("<f", v))[0]
@@ -1710,13 +1835,22 @@ DEC_SWEEP = tuple(sorted({*F32_SWEEP, *(s | (_f32w(v) + d) for v in _DEC_EDGES f
                           *(_f32w(k / 16) | s for k in range(1, 16 * 12) for s in (0, 1 << 31)),
                           *(_rng.getrandbits(1) << 31 | _rng.randrange(0x41800000) for _rng in [random.Random("decimals")]
                             for _ in range(8192))}))
+#: log's words: `DEC_SWEEP` (the edge words its exhaustive check's specials read, the subnormals' and the normals' ends,
+#: one and its neighbours, two and the largest finite word, are `F32_SWEEP`'s), 4096 seeded words about one, where `ln`
+#: is least, and 4096 seeded positive finite words
+LOG_SWEEP = tuple(sorted({*DEC_SWEEP,
+                          *(_rng.randrange(0x3F700000, 0x3F900000) for _rng in [random.Random("log about one")]
+                            for _ in range(4096)),
+                          *(_rng.randrange(1, 0x7F800000) for _rng in [random.Random("log")] for _ in range(4096))}))
 
 
 def test_decimal_primitives_on_their_grids(server):
-    """Each of exp, erf and tanh on every word of `DEC_SWEEP`, each answer also the Python primitive's own evaluator's."""
-    counts = {fn.id: _agree_on(server, fn, [[(a,) for a in DEC_SWEEP[i:i + 2048]] for i in range(0, len(DEC_SWEEP), 2048)])
-              for fn in DECIMALS}
-    assert counts == {fn.id: len(DEC_SWEEP) for fn in DECIMALS}, counts
+    """Each of exp, erf and tanh on every word of `DEC_SWEEP` and log on every word of `LOG_SWEEP`, each answer also the
+    Python primitive's own evaluator's."""
+    sweeps = [(fn, LOG_SWEEP if fn is RP.F32LogRn else DEC_SWEEP) for fn in DECIMALS]
+    counts = {fn.id: _agree_on(server, fn, [[(a,) for a in w[i:i + 2048]] for i in range(0, len(w), 2048)])
+              for fn, w in sweeps}
+    assert counts == {fn.id: len(w) for fn, w in sweeps}, counts
 
 
 @st.composite
@@ -1742,7 +1876,7 @@ def test_decimal_primitives_drawn(server):
 
 def test_decimal_words_out_of_range_are_refused(server):
     cases = _refused_leaves(DECIMALS)
-    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 3)
+    assert agree(server, cases) == (0, len(cases)) == (0, 3 * 4)
 
 
 # ---- E4: the activations and RoPE ---------------------------------------------------------------------------------------
@@ -1783,7 +1917,7 @@ def test_activations_on_their_grids(server):
                       "TanhF32Rn_v1": len(TANH_SWEEP), "GeluTanhMulBf16_v1": gu, "GeluErfBf16_v1": 65536}, counts
 
 
-CAPTURED = Path(__file__).resolve().parents[5] / "benchmarks/numerical/tests/bench/data/captured-101/slices"
+CAPTURED = Path(__file__).resolve().parents[5] / "verity/ml/flock/tests/data/captured-101/slices"
 
 
 def _u16(path: Path) -> list[int]:

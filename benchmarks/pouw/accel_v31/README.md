@@ -1,7 +1,7 @@
 # accel_v31: Dither's no-fold call on the GPU
 
 The GPU prover of one Dither call, the binding that runs it a call at a time, and the CPU reference and verifier checks
-that judge its output bit for bit. The call is `verity/core/protocols/pouw/circuit/dither.py`'s:
+that judge its output bit for bit. The call is `verity/ml/protocols/pouw/circuit/dither.py`'s:
 
 - m rows of A against n rows of B, at contraction K;
 - HYB noise in noise tiles of L′ inner indices;
@@ -31,7 +31,6 @@ binding.
   every knob.
 - `h200_step.py`: the H200's step, from `v31 fill-bench`'s JSON lines.
 - `h200_pipes.py`: each pipe's duty over an overlapped call, from Nsight Compute.
-- `duty.metrics`: an Nsight Compute metric list, read by `benchmarks/torch_gpu/sha512_rows/beside.sh`.
 
 ## API
 

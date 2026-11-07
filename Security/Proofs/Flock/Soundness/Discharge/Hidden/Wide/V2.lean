@@ -1,15 +1,41 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Copies
+public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Defs
 public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.RowBc
-public import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Tail
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Binding
+import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.Rows
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Hm.Nets
+public import Proofs.Flock.Soundness.Discharge.Hidden.Binding
+public import Proofs.Flock.Soundness.Discharge.Hidden.Committed
 
 /-!
 # `sha512/row/v1` or `sha512/row/v2` rows (`OutputsCommittedV2`, `OutputsBindingV2`)
 
-`outputs_committed_tail'`'s argument, for any rows: the flat twin's Δ is `flatPairsAll` (`delta_flat_all`), whose copies
-at an output row's message bit are none (`msg_filterAll`: an output row's message has no constant bit before its last
-block), so a satisfying witness of the hidden statement satisfies its flat twin (`sat_flatAll`) and holds each output
-row's message bit's copy (`msg_copyAll`); the row's `b ‖ c` is under its own prefix (`row_bc_tgt`).
+`outputs_committed'`'s argument (`Committed.lean`), for any rows: the flat twin's Δ is `flatPairsAll`
+(`delta_flat_all`), whose copies at an output row's message bit are none (`msg_filterAll`: an output row's message has
+no constant bit before its last block), so a satisfying witness of the hidden statement satisfies its flat twin
+(`sat_flatAll`) and holds each output row's message bit's copy (`msg_copyAll`); the row's `b ‖ c` is under its own
+prefix (`row_bc_tgt`).
 -/
 
 @[expose] public section

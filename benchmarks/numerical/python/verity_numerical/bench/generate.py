@@ -32,13 +32,15 @@ import numpy as np
 
 from verity.ml.randomness import Key, derive
 
-from . import input_sets as IS
-from . import templates as TM
+from verity_flock import input_sets as IS
+from verity_flock import subcircuit_templates as TM
 
 SOURCE = b"verity input-set synthetic"
 DOMAIN = "verity/input-sets/synthetic/v1"
 MAX_DRAW_FACTOR = 4
-_SOURCES = ("templates.py", "generate.py", "input_sets.py")
+#: the sources a set's recipe depends on, each by its path under its import package
+_SOURCES = {"verity_flock/subcircuit_templates.py": TM.__file__, "verity_numerical/bench/generate.py": __file__,
+            "verity_flock/input_sets.py": IS.__file__}
 
 
 def key_for(sub: TM.Subcircuit, seed: int) -> Key:
@@ -64,7 +66,7 @@ def _versions() -> dict[str, Any]:
         except (OSError, subprocess.SubprocessError):
             head = None
     return {"git_head": head, "python": platform.python_version(), "numpy": np.__version__,
-            "source_sha256": {f"verity_numerical/bench/{f}": hashlib.sha256((here / f).read_bytes()).hexdigest() for f in _SOURCES}}
+            "source_sha256": {k: hashlib.sha256(Path(f).read_bytes()).hexdigest() for k, f in _SOURCES.items()}}
 
 
 def generate(sub: TM.Subcircuit, n: int, seed: int, out: str | Path, *, procs: int = 1, chunk: int = 64,

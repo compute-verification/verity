@@ -201,7 +201,7 @@ class Sets:
         return tars[0][1] if tars else None
 
     def open(self, tar_sha: str, name: str):
-        from verity_numerical.bench.input_sets import InputSet
+        from verity_flock.input_sets import InputSet
         if not self.has(tar_sha, name):
             raise Missing(f"inputs/set.tar ({tar_sha[:16]}): {name}/manifest.json")
         return InputSet.open(str(self.dir(tar_sha) / name))
@@ -1452,7 +1452,7 @@ def registered_gemm(run: Run) -> Iterator[Case]:
     file's shared-row tables. The audit took the sessions and their roots (the LIVE line's), not the served draw, and read
     the roots the Lean verdict opened registered reads against; `audit_negatives` re-decided it with the record's roots as
     the sessions'."""
-    from verity_numerical.bench.input_sets import InputSet
+    from verity_flock.input_sets import InputSet
     from verity.ml.circuits.defs import CompositeDefinition, bind
     from verity.ml.circuits.program import Program
     from verity.ml.circuits.refs import coll_concat
@@ -1619,7 +1619,7 @@ def served_window(run: Run) -> Iterator[Case]:
     is the service's and the audit took the delivered sessions. Neither took the served draw or the sessions' roots, and
     no verdict of record reports registered reads."""
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.pouw.circuit import leaves as L, pc8
+    from verity.ml.protocols.pouw.circuit import leaves as L, pc8
     from verity.ml.commitments.rowleaf import ROLE_W, SCHEMA_HM96_SHA512_ROW_V2
     pv = run.json("out/request/params.json")
     rec = run.json("out/request/registration.json")
@@ -1766,7 +1766,7 @@ def served_audit(run: Run) -> Iterator[Case]:
     no sessions and none of the later checks' inputs. Before `served_commit.run_of` the verifier took the run its served
     domains bind from the record's own window, not the request's binding, so the other request's registration passed R3
     (`receive-foreign` RECEIVED, the run's failed check)."""
-    from verity.core.protocols.pouw.circuit import leaves as L, pc8
+    from verity.ml.protocols.pouw.circuit import leaves as L, pc8
     from verity.ml.commitments.rowleaf import ROLE_W, ROLE_X
     commit = run.commit()
     src = subprocess.run(["git", "-C", str(REPO), "show", f"{commit}:benchmarks/pouw/served_zk/served_commit.py"],

@@ -1,7 +1,11 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
-public import Proofs.Flock.Soundness.Discharge.Exec.Retained
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # flock-verify's acceptance, round by round (R11b, the executable side)

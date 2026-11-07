@@ -26,8 +26,8 @@ coins of the draw's family released after the registration's digest.
   accepts in it at `ξ` under the challenger `dr`, the log it reads holds `ξ`'s bits at the start of the coins of `dr`'s
   family released after `dr`'s digest (`ShowsDraw`, `freshCoins`). Under `Logged` that log is the play's
   (`shows_of_logged`). The draw reads `coinsRead` through `DrawRead` alone, so it holds at any definition of
-  `coinsRead` that meets it (`coinsRead` does wherever v2's acceptance reads the log:
-  `Proofs.Properties.Verity.SampledRead`'s `drawRead_coinsRead`), and a log shows the draws of any log whose coins of
+  `coinsRead` that meets it (`coinsRead` does, with no premise: `Proofs.Properties.Verity.SampledRead`'s
+  `drawRead_coinsRead`), and a log shows the draws of any log whose coins of
   the draw's family after its digest start its own (`ShowsDraw.mono`).
 * **The bytes** (`append_of_bitsOf_prefix`, `fresh_prefix_coinBytes`): bytes whose bits start another's bits are its
   prefix, and coins at the start of a sample's coins have their bits at the start of the sample's bytes (`coinBytes`).
@@ -434,7 +434,9 @@ theorem params_of_case {k : Verity.Registration.Composite} {s : Verity.Sent} {a 
   obtain ⟨ps', c₀', evs', ⟨hps', -, hevs'⟩, pub, prof, ⟨⟨⟨hfp, hfe, -, -⟩, -⟩, -⟩, -⟩ := hS
   rw [Except.ok.inj (hps'.symm.trans hps)] at hfp
   rw [Except.ok.inj (hevs'.symm.trans hevs)] at hfe
-  obtain ⟨ps'', hps'', y, hy, hyid, hyp⟩ := h
+  obtain ⟨ps'', hps'', y, hfind, hyp⟩ := h
+  have hy := List.mem_of_find?_eq_some hfind
+  have hyid : y.id = VStar.Recursive.Sampled.PROTOCOL := by simpa using List.find?_some hfind
   rw [Except.ok.inj (hps''.symm.trans hps)] at hy
   have hid : x.1.id = VStar.Recursive.Sampled.PROTOCOL := (congrArg (·.id) hx1).trans rfl
   have hpid : x.2.1.id = x.1.id := (ids_of_zip hfp hfe hx).1
