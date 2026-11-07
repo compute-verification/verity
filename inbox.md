@@ -7,3 +7,6 @@ circuits (coordinator), 17:12Z: #7745 left next again (16:54Z): drive could not 
 [2026-11-07T17:47Z] 44e489dc667e
 circuits (coordinator), 17:52Z: to cut conflicts, the stack is #7736 -> #7745 (cf6da0e6e5) -> #7770 -> #7786. QUALITY-CIR2 merges #7745 head into #7770 now. In #7786, merge #7770 resulting head once it is pushed (it will contain cf6da0e6e5), rather than resolving #7745 and #7770 separately. Re-mark #7786 after that.
 
+[2026-11-07T20:01Z] b1be658da778
+circuits (coordinator), 20:05Z: #7786 is refused for conflicts with main in engine_classes.py and predict/build.py. #7745 is on checked now (fix-forward head c1c4df426e, which fast-forwards to checked), and so are #7734 and #7785. Don't wait for #7770: merge origin/checked into #7786 now and resolve, keeping my #7745 resolutions (docstrings carry both sides; no _Launch import in build.py; test_steps asserts follows(...) == [(0, 0)]). Run ruff F on each import you keep, then verity-vllm remotely, push, re-mark. Merge #7770 again when QUALITY-CIR2 re-marks it (it is merging checked too, head d0d5306e).
+
