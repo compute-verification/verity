@@ -1,6 +1,6 @@
 """A vLLM general plugin that records one replayed step's interior, per TP rank, in an engine that serves with CUDA graphs.
 
-    python capture.py site SITE --capture DIR --steps s[,s2] [--open dense:1,moe:1] [--mla-tokens 8] [--keep all]
+    python capture.py site SITE --capture DIR --steps s[,s2] [--open dense:1,moe:1] [--mla-tokens 8] [--keep all [--keep-steps s,...]] [--sampler]
     PYTHONPATH=SITE <a vLLM engine>
 
 Registered as a ``vllm.general_plugins`` entry point (`site` writes the dist-info, and the capture's settings into
@@ -20,15 +20,16 @@ recorded. A step the engine runs without a graph is recorded as it runs. What is
 * calls no dispatcher sees: each Triton fused-MoE launch (``invoke_fused_moe_triton_kernel``: A, its scales, the expert
   ids, the sorted token ids, the routed weights, the config, and C after the launch), and each sparse MLA kernel call
   (FlashMLA's ``_bf16_flash_mla_kernel``, or FA3's ``flash_attn_varlen_func`` in the FlashAttention sparse backend: the
-  queries, the global top-k rows, the outputs, and the KV rows those indices read for the first ``--mla-tokens``
-  tokens).
+  queries, the global top-k rows, the outputs, and the KV rows those indices read for ``--mla-tokens`` tokens: FlashMLA's
+  first ones, FA3's with the most keys (``seqused_k``), the ones with the most splits, named in ``kv_gathered_rows``).
 
 Then the graph call runs as served, and its hidden states must equal the recorded forward's bit for bit (``check``). The
 extra forward writes the same KV values to the same slots, so the step and every later one are unchanged.
 
 Each recorded tensor is hashed when recorded; its bytes are held in memory until the coins have opened layers, and only the
-opened layers' tensors are written, once each, under ``DIR/rank<r>/blobs/<sha512>`` (``--keep all`` writes every one as
-it is recorded). ``DIR/rank<r>/step<s>/ops.jsonl`` lists
+opened layers' tensors are written, once each, under ``DIR/rank<r>/blobs/<sha512>`` (``--keep all`` writes every one up
+to ``--keep-max-mib`` as it is recorded, at every step or at the ``--keep-steps``, until the disk would fall below
+``--min-free-gib``; the rest are written only in the opened layers). ``DIR/rank<r>/step<s>/ops.jsonl`` lists
 the events in order. ``step<s>/meta.json`` holds the step (tokens, padding, graph mode, the scheduled requests and their
 token counts), the check, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
 ``params.json``, which gives each parameter a recorded op read (its shape, dtype and SHA-512 over its bytes). Every
@@ -48,10 +49,16 @@ from pathlib import Path
 from typing import Any
 
 BIG = 1 << 30
+#: with ``--keep all``, every parameter the step read up to this size is written too (``commit.json``'s ``kept_params``: the
+#: norms' and biases' weights of the layers the coins didn't open, which a gate over every call reads)
+SMALL_PARAM = 1 << 20
 #: aten ops that only allocate, view or restride: their outputs alias or are uninitialized, never a value of the step
 SKIP = {"empty", "empty_strided", "empty_like", "as_strided", "view", "_unsafe_view", "reshape", "alias", "detach", "t",
         "permute", "transpose", "expand", "unsqueeze", "squeeze", "select", "slice", "_reinterpret_tensor", "lift_fresh",
         "split", "split_with_sizes", "unbind", "chunk", "narrow", "view_as", "resize_", "set_", "record_stream"}
+#: the paged KV caches an op takes whole: hashed into the root but never written, since the rows a call reads are the sparse
+#: MLA tap's ``kv_gathered`` and no gate reads the rest
+CACHES = {"_vllm_fa3_C::fwd": ("k", "v"), "_C_cache_ops::cp_gather_indexer_k_quant_cache": ("kv_cache",)}
 
 
 #: the capture's settings, which `site` writes beside its copy of this file
@@ -69,6 +76,9 @@ class _State:
         self.dir = Path(cfg["capture"])
         self.targets = set(cfg["steps"])
         self.mla_tokens = int(cfg["mla_tokens"])
+        self.sampler = bool(cfg.get("sampler"))
+        self.sample_at: int | None = None
+        self.smp: dict | None = None
         self.open = dict(cfg["open"])
         self.step = -1
         self.active = False
@@ -84,7 +94,11 @@ class _State:
         self.used_params: set[str] = set()
         self.seen: set[str] = set()
         self.pending: dict[str, bytes] = {}
-        self.keep_all = cfg["keep"] == "all"
+        self.keep = cfg["keep"]
+        self.keep_steps = None if cfg.get("keep_steps") is None else set(cfg["keep_steps"])
+        self.keep_max = int(cfg.get("keep_max_mib", 64)) << 20
+        self.min_free = int(cfg.get("min_free_gib", 40)) << 30
+        self.floor_hit = False
         self.events: list[dict] = []
         self.piece = -1
         self.parents: list[int] = []
@@ -99,6 +113,21 @@ class _State:
 
     def root(self) -> Path:
         return self.dir / f"rank{self.rank}"
+
+    @property
+    def keep_all(self) -> bool:
+        """Whether this step writes every recorded tensor: ``--keep all``, at the ``--keep-steps`` (default every step)."""
+        return self.keep == "all" and (self.keep_steps is None or self.step in self.keep_steps)
+
+    def write_now(self, nbytes: int) -> bool:
+        """Whether a blob is written as it is recorded: on a step kept whole, up to ``--keep-max-mib``, while the capture's
+        disk keeps ``--min-free-gib`` free. Any other blob waits for the coins and is written only in an opened layer."""
+        if not self.keep_all or nbytes > self.keep_max or self.floor_hit:
+            return False
+        import shutil
+        self.root().mkdir(parents=True, exist_ok=True)
+        self.floor_hit = shutil.disk_usage(self.root()).free - nbytes < self.min_free
+        return not self.floor_hit
 
 
 S: _State | None = None
@@ -140,6 +169,7 @@ def _install() -> None:
                 S.step += 1
                 S.active = S.step in S.targets
                 S.runner, S.sched = self, scheduler_output
+                S.sample_at = S.step if S.active and S.sampler else None
                 if S.active:
                     _bind_model_state(self)
             try:
@@ -154,6 +184,8 @@ def _install() -> None:
                         S.events, S.errors, S.check = [], [], None
                         S.pending.clear()
                         S.seen.clear()
+                        S.floor_hit = False
+                        S.used_params.clear()
                 S.active = False
         return run
 
@@ -202,6 +234,8 @@ def _install() -> None:
                 return orig(self, *args)
         return call
 
+    if S.sampler:
+        _install_sampler()
     _wrap(mr.GPUModelRunner, "execute_model", execute_model)
     _wrap(mr.GPUModelRunner, "prepare_inputs", prepare_inputs)
     _wrap(mr, "build_slot_mappings_by_layer", slot_maps)
@@ -211,6 +245,78 @@ def _install() -> None:
     _wrap(pb.PiecewiseBackend, "__call__", pb_call)
     _install_moe()
     _install_mla()
+
+
+def _install_sampler() -> None:
+    """Rank 0's sampler at each recorded step (``--sampler``), read only: the logits it takes, the logits entering top-k/top-p
+    (after penalties and temperature) and leaving it, the Gumbel draw's per-row seed, position and temperature, and the chosen
+    tokens, under ``step<s>/sampler/`` with their SHA-512s in ``sampler.json``, outside the step's root."""
+    import torch
+    from vllm.v1.worker.gpu.sample import sampler as smp
+
+    def host(t: Any) -> Any:
+        return None if t is None else t.detach().to("cpu", copy=True)
+
+    def call(orig):
+        def run(self, logits, input_batch, *a, **kw):
+            rank = torch.distributed.get_rank() if torch.distributed.is_initialized() else 0
+            if S.sample_at is None or rank != 0:
+                return orig(self, logits, input_batch, *a, **kw)
+            S.smp = {"logits": host(logits)}
+            out = None
+            try:
+                out = orig(self, logits, input_batch, *a, **kw)
+                return out
+            finally:
+                rec, step, S.smp, S.sample_at = S.smp, S.sample_at, None, None
+                try:
+                    rec["chosen"] = host(getattr(out, "sampled_token_ids", None))
+                    _write_sampler(step, rec, list(getattr(input_batch, "req_ids", None) or []))
+                except Exception:  # noqa: BLE001
+                    _note(f"step {step}: the sampler record failed, serving goes on\n{traceback.format_exc()}")
+        return run
+
+    def top_k_top_p(orig):
+        def run(logits, top_k, top_p, *a, **kw):
+            if S.smp is None:
+                return orig(logits, top_k, top_p, *a, **kw)
+            S.smp.update(topp_in=host(logits), top_k=host(top_k), top_p=host(top_p))
+            out = orig(logits, top_k, top_p, *a, **kw)
+            S.smp["topp_out"] = host(out)
+            return out
+        return run
+
+    def gumbel(orig):
+        def run(logits, expanded_idx_mapping, temperature, seed, pos, *a, **kw):
+            out = orig(logits, expanded_idx_mapping, temperature, seed, pos, *a, **kw)
+            if S.smp is not None:
+                idx = expanded_idx_mapping.long()
+                S.smp.update(row_state=host(idx), seed=host(seed[idx]), temperature=host(temperature[idx]), pos=host(pos),
+                             gumbel_out=host(out), gumbel_args={k: v for k, v in kw.items() if isinstance(v, (bool, int, float))})
+            return out
+        return run
+
+    _wrap(smp.Sampler, "__call__", call)
+    _wrap(smp, "apply_top_k_top_p", top_k_top_p)
+    _wrap(smp, "gumbel_sample", gumbel)
+
+
+def _write_sampler(step: int, rec: dict, req_ids: list[str]) -> None:
+    import torch
+    d = S.dir / "rank0" / f"step{step}" / "sampler"
+    d.mkdir(parents=True, exist_ok=True)
+    if rec.get("topp_out") is not None:
+        rec["topp_kept"] = rec["topp_out"] != float("-inf")
+    doc: dict = {"step": step, "req_ids": req_ids, "gumbel_args": rec.pop("gumbel_args", None), "tensors": {},
+                 "path": "gumbel" if "gumbel_out" in rec else "flashinfer (no per-request seed in the batch)"}
+    for k, t in rec.items():
+        if t is None:
+            continue
+        raw = t.contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
+        (d / f"{k}.bin").write_bytes(raw)
+        doc["tensors"][k] = {"shape": list(t.shape), "dtype": str(t.dtype), "sha512": hashlib.sha512(raw).hexdigest()}
+    (d / "sampler.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
+    _note(f"step {step}: the sampler's {len(doc['tensors'])} tensors over {len(req_ids)} requests -> {d}")
 
 
 def _bind_model_state(runner: Any) -> None:
@@ -329,11 +435,15 @@ def _install_mla() -> None:
             n = min(S.mla_tokens, int(table.shape[0]))
             if n:
                 with _quiet():
-                    idx = table[:n].long().clamp(min=0).reshape(-1)
+                    used = kw.get("seqused_k")
+                    pick = (torch.sort(torch.argsort(used[:table.shape[0]].long(), descending=True, stable=True)[:n]).values
+                            if used is not None else torch.arange(n, device=table.device))
+                    idx = table[pick].long().clamp(min=0).reshape(-1)
                     rows = k.reshape(k.shape[0], -1), v.reshape(v.shape[0], -1)
                     gathered = torch.cat([rows[1][idx], rows[0][idx]], dim=-1).reshape(n, table.shape[1], -1)
                 ins["kv_gathered"] = _ref(gathered)
                 ins["kv_gathered_tokens"] = n
+                ins["kv_gathered_rows"] = [int(x) for x in pick.tolist()]
             out = orig(*a, **kw)
             outs = out if isinstance(out, tuple) else (out,)
             _event("fa3_sparse_mla", ins, {f"r{i}": _ref(t) for i, t in enumerate(outs) if isinstance(t, torch.Tensor)})
@@ -361,7 +471,8 @@ class Recorder(_recorder_base()):
             return func(*args, **kwargs)
         schema = func._schema
         flat = list(args) + [kwargs.get(a.name) for a in schema.arguments[len(args):]]
-        ins = {a.name: _ref(v) for a, v in zip(schema.arguments, flat)}
+        cache = CACHES.get(f"{ns}::{base}", ())
+        ins = {a.name: _ref(v, write=a.name not in cache) for a, v in zip(schema.arguments, flat)}
         seq = _event(f"{ns}::{base}", ins, {})
         if ns == "vllm" and torch._C._dispatch_has_kernel_for_dispatch_key(func.name(), "CUDA"):
             S.parents.append(seq)
@@ -375,7 +486,7 @@ class Recorder(_recorder_base()):
         outs = {f"ret{i}": _ref(t) for i, t in enumerate(out if isinstance(out, (tuple, list)) else (out,))}
         for a, v in zip(schema.arguments, flat):
             if a.alias_info is not None and a.alias_info.is_write:
-                outs[a.name] = _ref(v)
+                outs[a.name] = _ref(v, write=a.name not in cache)
         S.events[seq]["out"] = outs
         return out
 
@@ -419,9 +530,9 @@ class _quiet:
         S.quiet = self.was
 
 
-def _ref(v: Any) -> Any:
+def _ref(v: Any, write: bool = True) -> Any:
     with _quiet():
-        return _ref_quiet(v)
+        return _ref_quiet(v, write)
 
 
 def _write_blob(h: str, raw: bytes) -> None:
@@ -442,7 +553,7 @@ def _blobs(v: Any):
             yield from _blobs(x)
 
 
-def _ref_quiet(v: Any) -> Any:
+def _ref_quiet(v: Any, write: bool = True) -> Any:
     import torch
     if isinstance(v, torch.Tensor):
         if v.device.type == "cuda" and (pv := _param_view(v)) is not None:
@@ -455,10 +566,10 @@ def _ref_quiet(v: Any) -> Any:
             return {**d, "big": nb}
         raw = v.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy().tobytes() if nb else b""
         h = hashlib.sha512(raw).hexdigest()
-        if h not in S.seen:
+        if write and h not in S.seen:
             S.seen.add(h)
             S.bytes += len(raw)
-            if S.keep_all:
+            if S.write_now(len(raw)):
                 _write_blob(h, raw)
             else:
                 S.pending[h] = raw
@@ -567,8 +678,8 @@ def _finish(runner: Any) -> None:
         return name, {"shape": list(t.shape), "dtype": str(t.dtype), "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
     with ThreadPoolExecutor(8) as pool:
         params = dict(pool.map(digest, sorted(S.used_params)))
-    (S.root() / "params.json").write_text(json.dumps(params, indent=0, sort_keys=True))
-    ops_sha, params_sha = hashlib.sha512(lines).hexdigest(), hashlib.sha512((S.root() / "params.json").read_bytes()).hexdigest()
+    (d / "params.json").write_text(json.dumps(params, indent=0, sort_keys=True))
+    ops_sha, params_sha = hashlib.sha512(lines).hexdigest(), hashlib.sha512((d / "params.json").read_bytes()).hexdigest()
     meta = {"rank": S.rank, "step": S.step, "check": S.check, "scheduled": reqs, "events": len(S.events),
             "blob_bytes": S.bytes, "errors": S.errors, "seconds": round(time.time() - S.t0, 1),
             "ops_sha512": ops_sha, "params_sha512": params_sha,
@@ -624,6 +735,7 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
         if h in S.pending:
             _write_blob(h, S.pending[h])
     kept_bytes = sum(len(S.pending[h]) for h in kept if h in S.pending)
+    withheld = [len(raw) for h, raw in S.pending.items() if h not in kept]
     S.pending.clear()
     S.seen.clear()
     od = d / "open"
@@ -636,10 +748,27 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
         (od / f"{name}.bin").write_bytes(memoryview(raw))
         files[name] = {"shape": list(t.shape), "dtype": str(t.dtype), "stride": list(t.stride()),
                        "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
+    small = {}
+    if S.keep_all:
+        for name in sorted(S.used_params - set(files)):
+            t = S.param_of[name]
+            if t.numel() * t.element_size() > SMALL_PARAM:
+                continue
+            raw = t.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy()
+            (od / f"{name}.bin").write_bytes(memoryview(raw))
+            small[name] = {"shape": list(t.shape), "dtype": str(t.dtype), "stride": list(t.stride()),
+                           "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
     commit = {"rank": S.rank, "step": S.step, "rank_roots": roots, "root": root, "t_root": t_root, "coins": coins_hex,
               "t_coins_received": time.time(), "coins_by": "rank 0's os.urandom(64), drawn after every rank's root was gathered",
-              "layers": layers, "opened": files,
-              "kept": "every recorded tensor" if S.keep_all else f"the opened layers' {len(kept)} tensors, {kept_bytes} bytes"}
+              "layers": layers, "opened": files, "kept_params": small,
+              "kept": ("every recorded tensor" if S.keep_all and not withheld else
+                       f"every recorded tensor but {len(withheld)} outside the opened layers, {sum(withheld)} bytes "
+                       f"({'past the disk floor' if S.floor_hit else 'each over the keep cap'})" if S.keep_all else
+                       f"the opened layers' {len(kept)} tensors, {kept_bytes} bytes"),
+              # every layer's calls can be gated: a withheld tensor is one over the keep cap, never one lost to the floor
+              "whole": S.keep_all and not S.floor_hit, "keep_max": S.keep_max if S.keep_all else None}
+    S.floor_hit = False
+    S.used_params.clear()
     (d / "commit.json").write_text(json.dumps(commit, indent=1, sort_keys=True))
     return commit
 
@@ -666,12 +795,20 @@ def main(argv: list[str]) -> int:
     s.add_argument("--capture", required=True, help="where each rank's capture goes")
     s.add_argument("--steps", required=True, help="the 0-based steps to record, comma-separated")
     s.add_argument("--open", default="dense:1,moe:1", help="how many layers of each kind the coins open, KIND:N,...")
-    s.add_argument("--mla-tokens", type=int, default=8, help="a sparse MLA call's tokens whose gathered KV rows are recorded")
+    s.add_argument("--mla-tokens", type=int, default=8, help="how many of a sparse MLA call's tokens have their gathered KV rows recorded (FA3: those with the most keys)")
     s.add_argument("--keep", choices=("opened", "all"), default="opened", help="all: write every recorded tensor")
+    s.add_argument("--keep-steps", help="with --keep all, the steps that write every tensor (default: every step); the "
+                   "others write the opened layers'")
+    s.add_argument("--keep-max-mib", type=int, default=64,
+                   help="with --keep all, a larger tensor is written only in an opened layer (hashed into the root either way)")
+    s.add_argument("--min-free-gib", type=int, default=40,
+                   help="with --keep all, a step stops writing outside the opened layers once its disk would fall below this")
+    s.add_argument("--sampler", action="store_true", help="also record rank 0's sampler at each step (outside the step's root)")
     a = ap.parse_args(argv)
     cfg = {"capture": str(Path(a.capture).resolve()), "steps": sorted({int(x) for x in a.steps.split(",") if x.strip()}),
            "open": {k: int(n) for k, n in (x.split(":") for x in a.open.split(",") if x)}, "mla_tokens": a.mla_tokens,
-           "keep": a.keep}
+           "keep": a.keep, "keep_steps": None if a.keep_steps is None else sorted({int(x) for x in a.keep_steps.split(",") if x.strip()}),
+           "keep_max_mib": a.keep_max_mib, "min_free_gib": a.min_free_gib, "sampler": a.sampler}
     print(site(a.dir, cfg))
     return 0
 
