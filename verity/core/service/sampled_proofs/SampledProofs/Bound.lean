@@ -137,7 +137,7 @@ def twoAtanhUpper (t : Rat) : Rat :=
 
 /-- `optimize.ln_upper`: a rational at least `ln(1/δ)` for `0 < δ < 1`, within about `2^-lnBits` of it. With
 `1/δ = 2^j z`, `1 ≤ z < 2`, it is `j ln 2 + ln z`, `ln 2 = 2 atanh(1/3)` and `ln z = 2 atanh((z − 1)/(z + 1))`, rounded
-up. -/
+up (`Properties.SampledProofs.BoundLnUpperSound`). -/
 def lnUpper (δ : Rat) : Rat :=
   let y := 1 / δ
   let j0 := y.num.toNat.log2 - y.den.log2
@@ -200,7 +200,7 @@ def ln2Upper : Rat := twoAtanhUpper (1 / 3)
 
 /-- `ln(a / b)` for `a ≥ b > 0`, a multiple of `2^-lnPrec` below it, or above it when `up`. With `a / b = 2^j z`,
 `1 ≤ z < 2`, it is `j ln 2 + ln z`, `z` first rounded to a multiple of `2^-lnPrec` (down, or up) and
-`ln z = 2 atanh((z − 1)/(z + 1))`. -/
+`ln z = 2 atanh((z − 1)/(z + 1))` (`Properties.SampledProofs.BoundLnBoundSound`). -/
 def lnBound (a b : Nat) (up : Bool) : Rat :=
   let j0 := a.log2 - b.log2
   let j := if a < b * 2 ^ j0 then j0 - 1 else j0

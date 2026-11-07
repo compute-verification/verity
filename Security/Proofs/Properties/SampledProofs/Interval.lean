@@ -14,10 +14,12 @@ Every rounding is to the bound's side (`floorTo_le`, `le_ceilTo`). The exponenti
 `Σ rⁱ/i!` term by term (`series_false`), so below `e^r` (`Real.sum_le_exp_of_nonneg`), and above it plus
 `Real.exp_bound'`'s remainder (`series_true`); rounded squarings keep each side (`squares_false`, `squares_true`), and a
 negative argument goes through `e^x = 1/e^{-x}`. A logarithm is whatever candidate its exponential bounds confirm
-(`firstAbove_some`, `firstBelow_some`), else `ln y ≤ y − 1` or `1 − 1/y ≤ ln y`, and a power is `e^{θ ln c}`.
-`Bound`'s series is the partial sum of `ln((1+t)/(1−t)) = 2 Σ t^{2k+1}/(2k+1)` (`Real.hasSum_log_sub_log_of_abs_lt_one`),
-below it with every term nonnegative and above it with the tail bounded by a geometric series (`atanh_partial_le`,
-`atanh_le_partial`), after scaling by the `2^j` both helpers pick (`scale_le`).
+(`firstAbove_some`, `firstBelow_some`), else `ln y ≤ y − 1` or `1 − 1/y ≤ ln y`, at `|y|` since `ln y = ln |y|`
+(`abs_arg`). A power is `e^{θ ln c}`, `Real.rpow`'s value at `c > 0`, and `±e^{θ ln c}` brackets its
+`e^{θ ln c} cos(πθ)` at `c < 0`. `Bound`'s series is the partial sum of `ln((1+t)/(1−t)) = 2 Σ t^{2k+1}/(2k+1)`
+(`Real.hasSum_log_sub_log_of_abs_lt_one`), below it with every term nonnegative and above it with the tail bounded by
+a geometric series (`atanh_partial_le`, `atanh_le_partial`), after scaling by the `2^j` both helpers pick
+(`scale_le`), on their ranges (`boundLnUpper_le`, `lnBound_brackets`).
 
 Each bound passes at a deployed precision, one step of `2^-p` wide or less (`_honest`), and each conclusion fails at a
 bound on the wrong side (`_nontrivial`).
@@ -165,7 +167,8 @@ theorem expNonneg_true {x : ℚ} (hx : 0 ≤ x) (w : ℕ) : Real.exp x ≤ ((exp
     have hq : ∑ i ∈ range n, r ^ i / (i.factorial : ℚ) + r ^ n / (n.factorial : ℚ) * ((n + 1 : ℕ) : ℚ) / (n : ℚ) ≤
         (series true r w n).1 + (series true r w n).2 * ((n + 1 : ℕ) : ℚ) / (n : ℚ) := by
       gcongr
-    have hR : ((∑ i ∈ range n, r ^ i / (i.factorial : ℚ) + r ^ n / (n.factorial : ℚ) * ((n + 1 : ℕ) : ℚ) / (n : ℚ) : ℚ) : ℝ) =
+    have hR : ((∑ i ∈ range n, r ^ i / (i.factorial : ℚ) + r ^ n / (n.factorial : ℚ) * ((n + 1 : ℕ) : ℚ) / (n : ℚ) :
+        ℚ) : ℝ) =
         ∑ m ∈ range n, (r : ℝ) ^ m / (m.factorial : ℝ) + (r : ℝ) ^ n * (n + 1) / (n.factorial * n) := by
       push_cast; ring
     calc Real.exp r ≤ _ := hb
@@ -233,11 +236,11 @@ theorem firstBelow_some (y : ℚ) (p w : ℕ) : ∀ (k : ℕ) (l v : ℚ), first
     · obtain rfl := Option.some.inj h; exact hy
     · exact firstBelow_some y p w k _ v h
 
-theorem lnUpperSound : LnUpperSound := by
-  intro y p hy
+/-- `lnUpper`'s branch at `y > 0`. -/
+theorem log_le_lnUpperPos {y : ℚ} (hy : 0 < y) (p : ℕ) :
+    Real.log y ≤ (((firstAbove y p (lnPrec y p) lnTries (ceilTo (lnApprox y (lnPrec y p)) p)).getD
+      (ceilTo (y - 1) p) : ℚ) : ℝ) := by
   have hy' : (0 : ℝ) < y := by exact_mod_cast hy
-  unfold lnUpper
-  simp only
   cases h : firstAbove y p (lnPrec y p) lnTries (ceilTo (lnApprox y (lnPrec y p)) p) with
   | none =>
     simp only [Option.getD_none]
@@ -250,11 +253,11 @@ theorem lnUpperSound : LnUpperSound := by
     have h1 : (y : ℝ) ≤ ((expLower v (lnPrec y p) : ℚ) : ℝ) := by exact_mod_cast firstAbove_some y p _ _ _ _ h
     exact h1.trans (expLowerSound v _)
 
-theorem lnLowerSound : LnLowerSound := by
-  intro y p hy
+/-- `lnLower`'s branch at `y > 0`. -/
+theorem lnLowerPos_le_log {y : ℚ} (hy : 0 < y) (p : ℕ) :
+    (((firstBelow y p (lnPrec y p) lnTries (floorTo (lnApprox y (lnPrec y p)) p)).getD
+      (floorTo (1 - 1 / y) p) : ℚ) : ℝ) ≤ Real.log y := by
   have hy' : (0 : ℝ) < y := by exact_mod_cast hy
-  unfold lnLower
-  simp only
   cases h : firstBelow y p (lnPrec y p) lnTries (floorTo (lnApprox y (lnPrec y p)) p) with
   | none =>
     simp only [Option.getD_none]
@@ -267,55 +270,111 @@ theorem lnLowerSound : LnLowerSound := by
     have h1 : ((expUpper v (lnPrec y p) : ℚ) : ℝ) ≤ y := by exact_mod_cast firstBelow_some y p _ _ _ _ h
     exact (expUpperSound v _).trans h1
 
+/-- The magnitude `lnUpper`, `lnLower` and the powers read at `y ≠ 0`: positive, with `ln y = ln |y|`. -/
+theorem abs_arg {y : ℚ} (h0 : y ≠ 0) :
+    0 < (if 0 < y then y else -y) ∧ Real.log (y : ℝ) = Real.log (((if 0 < y then y else -y : ℚ)) : ℝ) := by
+  split_ifs with h
+  · exact ⟨h, rfl⟩
+  · have hn : y < 0 := lt_of_le_of_ne (not_lt.1 h) h0
+    refine ⟨neg_pos.2 hn, ?_⟩
+    push_cast
+    exact (Real.log_neg_eq_log _).symm
+
+theorem lnUpperSound : LnUpperSound := by
+  intro y p
+  unfold lnUpper
+  by_cases h0 : y = 0
+  · subst h0; simp
+  rw [ite_eq_right h0]
+  obtain ⟨ha, hlog⟩ := abs_arg h0
+  dsimp only
+  rw [hlog]
+  exact log_le_lnUpperPos ha p
+
+theorem lnLowerSound : LnLowerSound := by
+  intro y p
+  unfold lnLower
+  by_cases h0 : y = 0
+  · subst h0; simp
+  rw [ite_eq_right h0]
+  obtain ⟨ha, hlog⟩ := abs_arg h0
+  dsimp only
+  rw [hlog]
+  exact lnLowerPos_le_log ha p
+
 /-! ## Powers -/
 
-theorem powUpperSound : PowUpperSound := by
-  intro c θ p hc
+/-- `powUpper c θ p` is at least `|c|^θ = e^{θ ln c}` at `θ ≠ 0` and `c ≠ 0`. -/
+theorem exp_le_powUpper {c θ : ℚ} (hθ : θ ≠ 0) (hc : c ≠ 0) (p : ℕ) :
+    Real.exp (Real.log c * θ) ≤ ((powUpper c θ p : ℚ) : ℝ) := by
   unfold powUpper
-  split_ifs with hθ hc0 hθ0
-  · subst hθ; simp
-  · obtain rfl : c = 0 := le_antisymm hc0 hc
-    push_cast; rw [Real.zero_rpow (by exact_mod_cast hθ)]
-  · have hc' : (0 : ℝ) < c := by exact_mod_cast lt_of_not_ge hc0
-    rw [Real.rpow_def_of_pos hc']
-    refine le_trans ?_ (expUpperSound _ p)
-    apply Real.exp_le_exp.2
-    have := lnUpperSound c (powPrec c θ p) (lt_of_not_ge hc0)
+  rw [ite_eq_right hθ, ite_eq_right hc]
+  obtain ⟨ha, hlog⟩ := abs_arg hc
+  dsimp only
+  rw [hlog]
+  generalize (if 0 < c then c else -c) = a at ha ⊢
+  refine le_trans ?_ (expUpperSound _ p)
+  apply Real.exp_le_exp.2
+  split_ifs with hθ0
+  · have := lnUpperSound a (powPrec a θ p)
     have hθ' : (0 : ℝ) ≤ θ := by exact_mod_cast hθ0
     push_cast
     nlinarith
-  · have hc' : (0 : ℝ) < c := by exact_mod_cast lt_of_not_ge hc0
-    rw [Real.rpow_def_of_pos hc']
-    refine le_trans ?_ (expUpperSound _ p)
-    apply Real.exp_le_exp.2
-    have := lnLowerSound c (powPrec c θ p) (lt_of_not_ge hc0)
+  · have := lnLowerSound a (powPrec a θ p)
     have hθ' : (θ : ℝ) ≤ 0 := by exact_mod_cast (lt_of_not_ge hθ0).le
     push_cast
     nlinarith
 
-theorem powLowerSound : PowLowerSound := by
-  intro c θ p hc
+/-- `powLower c θ p` is at most `c^θ = e^{θ ln c}` at `θ ≠ 0` and `c > 0`. -/
+theorem powLowerPos_le {c θ : ℚ} (hθ : θ ≠ 0) (hc : 0 < c) (p : ℕ) :
+    ((powLower c θ p : ℚ) : ℝ) ≤ Real.exp (Real.log c * θ) := by
   unfold powLower
-  split_ifs with hθ hc0 hθ0
-  · subst hθ; simp
-  · obtain rfl : c = 0 := le_antisymm hc0 hc
-    push_cast; rw [Real.zero_rpow (by exact_mod_cast hθ)]
-  · have hc' : (0 : ℝ) < c := by exact_mod_cast lt_of_not_ge hc0
-    rw [Real.rpow_def_of_pos hc']
-    refine le_trans (expLowerSound _ p) ?_
-    apply Real.exp_le_exp.2
-    have := lnLowerSound c (powPrec c θ p) (lt_of_not_ge hc0)
+  rw [ite_eq_right hθ, ite_eq_right hc.ne', ite_eq_right (not_lt.2 hc.le)]
+  dsimp only
+  refine le_trans (expLowerSound _ p) ?_
+  apply Real.exp_le_exp.2
+  split_ifs with hθ0
+  · have := lnLowerSound c (powPrec c θ p)
     have hθ' : (0 : ℝ) ≤ θ := by exact_mod_cast hθ0
     push_cast
     nlinarith
-  · have hc' : (0 : ℝ) < c := by exact_mod_cast lt_of_not_ge hc0
-    rw [Real.rpow_def_of_pos hc']
-    refine le_trans (expLowerSound _ p) ?_
-    apply Real.exp_le_exp.2
-    have := lnUpperSound c (powPrec c θ p) (lt_of_not_ge hc0)
+  · have := lnUpperSound c (powPrec c θ p)
     have hθ' : (θ : ℝ) ≤ 0 := by exact_mod_cast (lt_of_not_ge hθ0).le
     push_cast
     nlinarith
+
+theorem powUpperSound : PowUpperSound := by
+  intro c θ p
+  by_cases hθ : θ = 0
+  · subst hθ; simp [powUpper]
+  by_cases hc : c = 0
+  · subst hc
+    have : powUpper 0 θ p = 0 := by unfold powUpper; rw [ite_eq_right hθ, ite_eq_left rfl]
+    rw [this]; push_cast; rw [Real.zero_rpow (by exact_mod_cast hθ)]
+  refine le_trans ?_ (exp_le_powUpper hθ hc p)
+  rcases lt_or_gt_of_ne hc with hn | hp
+  · rw [Real.rpow_def_of_neg (by exact_mod_cast hn)]
+    exact mul_le_of_le_one_right (Real.exp_pos _).le (Real.cos_le_one _)
+  · rw [Real.rpow_def_of_pos (by exact_mod_cast hp)]
+
+theorem powLowerSound : PowLowerSound := by
+  intro c θ p
+  by_cases hθ : θ = 0
+  · subst hθ; simp [powLower]
+  by_cases hc : c = 0
+  · subst hc
+    have : powLower 0 θ p = 0 := by unfold powLower; rw [ite_eq_right hθ, ite_eq_left rfl]
+    rw [this]; push_cast; rw [Real.zero_rpow (by exact_mod_cast hθ)]
+  rcases lt_or_gt_of_ne hc with hn | hp
+  · have : powLower c θ p = -powUpper c θ p := by unfold powLower; rw [ite_eq_right hθ, ite_eq_right hc, ite_eq_left hn]
+    rw [this, Real.rpow_def_of_neg (by exact_mod_cast hn)]
+    have h1 := exp_le_powUpper hθ hc p
+    have h2 := Real.neg_one_le_cos ((θ : ℝ) * Real.pi)
+    have h3 := (Real.exp_pos (Real.log c * θ)).le
+    push_cast
+    nlinarith [mul_nonneg h3 (by linarith : (0 : ℝ) ≤ Real.cos (θ * Real.pi) + 1)]
+  · rw [Real.rpow_def_of_pos (by exact_mod_cast hp)]
+    exact powLowerPos_le hθ hp p
 
 end Interval
 
@@ -483,8 +542,8 @@ theorem two_pow_le_ratio {y : ℚ} {N D : ℕ} (hD : 0 < D) (h : (N : ℚ) / D =
   rw [le_div_iff₀ (by exact_mod_cast hD), ← Nat.cast_mul, Nat.cast_le, mul_comm]
   exact hk
 
-theorem boundLnUpperSound : BoundLnUpperSound := by
-  intro δ hδ hδ1
+theorem boundLnUpper_le {δ : ℚ} (hδ : 0 < δ) (hδ1 : δ < 1) :
+    Real.log (1 / (δ : ℝ)) ≤ ((_root_.SampledProofs.Bound.lnUpper δ : ℚ) : ℝ) := by
   have hy1 : 1 < 1 / δ := by rw [lt_div_iff₀ hδ]; linarith
   have hnum : 0 < (1 / δ).num := Rat.num_pos.2 (by linarith)
   have hND : (((1 / δ).num.toNat : ℕ) : ℚ) / ((1 / δ).den : ℚ) = 1 / δ := by
@@ -518,6 +577,14 @@ theorem boundLnUpperSound : BoundLnUpperSound := by
   have hj0 : (0 : ℝ) ≤ j := Nat.cast_nonneg j
   have hmul := mul_le_mul_of_nonneg_left h2 hj0
   push_cast at hz hmul ⊢
+  linarith
+
+theorem boundLnUpperSound : BoundLnUpperSound := by
+  intro n k
+  have hd : (0 : ℚ) < ((n + k + 2 : ℕ) : ℚ) := by positivity
+  refine boundLnUpper_le (by positivity) ?_
+  rw [div_lt_one hd]
+  push_cast
   linarith
 
 /-- `(m − q)/(m + q) = (z − 1)/(z + 1)` at `z = m/q`. -/
@@ -585,8 +652,9 @@ theorem lnBound_core {a d m q j : ℕ} (ha : 0 < a) (hq : 0 < q) (hd : 0 < d) (h
     push_cast at hl hmono hmul ⊢
     linarith
 
-theorem boundLnBoundSound : BoundLnBoundSound := by
-  intro a b hb hab
+theorem lnBound_brackets {a b : ℕ} (hb : 0 < b) (hab : b ≤ a) :
+    ((_root_.SampledProofs.Bound.lnBound a b false : ℚ) : ℝ) ≤ Real.log ((a : ℝ) / b) ∧
+      Real.log ((a : ℝ) / b) ≤ ((_root_.SampledProofs.Bound.lnBound a b true : ℚ) : ℝ) := by
   have ha : 0 < a := lt_of_lt_of_le hb hab
   have hj := scale_le hb hab
   unfold _root_.SampledProofs.Bound.lnBound
@@ -607,6 +675,8 @@ theorem boundLnBoundSound : BoundLnBoundSound := by
     have hm1 : q ≤ (a * q + b * 2 ^ j - 1) / (b * 2 ^ j) :=
       Nat.le_of_mul_le_mul_right ((Nat.mul_le_mul_left q hj).trans (by rw [Nat.mul_comm q a]; exact hm2)) hd
     exact (lnBound_core ha hq hd hm1).2 hm2
+
+theorem boundLnBoundSound : BoundLnBoundSound := fun m k => lnBound_brackets (Nat.succ_pos m) (by omega)
 
 end Bound
 
@@ -666,7 +736,8 @@ theorem powLowerSound_nontrivial : ¬ ((1 : ℚ) : ℝ) ≤ ((1 / 2 : ℚ) : ℝ
   norm_num
 
 /-- At `p = 64`, `(1/2)^(1/2)`'s bounds are within `2^-62`. -/
-theorem powUpperSound_honest : powUpper (1 / 2) (1 / 2) 64 - powLower (1 / 2) (1 / 2) 64 ≤ 1 / 2 ^ 62 := by decide +kernel
+theorem powUpperSound_honest : powUpper (1 / 2) (1 / 2) 64 - powLower (1 / 2) (1 / 2) 64 ≤ 1 / 2 ^ 62 := by
+  decide +kernel
 
 /-- `0` is not above `(1/2)^1`. -/
 theorem powUpperSound_nontrivial : ¬ ((1 / 2 : ℚ) : ℝ) ^ ((1 : ℚ) : ℝ) ≤ ((0 : ℚ) : ℝ) := by
@@ -676,7 +747,8 @@ theorem powUpperSound_nontrivial : ¬ ((1 / 2 : ℚ) : ℝ) ^ ((1 : ℚ) : ℝ) 
 
 /-- `Bound.lnUpper (1/100)` is within `2^-63` of `ln 100` from above: `Bound.lnBound 100 1 false` is below it. -/
 theorem boundLnUpperSound_honest :
-    _root_.SampledProofs.Bound.lnUpper (1 / 100) - _root_.SampledProofs.Bound.lnBound 100 1 false < 1 / 2 ^ 63 := by decide +kernel
+    _root_.SampledProofs.Bound.lnUpper (1 / 100) - _root_.SampledProofs.Bound.lnBound 100 1 false < 1 / 2 ^ 63 := by
+  decide +kernel
 
 /-- `0` is not at least `ln 2 = ln(1/(1/2))`. -/
 theorem boundLnUpperSound_nontrivial : ¬ Real.log (1 / ((1 / 2 : ℚ) : ℝ)) ≤ ((0 : ℚ) : ℝ) := by
@@ -687,7 +759,8 @@ theorem boundLnUpperSound_nontrivial : ¬ Real.log (1 / ((1 / 2 : ℚ) : ℝ)) �
 
 /-- `Bound.lnBound 100 1`'s two sides are within `2^-100`. -/
 theorem boundLnBoundSound_honest :
-    _root_.SampledProofs.Bound.lnBound 100 1 true - _root_.SampledProofs.Bound.lnBound 100 1 false < 1 / 2 ^ 100 := by decide +kernel
+    _root_.SampledProofs.Bound.lnBound 100 1 true - _root_.SampledProofs.Bound.lnBound 100 1 false < 1 / 2 ^ 100 := by
+  decide +kernel
 
 /-- `1` is not below `ln(2/1)`. -/
 theorem boundLnBoundSound_nontrivial : ¬ ((1 : ℚ) : ℝ) ≤ Real.log (((2 : ℕ) : ℝ) / ((1 : ℕ) : ℝ)) := by
