@@ -106,8 +106,8 @@ def test_put_pool_refuses_another_configuration():
 
 def test_attrs_name_requests_and_blocks_and_skip_objects():
     p = served_pool()
-    req = NS(request_id="r1")
-    req.__class__ = type("Request", (NS,), {})
+    req = Request(0, 0.0)
+    req.request_id = "r1"
     m = NS(req_to_blocks=defaultdict(list, {"r1": [p.blocks[1], p.blocks[3]]}), num_cached_block={"r1": 1},
            _partial_hit_reqs={"r1": (16, p.blocks[3])}, running=[req], waiting=deque([req]), ids={"a"},
            config=object(), step=7)

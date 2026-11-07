@@ -56,8 +56,10 @@ def served(arm_dir: Path, kv_dir: Path, a: int, b: int) -> dict[str, Any]:
     tr = S.trace_records(trace)
     held = {r.request_id for r in B.unpickle_requests(st[a]["requests"], {"block_hasher": None})}
     named = json.loads((arm_dir / "meta.json").read_text()).get("plan")
-    plan_file = next(p for p in (Path(named) if named else None, arm_dir / "plan.jsonl") if p and p.is_file())
-    plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
+    plan_file = next((p for p in (Path(named) if named else None, arm_dir / "plan.jsonl") if p and p.is_file()), None)
+    if plan_file is None:
+        raise SystemExit(f"no plan at {named} or {arm_dir / 'plan.jsonl'}")
+    plan = {r["i"]: r for r in S.trace_records(plan_file)}
     client = {r["id"]: r for f in arm_dir.glob("*/rep-*/client.jsonl") for r in map(json.loads, f.read_text().splitlines())}
     client |= {r["id"]: r for f in arm_dir.glob("warm/client.jsonl") for r in map(json.loads, f.read_text().splitlines())}
     arrive = []
@@ -68,12 +70,8 @@ def served(arm_dir: Path, kv_dir: Path, a: int, b: int) -> dict[str, Any]:
                            "max_tokens": r["sampling"].get("max_tokens"), "prompt_ids": plan[client[http]["i"]]["prompt_ids"]})
     steps = {r["step"]: r for r in tr if r["kind"] == "step" and lo <= r["step"] < hi}
     outs: dict[int, dict] = {}
-    for f in sorted((srv / "edges").glob("outputs.*.jsonl")):
-        for x in f.read_text().splitlines():
-            if x.strip():
-                o = json.loads(x)
-                if lo <= o["step"] < hi:
-                    outs[o["step"]] = o["out"]
+    for f in sorted((srv / "edges").glob("outputs.*.jsonl*")):
+        outs |= {o["step"]: o["out"] for o in S.trace_records(f) if lo <= o["step"] < hi}
     return {"edges": edges, "files": files, "state": st, "dumps": dumps, "lo": lo, "hi": hi, "header": tr[0],
             "arrive": arrive, "steps": steps, "outputs": outs}
 
