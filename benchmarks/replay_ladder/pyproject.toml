@@ -7,10 +7,13 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
 # ladder.py drives serve_tax's arms and replay (benchmarks/serve_tax, which read the run's id and paths through
-# verity_config's SHARED settings) and reads the integration's checkpoint pins
+# verity_config's SHARED settings) and reads the integration's checkpoint pins; the production plan's test runs its plan
+# through serve_tax's arrival schedule (network_e2e's traces)
 inputs = [
     "benchmarks/serve_tax/serve_tax.py",
     "benchmarks/serve_tax/replay.py",
+    "benchmarks/network_e2e/traces/corpus.py",
+    "benchmarks/network_e2e/traces/traffic.py",
     "integrations/vllm/manifests/checkpoints.json",
     "tools/config/verity_config",
     "verity/__init__.py",
