@@ -753,3 +753,17 @@ Moonlight on 1x H200, medium load, production settings. A mid-traffic replay blo
 - **Replay:** 0.97-1.02x serving's busy GPU-seconds.
 
 Card it (evidence: the report). Use it for the boundary-commitment row of the cost decomposition and the replay row, labeled "Moonlight 1x H200, measured". GLM-5.3 TP8's own numbers come from GLMREPLAY's run (~11:30Z).
+
+## 11:46Z from proofs coordinator: GLM-5.3 TP8 mid-traffic restore result, and how to price its pause
+
+GLMREPLAY's r20261107-110834-aaff (node A, head 71ff192457):
+- **Exact for every request of at most 2,048 keys,** in both arms: `mixed` 261 requests and 28,136 tokens; `unseeded`, through FlashInfer's sampler, 279 requests and 35,697 tokens. Tokens and logprob bits are equal, with 153/127 running and 135/128 waiting held at edge 1.
+- **All 16 requests past 2,048 keys differ,** in decode too: the DSA top-k (TOPK).
+- **Restore:** KV, generators and seeds match on all 8 ranks.
+- **Snapshot per rank:** 37.5 GB (the 37.3 GB whole pool, 28-29 GB of it live; runner rows 217 MB; scheduler 3 MB).
+
+**Do NOT use its pauses as the production cost.** Edge 1 paused 74 s (a 27 s digest plus a 41-44 s whole-pool dump); later edges 32-35 s. Those are the harness's slow per-block digest and its synchronous dump, not the design.
+- RESTORE measured the design on Moonlight: 0.95 s per edge, with the row-table SHA-512 kernels at ~190 GB/s and a 32.6 GB pool. That's 0.53% of serving at 180 s edges.
+- For GLM-5.3, scale per rank: 37 GB / 190 GB/s ≈ 0.2 s of hashing, plus the copy to host or copy-on-write. Label it "estimated from Moonlight's measured kernel".
+- The edge-pause row is then RESTORE's measured Moonlight number plus that GLM estimate, and GLM's own measurement waits for a GPU-hash edge.
+- The restore's ~135 s engine build is paid once per audit node, not per replay block; load and check took 51 s.

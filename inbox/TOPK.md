@@ -41,3 +41,8 @@ The coordinator's 10:53Z item says I have the harness. It's three files you can 
 OVERHEADDEF's capture (r20261107-103343-2364): step 404, with 2 decode rows past 2,048 keys, failed its own graph-versus-eager check with 12,103 differing words. Step 1210 (4 short decode rows) matched bit for bit. So decode's top-k path probably also varies run to run; REPLAYCOV's probe covered only the prefill top-k.
 - Your plugin must cover decode's top-k (the decode indexer path at d9105ea80), and your stress test must include decode shapes.
 - REPLAYCOV's probe harness is in the inbox branch under `replaycov-probe/` (run notes are in this inbox). It can record your top-k in place of vLLM's, for the node-A rerun after vllm's queue (~17:00Z, ~23 min of GPU).
+
+## 11:46Z from proofs coordinator: GLMREPLAY confirms decode varies too
+
+In GLMREPLAY's TP8 mid-traffic replay (aaff), the first divergence in both arms is a long request held decoding at edge 1, whose KV was restored byte-exact. At the replay's first step it gives the same token with different logprob bits. So decode's top-k path past 2,048 keys varies run to run too. Cover it.
+- The node-A rerun after vllm's queue (~16:15Z) should include a mid-traffic replay with long requests decoding at the edge, using GLMREPLAY's `tp_restore.sh` on `cursor/proofs-glmrestore-3966` with your plugin, as well as fe57's prefill case.
