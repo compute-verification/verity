@@ -5,6 +5,11 @@ public import Proofs.Flock.ZkAny.RelayOut
 public import Proofs.Flock.Claims.ZK.FrameZK
 public import Proofs.Flock.Soundness.CROnly.Hiding
 public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.SessionLoop.Statement
+public import Proofs.Flock.Claims.ZK.CausalExe
+public import Proofs.Flock.Claims.ZK.Stopped
+public import Proofs.Flock.Claims.ZK.OneTape
+public import Proofs.Flock.Claims.ZK.ExeLayout
 public import Definitions.Flock.ZK.AnyValues
 
 /-!
@@ -38,7 +43,16 @@ pinned key (`CROnly.hm96Hiding_gap`). Scope: the released bytes and their order,
 * `RelayEnvAt`, `RelayReads`, `ZKOutRelay`, `zkOutRelay_of_zkOut`: what the held relay reads from its host and at its
   model slots, `ZKOut` read at the deployed held relay, and that `ZKOut` gives it.
 * `Loop.anySim`, `Loop.anyErr`: the session loop's simulator given the verdict and its error per outcome.
+* `Loop.ZkAnyAt`: `ZKOut` and `ZKOutRelay` at one release of the loop, the conclusion of both guarantees.
 * **`Flock.SecurityProofs.SessionLoopZKAny`**: `LeanRelease.zk_finish_out` at `ofLoop`, and `zkOutRelay_of_zkOut`.
+* **`Flock.SecurityProofs.SessionLoopZKAnyDeployed`**: `SessionLoopZKAny` at the deployed tables (`Masked.dataE`) and
+  the loop's own link and `Finish` (`LeanRelease.ofLoopLink`, `SessionLoopZKDeployed`'s release), where the tables' side
+  holds. It is the deployed statement without `SessionLoopZKDeployed`'s valid witness: any values, no `Flock.R`, no
+  `RowsOK`.
+
+The ZK server never stops for good after failed sessions: a worker chooses its sessions' verdicts, so what they reveal is
+bounded per outcome of each session (its `Finish` verdict, and at the held relay how many frames left), and is not
+capped over a monitoring period.
 -/
 
 @[expose] public section
@@ -150,6 +164,28 @@ noncomputable def anyErr (T : CoinLayer.TableData) (vs : (CoinLayer.session loop
         2 * (1 / 3) ^ t +
         4 * t * 3 ^ t * (Fork CoinOpen.shaH (((anyStops T L₀ real).unP vs).prover w) Vs θ x).Pr CoinOpen.shaH
 
+/-- **Zero knowledge at any values, per outcome, at one release of the session loop**: the release `ofLoop T L₀ real`
+at the worker `wk` meets `Claims.ZKOut` at the statements of `Rl` against every `V*` of its `refK x + 2` rounds, at its
+`Finish` verdict (`goesOnAt` at its last round), at `anySim` within `anyErr`, and so `ZKOutRelay` at the deployed held
+relay. -/
+def ZkAnyAt (T : CoinLayer.TableData) (vs : (CoinLayer.session loopNr T).SwVals)
+    (L₀ : LeanRelease Flock.Wit ((CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand))
+    (real : Msg → Flock.Wit → (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand →
+      ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
+    (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker) (Rl : Rel Flock.Wit) (t : ℕ) : Prop :=
+  ZKOut (fun _ => (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand)
+      (fun _ => (LeanRelease.ofLoop T L₀ real).toSrv.Chk) CoinOpen.shaH (fun x => refK x + 2)
+      (fun w _ => (LeanRelease.ofLoop T L₀ real).toSrv.proverD (LeanRelease.ofLoop T L₀ real).fillOf
+        (fun x => refK x + 2) wk w) Rl
+      (fun x τ => goesOnAt (LeanRelease.ofLoop T L₀ real).stop (refK x + 1) τ) (anySim T L₀ real t)
+      (anyErr T vs L₀ real t) ∧
+    ZKOutRelay (fun _ => (CoinLayer.session loopNr T).refP.Nonce × (CoinLayer.session loopNr T).refP.Rand)
+      (fun _ => (LeanRelease.ofLoop T L₀ real).toSrv.Chk) CoinOpen.shaH (fun x => refK x + 2)
+      (fun w _ => (LeanRelease.ofLoop T L₀ real).toSrv.proverD (LeanRelease.ofLoop T L₀ real).fillOf
+        (fun x => refK x + 2) wk w) Rl
+      (fun x τ => goesOnAt (LeanRelease.ofLoop T L₀ real).stop (refK x + 1) τ) (anySim T L₀ real t)
+      (anyErr T vs L₀ real t)
+
 end Loop
 
 /-- **Flock's zero knowledge at any values, per outcome, at the session loop's own release and at the deployed held
@@ -173,18 +209,29 @@ def _root_.Flock.Guarantees.SessionLoopZKAny : Prop :=
         ℕ → _root_.Flock.V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
       (wk : (LeanRelease.ofLoop T L₀ real).toSrv.Worker),
     LeanRelease.TrustsStop (CoinLayer.session Loop.loopNr T) vs (LeanRelease.ofLoop T L₀ real) CoinOpen.shaH wk Rl →
-    ZKOut (fun _ => (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)
-        (fun _ => (LeanRelease.ofLoop T L₀ real).toSrv.Chk) CoinOpen.shaH (fun x => refK x + 2)
-        (fun w _ => (LeanRelease.ofLoop T L₀ real).toSrv.proverD (LeanRelease.ofLoop T L₀ real).fillOf
-          (fun x => refK x + 2) wk w) Rl
-        (fun x τ => goesOnAt (LeanRelease.ofLoop T L₀ real).stop (refK x + 1) τ) (Loop.anySim T L₀ real t)
-        (Loop.anyErr T vs L₀ real t) ∧
-      ZKOutRelay (fun _ => (CoinLayer.session Loop.loopNr T).refP.Nonce × (CoinLayer.session Loop.loopNr T).refP.Rand)
-        (fun _ => (LeanRelease.ofLoop T L₀ real).toSrv.Chk) CoinOpen.shaH (fun x => refK x + 2)
-        (fun w _ => (LeanRelease.ofLoop T L₀ real).toSrv.proverD (LeanRelease.ofLoop T L₀ real).fillOf
-          (fun x => refK x + 2) wk w) Rl
-        (fun x τ => goesOnAt (LeanRelease.ofLoop T L₀ real).stop (refK x + 1) τ) (Loop.anySim T L₀ real t)
-        (Loop.anyErr T vs L₀ real t)
+    Loop.ZkAnyAt T vs L₀ real wk Rl t
+
+/-- **Flock's zero knowledge at any values, per outcome, at the deployed tables and the session loop's own link and
+`Finish`**: `SessionLoopZKAny` at `Masked.dataE`, at `SessionLoopZKDeployed`'s release (`LeanRelease.ofLoopLink` at the
+loop's own tables, `Loop.realOf src`), where the session's other Props hold. In place of `SessionLoopZKDeployed`'s valid
+witness (`Flock.R`, through which the workers' rows hold at the values, `Loop.RowsOK`) and its switched causality, it is
+at any values whose unswitched round encoding is causal (`UnCausal`), at every relation at whose statements the
+session's table witnesses are valid, where the transport's trusts hold at those statements (`LeanRelease.TrustsStop`).
+The ZK server never stops for good after failed sessions, so what the verdicts reveal is bounded per outcome of each
+session, and is not capped over a monitoring period. -/
+def _root_.Flock.Guarantees.SessionLoopZKAnyDeployed : Prop :=
+  ∀ (vs : (CoinLayer.session Loop.loopNr Masked.dataE).SwVals) (t : ℕ), 0 < t →
+    ∀ (Rl : Rel Flock.Wit), (CoinLayer.session Loop.loopNr Masked.dataE).Complete Rl →
+    (CoinLayer.session Loop.loopNr Masked.dataE).UnCausal vs →
+    ∀ (L₀ : LeanRelease Flock.Wit
+        ((CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand))
+      (src : Msg → Flock.Wit →
+        (CoinLayer.session Loop.loopNr Masked.dataE).refP.Nonce × (CoinLayer.session Loop.loopNr Masked.dataE).refP.Rand →
+        ℕ → _root_.Flock.V (Array _root_.Flock.F128 × ByteArray × Array ByteArray))
+      (wk : (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)).toSrv.Worker),
+    LeanRelease.TrustsStop (CoinLayer.session Loop.loopNr Masked.dataE) vs
+      (LeanRelease.ofLoopLink L₀ src (Loop.realOf src)) CoinOpen.shaH wk Rl →
+    Loop.ZkAnyAt Masked.dataE vs (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) wk Rl t
 
 end Claims.ZKServer
 
@@ -223,6 +270,21 @@ theorem SessionLoopZKAny : Flock.Guarantees.SessionLoopZKAny := by
     (fun x w h => (hTr x w h).1) (fun x w h => (hTr x w h).2.1) (fun x w h => (hTr x w h).2.2.1)
     (fun x w h => (hTr x w h).2.2.2.1) (fun x w h => (hTr x w h).2.2.2.2)
   rw [ENNReal.toReal_ofReal (FlockSoundness.CROnly.hidingGap_nonneg ZkView.My ZkView.saltHash)] at hZ
+  unfold Loop.ZkAnyAt
   exact ⟨hZ, zkOutRelay_of_zkOut hZ⟩
+
+/-- **Flock's zero knowledge at any values, per outcome, at the deployed tables and the session loop's own link and
+`Finish`**: `SessionLoopZKAny` at `Masked.dataE` and `withFiles (withLink L₀ src) src`, where every table is one it sets
+up (`Masked.tables`), the dummy's table witnesses carry the public region data (`Masked.dummyReg`), the stopped plan is
+causal (`causal_encStop` at `causalExe`) and the tape is read with fibers of one size (`fibersEq_ofLayout`). -/
+theorem SessionLoopZKAnyDeployed : Flock.Guarantees.SessionLoopZKAnyDeployed :=
+  fun vs t ht Rl hV huc L₀ src wk hTr =>
+    SessionLoopZKAny Masked.dataE vs t ht Rl (Masked.tables _ _ _ _) hV (Masked.dummyReg _ _ _ _)
+      (Masked.RoundPlan.causal (Masked.causal_encStop (cz := Masked.czExe Masked.PE) (enc := Masked.encExe Masked.PE)
+        (fin := Masked.finExe Masked.PE) Masked.causalExe) _ _) huc
+      ((CoinLayer.session Loop.loopNr Masked.dataE).tapeOKOn_iff.1
+        ((CoinLayer.session Loop.loopNr Masked.dataE).tapeOKOn_of_tape _ fun x _ =>
+          Masked.fibersEq_ofLayout (Masked.TapeLayout.exe Masked.PE) Masked.exeTape x))
+      (LeanRelease.withFiles (LeanRelease.withLink L₀ src) src) (Loop.realOf src) wk hTr
 
 end Flock.SecurityProofs

@@ -5218,6 +5218,12 @@
    "type_hash": "4833d6fd9acfc877d239481fbabd7f762c90d6e4b2e88f14f83431a7f1ac045d",
    "unfolded_hash": "9b59b33e852aed2e1c08c0b6c9db92791698f3dcb3cd5888d5948ffa63117245"
   },
+  "Properties.Flock.Nets.fixedNetsBuild": {
+   "owner": "@proofs",
+   "signature": ["Properties.Flock.Nets.fixedNetsBuild : Properties.Flock.Nets.FixedNetsBuild"],
+   "assumptions": [],
+   "type_hash": "659f123f5fe2c678a13ca6547f86b1aa7e666031ffe1415cf0db93a5505c60fe"
+  },
   "Properties.Identity.streamIsFlock": {
    "owner": "@network-accounting",
    "signature": ["Properties.Identity.streamIsFlock : Properties.Identity.StreamIsFlock"],
@@ -8740,12 +8746,6 @@
     ]
    },
    "type_hash": "7be5722effd046f635964f023dca25c90e739fb055dc677bb81837a5fcb7709d"
-  },
-  "Properties.Flock.Nets.fixedNetsBuild": {
-   "owner": "@proofs",
-   "signature": ["Properties.Flock.Nets.fixedNetsBuild : Properties.Flock.Nets.FixedNetsBuild"],
-   "assumptions": [],
-   "type_hash": "659f123f5fe2c678a13ca6547f86b1aa7e666031ffe1415cf0db93a5505c60fe"
   }
  },
  "shape": {

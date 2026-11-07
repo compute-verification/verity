@@ -601,7 +601,9 @@ closes the auditor's connection there, so the auditor sees how many of the sessi
 also leaks its end position: a session of `M` messages has up to `M + 1` stops beside its finish, `log₂(M + 2)` bits rather
 than one. It is counted by position, as `Flock.Guarantees.RecursiveZKLoopAnySum` counts a recursive session's stops
 (`1 + Σ_p (M_p + 1)`, `LoopAny.card_loopStops`), and the bound that holds at a prover that cuts is §10.5's (its table's first
-row a recursive session, and its bound over a stream). A ZK server that refuses is evidence against its rack.
+row a recursive session, and its bound over a stream). A ZK server that refuses is evidence against its rack. It
+never stops serving for good after failed sessions: a worker chooses its sessions' verdicts, so the leak is bounded per
+outcome of each session, and is not capped over a monitoring period (`Flock.Guarantees.SessionLoopZKAnyDeployed`).
 
 What the deferral costs: a bad worker is caught only at its session's `Finish`, one session's latency later than at its
 first bad message, and the rest of a doomed session's device and ZK server work is spent for nothing (the ZK server's share
