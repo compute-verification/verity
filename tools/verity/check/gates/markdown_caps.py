@@ -1,5 +1,6 @@
 """The Markdown caps as a warn gate: a change that leaves a Markdown file over its cap (`tests/test_repository.py`'s
-`markdown_cap`) is named, with how far over and the fix, and lands all the same.
+`markdown_cap`, the rule `test_markdown_size_caps` holds the tree to) is named, with how far over and the fix, and lands all
+the same.
 
     python3 tools/verity/check/gates/markdown_caps.py BASE TOP [--json]
 

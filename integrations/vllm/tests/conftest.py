@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 
 import pytest
 
@@ -87,3 +88,11 @@ def outside_a_checkout(monkeypatch):
     which = shutil.which
     monkeypatch.setattr(shutil, "which", lambda cmd, *a, **k: None if cmd == "git" else which(cmd, *a, **k))
 
+
+@pytest.fixture
+def gnu_timeout() -> None:
+    """Skips where the machine has no GNU timeout, for a test that starts one. A fixture, not a check at import, so a test file
+    that doesn't ask for it starts no program the suite's read guard can't trace."""
+    t = shutil.which("timeout")
+    if t is None or b"GNU" not in subprocess.run([t, "--version"], capture_output=True).stdout:
+        pytest.skip("GNU timeout (coreutils) required -- the pods have it, macOS does not")
