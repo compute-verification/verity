@@ -1,6 +1,8 @@
 """`check.py`: the Lean audit, one run over every Lake package that carries a `lean-audit.json`.
 
     python tools/verity/lean/check.py [--build] [--update [--owner @LANE] [--moved FILE]] [--out DIR] PACKAGE_DIR...
+    python tools/verity/lean/check.py --regenerate [--bookkeeping warn] [--out DIR] PACKAGE_DIR...   the Lean check of `next`;
+                                                    with --bookkeeping warn, drive's lock run (bookkeeping repaired, warned)
     python tools/verity/lean/check.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
     python tools/verity/lean/check.py --name-instances [--build] PACKAGE_DIR...  write each anonymous instance's name into its source
     python tools/verity/lean/check.py --lift FILE [--build] PACKAGE_DIR   lift guarantees into `SecurityProofs.G : G` (`lift`)
@@ -156,8 +158,11 @@ on `next` carries its record.  Every failure carries a code (`Failure`: `guarant
 lists beside its text (`failure_codes`, `settled_codes`); what settles is decided by code, never by the text.  With
 `--regenerate` (the lean-audit step of the Lean check of a commit of `next`) such a package passes instead, and
 `audit.json`'s `regenerated` maps each to its record for drive to commit when it lands that commit; the package's own lock
-is never written, and every other failure fails as before.  A guarantee whose
-statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
+is never written, and every other failure fails as before.  `--regenerate --bookkeeping warn` (drive's lock run after a
+landing; Daniel, 6 Nov) passes a package that fails only on its lock's bookkeeping (`BOOKKEEPING`) on the lock with it
+repaired (`repaired`), each repair a warning (`bookkeeping_warnings`) in the report's and audit.json's `bookkeeping`; the
+policy's checks are judged again on that lock, so the build, the replay, the axioms and a malformed lock fail as before.
+A guarantee whose statement is the same but prints differently (same type hash and named assumptions: a toolchain's printer, notation) gets
 one line, and so does a definition read in another module with the same content.  `--update` keeps each entry's `owner`
 and writes a new entry only with one, from `--owner`; an owner changed by hand gets one line, since it changes who answers
 for the statement, not what it says.  So does a guarantee lifted into a

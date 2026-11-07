@@ -137,6 +137,17 @@ Keys and access:
 
 Landing:
 
+- Lock bookkeeping warns and never holds a landing (Daniel, 6 Nov 2026, 6:14 PM PST). Drive's lock run after a landing
+  repairs it in the lock commit, each repair one warning naming its entry, its owner and the landing that brought it, and
+  the next PR fixes it. What it repairs:
+  - An unlisted premise, or an `assumptions` entry outside the assumptions module, goes under `open`, owned by its
+    guarantees' owner, on the lock's `open_default_issue` (else LEAN-186), due in seven days.
+  - A guarantee the witnesses rule now holds goes under `unwitnessed`.
+  - Stale entries are dropped, and missing owners are set.
+  - The unread and `tests/test_lean_packages.py` caps are set to what the run measures.
+
+  A PR's own check still fails on bookkeeping. The build, the replay, an axiom beyond the standard three, `sorry`,
+  `native_decide`, a kernel bypass and a malformed lock always fail. Lock files never conflict on merge (6:20 PM PST).
 - The vLLM integration's lint ratchets are no-growth: no change adds an
   exception or raises a recorded count, and a change to a lint's own code or thresholds is judged like source. Dedicated
   cleanup lanes pay the exceptions down; a feature PR owes none (`integrations/vllm/tools/ratchet_gate.py`).
