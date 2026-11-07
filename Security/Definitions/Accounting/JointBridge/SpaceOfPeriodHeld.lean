@@ -24,7 +24,7 @@ check; until it is, this bridge's guarantee holds at the challenge times only.
 namespace Accounting
 
 /-- **A period realizes its PoUS audit as the capacity audit of the joint run `run`, under the source's verdict
-`verdict`.** Each field is a property of the deployed period: PoUS draws its own coordinate of the period's coins, and
+`verdict`.** Each field is a property of the deployed period: PoUS samples its own coordinate of the period's coins, and
 that coordinate is the capacity audit's coins; the other audits' coins, as the joint run reads them, don't depend on
 it; the period's window has the capacity window's length; the capacity account's bit-ticks over the period's window,
 at the challenge times PoUS grades, are the joint run's over its capacity window; and PoUS's verdict on the period is

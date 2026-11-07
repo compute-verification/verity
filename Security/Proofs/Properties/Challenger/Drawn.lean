@@ -5,7 +5,7 @@ public import Proofs.Properties.Challenger.Coins
 public import Proofs.Properties.Challenger.Window
 
 /-!
-# The coins a draw reads are the ones its challenger drew
+# The coins a sample reads are the ones its challenger drew
 
 `drawCoins` reads its coins under the session the ledger opens on the window (`Session.drawCoins_ok`), and they are the
 coins any run of the device released whose commitment and roots are that session's (`Coins.drawn_released`), or a break.
@@ -24,8 +24,8 @@ open SampledProofs SampledProofs.Challenger
 
 variable {dev : History} {key : ChallengerKey} {label : String} {coins : Json}
 
-/-- **A draw `drawCoins` accepts reads the coins a run of the device released, and that run's log**, a run the device's
-own ledger opens withheld on the draw's window, whose release log reads as its coin commitment's (`releasedRootsOf`),
+/-- **A sample `drawCoins` accepts reads the coins a run of the device released, and that run's log**, a run the device's
+own ledger opens withheld on the sample's window, whose release log reads as its coin commitment's (`releasedRootsOf`),
 or the finder outputs a break. -/
 theorem drawn_log {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
     (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after ∧
@@ -43,8 +43,8 @@ theorem drawn_log {w : String} {after ξ : ByteArray} (h : drawCoins key w label
     · exact .inr b
   · exact .inr b
 
-/-- **A draw `drawCoins` accepts reads the coins a run of the device released**, a run the device's own ledger opens
-withheld on the draw's window, or the finder outputs a break: `DrawnByDevice` at one draw. -/
+/-- **A sample `drawCoins` accepts reads the coins a run of the device released**, a run the device's own ledger opens
+withheld on the sample's window, or the finder outputs a break: `DrawnByDevice` at one sample. -/
 theorem drawn {w : String} {after ξ : ByteArray} (h : drawCoins key w label after coins = .ok ξ) :
     (∃ s ∈ dev.runs key.pub, OpensOn dev key.pub w s.id ∧ ξ = s.released label after) ∨
       Break dev key label coins :=

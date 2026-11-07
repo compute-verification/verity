@@ -71,7 +71,7 @@ theorem acceptsZK_acceptedH : AcceptsZKAcceptedH := by
 
 theorem zk_schedOK : ZkSchedOK := zk_schedOK'
 
-/-- **A one-table hidden-output `--zk` acceptance at the challenger's draw sets the draw up**, from the session alone:
+/-- **A one-table hidden-output `--zk` acceptance at the challenger's sample sets the sample up**, from the session alone:
 with `ZkSchedOK`, a `DrawSetupZKH` at `dj S`. -/
 theorem drawSetupZKH_of_acceptsU (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {dj : Finset (Fin n) → Lean.Json} {S : Finset (Fin n)} (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1)
@@ -91,7 +91,7 @@ theorem drawSetupZKH_of_acceptsU (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs
   exact ⟨⟨x, _, _, hz', h1, h2, h3, h4, h5, h6 _⟩⟩
 
 set_option linter.unusedVariables false in
-/-- **A one-table hidden-output `--zk` acceptance at the challenger's draw sets the draw up**: with `ZkSchedOK`, a
+/-- **A one-table hidden-output `--zk` acceptance at the challenger's sample sets the sample up**: with `ZkSchedOK`, a
 `DrawSetupZKH` at `dj S`, wherever the outputs are returned. -/
 theorem drawSetupZKH_of_acceptsI (hsched : ZkSchedOK) {n mPts : ℕ} {I : Inputs} (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)

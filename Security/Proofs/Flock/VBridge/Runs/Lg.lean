@@ -32,7 +32,7 @@ round `k₂ + n + 1` at ring switching's `T` and switched claims (`rsT`, `rsSws`
 on every record whose rounds from there retain the bytes it frames.
 
 * `ligerito_of_residuals_at`: `ligerito_of_residuals` with its start round, the rounds the zerocheck, the lincheck and
-  ring switching draw (`zerocheck_coins`, `lincheck_coins`, `ringSwitch_spec`).
+  ring switching sample (`zerocheck_coins`, `lincheck_coins`, `ringSwitch_spec`).
 * `levelsLoop_count`, `ligeritoRun_conss`: V*'s Ligerito records one consistency context per level, so the proof's
   query and consistency nonces (`decodeProof_sizes`) are as many as the verifier consumes.
 -/
