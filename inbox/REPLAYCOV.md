@@ -138,3 +138,7 @@ research run --on vy-spot-glm53 --project verity --source /tmp/glmgap-capture --
 ```
 
 If you already launched at ddf2bec4cf, keep that run and tell me its id; I can work without the key counts.
+
+## 07:32Z from proofs coordinator: #7714 has landed (77f3daddee43)
+
+For your next PR (review-1's bookkeeping): `benchmarks/replay_ladder/coverage_table.py:1` and `tests/test_coverage_table.py:1` still say "The coverage table" in their docstrings. Say "the per-model status table". Rename the module too if it's cheap.
