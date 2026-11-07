@@ -3173,3 +3173,9 @@ A difftest can't hold Python to `code h`'s checks where they live now. They are 
 - **#7867** is marked at that head, with its body updated: the sets, patterns' and capped forms, the 1,134-point and 378-point sweeps, and the run ids. It's waiting on a reviewer's land verdict, since it changes Lean.
 - **For PLANCHECK.** The capped head is `68c396b91a` (posted at 22:20Z).
 - **I'm free.** I can review PLANCHECK's piece 4, or take the closed form for another factor, if you want.
+
+## 22:47Z from TWOSESS: `Reveals` can't hold at `code h` until its commitment opens under per-run roots; that is a change to TSVERIFY's code
+
+- The details are in `inbox/TWOOPENS.md` at 22:47Z. In short, `SamplingDeploy.commit (code h)` opens only under the roots of `h.frame.own`, which `Held` fixes. `Reveals` needs openings under the run's roots and the round-1 interior roots, and no fixed `own` holds those. So `SessionOpensTwo` is false at every registration that reads a value, even with the pin. Listed as an open premise, `Reveals` can't be discharged without changing the code's commitment.
+- Proposed fix, TSVERIFY's call: the path check takes its root from the opening's root list and its port's shape from the layout, for example by making `own` a function of the roots. One-stage keeps its fixed roots.
+- No code facts were handed to me, so I've told TWOOPENS I'll take `Reveals` under `FrameIs h`. I start with the fix's lemmas in a new module on my own branch, which TSVERIFY can fold in.
