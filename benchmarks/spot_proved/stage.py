@@ -20,7 +20,7 @@ top-k inputs (`long_rows`).
   RMSNorm's token for its residual half-rows and its norm, a plain allreduce's (token, half-row) on symm-mem's multimem route
   or FlashInfer's MNNVL one (its received row the same on every rank; a call on NCCL's route is counted, not staged), an
   unbiased bf16 cuBLAS GEMM's token
-  row (``aten::mm`` against a bf16 weight's transposed view) at the route its call's M rows take (a call past
+  row (``aten::mm`` against a bf16 weight's transposed view, or ``aten::linear``) at the route its call's M rows take (a call past
   ``CUBLAS_ROUTES["m_max"]`` is counted, not staged), the router's grouped top-k, ``silu_and_mul`` and ``moe_sum`` per row,
   and FA3's split combine per (token, head). Instances are sampled from it
   by the capture's coins, ``--per-type`` of each type.
@@ -570,7 +570,8 @@ def cublas_route(M: int, K: int, N: int, f32: bool) -> tuple[str, dict] | str:
 
 def cublas_instances(cap: Capture, profile, unstaged: dict | None = None):
     """An unbiased bf16 GEMM's token row on cuBLAS: ``aten::mm`` of the activation rows against a bf16 weight's transposed view
-    (GLM-5.3's router gate past the ll_bf16 tier, f32 out; its indexer's wk + weights projection, bf16 out), at the Definition
+    (GLM-5.3's router gate past the ll_bf16 tier, f32 out), or ``aten::linear`` against the weight itself (its indexer's wk +
+    weights projection, which vLLM runs as ``F.linear``, bf16 out), at the Definition
     the Program binds each row's call to at the M rows cuBLAS saw, in the opened layers (the weights are past the kept small
     parameters). A call whose M has no captured route, and any other ``aten::mm``, is counted in ``unstaged`` under its label,
     with why, and the step's other calls are still staged."""
@@ -581,18 +582,26 @@ def cublas_instances(cap: Capture, profile, unstaged: dict | None = None):
     dot = T.tensor_core_dot(profile)
     for r in cap.ranks:
         for e in cap.events[r]:
-            if e["op"] != "aten::mm" or not cap.opened(e, weights=True):
+            if e["op"] not in ("aten::mm", "aten::linear") or not cap.opened(e, weights=True):
                 continue
-            x, w, y = e["in"].get("self"), e["in"].get("mat2"), e["out"].get("ret0")
+            mm = e["op"] == "aten::mm"
+            x, w = (e["in"].get("self"), e["in"].get("mat2")) if mm else (e["in"].get("input"), e["in"].get("weight"))
+            y = e["out"].get("ret0")
             shaped = all(isinstance(v, dict) and len(v.get("shape", ())) == 2 for v in (x, w, y)) and "param" in w
             K = x["shape"][1] if shaped else None
-            if not shaped or (x["dtype"], w["dtype"]) != ("torch.bfloat16",) * 2 or w["shape"][0] != K or w.get("stride") != [1, K]:
-                rec = unstaged.setdefault("AtenMm_other", {"population": 0, "calls": [], "why": (
-                    "an aten::mm that is no bf16 activation against a bf16 weight's transposed view: no population reads it")})
+            if mm:
+                plain = shaped and w["shape"][0] == K and w.get("stride") == [1, K]
+            else:
+                plain = shaped and e["in"].get("bias") is None and w["shape"][1] == K and w.get("stride") in (None, [K, 1])
+            if not plain or (x["dtype"], w["dtype"]) != ("torch.bfloat16",) * 2:
+                name = "AtenMm_other" if mm else "AtenLinear_other"
+                rec = unstaged.setdefault(name, {"population": 0, "calls": [], "why": (
+                    f"an {e['op']} that is no bf16 activation against a bf16 weight's transposed view: no population reads it"
+                    if mm else "an aten::linear that is no unbiased bf16 activation against a bf16 weight: no population reads it")})
                 rec["population"] += 1
                 rec["calls"].append({"rank": r, "seq": e["seq"]})
                 continue
-            (M, K), N = x["shape"], w["shape"][1]
+            (M, K), N = x["shape"], (w["shape"][1] if mm else w["shape"][0])
             f32 = y["dtype"] == "torch.float32"
             rows, route = cap.real_rows(r, M), cublas_route(M, K, N, f32)
             if isinstance(route, str):
@@ -606,8 +615,9 @@ def cublas_instances(cap: Capture, profile, unstaged: dict | None = None):
             label = f"{spec.id.split('{')[0]}_K{K}_N{N}" + (f"_S{statics['SPLIT_K']}" if "SPLIT_K" in statics else "")
             for t in cap.rows(r, M):
                 yield (label, spec, (r, e["seq"], t),
-                       lambda r=r, e=e, t=t: [cap.tensor(r, e["in"]["self"])[t], np.ascontiguousarray(cap.tensor(r, e["in"]["mat2"]).T)],
-                       lambda r=r, e=e, t=t: [cap.tensor(r, e["out"]["ret0"])[t]])
+                       lambda r=r, x=x, w=w, t=t, mm=mm: [cap.tensor(r, x)[t],
+                                                          np.ascontiguousarray(cap.tensor(r, w).T if mm else cap.tensor(r, w))],
+                       lambda r=r, y=y, t=t: [cap.tensor(r, y)[t]])
 
 
 def fused_add_rms_norm_instances(cap: Capture):
@@ -743,7 +753,7 @@ def gate_instance(spec, key, args_of, want_of, full_gates: int) -> tuple[dict, d
 #: gated (`op_coverage`)
 GATED_OPS = {"_C::per_token_group_fp8_quant", "vllm::dynamic_flashinfer_deepgemm_blockscale_gemm", "moe_launch",
              "vllm::flashinfer_trtllm_fused_allreduce_norm", "vllm::all_reduce", "_C::fused_add_rms_norm", "_vllm_fa3_C::fwd",
-             "fa3_sparse_mla", "aten::mm", "_moe_C::grouped_topk", "_C::silu_and_mul", "_moe_C::moe_sum"}
+             "fa3_sparse_mla", "aten::mm", "aten::linear", "_moe_C::grouped_topk", "_C::silu_and_mul", "_moe_C::moe_sum"}
 _EVERY: dict = {}
 
 
