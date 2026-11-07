@@ -7,7 +7,8 @@
 # Run from the verity tree on a GPU node:
 #   bash benchmarks/one_stage/stationary_gpu.sh ST_UNITS="st-w13:M=1 st-w13:M=8" ST_GPU=0
 # env: ST_UNITS (stage.py's type specs, each with its own counts as SPEC@C1,C2)  ST_COUNTS=half,full  ST_RUNS=2  ST_ARMS=dev
-#      ST_GPU=0 (the device)  ST_WORK=/dev/shm (the scratch: builds, venv and staged statements)
+#      ST_GPU=0 (the device)  ST_WORK=/dev/shm (the staged statements' scratch)  ST_EXEC_WORK=/workspace/tmp (the builds'
+#      and the venv's, on a mount that executes)
 #      ST_PROVE_CPUS=0-31 (the prover's and the build's cores; the stagers take the rest)
 #      ST_HOLD (a file whose text names this run's slot: written once the file is gone, waiting up to ST_HOLD_WAIT=600 s, and
 #      removed at exit)  ST_DEADLINE (UTC epoch seconds after which no point starts)
@@ -17,6 +18,7 @@ for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uo pipefail
 REPO=$(pwd); O=${OUT:-${RESEARCH_RUN_DIR:?}/out}; mkdir -p "$O"
 W=$(mktemp -d "${ST_WORK:-/dev/shm}/stationary.XXXXXX")
+mkdir -p "${ST_EXEC_WORK:-/workspace/tmp}" && X=$(mktemp -d "${ST_EXEC_WORK:-/workspace/tmp}/stationary.XXXXXX")
 log() { echo "[$(date -u +%H:%M:%SZ)] $*" | tee -a "$O/job.log"; }
 HOLD=${ST_HOLD:-}; DEADLINE=${ST_DEADLINE:-0}
 MINE="proofs stationary ${RESEARCH_RUN_ID:-local}: GPU ${ST_GPU:-0}$( [ "$DEADLINE" = 0 ] || date -u -d "@$DEADLINE" +' until %H:%MZ')"
@@ -24,7 +26,7 @@ STAGERS=()
 cleanup() {
   for p in "${STAGERS[@]}"; do pkill -P "$p" 2>/dev/null; kill "$p" 2>/dev/null; done
   [ -n "$HOLD" ] && [ "$(cat "$HOLD" 2>/dev/null)" = "$MINE" ] && rm -f "$HOLD" && log "released $HOLD"
-  rm -rf "$W"
+  rm -rf "$W" "$X"
 }
 trap cleanup EXIT
 if [ -n "$HOLD" ]; then
@@ -35,10 +37,10 @@ fi
 NP=$(nproc); PC=${ST_PROVE_CPUS:-0-31}; SC=${ST_STAGE_CPUS:-$(( ${PC#*-} + 1 ))-$((NP - 1))}
 { hostname; lscpu | grep -E 'Model name|^CPU\(s\)'; nproc; free -g; nvidia-smi; git rev-parse HEAD; } > "$O/host.txt" 2>&1
 log "host: $NP CPUs ($(lscpu | sed -n 's/^Model name: *//p')), prover on $PC, stagers on $SC, GPU ${ST_GPU:-0}"
-export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=$W/venv UV_CACHE_DIR=$W/uv-cache
+export PATH=$HOME/.local/bin:$HOME/.cargo/bin:$PATH PYTHONDONTWRITEBYTECODE=1 UV_PROJECT_ENVIRONMENT=$X/venv UV_CACHE_DIR=$X/uv-cache
 command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
 uv sync -q --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
-PY=$W/venv/bin/python
+PY=$X/venv/bin/python
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
 Z=$W/zk; mkdir -p "$Z/records"; echo '[]' > "$Z/plan.json"
 SPECS=()
@@ -51,8 +53,8 @@ for spec in ${ST_UNITS:?}; do
   log "$u: staging $COUNTS"
 done
 
-# CUDA 13.3 unpacked under the scratch without root, as zk_cost.sh does, then the prover (flock-circuit --features gpu)
-CR=$W/cuda-root; todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3"; seen=
+# CUDA 13.3 unpacked without root, as zk_cost.sh does, then the prover (flock-circuit --features gpu)
+CR=$X/cuda-root; todo="cuda-nvcc-13-3 cuda-cudart-dev-13-3"; seen=
 while [ -n "$todo" ]; do
   set -- $todo; q=$1; shift; todo="$*"
   case " $seen " in *" $q "*) continue ;; esac
@@ -67,9 +69,9 @@ mkdir -p "$CR/debs" && (cd "$CR/debs" && apt-get download $(for q in $seen; do
 export CUDA_TK=$CR/usr/local/cuda-13.3 LD_LIBRARY_PATH=$CR/usr/local/cuda-13.3/compat:$CR/usr/local/cuda-13.3/lib64:${LD_LIBRARY_PATH:-}
 mkdir -p "$O/m0-build"
 log "build: CUDA 13.3 unpacked; building flock-circuit (GPU)"
-RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$W MODE=build GPU=1 taskset -c "$PC" bash verity/ml/flock/pod/60-circuit.sh \
+RESEARCH_RUN_DIR=$O/m0-build FLOCK_WORK=$X MODE=build GPU=1 taskset -c "$PC" bash verity/ml/flock/pod/60-circuit.sh \
   > "$O/m0-build/build.log" 2>&1 || { tail -40 "$O/m0-build/build.log"; exit 6; }
-BIN=$W/flock-gpu-link/flock/target/release/flock-circuit
+BIN=$X/flock-gpu-link/flock/target/release/flock-circuit
 sha256sum "$BIN" | tee "$O/binaries.sha256" | tee -a "$O/job.log"
 export CUDA_VISIBLE_DEVICES=${ST_GPU:-0} FC_PHASE_TIMES=1
 
