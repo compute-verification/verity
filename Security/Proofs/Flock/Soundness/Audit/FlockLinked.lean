@@ -16,7 +16,7 @@ What it rests on, all named:
   (`hCR : LinkCR … (reg σ) (cont σ) …`);
 * `ValueBinding`, the binding of wires to registered commit strings, which the circuit prover's `hm96-sha512` leaf
   layout discharges;
-* the lowering, `LoweringSoundB`, or in the `_placed` forms each drawn unit's place in its table (`UnitPlace`: the row
+* the lowering, `LoweringSoundB`, or in the `_placed` forms each sampled proof block's place in its table (`UnitPlace`: the row
   placement).
 
 The numeric side conditions are `N₀/(ek) ≤ ρ < 1` for every table (`hr`, `hρ`) and `t'`, the SHA-512 evaluations of one
@@ -42,7 +42,7 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
   {L : Law n} {decode : DecoderB (C := C) (Reg := Reg) plan tab} {Dh : Type} {Hc : List UInt8 → Dh}
   (vb : P.ValueBinding plan tab decode Hc)
 
-/-- **The link term the link theorem gives**: `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`. -/
+/-- **The binding error the link theorem gives**: `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`. -/
 noncomputable def linkBoundE (k Rw M : ℕ) (ρ t' : ℝ) : ℝ≥0∞ :=
   ENNReal.ofReal ((∑ c : vb.Pos, (Fintype.card (P.Ωc plan tab vb L c) : ℝ) / Fintype.card L.Ω) *
     (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
@@ -71,7 +71,7 @@ theorem flock_batched_count_linked (hlow : P.LoweringSoundB plan tab decode)
     (P.flock_batched_linkSoundE H E plan tab vb hlow hk hRw hM hρ hr ht) K σ).trans_eq
     (by rw [P.linkBoundCR_eq H E plan tab vb hCR])
 
-/-- **Drawn units of the compiled-layer audit, with `δ_link` discharged**, are correct at the plurality value layer
+/-- **Sampled proof blocks of the compiled-layer audit, with `δ_link` discharged**, are correct at the plurality value layer
 up to `ε_ks(σ) + linkBoundE`. -/
 theorem flock_batched_drawn_linked (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -96,7 +96,7 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D : Type} [In
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : Law n}
 
-/-- The decoder that reads each drawn unit from its place in its table (`loweringSoundB_of_place`). -/
+/-- The decoder that reads each sampled proof block from its place in its table (`loweringSoundB_of_place`). -/
 noncomputable def placeDecoder (place : ∀ S R u, u ∈ S → UnitPlace P (tabOf plan tab S R u).S u) :
     DecoderB (C := C) (Reg := Reg) plan tab := fun S R u M =>
   if h : u ∈ S then (place S R u h).decode

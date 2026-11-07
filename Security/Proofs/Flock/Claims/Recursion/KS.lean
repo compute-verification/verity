@@ -47,7 +47,7 @@ each session and the inner protocol's KS at the served runs, at the errors that 
 `KS` (`Claims.Recursion.KS`) with its `κ` and the weights `γ_A`, `γ_eA`. `E*` is the composed extractor of `Compose`
 (`served_eq`), so `servedERep_bad_le_good` splits its failure on an accepted run in two:
 
-* **`E_O` fails at one of the inner stage's draws**, at most `N_I = 1 + m′_I·k_I` times as often as `E_O` fails
+* **`E_O` fails at one of the inner stage's samples**, at most `N_I = 1 + m′_I·k_I` times as often as `E_O` fails
   (Wald). `E_O` gives up only when one session's `E^rep` does (`EO_none_session`), so `E_O`'s failure is at most the sum
   of the sessions' (`PrBad_EO_le`), each bounded by the outer Flock's KS at its session (`OuterKS`):
   `κ_O,s + √(γ_O,s·k(x)·Pr[B])`. That is `N_I·Σ_s κ_O,s` and, summed under one root, `√(γ_A·Pr[B])` with
@@ -90,7 +90,7 @@ variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [
 
 /-! ## The outer extraction, session by session -/
 
-/-- `E_O`'s output, as the composition reads it: `E_O` gave one. Its failure at a draw is its giving up there. -/
+/-- `E_O`'s output, as the composition reads it: `E_O` gave one. Its failure at a sample is its giving up there. -/
 def outR : Rel (List Flock.Wit) := fun _ _ => True
 
 /-- **Outer session `s`'s extraction, as `E_O` makes it**: replay the judged run; if it accepted, Flock's `E^rep` at
@@ -301,7 +301,7 @@ def Refuses (H : Msg → Msg) (D : Deploy Coin) : Prop :=
 
 /-- **The inner protocol's KS, carried to the served runs**: at every outer decoder that meets the list-decoding spec,
 the inner stage of `E*` (the inner `E^rep` at the inner statement, each rerun served by `E_O`) fails on an accepted run,
-when `E_O` succeeds at every draw it reruns at, with probability at most
+when `E_O` succeeds at every sample it reruns at, with probability at most
 `κ_I + √(γ_I·Pr[B_I]) + N_I·√(k_I·k(x)·Pr[Be])`: the inner protocol's bound with `B_I` for the inner `B` (the inner
 verifier's calls are recorded in the outer witnesses only), and, at each of the inner `E^rep`'s `N_I` expected reruns,
 the inner rounds' differing openings, each at most `√(Pr[a differing opening at a fork at that round])`. -/
@@ -371,7 +371,7 @@ theorem KS_of [Zero Col] (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) 
   have hp0 : 0 ≤ p := PrB_nonneg H D.V P x
   have hq0 : 0 ≤ q := PrBe_nonneg H D I DO decO P x
   have hG0 : 0 ≤ G := Finset.sum_nonneg fun s _ => Real.sqrt_nonneg _
-  -- the split: `E_O` fails at one of the inner stage's draws, or the inner stage fails
+  -- the split: `E_O` fails at one of the inner stage's samples, or the inner stage fails
   have hsplit := servedERep_bad_le_good H D.V (R D I) outR (EO D I DO decO) (dec H D) (fun x => I.waits (xI D x))
     (fun x => I.k (xI D x)) (fun x => I.cap (xI D x)) I.opens (fun x => I.assemble (xI D x))
     (fun x => I.check (xI D x)) x P

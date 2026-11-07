@@ -15,8 +15,8 @@ import VCVio.Prelude.Core
 
 `AcceptsZKR` reads the statements `Stmt.setupTables` sets up, whichever setup the tags choose, so it is the event at
 hidden outputs too (`Stmt.setupHidden`, the default `--statement`), as `AcceptsZK` is `zk_session_soundH`'s. What
-differs is the drawn statement: setupHidden's is `HmOut.drawn c pub d`, `HmRow.drawn` at the circuit without its output
-words. `OwnReadsH` and `regPathsH` are `OwnReads` and `regPaths` at that drawn statement.
+differs is the sampled statement: setupHidden's is `HmOut.drawn c pub d`, `HmRow.drawn` at the circuit without its output
+words. `OwnReadsH` and `regPathsH` are `OwnReads` and `regPaths` at that sampled statement.
 -/
 
 @[expose] public section
@@ -28,7 +28,7 @@ open FlockSoundness.Discharge.Exec (recordDraw)
 
 variable {n : ℕ} {Gate : Type}
 
-/-- **The registered reads are the verifier's own at the record's draw, under hidden outputs**: `OwnReads` at the drawn
+/-- **The registered reads are the verifier's own at the record's sample, under hidden outputs**: `OwnReads` at the sampled
 statement `HmOut.drawn c pub d`. -/
 def OwnReadsH (own : Array Registered.Port) (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (isRead : (Fin n × Fin c.ports.size) ⊕ Gate → Prop) (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port)
@@ -39,7 +39,7 @@ def OwnReadsH (own : Array Registered.Port) (c : Circuit) (pub : Public) (t : Ex
     Registered.unitIndices dp = .ok idx ∧ u.val ∈ D.proved ∧
     (port p).reads[idx.getD (D.proved.idxOf u.val) 0]? = some (some (readAt p))
 
-/-- **The paths of the registered reads, under hidden outputs**: `regPaths` at the drawn statement
+/-- **The paths of the registered reads, under hidden outputs**: `regPaths` at the sampled statement
 `HmOut.drawn c pub d`. -/
 def regPathsH (c : Circuit) (pub : Public) (t : Exec.Transcript)
     (port : (Fin n × Fin c.ports.size) ⊕ Gate → Registered.Port) : (Fin n × Fin c.ports.size) ⊕ Gate → ByteArray

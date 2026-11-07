@@ -15,22 +15,22 @@ decoders produce. It takes no premise: the check is a function of its three inpu
   and window (`R1`); its program, query, partition and population, and its day's declared program (`R2`); its scheme,
   ports, roots, leaves and domains (`R3`); its leaf layer (`R4`), anchors (`R5`), previous record, window and the
   window's stream and prover (`R6`); and for a v2 record its registered values (`R7`);
-* **the draw** is a draw of the registered law over the registered population (`Drawn`): its shape, its units and, for a
-  stratified or work law, its strata and closure;
-* **the units** were proved and served as drawn, under the registered roots, and the verifiers of record opened the
+* **the sample** is a sample of the registered law over the registered population (`Drawn`): its shape, its units and, for a
+  stratified or work sampling design, its strata and closure;
+* **the units** were proved and served as sampled, under the registered roots, and the verifiers opened the
   registered values' reads against the registered roots (`UnitsProved`), and the receipt names the commitment's digest
   (`Receipt`);
 * **the verdicts** accepted: one of record at least, every one of record ran, and none that ran refused
   (`VerdictsAccept`);
-* the law has a profile's draw and the population is a natural number;
+* the sampling design has a profile's sample and the population is a natural number;
 
-and it then publishes the drawn and proved units with the exact bounds at δ (`publicOf`), and the profile of one level
-`unit`, the partition's units, drawn by the law at δ (`profileOf`). That the check accepts every such commitment and
+and it then publishes the sampled and proved units with the exact bounds at δ (`publicOf`), and the profile of one level
+`unit`, the partition's units, sampled by the sampling design at δ (`profileOf`). That the check accepts every such commitment and
 evidence is completeness, `Properties.SampledProofs.acceptMeans_complete`.
 
 The digest the receipt is held to is the commitment's own (`Commitment.digest`), which `OneStage.commitmentOf` computes
 as the window record's digest of the record it decodes (`Flock.WindowRecord.digest`, `DigestIsRecord's`). A Bernoulli law is accepted as the code accepts
-it: its draw is checked as any other, its profile's draw is `bernoulli p`, and it publishes the largest `M` of the
+it: its sample is checked as any other, its profile's sample is `bernoulli p`, and it publishes the largest `M` of the
 profile's units with `(1 − p)^M ≥ δ` (`BernoulliBounds`, `Bound.bernoulliBound`).
 -/
 
@@ -53,7 +53,7 @@ def partitionOf (v : Registration.Verifier) : Json :=
   v.partition.getD (Partition.build (Flock.hexOf v.program.sha512) v.query)
 
 /-- R1: the record has exactly a v1 record's keys, or a v2 record's when the verifier expects values registered; its format
-is the matching one and its protocol one-stage's; its law is `law`, the verifier's agreed law as `Draw.derive` expands it
+is the matching one and its protocol one-stage's; its sampling design is `law`, the verifier's agreed law as `Draw.derive` expands it
 over the verifier's own program and query; and its window is an object of kind `served` or `stand-in`. -/
 def R1 (rec : Json) (v : Registration.Verifier) (law : Json) : Prop :=
   keys? rec = some (if v.registered.isEmpty then Registration.KEYS else Registration.KEYS_V2) ∧
@@ -219,16 +219,16 @@ verifier expects values registered. -/
 def Registered (v : Registration.Verifier) (rec law : Json) : Prop :=
   R1 rec v law ∧ R2 rec v ∧ R3 rec v ∧ R4 rec v ∧ R5 rec v ∧ R6 rec v ∧ (ExpectsV2 v → R7 rec v)
 
-/-! ## The draw: the registered law over the registered population -/
+/-! ## The sample: the registered law over the registered population -/
 
-/-- The law a draw names, as a string (empty when it isn't one). -/
+/-- The sampling design a sample names, as a string (empty when it isn't one). -/
 def kindOf (draw : Json) : String :=
   match getD draw "law" with
   | .str s => s
   | _ => ""
 
-/-- A draw's keys: its law, population and units, with `k` (subset), `p` (bernoulli) or `k` and `strata` (stratified,
-work), and a work draw's `closure` when it has one. -/
+/-- A sample's keys: its sampling design, population and units, with `k` (subset), `p` (bernoulli) or `k` and `strata` (stratified,
+work), and a work sample's `closure` when it has one. -/
 def drawKeys (kind : String) (closure : Bool) : Array String :=
   let keys := sortStrings (#["law", "population", "units"] ++
     if kind == "subset" then #["k"] else if kind == "bernoulli" then #["p"] else #["k", "strata"])
@@ -237,19 +237,19 @@ def drawKeys (kind : String) (closure : Bool) : Array String :=
 /-- Strictly ascending. -/
 def Ascending (xs : Array Int) : Prop := ∀ i (h : i + 1 < xs.size), xs[i] < xs[i + 1]
 
-/-- The draw's units of stratum `s`: those in one of its ranges. -/
+/-- The sample's units of stratum `s`: those in one of its ranges. -/
 def countIn (units : Array Int) (s : Json) : Int :=
   let rs := (Draw.ranges? (getD s "units")).getD #[]
   units.foldl (fun acc u => if rs.any (fun (lo, hi) => lo ≤ u && u < hi) then acc + 1 else acc) 0
 
-/-- A draw of the law `law` over the registered `population` (`draw.check_draw`): an object naming subset, bernoulli,
-stratified or work, with exactly its law's keys; the law it names is `law` and its population the registered one; its
+/-- A sample of the sampling design `law` over the registered `population` (`draw.check_draw`): an object naming subset, bernoulli,
+stratified or work, with exactly its sampling design's keys; the sampling design it names is `law` and its population the registered one; its
 units integers, strictly ascending, in `[0, population)`; a subset's `k` its number of units; a Bernoulli `p` written
-`NUM/DEN` with `0 ≤ NUM ≤ DEN`, `0 < DEN`; a stratified or work draw's strata well formed over its population
+`NUM/DEN` with `0 ≤ NUM ≤ DEN`, `0 < DEN`; a stratified or work sample's strata well formed over its population
 (`Draw.strataMessage` none: each stratum exactly its keys, a distinct string template, its ranges ascending, disjoint and
 tiling `[0, population)`, its `k` the rule's), and each stratum's `k`, where its template is a string (as
-`Draw.strataMessage` none has every one), the number of units drawn in it; and a work draw's closure, when it has one,
-integers, non-empty, strictly ascending, in `[0, population)` and none of them drawn. -/
+`Draw.strataMessage` none has every one), the number of units sampled in it; and a work sample's closure, when it has one,
+integers, non-empty, strictly ascending, in `[0, population)` and none of them sampled. -/
 def Drawn (draw population law : Json) : Prop :=
   let kind := kindOf draw
   let closure := kind == "work" && (field? draw "closure").isSome
@@ -270,7 +270,7 @@ def Drawn (draw population law : Json) : Prop :=
 
 /-! ## The units, the receipt and the verdicts -/
 
-/-- The drawn units, as integers. -/
+/-- The sampled proof blocks, as integers. -/
 def drawnInts (draw : Json) : Array Int :=
   match getD draw "units" with
   | .arr us => us.filterMap int?
@@ -280,7 +280,7 @@ def drawnInts (draw : Json) : Array Int :=
 def Receipt (c : Commitment) (e : Evidence) : Prop :=
   jeq (getD e.receipt "registration") (.str (Flock.hexOf c.digest))
 
-/-- The roots the verifiers of record that accepted report opening the sessions' registered reads against, for the
+/-- The roots the verifiers that accepted report opening the sessions' registered reads against, for the
 record's own values (its roots' ports and its registered values): `{value: root}`, a value reported under two roots mapped
 to null; none when no such verdict reports any (`audit.session_registered`, which `Record.sessionRegistered` and
 `Record.ownRegistered` compute from the verdicts). -/
@@ -292,11 +292,11 @@ the same key and root in the second. -/
 def SameRoots (a b : Array (String × Json)) : Prop :=
   a.size = b.size ∧ ∀ x ∈ a, ∃ y ∈ b, x.1 = y.1 ∧ jeq x.2 y.2
 
-/-- The units, as the record holds them (`audit_record`'s checks after the draw's): the proved statement's instances are
-exactly the units the draw proves (its units and a work draw's closure, ascending); the receipt names the commitment's
-digest; the sessions were served exactly the drawn units, when they were handed the draw; the sessions' roots, when
+/-- The units, as the record holds them (`audit_record`'s checks after the sample's): the proved statement's instances are
+exactly the units the sample proves (its units and a work sample's closure, ascending); the receipt names the commitment's
+digest; the sessions were served exactly the sampled proof blocks, when they were handed the sample; the sessions' roots, when
 given, name at least one port, each port's root the one the record registers for it (`Record.byPort`, the last root of
-each port); and, when the record registers values or the verifiers of record report reads of the record's own values,
+each port); and, when the record registers values or the verifiers report reads of the record's own values,
 those reads were opened against exactly the record's `{value: root}` (`Record.registeredRoots`, each value's last
 entry). -/
 def UnitsProved (c : Commitment) (e : Evidence) : Prop :=
@@ -318,15 +318,15 @@ def VerdictsAccept (vs : Array (String × Json)) : Prop :=
 
 /-! ## What acceptance publishes -/
 
-/-- The drawn units as natural numbers. -/
+/-- The sampled proof blocks as natural numbers. -/
 def drawnNats (draw : Json) : Array Nat :=
   match getD draw "units" with
   | .arr us => us.filterMap nat?
   | _ => #[]
 
-/-- The public outputs at δ, for the law `law` with its profile's draw `d` over `n` units: the drawn units, the proved
-ones, the exact bound on wrong units (`Bound.boundOf`: `Bound.countBound` over the draw's strata, `Bound.bernoulliBound`
-for a Bernoulli draw), and for a stratified or work law each template's own (`Bound.stratumBound`). -/
+/-- The public outputs at δ, for the sampling design `law` with its profile's sample `d` over `n` units: the sampled proof blocks, the proved
+ones, the exact bound on incorrect proof blocks (`Bound.boundOf`: `Bound.countBound` over the sample's strata, `Bound.bernoulliBound`
+for a Bernoulli sample), and for a stratified or work sampling design each template's own (`Bound.stratumBound`). -/
 def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) : Public :=
   { drawn := drawnNats e.draw,
     proved := (Draw.proved e.draw).filterMap fun (i : Int) => if 0 ≤ i then some i.toNat else none,
@@ -334,17 +334,17 @@ def publicOf (p : Params) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat) 
     perTemplate := if jeq (getD law "law") "stratified" || jeq (getD law "law") "work" then
       (Bound.strataOf n d).map (·.map fun s => (s.name, Bound.stratumBound s p.delta)) else none }
 
-/-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, drawn by
-`d`; and the number of units drawn. -/
+/-- The integrity profile at δ: the record's program; one level `unit`, the record's partition, of `n` units, sampled by
+`d`; and the number of units sampled. -/
 def profileOf (p : Params) (c : Commitment) (e : Evidence) (d : Core.Draw) (n : Nat) : Core.Integrity :=
   let str := fun (k : String) => match getD c.record k with | .str s => s | _ => ""
   { programs := #[str "program"], prescribed := #[], linked := false, covered := #[],
     levels := #[{ name := Record.LEVEL, query := some (str "partition"), size := n, draw := some d }],
     delta := p.delta, drawn := #[(Record.LEVEL, (drawnNats e.draw).size)] }
 
-/-- What the check accepts: the registration keeps R1–R7 with `law` the verifier's agreed law as derived, the draw is a
-draw of `law` over the registered population, the units were proved and served as drawn under the registered roots and
-values with the receipt naming the commitment's digest, and the verdicts accept; `law` has a profile's draw `d`
+/-- What the check accepts: the registration keeps R1–R7 with `law` the verifier's agreed law as derived, the sample is a
+sample of `law` over the registered population, the units were proved and served as sampled under the registered roots and
+values with the receipt naming the commitment's digest, and the verdicts accept; `law` has a profile's sample `d`
 (`Record.profileDraw`) and the registered population is a natural number `n`, and the check publishes `publicOf` and
 the profile `profileOf`. -/
 def AcceptMeans : Prop :=
@@ -360,7 +360,7 @@ def AcceptMeans : Prop :=
 def DigestIsRecord's : Prop :=
   ∀ (b : ByteArray) (c : Commitment), OneStage.commitmentOf b = .ok c → Flock.WindowRecord.digest c.record = .ok c.digest
 
-/-- An acceptance whose profile draws a level by a Bernoulli law at `r` bounds wrong units by `Bound.bernoulliBound` over
+/-- An acceptance whose profile samples a level by a Bernoulli law at `r` bounds incorrect proof blocks by `Bound.bernoulliBound` over
 the level's units at δ: the largest `M` of them with `(1 − r)^M ≥ δ`. -/
 def BernoulliBounds : Prop :=
   ∀ (p : Params) (c : Commitment) (e : Evidence) (pub : Public) (prof : Core.Integrity),

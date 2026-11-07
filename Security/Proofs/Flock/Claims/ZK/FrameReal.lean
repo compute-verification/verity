@@ -40,7 +40,7 @@ import Mathlib.Topology.Sheaves.Init
 # The rep's own table against the placeholder's
 
 The session loop keeps a rep's table as `Finish.tabOfLevel0` of a level 0 that `Level0.ofDraws` drew (`Finish`'s
-`level0` request, `level0Of`), and the placeholder is the same at zero draws. So the rep's own table is of the
+`level0` request, `level0Of`), and the placeholder is the same at zero samples. So the rep's own table is of the
 placeholder's shape.
 
 * `RealTabs`: the tables `real` answers are table `k / 2`'s `tabOfLevel0` at a level 0 `ofDraws` drew at its `m`.
