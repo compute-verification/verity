@@ -45,7 +45,7 @@ them), and that statement in readable form (`toReadable`): `m` and `kLog` of the
 relation's fields, and the `Form` the scope check reads, each field the value `ProvedScope.check` tests.
 
 * `Read`: the flags' values (`Exec.Inputs`, under `--zk` before `zkTags` and `zkCoins` replace `--statement`'s tags and
-  `--coins`), whether the verifier is the masked one, the record's draw, the verifier's own public input words
+  `--coins`), whether the verifier is the masked one, the record's sample, the verifier's own public input words
   (`--public-inputs`) and whether it holds its own registered reads (`--registered`).
 * `Read.check`: `ProvedScope.check` as `verifyCmd` calls it; `Parsed.scope`: it, then `ProvedScope.sizesOk` on the
   parsed tables' `m`, as `verifyCmd`'s verdict runs them.
@@ -64,7 +64,7 @@ open FlockSoundness.Discharge
 
 /-- What `flock-verify verify` reads of a statement besides the session directory: its flags' values (`I`, as
 `Exec.Inputs` holds them: `--statement`'s tags and `--coins`, which `verify --zk` replaces by
-`zkTags I` and `zkCoins I`), whether it is the masked verifier (`--zk`), the record's draw (`Main.recordDraw`, none
+`zkTags I` and `zkCoins I`), whether it is the masked verifier (`--zk`), the record's sample (`Main.recordDraw`, none
 without one), its own public input words (`--public-inputs`) and whether it holds its own registered reads
 (`--registered`). -/
 structure Read where

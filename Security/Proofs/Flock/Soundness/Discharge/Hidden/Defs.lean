@@ -107,7 +107,7 @@ def commitPair (r y r' y' : List UInt8) : List UInt8 × List UInt8 :=
 
 /-- **What `Stmt.setupHidden` accepted**: the circuit the session commits (`HmOut.parseCommit`: `HmOut.parse`'s, or a
 templated statement's read from its template; `Spec.parseF` at a flat statement's tags), the leaf scheme it names, the public file
-`HmOut.loadPublic` loaded (at a draw, `HmOut.drawn` of it) and `HmOut.checkPublic` passed, `n`, the block counts and `m`
+`HmOut.loadPublic` loaded (at a sample, `HmOut.drawn` of it) and `HmOut.checkPublic` passed, `n`, the block counts and `m`
 as the executable computes them (`k_log ≤ 27`, `m ≤ 35`), the pin `HmRow.pin` gave, Δ from `HmOut.delta`, the regions
 `HmOut.regions` built, which passed `checkInRange`, Σ over the circuit, the statement's
 digest and the public file, and the hello `helloOf` built. -/
@@ -177,12 +177,12 @@ def PublicExposes : Prop :=
         mkRegion st.c.kLog s!"digest {p}" (Layout.hmFree st.c) (Layout.hmFixed st.c p) (Layout.hmBytes st.c st.pub p) =
           .ok r
 
-/-- **`OutputsCommitted`** (the protocol meaning): in a drawn statement `Stmt.setupHidden` accepts, in every satisfying
+/-- **`OutputsCommitted`** (the protocol meaning): in a sampled statement `Stmt.setupHidden` accepts, in every satisfying
 witness of its block R1CS (`Layout.model`) at regions containing the executable's, at block `o` and template instance
 `g` (below `2^⌊log₂ g⌋`), output row `j`'s `b ‖ c` in the registered population's public file, at the unit the template
 instance proves, is the commit string of the row prefix and the output words the template instance computes
 (`outBytes`), under the salt the witness holds at the row's `hm96` slot (`Hm.saltCol`). For a population file without
-shared rows, a draw whose proved units are in the population, a unit that returns the outputs (`ho`) and `sha512/row/v1`
+shared rows, a sample whose proved units are in the population, a unit that returns the outputs (`ho`) and `sha512/row/v1`
 rows (`hv1`). -/
 def OutputsCommitted : Prop :=
   ∀ {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)} {d : Lean.Json}
@@ -210,7 +210,7 @@ def CommitPairSpec : Prop :=
   ∀ r y r' y' : List UInt8, r ≠ r' → Binding.commitString r y = Binding.commitString r' y' →
     Binding.Collides (commitPair r y r' y')
 
-/-- **`OutputsBinding`** (the protocol meaning, under `cr/sha-512`): two drawn statements `Stmt.setupHidden` accepts on
+/-- **`OutputsBinding`** (the protocol meaning, under `cr/sha-512`): two sampled statements `Stmt.setupHidden` accepts on
 one circuit file, public file and tables, under `OutputsCommitted`'s conditions each, and satisfying witnesses of their
 block R1CS, that put one registered unit at block `o`, template instance `g` and at block `o'`, template instance `g'`:
 when the output words the two template instances compute for output row `j` differ, `commitPair` of their rows' bytes

@@ -5,14 +5,14 @@ public import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
 public import Proofs.Flock.Soundness.Audit.HarmBound
 
 /-!
-# A sampling block stratified by subcircuit: its drawn units, its draw's miss, and its one budget
+# A sampling block stratified by subcircuit: its sampled proof blocks, its sample's miss, and its one budget
 
-* `Composed.execRefinesZK_on_drawn`: `execRefinesZK_on` with an event `E` of the draw on both sides, at one table, as
-  `execRefinesZK_tables_drawn` is at `J` tables: both audits' outcomes carry the draw, and the refinement is one
-  inequality at each of the law's draws, where `E` is fixed.
-* `StratifiedBlock.accepted_drawnWrong_le`: flock-verify accepts the sampling block with a drawn unit wrong with
+* `Composed.execRefinesZK_on_drawn`: `execRefinesZK_on` with an event `E` of the sample on both sides, at one table, as
+  `execRefinesZK_tables_drawn` is at `J` tables: both audits' outcomes carry the sample, and the refinement is one
+  inequality at each of the sampling design's samples, where `E` is fixed.
+* `StratifiedBlock.accepted_drawnWrong_le`: flock-verify accepts the sampling block with a sampled proof block wrong with
   probability at most `ε_ks + ε_bind`: `zk_flock_drawnC_reg` at `planAtZKH`, carried to flock-verify's acceptance.
-* `StratifiedBlock.drawMiss_le`: the live draw misses a set `B` with probability at most `Law.stratified`'s escape of
+* `StratifiedBlock.drawMiss_le`: the live sample misses a set `B` with probability at most `Law.stratified`'s escape of
   `B`, under A3 (`Law.execOS_escape_le`).
 * `StratifiedBlock.within_of_le`: a set in the confidence set, `δ ≤` its escape, is within the one budget:
   `Law.stratified_risk_le` for its spend, and `maxHarm`'s supremum for its ANDs and output bits.
@@ -35,8 +35,8 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] {mPts n : ℕ} {R
   (fin : Finset (Fin n) → Reg → Fin 2 → Array ByteArray → List Msg)
   (capOf : ∀ (_ : Finset (Fin n)) (_ : Reg), ByteArray → Fin 1 → Cap D) (N : ℕ) {L : Law n}
 
-/-- **The refinement at `--zk` at one table, with an event of the draw**: flock-verify `--zk` accepts the live audit at
-a draw in `E` no likelier than the compiled batched audit, played by `simZ … τ`, accepts at a draw in `E`. -/
+/-- **The refinement at `--zk` at one table, with an event of the sample**: flock-verify `--zk` accepts the live audit at
+a sample in `E` no likelier than the compiled batched audit, played by `simZ … τ`, accepts at a sample in `E`. -/
 theorem execRefinesZK_on_drawn (hdec : DecodesOnZK A Hs T I wr opn dec one fin capOf L)
     (τ : Strategy (auditLive L Reg (liveOf dg mPts N wr))) (E : Finset (Fin n) → Prop) :
     prob (fun o => LiveAcceptsZK I o ∧ E o.2.1) (auditLive L Reg (liveOf dg mPts N wr)) τ ≤
@@ -87,7 +87,7 @@ open scoped ENNReal
 variable (w : StratifiedBlock)
 
 open Classical in
-/-- **A sampling block accepted with a drawn unit wrong**, at the strategy `τ` that plays it: at most
+/-- **A sampling block accepted with a sampled proof block wrong**, at the strategy `τ` that plays it: at most
 `ε_ks + ε_bind`. -/
 theorem accepted_drawnWrong_le (τ : Strategy w.game)
     (hCR : ∀ ω j, TableCRZ execArith hs512 (planAtZKH w.dj w.y₀ (w.L.draw ω) (reg (w.sim τ))) j
@@ -123,7 +123,7 @@ private theorem prob_const {α : Type} (Q : Prop) [Decidable Q] (g : Game α) (s
     exact prob_false g s
 
 open Classical in
-/-- **A sampling block's draw misses a set `B`** with the escape probability of its live draw. -/
+/-- **A sampling block's sample misses a set `B`** with the acceptance probability of its live sample. -/
 theorem prob_drawMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ = w.L.escape B := by
   show avg (fun ω => prob _ ((liveOf w.dg (mPtsOf w.D.unroll.g (∑ s, w.ks s)) w.N w.wr (w.L.draw ω) τ.1).map
@@ -138,7 +138,7 @@ theorem prob_drawMiss (B : Finset (Fin w.n)) (τ : Strategy w.game) :
   · rw [if_neg (mt hiff.1 hd), if_neg hd]
 
 open Classical in
-/-- **A sampling block's draw misses a set `B`** with probability at most `Law.stratified`'s escape of `B`, under A3. -/
+/-- **A sampling block's sample misses a set `B`** with probability at most `Law.stratified`'s escape of `B`, under A3. -/
 theorem drawMiss_le (hA3 : Assumptions.UniformRandomBytes w.Lb w.src) (B : Finset (Fin w.n)) (τ : Strategy w.game) :
     prob (fun o => ¬ ∃ u ∈ o.2.1, u ∈ B) w.game τ ≤ w.ideal.escape B := by
   rw [prob_drawMiss]

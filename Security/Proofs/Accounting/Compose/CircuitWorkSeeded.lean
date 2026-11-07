@@ -15,7 +15,7 @@ public import Proofs.Accounting.Lemmas.TS
   `SeedLuckAt`'s `Break`, at the query `sq a r` names, the round's gain is at most `roundPremium` (`gain_le_premium`;
   the round's weight `roundCone` where `θ_r = 0`), and summed over the rounds (every tile's round is one, under
   `Declared.Wf`) the mode's `L − κ·U` is at most `premiumOf` (`gainSum_le`).
-* **The live draw** (`live_le`): given the oracle's answers, a uniform `K_d`-subset misses the tiles whose checked values
+* **The live sample** (`live_le`): given the oracle's answers, a uniform `K_d`-subset misses the tiles whose checked values
   aren't honest with probability at most `(1 − ρ·U)^{K_d} ≤ e^{−ρ·K_d·U}`, so a pass with `ρ·K_d·U ≥ ln(1/δ_s)` costs
   `δ_s`.
 * **The work**: off `DrawnRightOff`'s event on `Declared.atDraw`'s layer, `Of` gives the share game's pass; off the
@@ -225,10 +225,10 @@ theorem unlucky_le {A V : Type} [Fintype V] (R : JointRun A V) (w : V → ℝ) (
   refine Finset.sum_le_sum fun v _ => ?_
   by_cases hs : R.same a v <;> cases hm : R.mode a v <;> simp [hs, hw v]
 
-/-! ## The live draw -/
+/-! ## The live sample -/
 
 open Classical in
-/-- **The live draw's tail**: a pass with `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s`. -/
+/-- **The live sample's tail**: a pass with `ρ·K_d·U ≥ ln(1/δ_s)` has probability at most `δ_s`. -/
 theorem live_le {A Ξ : Type} [Fintype A] [Fintype Ξ] {Np : ℕ} (R : JointRun A (Fin Np)) (w : Fin Np → ℝ) (Kd : ℕ)
     (ρ δs : ℝ) (hρN : ∀ t, ρ * Np * w t ≤ 1) (hδs : 0 < δs) :
     prob (fun ω : A × (Equiv.Perm (Fin Np) × Ξ) =>

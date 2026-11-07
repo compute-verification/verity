@@ -14,7 +14,7 @@ own cap of `q` oracle queries (`Prover.bounded`), and `pr_unpaid_good_le` unions
 per-device `Fin q` union over all `P·G` candidates. When the deployed cap reads `q` as the prover's total hash budget,
 that charges the same budget `G` times over, and at `q = G = 2^55`, `r = 12` the term is `2^14`: vacuous.
 
-A pass's `G` candidates share their data: the store and the pass's certified stream are drawn once, and the candidates
+A pass's `G` candidates share their data: the store and the pass's certified stream are sampled once, and the candidates
 differ only in their oracles (`SketchPassCoins`). So for fixed oracles one resampling argument prices every
 candidate's correct-digest queries together: each query of each candidate is one guess at the shared unknown sector,
 and a budget of `qtot` queries summed across the candidates pays `qtot·fib/|X|` once. Queries add; grinding multiplies
@@ -610,8 +610,8 @@ theorem pr_unpaid_sum_le (A : SketchDeployedSession n P N m ρ h S L q ks G d) (
     SketchDeployedWindow.pr_unpaid_sum_le (A.window w η) r X qtot ε hr32 hRank (hX' w η)
       (fun j ι σ Os D => hq w η j ι σ Os D)
 
-/-- `RemoteSessionConservationSketchSum`'s reading on any store `store ω` drawn before the session's coins, from a
-bound `ε_u` on some window's unpaid words at the slack `S + (L − ρ·256) + X` a pass: the draws' terms hold at every
+/-- `RemoteSessionConservationSketchSum`'s reading on any store `store ω` sampled before the session's coins, from a
+bound `ε_u` on some window's unpaid words at the slack `S + (L − ρ·256) + X` a pass: the samples' terms hold at every
 store, and only the unpaid words read the store's distribution. -/
 theorem pr_conservation_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedSession n P N m ρ h S L q ks G d) (X : ℕ) (dbar dw : ℝ) (hn : 0 < n) (hP : 0 < P)
@@ -660,7 +660,7 @@ theorem pr_conservation_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Sketc
       exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
 /-- `pr_conservation_of_unpaid` at the deployed receipt parameters (`RemoteSessionConservationSketchDeployed`'s): the
-draws' terms are at most `2·2^-40`. -/
+samples' terms are at most `2·2^-40`. -/
 theorem pr_deployed_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N 128)
     (A : SketchDeployedSession n P N 128 ρ 512 S L q 16 G 2773) (X : ℕ) (hn : 7 ≤ n) (hP : 0 < P) (hN : 0 < N)
     (εu : ℝ≥0∞) (hu : pr (fun x : Ω × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) =>

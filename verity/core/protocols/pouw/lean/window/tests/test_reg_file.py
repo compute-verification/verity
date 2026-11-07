@@ -1,12 +1,12 @@
-"""`PouwWindow.RegFile`, a drawn H1 leaf's ``--registered`` files from the accepted registration and produced record, held
+"""`PouwWindow.RegFile`, a sampled H1 leaf's ``--registered`` files from the accepted registration and produced record, held
 to the Python on the shared harness (`verity_difftest`): `leaf_lanes.registered_file` at `leaf_lanes.reads` and at
 `leaf_lanes.verifier_entries`' entries and roots and at the unit's placement (each value its own table from row 0, or
-placed in a window table from a base row), the files h1_lanes' statements read (`benchmarks/pouw/h1_lanes/run.py`),
+placed in an execution phase table from a base row), the files h1_lanes' statements read (`benchmarks/pouw/h1_lanes/run.py`),
 and `pouw-leaf-own`'s check (`leafOwn?`), which accepts each such file and refuses one whose data port is not the
 layout's read at the records' root and the unit's placement or one of whose ports has two reads, and its sample policy
 (`checkFull`), which accepts a session record that samples every unit and refuses one that doesn't.
 
-The drawn inputs are registrations naming the leaf's four registered tables (one sometimes missing, one sometimes named
+The sampled inputs are registrations naming the leaf's four registered tables (one sometimes missing, one sometimes named
 twice, the partials sometimes among them), produced records with and without the partials, leaf tiles of 2 to 64 lanes,
 every lane, the combine and a lane past the last, known ports that do and don't collide with a read, and placements
 that do and don't move each value.
@@ -52,7 +52,7 @@ def _known(rng: random.Random, name: str) -> dict:
 
 
 def placement(rng: random.Random) -> dict[str, tuple[str, int]] | None:
-    """A unit's placement of the leaf's registered values, each in a window table from a base row (a call's A table of
+    """A unit's placement of the leaf's registered values, each in an execution phase table from a base row (a call's A table of
     its step, the weights' B, its z and receipt tables), or None: each value its own table from row 0."""
     if rng.random() < 0.4:
         return None
@@ -115,7 +115,7 @@ def test_the_python_is_the_lean(server) -> None:
     D.run(FILE, examples=300, server=server)
 
 
-#: a window unit's placement: its call's A table of its step, the weights' B, its call's z and receipt tables, each from
+#: an execution phase unit's placement: its call's A table of its step, the weights' B, its call's z and receipt tables, each from
 #: the unit's base row
 WINDOW = {LL.A: ("h1/w-0/a/448@1", 64), LL.B: ("h1/w-0/b/448", 96), LL.ZY: ("h1/w-0/zy@3", 5),
           LL.RECEIPT: ("h1/w-0/receipt@3", 5)}
@@ -142,7 +142,7 @@ def _own(server, x: dict, file: dict) -> tuple[str, str]:
 @pytest.mark.parametrize("ln", [0, 5, 31, None])
 def test_the_served_file_is_the_lean_and_passes_its_check(ln: int | None, place: dict | None, server) -> None:
     """At a served statement the Python's file is the Lean's, and `pouw-leaf-own` accepts it: each value its own table
-    from row 0, and each placed in a window table from the unit's base row, where every data port reads its table at
+    from row 0, and each placed in an execution phase table from the unit's base row, where every data port reads its table at
     the base plus its leaf row and the ports of A, B and partials rows stay marked read in full."""
     x, file = _served(ln or 0, ln, place)
     D.replay(FILE, x, server)
@@ -195,7 +195,7 @@ def test_the_check_refuses_a_port_of_two_reads(ln: int | None, known: bool, serv
     assert kind == "reject" and f"port {port} has 2 reads" in why
 
 
-#: `pouw-leaf-own`'s draw policy alone: a session record's verdict (no Python counterpart)
+#: `pouw-leaf-own`'s sample policy alone: a session record's verdict (no Python counterpart)
 FULL = D.Port(EXE, "full_draw", reference=lambda x: None, inputs=st.nothing(), package=LEAN)
 
 

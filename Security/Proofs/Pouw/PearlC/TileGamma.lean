@@ -13,7 +13,7 @@ Staged; nothing pinned. The pins proposed are `pearlCSampled8192`, `pearlCSample
 
 * `gammaSampled`: if every good tile's `W_ref` is at most `Ω` times its credit, `TTOutTile(γ₀)` gives `GγSampled` at
   `γ = 1 − (1 − γ₀)/Ω` with error `(1 − ε_s)^t + ε(q, N)`. Pointwise, an accepted run either has more than `ε_s` of the
-  layout's tickets on bad tiles of committed units, which `t` work-weighted draws all miss with probability at most
+  layout's tickets on bad tiles of committed units, which `t` work-weighted samples all miss with probability at most
   `(1 − ε_s)^t` (`workWeightedSampling`, pinned), or its good tiles carry the claimed work less `ε_s`, and then TT_OUT's
   event holds.
 * **The headlines are the unit-level worst case under the cap.** A good tile's credit is `(1 − ρ)·creditOf` times its

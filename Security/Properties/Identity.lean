@@ -3,9 +3,9 @@ module
 public import Identity.Tagged
 
 /-!
-# Core's identity hash is C-Flock's SHA-512
+# Core's identity hash is Flock's SHA-512
 
-`Identity.Sha512` (package `core_identity`) streams SHA-512 over C-Flock's compression: a state absorbs pieces
+`Identity.Sha512` (package `core_identity`) streams SHA-512 over Flock's compression: a state absorbs pieces
 (`State.update`) and pads once (`State.finalize`). `Flock.Sha512.hash` pads a whole message and compresses it. These say
 that the two compute one function, so that a statement about what SHA-512 hashes, such as a collision among the strings a
 run hashes, reads `Flock.Sha512.hash` whichever of the two the code calls:
@@ -28,12 +28,12 @@ header refuses: an empty tag, a tag of `2 ^ 32` bytes or more, a payload of `2 ^
 def taggedInput (tag : String) (payload : ByteArray) : Flock.V ByteArray := do
   return (← Identity.taggedHeader tag payload.size) ++ payload
 
-/-- **Streaming SHA-512 is C-Flock's.** Absorbing `ms` piece by piece and finalizing gives `Flock.Sha512.hash` of the
+/-- **Streaming SHA-512 is Flock's.** Absorbing `ms` piece by piece and finalizing gives `Flock.Sha512.hash` of the
 pieces' concatenation. -/
 def StreamIsFlock : Prop :=
   ∀ ms : List ByteArray, (ms.foldl State.update init).finalize = Flock.Sha512.hash (ms.foldl (· ++ ·) .empty)
 
-/-- **The tagged SHA-512 is C-Flock's SHA-512 of its input.** `Identity.taggedSha512 tag payload` refuses exactly when
+/-- **The tagged SHA-512 is Flock's SHA-512 of its input.** `Identity.taggedSha512 tag payload` refuses exactly when
 `taggedInput tag payload` does, and is otherwise `Flock.Sha512.hash` of it. -/
 def TaggedIsFlock : Prop :=
   ∀ (tag : String) (payload : ByteArray),

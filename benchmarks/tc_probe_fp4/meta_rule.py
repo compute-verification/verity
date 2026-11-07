@@ -8,11 +8,11 @@ Part A, the map (one-hot, exact): row config (stored slot s, nibble m) puts one 
 s // 4's nibble; B's column n is nonzero only at logical k = 8 c' + n for one chunk c' per tile; C = +0.  Each word is then
 weight x a x b x the scale of one block, and the scales are distinct powers of two per block (A's in variant ``a``, B's in
 variant ``b``), spaced so that (weight, block) decode uniquely for weights 1..15.  All 64 x 16 configs meet all 16 chunks c',
-so the word at (config, k) says whether slot s lands at logical k under m.  Variant ``b`` also permutes the rows, draws the
+so the word at (config, k) says whether slot s lands at logical k under m.  Variant ``b`` also permutes the rows, samples the
 other chunks' nibbles from all 16, and changes the codes' values and signs, so its agreement with ``a`` shows that the map
 depends on the nibble alone.
 
-Part B, the arithmetic: random codes, B nonzero everywhere, random scales and accumulators, nibbles drawn per row and chunk
+Part B, the arithmetic: random codes, B nonzero everywhere, random scales and accumulators, nibbles sampled per row and chunk
 from every nibble Part A found to be a gather (each slot at most one logical k, weight 1), against the pinned dense model
 (``sparse.PINNED``) on the stored A and, per row, the B codes its nibbles gather (``gather_dense`` extended to all 16 nibbles).
 Part B2 is the same with one metadata row per tile, against the dense ``mma.sync`` on the gathered B (hardware against

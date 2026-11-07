@@ -9,8 +9,8 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   p512/k2 (`a7.P512`: the opening's proof block at the default p1024/k3/masked is past Flock's K_MAX), sketch-sha512
   receipts. One window of N / ``--plan`` passes, pass i a stripe of P chunks from P i, so the window's U is N receipts, of
   which its openings coin draws ``--samples`` (`audit.AuditRun.close`). Every salt of the prover's (the payloads', the
-  receipt leaves', every row's) comes from its own secret, drawn per run from the OS.
-* **Each opening a proof block.** Draw (pass i, position p, chunk j) is one `BlockOpeningCheck_v1` (`block_check`) at P,
+  receipt leaves', every row's) comes from its own secret, sampled per run from the OS.
+* **Each opening a proof block.** Sample (pass i, position p, chunk j) is one `BlockOpeningCheck_v1` (`block_check`) at P,
   DR (the pass's receipt tree), DP (the payload tree of N) and DV 1 (no appended chunk), its witness `opening.witness`:
   the chunk, its payload, the receipt leaf, the pass's plan row, both salts and paths. The window's proof blocks are one
   statement of the one-stage audit (`one_stage.registration`, the template-instance partition, the stratified sampling
@@ -22,12 +22,12 @@ deploys them), so that the verifier receives no chunk bytes; and the prover's co
   plan shows"), so the prover sends the plan row's salt with the plan. It decides the window on the verdicts
   (`opening.Session.decide`).
 * **Rounds.** ``honest``, and ``tampered``: the same session (the same coins, so the same draws), the store's chunk at the
-  first draw replaced by other bytes before the passes (a prover that lost the chunk and receipts what it holds in its
+  first sample replaced by other bytes before the passes (a prover that lost the chunk and receipts what it holds in its
   place). Its proof block's verdict is codec, its proof is accepted, and the window is rejected. Both rounds are staged on
   one stager, so the circuit is lowered once.
 * **What the verifier received** (`scan`): every file the verifier side holds (the registration, partition, program,
   circuit, public file, the session's record and proofs, the sample, the openings it was sent and v0's messages), scanned
-  at every offset, raw and as hex, for each drawn chunk and payload cut whole into 16-byte pieces (`leak_scan.cut`, its
+  at every offset, raw and as hex, for each sampled chunk and payload cut whole into 16-byte pieces (`leak_scan.cut`, its
   tail included), but the pieces the staged public circuit holds (a run of zero bytes), which it lists. A round fails on
   a piece the zero-knowledge drivers' one rule reads ``leaked`` (`leak_scan.scan`). The prover's input file
   (``inst-*.bin``) is the positive control.
@@ -98,7 +98,7 @@ def store_of(blocks: int, seed: int, secret: bytes) -> C3.Store:
 
 def window(store: C3.Store, L: int, samples: int, delta: float, secret: bytes, seed: int) -> SimpleNamespace:
     """One window over ``store``: N / L passes, pass i the stripe of L chunks from L i, each received as the prover sends
-    it (its root, its plan, its step i), then the window closed and drawn. Returns the session, the passes and v0's
+    it (its root, its plan, its step i), then the window closed and sampled. Returns the session, the passes and v0's
     messages, as the verifier received them."""
     reg, N = store.registration, store.registration.blocks
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=samples, delta=delta, window_ns=10, codec=P512)

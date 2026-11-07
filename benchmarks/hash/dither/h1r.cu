@@ -1694,7 +1694,7 @@ static void tag3(const char* name, u64 out[3]) {
 
 constexpr int NW = 4;
 
-// step_base (device, may be null) is added to every call's base, so one call table serves every step of a window
+// step_base (device, may be null) is added to every call's base, so one call table serves every step of an execution phase
 extern "C" int h1r_launch(const H1Call* calls_dev, int ncalls, int max_units, const int* ks, const u64* salt_dev,
                           const u64* step_base, u64* seeds_dev, u32* out_dev, int nowrite, int version, cudaStream_t stream) {
   for (int i = 0; i < ncalls; ++i)

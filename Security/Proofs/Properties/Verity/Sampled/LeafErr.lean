@@ -18,11 +18,11 @@ the leaf the node opens, and pays for every leaf once:
   class at a round's release and at a link's, of every count the node's frame has; where the frame asks for more coins
   than a block holds, no round is released and the class error is 1.
 * **A leaf's class error** (`leafErr`, `leafErrMax`, `avg_leafErrMax_le`, `avg_leafErrMax_key_le`): the class error of
-  the leaf's fiber at the worst count, within `2·δ₁` over the device's draw of the round, and within `2·2^-257`
+  the leaf's fiber at the worst count, within `2·δ₁` over the device's sample of the round, and within `2·2^-257`
   (`leafTerm`) over the tree's key as well (`avg_hidingGap_tree_le`).
 * **At a tree's rounds** (`roundErr`, `treeErr`, `openErr_le_roundErr`, `avg_treeErr_hello_le`): a node's class error
   is within its round's, and a tree's unopened rounds' class errors are within `maxTreeCoins` leaves' terms over the
-  sample its `Hello` draws.
+  sample its `Hello` samples.
 * **The potential** (`treePotential`, `avg_treePotential_hello_le`, `roundErr_add_treePotential_le`,
   `treePotential_nil`): the open trees' unopened rounds' class errors, and `maxTreeCoins` leaves' terms for each
   coin-tree line the log has left. A `Hello` keeps it on average and an opening pays its round's class error out of
@@ -109,7 +109,7 @@ local notation "𝔽" => FlockLevel3.GF128
 
 /-! ## No round released -/
 
-/-- A draw's first `n` coins are 128 bits each, for each coin the block holds. -/
+/-- A sample's first `n` coins are 128 bits each, for each coin the block holds. -/
 theorem length_opened {block : ℕ} (d : TreeDraw block) (n : ℕ) :
     (TreeDraw.opened d n).length = 128 * min n block := by
   have h : (List.ofFn fun i => List.ofFn (d.1 i)).map List.length = List.replicate block 128 := by
@@ -118,7 +118,7 @@ theorem length_opened {block : ℕ} (d : TreeDraw block) (n : ℕ) :
   rw [TreeDraw.opened, List.length_flatten, List.map_take, h, List.take_replicate, List.sum_replicate_nat,
     Nat.mul_comm]
 
-/-- **More coins than a block holds are never released**: a draw's first `n` coins, for `n` past its block, are no
+/-- **More coins than a block holds are never released**: a sample's first `n` coins, for `n` past its block, are no
 string of `128·n` bits. -/
 theorem opened_ne_of_length {block n : ℕ} (hb : block < n) (d : TreeDraw block) {bits : List Bool}
     (hl : bits.length = 128 * n) : TreeDraw.opened d n ≠ bits := fun h => by
@@ -203,7 +203,7 @@ theorem linkBits_eq {m : ℕ} (p : Fin 2 → Fin m → 𝔽) : linkBits e p = ro
 /-! ## A leaf's class error -/
 
 /-- **A leaf's class error at a count**: under the nonce `ν` and the key `key`, the class error of the fiber of the
-draw `d₀`'s leaf as stream `s`'s round `r` (the draws with its leaf), partitioned by the bits of `n` challenges its
+sample `d₀`'s leaf as stream `s`'s round `r` (the samples with its leaf), partitioned by the bits of `n` challenges its
 first `n` coins release. -/
 noncomputable def leafErr (ν key : ByteArray) (s r : ℕ) {block : ℕ} (d₀ : TreeDraw block) (n : ℕ) : ℝ≥0∞ :=
   classErr (Finset.univ.filter fun d : TreeDraw block =>
@@ -216,8 +216,8 @@ leaf. -/
 noncomputable def leafErrMax (ν key : ByteArray) (s r : ℕ) {block : ℕ} (d₀ : TreeDraw block) : ℝ≥0∞ :=
   ⨆ n : Fin (block + 1), leafErr e ν key s r d₀ n
 
-/-- **A leaf's class error is within `2·δ₁` over the device's draw** (`avg_iSup_classErr_le_hm96` at
-`leaf_eq_treeH`): over the draw `d₀` of stream `s`'s round `r`, where the leaves under `key` hide within `δ₁`, the
+/-- **A leaf's class error is within `2·δ₁` over the device's sample** (`avg_iSup_classErr_le_hm96` at
+`leaf_eq_treeH`): over the sample `d₀` of stream `s`'s round `r`, where the leaves under `key` hide within `δ₁`, the
 class error at the worst count is at most `2·δ₁`. -/
 theorem avg_leafErrMax_le (ν key : ByteArray) (s r block : ℕ) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding (treeMy key) (treeC ν) δ₁) :
@@ -237,7 +237,7 @@ theorem avg_leafErrMax_le (ν key : ByteArray) (s r block : ℕ) {δ₁ : ℝ≥
 /-- **The term a leaf costs**: twice the leftover hash lemma's `2^-257`. -/
 noncomputable def leafTerm : ℝ≥0∞ := 2 * ENNReal.ofReal (1 / 2 ^ 257)
 
-/-- **A leaf's class error is within `leafTerm` over its tree's key and its draw** (`avg_leafErrMax_le` at
+/-- **A leaf's class error is within `leafTerm` over its tree's key and its sample** (`avg_leafErrMax_le` at
 `CROnly.hm96Hiding_gap`, then `avg_hidingGap_tree_le`). -/
 theorem avg_leafErrMax_key_le (ν : ByteArray) (s r block : ℕ) :
     avg (fun κ : Fin 2047 → Bool => avg fun d₀ : TreeDraw block => leafErrMax e ν (treeKey κ) s r d₀) ≤
@@ -258,7 +258,7 @@ theorem avg_leafErrMax_key_le (ν : ByteArray) (s r block : ℕ) :
 /-! ## A tree's rounds -/
 
 /-- **A round's class error**: the class error at the worst count of the leaf the tree `T`'s `Hello` committed to as
-stream `s`'s round `r`, at the draw it sampled there. -/
+stream `s`'s round `r`, at the sample it sampled there. -/
 noncomputable def roundErr (T : OpenTree) (s : Fin T.spec.streams.size) (r : Fin (2 ^ T.spec.roundsLog)) : ℝ≥0∞ :=
   leafErrMax e T.nonce (treeKey T.sample.1) s r (T.sample.2 s r)
 
@@ -266,7 +266,7 @@ noncomputable def roundErr (T : OpenTree) (s : Fin T.spec.streams.size) (r : Fin
 noncomputable def treeErr (T : OpenTree) : ℝ≥0∞ :=
   ∑ s, ∑ r : Fin (2 ^ T.spec.roundsLog), if T.opened s ≤ r.1 then roundErr e T s r else 0
 
-/-- **A fresh tree's rounds cost at most `maxTreeCoins` leaves' terms** over the sample its `Hello` draws: a tree the
+/-- **A fresh tree's rounds cost at most `maxTreeCoins` leaves' terms** over the sample its `Hello` samples: a tree the
 device samples holds at most `maxTreeCoins` leaves (`Leaves.treeLeaves_le`), each within `leafTerm`
 (`avg_leafErrMax_key_le`). -/
 theorem avg_treeErr_hello_le (ν : ByteArray) (spec : Flock.CoinTree.Spec) (hok : TreeSpecOk spec) :

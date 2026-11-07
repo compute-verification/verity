@@ -23,13 +23,13 @@ proved.
   The novel intake is line rate or, under network accounting, side channels plus certified timing plus the declared
   computation's novel intake, alpha F under the inference-only policy once the count check is in the ZK flow.
 * 1/rho_NCI: the declared computation trains at the thread bound, rho_T = b_a / (alpha Lambda(K)) declared gates per
-  counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum law rho_PS when no dark
+  counted multiplication with Lambda(K) = max(e, 2K / (4 d b_w)), or at the tighter partial-sum rule rho_PS when no dark
   compute can sum the inference blocks' partial sums. The residual reads them on the server for free; unmonitored compute
   reads them through the export (line rate, or side channels plus readable export under network accounting). A relay op
-  reads 2 b_p bits, and the developer relays only as many partial sums as buy more registered work than the relay's gates
-  would train directly.
+  reads 2 b_p bits, and the developer relays only as many partial sums as buy more gates of the registered circuit than
+  the relay's gates would train directly.
 * The verdict lag: from its first incorrect proof block until the halt (a window plus the verdict delay), a developer can skip
-  all registered work, once per identity, in every tier; that capacity joins the residual. Detection must end the
+  the whole registered circuit, once per identity, in every tier; that capacity joins the residual. Detection must end the
   identity and take its hardware out of use, or the capacity after the halt is unmonitored.
 * chi, the cheating share: with sampled proofs at a budget, the incorrect proof blocks the sampling design accepts number
   A ln(1/delta) / q per identity over the whole deployment, q = share / (overhead + replay)
