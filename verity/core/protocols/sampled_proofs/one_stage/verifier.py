@@ -366,16 +366,18 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         pinned: Mapping[str, str] | None = None, binding: Mapping[str, str] | None = None,
         schemas: Mapping[str, str] | None = None, window_root: str | None = None,
         held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None,
-        interior: Mapping[str, Any] | None = None) -> Verdict:
+        interior: Mapping[str, Any] | None = None,
+        output_values: Mapping[str, Mapping[str, str]] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
-    `verifiers`): on `check`'s copies, `check_public`'s values and declared items, the receipt's challenger and place in
-    the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
-    with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
-    `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
-    opens for `window_root` released after the registration's digest, and refuses the select step where they aren't or
-    `coins` is missing (code `coins`); for one that read none, `coins` must be None. Where the two differ,
-    or the Lean refuses a step, the verdict fails with `DISAGREE` alone.
+    `verifiers`): on `check`'s copies (its `outputs` here `output_values`, since `outputs` is the check's public outputs),
+    `check_public`'s values and declared items, the receipt's challenger and place in the log, `select`'s rule, the bytes
+    of the coins the sample read and the closure map, and `audit_record`'s arguments with the sessions' roots whole. The
+    verifier has no coins of its own: for a sample that read coins the Lean also checks `coins`, their evidence
+    (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger opens for `window_root`
+    released after the registration's digest, and refuses the select step where they aren't or `coins` is missing (code
+    `coins`); for one that read none, `coins` must be None. Where the two differ, or the Lean refuses a step, the verdict
+    fails with `DISAGREE` alone.
 
     Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
     `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`), one replay block's Program
@@ -384,7 +386,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     `{"receipt", "draw", "read", "audit"}` under `interior`."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
-                              registered, supplied, pinned, binding, schemas, window_root, held),
+                              registered, supplied, pinned, binding, schemas, window_root, held, output_values),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
             "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
             "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
@@ -396,10 +398,11 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             "coins": None if coins is None else dict(coins)}
     if interior is not None:
         it = interior
-        i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held = it["copies"]
+        i_ports, i_leaf, i_anchors, i_log, i_registered, i_supplied, i_pinned, i_schemas, i_window, i_held, i_outputs = \
+            it["copies"]
         args["interior"] = {
             "params": _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log, None,
-                              None, i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held),
+                              None, i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held, i_outputs),
             "replay": codec.encode_program(it["replay"]),
             "values": [{"name": n, "registered": r} for n, r in it["values"]], "record": dict(it["record"]),
             "received": it["received"], "source": it["read"].hex(),
