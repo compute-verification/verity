@@ -33,8 +33,7 @@ incorrect set of the trace the extractor recovers.
    - Real: SHA-512 collision resistance, through its folds.
    - Folds into: `TableCRZAt` and `LinkCRZCAt` into `Claims.ExpectedCR`; `UniformRandomBytes` (the verifier's bytes,
      exactly uniform) and `RecordCustodyZKJ` (the record is the live session's) into Core's challenger premises.
-   - Open: `TagsOkZHJ`, a hypothesis on the statement's form. The unit's `Built` is read off the parse
-     (`Discharge.Hidden.built_of_parseStmt`).
+   - Open: `TagsOkZHJ` and `Built`, hypotheses on the statement's form.
 2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Claims/RecursionGeneric.lean`, proved in
    `Proofs/Flock/RecGeneric/OuterProof.lean`): for every Π_in its repetition extractor shows knowledge sound, binding
    ZK server and knowledge-sound Π_out, the compiled verifier is knowledge sound wherever the compiler's contract holds;
