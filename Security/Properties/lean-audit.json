@@ -36,6 +36,7 @@
   "Properties.SampledProofs.Bits",
   "Properties.SampledProofs.Halt",
   "Properties.SampledProofs.Second",
+  "Properties.SampledProofs.PlanCheck",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.Wipe",
@@ -914,7 +915,9 @@
   "Properties.Firewall",
   "Firewall",
   "Properties.Core",
-  "CoreProtocol.Site"
+  "CoreProtocol.Site",
+  "Definitions.Flock.Audit",
+  "Definitions.Flock.Game"
  ],
  "witnesses": {
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
@@ -988,6 +991,18 @@
   "Properties.Firewall.afterOnTime": {
    "honest": ["Properties.Firewall.afterOnTime_honest"],
    "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.leakCheckSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.leakCheckSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.leakCheckSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.leakCountSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.leakCountSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.leakCountSound_nontrivial"
+  },
+  "Properties.SampledProofs.SecurityProofs.workCheckSound": {
+   "honest": ["Properties.SampledProofs.SecurityProofs.workCheckSound_honest"],
+   "nontrivial": "Properties.SampledProofs.SecurityProofs.workCheckSound_nontrivial"
   },
   "Properties.SampledProofs.SecurityProofs.secondMisses": {
    "honest": ["Properties.SampledProofs.SecurityProofs.secondMisses_honest"],
@@ -1843,7 +1858,8 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits", "Properties.SampledProofs.Second"],
+   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits", "Properties.SampledProofs.Second",
+    "Properties.SampledProofs.PlanCheck"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.CertifierNetwork": {
@@ -2077,6 +2093,11 @@
    "imports": ["Firewall"],
    "except": [],
    "why": "the record's rules are stated against the release side's own functions (`Firewall.Record`, `Firewall.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
+  },
+  "Properties.SampledProofs.PlanCheck": {
+   "imports": ["Definitions.Flock.Audit", "SampledProofs"],
+   "except": [],
+   "why": "what the planner's checker's acceptance means is stated against its own functions (`SampledProofs.PlanCheck`, on Lean core) and the sampling designs and partitioning targets the guarantees read (`Definitions.Flock.Audit`), never a proof"
   },
   "Properties.SampledProofs.Second": {
    "imports": ["Definitions.Claims", "SampledProofs", "Properties.SampledProofs.Draw"],
@@ -9981,6 +10002,18 @@
    },
    "Properties.SampledProofs.SecurityProofs.secondMisses": {
     "function": "SampledProofs.Select.selectSecond",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.leakCheckSound": {
+    "function": "SampledProofs.PlanCheck.leakBound",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.leakCountSound": {
+    "function": "SampledProofs.PlanCheck.leakBound",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.workCheckSound": {
+    "function": "SampledProofs.PlanCheck.checkWork",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
