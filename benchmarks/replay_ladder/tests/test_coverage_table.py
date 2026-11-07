@@ -72,11 +72,15 @@ def test_the_ladder_fills_each_replay_column_from_its_arm():
 def test_the_footnote_names_the_models_that_need_the_pin():
     big = ladder_model(False, "r2", [1.0, 1.0]) | {"model": "big", "tilings": {"replays": 2, "distinct": 2, "choices": 1}}
     mid = ladder_model(False, "r0", [1.0, 1.0]) | {"tilings": {"replays": 2, "distinct": 1, "choices": 1}}
+    small = ladder_model(False, "r3", [1.0, 0.9]) | {"model": "small"}
+    tiny = ladder_model(False, "r4", [1.0]) | {"model": "tiny"}
     cov = copy.deepcopy(COV)
-    cov["rows"][0]["ladder"] = "big"
-    cov = C.merge(cov, [{"models": [big, mid]}])
-    assert C.pin_verdicts(cov) == (["Big"], ["Mid"])
-    assert "differed from serving: Big; they kept the same tilings and matched: Mid." in C.markdown(cov)
+    for row, name in zip(cov["rows"], ("big", "mid", "small", "tiny")):
+        row["ladder"] = name
+    cov = C.merge(cov, [{"models": [big, mid, small, tiny]}])
+    assert C.pin_verdicts(cov) == (["Big", "Small"], ["Mid", "Tiny"])
+    assert "differed from serving or kept different tilings: Big, Small; every replay matched serving: Mid, Tiny." \
+        in C.markdown(cov)
 
 
 def test_an_arm_the_ladder_did_not_run_keeps_its_sidecar_cell():

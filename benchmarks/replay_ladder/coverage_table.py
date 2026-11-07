@@ -85,18 +85,15 @@ def ladder_cell(m: dict) -> dict | None:
 
 
 def pin_verdicts(cov: dict) -> tuple[list[str], list[str]]:
-    """The models whose unpinned replays kept different tilings or differed from serving (they need the pin), and those
-    whose unpinned replays, with their tilings logged, all kept the same tilings and matched serving."""
+    """The models whose unpinned replays differed from serving or kept different tilings (they need the pin), and those
+    whose unpinned replays all matched serving, keeping the same tilings where those were logged."""
     need, fine = [], []
     for row in cov["rows"]:
         c = row["cells"].get("replay_unpinned") or {}
-        if c.get("status") != "measured":
+        if c.get("status") != "measured" or c.get("rows_exact") is None:
             continue
         t = c.get("tilings")
-        if (t and t["distinct"] > 1) or c.get("rows_exact", 1) < 1:
-            need.append(row["model"])
-        elif t:
-            fine.append(row["model"])
+        (need if (t and t["distinct"] > 1) or c["rows_exact"] < 1 else fine).append(row["model"])
     return need, fine
 
 
@@ -129,8 +126,8 @@ def markdown(cov: dict) -> str:
     need, fine = pin_verdicts(cov)
     verdict = ""
     if need or fine:
-        verdict = (f" Unpinned, the replays kept different tilings or differed from serving: {', '.join(need) or 'none'}; "
-                   f"they kept the same tilings and matched: {', '.join(fine) or 'none'}.")
+        verdict = (f" Unpinned, the replays differed from serving or kept different tilings: {', '.join(need) or 'none'}; "
+                   f"every replay matched serving: {', '.join(fine) or 'none'}.")
     return ("\n".join(lines) + "\n\n" + f"● measured, ○ representable but not run, — can't represent yet. Replay: share of "
             "output rows exact in the worst replay, serving and replaying with Inductor's reduction tiling pinned "
             "(`TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK=0`); unpinned, a fused add + RMSNorm kernel picks one of two tilings "
