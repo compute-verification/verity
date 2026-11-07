@@ -183,7 +183,8 @@ is the only check before it joins, and a body naming no live goal draws a warnin
 gate flags (drive.toml; a Markdown file over its cap) lands too: drive tells its owner, who fixes it in their next PR. A
 Lean, lock or spec change lands on its verdict like any other: drive then runs lean-audit alone on `checked`'s tip (its lock
 run), commits the lock records it regenerated there, and checks that commit, so `main` moves only to a commit whose records
-are the regenerated ones and whose gated steps all passed on it.
+are the regenerated ones and whose gated steps all passed on it. The lock run never fails on a
+lock's bookkeeping: it repairs it in that commit, with a warning for each repair (The lock, under Lean).
 
 ## Lean
 
@@ -217,11 +218,16 @@ are the regenerated ones and whose gated steps all passed on it.
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
   premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
   named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
-  open (`open`, with the Linear issue that discharges it and its due date), a list `--update` never adds to, unless it
-  is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it).
+  open (`open`, with the Linear issue that discharges it and its due date), a list a PR's `--update` never adds to, unless
+  it is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it).
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
-  A guarantee that only moved keeps its record (`--update --moved MOVES.json`).
+  A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
+  after a landing. A PR's own check still fails on it. Drive's lock run repairs it in its lock commit and
+  warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
+  the witnesses rule holds to missing witnesses, a stale entry, a missing owner, or a cap of `unread-caps.json` or
+  `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
+  malformed lock always fail. Lock files never conflict on merge.
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
   lean-proofs skill.
 
