@@ -462,3 +462,16 @@ research run --on vy-spot-glm53 --project verity --cwd source --timeout 9000 --l
   - `--timeout 8700` is a hard stop at ~17:53Z.
 - **ETA ~17:30Z to 17:45Z.** The node is free for OVERHEADDEF from my END.
 - **Partial results** go in note:proofs/20261107T1300Z-checkpoint-servetax-glm as each arm ends.
+
+## 16:00Z SERVETAX: RESTART as r20261107-155724-3f53 (loads from this plan's own capacity, 1.67 req/s); ETA ~17:35Z, hard stop 17:52Z
+
+- **I cancelled r20261107-152819-1122 at 15:56Z after its `compiled` arm.** The 5.57 req/s was vllm's probe of a different workload: the trace corpus's plan, 1,200 requests in one burst, greedy.
+  - fe57's plan has a capacity of 1.67 req/s (475 out tok/s), and `compiled` reproduced it: 1.62 req/s, 463 tok/s at 8.4 req/s offered.
+  - So the old loads were 84%, 198% and 503% of capacity. Medium and saturated measured the same overloaded regime, and there was no light load.
+  - The old `compiled` arm (2 reps) stays in that run's record.
+- **New loads:** light 0.42, medium 1.0, saturated 2.5 req/s (25%, 60%, 150% of 1.67), with 60 s of arrivals each. That makes a set of three loads short enough for **REPS=3 on every arm**, the planned number, by ~17:35Z.
+  - `BUDGET_MIN=108` from the GPU hold at 15:57:45Z bounds the arms to ~17:46Z.
+  - `--timeout 6900` is the hard stop at 17:52Z.
+- **Found: `research cancel` doesn't reach vLLM's engine.** The engine core and its 8 TP workers were orphaned in their own session and kept 133 GB on every GPU.
+  - I checked that they were mine (their environment names the run dir) and stopped them by PID with SIGTERM. All 8 GPUs went to 0 MiB before the relaunch.
+  - I'll check for orphans again at END. A friction note for @infra follows.
