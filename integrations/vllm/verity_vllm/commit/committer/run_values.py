@@ -8,7 +8,12 @@ fields by the module their reader is lowered from (`attention_module`, a layer o
 the rows of `topk_indices_buffer` at a position P whose field the step requires there are copied on the device (the buffer is every
 layer's); at the step's end each is read once and turned into its settings, and a row whose order is no Waksman order of its P + 1
 keys is a collector error by name, its field then missing from coverage.  Two requests' rows at one position of one layer are
-committed in row order under one name: `bind.Binder.owners` gives occurrence k to the k-th of them."""
+committed in row order under one name: `bind.Binder.owners` gives occurrence k to the k-th of them.
+
+The buffer's indices are request-local, the keys' positions 0..P in their request, on prefill and decode alike: the pinned vLLM's
+top-k kernels number a prefill row's keys from its request's first gathered key and a decode row's by the paged logits' logical
+columns, and the sparse backend's mapping to KV-cache slots (`triton_convert_req_index_to_global_index`) writes a new tensor, so
+they are read as written."""
 from __future__ import annotations
 
 from collections import Counter

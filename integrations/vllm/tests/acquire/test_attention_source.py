@@ -427,6 +427,30 @@ def test_the_run_values_the_manifest_requires_are_the_layers_top_k_rows_at_their
     assert sum(n in r.att.own_names for k in r.rec for n in r.names(k)) == len(want)
 
 
+def test_a_cuda_graph_launchs_padding_rows_at_a_required_position_commit_nothing():
+    """[GLM-5.3] A decode launched at a CUDA graph's padded size hands `_sparse_indexer_and_attn` one real row (position 3) and three
+    padding rows whose positions the persistent buffer still holds (here 3 again) and whose top-k rows the indexer never wrote (-1):
+    only the row `forward_mqa` attended is read, and its order is committed as the Program's `run` field holds it."""
+    layer = sorted(INDEXER)[0]
+    r = AttnRun(True, (run_row(1, layer, 3, 2),))
+    try:
+        a = r.model.get_submodule(f"model.layers.{layer}.self_attn")
+        r.att.on_step_begin()
+        r.com._cur = types.SimpleNamespace(step=1)
+        a.md, a.slots = metadata(prefill=False, decodes=1), torch.tensor([3, -1, -1, -1])
+        a(torch.tensor([3, 3, 3, 3]), torch.zeros(4, 1))
+        r.com._cur = None
+        r.att.on_step_end(types.SimpleNamespace(step=1))
+    finally:
+        r.close()
+    topk = a.seen["topk"]
+    assert topk.shape[0] == 4 and bool((topk[1:] == -1).all())
+    assert r.com.errors == [] and r.att.stats["run_values"] == 1
+    name = D.run_field(layer, 3)
+    layout = {"fields": [{"name": name, "offset": 0, "leaves": waksman_switches(4, 2)}]}
+    assert [t.tolist() for n, t in r.rec[1] if n == name] == [D.run_bits(layout, {(layer, 3): topk[0, :2].tolist()}, 2)]
+
+
 def test_a_non_contiguous_tap_is_staged_as_a_contiguous_copy_held_for_the_step():
     """[GLM-5.3] ql_nope is bmm(q_nope^T, W_UK_T).transpose(0, 1): [M, NH, L] over strides no 2-D pitch describes, which the native
     committer refuses ("layout is not 2-D pitched"); the source stages its contiguous copy, the same values in row-major order."""
