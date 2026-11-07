@@ -129,7 +129,8 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   sealed and checked after each package.
 
 `--build` builds in `sandbox.sh` where `unshare` and unprivileged user namespaces are available: new user, mount, network
-and PID namespaces, everything read-only but the build's `.lake` directories, no network, and nothing outliving the build.
+and PID namespaces, everything read-only but the build's `.lake` directories and a private TMPDIR, no network, and nothing
+outliving the build.
 The audit says when it had to build without one; the `compile-time` check then stands in for the sandbox. `--build` first
 takes one of the node's Lean audit slots (`lean_slot`; pool `LEAN_SLOT_POOL`, else `audit`) unless it holds one, and exits
 2 when refused. Packages are audited side by side after one `setup.sh`: a package's build waits for those of the packages
