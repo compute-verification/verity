@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The Lean verifier on a served statement: flock_served.py stages one kind of a saved served step as one_stage/a11.py
 # stages it (flat), or with --layout MODE as a templated statement of the same unit (with --structural, struct_lower's
-# template, the flat unit never built). On a flat statement with a session
-# sent, this times `flock-verify archive-put` and `flock-verify verify --zk --partition --program` on it as a0.lean_verify
-# runs them (under `perf record` where the node has perf). With --phases or --layout, flock-served (flock_served/Main.lean)
+# template, the flat unit never built). With a session sent, this times `flock-verify archive-put` and `flock-verify
+# verify --zk --partition --program` on it as a0.lean_verify runs them (under `perf record` where the node has perf); a
+# templated statement's verify runs its session and then refuses it (`ProvedScope.servedForm`). With --phases or --layout, flock-served (flock_served/Main.lean)
 # times verify's work on the statement before any session a step at a time, and on a flat one flock-read
 # (flock_read/Main.lean) its parse's phases. Run from a clone (the builds write the verifier's .lake):
 #   research run --as proofs --project verity --on auto --mem-gb 128 --timeout 7200 --source . --cwd clone \
@@ -53,7 +53,7 @@ pub=$(ls "$w"/stmt/pub-*.bin)
 /usr/bin/time -v -o "$O/archive-put.time" "$FV" archive-put "$S/archive" "$w/circuit.txt" "$pub" "$w/partition.json" \
   "$w/program.json" > "$O/archive-put.log"
 key() { awk -v f="$(basename "$1")" '{ n = split($2, p, "/"); if (p[n] == f) print $1 }' "$O/archive-put.log"; }
-if [ -n "$session" ] && [ -z "$layout" ]; then
+if [ -n "$session" ]; then
   mkdir -p "$S/session"
   tar -xf "$session" -C "$S/session"
   sdir=$(dirname "$(find "$S/session" -name session.json | head -1)")
