@@ -5,7 +5,8 @@ states each of its engine limits, at most `CLASS_G_LIMITS`: steps of up to 8,192
 and a long-prefill threshold of at most 256 rows, so each prefill chunk stays on DSA's decode route at 8 heads a rank.  The step
 compiler admits such a registration (`predict.steps.launch_class`), compiles a long prompt as its prefill chunks, each at the
 launch it ran in, and refuses by name, request by request, a launch `predict.dsa` doesn't write: a step past the 2,048 tokens its
-captured all-reduce and cuBLAS routes cover, or a row past the 2,048 keys where DSA's top-k is the identity.
+captured all-reduce and cuBLAS routes cover.  A row past INDEX_TOPK (2,048) keys compiles, its top-k order a field of the Program's
+`run` input; no committed value binds that input yet, so the served `max_model_len` keeps every row within INDEX_TOPK.
 `verity_vllm.LLM(engine_class="G")` serves it at `CLASS_G_SERVED`, the limits within which every launch is written, and up to its
 256 sequences a step, with `options`; its admission (`engine.class_admission`) refuses as it serves what the compiler would refuse of
 the window: a prompt over the served `max_model_len`, and a request in flight when a Commit window closes.

@@ -39,7 +39,8 @@
   launch) share one Program. Its Program reads every launch its rows ran in, so a recompute after preemption, a cache hit, and a
   request a Commit window carries in or leaves with outputs to keep (its other launches are another window's advice) have no
   Program there. A launch the kernels' captured statics don't cover is the build's refusal, by name: today a step of more than
-  2,048 tokens (the all-reduce and cuBLAS captures) and a row of more than 2,048 keys (`dsa`'s top-k selection).
+  2,048 tokens (the all-reduce and cuBLAS captures). A row of more than INDEX_TOPK keys reads its top-k order from the Program's
+  `run` input (`dsa.run_field`), its own (`batch`'s R1), and the Program returns the checks that order is the top-k set.
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
