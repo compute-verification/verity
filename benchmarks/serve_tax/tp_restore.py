@@ -2,17 +2,22 @@
 its second and compared. GLM-5.3 at TP8 is the case it is for; any `serve_tax` model runs.
 
     tp_restore.py preflight --model-id glm53 [--max-model-len N] [--tp N]
-    tp_restore.py serve --model-id glm53 --c4 C4 --out OUT --scratch DIR [--rate 10] [--span-s 240] [--edges-at 150,210]
-                        [--sampling production] [--max-model-len 40960] [--tp N] [--long-share 0.05]
-                        [--long-tokens 8192,32768] [--saver MODULE:FUNCTION ...]
+    tp_restore.py serve --model-id glm53 --c4 C4 --out OUT --scratch DIR [--rate 10] [--span-s 240]
+                        [--edges-at 120,170,220] [--plan-file PLAN.jsonl] [--unseeded-share 0.5] [--sampling production]
+                        [--max-model-len 40960] [--tp N] [--long-share 0.05] [--long-tokens 8192,32768]
+                        [--saver MODULE:FUNCTION ...]
     tp_restore.py restore --served OUT --scratch DIR --out OUT2 --loader MODULE:FUNCTION [--no-fill] [--rank-map-free]
 
 ``serve`` runs `serve_tax`'s ``record`` arm (vLLM's OpenAI server with the scheduler's step trace), with `tp_edge` as a
 second general plugin. It is pinned: PYTHONHASHSEED=0, request ids not randomized, Inductor's reduction block untimed,
-Model Runner V2. It drives the plan under Poisson arrivals with ``--sampling``, where ``production`` sends no sampling
-fields: the server's generation-config defaults apply (GLM-5.3: temperature 1.0, top-p 0.95) and nothing is seeded. Each
+Model Runner V2. It drives the plan under Poisson arrivals, every request asking for its sampled tokens' logprobs. A
+plan whose requests carry their own sampling (``--plan-file``, the replay ladder's production plan: ShareGPT, multi-turn
+and long prompts, each greedy or at temperature 0.7) sends each request's, the rest of it the server's generation-config
+defaults; ``--unseeded-share`` of the sampled requests go without a seed (`request_class`), so vLLM draws theirs, and
+the rest carry the public seed rule's. Any other plan sends ``--sampling``, where ``production`` sends no sampling
+fields: the generation config's defaults apply (GLM-5.3: temperature 1.0, top-p 0.95) and nothing is seeded. Each
 edge writes under ``--scratch``, because its blocks are tens of GB and stay out of the run's record. OUT gets each
-``edge.json``, the client's records and the step trace.
+``edge.json``, the step outputs from the first edge to the last, the client's records and the step trace.
 
 ``restore`` builds the served engine again in this process, from the served server's own argv and block count, and:
 - calls ``--loader`` (the scheduler's state and the runner's rows) with the engine core and the first edge's directory
@@ -24,8 +29,10 @@ edge writes under ``--scratch``, because its blocks are tens of GB and stay out 
 - compares the rank map with the served one, and refuses a different map unless ``--rank-map-free``;
 - steps the engine core to the second edge, drained as served, adding each request that arrived after the first edge
   right before the step it arrived before in the served step trace;
-- writes ``restore.json``: bit-exact or not, with the first step whose scheduled rows differ, the first request
-  position whose token differs, and the first layer and block whose bytes differ at the second edge.
+- writes ``restore.json``: bit-exact or not, with the first step whose scheduled rows differ, the first step and
+  request whose sampled tokens or logprob bits differ (`boundary.outputs_diff`, and per sampling class), the first
+  request position whose client token differs, and the first layer and block whose bytes differ at the second edge,
+  with each edge's KV root (`kv_root`), the requests held at the first edge and the snapshot's bytes.
 """
 from __future__ import annotations
 
@@ -63,6 +70,8 @@ SAMPLING = {"production": {}}
 AUTOTUNE_ENV = "VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR"
 #: the client's request ids, ``tpr-<plan index>``; the engine's are ``cmpl-<client id>-0`` (with request ids not randomized)
 ID = "tpr"
+#: the logprobs every request asks for: its sampled token's (the step trace's sampling record leaves this field out)
+LOGPROBS = 0
 
 
 def client_id(engine_id: str) -> str:
@@ -72,14 +81,42 @@ def client_id(engine_id: str) -> str:
     return m.group(0)
 
 
-def sampling_params(sampling: Mapping[str, Any]) -> Any:
+def request_class(r: Mapping[str, Any], rid: str, unseeded_share: float) -> str:
+    """A request's sampling class: ``plan`` for a plan without per-request sampling; else ``greedy`` unless the plan
+    samples it, and a sampled one ``unseeded`` when the first byte of its id's SHA-512 falls in ``unseeded_share``,
+    else ``seeded``."""
+    if "sampling" not in r:
+        return "plan"
+    if not r.get("seeded"):
+        return "greedy"
+    return "unseeded" if hashlib.sha512(rid.encode()).digest()[0] < 256 * unseeded_share else "seeded"
+
+
+def own_body(real: Callable[..., dict], unseeded_share: float) -> Callable[..., dict]:
+    """`corpus.request_body` asking for each sampled token's logprob; for a request carrying its own sampling, that
+    sampling, no ignore_eos, and the public seed rule's seed (`corpus.request_seed`) unless it is unseeded."""
+    C = S.corpus()
+
+    def body(served: str, r: dict, rid: str, sampling: str) -> dict:
+        if "sampling" not in r:
+            return real(served, r, rid, sampling) | {"logprobs": LOGPROBS}
+        b = {"model": served, "prompt": r["prompt_ids"], "max_tokens": r["max_tokens"], **r["sampling"], "stream": True,
+             "stream_options": {"include_usage": True}, "return_token_ids": True, "user": rid, "logprobs": LOGPROBS}
+        if request_class(r, rid, unseeded_share) == "seeded":
+            b["seed"] = C.request_seed(rid)
+        return b
+    return body
+
+
+def sampling_params(sampling: Mapping[str, Any], logprobs: int | None = None) -> Any:
     """The request's SamplingParams from every field the step trace recorded of the served one (the server's
-    generation-config defaults applied), detokenizing nothing, its outputs as a streaming server's."""
+    generation-config defaults applied) and the ``logprobs`` the client asked for, detokenizing nothing, its outputs as a
+    streaming server's."""
     from vllm import SamplingParams
     from vllm.sampling_params import RequestOutputKind
 
-    return SamplingParams(**{k: v for k, v in sampling.items() if v is not None and k != "n"}, n=1, detokenize=False,
-                          output_kind=RequestOutputKind.DELTA)
+    return SamplingParams(**{k: v for k, v in sampling.items() if v is not None and k != "n"}, n=1, logprobs=logprobs,
+                          detokenize=False, output_kind=RequestOutputKind.DELTA)
 
 
 def edge_site(site: Path) -> Path:
@@ -93,8 +130,9 @@ def edge_site(site: Path) -> Path:
 
 
 def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, d: Path, drain_s: float,
-          sampling: str, requests: int | None = None) -> dict:
-    """`serve_tax.drive_load` under ``sampling`` (one of the corpus's, or ``production``)."""
+          sampling: str, requests: int | None = None, unseeded_share: float = 0.0) -> dict:
+    """`serve_tax.drive_load` under ``sampling`` (one of the corpus's, or ``production``), or each request's own
+    (`own_body`); each request's class goes to ``classes.json``."""
     C = S.corpus()
     for name, body in SAMPLING.items():
         C.SAMPLING.setdefault(name, body)
@@ -103,10 +141,20 @@ def drive(port: int, served: str, plan: list[dict], rate: float, span_s: float, 
     k = requests or max(1, sum(1 for a in arr if a <= span_s))
     reqs, arr = plan[:k], arr[:k]
     ids = [f"{ID}-{r['i']:05d}" for r in reqs]
+    classes = {rid: request_class(r, rid, unseeded_share) for r, rid in zip(reqs, ids)}
+    (d / "classes.json").write_text(json.dumps(classes))
+    real = C.request_body
+    C.request_body = own_body(real, unseeded_share)
     t = time.monotonic()
-    got = asyncio.run(C.drive(port, served, reqs, arr, ids, d / "client.jsonl", drain_s, sampling))
-    meta = {"rate": rate, "span_s": span_s, "requests": k, "sampling": sampling, "wall_s": round(time.monotonic() - t, 3),
-            **got}
+    try:
+        got = asyncio.run(C.drive(port, served, reqs, arr, ids, d / "client.jsonl", drain_s, sampling))
+    finally:
+        C.request_body = real
+    counts: dict[str, int] = {}
+    for c in classes.values():
+        counts[c] = counts.get(c, 0) + 1
+    meta = {"rate": rate, "span_s": span_s, "requests": k, "sampling": sampling, "logprobs": LOGPROBS,
+            "unseeded_share": unseeded_share, "classes": counts, "wall_s": round(time.monotonic() - t, 3), **got}
     (d / "meta.json").write_text(json.dumps(meta, indent=1))
     return meta
 
@@ -164,11 +212,18 @@ def serve(a: argparse.Namespace) -> int:
     out, scratch = Path(a.out), Path(a.scratch)
     out.mkdir(parents=True, exist_ok=True)
     scratch.mkdir(parents=True, exist_ok=True)
-    base = Path(a.plan) if a.plan else out / "plan.base.jsonl"
-    plan = S.plan_of(base, Path(a.c4), checkpoint, S.plan_need({"load": a.rate}, a.span_s, a.requests), a.docs, a.seed)
-    if a.long_share:
-        lo, hi = a.long_tokens
-        plan = lengthen(plan, a.long_share, lo, hi, a.seed)
+    need = S.plan_need({"load": a.rate}, a.span_s, a.requests)
+    if a.plan_file:
+        base = Path(a.plan_file)
+        plan = [json.loads(x) for x in base.read_text().splitlines() if x.strip()]
+        if len(plan) < need:
+            raise SystemExit(f"{base} holds {len(plan)} requests, fewer than {need} for {a.rate} req/s over {a.span_s:g} s")
+    else:
+        base = Path(a.plan) if a.plan else out / "plan.base.jsonl"
+        plan = S.plan_of(base, Path(a.c4), checkpoint, need, a.docs, a.seed)
+        if a.long_share:
+            lo, hi = a.long_tokens
+            plan = lengthen(plan, a.long_share, lo, hi, a.seed)
     plan_file = out / "plan.jsonl"
     plan_file.write_text("".join(json.dumps(r, separators=(",", ":")) + "\n" for r in plan))
     arm = S.ARMS["record"]
@@ -178,12 +233,15 @@ def serve(a: argparse.Namespace) -> int:
     srv = out / "server"
     srv.mkdir(exist_ok=True)
     env = S.server_env(arm, srv, site, None, 600.0, 600.0) | PINS | {AUTOTUNE_ENV: str(scratch / "autotune")}
-    env[E.ENV] = json.dumps({"out": str(scratch / "edges"), "at_s": a.edges_at, "dump": 1, "savers": a.saver})
+    env[E.ENV] = json.dumps({"out": str(scratch / "edges"), "at_s": a.edges_at, "dump": 1, "savers": a.saver,
+                             "outputs": True})
     meta: dict[str, Any] = {"schema": SCHEMA, "model_id": a.model_id, "model": f"{model.repo}@{model.revision}",
                             "checkpoint": str(checkpoint), "plan": str(plan_file), "plan_base": str(base),
-                            "long_share": a.long_share, "long_tokens": a.long_tokens, "server_argv": argv[1:], "pins": PINS,
-                            "edges_at": a.edges_at,
-                            "savers": a.saver, "scratch": str(scratch), "autotune_dir": str(scratch / "autotune"), "versions": S.versions(), "host": os.uname().nodename}
+                            "plan_file": a.plan_file, "unseeded_share": a.unseeded_share,
+                            "long_share": None if a.plan_file else a.long_share, "long_tokens": a.long_tokens,
+                            "server_argv": argv[1:], "pins": PINS, "edges_at": a.edges_at, "savers": a.saver,
+                            "scratch": str(scratch), "autotune_dir": str(scratch / "autotune"), "versions": S.versions(),
+                            "host": os.uname().nodename}
     meta["open_files"] = S.open_files()
     rc = 0
     t = time.monotonic()
@@ -192,7 +250,8 @@ def serve(a: argparse.Namespace) -> int:
     try:
         S.wait_ready(server, port, a.startup_s)
         meta["startup_s"] = round(time.monotonic() - t, 1)
-        meta["load"] = drive(port, model.served, plan, a.rate, a.span_s, out / "load", a.drain_s, a.sampling, a.requests)
+        meta["load"] = drive(port, model.served, plan, a.rate, a.span_s, out / "load", a.drain_s, a.sampling, a.requests,
+                             a.unseeded_share)
     except Exception as e:  # noqa: BLE001 -- the record says why the run stopped
         meta["error"] = f"{type(e).__name__}: {e}"
         rc = 1
@@ -207,15 +266,31 @@ def serve(a: argparse.Namespace) -> int:
 
 
 def copy_edges(src: Path, dst: Path) -> list[dict]:
-    """Each edge's ``edge.json`` from the scratch directory into the run's record, and a summary of each."""
+    """Each edge's ``edge.json``, and the step outputs, from the scratch directory into the run's record, and a summary
+    of each edge with its KV root and its files' bytes."""
     got = []
+    dst.mkdir(parents=True, exist_ok=True)
+    if (src / "outputs.jsonl").exists():
+        shutil.copy2(src / "outputs.jsonl", dst / "outputs.jsonl")
     for e in sorted(src.glob("edge-*/edge.json")):
         (dst / e.parent.name).mkdir(parents=True, exist_ok=True)
         shutil.copy2(e, dst / e.parent.name / "edge.json")
         rec = json.loads(e.read_text())
         got.append({k: rec.get(k) for k in ("edge", "current_step", "trace_step", "running", "in_flight", "waiting", "pool",
-                                            "check", "seconds")} | {"dir": str(e.parent), "blocks": len(rec["ids"])})
+                                            "check", "seconds")}
+                   | {"dir": str(e.parent), "blocks": len(rec["ids"]), "kv_root": kv_root(rec), "files": file_bytes(e.parent)})
     return got
+
+
+def kv_root(rec: Mapping[str, Any]) -> str:
+    """An edge's KV root: SHA-512 over its block ids and rank 0's per-layer digests (`tp_state.digest`), in order."""
+    return hashlib.sha512(json.dumps({"ids": rec["ids"], "layers": rec["ranks"][0]["layer_digests"]},
+                                     separators=(",", ":")).encode()).hexdigest()
+
+
+def file_bytes(d: Path) -> dict[str, int]:
+    """Each file's bytes under an edge's directory, by its path there."""
+    return {str(p.relative_to(d)): p.stat().st_size for p in sorted(d.rglob("*")) if p.is_file()}
 
 
 # ---------------------------------------------------------------------------------------------------- the restore
@@ -325,6 +400,48 @@ def edge_difference(served: Mapping[str, Any], replayed: Mapping[str, Any], serv
                                      (replayed_dir / "digests.rank0.bin").read_bytes(), served["layers"], served["ids"])
 
 
+def read_outputs(path: Path, lo: int, hi: int) -> dict[int, dict]:
+    """`tp_edge.record_outputs`'s steps ``lo`` … ``hi`` - 1: step -> request -> [tokens, logprob bits]."""
+    if not path.exists():
+        return {}
+    recs = (json.loads(x) for x in path.read_text().splitlines() if x)
+    return {r["step"]: r["out"] for r in recs if lo <= r["step"] < hi}
+
+
+def by_request(outs: Mapping[int, Mapping[str, list]]) -> dict[str, tuple[list[int], list[int]]]:
+    """Step outputs joined per request, in step order: its tokens and their logprob bits."""
+    got: dict[str, tuple[list[int], list[int]]] = {}
+    for s in sorted(outs):
+        for rid, (toks, bits) in outs[s].items():
+            t, b = got.setdefault(rid, ([], []))
+            t.extend(toks)
+            b.extend(bits or ())
+    return got
+
+
+def class_outputs(served: Mapping[int, Mapping[str, list]], replayed: Mapping[int, Mapping[str, list]],
+                  classes: Mapping[str, str]) -> dict[str, dict[str, int]]:
+    """Per sampling class (`request_class`, by client id), the requests with tokens in either run's steps, their served
+    tokens, and the requests whose tokens or logprob bits differ."""
+    a, b = by_request(served), by_request(replayed)
+    out: dict[str, dict[str, int]] = {}
+    for rid in sorted(set(a) | set(b)):
+        k = out.setdefault(classes.get(client_id(rid), "unknown"), {"requests": 0, "tokens": 0, "differing": 0})
+        k["requests"] += 1
+        k["tokens"] += len(a[rid][0]) if rid in a else 0
+        k["differing"] += a.get(rid) != b.get(rid)
+    return out
+
+
+def snapshot_bytes(files: Mapping[str, int]) -> dict[str, Any]:
+    """An edge's snapshot by part (`file_bytes`): the KV dump, rank 0's that every rank loads when the ranks agree; the
+    scheduler's state; each rank's runner rows and generators (`boundary.save_rank`); and what one rank reads."""
+    kv = sum(n for f, n in files.items() if f.startswith("kv.rank"))
+    ranks = {int(m.group(1)): n for f, n in files.items() if (m := re.fullmatch(r"rank-(\d+)\.pkl", f))}
+    return {"kv": kv, "state": files.get("state.pkl", 0), "ranks": ranks,
+            "per_rank": kv + max(ranks.values(), default=0)}
+
+
 def generators(rng: Mapping[str, Any]) -> dict[str, Any]:
     """An `tp_state.rng_state` without V2's per-request seeds, which the runner's rows hold (the loader's to restore)."""
     return {k: v for k, v in rng.items() if k != "seeds"}
@@ -382,7 +499,10 @@ def restore(a: argparse.Namespace) -> int:
     plan = {r["i"]: r for r in (json.loads(x) for x in plan_file.read_text().splitlines() if x.strip())}
     s1, s2 = rec1["trace_step"], rec2["trace_step"]
     res: dict[str, Any] = {"schema": SCHEMA, "served": str(served), "edge1": rec1["edge"], "edge2": rec2["edge"],
-                           "trace_steps": [s1, s2], "fill": not a.no_fill, "loader": a.loader}
+                           "trace_steps": [s1, s2], "fill": not a.no_fill, "loader": a.loader,
+                           "held": {k: rec1[k] for k in ("running", "in_flight", "waiting")},
+                           "edge_seconds": [e["seconds"] for e in meta["edges"]],
+                           "snapshot_bytes": snapshot_bytes(file_bytes(edge1))}
 
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
@@ -446,7 +566,8 @@ def restore(a: argparse.Namespace) -> int:
     def add_due() -> None:
         while pending and pending[0]["before_step"] <= trace.scheduled:
             r = pending.pop(0)
-            eng.add_request(r["engine_id"], {"prompt_token_ids": r["prompt_ids"]}, sampling_params(r["sampling"]))
+            eng.add_request(r["engine_id"], {"prompt_token_ids": r["prompt_ids"]},
+                            sampling_params(r["sampling"], meta["load"].get("logprobs")))
 
     def schedule(orig):
         def wrapped(*args, **kw):
@@ -454,8 +575,14 @@ def restore(a: argparse.Namespace) -> int:
             return orig(*args, **kw)
         return wrapped
 
+    import boundary as B
+    from servetax_plugin import step_outputs_hook
+
+    outs: dict[int, dict] = {}
     hooks = Hooks(tag="tp-restore")
     hooks.wrap(core.scheduler, "schedule", schedule)
+    hooks.wrap(core.scheduler, "update_from_output",
+               step_outputs_hook(trace, lambda rec: outs.__setitem__(rec["step"], rec["out"]), lambda: True))
     t0 = time.monotonic()
     while not edges.taken:
         if not core.scheduler.has_requests() and not core.batch_queue:
@@ -482,15 +609,24 @@ def restore(a: argparse.Namespace) -> int:
     want = interval_tokens(recs, client, s1, s2)
     res["tokens"] = {"requests": len(want), "served": sum(map(len, want.values())), "replayed": sum(map(len, tokens.values())),
                      "first_difference": first_token_difference(want, tokens)}
-    res["edge2"] = {"blocks": len(rec2["ids"]), "first_difference": edge_difference(rec2, rep2, edge2, scratch / "replay" /
-                                                                                     f"edge-{edges.taken[0]['edge']:06d}"),
-                    "replay_check": rep2["check"]}
+    served_outs = read_outputs(served / "edges" / "outputs.jsonl", s1, s2)
+    replayed_outs = {s: o for s, o in outs.items() if s < s2}
+    classes_file = served / "load" / "classes.json"
+    classes = json.loads(classes_file.read_text()) if classes_file.exists() else {}
+    res["outputs"] = B.outputs_diff(served_outs, replayed_outs) | {
+        "recorded": bool(served_outs), "classes": class_outputs(served_outs, replayed_outs, classes)}
+    rep2_dir = scratch / "replay" / f"edge-{edges.taken[0]['edge']:06d}"
+    res["edge2"] = {"blocks": len(rec2["ids"]), "first_difference": edge_difference(rec2, rep2, edge2, rep2_dir),
+                    "kv_root": {"served": kv_root(rec2), "replayed": kv_root(rep2)}, "replay_check": rep2["check"],
+                    "replay_seconds": rep2["seconds"]}
     res["bit_exact"] = (res["steps"]["first_difference"] is None and res["tokens"]["first_difference"] is None
+                        and res["outputs"]["recorded"] and res["outputs"]["first"] is None
                         and res["edge2"]["first_difference"] is None)
     res["verdict"] = "bit-exact" if res["bit_exact"] else "differs"
     verdict.write_text(json.dumps(res, indent=1))
-    print(f"[tp-restore] {res['verdict']}: steps {res['steps']['first_difference']}, tokens "
-          f"{res['tokens']['first_difference']}, edge 2 {res['edge2']['first_difference']}", flush=True)
+    print(f"[tp-restore] {res['verdict']}: steps {res['steps']['first_difference']}, outputs {res['outputs']['first']} "
+          f"(recorded {res['outputs']['recorded']}), tokens {res['tokens']['first_difference']}, edge 2 "
+          f"{res['edge2']['first_difference']}", flush=True)
     return 0 if res["bit_exact"] else 1
 
 
@@ -507,6 +643,9 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--checkpoint")
     s.add_argument("--c4", required=True)
     s.add_argument("--plan")
+    s.add_argument("--plan-file", help="a ready plan, used as it is (its requests may carry their own sampling)")
+    s.add_argument("--unseeded-share", type=float, default=0.5,
+                   help="the share of a plan's sampled requests sent without a seed (request_class)")
     s.add_argument("--docs", type=int, default=4000)
     s.add_argument("--seed", type=int, default=0)
     s.add_argument("--long-share", type=float, default=0.0, help="the share of requests given long prompts (lengthen)")
@@ -514,7 +653,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--rate", type=float, default=10.0)
     s.add_argument("--span-s", type=float, default=240.0)
     s.add_argument("--requests", type=int)
-    s.add_argument("--edges-at", type=lambda x: [float(t) for t in x.split(",")], default=[150.0, 210.0])
+    s.add_argument("--edges-at", type=lambda x: [float(t) for t in x.split(",")], default=[120.0, 170.0, 220.0])
     s.add_argument("--sampling", default="production")
     s.add_argument("--max-model-len", type=int)
     s.add_argument("--tp", type=int, help="the tensor-parallel size, when not the model's own")

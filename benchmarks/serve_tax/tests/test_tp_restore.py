@@ -144,9 +144,54 @@ def test_each_edges_record_is_copied_out_of_the_scratch_directory(tmp_path):
         d = tmp_path / "scratch" / f"edge-{e:06d}"
         d.mkdir(parents=True)
         (d / "edge.json").write_text(json.dumps({"edge": e, "current_step": e, "trace_step": e - 1, "running": 2, "waiting": 1,
-                                                 "pool": {}, "check": {}, "seconds": {}, "ids": [0, 1, 2]}))
+                                                 "pool": {}, "check": {}, "seconds": {}, "ids": [0, 1, 2],
+                                                 "ranks": [{"layer_digests": ["a", f"b{e}"]}]}))
         (d / "digests.rank0.bin").write_bytes(b"x")
+    (tmp_path / "scratch" / "outputs.jsonl").write_text('{"step":3,"out":{}}\n')
     got = T.copy_edges(tmp_path / "scratch", tmp_path / "out")
     assert [g["edge"] for g in got] == [4, 9] and got[0]["trace_step"] == 3 and got[0]["blocks"] == 3
     assert got[1]["dir"] == str(tmp_path / "scratch" / "edge-000009")
-    assert sorted(p.name for p in (tmp_path / "out").rglob("*")) == ["edge-000004", "edge-000009", "edge.json", "edge.json"]
+    assert got[0]["files"]["digests.rank0.bin"] == 1 and len(got[0]["kv_root"]) == 128
+    assert got[0]["kv_root"] != got[1]["kv_root"]
+    assert sorted(p.name for p in (tmp_path / "out").rglob("*")) == ["edge-000004", "edge-000009", "edge.json", "edge.json",
+                                                                    "outputs.jsonl"]
+
+
+def test_a_production_plans_requests_send_their_own_sampling_and_a_share_of_the_sampled_go_unseeded():
+    greedy = {"i": 0, "prompt_ids": [1, 2], "max_tokens": 8, "seeded": False, "sampling": {"temperature": 0.0}}
+    sampled = {"i": 1, "prompt_ids": [3], "max_tokens": 4, "seeded": True, "sampling": {"temperature": 0.7}}
+    ids = [f"tpr-{i:05d}" for i in range(400)]
+    got = [T.request_class(sampled, rid, 0.5) for rid in ids]
+    assert set(got) == {"seeded", "unseeded"} and 140 < got.count("unseeded") < 260
+    assert {T.request_class(sampled, rid, 0.0) for rid in ids} == {"seeded"}
+    assert {T.request_class(sampled, rid, 1.0) for rid in ids} == {"unseeded"}
+    assert T.request_class(greedy, ids[0], 0.5) == "greedy" and T.request_class({"prompt_ids": []}, ids[0], 0.5) == "plan"
+
+    body = T.own_body(lambda served, r, rid, sampling: {"model": served, "real": sampling}, 0.5)
+    seeded = next(rid for rid in ids if T.request_class(sampled, rid, 0.5) == "seeded")
+    unseeded = next(rid for rid in ids if T.request_class(sampled, rid, 0.5) == "unseeded")
+    b = body("glm", sampled, seeded, "production")
+    assert b["temperature"] == 0.7 and b["logprobs"] == 0 and b["seed"] == T.S.corpus().request_seed(seeded)
+    assert b["prompt"] == [3] and b["max_tokens"] == 4 and b["user"] == seeded and "ignore_eos" not in b
+    assert "seed" not in body("glm", sampled, unseeded, "production")
+    assert "seed" not in body("glm", greedy, seeded, "production")
+    assert body("glm", {"prompt_ids": []}, seeded, "production") == {"model": "glm", "real": "production", "logprobs": 0}
+
+
+def test_step_outputs_are_read_between_two_edges_and_compared_per_sampling_class(tmp_path):
+    a, b = "cmpl-tpr-00001-0", "cmpl-tpr-00002-0"
+    served = {3: {a: [[5], [1]], b: [[6], [2]]}, 4: {a: [[7], [3]]}}
+    replayed = {3: {a: [[5], [1]], b: [[6], [2]]}, 4: {a: [[7], [4]]}}
+    assert T.by_request(served) == {a: ([5, 7], [1, 3]), b: ([6], [2])}
+    assert T.class_outputs(served, replayed, {"tpr-00001": "seeded", "tpr-00002": "greedy"}) == {
+        "greedy": {"requests": 1, "tokens": 1, "differing": 0}, "seeded": {"requests": 1, "tokens": 2, "differing": 1}}
+    p = tmp_path / "outputs.jsonl"
+    p.write_text("".join(json.dumps({"step": s, "out": {a: [[s], None]}}) + "\n" for s in range(2, 7)))
+    assert T.read_outputs(p, 3, 5) == {3: {a: [[3], None]}, 4: {a: [[4], None]}}
+    assert T.read_outputs(tmp_path / "none.jsonl", 0, 9) == {}
+
+
+def test_a_snapshots_bytes_are_its_kv_dump_its_state_and_each_ranks_rows():
+    files = {"kv.rank0/000.bin": 100, "kv.rank0/layers.json": 10, "rank-0.pkl": 5, "rank-1.pkl": 7, "state.pkl": 3,
+             "digests.rank0.bin": 9, "edge.json": 4}
+    assert T.snapshot_bytes(files) == {"kv": 110, "state": 3, "ranks": {0: 5, 1: 7}, "per_rank": 117}

@@ -24,7 +24,8 @@ The snapshot, through ``collective_rpc`` on every rank (`tp_state`), runs in fiv
 `install` puts `Edges` on an engine core in this process (the restored engine's, in-process). `register`, a vLLM general
 plugin, puts it on every engine core a ``vllm serve`` process builds, configured by ``VERITY_TPEDGE`` (JSON: ``out``;
 ``steps`` or ``at_s``; ``dump``, how many of the first edges write their blocks, 1 by default; ``savers``, each a
-``module:function`` the snapshot calls with the engine core and the edge's directory).
+``module:function`` the snapshot calls with the engine core and the edge's directory; ``outputs``, true to record each
+step's sampled tokens and logprob bits from the first edge to the last, `record_outputs`).
 """
 from __future__ import annotations
 
@@ -109,13 +110,19 @@ def _rpc(core: Any) -> Callable[..., list[Any]]:
     return core.model_executor.collective_rpc
 
 
-def trace_step(sched: Any) -> int | None:
-    """The scheduler's step trace's count of steps scheduled with tokens (`StepTrace.scheduled`, the index its next
-    such step gets), from serve_tax's installs or a replay's trace, or None without one."""
+def step_trace(sched: Any) -> Any:
+    """The scheduler's step trace, from serve_tax's installs or a replay's, or None without one."""
     for obj in (*getattr(sched, "_verity_servetax", ()), getattr(sched, "_verity_trace", None)):
         if obj is not None and hasattr(obj, "scheduled"):
-            return int(obj.scheduled)
+            return obj
     return None
+
+
+def trace_step(sched: Any) -> int | None:
+    """The scheduler's step trace's count of steps scheduled with tokens (`StepTrace.scheduled`, the index its next
+    such step gets), or None without a trace."""
+    trace = step_trace(sched)
+    return None if trace is None else int(trace.scheduled)
 
 
 def in_flight(sched: Any) -> dict[str, int]:
@@ -146,9 +153,13 @@ class Edges:
         self.savers = list(savers)
         self.clock = clock
         self.counter = counter
+        self.total = len(self.pending) + len(self.times)
         self.t_first: float | None = None
         self.draining: int | None = None
+        self.drain_t0: float | None = None
         self.taken: list[dict[str, Any]] = []
+        #: with `record_outputs`, each step's sampled tokens since the last edge, written out at the next
+        self.outputs: list[dict] | None = None
 
     def due(self, current_step: int) -> int | None:
         """The edge the scheduler has reached (its step scheduled), if any is pending: its step."""
@@ -180,6 +191,7 @@ class Edges:
             got = step_fn()
             edge = self.due(self.counter(core))
             if edge is not None:
+                self.drain_t0 = self.clock()
                 if core.batch_queue:
                     self.draining = edge
                 else:
@@ -188,7 +200,9 @@ class Edges:
         return step
 
     def snapshot(self, core: Any, edge: int) -> dict[str, Any]:
-        """The boundary state at a drained edge (module docstring), into ``out/edge-<edge>``; returns ``edge.json``."""
+        """The boundary state at a drained edge (module docstring), into ``out/edge-<edge>``; returns ``edge.json``.
+        Its ``seconds``: the drain (from the edge's step to an empty batch queue), each part, and the pause, all of
+        them, during which the engine schedules nothing."""
         sched = core.scheduler
         pool = sched.kv_cache_manager.block_pool
         if getattr(sched, "deferred_frees", None) or sched.sched_step_seq != sched.processed_step_seq:
@@ -209,6 +223,12 @@ class Edges:
         t2 = self.clock()
         saved = [save(core, d) for save in self.savers]
         t3 = self.clock()
+        if self.outputs is not None:
+            with open(self.out / "outputs.jsonl", "a") as f:
+                f.writelines(json.dumps(o, separators=(",", ":")) + "\n" for o in self.outputs)
+            self.outputs.clear()
+        t4 = self.clock()
+        drain = t0 - (self.drain_t0 if self.drain_t0 is not None else t0)
         rec = {"edge": edge, "current_step": sched.current_step, "trace_step": trace_step(sched),
                "sched_step_seq": sched.sched_step_seq,
                "running": len(sched.running), "in_flight": in_flight(sched), "waiting": len(sched.waiting),
@@ -216,9 +236,12 @@ class Edges:
                "check": check, "rank_map": rank_map(recs), "layers": recs[0]["layers"],
                "ranks": [{k: r[k] for k in ("layer_digests", "rng_digest", "rng")} | {"rank": r["rank"]["rank"]}
                          for r in sorted(recs, key=lambda r: r["rank"]["rank"])],
-               "dump": wrote, "saved": saved, "seconds": {"digest": round(t1 - t0, 3), "dump": round(t2 - t1, 3),
-                                                          "savers": round(t3 - t2, 3)}}
+               "dump": wrote, "saved": saved, "seconds": {"drain": round(drain, 3), "digest": round(t1 - t0, 3),
+                                                          "dump": round(t2 - t1, 3), "savers": round(t3 - t2, 3),
+                                                          "outputs": round(t4 - t3, 3),
+                                                          "pause": round(drain + t4 - t0, 3)}}
         (d / "edge.json").write_text(json.dumps(rec, default=repr))
+        self.drain_t0 = None
         self.taken.append({k: rec[k] for k in ("edge", "running", "waiting", "pool", "check", "seconds")})
         return rec
 
@@ -229,6 +252,22 @@ def install(core: Any, edges: Edges) -> Edges:
     core.step_fn = edges.wrap(core, core.step_fn)
     core._verity_edges = edges
     return edges
+
+
+def record_outputs(core: Any, edges: Edges) -> None:
+    """From the first edge ``edges`` takes to its last, each step's sampled tokens and their logprobs' bits
+    (`boundary.step_outputs`, under the step trace's index of the step), written to ``out/outputs.jsonl`` at each edge."""
+    from servetax_plugin import step_outputs_hook
+    from verity_vllm.engine.hooks import Hooks
+
+    trace = step_trace(core.scheduler)
+    if trace is None:
+        raise RuntimeError("tp_edge: recording the step outputs needs the scheduler's step trace")
+    edges.outputs = []
+    hooks = Hooks(tag="tp-edge-outputs")
+    hooks.wrap(core.scheduler, "update_from_output",
+               step_outputs_hook(trace, edges.outputs.append, lambda: 0 < len(edges.taken) < edges.total))
+    core._verity_edge_hooks = hooks
 
 
 def config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | None:
@@ -263,8 +302,10 @@ def register() -> None:
 
     def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
         orig(self, *args, **kwargs)
-        install(self, Edges(cfg["out"], cfg.get("steps", ()), cfg.get("at_s", ()), cfg.get("dump", 1),
-                            [resolve(n) for n in cfg.get("savers", ())]))
+        edges = install(self, Edges(cfg["out"], cfg.get("steps", ()), cfg.get("at_s", ()), cfg.get("dump", 1),
+                                    [resolve(n) for n in cfg.get("savers", ())]))
+        if cfg.get("outputs"):
+            record_outputs(self, edges)
 
     EngineCore.__init__ = __init__
     _PLUGIN.append(orig)

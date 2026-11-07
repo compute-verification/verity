@@ -157,6 +157,29 @@ def test_an_edge_at_a_time_falls_on_the_first_step_after_it():
     assert seen == [(4, [1, 2, 3, 4]), (5, [1, 2, 3, 4, 5])]
 
 
+def test_step_outputs_are_kept_only_from_the_first_edge_to_the_last():
+    trace = NS(scheduled=0, _pending={})
+
+    class Sched:
+        _verity_servetax = (trace,)
+
+        def update_from_output(self, so, mro):
+            return {0: NS(outputs=[NS(request_id="r", new_token_ids=[so.k], new_logprobs=None)])}
+
+    core = NS(scheduler=Sched())
+    edges = E.Edges("/unused", steps=[2, 4, 6])
+    E.record_outputs(core, edges)
+    for k in range(8):
+        if k in (2, 4, 6):
+            edges.taken.append({"edge": k})
+        so = NS(k=k)
+        trace._pending[id(so)] = k
+        core.scheduler.update_from_output(so, None)
+    assert edges.outputs == [{"step": k, "out": {"r": [[k], None]}} for k in (2, 3, 4, 5)]
+    with pytest.raises(RuntimeError, match="needs the scheduler's step trace"):
+        E.record_outputs(NS(scheduler=NS()), edges)
+
+
 def test_a_snapshot_checks_the_ranks_dumps_one_copy_and_records_the_edge(tmp_path):
     pytest.importorskip("torch")
     import test_tp_state as T
@@ -182,10 +205,15 @@ def test_a_snapshot_checks_the_ranks_dumps_one_copy_and_records_the_edge(tmp_pat
     assert got["in_flight"] == {"prefilling": 1, "decoding": 1} and got["waiting"] == 1
     assert [w["rank"] for w in got["dump"]] == [0] and saved == ["edge-000005"] and got["saved"] == [{"state": 7}]
     assert json.loads((tmp_path / "edge-000005" / "edge.json").read_text())["ids"] == got["ids"]
-    assert got["seconds"] == {"digest": 1, "dump": 1, "savers": 1} and got["trace_step"] is None
+    assert got["seconds"] == {"drain": 0, "digest": 1, "dump": 1, "savers": 1, "outputs": 1, "pause": 4}
+    assert got["trace_step"] is None
     core.scheduler._verity_servetax = [object(), NS(scheduled=41)]
     assert E.trace_step(core.scheduler) == 41
-    assert edges.snapshot(core, 9)["dump"] == []
+    edges.outputs = [{"step": 40, "out": {}}]
+    edges.drain_t0 = 2
+    got = edges.snapshot(core, 9)
+    assert got["dump"] == [] and got["seconds"]["drain"] == 3 and got["seconds"]["pause"] == 7
+    assert (tmp_path / "outputs.jsonl").read_text() == '{"step":40,"out":{}}\n' and edges.outputs == []
 
     T.tensors(workers[2])[2][7, 1, 1] += 1
     got = E.Edges(tmp_path, steps=[6], dump=1).snapshot(core, 6)
