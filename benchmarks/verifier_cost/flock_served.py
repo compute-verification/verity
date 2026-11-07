@@ -1,8 +1,8 @@
-"""flock_served.py VALUES KIND WORK: one kind of a saved served step (`one_stage/a11.py --save-values`'s directory, or its
-`.tar.gz`) staged as a11.py stages it: the kind's unit Definition as a flat statement (`CS.UnitStager` with no layout, the
-unit's whole netlist in the circuit file), bound to the population program and partition of that one kind, with the
-kind's saved units as one instance under a11's salt key. So the files are a11's, byte for byte while the stager is
-unchanged, and an a11 session over them verifies against them.
+"""flock_served.py VALUES KIND WORK [N]: one kind of a saved served step (`one_stage/a11.py --save-values`'s directory, or
+its `.tar.gz`) staged as a11.py stages it: the kind's unit Definition as a flat statement (`CS.UnitStager` with no layout,
+the unit's whole netlist in the circuit file), bound to the population program and partition of that one kind, with the
+kind's first N saved units (a11's ``--per-kind``; all of them without N) under a11's salt key. So the files are a11's, byte
+for byte while the stager is unchanged, and an a11 session over them verifies against them.
 
 Writes WORK/circuit.txt, WORK/stmt/{inst-N.bin,pub-N.bin}, WORK/partition.json, WORK/program.json and WORK/build.json (the
 unit's ANDs and nnz, k_log, the circuit's bytes and lines, the size of the Program descriptor the statement could be
@@ -43,7 +43,9 @@ def main() -> None:
     t0 = time.time()
     _, rows_of_kind, _ = a11.load_values(values_dir(src, work), [kind])
     kv = rows_of_kind[kind]
-    defn, n = kv["unit"], kv["n"]
+    defn, n = kv["unit"], min(kv["n"], int(sys.argv[4]) if len(sys.argv) > 4 else kv["n"])
+    kv["rows"] = {k: v[:n] for k, v in kv["rows"].items()}
+    kv["outs"] = {k: v[:n] for k, v in kv["outs"].items()}
     program = P.mixed_population_program([(defn, n)])
     query = P.template_instances_query([defn])
     part = P.partition(program, query)
