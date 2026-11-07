@@ -11,8 +11,8 @@ public import Proofs.Flock.Soundness.ExtractAcc
 `Commit` sends each table's level-0 oracle, each rep receives its pads as two words, level 1's oracle as a table, and
 the inner proof's `τ` in the clear. Here is the protocol as run, with every oracle a commitment:
 
-* `Commit` sends each table's **witness cap**, the 68-lane level-0 tree (`2^k₀` witness lanes and the reps' `2e` extra
-  lanes, one tree);
+* `Commit` sends each table's **witness cap**, the level-0 tree of 68 lanes (`2^k₀` witness lanes and the reps' `2e`
+  extra lanes, one tree);
 * each rep (`repZC`) starts with the **pads root** (`recv D`, §3), runs the masked algebraic phase as in `repMaskedZK`,
   and level 0 masked with Ligerito's levels compiled (`ligeritoPadZC`: level 1 onward commit by caps, and level 0's
   consistency value is computed from the opened 68-lane rows, `padColumnO`), then `final_c'`;
@@ -190,8 +190,8 @@ def innerGameC (H : List UInt8 → D) (Ep : Merkle.Enc (F × F) D) (Lp : Merkle.
 /-! ## The table -/
 
 /-- **The commitments' hash and leaf schemes**: `H` and its node encoding `E` for every tree, the row leaf `Lf` (the
-68-lane level-0 rows and every level's rows), the pads-pair leaf `Lp` (with `Ep`, its tree's encoding) and `τ`'s leaf
-`Lτ`. Under `--zk` all three leaves are `hm96-sha512/v1` (`Merkle.Leaf.hm96`). -/
+level-0 rows of 68 lanes and every level's rows), the pads-pair leaf `Lp` (with `Ep`, its tree's encoding) and `τ`'s
+leaf `Lτ`. Under `--zk` all three leaves are `hm96-sha512/v1` (`Merkle.Leaf.hm96`). -/
 structure Hashes (F D Sl : Type) where
   H : List UInt8 → D
   E : Merkle.Enc (List F) D
@@ -279,7 +279,7 @@ def dfltOutZC [Inhabited D] [Inhabited Sl] : OutZC F D Sl :=
 
 /-! ## The session -/
 
-/-- **A batched session over `--zk` tables and any table run** (PROTOCOL.md §5; `Exec.sessionG` over `TabZK`): `Commit`
+/-- **A batched session over `--zk` tables and any table run** (`Flock.Record`; `Exec.sessionG` over `TabZK`): `Commit`
 sends every table's commitment `Cm`, then one link-point draw, then every table's run `tab` after them, concurrently. -/
 def sessionZG {Cm Out : Type} (tab : TabZK F mPts → Cm → (Fin 2 → Fin mPts → F) → Game Out)
     (ts : List (TabZK F mPts)) : Game (List Out) :=

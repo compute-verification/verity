@@ -1,10 +1,11 @@
 module
 
-public import Mathlib.Data.Int.ModEq
-public import Mathlib.Data.Nat.Prime.Defs
-public import Definitions.Accounting.Gates
-public import Definitions.Core.Prims
 public import Definitions.Accounting.Assumptions.SquaringChain
+public import Definitions.Accounting.Gates
+public import Definitions.Accounting.Gates.Declared
+public import Definitions.Accounting.Gates.Registry
+public import Definitions.Core.Prims
+public import Mathlib.Data.Nat.Prime.Defs
 
 /-!
 # The circuit model's window, and its lower bounds: the fooling bound, the carry bound and the encode budget (trusted)

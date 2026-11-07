@@ -237,11 +237,25 @@ def _record(text: str) -> Any:
     return _RECORDS[text]
 
 
+def _lift(fam: str) -> None:
+    """Register ``Lifted[<composite>]_v2``, the lift a body that calls the composite makes (`lifted.lift_composite`), where no body
+    has yet: unregistered, `word.specialization` takes it for a lifted primitive.  An id whose composite is lifted otherwise (by hand,
+    `lifted.register_hand_lift`, or at another version) names no Definition, and is refused by name."""
+    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition
+    from verity.ml.definitions.registry import lifted as L
+
+    m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fam)
+    inner = REGISTRY.defs.get(m[1]) if m else None
+    if isinstance(inner, CompositeDefinition) and (made := L.lift_composite(inner).id) != fam:
+        raise LookupError(f"{fam} names no Definition: {inner.id}'s lift is {made}")
+
+
 def definition(spec: str) -> Any:
     """The registered Definition ``spec`` names, bound to the statics its id writes (`_static`: a Definition-valued one by its
-    own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way), or else the suite's target of
-    that id: a Definition that only tracing the catalog's roots registers, such as `boolean_gather.gather_bf16(n)`'s gathers,
-    or one whose id writes a dict static as its digest, such as `gf2k.GfResiduals`'s schema."""
+    own id, ``EXACT=GemmAccumulatorS8_v2{K=64,DOT=BlackwellS8ImmaDot32_v2}``, bound the same way; a composite's lift, `_lift`, the
+    one a body calling it binds), or else the suite's target of that id: a Definition that only tracing the catalog's roots
+    registers, such as `boolean_gather.gather_bf16(n)`'s gathers, or one whose id writes a dict static as its digest, such as
+    `gf2k.GfResiduals`'s schema."""
     from verity.ml.definitions import word as W
 
     load_registries()
@@ -250,6 +264,7 @@ def definition(spec: str) -> Any:
         raise ValueError(f"not a Definition id: {spec!r}")
     fam, body = m[1], m[2]
     statics = {k: _static(v) for k, v in _split(body).items()} if body else {}
+    _lift(fam)
     try:
         if any(isinstance(v, str) and re.fullmatch(r"\{[0-9a-f]{12}\}", v) for v in statics.values()):
             raise KeyError(spec)
@@ -675,7 +690,7 @@ def boolean_call_candidates(word_calls: set[str]) -> set[str]:
 
 def on_demand_boolean_families(word_calls: set[str]) -> set[str]:
     """The Boolean version's family of each word Call family made on demand, by its id (`verity.ml.definitions.boolean.
-    made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`).  No module registers such a family's members ahead,
+    made_on_demand`: `Const<w>[0x..]`, `GatherBf16x{V}`, `GatherI32x{V}`, `GatherF32x{V}`).  No module registers such a family's members ahead,
     so these come from the families' own patterns, not from the catalog.  Made in sorted order: making one registers it, and
     the registry's order is then the same in every process, whatever its hash seed or what it did before."""
     from verity.ml.definitions.boolean import made_on_demand

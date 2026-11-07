@@ -1,7 +1,8 @@
 """serve-openai's admissions: what a request brings to the engine (`Admission`, and `Delta`, what goes back), and the order
-they are added in (``--admit``). ``arrival`` adds each request to the engine as soon as the frontend has parsed it, in the
-API server's body-read order; ``release-order`` adds them in the network certifier's release order, so the advice needn't carry the
-permutation between the two (3,669 bits on TRACE-CORPUS's heavy trace).
+and the step they are added in (``--admit``). ``arrival`` adds each request to the engine as soon as the frontend has parsed
+it, in the API server's body-read order; ``release-order`` adds them in the network certifier's release order, so the advice
+needn't carry the permutation between the two; ``tick`` also fixes the step each is added at, by the certified tick, so it
+needn't carry when each arrived either.
 
 `ReleaseOrder` is a reorder buffer in front of the engine loop's ``submit``: it forwards request n of the release order
 once the frontend holds every earlier-released request, each forwarded, refused or dropped, and holds it until then. There
@@ -12,7 +13,10 @@ order of its run (the certifier's ``Proxy.requests_released`` before the release
 released request numbered, a request a fault drops before its release unnumbered. With ``x-verity-release-run: ID`` (the
 certifier run's id, hex) the numbering is per run: a new ID starts a new order at 0, and what the old run still held is
 forwarded at once. The network certifier's shim (`benchmarks/network_traces/active_replay.LiveServer`) copies both onto the POST it
-sends the endpoint; it doesn't today, so ``release-order`` holds nothing until it does.
+sends the endpoint; it doesn't today, so ``release-order`` holds nothing until it does. The network certifier also sends
+``x-verity-release-bucket: A``, the release's bucket counted from 0 at the run's origin, and the watermark: one
+``POST /verity/watermark`` a run, naming it, whose chunked body has the line ``t n`` (`watermark_line`) once bucket t has
+closed, the releases of buckets up to t being exactly those numbered below n; its end ends the run.
 
 What a request without the header gets: it is forwarded at once (``unordered``), as the served plan's probes are. A
 malformed or repeated ordinal is refused (`ValueError`, the server's 400). A released request that never reaches the
@@ -32,20 +36,48 @@ rows in admission order. vLLM sorts decodes first for the attention backends tha
 (``split_decodes_and_prefills``, the ones with a ``reorder_batch_threshold``: FlashInfer, MLA, Mamba); FLASH_ATTN, the
 served backend, isn't one, so no kernel needs the decodes first, and `keep_scheduler_rows` refuses an engine with one.
 Batch invariance keeps each row's values independent of its place.
+
+**The certified tick** (``tick``, `TickGate`). Step k has a logical time T_k, an integer of microseconds, and before it the
+gate adds exactly the requests whose release bucket a has closed by then, (a + 1)·τ_b ≤ T_k, in release order. After a step
+that scheduled a token, T advances by τ_sat if vLLM's waiting queue is nonempty and by τ_free if it is empty; when nothing is
+running or waiting, T jumps to the close of the next release's bucket, so T_0 is the first release's. τ_b is the network
+certifier's bucket and τ_sat, τ_free the engine class's (`Tick`), registered with the class: a configuration, not a
+run-time choice. A release's bucket is the watermark's (the header is only checked against it), and the gate starts step k
+once it holds the watermark's line for the last bucket closed by T_k and every request numbered below that line's n. The
+rest of each step is vLLM's own scheduler, unpatched: the gate holds a numbered request outside it until its step
+(`install`, on the scheduler's ``add_request``, ``schedule`` and ``finish_requests``), so the scheduler sees each request
+from its admission on, and the batches are a function of the certified releases and the registered τ, which the encoder's
+replay recomputes (`benchmarks/network_e2e/encodings/replay.py`, ``tick``) without timing advice. What isn't certified is
+added at once and counted (`TickGate.summary`): a request without the header (``unordered``), one of an older run
+(``stale``), one that comes after it was skipped (``late``). A released request that doesn't reach the engine holds the
+later ones ``hold_s``, then is skipped; a watermark the gate has waited on ``hold_s`` without a new line, or that breaks,
+opens the gate (``opened``: every request is added at once from then on), as a shutdown or a drain does. Refused: a
+scheduler policy other than FCFS (the waiting queue must be the admission order) and more than one data-parallel engine.
+Two frontends feed the gate: serve-openai's (`TickAdmit`, its watermark route in the server), and vLLM's own OpenAI server
+through `verity_vllm.pipeline.tick_plugin` (its ``--middleware``, which writes the releases and the watermark to a feed
+file, and a vLLM general plugin whose gate in the engine core process reads it).
 """
 from __future__ import annotations
 
 import asyncio
+import bisect
+import re
 import sys
+import time
 import uuid
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
 from verity_vllm.engine.hooks import Hooks
 
-ADMIT = ("arrival", "release-order")
-RELEASE_HEADER, RUN_HEADER = "x-verity-release", "x-verity-release-run"
+ADMIT = ("arrival", "release-order", "tick")
+RELEASE_HEADER, RUN_HEADER, BUCKET_HEADER = "x-verity-release", "x-verity-release-run", "x-verity-release-bucket"
+WATERMARK_PATH = "/verity/watermark"
+#: seconds between the gate's looks at its feed while the engine waits on it
+POLL_S = 0.002
+_WATERMARK_LINE = re.compile(rb"(0|[1-9][0-9]*) (0|[1-9][0-9]*)\n")
+_ENGINE_ID = re.compile(r"^(?:cmpl|chatcmpl)-(.+)-\d+-[0-9a-f]{8}$")
 
 
 @dataclass
@@ -223,3 +255,445 @@ def keep_scheduler_rows(runner: Any, scheduler: Any) -> Hooks:
     hooks = Hooks(tag="admit-rows")
     hooks.patch(module, "sort_batch_req_ids", scheduler_order)
     return hooks
+
+
+# --- the certified tick ------------------------------------------------------------------------------------------------
+
+
+def watermark_line(line: bytes, last: tuple[int, int] | None = None) -> tuple[int, int]:
+    """(t, n) of one watermark line, ``t n`` and its newline: bucket t has closed, and the releases of buckets up to t are
+    exactly those numbered below n. `ValueError` unless it follows ``last``, the line before it: t one past last's (0
+    first) and n at least last's."""
+    m = _WATERMARK_LINE.fullmatch(line)
+    if m is None:
+        raise ValueError(f"a watermark line is 't n' and a newline, not {line[:40]!r}")
+    t, n = int(m[1]), int(m[2])
+    want, least = (0, 0) if last is None else (last[0] + 1, last[1])
+    if t != want or n < least:
+        raise ValueError(f"watermark ({t}, {n}) after {last}: t steps by 1 from 0 and n never decreases")
+    return t, n
+
+
+def release_of(headers: Mapping[str, str]) -> tuple[str, int, int | None] | None:
+    """(run, N, bucket) of a request's lower-cased headers, None without ``x-verity-release``; `ValueError` on a malformed
+    N or bucket. The run is ``x-verity-release-run`` (empty without it), the bucket None without its header."""
+    raw = headers.get(RELEASE_HEADER)
+    if raw is None:
+        return None
+    if not raw.strip().isdigit():
+        raise ValueError(f"{RELEASE_HEADER}: a non-negative integer, not {raw!r}")
+    bucket = headers.get(BUCKET_HEADER)
+    if bucket is not None and not bucket.strip().isdigit():
+        raise ValueError(f"{BUCKET_HEADER}: a non-negative integer, not {bucket!r}")
+    return headers.get(RUN_HEADER, "").strip(), int(raw), None if bucket is None else int(bucket)
+
+
+@dataclass(frozen=True)
+class Tick:
+    """The certified tick's constants, in microseconds: the network certifier's bucket τ_b, and the engine class's step
+    times τ_sat (a step after which vLLM's waiting queue is nonempty) and τ_free (one after which it is empty)."""
+
+    bucket_us: int
+    sat_us: int
+    free_us: int
+
+    def __post_init__(self) -> None:
+        for name in ("bucket_us", "sat_us", "free_us"):
+            v = getattr(self, name)
+            if type(v) is not int or v <= 0:
+                raise ValueError(f"tick {name}: a positive integer of microseconds, not {v!r}")
+
+    @classmethod
+    def of_ms(cls, bucket_ms: float, sat_ms: float, free_ms: float) -> Tick:
+        return cls(*(int(round(float(ms) * 1000)) for ms in (bucket_ms, sat_ms, free_ms)))
+
+    def close(self, a: int) -> int:
+        """When bucket a closes: (a + 1)·τ_b."""
+        return (a + 1) * self.bucket_us
+
+    def closed(self, t: int) -> int:
+        """The last bucket closed by logical time t, −1 for none."""
+        return t // self.bucket_us - 1
+
+    def step(self, saturated: bool) -> int:
+        return self.sat_us if saturated else self.free_us
+
+    def record(self) -> dict[str, int]:
+        return {"bucket_us": self.bucket_us, "sat_us": self.sat_us, "free_us": self.free_us}
+
+
+def _quiet(sched: Any) -> bool:
+    return not (sched.waiting or getattr(sched, "skipped_waiting", None) or sched.running)
+
+
+class TickGate:
+    """``--admit tick`` in front of one vLLM V1 scheduler (the module docstring).
+
+    The frontend's records come through `take`: a numbered request's release ``{"key", "run", "n", "bucket"}`` (``key``
+    the request's id as `install`'s ``key`` reads it), before the request reaches the engine; ``{"run", "n", "passed":
+    true}`` for one that won't reach it; each watermark line ``{"run", "t", "n"}``; and the watermark's end ``{"run",
+    "end": true}`` or its break ``{"run", "error": why}``. ``pull()``, if given, returns the records that came since its
+    last call (a `tick_plugin.FeedReader`). The rest runs on the engine's thread: `add` is the scheduler's ``add_request``, `finished`
+    its ``finish_requests``, `ready` comes before each engine iteration and `scheduled` after each ``schedule()``.
+    ``clock`` (seconds) times only the holds and the waits, ``log`` gets one dict per admission and per event."""
+
+    def __init__(self, tick: Tick, *, hold_s: float, clock: Callable[[], float] = time.monotonic,
+                 pull: Callable[[], Iterable[Mapping[str, Any]]] | None = None,
+                 log: Callable[[dict[str, Any]], Any] | None = None, poll_s: float = POLL_S) -> None:
+        self.tick, self.hold_s, self.clock, self.pull, self.log, self.poll_s = tick, float(hold_s), clock, pull, log, float(poll_s)
+        self.run: str | None = None
+        self.runs: list[str] = []
+        self.keys: dict[str, tuple[str, int]] = {}      # a release's key -> (run, N)
+        self.opened: str | None = None
+        self.counts = {"admitted": 0, "unordered": 0, "stale": 0, "late": 0, "skipped": 0, "aborted": 0, "past_end": 0,
+                       "bucket_mismatch": 0, "watermark_errors": 0}
+        self.steps = 0
+        self.waits = {"n": 0, "s": 0.0, "max_s": 0.0}
+        self.max_held = 0
+        self.wait_start: float | None = None
+        self.progress = 0.0
+        self._reset()
+
+    def _reset(self) -> None:
+        self.T = 0
+        self.next = 0
+        self.lines: list[int] = []                      # bucket t -> the watermark's n
+        self.ended = False
+        self.held: dict[int, tuple[Any, Callable[[Any], Any]]] = {}     # N -> (request, the scheduler's add)
+        self.held_ids: dict[str, int] = {}
+        self.buckets: dict[int, int] = {}               # N -> its x-verity-release-bucket
+        self.gone: set[int] = set()                     # N past `next` that won't reach the engine
+        self.skipped: set[int] = set()
+        self.missing: dict[int, float] = {}             # N -> when the gate began waiting on it
+
+    def _event(self, kind: str, **kw: Any) -> None:
+        if self.log is not None:
+            self.log({"event": kind, "run": self.run, **kw, "t": self.clock()})
+
+    def _start(self, run: str) -> None:
+        if self.run is not None:
+            for n in sorted(self.held):
+                self._add(n)
+            self._event("run", next=run)
+        self.run = run
+        self.runs.append(run)
+        self._reset()
+
+    def take(self, rec: Mapping[str, Any]) -> None:
+        run = str(rec.get("run") or "")
+        if run != self.run:
+            if run in self.runs:
+                if "key" in rec:
+                    self.keys[str(rec["key"])] = (run, int(rec["n"]))
+                return
+            self._start(run)
+        if "key" in rec:
+            n = int(rec["n"])
+            self.keys[str(rec["key"])] = (run, n)
+            if rec.get("bucket") is not None:
+                self.buckets[n] = int(rec["bucket"])
+        elif rec.get("passed"):
+            n = int(rec["n"])
+            if n >= self.next and n not in self.held:
+                self.gone.add(n)
+        elif "t" in rec:
+            t, n = int(rec["t"]), int(rec["n"])
+            if t != len(self.lines) or n < (self.lines[-1] if self.lines else 0):
+                self.counts["watermark_errors"] += 1
+                self._event("watermark", line=[t, n], why="out of order")
+                return
+            self.lines.append(n)
+            self.progress = self.clock()
+        elif rec.get("end"):
+            self.ended = True
+        elif "error" in rec:
+            self.counts["watermark_errors"] += 1
+            self.open(f"the watermark broke: {rec['error']}")
+
+    def _pull(self) -> None:
+        if self.pull is not None:
+            for rec in self.pull():
+                self.take(rec)
+
+    def add(self, request: Any, key: str, add: Callable[[Any], Any]) -> Any:
+        """The scheduler's ``add_request(request)``, ``add``: now for a request the gate doesn't order, else at its step."""
+        k = self.keys.get(key)
+        if k is None and self.opened is None:
+            self._pull()
+            k = self.keys.get(key)
+        why = ("opened" if self.opened is not None else "unordered" if k is None else "stale" if k[0] != self.run
+               else "late" if k[1] < self.next else None)
+        if why is not None:
+            if why != "opened":
+                self.counts[why] += 1
+                self._event(why, key=key, n=None if k is None else k[1])
+            if why == "late":
+                self.skipped.discard(k[1])
+            return add(request)
+        n = k[1]
+        self.held[n] = (request, add)
+        self.held_ids[request.request_id] = n
+        self.gone.discard(n)
+        self.missing.pop(n, None)
+        self.max_held = max(self.max_held, len(self.held))
+        return None
+
+    def _add(self, n: int) -> None:
+        request, add = self.held.pop(n)
+        self.held_ids.pop(request.request_id, None)
+        self.counts["admitted"] += 1
+        add(request)
+
+    def finished(self, ids: str | Iterable[str] | None) -> Iterable[str] | None:
+        """``finish_requests``' ids less the held requests among them, which are dropped (their N won't come); for every
+        request (None), the held ones are added first."""
+        if ids is None:
+            self.open("every request finished")
+            return None
+        rest = []
+        for rid in (ids,) if isinstance(ids, str) else ids:
+            n = self.held_ids.pop(rid, None)
+            if n is None:
+                rest.append(rid)
+                continue
+            del self.held[n]
+            self.gone.add(n)
+            self.counts["aborted"] += 1
+        return rest
+
+    def ready(self, sched: Any) -> bool:
+        """Before an engine iteration: add what T has closed. False while the gate waits on the watermark or on a released
+        request (the engine waits too, polling every ``poll_s``), True once the iteration may run."""
+        self._pull()
+        if self.opened is not None or self.run is None:
+            return self._go()
+        while self.next in self.gone:
+            self.gone.discard(self.next)
+            self.next += 1
+        quiet = _quiet(sched)
+        if quiet and sched.finished_req_ids:
+            return self._go()                   # the step that frees them comes first, as in the replay
+        if quiet:
+            a = bisect.bisect_right(self.lines, self.next)      # the next release's bucket, if the watermark has it
+            if a == len(self.lines):
+                if not self.held:
+                    return self._go()
+                return self._past_end() if self.ended else self._wait()
+            self.T = max(self.T, self.tick.close(a))
+        b = self.tick.closed(self.T)
+        if b >= len(self.lines) and not self.ended:
+            return self._wait()
+        target = self.lines[min(b, len(self.lines) - 1)] if b >= 0 and self.lines else 0
+        first = self.next
+        while self.next < target:
+            n = self.next
+            if n in self.held:
+                if n in self.buckets and self.buckets[n] != bisect.bisect_right(self.lines, n):
+                    self.counts["bucket_mismatch"] += 1
+                self._add(n)
+            elif n in self.gone:
+                self.gone.discard(n)
+            elif self.clock() - self.missing.setdefault(n, self.clock()) >= self.hold_s:
+                self.skipped.add(n)
+                self.counts["skipped"] += 1
+                self._event("skipped", n=n)
+            else:
+                self._admitted(first, b)
+                return self._wait(watermark=False)
+            self.missing.pop(n, None)
+            self.next += 1
+        self._admitted(first, b)
+        if self.ended and b >= len(self.lines) - 1:
+            return self._past_end()
+        return self._go()
+
+    def _admitted(self, first: int, b: int) -> None:
+        if self.next > first and self.log is not None:
+            self.log({"step": self.steps, "T": self.T, "bucket": b, "admitted": [first, self.next], "t": self.clock()})
+
+    def _past_end(self) -> bool:
+        """The run has ended and every release it numbered is in: what the gate still holds is added now."""
+        for n in sorted(self.held):
+            self.counts["past_end"] += 1
+            self._add(n)
+        return self._go()
+
+    def _wait(self, watermark: bool = True) -> bool:
+        now = self.clock()
+        if self.wait_start is None:
+            self.wait_start = now
+        if watermark and now - max(self.progress, self.wait_start) >= self.hold_s:
+            self.open(f"no watermark line for {self.hold_s:g} s, waiting on bucket {self.tick.closed(self.T)} "
+                      f"(the last line is {len(self.lines) - 1})")
+            return self._go()
+        return False
+
+    def _go(self) -> bool:
+        if self.wait_start is not None:
+            dt = self.clock() - self.wait_start
+            self.wait_start = None
+            self.waits["n"] += 1
+            self.waits["s"] += dt
+            self.waits["max_s"] = max(self.waits["max_s"], dt)
+        return True
+
+    def scheduled(self, sched: Any, out: Any) -> None:
+        """After ``schedule()``: a step that scheduled a token advances T."""
+        if self.run is not None and self.opened is None and getattr(out, "total_num_scheduled_tokens", 0) > 0:
+            self.T += self.tick.step(bool(sched.waiting or getattr(sched, "skipped_waiting", None)))
+            self.steps += 1
+
+    def open(self, why: str) -> None:
+        """Order nothing from now on: what the gate holds is added now, in release order, and every later request at once."""
+        if self.opened is None:
+            self.opened = why
+            self._event("opened", why=why)
+        for n in sorted(self.held):
+            self._add(n)
+
+    def pending(self) -> bool:
+        """The gate holds a request, or waits on the watermark or a release: the engine has work though its scheduler may
+        have none."""
+        return bool(self.held) or self.wait_start is not None
+
+    def summary(self) -> dict[str, Any]:
+        return {**self.counts, "tick": self.tick.record(), "hold_s": self.hold_s, "runs": len(self.runs), "steps": self.steps,
+                "T_us": self.T, "next": self.next, "buckets": len(self.lines), "ended": self.ended, "held_now": len(self.held),
+                "max_held": self.max_held, "skipped_unseen": sorted(self.skipped)[:20], "opened": self.opened,
+                "waits": dict(self.waits)}
+
+
+def request_key(engine_id: str) -> str:
+    """The client's X-Request-Id inside vLLM's OpenAI server's engine request id (``cmpl-{X-Request-Id}-0-{8 hex}``), else
+    the id unchanged: `tick_plugin.TickFeed`'s key for a release."""
+    m = _ENGINE_ID.match(engine_id)
+    return m.group(1) if m else engine_id
+
+
+def install(sched: Any, gate: TickGate, key: Callable[[str], str] = request_key) -> Hooks:
+    """Put ``gate`` between the engine core and ``sched`` (a vLLM V1 scheduler) until the returned hooks are uninstalled:
+    its ``add_request`` goes through `TickGate.add` (``key`` reads a request's release key from its engine id), its
+    ``finish_requests`` through `TickGate.finished`, and each ``schedule()`` advances T; ``sched._verity_tick`` is the
+    gate. Installed after any other wrapper of these (a step trace's), so that they see a request when it is added.
+    Refused for a policy other than FCFS and for more than one data-parallel engine."""
+    policy = getattr(getattr(sched, "scheduler_config", None), "policy", None)
+    if policy != "fcfs":
+        raise RuntimeError(f"--admit tick needs the FCFS scheduler, whose waiting queue is the admission order; this one's "
+                           f"policy is {policy!r}")
+    dp = getattr(getattr(getattr(sched, "vllm_config", None), "parallel_config", None), "data_parallel_size", 1)
+    if dp != 1:
+        raise RuntimeError(f"--admit tick orders one engine's admissions; this one is one of {dp} data-parallel engines")
+    hooks = Hooks(tag="admit-tick")
+
+    def add_request(add: Callable[..., Any]) -> Callable[..., Any]:
+        def gated(request: Any, *args: Any, **kwargs: Any) -> Any:
+            return gate.add(request, key(request.request_id), lambda r: add(r, *args, **kwargs))
+        return gated
+
+    def schedule(orig: Callable[..., Any]) -> Callable[..., Any]:
+        def ticked(*args: Any, **kwargs: Any) -> Any:
+            out = orig(*args, **kwargs)
+            gate.scheduled(sched, out)
+            return out
+        return ticked
+
+    def finish_requests(orig: Callable[..., Any]) -> Callable[..., Any]:
+        def finish(request_ids: Any, finished_status: Any) -> Any:
+            return orig(gate.finished(request_ids), finished_status)
+        return finish
+
+    hooks.wrap(sched, "add_request", add_request)
+    hooks.wrap(sched, "schedule", schedule)
+    hooks.wrap(sched, "finish_requests", finish_requests)
+    hooks.patch(sched, "_verity_tick", gate)
+    return hooks
+
+
+class Watermark:
+    """One watermark stream read into gate records (`TickGate.take`, through ``emit``): `feed` its body's bytes as they
+    come, then `close` it, with why it broke if it did. A malformed line closes it."""
+
+    def __init__(self, run: str, emit: Callable[[dict[str, Any]], Any]) -> None:
+        self.run, self.emit = run, emit
+        self.last: tuple[int, int] | None = None
+        self.buf = b""
+        self.error: str | None = None
+        self.closed = False
+
+    def feed(self, data: bytes) -> bool:
+        """False once the stream is closed."""
+        if self.closed:
+            return False
+        self.buf += data
+        *lines, self.buf = self.buf.split(b"\n")
+        for line in lines:
+            try:
+                self.last = watermark_line(line + b"\n", self.last)
+            except ValueError as e:
+                return self.close(str(e))
+            self.emit({"run": self.run, "t": self.last[0], "n": self.last[1]})
+        return True
+
+    def close(self, why: str | None = None) -> bool:
+        """End the stream: its end record, or its error (``why``, or a line it ended inside). True for a clean end."""
+        if self.closed:
+            return self.error is None
+        if why is None and self.buf:
+            why = f"the watermark ended inside a line ({self.buf[:40]!r})"
+        self.closed, self.error = True, why
+        self.emit({"run": self.run, "end": True} if why is None else {"run": self.run, "error": why})
+        return why is None
+
+
+class TickAdmit:
+    """serve-openai's frontend under ``--admit tick``: `key` reads a request's release headers (`ValueError` on a malformed
+    or repeated N, the server's 400), `submit` hands the engine loop's gate the release (through ``take``, the loop's
+    queue) just before the request itself (``forward``), `passed` says a numbered request won't be submitted, and the
+    server's watermark route feeds `watermark` streams. All of it runs on the HTTP server's event loop."""
+
+    def __init__(self, forward: Callable[[Any], None], abort: Callable[[str], None],
+                 take: Callable[[dict[str, Any]], None]) -> None:
+        self.forward, self.abort, self.take = forward, abort, take
+        self.seen: dict[str, set[int]] = {}
+        self.buckets: dict[tuple[str, int], int | None] = {}
+        self.submitted: set[tuple[str, int]] = set()
+        self.counts = {"numbered": 0, "unordered": 0, "passed": 0, "watermarks": 0}
+
+    def key(self, headers: Mapping[str, str]) -> tuple[str, int] | None:
+        rel = release_of(headers)
+        if rel is None:
+            return None
+        run, n, bucket = rel
+        seen = self.seen.setdefault(run, set())
+        if n in seen:
+            raise ValueError(f"{RELEASE_HEADER}: {n} came twice in run {run!r}")
+        seen.add(n)
+        self.buckets[(run, n)] = bucket
+        return run, n
+
+    def submit(self, adm: Any) -> None:
+        k = getattr(adm, "release", None)
+        if k is None:
+            self.counts["unordered"] += 1
+        else:
+            self.counts["numbered"] += 1
+            self.take({"key": adm.engine_id, "run": k[0], "n": k[1], "bucket": self.buckets.pop(k, None)})
+            self.submitted.add(k)
+        self.forward(adm)
+
+    def passed(self, key: tuple[str, int] | None) -> None:
+        if key is None:
+            return
+        if key in self.submitted:
+            self.submitted.discard(key)
+            return
+        self.buckets.pop(key, None)
+        self.counts["passed"] += 1
+        self.take({"run": key[0], "n": key[1], "passed": True})
+
+    def watermark(self, run: str) -> Watermark:
+        self.counts["watermarks"] += 1
+        return Watermark(run, self.take)
+
+    def summary(self) -> dict[str, Any]:
+        return {**self.counts, "runs": len(self.seen)}

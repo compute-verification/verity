@@ -884,6 +884,9 @@ def answering(ctx: Ctx) -> list[Finding]:
 WORKSPACE = "/workspace"
 DISK_FULL_PCT = 85.0        # resource_probe's HARD /workspace line: no new check starts past it
 INODES_FULL_PCT = 80.0      # resource_probe's inode_pct
+#: twice tools/verity/check/slot.py's DISK_MIN_INODES, under which no check slot starts: a page of its own, since a node can
+#: stand past INODES_FULL_PCT for days and that finding pages only once
+INODES_FREE_PAGE = 800_000
 FORECAST_S = 6 * 3600       # page while the line reaches FULL within this
 FIT_S = 3 * 3600            # the readings the line is fitted to
 FIT_MIN_S, FIT_MIN_N = 1800, 4
@@ -894,7 +897,8 @@ def disk_use(path: Path) -> dict[str, float]:
     s = os.statvfs(path)
     used, free = (s.f_blocks - s.f_bfree) * s.f_frsize, s.f_bavail * s.f_frsize
     return {"pct": 100.0 * used / (used + free) if used + free else 0.0, "size_b": float(used + free),
-            "ipct": 100.0 * (s.f_files - s.f_ffree) / s.f_files if s.f_files else 0.0}
+            "ipct": 100.0 * (s.f_files - s.f_ffree) / s.f_files if s.f_files else 0.0,
+            "ifree": float(s.f_favail) if s.f_files else None}
 
 
 def _slope_per_h(pts: list[tuple[float, float]]) -> float:
@@ -920,7 +924,8 @@ def _run_disk(ctx: Ctx) -> str:
 
 def disk_forecast(ctx: Ctx) -> list[Finding]:
     """/workspace's disk or inodes reaching DISK_FULL_PCT / INODES_FULL_PCT within 6 hours on the line fitted to the last 3
-    hours of readings (kept in the memo; at least 4 over 30 minutes), or already there. Names the biggest live runs on disk."""
+    hours of readings (kept in the memo; at least 4 over 30 minutes), or already there; and, as its own finding, fewer than
+    INODES_FREE_PAGE inodes free. Names the biggest live runs on disk."""
     now = disk_use(ctx.path(WORKSPACE))
     pts = [p for p in ctx.memo.get("readings", []) if ctx.now - FIT_S <= p[0] < ctx.now] + [[ctx.now, now["pct"], now["ipct"]]]
     ctx.memo["readings"] = pts
@@ -940,6 +945,12 @@ def disk_forecast(ctx: Ctx) -> list[Finding]:
                              f"{gain} over the last {span / 3600:.1f} h. Biggest live runs on disk: {biggest}.",
                              cleared=f"*Cleared:* {ctx.machine}'s /workspace {what} no longer reaches {full:.0f}% within "
                                      f"{FORECAST_S // 3600} h."))
+    if (left := now.get("ifree")) is not None and left < INODES_FREE_PAGE:
+        biggest = biggest or _run_disk(ctx)
+        found.append(Finding("inode-full", f"*{ctx.machine or 'This machine'}: /workspace has {left:,.0f} inodes free*, under "
+                             f"{INODES_FREE_PAGE:,}; check slots start nothing under {INODES_FREE_PAGE // 2:,}. Biggest live "
+                             f"runs on disk: {biggest}.",
+                             cleared=f"*Cleared:* {ctx.machine}'s /workspace has {INODES_FREE_PAGE:,} inodes free or more."))
     return found
 
 

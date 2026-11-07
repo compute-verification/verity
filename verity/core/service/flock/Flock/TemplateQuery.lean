@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.10: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`) over the
+`Flock.HmRow`: the template-instance partition queries (`verity.ir.partition_object.TemplatePartition`) over the
 verifier's own copy of the program, decoded from its descriptor bytes (`verity-ir/descriptor/v1`) as far as they need:
 the callees, each definition's form and nodes (form, callee, members), and the root body.
 
@@ -9,11 +9,7 @@ and each batch member one unit, in node then member order; every listed template
 -/
 module
 
-public import Lean.Data.Json
-public import Flock.Canon
-public import Flock.Hash
 public import Flock.Program
-public import Flock.JsonParse
 
 @[expose] public section
 set_option backward.privateInPublic true

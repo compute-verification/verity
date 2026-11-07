@@ -398,7 +398,7 @@ by round, and a Goldreich–Kahan simulator rewinds once, to just after that com
 degenerate coins as they open (the Claim above).
 
 **The coin commitment** (`src/coin_tree.rs`, the keyed coin tree `coin-tree/hm96-sha512/v2`,
-`SessionConfig::coin_tree`; the verifier's side is `verity/ml/flock/verifier/PROTOCOL.md` §7.4).
+`SessionConfig::coin_tree`; the verifier's side is `Flock.CoinTree`).
 - The schedule is pinned in `Hello` (`coins: {block, nonce, rounds_log, scheme, streams}`): streams `session`,
   `circuit/rep0`, `circuit/rep1`; `2^9` rounds per stream; blocks of 512 coins. A RoPE rep uses 100 rounds and at most
   277 coins in one (level 0's queries); the session stream's round 0 is the two link points.
@@ -587,14 +587,23 @@ item leaves:
 
 A device that sends more rounds than the statement has gets coins back and nothing leaves; one that returns early has the
 rest of the schedule released by the ZK server itself. A failed rep's rounds from its failure on reach the loop as no
-device round (the place's squeeze alone), which the rep's frame fails, releasing the statement's round in its place. Then the session's `Finish` goes without its proofs, and the auditor
+device round (the place's squeeze alone), and every rep of the session stops at its first failure: from then on the
+loop hands no rep's frame a device round, whatever the device sent (`Flock.Firewall.Frames.Sessions.stopped`), so each
+frame fails each of its rounds, releasing the statement's round in its place. Then the session's `Finish` goes
+without its proofs, and the auditor
 sees the stop there. What leaves before `Finish` has the form and the distribution of an honest session's, wherever the
 check failed: under pads `h + v` a stopped rep releases byte for byte what the honest rep with values `v` releases under `h`
-(`tests/test_firewall_frame.py`). So the stop reveals one bit a session (stop at `Finish` or not), and `log₂ Σ_{i≤b}
-C(m, i)` bits over `m` sessions with at most `b` stopped (the claims' `ZkServer.zk_deferred` and
-`stream_leak_deferred`). A ZK server that refuses is evidence against its rack. It never stops serving for good after
-failed sessions: a worker chooses its sessions' verdicts, so the leak is bounded per outcome of each session, and is not
-capped over a monitoring period (`Flock.Guarantees.SessionLoopZKAnyDeployed`).
+(`tests/test_firewall_frame.py`). So a stop the ZK server makes reveals one bit a session (stop at `Finish` or not), and
+`log₂ Σ_{i≤b} C(m, i)` bits over `m` sessions with at most `b` stopped (the claims' `ZkServer.zk_deferred` and
+`stream_leak_deferred`). Where the release ends is the prover's choice, though: the Lean loop
+(`Flock.Firewall.Session.relay`) ends it where the prover closes its connection or sends a frame the loop can't read, and
+closes the auditor's connection there, so the auditor sees how many of the session's frames reached it. A release therefore
+also leaks its end position: a session of `M` messages has up to `M + 1` stops beside its finish, `log₂(M + 2)` bits rather
+than one. It is counted by position, as `Flock.Guarantees.RecursiveZKLoopAnySum` counts a recursive session's stops
+(`1 + Σ_p (M_p + 1)`, `LoopAny.card_loopStops`), and the bound that holds at a prover that cuts is §10.5's (its table's first
+row a recursive session, and its bound over a stream). A ZK server that refuses is evidence against its rack. It
+never stops serving for good after failed sessions: a worker chooses its sessions' verdicts, so the leak is bounded per
+outcome of each session, and is not capped over a monitoring period (`Flock.Guarantees.SessionLoopZKAnyDeployed`).
 
 What the deferral costs: a bad worker is caught only at its session's `Finish`, one session's latency later than at its
 first bad message, and the rest of a doomed session's device and ZK server work is spent for nothing (the ZK server's share
@@ -773,16 +782,18 @@ drop, duplicate, swap, forgery and seeded byte flip of one. One difference is de
 spelling, so `flock-firewall` refuses any `Hello` with a fraction or an exponent, where the proxy compares Python's canonical
 JSON. The two agree whenever the schedule's `Hello` holds only integers, as `schedule_for`'s does.
 
-On live coins the send check is that program itself. `rec_live --lean BIN` (required unless `--coin-tree`) starts one
-`flock-firewall live` a session (`Flock.Firewall.liveWith`): its first line is the schedule, and each request goes to it
-before the proxy handles it. It answers with the messages the coin server gets for the request and the salts it drew for
-them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system, those a request doesn't
-draw kept for the next), or with the refusal that stops the session. The proxy delivers Lean's messages, in Lean's order,
-and handles the request too, for the prover's side (the answers, the session record, `private.json`) on Lean's salts: a message or a salt of its own that
+The send check is that program itself. `rec_live --lean BIN` (required) starts one `flock-firewall live` a session (`Flock.Firewall.liveWith`): its first line is the schedule, and
+each request goes to it before the proxy handles it. It answers with the messages the coin server gets for the request and
+the salts it drew for them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system, those
+a request doesn't draw kept for the next), or with the refusal that stops the session. The proxy delivers Lean's messages, in Lean's order, and handles the request too,
+for the prover's side (the answers, the session record, `private.json`) on Lean's salts: a message or a salt of its own that
 is not Lean's, or one of Lean's it leaves unused, stops the session. The same test holds the relay to `run` at the salts the
-live session drew, on every case and every whole placement of the `Open`s. Lean's firewall refuses a coin tree's `Hello` and
-a binding round of a registered top, so a `--coin-tree` session and `rec_session.serve`'s, with its stacked table's
-registered top, keep the Python check that the test holds to `run`.
+live session drew, on every case and every whole placement of the `Open`s. On the challenger's coin tree (`--coin-tree`)
+the first line also gives the tree's spec: the prover's `Hello` names the tree, with a nonce of its own the session never
+uses, and `Flock.Firewall.treeHello` holds `coins` without its nonce to the spec and hands `step` the `Hello` without
+`coins`, so the coin server gets the live-coin session's messages; the same test holds the proxy, the relay and `run` to
+one another on the tree's sessions. Lean's firewall refuses a binding round of a registered top, so `rec_session.serve`'s
+sessions, with their stacked table's registered top, keep the Python check that the test holds to `run`.
 
 In the Lean analysis (`Security/Proofs/Flock/Recursive/`), `FirewallTemplate.run_blank` proves that a session `run` finishes
 sent the pinned schedule's transcript (`tmpl`) but for its commitment strings, and `sends_of_one` that if `run` finishes at
@@ -871,7 +882,9 @@ rep's opening a round at a time in the loop, on the extra claims at the `Commit`
 ≥ 1, one copy with the finish's), then the inner proof's, each at the frame's own round (`Frame.innerSched`) on the loop's
 finish's round, which the finish hands the loop before Rust relays it (§10.4). At an inner round the finish has not
 computed, the loop hands the frame no device round (`Frames.roundStep`): whatever Rust relays fails, the frame's own round
-stands in, and the rep stops. Rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
+stands in, and the rep stops. Once any rep's frame of the session stopped, the loop hands no rep's frame of it a device
+round (`Frames.Sessions.stopped`), so every rep of the session stops at its first failure, each round leaving as the
+statement's. Rep 1's frame first takes rep 0's algebraic-phase coins. What leaves is the
 frame's release, at the stream's first round after its domain frame (`Frames.round`); anything the frame refuses is
 refused before it reaches the auditor. Once a round's coins open the tree, they are the frame's coins before the prover
 receives them (`Frames.feedOf`, `Frames.coins`), and the session's `Finish` leaves only once every rep's frame answered
@@ -911,8 +924,10 @@ proof files (`FinishIs`, `Loop.finishIs`). The frames refusing every coin fault 
 (`frameUnrefused_ofLoop`), and from it, `FinishIs` and the tables admitting unrefused coins, proved at the deployed
 tables, `FinalRoundEq` follows (`finalRoundEq_ofLoop`). The other bytes it releases the theorem still reads only through
 named hypotheses: the worker's passed rounds and the stand-in rounds are the session's (`LiveRoundEq`, `FillRoundEq`) and
-the inner proof's round 0 is the firewall's own (`LoopInnerRound0`), and the tables' side (`Tables`, `Complete`,
-`DummyReg`, `Causal`, `SwCausal`, `TapeOK`) is a premise. Until those are proved, the ZK server is not yet proved
+the inner proof's round 0 is the firewall's own (`LoopInnerRound0`), and of the tables' side one premise is left: the
+switched round encoding causal at the coins the loop computes at (`SwCausalOn` at `Loop.SwOk`: no zerocheck outer coin
+`1`, which the frames refuse). The rest of it (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK`) is proved at the
+deployed tables (`Loop.tables_dataE` and its siblings). Until those are proved, the ZK server is not yet proved
 zero-knowledge.
 
 The frame's protocol, which the loop steps on its own requests (`Frame.Req`) and `flock-firewall frame` serves on its
@@ -1035,7 +1050,12 @@ every stream runs its schedule, and `Finish` goes without proofs, the auditor's 
 as an honest session's. The prover's record has the refusal: `prover_stopped` the ZK server's, where its own checks caught
 it, and the verdict's `why` the loop's `PROVER-STOPPED: the Lean frame stopped table I rep R` where the rep's frame stopped
 it (both, for some). `verifier/firewall_controls.sh` runs each control through the loop and holds it to that outcome,
-after an honest session that must be accepted with no rep's frame stopped and no `prover_stopped`. `later-NAME` is `NAME`
+after an honest session that must be accepted with no rep's frame stopped and no `prover_stopped`. For `opening`,
+`opening-frame`, `cut-tree` and the inner rounds (`FC_INNER_TAMPER`, §10.4) it requires the frame's stop and admits, never
+requires, the ZK server's
+`FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` beside it: the session stops at its
+first failure, every rep with it (§10.1), so the ZK server's own check of the proof against the values the frame passed may
+refuse it too. `later-NAME` is `NAME`
 on every table of a several-table session but the first, and is refused
 the same way at the second table:
 
@@ -1044,8 +1064,8 @@ the same way at the second table:
 | `root` | flips a bit of its level-0 root | `FIREWALL-REFUSED: level-0 root: the device committed … where the recheck has …` |
 | `witness` | proves a witness one bit off the host's | `FIREWALL-REFUSED: level-0 root: …` |
 | `label` | flips a label byte in the algebraic phase | the frame's stop at the round; `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
-| `opening` | flips an observed value in the opening's first round | the frame's stop at the round alone |
-| `opening-frame` | flips an observed value in the opening's second round | the frame's stop at the round alone |
+| `opening` | flips an observed value in the opening's first round | the frame's stop at the round; the ZK server's `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` may come with it |
+| `opening-frame` | flips an observed value in the opening's second round | as `opening` |
 | `algebra` | flips a masked value, in its frame and its proof alike | `FIREWALL-REFUSED: circuit: the constraints … fail on a rep's pads` |
 | `steer` | sets each rep's first masked value to a word of its own, in its frame and its proof alike | as `algebra`; the word reaches the verifier in no request |
 | `algebra-proof` | flips a masked value in its returned proof only | `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` |
@@ -1055,7 +1075,7 @@ the same way at the second table:
 | `cut-panic` | panics at that round | `FIREWALL-REFUSED: the device failed: panicked: the worker panics at its round …` |
 | `cut-silent` | falls silent at that round (it ticks the deadline's injected clock, so no test waits on the wall clock) | `FIREWALL-REFUSED: the device failed: silent past the firewall's deadline` |
 | `cut-decode` | returns output that does not decode, from the rep that holds that round | `FIREWALL-REFUSED: the device failed: the device's output does not decode: …` |
-| `cut-tree` | samples its first tree at or after that round one leaf larger than the statement's (the CPU device: its trees sample through the salt context) | the frame's stop at the opening round that differs, alone |
+| `cut-tree` | samples its first tree at or after that round one leaf larger than the statement's (the CPU device: its trees sample through the salt context) | the frame's stop at the opening round that differs; cut at round 0, the ZK server's `FIREWALL-REFUSED: the proof's exposed value 0 is not the one the firewall passed` may come with it |
 
 `FC_FIREWALL_CUT_AT` counts the table's device rounds over both reps (default 0; a rep's bucket has the count so far as
 `firewall_device_rounds`, which leaves out the rounds the host's inner proof sends), and a `cut-` control fires once a table.
@@ -1187,7 +1207,10 @@ the session reaches the challenger. It relays the session's rounds as §10.4 say
 proofs, and at `Finish` decides (`Decision.after`, at the wall clock's time): the loop's own refusal of the session is a
 stop, as is a `Finish` with fewer than the session's proofs (two a table, the loop's finish's: where a check refused, the
 finish computed none) and a missed release time. A session that goes waits for its release time; its proofs, then `Finish`,
-leave, and serve's verdict is its release or its stop. `verity/core/service/firewall/tests` holds these stages to
+leave, and serve's verdict is its release or its stop. At each decision the loop writes one line to its stderr,
+`FIREWALL-TIMES {"session", "part", "ready_ms", "release_ms", "outcome"}`: when it decided, the release time it holds
+the proofs to (null on a stop) and `go` or `stop`, by which a run times its windows (pod 85's `RELEASE=1`,
+`rec_inner.py release-report`). `verity/core/service/firewall/tests` holds these stages to
 Python's record and to the cases frozen from the Rust release side the loop replaced (`tests/fixtures/`). Every stop the
 loop makes, and a fault of its own, cuts the challenger's connection before `Finish`, and the worker gets the loop's own
 verdict; a prover killed while its session holds the slot is that session's stop, which the loop records, or, where the

@@ -2,6 +2,8 @@ module
 
 public import Proofs.Accounting.TS
 public import Proofs.Accounting.HMu
+public import Proofs.Accounting.Lemmas.TS.Receipt
+public import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # The headlines' luck from the receipt

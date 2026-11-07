@@ -1,7 +1,11 @@
 module
 
-public import Mathlib.Analysis.SpecialFunctions.Exp
-public import Mathlib.Data.Fin.Tuple.Basic
+public import Mathlib.Analysis.Complex.Exponential
+import Mathlib.Algebra.Order.BigOperators.Expect
+import Mathlib.Algebra.Order.Field.Power
+import Mathlib.Analysis.Complex.Order
+import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Data.EReal.Inv
 
 /-!
 # Weight exfiltration before detection: the windowed audit as a game

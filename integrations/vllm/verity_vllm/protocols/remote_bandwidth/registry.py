@@ -51,9 +51,10 @@ from verity.core.protocols.remote_bandwidth.receipts import PER_LEAF, Plan
 from verity.core.protocols.remote_bandwidth.store import store_salt
 from verity.ml.circuits import requirement
 from verity.ml.commitments import merkle_depth
-from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, Codec, Counters, Layout, Opening, PageLayout,
-                                         PassCommitment, Receipt, Registration, RegionInfo, Segment, Source, Stale,
-                                         WindowRecord)
+from verity.ml.commitments.merkle import Opening
+from verity_vllm.protocols.remote_bandwidth.interface import (KINDS, TIERS, Append, Backing, BlockOpening, Codec, Counters, Layout,
+                                         PageLayout, PassCommitment, Receipt, Registration, RegionInfo, Segment, Source,
+                                         Stale, WindowRecord)
 from verity_vllm.protocols.remote_bandwidth import memory_map as mm
 
 CHALLENGE_BYTES = 32
@@ -68,8 +69,8 @@ def frame(b: bytes) -> bytes:
 
 
 def chain(challenge: bytes, previous: bytes, index: int) -> bytes:
-    """Pass ``index``'s seed in a window: the driver's chained `rb.seed`, ``SHA512(D ‖ σ ‖ u32be index ‖ root before
-    it)``."""
+    """Pass ``index``'s seed in a window: the driver's chained `rb.seed`, ``SHA512(D ‖ chal_t ‖ u32be index ‖ root
+    before it)``."""
     return rb.seed(challenge, index, previous)
 
 
@@ -747,7 +748,7 @@ class NodeMemory:
             return r.info.kind
         return "kv" if r.pool.allocated[r.pool.page_of[block]] else "filler"
 
-    def open(self, sample: Sequence[tuple[int, int]], window: int | None = None) -> list[Opening]:
+    def open(self, sample: Sequence[tuple[int, int]], window: int | None = None) -> list[BlockOpening]:
         """Each sampled (pass, position) of ``window`` (None: the latest) as that pass read it.  A KV block
         re-registered since (its epoch moved) or dirty now raises `Stale`: the binder reuses freed pages as late as
         the pool allows."""
@@ -773,10 +774,10 @@ class NodeMemory:
             memo = inner.setdefault((j, k), {}) if aligned(seg) else ps.top
             path = [_node(dom, n, h, (c >> h) ^ 1, leaf, memo if h < level else ps.top) for h in range(merkle_depth(n))]
             ys = self.receipts_at(ps, c * PER_LEAF, min((c + 1) * PER_LEAF, ps.positions))
-            bb = r.info.block_bytes
-            out.append(Opening(j, position, r.info.first + b, seg.region, r.info.tier, self.kind_now(seg.region, b),
-                               r.backing.read(b * bb, bb), ys[position % PER_LEAF], tuple(ys), tuple(path[:level]),
-                               tuple(path[level:]), self.source(seg.region, b), self.salt(ps.seed, c)))
+            bb, salt = r.info.block_bytes, self.salt(ps.seed, c)
+            out.append(BlockOpening(j, position, r.info.first + b, seg.region, r.info.tier, self.kind_now(seg.region, b),
+                                    r.backing.read(b * bb, bb), ys[position % PER_LEAF], tuple(ys), self.source(seg.region, b),
+                                    salt, Opening(c, rb.hidden(b"".join(ys), salt), tuple(path))))
         return out
 
 

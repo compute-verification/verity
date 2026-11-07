@@ -206,7 +206,7 @@ class Bench:
         self.items: list[dict] = []
         self.rejected: list[dict] = []
         self.chained = False
-        self.sass: SG.Gate | None = None
+        self.sass: SG.SassChecker | None = None
         self.warmups: list[dict] = []
         self.poisoning: list[dict] = []
         #: the traced pass beside the timed one (--traced), its items apart; the stock libraries through torch (--bridge)
@@ -1326,7 +1326,7 @@ def main(argv: list[str] | None = None) -> int:
         out["clocks"] = lock or {"locked": False}
         out["clocks"]["label"] = "locked" if (lock or {}).get("locked") else args.clock_label or "unlocked"
         arms = [A.load(s) for s in args.arm]
-        sass = SG.Gate(log)
+        sass = SG.SassChecker(log)
         for a in arms:
             A.check_arm(a, set(B.FAMILIES))
             build = a.build({"device": dev, "arch": card["arch"], "out_dir": str(args.out.parent),

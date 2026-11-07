@@ -1,14 +1,15 @@
 module
 
+public import Flock.Piop
 public import Proofs.Flock.Soundness.Refine.Run
-public import Flock.Verify
 public import Proofs.Flock.Verifier.Transcript
-public import Mathlib.Data.List.Range
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Runs of the executable's transcript programs
 
-The executable verifier's phases are programs in `TM = StateT Transcript (Except String)` (PROTOCOL.md §6). A run that
+The executable verifier's phases are programs in `TM = StateT Transcript (Except String)` (`Flock.Transcript`). A run that
 succeeds, `x t = .ok (a, t')`, is taken apart one step at a time: each lemma below peels one step off the front of a
 `bind` and says what that step did.
 

@@ -1,9 +1,6 @@
 module
 
 public import Mathlib.LinearAlgebra.Matrix.Rank
-public import Mathlib.LinearAlgebra.FiniteDimensional.Lemmas
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Order.Interval.Finset.Defs
 public import Mathlib.Data.Int.Interval
 
 /-!
