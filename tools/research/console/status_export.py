@@ -11,9 +11,9 @@ record the tree's data files name. Stdlib only; it reads the tree at one commit 
 - `packages`: every lock git tracks at REV (default HEAD) outside a `tests/` directory, by the package's path.
 - A guarantee's `assumptions` are those its lock record takes as hypotheses and, with `--facts`, the premises its statement
   takes through its definitions, by the Lean audit's own rule (`premised`). DIR is a Lean audit's output directory
-  (`lean-audit/` of a `check` or records run): `audit-<package path, each run of other characters as _>/facts.json.gz`, and
-  `proved-in-*/facts.json.gz` beside it for the packages its `proved_in` names (an older audit's `facts.json` where it
-  holds no `.gz`). A guarantee has `premises_read` when one of those holds it as a theorem whose signature is its lock
+  (`lean-audit/` of a `check` run; a records run keeps only its package's own facts, not its provers'): `audit-<package
+  path, each run of other characters as _>/facts.json.gz`, and `proved-in-*/facts.json.gz` beside it for the packages its
+  `proved_in` names (an older audit's `facts.json` where it holds no `.gz`). A guarantee has `premises_read` when one of those holds it as a theorem whose signature is its lock
   record's.
 - `status`: `assumes` with an assumption, `proved` with none and its premises read, `unknown` with none and its premises
   not read.
