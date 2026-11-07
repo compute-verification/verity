@@ -81,6 +81,10 @@ executor = "shadow"
 # one that gains its verdict goes after those already moved, so none below it is merged again. A held member goes to `next`'s
 # top every sync, this on or not
 verdict_first = true
+# how many restacks across a move the syncs run at once in the background: one `restack.py` per head merged above a move it
+# lacks, each rewriting a whole tree on one core, its PR waiting off `next` until a later sync reads the result. The control
+# pod has 4 cores, and the tick needs one
+restack_jobs = 3
 # the low-risk lane: each tick, after the reviewed prefix, land up to `lowrisk_per_tick` members of `next`, in its order, onto
 # `checked` on their ready mark alone (no land verdict), each whose merge onto `checked`'s tip changes nothing
 # `lowrisk_excludes` names, merges with no conflict, contains no unlanded PR and passes `landing_gates` and the compile gate;
