@@ -20,7 +20,8 @@
     circuit-check --batch                                           batch invariance of the v0 registration's templates
 
 A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
-``"mode": "by-calls"`` and names the target each callee relies on.
+``"mode": "by-calls"`` and names the target each callee relies on.  A family a sidecar registers over a range of statics
+(``RANGES``, `ranges`) is checked at its spots, and the report's ``ranges`` says whether each rule a target fell in holds.
 
 Exit status 1 when a check fails (each failure is named, `FAIL NAME`, and in the summary), 0 otherwise: the verdict is every
 target's real one, and whether a failure may stay red is drive's policy (`research.policy`, policy.toml's allowances), never
@@ -57,6 +58,7 @@ from . import ambient as AM
 from . import by_calls as BC
 from . import cache as CC
 from . import checks as CK
+from . import ranges as RG
 from . import shard as SH
 from . import sidecars as SC
 from . import structural as ST
@@ -1770,13 +1772,22 @@ def _cache_lines(rep: dict) -> None:
 
 
 def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what: str | None = None) -> int:
-    """Print the report's verdict, each failure, each warning and a last line counting ``what`` (default: its targets); write the
-    report to ``out``; and return the exit status."""
+    """Print the report's verdict, each failure, each warning, each range rule a target fell in (`ranges.section`; a shard's
+    report has none, since the rule's spots may be in other shards) and a last line counting ``what`` (default: its targets);
+    write the report to ``out``; and return the exit status.  A rule that doesn't hold fails nothing itself: a failed spot is
+    its own target's failure, and a run may check only some spots."""
     s = rep["summary"]
     for name in s["failure_names"]:
         print(f"FAIL {name}")
     for k, w in s["warnings"].items():
         print(f"unchecked {k}: {w['total']} over {w['definitions']} target(s)")
+    if "shard" not in rep and (rs := RG.section(rep["targets"])):
+        rep["ranges"] = rs
+        for r in rs:
+            why = [f"{len(r['failed'])} failed"] if r["failed"] else []
+            why += [f"{k} never at {', '.join(map(str, ends))}" for k, ends in r["unreached"].items()]
+            print(f"circuit-check: range {r['rule']}: {len(r['spots'])} spot(s), "
+                  + ("holds" if r["holds"] else f"does not hold ({'; '.join(why)})"))
     if out:
         out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
     across = s.get("recomputed_across") or {}
