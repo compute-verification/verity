@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Sampling.Assembled
 public import Proofs.Flock.Claims.Sampling.Bext
+public import Proofs.Flock.Claims.Sampling.CommitAt
 public import Proofs.Flock.Claims.Sampling.Committed
 public import Proofs.Flock.Claims.Sampling.Count
 public import Proofs.Flock.Claims.Sampling.Deployed
