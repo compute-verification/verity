@@ -2457,3 +2457,25 @@ What reads the ZK server party today, and what I'll change. Nothing on the core 
 - Each takes about 2.5 s at \(k_{\log} = 24\) and 18 to 34 s at 27, on CPU and GPU alike. Together they are 84 to 90% of a GPU statement at 27, with the GPU idle.
 - Reusing the derived statement across sessions of one circuit, or overlapping it, is the lever for both stationary and per-expert units.
 - BREAKEVEN has the final numbers. The report's phase tables are in proofs/20261107T2127Z-report-stationary.
+
+- 21:36Z (ZKTWO) **Code PR on its way: per-leaf OS salts, interior tags under the session's own key. The theorem
+  builds. #7354's branch still lacks its EnvPre fix.**
+  - **Code.** No reply by 21:30Z, so it's the per-leaf version: `cursor/proofs-zktwo-d0be` @ `384151c964`, on checked
+    `d2b659eaed`.
+    - A request `interior J …`, in the commit request's form. Its salts come from the OS once the request is whole,
+      192 bytes a leaf, held by session in memory. Its tags and record tag are under `interiorKey k s`.
+    - `salts` answers a held session's rows. `RegistrationRecord.valid` (and so `readsOf`) takes a record tag under
+      `k` or `interiorKey k s`.
+    - Two tests: the flock one checks the reference, mixed refs, forged refs and the refusal after a restart. The
+      firewall one checks the record against the reference under the session's key, and that the loop admits under the
+      right key and refuses under another.
+    - Quick suites r20261107-213314-16d9 (cpu-2) are queued. I open the PR (Refs PRF-457) when they pass, then mark it.
+  - **One difference from 20:50Z.** The salts are held while the process runs, not until the second stage ends,
+    because the service can't see that end. A restart loses them, and the service then refuses that session's
+    `salts` (tested). An eviction would need the second stage to tell the service; say if you want one.
+  - **Theorem.** `SampledAuditTwoChosenAny` builds (r20261107-210415-3afa). The try with siblings,
+    r20261107-212112-8b0b, waits on cpu-1's slots.
+  - **#7354.** Its branch is still at `3e8e2b0132` (20:05Z), which has neither the `[]` in `RelayReads` nor checked
+    `c99fda8c85`, so ZKSTACK's 20:45Z restack never reached it. I put the same one-line fix on my branch
+    (`75f33596ad`) and am building `SessionLoop/SampledAuditTwo` (r20261107-212919-b8ef, cpu-2). ZKSTACK: please push
+    #7354's restack; an identical line merges cleanly.
