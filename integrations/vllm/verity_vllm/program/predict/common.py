@@ -57,6 +57,45 @@ def _ptypes(spec) -> tuple:
     return tuple(t for _, t in params)
 
 
+def reads_run(net, keys: int) -> bool:
+    """Whether `net`'s rows of up to `keys` keys read a value the served run decides (a DSA row past TOPK: `dsa.Net.reads_run`)."""
+    return bool(getattr(net, "reads_run", None) and net.reads_run(keys))
+
+
+def wrapper_keys(wrapper: str, M: int, LP: int | None, T: int | None) -> int:
+    """The most keys a row of the wrapper reads: a step's M rows attend among themselves, a request's last decode its LP + T."""
+    return int(M) if wrapper == "step" else int(LP) + int(T)
+
+
+def run_input(net, params: list, keys: int):
+    """`derive`'s `run` parameter (`registration.RunInputs`), declared at the end of `params`, where `net`'s rows of up to `keys`
+    keys read a value the served run decides (`reads_run`), else None."""
+    if not reads_run(net, keys):
+        return None
+    from verity_vllm.program.frontend.registration import RunInputs
+    return RunInputs.declare(params)
+
+
+def finish_run(run, params: tuple, B) -> tuple:
+    """The parameters once `run`'s record holds every field the forward read (`RunInputs.finish`), the Builder's too."""
+    if run is None:
+        return params
+    run.finish(final := list(params))
+    B.params = tuple(final)
+    return B.params
+
+
+def with_checks(model, out: Coll) -> tuple[Coll, dict | None]:
+    """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
+    verifier requires to be 1), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks)."""
+    from verity.ml.circuits.types import Tuple
+    checks = getattr(model, "checks", None)
+    if not checks:
+        return out, None
+    ret = Coll(Tuple(out.type, Array(len(checks), Value(1))), concat([out.refs, *[c.refs for c, _ in checks]]))
+    return ret, {"output": 1, "accept": 1, "of": [w for _, w in checks]}
+
+
 @dataclass(frozen=True)
 class _Stochastic:
     """The row's stochastic policy as the select reads it: the seed (and, for several requests, the `splits`) Inputs, the f32 bits of
@@ -186,16 +225,50 @@ class _Launch:
         except ValueError as e:
             raise Unexpressible(f"request step {self.step}: {e}") from None
 
-    def keys(self, own: list[int]) -> list[int]:
-        """Every query row's key count in the launch (`targets.launch_keys`), `own`'s without a batch."""
+    def keys(self, own: list[int], without: list[tuple[int, int]] = ()) -> list[int]:
+        """Every query row's key count in the launch (`targets.launch_keys`), `own`'s without a batch; `without`: sequences
+        (rows, start) of the step whose rows another kernel runs (`prefills`' dense-MHA prefills), left out."""
         from collections import Counter
         from verity_vllm.program.frontend import targets as TG
-        keys = TG.launch_keys(self.step, self.ctx)
-        if keys is None:
+        seqs = TG.launch_sequences(self.step, self.ctx)
+        if seqs is None:
             return list(own)
+        drop, keys = Counter((int(n), int(p)) for n, p in without), []
+        for n, p in seqs:
+            if drop[(n, p)]:
+                drop[(n, p)] -= 1
+            else:
+                keys += [p + i + 1 for i in range(n)]
         if Counter(own) - Counter(keys):
             raise Unexpressible(f"request step {self.step}: the launch batch's key counts {keys} do not hold this request's {own}")
         return keys
+
+    def prefills(self, own: tuple[int, int], threshold: int) -> list[tuple[int, int]]:
+        """The step's prefills, (rows, start) each, as vLLM's MLA metadata builder counts them: every sequence from the first of
+        more than `threshold` rows (`split_decodes_and_prefills`) in the order `reorder_batch_to_split_decodes_and_prefills` gives
+        the batch, the extends (start > 0) of more than `threshold` rows and then the first chunks (start 0).  So with such an extend
+        every first chunk is a prefill, and without one the first chunks of more than `threshold` rows are; a first chunk of at most
+        `threshold` rows beside a longer one is refused, as the persistent batch's order, which the batch does not record, decides
+        whether it is one.  `own`: this request's (rows, start), the step's one sequence without a batch."""
+        from verity_vllm.program.frontend import targets as TG
+        try:
+            seqs = TG.launch_sequences(self.step, self.ctx)
+        except ValueError as e:
+            raise Unexpressible(f"request step {self.step}: {e}") from None
+        seqs = [own] if seqs is None else [(int(n), int(p)) for n, p in seqs]
+        if own not in seqs:
+            raise Unexpressible(f"request step {self.step}: the launch batch's sequences {seqs} do not hold this request's {own} "
+                                f"(rows, start)")
+        extends = [s for s in seqs if s[1] > 0 and s[0] > threshold]
+        first = [s for s in seqs if s[1] == 0]
+        if extends:
+            return extends + first
+        short, long = [s for s in first if s[0] <= threshold], [s for s in first if s[0] > threshold]
+        if short and long:
+            raise Unexpressible(f"vocabulary cannot express: request step {self.step} schedules first chunks of {[n for n, _ in short]} "
+                                f"rows beside ones of {[n for n, _ in long]} rows, above the decode threshold {threshold}: whether vLLM's "
+                                f"metadata builder counts the short ones prefills follows the persistent batch's order")
+        return long
 
 
 def launch_batch(phi, LP: int, T: int) -> list | None:
@@ -211,6 +284,20 @@ def launch_batch(phi, LP: int, T: int) -> list | None:
         raise Unexpressible(f"vocabulary cannot express: the launch batch of request shape LP {LP}, T {T}: "
                             f"{'its requests are co-scheduled differently' if batch else 'no request of the workload has it'}")
     return batch
+
+
+def in_launch(model, batch: list | None, model_class: str, chunks: tuple[int, ...] = (), T: int = 0, note: str = "") -> None:
+    """`model`'s calls run in `batch` (`_Launch.with_batch`) where its request has one; `Unexpressible` for a decoder whose kernel
+    choices read its own rows only (`reads_launch`), or for prefill `chunks` that aren't one a step of `batch` before its T decodes."""
+    if batch is not None:
+        if not getattr(model, "reads_launch", False):
+            raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance{note}), whose kernel "
+                                f"choices the {model_class} decoder reads at its own rows")
+        model.launch = model.launch.with_batch(batch)
+    if chunks and (batch is None or len(batch) != len(chunks) + int(T)):
+        raise Unexpressible(f"vocabulary cannot express: a prefill in {len(chunks)} chunks " + (
+            f"at a launch batch of {len(batch)} steps, not one a chunk and one a decode ({len(chunks) + int(T)})" if batch is not None else
+            "without a launch batch (on a batch-invariant target a chunked prefill is the request wrapper's Program)"))
 
 
 def graph_capture_sizes(phi) -> tuple[int, ...]:

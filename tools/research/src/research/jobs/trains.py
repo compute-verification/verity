@@ -23,7 +23,8 @@ A train with `land: false` stops at `would-land`: the shadow run beside the RC's
 Lean records.  GitHub's Merges API runs no custom merge driver, so a merge step whose two sides both changed a `lean-audit.json`
 is prepared first: the service computes the record merge with `tools/verity/lean/merge.py`'s `merge()`, writes the result onto
 both sides (one small commit on the train, one on top of the PR's head, through the Git Data API), and the Merges API then sees
-identical records and merges every other file as usual.  `merge()` never refuses, since lock files never conflict on merge:
+identical records and merges every other file as usual.  `merge()` never refuses (only the driver around it does, on the
+guards merge.py's docstring names):
 where the sides disagree on an entry it keeps the side that changed it over the side that removed it, and theirs' (the PR's)
 where both changed it, and the train names each such entry (`taken`).  The merged record is a candidate, which the merge
 check's Lean audit judges as it judges any record.  `merge_record` here is a stand-in for `merge()` on records like the train
