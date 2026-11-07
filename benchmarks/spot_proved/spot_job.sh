@@ -4,6 +4,8 @@
 #   ARM=RECORD_ARM_DIR LOAD=NAME [OPEN=dense:1,moe:1] [PER_TYPE=8] [SMALL=1,31] [BIG=256,384] [STEPS=s,...] [VENV=...]
 #     bash "$RESEARCH_RUN_DIR/inputs/spot_job.sh"
 #   ARM=... LOAD=... CAPTURE=DIR STEPS=s,... bash .../spot_job.sh   # only stage an earlier run's capture again (CPU only)
+# The engine's environment is the served one's: ENGINE_ENV=FILE (KEY=VALUE lines, a server's engine_env.txt) is exported,
+# and FLASHINFER=1 (the default, as production) puts $CUDA_HOME/bin on PATH for FlashInfer's JIT; OUT/engine_env.txt.
 # 1. The first-stage coin: one step of the window's with SMALL tokens (the FP8 linears' FlashInfer branch, the fused MNNVL
 #    all-reduce + norm) and one with BIG (DeepGEMM and its group quants, the multimem all-reduce, the fused add + RMSNorm at
 #    its 256-thread block, FA3 still split), each uniform over those steps, drawn here before the replay starts
@@ -39,6 +41,18 @@ free=$(df -BG --output=avail "$CAP" | tail -1 | tr -dc 0-9)
 [ "${free:-0}" -ge 40 ] || { echo "spot: ${free}G free under $CAP, want 40G"; exit 2; }
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM
 export HF_HOME=${HF_HOME:-/workspace/cp/hf} HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 TOKENIZERS_PARALLELISM=false PYTHONHASHSEED=0
+# the served engine's environment: replay.py takes its engine arguments from the trace, and its environment from here
+if [ -n "${ENGINE_ENV:-}" ]; then
+  while IFS='=' read -r k v; do
+    [[ $k =~ ^[A-Z_][A-Z0-9_]*$ ]] && [ "$k" != CUDA_VISIBLE_DEVICES ] && [ "$v" != unset ] && export "$k=$v"
+  done < "$ENGINE_ENV"
+fi
+[ "${FLASHINFER:-1}" = 1 ] && export PATH="${CUDA_HOME:-/usr/local/cuda}/bin:$PATH"
+{ for k in VLLM_USE_DEEP_GEMM VLLM_USE_FLASHINFER_SAMPLER CUDA_HOME CUDA_VISIBLE_DEVICES; do echo "$k=${!k-unset}"; done
+  echo "nvcc=$(command -v nvcc || echo none)"
+  "$PY" -c 'import importlib.util as u; print("has_flashinfer=" + str(u.find_spec("flashinfer") is not None))'
+} > "$OUT/engine_env.txt"
+cat "$OUT/engine_env.txt"
 echo "spot: tree $(git -C "$TREE" rev-parse HEAD 2>/dev/null) venv $VENV checkpoint $CK capture $CAP ($free G free)"
 
 rc=0
