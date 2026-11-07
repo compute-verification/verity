@@ -473,4 +473,11 @@ theorem push_zero_data (s : String) : (s.toUTF8.push 0).data.toList = Hash.cstr 
 theorem be64_data (x : ℕ) : (Flock.HmRow.be64 x).data.toList = Hash.be 8 x := by
   simp [Flock.HmRow.be64, Hash.be]
 
+theorem length_padTo {n : ℕ} {m : List UInt8} (h : m.length ≤ n) : (Hash.padTo n m).length = n := by
+  simp only [Hash.padTo, List.length_append, List.length_replicate]
+  omega
+
+theorem size_of_data {b : ByteArray} {l : List UInt8} (h : b.data.toList = l) : b.size = l.length := by
+  rw [← h, Array.length_toList, ByteArray.size_data]
+
 end Accounting.ReadUnit.Gates

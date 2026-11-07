@@ -179,13 +179,6 @@ theorem sound_segment_mid {G : Hash.Msg → Verity.Digest} (hG : IsSha512 G) (m 
     refine ⟨o1, o2, ?_⟩
     rw [hash_mid hG hpre, o3, hcv, length_packBits, length_evs, hbl]
 
-theorem length_padTo {n : ℕ} {m : List UInt8} (h : m.length ≤ n) : (Hash.padTo n m).length = n := by
-  simp only [Hash.padTo, List.length_append, List.length_replicate]
-  omega
-
-theorem size_of_data {b : ByteArray} {l : List UInt8} (h : b.data.toList = l) : b.size = l.length := by
-  rw [← h, Array.length_toList, ByteArray.size_data]
-
 theorem be32_1024 : (Flock.be32 1024).data.toList = Hash.be 4 1024 := by decide +kernel
 
 /-- The code's `Q(l)` is `Hash.RowSeg.outerPrefix l`. -/
