@@ -7,7 +7,7 @@ public import Proofs.Properties.Verity.Sampled.OpenEmpty
 
 An opening's node writes the live coins' release `bits u` into the tape as a round of its class at `bits u`, picked by
 `pickIn` (`writeOpening`), and `openGap` is how far the written round falls short of uniform over the rounds the node
-flips among (`shortfall`). This file bounds it at one leaf, averaged over the device's draw of the leaf's round, beside
+flips among (`shortfall`). This file bounds it at one leaf, averaged over the device's sample of the leaf's round, beside
 `openEmpty`'s bound.
 
 * **One class** (`prCoin_pickIn_ge`, `deficit_le`, `shortfall_pickIn_le`): `pickIn` picks the class member at the coin's
@@ -15,17 +15,17 @@ flips among (`shortfall`). This file bounds it at one leaf, averaged over the de
   coins' probability of an over-weighted release (one the class releases more often than the live coins do), is at
   most the class's probability of an over-weighted release, plus the probability that the live bits are an independent
   member's release.
-* **Over the leaf's draw** (`avg_fiber`, `Overweight`, `avg_shortfall_fiber_le`): averaged over a uniform draw `d₀`, a
-  class with the law of releases of `d₀`'s fiber of the leaf's hash gives the bound with the fibers' over-weighted
+* **Over the leaf's sample** (`avg_fiber`, `Overweight`, `avg_shortfall_fiber_le`): averaged over a uniform sample `d₀`, a
+  class with the sampling design of releases of `d₀`'s fiber of the leaf's hash gives the bound with the fibers' over-weighted
   releases.
 * **At an hm96 leaf** (`release_swap_le`, `avg_shortfall_leaf_le`, `prCoin_diag`): at a leaf `H(x(ω) + M·y, c(y))`, T1
-  swaps the draw's own release for the live bits within `2·δ₁` in an event that reads the leaf and the release, so the
+  swaps the sample's own release for the live bits within `2·δ₁` in an event that reads the leaf and the release, so the
   over-weighted terms cancel within `2·δ₁`. What remains is the collision term, the probability that two independent
-  live coins' bits agree: the shortfall averaged over the draw is at most `2·δ₁` plus it.
-* **At an opening's node** (`OpeningAt.avg_openable_eq`, `openGap_avg_le`): where every draw `d₀` of one leaf describes
-  the node, the node's rounds have the law of `d₀`'s fiber, so the bound holds for `openGap`.
+  live coins' bits agree: the shortfall averaged over the sample is at most `2·δ₁` plus it.
+* **At an opening's node** (`OpeningAt.avg_openable_eq`, `openGap_avg_le`): where every sample `d₀` of one leaf describes
+  the node, the node's rounds have the sampling design of `d₀`'s fiber, so the bound holds for `openGap`.
 * **At a round's release** (`roundBits_injective`, `prCoin_roundBits_eq`, `openGap_avg_le_round`): the bits of a
-  round's `m` live challenges collide with probability `2^-(128·m)`, so `openGap` averaged over the draw is at most
+  round's `m` live challenges collide with probability `2^-(128·m)`, so `openGap` averaged over the sample is at most
   `2·δ₁ + 2^-(128·m)`.
 -/
 
@@ -272,7 +272,7 @@ theorem shortfall_pickIn_le {C Q R : Type} [Fintype C] [Nonempty C] [Fintype Q] 
 theorem avg_congr_inst {C : Type} (i₁ i₂ : Fintype C) (f : C → ℝ≥0∞) : @avg C i₁ f = @avg C i₂ f := by
   rw [Subsingleton.elim i₁ i₂]
 
-/-! ## Over the leaf's draw -/
+/-! ## Over the leaf's sample -/
 
 /-- **Resampling within the fiber**: a uniform `d₀`, then a uniform `d` with `d₀`'s value `L d₀`, is a uniform `d`. -/
 theorem avg_fiber {D Dg : Type} [Fintype D] [DecidableEq Dg] (L : D → Dg) (g : Dg → D → ℝ≥0∞) :
@@ -314,10 +314,10 @@ def Overweight {D Dg Q R : Type} [Fintype D] [DecidableEq Dg] [Fintype Q] (L : D
   prCoin (fun u : Q => bits u = r) < prCoin fun d : {d // L d = ℓ} => rel d.1 = r
 
 open Classical in
-/-- **The written coin's shortfall, averaged over the draw**: where the class at each draw `d₀` has the law of releases
-of `d₀`'s fiber of `L` (`hG`), its shortfall `G d₀` averaged over the draw, plus the probability that the live bits are
-over-weighted at the draw's fiber, is at most the probability that the draw's own release is, plus the probability that
-the live bits are the draw's release (`shortfall_pickIn_le` in each fiber, `avg_fiber`). -/
+/-- **The written coin's shortfall, averaged over the sample**: where the class at each sample `d₀` has the sampling design of releases
+of `d₀`'s fiber of `L` (`hG`), its shortfall `G d₀` averaged over the sample, plus the probability that the live bits are
+over-weighted at the sample's fiber, is at most the probability that the sample's own release is, plus the probability that
+the live bits are the sample's release (`shortfall_pickIn_le` in each fiber, `avg_fiber`). -/
 theorem avg_shortfall_fiber_le {D Dg Q R : Type} [Fintype D] [DecidableEq Dg] [Fintype Q] [Nonempty Q]
     [DecidableEq R] (L : D → Dg) (rel : D → R) (bits : Q → R) (G : D → ℝ≥0∞)
     (hG : ∀ d₀, ∃ (C : Type) (_ : Fintype C) (_ : Nonempty C) (rel' : C → R),
@@ -352,9 +352,9 @@ theorem avg_shortfall_fiber_le {D Dg Q R : Type} [Fintype D] [DecidableEq Dg] [F
 
 /-! ## At an hm96 leaf -/
 
-/-- **An event of the leaf and the release swaps the draw's release for the live bits within `2·δ₁`** at one hm96
+/-- **An event of the leaf and the release swaps the sample's release for the live bits within `2·δ₁`** at one hm96
 leaf `H(x(ω) + M·y, c(y))`: T1 makes the leaf ideal, where the event no longer reads the coins `ω` and the release
-`P ω` may be swapped for the live bits, whose law it has (`hlaw`); T1 on the complement makes the leaf real again. -/
+`P ω` may be swapped for the live bits, whose sampling design it has (`hlaw`); T1 on the complement makes the leaf real again. -/
 theorem release_swap_le {Ω Q Salt B C D R : Type} [Fintype Ω] [Nonempty Ω] [Fintype Q] [Nonempty Q] [Fintype Salt]
     [Nonempty Salt] [AddCommGroup B] [Fintype B] (My : Salt → B) (c : Salt → C) {δ₁ : ℝ≥0∞}
     (hT1 : Claims.Hm96Hiding My c δ₁) (H : B × C → D) (x : Ω → B) (P : Ω → R) (bits : Q → R)
@@ -399,10 +399,10 @@ theorem release_swap_le {Ω Q Salt B C D R : Type} [Fintype Ω] [Nonempty Ω] [F
         gcongr
     _ = _ := by rw [add_assoc, ← two_mul]
 
-/-- **The written coin's shortfall at an hm96 leaf is at most `2·δ₁` plus a collision term, averaged over the draw**:
+/-- **The written coin's shortfall at an hm96 leaf is at most `2·δ₁` plus a collision term, averaged over the sample**:
 the leaf `L(ω, y) = H(x(ω) + M·y, c(y))` (`hL`) of uniform coins `ω` and salt `y` releases `P ω` (`hrel`), and live
-coins `u` drawn independently have bits `bits u` with the release's law (`hlaw`). Where the class at each draw `d₀` has
-the law of releases of `d₀`'s fiber (`hG`), its shortfall `G d₀` averaged over the draw is at most `2·δ₁` plus the
+coins `u` sampled independently have bits `bits u` with the release's law (`hlaw`). Where the class at each sample `d₀` has
+the sampling design of releases of `d₀`'s fiber (`hG`), its shortfall `G d₀` averaged over the sample is at most `2·δ₁` plus the
 probability that two independent live coins' bits agree (`avg_shortfall_fiber_le`, with `release_swap_le` cancelling
 the over-weighted terms). -/
 theorem avg_shortfall_leaf_le {Ω Q Salt B C D R : Type} [Fintype Ω] [Nonempty Ω] [Fintype Q] [Nonempty Q]
@@ -494,9 +494,9 @@ namespace OpeningAt
 
 variable {β : Type} {E : List Release → Game β} {g' : Game β}
 
-/-- **A node's rounds have the law of its leaf's fiber**: where the play ends in a close that records its log and `o`
-describes the node at the draw `d₀`'s leaf, the releases of the rounds any description `o₀` flips among have the law of
-the releases of the draws with `d₀`'s leaf (`opened_eq`). -/
+/-- **A node's rounds have the sampling design of its leaf's fiber**: where the play ends in a close that records its log and `o`
+describes the node at the sample `d₀`'s leaf, the releases of the rounds any description `o₀` flips among have the sampling design of
+the releases of the samples with `d₀`'s leaf (`opened_eq`). -/
 theorem avg_openable_eq {lg : β → List Release} (hE : RecordsLog lg E) (o₀ o : OpeningAt E g') {ν key : ByteArray}
     {s r n block : ℕ} {d₀ : TreeDraw block} (h : o.AtLeaf ν key s r n d₀) (φ : List Bool → ℝ≥0∞) :
     avg (fun d : o₀.Openable => φ (TreeDraw.opened d.1 o₀.n)) =
@@ -515,9 +515,9 @@ theorem avg_openable_eq {lg : β → List Release} (hE : RecordsLog lg E) (o₀ 
 end OpeningAt
 
 /-- **An opening's gap is at most `2·δ₁` plus the live releases' collision probability, averaged over the device's
-draw** at one leaf. Where the play ends in a close that records its log and, at each draw `d₀` of stream `s`'s round
+sample** at one leaf. Where the play ends in a close that records its log and, at each sample `d₀` of stream `s`'s round
 `r`, the node `g' d₀` has a description at `d₀`'s leaf (`ho`), the written round's shortfall at live coins whose bits
-`bits u` have the law of a draw's first `n` coins (`hlaw`), averaged over the draw, is at most `2·δ₁` plus the
+`bits u` have the sampling design of a sample's first `n` coins (`hlaw`), averaged over the sample, is at most `2·δ₁` plus the
 probability that two independent live coins' bits agree (`avg_shortfall_leaf_le`). -/
 theorem openGap_avg_le {β : Type} {lg : β → List Release} {E : List Release → Game β} (hE : RecordsLog lg E)
     (ν key : ByteArray) (s r n : ℕ) {block : ℕ} (g' : TreeDraw block → Game β)
@@ -567,7 +567,7 @@ theorem prCoin_roundBits_eq {m : ℕ} :
         rw [Fintype.card_fun, Fintype.card_congr e, Fintype.card_fun, Fintype.card_fin, Fintype.card_fin,
           Fintype.card_bool, ← pow_mul, Nat.cast_pow, Nat.cast_ofNat]
 
-/-- **An opening's gap at a round's release is at most `2·δ₁ + 2^-(128·m)`, averaged over the device's draw**
+/-- **An opening's gap at a round's release is at most `2·δ₁ + 2^-(128·m)`, averaged over the device's sample**
 (`openGap_avg_le` at `avg_opened_roundBits`, with `prCoin_roundBits_eq`'s collision): the release is a round's `m`
 live challenges as bits, and the opening's count `m` fits in the block. -/
 theorem openGap_avg_le_round {β : Type} {lg : β → List Release} {E : List Release → Game β}

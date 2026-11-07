@@ -38,16 +38,16 @@ import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 
 /-!
-# A leaf's proof layer through its 33 linked C-Flock sessions (option A)
+# A leaf's proof layer through its 33 linked Flock sessions (option A)
 
-Under option A a drawn 32 × 32 H1 leaf is proved as 33 statements (`h1zy`, SERVE-REG): its 32 lanes
+Under option A a sampled 32 × 32 H1 leaf is proved as 33 statements (`h1zy`, SERVE-REG): its 32 lanes
 `PouwH1LaneZy_v1{TILE}`, lane `l` reading its 4 A rows by row slot, its 8 B rows by column slot, the leaf's admit bits,
 its whole z/y record, row `l` of the leaf's partials, the salt, position and roots, and the index `l`, and returning
 `ok`; and their combine `PouwH1Combine_v1{TILE}`, reading the 32 partials rows and the leaf's receipt and returning `ok`.
 
 The leaf is one unit of the declared circuit: the 33 statements' `ok` words are that unit's
 `check` words, and its partials are proof-layer values, no values of the declared circuit. They are committed once,
-after the draw, under hiding leaves, read only by the unit's own 33 statements, which all open that one commitment,
+after the sample, under hiding leaves, read only by the unit's own 33 statements, which all open that one commitment,
 and they are what the unit's checks are proved through, not inputs it is credited on. So the unit's served checks
 (`UnitServed`) read its A and B rows, its record and its receipt, and no partials row.
 
@@ -81,8 +81,8 @@ This file states, on words, what the 33 statements check and what one unit's ser
   known-content check (`known x w i k`, the session's registered file's known content), its complete check
   (`Registered.checkComplete`, run whenever `--registered` is given) and its check that each known port, and each port the file marks
   `read_in_full` (`full x w i k`), is a row of its words whose every bit the circuit reads or returns
-  (`KnownRead.check`) included, and the leaf verifier's checks of its registered file and of its session's draw
-  (`pouw-leaf-own`: `PouwWindow.Lanes.checkOwn`, and `PouwWindow.Lanes.checkFull`, every unit drawn) pass, opens the
+  (`KnownRead.check`) included, and the leaf verifier's checks of its registered file and of its session's sample
+  (`pouw-leaf-own`: `PouwWindow.Lanes.checkOwn`, and `PouwWindow.Lanes.checkFull`, every unit sampled) pass, opens the
   leaf's values committed before σ_w (`Leaf`: its A and B rows with their scales and its z/y record), and its relation is
   `UnitServed` at the path's public inputs and receipt, which are no leaves of the round (`ProofLayer`), or `LeafColl`
   or `LeafKnownColl` at the proof's sessions.
@@ -246,9 +246,9 @@ its known-read check (`KnownRead.check`, which it runs on every statement at `F`
 (`KnownRead.fullRows`): each such port is a `sha512/row/v2` row of those words, and a computed row of the unit reads each
 bit of such an input row, a copy returns each bit of such an output row) and the leaf verifier's check of its file
 (`PouwWindow.Lanes.checkOwn`, which `pouw-leaf-own` runs: the file holds the ports `want x w i k`, the statement's data
-ports at the accepted registration's and produced record's roots) and of its session's draw
-(`PouwWindow.Lanes.checkFull`, which `pouw-leaf-own` runs on the session's record: the draw is `subset` of every unit of
-a non-empty population, the verifier's draw policy for a leaf's statements) and of its file's reads
+ports at the accepted registration's and produced record's roots) and of its session's sample
+(`PouwWindow.Lanes.checkFull`, which `pouw-leaf-own` runs on the session's record: the sample is `subset` of every unit of
+a non-empty population, the verifier's sample policy for a leaf's statements) and of its file's reads
 (`PouwWindow.Lanes.checkOneRead`, which `pouw-leaf-own` runs too: every port of the file has one read) and of the
 leaf's tile (`PouwWindow.Lanes.Tile.check` at 32 × 32 and `K`, which `pouw-leaf-own` runs first, in `lane?` and
 `combine?`: among others `32 ∣ K` and `K < 2^17`, where the lanes' s8 accumulator binds),

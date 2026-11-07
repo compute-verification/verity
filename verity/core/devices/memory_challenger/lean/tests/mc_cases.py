@@ -1,5 +1,5 @@
 """The Python side of the memory challenger's difftests: `memory_challenger.py` (the reference, unchanged) behind the Lean
-port's JSON formats, and the sessions the tests draw.
+port's JSON formats, and the sessions the tests sample.
 
 The decoders mirror `MemoryChallenger.Protocol`'s: byte strings lowercase hex, integers naturals, and where the protocol
 decodes its inputs (`params`, `commitment`, `evidence`) each input exactly the canonical JSON of what it decodes to. Past
@@ -279,8 +279,8 @@ class Session:
 
 @st.composite
 def sessions(draw, signer: AtLeaf | None = None) -> Session:
-    """An honest run of `MemoryChallenger` (some rounds late, some answers tampered), signed by `signer` or a drawn test
-    signer at a drawn leaf."""
+    """An honest run of `MemoryChallenger` (some rounds late, some answers tampered), signed by `signer` or a sampled test
+    signer at a sampled leaf."""
     if signer is None:
         height = draw(st.integers(1, 2))
         signer = test_signer(draw(st.sampled_from(SECRETS)), height, draw(st.integers(0, 2 ** height - 1)))
@@ -355,7 +355,7 @@ def _scheme(s: Session, x: int) -> Session:
 def _printable_scheme(s: Session, x: int) -> Session:
     return _unsigned(s, scheme=PRINTABLE_SCHEMES[x % len(PRINTABLE_SCHEMES)])
 
-#: One adversarial edit of a session, `(session, x) -> session`, `x` a drawn natural.
+#: One adversarial edit of a session, `(session, x) -> session`, `x` a sampled natural.
 MUTATIONS = [
     lambda s, x: _signature(s, _flip(s.signed.signature, x)),
     lambda s, x: _signature(s, s.signed.signature[:-1 - x % 3]),

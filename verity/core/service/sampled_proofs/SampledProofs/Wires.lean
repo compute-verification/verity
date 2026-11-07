@@ -260,7 +260,7 @@ An instance is `{"templates", "cuts", "wires", "queries"}`:
 * `wires`: V3a's wire records, `{reader, port, writer, out, at, radix, base, step}` and optionally `cut: [c0, C]`: strings,
   `at` a natural, `radix` at least one natural each at least 1, `base` an integer, `step` one integer a digit, and `C` at
   least 1;
-* `queries`: reader rows `[tid, unit, port, row]` to look up (a drawn unit's).
+* `queries`: reader rows `[tid, unit, port, row]` to look up (a sampled proof block's).
 
 Anything else is refused as malformed. The output is `{"ok": false, "code", "wire"}` (`wire` null but for a wire's own
 refusal) or `{"ok": true, "wired_rows", "wired_bits", "spans", "lookups"}`: per wire its least and greatest writer, and per

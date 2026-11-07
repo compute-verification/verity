@@ -1,8 +1,8 @@
 """A recursive session's inner coins held to the challenger's release log: `SampledProofs.Challenger.innerTreesReason`
-(`ChallengerInnerTrees.lean`, the verifier of record, which `VStar.Recursive.checkBlobs` reads) against its Python mirror
+(`ChallengerInnerTrees.lean`, the verifier, which `VStar.Recursive.checkBlobs` reads) against its Python mirror
 `verity_flock.rec_live.tree_held_reason`, through `sampled-proofs-difftest`'s piece `challenger_inner_trees`.
 
-The drawn cases are inner sessions as rec_live's coin server (`rec_live.CoinServer`) runs them on coin trees a
+The sampled cases are inner sessions as rec_live's live-coin part (`rec_live.CoinServer`) runs them on coin trees a
 challenger (`challenger.LiveChallenger`) samples and opens, their release log lines among the challenger's roots and
 releases, one tree a session; then one mutation each (`INNER_TREES_NAMES`): a tree no line logged, or another than the one
 logged under its root; a link root, table or point edited; a round's coins, entry, number or stream edited, so it is a
@@ -11,7 +11,7 @@ doesn't read; a tree the log shows sampled and no session uses, or one two sessi
 another's tree; each malformed form of the record, the log and the request.
 
 `test_a_served_inner_session_is_held_and_each_bent_copy_refused` holds the two to a served inner session (`SERVED`, as
-`rec_inner.py tree-held` reads one: the challenger's release log, the session's ``coin_tree`` and its coin server's
+`rec_inner.py tree-held` reads one: the challenger's release log, the session's ``coin_tree`` and its live-coin part's
 ``public.json``, gzipped), accepted, and to that session with a round moved, a second tree and an unread opening, each refused.
 """
 
@@ -70,10 +70,10 @@ class _Source:
 
 
 class Inner:
-    """An inner session as rec_live's coin server runs it on a coin tree challenger `ch` samples and opens: `lines` the
-    tree's release log lines in order, `tree` the session record's ``coin_tree`` and `public` the coin server's record as
+    """An inner session as rec_live's live-coin part runs it on a coin tree challenger `ch` samples and opens: `lines` the
+    tree's release log lines in order, `tree` the session record's ``coin_tree`` and `public` the challenger's live-coin part's record as
     ``public.json`` holds it (`rec_live.record_bytes`). Its ``Hello`` asks for some link points, its ``Commit`` gives each
-    table's salted top, then each table's two streams some rounds in a random order across them, each of drawn tops,
+    table's salted top, then each table's two streams some rounds in a random order across them, each of sampled tops,
     commits, level-0 copies and coin count."""
 
     def __init__(self, rng: random.Random, ch: Ch.LiveChallenger) -> None:
@@ -123,7 +123,7 @@ INNER_TREES_NAMES = ["honest", "no-tree", "coin-tree", "link-root", "link-table"
 
 
 def _record_form(rng: random.Random, p: dict) -> Any:
-    """`p`, a coin server's record, in a form rec_live never writes."""
+    """`p`, a live-coin part's record, in a form rec_live never writes."""
     link, rounds = p["link"], p["rounds"]
     t = rng.choice(sorted(link["roots"]))
     what = rng.choice(["public", "link", "points", "point", "roots", "roots-value", "root", "rounds", "round", "stream",
@@ -297,7 +297,7 @@ def _clean(kind: str, text: str) -> bool:
 
 
 def test_the_inner_trees_piece_agrees(pieces):
-    """The piece agrees on drawn cases and on every mutation over a few seeds, the honest ones accepted (no reason, no
+    """The piece agrees on sampled cases and on every mutation over a few seeds, the honest ones accepted (no reason, no
     refusal) and each mutation refused."""
     stats = D.run(INNER_TREES, examples=200, server=pieces)
     outcomes = Counter()
