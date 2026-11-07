@@ -69,7 +69,7 @@ class Net:
             OG = int(C["O_GROUPS"]) // self.world
         except (KeyError, ValueError, TypeError) as e:
             raise Unexpressible(f"config.json: {e}") from None
-        self.C, self.tp, self.NL = C, phi.target_profile(), C["NL"]
+        self.C, self.tp, self.NL, self.capture_sizes = C, phi.target_profile(), C["NL"], ()
         self.G = FLASHMLA_GEOMETRY.get((D, DR))
         facts = []
         if self.tp.compute_capability != (9, 0):

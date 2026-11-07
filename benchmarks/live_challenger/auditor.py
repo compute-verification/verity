@@ -57,7 +57,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   open's answer also carries the session's coin commitment root (`commitment`, from the record serve.py signs before it
   listens; `status` gives it too), so the serving side checks the hello's commitment against it before its first coin.
   Before the first reserve the ledger held one-step v2 opens (`--commit`), which still verify; none follows a reserve.
-- **A withheld session** (`reserve --withhold`, a sampled-proofs window's: its draw reads only such a session's coins,
+- **A withheld session** (`reserve --withhold`, a sampled-proofs window's: its sample reads only such a session's coins,
   `challenger.withheld_on`) keeps its coin commitment's root on this host until the prover's commitments are in. Its
   reserve and open bodies carry `withheld: true`, and serve.py serves it `--withhold`, so it answers the hello with the
   layout alone and releases the root, salts and paths only at the client's close. Until the session's `end` entry the
@@ -239,7 +239,7 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   loopback, where the prover's `load_relay.py sink --streams N --weights W --witness S` listens, and `warden_serve.py
   rehearse --load-store` relays the store over them: each value's bytes held to its digest and committed as they
   cross (`load_relay.relay_load`), every row's salts sent on with them. The witness (4.85 GB at H200) is the sink's
-  `--witness` file on the prover's host and nowhere here: this host never writes a salt. The prover then starts its
+  `--witness` file on the developer's host and nowhere here: this host never writes a salt. The developer then starts its
   endpoint on the weights the sink wrote, and the warden's one signer (its publisher process) signs the load's 733
   heads in the serving session before its first window, so one key and one session carry the load and the windows;
   `out/` publishes `load.json` (the load's registrations, which the block record pins) and `load-relay.json` (the
@@ -259,8 +259,8 @@ tree, one session a window, each recorded in a signed append-only ledger before 
   `warden_minutes` counts. A warden rehearsal's key signs `WARDEN_WINDOW_LEAVES` one-time signatures a link-window,
   after a load's heads, and its signer refuses every window past its 2^H: so a request whose `warden_windows` its
   height can't sign is refused, with the least height that can (`warden_height`; the gate's most requests at the
-  scan's schedule take 13). The rehearsal draws each serve's session itself (32 fresh random bytes, `--session`), as
-  the challenger it plays: the challenger here draws none, since a rehearsal is none of its windows.
+  scan's schedule take 13). The rehearsal samples each serve's session itself (32 fresh random bytes, `--session`), as
+  the challenger it plays: the challenger here samples none, since a rehearsal is none of its windows.
 
 Every signature of the key (`reserve`'s, `admit`'s, a period's, a declaration's, `end`'s, and `serve.py`'s record and
 close, `--sign-lock`) is taken under `sign.lock`, each opening the key's leaf state only to sign, so `lms.LeafState`,
@@ -309,7 +309,7 @@ from verity.ml.crypto import lms  # noqa: E402
 ZERO = "0" * 128
 PORTS = range(7811, 7900)
 MINUTES = (1, 720)
-#: the most a period-open's draw K may be (PoUW's `credit.MAX_K`)
+#: the most a period-open's sample K may be (PoUW's `credit.MAX_K`)
 MAX_DRAW_K = 1 << 24
 ROOT = re.compile(r"[0-9a-f]{128}")
 PINNED = re.compile(r"[0-9a-f]{40}")
@@ -587,7 +587,7 @@ def cap_of(v: Any) -> int:
 
 
 def draw_k_of(s: str) -> int:
-    """A period-open's draw K (`--draw-k`, written as `draw_k`): a positive integer at most 2^24, or Refused."""
+    """A period-open's sample K (`--draw-k`, written as `draw_k`): a positive integer at most 2^24, or Refused."""
     if not re.fullmatch(r"[1-9][0-9]{0,7}", s) or int(s) > MAX_DRAW_K:
         raise Refused(f"--draw-k {s!r}: the draw K the proof system selects each window's units with, 1 to 2^24")
     return int(s)

@@ -5,7 +5,7 @@ public import PouwWindow.Public
 public import Lean.Data.Json.Basic
 
 /-!
-# The window's values as JSON
+# The execution phase's values as JSON
 
 A number is an integer only when written without a fraction or exponent, as Python's `json` writes an `int`. The items
 are written as Python writes them: `Work` as its dataclass fields, `Work.to_json`, the `sampling` item with `str(Fraction)`.

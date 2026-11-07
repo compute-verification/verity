@@ -1,12 +1,12 @@
 """`drawn` (``benchmarks/pouw/h1_prove/drawn.py``'s method) on a window serve-openai's H1 arm served over J10-R units at one K (the pouw
 setting ``unit`` j10r, over a stand-in tile with J10-R's signature, `StandInJ10R`, or under `REAL` J10-R's own), on a
-gate session whose period opened its draw K: ``stage`` rebuilds every value a drawn call's statement reads from the
+gate session whose period opened its sample K: ``stage`` rebuilds every value a sampled call's statement reads from the
 prover's state and the served weights at the roots the window registered, stages the call on the circuit file
 `pouw_h1_circuits` built for K, and ``statements`` and ``check`` hand core's credit statements its ``proved`` accepts (`credit._verified`, then
 `credit._proved`), here with a stand-in ``flock-verify`` that accepts a session only when its proof binds every file
 credit hands it (`test_pouw_credit_statements.FAKE`'s). A prover state that is not what was served, and b/<K> under
 another key, are refused before anything is staged. A window served over v1's tile unit at a K committed in the lanes
-form (`pouw_h1_circuits --lanes`) has each drawn unit staged as its lanes and combine, which credit's lanes form
+form (`pouw_h1_circuits --lanes`) has each sampled proof block staged as its lanes and combine, which credit's lanes form
 accepts (`lanes_served`)."""
 from __future__ import annotations
 
@@ -127,7 +127,7 @@ def _with_receipts(commit):
 
 
 #: VERITY_VLLM_H1_DRAWN_J10R=1: the window served over J10-R's own tile unit (`served.unit_of` ``j10r``), so ``--recompose``
-#: holds its lowered outputs to the word reference drawn stages without composing (`drawn.unit_outputs`); run remotely
+#: holds its lowered outputs to the word reference sampled stages without composing (`drawn.unit_outputs`); run remotely
 REAL = os.environ.get("VERITY_VLLM_H1_DRAWN_J10R") == "1"
 WKEY = bytes(range(32))
 FAKE = f"""#!{sys.executable}
@@ -153,9 +153,9 @@ for s in sessions:
 
 @pytest.fixture
 def served(tmp_path, monkeypatch):
-    """One window served over the stand-in J10-R tile at K on a gate session of period p1 (draw K 2), with a prover dir
+    """One window served over the stand-in J10-R tile at K on a gate session of period p1 (sample K 2), with a prover dir
     and b/<K> under `WKEY`; its K's circuit file built by `pouw_h1_circuits` (``--strata K``); the served weights as
-    drawn's ``--weights``."""
+    sampled's ``--weights``."""
     if not REAL:
         j10r = _unit(defn=StandInJ10R)
         monkeypatch.setattr(SV, "unit_of", lambda name: j10r if name == "j10r" else None)
@@ -181,7 +181,7 @@ def served(tmp_path, monkeypatch):
 
 
 def _inputs(arm, tmp_path: Path) -> None:
-    """drawn's inputs beside the serve dir: the served weights (``--weights``), `WKEY` and the stand-in ``flock-verify``."""
+    """sampled's inputs beside the serve dir: the served weights (``--weights``), `WKEY` and the stand-in ``flock-verify``."""
     w = {}
     for i, layer in enumerate(arm.layers):
         w[f"w{i}"], w[f"s{i}"] = layer.weight.numpy(), layer.weight_scale.reshape(-1).numpy()
@@ -195,7 +195,7 @@ def _inputs(arm, tmp_path: Path) -> None:
 @pytest.fixture
 def lanes_served(tmp_path, monkeypatch):
     """One window served over v1's tile unit at K = `LK` with each call's zy receipts (`_with_receipts`) on a gate session
-    of period p1 (draw K 2), with a prover dir and b/<K> under `WKEY`; K committed in the lanes form by
+    of period p1 (sample K 2), with a prover dir and b/<K> under `WKEY`; K committed in the lanes form by
     `pouw_h1_circuits` (``--lanes K``) on the stand-in leaf statements (`_stand_in_leaf`)."""
     monkeypatch.setattr(SV.Served, "commit", _with_receipts(SV.Served.commit))
     monkeypatch.setattr(PC, "rebuilt", functools.cache(PC.rebuilt))
@@ -229,7 +229,7 @@ def _check(DR, d, tmp, st, monkeypatch):
 
 
 def _session(x: dict, program: bytes, part: dict, reg: bytes, openings: dict | None = None) -> None:
-    """Staged statement `x` proved as `fake`'s verifier accepts: one session drawing all its instances, its proof bound to
+    """Staged statement `x` proved as `fake`'s verifier accepts: one session sampling all its instances, its proof bound to
     the files credit hands the verifier (its circuit file, its public file, the Program, its partition and the
     ``--registered`` file credit builds), reporting `openings` as the rows it opened."""
     c = Path(x["dir"])
@@ -274,7 +274,7 @@ def _prove_leaves(plan: dict, win: dict) -> None:
 
 def _verified(monkeypatch):
     """`drawn.check`'s verifier as ``benchmarks/pouw/h1_prove/drawn.py`` binds it: `credit._verified` with the Lean
-    verifier at ``--lean`` under the window's draw, then `credit._proved`."""
+    verifier at ``--lean`` under the window's sample, then `credit._proved`."""
     def verified(statements, files, win, units, lean):
         monkeypatch.setattr(PF, "executable", lambda: lean)
         proofs, why = CR._verified(statements, files, win["raw"], win["layout"], win["entries"], win["root"], units,
@@ -354,8 +354,8 @@ def test_a_prover_state_or_weights_key_other_than_the_served_ones_is_refused(ser
 @pytest.mark.slow
 def test_a_lanes_form_ks_drawn_units_are_staged_as_their_lanes_and_combine_and_credit_accepts_them(lanes_served,
                                                                                                    monkeypatch, capsys):
-    """Each drawn unit at a lanes-form K is staged as `leaf_lanes.statements` on the committed lane and combine files,
-    its partials one produced record under the window's draw, its registered files credit's own; credit's lanes form
+    """Each sampled proof block at a lanes-form K is staged as `leaf_lanes.statements` on the committed lane and combine files,
+    its partials one produced record under the window's sample, its registered files credit's own; credit's lanes form
     accepts the statements and refuses a leaf without its combine, and a session that reports another opening of a
     partials row (P-shared). A window that registers no receipts is refused before anything is staged. Slow (the window
     Program over v1's real tile unit at K 384 takes about a minute to declare, and the lanes' word references run in

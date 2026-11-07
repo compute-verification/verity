@@ -122,8 +122,8 @@ theorem pr_guess_family_le {N m ρ h S L q ks G : ℕ}
   refine (Finset.sum_le_sum fun g _ => hg g).trans (le_of_eq ?_)
   simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
 
-/-- **A pass's coins are fresh at its prefix.** The coins `y` are drawn beside the session and pass `j` of window `w`
-draws its own coins after the prefix before it, so an event of the prefix, `y` and the pass's coins that is bounded at
+/-- **A pass's coins are fresh at its prefix.** The coins `y` are sampled beside the session and pass `j` of window `w`
+flips its own coins after the prefix before it, so an event of the prefix, `y` and the pass's coins that is bounded at
 every prefix is bounded. -/
 theorem pr_at_pass_le {n P N m ρ h ks G d : ℕ} (w : Fin n) (j : Fin P)
     (F : SketchPrefix n P N m ρ h ks G d → Y → SketchPassCoins N ρ h ks G → Prop) (p : ℝ≥0∞)

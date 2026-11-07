@@ -107,7 +107,7 @@ theorem setupTables_okHP (hh : tags.hiddenOutputs = true)
     exact Or.inr ⟨by omega, hsz, fun j hj => ⟨_, ok_of_refuse (hall j hj)⟩, mPts_of_any (by assumption), rfl⟩
 
 /-- **Every table of a hidden-output session accepted at the verifier's public inputs is its `SpecP`**: under the
-table's tags (`tagsAt`), at some draw (the session's, for one table), and at its circuit's public input ports. -/
+table's tags (`tagsAt`), at some sample (the session's, for one table), and at its circuit's public input ports. -/
 theorem setupTables_specP (hh : tags.hiddenOutputs = true)
     (h : Stmt.setupTables tags cf pf coins count tables draw partition program work stratified closure own =
       .ok (spec, sts)) :
