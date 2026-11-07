@@ -203,8 +203,11 @@ theorem anyFrom_eq_decide (z : Var → Bool) (x : List Lin) (lo : ℕ) :
 theorem map_range_decide (m L : ℕ) (h1 : 1 ≤ L) (h2 : L ≤ m + 1) :
     (List.range m).map (fun j => decide (j + 1 < L)) =
       List.replicate (L - 1) true ++ List.replicate (m + 1 - L) false := by
-  refine List.ext_getElem (by simp only [List.length_map, List.length_range, List.length_append,
-    List.length_replicate]; omega) fun j _ _ => ?_
+  have hlen : ((List.range m).map fun j => decide (j + 1 < L)).length =
+      (List.replicate (L - 1) true ++ List.replicate (m + 1 - L) false).length := by
+    simp only [List.length_map, List.length_range, List.length_append, List.length_replicate]
+    omega
+  refine List.ext_getElem hlen fun j _ _ => ?_
   rw [List.getElem_map, List.getElem_range]
   by_cases h : j < L - 1
   · rw [List.getElem_append_left (as := List.replicate (L - 1) true) (i := j) (by simpa using h), List.getElem_replicate]
@@ -249,7 +252,7 @@ theorem sound_select (fl : List Lin) (layouts : List (List Word)) : Sound (selec
   · intro z out h
     obtain ⟨hlen, hall⟩ := h
     refine ⟨by simpa using hlen, fun i hi => ?_⟩
-    have := hall i (by simpa using hi)
+    have := hall i (by rw [← hlen]; exact hi)
     simpa using this
 
 /-! ## A message over a hidden `uint` -/
@@ -297,15 +300,36 @@ theorem sound_hashUint (tag : List UInt8) (head : List (List Byte)) (x : List Li
 
 /-! ## The leaf -/
 
-theorem FRAME_length : FRAME.length = 33 := by decide
+/-- A string's UTF-8 byte count from its characters: a literal's then reduces by `simp`, where `decide` can't see
+`String.toUTF8`'s body from a module. -/
+theorem utf8ByteSize_eq_sum (s : String) : s.utf8ByteSize = (s.toList.map Char.utf8Size).sum := by
+  rw [← String.ofList_toList (s := s)]
+  generalize s.toList = l
+  induction l with
+  | nil => simp
+  | cons c l ih =>
+    rw [String.ofList_cons, String.utf8ByteSize_append, String.utf8ByteSize_singleton, ih]
+    simp
+
+theorem length_utf8 (s : String) : s.toUTF8.data.toList.length = (s.toList.map Char.utf8Size).sum := by
+  rw [Array.length_toList, ByteArray.size_data, String.toUTF8_eq_toByteArray, String.size_toByteArray,
+    utf8ByteSize_eq_sum]
+
+theorem FRAME_length : FRAME.length = 33 := by
+  rw [FRAME, List.length_append, length_utf8]
+  simp [Char.utf8Size]
 
 theorem LEAF_eq : LEAF = Hash.utf8 "leaf" := rfl
 
 theorem NODE_eq : NODE = Hash.utf8 "node" := rfl
 
-theorem LEAF_length : LEAF.length = 4 := by decide
+theorem LEAF_length : LEAF.length = 4 := by
+  rw [LEAF, length_utf8]
+  simp [Char.utf8Size]
 
-theorem NODE_length : NODE.length = 4 := by decide
+theorem NODE_length : NODE.length = 4 := by
+  rw [NODE, length_utf8]
+  simp [Char.utf8Size]
 
 theorem bytesV_single (z : Var → Bool) (b : Byte) : bytesV z [b] = [byteV z b] := rfl
 
@@ -347,16 +371,18 @@ theorem sound_leafHash (schema : String) (n : ℕ) (domain value : List Word) (x
   rw [bytesV_msgData, ← frame_eq]
   simp only [List.cons_append, List.nil_append, List.map_cons, List.map_nil, bytesV_bytesW z hd.2,
     bytesV_bytesW z hv.2, bytesV_uintBytes, bytesV_constBytes, ← bytes_wordsDigest z hd,
-    ← bytes_wordsDigest z hv, uint_eq, LEAF_eq] <;> rfl
+    ← bytes_wordsDigest z hv, uint_eq, LEAF_eq]
+  rfl
 
 /-! ## The swap and the node -/
 
-theorem sound_swap (d : Lin) (cur sib : List Word) : Sound ((cur.zip sib).mapM fun cs =>
-    (cs.1.zip cs.2).mapM fun xy => Flock.HmNets.and d (xy.1 ^^^ xy.2)) fun z t =>
-      t.map (evs z) = (cur.zip sib).map fun cs =>
-        (cs.1.zip cs.2).map fun xy => (ev z d && (ev z xy.1 ^^ ev z xy.2)) :=
-  sound_mapM_map [] _ evs (fun z cs => (cs.1.zip cs.2).map fun xy => (ev z d && (ev z xy.1 ^^ ev z xy.2)))
-    (fun cs => sound_mapM_map Lin.zero _ ev (fun z xy => (ev z d && (ev z xy.1 ^^ ev z xy.2)))
+theorem sound_swap (d : Lin) (cur sib : List Word) : Sound ((cur.zip sib).mapM fun (cs : Word × Word) =>
+    (cs.1.zip cs.2).mapM fun (xy : Lin × Lin) => Flock.HmNets.and d (xy.1 ^^^ xy.2)) fun z t =>
+      t.map (evs z) = (cur.zip sib).map fun (cs : Word × Word) =>
+        (cs.1.zip cs.2).map fun (xy : Lin × Lin) => (ev z d && (ev z xy.1 ^^ ev z xy.2)) :=
+  sound_mapM_map [] _ evs (fun z (cs : Word × Word) =>
+      (cs.1.zip cs.2).map fun (xy : Lin × Lin) => (ev z d && (ev z xy.1 ^^ ev z xy.2)))
+    (fun cs => sound_mapM_map Lin.zero _ ev (fun z (xy : Lin × Lin) => (ev z d && (ev z xy.1 ^^ ev z xy.2)))
       (fun xy => Sound.mono (sound_and d _) fun z r h => by rw [h, ev_xor]) _) _
 
 theorem swap_bits (z : Var → Bool) (dv : Bool) {cur sib t : List Word} (hc : Shaped 8 cur) (hs : Shaped 8 sib)
@@ -438,13 +464,13 @@ theorem swap_digest (z : Var → Bool) (dv : Bool) {a b t : List Word} (ha : Sha
   obtain ⟨hls, hlb⟩ := bits_xorW_zip z ha hts
   refine ⟨hls, ?_⟩
   cases dv
-  · rw [if_neg Bool.false_ne_true]
+  · rw [ite_eq_right Bool.false_ne_true]
     refine wordsDigest_congr z (map_evs_ext z hls ha fun i hi j hj => ?_)
     rw [hlb i hi j hj, htb i hi j hj]
     generalize ev z ((a.getD i []).getD j Lin.zero) = u
     generalize ev z ((b.getD i []).getD j Lin.zero) = w
     cases u <;> cases w <;> rfl
-  · rw [if_pos rfl]
+  · rw [ite_eq_left rfl]
     refine wordsDigest_congr z (map_evs_ext z hls hb fun i hi j hj => ?_)
     rw [hlb i hi j hj, htb i hi j hj]
     generalize ev z ((a.getD i []).getD j Lin.zero) = u
@@ -476,7 +502,7 @@ theorem sound_nodeHash (n : ℕ) (domain : List Word) (level : Byte) (index : Li
   rw [bytesV_msgData, ← frame_eq]
   simp only [List.cons_append, List.nil_append, List.map_cons, List.map_nil, bytesV_bytesW z hd.2,
     bytesV_bytesW z hls.2, bytesV_bytesW z hrs.2, bytesV_uintBytes, bytesV_single, ← bytes_wordsDigest z hd,
-    ← bytes_wordsDigest z hls, ← bytes_wordsDigest z hrs, hL, hR, uint_eq, NODE_eq] <;> rfl
+    ← bytes_wordsDigest z hls, ← bytes_wordsDigest z hrs, hL, hR, uint_eq, NODE_eq]
 
 /-! ## The climb -/
 
@@ -532,11 +558,11 @@ theorem sound_climb (Dd : ℕ) (domain : List Word) (pos : List Lin) :
       rw [← testBit_num_evs, Nat.testBit_eq_decide_div_mod_eq]
     rw [hce, List.map_cons, climb_cons_snd, hidx, hlvu, hnum, hdv]
     by_cases h2 : ReadUnit.num (evs z pos) / 2 ^ k % 2 = 0
-    · rw [if_pos h2, decide_eq_false (show ¬(ReadUnit.num (evs z pos) / 2 ^ k % 2 = 1) by omega),
-        if_neg Bool.false_ne_true, if_neg Bool.false_ne_true]
+    · rw [ite_eq_left h2, decide_eq_false (show ¬(ReadUnit.num (evs z pos) / 2 ^ k % 2 = 1) by omega),
+        ite_eq_right Bool.false_ne_true, ite_eq_right Bool.false_ne_true]
       all_goals rfl
-    · rw [if_neg h2, decide_eq_true (show ReadUnit.num (evs z pos) / 2 ^ k % 2 = 1 by omega), if_pos rfl,
-        if_pos rfl]
+    · rw [ite_eq_right h2, decide_eq_true (show ReadUnit.num (evs z pos) / 2 ^ k % 2 = 1 by omega), ite_eq_left rfl,
+        ite_eq_left rfl]
       all_goals rfl
 
 end Accounting.ReadUnit.FrameRead

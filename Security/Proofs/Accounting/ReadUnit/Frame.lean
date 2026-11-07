@@ -17,7 +17,10 @@ open FlockSoundness.Discharge.Hm
 open Flock.ReadNet Flock.ReadNet.Frame
 open Accounting.ReadUnit.Gates
 
-theorem length_utf8_seg : (Hash.utf8 Hash.RowLeaf.Format.seg.schema).length = 22 := by decide
+theorem length_utf8_seg : (Hash.utf8 Hash.RowLeaf.Format.seg.schema).length = 22 := by
+  show ("hm96-sha512/row-seg/v1".toUTF8.data.toList).length = 22
+  rw [length_utf8]
+  simp [Char.utf8Size]
 
 /-- **The frame-v3 read is sound** at every depth up to 32 under the row-seg schema: whenever its rows hold, the
 read's bit is set only where the frame leaf over the opened digest, climbed through the opened siblings, reaches the
@@ -31,7 +34,7 @@ theorem frameReadSpec {D : ℕ} (hD : D ≤ 32) :
     Sound.bind' (sound_leafHash _ _ domain leaf _) fun cur =>
       Sound.bind' (sound_climb D domain pos path 0 pad.1 cur) fun cur' =>
         Sound.mono (sound_eqDigest cur' root) fun z r heq hcl hlf hpad hr hd hl hpos hpath hps hev => ?_
-  obtain ⟨hc1, hpe, hpl⟩ := hpad ⟨fun _ h => by cases h, fun _ h => by cases h⟩
+  obtain ⟨hc1, hpe, hpl⟩ := hpad ⟨fun _ h => (by cases h), fun _ h => (by cases h)⟩
   have hn1 : 1 ≤ indexBytes D := le_max_left _ _
   have hn4 : indexBytes D ≤ 4 := by
     unfold indexBytes

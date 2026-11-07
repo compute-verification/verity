@@ -5,7 +5,7 @@ bit `p % 8` of byte `8 i + 7 - p / 8`, each word's bytes big-endian and each byt
 -/
 module
 
-public import Proofs.Accounting.ReadUnit.Gates
+public import Proofs.Accounting.ReadUnit.Net
 public import Proofs.Flock.Soundness.Discharge.Hm.Compress
 public import Flock.ReadNet.Frame
 
@@ -23,20 +23,6 @@ open Accounting.ReadUnit.Gates
 theorem num_nil : ReadUnit.num [] = 0 := rfl
 
 theorem num_cons (b : Bool) (bs : List Bool) : ReadUnit.num (b :: bs) = b.toNat + 2 * ReadUnit.num bs := rfl
-
-theorem num_append : ∀ a b : List Bool, ReadUnit.num (a ++ b) = ReadUnit.num a + 2 ^ a.length * ReadUnit.num b
-  | [], b => by simp [num_nil]
-  | x :: a, b => by
-    rw [List.cons_append, num_cons, num_cons, num_append a b, List.length_cons, pow_succ]
-    ring
-
-theorem num_lt : ∀ a : List Bool, ReadUnit.num a < 2 ^ a.length
-  | [] => by simp [num_nil]
-  | x :: a => by
-    have h := num_lt a
-    have hx : x.toNat ≤ 1 := Bool.toNat_le x
-    rw [num_cons, List.length_cons, pow_succ]
-    omega
 
 /-- Bit `q` of the number bits hold is bit `q` of the list, 0 past its end. -/
 theorem testBit_num : ∀ (l : List Bool) (q : ℕ), (ReadUnit.num l).testBit q = l.getD q false
