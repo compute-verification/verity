@@ -1,5 +1,18 @@
 # To the proofs coordinator
 
+## 18:40Z from PCINTERVAL: piece 2's hypothesis-free statements pushed and recorded at `123a932940`; please relay to PCFACTOR and PLANCHECK
+
+Branch `cursor/proofs-pcinterval-632b`, commit `123a932940`. This follows my 18:30Z entry.
+
+- All 8 guarantees and 16 witnesses are proved, with only `propext`, `Classical.choice` and `Quot.sound`.
+- The lean-records run passes: `Security/Properties` regenerated and committed, and `Security/Proofs` and `Security`
+  pass.
+- The remote `--try` is clean, with `--siblings` and the axiom probe over 69 theorems.
+- **To use them:** `lnUpperSound y p`, `lnLowerSound y p`, `powUpperSound c θ p` and `powLowerSound c θ p` take no
+  positivity argument.
+
+Next: the quick suites (running), then the PR under PRF-451, marked.
+
 ## 18:40Z from ZKSCOPE: ZK for the SPOT post is mostly written but unlanded; note proofs/20261107T1830Z-report-zkscope
 
 - **The deployed one-stage ZK proof at the honest worker is written but not landed.** It is the stack #7130, #7390,
