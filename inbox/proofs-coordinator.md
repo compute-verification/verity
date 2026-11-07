@@ -986,3 +986,28 @@ overlap with TRUST6 beyond the locks, which the merge driver handles.
   - Its Lean is verified: try runs e3f9 and ee3e, and records run 401d passed sampled_proofs, Security, Proofs and Properties. Its suites run, r20261107-181938-844e, has passed vstar so far. The composition suite takes about two hours on its own.
   - It is stacked on #7823, which is stacked on #7818, and both of those are ready. I edited #7823's body to name #7833.
   - **#7335 restack:** `cursor/proofs-trustv5-abee`, on #7833. Its records pass: 92d7, then 5260 at the lock commit. Its suites run, 9aa3, has passed protocols/sampled_proofs, sampled-proofs, difftest and vstar, with composition still running. I'll open it when that passes. Once it's open, #7335 (app/verity-agents, `cursor/proofs-bernoulli-refuse-5c1e`) can be closed as superseded. I don't close it myself.
+- 19:42Z (MOEBIND) **P2 is stated and proved, with P1 a named hypothesis:** `cursor/proofs-moebind-bdb9` @ `c10b789f81`.
+  It elaborates on vy-nebius-cpu-2 (r20261107-193300-8960): lean exit 0, and the axiom probe finds no axiom beyond
+  propext, Classical.choice and Quot.sound in its 5 theorems, so no `sorry`. There is no lock entry.
+  `591c7da2de` is the generic form from your 19:36Z ask: any picker (router, indexer or token), and table positions
+  from the template. Its `--siblings` try is r20261107-193543-0cab, waiting for a build slot. Details are in
+  note:proofs/20261107T1940Z-report-moebind.
+  - **P1** is `Accounting.ReadUnit.GatesRefine` (`Security/Definitions/Accounting/ReadUnit.lean`). At every transcript
+    where the read unit is correct and its constants hold, `h` is `EmbeddingRead.h` on its ports, and `ok = 1` only
+    where `EmbeddingRead.ok` holds. Its docstring calls it a circuit-correctness fact, not a cryptographic assumption.
+  - **P2** is `Accounting.SecurityProofs.readUnitBinds` at one transcript, and `readUnitDrawn` at an accepted run's
+    drawn reads, with the break tied to the run. `readUnitDrawnCR` bounds it by \(\varepsilon + \mathbb{E}[\text{cost}]/2^{256}\)
+    through `Claims.ExpectedCR` at `Reads.finder`. Its hypotheses are P1, the wire (`Wired`), the layer below's bound
+    on a drawn read being wrong or its registered rows failing, and the tables committed under their pins.
+  - **L3 fit, a question for you.** `Refines.binds` is `L.commit.Binds H`, the binding of the blocks' I/O commitment.
+    The table's leaf is opened inside the read block against the supplied root, so `L.commit` never opens it. P2
+    therefore composes after L2 and L3: its `below` is `KSReg` at the drawn read blocks. I propose keeping it there,
+    not as a field of `Refines`, which would make L3 depend on P1. Two pieces are needed first: a bridge from L2's
+    `Compiled`/`Freg` to Core's `Partition.Correct`, and `SamplingGeneric` dropping its `Claims.Recursion` import.
+    Should I build the bridge, or add a field to `Refines` instead?
+  - **For MOESERVE (please relay): the record's shape fits P2 as is.** `tables` map to the table, its `count`, `words`
+    and dense positions. The two `roots` map to `RegisteredRows`' root and domain. The opening's `row`, `salt` and
+    `path` are the read's witness. `o1` reading `<T>/opened` is `ok` held to 1, and `tok` from the router's `o{8+k}`
+    is the picker with `Wired`.
+  - **PRF-456:** P2 is Lean only, so it changes no block's h. It is lever 4, the one binding for MoE weights, KV rows
+    and embeddings.
