@@ -90,11 +90,12 @@ Each scheme module's docstring states its steps and roundings, with pinned vecto
 ## Security assumptions and guarantees
 
 PoUW's security property is stated at the adversary's advantage ε, with failure probability δ: what an adversary
-spends is at least the honest work of its correct units over 1 + ε, except with probability δ (`Pouw.Gε`, and
-`Pouw.PearlC.Gε` in Pearl-C's game). The proofs carry it as the gap g = ε/(1 + ε), the same property: an adversary of
-cost T wins when its correct units' honest work exceeds T/(1 − g) (`Pouw.GGap`, `Pouw.Proofs.gGap_iff_gε`). The
-honest overhead γ is a cost, never a share of the bound: the honest prover's busy SM-time is at most (1 + γ) times the
-fastest stock time for the same MACs, capped at γ ≤ 10 at each operating point (`GLOSSARY.md`).
+spends is at least the honest work of its correct units over 1 + ε, except with probability δ (the game's and
+Pearl-C's, in `Security/Definitions/Pouw/Advantage.lean`). The proofs carry it as the gap g = ε/(1 + ε), the same
+property: an adversary of cost T wins when its correct units' honest work exceeds T/(1 − g)
+(`Security/Definitions/Pouw/Game/Defs.lean`), and a lemma in `Security/Proofs/Pouw/Advantage.lean` proves the two forms
+equivalent. The honest overhead γ is a cost, never a share of the bound: the honest prover's busy SM-time is at most
+(1 + γ) times the fastest stock time for the same MACs, capped at γ ≤ 10 at each operating point (`GLOSSARY.md`).
 
 Guarantees are stated in `Security/Definitions/Pouw` and proved in `Security/Proofs/Pouw`, as
 `Pouw.SecurityProofs.G : Pouw.Guarantees.G`; `Security/lean-audit.json` lists each proved one with what its statement
