@@ -22,11 +22,11 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   by `card_influenceTwo_le_min`) at one machine's, the comparison.  Infiltration is its write form (`write_form`) at a
   footprint of a request's served bits: an incorrect request is charged at most the cheapest explanation of what it
   serves.
-* `layer_of_token` (B): serving also commits each layer's residual stream, K/V and indexer keys; a replay block is one
-  layer of one token, holding its share of the token's proof blocks and replayed with its engine step's whole batch at
-  that layer.  Exfiltration is the planner's design on that grain in the capped sets' form, each replay block charged at
-  most its request's served bits, which is at least the lemma's charge because min(·, S) is subadditive, and never
-  above the scope's served bits.  Infiltration is its write form at a footprint of the layer's boundary bits.
+* `layer_of_token` (B): serving also commits each layer's residual stream, K/V and indexer keys; the audit samples a
+  layer of one token, holding its share of the token's proof blocks, and its replay block is its engine step's whole
+  batch at that layer.  Exfiltration is the planner's design on that grain in the capped sets' form, each sampled
+  layer charged at most its request's served bits, which is at least the lemma's charge because min(·, S) is
+  subadditive, and never above the scope's served bits.  Infiltration is its write form at a footprint of the layer's boundary bits.
 * `per_expert` (A′): (A)'s serving, tax, forms and registrations on another cut of the circuit, the model's
   `partition` card `per-expert` (the MoE cut per expert: the router's slots, table reads at each slot's expert and
   per-expert GEMMs), labelled with the card's `label`; lines only for a model with that card.
@@ -145,7 +145,7 @@ def _spans(name: str, line: Configuration) -> dict[str, Configuration]:
 
 
 TOKENS = "the token ids, the schedule record and the KV cache at replay-block edges"
-REQUEST = "a request, replayed with its whole batch from its replay block's edge (one machine's 600 s)"
+REQUEST = "one machine's 600 s, its whole batch re-run from its edge for each sampled request"
 CONFIGURATIONS = {
     **_spans("tokens", Configuration("(A) Tokens only", TOKENS, REQUEST, "two-stage, width-stratified",
                                      ("exfiltration", "infiltration"), form="patterns", registration="machine")),
@@ -154,7 +154,7 @@ CONFIGURATIONS = {
                                registration="machine", variant_of="tokens", replay="request"),
     "layer_of_token": Configuration("(B) Each layer's state",
                                     "the tokens and each layer's residual stream, K/V and indexer keys",
-                                    "one layer of one token, replayed with its engine step's whole batch at that layer",
+                                    "one engine step's whole batch at one layer, re-run for each sampled layer of one token",
                                     "two-stage, width-stratified", ("exfiltration", "infiltration"), form="sets",
                                     registration="machine", replay="step"),
     **_spans("per_expert", Configuration("(A′) Tokens only, the MoE cut per expert", TOKENS, REQUEST,
@@ -439,7 +439,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         shared = (f"{_share(s['shared'][at])} of its proving in the registration's statements, "
                   f"{_share(s['padding'][at])} padding" if s["shared"][at] else "its own statements")
         return (f" {_size(s['y'][at])}; Q = {s['registration_sample'][at]:.2g}, K0 = {s['registration_cap'][at]:,}: "
-                f"{shared}; {_share(s['computed_proving'][at])} of its sampled replay block's proving computed;")
+                f"{shared}; {_share(s['computed_proving'][at])} of its sampled request's proving computed;")
 
     head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
@@ -454,16 +454,16 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             "serving's busy GPU-seconds (0.97× to 1.02× measured), and a sampled layer of one token its engine step's "
             "whole batch at that layer.")
     regs, window = out["registrations"], out["inputs"]["window"]["value"]
-    head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled replay block or of a "
-             f"registration's: a registration spans the {window:g} s window on one machine "
+    head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled request (of (B), a "
+             f"sampled layer of one token) or of a registration's: a registration spans the {window:g} s window on one machine "
              f"({out['inputs']['machine_gpus']['value']:g} GPUs), on a {POD}-machine pod or on a datacenter's "
              f"{regs['datacenter']['machines']:,.0f} machines, its statements' sessions padded to a public cap of K0 "
-             "replay blocks' blocks, the least with P(K > K0) ≤ 2^−40 at the Q it samples, a sample past it refused; "
+             "sampled requests' blocks, the least with P(K > K0) ≤ 2^−40 at the Q it samples, a sample past it refused; "
              "every registration proves its padding, whatever it samples, and each Definition takes the "
              "registration's statements only where they cost less than its own. The registration and its statements' "
              "split are the protocol's, fixed before any coin, never the prover's. Each two-stage line gives at "
              f"β = {_share(f1.RATIO_BUDGET)} its bound, Q and K0, the shares of its proving in the registration's "
-             "statements and on padding, and the share of its sampled replay block's proving, the statements' fixed "
+             "statements and on padding, and the share of its sampled request's proving, the statements' fixed "
              "costs included, that is computed.")
     a, b, c = CONFIGURATIONS["tokens"], CONFIGURATIONS["layer_of_token"], CONFIGURATIONS["every_block"]
     short = a.label.split(" ")[0]
@@ -504,7 +504,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
                 f"request costs {served:,.0f} bits, and the bound is at most the {sc['served_bits']:.2g} bits the "
                 f"scope serves ({f1.OUTS_STATUS}). It takes two modeling conditions: each request serves at most "
                 f"S = {served:,.0f} bits, and no proof block is shared across requests, so a request's served outputs "
-                "read only its own replay block's proof blocks.")
+                "read only its own proof blocks.")
     cuts = {n: k["cut"] for n, k in conf.items() if "cut" in k and not k["variant_of"]}
     exfil_cuts = "".join(family(n, "dash-dot", f"{short}'s serving and serve tax on the partition card {k['name']}'s "
                                 f"cut ({k['label']}), its marginal proof overhead {conf[n]['overhead']:.3g}×, "
@@ -530,14 +530,14 @@ def captions(out: dict, scope: str) -> dict[str, str]:
                  f"none of on the H200, {priced('tokens_bi')}; the patterns' form:{binds('tokens_bi')}"
                  if bi and "tokens_bi" in lines["exfiltration"] else "")
               + f"{exfil_cuts} {b.label} ({regs[b.registration]['label']}): serving commits {b.commits}, a replay "
-              f"block is {b.replay_block}, {priced('layer_of_token')}; the capped sets' form, each replay block "
-              f"charged at most its request's served bits, at least the lemma's charge:{binds('layer_of_token')}"
+              f"block is {b.replay_block}, {priced('layer_of_token')}; the capped sets' form, each sampled layer of "
+              f"one token charged at most its request's served bits, at least the lemma's charge:{binds('layer_of_token')}"
               f" {c.label} (dashed): serving commits {c.commits}, sampled one-stage, a statement a sampled proof "
               f"block, {priced('every_block')}; consumers.exfiltration_bound's form, which bits are incorrect and "
               "where, at most the served bits by the same count (an influence set is a set of served outputs; Lean "
               f"states it for two-stage only): {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
-    infil = (f" The write form: the bits the incorrect proof blocks write, each replay block charged at most its "
-             f"footprint, at the design its exfiltration line plans. {a.label} (solid, dark to light: its "
+    infil = (f" The write form: the bits the incorrect proof blocks write, each sampled request or layer charged at "
+             f"most its footprint, at the design its exfiltration line plans. {a.label} (solid, dark to light: its "
              f"registrations): a footprint of a request's {served:,.0f} served bits, the cheapest explanation of what "
              f"it serves (the served form).{infil_cuts} {b.label} ({regs[b.registration]['label']}): a footprint of "
              f"its {out['footprint_bits'][1]:,.0f} boundary bits, written wherever they sit. {c.label} (dashed): the K "

@@ -251,7 +251,7 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     for name in ("tokens", "per_expert", "layer_of_token"):
         s = lines[name]
         assert all(0 < v < 1 for v in s["computed_proving"])
-        assert f"{t._share(s['computed_proving'][at])} of its sampled replay block's proving" in caps["exfiltration"]
+        assert f"{t._share(s['computed_proving'][at])} of its sampled request's proving" in caps["exfiltration"]
     assert "everything the scope serves (" not in caps["infiltration"]
     assert "priced, not measured, a lower bound: the hashing alone" in caps["skipped_work"]
     assert "Replay is full-batch" in caps["exfiltration"] and "batch-invariant kernels (dotted" in caps["exfiltration"]
