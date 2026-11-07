@@ -26,7 +26,8 @@ At this code, four of `ksTwo_code`'s hypotheses are facts of the order and the b
   the code (`RegMatchesTwo`, `RefusesTwo`, `InteriorFixed`, `SessionRuns`, `SessionsIn`, `SessionOpensTwo`). The
   verifier in public-coin form, its parser, partition, sessions and reveals are `c`'s.
 
-`Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo` states it. Its witnesses:
+`Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo` (`Proofs.Flock.SamplingGeneric.Guarantees`)
+states it. Its witnesses:
 
 * `sampledKSTwo_honest`: every premise at a toy code (`toyCode`) that parses no statement, accepts none, opens no
   session and reads no bytes;
@@ -55,8 +56,8 @@ def Code.atOrder (c : Code) (j : (x : Msg) → Order (c.V.k x)) : Code :=
     stage2 := fun x => univ.filter fun t => (j x).first < t
     rounds := fun x u => (c.rounds x u).filter fun t => (j x).second < t }
 
-/-- **A challenger call's bytes are uniform** (`UniformRandomBytes`, A3): at every statement `x`, the bytes `b x` returns
-on a uniform coin. -/
+/-- **A challenger call's bytes are uniform** (`UniformRandomBytes`, A3): at every statement `x`, the bytes `b x`
+returns on a uniform coin. -/
 def CallsUniform (L : Msg → ℕ) (b : (x : Msg) → FlockDeploy.Coin → Fin (L x) → Fin 256) : Prop :=
   ∀ x, FlockSoundness.Assumptions.UniformRandomBytes (fun _ : Fin 1 => L x) fun c _ => b x c
 
@@ -148,41 +149,6 @@ theorem ksTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (hA₁ : Call
     (bytesFixedTwo_atOrder c L₁ L₂ j b₁ b₂) hr hi hruns hnum hopens
 
 end SamplingDeploy
-
-namespace Flock.Guarantees
-
-open Claims
-
-/-- **The deployed two-stage sampled verifier is knowledge sound at SHA-512**, at its round order (`codeTwoAt`): on
-the challenger's bytes uniform at each of its two calls (`CallsUniform`, `UniformRandomBytes`), and the code's facts
-(the registration is the statement's two-stage design, the verifier refuses outside the two-stage scope, the interior
-roots don't read the second stage's coins, each checked unit's session runs Flock on its rounds within its numbers and
-opens the unit's proof block on its replay block), `CompiledTwo.KS` holds at Flock's masked record over the readable
-relation and SHA-512: `KSLinOn` at the two-stage relation, the extractor's errors and the binding finder `Bext`. -/
-def SampledKSTwo : Prop :=
-  ∀ (c : SamplingDeploy.Code) (reg : Msg → Option SamplingDeploy.RegTwo)
-    (two : Sampling.AuditStatement → Option Sampling.Design.Two) (L₁ L₂ : Msg → ℕ)
-    (j : (x : Msg) → SamplingDeploy.Order (c.V.k x))
-    (b₁ : (x : Msg) → FlockDeploy.Coin → Fin (L₁ x) → Fin 256)
-    (b₂ : (x : Msg) → FlockDeploy.Coin → Fin (L₂ x) → Fin 256) (iroots : Msg → Seen → ℕ → List Msg),
-    SamplingDeploy.CallsUniform L₁ b₁ → SamplingDeploy.CallsUniform L₂ b₂ →
-    SamplingDeploy.RegMatchesTwo (c.atOrder j) reg two →
-    (c.atOrder j).RefusesTwo FlockDeploy.sha512 two →
-    (c.atOrder j).InteriorFixed FlockDeploy.sha512 iroots →
-    Sampling.SessionRuns FlockDeploy.sha512
-      (SamplingDeploy.deploy _root_.Flock.Readable.relation (SamplingDeploy.codeTwoAt c reg L₁ L₂ j b₁ b₂)) →
-    SamplingDeploy.SessionsIn (SamplingDeploy.codeTwoAt c reg L₁ L₂ j b₁ b₂) →
-    SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
-      (SamplingDeploy.deploy _root_.Flock.Readable.relation (SamplingDeploy.codeTwoAt c reg L₁ L₂ j b₁ b₂)) two iroots →
-    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation)
-      (SamplingDeploy.codeTwoAt c reg L₁ L₂ j b₁ b₂) iroots two
-      (SamplingDeploy.replayTwo (c.atOrder j) reg L₁ (SamplingDeploy.bytesFirst c L₁ j b₁))).KS FlockDeploy.sha512
-
-end Flock.Guarantees
-
-theorem Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo :=
-  fun c reg two L₁ L₂ j b₁ b₂ iroots hA₁ hA₂ hreg hr hi hruns hnum hopens =>
-    SamplingDeploy.ksTwo_atOrder c reg two L₁ L₂ j b₁ b₂ iroots hA₁ hA₂ hreg hr hi hruns hnum hopens
 
 /-! ## Witnesses -/
 

@@ -46,6 +46,7 @@ public import Definitions.Claims.RecursionLin
 public import Definitions.Claims.Sampling
 public import Definitions.Claims.SamplingGeneric
 public import Definitions.Claims.SamplingTwo
+public import Definitions.Claims.Guarantees.SamplingTwo
 public import Definitions.Claims.ZKOut
 public import Definitions.Hash
 public import Definitions.Flock
