@@ -9,6 +9,8 @@ its change to the arm it names as its parent (`serve_tax.ARMS`):
 |---|---|---|
 | `compiled` | stock vLLM: torch.compile and CUDA graphs, chunked prefill, prefix caching, async scheduling | — |
 | `eager` | `--enforce-eager` | `compiled` |
+| `bi-compiled` | `VLLM_BATCH_INVARIANT=1`: vLLM's batch-invariant kernels | `compiled` |
+| `bi-eager` | `VLLM_BATCH_INVARIANT=1`, eager: the committing path's execution (`TargetProfile`'s `bi-eager`), nothing committed | `eager` |
 | `record` | the scheduler's step trace (`verity_vllm.engine.step_trace.StepTrace`), written by a thread of its own | `compiled` |
 | `release-order` | requests added in the certifier's release order (`serve_admit.ReleaseOrder`, in the engine core) | `record` |
 | `tick` | admission on the certified tick (`verity_vllm.pipeline.tick_plugin`), τ calibrated on `record` | `record` |
@@ -46,12 +48,15 @@ research run --on NODE --source . --cwd source --send C4.json.gz \
   --env REPLAY=saturated -- bash benchmarks/serve_tax/run.sh
 ~~~
 
-`run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit window and the KV edge's window).
+`run.sh`'s header lists its parameters (the model, reps, the loads' span, the Commit period and the KV edge's window).
 `MODEL_ID=glm53` serves GLM-5.3 at TP8 on an 8-GPU node, with the GLM-5.3 TP drivers' checkpoint; `kv` there needs the
 edge in each worker process, which the plugin's model runner hook gives where vLLM loads general plugins in its workers.
 The `tick`, `tokens` and `kv` arms need `verity_vllm.pipeline.tick_plugin` and the corpus client's stand-in certifier,
 and refuse a tree without them. A saturated load keeps a connection open for every request queued in the server, so the
 client raises its open-file limit to the hard limit first.
+
+On one GPU, `MODEL_ID` is `moonlight` (the default), `llama8b` or `qwen3-30b`, the last two read from their pinned
+snapshots under `HF_HOME` (`serve_tax.py checkpoint --model-id ID` prints the path).
 
 ## What it writes
 
@@ -60,8 +65,9 @@ the plugin's changes, τ, versions, each load's start), `server/` (the server's 
 trace, each window's token roots, each KV edge's bytes and kernel time) and `<load>/rep-<r>/client.jsonl` (each request's
 send, streamed chunks and tokens), then `table.md` and `table.json` (`serve_tax.py table`): per arm and load, output tokens
 and requests a second, goodput at the SLO (TTFT and time per output token), TTFT and ITL at p50 and p99, each a mean over
-reps with a 95% interval, the requests sent and not served, and each arm's tax, its compute per token over the
-reference's at the same load less one, against `compiled` and against its parent. Below capacity the throughput is set
+reps with a 95% interval, the requests sent and not served, each load's schedule (the engine's steps, the tokens each
+scheduled and the rows each sampled, from the server's `/metrics` before and after the load), and each arm's tax, its
+compute per token over the reference's at the same load less one, against `compiled` and against its parent. Below capacity the throughput is set
 by the arrivals, so the tax there reads the drain and the cost shows in the latencies; a tax beside unserved requests
 isn't over the same requests. `replay-{compiled,eager}/replay.json` has the replay's counts, its differing requests and
 its wall time beside the served window's, and `replay_tokens.jsonl.gz` its tokens. Each request decodes to its cap, so the
